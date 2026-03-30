@@ -19,7 +19,7 @@ export function LanguageSelector({ className = '' }: { className?: string }) {
             : 'border-gray-300 text-gray-700 hover:border-gray-400'
         }`}
       >
-        {t('common.english')}
+        English
       </button>
       <button
         type="button"
@@ -30,7 +30,7 @@ export function LanguageSelector({ className = '' }: { className?: string }) {
             : 'border-gray-300 text-gray-700 hover:border-gray-400'
         }`}
       >
-        {t('common.french')}
+        Français
       </button>
     </div>
   );

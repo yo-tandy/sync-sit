@@ -3,6 +3,7 @@ import * as crypto from 'crypto';
 import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { validateEjmEmail } from '@ejm/shared';
+import { writeUserActivity } from '../admin/writeAuditLog.js';
 
 /**
  * Send a 6-digit verification code to an EJM email address.
@@ -53,6 +54,8 @@ export const verifyEjmEmail = onCall(
     if (process.env.FUNCTIONS_EMULATOR === 'true') {
       console.log(`[DEV] Verification code for ${email}: ${code}`);
     }
+
+    await writeUserActivity('system', 'verification_email_sent', { email });
 
     return { success: true, message: 'Verification code sent' };
   }

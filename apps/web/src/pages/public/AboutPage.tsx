@@ -8,6 +8,9 @@ export function AboutPage() {
     <div>
       <TopNav title={t('about.title')} backTo="back" />
       <div className="px-6 pt-4">
+        <div className="mb-6 flex justify-center">
+          <img src="/logo.png" alt="Sync/Sit" className="h-24 w-24 rounded-2xl" />
+        </div>
         <h2 className="mb-4 text-xl font-bold">{t('about.heading')}</h2>
         <p className="mb-4 text-sm leading-relaxed text-gray-600">
           {t('about.body1')}

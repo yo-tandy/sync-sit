@@ -3,6 +3,7 @@ import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { haversineDistance } from '@ejm/shared';
 import type { LatLng } from '@ejm/shared';
+import { writeUserActivity } from '../admin/writeAuditLog.js';
 
 interface SearchParams {
   type: 'one_time' | 'recurring';
@@ -198,6 +199,8 @@ export const searchBabysitters = onCall(
     });
 
     console.log(`Returning ${results.length} matching babysitters`);
+    await writeUserActivity(request.auth!.uid, 'search_babysitters', { type: params.type, resultsCount: results.length });
+
     return { results };
   }
 );

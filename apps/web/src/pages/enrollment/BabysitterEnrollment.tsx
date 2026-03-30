@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
+import { useTranslation } from 'react-i18next';
 import { httpsCallable } from 'firebase/functions';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -60,6 +61,7 @@ const INITIAL_DATA: BabysitterFormData = {
 };
 
 export function BabysitterEnrollment() {
+  const { t } = useTranslation();
   const [step, setStep] = useState(0);
   const [formData, setFormData] = useState<BabysitterFormData>(INITIAL_DATA);
   const [loading, setLoading] = useState(false);
@@ -180,7 +182,7 @@ export function BabysitterEnrollment() {
   return (
     <div>
       <TopNav
-        title="Babysitter Sign Up"
+        title={t('enrollment.babysitterTitle')}
         backTo={step === 0 ? '/' : undefined}
         rightAction={
           step > 0 ? (
@@ -188,7 +190,7 @@ export function BabysitterEnrollment() {
               onClick={() => setStep(step - 1)}
               className="text-sm font-medium text-gray-500"
             >
-              Back
+              {t('common.back')}
             </button>
           ) : undefined
         }

@@ -2,6 +2,7 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { db, adminAuth } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { familyEnrollmentSchema } from '@ejm/shared';
+import { writeUserActivity } from '../admin/writeAuditLog.js';
 
 interface KidInput {
   firstName: string;
@@ -144,6 +145,8 @@ export const enrollFamily = onCall(
 
     // 7. Clean up verification code
     await codeDoc.ref.delete();
+
+    await writeUserActivity(uid, 'family_enrolled', { email: data.email });
 
     return { success: true, uid, familyId };
   }

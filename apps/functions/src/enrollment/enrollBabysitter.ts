@@ -3,6 +3,7 @@ import { db, adminAuth } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { FieldValue } from 'firebase-admin/firestore';
 import { isOldEnough, babysitterProfileSchema, babysitterPreferencesSchema } from '@ejm/shared';
+import { writeUserActivity } from '../admin/writeAuditLog.js';
 
 interface EnrollBabysitterData {
   ejemEmail: string;
@@ -156,6 +157,8 @@ export const enrollBabysitter = onCall(
 
     // 7. Clean up verification code
     await codeDoc.ref.delete();
+
+    await writeUserActivity(uid, 'babysitter_enrolled', { email: data.ejemEmail });
 
     return { success: true, uid };
   }

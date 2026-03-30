@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
+import { useTranslation } from 'react-i18next';
 import { httpsCallable } from 'firebase/functions';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth, functions } from '@/config/firebase';
@@ -57,6 +58,7 @@ const INITIAL_DATA: ParentFormData = {
 };
 
 export function ParentEnrollment() {
+  const { t } = useTranslation();
   const [step, setStep] = useState(0);
   const [formData, setFormData] = useState<ParentFormData>(INITIAL_DATA);
   const [loading, setLoading] = useState(false);
@@ -167,7 +169,7 @@ export function ParentEnrollment() {
   return (
     <div>
       <TopNav
-        title="Parent Sign Up"
+        title={t('enrollment.parentTitle')}
         backTo={step === 0 ? '/' : undefined}
         rightAction={
           step > 0 ? (
@@ -175,7 +177,7 @@ export function ParentEnrollment() {
               onClick={() => setStep(step - 1)}
               className="text-sm font-medium text-gray-500"
             >
-              Back
+              {t('common.back')}
             </button>
           ) : undefined
         }

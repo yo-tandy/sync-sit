@@ -1,5 +1,5 @@
 /**
- * EJM Babysitter Coordinator — Cloud Functions
+ * Sync/Sit — Cloud Functions
  *
  * All function exports are organized by domain.
  * Each module exports named functions that are registered with Firebase.
@@ -25,3 +25,16 @@ export { respondToRequest } from './appointments/respondToRequest.js';
 
 // Scheduled
 export { sendReminders } from './scheduled/sendReminders.js';
+
+// Admin
+export { getAdminDashboard } from './admin/getAdminDashboard.js';
+export { listUsers } from './admin/listUsers.js';
+export { blockUser } from './admin/blockUser.js';
+export { deleteUser } from './admin/deleteUser.js';
+export { resetUserPassword } from './admin/resetUserPassword.js';
+export { listAppointments } from './admin/listAppointments.js';
+export { deleteAppointment } from './admin/deleteAppointment.js';
+export { updateHolidays } from './admin/updateHolidays.js';
+export { listAuditLogs } from './admin/listAuditLogs.js';
+export { exportUserData } from './admin/exportUserData.js';
+export { deactivateUser } from './admin/deactivateUser.js';

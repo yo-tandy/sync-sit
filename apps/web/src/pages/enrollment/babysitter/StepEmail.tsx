@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { Button, Input, InfoBanner } from '@/components/ui';
 import type { BabysitterFormData } from '../BabysitterEnrollment';
 
@@ -10,6 +11,7 @@ interface StepEmailProps {
 }
 
 export function StepEmail({ data, onChange, onNext, loading, error }: StepEmailProps) {
+  const { t } = useTranslation();
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onNext();
@@ -17,14 +19,16 @@ export function StepEmail({ data, onChange, onNext, loading, error }: StepEmailP
 
   return (
     <form onSubmit={handleSubmit} className="px-6">
-      <h2 className="mb-2 text-xl font-bold">Verify your school</h2>
+      <div className="mb-6 flex justify-center">
+        <img src="/logo.png" alt="Sync/Sit" className="h-20 w-20 rounded-2xl" />
+      </div>
+      <h2 className="mb-2 text-xl font-bold">{t('enrollment.verifySchool')}</h2>
       <p className="mb-8 text-sm leading-relaxed text-gray-500">
-        Enter your EJM email address. We'll send a code to verify you're a
-        current student.
+        {t('enrollment.verifySchoolDesc')}
       </p>
 
       <Input
-        label="EJM Email"
+        label={t('enrollment.ejemEmailLabel')}
         type="email"
         value={data.ejemEmail}
         onChange={(e) => onChange({ ejemEmail: e.target.value })}
@@ -34,12 +38,11 @@ export function StepEmail({ data, onChange, onNext, loading, error }: StepEmailP
       />
 
       <InfoBanner className="mb-6">
-        Use your official EJM email. The last 2 digits must be your graduation
-        year (currently 26–29).
+        {t('enrollment.ejemEmailHint')}
       </InfoBanner>
 
       <Button type="submit" disabled={loading || !data.ejemEmail}>
-        {loading ? 'Sending...' : 'Send verification code'}
+        {loading ? t('auth.sending') : t('auth.sendCode')}
       </Button>
     </form>
   );

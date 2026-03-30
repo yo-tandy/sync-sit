@@ -4,6 +4,7 @@ import { createBrowserRouter } from 'react-router';
 import { PublicLayout } from '@/layouts/PublicLayout';
 import { BabysitterLayout } from '@/layouts/BabysitterLayout';
 import { FamilyLayout } from '@/layouts/FamilyLayout';
+import { AdminLayout } from '@/layouts/AdminLayout';
 
 // Public pages
 import { WelcomePage } from '@/pages/public/WelcomePage';
@@ -32,6 +33,14 @@ import { FamilySettingsPage } from '@/pages/family/FamilySettingsPage';
 import { InvitePage } from '@/pages/family/InvitePage';
 import { SubmittedReferencesPage } from '@/pages/family/SubmittedReferencesPage';
 import { SearchPage } from '@/pages/family/SearchPage';
+
+// Admin pages
+import { AdminDashboard } from '@/pages/admin/DashboardPage';
+import { AdminUsersPage } from '@/pages/admin/UsersPage';
+import { AdminAppointmentsPage } from '@/pages/admin/AppointmentsPage';
+import { AdminHolidaysPage } from '@/pages/admin/HolidaysPage';
+import { AdminAuditLogPage } from '@/pages/admin/AuditLogPage';
+import { AdminGdprExportPage } from '@/pages/admin/GdprExportPage';
 
 export const router = createBrowserRouter([
   // Public routes
@@ -77,5 +86,16 @@ export const router = createBrowserRouter([
     ],
   },
 
-  // TODO Phase 7: Admin portal routes
+  // Admin portal (auth + role guard)
+  {
+    element: <AdminLayout />,
+    children: [
+      { path: '/admin', element: <AdminDashboard /> },
+      { path: '/admin/users', element: <AdminUsersPage /> },
+      { path: '/admin/appointments', element: <AdminAppointmentsPage /> },
+      { path: '/admin/holidays', element: <AdminHolidaysPage /> },
+      { path: '/admin/audit-log', element: <AdminAuditLogPage /> },
+      { path: '/admin/gdpr-export', element: <AdminGdprExportPage /> },
+    ],
+  },
 ]);

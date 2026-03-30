@@ -60,6 +60,9 @@ export function LoginPage() {
       </div>
 
       <div className="px-6 pt-8">
+        <div className="mb-6 flex justify-center">
+          <img src="/logo.png" alt="Sync/Sit" className="h-20 w-20 rounded-2xl" />
+        </div>
         <h2 className="mb-2 text-2xl font-bold">{t('auth.loginTitle')}</h2>
         <p className="mb-8 text-sm text-gray-500">{t('auth.loginSubtitle')}</p>
 

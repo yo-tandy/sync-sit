@@ -1,6 +1,7 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
+import { writeUserActivity } from '../admin/writeAuditLog.js';
 
 interface ContactRequestData {
   babysitterUserId: string;
@@ -127,6 +128,8 @@ export const sendContactRequest = onCall(
     });
 
     // TODO: Send email + push notification to babysitter
+
+    await writeUserActivity(request.auth!.uid, 'contact_request_sent', { babysitterUserId: data.babysitterUserId, appointmentId: appointmentRef.id });
 
     return {
       success: true,

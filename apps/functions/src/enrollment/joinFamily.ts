@@ -3,6 +3,7 @@ import { db, adminAuth } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { FieldValue } from 'firebase-admin/firestore';
 import { joinFamilySchema } from '@ejm/shared';
+import { writeUserActivity } from '../admin/writeAuditLog.js';
 
 interface JoinFamilyData {
   token: string;
@@ -127,6 +128,8 @@ export const joinFamily = onCall(
 
     // 8. Clean up verification code
     await codeDoc.ref.delete();
+
+    await writeUserActivity(uid, 'joined_family', { familyId });
 
     return { success: true, uid, familyId };
   }

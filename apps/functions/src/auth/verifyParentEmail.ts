@@ -2,6 +2,7 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import * as crypto from 'crypto';
 import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
+import { writeUserActivity } from '../admin/writeAuditLog.js';
 
 /**
  * Send a 6-digit verification code to any email address (for parent enrollment).
@@ -47,6 +48,8 @@ export const verifyParentEmail = onCall(
     if (process.env.FUNCTIONS_EMULATOR === 'true') {
       console.log(`[DEV] Code for ${normalizedEmail}: ${code}`);
     }
+
+    await writeUserActivity('system', 'verification_email_sent', { email });
 
     return { success: true, message: 'Verification code sent' };
   }

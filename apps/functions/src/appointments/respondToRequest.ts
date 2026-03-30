@@ -1,6 +1,7 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
+import { writeUserActivity } from '../admin/writeAuditLog.js';
 
 interface RespondData {
   appointmentId: string;
@@ -90,6 +91,8 @@ export const respondToRequest = onCall(
 
       // TODO: Send notification to family
     }
+
+    await writeUserActivity(request.auth!.uid, data.action === 'accept' ? 'appointment_accepted' : 'appointment_declined', { appointmentId: data.appointmentId });
 
     return { success: true };
   }
