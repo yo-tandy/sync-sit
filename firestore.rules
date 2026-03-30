@@ -1,0 +1,129 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper: check if the requester is authenticated
+    function isAuth() {
+      return request.auth != null;
+    }
+
+    // Helper: check if the requester is the document owner
+    function isOwner(userId) {
+      return isAuth() && request.auth.uid == userId;
+    }
+
+    // Helper: check if the requester is an admin
+    function isAdmin() {
+      return isAuth() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // Helper: check if the requester is a member of a family
+    function isFamilyMember(familyId) {
+      return isAuth() && request.auth.uid in get(/databases/$(database)/documents/families/$(familyId)).data.parentIds;
+    }
+
+    // Users: read own profile; parents can read active babysitters (for search results)
+    match /users/{userId} {
+      allow read: if isOwner(userId)
+                  || isAdmin()
+                  || (isAuth() && resource.data.role == 'babysitter' && resource.data.status == 'active')
+                  || (isAuth() && resource.data.role == 'parent'
+                      && resource.data.familyId != null
+                      && resource.data.familyId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.familyId);
+      allow create, delete: if false; // Only via Cloud Functions
+      allow update: if isOwner(userId)
+                    && !request.resource.data.diff(resource.data).affectedKeys()
+                        .hasAny(['role', 'status', 'uid', 'email', 'ejemEmail', 'createdAt']);
+    }
+
+    // Families: readable + editable by family members + admin
+    match /families/{familyId} {
+      allow read: if isFamilyMember(familyId) || isAdmin();
+      allow create, delete: if false;
+      allow update: if isFamilyMember(familyId);
+
+      match /kids/{kidId} {
+        allow read: if isFamilyMember(familyId) || isAdmin();
+        allow write: if isFamilyMember(familyId);
+      }
+    }
+
+    // Schedules: own schedule readable + writable by owner
+    match /schedules/{userId} {
+      allow read: if isOwner(userId);
+      allow write: if isOwner(userId);
+
+      match /overrides/{date} {
+        allow read: if isOwner(userId);
+        allow write: if isOwner(userId);
+      }
+    }
+
+    // Searches: readable by family members who created them
+    match /searches/{searchId} {
+      allow read: if isAuth() && isFamilyMember(resource.data.familyId);
+      allow write: if false;
+    }
+
+    // Appointments: readable by involved babysitter or family
+    match /appointments/{appointmentId} {
+      allow read: if isAuth() && (
+        request.auth.uid == resource.data.babysitterUserId
+        || isFamilyMember(resource.data.familyId)
+        || isAdmin()
+      );
+      allow write: if false;
+    }
+
+    // References: readable by anyone authenticated (shown in search results)
+    match /references/{referenceId} {
+      allow read: if isAuth();
+      allow create: if isAuth() && (
+        request.resource.data.babysitterUserId == request.auth.uid
+        || request.resource.data.submittedByUserId == request.auth.uid
+      );
+      allow update: if isAuth() && (
+        resource.data.babysitterUserId == request.auth.uid
+        || resource.data.submittedByUserId == request.auth.uid
+      );
+      allow delete: if false;
+    }
+
+    // Notifications: own only, can mark as read
+    match /notifications/{notifId} {
+      allow read: if isAuth() && request.auth.uid == resource.data.recipientUserId;
+      allow update: if isAuth()
+                    && request.auth.uid == resource.data.recipientUserId
+                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+      allow create, delete: if false;
+    }
+
+    // Invite links: readable by anyone (validated in Cloud Function)
+    match /inviteLinks/{token} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Verification codes: no client access
+    match /verificationCodes/{email} {
+      allow read, write: if false;
+    }
+
+    // Holidays: readable by anyone authenticated
+    match /holidays/{schoolYear} {
+      allow read: if isAuth();
+      allow write: if false;
+    }
+
+    // Audit log: admin only
+    match /auditLog/{logId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    // Deny everything else
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

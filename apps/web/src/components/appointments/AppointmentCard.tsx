@@ -1,0 +1,118 @@
+import { useTranslation } from 'react-i18next';
+import { Card, Badge, Button } from '@/components/ui';
+import { CalendarIcon } from '@/components/ui/Icons';
+import type { AppointmentDoc } from '@ejm/shared';
+
+type Variant = 'pending' | 'confirmed' | 'past' | 'rejected';
+
+interface AppointmentCardProps {
+  appointment: AppointmentDoc;
+  variant: Variant;
+  familyName?: string;
+  onClick?: () => void;
+  onAccept?: () => void;
+  onDecline?: () => void;
+}
+
+const borderColors: Record<Variant, string> = {
+  pending: '#f59e0b',   // amber
+  confirmed: '#22c55e', // green
+  past: '#9ca3af',      // gray
+  rejected: '#9ca3af',
+};
+
+const badgeVariants: Record<Variant, 'amber' | 'green' | 'gray'> = {
+  pending: 'amber',
+  confirmed: 'green',
+  past: 'gray',
+  rejected: 'gray',
+};
+
+const badgeLabels: Record<Variant, string> = {
+  pending: 'Pending',
+  confirmed: 'Confirmed',
+  past: 'Completed',
+  rejected: 'Declined',
+};
+
+function formatTime(start?: string, end?: string): string {
+  if (!start || !end) return '';
+  return `${start} – ${end}`;
+}
+
+export function AppointmentCard({
+  appointment,
+  variant,
+  familyName,
+  onClick,
+  onAccept,
+  onDecline,
+}: AppointmentCardProps) {
+  const { t, i18n } = useTranslation();
+  const locale = i18n.language?.startsWith('fr') ? 'fr-FR' : 'en-GB';
+
+  const dayNames: Record<string, string> = {
+    mon: t('days.mondays'), tue: t('days.tuesdays'), wed: t('days.wednesdays'), thu: t('days.thursdays'),
+    fri: t('days.fridays'), sat: t('days.saturdays'), sun: t('days.sundays'),
+  };
+
+  const formatDate = (dateStr?: string): string => {
+    if (!dateStr) return '';
+    const d = new Date(dateStr + 'T00:00:00');
+    return d.toLocaleDateString(locale, { weekday: 'short', month: 'short', day: 'numeric' });
+  };
+
+  const formatRecurringSlots = (slots?: { day: string; startTime: string; endTime: string }[]): string => {
+    if (!slots || slots.length === 0) return t('request.recurring');
+    return slots.map((s) => `${dayNames[s.day] || s.day} ${s.startTime}–${s.endTime}`).join(', ');
+  };
+
+  const apt = appointment;
+  const rawName = familyName || (apt as any).familyName;
+  const title = rawName ? t('familyDashboard.familyTitle', { name: rawName.toUpperCase() }) : t('request.title');
+  const kidCount = apt.kidIds?.length || 0;
+
+  return (
+    <Card borderColor={borderColors[variant]} className="mb-3" interactive={!!onClick} onClick={onClick}>
+      <div className="flex items-start justify-between">
+        <div className="min-w-0 flex-1">
+          <p className="font-semibold text-gray-900">{title}</p>
+          <div className="mt-1 flex items-center gap-2 text-sm text-gray-500">
+            <CalendarIcon className="h-4 w-4 shrink-0" />
+            {apt.date ? (
+              <>
+                <span>{formatDate(apt.date)}</span>
+                {apt.startTime && apt.endTime && (
+                  <span className="text-gray-400">{formatTime(apt.startTime, apt.endTime)}</span>
+                )}
+              </>
+            ) : (
+              <span className="text-gray-500">{t('request.recurringLabel')}: {formatRecurringSlots(apt.recurringSlots)}</span>
+            )}
+          </div>
+          {kidCount > 0 && (
+            <p className="mt-1 text-sm text-gray-500">
+              {kidCount} {kidCount === 1 ? 'child' : 'children'}
+            </p>
+          )}
+        </div>
+        <Badge variant={badgeVariants[variant]}>{badgeLabels[variant]}</Badge>
+      </div>
+
+      {variant === 'pending' && (onAccept || onDecline) && (
+        <div className="mt-3 flex gap-2">
+          {onAccept && (
+            <Button size="sm" onClick={onAccept} className="flex-1">
+              Accept
+            </Button>
+          )}
+          {onDecline && (
+            <Button size="sm" variant="outline" onClick={onDecline} className="flex-1">
+              Decline
+            </Button>
+          )}
+        </div>
+      )}
+    </Card>
+  );
+}
