@@ -70,6 +70,18 @@ export const searchBabysitters = onCall(
 
     const params = request.data as SearchParams;
 
+    // Verify the calling parent's family is fully verified
+    const callerDoc = await db.collection('users').doc(request.auth.uid).get();
+    if (callerDoc.exists && callerDoc.data()?.role === 'parent') {
+      const callerFamilyId = callerDoc.data()?.familyId;
+      if (callerFamilyId) {
+        const callerFamilyDoc = await db.collection('families').doc(callerFamilyId).get();
+        if (!callerFamilyDoc.data()?.verification?.isFullyVerified) {
+          throw new HttpsError('permission-denied', 'Family verification required before searching for babysitters');
+        }
+      }
+    }
+
     // 1. Get all searchable, active babysitters
     const usersSnap = await db.collection('users')
       .where('role', '==', 'babysitter')

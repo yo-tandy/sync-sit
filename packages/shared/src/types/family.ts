@@ -1,4 +1,5 @@
 import type { FirestoreTimestamp, LatLng } from './common.js';
+import type { FamilyVerificationStatus } from './verification.js';
 
 export interface FamilyDoc {
   familyId: string;
@@ -13,6 +14,7 @@ export interface FamilyDoc {
   createdAt: FirestoreTimestamp;
   updatedAt: FirestoreTimestamp;
   status: 'active' | 'deleted';
+  verification?: FamilyVerificationStatus;
 }
 
 export interface SearchDefaults {

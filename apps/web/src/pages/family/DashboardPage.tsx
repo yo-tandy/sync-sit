@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
+import { useVerificationStore } from '@/stores/verificationStore';
 import { useFamilyAppointments } from '@/hooks/useFamilyAppointments';
 import { Button, Badge, Card, Dialog, Spinner } from '@/components/ui';
 import { CalendarIcon } from '@/components/ui/Icons';
@@ -288,6 +289,7 @@ export function FamilyDashboard() {
     fri: t('days.fridays'), sat: t('days.saturdays'), sun: t('days.sundays'),
   };
   const { userDoc, logout } = useAuthStore();
+  const { familyVerification, fetchStatus: fetchVerificationStatus } = useVerificationStore();
   const [familyName, setFamilyName] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
   const navigate = useNavigate();
@@ -355,6 +357,12 @@ export function FamilyDashboard() {
     loadFamily();
   }, [userDoc]);
 
+  useEffect(() => {
+    if (userDoc?.role === 'parent') {
+      fetchVerificationStatus();
+    }
+  }, []);
+
   return (
     <div className="px-5 pt-4 pb-8">
       {/* Header */}
@@ -363,11 +371,26 @@ export function FamilyDashboard() {
         <p className="text-xs text-gray-500">{familyName || 'Family'} {t('familyDashboard.family')}</p>
       </div>
 
+      {/* Verification banner */}
+      {familyVerification && !familyVerification.isFullyVerified && (
+        <Card className="mb-4 border-amber-200 bg-amber-50">
+          <div className="text-center">
+            <p className="mb-2 text-sm font-semibold text-amber-800">{t('verification.required')}</p>
+            <p className="mb-3 text-xs text-amber-600">{t('verification.requiredDesc')}</p>
+            <Link to="/family/verification">
+              <Button size="sm">{t('verification.completeVerification')}</Button>
+            </Link>
+          </div>
+        </Card>
+      )}
+
       {/* Find a Babysitter */}
-      <Button className="mb-6 h-14 text-lg" onClick={() => navigate('/family/search')}>
-        <SearchIcon className="h-5 w-5" />
-        {t('search.findBabysitter')}
-      </Button>
+      {(!familyVerification || familyVerification.isFullyVerified) && (
+        <Button className="mb-6 h-14 text-lg" onClick={() => navigate('/family/search')}>
+          <SearchIcon className="h-5 w-5" />
+          {t('search.findBabysitter')}
+        </Button>
+      )}
 
       {/* Appointments */}
       {aptsLoading ? (

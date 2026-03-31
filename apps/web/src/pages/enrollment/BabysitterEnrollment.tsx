@@ -35,6 +35,7 @@ export interface BabysitterFormData {
   areaLatLng?: { lat: number; lng: number };
   areaRadiusKm?: number;
   photoFile?: File;
+  consentAccepted: boolean;
 }
 
 const INITIAL_DATA: BabysitterFormData = {
@@ -58,6 +59,7 @@ const INITIAL_DATA: BabysitterFormData = {
   arrondissements: [],
   areaAddress: '',
   areaRadiusKm: 3,
+  consentAccepted: false,
 };
 
 export function BabysitterEnrollment() {

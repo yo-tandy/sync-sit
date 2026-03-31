@@ -47,6 +47,10 @@ export const sendContactRequest = onCall(
       throw new HttpsError('permission-denied', 'Not a member of this family');
     }
 
+    if (!familyData.verification?.isFullyVerified) {
+      throw new HttpsError('permission-denied', 'Family verification required before contacting babysitters');
+    }
+
     // Verify babysitter exists and is active
     const babysitterSnap = await db.collection('users').doc(data.babysitterUserId).get();
     if (!babysitterSnap.exists || babysitterSnap.data()?.status !== 'active') {

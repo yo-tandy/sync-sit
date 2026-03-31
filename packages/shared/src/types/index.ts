@@ -6,3 +6,4 @@ export * from './schedule.js';
 export * from './reference.js';
 export * from './notification.js';
 export * from './admin.js';
+export * from './verification.js';

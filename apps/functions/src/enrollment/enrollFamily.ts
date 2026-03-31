@@ -141,6 +141,8 @@ export const enrollFamily = onCall(
       fcmTokens: [],
       createdAt: now,
       updatedAt: now,
+      consentAt: now,
+      consentVersion: '1.0',
     });
 
     // 7. Clean up verification code

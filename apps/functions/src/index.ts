@@ -23,8 +23,15 @@ export { sendContactRequest } from './search/sendContactRequest.js';
 // Appointments
 export { respondToRequest } from './appointments/respondToRequest.js';
 
+// Verification
+export { submitVerification } from './verification/submitVerification.js';
+export { reviewVerification } from './verification/reviewVerification.js';
+export { listPendingVerifications } from './verification/listPendingVerifications.js';
+export { getVerificationStatus } from './verification/getVerificationStatus.js';
+
 // Scheduled
 export { sendReminders } from './scheduled/sendReminders.js';
+export { cleanupOldData } from './scheduled/cleanupOldData.js';
 
 // Admin
 export { getAdminDashboard } from './admin/getAdminDashboard.js';

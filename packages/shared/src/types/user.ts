@@ -15,6 +15,8 @@ export interface UserBase {
   createdAt: FirestoreTimestamp;
   updatedAt: FirestoreTimestamp;
   lastLoginAt?: FirestoreTimestamp;
+  consentAt?: FirestoreTimestamp;
+  consentVersion?: string;
 }
 
 /** Babysitter-specific user fields */

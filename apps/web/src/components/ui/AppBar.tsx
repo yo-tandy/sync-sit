@@ -113,6 +113,7 @@ export function AppBar({ role }: { role: UserRole }) {
 
           {role === 'parent' && (
             <>
+              <MenuItem icon={<ShieldIcon className="h-5 w-5" />} label={t('verification.menuTitle')} to="/family/verification" onNavigate={() => setMenuOpen(false)} />
               <MenuItem icon={<SettingsIcon className="h-5 w-5" />} label={t('menu.editFamily')} to="/family/settings" onNavigate={() => setMenuOpen(false)} />
               <MenuItem icon={<UserPlusIcon className="h-5 w-5" />} label={t('menu.addCoParent')} to="/family/invite" onNavigate={() => setMenuOpen(false)} />
               <MenuItem icon={<UserIcon className="h-5 w-5" />} label={t('menu.myReferences')} to="/family/references" onNavigate={() => setMenuOpen(false)} />
@@ -125,6 +126,7 @@ export function AppBar({ role }: { role: UserRole }) {
               <MenuItem icon={<UsersIcon className="h-5 w-5" />} label={t('admin.manageUsers')} to="/admin/users" onNavigate={() => setMenuOpen(false)} />
               <MenuItem icon={<CalendarIcon className="h-5 w-5" />} label={t('admin.manageAppointments')} to="/admin/appointments" onNavigate={() => setMenuOpen(false)} />
               <MenuItem icon={<CalendarIcon className="h-5 w-5" />} label={t('admin.holidays')} to="/admin/holidays" onNavigate={() => setMenuOpen(false)} />
+              <MenuItem icon={<ShieldIcon className="h-5 w-5" />} label={t('admin.verifications')} to="/admin/verifications" onNavigate={() => setMenuOpen(false)} />
               <MenuItem icon={<ClipboardListIcon className="h-5 w-5" />} label={t('admin.auditLog')} to="/admin/audit-log" onNavigate={() => setMenuOpen(false)} />
               <MenuItem icon={<DownloadIcon className="h-5 w-5" />} label={t('admin.gdprExport')} to="/admin/gdpr-export" onNavigate={() => setMenuOpen(false)} />
               <div className="px-4 py-3">

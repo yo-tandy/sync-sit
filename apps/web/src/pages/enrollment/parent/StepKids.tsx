@@ -1,4 +1,6 @@
-import { Button, Input, Card } from '@/components/ui';
+import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router';
+import { Button, Input, Card, Checkbox } from '@/components/ui';
 import { PlusIcon, XIcon } from '@/components/ui/Icons';
 import { LanguagePicker } from '@/components/forms/LanguagePicker';
 import type { ParentFormData, KidFormData } from '../ParentEnrollment';
@@ -12,6 +14,7 @@ interface StepKidsProps {
 }
 
 export function StepKids({ data, onChange, onNext, loading, error }: StepKidsProps) {
+  const { t } = useTranslation();
   const updateKid = (index: number, partial: Partial<KidFormData>) => {
     const newKids = [...data.kids];
     newKids[index] = { ...newKids[index], ...partial };
@@ -101,10 +104,32 @@ export function StepKids({ data, onChange, onNext, loading, error }: StepKidsPro
         Add another child
       </Button>
 
+      {/* Consent */}
+      <div className="mb-2 mt-6 rounded-lg border border-gray-200 bg-gray-50 p-4">
+        <Checkbox
+          checked={data.consentAccepted}
+          onChange={(e) => onChange({ consentAccepted: e.target.checked })}
+          label={
+            <span>
+              {t('enrollment.consentAgree')}{' '}
+              <Link to="/terms" target="_blank" className="font-medium text-red-600 underline">{t('enrollment.termsOfService')}</Link>
+              {' '}{t('enrollment.consentAnd')}{' '}
+              <Link to="/privacy" target="_blank" className="font-medium text-red-600 underline">{t('enrollment.privacyPolicy')}</Link>
+            </span>
+          }
+        />
+        <Checkbox
+          checked={data.consentAccepted}
+          onChange={(e) => onChange({ consentAccepted: e.target.checked })}
+          label={t('enrollment.consentChildren')}
+          className="mt-3"
+        />
+      </div>
+
       {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
 
-      <Button type="submit" disabled={loading || !isValid} className="mb-8">
-        {loading ? 'Creating account...' : 'Complete sign up'}
+      <Button type="submit" disabled={loading || !isValid || !data.consentAccepted} className="mb-8">
+        {loading ? t('enrollment.creatingAccount') : t('enrollment.completeSignUp')}
       </Button>
     </form>
   );

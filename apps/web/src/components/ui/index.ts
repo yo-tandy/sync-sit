@@ -12,4 +12,5 @@ export { Avatar } from './Avatar';
 export { InfoBanner } from './InfoBanner';
 export { TopNav } from './TopNav';
 export { LanguageSelector } from './LanguageSelector';
+export { Checkbox } from './Checkbox';
 export * from './Icons';

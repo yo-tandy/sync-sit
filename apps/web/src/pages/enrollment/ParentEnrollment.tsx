@@ -41,6 +41,7 @@ export interface ParentFormData {
     requireReferences?: boolean;
     maxRate?: number;
   };
+  consentAccepted: boolean;
 }
 
 const INITIAL_DATA: ParentFormData = {
@@ -55,6 +56,7 @@ const INITIAL_DATA: ParentFormData = {
   note: '',
   kids: [{ firstName: '', age: 0, languages: [] }],
   searchDefaults: {},
+  consentAccepted: false,
 };
 
 export function ParentEnrollment() {

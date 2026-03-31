@@ -136,6 +136,8 @@ export const enrollBabysitter = onCall(
       fcmTokens: [],
       createdAt: now,
       updatedAt: now,
+      consentAt: now,
+      consentVersion: '1.0',
     });
 
     // 6. Create empty schedule

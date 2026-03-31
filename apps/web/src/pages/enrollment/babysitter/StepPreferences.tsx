@@ -1,4 +1,6 @@
-import { Button, Input, Textarea, Chip } from '@/components/ui';
+import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router';
+import { Button, Input, Textarea, Chip, Checkbox } from '@/components/ui';
 import { AddressAutocomplete, type AddressResult } from '@/components/forms/AddressAutocomplete';
 import { ARRONDISSEMENTS, NEARBY_TOWNS } from '@ejm/shared';
 import type { BabysitterFormData } from '../BabysitterEnrollment';
@@ -12,6 +14,7 @@ interface StepPreferencesProps {
 }
 
 export function StepPreferences({ data, onChange, onNext, loading, error }: StepPreferencesProps) {
+  const { t } = useTranslation();
   const toggleArea = (area: string) => {
     const current = data.arrondissements || [];
     if (current.includes(area)) {
@@ -214,10 +217,26 @@ export function StepPreferences({ data, onChange, onNext, loading, error }: Step
         )}
       </div>
 
+      {/* Consent */}
+      <div className="mb-4 mt-6 rounded-lg border border-gray-200 bg-gray-50 p-4">
+        <Checkbox
+          checked={data.consentAccepted}
+          onChange={(e) => onChange({ consentAccepted: e.target.checked })}
+          label={
+            <span>
+              {t('enrollment.consentAgree')}{' '}
+              <Link to="/terms" target="_blank" className="font-medium text-red-600 underline">{t('enrollment.termsOfService')}</Link>
+              {' '}{t('enrollment.consentAnd')}{' '}
+              <Link to="/privacy" target="_blank" className="font-medium text-red-600 underline">{t('enrollment.privacyPolicy')}</Link>
+            </span>
+          }
+        />
+      </div>
+
       {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
 
-      <Button type="submit" disabled={loading || !isValid} className="mb-8 mt-4">
-        {loading ? 'Creating account...' : 'Complete sign up'}
+      <Button type="submit" disabled={loading || !isValid || !data.consentAccepted} className="mb-8 mt-4">
+        {loading ? t('enrollment.creatingAccount') : t('enrollment.completeSignUp')}
       </Button>
     </form>
   );

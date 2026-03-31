@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { TopNav } from '@/components/ui/TopNav';
 import { Card } from '@/components/ui/Card';
 import { Spinner } from '@/components/ui/Spinner';
-import { UsersIcon, CalendarIcon, ClipboardListIcon, DownloadIcon } from '@/components/ui/Icons';
+import { UsersIcon, CalendarIcon, ClipboardListIcon, DownloadIcon, ShieldIcon } from '@/components/ui/Icons';
 import { useAdminStore } from '@/stores/adminStore';
 
 export function AdminDashboard() {
@@ -33,6 +33,12 @@ export function AdminDashboard() {
       icon: <CalendarIcon className="h-6 w-6 text-red-600" />,
       title: t('admin.holidays'),
       description: t('admin.holidaysDesc'),
+    },
+    {
+      to: '/admin/verifications',
+      icon: <ShieldIcon className="h-6 w-6 text-red-600" />,
+      title: t('admin.verifications'),
+      description: t('admin.verificationsDesc'),
     },
     {
       to: '/admin/audit-log',

@@ -33,6 +33,7 @@ import { FamilySettingsPage } from '@/pages/family/FamilySettingsPage';
 import { InvitePage } from '@/pages/family/InvitePage';
 import { SubmittedReferencesPage } from '@/pages/family/SubmittedReferencesPage';
 import { SearchPage } from '@/pages/family/SearchPage';
+import { VerificationPage } from '@/pages/family/VerificationPage';
 
 // Admin pages
 import { AdminDashboard } from '@/pages/admin/DashboardPage';
@@ -41,6 +42,7 @@ import { AdminAppointmentsPage } from '@/pages/admin/AppointmentsPage';
 import { AdminHolidaysPage } from '@/pages/admin/HolidaysPage';
 import { AdminAuditLogPage } from '@/pages/admin/AuditLogPage';
 import { AdminGdprExportPage } from '@/pages/admin/GdprExportPage';
+import { AdminVerificationsPage } from '@/pages/admin/VerificationsPage';
 
 export const router = createBrowserRouter([
   // Public routes
@@ -83,6 +85,7 @@ export const router = createBrowserRouter([
       { path: '/family/references', element: <SubmittedReferencesPage /> },
       { path: '/family/search', element: <SearchPage /> },
       { path: '/family/settings/preferences', element: <NotificationPrefsPage /> },
+      { path: '/family/verification', element: <VerificationPage /> },
     ],
   },
 
@@ -96,6 +99,7 @@ export const router = createBrowserRouter([
       { path: '/admin/holidays', element: <AdminHolidaysPage /> },
       { path: '/admin/audit-log', element: <AdminAuditLogPage /> },
       { path: '/admin/gdpr-export', element: <AdminGdprExportPage /> },
+      { path: '/admin/verifications', element: <AdminVerificationsPage /> },
     ],
   },
 ]);
