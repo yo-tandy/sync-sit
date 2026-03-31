@@ -28,6 +28,9 @@ export { submitVerification } from './verification/submitVerification.js';
 export { reviewVerification } from './verification/reviewVerification.js';
 export { listPendingVerifications } from './verification/listPendingVerifications.js';
 export { getVerificationStatus } from './verification/getVerificationStatus.js';
+export { generateCommunityCode } from './verification/generateCommunityCode.js';
+export { lookupCommunityCode } from './verification/lookupCommunityCode.js';
+export { approveCommunityCode } from './verification/approveCommunityCode.js';
 
 // Scheduled
 export { sendReminders } from './scheduled/sendReminders.js';

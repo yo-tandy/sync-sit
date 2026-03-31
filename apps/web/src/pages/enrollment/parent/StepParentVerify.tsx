@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '@/config/firebase';
-import { Button, Input } from '@/components/ui';
+import {} from '@/components/ui';
 import { MailIcon } from '@/components/ui/Icons';
 import { CodeInput } from '@/components/forms/CodeInput';
 import type { ParentFormData } from '../ParentEnrollment';
@@ -18,7 +18,6 @@ interface StepParentVerifyProps {
 export function StepParentVerify({ data, onChange, onNext, onResend, loading, error }: StepParentVerifyProps) {
   const [resendCooldown, setResendCooldown] = useState(60);
   const [resendCount, setResendCount] = useState(0);
-  const [passwordConfirm, setPasswordConfirm] = useState('');
   const [codeVerified, setCodeVerified] = useState(false);
   const [codeError, setCodeError] = useState<string | null>(null);
   const [verifying, setVerifying] = useState(false);
@@ -36,7 +35,8 @@ export function StepParentVerify({ data, onChange, onNext, onResend, loading, er
     try {
       const verifyFn = httpsCallable(functions, 'verifyCode');
       await verifyFn({ email: data.email, code });
-      setCodeVerified(true);
+      handleCodeVerified();
+      return;
     } catch (err: any) {
       setCodeError(err.message || 'Invalid verification code');
       setCodeVerified(false);
@@ -45,12 +45,14 @@ export function StepParentVerify({ data, onChange, onNext, onResend, loading, er
     }
   };
 
+  // Auto-advance when code is verified
+  const handleCodeVerified = () => {
+    setCodeVerified(true);
+    onNext();
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!codeVerified) return;
-    if (data.password.length >= 8 && data.password === passwordConfirm) {
-      onNext();
-    }
   };
 
   return (
@@ -93,30 +95,7 @@ export function StepParentVerify({ data, onChange, onNext, onResend, loading, er
       </div>
 
       {codeVerified && (
-        <div className="border-t border-gray-200 pt-6">
-          <h3 className="mb-4 text-lg font-semibold">Create your password</h3>
-          <Input
-            label="Password"
-            type="password"
-            value={data.password}
-            onChange={(e) => onChange({ password: e.target.value })}
-            placeholder="Min. 8 characters"
-            error={data.password && data.password.length < 8 ? 'Password must be at least 8 characters' : undefined}
-            required
-          />
-          <Input
-            label="Confirm password"
-            type="password"
-            value={passwordConfirm}
-            onChange={(e) => setPasswordConfirm(e.target.value)}
-            placeholder="Re-enter your password"
-            error={passwordConfirm && data.password !== passwordConfirm ? "Passwords don't match" : undefined}
-            required
-          />
-          <Button type="submit" disabled={loading || data.password.length < 8 || data.password !== passwordConfirm}>
-            Continue
-          </Button>
-        </div>
+        <p className="mt-3 text-center text-sm text-green-600">✓ Code verified</p>
       )}
     </form>
   );

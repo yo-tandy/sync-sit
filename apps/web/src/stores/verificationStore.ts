@@ -41,6 +41,14 @@ interface VerificationState {
   pendingVerifications: VerificationDoc[];
   pendingLoading: boolean;
 
+  // Community verification
+  communityCode: string | null;
+  communityCodeExpires: string | null;
+  communityCodeLoading: boolean;
+  lookupResult: { familyName: string; firstName: string; lastName: string; familyId: string } | null;
+  lookupLoading: boolean;
+  approving: boolean;
+
   // Actions
   fetchStatus: () => Promise<void>;
   submitDocument: (data: {
@@ -55,6 +63,10 @@ interface VerificationState {
   }) => Promise<void>;
   fetchPendingVerifications: (params: { status?: string; type?: string }) => Promise<void>;
   reviewVerification: (verificationId: string, decision: 'approved' | 'rejected', rejectionReason?: string) => Promise<void>;
+  generateCommunityCode: () => Promise<void>;
+  lookupCommunityCode: (code: string) => Promise<void>;
+  approveCommunityCode: (code: string) => Promise<void>;
+  clearLookup: () => void;
 }
 
 export const useVerificationStore = create<VerificationState>((set) => ({
@@ -64,6 +76,13 @@ export const useVerificationStore = create<VerificationState>((set) => ({
   uploading: false,
   pendingVerifications: [],
   pendingLoading: false,
+
+  communityCode: null,
+  communityCodeExpires: null,
+  communityCodeLoading: false,
+  lookupResult: null,
+  lookupLoading: false,
+  approving: false,
 
   fetchStatus: async () => {
     set({ loading: true });
@@ -114,4 +133,43 @@ export const useVerificationStore = create<VerificationState>((set) => ({
     const fn = httpsCallable(functions, 'reviewVerification');
     await fn({ verificationId, decision, rejectionReason });
   },
+
+  generateCommunityCode: async () => {
+    set({ communityCodeLoading: true });
+    try {
+      const fn = httpsCallable(functions, 'generateCommunityCode');
+      const result = await fn({});
+      const data = result.data as any;
+      set({ communityCode: data.code, communityCodeExpires: data.expiresAt, communityCodeLoading: false });
+    } catch (err) {
+      set({ communityCodeLoading: false });
+      throw err;
+    }
+  },
+
+  lookupCommunityCode: async (code: string) => {
+    set({ lookupLoading: true, lookupResult: null });
+    try {
+      const fn = httpsCallable(functions, 'lookupCommunityCode');
+      const result = await fn({ code });
+      set({ lookupResult: result.data as any, lookupLoading: false });
+    } catch (err) {
+      set({ lookupLoading: false });
+      throw err;
+    }
+  },
+
+  approveCommunityCode: async (code: string) => {
+    set({ approving: true });
+    try {
+      const fn = httpsCallable(functions, 'approveCommunityCode');
+      await fn({ code });
+      set({ approving: false, lookupResult: null });
+    } catch (err) {
+      set({ approving: false });
+      throw err;
+    }
+  },
+
+  clearLookup: () => set({ lookupResult: null }),
 }));

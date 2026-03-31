@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Spinner } from '@/components/ui/Spinner';
+import { Checkbox } from '@/components/ui/Checkbox';
 import type { ParentUser } from '@ejm/shared';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
@@ -36,22 +37,34 @@ export function VerificationPage() {
     uploading,
     fetchStatus,
     submitDocument,
+    communityCode,
+    communityCodeExpires,
+    communityCodeLoading,
+    lookupResult,
+    lookupLoading,
+    approving,
+    generateCommunityCode,
+    lookupCommunityCode,
+    approveCommunityCode,
+    clearLookup,
   } = useVerificationStore();
 
+  const [activeTab, setActiveTab] = useState<'identity' | 'enrollment'>('identity');
   const [identityFile, setIdentityFile] = useState<File | null>(null);
   const [identityError, setIdentityError] = useState('');
   const identityInputRef = useRef<HTMLInputElement>(null);
 
   // Enrollment form state
-  const [showEnrollmentForm, setShowEnrollmentForm] = useState(false);
   const [enrollmentFile, setEnrollmentFile] = useState<File | null>(null);
-  const [childName, setChildName] = useState('');
-  const [childDob, setChildDob] = useState('');
-  const [schoolYear, setSchoolYear] = useState('');
-  const [classLevel, setClassLevel] = useState('');
-  const [signerName, setSignerName] = useState('');
   const [enrollmentError, setEnrollmentError] = useState('');
   const enrollmentInputRef = useRef<HTMLInputElement>(null);
+
+  // Community verification state
+  const [approveCode, setApproveCode] = useState('');
+  const [approveError, setApproveError] = useState('');
+  const [approveSuccess, setApproveSuccess] = useState(false);
+  const [knowPerson, setKnowPerson] = useState(false);
+  const [confirmEjm, setConfirmEjm] = useState(false);
 
   useEffect(() => {
     fetchStatus();
@@ -83,35 +96,41 @@ export function VerificationPage() {
     }
   };
 
-  const handleEnrollmentSubmit = async () => {
-    if (!enrollmentFile || !childName.trim()) {
-      setEnrollmentError(t('verification.fillRequired'));
-      return;
-    }
+  const handleEnrollmentUpload = async () => {
+    if (!enrollmentFile) return;
     if (enrollmentFile.size > MAX_FILE_SIZE) {
       setEnrollmentError(t('verification.fileTooLarge'));
       return;
     }
     setEnrollmentError('');
     try {
-      await handleUpload(enrollmentFile, 'ejm_enrollment', {
-        childName: childName.trim(),
-        childDob,
-        schoolYear: schoolYear.trim(),
-        classLevel: classLevel.trim(),
-        signerName: signerName.trim(),
-      });
-      // Reset form
+      await handleUpload(enrollmentFile, 'ejm_enrollment');
       setEnrollmentFile(null);
-      setChildName('');
-      setChildDob('');
-      setSchoolYear('');
-      setClassLevel('');
-      setSignerName('');
-      setShowEnrollmentForm(false);
       if (enrollmentInputRef.current) enrollmentInputRef.current.value = '';
     } catch {
       setEnrollmentError(t('verification.uploadError'));
+    }
+  };
+
+  const handleLookup = async () => {
+    setApproveError('');
+    try {
+      await lookupCommunityCode(approveCode.trim());
+    } catch (err: any) {
+      setApproveError(err.message || 'Invalid code');
+    }
+  };
+
+  const handleCommunityApprove = async () => {
+    setApproveError('');
+    try {
+      await approveCommunityCode(approveCode.trim());
+      setApproveSuccess(true);
+      setApproveCode('');
+      setKnowPerson(false);
+      setConfirmEjm(false);
+    } catch (err: any) {
+      setApproveError(err.message || 'Approval failed');
     }
   };
 
@@ -172,9 +191,49 @@ export function VerificationPage() {
               </div>
             </Card>
 
-            {/* Identity section */}
+            {/* ─── Section: Verification with Documents ─── */}
             <div className="mb-6">
-              <h3 className="mb-3 text-sm font-semibold text-gray-900">{t('verification.identityVerification')}</h3>
+              <h3 className="mb-3 text-base font-bold text-gray-900">{t('verification.documentSection')}</h3>
+
+            {/* Tabs */}
+            <div className="mb-4 flex rounded-lg border border-gray-200 bg-gray-100 p-1">
+              <button
+                type="button"
+                onClick={() => setActiveTab('identity')}
+                className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+                  activeTab === 'identity'
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                {t('verification.identity')}
+                {identityStatus !== 'not_submitted' && (
+                  <Badge variant={statusBadgeVariant(identityStatus)} className="ml-2">
+                    {t(`verification.status_${identityStatus}`)}
+                  </Badge>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('enrollment')}
+                className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+                  activeTab === 'enrollment'
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                {t('verification.enrollment')}
+                {enrollmentStatus !== 'not_submitted' && (
+                  <Badge variant={statusBadgeVariant(enrollmentStatus)} className="ml-2">
+                    {t(`verification.status_${enrollmentStatus}`)}
+                  </Badge>
+                )}
+              </button>
+            </div>
+
+            {/* Identity section */}
+            {activeTab === 'identity' && (
+            <div className="mb-6">
 
               {identityStatus === 'approved' ? (
                 <Card>
@@ -220,10 +279,11 @@ export function VerificationPage() {
                 </Card>
               )}
             </div>
+            )}
 
             {/* Enrollment section */}
+            {activeTab === 'enrollment' && (
             <div className="mb-6">
-              <h3 className="mb-3 text-sm font-semibold text-gray-900">{t('verification.enrollmentVerification')}</h3>
 
               {/* List of submitted enrollment docs */}
               {enrollmentDocs.length > 0 && (
@@ -250,71 +310,137 @@ export function VerificationPage() {
                 </div>
               )}
 
-              {/* Add enrollment document button/form */}
-              {!showEnrollmentForm ? (
-                <Button size="sm" variant="outline" onClick={() => setShowEnrollmentForm(true)}>
-                  {t('verification.addEnrollmentDoc')}
+              {/* Upload enrollment document */}
+              <Card>
+                <p className="mb-3 text-xs text-gray-500">{t('verification.enrollmentDesc')}</p>
+                <p className="mb-3 text-xs text-gray-500">{t('verification.enrollmentNote')}</p>
+                <input
+                  ref={enrollmentInputRef}
+                  type="file"
+                  accept="image/*,.pdf"
+                  onChange={(e) => setEnrollmentFile(e.target.files?.[0] || null)}
+                  className="mb-3 block w-full text-sm text-gray-500 file:mr-4 file:rounded-lg file:border-0 file:bg-red-50 file:px-4 file:py-2 file:text-sm file:font-medium file:text-red-600 hover:file:bg-red-100"
+                />
+                {enrollmentError && <p className="mb-2 text-xs text-red-600">{enrollmentError}</p>}
+                <Button
+                  size="sm"
+                  onClick={handleEnrollmentUpload}
+                  disabled={!enrollmentFile || uploading}
+                >
+                  {uploading ? t('common.saving') : t('verification.upload')}
                 </Button>
-              ) : (
+              </Card>
+            </div>
+            )}
+            </div>
+
+            {/* ─── Section: Community Verification ─── */}
+            <div>
+              <h3 className="mb-3 text-base font-bold text-gray-900">{t('verification.communitySection')}</h3>
+
+              {/* Ask for a verification */}
+              {!isFullyVerified && (
+                <Card className="mb-4">
+                  <h4 className="mb-2 text-sm font-semibold text-gray-900">{t('verification.askForVerification')}</h4>
+                  <p className="mb-3 text-xs text-gray-500">{t('verification.askForVerificationDesc')}</p>
+
+                  {communityCode && communityCodeExpires && new Date(communityCodeExpires) > new Date() ? (
+                    <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                      <p className="mb-3 text-xs leading-relaxed text-gray-600">
+                        {t('verification.shareMessage')}
+                      </p>
+                      <div className="flex items-center justify-center rounded-lg bg-white p-3 border border-gray-200">
+                        <span className="text-2xl font-mono font-bold tracking-widest text-red-600">{communityCode}</span>
+                      </div>
+                      <p className="mt-2 text-center text-xs text-gray-400">
+                        {t('verification.codeExpires', { time: new Date(communityCodeExpires).toLocaleString(i18n.language === 'fr' ? 'fr-FR' : 'en-US', { dateStyle: 'short', timeStyle: 'short' }) })}
+                      </p>
+                    </div>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => generateCommunityCode()}
+                      disabled={communityCodeLoading}
+                    >
+                      {communityCodeLoading ? '...' : t('verification.generateCode')}
+                    </Button>
+                  )}
+                </Card>
+              )}
+
+              {/* Approve a friend */}
+              {familyVerification?.isFullyVerified && familyVerification?.isEjmFamily && (
                 <Card>
-                  <h4 className="mb-3 text-sm font-semibold text-gray-900">{t('verification.addEnrollmentDoc')}</h4>
-                  <div className="space-y-3">
-                    <input
-                      ref={enrollmentInputRef}
-                      type="file"
-                      accept="image/*,.pdf"
-                      onChange={(e) => setEnrollmentFile(e.target.files?.[0] || null)}
-                      className="block w-full text-sm text-gray-500 file:mr-4 file:rounded-lg file:border-0 file:bg-red-50 file:px-4 file:py-2 file:text-sm file:font-medium file:text-red-600 hover:file:bg-red-100"
-                    />
-                    <Input
-                      label={t('verification.childFullName')}
-                      value={childName}
-                      onChange={(e) => setChildName(e.target.value)}
-                      required
-                    />
-                    <Input
-                      label={t('verification.childDob')}
-                      type="date"
-                      value={childDob}
-                      onChange={(e) => setChildDob(e.target.value)}
-                    />
-                    <Input
-                      label={t('verification.schoolYear')}
-                      placeholder="2025-2026"
-                      value={schoolYear}
-                      onChange={(e) => setSchoolYear(e.target.value)}
-                    />
-                    <Input
-                      label={t('verification.classLevelLabel')}
-                      value={classLevel}
-                      onChange={(e) => setClassLevel(e.target.value)}
-                    />
-                    <Input
-                      label={t('verification.signerName')}
-                      value={signerName}
-                      onChange={(e) => setSignerName(e.target.value)}
-                    />
-                    {enrollmentError && <p className="text-xs text-red-600">{enrollmentError}</p>}
+                  <h4 className="mb-2 text-sm font-semibold text-gray-900">{t('verification.approveAFriend')}</h4>
+                  <p className="mb-3 text-xs text-gray-500">{t('verification.approveAFriendDesc')}</p>
+
+                  {approveSuccess ? (
+                    <div className="rounded-lg border border-green-200 bg-green-50 p-3 text-center">
+                      <p className="text-sm font-medium text-green-800">{t('verification.approveSuccess')}</p>
+                    </div>
+                  ) : lookupResult ? (
+                    <div>
+                      <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3">
+                        <p className="text-sm text-amber-900">
+                          {t('verification.approveConfirmMessage', {
+                            name: `${lookupResult.firstName} ${lookupResult.lastName.toUpperCase()}`,
+                            family: lookupResult.familyName.toUpperCase(),
+                          })}
+                        </p>
+                        <p className="mt-2 text-xs text-amber-700">
+                          {t('verification.approveWarning')}
+                        </p>
+                      </div>
+
+                      <div className="mb-4 space-y-3">
+                        <Checkbox
+                          checked={knowPerson}
+                          onChange={(e) => setKnowPerson(e.target.checked)}
+                          label={t('verification.checkboxKnowPerson')}
+                        />
+                        <Checkbox
+                          checked={confirmEjm}
+                          onChange={(e) => setConfirmEjm(e.target.checked)}
+                          label={t('verification.checkboxConfirmEjm')}
+                        />
+                      </div>
+
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          onClick={handleCommunityApprove}
+                          disabled={!knowPerson || !confirmEjm || approving}
+                        >
+                          {approving ? '...' : t('verification.approve')}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => { clearLookup(); setApproveCode(''); setKnowPerson(false); setConfirmEjm(false); }}
+                        >
+                          {t('common.cancel')}
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
                     <div className="flex gap-2">
+                      <Input
+                        placeholder={t('verification.enterCode')}
+                        value={approveCode}
+                        onChange={(e) => { setApproveCode(e.target.value.toUpperCase()); setApproveError(''); }}
+                        className="flex-1 font-mono uppercase"
+                      />
                       <Button
                         size="sm"
-                        onClick={handleEnrollmentSubmit}
-                        disabled={uploading}
+                        onClick={handleLookup}
+                        disabled={!approveCode.trim() || lookupLoading}
                       >
-                        {uploading ? t('common.saving') : t('verification.submit')}
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          setShowEnrollmentForm(false);
-                          setEnrollmentError('');
-                        }}
-                      >
-                        {t('common.cancel')}
+                        {lookupLoading ? '...' : t('verification.lookUp')}
                       </Button>
                     </div>
-                  </div>
+                  )}
+                  {approveError && <p className="mt-2 text-xs text-red-600">{approveError}</p>}
                 </Card>
               )}
             </div>

@@ -119,8 +119,8 @@ export function StepKids({ data, onChange, onNext, loading, error }: StepKidsPro
           }
         />
         <Checkbox
-          checked={data.consentAccepted}
-          onChange={(e) => onChange({ consentAccepted: e.target.checked })}
+          checked={data.consentChildrenAccepted}
+          onChange={(e) => onChange({ consentChildrenAccepted: e.target.checked })}
           label={t('enrollment.consentChildren')}
           className="mt-3"
         />
@@ -128,7 +128,7 @@ export function StepKids({ data, onChange, onNext, loading, error }: StepKidsPro
 
       {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
 
-      <Button type="submit" disabled={loading || !isValid || !data.consentAccepted} className="mb-8">
+      <Button type="submit" disabled={loading || !isValid || !data.consentAccepted || !data.consentChildrenAccepted} className="mb-8">
         {loading ? t('enrollment.creatingAccount') : t('enrollment.completeSignUp')}
       </Button>
     </form>

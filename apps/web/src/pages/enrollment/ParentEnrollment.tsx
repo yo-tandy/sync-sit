@@ -8,6 +8,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { TopNav, StepIndicator } from '@/components/ui';
 import { StepParentEmail } from './parent/StepParentEmail';
 import { StepParentVerify } from './parent/StepParentVerify';
+import { StepParentPassword } from './parent/StepParentPassword';
 import { StepFamilyInfo } from './parent/StepFamilyInfo';
 import { StepKids } from './parent/StepKids';
 
@@ -42,6 +43,7 @@ export interface ParentFormData {
     maxRate?: number;
   };
   consentAccepted: boolean;
+  consentChildrenAccepted: boolean;
 }
 
 const INITIAL_DATA: ParentFormData = {
@@ -57,6 +59,7 @@ const INITIAL_DATA: ParentFormData = {
   kids: [{ firstName: '', age: 0, languages: [] }],
   searchDefaults: {},
   consentAccepted: false,
+  consentChildrenAccepted: false,
 };
 
 export function ParentEnrollment() {
@@ -90,8 +93,12 @@ export function ParentEnrollment() {
     setStep(2);
   };
 
-  const handleFamilyInfoContinue = () => {
+  const handlePasswordContinue = () => {
     setStep(3);
+  };
+
+  const handleFamilyInfoComplete = () => {
+    handleComplete();
   };
 
   const handleComplete = async () => {
@@ -151,18 +158,18 @@ export function ParentEnrollment() {
       loading={loading}
       error={error}
     />,
+    <StepParentPassword
+      key="password"
+      data={formData}
+      onChange={updateData}
+      onNext={handlePasswordContinue}
+      error={error}
+    />,
     <StepFamilyInfo
       key="family"
       data={formData}
       onChange={updateData}
-      onNext={handleFamilyInfoContinue}
-      error={error}
-    />,
-    <StepKids
-      key="kids"
-      data={formData}
-      onChange={updateData}
-      onNext={handleComplete}
+      onNext={handleFamilyInfoComplete}
       loading={loading}
       error={error}
     />,
@@ -171,18 +178,9 @@ export function ParentEnrollment() {
   return (
     <div>
       <TopNav
-        title={t('enrollment.parentTitle')}
+        title="Sync/Sit - Parent Sign Up"
         backTo={step === 0 ? '/' : undefined}
-        rightAction={
-          step > 0 ? (
-            <button
-              onClick={() => setStep(step - 1)}
-              className="text-sm font-medium text-gray-500"
-            >
-              {t('common.back')}
-            </button>
-          ) : undefined
-        }
+        onBack={step > 0 ? () => setStep(step - 1) : undefined}
       />
       <StepIndicator totalSteps={4} currentStep={step} />
       {steps[step]}

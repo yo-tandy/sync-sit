@@ -160,20 +160,15 @@ export function AdminVerificationsPage() {
                   </div>
                 </div>
 
-                {/* Enrollment-specific details */}
-                {v.type === 'ejm_enrollment' && (
-                  <div className="mb-2 space-y-0.5">
-                    {v.childName && (
-                      <p className="text-xs text-gray-600">{t('verification.childFullName')}: {v.childName}</p>
+                {/* Registered family data for comparison */}
+                {v.type === 'ejm_enrollment' && (v.familyParentNames?.length > 0 || v.familyKids?.length > 0) && (
+                  <div className="mb-2 rounded-lg border border-blue-100 bg-blue-50 p-3">
+                    <p className="mb-1 text-xs font-semibold text-blue-800">{t('verification.registeredFamily')}</p>
+                    {v.familyParentNames?.length > 0 && (
+                      <p className="text-xs text-blue-700">{t('verification.parents')}: {v.familyParentNames.join(', ')}</p>
                     )}
-                    {v.schoolYear && (
-                      <p className="text-xs text-gray-600">{t('verification.schoolYear')}: {v.schoolYear}</p>
-                    )}
-                    {v.classLevel && (
-                      <p className="text-xs text-gray-600">{t('verification.classLevelLabel')}: {v.classLevel}</p>
-                    )}
-                    {v.signerName && (
-                      <p className="text-xs text-gray-600">{t('verification.signerName')}: {v.signerName}</p>
+                    {v.familyKids?.length > 0 && (
+                      <p className="text-xs text-blue-700">{t('verification.kids')}: {v.familyKids.map((k: any) => `${k.firstName} (${k.age})`).join(', ')}</p>
                     )}
                   </div>
                 )}

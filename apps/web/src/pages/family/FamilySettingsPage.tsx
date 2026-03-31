@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   doc,
   collection,
@@ -9,7 +9,8 @@ import {
   deleteDoc,
   serverTimestamp,
 } from 'firebase/firestore';
-import { db } from '@/config/firebase';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { db, storage } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { Button, Input, Textarea, TopNav, InfoBanner, Card } from '@/components/ui';
 import { AddressAutocomplete, type AddressResult } from '@/components/forms/AddressAutocomplete';
@@ -38,6 +39,11 @@ export function FamilySettingsPage() {
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Photo
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+
   // Load family + kids
   useEffect(() => {
     if (!familyId) return;
@@ -50,6 +56,7 @@ export function FamilySettingsPage() {
         setLatLng(f.latLng);
         setPets(f.pets || '');
         setNote(f.note || '');
+        if (f.photoUrl) setPhotoPreview(f.photoUrl);
       }
 
       const kidsSnap = await getDocs(collection(db, 'families', familyId!, 'kids'));
@@ -75,6 +82,25 @@ export function FamilySettingsPage() {
     setKids(kids.map((k, i) => (i === index ? { ...k, [field]: value } : k)));
   };
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      setError('Photo must be under 5 MB');
+      return;
+    }
+    setPhotoFile(file);
+    const reader = new FileReader();
+    reader.onload = (ev) => setPhotoPreview(ev.target?.result as string);
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemovePhoto = () => {
+    setPhotoFile(null);
+    setPhotoPreview(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
   const handleSave = async () => {
     if (!familyId) return;
     setSaving(true);
@@ -82,6 +108,17 @@ export function FamilySettingsPage() {
     setSuccess(false);
 
     try {
+      // Upload photo if changed
+      let photoUrl: string | null = photoPreview;
+      if (photoFile) {
+        const ext = photoFile.name.split('.').pop() || 'jpg';
+        const path = `family-photos/${familyId}.${ext}`;
+        const storageRef = ref(storage, path);
+        await uploadBytes(storageRef, photoFile);
+        photoUrl = await getDownloadURL(storageRef);
+      }
+      if (!photoPreview) photoUrl = null;
+
       // Update family doc
       await updateDoc(doc(db, 'families', familyId), {
         familyName,
@@ -89,6 +126,7 @@ export function FamilySettingsPage() {
         latLng: latLng || null,
         pets: pets || null,
         note: note || null,
+        photoUrl,
         updatedAt: serverTimestamp(),
       });
 
@@ -145,6 +183,41 @@ export function FamilySettingsPage() {
       <div className="px-6 pt-4 pb-8">
         {success && <InfoBanner className="mb-4">Family info saved!</InfoBanner>}
         {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
+
+        {/* Family photo */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+          className="hidden"
+          onChange={handleFileChange}
+        />
+        <div className="mb-6 flex items-center gap-4">
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="relative flex h-[72px] w-[72px] shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-dashed border-gray-300 bg-gray-50 transition-colors hover:border-gray-400"
+          >
+            {photoPreview ? (
+              <img src={photoPreview} alt="Family" className="h-full w-full object-cover" />
+            ) : (
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="1.5">
+                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+                <circle cx="12" cy="13" r="4" />
+              </svg>
+            )}
+          </button>
+          <div>
+            {photoPreview ? (
+              <button type="button" onClick={handleRemovePhoto} className="text-sm font-medium text-red-600">
+                Remove photo
+              </button>
+            ) : (
+              <p className="text-sm font-medium">Add family photo</p>
+            )}
+            <p className="mt-0.5 text-xs text-gray-400">Optional · Max 5 MB</p>
+          </div>
+        </div>
 
         <Input
           label="Family name *"

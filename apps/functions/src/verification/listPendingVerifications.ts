@@ -66,6 +66,23 @@ export const listPendingVerifications = onCall(
       }
     }
 
+    // Fetch kids for each family (for enrollment document comparison)
+    const familyKids: Record<string, { firstName: string; age: number }[]> = {};
+    const familyParents: Record<string, string[]> = {};
+    if (familyIds.size > 0) {
+      for (const fId of familyIds) {
+        const kidsSnap = await db.collection('families').doc(fId).collection('kids').get();
+        familyKids[fId] = kidsSnap.docs.map((k) => ({
+          firstName: k.data().firstName || '',
+          age: k.data().age || 0,
+        }));
+
+        const familyDoc = await db.collection('families').doc(fId).get();
+        const parentIds: string[] = familyDoc.data()?.parentIds || [];
+        familyParents[fId] = parentIds.map((pid) => userNames[pid] || pid);
+      }
+    }
+
     const verifications = snapshot.docs.map((doc) => {
       const d = doc.data();
       return {
@@ -73,6 +90,8 @@ export const listPendingVerifications = onCall(
         ...d,
         familyName: familyNames[d.familyId] || 'Unknown',
         parentName: userNames[d.uploadedByUserId] || 'Unknown',
+        familyKids: familyKids[d.familyId] || [],
+        familyParentNames: familyParents[d.familyId] || [],
         createdAt: d.createdAt?.toDate?.() ? d.createdAt.toDate().toISOString() : '',
         reviewedAt: d.reviewedAt?.toDate?.() ? d.reviewedAt.toDate().toISOString() : '',
       };

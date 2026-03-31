@@ -32,4 +32,5 @@ export interface FamilyVerificationStatus {
   enrollmentStatus: VerificationStatus;
   isFullyVerified: boolean;
   isEjmFamily: boolean;
+  communityApprovedBy?: string; // uid of the parent who vouched
 }

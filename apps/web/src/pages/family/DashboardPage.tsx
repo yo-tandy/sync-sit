@@ -1,17 +1,16 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, getDocs, addDoc } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { useVerificationStore } from '@/stores/verificationStore';
 import { useFamilyAppointments } from '@/hooks/useFamilyAppointments';
-import { Button, Badge, Card, Dialog, Spinner } from '@/components/ui';
-import { CalendarIcon } from '@/components/ui/Icons';
-import { ChevronRightIcon } from '@/components/ui/Icons';
+import { Button, Badge, Card, Dialog, Spinner, Input } from '@/components/ui';
+import { CalendarIcon, ChevronRightIcon, PlusIcon } from '@/components/ui/Icons';
 import { Avatar } from '@/components/ui';
 import type { AppointmentDoc, BabysitterUser } from '@ejm/shared';
-import { formatBabysitterName } from '@/lib/formatName';
+import { formatBabysitterName, capitalize, formatFamilyTitle } from '@/lib/formatName';
 import {
   SearchIcon,
   SettingsIcon,
@@ -291,6 +290,11 @@ export function FamilyDashboard() {
   const { userDoc, logout } = useAuthStore();
   const { familyVerification, fetchStatus: fetchVerificationStatus } = useVerificationStore();
   const [familyName, setFamilyName] = useState('');
+  const [kids, setKids] = useState<{ kidId: string; firstName: string; age: number }[]>([]);
+  const [kidsLoaded, setKidsLoaded] = useState(false);
+  const [newKidName, setNewKidName] = useState('');
+  const [newKidAge, setNewKidAge] = useState('');
+  const [addingKid, setAddingKid] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const navigate = useNavigate();
   const { pending, confirmed, pastRecent, rejectedRecent, loading: aptsLoading } = useFamilyAppointments();
@@ -352,6 +356,9 @@ export function FamilyDashboard() {
         if (familySnap.exists()) {
           setFamilyName(familySnap.data().familyName || '');
         }
+        const kidsSnap = await getDocs(collection(db, 'families', userDoc.familyId, 'kids'));
+        setKids(kidsSnap.docs.map((d) => ({ kidId: d.id, firstName: d.data().firstName, age: d.data().age })));
+        setKidsLoaded(true);
       }
     }
     loadFamily();
@@ -367,8 +374,8 @@ export function FamilyDashboard() {
     <div className="px-5 pt-4 pb-8">
       {/* Header */}
       <div className="mb-6">
-        <h2 className="text-lg font-bold">{t('babysitterDashboard.hello')} {userDoc?.firstName || 'there'} 👋</h2>
-        <p className="text-xs text-gray-500">{familyName || 'Family'} {t('familyDashboard.family')}</p>
+        <h2 className="text-lg font-bold">{t('babysitterDashboard.hello')} {capitalize(userDoc?.firstName) || 'there'} 👋</h2>
+        <p className="text-xs text-gray-500">{formatFamilyTitle(familyName)} {t('familyDashboard.family')}</p>
       </div>
 
       {/* Verification banner */}
@@ -384,8 +391,58 @@ export function FamilyDashboard() {
         </Card>
       )}
 
-      {/* Find a Babysitter */}
-      {(!familyVerification || familyVerification.isFullyVerified) && (
+      {/* Kids management — shown prominently when no kids exist */}
+      {kidsLoaded && kids.length === 0 && (
+        <Card className="mb-4 border-red-200 bg-red-50">
+          <h3 className="mb-2 text-sm font-semibold text-red-800">{t('familyDashboard.addKidsTitle')}</h3>
+          <p className="mb-4 text-xs text-red-600">{t('familyDashboard.addKidsDesc')}</p>
+          <div className="flex gap-2">
+            <div className="flex-1">
+              <Input
+                placeholder={t('enrollment.kidName')}
+                value={newKidName}
+                onChange={(e) => setNewKidName(e.target.value)}
+              />
+            </div>
+            <div className="w-20">
+              <Input
+                type="number"
+                placeholder={t('enrollment.kidAge')}
+                value={newKidAge}
+                onChange={(e) => setNewKidAge(e.target.value)}
+                min={0}
+                max={18}
+              />
+            </div>
+          </div>
+          <Button
+            size="sm"
+            disabled={addingKid || !newKidName.trim() || !newKidAge}
+            onClick={async () => {
+              if (!userDoc?.familyId) return;
+              setAddingKid(true);
+              try {
+                await addDoc(collection(db, 'families', userDoc.familyId, 'kids'), {
+                  firstName: newKidName.trim(),
+                  age: parseInt(newKidAge) || 0,
+                  languages: [],
+                });
+                setKids([...kids, { kidId: '', firstName: newKidName.trim(), age: parseInt(newKidAge) || 0 }]);
+                setNewKidName('');
+                setNewKidAge('');
+              } finally {
+                setAddingKid(false);
+              }
+            }}
+          >
+            <PlusIcon className="h-4 w-4" />
+            {addingKid ? '...' : t('enrollment.addChild')}
+          </Button>
+        </Card>
+      )}
+
+      {/* Find a Babysitter — only when verified AND has kids */}
+      {(!familyVerification || familyVerification.isFullyVerified) && kidsLoaded && kids.length > 0 && (
         <Button className="mb-6 h-14 text-lg" onClick={() => navigate('/family/search')}>
           <SearchIcon className="h-5 w-5" />
           {t('search.findBabysitter')}

@@ -184,18 +184,9 @@ export function BabysitterEnrollment() {
   return (
     <div>
       <TopNav
-        title={t('enrollment.babysitterTitle')}
+        title="Sync/Sit - Babysitter Sign Up"
         backTo={step === 0 ? '/' : undefined}
-        rightAction={
-          step > 0 ? (
-            <button
-              onClick={() => setStep(step - 1)}
-              className="text-sm font-medium text-gray-500"
-            >
-              {t('common.back')}
-            </button>
-          ) : undefined
-        }
+        onBack={step > 0 ? () => setStep(step - 1) : undefined}
       />
       <StepIndicator totalSteps={4} currentStep={step} />
       {steps[step]}

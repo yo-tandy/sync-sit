@@ -41,9 +41,7 @@ export const submitVerification = onCall(
       throw new HttpsError('invalid-argument', 'Missing required fields');
     }
 
-    if (data.type === 'ejm_enrollment' && (!data.childName || !data.signerName)) {
-      throw new HttpsError('invalid-argument', 'Enrollment documents require childName and signerName');
-    }
+    // Enrollment documents only need the file — admin verifies against family data
 
     // For identity type, check if there's already a pending or approved one
     if (data.type === 'identity') {
@@ -70,13 +68,6 @@ export const submitVerification = onCall(
       status: 'pending',
       fileUrl: data.fileUrl,
       fileName: data.fileName,
-      ...(data.type === 'ejm_enrollment' && {
-        childName: data.childName,
-        childDob: data.childDob || null,
-        schoolYear: data.schoolYear || null,
-        classLevel: data.classLevel || null,
-        signerName: data.signerName,
-      }),
       createdAt: now,
     });
 
