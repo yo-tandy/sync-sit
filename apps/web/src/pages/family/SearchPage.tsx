@@ -6,7 +6,7 @@ import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import {
-  Button, Card, Input, Select, Textarea, Chip, TopNav, Spinner, Dialog, Badge, Avatar,
+  Button, Card, Input, Select, Textarea, Chip, TopNav, Dialog, Avatar,
 } from '@/components/ui';
 import { AddressAutocomplete, type AddressResult } from '@/components/forms/AddressAutocomplete';
 import { formatBabysitterName } from '@/lib/formatName';
@@ -67,9 +67,9 @@ export function SearchPage() {
   const [searchType, setSearchType] = useState<'one_time' | 'recurring'>('one_time');
 
   // Family data
-  const [family, setFamily] = useState<FamilyDoc | null>(null);
+  const [_family, setFamily] = useState<FamilyDoc | null>(null);
   const [kids, setKids] = useState<(KidDoc & { selected: boolean })[]>([]);
-  const [defaults, setDefaults] = useState<SearchDefaults>({});
+  const [_defaults, setDefaults] = useState<SearchDefaults>({});
 
   // Search form — one-time
   const [date, setDate] = useState('');
@@ -452,7 +452,7 @@ export function SearchPage() {
               results.map((b) => (
                 <Card key={b.uid} className="mb-3">
                   <div className="flex gap-3">
-                    <Avatar name={`${b.firstName} ${b.lastName}`} src={b.photoUrl || undefined} size="lg" />
+                    <Avatar initials={`${(b.firstName || '')[0] || ''}${(b.lastName || '')[0] || ''}`} src={b.photoUrl || undefined} size="lg" />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between">
                         <p className="font-semibold text-gray-900">

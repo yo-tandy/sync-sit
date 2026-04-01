@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Chip, Input } from '@/components/ui';
+import { Chip } from '@/components/ui';
 
 const PRIMARY_LANGUAGES = ['French', 'English', 'Spanish', 'German', 'Arabic'];
 

@@ -8,7 +8,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { haversineDistance } from '@ejm/shared';
 import { Button, Card, Badge, Avatar, Dialog, TopNav, Spinner } from '@/components/ui';
 import { CalendarIcon, CheckIcon } from '@/components/ui/Icons';
-import type { AppointmentDoc, BabysitterUser } from '@ejm/shared';
+import type { BabysitterUser } from '@ejm/shared';
 
 export function RequestDetailPage() {
   const { t, i18n } = useTranslation();
@@ -120,7 +120,7 @@ export function RequestDetailPage() {
       <div className="px-5 pt-4 pb-8">
         {/* Family header */}
         <div className="mb-4 flex items-center gap-3">
-          <Avatar name={familyName} size="lg" />
+          <Avatar initials={familyName.split(' ').map((w: string) => w[0] || '').join('').slice(0, 2)} size="lg" />
           <div className="flex-1">
             <h2 className="text-xl font-bold">
               {familyName}

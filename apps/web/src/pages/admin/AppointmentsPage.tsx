@@ -12,7 +12,7 @@ import { TrashIcon } from '@/components/ui/Icons';
 import { useAdminStore } from '@/stores/adminStore';
 
 export function AdminAppointmentsPage() {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const {
     appointments,
     appointmentsLoading,

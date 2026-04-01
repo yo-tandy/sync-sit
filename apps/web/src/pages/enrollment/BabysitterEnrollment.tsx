@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
-import { useTranslation } from 'react-i18next';
 import { httpsCallable } from 'firebase/functions';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -63,7 +62,6 @@ const INITIAL_DATA: BabysitterFormData = {
 };
 
 export function BabysitterEnrollment() {
-  const { t } = useTranslation();
   const [step, setStep] = useState(0);
   const [formData, setFormData] = useState<BabysitterFormData>(INITIAL_DATA);
   const [loading, setLoading] = useState(false);

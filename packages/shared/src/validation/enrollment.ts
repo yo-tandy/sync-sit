@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { LANGUAGES, ALL_AREAS } from '../constants/config.js';
 
 // ── Babysitter Enrollment ──
 

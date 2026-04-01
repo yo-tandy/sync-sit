@@ -14,7 +14,6 @@ import { AboutPage } from '@/pages/public/AboutPage';
 import { PrivacyPage } from '@/pages/public/PrivacyPage';
 import { TermsPage } from '@/pages/public/TermsPage';
 import { ReportProblemPage } from '@/pages/public/ReportProblemPage';
-import { SharePage } from '@/pages/public/SharePage';
 
 // Enrollment
 import { BabysitterEnrollment } from '@/pages/enrollment/BabysitterEnrollment';

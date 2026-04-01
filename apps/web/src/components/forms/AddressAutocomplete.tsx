@@ -39,7 +39,7 @@ export function AddressAutocomplete({
   const [suggestions, setSuggestions] = useState<GouvFeature[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [loading, setLoading] = useState(false);
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Close suggestions on click outside

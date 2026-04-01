@@ -161,14 +161,14 @@ export function AdminVerificationsPage() {
                 </div>
 
                 {/* Registered family data for comparison */}
-                {v.type === 'ejm_enrollment' && (v.familyParentNames?.length > 0 || v.familyKids?.length > 0) && (
+                {v.type === 'ejm_enrollment' && ((v as any).familyParentNames?.length > 0 || (v as any).familyKids?.length > 0) && (
                   <div className="mb-2 rounded-lg border border-blue-100 bg-blue-50 p-3">
                     <p className="mb-1 text-xs font-semibold text-blue-800">{t('verification.registeredFamily')}</p>
-                    {v.familyParentNames?.length > 0 && (
-                      <p className="text-xs text-blue-700">{t('verification.parents')}: {v.familyParentNames.join(', ')}</p>
+                    {(v as any).familyParentNames?.length > 0 && (
+                      <p className="text-xs text-blue-700">{t('verification.parents')}: {(v as any).familyParentNames.join(', ')}</p>
                     )}
-                    {v.familyKids?.length > 0 && (
-                      <p className="text-xs text-blue-700">{t('verification.kids')}: {v.familyKids.map((k: any) => `${k.firstName} (${k.age})`).join(', ')}</p>
+                    {(v as any).familyKids?.length > 0 && (
+                      <p className="text-xs text-blue-700">{t('verification.kids')}: {(v as any).familyKids.map((k: any) => `${k.firstName} (${k.age})`).join(', ')}</p>
                     )}
                   </div>
                 )}

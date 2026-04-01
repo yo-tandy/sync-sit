@@ -4,7 +4,7 @@ import { UserIcon, UsersIcon } from '@/components/ui/Icons';
 import { LanguageSelector } from '@/components/ui';
 
 export function WelcomePage() {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
 
   return (
     <div className="flex min-h-screen flex-col px-6 py-8">

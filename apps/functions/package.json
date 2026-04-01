@@ -6,7 +6,8 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "predeploy": "node ../../scripts/bundle-shared-for-deploy.js"
   },
   "dependencies": {
     "@ejm/shared": "workspace:*",

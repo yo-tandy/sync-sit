@@ -15,7 +15,7 @@ interface StepParentVerifyProps {
   error: string | null;
 }
 
-export function StepParentVerify({ data, onChange, onNext, onResend, loading, error }: StepParentVerifyProps) {
+export function StepParentVerify({ data, onChange, onNext, onResend, error }: StepParentVerifyProps) {
   const [resendCooldown, setResendCooldown] = useState(60);
   const [resendCount, setResendCount] = useState(0);
   const [codeVerified, setCodeVerified] = useState(false);

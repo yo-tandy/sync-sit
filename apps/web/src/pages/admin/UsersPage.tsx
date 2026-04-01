@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Spinner } from '@/components/ui/Spinner';
 import { Dialog } from '@/components/ui/Dialog';
-import { BlockIcon, TrashIcon, DownloadIcon } from '@/components/ui/Icons';
+import { DownloadIcon } from '@/components/ui/Icons';
 import { useAdminStore } from '@/stores/adminStore';
 
 export function AdminUsersPage() {

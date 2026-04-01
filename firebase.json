@@ -30,7 +30,14 @@
   "functions": {
     "source": "apps/functions",
     "runtime": "nodejs20",
-    "codebase": "default"
+    "codebase": "default",
+    "predeploy": [
+      "node scripts/bundle-shared-for-deploy.js",
+      "pnpm --filter functions build"
+    ],
+    "postdeploy": [
+      "node scripts/unbundle-shared-after-deploy.js"
+    ]
   },
   "firestore": {
     "rules": "firestore.rules",

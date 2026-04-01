@@ -199,7 +199,7 @@ export function OverrideList({ overrides, onAdd, onRemove }: OverrideListProps) 
       ))}
 
       {formMode === 'availability' && (
-        <Card className="mt-3" ref={formRef as any}>
+        <Card className="mt-3">
           <p className="mb-3 text-sm font-semibold text-gray-700">{t('schedule.addAvailability')}</p>
           <Input
             label={t('common.date')}
@@ -228,7 +228,7 @@ export function OverrideList({ overrides, onAdd, onRemove }: OverrideListProps) 
       )}
 
       {formMode === 'block' && (
-        <Card className="mt-3" ref={formRef as any}>
+        <Card className="mt-3">
           <p className="mb-3 text-sm font-semibold text-gray-700">{t('schedule.blockDay')}</p>
           <Input
             label={t('common.date')}

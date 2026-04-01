@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
@@ -11,28 +11,9 @@ import { Card, Badge, Dialog, Button, Spinner } from '@/components/ui';
 import {
   CalendarIcon,
   ChevronRightIcon,
-  UserIcon,
-  UsersIcon,
-  LogOutIcon,
-  SettingsIcon,
-  InfoIcon,
-  ShieldIcon,
-  FileTextIcon,
-  MailIcon,
 } from '@/components/ui/Icons';
 import type { AppointmentDoc, BabysitterUser } from '@ejm/shared';
 import { DAYS_OF_WEEK } from '@ejm/shared';
-
-// ── Hamburger Menu Icon ──
-function MenuIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-      <line x1="3" y1="6" x2="21" y2="6" />
-      <line x1="3" y1="12" x2="21" y2="12" />
-      <line x1="3" y1="18" x2="21" y2="18" />
-    </svg>
-  );
-}
 
 // ── Appointment Section ──
 function Section({
@@ -76,73 +57,6 @@ function Section({
   );
 }
 
-// ── Menu Item ──
-function MenuItem({ icon, label, to, onClick }: { icon: React.ReactNode; label: string; to?: string; onClick?: () => void }) {
-  const inner = (
-    <div className="flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 active:bg-gray-100">
-      <span className="text-gray-400">{icon}</span>
-      <span>{label}</span>
-    </div>
-  );
-  if (to) return <Link to={to} className="block">{inner}</Link>;
-  return <button type="button" onClick={onClick} className="w-full text-left">{inner}</button>;
-}
-
-// ── Language Selector ──
-function LanguageSelectorInline() {
-  const { i18n } = useTranslation();
-  return (
-    <div className="flex gap-2">
-      {['en', 'fr'].map((lang) => (
-        <button
-          key={lang}
-          type="button"
-          onClick={() => { i18n.changeLanguage(lang); localStorage.setItem('ejm_language', lang); }}
-          className={`rounded-lg border-[1.5px] px-3 py-1.5 text-xs font-medium transition-colors ${
-            (i18n.language || 'en').startsWith(lang) ? 'border-red-600 bg-red-50 text-red-600' : 'border-gray-300 text-gray-700'
-          }`}
-        >
-          {lang === 'en' ? 'English' : 'Fran\u00e7ais'}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-// ── Share App ──
-function ShareMenuInline() {
-  const { t } = useTranslation();
-  const [copied, setCopied] = useState(false);
-  const shareText = t('menu.shareText', { link: window.location.origin });
-
-  const handleCopy = async () => {
-    try { await navigator.clipboard.writeText(shareText); } catch {
-      const input = document.createElement('input');
-      input.value = shareText;
-      document.body.appendChild(input);
-      input.select();
-      document.execCommand('copy');
-      document.body.removeChild(input);
-    }
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  return (
-    <div className="px-4 py-3">
-      <p className="mb-2 text-sm font-medium text-gray-700">{t('menu.shareApp')}</p>
-      <div className="flex gap-2">
-        <button type="button" onClick={handleCopy} className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50">
-          {copied ? '✓' : t('menu.copyMessage')}
-        </button>
-        <a href={`mailto:?subject=${encodeURIComponent('EJM Babysitting')}&body=${encodeURIComponent(shareText)}`} className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-center text-xs font-medium text-gray-600 hover:bg-gray-50">
-          {t('menu.shareByEmail')}
-        </a>
-      </div>
-    </div>
-  );
-}
-
 // ── Onboarding ──
 // Tracks which dialogs have been dismissed this browser session
 const ONBOARDING_KEY = 'babysitter_onboarding';
@@ -161,7 +75,7 @@ function dismissOnboarding(key: string) {
 
 // ── Main Component ──
 export function BabysitterDashboard() {
-  const { userDoc, firebaseUser, logout, refreshUserDoc } = useAuthStore();
+  const { userDoc, firebaseUser, refreshUserDoc } = useAuthStore();
   const { pending, confirmed, pastRecent, rejectedRecent, loading } = useAppointments();
   const { weekly, loading: scheduleLoading } = useSchedule();
   const navigate = useNavigate();
@@ -169,7 +83,6 @@ export function BabysitterDashboard() {
   const uid = firebaseUser?.uid;
   const { t } = useTranslation();
 
-  const [menuOpen, setMenuOpen] = useState(false);
   const [toggleDialog, setToggleDialog] = useState(false);
   const [toggling, setToggling] = useState(false);
 

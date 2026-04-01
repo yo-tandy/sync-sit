@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
-import { useTranslation } from 'react-i18next';
 import { httpsCallable } from 'firebase/functions';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth, functions } from '@/config/firebase';
@@ -10,7 +9,6 @@ import { StepParentEmail } from './parent/StepParentEmail';
 import { StepParentVerify } from './parent/StepParentVerify';
 import { StepParentPassword } from './parent/StepParentPassword';
 import { StepFamilyInfo } from './parent/StepFamilyInfo';
-import { StepKids } from './parent/StepKids';
 
 export interface KidFormData {
   firstName: string;
@@ -63,7 +61,6 @@ const INITIAL_DATA: ParentFormData = {
 };
 
 export function ParentEnrollment() {
-  const { t } = useTranslation();
   const [step, setStep] = useState(0);
   const [formData, setFormData] = useState<ParentFormData>(INITIAL_DATA);
   const [loading, setLoading] = useState(false);

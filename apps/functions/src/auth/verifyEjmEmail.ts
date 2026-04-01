@@ -1,16 +1,20 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { defineSecret } from 'firebase-functions/params';
 import * as crypto from 'crypto';
 import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { validateEjmEmail } from '@ejm/shared';
+import { sendVerificationEmail } from '../config/email.js';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
+
+const resendApiKey = defineSecret('RESEND_API_KEY');
 
 /**
  * Send a 6-digit verification code to an EJM email address.
  * Stores the code in Firestore for later verification.
  */
 export const verifyEjmEmail = onCall(
-  { region: 'europe-west1', cors: getCorsOrigin() },
+  { region: 'europe-west1', cors: getCorsOrigin(), secrets: [resendApiKey] },
   async (request) => {
     const { email } = request.data as { email: string };
 
@@ -49,11 +53,8 @@ export const verifyEjmEmail = onCall(
       createdAt: new Date(),
     });
 
-    // TODO: Send email via Resend
-    // Only log in emulator/development
-    if (process.env.FUNCTIONS_EMULATOR === 'true') {
-      console.log(`[DEV] Verification code for ${email}: ${code}`);
-    }
+    // Send verification email
+    await sendVerificationEmail(email.toLowerCase(), code);
 
     await writeUserActivity('system', 'verification_email_sent', { email });
 

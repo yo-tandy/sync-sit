@@ -26,7 +26,6 @@ function statusBadgeVariant(status: string): 'green' | 'amber' | 'red' | 'gray' 
 
 export function VerificationPage() {
   const { t, i18n } = useTranslation();
-  const locale = i18n.language === 'fr' ? 'fr-FR' : 'en-US';
   const { userDoc } = useAuthStore();
   const familyId = (userDoc as ParentUser | null)?.familyId;
 
