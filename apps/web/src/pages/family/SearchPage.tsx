@@ -11,6 +11,9 @@ import {
 import { AddressAutocomplete, type AddressResult } from '@/components/forms/AddressAutocomplete';
 import { formatBabysitterName } from '@/lib/formatName';
 import { CheckIcon, ShieldIcon } from '@/components/ui/Icons';
+import { useHolidays } from '@/hooks/useHolidays';
+import { getDateTag } from '@/lib/dateTag';
+import { DateTag } from '@/components/ui/DateTag';
 import type { ParentUser, FamilyDoc, KidDoc, SearchDefaults } from '@ejm/shared';
 
 // Time options 06:00–02:00
@@ -145,8 +148,10 @@ export function SearchPage() {
     load();
   }, [parent]);
 
+  const { periods: holidayPeriods } = useHolidays();
   const selectedKids = kids.filter((k) => k.selected);
   const today = new Date().toISOString().split('T')[0];
+  const dateTag = getDateTag(date, startTime, holidayPeriods);
 
   const handleSearch = async () => {
     setSearching(true);
@@ -268,6 +273,7 @@ export function SearchPage() {
             {searchType === 'one_time' && (
               <>
                 <Input label={t('search.date')} type="date" value={date} onChange={(e) => setDate(e.target.value)} min={today} error={date && date < today ? t('search.pastDateError') : undefined} required />
+                {dateTag && <DateTag tag={dateTag} className="mt-1" />}
                 <div className="flex gap-3">
                   <div className="flex-1">
                     <Select label={t('search.startTime')} value={startTime} onChange={(e) => setStartTime(e.target.value)} options={TIME_OPTIONS} />
@@ -448,9 +454,12 @@ export function SearchPage() {
           <>
             <h2 className="mb-1 text-xl font-bold">{t('search.results')} ({results.length})</h2>
             {searchType === 'one_time' && date && (
-              <p className="mb-4 text-sm text-gray-500">
-                {new Date(date + 'T00:00:00').toLocaleDateString(i18n.language === 'fr' ? 'fr-FR' : 'en-US', { weekday: 'long', day: 'numeric', month: 'long' })}, {startTime}–{endTime}
-              </p>
+              <div className="mb-4">
+                <p className="text-sm text-gray-500">
+                  {new Date(date + 'T00:00:00').toLocaleDateString(i18n.language === 'fr' ? 'fr-FR' : 'en-US', { weekday: 'long', day: 'numeric', month: 'long' })}, {startTime}–{endTime}
+                </p>
+                <DateTag tag={dateTag} className="mt-1" />
+              </div>
             )}
 
             {results.length === 0 ? (

@@ -12,9 +12,19 @@ interface StepParentEmailProps {
 
 export function StepParentEmail({ data, onChange, onNext, loading, error }: StepParentEmailProps) {
   const { t } = useTranslation();
+
+  const email = data.email.trim().toLowerCase();
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const isValidEmail = emailRegex.test(email);
+
+  const validationError = email && !isValidEmail ? t('validation.validEmail') : undefined;
+  const displayError = error === 'Must be logged in' || error === 'UNAUTHENTICATED'
+    ? t('enrollment.serverError')
+    : error;
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onNext();
+    if (isValidEmail) onNext();
   };
 
   return (
@@ -33,11 +43,11 @@ export function StepParentEmail({ data, onChange, onNext, loading, error }: Step
         value={data.email}
         onChange={(e) => onChange({ email: e.target.value })}
         placeholder="your@email.com"
-        error={error ?? undefined}
+        error={validationError || displayError || undefined}
         required
       />
 
-      <Button type="submit" disabled={loading || !data.email}>
+      <Button type="submit" disabled={loading || !isValidEmail}>
         {loading ? t('auth.sending') : t('auth.sendCode')}
       </Button>
     </form>

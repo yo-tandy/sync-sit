@@ -2,6 +2,7 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
+import { sendAdminNotification } from '../config/email.js';
 
 interface SubmitVerificationInput {
   type: 'identity' | 'ejm_enrollment';
@@ -85,6 +86,15 @@ export const submitVerification = onCall(
     await familyRef.update({ verification: currentVerification });
 
     await writeUserActivity(uid, 'verification_submitted', { type: data.type, familyId });
+
+    // Notify admin
+    const userName = `${userDoc.data()?.firstName || ''} ${userDoc.data()?.lastName || ''}`.trim();
+    const typeLabel = data.type === 'identity' ? 'Identity Document' : 'EJM Enrollment Document';
+    await sendAdminNotification(
+      `New verification request: ${typeLabel}`,
+      `<p><strong>${userName}</strong> has submitted a new <strong>${typeLabel}</strong> for review.</p>
+       <p style="color: #6B7280; font-size: 14px;">File: ${data.fileName}</p>`
+    );
 
     return { verificationId: verificationRef.id };
   }

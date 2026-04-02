@@ -2,7 +2,6 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { verifyAdmin } from './verifyAdmin.js';
-import { writeAuditLog } from './writeAuditLog.js';
 
 /**
  * Return dashboard counts: active babysitters, families, appointments.
@@ -26,11 +25,6 @@ export const getAdminDashboard = onCall(
       db.collection('families').count().get(),
       db.collection('appointments').count().get(),
     ]);
-
-    await writeAuditLog({
-      adminUserId: request.auth.uid,
-      action: 'view_dashboard',
-    });
 
     return {
       babysitterCount: babysitterSnap.data().count,

@@ -88,6 +88,8 @@ export default {
     yourAccountDesc: 'Entrez votre adresse email. Nous vous enverrons un code pour la v\u00e9rifier.',
     ejemEmailLabel: 'Adresse email EJM *',
     ejemEmailHint: "Utilisez votre email EJM officiel. Les 2 derniers chiffres doivent correspondre \u00e0 votre ann\u00e9e d'obtention du dipl\u00f4me.",
+    ejemDomainRequired: "L'adresse email doit \u00eatre une adresse @ejm.org",
+    serverError: 'Une erreur est survenue. Veuillez r\u00e9essayer.',
     emailLabel: 'Adresse email *',
     aboutYou: '\u00c0 propos de vous',
     aboutYouDesc: 'Dites aux familles un peu sur vous.',
@@ -180,6 +182,7 @@ export default {
     inviteMembers: 'Inviter des membres',
     myReferences: 'Mes r\u00e9f\u00e9rences',
     about: '\u00c0 propos',
+    sendFeedback: 'Envoyer un avis',
     reportProblem: 'Signaler un probl\u00e8me',
     privacyPolicy: 'Politique de confidentialit\u00e9',
     terms: 'Conditions g\u00e9n\u00e9rales',
@@ -320,6 +323,7 @@ export default {
     includingHolidays: 'Vacances incluses',
     pastDateError: 'Veuillez sélectionner une date future',
     verificationRequired: 'Pour assurer la sécurité de notre communauté, nous devons vérifier tous les utilisateurs avant qu\'ils puissent rechercher des babysitters. Veuillez compléter le processus de vérification pour continuer.',
+    schoolNight: 'Veille d\'école',
   },
 
   familyDashboard: {

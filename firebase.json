@@ -36,7 +36,8 @@
       "pnpm --filter functions build"
     ],
     "postdeploy": [
-      "node scripts/unbundle-shared-after-deploy.js"
+      "node scripts/unbundle-shared-after-deploy.js",
+      "bash scripts/fix-cloud-run-permissions.sh"
     ]
   },
   "storage": {

@@ -2,7 +2,6 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { verifyAdmin } from './verifyAdmin.js';
-import { writeAuditLog } from './writeAuditLog.js';
 
 interface ListAppointmentsInput {
   statusFilter?: string;
@@ -133,12 +132,6 @@ export const listAppointments = onCall(
         familyName: familyNames[data.familyId] || 'Unknown',
         parentNames: familyParentNames[data.familyId] || '',
       };
-    });
-
-    await writeAuditLog({
-      adminUserId: request.auth.uid,
-      action: 'list_appointments',
-      details: { statusFilter },
     });
 
     return { appointments };

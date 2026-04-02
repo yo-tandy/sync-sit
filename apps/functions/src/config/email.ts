@@ -80,3 +80,43 @@ export async function sendVerificationEmail(to: string, code: string): Promise<v
     }
   }
 }
+
+const ADMIN_EMAIL = 'support@sync-sit.com';
+
+/**
+ * Send admin notification email (e.g. new verification request).
+ * Fails silently — admin notifications should not block user actions.
+ */
+export async function sendAdminNotification(subject: string, body: string): Promise<void> {
+  if (process.env.FUNCTIONS_EMULATOR === 'true') {
+    console.log(`[DEV] Admin notification: ${subject}`);
+    return;
+  }
+
+  const resend = getResend();
+  if (!resend) {
+    console.log(`[NO-RESEND] Admin notification: ${subject}`);
+    return;
+  }
+
+  try {
+    await resend.emails.send({
+      from: FROM_EMAIL_FALLBACK,
+      to: ADMIN_EMAIL,
+      subject,
+      html: `
+        <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
+          <h2 style="color: #DC2626; margin-bottom: 16px;">Sync/Sit — Admin</h2>
+          ${body}
+          <hr style="border: none; border-top: 1px solid #E5E7EB; margin: 24px 0;" />
+          <p style="color: #9CA3AF; font-size: 12px;">
+            <a href="https://sync-sit.com/admin/verifications" style="color: #DC2626;">Review in admin panel</a>
+          </p>
+        </div>
+      `,
+    });
+  } catch (err) {
+    console.error('Failed to send admin notification:', err);
+    // Don't throw — admin notification failure should not block user actions
+  }
+}

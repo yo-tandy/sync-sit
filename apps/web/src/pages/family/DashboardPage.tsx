@@ -11,6 +11,9 @@ import { CalendarIcon, ChevronRightIcon, PlusIcon, SearchIcon } from '@/componen
 import { Avatar } from '@/components/ui';
 import type { AppointmentDoc, BabysitterUser } from '@ejm/shared';
 import { formatBabysitterName, capitalize, formatFamilyTitle } from '@/lib/formatName';
+import { useHolidays } from '@/hooks/useHolidays';
+import { getDateTag } from '@/lib/dateTag';
+import { DateTag } from '@/components/ui/DateTag';
 
 interface BabysitterInfo {
   name: string;
@@ -64,6 +67,7 @@ function ExpandableBabysitterCard({
   const locale = i18n.language?.startsWith('fr') ? 'fr-FR' : 'en-GB';
   const [expanded, setExpanded] = useState(false);
   const badgeLabels = useBadgeLabels();
+  const { periods: holidayPeriods } = useHolidays();
   const name = info?.name || t('familyDashboard.babysitterFallback');
 
   // Format date/time for confirmed/past cards
@@ -96,6 +100,7 @@ function ExpandableBabysitterCard({
             {variant !== 'pending' && dateTimeStr && (
               <span className="text-xs text-gray-500">{dateTimeStr}</span>
             )}
+            <DateTag tag={getDateTag(appointment.date || '', appointment.startTime || '', holidayPeriods)} />
           </div>
         </div>
         <div className="flex items-center gap-2">

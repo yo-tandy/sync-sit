@@ -1,6 +1,9 @@
 import { useTranslation } from 'react-i18next';
 import { Card, Badge, Button } from '@/components/ui';
 import { CalendarIcon } from '@/components/ui/Icons';
+import { useHolidays } from '@/hooks/useHolidays';
+import { getDateTag } from '@/lib/dateTag';
+import { DateTag } from '@/components/ui/DateTag';
 import type { AppointmentDoc } from '@ejm/shared';
 
 type Variant = 'pending' | 'confirmed' | 'past' | 'rejected';
@@ -49,6 +52,7 @@ export function AppointmentCard({
   onDecline,
 }: AppointmentCardProps) {
   const { t, i18n } = useTranslation();
+  const { periods: holidayPeriods } = useHolidays();
   const locale = i18n.language?.startsWith('fr') ? 'fr-FR' : 'en-GB';
 
   const dayNames: Record<string, string> = {
@@ -90,6 +94,7 @@ export function AppointmentCard({
               <span className="text-gray-500">{t('request.recurringLabel')}: {formatRecurringSlots(apt.recurringSlots)}</span>
             )}
           </div>
+          <DateTag tag={getDateTag(apt.date || '', apt.startTime || '', holidayPeriods)} className="mt-1" />
           {kidCount > 0 && (
             <p className="mt-1 text-sm text-gray-500">
               {kidCount} {kidCount === 1 ? 'child' : 'children'}

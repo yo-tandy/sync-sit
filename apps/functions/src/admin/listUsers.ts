@@ -2,7 +2,6 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { verifyAdmin } from './verifyAdmin.js';
-import { writeAuditLog } from './writeAuditLog.js';
 
 interface ListUsersInput {
   searchQuery?: string;
@@ -73,12 +72,6 @@ export const listUsers = onCall(
         );
       });
     }
-
-    await writeAuditLog({
-      adminUserId: request.auth.uid,
-      action: 'list_users',
-      details: { searchQuery, roleFilter, statusFilter },
-    });
 
     return { users: users.slice(0, limit) };
   }

@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router';
 import { Button, Input, InfoBanner } from '@/components/ui';
+import { validateEjmEmail } from '@ejm/shared';
 import type { BabysitterFormData } from '../BabysitterEnrollment';
 
 interface StepEmailProps {
@@ -16,9 +17,31 @@ export function StepEmail({ data, onChange, onNext, loading, error }: StepEmailP
   const [searchParams] = useSearchParams();
   const isInvite = searchParams.get('invite') === 'true';
 
+  const email = data.ejemEmail.trim().toLowerCase();
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const isValidEmail = emailRegex.test(email);
+
+  // For non-invite: validate EJM domain + graduation year
+  const ejmValidation = !isInvite && email ? validateEjmEmail(email) : null;
+
+  // FE validation error
+  let validationError: string | undefined;
+  if (email && !isValidEmail) {
+    validationError = t('validation.validEmail');
+  } else if (ejmValidation && !ejmValidation.valid) {
+    validationError = ejmValidation.error;
+  }
+
+  // Improve backend error messages
+  const displayError = error === 'Must be logged in' || error === 'UNAUTHENTICATED'
+    ? t('enrollment.serverError')
+    : error;
+
+  const canSubmit = isValidEmail && (isInvite || (ejmValidation?.valid === true)) && !loading;
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onNext();
+    if (canSubmit) onNext();
   };
 
   return (
@@ -37,7 +60,7 @@ export function StepEmail({ data, onChange, onNext, loading, error }: StepEmailP
         value={data.ejemEmail}
         onChange={(e) => onChange({ ejemEmail: e.target.value })}
         placeholder={isInvite ? 'your@email.com' : 'name@ejm.org'}
-        error={error ?? undefined}
+        error={validationError || displayError || undefined}
         required
       />
 
@@ -47,7 +70,7 @@ export function StepEmail({ data, onChange, onNext, loading, error }: StepEmailP
         </InfoBanner>
       )}
 
-      <Button type="submit" disabled={loading || !data.ejemEmail}>
+      <Button type="submit" disabled={!canSubmit}>
         {loading ? t('auth.sending') : t('auth.sendCode')}
       </Button>
     </form>

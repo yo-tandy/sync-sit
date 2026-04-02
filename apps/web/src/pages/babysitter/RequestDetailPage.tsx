@@ -8,11 +8,15 @@ import { useAuthStore } from '@/stores/authStore';
 import { haversineDistance } from '@ejm/shared';
 import { Button, Card, Badge, Avatar, Dialog, TopNav, Spinner } from '@/components/ui';
 import { CalendarIcon, CheckIcon } from '@/components/ui/Icons';
+import { useHolidays } from '@/hooks/useHolidays';
+import { getDateTag } from '@/lib/dateTag';
+import { DateTag } from '@/components/ui/DateTag';
 import type { BabysitterUser } from '@ejm/shared';
 
 export function RequestDetailPage() {
   const { t, i18n } = useTranslation();
   const locale = i18n.language?.startsWith('fr') ? 'fr-FR' : 'en-GB';
+  const { periods: holidayPeriods } = useHolidays();
   const { appointmentId } = useParams<{ appointmentId: string }>();
   const navigate = useNavigate();
   const { userDoc } = useAuthStore();
@@ -154,6 +158,7 @@ export function RequestDetailPage() {
               </span>
             )}
           </div>
+          <DateTag tag={getDateTag(apt.date || '', apt.startTime || '', holidayPeriods)} className="mt-1" />
         </Card>
 
         {/* Children (ages only) */}

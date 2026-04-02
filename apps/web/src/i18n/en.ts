@@ -92,6 +92,8 @@ export default {
     yourAccountDesc: "Enter your email address. We'll send a code to verify it.",
     ejemEmailLabel: 'EJM email address *',
     ejemEmailHint: 'Use your official EJM email. The last 2 digits must be your graduation year.',
+    ejemDomainRequired: 'Email must be an @ejm.org address',
+    serverError: 'Something went wrong. Please try again.',
     emailLabel: 'Email address *',
     aboutYou: 'About you',
     aboutYouDesc: 'Tell families a bit about yourself.',
@@ -191,6 +193,7 @@ export default {
     inviteMembers: 'Invite Members',
     myReferences: 'My References',
     about: 'About',
+    sendFeedback: 'Send Feedback',
     reportProblem: 'Report a Problem',
     privacyPolicy: 'Privacy Policy',
     terms: 'Terms & Conditions',
@@ -334,6 +337,7 @@ export default {
     includingHolidays: 'Including holidays',
     pastDateError: 'Please select a future date',
     verificationRequired: 'To keep our community safe, we need to verify all users before they can search for babysitters. Please complete the verification process to continue.',
+    schoolNight: 'School night',
   },
 
   // Family Dashboard
