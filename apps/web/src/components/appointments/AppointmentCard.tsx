@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { Card, Badge, Button } from '@/components/ui';
 import { CalendarIcon } from '@/components/ui/Icons';
+import { PhotoLightbox } from '@/components/ui/PhotoLightbox';
 import { useHolidays } from '@/hooks/useHolidays';
 import { getDateTag } from '@/lib/dateTag';
 import { DateTag } from '@/components/ui/DateTag';
@@ -73,14 +74,20 @@ export function AppointmentCard({
 
   const apt = appointment;
   const rawName = familyName || (apt as any).familyName;
+  const familyPhoto = (apt as any).familyPhotoUrl;
   const title = rawName ? t('familyDashboard.familyTitle', { name: rawName.toUpperCase() }) : t('request.title');
   const kidCount = apt.kidIds?.length || 0;
+  const familyInitials = rawName ? rawName.split(' ').map((w: string) => w[0] || '').join('').slice(0, 2).toUpperCase() : '?';
 
   return (
     <Card borderColor={borderColors[variant]} className="mb-3" interactive={!!onClick} onClick={onClick}>
-      <div className="flex items-start justify-between">
+      <div className="flex items-start gap-3">
+        <PhotoLightbox src={familyPhoto} initials={familyInitials} size="sm" />
         <div className="min-w-0 flex-1">
-          <p className="font-semibold text-gray-900">{title}</p>
+          <div className="flex items-start justify-between">
+            <p className="font-semibold text-gray-900">{title}</p>
+            <Badge variant={badgeVariants[variant]}>{badgeLabels[variant]}</Badge>
+          </div>
           <div className="mt-1 flex items-center gap-2 text-sm text-gray-500">
             <CalendarIcon className="h-4 w-4 shrink-0" />
             {apt.date ? (
@@ -101,7 +108,6 @@ export function AppointmentCard({
             </p>
           )}
         </div>
-        <Badge variant={badgeVariants[variant]}>{badgeLabels[variant]}</Badge>
       </div>
 
       {variant === 'pending' && (onAccept || onDecline) && (

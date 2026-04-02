@@ -108,6 +108,7 @@ export const sendContactRequest = onCall(
       searchId: searchRef.id,
       familyId: data.familyId,
       familyName: familyData.familyName || '',
+      familyPhotoUrl: familyData.photoUrl || null,
       babysitterUserId: data.babysitterUserId,
       createdByUserId: uid,
       type: data.searchType,

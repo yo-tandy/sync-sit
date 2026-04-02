@@ -6,7 +6,8 @@ import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { haversineDistance } from '@ejm/shared';
-import { Button, Card, Badge, Avatar, Dialog, TopNav, Spinner } from '@/components/ui';
+import { Button, Card, Badge, Dialog, TopNav, Spinner } from '@/components/ui';
+import { PhotoLightbox } from '@/components/ui/PhotoLightbox';
 import { CalendarIcon, CheckIcon } from '@/components/ui/Icons';
 import { useHolidays } from '@/hooks/useHolidays';
 import { getDateTag } from '@/lib/dateTag';
@@ -124,7 +125,11 @@ export function RequestDetailPage() {
       <div className="px-5 pt-4 pb-8">
         {/* Family header */}
         <div className="mb-4 flex items-center gap-3">
-          <Avatar initials={familyName.split(' ').map((w: string) => w[0] || '').join('').slice(0, 2)} size="lg" />
+          <PhotoLightbox
+            src={apt.familyPhotoUrl || undefined}
+            initials={familyName.split(' ').map((w: string) => w[0] || '').join('').slice(0, 2)}
+            size="lg"
+          />
           <div className="flex-1">
             <h2 className="text-xl font-bold">
               {familyName}
