@@ -22,11 +22,17 @@ export function AdminUsersPage() {
     deleteUser,
     resetUserPassword,
     exportUserData,
+    preapprovedEmails,
+    preapprovedLoading,
+    fetchPreapprovedEmails,
+    addPreapprovedEmail,
+    removePreapprovedEmail,
   } = useAdminStore();
 
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [newPreapprovedEmail, setNewPreapprovedEmail] = useState('');
 
   // Confirmation dialog state
   const [confirmDialog, setConfirmDialog] = useState<{
@@ -43,6 +49,31 @@ export function AdminUsersPage() {
       status: statusFilter !== 'all' ? statusFilter : undefined,
     });
   }, [fetchUsers, search, roleFilter, statusFilter]);
+
+  // Load pre-approved emails on mount
+  useEffect(() => {
+    fetchPreapprovedEmails();
+  }, [fetchPreapprovedEmails]);
+
+  const handleAddPreapproved = async () => {
+    if (!newPreapprovedEmail) return;
+    try {
+      await addPreapprovedEmail(newPreapprovedEmail);
+      setNewPreapprovedEmail('');
+      await fetchPreapprovedEmails();
+    } catch (err: any) {
+      alert(err.message || 'Failed to add email');
+    }
+  };
+
+  const handleRemovePreapproved = async (email: string) => {
+    try {
+      await removePreapprovedEmail(email);
+      await fetchPreapprovedEmails();
+    } catch (err: any) {
+      alert(err.message || 'Failed to remove email');
+    }
+  };
 
   // Debounced search
   useEffect(() => {
@@ -165,6 +196,49 @@ export function AdminUsersPage() {
       <TopNav title={t('admin.manageUsers')} backTo="/admin" />
 
       <div className="px-5 pb-8">
+        {/* Pre-approved Emails */}
+        <Card className="mb-6">
+          <h3 className="mb-1 text-sm font-semibold text-gray-900">{t('admin.preapprovedEmails')}</h3>
+          <p className="mb-4 text-xs text-gray-500">{t('admin.preapprovedDesc')}</p>
+          <div className="mb-3 flex gap-2">
+            <Input
+              placeholder={t('common.email')}
+              type="email"
+              value={newPreapprovedEmail}
+              onChange={(e) => setNewPreapprovedEmail(e.target.value)}
+              className="flex-1"
+            />
+            <Button variant="primary" size="sm" onClick={handleAddPreapproved} disabled={!newPreapprovedEmail}>
+              {t('admin.addEmail')}
+            </Button>
+          </div>
+          {preapprovedLoading ? (
+            <div className="flex justify-center py-4">
+              <Spinner className="h-5 w-5 text-red-600" />
+            </div>
+          ) : preapprovedEmails.length === 0 ? (
+            <p className="py-3 text-center text-xs text-gray-400">{t('admin.noPreapprovedEmails')}</p>
+          ) : (
+            <div className="space-y-2">
+              {preapprovedEmails.map((item) => (
+                <div key={item.email} className="flex items-center justify-between rounded-lg bg-gray-50 px-3 py-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-gray-700">{item.email}</span>
+                    <Badge variant={item.used ? 'gray' : 'green'}>
+                      {item.used ? t('admin.preapprovedUsed') : t('admin.preapprovedPending')}
+                    </Badge>
+                  </div>
+                  {!item.used && (
+                    <Button variant="outline" size="sm" onClick={() => handleRemovePreapproved(item.email)}>
+                      {t('common.remove')}
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+
         {/* Filters */}
         <Input
           placeholder={t('admin.searchUsers')}

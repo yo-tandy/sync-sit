@@ -53,7 +53,7 @@ export const familyEnrollmentSchema = z.object({
   address: z.string().min(1, 'Address is required'),
   pets: z.string().optional(),
   note: z.string().optional(),
-  kids: z.array(kidSchema).min(1, 'Add at least one child'),
+  kids: z.array(kidSchema).optional(),
 });
 
 export const searchDefaultsSchema = z.object({

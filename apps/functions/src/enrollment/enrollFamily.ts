@@ -70,7 +70,7 @@ export const enrollFamily = onCall(
     }
 
     // 2. Validate
-    if (!data.familyName || !data.firstName || !data.address || !data.kids?.length) {
+    if (!data.familyName || !data.firstName || !data.address) {
       throw new HttpsError('invalid-argument', 'Missing required fields');
     }
 
@@ -111,15 +111,18 @@ export const enrollFamily = onCall(
       status: 'active',
     });
 
-    // 5. Create kid documents
-    for (const kid of data.kids) {
-      const kidRef = familyRef.collection('kids').doc();
-      await kidRef.set({
-        kidId: kidRef.id,
-        firstName: kid.firstName,
-        age: kid.age,
-        languages: kid.languages,
-      });
+    // 5. Create kid documents (if provided during enrollment)
+    if (data.kids?.length) {
+      for (const kid of data.kids) {
+        if (!kid.firstName) continue;
+        const kidRef = familyRef.collection('kids').doc();
+        await kidRef.set({
+          kidId: kidRef.id,
+          firstName: kid.firstName,
+          age: kid.age,
+          languages: kid.languages,
+        });
+      }
     }
 
     // 6. Create parent user document

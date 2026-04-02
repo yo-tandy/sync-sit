@@ -19,9 +19,24 @@ if (fs.existsSync(bundleDir)) {
 }
 fs.mkdirSync(bundleDir, { recursive: true });
 
+// Build shared package first (CJS output needed for Cloud Functions)
+const { execSync } = require('child_process');
+try {
+  execSync('pnpm --filter @ejm/shared build', { cwd: path.resolve(__dirname, '..'), stdio: 'inherit' });
+} catch (e) {
+  console.error('Failed to build shared package');
+  process.exit(1);
+}
+
 // Copy src
 const srcDir = path.join(sharedDir, 'src');
 fs.cpSync(srcDir, path.join(bundleDir, 'src'), { recursive: true });
+
+// Copy dist (compiled CJS output)
+const distDir = path.join(sharedDir, 'dist');
+if (fs.existsSync(distDir)) {
+  fs.cpSync(distDir, path.join(bundleDir, 'dist'), { recursive: true });
+}
 
 // Copy package.json and tsconfig
 fs.copyFileSync(path.join(sharedDir, 'package.json'), path.join(bundleDir, 'package.json'));

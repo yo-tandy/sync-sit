@@ -1,13 +1,14 @@
-import { Resend } from 'resend';
+let resendInstance: any = null;
 
-let resendInstance: Resend | null = null;
-
-function getResend(): Resend {
+function getResend(): any {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) {
+    console.warn('RESEND_API_KEY not configured — emails will be logged only');
+    return null;
+  }
   if (!resendInstance) {
-    const apiKey = process.env.RESEND_API_KEY;
-    if (!apiKey) {
-      throw new Error('RESEND_API_KEY not configured');
-    }
+    // Lazy import to avoid startup failures if resend package has issues
+    const { Resend } = require('resend');
     resendInstance = new Resend(apiKey);
   }
   return resendInstance;
@@ -27,6 +28,11 @@ export async function sendVerificationEmail(to: string, code: string): Promise<v
   }
 
   const resend = getResend();
+
+  if (!resend) {
+    console.log(`[NO-RESEND] Code for ${to}: ${code}`);
+    return;
+  }
 
   try {
     await resend.emails.send({

@@ -251,7 +251,7 @@ export function SearchPage() {
 
             {searchType === 'one_time' && (
               <>
-                <Input label={t('search.date')} type="date" value={date} onChange={(e) => setDate(e.target.value)} min={today} required />
+                <Input label={t('search.date')} type="date" value={date} onChange={(e) => setDate(e.target.value)} min={today} error={date && date < today ? t('search.pastDateError') : undefined} required />
                 <div className="flex gap-3">
                   <div className="flex-1">
                     <Select label={t('search.startTime')} value={startTime} onChange={(e) => setStartTime(e.target.value)} options={TIME_OPTIONS} />
@@ -420,7 +420,7 @@ export function SearchPage() {
 
             <Button
               onClick={handleSearch}
-              disabled={searching || (searchType === 'one_time' && !date) || (searchType === 'recurring' && !recurringSlots.some((s) => s.enabled)) || selectedKids.length === 0}
+              disabled={searching || (searchType === 'one_time' && (!date || date < today)) || (searchType === 'recurring' && !recurringSlots.some((s) => s.enabled)) || selectedKids.length === 0}
             >
               {searching ? t('search.searching') : t('common.search')}
             </Button>

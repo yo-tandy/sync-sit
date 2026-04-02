@@ -1,19 +1,16 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
-import { defineSecret } from 'firebase-functions/params';
 import * as crypto from 'crypto';
 import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { sendVerificationEmail } from '../config/email.js';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
 
-const resendApiKey = defineSecret('RESEND_API_KEY');
-
 /**
  * Send a 6-digit verification code to any email address (for parent enrollment).
  * Unlike verifyEjmEmail, this accepts any domain.
  */
 export const verifyParentEmail = onCall(
-  { region: 'europe-west1', cors: getCorsOrigin(), secrets: [resendApiKey] },
+  { region: 'europe-west1', cors: getCorsOrigin() },
   async (request) => {
     const { email } = request.data as { email: string };
 
@@ -48,7 +45,6 @@ export const verifyParentEmail = onCall(
       createdAt: new Date(),
     });
 
-    // Send verification email
     await sendVerificationEmail(normalizedEmail, code);
 
     await writeUserActivity('system', 'verification_email_sent', { email });

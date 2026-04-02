@@ -48,3 +48,6 @@ export { updateHolidays } from './admin/updateHolidays.js';
 export { listAuditLogs } from './admin/listAuditLogs.js';
 export { exportUserData } from './admin/exportUserData.js';
 export { deactivateUser } from './admin/deactivateUser.js';
+export { addPreapprovedEmail } from './admin/managePreapprovedEmails.js';
+export { removePreapprovedEmail } from './admin/managePreapprovedEmails.js';
+export { listPreapprovedEmails } from './admin/managePreapprovedEmails.js';

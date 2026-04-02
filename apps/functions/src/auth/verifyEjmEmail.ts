@@ -1,5 +1,4 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
-import { defineSecret } from 'firebase-functions/params';
 import * as crypto from 'crypto';
 import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
@@ -7,14 +6,12 @@ import { validateEjmEmail } from '@ejm/shared';
 import { sendVerificationEmail } from '../config/email.js';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
 
-const resendApiKey = defineSecret('RESEND_API_KEY');
-
 /**
  * Send a 6-digit verification code to an EJM email address.
  * Stores the code in Firestore for later verification.
  */
 export const verifyEjmEmail = onCall(
-  { region: 'europe-west1', cors: getCorsOrigin(), secrets: [resendApiKey] },
+  { region: 'europe-west1', cors: getCorsOrigin() },
   async (request) => {
     const { email } = request.data as { email: string };
 
@@ -22,10 +19,18 @@ export const verifyEjmEmail = onCall(
       throw new HttpsError('invalid-argument', 'Email is required');
     }
 
-    // Validate EJM email format
-    const validation = validateEjmEmail(email);
-    if (!validation.valid) {
-      throw new HttpsError('invalid-argument', validation.error!);
+    // Check if email is pre-approved (for test/invite accounts)
+    const preapprovedDoc = await db.collection('preapprovedEmails').doc(email.toLowerCase()).get();
+    const isPreapproved = preapprovedDoc.exists && preapprovedDoc.data()?.used === false;
+
+    // Skip EJM domain validation if pre-approved
+    let graduationYear: number | null = null;
+    if (!isPreapproved) {
+      const validation = validateEjmEmail(email);
+      if (!validation.valid) {
+        throw new HttpsError('invalid-argument', validation.error!);
+      }
+      graduationYear = validation.graduationYear ?? null;
     }
 
     // Check if account already exists
@@ -47,13 +52,12 @@ export const verifyEjmEmail = onCall(
     await db.collection('verificationCodes').doc(email.toLowerCase()).set({
       code,
       email: email.toLowerCase(),
-      graduationYear: validation.graduationYear,
+      graduationYear,
       expiresAt,
       attempts: 0,
       createdAt: new Date(),
     });
 
-    // Send verification email
     await sendVerificationEmail(email.toLowerCase(), code);
 
     await writeUserActivity('system', 'verification_email_sent', { email });

@@ -318,6 +318,7 @@ export default {
     duringHolidays: 'Pendant les vacances scolaires ?',
     schoolWeeksOnly: 'Semaines scolaires uniquement',
     includingHolidays: 'Vacances incluses',
+    pastDateError: 'Veuillez sélectionner une date future',
   },
 
   familyDashboard: {
@@ -570,6 +571,13 @@ export default {
     noVerifications: 'Aucune vérification trouvée',
     identityType: 'Identité',
     enrollmentType: 'Inscription',
+    preapprovedEmails: 'Emails babysitter pré-approuvés',
+    preapprovedDesc: 'Ajoutez des emails pour les comptes babysitter de test. Partagez le lien d\'inscription avec ?invite=true',
+    addEmail: 'Ajouter un email',
+    emailAdded: 'Email ajouté',
+    preapprovedPending: 'En attente',
+    preapprovedUsed: 'Utilisé',
+    noPreapprovedEmails: 'Aucun email pré-approuvé',
   },
 
   // Verification

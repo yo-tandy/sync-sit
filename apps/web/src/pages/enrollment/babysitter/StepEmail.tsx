@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next';
+import { useSearchParams } from 'react-router';
 import { Button, Input, InfoBanner } from '@/components/ui';
 import type { BabysitterFormData } from '../BabysitterEnrollment';
 
@@ -12,6 +13,9 @@ interface StepEmailProps {
 
 export function StepEmail({ data, onChange, onNext, loading, error }: StepEmailProps) {
   const { t } = useTranslation();
+  const [searchParams] = useSearchParams();
+  const isInvite = searchParams.get('invite') === 'true';
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onNext();
@@ -28,18 +32,20 @@ export function StepEmail({ data, onChange, onNext, loading, error }: StepEmailP
       </p>
 
       <Input
-        label={t('enrollment.ejemEmailLabel')}
+        label={isInvite ? t('enrollment.emailLabel') : t('enrollment.ejemEmailLabel')}
         type="email"
         value={data.ejemEmail}
         onChange={(e) => onChange({ ejemEmail: e.target.value })}
-        placeholder="name@ejm.org"
+        placeholder={isInvite ? 'your@email.com' : 'name@ejm.org'}
         error={error ?? undefined}
         required
       />
 
-      <InfoBanner className="mb-6">
-        {t('enrollment.ejemEmailHint')}
-      </InfoBanner>
+      {!isInvite && (
+        <InfoBanner className="mb-6">
+          {t('enrollment.ejemEmailHint')}
+        </InfoBanner>
+      )}
 
       <Button type="submit" disabled={loading || !data.ejemEmail}>
         {loading ? t('auth.sending') : t('auth.sendCode')}

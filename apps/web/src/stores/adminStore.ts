@@ -51,6 +51,13 @@ interface AdminState {
   // GDPR export
   exporting: boolean;
   exportUserData: (uid: string) => Promise<any>;
+
+  // Pre-approved emails
+  preapprovedEmails: { email: string; used: boolean; createdAt: any }[];
+  preapprovedLoading: boolean;
+  fetchPreapprovedEmails: () => Promise<void>;
+  addPreapprovedEmail: (email: string) => Promise<void>;
+  removePreapprovedEmail: (email: string) => Promise<void>;
 }
 
 export const useAdminStore = create<AdminState>((set) => ({
@@ -157,5 +164,27 @@ export const useAdminStore = create<AdminState>((set) => ({
       set({ exporting: false });
       throw err;
     }
+  },
+  // Pre-approved emails
+  preapprovedEmails: [],
+  preapprovedLoading: false,
+  fetchPreapprovedEmails: async () => {
+    set({ preapprovedLoading: true });
+    try {
+      const fn = httpsCallable(functions, 'listPreapprovedEmails');
+      const result = await fn({});
+      set({ preapprovedEmails: (result.data as any).emails, preapprovedLoading: false });
+    } catch (err) {
+      set({ preapprovedLoading: false });
+      throw err;
+    }
+  },
+  addPreapprovedEmail: async (email) => {
+    const fn = httpsCallable(functions, 'addPreapprovedEmail');
+    await fn({ email });
+  },
+  removePreapprovedEmail: async (email) => {
+    const fn = httpsCallable(functions, 'removePreapprovedEmail');
+    await fn({ email });
   },
 }));

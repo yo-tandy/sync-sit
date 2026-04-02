@@ -332,6 +332,7 @@ export default {
     duringHolidays: 'During school holidays?',
     schoolWeeksOnly: 'School weeks only',
     includingHolidays: 'Including holidays',
+    pastDateError: 'Please select a future date',
   },
 
   // Family Dashboard
@@ -602,6 +603,13 @@ export default {
     noVerifications: 'No verifications found',
     identityType: 'Identity',
     enrollmentType: 'Enrollment',
+    preapprovedEmails: 'Pre-approved Babysitter Emails',
+    preapprovedDesc: 'Add emails for test babysitter accounts. Share the enrollment link with ?invite=true',
+    addEmail: 'Add Email',
+    emailAdded: 'Email added',
+    preapprovedPending: 'Pending',
+    preapprovedUsed: 'Used',
+    noPreapprovedEmails: 'No pre-approved emails',
   },
 
   // Verification

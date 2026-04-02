@@ -105,6 +105,7 @@ export function ParentEnrollment() {
       const enrollFamily = httpsCallable(functions, 'enrollFamily');
       await enrollFamily({
         ...formData,
+        kids: [],
         address: formData.address?.fullAddress || '',
         latLng: formData.address
           ? { lat: formData.address.lat, lng: formData.address.lng }
