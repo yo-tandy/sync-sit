@@ -154,9 +154,16 @@ export function AdminUsersPage() {
     }
   };
 
+  const [confirming, setConfirming] = useState(false);
   const handleConfirm = async () => {
-    await confirmDialog.action();
-    setConfirmDialog((prev) => ({ ...prev, open: false }));
+    if (confirming) return;
+    setConfirming(true);
+    try {
+      await confirmDialog.action();
+    } finally {
+      setConfirming(false);
+      setConfirmDialog((prev) => ({ ...prev, open: false }));
+    }
   };
 
   const roleBadgeVariant = (role: string) => {
