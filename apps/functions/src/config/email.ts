@@ -120,3 +120,40 @@ export async function sendAdminNotification(subject: string, body: string): Prom
     // Don't throw — admin notification failure should not block user actions
   }
 }
+
+/**
+ * Send a notification email to a user.
+ * Fails silently — notifications should not block user actions.
+ */
+export async function sendNotificationEmail(to: string, subject: string, body: string): Promise<void> {
+  if (process.env.FUNCTIONS_EMULATOR === 'true') {
+    console.log(`[DEV] Notification to ${to}: ${subject}`);
+    return;
+  }
+
+  const resend = getResend();
+  if (!resend) {
+    console.log(`[NO-RESEND] Notification to ${to}: ${subject}`);
+    return;
+  }
+
+  try {
+    await resend.emails.send({
+      from: FROM_EMAIL_FALLBACK,
+      to,
+      subject,
+      html: `
+        <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
+          <h2 style="color: #DC2626; margin-bottom: 16px;">Sync/Sit</h2>
+          ${body}
+          <hr style="border: none; border-top: 1px solid #E5E7EB; margin: 24px 0;" />
+          <p style="color: #9CA3AF; font-size: 12px;">
+            <a href="https://sync-sit.com" style="color: #DC2626;">Open Sync/Sit</a>
+          </p>
+        </div>
+      `,
+    });
+  } catch (err) {
+    console.error('Failed to send notification email:', err);
+  }
+}

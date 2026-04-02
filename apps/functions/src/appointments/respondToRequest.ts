@@ -2,6 +2,7 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
+import { sendNotificationEmail } from '../config/email.js';
 
 interface RespondData {
   appointmentId: string;
@@ -79,7 +80,60 @@ export const respondToRequest = onCall(
         }
       }
 
-      // TODO: Send notification to family
+      // Send confirmation notification to family
+      const babysitterDoc = await db.collection('users').doc(uid).get();
+      const babysitterUser = babysitterDoc.data()!;
+      const babysitterName = `${babysitterUser.firstName} ${babysitterUser.lastName}`;
+
+      const dateDisplay = appointment.date
+        ? `${appointment.date}${appointment.startTime ? ` at ${appointment.startTime}` : ''}${appointment.endTime ? `–${appointment.endTime}` : ''}`
+        : 'Recurring schedule';
+
+      const contactInfo = babysitterUser.email
+        ? `<p><strong>Email:</strong> ${babysitterUser.email}</p>`
+        : '';
+      const phoneInfo = babysitterUser.phone
+        ? `<p><strong>Phone:</strong> ${babysitterUser.phone}</p>`
+        : '';
+
+      const acceptEmailBody = `
+        <p><strong>${babysitterName}</strong> has accepted your babysitting request for <strong>${dateDisplay}</strong>.</p>
+        ${contactInfo}
+        ${phoneInfo}
+        <p style="margin-top: 16px;"><a href="https://sync-sit.com/family" style="background: #DC2626; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View in app</a></p>
+      `;
+
+      if (appointment.familyId) {
+        const familyDoc = await db.collection('families').doc(appointment.familyId).get();
+        const parentIds: string[] = familyDoc.data()?.parentIds || [];
+
+        for (const parentId of parentIds) {
+          const parentDoc = await db.collection('users').doc(parentId).get();
+          const parentData = parentDoc.data();
+          if (!parentData) continue;
+
+          if (parentData.notifPrefs?.confirmed?.email !== false && parentData.email) {
+            await sendNotificationEmail(
+              parentData.email,
+              `Babysitting confirmed — ${babysitterName}`,
+              acceptEmailBody
+            );
+          }
+
+          await db.collection('notifications').add({
+            recipientUserId: parentId,
+            type: 'request_accepted',
+            title: 'Babysitting confirmed',
+            body: `${babysitterName} has accepted your babysitting request.`,
+            data: { appointmentId: data.appointmentId },
+            read: false,
+            channels: ['email', 'push'],
+            emailSent: parentData.notifPrefs?.confirmed?.email !== false,
+            pushSent: false,
+            createdAt: now,
+          });
+        }
+      }
 
     } else {
       // Decline
@@ -89,7 +143,47 @@ export const respondToRequest = onCall(
         updatedAt: now,
       });
 
-      // TODO: Send notification to family
+      // Send decline notification to family
+      const declineDateDisplay = appointment.date
+        ? `${appointment.date}${appointment.startTime ? ` at ${appointment.startTime}` : ''}${appointment.endTime ? `–${appointment.endTime}` : ''}`
+        : 'Recurring schedule';
+
+      const declineEmailBody = `
+        <p>Your babysitting request for <strong>${declineDateDisplay}</strong> was declined. You can search for other available babysitters.</p>
+        <p style="margin-top: 16px;"><a href="https://sync-sit.com/family/search" style="background: #DC2626; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">Search babysitters</a></p>
+      `;
+
+      if (appointment.familyId) {
+        const familyDoc = await db.collection('families').doc(appointment.familyId).get();
+        const parentIds: string[] = familyDoc.data()?.parentIds || [];
+
+        for (const parentId of parentIds) {
+          const parentDoc = await db.collection('users').doc(parentId).get();
+          const parentData = parentDoc.data();
+          if (!parentData) continue;
+
+          if (parentData.notifPrefs?.cancelled?.email !== false && parentData.email) {
+            await sendNotificationEmail(
+              parentData.email,
+              'Babysitting request declined',
+              declineEmailBody
+            );
+          }
+
+          await db.collection('notifications').add({
+            recipientUserId: parentId,
+            type: 'request_declined',
+            title: 'Request declined',
+            body: `Your babysitting request was declined.`,
+            data: { appointmentId: data.appointmentId },
+            read: false,
+            channels: ['email', 'push'],
+            emailSent: parentData.notifPrefs?.cancelled?.email !== false,
+            pushSent: false,
+            createdAt: now,
+          });
+        }
+      }
     }
 
     await writeUserActivity(request.auth!.uid, data.action === 'accept' ? 'appointment_accepted' : 'appointment_declined', { appointmentId: data.appointmentId });

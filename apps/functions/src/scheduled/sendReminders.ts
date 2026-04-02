@@ -1,5 +1,6 @@
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { db } from '../config/firebase.js';
+import { sendNotificationEmail } from '../config/email.js';
 
 /**
  * Runs every hour. Finds confirmed appointments happening in the next 24-25 hours
@@ -76,6 +77,18 @@ export const sendReminders = onSchedule(
             appointmentId: aptDoc.id,
             createdAt: now,
           });
+
+          if (babysitterPrefs?.email) {
+            const babysitterEmail = babysitterDoc.data()?.email;
+            if (babysitterEmail) {
+              await sendNotificationEmail(
+                babysitterEmail,
+                'Babysitting appointment tomorrow',
+                `<p>Reminder: You have a babysitting appointment with <strong>${familyName}</strong> on <strong>${appointmentDate}</strong> at <strong>${apt.startTime}</strong>.</p>
+                 <p style="margin-top: 16px;"><a href="https://sync-sit.com/babysitter" style="background: #DC2626; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View Appointment</a></p>`
+              );
+            }
+          }
         }
       }
 
@@ -104,6 +117,18 @@ export const sendReminders = onSchedule(
               appointmentId: aptDoc.id,
               createdAt: now,
             });
+
+            if (parentPrefs?.email) {
+              const parentEmail = parentDoc.data()?.email;
+              if (parentEmail) {
+                await sendNotificationEmail(
+                  parentEmail,
+                  'Babysitting appointment tomorrow',
+                  `<p>Reminder: Your babysitting appointment is on <strong>${appointmentDate}</strong> at <strong>${apt.startTime}</strong>.</p>
+                   <p style="margin-top: 16px;"><a href="https://sync-sit.com/family" style="background: #DC2626; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View Appointment</a></p>`
+                );
+              }
+            }
           }
         }
       }

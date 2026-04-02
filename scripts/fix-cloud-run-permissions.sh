@@ -26,7 +26,7 @@ done
 if [ -n "$RESEND_API_KEY" ]; then
   echo ""
   echo "Setting Resend API key on email functions..."
-  for svc in verifyparentemail verifyejmemail; do
+  for svc in verifyparentemail verifyejmemail sendcontactrequest respondtorequest sendreminders submitverification; do
     gcloud run services update "$svc" \
       --region=$REGION --project=$PROJECT \
       --set-env-vars="RESEND_API_KEY=$RESEND_API_KEY" \
