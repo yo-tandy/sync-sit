@@ -319,6 +319,7 @@ export default {
     schoolWeeksOnly: 'Semaines scolaires uniquement',
     includingHolidays: 'Vacances incluses',
     pastDateError: 'Veuillez sélectionner une date future',
+    verificationRequired: 'Pour assurer la sécurité de notre communauté, nous devons vérifier tous les utilisateurs avant qu\'ils puissent rechercher des babysitters. Veuillez compléter le processus de vérification pour continuer.',
   },
 
   familyDashboard: {
@@ -461,6 +462,7 @@ export default {
     platform: 'Plateforme',
     recentErrors: 'Erreurs r\u00e9centes',
     none: 'Aucune',
+    errorsFound: 'erreur(s) capturée(s)',
     privacyNote: "Seul votre identifiant utilisateur est inclus pour nous aider \u00e0 enqu\u00eater. Aucune donn\u00e9e personnelle n'est envoy\u00e9e automatiquement.",
     openEmail: "Ouvrir l'email au support",
   },
@@ -605,6 +607,7 @@ export default {
     classLevelLabel: 'Niveau de classe',
     signerName: 'Nom du signataire',
     submit: 'Soumettre',
+    whyRequired: 'Sync/Sit connecte les familles EJM avec des babysitters étudiants. Pour assurer la sécurité de tous — en particulier des étudiants — nous devons vérifier que tous les parents sur la plateforme sont bien qui ils prétendent être et font partie de la communauté EJM. Vous pouvez vous vérifier via les documents ci-dessous, ou demander à un parent vérifié de se porter garant pour vous via la vérification communautaire.',
     fullyVerified: 'Vérification terminée',
     fullyVerifiedDesc: 'Votre famille a été entièrement vérifiée. Vous pouvez maintenant utiliser toutes les fonctionnalités.',
     required: 'Vérification requise',

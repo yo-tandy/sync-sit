@@ -333,6 +333,7 @@ export default {
     schoolWeeksOnly: 'School weeks only',
     includingHolidays: 'Including holidays',
     pastDateError: 'Please select a future date',
+    verificationRequired: 'To keep our community safe, we need to verify all users before they can search for babysitters. Please complete the verification process to continue.',
   },
 
   // Family Dashboard
@@ -492,6 +493,7 @@ export default {
     platform: 'Platform',
     recentErrors: 'Recent errors',
     none: 'None',
+    errorsFound: 'error(s) captured',
     privacyNote: 'Only your user ID is included to help us investigate. No personal data is sent automatically.',
     openEmail: 'Open email to support',
   },
@@ -637,6 +639,7 @@ export default {
     classLevelLabel: 'Class level',
     signerName: 'Signer name',
     submit: 'Submit',
+    whyRequired: 'Sync/Sit connects EJM families with student babysitters. To keep everyone safe — especially the students — we need to verify that all parents on the platform are who they say they are and are part of the EJM community. You can verify through documents below, or ask a verified parent to vouch for you using the community verification option.',
     fullyVerified: 'Verification Complete',
     fullyVerifiedDesc: 'Your family has been fully verified. You can now use all features.',
     required: 'Verification Required',

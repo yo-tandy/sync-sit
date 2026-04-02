@@ -163,6 +163,15 @@ export function VerificationPage() {
           </div>
         ) : (
           <>
+            {/* Explanation */}
+            {!isFullyVerified && (
+              <div className="mb-4 rounded-lg bg-gray-50 p-4">
+                <p className="text-sm leading-relaxed text-gray-600">
+                  {t('verification.whyRequired')}
+                </p>
+              </div>
+            )}
+
             {/* Fully verified banner */}
             {isFullyVerified && (
               <div className="mb-4 rounded-lg border border-green-300 bg-green-50 p-4 text-center">

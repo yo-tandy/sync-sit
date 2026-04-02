@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { doc, getDoc, collection, getDocs, query, where } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
@@ -10,7 +10,7 @@ import {
 } from '@/components/ui';
 import { AddressAutocomplete, type AddressResult } from '@/components/forms/AddressAutocomplete';
 import { formatBabysitterName } from '@/lib/formatName';
-import { CheckIcon } from '@/components/ui/Icons';
+import { CheckIcon, ShieldIcon } from '@/components/ui/Icons';
 import type { ParentUser, FamilyDoc, KidDoc, SearchDefaults } from '@ejm/shared';
 
 // Time options 06:00–02:00
@@ -216,6 +216,22 @@ export function SearchPage() {
         onBack={step !== 'type' ? () => setStep(step === 'results' ? 'details' : 'type') : undefined}
       />
 
+      {_family && !_family.verification?.isFullyVerified ? (
+      <div className="px-5 pt-4 pb-8">
+        <div className="flex flex-col items-center py-12 text-center">
+          <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-amber-100">
+            <ShieldIcon className="h-8 w-8 text-amber-600" />
+          </div>
+          <h2 className="mb-2 text-xl font-bold text-gray-900">{t('verification.required')}</h2>
+          <p className="mb-6 max-w-sm text-sm leading-relaxed text-gray-500">
+            {t('search.verificationRequired')}
+          </p>
+          <Link to="/family/verification">
+            <Button>{t('verification.completeVerification')}</Button>
+          </Link>
+        </div>
+      </div>
+      ) : (<>
       <div className="px-5 pt-4 pb-8">
         {/* Step 1: Type selection */}
         {step === 'type' && (
@@ -551,6 +567,8 @@ export function SearchPage() {
           </div>
         </Dialog>
       )}
+      </>)}
     </div>
   );
 }
+

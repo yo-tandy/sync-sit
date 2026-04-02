@@ -41,20 +41,18 @@ export const submitVerification = onCall(
       throw new HttpsError('invalid-argument', 'Missing required fields');
     }
 
-    // Enrollment documents only need the file — admin verifies against family data
+    // Delete any existing verification docs of the same type for this family
+    const existing = await db.collection('verifications')
+      .where('familyId', '==', familyId)
+      .where('type', '==', data.type)
+      .get();
 
-    // For identity type, check if there's already a pending or approved one
-    if (data.type === 'identity') {
-      const existing = await db.collection('verifications')
-        .where('familyId', '==', familyId)
-        .where('type', '==', 'identity')
-        .where('status', 'in', ['pending', 'approved'])
-        .limit(1)
-        .get();
-
-      if (!existing.empty) {
-        throw new HttpsError('already-exists', 'An identity verification is already pending or approved');
+    if (!existing.empty) {
+      const batch = db.batch();
+      for (const doc of existing.docs) {
+        batch.delete(doc.ref);
       }
+      await batch.commit();
     }
 
     const now = new Date();
@@ -82,12 +80,9 @@ export const submitVerification = onCall(
     };
 
     const statusField = data.type === 'identity' ? 'identityStatus' : 'enrollmentStatus';
-    if (currentVerification[statusField] === 'not_submitted' || currentVerification[statusField] === 'rejected') {
-      await familyRef.update({
-        [`verification.${statusField}`]: 'pending',
-        'verification.isFullyVerified': false,
-      });
-    }
+    currentVerification[statusField] = 'pending';
+    currentVerification.isFullyVerified = false;
+    await familyRef.update({ verification: currentVerification });
 
     await writeUserActivity(uid, 'verification_submitted', { type: data.type, familyId });
 

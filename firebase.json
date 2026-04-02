@@ -39,6 +39,9 @@
       "node scripts/unbundle-shared-after-deploy.js"
     ]
   },
+  "storage": {
+    "rules": "storage.rules"
+  },
   "firestore": {
     "rules": "firestore.rules",
     "indexes": "firestore.indexes.json"
