@@ -654,4 +654,15 @@ export default {
     checkboxConfirmEjm: 'Je confirme qu\'ils ont des enfants à l\'EJM',
     approveSuccess: 'Compte approuvé avec succès !',
   },
+
+  // Appointment actions
+  appointment: {
+    cancel: 'Annuler le rendez-vous',
+    cancelTitle: 'Annuler le rendez-vous',
+    cancelDesc: 'Veuillez indiquer la raison de l\'annulation. L\'autre partie sera notifiée.',
+    cancelReason: 'Raison de l\'annulation *',
+    cancelReasonPlaceholder: 'Pourquoi annulez-vous ce rendez-vous ?',
+    confirmCancel: 'Confirmer l\'annulation',
+    cancelled: 'Annulé',
+  },
 } as const;

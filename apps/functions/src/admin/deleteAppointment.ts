@@ -4,6 +4,7 @@ import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { verifyAdmin } from './verifyAdmin.js';
 import { writeAuditLog } from './writeAuditLog.js';
+import { sendNotificationEmail } from '../config/email.js';
 
 interface DeleteAppointmentInput {
   appointmentId: string;
@@ -72,6 +73,51 @@ export const deleteAppointment = onCall(
     }
 
     await Promise.all(notificationPromises);
+
+    // Send email notifications to babysitter and family parents
+    const dateInfo = apptData.date
+      ? `${apptData.date}${apptData.startTime ? `, ${apptData.startTime}` : ''}${apptData.endTime ? `–${apptData.endTime}` : ''}`
+      : 'Recurring';
+
+    if (apptData.babysitterUserId) {
+      try {
+        const babysitterDoc = await db.collection('users').doc(apptData.babysitterUserId).get();
+        const babysitterEmail = babysitterDoc.data()?.email;
+        if (babysitterEmail) {
+          await sendNotificationEmail(
+            babysitterEmail,
+            'Appointment cancelled by admin',
+            `<p>An administrator has cancelled your appointment for <strong>${dateInfo}</strong>.</p>
+             <p>If you have questions, please contact support.</p>
+             <p style="margin-top: 16px;"><a href="https://sync-sit.com/babysitter" style="background: #DC2626; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View Dashboard</a></p>`
+          );
+        }
+      } catch (err) {
+        console.error('Failed to send cancellation email to babysitter:', err);
+      }
+    }
+
+    if (apptData.familyId) {
+      try {
+        const familyDoc = await db.collection('families').doc(apptData.familyId).get();
+        const parentIds: string[] = familyDoc.data()?.parentIds || [];
+        for (const parentId of parentIds) {
+          const parentDoc = await db.collection('users').doc(parentId).get();
+          const parentEmail = parentDoc.data()?.email;
+          if (parentEmail) {
+            await sendNotificationEmail(
+              parentEmail,
+              'Appointment cancelled by admin',
+              `<p>An administrator has cancelled your appointment for <strong>${dateInfo}</strong>.</p>
+               <p>If you have questions, please contact support.</p>
+               <p style="margin-top: 16px;"><a href="https://sync-sit.com/family/search" style="background: #DC2626; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">Search Babysitters</a></p>`
+            );
+          }
+        }
+      } catch (err) {
+        console.error('Failed to send cancellation email to family:', err);
+      }
+    }
 
     await writeAuditLog({
       adminUserId: request.auth.uid,

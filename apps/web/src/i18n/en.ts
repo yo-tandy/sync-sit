@@ -686,4 +686,15 @@ export default {
     checkboxConfirmEjm: 'I confirm that they have kids in EJM',
     approveSuccess: 'Account approved successfully!',
   },
+
+  // Appointment actions
+  appointment: {
+    cancel: 'Cancel Appointment',
+    cancelTitle: 'Cancel Appointment',
+    cancelDesc: 'Please provide a reason for cancelling. The other party will be notified.',
+    cancelReason: 'Reason for cancellation *',
+    cancelReasonPlaceholder: 'Why are you cancelling this appointment?',
+    confirmCancel: 'Confirm Cancellation',
+    cancelled: 'Cancelled',
+  },
 } as const;

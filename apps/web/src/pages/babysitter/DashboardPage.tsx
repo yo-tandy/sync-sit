@@ -2,12 +2,13 @@ import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '@/config/firebase';
+import { httpsCallable } from 'firebase/functions';
+import { db, functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { useAppointments } from '@/hooks/useAppointments';
 import { useSchedule } from '@/hooks/useSchedule';
 import { AppointmentCard } from '@/components/appointments/AppointmentCard';
-import { Card, Badge, Dialog, Button, Spinner } from '@/components/ui';
+import { Card, Badge, Dialog, Button, Spinner, Textarea } from '@/components/ui';
 import {
   CalendarIcon,
   ChevronRightIcon,
@@ -23,6 +24,7 @@ function Section({
   variant,
   items,
   onCardClick,
+  onCancel,
 }: {
   title: string;
   count: number;
@@ -30,6 +32,7 @@ function Section({
   variant: 'pending' | 'confirmed' | 'past' | 'rejected';
   items: AppointmentDoc[];
   onCardClick?: (apt: AppointmentDoc) => void;
+  onCancel?: (apt: AppointmentDoc) => void;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   if (count === 0) return null;
@@ -51,6 +54,7 @@ function Section({
           appointment={apt}
           variant={variant}
           onClick={onCardClick ? () => onCardClick(apt) : undefined}
+          onCancel={onCancel ? () => onCancel(apt) : undefined}
         />
       ))}
     </div>
@@ -82,6 +86,25 @@ export function BabysitterDashboard() {
   const babysitter = userDoc as BabysitterUser | null;
   const uid = firebaseUser?.uid;
   const { t } = useTranslation();
+
+  const [cancelTarget, setCancelTarget] = useState<string | null>(null);
+  const [cancelReason, setCancelReason] = useState('');
+  const [cancelling, setCancelling] = useState(false);
+
+  const handleCancel = async () => {
+    if (!cancelTarget || !cancelReason.trim()) return;
+    setCancelling(true);
+    try {
+      const fn = httpsCallable(functions, 'cancelAppointment');
+      await fn({ appointmentId: cancelTarget, reason: cancelReason.trim() });
+      setCancelTarget(null);
+      setCancelReason('');
+    } catch (err: any) {
+      alert(err.message || 'Failed to cancel');
+    } finally {
+      setCancelling(false);
+    }
+  };
 
   const [toggleDialog, setToggleDialog] = useState(false);
   const [toggling, setToggling] = useState(false);
@@ -191,7 +214,7 @@ export function BabysitterDashboard() {
       ) : hasAny ? (
         <>
           <Section title={t('babysitterDashboard.newRequests')} count={pending.length} variant="pending" items={pending} onCardClick={(apt) => navigate(`/babysitter/request/${apt.appointmentId}`)} />
-          <Section title={t('babysitterDashboard.confirmed')} count={confirmed.length} variant="confirmed" items={confirmed} onCardClick={(apt) => navigate(`/babysitter/request/${apt.appointmentId}`)} />
+          <Section title={t('babysitterDashboard.confirmed')} count={confirmed.length} variant="confirmed" items={confirmed} onCardClick={(apt) => navigate(`/babysitter/request/${apt.appointmentId}`)} onCancel={(apt) => setCancelTarget(apt.appointmentId)} />
           <Section title={t('babysitterDashboard.past')} count={pastRecent.length} defaultOpen={false} variant="past" items={pastRecent} onCardClick={(apt) => navigate(`/babysitter/request/${apt.appointmentId}`)} />
           <Section title={t('babysitterDashboard.rejected')} count={rejectedRecent.length} defaultOpen={false} variant="rejected" items={rejectedRecent} onCardClick={(apt) => navigate(`/babysitter/request/${apt.appointmentId}`)} />
         </>
@@ -304,6 +327,27 @@ export function BabysitterDashboard() {
           </div>
         </Dialog>
       )}
+
+      {/* ── Cancel Appointment Dialog ── */}
+      <Dialog open={!!cancelTarget} onClose={() => { setCancelTarget(null); setCancelReason(''); }}>
+        <h3 className="mb-2 text-lg font-semibold">{t('appointment.cancelTitle')}</h3>
+        <p className="mb-4 text-sm text-gray-500">{t('appointment.cancelDesc')}</p>
+        <Textarea
+          label={t('appointment.cancelReason')}
+          value={cancelReason}
+          onChange={(e) => setCancelReason(e.target.value)}
+          placeholder={t('appointment.cancelReasonPlaceholder')}
+          required
+        />
+        <div className="mt-4 flex gap-2">
+          <Button variant="outline" size="sm" onClick={() => { setCancelTarget(null); setCancelReason(''); }}>
+            {t('common.back')}
+          </Button>
+          <Button size="sm" onClick={handleCancel} disabled={cancelling || !cancelReason.trim()}>
+            {cancelling ? '...' : t('appointment.confirmCancel')}
+          </Button>
+        </div>
+      </Dialog>
     </div>
   );
 }

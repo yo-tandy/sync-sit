@@ -91,7 +91,8 @@ export const cleanupOldData = onSchedule(
       console.log(`Deleted ${expiredCodes.size} expired verification codes`);
     }
 
-    // 5. Delete old cancelled/rejected appointments (> 30 days)
+    // 5. Delete old cancelled/rejected appointments
+    // Keep for 30 days OR until 7 days after booking date (whichever is longer)
     const oldAppointments = await db
       .collection('appointments')
       .where('status', 'in', ['cancelled', 'rejected'])
@@ -100,13 +101,25 @@ export const cleanupOldData = onSchedule(
       .get();
 
     if (!oldAppointments.empty) {
+      const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      const sevenDaysAgoStr = sevenDaysAgo.toISOString().split('T')[0];
+
       const batch = db.batch();
+      let count = 0;
       for (const doc of oldAppointments.docs) {
-        batch.delete(doc.ref);
+        const data = doc.data();
+        const bookingDate = data.date || ''; // YYYY-MM-DD string
+        // Delete if no booking date or booking date is > 7 days ago
+        if (!bookingDate || bookingDate < sevenDaysAgoStr) {
+          batch.delete(doc.ref);
+          count++;
+        }
       }
-      await batch.commit();
-      totalDeleted += oldAppointments.size;
-      console.log(`Deleted ${oldAppointments.size} old cancelled/rejected appointments`);
+      if (count > 0) {
+        await batch.commit();
+        totalDeleted += count;
+        console.log(`Deleted ${count} old cancelled/rejected appointments`);
+      }
     }
 
     console.log(`Data retention cleanup complete. Total deleted: ${totalDeleted}`);

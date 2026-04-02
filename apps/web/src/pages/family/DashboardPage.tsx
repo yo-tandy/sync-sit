@@ -2,11 +2,12 @@ import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { doc, getDoc, collection, getDocs, addDoc } from 'firebase/firestore';
-import { db } from '@/config/firebase';
+import { httpsCallable } from 'firebase/functions';
+import { db, functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { useVerificationStore } from '@/stores/verificationStore';
 import { useFamilyAppointments } from '@/hooks/useFamilyAppointments';
-import { Button, Badge, Card, Spinner, Input } from '@/components/ui';
+import { Button, Badge, Card, Spinner, Input, Dialog, Textarea } from '@/components/ui';
 import { CalendarIcon, ChevronRightIcon, PlusIcon, SearchIcon } from '@/components/ui/Icons';
 import { Avatar } from '@/components/ui';
 import type { AppointmentDoc, BabysitterUser } from '@ejm/shared';
@@ -57,11 +58,13 @@ function ExpandableBabysitterCard({
   info,
   variant,
   isReturning,
+  onCancel,
 }: {
   appointment: AppointmentDoc;
   info?: BabysitterInfo;
   variant: string;
   isReturning?: boolean;
+  onCancel?: () => void;
 }) {
   const { t, i18n } = useTranslation();
   const locale = i18n.language?.startsWith('fr') ? 'fr-FR' : 'en-GB';
@@ -154,6 +157,14 @@ function ExpandableBabysitterCard({
               {appointment.startTime && appointment.endTime && ` · ${appointment.startTime}–${appointment.endTime}`}
             </p>
           )}
+
+          {variant === 'confirmed' && onCancel && (
+            <div className="mt-3">
+              <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); onCancel(); }} className="w-full">
+                {t('appointment.cancel')}
+              </Button>
+            </div>
+          )}
         </div>
       )}
     </Card>
@@ -202,6 +213,26 @@ export function FamilyDashboard() {
   const [addingKid, setAddingKid] = useState(false);
   const navigate = useNavigate();
   const { pending, confirmed, pastRecent, rejectedRecent, loading: aptsLoading } = useFamilyAppointments();
+
+  const [cancelTarget, setCancelTarget] = useState<string | null>(null);
+  const [cancelReason, setCancelReason] = useState('');
+  const [cancelling, setCancelling] = useState(false);
+
+  const handleCancel = async () => {
+    if (!cancelTarget || !cancelReason.trim()) return;
+    setCancelling(true);
+    try {
+      const fn = httpsCallable(functions, 'cancelAppointment');
+      await fn({ appointmentId: cancelTarget, reason: cancelReason.trim() });
+      setCancelTarget(null);
+      setCancelReason('');
+      // Refresh will happen via Firestore listener
+    } catch (err: any) {
+      alert(err.message || 'Failed to cancel');
+    } finally {
+      setCancelling(false);
+    }
+  };
 
   const [babysitters, setBabysitters] = useState<Record<string, BabysitterInfo>>({});
 
@@ -398,6 +429,7 @@ export function FamilyDashboard() {
                   info={babysitters[apt.babysitterUserId]}
                   variant="confirmed"
                   isReturning={returningBabysitterIds.has(apt.babysitterUserId)}
+                  onCancel={() => setCancelTarget(apt.appointmentId)}
                 />
               ))}
             </div>
@@ -429,6 +461,25 @@ export function FamilyDashboard() {
         </div>
       )}
 
+      <Dialog open={!!cancelTarget} onClose={() => { setCancelTarget(null); setCancelReason(''); }}>
+        <h3 className="mb-2 text-lg font-semibold">{t('appointment.cancelTitle')}</h3>
+        <p className="mb-4 text-sm text-gray-500">{t('appointment.cancelDesc')}</p>
+        <Textarea
+          label={t('appointment.cancelReason')}
+          value={cancelReason}
+          onChange={(e) => setCancelReason(e.target.value)}
+          placeholder={t('appointment.cancelReasonPlaceholder')}
+          required
+        />
+        <div className="mt-4 flex gap-2">
+          <Button variant="outline" size="sm" onClick={() => { setCancelTarget(null); setCancelReason(''); }}>
+            {t('common.back')}
+          </Button>
+          <Button size="sm" onClick={handleCancel} disabled={cancelling || !cancelReason.trim()}>
+            {cancelling ? '...' : t('appointment.confirmCancel')}
+          </Button>
+        </div>
+      </Dialog>
     </div>
   );
 }

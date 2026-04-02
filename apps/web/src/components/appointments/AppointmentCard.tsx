@@ -16,6 +16,7 @@ interface AppointmentCardProps {
   onClick?: () => void;
   onAccept?: () => void;
   onDecline?: () => void;
+  onCancel?: () => void;
 }
 
 const borderColors: Record<Variant, string> = {
@@ -51,6 +52,7 @@ export function AppointmentCard({
   onClick,
   onAccept,
   onDecline,
+  onCancel,
 }: AppointmentCardProps) {
   const { t, i18n } = useTranslation();
   const { periods: holidayPeriods } = useHolidays();
@@ -122,6 +124,14 @@ export function AppointmentCard({
               Decline
             </Button>
           )}
+        </div>
+      )}
+
+      {variant === 'confirmed' && onCancel && (
+        <div className="mt-3">
+          <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); onCancel(); }} className="w-full">
+            {t('appointment.cancel')}
+          </Button>
         </div>
       )}
     </Card>
