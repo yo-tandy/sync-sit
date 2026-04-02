@@ -59,7 +59,7 @@ export function LanguagePicker({ selected, onChange, label = 'Languages spoken *
         {label}
       </label>
 
-      {/* Primary languages */}
+      {/* All language chips in a single wrapping container */}
       <div className="flex flex-wrap gap-2">
         {PRIMARY_LANGUAGES.map((lang) => (
           <Chip key={lang} selected={selected.includes(lang)} onClick={() => toggle(lang)}>
@@ -73,32 +73,32 @@ export function LanguagePicker({ selected, onChange, label = 'Languages spoken *
             + More
           </Chip>
         )}
+
+        {/* Extended languages */}
+        {(showMore || hasMoreSelected) && (
+          <>
+            {MORE_LANGUAGES.map((lang) => (
+              <Chip key={lang} selected={selected.includes(lang)} onClick={() => toggle(lang)}>
+                {lang}
+              </Chip>
+            ))}
+
+            {/* Custom languages already added */}
+            {customLanguages.map((lang) => (
+              <Chip key={lang} selected onClick={() => toggle(lang)}>
+                {lang}
+              </Chip>
+            ))}
+
+            {/* Other button */}
+            {!showCustom && (
+              <Chip onClick={() => setShowCustom(true)}>
+                + Other
+              </Chip>
+            )}
+          </>
+        )}
       </div>
-
-      {/* Extended languages */}
-      {(showMore || hasMoreSelected) && (
-        <div className="mt-2 flex flex-wrap gap-2">
-          {MORE_LANGUAGES.map((lang) => (
-            <Chip key={lang} selected={selected.includes(lang)} onClick={() => toggle(lang)}>
-              {lang}
-            </Chip>
-          ))}
-
-          {/* Custom languages already added */}
-          {customLanguages.map((lang) => (
-            <Chip key={lang} selected onClick={() => toggle(lang)}>
-              {lang}
-            </Chip>
-          ))}
-
-          {/* Other button */}
-          {!showCustom && (
-            <Chip onClick={() => setShowCustom(true)}>
-              + Other
-            </Chip>
-          )}
-        </div>
-      )}
 
       {/* Custom language input */}
       {showCustom && (

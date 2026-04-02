@@ -96,7 +96,6 @@ export function StepProfile({ data, onChange, onNext, error }: StepProfileProps)
         ref={fileInputRef}
         type="file"
         accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
-        capture="user"
         className="hidden"
         onChange={handleFileChange}
       />
@@ -151,8 +150,8 @@ export function StepProfile({ data, onChange, onNext, error }: StepProfileProps)
         </div>
       </div>
 
-      <div className="flex gap-3">
-        <div className="flex-1">
+      <div className="grid grid-cols-2 gap-3">
+        <div className="min-w-0">
           <Input
             label="Date of birth *"
             type="date"
@@ -163,7 +162,7 @@ export function StepProfile({ data, onChange, onNext, error }: StepProfileProps)
             required
           />
         </div>
-        <div className="flex-1">
+        <div className="min-w-0">
           <Select
             label="Class *"
             value={data.classLevel}

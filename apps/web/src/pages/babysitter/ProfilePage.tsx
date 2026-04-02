@@ -206,7 +206,6 @@ export function ProfilePage() {
           ref={fileInputRef}
           type="file"
           accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
-          capture="user"
           className="hidden"
           onChange={handleFileChange}
         />
@@ -301,19 +300,19 @@ export function ProfilePage() {
 
         <div className="flex gap-3">
           <div className="flex-1">
-            <Input label={t('enrollment.kidsAgeMin')} type="number" value={kidAgeMin} onChange={(e) => setKidAgeMin(parseInt(e.target.value) || 0)} min={0} max={18} />
+            <Input label={t('enrollment.kidsAgeMin')} type="number" value={kidAgeMin || ''} onChange={(e) => setKidAgeMin(e.target.value === '' ? 0 : parseInt(e.target.value))} min={0} max={18} />
           </div>
           <div className="flex-1">
-            <Input label={t('enrollment.kidsAgeMax')} type="number" value={kidAgeMax} onChange={(e) => setKidAgeMax(parseInt(e.target.value) || 0)} min={0} max={18} />
+            <Input label={t('enrollment.kidsAgeMax')} type="number" value={kidAgeMax || ''} onChange={(e) => setKidAgeMax(e.target.value === '' ? 0 : parseInt(e.target.value))} min={0} max={18} />
           </div>
         </div>
 
         <div className="flex gap-3">
           <div className="flex-1">
-            <Input label={t('enrollment.maxKids')} type="number" value={maxKids} onChange={(e) => setMaxKids(parseInt(e.target.value) || 1)} min={1} max={10} />
+            <Input label={t('enrollment.maxKids')} type="number" value={maxKids || ''} onChange={(e) => setMaxKids(e.target.value === '' ? 0 : parseInt(e.target.value))} min={1} max={10} />
           </div>
           <div className="flex-1">
-            <Input label={t('enrollment.rateLabel')} type="number" value={hourlyRate} onChange={(e) => setHourlyRate(parseFloat(e.target.value) || 0)} min={0} />
+            <Input label={t('enrollment.rateLabel')} type="number" value={hourlyRate || ''} onChange={(e) => setHourlyRate(e.target.value === '' ? 0 : parseFloat(e.target.value))} min={0} />
           </div>
         </div>
 
@@ -388,8 +387,8 @@ export function ProfilePage() {
               <Input
                 label={t('enrollment.maxDistance')}
                 type="number"
-                value={areaRadiusKm}
-                onChange={(e) => setAreaRadiusKm(parseFloat(e.target.value) || 1)}
+                value={areaRadiusKm || ''}
+                onChange={(e) => setAreaRadiusKm(e.target.value === '' ? 0 : parseFloat(e.target.value))}
                 min={1}
                 max={20}
               />

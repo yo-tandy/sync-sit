@@ -50,8 +50,8 @@ export function StepPreferences({ data, onChange, onNext, loading, error }: Step
           <Input
             label="Kids age min *"
             type="number"
-            value={data.kidAgeMin}
-            onChange={(e) => onChange({ kidAgeMin: parseInt(e.target.value) || 0 })}
+            value={data.kidAgeMin || ''}
+            onChange={(e) => onChange({ kidAgeMin: e.target.value === '' ? 0 : parseInt(e.target.value) })}
             min={0}
             max={18}
           />
@@ -60,8 +60,8 @@ export function StepPreferences({ data, onChange, onNext, loading, error }: Step
           <Input
             label="Kids age max *"
             type="number"
-            value={data.kidAgeMax}
-            onChange={(e) => onChange({ kidAgeMax: parseInt(e.target.value) || 0 })}
+            value={data.kidAgeMax || ''}
+            onChange={(e) => onChange({ kidAgeMax: e.target.value === '' ? 0 : parseInt(e.target.value) })}
             min={0}
             max={18}
           />
@@ -73,8 +73,8 @@ export function StepPreferences({ data, onChange, onNext, loading, error }: Step
           <Input
             label="Max kids *"
             type="number"
-            value={data.maxKids}
-            onChange={(e) => onChange({ maxKids: parseInt(e.target.value) || 1 })}
+            value={data.maxKids || ''}
+            onChange={(e) => onChange({ maxKids: e.target.value === '' ? 0 : parseInt(e.target.value) })}
             min={1}
             max={10}
           />
@@ -83,8 +83,8 @@ export function StepPreferences({ data, onChange, onNext, loading, error }: Step
           <Input
             label="Rate (€/hr) *"
             type="number"
-            value={data.hourlyRate}
-            onChange={(e) => onChange({ hourlyRate: parseFloat(e.target.value) || 0 })}
+            value={data.hourlyRate || ''}
+            onChange={(e) => onChange({ hourlyRate: e.target.value === '' ? 0 : parseFloat(e.target.value) })}
             min={0}
           />
         </div>
@@ -208,8 +208,8 @@ export function StepPreferences({ data, onChange, onNext, loading, error }: Step
             <Input
               label="Max distance (km)"
               type="number"
-              value={data.areaRadiusKm}
-              onChange={(e) => onChange({ areaRadiusKm: parseFloat(e.target.value) || 1 })}
+              value={data.areaRadiusKm || ''}
+              onChange={(e) => onChange({ areaRadiusKm: e.target.value === '' ? 0 : parseFloat(e.target.value) })}
               min={1}
               max={20}
             />

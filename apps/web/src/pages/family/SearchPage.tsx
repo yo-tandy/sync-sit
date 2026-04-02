@@ -106,6 +106,9 @@ export function SearchPage() {
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
 
+  // Expanded card
+  const [expandedBabysitter, setExpandedBabysitter] = useState<string | null>(null);
+
   // Contact dialog
   const [contactTarget, setContactTarget] = useState<BabysitterResult | null>(null);
   const [message, setMessage] = useState('');
@@ -406,8 +409,8 @@ export function SearchPage() {
             <Input
               label={t('search.rateToPayLabel')}
               type="number"
-              value={offeredRate}
-              onChange={(e) => setOfferedRate(parseFloat(e.target.value) || 0)}
+              value={offeredRate || ''}
+              onChange={(e) => setOfferedRate(e.target.value === '' ? 0 : parseFloat(e.target.value))}
               min={0}
               hint={t('search.rateHint')}
             />
@@ -425,7 +428,7 @@ export function SearchPage() {
             <h3 className="mb-3 text-sm font-semibold text-gray-700">{t('search.filters')}</h3>
             <div className="flex gap-3">
               <div className="flex-1">
-                <Input label={t('search.minBabysitterAge')} type="number" value={filterMinAge} onChange={(e) => setFilterMinAge(parseInt(e.target.value) || 15)} min={15} max={19} />
+                <Input label={t('search.minBabysitterAge')} type="number" value={filterMinAge || ''} onChange={(e) => setFilterMinAge(e.target.value === '' ? 0 : parseInt(e.target.value))} min={15} max={19} />
               </div>
               <div className="flex-1">
                 <Select label={t('search.genderPreference')} value={filterGender} onChange={(e) => setFilterGender(e.target.value)} options={GENDER_OPTIONS} />
@@ -474,8 +477,10 @@ export function SearchPage() {
                 </Button>
               </div>
             ) : (
-              results.map((b) => (
-                <Card key={b.uid} className="mb-3">
+              results.map((b) => {
+                const isExpanded = expandedBabysitter === b.uid;
+                return (
+                <Card key={b.uid} className="mb-3 cursor-pointer" onClick={() => setExpandedBabysitter(isExpanded ? null : b.uid)}>
                   <div className="flex gap-3">
                     <Avatar initials={`${(b.firstName || '')[0] || ''}${(b.lastName || '')[0] || ''}`} src={b.photoUrl || undefined} size="lg" />
                     <div className="min-w-0 flex-1">
@@ -498,15 +503,29 @@ export function SearchPage() {
                         <p className="text-xs text-gray-500">⭐ {b.referenceCount} reference{b.referenceCount > 1 ? 's' : ''}</p>
                       )}
                       {b.aboutMe && (
-                        <p className="mt-1 text-xs text-gray-600 line-clamp-2">"{b.aboutMe}"</p>
+                        <p className={`mt-1 text-xs text-gray-600 ${isExpanded ? '' : 'line-clamp-2'}`}>"{b.aboutMe}"</p>
                       )}
                     </div>
                   </div>
-                  <Button size="sm" onClick={() => setContactTarget(b)} className="mt-3">
+
+                  {isExpanded && (
+                    <div className="mt-3 border-t border-gray-100 pt-3 space-y-1">
+                      <p className="text-xs text-gray-500">💰 {t('familyDashboard.rateOffered', { rate: b.hourlyRate })}</p>
+                      {b.contactEmail && (
+                        <p className="text-xs text-gray-600">📧 {b.contactEmail}</p>
+                      )}
+                      {b.contactPhone && (
+                        <p className="text-xs text-gray-600">📞 {b.contactPhone}</p>
+                      )}
+                    </div>
+                  )}
+
+                  <Button size="sm" onClick={(e) => { e.stopPropagation(); setContactTarget(b); }} className="mt-3">
                     {t('search.contact', { name: b.firstName })}
                   </Button>
                 </Card>
-              ))
+                );
+              })
             )}
           </>
         )}
@@ -530,8 +549,8 @@ export function SearchPage() {
           <Input
             label={t('search.rateOffered')}
             type="number"
-            value={offeredRate}
-            onChange={(e) => setOfferedRate(parseFloat(e.target.value) || 0)}
+            value={offeredRate || ''}
+            onChange={(e) => setOfferedRate(e.target.value === '' ? 0 : parseFloat(e.target.value))}
             min={0}
           />
 
