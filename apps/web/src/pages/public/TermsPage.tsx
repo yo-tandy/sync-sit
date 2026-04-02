@@ -14,10 +14,10 @@ const sections: Section[] = [
     titleFr: '1. Acceptation des conditions',
     contentEn:
       'By creating an account on Sync/Sit or using the platform in any way, you agree to be bound by these Terms of Service and our Privacy Policy. If you do not agree with any part of these terms, you must not use the platform.\n\n' +
-      'These terms constitute a legally binding agreement between you and the operator of Sync/Sit. Please read them carefully before using the service.',
+      'These terms constitute a legally binding agreement between you and Tandy SARL, the operator of Sync/Sit, based in Paris, France. Please read them carefully before using the service.',
     contentFr:
       'En créant un compte sur Sync/Sit ou en utilisant la plateforme de quelque manière que ce soit, vous acceptez d\'être lié(e) par les présentes Conditions Générales d\'Utilisation et notre Politique de confidentialité. Si vous n\'acceptez pas tout ou partie de ces conditions, vous ne devez pas utiliser la plateforme.\n\n' +
-      'Les présentes conditions constituent un accord juridiquement contraignant entre vous et l\'exploitant de Sync/Sit. Veuillez les lire attentivement avant d\'utiliser le service.',
+      'Les présentes conditions constituent un accord juridiquement contraignant entre vous et Tandy SARL, l\'exploitant de Sync/Sit, basée à Paris, France. Veuillez les lire attentivement avant d\'utiliser le service.',
   },
   {
     titleEn: '2. Description of Service',
@@ -26,7 +26,7 @@ const sections: Section[] = [
       'Sync/Sit is a non-commercial platform that connects families of the École Jeannine Manuel (EJM) community in Paris with EJM student babysitters aged 15 to 18.\n\n' +
       'The platform provides the following features:\n' +
       '- Profile creation for parents and babysitters\n' +
-      '- Identity and school enrollment verification for babysitters\n' +
+      '- School affiliation verification for families and babysitters\n' +
       '- Proximity-based search for babysitters\n' +
       '- Scheduling and appointment management\n' +
       '- In-app communication via notifications\n' +
@@ -36,7 +36,7 @@ const sections: Section[] = [
       'Sync/Sit est une plateforme non commerciale qui met en relation les familles de la communauté de l\'École Jeannine Manuel (EJM) à Paris avec des élèves babysitters de l\'EJM âgés de 15 à 18 ans.\n\n' +
       'La plateforme offre les fonctionnalités suivantes :\n' +
       '- Création de profils pour les parents et les babysitters\n' +
-      '- Vérification de l\'identité et de la scolarité des babysitters\n' +
+      '- Vérification de l\'affiliation scolaire des familles et des babysitters\n' +
       '- Recherche de babysitters par proximité géographique\n' +
       '- Gestion des disponibilités et des rendez-vous\n' +
       '- Communication via notifications dans l\'application\n' +
@@ -56,7 +56,7 @@ const sections: Section[] = [
       '- Must be a currently enrolled student at École Jeannine Manuel\n' +
       '- Must be between 15 and 18 years of age\n' +
       '- Must have a valid EJM school email address (@ejm.org)\n' +
-      '- Must submit a valid government-issued ID and school enrollment certificate for verification\n\n' +
+      '- Must verify their school affiliation through their @ejm.org email address\n\n' +
       'In accordance with French law (Article 8 of the GDPR, as implemented in France), individuals aged 15 and over may consent to the processing of their personal data. Babysitters aged 15 to 18 create their accounts with their own consent.',
     contentFr:
       'Pour utiliser Sync/Sit, vous devez remplir les conditions d\'éligibilité suivantes :\n\n' +
@@ -68,7 +68,7 @@ const sections: Section[] = [
       '- Être un(e) élève actuellement inscrit(e) à l\'École Jeannine Manuel\n' +
       '- Être âgé(e) de 15 à 18 ans\n' +
       '- Disposer d\'une adresse e-mail scolaire EJM valide (@ejm.org)\n' +
-      '- Soumettre une pièce d\'identité officielle et un certificat de scolarité valides pour vérification\n\n' +
+      '- Vérifier leur affiliation scolaire par leur adresse e-mail @ejm.org\n\n' +
       'Conformément au droit français (article 8 du RGPD, tel que transposé en France), les personnes âgées de 15 ans et plus peuvent consentir au traitement de leurs données personnelles. Les babysitters âgés de 15 à 18 ans créent leur compte avec leur propre consentement.',
   },
   {
@@ -78,7 +78,7 @@ const sections: Section[] = [
       'All users must create an account to access Sync/Sit. Account creation requires:\n\n' +
       '- Providing accurate and complete personal information\n' +
       '- Verifying your email address through a magic link sent to your email\n' +
-      '- For babysitters: completing the full verification process including ID document submission, school enrollment proof, and EJM email verification\n' +
+      '- For babysitters: verifying their school affiliation through their @ejm.org email address\n' +
       '- For parents: completing the parent verification process\n\n' +
       'You are responsible for maintaining the security of your account. You must not share your authentication links with anyone. You must notify us immediately at support@sync-sit.com if you suspect unauthorised access to your account.\n\n' +
       'We reserve the right to refuse, suspend, or terminate any account that fails verification or provides false information.',
@@ -86,7 +86,7 @@ const sections: Section[] = [
       'Tous les utilisateurs doivent créer un compte pour accéder à Sync/Sit. La création de compte nécessite :\n\n' +
       '- La fourniture d\'informations personnelles exactes et complètes\n' +
       '- La vérification de votre adresse e-mail via un lien magique envoyé à votre adresse\n' +
-      '- Pour les babysitters : la réalisation complète du processus de vérification comprenant la soumission d\'une pièce d\'identité, d\'un justificatif de scolarité et la vérification de l\'adresse e-mail EJM\n' +
+      '- Pour les babysitters : la vérification de leur affiliation scolaire par leur adresse e-mail @ejm.org\n' +
       '- Pour les parents : la réalisation du processus de vérification parentale\n\n' +
       'Vous êtes responsable de la sécurité de votre compte. Vous ne devez en aucun cas partager vos liens d\'authentification. Vous devez nous notifier immédiatement à support@sync-sit.com si vous soupçonnez un accès non autorisé à votre compte.\n\n' +
       'Nous nous réservons le droit de refuser, suspendre ou résilier tout compte qui échoue à la vérification ou fournit de fausses informations.',

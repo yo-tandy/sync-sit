@@ -13,9 +13,9 @@ const sections: Section[] = [
     titleEn: '1. Data Controller',
     titleFr: '1. Responsable du traitement',
     contentEn:
-      'Sync/Sit is operated by a private individual based in Paris, France. The data controller within the meaning of the General Data Protection Regulation (GDPR) and the French Data Protection Act (Loi Informatique et Libertés) can be contacted at: support@sync-sit.com.\n\nSync/Sit is not a registered company. It is a non-commercial platform designed to connect families and student babysitters within the École Jeannine Manuel (EJM) community in Paris.',
+      'Sync/Sit is operated by Tandy SARL, a company based in Paris, France. The data controller within the meaning of the General Data Protection Regulation (GDPR) and the French Data Protection Act (Loi Informatique et Libertés) can be contacted at: support@sync-sit.com.\n\nSync/Sit is a non-commercial platform designed to connect families and student babysitters within the École Jeannine Manuel (EJM) community in Paris.',
     contentFr:
-      'Sync/Sit est exploité par une personne physique domiciliée à Paris, France. Le responsable du traitement au sens du Règlement Général sur la Protection des Données (RGPD) et de la loi Informatique et Libertés est joignable à l\'adresse : support@sync-sit.com.\n\nSync/Sit n\'est pas une société immatriculée. Il s\'agit d\'une plateforme non commerciale destinée à mettre en relation les familles et les élèves babysitters au sein de la communauté de l\'École Jeannine Manuel (EJM) à Paris.',
+      'Sync/Sit est exploitée par la société Tandy SARL, basée à Paris, France. Le responsable du traitement au sens du Règlement Général sur la Protection des Données (RGPD) et de la loi Informatique et Libertés est joignable à l\'adresse : support@sync-sit.com.\n\nSync/Sit est une plateforme non commerciale destinée à mettre en relation les familles et les élèves babysitters au sein de la communauté de l\'École Jeannine Manuel (EJM) à Paris.',
   },
   {
     titleEn: '2. Personal Data Collected',
@@ -25,7 +25,7 @@ const sections: Section[] = [
       '- Identity data: first name, last name, date of birth\n' +
       '- Contact data: email address, phone number, residential address (including GPS coordinates for proximity-based search)\n' +
       '- Profile data: profile photo, biography, spoken languages\n' +
-      '- Verification documents: government-issued ID scans (for babysitters), school enrollment certificates\n' +
+      '- Verification documents: government-issued ID scans and school enrollment certificates (for families only). Babysitters are verified through their @ejm.org school email address.\n' +
       '- Children\'s data: first names, ages, and spoken languages of children in parent profiles\n' +
       '- Scheduling data: babysitter availability, appointment history\n' +
       '- References: names and contact details of references provided by babysitters\n' +
@@ -37,7 +37,7 @@ const sections: Section[] = [
       '- Données d\'identité : prénom, nom, date de naissance\n' +
       '- Données de contact : adresse e-mail, numéro de téléphone, adresse postale (y compris les coordonnées GPS pour la recherche de proximité)\n' +
       '- Données de profil : photo de profil, biographie, langues parlées\n' +
-      '- Documents de vérification : copie d\'une pièce d\'identité officielle (pour les babysitters), certificat de scolarité\n' +
+      '- Documents de vérification : copies de pièces d\'identité officielles et certificats de scolarité (pour les familles uniquement). Les babysitters sont vérifiés par leur adresse e-mail scolaire @ejm.org.\n' +
       '- Données relatives aux enfants : prénoms, âges et langues parlées des enfants figurant dans les profils des parents\n' +
       '- Données de planification : disponibilités des babysitters, historique des rendez-vous\n' +
       '- Références : noms et coordonnées des personnes de référence fournies par les babysitters\n' +
@@ -52,7 +52,7 @@ const sections: Section[] = [
       'Your personal data is processed for the following purposes:\n\n' +
       '- Account creation and management: to create, maintain, and authenticate your account\n' +
       '- Matching and search: to enable parents to find babysitters near their home and matching their scheduling needs\n' +
-      '- Identity verification: to verify the identity and school affiliation of babysitters for the safety of families and children\n' +
+      '- Affiliation verification: to verify the school affiliation of both families and babysitters — families through identity documents and enrollment certificates, babysitters through their @ejm.org school email\n' +
       '- Community verification: to facilitate peer vouching between verified community members\n' +
       '- Communication: to send transactional emails (verification codes, appointment confirmations) and push notifications\n' +
       '- Safety and trust: to verify that babysitters are enrolled EJM students and are of the required age\n' +
@@ -61,7 +61,7 @@ const sections: Section[] = [
       'Vos données personnelles sont traitées aux fins suivantes :\n\n' +
       '- Création et gestion de compte : pour créer, maintenir et authentifier votre compte\n' +
       '- Mise en relation et recherche : pour permettre aux parents de trouver des babysitters à proximité de leur domicile et correspondant à leurs besoins de disponibilité\n' +
-      '- Vérification d\'identité : pour vérifier l\'identité et l\'affiliation scolaire des babysitters afin d\'assurer la sécurité des familles et des enfants\n' +
+      '- Vérification d\'affiliation : pour vérifier l\'affiliation scolaire des familles et des babysitters — les familles par le biais de documents d\'identité et de certificats de scolarité, les babysitters par leur adresse e-mail scolaire @ejm.org\n' +
       '- Vérification communautaire : pour faciliter le parrainage entre membres vérifiés de la communauté\n' +
       '- Communication : pour envoyer des e-mails transactionnels (codes de vérification, confirmations de rendez-vous) et des notifications push\n' +
       '- Sécurité et confiance : pour vérifier que les babysitters sont bien des élèves inscrits à l\'EJM et ont l\'âge requis\n' +
@@ -74,13 +74,13 @@ const sections: Section[] = [
       'We process your data on the following legal grounds under Article 6 of the GDPR:\n\n' +
       '- Consent (Article 6(1)(a)): you provide explicit consent when you create your account and accept this privacy policy. You may withdraw consent at any time by deleting your account or contacting us.\n' +
       '- Contract performance (Article 6(1)(b)): processing is necessary to provide the services you signed up for, including matching, scheduling, and communication features.\n' +
-      '- Legitimate interest (Article 6(1)(f)): we have a legitimate interest in verifying the identity and school affiliation of babysitters to ensure the safety of children and families using the platform. This includes collecting and reviewing ID documents and school enrollment certificates.\n\n' +
+      '- Legitimate interest (Article 6(1)(f)): we have a legitimate interest in verifying the school affiliation of families and babysitters to ensure the safety of children and families using the platform. This includes collecting and reviewing ID documents and school enrollment certificates from families, and verifying babysitters through their @ejm.org school email.\n\n' +
       'For children\'s data (names and ages), we rely on parental consent provided by the parent who creates the account and enters this information.',
     contentFr:
       'Nous traitons vos données sur les bases légales suivantes au titre de l\'article 6 du RGPD :\n\n' +
       '- Consentement (article 6, paragraphe 1, point a) : vous donnez votre consentement explicite lors de la création de votre compte et de l\'acceptation de la présente politique de confidentialité. Vous pouvez retirer votre consentement à tout moment en supprimant votre compte ou en nous contactant.\n' +
       '- Exécution du contrat (article 6, paragraphe 1, point b) : le traitement est nécessaire à la fourniture des services auxquels vous vous êtes inscrit(e), y compris les fonctionnalités de mise en relation, de planification et de communication.\n' +
-      '- Intérêt légitime (article 6, paragraphe 1, point f) : nous avons un intérêt légitime à vérifier l\'identité et l\'affiliation scolaire des babysitters afin de garantir la sécurité des enfants et des familles utilisant la plateforme. Cela inclut la collecte et l\'examen de copies de pièces d\'identité et de certificats de scolarité.\n\n' +
+      '- Intérêt légitime (article 6, paragraphe 1, point f) : nous avons un intérêt légitime à vérifier l\'affiliation scolaire des familles et des babysitters afin de garantir la sécurité des enfants et des familles utilisant la plateforme. Cela inclut la collecte et l\'examen de copies de pièces d\'identité et de certificats de scolarité des familles, ainsi que la vérification des babysitters par leur adresse e-mail scolaire @ejm.org.\n\n' +
       'Pour les données relatives aux enfants (prénoms et âges), nous nous fondons sur le consentement parental donné par le parent qui crée le compte et saisit ces informations.',
   },
   {
@@ -88,14 +88,14 @@ const sections: Section[] = [
     titleFr: '5. Destinataires des données',
     contentEn:
       'Your personal data may be shared with or accessed by the following recipients:\n\n' +
-      '- Platform administrators: for verification review (ID documents, school certificates) and user account management\n' +
+      '- Platform administrators: for verification review (family ID documents and school certificates) and user account management\n' +
       '- Other users: your profile information (name, photo, bio, languages, availability) is visible to other verified users of the platform. Your address is not displayed; only approximate distance is shown.\n' +
       '- Google LLC (Firebase): provides hosting, database (Firestore), authentication, file storage (Cloud Storage), and push notification services (FCM). Data is stored in the EU region (europe-west1).\n' +
       '- Resend Inc.: provides transactional email delivery for verification codes, appointment notifications, and account-related communications.\n\n' +
       'We do not sell, rent, or trade your personal data to any third party. We do not use your data for advertising or marketing purposes.',
     contentFr:
       'Vos données personnelles peuvent être partagées avec ou consultées par les destinataires suivants :\n\n' +
-      '- Administrateurs de la plateforme : pour l\'examen des vérifications (pièces d\'identité, certificats de scolarité) et la gestion des comptes utilisateurs\n' +
+      '- Administrateurs de la plateforme : pour l\'examen des vérifications (pièces d\'identité et certificats de scolarité des familles) et la gestion des comptes utilisateurs\n' +
       '- Autres utilisateurs : vos informations de profil (nom, photo, biographie, langues, disponibilités) sont visibles par les autres utilisateurs vérifiés de la plateforme. Votre adresse n\'est pas affichée ; seule une distance approximative est indiquée.\n' +
       '- Google LLC (Firebase) : fournit l\'hébergement, la base de données (Firestore), l\'authentification, le stockage de fichiers (Cloud Storage) et les services de notifications push (FCM). Les données sont stockées dans la région UE (europe-west1).\n' +
       '- Resend Inc. : fournit le service d\'envoi d\'e-mails transactionnels pour les codes de vérification, les notifications de rendez-vous et les communications liées aux comptes.\n\n' +
@@ -192,7 +192,7 @@ const sections: Section[] = [
       '- All data transmitted over encrypted HTTPS connections (TLS)\n' +
       '- Role-based access control: only administrators can access verification documents and manage accounts\n' +
       '- Firestore security rules restricting data access based on user role and ownership\n' +
-      '- Verification requirements: babysitters must provide a valid EJM email address, government ID, and school enrollment proof before their profiles are published\n' +
+      '- Verification requirements: babysitters must verify their school affiliation through their @ejm.org email address; families must provide government ID and school enrollment proof before their profiles are published\n' +
       '- Secure file storage via Firebase Cloud Storage with restricted access rules\n\n' +
       'While we take reasonable steps to protect your data, no system is completely secure. We encourage you to use a secure email provider and to contact us immediately at support@sync-sit.com if you suspect any unauthorised access to your account.',
     contentFr:
@@ -201,7 +201,7 @@ const sections: Section[] = [
       '- Toutes les données transmises via des connexions HTTPS chiffrées (TLS)\n' +
       '- Contrôle d\'accès basé sur les rôles : seuls les administrateurs peuvent accéder aux documents de vérification et gérer les comptes\n' +
       '- Règles de sécurité Firestore limitant l\'accès aux données en fonction du rôle et de la propriété de l\'utilisateur\n' +
-      '- Exigences de vérification : les babysitters doivent fournir une adresse e-mail EJM valide, une pièce d\'identité officielle et un justificatif de scolarité avant la publication de leur profil\n' +
+      '- Exigences de vérification : les babysitters doivent vérifier leur affiliation scolaire par leur adresse e-mail @ejm.org ; les familles doivent fournir une pièce d\'identité officielle et un justificatif de scolarité avant la publication de leur profil\n' +
       '- Stockage sécurisé des fichiers via Firebase Cloud Storage avec des règles d\'accès restreintes\n\n' +
       'Bien que nous prenions des mesures raisonnables pour protéger vos données, aucun système n\'est totalement infaillible. Nous vous encourageons à utiliser un fournisseur de messagerie sécurisé et à nous contacter immédiatement à support@sync-sit.com si vous soupçonnez un accès non autorisé à votre compte.',
   },
@@ -241,19 +241,19 @@ const sections: Section[] = [
     titleEn: '13. Verification Documents',
     titleFr: '13. Documents de vérification',
     contentEn:
-      'Babysitters are required to submit identity documents (government-issued ID scan) and school enrollment certificates as part of the verification process. These documents are:\n\n' +
+      'Families are required to submit identity documents (government-issued ID scan) and school enrollment certificates as part of the verification process. Babysitters verify their school affiliation through their @ejm.org email address and do not submit identity documents. Family verification documents are:\n\n' +
       '- Uploaded securely to Firebase Cloud Storage with restricted access\n' +
       '- Accessible only to platform administrators for the purpose of identity and enrollment verification\n' +
       '- Not shared with other users or third parties\n' +
-      '- Permanently deleted when the babysitter\'s account is deleted\n\n' +
-      'Administrators review these documents solely to confirm that babysitters are current EJM students and that their identity matches their profile information.',
+      '- Permanently deleted when the family\'s account is deleted\n\n' +
+      'Administrators review these documents solely to confirm that families are part of the EJM community and that their identity matches their profile information.',
     contentFr:
-      'Les babysitters doivent soumettre des documents d\'identité (copie d\'une pièce d\'identité officielle) et des certificats de scolarité dans le cadre du processus de vérification. Ces documents sont :\n\n' +
+      'Les familles doivent soumettre des documents d\'identité (copie d\'une pièce d\'identité officielle) et des certificats de scolarité dans le cadre du processus de vérification. Les babysitters vérifient leur affiliation scolaire par leur adresse e-mail @ejm.org et ne soumettent pas de documents d\'identité. Les documents de vérification des familles sont :\n\n' +
       '- Téléchargés de manière sécurisée sur Firebase Cloud Storage avec un accès restreint\n' +
       '- Accessibles uniquement aux administrateurs de la plateforme à des fins de vérification d\'identité et de scolarité\n' +
       '- Non partagés avec d\'autres utilisateurs ou des tiers\n' +
-      '- Définitivement supprimés lors de la suppression du compte du babysitter\n\n' +
-      'Les administrateurs examinent ces documents uniquement pour confirmer que les babysitters sont des élèves actuellement inscrits à l\'EJM et que leur identité correspond aux informations de leur profil.',
+      '- Définitivement supprimés lors de la suppression du compte de la famille\n\n' +
+      'Les administrateurs examinent ces documents uniquement pour confirmer que les familles font partie de la communauté EJM et que leur identité correspond aux informations de leur profil.',
   },
   {
     titleEn: '14. Changes to This Policy',
