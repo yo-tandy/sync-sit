@@ -49,7 +49,12 @@ function PushStatusCard({ uid }: { uid?: string }) {
           {status === 'granted' ? (
             <p className="text-xs text-green-600">{t('notifications.pushEnabled')}</p>
           ) : status === 'denied' ? (
-            <p className="text-xs text-amber-600">{t('notifications.pushDenied')}</p>
+            <>
+              <p className="mb-2 text-xs text-amber-600">{t('notifications.pushDenied')}</p>
+              <Button size="sm" variant="outline" onClick={handleEnable}>
+                {t('notifications.tryAgain')}
+              </Button>
+            </>
           ) : (
             <>
               <p className="mb-2 text-xs text-amber-600">{t('notifications.pushDisabled')}</p>
