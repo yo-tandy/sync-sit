@@ -454,6 +454,8 @@ export default {
     confirmationDesc: "Quand une demande est accept\u00e9e ou confirm\u00e9e",
     cancellation: 'Annulation',
     cancellationDesc: "Quand un rendez-vous est annul\u00e9",
+    declineOrCancel: 'Refus / Annulation',
+    declineOrCancelDesc: 'Quand un(e) babysitter refuse votre demande ou annule un rendez-vous confirmé',
     reminder: 'Rappel',
     reminderDesc: "24 heures avant un rendez-vous programm\u00e9",
     referenceSubmitted: 'R\u00e9f\u00e9rence soumise',

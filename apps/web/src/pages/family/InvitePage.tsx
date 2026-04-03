@@ -154,9 +154,13 @@ export function InvitePage() {
                 {userDoc && member.uid === userDoc.uid ? (
                   <span className="text-xs text-gray-400">{t('invite.you')}</span>
                 ) : (
-                  <Button size="sm" variant="outline" onClick={() => setRemoveTarget({ uid: member.uid, name: member.name })}>
+                  <button
+                    type="button"
+                    className="text-xs text-red-600 hover:underline"
+                    onClick={() => setRemoveTarget({ uid: member.uid, name: member.name })}
+                  >
                     {t('coParent.remove')}
-                  </Button>
+                  </button>
                 )}
               </div>
             </Card>

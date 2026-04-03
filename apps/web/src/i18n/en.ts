@@ -479,6 +479,8 @@ export default {
     confirmationDesc: 'When a request is accepted or confirmed',
     cancellation: 'Cancellation',
     cancellationDesc: 'When an appointment is cancelled',
+    declineOrCancel: 'Decline / Cancellation',
+    declineOrCancelDesc: 'When a babysitter declines your request or cancels a confirmed appointment',
     reminder: 'Reminder',
     reminderDesc: '24 hours before a scheduled appointment',
     referenceSubmitted: 'Reference submitted',

@@ -17,10 +17,10 @@ interface NotifChannel {
   email: boolean;
 }
 
+// Parent-specific notification scenarios (no "new request" — parents initiate requests)
 const SCENARIOS: { key: keyof NotifPrefs; labelKey: string; descKey: string }[] = [
-  { key: 'newRequest', labelKey: 'notifications.newRequest', descKey: 'notifications.newRequestDesc' },
   { key: 'confirmed', labelKey: 'notifications.confirmation', descKey: 'notifications.confirmationDesc' },
-  { key: 'cancelled', labelKey: 'notifications.cancellation', descKey: 'notifications.cancellationDesc' },
+  { key: 'cancelled', labelKey: 'notifications.declineOrCancel', descKey: 'notifications.declineOrCancelDesc' },
   { key: 'reminders', labelKey: 'notifications.reminder', descKey: 'notifications.reminderDesc' },
 ];
 
