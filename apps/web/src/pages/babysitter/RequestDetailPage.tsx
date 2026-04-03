@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
-import { doc, getDoc, collection, query, where, getDocs, onSnapshot } from 'firebase/firestore';
+import { doc, collection, query, where, getDocs, onSnapshot } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
@@ -45,32 +45,18 @@ export function RequestDetailPage() {
     return unsub;
   }, [appointmentId]);
 
-  // Load parent contacts from family
+  // Load parent contacts via cloud function (bypasses Firestore rules)
   useEffect(() => {
-    if (!appointment?.familyId) return;
+    if (!appointmentId || !appointment) return;
     async function loadParents() {
       try {
-        const familySnap = await getDoc(doc(db, 'families', appointment.familyId));
-        if (!familySnap.exists()) return;
-        const parentIds: string[] = familySnap.data()?.parentIds || [];
-        const contacts: { firstName: string; lastName: string; email: string; phone?: string }[] = [];
-        for (const pid of parentIds) {
-          const pSnap = await getDoc(doc(db, 'users', pid));
-          if (pSnap.exists()) {
-            const p = pSnap.data()!;
-            contacts.push({
-              firstName: p.firstName || '',
-              lastName: p.lastName || '',
-              email: p.email || '',
-              ...(p.phone && { phone: p.phone }),
-            });
-          }
-        }
-        setParentContacts(contacts);
-      } catch { /* permission error */ }
+        const fn = httpsCallable(functions, 'getParentContacts');
+        const result = await fn({ appointmentId });
+        setParentContacts((result.data as any).contacts || []);
+      } catch { /* function unavailable */ }
     }
     loadParents();
-  }, [appointment?.familyId]);
+  }, [appointmentId, appointment?.familyId]);
 
   // Check if this is a returning family
   useEffect(() => {
