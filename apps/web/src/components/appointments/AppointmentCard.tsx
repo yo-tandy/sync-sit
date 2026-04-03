@@ -89,6 +89,11 @@ export function AppointmentCard({
           <div className="flex items-start justify-between">
             <p className="font-semibold text-gray-900">{title}</p>
             <Badge variant={badgeVariants[variant]}>{badgeLabels[variant]}</Badge>
+            {(apt as any).modified && (
+              <Badge variant="amber" className="ml-1">
+                {t('appointment.modified')}
+              </Badge>
+            )}
           </div>
           <div className="mt-1 flex items-center gap-2 text-sm text-gray-500">
             <CalendarIcon className="h-4 w-4 shrink-0" />

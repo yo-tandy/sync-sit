@@ -40,10 +40,12 @@ export function useAppointments() {
         if (apt.status === 'pending') {
           _pending.push(apt);
         } else if (apt.status === 'confirmed') {
-          // For one-time: check if date is past
+          // For one-time: check if endTime has passed (not just the date)
           if (apt.date) {
-            const aptDate = new Date(apt.date);
-            if (aptDate < now) {
+            const endTimeStr = apt.endTime || '23:59';
+            const aptEnd = new Date(`${apt.date}T${endTimeStr}:00`);
+            if (aptEnd < now) {
+              const aptDate = new Date(apt.date);
               if (aptDate >= cutoff) _past.push(apt);
             } else {
               _confirmed.push(apt);

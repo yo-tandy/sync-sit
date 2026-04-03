@@ -31,6 +31,7 @@ export function RequestDetailPage() {
   const [responding, setResponding] = useState(false);
   const [success, setSuccess] = useState<'accepted' | 'declined' | null>(null);
   const [isReturningFamily, setIsReturningFamily] = useState(false);
+  const [acknowledging, setAcknowledging] = useState(false);
 
   useEffect(() => {
     if (!appointmentId) return;
@@ -61,6 +62,18 @@ export function RequestDetailPage() {
     }
     checkReturning();
   }, [appointment?.familyId, babysitter?.uid]);
+
+  const handleAcknowledge = async () => {
+    setAcknowledging(true);
+    try {
+      const fn = httpsCallable(functions, 'acknowledgeModification');
+      await fn({ appointmentId });
+    } catch (err: any) {
+      alert(err.message || 'Failed');
+    } finally {
+      setAcknowledging(false);
+    }
+  };
 
   const handleRespond = async (action: 'accept' | 'decline') => {
     if (!appointmentId) return;
@@ -142,6 +155,18 @@ export function RequestDetailPage() {
             </Badge>
           </div>
         </div>
+
+        {apt.modified && (
+          <Card className="mb-4 border-amber-300 bg-amber-50">
+            <p className="mb-1 text-sm font-semibold text-amber-800">{t('appointment.modifiedBanner')}</p>
+            {apt.modifiedFields?.length > 0 && (
+              <p className="mb-3 text-xs text-amber-600">{t('appointment.modifiedFieldsLabel')}: {apt.modifiedFields.join(', ')}</p>
+            )}
+            <Button size="sm" onClick={handleAcknowledge} disabled={acknowledging}>
+              {acknowledging ? '...' : t('appointment.acknowledgeChanges')}
+            </Button>
+          </Card>
+        )}
 
         {/* Date / time */}
         <Card className="mb-3">

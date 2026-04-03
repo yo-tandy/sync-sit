@@ -59,12 +59,14 @@ function ExpandableBabysitterCard({
   variant,
   isReturning,
   onCancel,
+  onEdit,
 }: {
   appointment: AppointmentDoc;
   info?: BabysitterInfo;
   variant: string;
   isReturning?: boolean;
   onCancel?: () => void;
+  onEdit?: () => void;
 }) {
   const { t, i18n } = useTranslation();
   const locale = i18n.language?.startsWith('fr') ? 'fr-FR' : 'en-GB';
@@ -108,6 +110,9 @@ function ExpandableBabysitterCard({
         </div>
         <div className="flex items-center gap-2">
           <Badge variant={badgeVariants[variant]}>{badgeLabels[variant]}</Badge>
+          {(appointment as any).modified && (
+            <Badge variant="amber" className="ml-1">{t('appointment.modified')}</Badge>
+          )}
           <ChevronRightIcon className={`h-4 w-4 text-gray-400 transition-transform ${expanded ? 'rotate-90' : ''}`} />
         </div>
       </button>
@@ -158,6 +163,13 @@ function ExpandableBabysitterCard({
             </p>
           )}
 
+          {(variant === 'pending' || variant === 'confirmed') && onEdit && (
+            <div className="mt-3">
+              <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); onEdit(); }}>
+                {t('appointment.edit')}
+              </Button>
+            </div>
+          )}
           {variant === 'confirmed' && onCancel && (
             <div className="mt-3">
               <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); onCancel(); }} className="w-full">
@@ -218,6 +230,13 @@ export function FamilyDashboard() {
   const [cancelReason, setCancelReason] = useState('');
   const [cancelling, setCancelling] = useState(false);
 
+  const [editTarget, setEditTarget] = useState<any>(null);
+  const [editStartTime, setEditStartTime] = useState('');
+  const [editEndTime, setEditEndTime] = useState('');
+  const [editMessage, setEditMessage] = useState('');
+  const [editAdditionalInfo, setEditAdditionalInfo] = useState('');
+  const [editing, setEditing] = useState(false);
+
   const handleCancel = async () => {
     if (!cancelTarget || !cancelReason.trim()) return;
     setCancelling(true);
@@ -231,6 +250,34 @@ export function FamilyDashboard() {
       alert(err.message || 'Failed to cancel');
     } finally {
       setCancelling(false);
+    }
+  };
+
+  const openEdit = (apt: any) => {
+    setEditTarget(apt);
+    setEditStartTime(apt.startTime || '');
+    setEditEndTime(apt.endTime || '');
+    setEditMessage(apt.message || '');
+    setEditAdditionalInfo(apt.additionalInfo || '');
+  };
+
+  const handleEdit = async () => {
+    if (!editTarget) return;
+    setEditing(true);
+    try {
+      const fn = httpsCallable(functions, 'modifyAppointment');
+      await fn({
+        appointmentId: editTarget.appointmentId,
+        startTime: editStartTime,
+        endTime: editEndTime,
+        message: editMessage,
+        additionalInfo: editAdditionalInfo,
+      });
+      setEditTarget(null);
+    } catch (err: any) {
+      alert(err.message || 'Failed to modify');
+    } finally {
+      setEditing(false);
     }
   };
 
@@ -410,6 +457,7 @@ export function FamilyDashboard() {
                       info={babysitters[apt.babysitterUserId]}
                       variant="pending"
                       isReturning={returningBabysitterIds.has(apt.babysitterUserId)}
+                      onEdit={() => openEdit(apt)}
                     />
                   ))}
                 </div>
@@ -430,6 +478,7 @@ export function FamilyDashboard() {
                   variant="confirmed"
                   isReturning={returningBabysitterIds.has(apt.babysitterUserId)}
                   onCancel={() => setCancelTarget(apt.appointmentId)}
+                  onEdit={() => openEdit(apt)}
                 />
               ))}
             </div>
@@ -478,6 +527,26 @@ export function FamilyDashboard() {
           <Button size="sm" onClick={handleCancel} disabled={cancelling || !cancelReason.trim()}>
             {cancelling ? '...' : t('appointment.confirmCancel')}
           </Button>
+        </div>
+      </Dialog>
+
+      <Dialog open={!!editTarget} onClose={() => setEditTarget(null)}>
+        <h3 className="mb-2 text-lg font-semibold">{t('appointment.editTitle')}</h3>
+        <div className="space-y-3">
+          <div className="flex gap-3">
+            <div className="flex-1">
+              <Input label={t('search.startTime')} type="time" value={editStartTime} onChange={(e) => setEditStartTime(e.target.value)} />
+            </div>
+            <div className="flex-1">
+              <Input label={t('search.endTime')} type="time" value={editEndTime} onChange={(e) => setEditEndTime(e.target.value)} />
+            </div>
+          </div>
+          <Textarea label={t('appointment.messageLabel')} value={editMessage} onChange={(e) => setEditMessage(e.target.value)} />
+          <Textarea label={t('appointment.additionalInfoLabel')} value={editAdditionalInfo} onChange={(e) => setEditAdditionalInfo(e.target.value)} />
+        </div>
+        <div className="mt-4 flex gap-2">
+          <Button variant="outline" size="sm" onClick={() => setEditTarget(null)}>{t('common.cancel')}</Button>
+          <Button size="sm" onClick={handleEdit} disabled={editing}>{editing ? '...' : t('appointment.saveChanges')}</Button>
         </div>
       </Dialog>
     </div>

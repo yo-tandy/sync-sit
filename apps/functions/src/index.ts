@@ -23,6 +23,8 @@ export { sendContactRequest } from './search/sendContactRequest.js';
 // Appointments
 export { respondToRequest } from './appointments/respondToRequest.js';
 export { cancelAppointment } from './appointments/cancelAppointment.js';
+export { modifyAppointment } from './appointments/modifyAppointment.js';
+export { acknowledgeModification } from './appointments/acknowledgeModification.js';
 
 // Verification
 export { submitVerification } from './verification/submitVerification.js';

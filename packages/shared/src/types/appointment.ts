@@ -72,4 +72,9 @@ export interface AppointmentDoc {
   confirmedAt?: FirestoreTimestamp;
   cancelledAt?: FirestoreTimestamp;
   softDeletedAt?: FirestoreTimestamp;
+
+  // Modification tracking
+  modified?: boolean;
+  modifiedAt?: FirestoreTimestamp;
+  modifiedFields?: string[];
 }
