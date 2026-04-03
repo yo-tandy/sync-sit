@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
-import { doc, collection, query, where, getDocs, onSnapshot } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, getDocs, onSnapshot } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
@@ -32,6 +32,7 @@ export function RequestDetailPage() {
   const [success, setSuccess] = useState<'accepted' | 'declined' | null>(null);
   const [isReturningFamily, setIsReturningFamily] = useState(false);
   const [acknowledging, setAcknowledging] = useState(false);
+  const [parentContacts, setParentContacts] = useState<{ firstName: string; lastName: string; email: string; phone?: string }[]>([]);
 
   useEffect(() => {
     if (!appointmentId) return;
@@ -43,6 +44,33 @@ export function RequestDetailPage() {
     });
     return unsub;
   }, [appointmentId]);
+
+  // Load parent contacts from family
+  useEffect(() => {
+    if (!appointment?.familyId) return;
+    async function loadParents() {
+      try {
+        const familySnap = await getDoc(doc(db, 'families', appointment.familyId));
+        if (!familySnap.exists()) return;
+        const parentIds: string[] = familySnap.data()?.parentIds || [];
+        const contacts: { firstName: string; lastName: string; email: string; phone?: string }[] = [];
+        for (const pid of parentIds) {
+          const pSnap = await getDoc(doc(db, 'users', pid));
+          if (pSnap.exists()) {
+            const p = pSnap.data()!;
+            contacts.push({
+              firstName: p.firstName || '',
+              lastName: p.lastName || '',
+              email: p.email || '',
+              ...(p.phone && { phone: p.phone }),
+            });
+          }
+        }
+        setParentContacts(contacts);
+      } catch { /* permission error */ }
+    }
+    loadParents();
+  }, [appointment?.familyId]);
 
   // Check if this is a returning family
   useEffect(() => {
@@ -122,7 +150,7 @@ export function RequestDetailPage() {
   const rawFamilyName = apt.familyName || 'Family';
   const familyName = t('familyDashboard.familyTitle', { name: rawFamilyName.toUpperCase() });
   const kids: { age: number; languages?: string[] }[] = apt.kids || [];
-  const parentContacts: { firstName: string; lastName: string; email: string; phone?: string }[] = apt.parentContacts || [];
+  // parentContacts loaded dynamically from family doc (useEffect above)
 
   // Distance
   let distance: string | null = null;
