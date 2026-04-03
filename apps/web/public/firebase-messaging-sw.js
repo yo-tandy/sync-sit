@@ -14,15 +14,21 @@ firebase.initializeApp({
 const messaging = firebase.messaging();
 
 messaging.onBackgroundMessage((payload) => {
-  const { title, body } = payload.notification || {};
-  if (title) {
-    self.registration.showNotification(title, {
-      body: body || '',
-      icon: '/favicon.png',
-      badge: '/favicon.png',
-      data: payload.data,
-    });
-  }
+  // Only show notification if no app window is focused (avoid duplicates)
+  return clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+    const hasFocusedClient = windowClients.some((client) => client.focused);
+    if (hasFocusedClient) return; // foreground handler will show in-app toast
+
+    const { title, body } = payload.notification || {};
+    if (title) {
+      return self.registration.showNotification(title, {
+        body: body || '',
+        icon: '/favicon.png',
+        badge: '/favicon.png',
+        data: payload.data,
+      });
+    }
+  });
 });
 
 self.addEventListener('notificationclick', (event) => {
