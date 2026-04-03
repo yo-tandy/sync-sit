@@ -27,6 +27,7 @@ export { cancelAppointment } from './appointments/cancelAppointment.js';
 export { modifyAppointment } from './appointments/modifyAppointment.js';
 export { acknowledgeModification } from './appointments/acknowledgeModification.js';
 export { getParentContacts } from './appointments/getParentContacts.js';
+export { resubmitAppointment } from './appointments/resubmitAppointment.js';
 
 // Verification
 export { submitVerification } from './verification/submitVerification.js';

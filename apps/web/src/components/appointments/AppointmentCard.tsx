@@ -94,6 +94,11 @@ export function AppointmentCard({
                 {t('appointment.modified')}
               </Badge>
             )}
+            {(apt as any).isResubmission && (
+              <Badge variant="blue" className="ml-1">
+                {t('appointment.resubmitted')}
+              </Badge>
+            )}
           </div>
           <div className="mt-1 flex items-center gap-2 text-sm text-gray-500">
             <CalendarIcon className="h-4 w-4 shrink-0" />

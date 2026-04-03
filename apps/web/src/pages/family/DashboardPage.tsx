@@ -60,6 +60,7 @@ function ExpandableBabysitterCard({
   isReturning,
   onCancel,
   onEdit,
+  onResubmit,
 }: {
   appointment: AppointmentDoc;
   info?: BabysitterInfo;
@@ -67,6 +68,7 @@ function ExpandableBabysitterCard({
   isReturning?: boolean;
   onCancel?: () => void;
   onEdit?: () => void;
+  onResubmit?: () => void;
 }) {
   const { t, i18n } = useTranslation();
   const locale = i18n.language?.startsWith('fr') ? 'fr-FR' : 'en-GB';
@@ -177,6 +179,13 @@ function ExpandableBabysitterCard({
               </Button>
             </div>
           )}
+          {variant === 'rejected' && onResubmit && (
+            <div className="mt-3">
+              <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); onResubmit(); }}>
+                {t('appointment.resubmit')}
+              </Button>
+            </div>
+          )}
         </div>
       )}
     </Card>
@@ -237,6 +246,13 @@ export function FamilyDashboard() {
   const [editAdditionalInfo, setEditAdditionalInfo] = useState('');
   const [editing, setEditing] = useState(false);
 
+  const [resubmitTarget, setResubmitTarget] = useState<any>(null);
+  const [resubmitStartTime, setResubmitStartTime] = useState('');
+  const [resubmitEndTime, setResubmitEndTime] = useState('');
+  const [resubmitRate, setResubmitRate] = useState('');
+  const [resubmitNotes, setResubmitNotes] = useState('');
+  const [resubmitting, setResubmitting] = useState(false);
+
   const handleCancel = async () => {
     if (!cancelTarget || !cancelReason.trim()) return;
     setCancelling(true);
@@ -278,6 +294,34 @@ export function FamilyDashboard() {
       alert(err.message || 'Failed to modify');
     } finally {
       setEditing(false);
+    }
+  };
+
+  const openResubmit = (apt: any) => {
+    setResubmitTarget(apt);
+    setResubmitStartTime(apt.startTime || '');
+    setResubmitEndTime(apt.endTime || '');
+    setResubmitRate(apt.offeredRate ? String(apt.offeredRate) : '');
+    setResubmitNotes('');
+  };
+
+  const handleResubmit = async () => {
+    if (!resubmitTarget || !resubmitNotes.trim()) return;
+    setResubmitting(true);
+    try {
+      const fn = httpsCallable(functions, 'resubmitAppointment');
+      await fn({
+        originalAppointmentId: resubmitTarget.appointmentId,
+        startTime: resubmitStartTime,
+        endTime: resubmitEndTime,
+        offeredRate: resubmitRate ? parseFloat(resubmitRate) : undefined,
+        additionalNotes: resubmitNotes.trim(),
+      });
+      setResubmitTarget(null);
+    } catch (err: any) {
+      alert(err.message || 'Failed to resubmit');
+    } finally {
+      setResubmitting(false);
     }
   };
 
@@ -495,7 +539,7 @@ export function FamilyDashboard() {
             <div className="mb-5">
               <h3 className="mb-2 text-sm font-semibold text-gray-700">{t('familyDashboard.declined')}</h3>
               {rejectedRecent.map((apt) => (
-                <ExpandableBabysitterCard key={apt.appointmentId} appointment={apt} info={babysitters[apt.babysitterUserId]} variant="rejected" />
+                <ExpandableBabysitterCard key={apt.appointmentId} appointment={apt} info={babysitters[apt.babysitterUserId]} variant="rejected" onResubmit={() => openResubmit(apt)} />
               ))}
             </div>
           )}
@@ -547,6 +591,35 @@ export function FamilyDashboard() {
         <div className="mt-4 flex gap-2">
           <Button variant="outline" size="sm" onClick={() => setEditTarget(null)}>{t('common.cancel')}</Button>
           <Button size="sm" onClick={handleEdit} disabled={editing}>{editing ? '...' : t('appointment.saveChanges')}</Button>
+        </div>
+      </Dialog>
+
+      <Dialog open={!!resubmitTarget} onClose={() => setResubmitTarget(null)}>
+        <h3 className="mb-2 text-lg font-semibold">{t('appointment.resubmitTitle')}</h3>
+        <p className="mb-4 text-sm text-gray-500">{t('appointment.resubmitDesc')}</p>
+        <div className="space-y-3">
+          <div className="flex gap-3">
+            <div className="flex-1">
+              <Input label={t('search.startTime')} type="time" value={resubmitStartTime} onChange={(e) => setResubmitStartTime(e.target.value)} />
+            </div>
+            <div className="flex-1">
+              <Input label={t('search.endTime')} type="time" value={resubmitEndTime} onChange={(e) => setResubmitEndTime(e.target.value)} />
+            </div>
+          </div>
+          <Input label={t('search.rateToPayLabel')} type="number" value={resubmitRate} onChange={(e) => setResubmitRate(e.target.value)} />
+          <Textarea
+            label={t('appointment.additionalNotes')}
+            value={resubmitNotes}
+            onChange={(e) => setResubmitNotes(e.target.value)}
+            placeholder={t('appointment.additionalNotesPlaceholder')}
+            required
+          />
+        </div>
+        <div className="mt-4 flex gap-2">
+          <Button variant="outline" size="sm" onClick={() => setResubmitTarget(null)}>{t('common.cancel')}</Button>
+          <Button size="sm" onClick={handleResubmit} disabled={resubmitting || !resubmitNotes.trim()}>
+            {resubmitting ? '...' : t('appointment.resubmit')}
+          </Button>
         </div>
       </Dialog>
     </div>

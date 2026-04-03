@@ -717,5 +717,12 @@ export default {
     saveChanges: 'Enregistrer',
     messageLabel: 'Message',
     additionalInfoLabel: 'Informations supplémentaires',
+    resubmit: 'Renvoyer',
+    resubmitTitle: 'Renvoyer la demande',
+    resubmitDesc: 'Modifiez les détails et ajoutez une note explicative. Le/la babysitter sera notifié(e).',
+    additionalNotes: 'Notes supplémentaires *',
+    additionalNotesPlaceholder: 'Expliquez pourquoi vous renvoyez cette demande...',
+    resubmitted: 'Renvoyé',
+    resubmittedBanner: 'Cette demande a été renvoyée par la famille après avoir été refusée.',
   },
 } as const;

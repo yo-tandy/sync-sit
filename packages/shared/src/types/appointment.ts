@@ -77,4 +77,8 @@ export interface AppointmentDoc {
   modified?: boolean;
   modifiedAt?: FirestoreTimestamp;
   modifiedFields?: string[];
+
+  // Resubmission tracking
+  isResubmission?: boolean;
+  resubmittedFromAppointmentId?: string;
 }

@@ -749,5 +749,12 @@ export default {
     saveChanges: 'Save Changes',
     messageLabel: 'Message',
     additionalInfoLabel: 'Additional info',
+    resubmit: 'Resubmit',
+    resubmitTitle: 'Resubmit Request',
+    resubmitDesc: 'Edit the details and add a note explaining the changes. The babysitter will be notified.',
+    additionalNotes: 'Additional notes *',
+    additionalNotesPlaceholder: 'Explain why you are resubmitting this request...',
+    resubmitted: 'Resubmitted',
+    resubmittedBanner: 'This request was resubmitted by the family after being declined.',
   },
 } as const;

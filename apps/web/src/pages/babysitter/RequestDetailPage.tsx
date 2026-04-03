@@ -182,6 +182,12 @@ export function RequestDetailPage() {
           </Card>
         )}
 
+        {apt.isResubmission && (
+          <Card className="mb-4 border-blue-300 bg-blue-50">
+            <p className="text-sm font-semibold text-blue-800">{t('appointment.resubmittedBanner')}</p>
+          </Card>
+        )}
+
         {/* Date / time */}
         <Card className="mb-3">
           <div className="flex items-center gap-2 text-sm">
