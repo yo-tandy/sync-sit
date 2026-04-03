@@ -460,6 +460,10 @@ export default {
     referenceDesc: 'When a family submits a reference for you',
     savePreferences: 'Save Preferences',
     preferencesSaved: 'Preferences saved!',
+    pushPromptTitle: 'Enable notifications',
+    pushPromptDesc: 'Get notified when you receive babysitting requests, confirmations, and reminders.',
+    enable: 'Enable',
+    notNow: 'Not now',
   },
 
   // Submitted References

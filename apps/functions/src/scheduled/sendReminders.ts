@@ -1,6 +1,7 @@
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { db } from '../config/firebase.js';
 import { sendNotificationEmail } from '../config/email.js';
+import { sendPushNotification } from '../config/push.js';
 
 /**
  * Runs every hour. Finds confirmed appointments happening in the next 24-25 hours
@@ -89,6 +90,15 @@ export const sendReminders = onSchedule(
               );
             }
           }
+
+          if (babysitterPrefs?.push) {
+            await sendPushNotification(
+              apt.babysitterUserId,
+              'Babysitting appointment tomorrow',
+              `Reminder: You have a babysitting appointment with ${familyName} on ${appointmentDate} at ${apt.startTime}.`,
+              { appointmentId: aptDoc.id, type: 'reminder' }
+            );
+          }
         }
       }
 
@@ -128,6 +138,15 @@ export const sendReminders = onSchedule(
                    <p style="margin-top: 16px;"><a href="https://sync-sit.com/family" style="background: #DC2626; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View Appointment</a></p>`
                 );
               }
+            }
+
+            if (parentPrefs?.push) {
+              await sendPushNotification(
+                parentId,
+                'Babysitting appointment tomorrow',
+                `Reminder: Your babysitting appointment is on ${appointmentDate} at ${apt.startTime}.`,
+                { appointmentId: aptDoc.id, type: 'reminder' }
+              );
             }
           }
         }

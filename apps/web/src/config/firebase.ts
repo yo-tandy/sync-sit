@@ -3,6 +3,7 @@ import { getAuth, connectAuthEmulator } from 'firebase/auth';
 import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
 import { getFunctions, connectFunctionsEmulator } from 'firebase/functions';
 import { getStorage, connectStorageEmulator } from 'firebase/storage';
+import { getMessaging, isSupported } from 'firebase/messaging';
 
 // TODO: Replace with actual Firebase config after project creation
 const firebaseConfig = {
@@ -19,6 +20,16 @@ export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const functions = getFunctions(app, 'europe-west1');
 export const storage = getStorage(app);
+
+// Messaging — only available in browser (not SSR) and when supported
+export let messaging: ReturnType<typeof getMessaging> | null = null;
+if (typeof window !== 'undefined' && !import.meta.env.DEV) {
+  isSupported().then((supported) => {
+    if (supported) {
+      messaging = getMessaging(app);
+    }
+  });
+}
 
 // Connect to emulators in development
 if (import.meta.env.DEV) {

@@ -434,6 +434,10 @@ export default {
     referenceSubmitted: 'R\u00e9f\u00e9rence soumise',
     savePreferences: 'Enregistrer les pr\u00e9f\u00e9rences',
     preferencesSaved: 'Pr\u00e9f\u00e9rences enregistr\u00e9es !',
+    pushPromptTitle: 'Activer les notifications',
+    pushPromptDesc: 'Recevez des notifications pour les demandes de babysitting, confirmations et rappels.',
+    enable: 'Activer',
+    notNow: 'Plus tard',
     referenceDesc: "Quand une famille soumet une r\u00e9f\u00e9rence pour vous",
   },
 

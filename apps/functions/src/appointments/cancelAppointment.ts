@@ -3,6 +3,7 @@ import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
 import { sendNotificationEmail } from '../config/email.js';
+import { sendPushNotification } from '../config/push.js';
 
 interface CancelInput {
   appointmentId: string;
@@ -97,6 +98,15 @@ export const cancelAppointment = onCall(
            <p style="margin-top: 16px;"><a href="https://sync-sit.com/babysitter" style="background: #DC2626; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View Dashboard</a></p>`
         );
       }
+
+      if (babysitterDoc.data()?.notifPrefs?.cancelled?.push !== false) {
+        await sendPushNotification(
+          apt.babysitterUserId,
+          'Appointment cancelled',
+          `${familyName} has cancelled the appointment.`,
+          { appointmentId, type: 'request_cancelled' }
+        );
+      }
     } else {
       // Notify all parents in family
       const familyDoc = await db.collection('families').doc(apt.familyId).get();
@@ -129,6 +139,15 @@ export const cancelAppointment = onCall(
             `<p>The babysitter has cancelled the appointment for <strong>${dateInfo}</strong>.</p>
              <p><strong>Reason:</strong> ${reason.trim()}</p>
              <p style="margin-top: 16px;"><a href="https://sync-sit.com/family/search" style="background: #DC2626; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">Search Babysitters</a></p>`
+          );
+        }
+
+        if (parentDoc.data()?.notifPrefs?.cancelled?.push !== false) {
+          await sendPushNotification(
+            parentId,
+            'Appointment cancelled',
+            'The babysitter has cancelled the appointment.',
+            { appointmentId, type: 'request_cancelled' }
           );
         }
       }

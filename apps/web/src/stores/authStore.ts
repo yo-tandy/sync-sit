@@ -8,6 +8,7 @@ import {
 } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '@/config/firebase';
+import { removePushToken } from '@/lib/pushNotifications';
 import type { UserDoc } from '@ejm/shared';
 
 interface AuthState {
@@ -41,6 +42,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   logout: async () => {
+    if (get().firebaseUser) {
+      await removePushToken(get().firebaseUser!.uid).catch(() => {});
+    }
     await signOut(auth);
     set({ firebaseUser: null, userDoc: null });
   },

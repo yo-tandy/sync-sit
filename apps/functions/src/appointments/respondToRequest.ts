@@ -3,6 +3,7 @@ import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
 import { sendNotificationEmail } from '../config/email.js';
+import { sendPushNotification } from '../config/push.js';
 
 interface RespondData {
   appointmentId: string;
@@ -120,6 +121,15 @@ export const respondToRequest = onCall(
             );
           }
 
+          if (parentData.notifPrefs?.confirmed?.push !== false) {
+            await sendPushNotification(
+              parentId,
+              'Babysitting confirmed',
+              `${babysitterName} has accepted your babysitting request.`,
+              { appointmentId: data.appointmentId, type: 'request_accepted' }
+            );
+          }
+
           await db.collection('notifications').add({
             recipientUserId: parentId,
             type: 'request_accepted',
@@ -167,6 +177,15 @@ export const respondToRequest = onCall(
               parentData.email,
               'Babysitting request declined',
               declineEmailBody
+            );
+          }
+
+          if (parentData.notifPrefs?.cancelled?.push !== false) {
+            await sendPushNotification(
+              parentId,
+              'Request declined',
+              'Your babysitting request was declined.',
+              { appointmentId: data.appointmentId, type: 'request_declined' }
             );
           }
 

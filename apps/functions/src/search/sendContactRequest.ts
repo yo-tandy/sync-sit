@@ -3,6 +3,7 @@ import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
 import { sendNotificationEmail } from '../config/email.js';
+import { sendPushNotification } from '../config/push.js';
 
 interface ContactRequestData {
   babysitterUserId: string;
@@ -156,6 +157,16 @@ export const sendContactRequest = onCall(
         babysitterData.email,
         `New babysitting request from ${familyData.familyName}`,
         emailBody
+      );
+    }
+
+    // Send push notification
+    if (babysitterData.notifPrefs?.newRequest?.push !== false) {
+      await sendPushNotification(
+        data.babysitterUserId,
+        'New babysitting request',
+        `${familyData.familyName} has sent you a babysitting request.`,
+        { appointmentId: appointmentRef.id, type: 'new_request' }
       );
     }
 
