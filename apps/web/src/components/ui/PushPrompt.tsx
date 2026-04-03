@@ -11,9 +11,17 @@ export function PushPrompt() {
   const [show, setShow] = useState(false);
 
   useEffect(() => {
-    // Show prompt after a short delay, only if supported and not prompted before
+    if (!firebaseUser || !isPushSupported()) return;
+
+    // If permission already granted, silently refresh token
+    if (Notification.permission === 'granted') {
+      requestPushPermission(firebaseUser.uid).catch(() => {});
+      return;
+    }
+
+    // Show prompt after a short delay, only if not prompted before
     const timer = setTimeout(() => {
-      if (firebaseUser && isPushSupported() && !wasPrompted() && Notification.permission === 'default') {
+      if (!wasPrompted() && Notification.permission === 'default') {
         setShow(true);
       }
     }, 3000);
