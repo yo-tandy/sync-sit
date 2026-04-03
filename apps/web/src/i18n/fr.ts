@@ -376,7 +376,7 @@ export default {
     confirming: 'Confirmation...',
     declineTitle: 'Refuser cette demande ?',
     declineDesc: 'La famille sera inform\u00e9e de votre refus.',
-    confirmDecline: 'Confirmer le refus',
+    confirmDecline: 'Refuser',
     declining: 'Refus...',
     appointmentConfirmed: 'Rendez-vous confirm\u00e9 !',
     confirmedDesc: 'La famille a \u00e9t\u00e9 pr\u00e9venue. Le rendez-vous est maintenant confirm\u00e9.',

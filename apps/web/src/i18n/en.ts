@@ -392,7 +392,7 @@ export default {
     confirming: 'Confirming...',
     declineTitle: 'Decline this request?',
     declineDesc: 'The family will be notified that you declined.',
-    confirmDecline: 'Confirm decline',
+    confirmDecline: 'Decline',
     declining: 'Declining...',
     appointmentConfirmed: 'Appointment Confirmed!',
     confirmedDesc: 'The family has been notified. The appointment is now confirmed.',

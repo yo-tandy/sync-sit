@@ -126,6 +126,11 @@ export async function sendAdminNotification(subject: string, body: string): Prom
  * Fails silently — notifications should not block user actions.
  */
 export async function sendNotificationEmail(to: string, subject: string, body: string): Promise<void> {
+  if (!to || !to.includes('@')) {
+    console.warn(`[SKIP-EMAIL] Invalid recipient: ${to}`);
+    return;
+  }
+
   if (process.env.FUNCTIONS_EMULATOR === 'true') {
     console.log(`[DEV] Notification to ${to}: ${subject}`);
     return;
