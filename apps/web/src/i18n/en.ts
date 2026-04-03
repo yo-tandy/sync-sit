@@ -206,10 +206,12 @@ export default {
   },
 
   share: {
-    desc: 'Share this app with other EJM families and babysitters!',
-    messagePreview: 'Message',
+    title: 'Share Sync/Sit',
+    desc: 'Help grow our community! Share Sync/Sit with other EJM families and babysitters.',
+    messagePreview: 'Message preview',
     copyMessage: 'Copy to clipboard',
     shareByEmail: 'Share by email',
+    shareNow: 'Share',
     copied: 'Copied!',
   },
 

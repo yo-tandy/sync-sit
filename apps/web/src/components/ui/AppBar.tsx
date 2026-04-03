@@ -17,6 +17,7 @@ import {
   UserPlusIcon,
   ClipboardListIcon,
   DownloadIcon,
+  ShareIcon,
 } from './Icons';
 import { LanguageSelector } from './LanguageSelector';
 import type { UserRole } from '@ejm/shared';
@@ -40,39 +41,6 @@ function MenuItem({ icon, label, to, onClick, onNavigate }: { icon: React.ReactN
   );
   if (to) return <Link to={to} className="block" onClick={onNavigate}>{inner}</Link>;
   return <button type="button" onClick={onClick} className="w-full text-left">{inner}</button>;
-}
-
-function ShareSection() {
-  const { t } = useTranslation();
-  const [copied, setCopied] = useState(false);
-  const shareText = t('menu.shareText', { link: window.location.origin });
-
-  const handleCopy = async () => {
-    try { await navigator.clipboard.writeText(shareText); } catch {
-      const input = document.createElement('input');
-      input.value = shareText;
-      document.body.appendChild(input);
-      input.select();
-      document.execCommand('copy');
-      document.body.removeChild(input);
-    }
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  return (
-    <div className="px-4 py-3">
-      <p className="mb-2 text-sm font-medium text-gray-700">{t('menu.shareApp')}</p>
-      <div className="flex gap-2">
-        <button type="button" onClick={handleCopy} className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50">
-          {copied ? '✓' : t('menu.copyMessage')}
-        </button>
-        <a href={`mailto:?subject=${encodeURIComponent('EJM Babysitting')}&body=${encodeURIComponent(shareText)}`} className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-center text-xs font-medium text-gray-600 hover:bg-gray-50">
-          {t('menu.shareByEmail')}
-        </a>
-      </div>
-    </div>
-  );
 }
 
 export function AppBar({ role }: { role: UserRole }) {
@@ -145,7 +113,7 @@ export function AppBar({ role }: { role: UserRole }) {
 
           <div className="border-t border-gray-100" />
 
-          <ShareSection />
+          <MenuItem icon={<ShareIcon className="h-5 w-5" />} label={t('share.title')} to="/share" onNavigate={() => setMenuOpen(false)} />
 
           <div className="border-t border-gray-100" />
 
