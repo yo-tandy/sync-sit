@@ -7,6 +7,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { TopNav, Button, Input, Card, InfoBanner, LanguageSelector } from '@/components/ui';
 import { BellIcon } from '@/components/ui/Icons';
 import { isPushSupported, getPushPermissionStatus, requestPushPermission } from '@/lib/pushNotifications';
+import { PhoneInput } from '@/components/forms/PhoneInput';
 import type { ParentUser, NotifPrefs } from '@ejm/shared';
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
@@ -84,6 +85,8 @@ export function AccountPage() {
   // Contact state
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
+  const [whatsapp, setWhatsapp] = useState('');
+  const [whatsappSameAsPhone, setWhatsappSameAsPhone] = useState(true);
   const [contactSaving, setContactSaving] = useState(false);
   const [contactSuccess, setContactSuccess] = useState(false);
 
@@ -107,6 +110,8 @@ export function AccountPage() {
     if (!parent) return;
     setEmail(parent.email || '');
     setPhone((parent as any).phone || '');
+    setWhatsapp((parent as any).whatsapp || '');
+    setWhatsappSameAsPhone((parent as any).whatsapp ? (parent as any).whatsapp === (parent as any).phone : true);
     if ((parent as any).photoUrl) {
       setPhotoPreview((parent as any).photoUrl);
     }
@@ -196,6 +201,7 @@ export function AccountPage() {
       await updateDoc(doc(db, 'users', uid), {
         email,
         phone: phone || null,
+        whatsapp: whatsappSameAsPhone ? (phone || null) : (whatsapp || null),
         updatedAt: serverTimestamp(),
       });
       await refreshUserDoc();
@@ -326,12 +332,37 @@ export function AccountPage() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
           />
-          <Input
+          <PhoneInput
             label={t('account.phone')}
-            type="tel"
             value={phone}
-            onChange={(e) => setPhone(e.target.value)}
+            onChange={(val) => { setPhone(val); if (whatsappSameAsPhone) setWhatsapp(val); }}
           />
+
+          <div className="mb-5">
+            <label className="mb-2 flex items-center gap-2 text-sm font-medium text-gray-700">
+              <span>WhatsApp</span>
+            </label>
+            <label className="mb-3 flex items-center gap-2 text-sm text-gray-600">
+              <input
+                type="checkbox"
+                checked={whatsappSameAsPhone}
+                onChange={(e) => {
+                  setWhatsappSameAsPhone(e.target.checked);
+                  if (e.target.checked) setWhatsapp(phone);
+                }}
+                className="h-4 w-4 rounded border-gray-300 text-red-600 focus:ring-red-500"
+              />
+              {t('account.whatsappSameAsPhone')}
+            </label>
+            {!whatsappSameAsPhone && (
+              <PhoneInput
+                label=""
+                value={whatsapp}
+                onChange={setWhatsapp}
+              />
+            )}
+          </div>
+
           <Button type="submit" disabled={contactSaving || !email}>
             {contactSaving ? t('common.saving') : t('account.saveContact')}
           </Button>

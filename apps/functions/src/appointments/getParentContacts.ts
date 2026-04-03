@@ -49,6 +49,7 @@ export const getParentContacts = onCall(
           lastName: p.lastName || '',
           email: p.email || '',
           ...(p.phone && { phone: p.phone }),
+          ...(p.whatsapp && { whatsapp: p.whatsapp }),
         });
       }
     }

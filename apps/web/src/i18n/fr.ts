@@ -406,6 +406,7 @@ export default {
     sendPasswordReset: 'Envoyer un email de réinitialisation',
     passwordResetSent: 'Email de réinitialisation envoyé à {{email}}',
     passwordResetFailed: 'Échec de l\'envoi de l\'email de réinitialisation',
+    whatsappSameAsPhone: 'Même numéro que le téléphone',
     saveContact: 'Enregistrer les coordonnées',
     saved: 'Enregistré !',
     photoTooLarge: 'La photo doit faire moins de 5 Mo',

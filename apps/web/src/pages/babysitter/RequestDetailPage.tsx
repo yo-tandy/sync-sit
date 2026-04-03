@@ -32,7 +32,7 @@ export function RequestDetailPage() {
   const [success, setSuccess] = useState<'accepted' | 'declined' | null>(null);
   const [isReturningFamily, setIsReturningFamily] = useState(false);
   const [acknowledging, setAcknowledging] = useState(false);
-  const [parentContacts, setParentContacts] = useState<{ firstName: string; lastName: string; email: string; phone?: string }[]>([]);
+  const [parentContacts, setParentContacts] = useState<{ firstName: string; lastName: string; email: string; phone?: string; whatsapp?: string }[]>([]);
 
   useEffect(() => {
     if (!appointmentId) return;
@@ -282,6 +282,11 @@ export function RequestDetailPage() {
                 {p.phone && (
                   <p className="text-xs text-gray-600">
                     📞 <a href={`tel:${p.phone}`} className="text-red-600 hover:underline">{p.phone}</a>
+                  </p>
+                )}
+                {p.whatsapp && (
+                  <p className="text-xs text-gray-600">
+                    💬 <a href={`https://wa.me/${p.whatsapp.replace(/[^\d+]/g, '').replace('+', '')}`} target="_blank" rel="noopener noreferrer" className="text-green-600 hover:underline">WhatsApp</a>
                   </p>
                 )}
               </div>

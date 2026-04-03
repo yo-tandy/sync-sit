@@ -429,6 +429,7 @@ export default {
     sendPasswordReset: 'Send password reset email',
     passwordResetSent: 'Password reset email sent to {{email}}',
     passwordResetFailed: 'Failed to send reset email',
+    whatsappSameAsPhone: 'Same as phone number',
     saveContact: 'Save Contact Info',
     saved: 'Saved!',
     photoTooLarge: 'Photo must be under 5 MB',
