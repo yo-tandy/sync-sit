@@ -95,7 +95,6 @@ export function StepProfile({ data, onChange, onNext, error }: StepProfileProps)
       <input
         ref={fileInputRef}
         type="file"
-        accept="image/*"
         className="hidden"
         onChange={handleFileChange}
       />

@@ -205,7 +205,6 @@ export function ProfilePage() {
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/*"
           className="hidden"
           onChange={handleFileChange}
         />
