@@ -21,13 +21,18 @@ export const db = getFirestore(app);
 export const functions = getFunctions(app, 'europe-west1');
 export const storage = getStorage(app);
 
-// Messaging — only available in browser (not SSR) and when supported
+// Messaging — only available in browser with service worker support
 export let messaging: ReturnType<typeof getMessaging> | null = null;
-if (typeof window !== 'undefined' && !import.meta.env.DEV) {
+if (typeof window !== 'undefined' && 'serviceWorker' in navigator && 'Notification' in window) {
   isSupported().then((supported) => {
     if (supported) {
       messaging = getMessaging(app);
+      console.log('FCM messaging initialized');
+    } else {
+      console.log('FCM not supported in this browser');
     }
+  }).catch((err) => {
+    console.warn('FCM initialization failed:', err);
   });
 }
 

@@ -508,15 +508,9 @@ export function SearchPage() {
                     </div>
                   </div>
 
-                  {isExpanded && (
-                    <div className="mt-3 border-t border-gray-100 pt-3 space-y-1">
-                      <p className="text-xs text-gray-500">💰 {t('familyDashboard.rateOffered', { rate: b.hourlyRate })}</p>
-                      {b.contactEmail && (
-                        <p className="text-xs text-gray-600">📧 {b.contactEmail}</p>
-                      )}
-                      {b.contactPhone && (
-                        <p className="text-xs text-gray-600">📞 {b.contactPhone}</p>
-                      )}
+                  {isExpanded && b.aboutMe && (
+                    <div className="mt-3 border-t border-gray-100 pt-3">
+                      <p className="text-xs leading-relaxed text-gray-600">{b.aboutMe}</p>
                     </div>
                   )}
 
