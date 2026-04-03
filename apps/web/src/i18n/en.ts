@@ -198,6 +198,9 @@ export default {
     privacyPolicy: 'Privacy Policy',
     terms: 'Terms & Conditions',
     settings: 'Settings',
+    myAccount: 'My Account',
+    myFamily: 'My Family',
+    coParent: 'Co-Parent',
     addCoParent: 'Add a co-parent',
     shareApp: 'Share this app with a friend',
     copyMessage: 'Copy message',
@@ -414,9 +417,29 @@ export default {
   },
 
   // Family Settings
+  account: {
+    personalInfo: 'Personal Information',
+    contactInfo: 'Contact Information',
+    phone: 'Phone number',
+    changePassword: 'Change Password',
+    sendPasswordReset: 'Send password reset email',
+    passwordResetSent: 'Password reset email sent to {{email}}',
+    saveContact: 'Save Contact Info',
+    saved: 'Saved!',
+  },
+
+  coParent: {
+    remove: 'Remove',
+    removeTitle: 'Remove Co-Parent',
+    removeConfirm: 'Remove {{name}} from your family? They will lose access to family features but their account will not be deleted.',
+    confirmRemove: 'Remove',
+  },
+
   familySettings: {
     title: 'Edit Family',
     saved: 'Family info saved!',
+    kidNote: 'About this child (optional)',
+    kidNotePlaceholder: 'What would you like babysitters to know about your child?',
   },
 
   // Invite

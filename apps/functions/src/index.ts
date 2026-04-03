@@ -15,6 +15,7 @@ export { enrollBabysitter } from './enrollment/enrollBabysitter.js';
 export { enrollFamily } from './enrollment/enrollFamily.js';
 export { generateInviteLink } from './enrollment/generateInviteLink.js';
 export { joinFamily } from './enrollment/joinFamily.js';
+export { removeCoParent } from './enrollment/removeCoParent.js';
 
 // Search
 export { searchBabysitters } from './search/searchBabysitters.js';

@@ -187,6 +187,9 @@ export default {
     privacyPolicy: 'Politique de confidentialit\u00e9',
     terms: 'Conditions g\u00e9n\u00e9rales',
     settings: 'Param\u00e8tres',
+    myAccount: 'Mon compte',
+    myFamily: 'Ma famille',
+    coParent: 'Co-parent',
     addCoParent: 'Ajouter un co-parent',
     shareApp: 'Partager cette app avec un ami',
     copyMessage: 'Copier le message',
@@ -391,9 +394,29 @@ export default {
     saveProfile: 'Enregistrer le profil',
   },
 
+  account: {
+    personalInfo: 'Informations personnelles',
+    contactInfo: 'Coordonn\u00e9es',
+    phone: 'Num\u00e9ro de t\u00e9l\u00e9phone',
+    changePassword: 'Changer le mot de passe',
+    sendPasswordReset: 'Envoyer un email de r\u00e9initialisation',
+    passwordResetSent: 'Email de r\u00e9initialisation envoy\u00e9 \u00e0 {{email}}',
+    saveContact: 'Enregistrer les coordonn\u00e9es',
+    saved: 'Enregistr\u00e9 !',
+  },
+
+  coParent: {
+    remove: 'Retirer',
+    removeTitle: 'Retirer le co-parent',
+    removeConfirm: 'Retirer {{name}} de votre famille ? Cette personne perdra l\'acc\u00e8s aux fonctionnalit\u00e9s familiales mais son compte ne sera pas supprim\u00e9.',
+    confirmRemove: 'Retirer',
+  },
+
   familySettings: {
     title: 'Modifier la famille',
     saved: 'Informations de la famille enregistr\u00e9es !',
+    kidNote: '\u00c0 propos de cet enfant (optionnel)',
+    kidNotePlaceholder: 'Que souhaitez-vous que les babysitters sachent sur votre enfant ?',
   },
 
   invite: {

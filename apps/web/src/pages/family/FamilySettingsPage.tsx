@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   doc,
   collection,
@@ -21,9 +22,11 @@ interface KidForm {
   kidId?: string; // undefined = new kid
   firstName: string;
   age: string;
+  note?: string;
 }
 
 export function FamilySettingsPage() {
+  const { t } = useTranslation();
   const { userDoc } = useAuthStore();
   const parent = userDoc as ParentUser | null;
   const familyId = parent?.familyId;
@@ -62,7 +65,7 @@ export function FamilySettingsPage() {
       const kidsSnap = await getDocs(collection(db, 'families', familyId!, 'kids'));
       const kidsList = kidsSnap.docs.map((d) => {
         const k = d.data() as KidDoc;
-        return { kidId: d.id, firstName: k.firstName, age: String(k.age) };
+        return { kidId: d.id, firstName: k.firstName, age: String(k.age), note: k.note || '' };
       });
       setKids(kidsList);
       setLoading(false);
@@ -149,6 +152,7 @@ export function FamilySettingsPage() {
           firstName: kid.firstName.trim(),
           age: parseInt(kid.age) || 0,
           languages: [],
+          note: kid.note?.trim() || null,
         };
         if (kid.kidId) {
           await updateDoc(doc(db, 'families', familyId, 'kids', kid.kidId), kidData);
@@ -169,7 +173,7 @@ export function FamilySettingsPage() {
   if (loading) {
     return (
       <div>
-        <TopNav title="Edit Family" backTo="/family" />
+        <TopNav title={t('menu.myFamily')} backTo="/family" />
         <div className="flex justify-center py-20">
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-gray-300 border-t-red-600" />
         </div>
@@ -179,9 +183,9 @@ export function FamilySettingsPage() {
 
   return (
     <div>
-      <TopNav title="Edit Family" backTo="/family" />
+      <TopNav title={t('menu.myFamily')} backTo="/family" />
       <div className="px-6 pt-4 pb-8">
-        {success && <InfoBanner className="mb-4">Family info saved!</InfoBanner>}
+        {success && <InfoBanner className="mb-4">{t('familySettings.saved')}</InfoBanner>}
         {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
 
         {/* Family photo */}
@@ -235,20 +239,6 @@ export function FamilySettingsPage() {
           }}
         />
 
-        <Input
-          label="Pets"
-          value={pets}
-          onChange={(e) => setPets(e.target.value)}
-          placeholder="e.g. Dog, Cat"
-        />
-
-        <Textarea
-          label="Notes for babysitters"
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          placeholder="Any info babysitters should know about your family..."
-        />
-
         <hr className="my-5 border-gray-200" />
 
         {/* Kids */}
@@ -285,6 +275,12 @@ export function FamilySettingsPage() {
                 <XIcon className="h-4 w-4" />
               </button>
             </div>
+            <Textarea
+              label={t('familySettings.kidNote')}
+              value={kid.note || ''}
+              onChange={(e) => updateKid(i, 'note', e.target.value)}
+              placeholder={t('familySettings.kidNotePlaceholder')}
+            />
           </Card>
         ))}
 
@@ -292,6 +288,22 @@ export function FamilySettingsPage() {
           <PlusIcon className="h-4 w-4" />
           Add child
         </Button>
+
+        <hr className="my-5 border-gray-200" />
+
+        <Input
+          label="Pets"
+          value={pets}
+          onChange={(e) => setPets(e.target.value)}
+          placeholder="e.g. Dog, Cat"
+        />
+
+        <Textarea
+          label="Notes for babysitters"
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          placeholder="Any info babysitters should know about your family..."
+        />
 
         <Button onClick={handleSave} disabled={saving || !familyName.trim()}>
           {saving ? 'Saving...' : 'Save'}

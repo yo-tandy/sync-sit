@@ -1,11 +1,16 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { doc, getDoc } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
-import { Button, Card, TopNav, InfoBanner, Spinner } from '@/components/ui';
+import { Button, Card, TopNav, InfoBanner, Spinner, Dialog } from '@/components/ui';
 import type { ParentUser } from '@ejm/shared';
+
+interface MemberInfo {
+  uid: string;
+  name: string;
+}
 
 export function InvitePage() {
   const { t } = useTranslation();
@@ -13,35 +18,38 @@ export function InvitePage() {
   const parent = userDoc as ParentUser | null;
   const familyId = parent?.familyId;
 
-  const [memberNames, setMemberNames] = useState<string[]>([]);
+  const [members, setMembers] = useState<MemberInfo[]>([]);
   const [inviteLink, setInviteLink] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [removeTarget, setRemoveTarget] = useState<{ uid: string; name: string } | null>(null);
+  const [removing, setRemoving] = useState(false);
 
   // Load member names
-  useEffect(() => {
+  const loadMembers = useCallback(async () => {
     if (!familyId) return;
-    async function loadMembers() {
-      const familySnap = await getDoc(doc(db, 'families', familyId!));
-      if (!familySnap.exists()) return;
-      const parentIds: string[] = familySnap.data().parentIds || [];
-      const names: string[] = [];
-      for (const pid of parentIds) {
-        try {
-          const userSnap = await getDoc(doc(db, 'users', pid));
-          if (userSnap.exists()) {
-            const u = userSnap.data();
-            names.push(`${u.firstName} ${u.lastName}`);
-          }
-        } catch {
-          names.push('Family member');
+    const familySnap = await getDoc(doc(db, 'families', familyId));
+    if (!familySnap.exists()) return;
+    const parentIds: string[] = familySnap.data().parentIds || [];
+    const memberList: MemberInfo[] = [];
+    for (const pid of parentIds) {
+      try {
+        const userSnap = await getDoc(doc(db, 'users', pid));
+        if (userSnap.exists()) {
+          const u = userSnap.data();
+          memberList.push({ uid: pid, name: `${u.firstName} ${u.lastName}` });
         }
+      } catch {
+        memberList.push({ uid: pid, name: 'Family member' });
       }
-      setMemberNames(names);
     }
-    loadMembers();
+    setMembers(memberList);
   }, [familyId]);
+
+  useEffect(() => {
+    loadMembers();
+  }, [loadMembers]);
 
   const handleGenerateLink = async () => {
     if (!familyId) return;
@@ -76,9 +84,24 @@ export function InvitePage() {
     setTimeout(() => setCopied(false), 3000);
   };
 
+  const handleRemove = async () => {
+    if (!removeTarget) return;
+    setRemoving(true);
+    try {
+      const fn = httpsCallable(functions, 'removeCoParent');
+      await fn({ targetUserId: removeTarget.uid });
+      setRemoveTarget(null);
+      loadMembers();
+    } catch (err: any) {
+      alert(err.message || 'Failed to remove');
+    } finally {
+      setRemoving(false);
+    }
+  };
+
   return (
     <div>
-      <TopNav title={t('menu.addCoParent')} backTo="/family" />
+      <TopNav title={t('menu.coParent')} backTo="/family" />
       <div className="px-5 pt-4 pb-8">
         <p className="mb-6 text-sm text-gray-500">
           {t('invite.desc')}
@@ -119,23 +142,38 @@ export function InvitePage() {
 
         {/* Current members */}
         <h3 className="mb-3 text-sm font-semibold text-gray-700">{t('invite.familyMembers')}</h3>
-        {memberNames.length === 0 ? (
+        {members.length === 0 ? (
           <div className="flex justify-center py-4">
             <Spinner className="h-5 w-5 text-gray-400" />
           </div>
         ) : (
-          memberNames.map((name, i) => (
+          members.map((member, i) => (
             <Card key={i} className="mb-2">
               <div className="flex items-center justify-between">
-                <p className="text-sm font-medium text-gray-900">{name}</p>
-                {userDoc && name === `${userDoc.firstName} ${userDoc.lastName}` && (
+                <p className="text-sm font-medium text-gray-900">{member.name}</p>
+                {userDoc && member.uid === userDoc.uid ? (
                   <span className="text-xs text-gray-400">{t('invite.you')}</span>
+                ) : (
+                  <Button size="sm" variant="outline" onClick={() => setRemoveTarget({ uid: member.uid, name: member.name })}>
+                    {t('coParent.remove')}
+                  </Button>
                 )}
               </div>
             </Card>
           ))
         )}
       </div>
+
+      <Dialog open={!!removeTarget} onClose={() => setRemoveTarget(null)}>
+        <h3 className="mb-2 text-lg font-semibold">{t('coParent.removeTitle')}</h3>
+        <p className="mb-6 text-sm text-gray-600">
+          {t('coParent.removeConfirm', { name: removeTarget?.name })}
+        </p>
+        <div className="flex gap-3">
+          <Button variant="outline" size="sm" onClick={() => setRemoveTarget(null)}>{t('common.cancel')}</Button>
+          <Button size="sm" onClick={handleRemove} disabled={removing}>{removing ? '...' : t('coParent.confirmRemove')}</Button>
+        </div>
+      </Dialog>
     </div>
   );
 }

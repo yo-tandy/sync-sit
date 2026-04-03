@@ -29,4 +29,5 @@ export interface KidDoc {
   firstName: string;
   age: number;
   languages: string[];
+  note?: string;
 }
