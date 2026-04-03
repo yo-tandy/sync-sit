@@ -420,13 +420,20 @@ export default {
   account: {
     personalInfo: 'Personal Information',
     loginEmail: 'Login email',
+    profilePhoto: 'Profile Photo',
     contactInfo: 'Contact Information',
+    contactSaved: 'Contact info saved!',
+    contactSaveFailed: 'Failed to save contact info',
     phone: 'Phone number',
     changePassword: 'Change Password',
     sendPasswordReset: 'Send password reset email',
     passwordResetSent: 'Password reset email sent to {{email}}',
+    passwordResetFailed: 'Failed to send reset email',
     saveContact: 'Save Contact Info',
     saved: 'Saved!',
+    photoTooLarge: 'Photo must be under 5 MB',
+    photoInvalidType: 'Please select an image file',
+    photoUploadFailed: 'Failed to upload photo',
   },
 
   coParent: {
