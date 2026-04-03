@@ -503,7 +503,8 @@ export default {
     pushStatus: 'Push Notifications',
     pushEnabled: 'Push notifications are enabled on this device.',
     pushDisabled: 'Push notifications are not enabled. Enable them to get real-time alerts.',
-    pushDenied: 'Push notifications were blocked. To enable them, go to your browser settings and allow notifications for sync-sit.com.',
+    pushDenied: 'Push notifications are not available. This can happen in incognito/private mode, or if notifications are blocked in your browser settings. Try opening the app in a regular browser window.',
+    tryAgain: 'Try again',
   },
 
   // Submitted References

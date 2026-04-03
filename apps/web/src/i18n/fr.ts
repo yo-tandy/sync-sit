@@ -477,7 +477,8 @@ export default {
     pushStatus: 'Notifications push',
     pushEnabled: 'Les notifications push sont activées sur cet appareil.',
     pushDisabled: 'Les notifications push ne sont pas activées. Activez-les pour recevoir des alertes en temps réel.',
-    pushDenied: 'Les notifications push ont été bloquées. Pour les activer, allez dans les paramètres de votre navigateur et autorisez les notifications pour sync-sit.com.',
+    pushDenied: 'Les notifications push ne sont pas disponibles. Cela peut arriver en mode navigation privée, ou si les notifications sont bloquées dans les paramètres de votre navigateur. Essayez d\'ouvrir l\'application dans une fenêtre de navigateur normale.',
+    tryAgain: 'Réessayer',
     referenceDesc: "Quand une famille soumet une r\u00e9f\u00e9rence pour vous",
   },
 
