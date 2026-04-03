@@ -122,7 +122,7 @@ export function RequestDetailPage() {
   const rawFamilyName = apt.familyName || 'Family';
   const familyName = t('familyDashboard.familyTitle', { name: rawFamilyName.toUpperCase() });
   const kids: { age: number; languages?: string[] }[] = apt.kids || [];
-  const parentContacts: { firstName: string; lastName: string; email: string }[] = apt.parentContacts || [];
+  const parentContacts: { firstName: string; lastName: string; email: string; phone?: string }[] = apt.parentContacts || [];
 
   // Distance
   let distance: string | null = null;
@@ -265,6 +265,11 @@ export function RequestDetailPage() {
                 <p className="text-xs text-gray-600">
                   📧 <a href={`mailto:${p.email}`} className="text-red-600 hover:underline">{p.email}</a>
                 </p>
+                {p.phone && (
+                  <p className="text-xs text-gray-600">
+                    📞 <a href={`tel:${p.phone}`} className="text-red-600 hover:underline">{p.phone}</a>
+                  </p>
+                )}
               </div>
             ))}
           </Card>

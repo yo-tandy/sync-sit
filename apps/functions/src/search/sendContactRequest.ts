@@ -70,12 +70,17 @@ export const sendContactRequest = onCall(
     }
 
     // Load parent contact details
-    const parentContacts: { firstName: string; lastName: string; email: string }[] = [];
+    const parentContacts: { firstName: string; lastName: string; email: string; phone?: string }[] = [];
     for (const pid of familyData.parentIds || []) {
       const pSnap = await db.collection('users').doc(pid).get();
       if (pSnap.exists) {
         const p = pSnap.data()!;
-        parentContacts.push({ firstName: p.firstName, lastName: p.lastName, email: p.email });
+        parentContacts.push({
+          firstName: p.firstName,
+          lastName: p.lastName,
+          email: p.email,
+          ...(p.phone && { phone: p.phone }),
+        });
       }
     }
 
