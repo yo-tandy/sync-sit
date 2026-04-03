@@ -464,6 +464,10 @@ export default {
     pushPromptDesc: 'Get notified when you receive babysitting requests, confirmations, and reminders.',
     enable: 'Enable',
     notNow: 'Not now',
+    pushStatus: 'Push Notifications',
+    pushEnabled: 'Push notifications are enabled on this device.',
+    pushDisabled: 'Push notifications are not enabled. Enable them to get real-time alerts.',
+    pushDenied: 'Push notifications were blocked. To enable them, go to your browser settings and allow notifications for sync-sit.com.',
   },
 
   // Submitted References

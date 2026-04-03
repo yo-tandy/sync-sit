@@ -3,7 +3,9 @@ import { useTranslation } from 'react-i18next';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
-import { TopNav, LanguageSelector } from '@/components/ui';
+import { TopNav, LanguageSelector, Button, Card } from '@/components/ui';
+import { BellIcon } from '@/components/ui/Icons';
+import { isPushSupported, getPushPermissionStatus, requestPushPermission } from '@/lib/pushNotifications';
 import type { NotifPrefs } from '@ejm/shared';
 
 interface NotifChannel {
@@ -17,6 +19,50 @@ const SCENARIOS: { key: keyof NotifPrefs; labelKey: string; descKey: string }[] 
   { key: 'cancelled', labelKey: 'notifications.cancellation', descKey: 'notifications.cancellationDesc' },
   { key: 'reminders', labelKey: 'notifications.reminder', descKey: 'notifications.reminderDesc' },
 ];
+
+function PushStatusCard({ uid }: { uid?: string }) {
+  const { t } = useTranslation();
+  const [status, setStatus] = useState(getPushPermissionStatus());
+  const [enabling, setEnabling] = useState(false);
+
+  const handleEnable = async () => {
+    if (!uid) return;
+    setEnabling(true);
+    try {
+      const token = await requestPushPermission(uid);
+      setStatus(token ? 'granted' : Notification.permission);
+    } catch {
+      setStatus(Notification.permission);
+    } finally {
+      setEnabling(false);
+    }
+  };
+
+  return (
+    <Card className={`mb-6 ${status === 'granted' ? 'border-green-200 bg-green-50' : 'border-amber-200 bg-amber-50'}`}>
+      <div className="flex items-start gap-3">
+        <BellIcon className={`mt-0.5 h-5 w-5 shrink-0 ${status === 'granted' ? 'text-green-600' : 'text-amber-600'}`} />
+        <div className="flex-1">
+          <p className={`text-sm font-semibold ${status === 'granted' ? 'text-green-800' : 'text-amber-800'}`}>
+            {t('notifications.pushStatus')}
+          </p>
+          {status === 'granted' ? (
+            <p className="text-xs text-green-600">{t('notifications.pushEnabled')}</p>
+          ) : status === 'denied' ? (
+            <p className="text-xs text-amber-600">{t('notifications.pushDenied')}</p>
+          ) : (
+            <>
+              <p className="mb-2 text-xs text-amber-600">{t('notifications.pushDisabled')}</p>
+              <Button size="sm" onClick={handleEnable} disabled={enabling}>
+                {enabling ? '...' : t('notifications.enable')}
+              </Button>
+            </>
+          )}
+        </div>
+      </div>
+    </Card>
+  );
+}
 
 export function NotificationPrefsPage() {
   const { t } = useTranslation();
@@ -68,6 +114,13 @@ export function NotificationPrefsPage() {
         {/* Language */}
         <h3 className="mb-3 text-sm font-semibold text-gray-700">{t('common.language')}</h3>
         <LanguageSelector className="mb-6" />
+
+        <hr className="mb-6 border-gray-200" />
+
+        {/* Push Notification Status */}
+        {isPushSupported() && (
+          <PushStatusCard uid={uid} />
+        )}
 
         <hr className="mb-6 border-gray-200" />
 

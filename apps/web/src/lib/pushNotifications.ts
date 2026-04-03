@@ -9,11 +9,19 @@ const PROMPTED_KEY = 'syncsit_push_prompted';
  * Check if push notifications are supported in this browser.
  */
 export function isPushSupported(): boolean {
-  return typeof window !== 'undefined' && 'Notification' in window && 'serviceWorker' in navigator && messaging !== null;
+  return typeof window !== 'undefined' && 'Notification' in window && 'serviceWorker' in navigator;
 }
 
 /**
- * Check if the user has already been prompted.
+ * Check current permission status.
+ */
+export function getPushPermissionStatus(): NotificationPermission | 'unsupported' {
+  if (!isPushSupported()) return 'unsupported';
+  return Notification.permission;
+}
+
+/**
+ * Check if the user has already been prompted (soft prompt dismissed).
  */
 export function wasPrompted(): boolean {
   return localStorage.getItem(PROMPTED_KEY) === 'true';
@@ -27,11 +35,26 @@ export function markPrompted(): void {
 }
 
 /**
+ * Reset the prompted flag (allow re-prompting).
+ */
+export function resetPrompted(): void {
+  localStorage.removeItem(PROMPTED_KEY);
+}
+
+/**
  * Request push notification permission and save the FCM token.
  * Returns the token if successful, null otherwise.
  */
 export async function requestPushPermission(userId: string): Promise<string | null> {
-  if (!messaging || !VAPID_KEY) return null;
+  if (!VAPID_KEY) return null;
+
+  // Wait for messaging to be ready (async initialization)
+  let attempts = 0;
+  while (!messaging && attempts < 10) {
+    await new Promise((r) => setTimeout(r, 500));
+    attempts++;
+  }
+  if (!messaging) return null;
 
   try {
     const permission = await Notification.requestPermission();

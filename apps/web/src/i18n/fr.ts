@@ -438,6 +438,10 @@ export default {
     pushPromptDesc: 'Recevez des notifications pour les demandes de babysitting, confirmations et rappels.',
     enable: 'Activer',
     notNow: 'Plus tard',
+    pushStatus: 'Notifications push',
+    pushEnabled: 'Les notifications push sont activées sur cet appareil.',
+    pushDisabled: 'Les notifications push ne sont pas activées. Activez-les pour recevoir des alertes en temps réel.',
+    pushDenied: 'Les notifications push ont été bloquées. Pour les activer, allez dans les paramètres de votre navigateur et autorisez les notifications pour sync-sit.com.',
     referenceDesc: "Quand une famille soumet une r\u00e9f\u00e9rence pour vous",
   },
 
