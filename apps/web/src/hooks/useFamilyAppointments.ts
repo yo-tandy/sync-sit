@@ -37,6 +37,8 @@ export function useFamilyAppointments() {
 
       snap.docs.forEach((d) => {
         const apt = d.data() as AppointmentDoc;
+        // Hide declined appointments that have been resubmitted
+        if ((apt as any).resubmitted) return;
 
         if (apt.status === 'pending') {
           _pending.push(apt);

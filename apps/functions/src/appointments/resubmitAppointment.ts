@@ -110,6 +110,9 @@ export const resubmitAppointment = onCall(
       updatedAt: now,
     });
 
+    // Mark original appointment as resubmitted (hides it from dashboards)
+    await originalRef.update({ resubmitted: true });
+
     // Notify babysitter
     const babysitterDoc = await db.collection('users').doc(original.babysitterUserId).get();
     const babysitterData = babysitterDoc.data();
