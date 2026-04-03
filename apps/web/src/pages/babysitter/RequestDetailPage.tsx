@@ -102,8 +102,8 @@ export function RequestDetailPage() {
       setSuccess(action === 'accept' ? 'accepted' : 'declined');
       setAcceptDialog(false);
       setDeclineDialog(false);
-    } catch {
-      // Error handled silently
+    } catch (err: any) {
+      alert(err.message || 'Something went wrong. Please try again.');
     } finally {
       setResponding(false);
     }
