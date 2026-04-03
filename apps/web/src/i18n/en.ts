@@ -419,6 +419,7 @@ export default {
   // Family Settings
   account: {
     personalInfo: 'Personal Information',
+    loginEmail: 'Login email',
     contactInfo: 'Contact Information',
     phone: 'Phone number',
     changePassword: 'Change Password',

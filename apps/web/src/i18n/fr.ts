@@ -396,6 +396,7 @@ export default {
 
   account: {
     personalInfo: 'Informations personnelles',
+    loginEmail: 'Email de connexion',
     contactInfo: 'Coordonn\u00e9es',
     phone: 'Num\u00e9ro de t\u00e9l\u00e9phone',
     changePassword: 'Changer le mot de passe',

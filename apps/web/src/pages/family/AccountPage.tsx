@@ -259,7 +259,7 @@ export function AccountPage() {
         {/* 1. Personal Info (read-only) */}
         <h3 className="mb-3 text-sm font-semibold text-gray-700">{t('account.personalInfo')}</h3>
         <Card className="mb-6 bg-gray-50">
-          <div className="flex gap-3">
+          <div className="mb-3 flex gap-3">
             <div className="flex-1">
               <p className="text-xs text-gray-500">{t('enrollment.firstName')}</p>
               <p className="text-sm font-medium text-gray-900">{parent?.firstName || ''}</p>
@@ -268,6 +268,10 @@ export function AccountPage() {
               <p className="text-xs text-gray-500">{t('enrollment.lastName')}</p>
               <p className="text-sm font-medium text-gray-900">{parent?.lastName || ''}</p>
             </div>
+          </div>
+          <div>
+            <p className="text-xs text-gray-500">{t('account.loginEmail')}</p>
+            <p className="text-sm font-medium text-gray-900">{parent?.email || ''}</p>
           </div>
         </Card>
 
