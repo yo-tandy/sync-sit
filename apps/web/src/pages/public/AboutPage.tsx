@@ -1,3 +1,4 @@
+import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { TopNav } from '@/components/ui';
 import { ShieldIcon, SearchIcon, UsersIcon, CalendarIcon } from '@/components/ui/Icons';
@@ -117,6 +118,27 @@ export function AboutPage() {
               : 'Personal data is protected in compliance with GDPR and French law'}
           </li>
         </ul>
+
+        {/* How-to Guides */}
+        <h2 className="mb-3 text-lg font-bold text-gray-900">
+          {isFr ? 'Guides d\'utilisation' : 'How-to Guides'}
+        </h2>
+        <div className="mb-6 space-y-2">
+          <Link to="/guide/parents" className="flex items-center gap-3 rounded-lg bg-gray-50 p-3 active:bg-gray-100">
+            <UsersIcon className="h-5 w-5 shrink-0 text-red-500" />
+            <div>
+              <p className="text-sm font-semibold text-red-600">{isFr ? 'Guide Parents' : 'Parent Guide'}</p>
+              <p className="text-xs text-gray-500">{isFr ? 'Comment trouver et gérer les babysitters' : 'How to find and manage babysitters'}</p>
+            </div>
+          </Link>
+          <Link to="/guide/babysitters" className="flex items-center gap-3 rounded-lg bg-gray-50 p-3 active:bg-gray-100">
+            <SearchIcon className="h-5 w-5 shrink-0 text-red-500" />
+            <div>
+              <p className="text-sm font-semibold text-red-600">{isFr ? 'Guide Babysitters' : 'Babysitter Guide'}</p>
+              <p className="text-xs text-gray-500">{isFr ? 'Comment recevoir et gérer les demandes' : 'How to receive and manage requests'}</p>
+            </div>
+          </Link>
+        </div>
 
         {/* Disclaimer */}
         <div className="mb-6 rounded-lg border border-gray-200 bg-gray-50 p-4">

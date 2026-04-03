@@ -86,31 +86,13 @@ export function AppointmentCard({
       <div className="flex items-start gap-3">
         <PhotoLightbox src={familyPhoto} initials={familyInitials} size="sm" />
         <div className="min-w-0 flex-1">
-          <div className="flex items-start justify-between">
-            <p className="font-semibold text-gray-900">{title}</p>
-            <Badge variant={badgeVariants[variant]}>{badgeLabels[variant]}</Badge>
-            {(apt as any).modified && (
-              <Badge variant="amber" className="ml-1">
-                {t('appointment.modified')}
-              </Badge>
-            )}
-            {(apt as any).isResubmission && (
-              <Badge variant="blue" className="ml-1">
-                {t('appointment.resubmitted')}
-              </Badge>
-            )}
-          </div>
-          <div className="mt-1 flex items-center gap-2 text-sm text-gray-500">
+          <p className="font-semibold text-gray-900">{title}</p>
+          <div className="mt-1 flex items-center gap-1 text-sm text-gray-500">
             <CalendarIcon className="h-4 w-4 shrink-0" />
             {apt.date ? (
-              <>
-                <span>{formatDate(apt.date)}</span>
-                {apt.startTime && apt.endTime && (
-                  <span className="text-gray-400">{formatTime(apt.startTime, apt.endTime)}</span>
-                )}
-              </>
+              <span>{formatDate(apt.date)} {apt.startTime && apt.endTime ? formatTime(apt.startTime, apt.endTime) : ''}</span>
             ) : (
-              <span className="text-gray-500">{t('request.recurringLabel')}: {formatRecurringSlots(apt.recurringSlots)}</span>
+              <span>{formatRecurringSlots(apt.recurringSlots)}</span>
             )}
           </div>
           <DateTag tag={getDateTag(apt.date || '', apt.startTime || '', holidayPeriods)} className="mt-1" />
@@ -118,6 +100,19 @@ export function AppointmentCard({
             <p className="mt-1 text-sm text-gray-500">
               {kidCount} {kidCount === 1 ? 'child' : 'children'}
             </p>
+          )}
+        </div>
+        <div className="flex shrink-0 flex-col items-end gap-1">
+          <Badge variant={badgeVariants[variant]}>{badgeLabels[variant]}</Badge>
+          {(apt as any).modified && (
+            <Badge variant="blue">
+              {t('appointment.modified')}
+            </Badge>
+          )}
+          {(apt as any).isResubmission && variant !== 'confirmed' && (
+            <Badge variant="blue">
+              {t('appointment.resubmitted')}
+            </Badge>
           )}
         </div>
       </div>

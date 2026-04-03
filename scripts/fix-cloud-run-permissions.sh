@@ -23,14 +23,24 @@ for svc in $SERVICES; do
 done
 
 # Re-set Resend API key on email functions
+# IMPORTANT: Use --update-env-vars with || delimiter to avoid wiping Firebase env vars.
+# The gcloud update creates a new revision that inherits from the current template,
+# so we must never use --set-env-vars (which replaces ALL vars).
 if [ -n "$RESEND_API_KEY" ]; then
   echo ""
   echo "Setting Resend API key on email functions..."
-  for svc in verifyparentemail verifyejmemail sendcontactrequest respondtorequest sendreminders submitverification modifyappointment cancelappointment deleteappointment deleteuser; do
-    gcloud run services update "$svc" \
-      --region=$REGION --project=$PROJECT \
-      --set-env-vars="RESEND_API_KEY=$RESEND_API_KEY" \
-      --quiet 2>/dev/null | tail -1
+  EMAIL_SVCS="verifyparentemail verifyejmemail sendcontactrequest respondtorequest resubmitappointment sendreminders submitverification modifyappointment cancelappointment deleteappointment deleteuser"
+  for svc in $EMAIL_SVCS; do
+    # Check if RESEND_API_KEY is already set correctly (avoid creating unnecessary revisions)
+    current=$(gcloud run services describe "$svc" --region=$REGION --project=$PROJECT --format="value(spec.template.spec.containers[0].env)" 2>/dev/null)
+    if echo "$current" | grep -q "RESEND_API_KEY.*$RESEND_API_KEY"; then
+      echo "  ✔ $svc (already set)"
+    else
+      gcloud run services update "$svc" \
+        --region=$REGION --project=$PROJECT \
+        --update-env-vars="RESEND_API_KEY=$RESEND_API_KEY" \
+        --quiet 2>/dev/null && echo "  ✔ $svc" || echo "  ✗ $svc (failed)"
+    fi
   done
 fi
 

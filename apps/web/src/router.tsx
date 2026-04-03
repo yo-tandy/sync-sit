@@ -1,4 +1,4 @@
-import { createBrowserRouter } from 'react-router';
+import { createBrowserRouter, Navigate } from 'react-router';
 
 // Layouts
 import { PublicLayout } from '@/layouts/PublicLayout';
@@ -15,6 +15,8 @@ import { PrivacyPage } from '@/pages/public/PrivacyPage';
 import { TermsPage } from '@/pages/public/TermsPage';
 import { ReportProblemPage } from '@/pages/public/ReportProblemPage';
 import { SharePage } from '@/pages/public/SharePage';
+import { ParentGuidePage } from '@/pages/public/ParentGuidePage';
+import { BabysitterGuidePage } from '@/pages/public/BabysitterGuidePage';
 
 // Enrollment
 import { BabysitterEnrollment } from '@/pages/enrollment/BabysitterEnrollment';
@@ -23,11 +25,11 @@ import { JoinFamilyPage } from '@/pages/enrollment/JoinFamilyPage';
 
 // Portal dashboards
 import { BabysitterDashboard } from '@/pages/babysitter/DashboardPage';
-import { ProfilePage } from '@/pages/babysitter/ProfilePage';
+import { BabysitterAccountPage } from '@/pages/babysitter/AccountPage';
+import { BabysittingOptionsPage } from '@/pages/babysitter/BabysittingOptionsPage';
 import { SchedulePage } from '@/pages/babysitter/SchedulePage';
 import { ReferencesPage } from '@/pages/babysitter/ReferencesPage';
 import { RequestDetailPage } from '@/pages/babysitter/RequestDetailPage';
-import { NotificationPrefsPage } from '@/pages/babysitter/NotificationPrefsPage';
 import { FamilyDashboard } from '@/pages/family/DashboardPage';
 import { FamilySettingsPage } from '@/pages/family/FamilySettingsPage';
 import { InvitePage } from '@/pages/family/InvitePage';
@@ -58,6 +60,8 @@ export const router = createBrowserRouter([
       { path: '/terms', element: <TermsPage /> },
       { path: '/report', element: <ReportProblemPage /> },
       { path: '/share', element: <SharePage /> },
+      { path: '/guide/parents', element: <ParentGuidePage /> },
+      { path: '/guide/babysitters', element: <BabysitterGuidePage /> },
       { path: '/enroll/babysitter', element: <BabysitterEnrollment /> },
       { path: '/enroll/parent', element: <ParentEnrollment /> },
       { path: '/invite/:token', element: <JoinFamilyPage /> },
@@ -69,11 +73,14 @@ export const router = createBrowserRouter([
     element: <BabysitterLayout />,
     children: [
       { path: '/babysitter', element: <BabysitterDashboard /> },
-      { path: '/babysitter/profile', element: <ProfilePage /> },
+      { path: '/babysitter/account', element: <BabysitterAccountPage /> },
+      { path: '/babysitter/options', element: <BabysittingOptionsPage /> },
       { path: '/babysitter/schedule', element: <SchedulePage /> },
       { path: '/babysitter/references', element: <ReferencesPage /> },
       { path: '/babysitter/request/:appointmentId', element: <RequestDetailPage /> },
-      { path: '/babysitter/settings', element: <NotificationPrefsPage /> },
+      // Backward-compatible redirects
+      { path: '/babysitter/profile', element: <Navigate to="/babysitter/options" replace /> },
+      { path: '/babysitter/settings', element: <Navigate to="/babysitter/account" replace /> },
     ],
   },
 

@@ -38,6 +38,7 @@ export interface BabysitterUser extends UserBase {
   // Contact (at least one required)
   contactEmail?: string;
   contactPhone?: string;
+  whatsapp?: string;
 
   // Area
   areaMode: AreaMode;

@@ -15,30 +15,10 @@ export function LoginPage() {
     e.preventDefault();
     try {
       await login(email, password);
-      // Wait for user doc to load, then redirect based on role
-      const getPath = (role?: string) =>
-        role === 'babysitter' ? '/babysitter' : role === 'parent' ? '/family' : role === 'admin' ? '/admin' : '/';
-
-      const path = await new Promise<string>((resolve) => {
-        // Timeout after 5s — redirect to home as fallback
-        const timeout = setTimeout(() => { unsub(); resolve('/'); }, 5000);
-
-        const unsub = useAuthStore.subscribe((state) => {
-          if (!state.loading) {
-            clearTimeout(timeout);
-            unsub();
-            resolve(state.userDoc ? getPath(state.userDoc.role) : '/');
-          }
-        });
-
-        // Check current state immediately
-        const current = useAuthStore.getState();
-        if (!current.loading) {
-          clearTimeout(timeout);
-          unsub();
-          resolve(current.userDoc ? getPath(current.userDoc.role) : '/');
-        }
-      });
+      // login() now fetches userDoc before returning, so state is ready
+      const { userDoc } = useAuthStore.getState();
+      const role = userDoc?.role;
+      const path = role === 'babysitter' ? '/babysitter' : role === 'parent' ? '/family' : role === 'admin' ? '/admin' : '/';
       navigate(path);
     } catch {
       // Error is set in the store

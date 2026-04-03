@@ -15,6 +15,7 @@ import { formatBabysitterName, capitalize, formatFamilyTitle } from '@/lib/forma
 import { useHolidays } from '@/hooks/useHolidays';
 import { getDateTag } from '@/lib/dateTag';
 import { DateTag } from '@/components/ui/DateTag';
+import { buildCalendarUrl } from '@/lib/calendar';
 
 interface BabysitterInfo {
   name: string;
@@ -110,11 +111,13 @@ function ExpandableBabysitterCard({
             <DateTag tag={getDateTag(appointment.date || '', appointment.startTime || '', holidayPeriods)} />
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Badge variant={badgeVariants[variant]}>{badgeLabels[variant]}</Badge>
-          {(appointment as any).modified && (
-            <Badge variant="amber" className="ml-1">{t('appointment.modified')}</Badge>
-          )}
+        <div className="flex shrink-0 items-center gap-2">
+          <div className="flex flex-col items-end gap-1">
+            <Badge variant={badgeVariants[variant]}>{badgeLabels[variant]}</Badge>
+            {(appointment as any).modified && (
+              <Badge variant="blue">{t('appointment.modified')}</Badge>
+            )}
+          </div>
           <ChevronRightIcon className={`h-4 w-4 text-gray-400 transition-transform ${expanded ? 'rotate-90' : ''}`} />
         </div>
       </button>
@@ -142,27 +145,40 @@ function ExpandableBabysitterCard({
 
           {/* Contact details */}
           {(info.contactEmail || info.contactPhone) && (
-            <div className="mt-2 rounded-lg bg-gray-50 p-2.5">
+            <div className="mt-2 rounded-lg bg-gray-50 p-3">
               <p className="mb-1 text-xs font-medium text-gray-500">{t('familyDashboard.contactLabel')}</p>
               {info.contactEmail && (
-                <p className="text-xs text-gray-700">
-                  📧 <a href={`mailto:${info.contactEmail}`} className="text-red-600 hover:underline">{info.contactEmail}</a>
-                </p>
+                <a href={`mailto:${info.contactEmail}`} className="flex items-center gap-2 py-1.5 text-xs text-red-600 active:bg-gray-100">
+                  <span>📧</span> <span>{info.contactEmail}</span>
+                </a>
               )}
               {info.contactPhone && (
-                <p className="text-xs text-gray-700">
-                  📞 <a href={`tel:${info.contactPhone}`} className="text-red-600 hover:underline">{info.contactPhone}</a>
-                </p>
+                <a href={`tel:${info.contactPhone}`} className="flex items-center gap-2 py-1.5 text-xs text-red-600 active:bg-gray-100">
+                  <span>📞</span> <span>{info.contactPhone}</span>
+                </a>
               )}
             </div>
           )}
 
           {/* Date/time for non-grouped sections */}
           {variant !== 'pending' && appointment.date && (
-            <p className="text-xs text-gray-500">
-              📅 {new Date(appointment.date + 'T00:00:00').toLocaleDateString(locale, { weekday: 'short', month: 'short', day: 'numeric' })}
-              {appointment.startTime && appointment.endTime && ` · ${appointment.startTime}–${appointment.endTime}`}
-            </p>
+            <div className="flex items-center gap-3">
+              <p className="text-xs text-gray-500">
+                📅 {new Date(appointment.date + 'T00:00:00').toLocaleDateString(locale, { weekday: 'short', month: 'short', day: 'numeric' })}
+                {appointment.startTime && appointment.endTime && ` · ${appointment.startTime}–${appointment.endTime}`}
+              </p>
+              {variant === 'confirmed' && appointment.startTime && appointment.endTime && (
+                <a
+                  href={buildCalendarUrl(appointment.date, appointment.startTime, appointment.endTime, name, appointment.address)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className="text-xs font-medium text-red-600 active:text-red-800"
+                >
+                  {t('request.addToCalendar')}
+                </a>
+              )}
+            </div>
           )}
 
           {(variant === 'pending' || variant === 'confirmed') && onEdit && (

@@ -18,6 +18,8 @@ export async function sendPushNotification(
 
     if (tokens.length === 0) return;
 
+    // Send with notification payload — the browser handles display automatically.
+    // The service worker's onBackgroundMessage skips showing if the browser already displayed it.
     const response = await messaging.sendEachForMulticast({
       tokens,
       notification: { title, body },
@@ -32,6 +34,8 @@ export async function sendPushNotification(
         },
       },
     });
+
+    console.log(`[PUSH] Sent to ${tokens.length} tokens: ${response.successCount} success, ${response.failureCount} failed`);
 
     // Clean up invalid tokens
     if (response.failureCount > 0) {

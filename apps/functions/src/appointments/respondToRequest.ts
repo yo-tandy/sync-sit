@@ -39,6 +39,8 @@ export const respondToRequest = onCall(
       throw new HttpsError('permission-denied', 'You are not the babysitter for this appointment');
     }
 
+    console.log(`[respondToRequest] aptId=${data.appointmentId} action=${data.action} status=${appointment.status} familyId=${appointment.familyId}`);
+
     if (appointment.status !== 'pending') {
       throw new HttpsError('failed-precondition', 'This appointment is no longer pending');
     }
@@ -153,14 +155,19 @@ export const respondToRequest = onCall(
         updatedAt: now,
       });
 
-      // Send decline notification to family
+      // Load babysitter name for notification
+      const babysitterDoc = await db.collection('users').doc(uid).get();
+      const babysitterUser = babysitterDoc.data()!;
+      const babysitterName = `${babysitterUser.firstName} ${babysitterUser.lastName}`;
+
       const declineDateDisplay = appointment.date
         ? `${appointment.date}${appointment.startTime ? ` at ${appointment.startTime}` : ''}${appointment.endTime ? `–${appointment.endTime}` : ''}`
         : 'Recurring schedule';
 
       const declineEmailBody = `
-        <p>Your babysitting request for <strong>${declineDateDisplay}</strong> was declined. You can search for other available babysitters.</p>
-        <p style="margin-top: 16px;"><a href="https://sync-sit.com/family/search" style="background: #DC2626; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">Search babysitters</a></p>
+        <p><strong>${babysitterName}</strong> has declined your babysitting request for <strong>${declineDateDisplay}</strong>.</p>
+        <p>You can search for other available babysitters or resubmit this request with updated details.</p>
+        <p style="margin-top: 16px;"><a href="https://sync-sit.com/family" style="background: #DC2626; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View in app</a></p>
       `;
 
       if (appointment.familyId) {
@@ -175,7 +182,7 @@ export const respondToRequest = onCall(
           if (parentData.notifPrefs?.cancelled?.email !== false && parentData.email) {
             await sendNotificationEmail(
               parentData.email,
-              'Babysitting request declined',
+              `Babysitting request declined — ${babysitterName}`,
               declineEmailBody
             );
           }
@@ -184,7 +191,7 @@ export const respondToRequest = onCall(
             await sendPushNotification(
               parentId,
               'Request declined',
-              'Your babysitting request was declined.',
+              `${babysitterName} has declined your babysitting request.`,
               { appointmentId: data.appointmentId, type: 'request_declined' }
             );
           }
@@ -193,7 +200,7 @@ export const respondToRequest = onCall(
             recipientUserId: parentId,
             type: 'request_declined',
             title: 'Request declined',
-            body: `Your babysitting request was declined.`,
+            body: `${babysitterName} has declined your babysitting request.`,
             data: { appointmentId: data.appointmentId },
             read: false,
             channels: ['email', 'push'],

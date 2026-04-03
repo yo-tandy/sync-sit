@@ -7,7 +7,7 @@ export function WelcomePage() {
   const { t } = useTranslation();
 
   return (
-    <div className="flex min-h-screen flex-col px-6 py-8">
+    <div className="flex h-[100dvh] flex-col px-6 py-4">
       {/* Language toggle top-right */}
       <div className="flex justify-end">
         <LanguageSelector />
@@ -15,24 +15,24 @@ export function WelcomePage() {
 
       {/* Logo + Title */}
       <div className="flex flex-1 flex-col items-center justify-center">
-        <img src="/logo.png" alt="Sync/Sit" className="mb-6 h-72 w-72 rounded-3xl" />
-        <h1 className="mb-2 text-center text-3xl font-bold text-gray-950">
+        <img src="/logo.png" alt="Sync/Sit" className="mb-4 h-44 w-44 rounded-2xl sm:h-56 sm:w-56" />
+        <h1 className="mb-1 text-center text-2xl font-bold text-gray-950">
           {t('welcome.title')}
         </h1>
-        <p className="max-w-[260px] text-center text-base leading-relaxed text-gray-500">
+        <p className="max-w-[260px] text-center text-sm leading-relaxed text-gray-500">
           {t('welcome.subtitle')}
         </p>
       </div>
 
       {/* Actions */}
-      <div className="pb-8">
-        <p className="mb-4 text-center text-sm font-medium text-gray-500">
+      <div className="shrink-0 pb-3">
+        <p className="mb-3 text-center text-sm font-medium text-gray-500">
           {t('welcome.iAmA')}
         </p>
 
         <Link
           to="/enroll/babysitter"
-          className="mb-3 flex h-[52px] w-full items-center justify-center gap-2 rounded-xl bg-red-600 text-base font-semibold text-white transition-colors hover:bg-red-600/90"
+          className="mb-2.5 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-red-600 text-base font-semibold text-white transition-colors hover:bg-red-600/90"
         >
           <UserIcon className="h-5 w-5" />
           {t('welcome.babysitter')}
@@ -40,7 +40,7 @@ export function WelcomePage() {
 
         <Link
           to="/enroll/parent"
-          className="mb-6 flex h-[52px] w-full items-center justify-center gap-2 rounded-xl border-[1.5px] border-gray-300 bg-white text-base font-semibold text-gray-950 transition-colors hover:border-gray-950"
+          className="mb-4 flex h-12 w-full items-center justify-center gap-2 rounded-xl border-[1.5px] border-gray-300 bg-white text-base font-semibold text-gray-950 transition-colors hover:border-gray-950"
         >
           <UsersIcon className="h-5 w-5" />
           {t('welcome.parent')}
@@ -60,7 +60,7 @@ export function WelcomePage() {
       </div>
 
       {/* Footer links */}
-      <div className="flex justify-center gap-4 pb-2">
+      <div className="flex shrink-0 justify-center gap-4 pb-1 pt-2">
         <Link to="/about" className="text-xs text-gray-400 hover:text-gray-600">
           {t('welcome.about')}
         </Link>

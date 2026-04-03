@@ -13,6 +13,7 @@ import { useHolidays } from '@/hooks/useHolidays';
 import { getDateTag } from '@/lib/dateTag';
 import { DateTag } from '@/components/ui/DateTag';
 import type { BabysitterUser } from '@ejm/shared';
+import { buildCalendarUrl } from '@/lib/calendar';
 
 export function RequestDetailPage() {
   const { t, i18n } = useTranslation();
@@ -209,6 +210,16 @@ export function RequestDetailPage() {
             )}
           </div>
           <DateTag tag={getDateTag(apt.date || '', apt.startTime || '', holidayPeriods)} className="mt-1" />
+          {apt.status === 'confirmed' && apt.date && apt.startTime && apt.endTime && (
+            <a
+              href={buildCalendarUrl(apt.date, apt.startTime, apt.endTime, familyName, apt.address)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-2 inline-flex items-center gap-1.5 text-sm font-medium text-red-600 active:text-red-800"
+            >
+              <span>📅</span> {t('request.addToCalendar')}
+            </a>
+          )}
         </Card>
 
         {/* Children (ages only) */}
@@ -280,20 +291,20 @@ export function RequestDetailPage() {
           <Card className="mb-3 bg-gray-50">
             <p className="text-xs font-medium text-gray-500 mb-2">{t('request.contactLabel')}</p>
             {parentContacts.map((p, i) => (
-              <div key={i} className="mb-1.5 last:mb-0">
-                <p className="text-sm font-medium text-gray-900">{p.firstName} {p.lastName}</p>
-                <p className="text-xs text-gray-600">
-                  📧 <a href={`mailto:${p.email}`} className="text-red-600 hover:underline">{p.email}</a>
-                </p>
+              <div key={i} className="mb-3 last:mb-0">
+                <p className="mb-1 text-sm font-medium text-gray-900">{p.firstName} {p.lastName}</p>
+                <a href={`mailto:${p.email}`} className="flex items-center gap-2 py-1.5 text-xs text-red-600 active:bg-gray-100">
+                  <span>📧</span> <span>{p.email}</span>
+                </a>
                 {p.phone && (
-                  <p className="text-xs text-gray-600">
-                    📞 <a href={`tel:${p.phone}`} className="text-red-600 hover:underline">{p.phone}</a>
-                  </p>
+                  <a href={`tel:${p.phone}`} className="flex items-center gap-2 py-1.5 text-xs text-red-600 active:bg-gray-100">
+                    <span>📞</span> <span>{p.phone}</span>
+                  </a>
                 )}
                 {p.whatsapp && (
-                  <p className="text-xs text-gray-600">
-                    💬 <a href={`https://wa.me/${p.whatsapp.replace(/[^\d+]/g, '').replace('+', '')}`} target="_blank" rel="noopener noreferrer" className="text-green-600 hover:underline">WhatsApp</a>
-                  </p>
+                  <a href={`https://wa.me/${p.whatsapp.replace(/[^\d+]/g, '').replace('+', '')}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 py-1.5 text-xs text-green-600 active:bg-gray-100">
+                    <span>💬</span> <span>WhatsApp</span>
+                  </a>
                 )}
               </div>
             ))}
@@ -377,6 +388,16 @@ export function RequestDetailPage() {
                 ? t('request.confirmedDesc')
                 : t('request.declinedDesc')}
             </p>
+            {success === 'accepted' && apt.date && apt.startTime && apt.endTime && (
+              <a
+                href={buildCalendarUrl(apt.date, apt.startTime, apt.endTime, familyName, apt.address)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mb-3 inline-flex items-center gap-1.5 text-sm font-medium text-red-600 active:text-red-800"
+              >
+                <span>📅</span> {t('request.addToCalendar')}
+              </a>
+            )}
             <Button onClick={() => navigate('/babysitter')}>{t('request.backToDashboard')}</Button>
           </div>
         </Dialog>

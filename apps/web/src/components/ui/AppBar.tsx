@@ -73,9 +73,9 @@ export function AppBar({ role }: { role: UserRole }) {
 
           {role === 'babysitter' && (
             <>
-              <MenuItem icon={<UserIcon className="h-5 w-5" />} label={t('menu.editProfile')} to="/babysitter/profile" onNavigate={() => setMenuOpen(false)} />
+              <MenuItem icon={<UserIcon className="h-5 w-5" />} label={t('menu.myAccount')} to="/babysitter/account" onNavigate={() => setMenuOpen(false)} />
+              <MenuItem icon={<SettingsIcon className="h-5 w-5" />} label={t('menu.babysittingOptions')} to="/babysitter/options" onNavigate={() => setMenuOpen(false)} />
               <MenuItem icon={<UsersIcon className="h-5 w-5" />} label={t('menu.references')} to="/babysitter/references" onNavigate={() => setMenuOpen(false)} />
-              <MenuItem icon={<SettingsIcon className="h-5 w-5" />} label={t('menu.settings')} to="/babysitter/settings" onNavigate={() => setMenuOpen(false)} />
             </>
           )}
 

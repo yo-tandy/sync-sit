@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 const COUNTRY_CODES = [
   { code: '+33', country: 'FR', flag: '🇫🇷' },
@@ -66,6 +66,13 @@ export function PhoneInput({ label, value, onChange, placeholder, className = ''
   const parsed = parsePhone(value);
   const [countryCode, setCountryCode] = useState(parsed.countryCode);
   const [number, setNumber] = useState(parsed.number);
+
+  // Sync internal state when value prop changes externally
+  useEffect(() => {
+    const p = parsePhone(value);
+    setCountryCode(p.countryCode);
+    setNumber(p.number);
+  }, [value]);
 
   const handleCountryChange = (code: string) => {
     setCountryCode(code);

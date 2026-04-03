@@ -34,7 +34,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   login: async (email: string, password: string) => {
     try {
       set({ loading: true, error: null });
-      await signInWithEmailAndPassword(auth, email, password);
+      const cred = await signInWithEmailAndPassword(auth, email, password);
+      // Fetch userDoc immediately so state is ready when login() returns
+      // (don't rely solely on onAuthStateChanged which may resolve after redirect)
+      const snap = await getDoc(doc(db, 'users', cred.user.uid));
+      const userDoc = snap.exists() ? (snap.data() as UserDoc) : null;
+      set({ firebaseUser: cred.user, userDoc, loading: false });
     } catch (err: any) {
       set({ error: err.message, loading: false });
       throw err;

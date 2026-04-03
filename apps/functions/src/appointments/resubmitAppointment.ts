@@ -79,8 +79,11 @@ export const resubmitAppointment = onCall(
       ? `${existingInfo}\n---\n${data.additionalNotes.trim()}`
       : data.additionalNotes.trim();
 
+    // Use a batch to atomically create the new appointment AND mark the original
     const newAppointmentRef = db.collection('appointments').doc();
-    await newAppointmentRef.set({
+    const batch = db.batch();
+
+    batch.set(newAppointmentRef, {
       appointmentId: newAppointmentRef.id,
       searchId: original.searchId || null,
       familyId: original.familyId,
@@ -111,7 +114,9 @@ export const resubmitAppointment = onCall(
     });
 
     // Mark original appointment as resubmitted (hides it from dashboards)
-    await originalRef.update({ resubmitted: true });
+    batch.update(originalRef, { resubmitted: true });
+
+    await batch.commit();
 
     // Notify babysitter
     const babysitterDoc = await db.collection('users').doc(original.babysitterUserId).get();

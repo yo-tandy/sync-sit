@@ -13,22 +13,11 @@ firebase.initializeApp({
 
 const messaging = firebase.messaging();
 
-messaging.onBackgroundMessage((payload) => {
-  // Only show notification if no app window is focused (avoid duplicates)
-  return clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
-    const hasFocusedClient = windowClients.some((client) => client.focused);
-    if (hasFocusedClient) return; // foreground handler will show in-app toast
-
-    const { title, body } = payload.notification || {};
-    if (title) {
-      return self.registration.showNotification(title, {
-        body: body || '',
-        icon: '/favicon.png',
-        badge: '/favicon.png',
-        data: payload.data,
-      });
-    }
-  });
+// The notification payload is auto-displayed by the browser — do nothing here.
+// This handler only exists to prevent the default FCM background handler from
+// showing a second notification.
+messaging.onBackgroundMessage(() => {
+  // no-op: browser already shows the notification from the payload
 });
 
 self.addEventListener('notificationclick', (event) => {

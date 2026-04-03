@@ -102,8 +102,8 @@ export function setupForegroundMessages(onNotification: (title: string, body: st
   if (!messaging) return () => {};
 
   return onMessage(messaging, (payload) => {
-    const title = payload.notification?.title || 'Sync/Sit';
-    const body = payload.notification?.body || '';
+    const title = payload.notification?.title || payload.data?.title || 'Sync/Sit';
+    const body = payload.notification?.body || payload.data?.body || '';
     onNotification(title, body);
   });
 }

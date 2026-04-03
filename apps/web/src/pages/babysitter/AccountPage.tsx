@@ -8,7 +8,7 @@ import { TopNav, Button, Input, Card, InfoBanner, LanguageSelector } from '@/com
 import { BellIcon } from '@/components/ui/Icons';
 import { isPushSupported, getPushPermissionStatus, requestPushPermission } from '@/lib/pushNotifications';
 import { PhoneInput } from '@/components/forms/PhoneInput';
-import type { ParentUser, NotifPrefs } from '@ejm/shared';
+import type { BabysitterUser, NotifPrefs } from '@ejm/shared';
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
 const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
@@ -18,12 +18,20 @@ interface NotifChannel {
   email: boolean;
 }
 
-// Parent-specific notification scenarios (no "new request" — parents initiate requests)
 const SCENARIOS: { key: keyof NotifPrefs; labelKey: string; descKey: string }[] = [
-  { key: 'confirmed', labelKey: 'notifications.confirmation', descKey: 'notifications.confirmationDesc' },
-  { key: 'cancelled', labelKey: 'notifications.declineOrCancel', descKey: 'notifications.declineOrCancelDesc' },
+  { key: 'newRequest', labelKey: 'notifications.newRequest', descKey: 'notifications.newRequestDesc' },
+  { key: 'cancelled', labelKey: 'notifications.cancellation', descKey: 'notifications.cancellationDesc' },
   { key: 'reminders', labelKey: 'notifications.reminder', descKey: 'notifications.reminderDesc' },
 ];
+
+function getGenderOptions(t: (key: string) => string) {
+  return [
+    { value: 'female', label: t('enrollment.genderFemale') },
+    { value: 'male', label: t('enrollment.genderMale') },
+    { value: 'other', label: t('enrollment.genderOther') },
+    { value: 'prefer_not_to_say', label: t('enrollment.genderPreferNot') },
+  ];
+}
 
 function PushStatusCard({ uid }: { uid?: string }) {
   const { t } = useTranslation();
@@ -74,10 +82,10 @@ function PushStatusCard({ uid }: { uid?: string }) {
   );
 }
 
-export function AccountPage() {
+export function BabysitterAccountPage() {
   const { t } = useTranslation();
   const { userDoc, firebaseUser, refreshUserDoc, resetPassword } = useAuthStore();
-  const parent = userDoc as ParentUser | null;
+  const babysitter = userDoc as BabysitterUser | null;
   const uid = firebaseUser?.uid;
 
   // Photo state
@@ -88,18 +96,18 @@ export function AccountPage() {
   const [photoSaving, setPhotoSaving] = useState(false);
 
   // Contact state
-  const [email, setEmail] = useState('');
+  const [contactEmail, setContactEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [whatsapp, setWhatsapp] = useState('');
   const [whatsappSameAsPhone, setWhatsappSameAsPhone] = useState(true);
   const [contactSaving, setContactSaving] = useState(false);
   const [contactSuccess, setContactSuccess] = useState(false);
 
-  // Password reset state
+  // Password reset
   const [passwordResetSent, setPasswordResetSent] = useState(false);
   const [passwordResetting, setPasswordResetting] = useState(false);
 
-  // Notification prefs state
+  // Notification prefs
   const [prefs, setPrefs] = useState<NotifPrefs>({
     newRequest: { push: true, email: true },
     confirmed: { push: true, email: true },
@@ -107,25 +115,36 @@ export function AccountPage() {
     reminders: { push: true, email: false },
   });
 
-  // General UI state
   const [error, setError] = useState<string | null>(null);
 
   // Initialize from userDoc
   useEffect(() => {
-    if (!parent) return;
-    setEmail(parent.email || '');
-    setPhone((parent as any).phone || '');
-    setWhatsapp((parent as any).whatsapp || '');
-    setWhatsappSameAsPhone((parent as any).whatsapp ? (parent as any).whatsapp === (parent as any).phone : true);
-    if ((parent as any).photoUrl) {
-      setPhotoPreview((parent as any).photoUrl);
+    if (!babysitter) return;
+    setContactEmail(babysitter.contactEmail || babysitter.email || '');
+    setPhone(babysitter.contactPhone || '');
+    setWhatsapp(babysitter.whatsapp || '');
+    setWhatsappSameAsPhone(babysitter.whatsapp ? babysitter.whatsapp === babysitter.contactPhone : true);
+    if (babysitter.photoUrl) {
+      setPhotoPreview(babysitter.photoUrl);
     }
-    if (parent.notifPrefs) {
-      setPrefs(parent.notifPrefs);
+    if (babysitter.notifPrefs) {
+      setPrefs(babysitter.notifPrefs);
     }
-  }, [parent]);
+  }, [babysitter]);
 
-  // --- Photo handlers ---
+  // Format DOB for display
+  const dobDisplay = (() => {
+    if (!babysitter?.dateOfBirth) return '';
+    const dob = babysitter.dateOfBirth;
+    if (typeof dob === 'string') return dob;
+    if (typeof (dob as any).toDate === 'function') {
+      const d = (dob as any).toDate() as Date;
+      return d.toLocaleDateString();
+    }
+    return '';
+  })();
+
+  // --- Photo handlers (auto-save) ---
   const handlePhotoSelect = (file: File) => {
     setPhotoError(null);
     if (!ACCEPTED_TYPES.includes(file.type)) {
@@ -189,9 +208,7 @@ export function AccountPage() {
 
   // Auto-save photo after selection
   useEffect(() => {
-    if (photoFile) {
-      handlePhotoSave();
-    }
+    if (photoFile) handlePhotoSave();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [photoFile]);
 
@@ -204,8 +221,8 @@ export function AccountPage() {
     setError(null);
     try {
       await updateDoc(doc(db, 'users', uid), {
-        email,
-        phone: phone || null,
+        contactEmail: contactEmail || null,
+        contactPhone: phone || null,
         whatsapp: whatsappSameAsPhone ? (phone || null) : (whatsapp || null),
         updatedAt: serverTimestamp(),
       });
@@ -221,10 +238,10 @@ export function AccountPage() {
 
   // --- Password reset ---
   const handlePasswordReset = async () => {
-    if (!parent?.email) return;
+    if (!babysitter?.email) return;
     setPasswordResetting(true);
     try {
-      await resetPassword(parent.email);
+      await resetPassword(babysitter.email);
       setPasswordResetSent(true);
       setTimeout(() => setPasswordResetSent(false), 5000);
     } catch {
@@ -244,7 +261,7 @@ export function AccountPage() {
       });
       await refreshUserDoc();
     } catch {
-      // silent — will retry on next toggle
+      // silent
     }
   }, [uid, refreshUserDoc]);
 
@@ -262,27 +279,49 @@ export function AccountPage() {
 
   return (
     <div>
-      <TopNav title={t('menu.myAccount')} backTo="/family" />
+      <TopNav title={t('menu.myAccount')} backTo="/babysitter" />
 
       <div className="px-5 pt-4 pb-8">
         {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
 
-        {/* 1. Personal Info (read-only) */}
+        {/* 1. Personal Info */}
         <h3 className="mb-3 text-sm font-semibold text-gray-700">{t('account.personalInfo')}</h3>
-        <Card className="mb-6 bg-gray-50">
+        <Card className="mb-4 bg-gray-50">
           <div className="mb-3 flex gap-3">
             <div className="flex-1">
               <p className="text-xs text-gray-500">{t('enrollment.firstName')}</p>
-              <p className="text-sm font-medium text-gray-900">{parent?.firstName || ''}</p>
+              <p className="text-sm font-medium text-gray-900">{babysitter?.firstName || ''}</p>
             </div>
             <div className="flex-1">
               <p className="text-xs text-gray-500">{t('enrollment.lastName')}</p>
-              <p className="text-sm font-medium text-gray-900">{parent?.lastName || ''}</p>
+              <p className="text-sm font-medium text-gray-900">{babysitter?.lastName || ''}</p>
+            </div>
+          </div>
+          <div className="mb-3">
+            <p className="text-xs text-gray-500">{t('account.loginEmail')}</p>
+            <p className="text-sm font-medium text-gray-900">{babysitter?.email || ''}</p>
+          </div>
+          {babysitter?.ejemEmail && babysitter.ejemEmail !== babysitter.email && (
+            <div className="mb-3">
+              <p className="text-xs text-gray-500">{t('account.ejemEmail')}</p>
+              <p className="text-sm font-medium text-gray-900">{babysitter.ejemEmail}</p>
+            </div>
+          )}
+          <div className="mb-3 flex gap-3">
+            <div className="flex-1">
+              <p className="text-xs text-gray-500">{t('account.dateOfBirth')}</p>
+              <p className="text-sm font-medium text-gray-900">{dobDisplay || '—'}</p>
+            </div>
+            <div className="flex-1">
+              <p className="text-xs text-gray-500">{t('account.classLevel')}</p>
+              <p className="text-sm font-medium text-gray-900">{babysitter?.classLevel || '—'}</p>
             </div>
           </div>
           <div>
-            <p className="text-xs text-gray-500">{t('account.loginEmail')}</p>
-            <p className="text-sm font-medium text-gray-900">{parent?.email || ''}</p>
+            <p className="text-xs text-gray-500">{t('enrollment.gender')}</p>
+            <p className="text-sm font-medium text-gray-900">
+              {babysitter?.gender ? getGenderOptions(t).find((o) => o.value === babysitter.gender)?.label || '—' : '—'}
+            </p>
           </div>
         </Card>
 
@@ -334,8 +373,8 @@ export function AccountPage() {
           <Input
             label={t('common.email')}
             type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            value={contactEmail}
+            onChange={(e) => setContactEmail(e.target.value)}
           />
           <PhoneInput
             label={t('account.phone')}
@@ -369,7 +408,7 @@ export function AccountPage() {
             )}
           </div>
 
-          <Button type="submit" disabled={contactSaving || !email}>
+          <Button type="submit" disabled={contactSaving}>
             {contactSaving ? t('common.saving') : t('account.saveContact')}
           </Button>
         </form>
@@ -380,7 +419,7 @@ export function AccountPage() {
         <h3 className="mb-3 text-sm font-semibold text-gray-700">{t('account.changePassword')}</h3>
         {passwordResetSent && (
           <InfoBanner className="mb-4">
-            {t('account.passwordResetSent', { email: parent?.email })}
+            {t('account.passwordResetSent', { email: babysitter?.email })}
           </InfoBanner>
         )}
         <div className="mb-6">
@@ -404,13 +443,11 @@ export function AccountPage() {
         <h3 className="mb-1 text-sm font-semibold text-gray-700">{t('notifications.title')}</h3>
         <p className="mb-4 text-sm text-gray-500">{t('notifications.desc')}</p>
 
-        {/* Header */}
         <div className="mb-3 flex items-center justify-end gap-6 pr-1">
           <span className="w-10 text-center text-xs font-medium text-gray-500">{t('notifications.push')}</span>
           <span className="w-10 text-center text-xs font-medium text-gray-500">{t('notifications.emailNotif')}</span>
         </div>
 
-        {/* Scenarios */}
         {SCENARIOS.map((s) => {
           const channel = prefs[s.key] as NotifChannel;
           return (

@@ -101,7 +101,7 @@ export async function sendAdminNotification(subject: string, body: string): Prom
 
   try {
     await resend.emails.send({
-      from: FROM_EMAIL_FALLBACK,
+      from: FROM_EMAIL,
       to: ADMIN_EMAIL,
       subject,
       html: `
@@ -142,22 +142,26 @@ export async function sendNotificationEmail(to: string, subject: string, body: s
     return;
   }
 
+  const emailHtml = `
+    <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
+      <h2 style="color: #DC2626; margin-bottom: 16px;">Sync/Sit</h2>
+      ${body}
+      <hr style="border: none; border-top: 1px solid #E5E7EB; margin: 24px 0;" />
+      <p style="color: #9CA3AF; font-size: 12px;">
+        <a href="https://sync-sit.com" style="color: #DC2626;">Open Sync/Sit</a>
+      </p>
+    </div>
+  `;
+
   try {
-    await resend.emails.send({
-      from: FROM_EMAIL_FALLBACK,
-      to,
-      subject,
-      html: `
-        <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
-          <h2 style="color: #DC2626; margin-bottom: 16px;">Sync/Sit</h2>
-          ${body}
-          <hr style="border: none; border-top: 1px solid #E5E7EB; margin: 24px 0;" />
-          <p style="color: #9CA3AF; font-size: 12px;">
-            <a href="https://sync-sit.com" style="color: #DC2626;">Open Sync/Sit</a>
-          </p>
-        </div>
-      `,
-    });
+    const result = await resend.emails.send({ from: FROM_EMAIL, to, subject, html: emailHtml });
+    if (result.error) {
+      console.warn(`[EMAIL] Primary sender failed: ${result.error.message}, trying fallback`);
+      const fallbackResult = await resend.emails.send({ from: FROM_EMAIL_FALLBACK, to, subject, html: emailHtml });
+      if (fallbackResult.error) {
+        console.error(`[EMAIL] Fallback also failed: ${fallbackResult.error.message}`);
+      }
+    }
   } catch (err) {
     console.error('Failed to send notification email:', err);
   }

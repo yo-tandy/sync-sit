@@ -1,9 +1,12 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from '@/config/firebase';
+import { useAuthStore } from '@/stores/authStore';
 import { useReferences } from '@/hooks/useReferences';
-import { Button, Card, Badge, Input, Textarea, Dialog, TopNav, Spinner } from '@/components/ui';
+import { Button, Card, Badge, Input, Textarea, Dialog, TopNav, Spinner, InfoBanner } from '@/components/ui';
 import { PlusIcon } from '@/components/ui/Icons';
-import type { ReferenceDoc } from '@ejm/shared';
+import type { ReferenceDoc, BabysitterUser } from '@ejm/shared';
 
 // ── Validation ──
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -20,6 +23,54 @@ function validateEmail(email: string): string | null {
   if (!email) return null; // optional
   if (!EMAIL_REGEX.test(email.trim())) return 'validation.validEmail';
   return null;
+}
+
+// ── About Me ──
+function AboutMeSection() {
+  const { t } = useTranslation();
+  const { userDoc, firebaseUser, refreshUserDoc } = useAuthStore();
+  const babysitter = userDoc as BabysitterUser | null;
+  const uid = firebaseUser?.uid;
+  const [aboutMe, setAboutMe] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    if (babysitter?.aboutMe) setAboutMe(babysitter.aboutMe);
+  }, [babysitter]);
+
+  const handleSave = async () => {
+    if (!uid) return;
+    setSaving(true);
+    try {
+      await updateDoc(doc(db, 'users', uid), {
+        aboutMe: aboutMe || null,
+        updatedAt: serverTimestamp(),
+      });
+      await refreshUserDoc();
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } catch {
+      // silent
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div>
+      <h3 className="mb-3 text-sm font-semibold text-gray-700">{t('enrollment.aboutMe')}</h3>
+      <Textarea
+        value={aboutMe}
+        onChange={(e) => { setAboutMe(e.target.value); setSaved(false); }}
+        placeholder={t('enrollment.aboutMePlaceholder')}
+      />
+      {saved && <InfoBanner className="mb-2">{t('account.saved')}</InfoBanner>}
+      <Button size="sm" onClick={handleSave} disabled={saving}>
+        {saving ? t('common.saving') : t('common.save')}
+      </Button>
+    </div>
+  );
 }
 
 // ── Reference Card ──
@@ -310,6 +361,11 @@ export function ReferencesPage() {
       <TopNav title={t('references.title')} backTo="/babysitter" />
 
       <div className="px-5 pt-4 pb-8">
+        {/* About Me */}
+        <AboutMeSection />
+
+        <hr className="my-5 border-gray-200" />
+
         {/* Manual references */}
         <h3 className="mb-3 text-sm font-semibold text-gray-700">{t('references.myReferences')}</h3>
 

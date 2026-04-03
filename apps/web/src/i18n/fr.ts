@@ -177,6 +177,7 @@ export default {
 
   menu: {
     editProfile: 'Modifier le profil',
+    babysittingOptions: 'Options de babysitting',
     references: 'R\u00e9f\u00e9rences',
     editFamily: 'Modifier la famille',
     inviteMembers: 'Inviter des membres',
@@ -367,12 +368,13 @@ export default {
     messageLabel: 'Message',
     additionalInfo: 'Informations suppl\u00e9mentaires',
     contactLabel: 'Contact',
+    addToCalendar: 'Ajouter au calendrier',
     accept: 'Accepter',
     decline: 'Refuser',
     confirmAppointment: 'Confirmer le rendez-vous',
     confirmDesc: 'Nous recommandons de contacter la famille d\u2019abord pour coordonner les d\u00e9tails.',
     blockSchedule: 'Bloquer ce cr\u00e9neau dans mon planning',
-    confirmAccept: 'Confirmer le rendez-vous',
+    confirmAccept: 'Accepter',
     confirming: 'Confirmation...',
     declineTitle: 'Refuser cette demande ?',
     declineDesc: 'La famille sera inform\u00e9e de votre refus.',
@@ -412,6 +414,9 @@ export default {
     photoTooLarge: 'La photo doit faire moins de 5 Mo',
     photoInvalidType: 'Veuillez sélectionner une image',
     photoUploadFailed: 'Échec du téléchargement de la photo',
+    ejemEmail: 'Email EJM',
+    dateOfBirth: 'Date de naissance',
+    classLevel: 'Classe',
   },
 
   coParent: {

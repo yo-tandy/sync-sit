@@ -188,6 +188,7 @@ export default {
   // Menu
   menu: {
     editProfile: 'Edit Profile',
+    babysittingOptions: 'Babysitting Options',
     references: 'References',
     editFamily: 'Edit Family',
     inviteMembers: 'Invite Members',
@@ -383,12 +384,13 @@ export default {
     messageLabel: 'Message',
     additionalInfo: 'Additional info',
     contactLabel: 'Contact',
+    addToCalendar: 'Add to calendar',
     accept: 'Accept',
     decline: 'Decline',
     confirmAppointment: 'Confirm Appointment',
     confirmDesc: 'We recommend contacting the family first to coordinate details.',
     blockSchedule: 'Block this time in my schedule',
-    confirmAccept: 'Confirm appointment',
+    confirmAccept: 'Accept',
     confirming: 'Confirming...',
     declineTitle: 'Decline this request?',
     declineDesc: 'The family will be notified that you declined.',
@@ -435,6 +437,9 @@ export default {
     photoTooLarge: 'Photo must be under 5 MB',
     photoInvalidType: 'Please select an image file',
     photoUploadFailed: 'Failed to upload photo',
+    ejemEmail: 'EJM Email',
+    dateOfBirth: 'Date of Birth',
+    classLevel: 'Class',
   },
 
   coParent: {
