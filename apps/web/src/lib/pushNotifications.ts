@@ -1,6 +1,6 @@
 import { getToken, deleteToken, onMessage } from 'firebase/messaging';
 import { doc, updateDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
-import { messaging, db } from '@/config/firebase';
+import { messaging, initMessaging, db } from '@/config/firebase';
 
 const VAPID_KEY = import.meta.env.VITE_FIREBASE_VAPID_KEY;
 const PROMPTED_KEY = 'syncsit_push_prompted';
@@ -43,24 +43,21 @@ export function resetPrompted(): void {
 
 /**
  * Request push notification permission and save the FCM token.
+ * This is the first point where FCM is initialized (lazily).
  * Returns the token if successful, null otherwise.
  */
 export async function requestPushPermission(userId: string): Promise<string | null> {
   if (!VAPID_KEY) return null;
 
-  // Wait for messaging to be ready (async initialization)
-  let attempts = 0;
-  while (!messaging && attempts < 10) {
-    await new Promise((r) => setTimeout(r, 500));
-    attempts++;
-  }
-  if (!messaging) return null;
+  // Initialize messaging lazily — only when user explicitly requests push
+  const msg = await initMessaging();
+  if (!msg) return null;
 
   try {
     const permission = await Notification.requestPermission();
     if (permission !== 'granted') return null;
 
-    const token = await getToken(messaging, { vapidKey: VAPID_KEY });
+    const token = await getToken(msg, { vapidKey: VAPID_KEY });
     if (!token) return null;
 
     // Save token to user's fcmTokens array
@@ -79,15 +76,16 @@ export async function requestPushPermission(userId: string): Promise<string | nu
  * Remove the current FCM token from the user's doc and delete it from FCM.
  */
 export async function removePushToken(userId: string): Promise<void> {
-  if (!messaging) return;
+  const msg = messaging || await initMessaging();
+  if (!msg) return;
 
   try {
-    const token = await getToken(messaging, { vapidKey: VAPID_KEY });
+    const token = await getToken(msg, { vapidKey: VAPID_KEY });
     if (token) {
       await updateDoc(doc(db, 'users', userId), {
         fcmTokens: arrayRemove(token),
       });
-      await deleteToken(messaging);
+      await deleteToken(msg);
     }
   } catch (err) {
     console.error('Failed to remove push token:', err);
@@ -97,11 +95,16 @@ export async function removePushToken(userId: string): Promise<void> {
 /**
  * Set up foreground message handler. Shows an alert/toast when a push
  * arrives while the app is in the foreground.
+ * Only initializes messaging if permission was already granted.
  */
-export function setupForegroundMessages(onNotification: (title: string, body: string) => void): () => void {
-  if (!messaging) return () => {};
+export async function setupForegroundMessages(onNotification: (title: string, body: string) => void): Promise<() => void> {
+  // Only init messaging if push is already granted — don't trigger the prompt
+  if (Notification.permission !== 'granted') return () => {};
 
-  return onMessage(messaging, (payload) => {
+  const msg = await initMessaging();
+  if (!msg) return () => {};
+
+  return onMessage(msg, (payload) => {
     const title = payload.notification?.title || payload.data?.title || 'Sync/Sit';
     const body = payload.notification?.body || payload.data?.body || '';
     onNotification(title, body);
