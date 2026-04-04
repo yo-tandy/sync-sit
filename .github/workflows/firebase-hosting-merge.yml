@@ -10,6 +10,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Enable pnpm (Corepack)
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.13.1 --activate
+          pnpm --version
+
       - uses: pnpm/action-setup@v4
         with:
           version: 9
