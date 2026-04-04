@@ -21,6 +21,11 @@ export { removeCoParent } from './enrollment/removeCoParent.js';
 export { searchBabysitters } from './search/searchBabysitters.js';
 export { sendContactRequest } from './search/sendContactRequest.js';
 
+// Family
+export { addPreferredBabysitter } from './family/addPreferredBabysitter.js';
+export { removePreferredBabysitter } from './family/removePreferredBabysitter.js';
+export { lookupBabysitter } from './family/lookupBabysitter.js';
+
 // Appointments
 export { respondToRequest } from './appointments/respondToRequest.js';
 export { cancelAppointment } from './appointments/cancelAppointment.js';
