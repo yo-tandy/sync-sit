@@ -41,6 +41,7 @@ interface BabysitterResult {
   referenceCount: number;
   contactEmail?: string;
   contactPhone?: string;
+  isPreferred?: boolean;
 }
 
 function calculateAge(dob: string | Date): number {
@@ -72,6 +73,7 @@ export const searchBabysitters = onCall(
 
     // Verify the calling parent's family is fully verified
     const callerDoc = await db.collection('users').doc(request.auth.uid).get();
+    let preferredSet = new Set<string>();
     if (callerDoc.exists && callerDoc.data()?.role === 'parent') {
       const callerFamilyId = callerDoc.data()?.familyId;
       if (callerFamilyId) {
@@ -79,6 +81,8 @@ export const searchBabysitters = onCall(
         if (!callerFamilyDoc.data()?.verification?.isFullyVerified) {
           throw new HttpsError('permission-denied', 'Family verification required before searching for babysitters');
         }
+        const preferred: string[] = callerFamilyDoc.data()?.preferredBabysitters || [];
+        preferredSet = new Set(preferred);
       }
     }
 
@@ -201,6 +205,7 @@ export const searchBabysitters = onCall(
         referenceCount: refCount,
         contactEmail: b.contactEmail,
         contactPhone: b.contactPhone,
+        isPreferred: preferredSet.has(uid),
       });
     }
 

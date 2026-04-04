@@ -191,6 +191,7 @@ export default {
     myAccount: 'Mon compte',
     myFamily: 'Ma famille',
     coParent: 'Co-parent',
+    preferredBabysitters: 'Babysitters favoris',
     addCoParent: 'Ajouter un co-parent',
     shareApp: 'Partager cette app avec un ami',
     copyMessage: 'Copier le message',
@@ -330,6 +331,21 @@ export default {
     pastDateError: 'Veuillez sélectionner une date future',
     verificationRequired: 'Pour assurer la sécurité de notre communauté, nous devons vérifier tous les utilisateurs avant qu\'ils puissent rechercher des babysitters. Veuillez compléter le processus de vérification pour continuer.',
     schoolNight: 'Veille d\'école',
+    preferredSection: 'Babysitters favoris',
+    otherSection: 'Autres babysitters',
+  },
+
+  preferred: {
+    title: 'Babysitters favoris',
+    searchPlaceholder: 'Rechercher par nom ou email...',
+    add: 'Ajouter aux favoris',
+    remove: 'Retirer des favoris',
+    added: 'Ajouté aux favoris !',
+    removed: 'Retiré des favoris',
+    noPreferred: 'Pas encore de babysitters favoris',
+    noPreferredDesc: 'Ajoutez des babysitters depuis les résultats de recherche, les cartes de rendez-vous ou cherchez par nom ci-dessous.',
+    noResults: 'Aucun babysitter trouvé',
+    searching: 'Recherche...',
   },
 
   familyDashboard: {

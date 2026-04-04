@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
-import { doc, getDoc, collection, getDocs, addDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, getDocs, addDoc, onSnapshot } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
@@ -59,6 +59,8 @@ function ExpandableBabysitterCard({
   info,
   variant,
   isReturning,
+  isPreferred,
+  onTogglePreferred,
   onCancel,
   onEdit,
   onResubmit,
@@ -67,6 +69,8 @@ function ExpandableBabysitterCard({
   info?: BabysitterInfo;
   variant: string;
   isReturning?: boolean;
+  isPreferred?: boolean;
+  onTogglePreferred?: () => void;
   onCancel?: () => void;
   onEdit?: () => void;
   onResubmit?: () => void;
@@ -96,6 +100,7 @@ function ExpandableBabysitterCard({
           <div>
             <div className="flex items-center gap-1.5">
               <p className="text-sm font-semibold text-gray-900">{name}</p>
+              {isPreferred && <span title="Preferred">❤️</span>}
               {isReturning && <span className="text-blue-500" title="Returning">⭐</span>}
             </div>
             {/* Pending: show age + class */}
@@ -179,6 +184,16 @@ function ExpandableBabysitterCard({
                 </a>
               )}
             </div>
+          )}
+
+          {onTogglePreferred && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onTogglePreferred(); }}
+              className="mt-2 flex items-center gap-1.5 text-xs font-medium text-gray-600 active:text-gray-900"
+            >
+              <span className="text-base">{isPreferred ? '❤️' : '🤍'}</span>
+              {isPreferred ? t('preferred.remove') : t('preferred.add')}
+            </button>
           )}
 
           {(variant === 'pending' || variant === 'confirmed') && onEdit && (
@@ -342,6 +357,26 @@ export function FamilyDashboard() {
   };
 
   const [babysitters, setBabysitters] = useState<Record<string, BabysitterInfo>>({});
+  const [preferredIds, setPreferredIds] = useState<Set<string>>(new Set());
+
+  // Load preferred babysitter IDs from family doc
+  const familyId = userDoc?.role === 'parent' ? (userDoc as any).familyId : null;
+  useEffect(() => {
+    if (!familyId) return;
+    const unsub = onSnapshot(doc(db, 'families', familyId), (snap) => {
+      setPreferredIds(new Set(snap.data()?.preferredBabysitters || []));
+    });
+    return unsub;
+  }, [familyId]);
+
+  const togglePreferred = async (babysitterUserId: string) => {
+    const isPref = preferredIds.has(babysitterUserId);
+    try {
+      const fn = httpsCallable(functions, isPref ? 'removePreferredBabysitter' : 'addPreferredBabysitter');
+      await fn({ babysitterUserId });
+      // The onSnapshot listener will update preferredIds automatically
+    } catch { /* silent */ }
+  };
 
   // Babysitters who have had a confirmed appointment with this family
   const returningBabysitterIds = new Set(
@@ -517,6 +552,8 @@ export function FamilyDashboard() {
                       info={babysitters[apt.babysitterUserId]}
                       variant="pending"
                       isReturning={returningBabysitterIds.has(apt.babysitterUserId)}
+                      isPreferred={preferredIds.has(apt.babysitterUserId)}
+                      onTogglePreferred={() => togglePreferred(apt.babysitterUserId)}
                       onEdit={() => openEdit(apt)}
                     />
                   ))}
@@ -537,6 +574,8 @@ export function FamilyDashboard() {
                   info={babysitters[apt.babysitterUserId]}
                   variant="confirmed"
                   isReturning={returningBabysitterIds.has(apt.babysitterUserId)}
+                  isPreferred={preferredIds.has(apt.babysitterUserId)}
+                  onTogglePreferred={() => togglePreferred(apt.babysitterUserId)}
                   onCancel={() => setCancelTarget(apt.appointmentId)}
                   onEdit={() => openEdit(apt)}
                 />
@@ -547,7 +586,7 @@ export function FamilyDashboard() {
             <div className="mb-5">
               <h3 className="mb-2 text-sm font-semibold text-gray-700">{t('babysitterDashboard.past')}</h3>
               {pastRecent.map((apt) => (
-                <ExpandableBabysitterCard key={apt.appointmentId} appointment={apt} info={babysitters[apt.babysitterUserId]} variant="past" />
+                <ExpandableBabysitterCard key={apt.appointmentId} appointment={apt} info={babysitters[apt.babysitterUserId]} variant="past" isPreferred={preferredIds.has(apt.babysitterUserId)} onTogglePreferred={() => togglePreferred(apt.babysitterUserId)} />
               ))}
             </div>
           )}
@@ -555,7 +594,7 @@ export function FamilyDashboard() {
             <div className="mb-5">
               <h3 className="mb-2 text-sm font-semibold text-gray-700">{t('familyDashboard.declined')}</h3>
               {rejectedRecent.map((apt) => (
-                <ExpandableBabysitterCard key={apt.appointmentId} appointment={apt} info={babysitters[apt.babysitterUserId]} variant="rejected" onResubmit={() => openResubmit(apt)} />
+                <ExpandableBabysitterCard key={apt.appointmentId} appointment={apt} info={babysitters[apt.babysitterUserId]} variant="rejected" isPreferred={preferredIds.has(apt.babysitterUserId)} onTogglePreferred={() => togglePreferred(apt.babysitterUserId)} onResubmit={() => openResubmit(apt)} />
               ))}
             </div>
           )}

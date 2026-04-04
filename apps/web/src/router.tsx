@@ -37,6 +37,7 @@ import { SubmittedReferencesPage } from '@/pages/family/SubmittedReferencesPage'
 import { SearchPage } from '@/pages/family/SearchPage';
 import { VerificationPage } from '@/pages/family/VerificationPage';
 import { AccountPage } from '@/pages/family/AccountPage';
+import { PreferredBabysittersPage } from '@/pages/family/PreferredBabysittersPage';
 
 // Admin pages
 import { AdminDashboard } from '@/pages/admin/DashboardPage';
@@ -93,6 +94,7 @@ export const router = createBrowserRouter([
       { path: '/family/invite', element: <InvitePage /> },
       { path: '/family/references', element: <SubmittedReferencesPage /> },
       { path: '/family/search', element: <SearchPage /> },
+      { path: '/family/preferred', element: <PreferredBabysittersPage /> },
       { path: '/family/account', element: <AccountPage /> },
       { path: '/family/verification', element: <VerificationPage /> },
     ],

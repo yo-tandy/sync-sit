@@ -10,6 +10,7 @@ export interface FamilyDoc {
   pets?: string;
   note?: string;
   parentIds: string[];
+  preferredBabysitters?: string[];
   searchDefaults?: SearchDefaults;
   createdAt: FirestoreTimestamp;
   updatedAt: FirestoreTimestamp;

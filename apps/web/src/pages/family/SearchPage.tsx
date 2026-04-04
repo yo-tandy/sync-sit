@@ -52,6 +52,7 @@ interface BabysitterResult {
   referenceCount: number;
   contactEmail?: string;
   contactPhone?: string;
+  isPreferred?: boolean;
 }
 
 export function SearchPage() {
@@ -118,6 +119,25 @@ export function SearchPage() {
   // Returning babysitter IDs (had confirmed appointment with this family)
   const [returningIds, setReturningIds] = useState<Set<string>>(new Set());
 
+  // Preferred babysitter IDs
+  const [preferredIds, setPreferredIds] = useState<Set<string>>(new Set());
+
+  const togglePreferred = async (babysitterUid: string) => {
+    const isPref = preferredIds.has(babysitterUid);
+    try {
+      const fn = httpsCallable(functions, isPref ? 'removePreferredBabysitter' : 'addPreferredBabysitter');
+      await fn({ babysitterUserId: babysitterUid });
+      setPreferredIds((prev) => {
+        const next = new Set(prev);
+        if (isPref) next.delete(babysitterUid);
+        else next.add(babysitterUid);
+        return next;
+      });
+      // Also update the results array so the UI re-renders sections
+      setResults((prev) => prev.map((r) => r.uid === babysitterUid ? { ...r, isPreferred: !isPref } : r));
+    } catch { /* silent */ }
+  };
+
   // Load family + kids + returning babysitters
   useEffect(() => {
     if (!parent?.familyId) return;
@@ -128,6 +148,7 @@ export function SearchPage() {
         setFamily(f);
         setAddress(f.address || '');
         setLatLng(f.latLng || null);
+        setPreferredIds(new Set(f.preferredBabysitters || []));
         if (f.searchDefaults) {
           setDefaults(f.searchDefaults);
           if (f.searchDefaults.maxRate) setOfferedRate(f.searchDefaults.maxRate);
@@ -476,8 +497,10 @@ export function SearchPage() {
                   {t('search.editSearch')}
                 </Button>
               </div>
-            ) : (
-              results.map((b) => {
+            ) : (() => {
+              const preferred = results.filter((r) => r.isPreferred);
+              const others = results.filter((r) => !r.isPreferred);
+              const renderCard = (b: BabysitterResult) => {
                 const isExpanded = expandedBabysitter === b.uid;
                 return (
                 <Card key={b.uid} className="mb-3 cursor-pointer" onClick={() => setExpandedBabysitter(isExpanded ? null : b.uid)}>
@@ -487,9 +510,19 @@ export function SearchPage() {
                       <div className="flex items-center justify-between">
                         <p className="font-semibold text-gray-900">
                           {formatBabysitterName(b.firstName, b.lastName)}
+                          {b.isPreferred && <span className="ml-1" title="Preferred">❤️</span>}
                           {returningIds.has(b.uid) && <span className="ml-1 text-blue-500" title="Returning babysitter">⭐</span>}
                         </p>
-                        <span className="text-sm text-gray-500">{b.age} {t('familyDashboard.ageSuffix')}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-gray-500">{b.age} {t('familyDashboard.ageSuffix')}</span>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); togglePreferred(b.uid); }}
+                            className="text-base"
+                            title={b.isPreferred ? t('preferred.remove') : t('preferred.add')}
+                          >
+                            {b.isPreferred ? '❤️' : '🤍'}
+                          </button>
+                        </div>
                       </div>
                       <p className="text-xs text-gray-500">{t('familyDashboard.classLabel')} {b.classLevel}</p>
                       <p className="text-xs text-gray-500">🗣 {b.languages.join(', ')}</p>
@@ -519,8 +552,27 @@ export function SearchPage() {
                   </Button>
                 </Card>
                 );
-              })
-            )}
+              };
+              return (
+                <>
+                  {preferred.length > 0 && (
+                    <>
+                      <h3 className="mb-2 mt-2 text-sm font-semibold text-red-600">❤️ {t('search.preferredSection')} ({preferred.length})</h3>
+                      {preferred.map(renderCard)}
+                    </>
+                  )}
+                  {others.length > 0 && (
+                    <>
+                      {preferred.length > 0 && (
+                        <h3 className="mb-2 mt-4 text-sm font-semibold text-gray-700">{t('search.otherSection')} ({others.length})</h3>
+                      )}
+                      {others.map(renderCard)}
+                    </>
+                  )}
+                </>
+              );
+            })()
+            }
           </>
         )}
       </div>
