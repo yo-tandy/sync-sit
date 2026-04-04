@@ -1,4 +1,4 @@
-name: Deploy to Firebase Hosting on merge
+name: Deploy to Firebase on merge
 on:
   push:
     branches:
@@ -14,7 +14,6 @@ jobs:
         run: |
           corepack enable
           corepack prepare pnpm@10.13.1 --activate
-          pnpm --version
 
       - uses: actions/setup-node@v4
         with:
@@ -22,11 +21,50 @@ jobs:
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
+
+      # Build shared package
+      - run: pnpm --filter @ejm/shared build
+
+      # Build web
       - run: pnpm --filter web build
 
+      # Write service account key
+      - name: Write service account key
+        run: echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT_SYNC_SIT }}' > /tmp/firebase-sa.json
+
+      # Deploy hosting
       - uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SYNC_SIT }}
           channelId: live
           projectId: sync-sit
+
+      # Bundle shared for functions deploy (Firebase uses npm, not pnpm workspaces)
+      - name: Bundle shared for functions
+        run: node scripts/bundle-shared-for-deploy.js
+
+      # Build functions
+      - run: cd apps/functions && npx tsc
+
+      # Deploy functions (--force to auto-delete removed functions)
+      - name: Deploy Cloud Functions
+        run: npx firebase-tools deploy --only functions --project sync-sit --non-interactive --force
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: /tmp/firebase-sa.json
+
+      # Unbundle shared
+      - name: Unbundle shared
+        run: node scripts/unbundle-shared-after-deploy.js
+
+      # Fix IAM permissions on Cloud Run services
+      - name: Fix Cloud Run IAM
+        run: |
+          gcloud auth activate-service-account --key-file=/tmp/firebase-sa.json
+          gcloud run services list --region=europe-west1 --project=sync-sit --format="value(name)" | while read svc; do
+            gcloud run services add-iam-policy-binding "$svc" \
+              --region=europe-west1 --project=sync-sit \
+              --member="allUsers" --role="roles/run.invoker" \
+              --quiet 2>/dev/null && echo "  ✔ $svc" || echo "  ✗ $svc"
+          done
+          rm -f /tmp/firebase-sa.json
