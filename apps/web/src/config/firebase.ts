@@ -21,19 +21,24 @@ export const db = getFirestore(app);
 export const functions = getFunctions(app, 'europe-west1');
 export const storage = getStorage(app);
 
-// Messaging — only available in browser with service worker support
+// Messaging — lazily initialized only when push permission is requested.
+// Calling getMessaging() eagerly registers the service worker and triggers
+// an Android system prompt ("wants to access other apps") before login.
 export let messaging: ReturnType<typeof getMessaging> | null = null;
-if (typeof window !== 'undefined' && 'serviceWorker' in navigator && 'Notification' in window) {
-  isSupported().then((supported) => {
+
+export async function initMessaging(): Promise<ReturnType<typeof getMessaging> | null> {
+  if (messaging) return messaging;
+  if (typeof window === 'undefined' || !('serviceWorker' in navigator) || !('Notification' in window)) return null;
+  try {
+    const supported = await isSupported();
     if (supported) {
       messaging = getMessaging(app);
-      console.log('FCM messaging initialized');
-    } else {
-      console.log('FCM not supported in this browser');
+      return messaging;
     }
-  }).catch((err) => {
+  } catch (err) {
     console.warn('FCM initialization failed:', err);
-  });
+  }
+  return null;
 }
 
 // Connect to emulators in development

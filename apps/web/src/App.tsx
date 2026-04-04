@@ -8,11 +8,12 @@ export default function App() {
   const [toast, setToast] = useState<{ title: string; body: string } | null>(null);
 
   useEffect(() => {
-    const unsub = setupForegroundMessages((title, body) => {
+    let unsub: (() => void) | undefined;
+    setupForegroundMessages((title, body) => {
       setToast({ title, body });
       setTimeout(() => setToast(null), 5000);
-    });
-    return unsub;
+    }).then((fn) => { unsub = fn; });
+    return () => { unsub?.(); };
   }, []);
 
   return (
