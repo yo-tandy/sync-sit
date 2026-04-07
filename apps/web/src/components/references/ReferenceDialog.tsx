@@ -42,7 +42,6 @@ export function ReferenceDialog({
 
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [familyName, setFamilyName] = useState('');
   const [isEjmFamily, setIsEjmFamily] = useState(false);
 
   // Load family data for pre-population
@@ -53,13 +52,13 @@ export function ReferenceDialog({
         const famSnap = await getDoc(doc(db, 'families', parent!.familyId));
         if (famSnap.exists()) {
           const fam = famSnap.data();
-          setFamilyName(fam.familyName || '');
+          // fam.familyName available if needed
           setIsEjmFamily(!!fam.verification?.isFullyVerified);
 
           // Pre-populate name as "First LAST" if not editing
           if (!existingReference) {
             const first = parent!.firstName || '';
-            const last = (fam.familyName || '').toUpperCase();
+            const last = ((parent as any).lastName || '').toUpperCase();
             setRefName(`${first} ${last}`.trim());
           }
 
@@ -116,7 +115,7 @@ export function ReferenceDialog({
           babysitterUserId,
           submittedByUserId: parent.uid,
           submittedByFamilyId: parent.familyId,
-          submittedByName: refName.trim() || `${parent.firstName || ''} ${(familyName || '').toUpperCase()}`.trim(),
+          submittedByName: refName.trim() || `${parent.firstName || ''} ${((parent as any).lastName || '').toUpperCase()}`.trim(),
           appointmentId: appointmentId || null,
           referenceText: text.trim(),
           refName: refName.trim(),
