@@ -147,7 +147,7 @@ export function SearchPage() {
           numberOfKids: data.numberOfKids || undefined,
           kidAges: data.kidAges || undefined,
         };
-      }).filter((r) => r.text);
+      });
       setBabysitterRefs((prev) => ({ ...prev, [uid]: refs }));
     } catch { /* silent */ }
   };
@@ -590,7 +590,7 @@ export function SearchPage() {
                       )}
                       {babysitterRefs[b.uid]?.length > 0 && (
                         <div className="mt-2 rounded-lg border border-gray-200 bg-gray-50 p-3">
-                          <p className="mb-2 text-xs font-semibold text-gray-700"><span className="text-green-600">✓</span> {t('references.familyReviews')} ({babysitterRefs[b.uid].length})</p>
+                          <p className="mb-2 text-xs font-semibold text-gray-700"><span className="text-green-600">✓</span> {t('references.title')} ({babysitterRefs[b.uid].length})</p>
                           {babysitterRefs[b.uid].map((ref, i) => {
                             const refKey = `${b.uid}-${i}`;
                             const refExpanded = expandedRefIdx === refKey;
