@@ -57,24 +57,19 @@ function ReferenceCard({
           </Badge>
         </div>
         {reference.refEmail && (
-          <p className="mt-1 flex items-center gap-2 text-xs text-gray-500">
+          <a href={`mailto:${reference.refEmail}`} onClick={(e) => e.stopPropagation()} className="mt-1 flex items-center gap-2 py-0.5 text-xs text-red-600 active:bg-gray-100">
             <span>📧</span> {reference.refEmail}
-          </p>
+          </a>
         )}
         {reference.refPhone && (
-          <p className="mt-0.5 flex items-center gap-2 text-xs text-gray-500">
+          <a href={`tel:${reference.refPhone}`} onClick={(e) => e.stopPropagation()} className="mt-0.5 flex items-center gap-2 py-0.5 text-xs text-red-600 active:bg-gray-100">
             <span>📞</span> {reference.refPhone}
-          </p>
+          </a>
         )}
-        {whatsapp && whatsapp !== reference.refPhone && (
-          <p className="mt-0.5 flex items-center gap-2 text-xs text-gray-500">
-            <span>💬</span> {whatsapp}
-          </p>
-        )}
-        {whatsapp && whatsapp === reference.refPhone && (
-          <p className="mt-0.5 flex items-center gap-2 text-xs text-gray-500">
-            <span>💬</span> WhatsApp
-          </p>
+        {whatsapp && (
+          <a href={`https://wa.me/${whatsapp.replace(/[^\d+]/g, '').replace('+', '')}`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="mt-0.5 flex items-center gap-2 py-0.5 text-xs text-green-600 active:bg-gray-100">
+            <span>💬</span> {whatsapp !== reference.refPhone ? whatsapp : 'WhatsApp'}
+          </a>
         )}
         <div className="mt-1 flex flex-wrap items-center gap-2">
           {reference.isEjmFamily && (
