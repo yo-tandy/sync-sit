@@ -4,6 +4,10 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
+  id-token: write
+
 jobs:
   build_and_deploy:
     runs-on: ubuntu-latest
@@ -28,13 +32,17 @@ jobs:
       # Build web
       - run: pnpm --filter web build
 
-      # Deploy hosting (uses FirebaseExtended action which handles its own auth)
-      - uses: FirebaseExtended/action-hosting-deploy@v0
+      # Authenticate to Google Cloud via Workload Identity Federation
+      - id: auth
+        uses: google-github-actions/auth@v2
         with:
-          repoToken: ${{ secrets.GITHUB_TOKEN }}
-          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SYNC_SIT }}
-          channelId: live
-          projectId: sync-sit
+          project_id: sync-sit
+          workload_identity_provider: projects/652129443234/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+          service_account: github-action-1196270164@sync-sit.iam.gserviceaccount.com
+
+      # Deploy hosting
+      - name: Deploy Hosting
+        run: npx firebase-tools deploy --only hosting --project sync-sit --non-interactive
 
       # Bundle shared for functions deploy
       - run: node scripts/bundle-shared-for-deploy.js
@@ -42,11 +50,9 @@ jobs:
       # Build functions
       - run: cd apps/functions && npx tsc
 
-      # Deploy functions using service account
+      # Deploy functions
       - name: Deploy Cloud Functions
-        run: |
-          echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT_SYNC_SIT }}' > /tmp/gcp-sa.json
-          npx firebase-tools deploy --only functions --project sync-sit --non-interactive --force
-          rm -f /tmp/gcp-sa.json
-        env:
-          GOOGLE_APPLICATION_CREDENTIALS: /tmp/gcp-sa.json
+        run: npx firebase-tools deploy --only functions --project sync-sit --non-interactive --force
+
+      # Unbundle shared
+      - run: node scripts/unbundle-shared-after-deploy.js
