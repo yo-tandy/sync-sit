@@ -57,8 +57,11 @@ export function ReferenceDialog({
 
           // Pre-populate name as "First LAST" if not editing
           if (!existingReference) {
-            const first = parent!.firstName || '';
-            const last = ((parent as any).lastName || '').toUpperCase();
+            // Read parent's own user doc to get lastName reliably
+            const parentSnap = await getDoc(doc(db, 'users', parent!.uid));
+            const parentData = parentSnap.data();
+            const first = parentData?.firstName || parent!.firstName || '';
+            const last = (parentData?.lastName || '').toUpperCase();
             setRefName(`${first} ${last}`.trim());
           }
 
@@ -115,7 +118,7 @@ export function ReferenceDialog({
           babysitterUserId,
           submittedByUserId: parent.uid,
           submittedByFamilyId: parent.familyId,
-          submittedByName: refName.trim() || `${parent.firstName || ''} ${((parent as any).lastName || '').toUpperCase()}`.trim(),
+          submittedByName: refName.trim(),
           appointmentId: appointmentId || null,
           referenceText: text.trim(),
           refName: refName.trim(),
