@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
-import { doc, getDoc, collection, getDocs, addDoc, onSnapshot } from 'firebase/firestore';
+import { doc, getDoc, collection, getDocs, addDoc, onSnapshot, query as fsQuery, where as fsWhere, limit as fsLimit } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
@@ -88,6 +88,35 @@ function ExpandableBabysitterCard({
   const { periods: holidayPeriods } = useHolidays();
   const name = info?.name || t('familyDashboard.babysitterFallback');
 
+  // References for this babysitter
+  interface RefInfo { text: string; refName: string; refEmail?: string; refPhone?: string; refWhatsapp?: string; isEjmFamily?: boolean; numberOfKids?: number; kidAges?: number[] }
+  const [refs, setRefs] = useState<RefInfo[]>([]);
+  const [expandedRefIds, setExpandedRefIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!expanded || !appointment.babysitterUserId) return;
+    getDocs(fsQuery(
+      collection(db, 'references'),
+      fsWhere('babysitterUserId', '==', appointment.babysitterUserId),
+      fsWhere('status', 'in', ['approved', 'published']),
+      fsLimit(10)
+    )).then((snap) => {
+      setRefs(snap.docs.map((d) => {
+        const data = d.data();
+        return {
+          text: data.referenceText || data.note || '',
+          refName: data.submittedByName || data.refName || '',
+          refEmail: data.refEmail || undefined,
+          refPhone: data.refPhone || undefined,
+          refWhatsapp: data.refWhatsapp || undefined,
+          isEjmFamily: data.isEjmFamily || false,
+          numberOfKids: data.numberOfKids || undefined,
+          kidAges: data.kidAges || undefined,
+        };
+      }));
+    }).catch(() => {});
+  }, [expanded, appointment.babysitterUserId]);
+
   // Format date/time for confirmed/past cards
   const dateTimeStr = appointment.date
     ? new Date(appointment.date + 'T00:00:00').toLocaleDateString(locale, { weekday: 'short', month: 'short', day: 'numeric' })
@@ -168,6 +197,54 @@ function ExpandableBabysitterCard({
                   <span>📞</span> <span>{info.contactPhone}</span>
                 </a>
               )}
+            </div>
+          )}
+
+          {/* References */}
+          {refs.length > 0 && (
+            <div className="mt-2 rounded-lg border border-gray-200 bg-gray-50 p-3">
+              <p className="mb-2 text-xs font-semibold text-gray-700"><span className="text-green-600">✓</span> {t('references.title')} ({refs.length})</p>
+              {refs.map((ref, i) => {
+                const refKey = `${appointment.appointmentId}-${i}`;
+                const refExpanded = expandedRefIds.has(refKey);
+                return (
+                  <div key={i} className="mb-1.5 last:mb-0">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setExpandedRefIds((prev) => { const next = new Set(prev); if (refExpanded) next.delete(refKey); else next.add(refKey); return next; }); }}
+                      className="w-full text-left rounded-md px-2 py-1.5 text-xs font-medium text-gray-700 hover:bg-white active:bg-white"
+                    >
+                      {refExpanded ? '▾' : '▸'} {ref.refName ? `Reference from ${ref.refName}` : `Reference ${i + 1}`}
+                      {ref.isEjmFamily && <span className="ml-1.5 text-blue-600 font-normal">EJM Family</span>}
+                    </button>
+                    {refExpanded && (
+                      <div className="ml-4 mt-1 mb-2 space-y-1">
+                        {ref.text && <p className="text-xs text-gray-600 italic">"{ref.text}"</p>}
+                        {ref.refEmail && (
+                          <a href={`mailto:${ref.refEmail}`} onClick={(e) => e.stopPropagation()} className="flex items-center gap-1.5 text-xs text-red-600">
+                            <span>📧</span> {ref.refEmail}
+                          </a>
+                        )}
+                        {ref.refPhone && (
+                          <a href={`tel:${ref.refPhone}`} onClick={(e) => e.stopPropagation()} className="flex items-center gap-1.5 text-xs text-red-600">
+                            <span>📞</span> {ref.refPhone}
+                          </a>
+                        )}
+                        {ref.refWhatsapp && (
+                          <a href={`https://wa.me/${ref.refWhatsapp.replace(/[^\d+]/g, '').replace('+', '')}`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="flex items-center gap-1.5 text-xs text-green-600">
+                            <span>💬</span> {ref.refWhatsapp !== ref.refPhone ? ref.refWhatsapp : 'WhatsApp'}
+                          </a>
+                        )}
+                        {ref.numberOfKids && ref.numberOfKids > 0 && (
+                          <p className="text-xs text-gray-500">
+                            👶 {ref.numberOfKids} {ref.numberOfKids === 1 ? 'child' : 'children'}
+                            {ref.kidAges?.length ? ` (ages ${ref.kidAges.join(', ')})` : ''}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
 
