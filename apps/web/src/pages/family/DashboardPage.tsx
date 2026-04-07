@@ -396,7 +396,15 @@ export function FamilyDashboard() {
     submittedRefs.find((r) => r.appointmentId === appointmentId);
 
   // Find first past appointment without a reference (for auto-prompt)
-  const unreferencedPast = pastRecent.find((apt) => !getRefForAppointment(apt.appointmentId));
+  // Only show if the appointment was within the last 7 days
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+  const unreferencedPast = pastRecent.find((apt) => {
+    if (getRefForAppointment(apt.appointmentId)) return false;
+    if (!apt.date) return false;
+    const aptDate = new Date(apt.date + 'T' + (apt.endTime || '23:59'));
+    return aptDate >= sevenDaysAgo;
+  });
 
   // Load preferred babysitter IDs from family doc
   const familyId = userDoc?.role === 'parent' ? (userDoc as any).familyId : null;
@@ -579,6 +587,12 @@ export function FamilyDashboard() {
               </p>
               <p className="text-xs text-blue-600">{t('references.referencePromptDesc', { name: babysitters[unreferencedPast.babysitterUserId]?.name?.split(' ')[0] || '' })}</p>
             </div>
+            <button
+              onClick={(e) => { e.stopPropagation(); setRefPromptDismissed(true); }}
+              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-blue-400 hover:bg-blue-100 hover:text-blue-600"
+            >
+              ✕
+            </button>
           </div>
         </Card>
       )}
