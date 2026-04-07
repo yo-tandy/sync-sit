@@ -42,14 +42,9 @@ jobs:
           create_credentials_file: true
           export_environment_variables: true
 
-      # Get access token for Firebase CLI
-      - name: Get access token
-        id: token
-        run: echo "token=$(gcloud auth print-access-token)" >> "$GITHUB_OUTPUT"
-
-      # Deploy hosting
+      # Deploy hosting (uses ADC from auth step)
       - name: Deploy Hosting
-        run: npx firebase-tools deploy --only hosting --project sync-sit --non-interactive --token "${{ steps.token.outputs.token }}"
+        run: npx firebase-tools deploy --only hosting --project sync-sit --non-interactive
 
       # Bundle shared for functions deploy
       - run: node scripts/bundle-shared-for-deploy.js
@@ -57,9 +52,9 @@ jobs:
       # Build functions
       - run: cd apps/functions && npx tsc
 
-      # Deploy functions
+      # Deploy functions (uses ADC from auth step)
       - name: Deploy Cloud Functions
-        run: npx firebase-tools deploy --only functions --project sync-sit --non-interactive --force --token "${{ steps.token.outputs.token }}"
+        run: npx firebase-tools deploy --only functions --project sync-sit --non-interactive --force
 
       # Unbundle shared
       - run: node scripts/unbundle-shared-after-deploy.js
