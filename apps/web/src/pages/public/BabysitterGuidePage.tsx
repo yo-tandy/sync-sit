@@ -123,11 +123,11 @@ export function BabysitterGuidePage() {
         <hr className="my-6 border-gray-200" />
         <h2 className="mb-4 text-lg font-bold text-gray-900">{fr ? 'Votre profil et compte' : 'Your Profile & Account'}</h2>
 
-        <Step number={11} title={fr ? 'Références' : 'References'}>
+        <Step number={11} title={fr ? 'Recommandations' : 'Endorsements'}>
           <p>
             {fr
-              ? 'Dans le menu, allez dans "Références" pour ajouter une description "À propos de moi" et des références de familles pour lesquelles vous avez travaillé. Les familles EJM peuvent aussi soumettre des références directement depuis leur compte.'
-              : 'From the menu, go to "References" to add an "About me" description and references from families you\'ve worked for. EJM families can also submit references directly from their account.'}
+              ? 'Dans le menu, allez dans "Recommandations" pour ajouter une description "À propos de moi" et des recommandations de familles pour lesquelles vous avez travaillé. Les familles EJM peuvent aussi soumettre des recommandations directement depuis leur compte.'
+              : 'From the menu, go to "Endorsements" to add an "About me" description and endorsements from families you\'ve worked for. EJM families can also submit endorsements directly from their account.'}
           </p>
         </Step>
 

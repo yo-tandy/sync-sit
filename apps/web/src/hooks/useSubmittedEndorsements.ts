@@ -4,7 +4,7 @@ import { db } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import type { ReferenceDoc } from '@ejm/shared';
 
-export function useSubmittedReferences() {
+export function useSubmittedEndorsements() {
   const uid = useAuthStore((s) => s.firebaseUser?.uid);
   const [references, setReferences] = useState<ReferenceDoc[]>([]);
   const [loading, setLoading] = useState(true);

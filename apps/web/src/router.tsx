@@ -29,12 +29,12 @@ import { BabysitterDashboard } from '@/pages/babysitter/DashboardPage';
 import { BabysitterAccountPage } from '@/pages/babysitter/AccountPage';
 import { BabysittingOptionsPage } from '@/pages/babysitter/BabysittingOptionsPage';
 import { SchedulePage } from '@/pages/babysitter/SchedulePage';
-import { ReferencesPage } from '@/pages/babysitter/ReferencesPage';
+import { EndorsementsPage } from '@/pages/babysitter/EndorsementsPage';
 import { RequestDetailPage } from '@/pages/babysitter/RequestDetailPage';
 import { FamilyDashboard } from '@/pages/family/DashboardPage';
 import { FamilySettingsPage } from '@/pages/family/FamilySettingsPage';
 import { InvitePage } from '@/pages/family/InvitePage';
-import { SubmittedReferencesPage } from '@/pages/family/SubmittedReferencesPage';
+import { SubmittedEndorsementsPage } from '@/pages/family/SubmittedEndorsementsPage';
 import { SearchPage } from '@/pages/family/SearchPage';
 import { VerificationPage } from '@/pages/family/VerificationPage';
 import { AccountPage } from '@/pages/family/AccountPage';
@@ -79,7 +79,8 @@ export const router = createBrowserRouter([
       { path: '/babysitter/account', element: <BabysitterAccountPage /> },
       { path: '/babysitter/options', element: <BabysittingOptionsPage /> },
       { path: '/babysitter/schedule', element: <SchedulePage /> },
-      { path: '/babysitter/references', element: <ReferencesPage /> },
+      { path: '/babysitter/endorsements', element: <EndorsementsPage /> },
+      { path: '/babysitter/references', element: <Navigate to="/babysitter/endorsements" replace /> },
       { path: '/babysitter/request/:appointmentId', element: <RequestDetailPage /> },
       // Backward-compatible redirects
       { path: '/babysitter/profile', element: <Navigate to="/babysitter/options" replace /> },
@@ -94,7 +95,8 @@ export const router = createBrowserRouter([
       { path: '/family', element: <FamilyDashboard /> },
       { path: '/family/settings', element: <FamilySettingsPage /> },
       { path: '/family/invite', element: <InvitePage /> },
-      { path: '/family/references', element: <SubmittedReferencesPage /> },
+      { path: '/family/endorsements', element: <SubmittedEndorsementsPage /> },
+      { path: '/family/references', element: <Navigate to="/family/endorsements" replace /> },
       { path: '/family/search', element: <SearchPage /> },
       { path: '/family/preferred', element: <PreferredBabysittersPage /> },
       { path: '/family/account', element: <AccountPage /> },

@@ -7,7 +7,7 @@ import { Dialog, Button, Input } from '@/components/ui';
 import { PhoneInput } from '@/components/forms/PhoneInput';
 import type { ParentUser, ReferenceDoc } from '@ejm/shared';
 
-interface ReferenceDialogProps {
+interface EndorsementDialogProps {
   babysitterUserId: string;
   babysitterName: string;
   appointmentId: string;
@@ -16,14 +16,14 @@ interface ReferenceDialogProps {
   onSaved?: () => void;
 }
 
-export function ReferenceDialog({
+export function EndorsementDialog({
   babysitterUserId,
   babysitterName,
   appointmentId,
   existingReference,
   onClose,
   onSaved,
-}: ReferenceDialogProps) {
+}: EndorsementDialogProps) {
   const { t } = useTranslation();
   const { userDoc } = useAuthStore();
   const parent = userDoc as ParentUser | null;
@@ -243,6 +243,9 @@ export function ReferenceDialog({
           {text.length > 0 && text.trim().length < 10 && (
             <p className="mb-3 text-xs text-amber-600">{t('references.minLength')}</p>
           )}
+          <p className="mb-3 text-xs text-gray-400 italic">
+            {t('references.endorsementPrivacyNote')}
+          </p>
           <div className="flex gap-2">
             <Button onClick={handleSubmit} disabled={saving || !isValid} className="flex-1">
               {saving ? '...' : isEdit ? t('common.save') : t('common.confirm')}

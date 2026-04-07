@@ -23,7 +23,7 @@ interface ManualRefInput {
   note?: string;
 }
 
-export function useReferences() {
+export function useEndorsements() {
   const uid = useAuthStore((s) => s.firebaseUser?.uid);
   const [loading, setLoading] = useState(true);
   const [manualRefs, setManualRefs] = useState<ReferenceDoc[]>([]);

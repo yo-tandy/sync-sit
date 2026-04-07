@@ -28,7 +28,7 @@ const sections: Section[] = [
       '- Verification documents: government-issued ID scans and school enrollment certificates (for families only). Babysitters are verified through their @ejm.org school email address.\n' +
       '- Children\'s data: first names, ages, and spoken languages of children in parent profiles\n' +
       '- Scheduling data: babysitter availability, appointment history\n' +
-      '- References: names and contact details of references provided by babysitters\n' +
+      '- Endorsements: names and contact details of endorsements provided by babysitters\n' +
       '- Community verification data: vouching records from other verified members\n' +
       '- Technical data: Firebase Cloud Messaging (FCM) tokens for push notifications\n' +
       '- Authentication data: email-based authentication tokens managed by Firebase Auth',
@@ -40,7 +40,7 @@ const sections: Section[] = [
       '- Documents de vérification : copies de pièces d\'identité officielles et certificats de scolarité (pour les familles uniquement). Les babysitters sont vérifiés par leur adresse e-mail scolaire @ejm.org.\n' +
       '- Données relatives aux enfants : prénoms, âges et langues parlées des enfants figurant dans les profils des parents\n' +
       '- Données de planification : disponibilités des babysitters, historique des rendez-vous\n' +
-      '- Références : noms et coordonnées des personnes de référence fournies par les babysitters\n' +
+      '- Recommandations : noms et coordonnées des personnes de recommandation fournies par les babysitters\n' +
       '- Données de vérification communautaire : attestations de parrainage par d\'autres membres vérifiés\n' +
       '- Données techniques : jetons Firebase Cloud Messaging (FCM) pour les notifications push\n' +
       '- Données d\'authentification : jetons d\'authentification par e-mail gérés par Firebase Auth',

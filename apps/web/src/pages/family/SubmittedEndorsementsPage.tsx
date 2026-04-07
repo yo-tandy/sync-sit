@@ -2,11 +2,11 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { doc, getDoc, getDocs, updateDoc, collection, query, where, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/config/firebase';
-import { useSubmittedReferences } from '@/hooks/useSubmittedReferences';
+import { useSubmittedEndorsements } from '@/hooks/useSubmittedEndorsements';
 import { Button, Card, TopNav, Spinner, Dialog } from '@/components/ui';
 import { Avatar } from '@/components/ui';
 import { SearchIcon, PlusIcon } from '@/components/ui/Icons';
-import { ReferenceDialog } from '@/components/references/ReferenceDialog';
+import { EndorsementDialog } from '@/components/endorsements/EndorsementDialog';
 import { formatBabysitterName } from '@/lib/formatName';
 import type { ReferenceDoc } from '@ejm/shared';
 
@@ -50,9 +50,9 @@ function ReferenceCard({ reference, babysitterName, onEdit, onDelete }: { refere
   );
 }
 
-export function SubmittedReferencesPage() {
+export function SubmittedEndorsementsPage() {
   const { t } = useTranslation();
-  const { references, loading } = useSubmittedReferences();
+  const { references, loading } = useSubmittedEndorsements();
   const [editTarget, setEditTarget] = useState<ReferenceDoc | null>(null);
   const [babysitterNames, setBabysitterNames] = useState<Record<string, string>>({});
 
@@ -205,7 +205,7 @@ export function SubmittedReferencesPage() {
 
       {/* Edit dialog */}
       {editTarget && (
-        <ReferenceDialog
+        <EndorsementDialog
           babysitterUserId={editTarget.babysitterUserId}
           babysitterName={babysitterNames[editTarget.babysitterUserId] || ''}
           appointmentId={editTarget.appointmentId || ''}
@@ -264,7 +264,7 @@ export function SubmittedReferencesPage() {
 
       {/* Add reference: write reference for selected babysitter */}
       {selectedBabysitter && (
-        <ReferenceDialog
+        <EndorsementDialog
           babysitterUserId={selectedBabysitter.uid}
           babysitterName={formatBabysitterName(selectedBabysitter.firstName, selectedBabysitter.lastName)}
           appointmentId=""

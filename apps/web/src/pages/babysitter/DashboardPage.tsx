@@ -319,7 +319,7 @@ export function BabysitterDashboard() {
             <Button onClick={() => {
               setShowReferences(false);
               dismissOnboarding('references');
-              navigate('/babysitter/references');
+              navigate('/babysitter/endorsements');
             }}>
               {t('onboarding.addReferences')}
             </Button>
