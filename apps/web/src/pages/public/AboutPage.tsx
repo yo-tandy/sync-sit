@@ -1,7 +1,7 @@
 import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { TopNav } from '@/components/ui';
-import { ShieldIcon, SearchIcon, UsersIcon, CalendarIcon } from '@/components/ui/Icons';
+import { ShieldIcon, SearchIcon, UsersIcon, CalendarIcon, DownloadIcon } from '@/components/ui/Icons';
 
 export function AboutPage() {
   const { t, i18n } = useTranslation();
@@ -136,6 +136,13 @@ export function AboutPage() {
             <div>
               <p className="text-sm font-semibold text-red-600">{isFr ? 'Guide Babysitters' : 'Babysitter Guide'}</p>
               <p className="text-xs text-gray-500">{isFr ? 'Comment recevoir et gérer les demandes' : 'How to receive and manage requests'}</p>
+            </div>
+          </Link>
+          <Link to="/install" className="flex items-center gap-3 rounded-lg bg-gray-50 p-3 active:bg-gray-100">
+            <DownloadIcon className="h-5 w-5 shrink-0 text-red-500" />
+            <div>
+              <p className="text-sm font-semibold text-red-600">{isFr ? 'Installer l\'application' : 'Install the App'}</p>
+              <p className="text-xs text-gray-500">{isFr ? 'Ajouter Sync/Sit à votre écran d\'accueil' : 'Add Sync/Sit to your home screen'}</p>
             </div>
           </Link>
         </div>
