@@ -82,11 +82,18 @@ export function ReferenceDialog({
       ) : (
         <>
           <h3 className="mb-1 text-lg font-bold">
-            {isEdit ? t('references.editMyReference') : t('references.referencePrompt', { name: babysitterName })}
+            {isEdit
+              ? t('references.editMyReference')
+              : appointmentId
+                ? t('references.referencePrompt', { name: babysitterName })
+                : t('references.referencePromptDesc', { name: babysitterName.split(' ')[0] || babysitterName })}
           </h3>
-          <p className="mb-4 text-sm text-gray-500">
-            {t('references.referencePromptDesc', { name: babysitterName.split(' ')[0] || babysitterName })}
-          </p>
+          {!isEdit && appointmentId && (
+            <p className="mb-4 text-sm text-gray-500">
+              {t('references.referencePromptDesc', { name: babysitterName.split(' ')[0] || babysitterName })}
+            </p>
+          )}
+          {!appointmentId && !isEdit && <div className="mb-3" />}
           <textarea
             value={text}
             onChange={(e) => setText(e.target.value)}
