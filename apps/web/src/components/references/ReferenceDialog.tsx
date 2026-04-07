@@ -32,6 +32,10 @@ export function ReferenceDialog({
   const [text, setText] = useState(existingReference?.referenceText || '');
   const [refName, setRefName] = useState(existingReference?.refName || '');
   const [refPhone, setRefPhone] = useState(existingReference?.refPhone || '');
+  const [refWhatsapp, setRefWhatsapp] = useState(existingReference?.refWhatsapp || '');
+  const [whatsappSameAsPhone, setWhatsappSameAsPhone] = useState(
+    existingReference ? (existingReference.refWhatsapp === existingReference.refPhone || !existingReference.refWhatsapp) : true
+  );
   const [refEmail, setRefEmail] = useState(existingReference?.refEmail || '');
   const [numberOfKids, setNumberOfKids] = useState(existingReference?.numberOfKids || 0);
   const [kidAges, setKidAges] = useState(existingReference?.kidAges?.join(', ') || '');
@@ -70,7 +74,9 @@ export function ReferenceDialog({
         if (!existingReference) {
           const parentPhone = (parent as any).phone || '';
           const parentWhatsapp = (parent as any).whatsapp || '';
-          setRefPhone(parentPhone || parentWhatsapp || '');
+          setRefPhone(parentPhone || '');
+          setRefWhatsapp(parentWhatsapp || parentPhone || '');
+          setWhatsappSameAsPhone(parentWhatsapp === parentPhone || !parentWhatsapp);
           setRefEmail(parent!.email || '');
         }
       } catch { /* silent */ }
@@ -88,11 +94,14 @@ export function ReferenceDialog({
     const parsedAges = kidAges.split(',').map((s) => parseInt(s.trim())).filter((n) => !isNaN(n));
 
     try {
+      const whatsappValue = whatsappSameAsPhone ? (refPhone || null) : (refWhatsapp || null);
+
       if (isEdit && existingReference) {
         await updateDoc(doc(db, 'references', existingReference.referenceId), {
           referenceText: text.trim(),
           refName: refName.trim(),
           refPhone: refPhone || null,
+          refWhatsapp: whatsappValue,
           refEmail: refEmail || null,
           numberOfKids: numberOfKids || null,
           kidAges: parsedAges.length > 0 ? parsedAges : null,
@@ -110,6 +119,7 @@ export function ReferenceDialog({
           referenceText: text.trim(),
           refName: refName.trim(),
           refPhone: refPhone || null,
+          refWhatsapp: whatsappValue,
           refEmail: refEmail || null,
           isEjmFamily,
           numberOfKids: numberOfKids || null,
@@ -168,8 +178,34 @@ export function ReferenceDialog({
           <PhoneInput
             label={t('account.phone')}
             value={refPhone}
-            onChange={setRefPhone}
+            onChange={(val) => { setRefPhone(val); if (whatsappSameAsPhone) setRefWhatsapp(val); }}
           />
+
+          <div className="mb-5">
+            <label className="mb-2 flex items-center gap-2 text-sm font-medium text-gray-700">
+              <span>WhatsApp</span>
+            </label>
+            <label className="mb-3 flex items-center gap-2 text-sm text-gray-600">
+              <input
+                type="checkbox"
+                checked={whatsappSameAsPhone}
+                onChange={(e) => {
+                  setWhatsappSameAsPhone(e.target.checked);
+                  if (e.target.checked) setRefWhatsapp(refPhone);
+                  else setRefWhatsapp('');
+                }}
+                className="h-4 w-4 rounded border-gray-300 text-red-600 focus:ring-red-500"
+              />
+              {t('account.whatsappSameAsPhone')}
+            </label>
+            {!whatsappSameAsPhone && (
+              <PhoneInput
+                label=""
+                value={refWhatsapp}
+                onChange={setRefWhatsapp}
+              />
+            )}
+          </div>
 
           {/* Kids */}
           <div className="flex gap-3">

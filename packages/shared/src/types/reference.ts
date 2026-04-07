@@ -10,6 +10,7 @@ export interface ReferenceDoc {
   // Manual reference fields
   refName?: string;
   refPhone?: string;
+  refWhatsapp?: string;
   refEmail?: string;
   isEjmFamily?: boolean;
   numberOfKids?: number;
