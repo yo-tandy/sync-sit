@@ -108,7 +108,7 @@ export function LoginPage() {
             {t('auth.noAccount')}{' '}
           </span>
           <Link
-            to="/"
+            to="/signup"
             className="text-sm font-semibold text-red-600 hover:underline"
           >
             {t('auth.signUp')}

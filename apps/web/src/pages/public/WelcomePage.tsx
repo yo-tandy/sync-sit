@@ -1,6 +1,5 @@
 import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
-import { UserIcon, UsersIcon } from '@/components/ui/Icons';
 import { LanguageSelector } from '@/components/ui';
 
 export function WelcomePage() {
@@ -26,37 +25,19 @@ export function WelcomePage() {
 
       {/* Actions */}
       <div className="shrink-0 pb-3">
-        <p className="mb-3 text-center text-sm font-medium text-gray-500">
-          {t('welcome.iAmA')}
-        </p>
-
         <Link
-          to="/enroll/babysitter"
+          to="/login"
           className="mb-2.5 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-red-600 text-base font-semibold text-white transition-colors hover:bg-red-600/90"
         >
-          <UserIcon className="h-5 w-5" />
-          {t('welcome.babysitter')}
+          {t('welcome.logIn')}
         </Link>
 
         <Link
-          to="/enroll/parent"
+          to="/signup"
           className="mb-4 flex h-12 w-full items-center justify-center gap-2 rounded-xl border-[1.5px] border-gray-300 bg-white text-base font-semibold text-gray-950 transition-colors hover:border-gray-950"
         >
-          <UsersIcon className="h-5 w-5" />
-          {t('welcome.parent')}
+          {t('welcome.signUp')}
         </Link>
-
-        <div className="text-center">
-          <span className="text-sm text-gray-500">
-            {t('welcome.alreadyHaveAccount')}{' '}
-          </span>
-          <Link
-            to="/login"
-            className="text-sm font-semibold text-red-600 hover:underline"
-          >
-            {t('welcome.logIn')}
-          </Link>
-        </div>
       </div>
 
       {/* Footer links */}

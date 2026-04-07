@@ -15,6 +15,7 @@ import { PrivacyPage } from '@/pages/public/PrivacyPage';
 import { TermsPage } from '@/pages/public/TermsPage';
 import { ReportProblemPage } from '@/pages/public/ReportProblemPage';
 import { SharePage } from '@/pages/public/SharePage';
+import { SignUpRolePage } from '@/pages/public/SignUpRolePage';
 import { ParentGuidePage } from '@/pages/public/ParentGuidePage';
 import { BabysitterGuidePage } from '@/pages/public/BabysitterGuidePage';
 
@@ -55,6 +56,7 @@ export const router = createBrowserRouter([
     children: [
       { path: '/', element: <WelcomePage /> },
       { path: '/login', element: <LoginPage /> },
+      { path: '/signup', element: <SignUpRolePage /> },
       { path: '/forgot-password', element: <ForgotPasswordPage /> },
       { path: '/about', element: <AboutPage /> },
       { path: '/privacy', element: <PrivacyPage /> },
