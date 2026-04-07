@@ -122,7 +122,7 @@ export function SearchPage() {
     kidAges?: number[];
   }
   const [babysitterRefs, setBabysitterRefs] = useState<Record<string, RefInfo[]>>({});
-  const [expandedRefIdx, setExpandedRefIdx] = useState<string | null>(null);
+  const [expandedRefIds, setExpandedRefIds] = useState<Set<string>>(new Set());
 
   const loadRefs = async (uid: string) => {
     if (babysitterRefs[uid]) return; // already loaded
@@ -593,11 +593,11 @@ export function SearchPage() {
                           <p className="mb-2 text-xs font-semibold text-gray-700"><span className="text-green-600">✓</span> {t('references.title')} ({babysitterRefs[b.uid].length})</p>
                           {babysitterRefs[b.uid].map((ref, i) => {
                             const refKey = `${b.uid}-${i}`;
-                            const refExpanded = expandedRefIdx === refKey;
+                            const refExpanded = expandedRefIds.has(refKey);
                             return (
                               <div key={i} className="mb-1.5 last:mb-0">
                                 <button
-                                  onClick={(e) => { e.stopPropagation(); setExpandedRefIdx(refExpanded ? null : refKey); }}
+                                  onClick={(e) => { e.stopPropagation(); setExpandedRefIds((prev) => { const next = new Set(prev); if (refExpanded) next.delete(refKey); else next.add(refKey); return next; }); }}
                                   className="w-full text-left rounded-md px-2 py-1.5 text-xs font-medium text-gray-700 hover:bg-white active:bg-white"
                                 >
                                   {refExpanded ? '▾' : '▸'} {ref.refName ? `Reference from ${ref.refName}` : `Reference ${i + 1}`}
@@ -605,7 +605,7 @@ export function SearchPage() {
                                 </button>
                                 {refExpanded && (
                                   <div className="ml-4 mt-1 mb-2 space-y-1">
-                                    <p className="text-xs text-gray-600 italic">"{ref.text}"</p>
+                                    {ref.text && <p className="text-xs text-gray-600 italic">"{ref.text}"</p>}
                                     {ref.refEmail && (
                                       <a href={`mailto:${ref.refEmail}`} onClick={(e) => e.stopPropagation()} className="flex items-center gap-1.5 text-xs text-red-600">
                                         <span>📧</span> {ref.refEmail}
