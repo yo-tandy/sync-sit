@@ -1,12 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '@/config/firebase';
-import { useAuthStore } from '@/stores/authStore';
 import { useReferences } from '@/hooks/useReferences';
-import { Button, Card, Badge, Input, Textarea, Dialog, TopNav, Spinner, InfoBanner } from '@/components/ui';
+import { Button, Card, Badge, Input, Textarea, Dialog, TopNav, Spinner } from '@/components/ui';
 import { PlusIcon } from '@/components/ui/Icons';
-import type { ReferenceDoc, BabysitterUser } from '@ejm/shared';
+import type { ReferenceDoc } from '@ejm/shared';
 
 // ── Validation ──
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -25,72 +22,31 @@ function validateEmail(email: string): string | null {
   return null;
 }
 
-// ── About Me ──
-function AboutMeSection() {
-  const { t } = useTranslation();
-  const { userDoc, firebaseUser, refreshUserDoc } = useAuthStore();
-  const babysitter = userDoc as BabysitterUser | null;
-  const uid = firebaseUser?.uid;
-  const [aboutMe, setAboutMe] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
-
-  useEffect(() => {
-    if (babysitter?.aboutMe) setAboutMe(babysitter.aboutMe);
-  }, [babysitter]);
-
-  const handleSave = async () => {
-    if (!uid) return;
-    setSaving(true);
-    try {
-      await updateDoc(doc(db, 'users', uid), {
-        aboutMe: aboutMe || null,
-        updatedAt: serverTimestamp(),
-      });
-      await refreshUserDoc();
-      setSaved(true);
-      setTimeout(() => setSaved(false), 3000);
-    } catch {
-      // silent
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div>
-      <h3 className="mb-3 text-sm font-semibold text-gray-700">{t('enrollment.aboutMe')}</h3>
-      <Textarea
-        value={aboutMe}
-        onChange={(e) => { setAboutMe(e.target.value); setSaved(false); }}
-        placeholder={t('enrollment.aboutMePlaceholder')}
-      />
-      {saved && <InfoBanner className="mb-2">{t('account.saved')}</InfoBanner>}
-      <Button size="sm" onClick={handleSave} disabled={saving}>
-        {saving ? t('common.saving') : t('common.save')}
-      </Button>
-    </div>
-  );
-}
-
 // ── Reference Card ──
 function ReferenceCard({
   reference,
   onRemove,
   onEdit,
-  onApprove,
+  onPublish,
+  onUnpublish,
 }: {
   reference: ReferenceDoc;
   onRemove: () => void;
   onEdit?: () => void;
-  onApprove?: () => void;
+  onPublish?: () => void;
+  onUnpublish?: () => void;
 }) {
   const { t } = useTranslation();
+  const isPublished = reference.status === 'published';
+  const name = reference.type === 'family_submitted'
+    ? (reference as any).submittedByName || reference.refName || t('references.unknown')
+    : reference.refName || t('references.unknown');
+
   return (
     <Card className="mb-3">
       <div className="flex items-start justify-between">
         <div className="min-w-0 flex-1">
-          <p className="font-semibold text-gray-900">{reference.refName || t('references.unknown')}</p>
+          <p className="font-semibold text-gray-900">{name}</p>
           {reference.refPhone && (
             <p className="text-sm text-gray-500">{reference.refPhone}</p>
           )}
@@ -113,26 +69,29 @@ function ReferenceCard({
             <p className="mt-2 text-sm text-gray-600 line-clamp-2">"{reference.referenceText}"</p>
           )}
         </div>
-        {reference.type === 'family_submitted' && (
-          <Badge variant={reference.status === 'approved' ? 'green' : 'amber'}>
-            {reference.status === 'approved' ? t('references.approved') : t('references.pending')}
-          </Badge>
-        )}
+        <Badge variant={isPublished ? 'green' : 'gray'}>
+          {isPublished ? t('references.published') : t('references.private')}
+        </Badge>
       </div>
 
       <div className="mt-3 flex gap-2">
-        {onApprove && reference.status === 'pending' && (
-          <Button size="sm" onClick={onApprove} className="flex-1">
-            {t('references.approve')}
-          </Button>
-        )}
         {onEdit && (
           <Button size="sm" variant="outline" onClick={onEdit} className="flex-1">
             {t('common.edit')}
           </Button>
         )}
-        <Button size="sm" variant="outline" onClick={onRemove} className="flex-1">
-          {t('common.remove')}
+        {!isPublished && onPublish && (
+          <Button size="sm" onClick={onPublish} className="flex-1">
+            {t('references.publish')}
+          </Button>
+        )}
+        {isPublished && onUnpublish && (
+          <Button size="sm" variant="outline" onClick={onUnpublish} className="flex-1">
+            {t('references.unpublish')}
+          </Button>
+        )}
+        <Button size="sm" variant="ghost" onClick={onRemove}>
+          {t('references.delete')}
         </Button>
       </div>
     </Card>
@@ -308,7 +267,8 @@ export function ReferencesPage() {
     addManualReference,
     updateManualReference,
     removeReference,
-    approveReference,
+    publishReference,
+    unpublishReference,
   } = useReferences();
 
   const [dialogMode, setDialogMode] = useState<'add' | 'edit' | null>(null);
@@ -361,13 +321,16 @@ export function ReferencesPage() {
       <TopNav title={t('references.title')} backTo="/babysitter" />
 
       <div className="px-5 pt-4 pb-8">
-        {/* About Me */}
-        <AboutMeSection />
-
-        <hr className="my-5 border-gray-200" />
-
         {/* Manual references */}
-        <h3 className="mb-3 text-sm font-semibold text-gray-700">{t('references.myReferences')}</h3>
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-gray-700">{t('references.myReferences')}</h3>
+          <button
+            onClick={openAdd}
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-red-600 text-white"
+          >
+            <PlusIcon className="h-4 w-4" />
+          </button>
+        </div>
 
         {manualRefs.length === 0 ? (
           <p className="mb-4 text-sm text-gray-400">{t('references.noReferencesYet')}</p>
@@ -378,19 +341,11 @@ export function ReferencesPage() {
               reference={ref}
               onEdit={() => openEdit(ref)}
               onRemove={() => removeReference(ref.referenceId)}
+              onPublish={() => publishReference(ref.referenceId)}
+              onUnpublish={() => unpublishReference(ref.referenceId)}
             />
           ))
         )}
-
-        <Button
-          type="button"
-          variant="outline"
-          onClick={openAdd}
-          className="mb-6"
-        >
-          <PlusIcon className="h-4 w-4" />
-          {t('references.addReference')}
-        </Button>
 
         {/* Family submitted */}
         {familySubmittedRefs.length > 0 && (
@@ -402,7 +357,8 @@ export function ReferencesPage() {
                 key={ref.referenceId}
                 reference={ref}
                 onRemove={() => removeReference(ref.referenceId)}
-                onApprove={() => approveReference(ref.referenceId)}
+                onPublish={() => publishReference(ref.referenceId)}
+                onUnpublish={() => unpublishReference(ref.referenceId)}
               />
             ))}
           </>

@@ -19,6 +19,7 @@ export interface ReferenceDoc {
   // Family-submitted fields
   submittedByUserId?: string;
   submittedByFamilyId?: string;
+  submittedByName?: string;
   appointmentId?: string;
   referenceText?: string;
 

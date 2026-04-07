@@ -53,6 +53,8 @@ export type ReferenceType = (typeof ReferenceType)[keyof typeof ReferenceType];
 export const ReferenceStatus = {
   PENDING: 'pending',
   APPROVED: 'approved',
+  PRIVATE: 'private',
+  PUBLISHED: 'published',
   REMOVED: 'removed',
 } as const;
 

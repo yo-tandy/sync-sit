@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { doc, addDoc, updateDoc, collection, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, addDoc, updateDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { Dialog, Button } from '@/components/ui';
@@ -30,6 +30,15 @@ export function ReferenceDialog({
   const [text, setText] = useState(existingReference?.referenceText || '');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [familyName, setFamilyName] = useState('');
+
+  // Load family name for attribution
+  useEffect(() => {
+    if (!parent?.familyId) return;
+    getDoc(doc(db, 'families', parent.familyId)).then((snap) => {
+      if (snap.exists()) setFamilyName(snap.data().familyName || '');
+    }).catch(() => {});
+  }, [parent?.familyId]);
 
   const isEdit = !!existingReference;
   const isValid = text.trim().length >= 10;
@@ -48,11 +57,12 @@ export function ReferenceDialog({
         // Create new reference
         const ref = await addDoc(collection(db, 'references'), {
           type: 'family_submitted',
-          status: 'approved',
+          status: 'private',
           babysitterUserId,
           submittedByUserId: parent.uid,
           submittedByFamilyId: parent.familyId,
-          appointmentId,
+          submittedByName: familyName || parent.firstName || '',
+          appointmentId: appointmentId || null,
           referenceText: text.trim(),
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),

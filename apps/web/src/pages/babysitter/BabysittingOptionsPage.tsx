@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
-import { Button, Input, Chip, TopNav, InfoBanner } from '@/components/ui';
+import { Button, Input, Textarea, Chip, TopNav, InfoBanner } from '@/components/ui';
 import { LanguagePicker } from '@/components/forms/LanguagePicker';
 import { AddressAutocomplete, type AddressResult } from '@/components/forms/AddressAutocomplete';
 import { ARRONDISSEMENTS, NEARBY_TOWNS } from '@ejm/shared';
@@ -26,6 +26,7 @@ export function BabysittingOptionsPage() {
   const [areaAddress, setAreaAddress] = useState('');
   const [areaLatLng, setAreaLatLng] = useState<{ lat: number; lng: number } | undefined>();
   const [areaRadiusKm, setAreaRadiusKm] = useState(3);
+  const [aboutMe, setAboutMe] = useState('');
 
   // UI state
   const [saving, setSaving] = useState(false);
@@ -45,6 +46,7 @@ export function BabysittingOptionsPage() {
     setAreaAddress(babysitter.areaAddress || '');
     setAreaLatLng(babysitter.areaLatLng);
     setAreaRadiusKm(babysitter.areaRadiusKm ?? 3);
+    setAboutMe(babysitter.aboutMe || '');
   }, [babysitter]);
 
   const toggleArea = (area: string) => {
@@ -65,6 +67,7 @@ export function BabysittingOptionsPage() {
 
     try {
       await updateDoc(doc(db, 'users', uid), {
+        aboutMe: aboutMe || null,
         languages,
         kidAgeRange: { min: kidAgeMin, max: kidAgeMax },
         maxKids,
@@ -93,6 +96,16 @@ export function BabysittingOptionsPage() {
       <form onSubmit={handleSave} className="px-5 pt-4 pb-8">
         {success && <InfoBanner className="mb-4">{t('profile.saved')}</InfoBanner>}
         {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
+
+        {/* About Me */}
+        <Textarea
+          label={t('enrollment.aboutMe')}
+          value={aboutMe}
+          onChange={(e) => setAboutMe(e.target.value)}
+          placeholder={t('enrollment.aboutMePlaceholder')}
+        />
+
+        <hr className="my-5 border-gray-200" />
 
         {/* Languages */}
         <LanguagePicker selected={languages} onChange={setLanguages} />
