@@ -155,11 +155,14 @@ export function SubmittedReferencesPage() {
     <div>
       <TopNav title={t('submittedReferences.title')} backTo="/family" />
       <div className="px-5 pt-4 pb-8">
-        <div className="mb-4 flex items-center justify-between">
-          <p className="text-sm text-gray-500">{t('submittedReferences.desc')}</p>
-          <Button size="sm" onClick={() => setShowAddDialog(true)} className="shrink-0 ml-3">
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <p className="flex-1 text-sm text-gray-500">{t('submittedReferences.desc')}</p>
+          <button
+            onClick={() => setShowAddDialog(true)}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-600 text-white"
+          >
             <PlusIcon className="h-4 w-4" />
-          </Button>
+          </button>
         </div>
 
         {references.length === 0 ? (
