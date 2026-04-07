@@ -4,12 +4,13 @@ permissions:
   checks: write
   contents: read
   pull-requests: write
+  id-token: write
 
 jobs:
   build_and_preview:
     if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
     runs-on: ubuntu-latest
-    
+
     steps:
       - uses: actions/checkout@v4
 
@@ -17,21 +18,41 @@ jobs:
         run: |
           corepack enable
           corepack prepare pnpm@10.13.1 --activate
-          pnpm --version
 
       - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: pnpm
 
-      - name: Install deps
-        run: pnpm install --frozen-lockfile
+      - run: pnpm install --frozen-lockfile
 
-      - name: Build
+      # Build shared package
+      - run: pnpm --filter @ejm/shared build
+
+      # Build web
+      - name: Build web
         run: pnpm --filter web build
+        env:
+          VITE_FIREBASE_API_KEY: AIzaSyDyYp2GQdH-8h16B6XNx3sdI8tdDcY1tEw
+          VITE_FIREBASE_AUTH_DOMAIN: sync-sit.firebaseapp.com
+          VITE_FIREBASE_PROJECT_ID: sync-sit
+          VITE_FIREBASE_STORAGE_BUCKET: sync-sit.firebasestorage.app
+          VITE_FIREBASE_MESSAGING_SENDER_ID: '652129443234'
+          VITE_FIREBASE_APP_ID: '1:652129443234:web:b1addb8ca9204154aba6fb'
+          VITE_FIREBASE_VAPID_KEY: BHhR2VRnGyiMruB55skkISGURA5MqVat0lzGRtzfnfHJ6IlgOs8sZDKy25k0nitxIlmLToaUWr1YfX5KBuxg1yo
 
-      - uses: FirebaseExtended/action-hosting-deploy@v0
+      # Authenticate via Workload Identity Federation
+      - id: auth
+        uses: google-github-actions/auth@v2
         with:
-          repoToken: ${{ secrets.GITHUB_TOKEN }}
-          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SYNC_SIT }}
-          projectId: sync-sit
+          project_id: sync-sit
+          workload_identity_provider: projects/652129443234/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+          service_account: github-action-1196270164@sync-sit.iam.gserviceaccount.com
+          create_credentials_file: true
+          export_environment_variables: true
+
+      # Deploy preview channel
+      - name: Deploy Preview
+        run: |
+          CHANNEL="pr-${{ github.event.pull_request.number }}"
+          npx firebase-tools hosting:channel:deploy "$CHANNEL" --project sync-sit --non-interactive --expires 7d
