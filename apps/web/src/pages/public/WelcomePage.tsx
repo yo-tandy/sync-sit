@@ -6,15 +6,15 @@ export function WelcomePage() {
   const { t } = useTranslation();
 
   return (
-    <div className="flex h-[100dvh] flex-col px-6 py-4">
+    <div className="flex h-[100svh] flex-col px-6 py-3">
       {/* Language toggle top-right */}
-      <div className="flex justify-end">
+      <div className="flex shrink-0 justify-end">
         <LanguageSelector />
       </div>
 
       {/* Logo + Title */}
       <div className="flex flex-1 flex-col items-center justify-center">
-        <img src="/logo.png" alt="Sync/Sit" className="mb-4 h-44 w-44 rounded-2xl sm:h-56 sm:w-56" />
+        <img src="/logo.png" alt="Sync/Sit" className="mb-3 h-32 w-32 rounded-2xl sm:h-40 sm:w-40" />
         <h1 className="mb-1 text-center text-2xl font-bold text-gray-950">
           {t('welcome.title')}
         </h1>
@@ -23,8 +23,8 @@ export function WelcomePage() {
         </p>
       </div>
 
-      {/* Actions */}
-      <div className="shrink-0 pb-3">
+      {/* Actions + Footer */}
+      <div className="shrink-0">
         <Link
           to="/login"
           className="mb-2.5 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-red-600 text-base font-semibold text-white transition-colors hover:bg-red-600/90"
@@ -38,22 +38,21 @@ export function WelcomePage() {
         >
           {t('welcome.signUp')}
         </Link>
-      </div>
 
-      {/* Footer links */}
-      <div className="flex shrink-0 justify-center gap-4 pb-1 pt-2">
-        <Link to="/about" className="text-xs text-gray-400 hover:text-gray-600">
-          {t('welcome.about')}
-        </Link>
-        <Link to="/privacy" className="text-xs text-gray-400 hover:text-gray-600">
-          {t('welcome.privacy')}
-        </Link>
-        <Link to="/terms" className="text-xs text-gray-400 hover:text-gray-600">
-          {t('welcome.terms')}
-        </Link>
-        <Link to="/report" className="text-xs text-gray-400 hover:text-gray-600">
-          {t('welcome.help')}
-        </Link>
+        <div className="flex justify-center gap-4 pb-1 pt-1">
+          <Link to="/about" className="text-xs text-gray-400 hover:text-gray-600">
+            {t('welcome.about')}
+          </Link>
+          <Link to="/privacy" className="text-xs text-gray-400 hover:text-gray-600">
+            {t('welcome.privacy')}
+          </Link>
+          <Link to="/terms" className="text-xs text-gray-400 hover:text-gray-600">
+            {t('welcome.terms')}
+          </Link>
+          <Link to="/report" className="text-xs text-gray-400 hover:text-gray-600">
+            {t('welcome.help')}
+          </Link>
+        </div>
       </div>
     </div>
   );
