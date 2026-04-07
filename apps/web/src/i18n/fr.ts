@@ -516,7 +516,11 @@ export default {
     title: 'Mes r\u00e9f\u00e9rences',
     desc: 'R\u00e9f\u00e9rences que vous avez soumises pour des babysitters.',
     noReferences: 'Aucune r\u00e9f\u00e9rence',
-    noReferencesDesc: 'Apr\u00e8s un rendez-vous de babysitting, vous pourrez laisser une r\u00e9f\u00e9rence pour le/la babysitter.',
+    noReferencesDesc: 'Après un rendez-vous de babysitting, vous pourrez laisser une référence pour le/la babysitter.',
+    referenceForBabysitter: 'Référence pour {{name}}',
+    statusApproved: 'Approuvée',
+    statusPending: 'En attente',
+    statusRemoved: 'Retirée',
   },
 
   about: {

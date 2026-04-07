@@ -1,11 +1,14 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '@/config/firebase';
 import { useSubmittedReferences } from '@/hooks/useSubmittedReferences';
 import { Button, Card, Badge, TopNav, Spinner } from '@/components/ui';
 import { ReferenceDialog } from '@/components/references/ReferenceDialog';
+import { formatBabysitterName } from '@/lib/formatName';
 import type { ReferenceDoc } from '@ejm/shared';
 
-function ReferenceCard({ reference, onEdit }: { reference: ReferenceDoc; onEdit: () => void }) {
+function ReferenceCard({ reference, babysitterName, onEdit }: { reference: ReferenceDoc; babysitterName: string; onEdit: () => void }) {
   const { t, i18n } = useTranslation();
   const statusVariant = reference.status === 'approved' ? 'green' : reference.status === 'pending' ? 'amber' : 'gray';
   const statusLabel = reference.status === 'approved'
@@ -18,7 +21,9 @@ function ReferenceCard({ reference, onEdit }: { reference: ReferenceDoc; onEdit:
     <Card className="mb-3">
       <div className="flex items-start justify-between">
         <div className="min-w-0 flex-1">
-          <p className="text-xs text-gray-500">{t('submittedReferences.referenceForBabysitter')}</p>
+          <p className="text-xs text-gray-500">
+            {t('submittedReferences.referenceForBabysitter', { name: babysitterName || '...' })}
+          </p>
           {reference.referenceText && (
             <p className="mt-1 text-sm text-gray-700">"{reference.referenceText}"</p>
           )}
@@ -45,6 +50,35 @@ export function SubmittedReferencesPage() {
   const { t } = useTranslation();
   const { references, loading } = useSubmittedReferences();
   const [editTarget, setEditTarget] = useState<ReferenceDoc | null>(null);
+  const [babysitterNames, setBabysitterNames] = useState<Record<string, string>>({});
+
+  // Load babysitter names for all references
+  useEffect(() => {
+    const uids = [...new Set(references.map((r) => r.babysitterUserId).filter(Boolean))];
+    const missing = uids.filter((uid) => !babysitterNames[uid]);
+    if (missing.length === 0) return;
+
+    Promise.all(
+      missing.map(async (uid) => {
+        try {
+          const snap = await getDoc(doc(db, 'users', uid));
+          if (snap.exists()) {
+            const d = snap.data();
+            return [uid, formatBabysitterName(d.firstName || '', d.lastName || '')] as [string, string];
+          }
+        } catch { /* skip */ }
+        return null;
+      })
+    ).then((results) => {
+      const newNames: Record<string, string> = {};
+      for (const r of results) {
+        if (r) newNames[r[0]] = r[1];
+      }
+      if (Object.keys(newNames).length > 0) {
+        setBabysitterNames((prev) => ({ ...prev, ...newNames }));
+      }
+    });
+  }, [references]);
 
   if (loading) {
     return (
@@ -75,7 +109,12 @@ export function SubmittedReferencesPage() {
           </div>
         ) : (
           references.map((ref) => (
-            <ReferenceCard key={ref.referenceId} reference={ref} onEdit={() => setEditTarget(ref)} />
+            <ReferenceCard
+              key={ref.referenceId}
+              reference={ref}
+              babysitterName={babysitterNames[ref.babysitterUserId] || ''}
+              onEdit={() => setEditTarget(ref)}
+            />
           ))
         )}
       </div>
@@ -83,7 +122,7 @@ export function SubmittedReferencesPage() {
       {editTarget && (
         <ReferenceDialog
           babysitterUserId={editTarget.babysitterUserId}
-          babysitterName=""
+          babysitterName={babysitterNames[editTarget.babysitterUserId] || ''}
           appointmentId={editTarget.appointmentId || ''}
           existingReference={editTarget}
           onClose={() => setEditTarget(null)}

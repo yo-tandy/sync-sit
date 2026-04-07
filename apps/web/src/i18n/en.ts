@@ -543,7 +543,7 @@ export default {
     desc: "References you've submitted for babysitters.",
     noReferences: 'No references yet',
     noReferencesDesc: "After a babysitting appointment, you'll be able to leave a reference for the babysitter.",
-    referenceForBabysitter: 'Reference for babysitter',
+    referenceForBabysitter: 'Reference for {{name}}',
     statusApproved: 'Approved',
     statusPending: 'Pending',
     statusRemoved: 'Removed',
