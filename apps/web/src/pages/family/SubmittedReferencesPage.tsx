@@ -217,7 +217,8 @@ export function SubmittedReferencesPage() {
       {/* Add reference: search for babysitter */}
       {showAddDialog && !selectedBabysitter && (
         <Dialog open onClose={() => { setShowAddDialog(false); setSearchQuery(''); setSearchResults([]); }}>
-          <h3 className="mb-3 text-lg font-bold">{t('references.addReference')}</h3>
+          <h3 className="mb-1 text-lg font-bold">{t('references.addReference')}</h3>
+          <p className="mb-3 text-sm text-gray-500">{t('references.addReferenceDesc')}</p>
           <div className="relative mb-3">
             <SearchIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
             <input
