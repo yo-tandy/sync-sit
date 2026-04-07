@@ -450,7 +450,7 @@ export function BabysitterAccountPage() {
         </div>
 
         {SCENARIOS.map((s) => {
-          const channel = prefs[s.key] as NotifChannel;
+          const channel = (prefs[s.key] || { push: true, email: true }) as NotifChannel;
           return (
             <div key={s.key} className="mb-4 flex items-center justify-between">
               <div className="flex-1 pr-4">
