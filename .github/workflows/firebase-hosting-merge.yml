@@ -29,8 +29,17 @@ jobs:
       # Build shared package
       - run: pnpm --filter @ejm/shared build
 
-      # Build web
-      - run: pnpm --filter web build
+      # Build web (Firebase config is public/client-side, not secret)
+      - name: Build web
+        run: pnpm --filter web build
+        env:
+          VITE_FIREBASE_API_KEY: AIzaSyDyYp2GQdH-8h16B6XNx3sdI8tdDcY1tEw
+          VITE_FIREBASE_AUTH_DOMAIN: sync-sit.firebaseapp.com
+          VITE_FIREBASE_PROJECT_ID: sync-sit
+          VITE_FIREBASE_STORAGE_BUCKET: sync-sit.firebasestorage.app
+          VITE_FIREBASE_MESSAGING_SENDER_ID: '652129443234'
+          VITE_FIREBASE_APP_ID: '1:652129443234:web:b1addb8ca9204154aba6fb'
+          VITE_FIREBASE_VAPID_KEY: BHhR2VRnGyiMruB55skkISGURA5MqVat0lzGRtzfnfHJ6IlgOs8sZDKy25k0nitxIlmLToaUWr1YfX5KBuxg1yo
 
       # Authenticate to Google Cloud via Workload Identity Federation
       - id: auth
