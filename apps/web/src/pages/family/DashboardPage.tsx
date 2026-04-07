@@ -375,7 +375,14 @@ export function FamilyDashboard() {
   // References state
   const [submittedRefs, setSubmittedRefs] = useState<ReferenceDoc[]>([]);
   const [refTarget, setRefTarget] = useState<{ apt: any; existing?: ReferenceDoc } | null>(null);
-  const [refPromptDismissed, setRefPromptDismissed] = useState(false);
+  const [refPromptDismissed, setRefPromptDismissed] = useState(() => {
+    const stored = localStorage.getItem('syncsit_ref_prompt_dismissed');
+    return stored ? JSON.parse(stored) : false;
+  });
+  const dismissRefPrompt = () => {
+    setRefPromptDismissed(true);
+    localStorage.setItem('syncsit_ref_prompt_dismissed', 'true');
+  };
 
   // Load submitted references for this user
   useEffect(() => {
@@ -577,7 +584,7 @@ export function FamilyDashboard() {
       {unreferencedPast && !refPromptDismissed && babysitters[unreferencedPast.babysitterUserId] && (
         <Card className="mb-4 border-blue-200 bg-blue-50 cursor-pointer" onClick={() => {
           setRefTarget({ apt: unreferencedPast });
-          setRefPromptDismissed(true);
+          dismissRefPrompt();
         }}>
           <div className="flex items-center gap-3">
             <span className="text-2xl">✍️</span>
@@ -588,7 +595,7 @@ export function FamilyDashboard() {
               <p className="text-xs text-blue-600">{t('references.referencePromptDesc', { name: babysitters[unreferencedPast.babysitterUserId]?.name?.split(' ')[0] || '' })}</p>
             </div>
             <button
-              onClick={(e) => { e.stopPropagation(); setRefPromptDismissed(true); }}
+              onClick={(e) => { e.stopPropagation(); dismissRefPrompt(); }}
               className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-blue-400 hover:bg-blue-100 hover:text-blue-600"
             >
               ✕

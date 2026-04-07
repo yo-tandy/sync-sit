@@ -47,7 +47,7 @@ function ReferenceCard({
   return (
     <Card className="mb-3">
       <div className="mb-2">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center justify-between">
           <p className="font-semibold text-gray-900">{name}</p>
           <Badge variant={isPublished ? 'green' : 'gray'}>
             {isPublished ? t('references.published') : t('references.private')}
