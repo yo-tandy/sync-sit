@@ -1,5 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '@/config/firebase';
 import { useReferences } from '@/hooks/useReferences';
 import { Button, Card, Badge, Input, Textarea, Dialog, TopNav, Spinner } from '@/components/ui';
 import { PlusIcon } from '@/components/ui/Icons';
@@ -25,12 +27,14 @@ function validateEmail(email: string): string | null {
 // ── Reference Card ──
 function ReferenceCard({
   reference,
+  displayName,
   onRemove,
   onEdit,
   onPublish,
   onUnpublish,
 }: {
   reference: ReferenceDoc;
+  displayName?: string;
   onRemove: () => void;
   onEdit?: () => void;
   onPublish?: () => void;
@@ -38,9 +42,7 @@ function ReferenceCard({
 }) {
   const { t } = useTranslation();
   const isPublished = reference.status === 'published';
-  const name = reference.type === 'family_submitted'
-    ? (reference as any).submittedByName || reference.refName || t('references.unknown')
-    : reference.refName || t('references.unknown');
+  const name = displayName || reference.refName || t('references.unknown');
 
   return (
     <Card className="mb-3">
@@ -271,6 +273,31 @@ export function ReferencesPage() {
     unpublishReference,
   } = useReferences();
 
+  // Load family names for family-submitted refs that don't have submittedByName
+  const [familyNames, setFamilyNames] = useState<Record<string, string>>({});
+  useEffect(() => {
+    const missing = familySubmittedRefs.filter(
+      (r) => !(r as any).submittedByName && r.submittedByFamilyId && !familyNames[r.submittedByFamilyId]
+    );
+    if (missing.length === 0) return;
+    Promise.all(
+      missing.map(async (r) => {
+        try {
+          const snap = await getDoc(doc(db, 'families', r.submittedByFamilyId!));
+          if (snap.exists()) return [r.submittedByFamilyId!, snap.data().familyName || ''] as [string, string];
+        } catch { /* skip */ }
+        return null;
+      })
+    ).then((results) => {
+      const names: Record<string, string> = {};
+      for (const r of results) { if (r) names[r[0]] = r[1]; }
+      if (Object.keys(names).length > 0) setFamilyNames((prev) => ({ ...prev, ...names }));
+    });
+  }, [familySubmittedRefs]);
+
+  const getFamilyRefName = (ref: ReferenceDoc) =>
+    (ref as any).submittedByName || (ref.submittedByFamilyId ? familyNames[ref.submittedByFamilyId] : null) || undefined;
+
   const [dialogMode, setDialogMode] = useState<'add' | 'edit' | null>(null);
   const [editingRefId, setEditingRefId] = useState<string | null>(null);
   const [form, setForm] = useState<RefForm>(INITIAL_FORM);
@@ -356,6 +383,7 @@ export function ReferencesPage() {
               <ReferenceCard
                 key={ref.referenceId}
                 reference={ref}
+                displayName={getFamilyRefName(ref)}
                 onRemove={() => removeReference(ref.referenceId)}
                 onPublish={() => publishReference(ref.referenceId)}
                 onUnpublish={() => unpublishReference(ref.referenceId)}
