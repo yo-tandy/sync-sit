@@ -6,15 +6,15 @@ export function WelcomePage() {
   const { t } = useTranslation();
 
   return (
-    <div className="flex h-[100dvh] flex-col justify-between px-6 py-4">
+    <div className="flex h-[100svh] flex-col px-6 py-3">
       {/* Language toggle top-right */}
       <div className="flex shrink-0 justify-end">
         <LanguageSelector />
       </div>
 
       {/* Logo + Title */}
-      <div className="flex flex-col items-center justify-center py-4">
-        <img src="/logo.png" alt="Sync/Sit" className="mb-3 h-36 w-36 rounded-2xl sm:h-44 sm:w-44" />
+      <div className="flex flex-1 flex-col items-center justify-center">
+        <img src="/logo.png" alt="Sync/Sit" className="mb-3 h-32 w-32 rounded-2xl sm:h-40 sm:w-40" />
         <h1 className="mb-1 text-center text-2xl font-bold text-gray-950">
           {t('welcome.title')}
         </h1>
