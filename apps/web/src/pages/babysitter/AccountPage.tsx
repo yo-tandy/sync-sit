@@ -22,6 +22,7 @@ const SCENARIOS: { key: keyof NotifPrefs; labelKey: string; descKey: string }[] 
   { key: 'newRequest', labelKey: 'notifications.newRequest', descKey: 'notifications.newRequestDesc' },
   { key: 'cancelled', labelKey: 'notifications.cancellation', descKey: 'notifications.cancellationDesc' },
   { key: 'reminders', labelKey: 'notifications.reminder', descKey: 'notifications.reminderDesc' },
+  { key: 'references', labelKey: 'notifications.references', descKey: 'notifications.referencesDesc' },
 ];
 
 function getGenderOptions(t: (key: string) => string) {
@@ -449,7 +450,7 @@ export function BabysitterAccountPage() {
         </div>
 
         {SCENARIOS.map((s) => {
-          const channel = prefs[s.key] as NotifChannel;
+          const channel = (prefs[s.key] || { push: true, email: true }) as NotifChannel;
           return (
             <div key={s.key} className="mb-4 flex items-center justify-between">
               <div className="flex-1 pr-4">

@@ -23,6 +23,7 @@ export interface NotifPrefs {
   confirmed: NotifChannels;
   cancelled: NotifChannels;
   reminders: NotifChannels;
+  references?: NotifChannels;
 }
 
 /** Default notification preferences (all on) */
@@ -31,4 +32,5 @@ export const DEFAULT_NOTIF_PREFS: NotifPrefs = {
   confirmed: { push: true, email: true },
   cancelled: { push: true, email: true },
   reminders: { push: true, email: false },
+  references: { push: true, email: true },
 };

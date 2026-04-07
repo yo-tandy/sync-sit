@@ -43,6 +43,9 @@ export { generateCommunityCode } from './verification/generateCommunityCode.js';
 export { lookupCommunityCode } from './verification/lookupCommunityCode.js';
 export { approveCommunityCode } from './verification/approveCommunityCode.js';
 
+// References
+export { onReferenceCreated } from './references/onReferenceCreated.js';
+
 // Scheduled
 export { sendReminders } from './scheduled/sendReminders.js';
 export { cleanupOldData } from './scheduled/cleanupOldData.js';
