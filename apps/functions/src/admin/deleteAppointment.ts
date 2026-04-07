@@ -38,10 +38,8 @@ export const deleteAppointment = onCall(
 
     const apptData = apptDoc.data()!;
 
-    await apptRef.update({
-      status: 'cancelled',
-      statusReason: 'admin_action',
-    });
+    // Delete the appointment document permanently
+    await apptRef.delete();
 
     // Create notification docs for both babysitter and family
     const notificationData = {
