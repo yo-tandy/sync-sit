@@ -41,11 +41,14 @@ function ReferenceCard({
   onUnpublish?: () => void;
 }) {
   const { t } = useTranslation();
+  const [expanded, setExpanded] = useState(false);
   const isPublished = reference.status === 'published';
   const name = displayName || reference.refName || t('references.unknown');
+  const hasText = !!(reference.note || reference.referenceText);
+  const whatsapp = (reference as any).refWhatsapp;
 
   return (
-    <Card className="mb-3">
+    <Card className="mb-3 cursor-pointer" onClick={() => setExpanded(!expanded)}>
       <div className="mb-2">
         <div className="flex items-center justify-between">
           <p className="font-semibold text-gray-900">{name}</p>
@@ -53,14 +56,30 @@ function ReferenceCard({
             {isPublished ? t('references.published') : t('references.private')}
           </Badge>
         </div>
-        {reference.refPhone && (
-          <p className="text-sm text-gray-500">{reference.refPhone}</p>
-        )}
         {reference.refEmail && (
-          <p className="text-sm text-gray-500">{reference.refEmail}</p>
+          <p className="mt-1 flex items-center gap-2 text-xs text-gray-500">
+            <span>📧</span> {reference.refEmail}
+          </p>
+        )}
+        {reference.refPhone && (
+          <p className="mt-0.5 flex items-center gap-2 text-xs text-gray-500">
+            <span>📞</span> {reference.refPhone}
+          </p>
+        )}
+        {whatsapp && whatsapp !== reference.refPhone && (
+          <p className="mt-0.5 flex items-center gap-2 text-xs text-gray-500">
+            <span>💬</span> {whatsapp}
+          </p>
+        )}
+        {whatsapp && whatsapp === reference.refPhone && (
+          <p className="mt-0.5 flex items-center gap-2 text-xs text-gray-500">
+            <span>💬</span> WhatsApp
+          </p>
         )}
         <div className="mt-1 flex flex-wrap items-center gap-2">
-          {reference.isEjmFamily && <Badge variant="blue">{t('references.ejemFamilyBadge')}</Badge>}
+          {reference.isEjmFamily && (
+            <span className="text-xs font-medium text-blue-600">{t('references.ejemFamilyBadge')}</span>
+          )}
           {reference.numberOfKids != null && reference.numberOfKids > 0 && (
             <span className="text-xs text-gray-500">
               {reference.numberOfKids} {reference.numberOfKids === 1 ? t('references.child') : t('references.children')}
@@ -68,15 +87,14 @@ function ReferenceCard({
             </span>
           )}
         </div>
-        {reference.note && (
-          <p className="mt-2 text-sm text-gray-600 line-clamp-2">"{reference.note}"</p>
-        )}
-        {reference.referenceText && (
-          <p className="mt-2 text-sm text-gray-600 line-clamp-2">"{reference.referenceText}"</p>
+        {hasText && (
+          <p className={`mt-2 text-sm text-gray-600 ${expanded ? '' : 'line-clamp-2'}`}>
+            "{reference.note || reference.referenceText}"
+          </p>
         )}
       </div>
 
-      <div className="mt-3 flex items-center gap-2">
+      <div className="mt-3 flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
         {onEdit && (
           <Button size="sm" variant="outline" onClick={onEdit}>
             {t('common.edit')}

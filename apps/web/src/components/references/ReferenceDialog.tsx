@@ -56,9 +56,11 @@ export function ReferenceDialog({
           setFamilyName(fam.familyName || '');
           setIsEjmFamily(!!fam.verification?.isFullyVerified);
 
-          // Pre-populate name from family if not editing
+          // Pre-populate name as "First LAST" if not editing
           if (!existingReference) {
-            setRefName(fam.familyName || '');
+            const first = parent!.firstName || '';
+            const last = (fam.familyName || '').toUpperCase();
+            setRefName(`${first} ${last}`.trim());
           }
 
           // Load kids for count and ages
@@ -114,7 +116,7 @@ export function ReferenceDialog({
           babysitterUserId,
           submittedByUserId: parent.uid,
           submittedByFamilyId: parent.familyId,
-          submittedByName: refName.trim() || familyName || parent.firstName || '',
+          submittedByName: refName.trim() || `${parent.firstName || ''} ${(familyName || '').toUpperCase()}`.trim(),
           appointmentId: appointmentId || null,
           referenceText: text.trim(),
           refName: refName.trim(),
