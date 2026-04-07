@@ -22,6 +22,7 @@ const SCENARIOS: { key: keyof NotifPrefs; labelKey: string; descKey: string }[] 
   { key: 'newRequest', labelKey: 'notifications.newRequest', descKey: 'notifications.newRequestDesc' },
   { key: 'cancelled', labelKey: 'notifications.cancellation', descKey: 'notifications.cancellationDesc' },
   { key: 'reminders', labelKey: 'notifications.reminder', descKey: 'notifications.reminderDesc' },
+  { key: 'references', labelKey: 'notifications.references', descKey: 'notifications.referencesDesc' },
 ];
 
 function getGenderOptions(t: (key: string) => string) {
