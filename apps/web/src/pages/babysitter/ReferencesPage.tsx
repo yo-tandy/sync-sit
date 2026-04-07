@@ -46,53 +46,54 @@ function ReferenceCard({
 
   return (
     <Card className="mb-3">
-      <div className="flex items-start justify-between">
-        <div className="min-w-0 flex-1">
+      <div className="mb-2">
+        <div className="flex items-center gap-2">
           <p className="font-semibold text-gray-900">{name}</p>
-          {reference.refPhone && (
-            <p className="text-sm text-gray-500">{reference.refPhone}</p>
-          )}
-          {reference.refEmail && (
-            <p className="text-sm text-gray-500">{reference.refEmail}</p>
-          )}
-          <div className="mt-1 flex flex-wrap items-center gap-2">
-            {reference.isEjmFamily && <Badge variant="blue">{t('references.ejemFamilyBadge')}</Badge>}
-            {reference.numberOfKids != null && reference.numberOfKids > 0 && (
-              <span className="text-xs text-gray-500">
-                {reference.numberOfKids} {reference.numberOfKids === 1 ? t('references.child') : t('references.children')}
-                {reference.kidAges?.length ? ` (${reference.kidAges.join(', ')})` : ''}
-              </span>
-            )}
-          </div>
-          {reference.note && (
-            <p className="mt-2 text-sm text-gray-600 line-clamp-2">"{reference.note}"</p>
-          )}
-          {reference.referenceText && (
-            <p className="mt-2 text-sm text-gray-600 line-clamp-2">"{reference.referenceText}"</p>
+          <Badge variant={isPublished ? 'green' : 'gray'}>
+            {isPublished ? t('references.published') : t('references.private')}
+          </Badge>
+        </div>
+        {reference.refPhone && (
+          <p className="text-sm text-gray-500">{reference.refPhone}</p>
+        )}
+        {reference.refEmail && (
+          <p className="text-sm text-gray-500">{reference.refEmail}</p>
+        )}
+        <div className="mt-1 flex flex-wrap items-center gap-2">
+          {reference.isEjmFamily && <Badge variant="blue">{t('references.ejemFamilyBadge')}</Badge>}
+          {reference.numberOfKids != null && reference.numberOfKids > 0 && (
+            <span className="text-xs text-gray-500">
+              {reference.numberOfKids} {reference.numberOfKids === 1 ? t('references.child') : t('references.children')}
+              {reference.kidAges?.length ? ` (${reference.kidAges.join(', ')})` : ''}
+            </span>
           )}
         </div>
-        <Badge variant={isPublished ? 'green' : 'gray'}>
-          {isPublished ? t('references.published') : t('references.private')}
-        </Badge>
+        {reference.note && (
+          <p className="mt-2 text-sm text-gray-600 line-clamp-2">"{reference.note}"</p>
+        )}
+        {reference.referenceText && (
+          <p className="mt-2 text-sm text-gray-600 line-clamp-2">"{reference.referenceText}"</p>
+        )}
       </div>
 
-      <div className="mt-3 flex gap-2">
+      <div className="mt-3 flex items-center gap-2">
         {onEdit && (
-          <Button size="sm" variant="outline" onClick={onEdit} className="flex-1">
+          <Button size="sm" variant="outline" onClick={onEdit}>
             {t('common.edit')}
           </Button>
         )}
         {!isPublished && onPublish && (
-          <Button size="sm" onClick={onPublish} className="flex-1">
+          <Button size="sm" onClick={onPublish}>
             {t('references.publish')}
           </Button>
         )}
         {isPublished && onUnpublish && (
-          <Button size="sm" variant="outline" onClick={onUnpublish} className="flex-1">
+          <Button size="sm" variant="outline" onClick={onUnpublish}>
             {t('references.unpublish')}
           </Button>
         )}
-        <Button size="sm" variant="ghost" onClick={onRemove}>
+        <div className="flex-1" />
+        <Button size="sm" variant="outline" onClick={onRemove}>
           {t('references.delete')}
         </Button>
       </div>
