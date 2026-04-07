@@ -39,10 +39,17 @@ jobs:
           project_id: sync-sit
           workload_identity_provider: projects/652129443234/locations/global/workloadIdentityPools/github-pool/providers/github-provider
           service_account: github-action-1196270164@sync-sit.iam.gserviceaccount.com
+          create_credentials_file: true
+          export_environment_variables: true
+
+      # Get access token for Firebase CLI
+      - name: Get access token
+        id: token
+        run: echo "token=$(gcloud auth print-access-token)" >> "$GITHUB_OUTPUT"
 
       # Deploy hosting
       - name: Deploy Hosting
-        run: npx firebase-tools deploy --only hosting --project sync-sit --non-interactive
+        run: npx firebase-tools deploy --only hosting --project sync-sit --non-interactive --token "${{ steps.token.outputs.token }}"
 
       # Bundle shared for functions deploy
       - run: node scripts/bundle-shared-for-deploy.js
@@ -52,7 +59,7 @@ jobs:
 
       # Deploy functions
       - name: Deploy Cloud Functions
-        run: npx firebase-tools deploy --only functions --project sync-sit --non-interactive --force
+        run: npx firebase-tools deploy --only functions --project sync-sit --non-interactive --force --token "${{ steps.token.outputs.token }}"
 
       # Unbundle shared
       - run: node scripts/unbundle-shared-after-deploy.js
