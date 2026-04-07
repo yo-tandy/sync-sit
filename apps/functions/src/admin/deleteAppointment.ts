@@ -54,11 +54,11 @@ export const deleteAppointment = onCall(
 
     const notificationPromises: Promise<unknown>[] = [];
 
-    if (apptData.babysitterId) {
+    if (apptData.babysitterUserId) {
       notificationPromises.push(
         db.collection('notifications').add({
           ...notificationData,
-          userId: apptData.babysitterId,
+          userId: apptData.babysitterUserId,
         })
       );
     }
@@ -124,8 +124,8 @@ export const deleteAppointment = onCall(
       action: 'delete_appointment',
       details: {
         appointmentId,
-        babysitterId: apptData.babysitterId,
-        familyId: apptData.familyId,
+        babysitterUserId: apptData.babysitterUserId || null,
+        familyId: apptData.familyId || null,
       },
     });
 
