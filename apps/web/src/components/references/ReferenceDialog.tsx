@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { doc, getDoc, addDoc, updateDoc, collection, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, getDocs, addDoc, updateDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
-import { Dialog, Button } from '@/components/ui';
+import { Dialog, Button, Input } from '@/components/ui';
+import { PhoneInput } from '@/components/forms/PhoneInput';
 import type { ParentUser, ReferenceDoc } from '@ejm/shared';
 
 interface ReferenceDialogProps {
@@ -27,47 +28,95 @@ export function ReferenceDialog({
   const { userDoc } = useAuthStore();
   const parent = userDoc as ParentUser | null;
 
+  // Form fields
   const [text, setText] = useState(existingReference?.referenceText || '');
+  const [refName, setRefName] = useState(existingReference?.refName || '');
+  const [refPhone, setRefPhone] = useState(existingReference?.refPhone || '');
+  const [refEmail, setRefEmail] = useState(existingReference?.refEmail || '');
+  const [numberOfKids, setNumberOfKids] = useState(existingReference?.numberOfKids || 0);
+  const [kidAges, setKidAges] = useState(existingReference?.kidAges?.join(', ') || '');
+
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [familyName, setFamilyName] = useState('');
+  const [isEjmFamily, setIsEjmFamily] = useState(false);
 
-  // Load family name for attribution
+  // Load family data for pre-population
   useEffect(() => {
     if (!parent?.familyId) return;
-    getDoc(doc(db, 'families', parent.familyId)).then((snap) => {
-      if (snap.exists()) setFamilyName(snap.data().familyName || '');
-    }).catch(() => {});
+    async function loadFamily() {
+      try {
+        const famSnap = await getDoc(doc(db, 'families', parent!.familyId));
+        if (famSnap.exists()) {
+          const fam = famSnap.data();
+          setFamilyName(fam.familyName || '');
+          setIsEjmFamily(!!fam.verification?.isFullyVerified);
+
+          // Pre-populate name from family if not editing
+          if (!existingReference) {
+            setRefName(fam.familyName || '');
+          }
+
+          // Load kids for count and ages
+          const kidsSnap = await getDocs(collection(db, 'families', parent!.familyId, 'kids'));
+          if (!existingReference && kidsSnap.size > 0) {
+            setNumberOfKids(kidsSnap.size);
+            const ages = kidsSnap.docs.map((d) => d.data().age).filter(Boolean).sort((a: number, b: number) => a - b);
+            setKidAges(ages.join(', '));
+          }
+        }
+
+        // Pre-populate contact from parent user if not editing
+        if (!existingReference) {
+          const parentPhone = (parent as any).phone || '';
+          const parentWhatsapp = (parent as any).whatsapp || '';
+          setRefPhone(parentPhone || parentWhatsapp || '');
+          setRefEmail(parent!.email || '');
+        }
+      } catch { /* silent */ }
+    }
+    loadFamily();
   }, [parent?.familyId]);
 
   const isEdit = !!existingReference;
-  const isValid = text.trim().length >= 10;
+  const isValid = text.trim().length >= 10 && refName.trim().length > 0;
 
   const handleSubmit = async () => {
     if (!parent || !isValid) return;
     setSaving(true);
+
+    const parsedAges = kidAges.split(',').map((s) => parseInt(s.trim())).filter((n) => !isNaN(n));
+
     try {
       if (isEdit && existingReference) {
-        // Update existing reference
         await updateDoc(doc(db, 'references', existingReference.referenceId), {
           referenceText: text.trim(),
+          refName: refName.trim(),
+          refPhone: refPhone || null,
+          refEmail: refEmail || null,
+          numberOfKids: numberOfKids || null,
+          kidAges: parsedAges.length > 0 ? parsedAges : null,
           updatedAt: serverTimestamp(),
         });
       } else {
-        // Create new reference
         const ref = await addDoc(collection(db, 'references'), {
           type: 'family_submitted',
           status: 'private',
           babysitterUserId,
           submittedByUserId: parent.uid,
           submittedByFamilyId: parent.familyId,
-          submittedByName: familyName || parent.firstName || '',
+          submittedByName: refName.trim() || familyName || parent.firstName || '',
           appointmentId: appointmentId || null,
           referenceText: text.trim(),
+          refName: refName.trim(),
+          refPhone: refPhone || null,
+          refEmail: refEmail || null,
+          isEjmFamily,
+          numberOfKids: numberOfKids || null,
+          kidAges: parsedAges.length > 0 ? parsedAges : null,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
         });
-        // Set referenceId to match the doc ID
         await updateDoc(ref, { referenceId: ref.id });
       }
       setSaved(true);
@@ -99,16 +148,56 @@ export function ReferenceDialog({
                 : t('references.referencePromptDesc', { name: babysitterName.split(' ')[0] || babysitterName })}
           </h3>
           {!isEdit && appointmentId && (
-            <p className="mb-4 text-sm text-gray-500">
+            <p className="mb-3 text-sm text-gray-500">
               {t('references.referencePromptDesc', { name: babysitterName.split(' ')[0] || babysitterName })}
             </p>
           )}
-          {!appointmentId && !isEdit && <div className="mb-3" />}
+
+          {/* Contact fields */}
+          <Input
+            label={t('references.fullName')}
+            value={refName}
+            onChange={(e) => setRefName(e.target.value)}
+          />
+          <Input
+            label={t('common.email')}
+            type="email"
+            value={refEmail}
+            onChange={(e) => setRefEmail(e.target.value)}
+          />
+          <PhoneInput
+            label={t('account.phone')}
+            value={refPhone}
+            onChange={setRefPhone}
+          />
+
+          {/* Kids */}
+          <div className="flex gap-3">
+            <div className="flex-1">
+              <Input
+                label={t('references.numberOfKids')}
+                type="number"
+                value={numberOfKids || ''}
+                onChange={(e) => setNumberOfKids(e.target.value === '' ? 0 : parseInt(e.target.value))}
+                min={0}
+              />
+            </div>
+            <div className="flex-1">
+              <Input
+                label={t('references.kidAges')}
+                value={kidAges}
+                onChange={(e) => setKidAges(e.target.value)}
+                placeholder="4, 7"
+              />
+            </div>
+          </div>
+
+          {/* Reference text */}
           <textarea
             value={text}
             onChange={(e) => setText(e.target.value)}
             placeholder={t('references.referencePlaceholder')}
-            rows={5}
+            rows={4}
             className="mb-3 w-full rounded-lg border-[1.5px] border-gray-300 bg-white px-4 py-3 text-base text-gray-950 outline-none transition-colors placeholder:text-gray-400 focus:border-red-600"
           />
           {text.length > 0 && text.trim().length < 10 && (
