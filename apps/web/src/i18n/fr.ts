@@ -292,7 +292,7 @@ export default {
     delete: 'Supprimer',
     removeAvailability: 'Supprimer la disponibilité',
     leaveReference: 'Laisser une recommandation',
-    editMyReference: 'Modifier la recommandation',
+    editMyReference: 'Modifier',
     referencePrompt: 'Comment était {{name}} ?',
     referencePromptDesc: 'Laissez une recommandation pour aider {{name}} et les autres familles',
     referencePlaceholder: 'Partagez votre expérience avec ce babysitter...',
