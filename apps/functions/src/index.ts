@@ -44,7 +44,7 @@ export { lookupCommunityCode } from './verification/lookupCommunityCode.js';
 export { approveCommunityCode } from './verification/approveCommunityCode.js';
 
 // References
-export { onReferenceCreated } from './references/onReferenceCreated.js';
+export { notifyOnNewReference } from './references/onReferenceCreated.js';
 
 // Scheduled
 export { sendReminders } from './scheduled/sendReminders.js';

@@ -7,7 +7,7 @@ import { sendPushNotification } from '../config/push.js';
  * Firestore trigger: when a new family-submitted reference is created,
  * notify the babysitter via email and push (if preferences allow).
  */
-export const onReferenceCreated = onDocumentCreated(
+export const notifyOnNewReference = onDocumentCreated(
   { document: 'references/{referenceId}', region: 'europe-west1' },
   async (event) => {
     const data = event.data?.data();
