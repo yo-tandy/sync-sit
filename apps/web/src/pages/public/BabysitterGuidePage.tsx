@@ -126,8 +126,8 @@ export function BabysitterGuidePage() {
         <Step number={11} title={fr ? 'Recommandations' : 'Endorsements'}>
           <p>
             {fr
-              ? 'Dans le menu, allez dans "Recommandations" pour ajouter une description "À propos de moi" et des recommandations de familles pour lesquelles vous avez travaillé. Les familles EJM peuvent aussi soumettre des recommandations directement depuis leur compte.'
-              : 'From the menu, go to "Endorsements" to add an "About me" description and endorsements from families you\'ve worked for. EJM families can also submit endorsements directly from their account.'}
+              ? 'Dans le menu, allez dans "Recommandations" pour gérer vos recommandations. Vous pouvez ajouter manuellement des recommandations de personnes pour lesquelles vous avez travaillé, et les familles EJM peuvent en soumettre directement depuis leur compte. Chaque recommandation est privée par défaut — vous choisissez lesquelles publier pour qu\'elles soient visibles par les autres parents.'
+              : 'From the menu, go to "Endorsements" to manage your endorsements. You can manually add endorsements from people you\'ve worked for, and EJM families can submit them directly from their account. Each endorsement is private by default — you choose which ones to publish so they\'re visible to other parents.'}
           </p>
         </Step>
 

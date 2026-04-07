@@ -124,9 +124,17 @@ export function ParentGuidePage() {
         </Step>
 
         <hr className="my-6 border-gray-200" />
-        <h2 className="mb-4 text-lg font-bold text-gray-900">{fr ? 'Paramètres du compte' : 'Account Settings'}</h2>
+        <h2 className="mb-4 text-lg font-bold text-gray-900">{fr ? 'Recommandations et compte' : 'Endorsements & Account'}</h2>
 
-        <Step number={11} title={fr ? 'Mon compte' : 'My Account'}>
+        <Step number={11} title={fr ? 'Laisser une recommandation' : 'Leave an endorsement'}>
+          <p>
+            {fr
+              ? 'Après un babysitting, vous pouvez laisser une recommandation pour le/la babysitter. Vous serez invité(e) à le faire depuis votre tableau de bord, ou vous pouvez aller dans "Mes recommandations" dans le menu. Votre recommandation sera envoyée au babysitter, qui choisira de la publier ou non pour les autres parents.'
+              : 'After a babysitting appointment, you can leave an endorsement for the babysitter. You\'ll be prompted from your dashboard, or you can go to "My Endorsements" in the menu. Your endorsement will be sent to the babysitter, who can choose whether to publish it for other parents to see.'}
+          </p>
+        </Step>
+
+        <Step number={12} title={fr ? 'Mon compte' : 'My Account'}>
           <p>
             {fr
               ? 'Dans le menu, allez dans "Mon compte" pour gérer votre photo de profil, vos coordonnées (téléphone avec indicatif pays, WhatsApp), changer votre mot de passe, configurer les notifications push/email et choisir votre langue.'
@@ -134,7 +142,7 @@ export function ParentGuidePage() {
           </p>
         </Step>
 
-        <Step number={12} title={fr ? 'Notifications' : 'Notifications'}>
+        <Step number={13} title={fr ? 'Notifications' : 'Notifications'}>
           <p>
             {fr
               ? 'Vous recevez des notifications quand un babysitter accepte ou refuse votre demande, et des rappels avant les rendez-vous. Vous pouvez activer/désactiver les notifications push et email séparément pour chaque type.'
