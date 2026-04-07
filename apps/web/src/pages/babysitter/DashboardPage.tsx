@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
-import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, updateDoc, serverTimestamp, collection, query, where, getDocs } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
@@ -137,12 +137,17 @@ export function BabysitterDashboard() {
       return;
     }
 
-    // Step 3: References — after just activated (searchable and not dismissed)
-    if (isSearchable && !dismissed.has('references')) {
-      setShowReferences(true);
+    // Step 3: References — only if searchable, not dismissed, AND no existing references
+    if (isSearchable && !dismissed.has('references') && uid) {
+      getDocs(query(collection(db, 'references'), where('babysitterUserId', '==', uid)))
+        .then((snap) => {
+          if (snap.empty) setShowReferences(true);
+          else dismissOnboarding('references'); // auto-dismiss if already has refs
+        })
+        .catch(() => {});
       return;
     }
-  }, [babysitter, scheduleLoading, weekly, isSearchable]);
+  }, [babysitter, scheduleLoading, weekly, isSearchable, uid]);
 
   const handleToggleSearchable = async () => {
     if (!uid) return;

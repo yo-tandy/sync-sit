@@ -10,6 +10,7 @@ export interface ReferenceDoc {
   // Manual reference fields
   refName?: string;
   refPhone?: string;
+  refWhatsapp?: string;
   refEmail?: string;
   isEjmFamily?: boolean;
   numberOfKids?: number;
@@ -19,6 +20,7 @@ export interface ReferenceDoc {
   // Family-submitted fields
   submittedByUserId?: string;
   submittedByFamilyId?: string;
+  submittedByName?: string;
   appointmentId?: string;
   referenceText?: string;
 

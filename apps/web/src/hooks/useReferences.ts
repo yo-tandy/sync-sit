@@ -66,14 +66,13 @@ export function useReferences() {
   const addManualReference = useCallback(
     async (data: ManualRefInput) => {
       if (!uid) return;
-      // Strip undefined values — Firestore rejects them
       const cleaned = Object.fromEntries(
         Object.entries(data).filter(([, v]) => v !== undefined)
       );
       await addDoc(collection(db, 'references'), {
         babysitterUserId: uid,
         type: 'manual',
-        status: 'approved',
+        status: 'private',
         ...cleaned,
         createdAt: serverTimestamp(),
       });
@@ -92,7 +91,6 @@ export function useReferences() {
       const cleaned = Object.fromEntries(
         Object.entries(data).filter(([, v]) => v !== undefined)
       );
-      // Explicitly null out fields that were cleared
       const update: Record<string, unknown> = { ...cleaned };
       if (data.refPhone === undefined) update.refPhone = null;
       if (data.refEmail === undefined) update.refEmail = null;
@@ -104,10 +102,16 @@ export function useReferences() {
     []
   );
 
-  const approveReference = useCallback(async (referenceId: string) => {
+  const publishReference = useCallback(async (referenceId: string) => {
     await updateDoc(doc(db, 'references', referenceId), {
-      status: 'approved',
+      status: 'published',
       approvedAt: serverTimestamp(),
+    });
+  }, []);
+
+  const unpublishReference = useCallback(async (referenceId: string) => {
+    await updateDoc(doc(db, 'references', referenceId), {
+      status: 'private',
     });
   }, []);
 
@@ -118,6 +122,7 @@ export function useReferences() {
     addManualReference,
     updateManualReference,
     removeReference,
-    approveReference,
+    publishReference,
+    unpublishReference,
   };
 }

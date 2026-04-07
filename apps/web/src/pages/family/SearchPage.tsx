@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
-import { doc, getDoc, collection, getDocs, query, where } from 'firebase/firestore';
+import { doc, getDoc, collection, getDocs, query, where, limit } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
@@ -109,6 +109,48 @@ export function SearchPage() {
 
   // Expanded card
   const [expandedBabysitter, setExpandedBabysitter] = useState<string | null>(null);
+
+  // References for expanded babysitter
+  interface RefInfo {
+    text: string;
+    refName: string;
+    refEmail?: string;
+    refPhone?: string;
+    refWhatsapp?: string;
+    isEjmFamily?: boolean;
+    numberOfKids?: number;
+    kidAges?: number[];
+  }
+  const [babysitterRefs, setBabysitterRefs] = useState<Record<string, RefInfo[]>>({});
+  const [expandedRefIds, setExpandedRefIds] = useState<Set<string>>(new Set());
+
+  const loadRefs = async (uid: string) => {
+    if (babysitterRefs[uid]) return; // already loaded
+    try {
+      const snap = await getDocs(
+        query(
+          collection(db, 'references'),
+          where('babysitterUserId', '==', uid),
+          where('status', 'in', ['approved', 'published']),
+          limit(10)
+        )
+      );
+      const refs: RefInfo[] = snap.docs.map((d) => {
+        const data = d.data();
+        return {
+          text: data.referenceText || data.note || '',
+          refName: data.submittedByName || data.refName || '',
+          refEmail: data.refEmail || undefined,
+          refPhone: data.refPhone || undefined,
+          refWhatsapp: data.refWhatsapp || undefined,
+          isEjmFamily: data.isEjmFamily || false,
+          numberOfKids: data.numberOfKids || undefined,
+          kidAges: data.kidAges || undefined,
+        };
+      });
+      setBabysitterRefs((prev) => ({ ...prev, [uid]: refs }));
+    } catch { /* silent */ }
+  };
 
   // Contact dialog
   const [contactTarget, setContactTarget] = useState<BabysitterResult | null>(null);
@@ -503,7 +545,7 @@ export function SearchPage() {
               const renderCard = (b: BabysitterResult) => {
                 const isExpanded = expandedBabysitter === b.uid;
                 return (
-                <Card key={b.uid} className="mb-3 cursor-pointer" onClick={() => setExpandedBabysitter(isExpanded ? null : b.uid)}>
+                <Card key={b.uid} className="mb-3 cursor-pointer" onClick={() => { const next = isExpanded ? null : b.uid; setExpandedBabysitter(next); if (next) loadRefs(b.uid); }}>
                   <div className="flex gap-3">
                     <Avatar initials={`${(b.firstName || '')[0] || ''}${(b.lastName || '')[0] || ''}`} src={b.photoUrl || undefined} size="lg" />
                     <div className="min-w-0 flex-1">
@@ -533,7 +575,7 @@ export function SearchPage() {
                         <p className="text-xs text-gray-500">📍 {b.distance} km away</p>
                       )}
                       {b.referenceCount > 0 && (
-                        <p className="text-xs text-gray-500">⭐ {b.referenceCount} reference{b.referenceCount > 1 ? 's' : ''}</p>
+                        <p className="text-xs text-gray-500"><span className="text-green-600">✓</span> {b.referenceCount} reference{b.referenceCount > 1 ? 's' : ''}</p>
                       )}
                       {b.aboutMe && (
                         <p className={`mt-1 text-xs text-gray-600 ${isExpanded ? '' : 'line-clamp-2'}`}>"{b.aboutMe}"</p>
@@ -541,9 +583,57 @@ export function SearchPage() {
                     </div>
                   </div>
 
-                  {isExpanded && b.aboutMe && (
-                    <div className="mt-3 border-t border-gray-100 pt-3">
-                      <p className="text-xs leading-relaxed text-gray-600">{b.aboutMe}</p>
+                  {isExpanded && (
+                    <div className="mt-3 border-t border-gray-100 pt-3 space-y-2">
+                      {b.aboutMe && (
+                        <p className="text-xs leading-relaxed text-gray-600">{b.aboutMe}</p>
+                      )}
+                      {babysitterRefs[b.uid]?.length > 0 && (
+                        <div className="mt-2 rounded-lg border border-gray-200 bg-gray-50 p-3">
+                          <p className="mb-2 text-xs font-semibold text-gray-700"><span className="text-green-600">✓</span> {t('references.title')} ({babysitterRefs[b.uid].length})</p>
+                          {babysitterRefs[b.uid].map((ref, i) => {
+                            const refKey = `${b.uid}-${i}`;
+                            const refExpanded = expandedRefIds.has(refKey);
+                            return (
+                              <div key={i} className="mb-1.5 last:mb-0">
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); setExpandedRefIds((prev) => { const next = new Set(prev); if (refExpanded) next.delete(refKey); else next.add(refKey); return next; }); }}
+                                  className="w-full text-left rounded-md px-2 py-1.5 text-xs font-medium text-gray-700 hover:bg-white active:bg-white"
+                                >
+                                  {refExpanded ? '▾' : '▸'} {ref.refName ? `Reference from ${ref.refName}` : `Reference ${i + 1}`}
+                                  {ref.isEjmFamily && <span className="ml-1.5 text-blue-600 font-normal">EJM Family</span>}
+                                </button>
+                                {refExpanded && (
+                                  <div className="ml-4 mt-1 mb-2 space-y-1">
+                                    {ref.text && <p className="text-xs text-gray-600 italic">"{ref.text}"</p>}
+                                    {ref.refEmail && (
+                                      <a href={`mailto:${ref.refEmail}`} onClick={(e) => e.stopPropagation()} className="flex items-center gap-1.5 text-xs text-red-600">
+                                        <span>📧</span> {ref.refEmail}
+                                      </a>
+                                    )}
+                                    {ref.refPhone && (
+                                      <a href={`tel:${ref.refPhone}`} onClick={(e) => e.stopPropagation()} className="flex items-center gap-1.5 text-xs text-red-600">
+                                        <span>📞</span> {ref.refPhone}
+                                      </a>
+                                    )}
+                                    {ref.refWhatsapp && (
+                                      <a href={`https://wa.me/${ref.refWhatsapp.replace(/[^\d+]/g, '').replace('+', '')}`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="flex items-center gap-1.5 text-xs text-green-600">
+                                        <span>💬</span> {ref.refWhatsapp !== ref.refPhone ? ref.refWhatsapp : 'WhatsApp'}
+                                      </a>
+                                    )}
+                                    {ref.numberOfKids && ref.numberOfKids > 0 && (
+                                      <p className="text-xs text-gray-500">
+                                        👶 {ref.numberOfKids} {ref.numberOfKids === 1 ? 'child' : 'children'}
+                                        {ref.kidAges?.length ? ` (ages ${ref.kidAges.join(', ')})` : ''}
+                                      </p>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   )}
 

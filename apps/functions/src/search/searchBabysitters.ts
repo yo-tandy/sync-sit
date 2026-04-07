@@ -96,9 +96,9 @@ export const searchBabysitters = onCall(
     console.log(`Found ${usersSnap.size} searchable babysitters`);
     if (usersSnap.empty) return { results: [] };
 
-    // 2. Get reference counts
+    // 2. Get reference counts (only published references are visible)
     const refsSnap = await db.collection('references')
-      .where('status', '==', 'approved')
+      .where('status', 'in', ['approved', 'published'])
       .get();
 
     const refCounts = new Map<string, number>();

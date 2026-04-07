@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
-import { doc, getDoc, collection, getDocs, addDoc, onSnapshot } from 'firebase/firestore';
+import { doc, getDoc, collection, getDocs, addDoc, onSnapshot, query as fsQuery, where as fsWhere, limit as fsLimit } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
@@ -16,6 +16,8 @@ import { useHolidays } from '@/hooks/useHolidays';
 import { getDateTag } from '@/lib/dateTag';
 import { DateTag } from '@/components/ui/DateTag';
 import { buildCalendarUrl } from '@/lib/calendar';
+import { ReferenceDialog } from '@/components/references/ReferenceDialog';
+import type { ReferenceDoc } from '@ejm/shared';
 
 interface BabysitterInfo {
   name: string;
@@ -64,6 +66,8 @@ function ExpandableBabysitterCard({
   onCancel,
   onEdit,
   onResubmit,
+  onLeaveReference,
+  existingReference,
 }: {
   appointment: AppointmentDoc;
   info?: BabysitterInfo;
@@ -74,6 +78,8 @@ function ExpandableBabysitterCard({
   onCancel?: () => void;
   onEdit?: () => void;
   onResubmit?: () => void;
+  onLeaveReference?: () => void;
+  existingReference?: ReferenceDoc;
 }) {
   const { t, i18n } = useTranslation();
   const locale = i18n.language?.startsWith('fr') ? 'fr-FR' : 'en-GB';
@@ -81,6 +87,35 @@ function ExpandableBabysitterCard({
   const badgeLabels = useBadgeLabels();
   const { periods: holidayPeriods } = useHolidays();
   const name = info?.name || t('familyDashboard.babysitterFallback');
+
+  // References for this babysitter
+  interface RefInfo { text: string; refName: string; refEmail?: string; refPhone?: string; refWhatsapp?: string; isEjmFamily?: boolean; numberOfKids?: number; kidAges?: number[] }
+  const [refs, setRefs] = useState<RefInfo[]>([]);
+  const [expandedRefIds, setExpandedRefIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!expanded || !appointment.babysitterUserId) return;
+    getDocs(fsQuery(
+      collection(db, 'references'),
+      fsWhere('babysitterUserId', '==', appointment.babysitterUserId),
+      fsWhere('status', 'in', ['approved', 'published']),
+      fsLimit(10)
+    )).then((snap) => {
+      setRefs(snap.docs.map((d) => {
+        const data = d.data();
+        return {
+          text: data.referenceText || data.note || '',
+          refName: data.submittedByName || data.refName || '',
+          refEmail: data.refEmail || undefined,
+          refPhone: data.refPhone || undefined,
+          refWhatsapp: data.refWhatsapp || undefined,
+          isEjmFamily: data.isEjmFamily || false,
+          numberOfKids: data.numberOfKids || undefined,
+          kidAges: data.kidAges || undefined,
+        };
+      }));
+    }).catch(() => {});
+  }, [expanded, appointment.babysitterUserId]);
 
   // Format date/time for confirmed/past cards
   const dateTimeStr = appointment.date
@@ -165,6 +200,54 @@ function ExpandableBabysitterCard({
             </div>
           )}
 
+          {/* References */}
+          {refs.length > 0 && (
+            <div className="mt-2 rounded-lg border border-gray-200 bg-gray-50 p-3">
+              <p className="mb-2 text-xs font-semibold text-gray-700"><span className="text-green-600">✓</span> {t('references.title')} ({refs.length})</p>
+              {refs.map((ref, i) => {
+                const refKey = `${appointment.appointmentId}-${i}`;
+                const refExpanded = expandedRefIds.has(refKey);
+                return (
+                  <div key={i} className="mb-1.5 last:mb-0">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setExpandedRefIds((prev) => { const next = new Set(prev); if (refExpanded) next.delete(refKey); else next.add(refKey); return next; }); }}
+                      className="w-full text-left rounded-md px-2 py-1.5 text-xs font-medium text-gray-700 hover:bg-white active:bg-white"
+                    >
+                      {refExpanded ? '▾' : '▸'} {ref.refName ? `Reference from ${ref.refName}` : `Reference ${i + 1}`}
+                      {ref.isEjmFamily && <span className="ml-1.5 text-blue-600 font-normal">EJM Family</span>}
+                    </button>
+                    {refExpanded && (
+                      <div className="ml-4 mt-1 mb-2 space-y-1">
+                        {ref.text && <p className="text-xs text-gray-600 italic">"{ref.text}"</p>}
+                        {ref.refEmail && (
+                          <a href={`mailto:${ref.refEmail}`} onClick={(e) => e.stopPropagation()} className="flex items-center gap-1.5 text-xs text-red-600">
+                            <span>📧</span> {ref.refEmail}
+                          </a>
+                        )}
+                        {ref.refPhone && (
+                          <a href={`tel:${ref.refPhone}`} onClick={(e) => e.stopPropagation()} className="flex items-center gap-1.5 text-xs text-red-600">
+                            <span>📞</span> {ref.refPhone}
+                          </a>
+                        )}
+                        {ref.refWhatsapp && (
+                          <a href={`https://wa.me/${ref.refWhatsapp.replace(/[^\d+]/g, '').replace('+', '')}`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="flex items-center gap-1.5 text-xs text-green-600">
+                            <span>💬</span> {ref.refWhatsapp !== ref.refPhone ? ref.refWhatsapp : 'WhatsApp'}
+                          </a>
+                        )}
+                        {ref.numberOfKids && ref.numberOfKids > 0 && (
+                          <p className="text-xs text-gray-500">
+                            👶 {ref.numberOfKids} {ref.numberOfKids === 1 ? 'child' : 'children'}
+                            {ref.kidAges?.length ? ` (ages ${ref.kidAges.join(', ')})` : ''}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
           {/* Date/time for non-grouped sections */}
           {variant !== 'pending' && appointment.date && (
             <div className="flex items-center gap-3">
@@ -214,6 +297,13 @@ function ExpandableBabysitterCard({
             <div className="mt-3">
               <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); onResubmit(); }}>
                 {t('appointment.resubmit')}
+              </Button>
+            </div>
+          )}
+          {variant === 'past' && onLeaveReference && (
+            <div className="mt-3">
+              <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); onLeaveReference(); }}>
+                {existingReference ? t('references.editMyReference') : t('references.leaveReference')}
               </Button>
             </div>
           )}
@@ -358,6 +448,47 @@ export function FamilyDashboard() {
 
   const [babysitters, setBabysitters] = useState<Record<string, BabysitterInfo>>({});
   const [preferredIds, setPreferredIds] = useState<Set<string>>(new Set());
+
+  // References state
+  const [submittedRefs, setSubmittedRefs] = useState<ReferenceDoc[]>([]);
+  const [refTarget, setRefTarget] = useState<{ apt: any; existing?: ReferenceDoc } | null>(null);
+  const [refPromptDismissed, setRefPromptDismissed] = useState(() => {
+    const stored = localStorage.getItem('syncsit_ref_prompt_dismissed');
+    return stored ? JSON.parse(stored) : false;
+  });
+  const dismissRefPrompt = () => {
+    setRefPromptDismissed(true);
+    localStorage.setItem('syncsit_ref_prompt_dismissed', 'true');
+  };
+
+  // Load submitted references for this user
+  useEffect(() => {
+    if (!userDoc?.uid) return;
+    const unsub = onSnapshot(
+      collection(db, 'references'),
+      (snap) => {
+        const refs = snap.docs
+          .map((d) => ({ ...d.data(), referenceId: d.id }) as ReferenceDoc)
+          .filter((r) => r.submittedByUserId === userDoc.uid && r.type === 'family_submitted' && r.status !== 'removed');
+        setSubmittedRefs(refs);
+      }
+    );
+    return unsub;
+  }, [userDoc?.uid]);
+
+  const getRefForAppointment = (appointmentId: string) =>
+    submittedRefs.find((r) => r.appointmentId === appointmentId);
+
+  // Find first past appointment without a reference (for auto-prompt)
+  // Only show if the appointment was within the last 7 days
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+  const unreferencedPast = pastRecent.find((apt) => {
+    if (getRefForAppointment(apt.appointmentId)) return false;
+    if (!apt.date) return false;
+    const aptDate = new Date(apt.date + 'T' + (apt.endTime || '23:59'));
+    return aptDate >= sevenDaysAgo;
+  });
 
   // Load preferred babysitter IDs from family doc
   const familyId = userDoc?.role === 'parent' ? (userDoc as any).familyId : null;
@@ -526,6 +657,30 @@ export function FamilyDashboard() {
         </Button>
       )}
 
+      {/* Reference prompt banner */}
+      {unreferencedPast && !refPromptDismissed && babysitters[unreferencedPast.babysitterUserId] && (
+        <Card className="mb-4 border-blue-200 bg-blue-50 cursor-pointer" onClick={() => {
+          setRefTarget({ apt: unreferencedPast });
+          dismissRefPrompt();
+        }}>
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">✍️</span>
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-blue-800">
+                {t('references.referencePrompt', { name: babysitters[unreferencedPast.babysitterUserId]?.name || '' })}
+              </p>
+              <p className="text-xs text-blue-600">{t('references.referencePromptDesc', { name: babysitters[unreferencedPast.babysitterUserId]?.name?.split(' ')[0] || '' })}</p>
+            </div>
+            <button
+              onClick={(e) => { e.stopPropagation(); dismissRefPrompt(); }}
+              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-blue-400 hover:bg-blue-100 hover:text-blue-600"
+            >
+              ✕
+            </button>
+          </div>
+        </Card>
+      )}
+
       {/* Appointments */}
       {aptsLoading ? (
         <div className="flex justify-center py-12">
@@ -586,7 +741,7 @@ export function FamilyDashboard() {
             <div className="mb-5">
               <h3 className="mb-2 text-sm font-semibold text-gray-700">{t('babysitterDashboard.past')}</h3>
               {pastRecent.map((apt) => (
-                <ExpandableBabysitterCard key={apt.appointmentId} appointment={apt} info={babysitters[apt.babysitterUserId]} variant="past" isPreferred={preferredIds.has(apt.babysitterUserId)} onTogglePreferred={() => togglePreferred(apt.babysitterUserId)} />
+                <ExpandableBabysitterCard key={apt.appointmentId} appointment={apt} info={babysitters[apt.babysitterUserId]} variant="past" isPreferred={preferredIds.has(apt.babysitterUserId)} onTogglePreferred={() => togglePreferred(apt.babysitterUserId)} existingReference={getRefForAppointment(apt.appointmentId)} onLeaveReference={() => setRefTarget({ apt, existing: getRefForAppointment(apt.appointmentId) })} />
               ))}
             </div>
           )}
@@ -677,6 +832,17 @@ export function FamilyDashboard() {
           </Button>
         </div>
       </Dialog>
+
+      {/* Reference Dialog */}
+      {refTarget && (
+        <ReferenceDialog
+          babysitterUserId={refTarget.apt.babysitterUserId}
+          babysitterName={babysitters[refTarget.apt.babysitterUserId]?.name || ''}
+          appointmentId={refTarget.apt.appointmentId}
+          existingReference={refTarget.existing}
+          onClose={() => setRefTarget(null)}
+        />
+      )}
     </div>
   );
 }
