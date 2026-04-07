@@ -111,7 +111,8 @@ export function SearchPage() {
   const [expandedBabysitter, setExpandedBabysitter] = useState<string | null>(null);
 
   // References for expanded babysitter
-  const [babysitterRefs, setBabysitterRefs] = useState<Record<string, { text: string; familyName: string }[]>>({});
+  const [babysitterRefs, setBabysitterRefs] = useState<Record<string, { text: string; submittedByName: string; refName: string }[]>>({});
+  const [expandedRefIdx, setExpandedRefIdx] = useState<string | null>(null);
 
   const loadRefs = async (uid: string) => {
     if (babysitterRefs[uid]) return; // already loaded
@@ -120,14 +121,17 @@ export function SearchPage() {
         query(
           collection(db, 'references'),
           where('babysitterUserId', '==', uid),
-          where('type', '==', 'family_submitted'),
-          where('status', '==', 'approved'),
-          limit(5)
+          where('status', 'in', ['approved', 'published']),
+          limit(10)
         )
       );
       const refs = snap.docs.map((d) => {
         const data = d.data();
-        return { text: data.referenceText || '', familyName: data.submittedByFamilyId ? '' : '' };
+        return {
+          text: data.referenceText || data.note || '',
+          submittedByName: data.submittedByName || '',
+          refName: data.refName || '',
+        };
       }).filter((r) => r.text);
       setBabysitterRefs((prev) => ({ ...prev, [uid]: refs }));
     } catch { /* silent */ }
@@ -556,7 +560,7 @@ export function SearchPage() {
                         <p className="text-xs text-gray-500">📍 {b.distance} km away</p>
                       )}
                       {b.referenceCount > 0 && (
-                        <p className="text-xs text-gray-500">⭐ {b.referenceCount} reference{b.referenceCount > 1 ? 's' : ''}</p>
+                        <p className="text-xs text-gray-500"><span className="text-green-600">✓</span> {b.referenceCount} reference{b.referenceCount > 1 ? 's' : ''}</p>
                       )}
                       {b.aboutMe && (
                         <p className={`mt-1 text-xs text-gray-600 ${isExpanded ? '' : 'line-clamp-2'}`}>"{b.aboutMe}"</p>
@@ -571,10 +575,25 @@ export function SearchPage() {
                       )}
                       {babysitterRefs[b.uid]?.length > 0 && (
                         <div>
-                          <p className="mb-1 text-xs font-medium text-gray-500">{t('references.familyReviews')}</p>
-                          {babysitterRefs[b.uid].map((ref, i) => (
-                            <p key={i} className="mb-1 text-xs text-gray-600 italic">"{ref.text}"</p>
-                          ))}
+                          <p className="mb-1 text-xs font-medium text-gray-500">✓ {t('references.familyReviews')}</p>
+                          {babysitterRefs[b.uid].map((ref, i) => {
+                            const refKey = `${b.uid}-${i}`;
+                            const refExpanded = expandedRefIdx === refKey;
+                            const refName = ref.submittedByName || ref.refName || '';
+                            return (
+                              <div key={i}>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); setExpandedRefIdx(refExpanded ? null : refKey); }}
+                                  className="w-full text-left rounded-md px-2 py-1.5 text-xs text-gray-700 hover:bg-gray-50 active:bg-gray-100"
+                                >
+                                  {refExpanded ? '▾' : '▸'} {refName ? `Reference from ${refName}` : `Reference ${i + 1}`}
+                                </button>
+                                {refExpanded && (
+                                  <p className="ml-4 mb-1 text-xs text-gray-600 italic">"{ref.text}"</p>
+                                )}
+                              </div>
+                            );
+                          })}
                         </div>
                       )}
                     </div>
