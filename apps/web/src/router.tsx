@@ -18,6 +18,7 @@ import { SharePage } from '@/pages/public/SharePage';
 import { SignUpRolePage } from '@/pages/public/SignUpRolePage';
 import { ParentGuidePage } from '@/pages/public/ParentGuidePage';
 import { BabysitterGuidePage } from '@/pages/public/BabysitterGuidePage';
+import { AddToHomescreenPage } from '@/pages/public/AddToHomescreenPage';
 
 // Enrollment
 import { BabysitterEnrollment } from '@/pages/enrollment/BabysitterEnrollment';
@@ -65,6 +66,7 @@ export const router = createBrowserRouter([
       { path: '/share', element: <SharePage /> },
       { path: '/guide/parents', element: <ParentGuidePage /> },
       { path: '/guide/babysitters', element: <BabysitterGuidePage /> },
+      { path: '/install', element: <AddToHomescreenPage /> },
       { path: '/enroll/babysitter', element: <BabysitterEnrollment /> },
       { path: '/enroll/parent', element: <ParentEnrollment /> },
       { path: '/invite/:token', element: <JoinFamilyPage /> },
