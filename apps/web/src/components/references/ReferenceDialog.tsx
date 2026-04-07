@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { doc, addDoc, updateDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
-import { Dialog, Button, Textarea } from '@/components/ui';
+import { Dialog, Button } from '@/components/ui';
 import type { ParentUser, ReferenceDoc } from '@ejm/shared';
 
 interface ReferenceDialogProps {
@@ -85,20 +85,21 @@ export function ReferenceDialog({
             {isEdit ? t('references.editMyReference') : t('references.referencePrompt', { name: babysitterName })}
           </h3>
           <p className="mb-4 text-sm text-gray-500">
-            {t('references.referencePromptDesc')}
+            {t('references.referencePromptDesc', { name: babysitterName.split(' ')[0] || babysitterName })}
           </p>
-          <Textarea
-            label=""
+          <textarea
             value={text}
             onChange={(e) => setText(e.target.value)}
             placeholder={t('references.referencePlaceholder')}
+            rows={5}
+            className="mb-3 w-full rounded-lg border-[1.5px] border-gray-300 bg-white px-4 py-3 text-base text-gray-950 outline-none transition-colors placeholder:text-gray-400 focus:border-red-600"
           />
           {text.length > 0 && text.trim().length < 10 && (
             <p className="mb-3 text-xs text-amber-600">{t('references.minLength')}</p>
           )}
           <div className="flex gap-2">
             <Button onClick={handleSubmit} disabled={saving || !isValid} className="flex-1">
-              {saving ? '...' : isEdit ? t('common.save') : t('references.leaveReference')}
+              {saving ? '...' : isEdit ? t('common.save') : t('common.confirm')}
             </Button>
             <Button variant="ghost" onClick={onClose} className="flex-1">
               {t('common.cancel')}

@@ -577,7 +577,7 @@ export function FamilyDashboard() {
               <p className="text-sm font-semibold text-blue-800">
                 {t('references.referencePrompt', { name: babysitters[unreferencedPast.babysitterUserId]?.name || '' })}
               </p>
-              <p className="text-xs text-blue-600">{t('references.referencePromptDesc')}</p>
+              <p className="text-xs text-blue-600">{t('references.referencePromptDesc', { name: babysitters[unreferencedPast.babysitterUserId]?.name?.split(' ')[0] || '' })}</p>
             </div>
           </div>
         </Card>

@@ -297,7 +297,7 @@ export default {
     leaveReference: 'Leave a reference',
     editMyReference: 'Edit reference',
     referencePrompt: 'How was {{name}}?',
-    referencePromptDesc: 'Leave a reference to help other families',
+    referencePromptDesc: 'Leave a reference to help {{name}} and other families',
     referencePlaceholder: 'Share your experience with this babysitter...',
     referenceSubmitted: 'Reference submitted!',
     referenceUpdated: 'Reference updated!',
