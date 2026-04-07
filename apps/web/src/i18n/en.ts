@@ -305,7 +305,7 @@ export default {
     delete: 'Delete',
     removeAvailability: 'Remove availability',
     leaveReference: 'Leave an endorsement',
-    editMyReference: 'Edit endorsement',
+    editMyReference: 'Edit',
     referencePrompt: 'How was {{name}}?',
     referencePromptDesc: 'Leave an endorsement to help {{name}} and other families',
     referencePlaceholder: 'Share your experience with this babysitter...',
