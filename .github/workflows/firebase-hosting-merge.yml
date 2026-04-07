@@ -28,11 +28,7 @@ jobs:
       # Build web
       - run: pnpm --filter web build
 
-      # Write service account key
-      - name: Write service account key
-        run: echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT_SYNC_SIT }}' > /tmp/firebase-sa.json
-
-      # Deploy hosting
+      # Deploy hosting (uses FirebaseExtended action which handles its own auth)
       - uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
@@ -40,31 +36,17 @@ jobs:
           channelId: live
           projectId: sync-sit
 
-      # Bundle shared for functions deploy (Firebase uses npm, not pnpm workspaces)
-      - name: Bundle shared for functions
-        run: node scripts/bundle-shared-for-deploy.js
+      # Bundle shared for functions deploy
+      - run: node scripts/bundle-shared-for-deploy.js
 
       # Build functions
       - run: cd apps/functions && npx tsc
 
-      # Deploy functions (--force to auto-delete removed functions)
+      # Deploy functions using service account
       - name: Deploy Cloud Functions
-        run: npx firebase-tools deploy --only functions --project sync-sit --non-interactive --force
-        env:
-          GOOGLE_APPLICATION_CREDENTIALS: /tmp/firebase-sa.json
-
-      # Unbundle shared
-      - name: Unbundle shared
-        run: node scripts/unbundle-shared-after-deploy.js
-
-      # Fix IAM permissions on Cloud Run services
-      - name: Fix Cloud Run IAM
         run: |
-          gcloud auth activate-service-account --key-file=/tmp/firebase-sa.json
-          gcloud run services list --region=europe-west1 --project=sync-sit --format="value(name)" | while read svc; do
-            gcloud run services add-iam-policy-binding "$svc" \
-              --region=europe-west1 --project=sync-sit \
-              --member="allUsers" --role="roles/run.invoker" \
-              --quiet 2>/dev/null && echo "  ✔ $svc" || echo "  ✗ $svc"
-          done
-          rm -f /tmp/firebase-sa.json
+          echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT_SYNC_SIT }}' > /tmp/gcp-sa.json
+          npx firebase-tools deploy --only functions --project sync-sit --non-interactive --force
+          rm -f /tmp/gcp-sa.json
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: /tmp/gcp-sa.json
