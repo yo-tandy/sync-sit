@@ -518,6 +518,7 @@ export default {
     noReferences: 'Aucune r\u00e9f\u00e9rence',
     noReferencesDesc: 'Après un rendez-vous de babysitting, vous pourrez laisser une référence pour le/la babysitter.',
     referenceForBabysitter: 'Référence pour {{name}}',
+    confirmDelete: 'Êtes-vous sûr de vouloir supprimer votre référence pour {{name}} ?',
     statusApproved: 'Approuvée',
     statusPending: 'En attente',
     statusRemoved: 'Retirée',

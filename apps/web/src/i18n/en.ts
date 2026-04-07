@@ -544,6 +544,7 @@ export default {
     noReferences: 'No references yet',
     noReferencesDesc: "After a babysitting appointment, you'll be able to leave a reference for the babysitter.",
     referenceForBabysitter: 'Reference for {{name}}',
+    confirmDelete: 'Are you sure you want to remove your reference for {{name}}?',
     statusApproved: 'Approved',
     statusPending: 'Pending',
     statusRemoved: 'Removed',
