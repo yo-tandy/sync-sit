@@ -1,47 +1,41 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { useSubmittedReferences } from '@/hooks/useSubmittedReferences';
-import { Button, Card, Badge, TopNav, Spinner } from '@/components/ui';
+import { Button, Card, TopNav, Spinner } from '@/components/ui';
 import { ReferenceDialog } from '@/components/references/ReferenceDialog';
 import { formatBabysitterName } from '@/lib/formatName';
 import type { ReferenceDoc } from '@ejm/shared';
 
-function ReferenceCard({ reference, babysitterName, onEdit }: { reference: ReferenceDoc; babysitterName: string; onEdit: () => void }) {
+function ReferenceCard({ reference, babysitterName, onEdit, onDelete }: { reference: ReferenceDoc; babysitterName: string; onEdit: () => void; onDelete: () => void }) {
   const { t, i18n } = useTranslation();
-  const statusVariant = reference.status === 'approved' ? 'green' : reference.status === 'pending' ? 'amber' : 'gray';
-  const statusLabel = reference.status === 'approved'
-    ? t('submittedReferences.statusApproved')
-    : reference.status === 'pending'
-      ? t('submittedReferences.statusPending')
-      : t('submittedReferences.statusRemoved');
 
   return (
     <Card className="mb-3">
-      <div className="flex items-start justify-between">
-        <div className="min-w-0 flex-1">
-          <p className="text-xs text-gray-500">
-            {t('submittedReferences.referenceForBabysitter', { name: babysitterName || '...' })}
+      <div className="min-w-0">
+        <p className="text-xs text-gray-500">
+          {t('submittedReferences.referenceForBabysitter', { name: babysitterName || '...' })}
+        </p>
+        {reference.referenceText && (
+          <p className="mt-1 text-sm text-gray-700">"{reference.referenceText}"</p>
+        )}
+        {reference.createdAt && (
+          <p className="mt-1 text-xs text-gray-400">
+            {reference.createdAt.toDate?.()
+              ? reference.createdAt.toDate().toLocaleDateString(i18n.language === 'fr' ? 'fr-FR' : 'en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+              : ''}
           </p>
-          {reference.referenceText && (
-            <p className="mt-1 text-sm text-gray-700">"{reference.referenceText}"</p>
-          )}
-          {reference.createdAt && (
-            <p className="mt-1 text-xs text-gray-400">
-              {reference.createdAt.toDate?.()
-                ? reference.createdAt.toDate().toLocaleDateString(i18n.language === 'fr' ? 'fr-FR' : 'en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-                : ''}
-            </p>
-          )}
-        </div>
-        <Badge variant={statusVariant}>{statusLabel}</Badge>
+        )}
       </div>
-      {reference.status !== 'removed' && (
-        <Button size="sm" variant="outline" onClick={onEdit} className="mt-3">
+      <div className="mt-3 flex gap-2">
+        <Button size="sm" variant="outline" onClick={onEdit}>
           {t('references.editMyReference')}
         </Button>
-      )}
+        <Button size="sm" variant="ghost" onClick={onDelete}>
+          {t('common.remove')}
+        </Button>
+      </div>
     </Card>
   );
 }
@@ -114,6 +108,14 @@ export function SubmittedReferencesPage() {
               reference={ref}
               babysitterName={babysitterNames[ref.babysitterUserId] || ''}
               onEdit={() => setEditTarget(ref)}
+              onDelete={async () => {
+                try {
+                  await updateDoc(doc(db, 'references', ref.referenceId), {
+                    status: 'removed',
+                    updatedAt: serverTimestamp(),
+                  });
+                } catch { /* silent */ }
+              }}
             />
           ))
         )}
