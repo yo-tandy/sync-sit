@@ -213,21 +213,6 @@ function RefFormDialog({
         error={form.refEmail ? (emailError ? t(emailError) : undefined) : undefined}
       />
 
-      <div className="mb-5">
-        <label className="mb-2 block text-sm font-medium text-gray-700">{t('references.ejemFamily')}</label>
-        <button
-          type="button"
-          onClick={() => setForm({ ...form, isEjmFamily: !form.isEjmFamily })}
-          className={`rounded-lg border-[1.5px] px-4 py-2 text-sm font-medium transition-colors ${
-            form.isEjmFamily
-              ? 'border-red-600 bg-red-50 text-red-600'
-              : 'border-gray-300 text-gray-700'
-          }`}
-        >
-          {form.isEjmFamily ? `✓ ${t('common.yes')}` : t('common.no')}
-        </button>
-      </div>
-
       <div className="flex gap-3">
         <div className="flex-1">
           <Input
