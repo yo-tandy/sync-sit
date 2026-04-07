@@ -7,7 +7,7 @@ import { Dialog, Button, Input } from '@/components/ui';
 import { PhoneInput } from '@/components/forms/PhoneInput';
 import type { ParentUser, ReferenceDoc } from '@ejm/shared';
 
-interface ReferenceDialogProps {
+interface EndorsementDialogProps {
   babysitterUserId: string;
   babysitterName: string;
   appointmentId: string;
@@ -16,14 +16,14 @@ interface ReferenceDialogProps {
   onSaved?: () => void;
 }
 
-export function ReferenceDialog({
+export function EndorsementDialog({
   babysitterUserId,
   babysitterName,
   appointmentId,
   existingReference,
   onClose,
   onSaved,
-}: ReferenceDialogProps) {
+}: EndorsementDialogProps) {
   const { t } = useTranslation();
   const { userDoc } = useAuthStore();
   const parent = userDoc as ParentUser | null;

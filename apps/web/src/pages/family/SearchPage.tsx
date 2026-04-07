@@ -575,7 +575,7 @@ export function SearchPage() {
                         <p className="text-xs text-gray-500">📍 {b.distance} km away</p>
                       )}
                       {b.referenceCount > 0 && (
-                        <p className="text-xs text-gray-500"><span className="text-green-600">✓</span> {b.referenceCount} reference{b.referenceCount > 1 ? 's' : ''}</p>
+                        <p className="text-xs text-gray-500"><span className="text-green-600">✓</span> {b.referenceCount} endorsement{b.referenceCount > 1 ? 's' : ''}</p>
                       )}
                       {b.aboutMe && (
                         <p className={`mt-1 text-xs text-gray-600 ${isExpanded ? '' : 'line-clamp-2'}`}>"{b.aboutMe}"</p>
@@ -600,7 +600,7 @@ export function SearchPage() {
                                   onClick={(e) => { e.stopPropagation(); setExpandedRefIds((prev) => { const next = new Set(prev); if (refExpanded) next.delete(refKey); else next.add(refKey); return next; }); }}
                                   className="w-full text-left rounded-md px-2 py-1.5 text-xs font-medium text-gray-700 hover:bg-white active:bg-white"
                                 >
-                                  {refExpanded ? '▾' : '▸'} {ref.refName ? `Reference from ${ref.refName}` : `Reference ${i + 1}`}
+                                  {refExpanded ? '▾' : '▸'} {ref.refName ? `Endorsement from ${ref.refName}` : `Endorsement ${i + 1}`}
                                   {ref.isEjmFamily && <span className="ml-1.5 text-blue-600 font-normal">EJM Family</span>}
                                 </button>
                                 {refExpanded && (

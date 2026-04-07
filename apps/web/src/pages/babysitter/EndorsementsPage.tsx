@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '@/config/firebase';
-import { useReferences } from '@/hooks/useReferences';
+import { useEndorsements } from '@/hooks/useEndorsements';
 import { Button, Card, Badge, Input, Textarea, Dialog, TopNav, Spinner } from '@/components/ui';
 import { PlusIcon } from '@/components/ui/Icons';
 import type { ReferenceDoc } from '@ejm/shared';
@@ -259,7 +259,7 @@ function RefFormDialog({
 }
 
 // ── Main Page ──
-export function ReferencesPage() {
+export function EndorsementsPage() {
   const { t } = useTranslation();
   const {
     manualRefs,
@@ -270,7 +270,7 @@ export function ReferencesPage() {
     removeReference,
     publishReference,
     unpublishReference,
-  } = useReferences();
+  } = useEndorsements();
 
   // Load family names for family-submitted refs that don't have submittedByName
   const [familyNames, setFamilyNames] = useState<Record<string, string>>({});

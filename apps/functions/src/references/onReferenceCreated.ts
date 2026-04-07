@@ -31,13 +31,13 @@ export const notifyOnNewReference = onDocumentCreated(
     // Send email
     if (refsPrefs.email && babysitter.email) {
       const emailBody = `
-        <p><strong>${submitterName}</strong> has submitted a reference for you on Sync/Sit.</p>
-        <p>Go to your References page to review it and choose whether to publish it on your profile.</p>
-        <p style="margin-top: 16px;"><a href="https://sync-sit.com/babysitter/references" style="background: #DC2626; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View References</a></p>
+        <p><strong>${submitterName}</strong> has submitted an endorsement for you on Sync/Sit.</p>
+        <p>Go to your Endorsements page to review it and choose whether to publish it on your profile.</p>
+        <p style="margin-top: 16px;"><a href="https://sync-sit.com/babysitter/endorsements" style="background: #DC2626; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View Endorsements</a></p>
       `;
       await sendNotificationEmail(
         babysitter.email,
-        `New reference from ${submitterName}`,
+        `New endorsement from ${submitterName}`,
         emailBody
       );
     }
@@ -46,8 +46,8 @@ export const notifyOnNewReference = onDocumentCreated(
     if (refsPrefs.push) {
       await sendPushNotification(
         babysitterUserId,
-        'New reference received',
-        `${submitterName} has submitted a reference for you.`,
+        'New endorsement received',
+        `${submitterName} has submitted an endorsement for you.`,
         { type: 'reference_received' }
       );
     }
@@ -56,8 +56,8 @@ export const notifyOnNewReference = onDocumentCreated(
     await db.collection('notifications').add({
       recipientUserId: babysitterUserId,
       type: 'reference_received',
-      title: 'New reference received',
-      body: `${submitterName} has submitted a reference for you.`,
+      title: 'New endorsement received',
+      body: `${submitterName} has submitted an endorsement for you.`,
       data: { referenceId: event.params.referenceId },
       read: false,
       channels: ['email', 'push'],
