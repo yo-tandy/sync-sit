@@ -111,7 +111,17 @@ export function SearchPage() {
   const [expandedBabysitter, setExpandedBabysitter] = useState<string | null>(null);
 
   // References for expanded babysitter
-  const [babysitterRefs, setBabysitterRefs] = useState<Record<string, { text: string; submittedByName: string; refName: string }[]>>({});
+  interface RefInfo {
+    text: string;
+    refName: string;
+    refEmail?: string;
+    refPhone?: string;
+    refWhatsapp?: string;
+    isEjmFamily?: boolean;
+    numberOfKids?: number;
+    kidAges?: number[];
+  }
+  const [babysitterRefs, setBabysitterRefs] = useState<Record<string, RefInfo[]>>({});
   const [expandedRefIdx, setExpandedRefIdx] = useState<string | null>(null);
 
   const loadRefs = async (uid: string) => {
@@ -125,12 +135,17 @@ export function SearchPage() {
           limit(10)
         )
       );
-      const refs = snap.docs.map((d) => {
+      const refs: RefInfo[] = snap.docs.map((d) => {
         const data = d.data();
         return {
           text: data.referenceText || data.note || '',
-          submittedByName: data.submittedByName || '',
-          refName: data.refName || '',
+          refName: data.submittedByName || data.refName || '',
+          refEmail: data.refEmail || undefined,
+          refPhone: data.refPhone || undefined,
+          refWhatsapp: data.refWhatsapp || undefined,
+          isEjmFamily: data.isEjmFamily || false,
+          numberOfKids: data.numberOfKids || undefined,
+          kidAges: data.kidAges || undefined,
         };
       }).filter((r) => r.text);
       setBabysitterRefs((prev) => ({ ...prev, [uid]: refs }));
@@ -574,22 +589,45 @@ export function SearchPage() {
                         <p className="text-xs leading-relaxed text-gray-600">{b.aboutMe}</p>
                       )}
                       {babysitterRefs[b.uid]?.length > 0 && (
-                        <div>
-                          <p className="mb-1 text-xs font-medium text-gray-500">✓ {t('references.familyReviews')}</p>
+                        <div className="mt-2 rounded-lg border border-gray-200 bg-gray-50 p-3">
+                          <p className="mb-2 text-xs font-semibold text-gray-700"><span className="text-green-600">✓</span> {t('references.familyReviews')} ({babysitterRefs[b.uid].length})</p>
                           {babysitterRefs[b.uid].map((ref, i) => {
                             const refKey = `${b.uid}-${i}`;
                             const refExpanded = expandedRefIdx === refKey;
-                            const refName = ref.submittedByName || ref.refName || '';
                             return (
-                              <div key={i}>
+                              <div key={i} className="mb-1.5 last:mb-0">
                                 <button
                                   onClick={(e) => { e.stopPropagation(); setExpandedRefIdx(refExpanded ? null : refKey); }}
-                                  className="w-full text-left rounded-md px-2 py-1.5 text-xs text-gray-700 hover:bg-gray-50 active:bg-gray-100"
+                                  className="w-full text-left rounded-md px-2 py-1.5 text-xs font-medium text-gray-700 hover:bg-white active:bg-white"
                                 >
-                                  {refExpanded ? '▾' : '▸'} {refName ? `Reference from ${refName}` : `Reference ${i + 1}`}
+                                  {refExpanded ? '▾' : '▸'} {ref.refName ? `Reference from ${ref.refName}` : `Reference ${i + 1}`}
+                                  {ref.isEjmFamily && <span className="ml-1.5 text-blue-600 font-normal">EJM Family</span>}
                                 </button>
                                 {refExpanded && (
-                                  <p className="ml-4 mb-1 text-xs text-gray-600 italic">"{ref.text}"</p>
+                                  <div className="ml-4 mt-1 mb-2 space-y-1">
+                                    <p className="text-xs text-gray-600 italic">"{ref.text}"</p>
+                                    {ref.refEmail && (
+                                      <a href={`mailto:${ref.refEmail}`} onClick={(e) => e.stopPropagation()} className="flex items-center gap-1.5 text-xs text-red-600">
+                                        <span>📧</span> {ref.refEmail}
+                                      </a>
+                                    )}
+                                    {ref.refPhone && (
+                                      <a href={`tel:${ref.refPhone}`} onClick={(e) => e.stopPropagation()} className="flex items-center gap-1.5 text-xs text-red-600">
+                                        <span>📞</span> {ref.refPhone}
+                                      </a>
+                                    )}
+                                    {ref.refWhatsapp && (
+                                      <a href={`https://wa.me/${ref.refWhatsapp.replace(/[^\d+]/g, '').replace('+', '')}`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="flex items-center gap-1.5 text-xs text-green-600">
+                                        <span>💬</span> {ref.refWhatsapp !== ref.refPhone ? ref.refWhatsapp : 'WhatsApp'}
+                                      </a>
+                                    )}
+                                    {ref.numberOfKids && ref.numberOfKids > 0 && (
+                                      <p className="text-xs text-gray-500">
+                                        👶 {ref.numberOfKids} {ref.numberOfKids === 1 ? 'child' : 'children'}
+                                        {ref.kidAges?.length ? ` (ages ${ref.kidAges.join(', ')})` : ''}
+                                      </p>
+                                    )}
+                                  </div>
                                 )}
                               </div>
                             );
