@@ -294,6 +294,15 @@ export default {
     approved: 'Approved',
     pending: 'Pending',
     removeAvailability: 'Remove availability',
+    leaveReference: 'Leave a reference',
+    editMyReference: 'Edit reference',
+    referencePrompt: 'How was {{name}}?',
+    referencePromptDesc: 'Leave a reference to help other families',
+    referencePlaceholder: 'Share your experience with this babysitter...',
+    referenceSubmitted: 'Reference submitted!',
+    referenceUpdated: 'Reference updated!',
+    minLength: 'At least 10 characters',
+    submittedBy: 'by {{name}}',
   },
 
   // Search

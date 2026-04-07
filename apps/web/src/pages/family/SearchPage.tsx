@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
-import { doc, getDoc, collection, getDocs, query, where } from 'firebase/firestore';
+import { doc, getDoc, collection, getDocs, query, where, limit } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
@@ -109,6 +109,29 @@ export function SearchPage() {
 
   // Expanded card
   const [expandedBabysitter, setExpandedBabysitter] = useState<string | null>(null);
+
+  // References for expanded babysitter
+  const [babysitterRefs, setBabysitterRefs] = useState<Record<string, { text: string; familyName: string }[]>>({});
+
+  const loadRefs = async (uid: string) => {
+    if (babysitterRefs[uid]) return; // already loaded
+    try {
+      const snap = await getDocs(
+        query(
+          collection(db, 'references'),
+          where('babysitterUserId', '==', uid),
+          where('type', '==', 'family_submitted'),
+          where('status', '==', 'approved'),
+          limit(5)
+        )
+      );
+      const refs = snap.docs.map((d) => {
+        const data = d.data();
+        return { text: data.referenceText || '', familyName: data.submittedByFamilyId ? '' : '' };
+      }).filter((r) => r.text);
+      setBabysitterRefs((prev) => ({ ...prev, [uid]: refs }));
+    } catch { /* silent */ }
+  };
 
   // Contact dialog
   const [contactTarget, setContactTarget] = useState<BabysitterResult | null>(null);
@@ -503,7 +526,7 @@ export function SearchPage() {
               const renderCard = (b: BabysitterResult) => {
                 const isExpanded = expandedBabysitter === b.uid;
                 return (
-                <Card key={b.uid} className="mb-3 cursor-pointer" onClick={() => setExpandedBabysitter(isExpanded ? null : b.uid)}>
+                <Card key={b.uid} className="mb-3 cursor-pointer" onClick={() => { const next = isExpanded ? null : b.uid; setExpandedBabysitter(next); if (next) loadRefs(b.uid); }}>
                   <div className="flex gap-3">
                     <Avatar initials={`${(b.firstName || '')[0] || ''}${(b.lastName || '')[0] || ''}`} src={b.photoUrl || undefined} size="lg" />
                     <div className="min-w-0 flex-1">
@@ -541,9 +564,19 @@ export function SearchPage() {
                     </div>
                   </div>
 
-                  {isExpanded && b.aboutMe && (
-                    <div className="mt-3 border-t border-gray-100 pt-3">
-                      <p className="text-xs leading-relaxed text-gray-600">{b.aboutMe}</p>
+                  {isExpanded && (
+                    <div className="mt-3 border-t border-gray-100 pt-3 space-y-2">
+                      {b.aboutMe && (
+                        <p className="text-xs leading-relaxed text-gray-600">{b.aboutMe}</p>
+                      )}
+                      {babysitterRefs[b.uid]?.length > 0 && (
+                        <div>
+                          <p className="mb-1 text-xs font-medium text-gray-500">{t('references.familyReviews')}</p>
+                          {babysitterRefs[b.uid].map((ref, i) => (
+                            <p key={i} className="mb-1 text-xs text-gray-600 italic">"{ref.text}"</p>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   )}
 

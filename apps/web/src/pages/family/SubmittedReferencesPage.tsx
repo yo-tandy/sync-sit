@@ -1,9 +1,11 @@
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSubmittedReferences } from '@/hooks/useSubmittedReferences';
-import { Card, Badge, TopNav, Spinner } from '@/components/ui';
+import { Button, Card, Badge, TopNav, Spinner } from '@/components/ui';
+import { ReferenceDialog } from '@/components/references/ReferenceDialog';
 import type { ReferenceDoc } from '@ejm/shared';
 
-function ReferenceCard({ reference }: { reference: ReferenceDoc }) {
+function ReferenceCard({ reference, onEdit }: { reference: ReferenceDoc; onEdit: () => void }) {
   const { t, i18n } = useTranslation();
   const statusVariant = reference.status === 'approved' ? 'green' : reference.status === 'pending' ? 'amber' : 'gray';
   const statusLabel = reference.status === 'approved'
@@ -30,6 +32,11 @@ function ReferenceCard({ reference }: { reference: ReferenceDoc }) {
         </div>
         <Badge variant={statusVariant}>{statusLabel}</Badge>
       </div>
+      {reference.status !== 'removed' && (
+        <Button size="sm" variant="outline" onClick={onEdit} className="mt-3">
+          {t('references.editMyReference')}
+        </Button>
+      )}
     </Card>
   );
 }
@@ -37,6 +44,7 @@ function ReferenceCard({ reference }: { reference: ReferenceDoc }) {
 export function SubmittedReferencesPage() {
   const { t } = useTranslation();
   const { references, loading } = useSubmittedReferences();
+  const [editTarget, setEditTarget] = useState<ReferenceDoc | null>(null);
 
   if (loading) {
     return (
@@ -67,10 +75,20 @@ export function SubmittedReferencesPage() {
           </div>
         ) : (
           references.map((ref) => (
-            <ReferenceCard key={ref.referenceId} reference={ref} />
+            <ReferenceCard key={ref.referenceId} reference={ref} onEdit={() => setEditTarget(ref)} />
           ))
         )}
       </div>
+
+      {editTarget && (
+        <ReferenceDialog
+          babysitterUserId={editTarget.babysitterUserId}
+          babysitterName=""
+          appointmentId={editTarget.appointmentId || ''}
+          existingReference={editTarget}
+          onClose={() => setEditTarget(null)}
+        />
+      )}
     </div>
   );
 }

@@ -280,7 +280,16 @@ export default {
     approve: 'Approuver',
     approved: 'Approuv\u00e9e',
     pending: 'En attente',
-    removeAvailability: 'Supprimer la disponibilit\u00e9',
+    removeAvailability: 'Supprimer la disponibilité',
+    leaveReference: 'Laisser une référence',
+    editMyReference: 'Modifier la référence',
+    referencePrompt: 'Comment était {{name}} ?',
+    referencePromptDesc: 'Laissez une référence pour aider les autres familles',
+    referencePlaceholder: 'Partagez votre expérience avec ce babysitter...',
+    referenceSubmitted: 'Référence envoyée !',
+    referenceUpdated: 'Référence mise à jour !',
+    minLength: 'Au moins 10 caractères',
+    submittedBy: 'par {{name}}',
   },
 
   search: {

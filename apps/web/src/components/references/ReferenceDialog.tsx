@@ -1,0 +1,111 @@
+import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { doc, addDoc, updateDoc, collection, serverTimestamp } from 'firebase/firestore';
+import { db } from '@/config/firebase';
+import { useAuthStore } from '@/stores/authStore';
+import { Dialog, Button, Textarea } from '@/components/ui';
+import type { ParentUser, ReferenceDoc } from '@ejm/shared';
+
+interface ReferenceDialogProps {
+  babysitterUserId: string;
+  babysitterName: string;
+  appointmentId: string;
+  existingReference?: ReferenceDoc;
+  onClose: () => void;
+  onSaved?: () => void;
+}
+
+export function ReferenceDialog({
+  babysitterUserId,
+  babysitterName,
+  appointmentId,
+  existingReference,
+  onClose,
+  onSaved,
+}: ReferenceDialogProps) {
+  const { t } = useTranslation();
+  const { userDoc } = useAuthStore();
+  const parent = userDoc as ParentUser | null;
+
+  const [text, setText] = useState(existingReference?.referenceText || '');
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  const isEdit = !!existingReference;
+  const isValid = text.trim().length >= 10;
+
+  const handleSubmit = async () => {
+    if (!parent || !isValid) return;
+    setSaving(true);
+    try {
+      if (isEdit && existingReference) {
+        // Update existing reference
+        await updateDoc(doc(db, 'references', existingReference.referenceId), {
+          referenceText: text.trim(),
+          updatedAt: serverTimestamp(),
+        });
+      } else {
+        // Create new reference
+        const ref = await addDoc(collection(db, 'references'), {
+          type: 'family_submitted',
+          status: 'approved',
+          babysitterUserId,
+          submittedByUserId: parent.uid,
+          submittedByFamilyId: parent.familyId,
+          appointmentId,
+          referenceText: text.trim(),
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+        // Set referenceId to match the doc ID
+        await updateDoc(ref, { referenceId: ref.id });
+      }
+      setSaved(true);
+      onSaved?.();
+      setTimeout(() => onClose(), 1500);
+    } catch (err) {
+      console.error('Failed to save reference:', err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open onClose={onClose}>
+      {saved ? (
+        <div className="text-center py-4">
+          <div className="mb-3 text-3xl">✅</div>
+          <p className="text-sm font-semibold text-gray-900">
+            {isEdit ? t('references.referenceUpdated') : t('references.referenceSubmitted')}
+          </p>
+        </div>
+      ) : (
+        <>
+          <h3 className="mb-1 text-lg font-bold">
+            {isEdit ? t('references.editMyReference') : t('references.referencePrompt', { name: babysitterName })}
+          </h3>
+          <p className="mb-4 text-sm text-gray-500">
+            {t('references.referencePromptDesc')}
+          </p>
+          <Textarea
+            label=""
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder={t('references.referencePlaceholder')}
+          />
+          {text.length > 0 && text.trim().length < 10 && (
+            <p className="mb-3 text-xs text-amber-600">{t('references.minLength')}</p>
+          )}
+          <div className="flex gap-2">
+            <Button onClick={handleSubmit} disabled={saving || !isValid} className="flex-1">
+              {saving ? '...' : isEdit ? t('common.save') : t('references.leaveReference')}
+            </Button>
+            <Button variant="ghost" onClick={onClose} className="flex-1">
+              {t('common.cancel')}
+            </Button>
+          </div>
+        </>
+      )}
+    </Dialog>
+  );
+}
