@@ -68,8 +68,8 @@ export function StepProfile({ uid, onNext }: StepProfileProps) {
 
   return (
     <form onSubmit={handleSubmit} className="px-6">
-      <h2 className="mb-2 text-xl font-bold">{t('enrollment.immutableFieldsTitle')}</h2>
-      <p className="mb-6 text-sm text-gray-500">{t('enrollment.immutableFieldsDesc')}</p>
+      <h2 className="mb-2 text-xl font-bold">{t('enrollment.welcomeTitle')}</h2>
+      <p className="mb-6 text-sm text-gray-500">{t('enrollment.welcomeSubtitle')}</p>
 
       <div className="flex gap-3">
         <div className="flex-1">

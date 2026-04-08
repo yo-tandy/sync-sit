@@ -152,6 +152,8 @@ export default {
     consentAnd: 'et la',
     privacyPolicy: 'Politique de confidentialité',
     consentChildren: 'Je consens au traitement des données personnelles de mes enfants tel que décrit dans la Politique de confidentialité.',
+    welcomeTitle: 'Bienvenue sur Sync/Sit. Commençons par vos informations de base',
+    welcomeSubtitle: 'Vous ne pourrez pas les modifier plus tard',
     completeProfile: 'Complétez votre profil',
     completeProfileDesc: 'Renseignez vos préférences de babysitting pour être visible par les familles.',
     completeProfileButton: 'Compléter le profil',

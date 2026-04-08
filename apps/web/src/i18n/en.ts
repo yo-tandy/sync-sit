@@ -160,6 +160,8 @@ export default {
     consentAnd: 'and',
     privacyPolicy: 'Privacy Policy',
     consentChildren: 'I consent to the processing of my children\'s personal data as described in the Privacy Policy.',
+    welcomeTitle: 'Welcome to Sync/Sit. Let\'s start with your basic information',
+    welcomeSubtitle: 'You won\'t be able to change these later',
     completeProfile: 'Complete your profile',
     completeProfileDesc: 'Fill in your babysitting preferences to become visible to families.',
     completeProfileButton: 'Complete Profile',

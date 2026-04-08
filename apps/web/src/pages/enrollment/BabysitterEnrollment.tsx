@@ -205,20 +205,17 @@ export function BabysitterEnrollment() {
   return (
     <div>
       {isPostAccountStep ? (
-        <>
-          <EnrollmentAppBar />
-          <div className="px-5 pt-3 pb-1">
-            <h2 className="text-lg font-bold text-gray-900">{t('enrollment.babysitterTitle')}</h2>
-          </div>
-        </>
+        <EnrollmentAppBar />
       ) : (
-        <TopNav
-          title={t('enrollment.babysitterTitle')}
-          backTo={step === 0 ? '/' : undefined}
-          onBack={step > 0 ? () => setStep(step - 1) : undefined}
-        />
+        <>
+          <TopNav
+            title={t('enrollment.babysitterTitle')}
+            backTo={step === 0 ? '/' : undefined}
+            onBack={step > 0 ? () => setStep(step - 1) : undefined}
+          />
+          <StepIndicator totalSteps={3} currentStep={step} />
+        </>
       )}
-      <StepIndicator totalSteps={5} currentStep={step} />
       {renderStep()}
     </div>
   );
