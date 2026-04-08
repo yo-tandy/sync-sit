@@ -65,7 +65,7 @@ export function AdminDashboard() {
             <Spinner className="h-8 w-8 text-red-600" />
           </div>
         ) : (
-          <div className="mb-6 grid grid-cols-3 gap-3">
+          <div className="mb-6 grid grid-cols-2 gap-3">
             <Card className="text-center">
               <p className="text-2xl font-bold text-red-600">{stats?.babysitterCount ?? 0}</p>
               <p className="mt-1 text-xs text-gray-500">{t('admin.babysitters')}</p>
@@ -78,6 +78,12 @@ export function AdminDashboard() {
               <p className="text-2xl font-bold text-red-600">{stats?.appointmentCount ?? 0}</p>
               <p className="mt-1 text-xs text-gray-500">{t('admin.appointments')}</p>
             </Card>
+            <Link to="/admin/verifications">
+              <Card className={`text-center ${(stats?.pendingVerificationCount ?? 0) > 0 ? 'border-amber-300 bg-amber-50' : ''}`}>
+                <p className={`text-2xl font-bold ${(stats?.pendingVerificationCount ?? 0) > 0 ? 'text-amber-600' : 'text-red-600'}`}>{stats?.pendingVerificationCount ?? 0}</p>
+                <p className="mt-1 text-xs text-gray-500">{t('admin.pendingVerifications')}</p>
+              </Card>
+            </Link>
           </div>
         )}
 
