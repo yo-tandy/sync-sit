@@ -62,7 +62,7 @@ export function EnrollmentAppBar() {
           <MenuItem
             icon={<LogOutIcon className="h-5 w-5" />}
             label={t('common.signOut')}
-            onClick={() => { setMenuOpen(false); logout(); }}
+            onClick={async () => { setMenuOpen(false); await logout(); window.location.href = '/'; }}
           />
         </div>
       </Dialog>
