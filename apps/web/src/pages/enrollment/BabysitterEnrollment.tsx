@@ -8,6 +8,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { TopNav, StepIndicator } from '@/components/ui';
 import { StepEmail } from './babysitter/StepEmail';
 import { StepVerify } from './babysitter/StepVerify';
+import { StepPassword } from './babysitter/StepPassword';
 import { StepProfile } from './babysitter/StepProfile';
 import { StepPreferences } from './babysitter/StepPreferences';
 import type { BabysitterUser } from '@ejm/shared';
@@ -17,7 +18,6 @@ export interface BabysitterFormData {
   ejemEmail: string;
   verificationCode: string;
   password: string;
-  // Legacy fields — no longer used by new steps
   firstName: string;
   lastName: string;
   dateOfBirth: string;
@@ -45,8 +45,10 @@ export function BabysitterEnrollment() {
   const navigate = useNavigate();
   const { firebaseUser, userDoc, loading: authLoading } = useAuthStore();
 
+  // Steps: 0=Email, 1=Verify code, 2=Password+consent, 3=Immutable profile, 4=Mutable prefs
   const [step, setStep] = useState(0);
   const [ejemEmail, setEjemEmail] = useState('');
+  const [verificationCode, setVerificationCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -56,20 +58,18 @@ export function BabysitterEnrollment() {
     if (firebaseUser && userDoc?.role === 'babysitter') {
       const babysitter = userDoc as BabysitterUser;
       if (babysitter.enrollmentComplete === false) {
-        // Determine which step to resume at
         if (!babysitter.firstName) {
-          setStep(2); // Need immutable fields
+          setStep(3); // Need immutable fields
         } else {
-          setStep(3); // Need mutable fields
+          setStep(4); // Need mutable fields
         }
       } else {
-        // Enrollment complete — go to dashboard
         navigate('/babysitter');
       }
     }
   }, [authLoading, firebaseUser, userDoc, navigate]);
 
-  // StepEmail compatibility — uses the old form data interface
+  // StepEmail compatibility
   const formDataForEmail = {
     ejemEmail,
     verificationCode: '',
@@ -93,14 +93,20 @@ export function BabysitterEnrollment() {
     }
   };
 
-  const handleCreateAccount = async (code: string, password: string, consentVersion: string) => {
+  const handleCodeVerified = (code: string) => {
+    setVerificationCode(code);
+    setError(null);
+    setStep(2);
+  };
+
+  const handleCreateAccount = async (password: string, consentVersion: string) => {
     setLoading(true);
     setError(null);
     try {
       const enrollFn = httpsCallable(functions, 'enrollBabysitter');
       await enrollFn({
         ejemEmail,
-        verificationCode: code,
+        verificationCode,
         password,
         consentVersion,
       });
@@ -117,7 +123,7 @@ export function BabysitterEnrollment() {
         if (!current.loading && current.userDoc) { unsub(); resolve(); }
       });
 
-      setStep(2);
+      setStep(3);
     } catch (err: any) {
       setError(err.message || 'Failed to create account');
     } finally {
@@ -133,9 +139,8 @@ export function BabysitterEnrollment() {
   };
 
   const handleProfileComplete = () => {
-    // Refresh user doc so step 3 sees the updated data
     useAuthStore.getState().refreshUserDoc();
-    setStep(3);
+    setStep(4);
   };
 
   const handleEnrollmentComplete = () => {
@@ -144,7 +149,6 @@ export function BabysitterEnrollment() {
 
   const uid = firebaseUser?.uid || '';
 
-  // Determine which step to render
   const renderStep = () => {
     switch (step) {
       case 0:
@@ -163,20 +167,27 @@ export function BabysitterEnrollment() {
         return (
           <StepVerify
             ejemEmail={ejemEmail}
-            onCreateAccount={handleCreateAccount}
+            onVerified={handleCodeVerified}
             onResend={handleResendCode}
-            loading={loading}
             error={error}
           />
         );
       case 2:
+        return (
+          <StepPassword
+            onCreateAccount={handleCreateAccount}
+            loading={loading}
+            error={error}
+          />
+        );
+      case 3:
         return (
           <StepProfile
             uid={uid}
             onNext={handleProfileComplete}
           />
         );
-      case 3:
+      case 4:
         return (
           <StepPreferences
             uid={uid}
@@ -193,9 +204,9 @@ export function BabysitterEnrollment() {
       <TopNav
         title={t('enrollment.babysitterTitle')}
         backTo={step === 0 ? '/' : undefined}
-        onBack={step > 0 && step < 2 ? () => setStep(step - 1) : undefined}
+        onBack={step > 0 && step < 3 ? () => setStep(step - 1) : undefined}
       />
-      <StepIndicator totalSteps={4} currentStep={step} />
+      <StepIndicator totalSteps={5} currentStep={step} />
       {renderStep()}
     </div>
   );
