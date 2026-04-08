@@ -28,6 +28,8 @@ export function StepPreferences({ uid, onComplete }: StepPreferencesProps) {
   const [aboutMe, setAboutMe] = useState('');
   const [contactEmail, setContactEmail] = useState('');
   const [contactPhone, setContactPhone] = useState('');
+  const [whatsapp, setWhatsapp] = useState('');
+  const [whatsappSameAsPhone, setWhatsappSameAsPhone] = useState(true);
   const [areaMode, setAreaMode] = useState<'arrondissement' | 'distance'>('arrondissement');
   const [arrondissements, setArrondissements] = useState<string[]>([]);
   const [areaAddress, setAreaAddress] = useState('');
@@ -46,6 +48,7 @@ export function StepPreferences({ uid, onComplete }: StepPreferencesProps) {
     if (babysitter.aboutMe) setAboutMe(babysitter.aboutMe);
     if (babysitter.contactEmail) setContactEmail(babysitter.contactEmail);
     if (babysitter.contactPhone) setContactPhone(babysitter.contactPhone);
+    if (babysitter.whatsapp) { setWhatsapp(babysitter.whatsapp); setWhatsappSameAsPhone(babysitter.whatsapp === babysitter.contactPhone); }
     if (babysitter.areaMode) setAreaMode(babysitter.areaMode);
     if (babysitter.arrondissements) setArrondissements(babysitter.arrondissements);
     if (babysitter.areaAddress) setAreaAddress(babysitter.areaAddress);
@@ -73,6 +76,7 @@ export function StepPreferences({ uid, onComplete }: StepPreferencesProps) {
         aboutMe: aboutMe || null,
         contactEmail: contactEmail || null,
         contactPhone: contactPhone || null,
+        whatsapp: whatsappSameAsPhone ? (contactPhone || null) : (whatsapp || null),
         areaMode,
         arrondissements: areaMode === 'arrondissement' ? arrondissements : [],
         areaAddress: areaMode === 'distance' ? areaAddress : null,
@@ -108,32 +112,30 @@ export function StepPreferences({ uid, onComplete }: StepPreferencesProps) {
 
   return (
     <div className="px-6">
-      <h2 className="mb-2 text-xl font-bold">{t('enrollment.mutableFieldsTitle')}</h2>
+      <h2 className="mt-6 mb-2 text-xl font-bold">{t('enrollment.step4Title')}</h2>
       <p className="mb-6 text-sm text-gray-500">{t('enrollment.mutableFieldsDesc')}</p>
 
       {/* Languages */}
       <LanguagePicker selected={languages} onChange={setLanguages} />
+      <p className="mb-4 -mt-3 text-xs text-gray-400">{t('enrollment.languagesHint')}</p>
 
       <hr className="my-5 border-gray-200" />
 
-      {/* Preferences */}
-      <h3 className="mb-3 text-sm font-semibold text-gray-700">{t('profile.babysittingPreferences')}</h3>
-      <div className="flex gap-3">
+      {/* Kids preferences — 3 in a row */}
+      <div className="flex gap-2">
         <div className="flex-1">
-          <Input label={t('enrollment.kidsAgeMin')} type="number" value={kidAgeMin || ''} onChange={(e) => setKidAgeMin(e.target.value === '' ? 0 : parseInt(e.target.value))} min={0} max={18} />
+          <Input label={t('enrollment.kidsAgeMin')} type="number" value={kidAgeMin || ''} onChange={(e) => setKidAgeMin(e.target.value === '' ? 0 : parseInt(e.target.value))} min={0} max={18} hint={t('enrollment.kidsAgeMinHint')} />
         </div>
         <div className="flex-1">
-          <Input label={t('enrollment.kidsAgeMax')} type="number" value={kidAgeMax || ''} onChange={(e) => setKidAgeMax(e.target.value === '' ? 0 : parseInt(e.target.value))} min={0} max={18} />
-        </div>
-      </div>
-      <div className="flex gap-3">
-        <div className="flex-1">
-          <Input label={t('enrollment.maxKids')} type="number" value={maxKids || ''} onChange={(e) => setMaxKids(e.target.value === '' ? 0 : parseInt(e.target.value))} min={1} max={10} />
+          <Input label={t('enrollment.kidsAgeMax')} type="number" value={kidAgeMax || ''} onChange={(e) => setKidAgeMax(e.target.value === '' ? 0 : parseInt(e.target.value))} min={0} max={18} hint={t('enrollment.kidsAgeMaxHint')} />
         </div>
         <div className="flex-1">
-          <Input label={t('enrollment.rateLabel')} type="number" value={hourlyRate || ''} onChange={(e) => setHourlyRate(e.target.value === '' ? 0 : parseFloat(e.target.value))} min={0} />
+          <Input label={t('enrollment.maxKids')} type="number" value={maxKids || ''} onChange={(e) => setMaxKids(e.target.value === '' ? 0 : parseInt(e.target.value))} min={1} max={10} hint={t('enrollment.maxKidsHint')} />
         </div>
       </div>
+
+      {/* Rate — separate line with tooltip */}
+      <Input label={t('enrollment.rateLabel')} type="number" value={hourlyRate || ''} onChange={(e) => setHourlyRate(e.target.value === '' ? 0 : parseFloat(e.target.value))} min={0} tooltip={t('enrollment.rateTooltip')} />
 
       <Textarea label={t('enrollment.aboutMe')} value={aboutMe} onChange={(e) => setAboutMe(e.target.value)} placeholder={t('enrollment.aboutMePlaceholder')} />
 
@@ -142,7 +144,29 @@ export function StepPreferences({ uid, onComplete }: StepPreferencesProps) {
       {/* Contact */}
       <h3 className="mb-3 text-sm font-semibold text-gray-700">{t('account.contactInfo')}</h3>
       <Input label={t('common.email')} type="email" value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} />
-      <PhoneInput label={t('account.phone')} value={contactPhone} onChange={setContactPhone} />
+      <PhoneInput label={t('account.phone')} value={contactPhone} onChange={(val) => { setContactPhone(val); if (whatsappSameAsPhone) setWhatsapp(val); }} />
+
+      <div className="mb-5">
+        <label className="mb-2 flex items-center gap-2 text-sm font-medium text-gray-700">
+          <span>WhatsApp</span>
+        </label>
+        <label className="mb-3 flex items-center gap-2 text-sm text-gray-600">
+          <input
+            type="checkbox"
+            checked={whatsappSameAsPhone}
+            onChange={(e) => {
+              setWhatsappSameAsPhone(e.target.checked);
+              if (e.target.checked) setWhatsapp(contactPhone);
+              else setWhatsapp('');
+            }}
+            className="h-4 w-4 rounded border-gray-300 text-red-600 focus:ring-red-500"
+          />
+          {t('account.whatsappSameAsPhone')}
+        </label>
+        {!whatsappSameAsPhone && (
+          <PhoneInput label="" value={whatsapp} onChange={setWhatsapp} />
+        )}
+      </div>
 
       <hr className="my-5 border-gray-200" />
 
