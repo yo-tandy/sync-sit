@@ -102,7 +102,6 @@ export function BabysittingOptionsPage() {
 
       <form onSubmit={handleSave} className="px-5 pt-4 pb-8">
         {success && <InfoBanner className="mb-4">{t('profile.saved')}</InfoBanner>}
-        {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
 
         {/* Languages */}
         <LanguagePicker selected={languages} onChange={setLanguages} />
@@ -184,6 +183,7 @@ export function BabysittingOptionsPage() {
           )}
         </div>
 
+        {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
         <Button type="submit" disabled={saving} className="mt-4">
           {saving ? t('common.saving') : t('common.save')}
         </Button>
