@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
-import { Button, Input, Textarea, Chip, TopNav, InfoBanner } from '@/components/ui';
+import { Button, Input, Textarea, Chip, TopNav } from '@/components/ui';
 import { LanguagePicker } from '@/components/forms/LanguagePicker';
 import { AddressAutocomplete, type AddressResult } from '@/components/forms/AddressAutocomplete';
 import { ARRONDISSEMENTS, NEARBY_TOWNS } from '@ejm/shared';
@@ -101,7 +101,6 @@ export function BabysittingOptionsPage() {
       <TopNav title={t('menu.babysittingOptions')} backTo="/babysitter" />
 
       <form onSubmit={handleSave} className="px-5 pt-4 pb-8">
-        {success && <InfoBanner className="mb-4">{t('profile.saved')}</InfoBanner>}
 
         {/* Languages */}
         <LanguagePicker selected={languages} onChange={setLanguages} />
@@ -184,6 +183,7 @@ export function BabysittingOptionsPage() {
         </div>
 
         {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
+        {success && <p className="mt-4 text-sm text-green-600">✓ {t('profile.saved')}</p>}
         <Button type="submit" disabled={saving} className="mt-4">
           {saving ? t('common.saving') : t('common.save')}
         </Button>
