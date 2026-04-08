@@ -5,6 +5,7 @@ import { doc, updateDoc, serverTimestamp, collection, query, where, getDocs } fr
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
+import { isBabysitterProfileComplete } from '@ejm/shared';
 import { useAppointments } from '@/hooks/useAppointments';
 import { useSchedule } from '@/hooks/useSchedule';
 import { AppointmentCard } from '@/components/appointments/AppointmentCard';
@@ -149,8 +150,18 @@ export function BabysitterDashboard() {
     }
   }, [babysitter, scheduleLoading, weekly, isSearchable, uid]);
 
+  const profileComplete = babysitter ? isBabysitterProfileComplete(babysitter as unknown as Record<string, unknown>) : false;
+
   const handleToggleSearchable = async () => {
     if (!uid) return;
+
+    // Guard: can't activate without mandatory fields
+    if (!isSearchable && !profileComplete) {
+      alert(t('enrollment.mandatoryFieldsMissingActivate'));
+      setToggleDialog(false);
+      return;
+    }
+
     setToggling(true);
     try {
       await updateDoc(doc(db, 'users', uid), {
@@ -198,6 +209,17 @@ export function BabysitterDashboard() {
           {isSearchable ? t('babysitterDashboard.active') : t('babysitterDashboard.inactive')}
         </button>
       </div>
+
+      {/* ── Profile completion banner ── */}
+      {!profileComplete && (
+        <Card className="mb-4 border-amber-300 bg-amber-50">
+          <p className="mb-1 text-sm font-semibold text-amber-800">{t('enrollment.mandatoryFieldsMissing')}</p>
+          <p className="mb-3 text-xs text-amber-600">{t('enrollment.completeProfileDesc')}</p>
+          <Button size="sm" onClick={() => navigate('/babysitter/options')}>
+            {t('enrollment.completeProfileButton')}
+          </Button>
+        </Card>
+      )}
 
       {/* ── My Availability button ── */}
       <Link to="/babysitter/schedule" className="mb-6 block">
