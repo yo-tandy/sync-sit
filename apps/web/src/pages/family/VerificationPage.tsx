@@ -26,7 +26,7 @@ function statusBadgeVariant(status: string): 'green' | 'amber' | 'red' | 'gray' 
 
 export function VerificationPage() {
   const { t, i18n } = useTranslation();
-  const { userDoc } = useAuthStore();
+  const { userDoc, firebaseUser } = useAuthStore();
   const familyId = (userDoc as ParentUser | null)?.familyId;
 
   const {
@@ -71,7 +71,9 @@ export function VerificationPage() {
 
   const handleUpload = async (file: File, type: 'identity' | 'ejm_enrollment', metadata?: Record<string, string>) => {
     if (!familyId) return;
-    const path = `verification-documents/${familyId}/${Date.now()}-${file.name}`;
+    const uid = firebaseUser?.uid;
+    if (!uid) return;
+    const path = `verification-documents/${familyId}/${uid}-${Date.now()}-${file.name}`;
     const storageRef = ref(storage, path);
     await uploadBytes(storageRef, file);
     const fileUrl = await getDownloadURL(storageRef);
