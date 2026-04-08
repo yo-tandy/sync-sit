@@ -24,8 +24,8 @@ export const getAdminDashboard = onCall(
         .get(),
       db.collection('families').count().get(),
       db.collection('appointments').count().get(),
-      db.collection('families')
-        .where('verification.status', '==', 'pending')
+      db.collection('verifications')
+        .where('status', '==', 'pending')
         .count()
         .get(),
     ]);
