@@ -21,10 +21,10 @@ export function StepPreferences({ uid, onComplete }: StepPreferencesProps) {
   const babysitter = userDoc as BabysitterUser | null;
 
   const [languages, setLanguages] = useState<string[]>([]);
-  const [kidAgeMin, setKidAgeMin] = useState(3);
-  const [kidAgeMax, setKidAgeMax] = useState(12);
-  const [maxKids, setMaxKids] = useState(3);
-  const [hourlyRate, setHourlyRate] = useState(15);
+  const [kidAgeMin, setKidAgeMin] = useState<number | ''>('');
+  const [kidAgeMax, setKidAgeMax] = useState<number | ''>('');
+  const [maxKids, setMaxKids] = useState<number | ''>('');
+  const [hourlyRate, setHourlyRate] = useState<number | ''>('');
   const [aboutMe, setAboutMe] = useState('');
   const [contactEmail, setContactEmail] = useState('');
   const [contactPhone, setContactPhone] = useState('');
@@ -70,9 +70,9 @@ export function StepPreferences({ uid, onComplete }: StepPreferencesProps) {
     try {
       await updateDoc(doc(db, 'users', uid), {
         languages,
-        kidAgeRange: { min: kidAgeMin, max: kidAgeMax },
-        maxKids,
-        hourlyRate,
+        kidAgeRange: kidAgeMin !== '' && kidAgeMax !== '' ? { min: kidAgeMin, max: kidAgeMax } : null,
+        maxKids: maxKids || null,
+        hourlyRate: hourlyRate || null,
         aboutMe: aboutMe || null,
         contactEmail: contactEmail || null,
         contactPhone: contactPhone || null,
@@ -124,18 +124,18 @@ export function StepPreferences({ uid, onComplete }: StepPreferencesProps) {
       {/* Kids preferences — 3 in a row */}
       <div className="flex gap-2">
         <div className="flex-1">
-          <Input label={t('enrollment.kidsAgeMin')} type="number" value={kidAgeMin || ''} onChange={(e) => setKidAgeMin(e.target.value === '' ? 0 : parseInt(e.target.value))} min={0} max={18} hint={t('enrollment.kidsAgeMinHint')} />
+          <Input label={t('enrollment.kidsAgeMin')} type="number" value={kidAgeMin} onChange={(e) => setKidAgeMin(e.target.value === '' ? '' : parseInt(e.target.value))} min={0} max={18} placeholder="e.g. 3" hint={t('enrollment.kidsAgeMinHint')} />
         </div>
         <div className="flex-1">
-          <Input label={t('enrollment.kidsAgeMax')} type="number" value={kidAgeMax || ''} onChange={(e) => setKidAgeMax(e.target.value === '' ? 0 : parseInt(e.target.value))} min={0} max={18} hint={t('enrollment.kidsAgeMaxHint')} />
+          <Input label={t('enrollment.kidsAgeMax')} type="number" value={kidAgeMax} onChange={(e) => setKidAgeMax(e.target.value === '' ? '' : parseInt(e.target.value))} min={0} max={18} placeholder="e.g. 12" hint={t('enrollment.kidsAgeMaxHint')} />
         </div>
         <div className="flex-1">
-          <Input label={t('enrollment.maxKids')} type="number" value={maxKids || ''} onChange={(e) => setMaxKids(e.target.value === '' ? 0 : parseInt(e.target.value))} min={1} max={10} hint={t('enrollment.maxKidsHint')} />
+          <Input label={t('enrollment.maxKids')} type="number" value={maxKids} onChange={(e) => setMaxKids(e.target.value === '' ? '' : parseInt(e.target.value))} min={1} max={10} placeholder="e.g. 3" hint={t('enrollment.maxKidsHint')} />
         </div>
       </div>
 
-      {/* Rate — separate line with tooltip */}
-      <Input label={t('enrollment.rateLabel')} type="number" value={hourlyRate || ''} onChange={(e) => setHourlyRate(e.target.value === '' ? 0 : parseFloat(e.target.value))} min={0} hint={t('enrollment.rateTooltip')} />
+      {/* Rate — separate line with hint */}
+      <Input label={t('enrollment.rateLabel')} type="number" value={hourlyRate} onChange={(e) => setHourlyRate(e.target.value === '' ? '' : parseFloat(e.target.value))} min={0} placeholder="e.g. 15" hint={t('enrollment.rateTooltip')} />
 
       <Textarea label={t('enrollment.aboutMe')} value={aboutMe} onChange={(e) => setAboutMe(e.target.value)} placeholder={t('enrollment.aboutMePlaceholder')} />
 
