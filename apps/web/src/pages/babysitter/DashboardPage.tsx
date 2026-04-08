@@ -198,11 +198,13 @@ export function BabysitterDashboard() {
 
         {/* Active/Inactive toggle */}
         <button
-          onClick={() => setToggleDialog(true)}
+          onClick={() => { if (!isSearchable && !profileComplete) return; setToggleDialog(true); }}
           className={`flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
             isSearchable
               ? 'bg-green-100 text-green-700'
-              : 'bg-gray-100 text-gray-500'
+              : profileComplete
+                ? 'bg-gray-100 text-gray-500'
+                : 'bg-gray-100 text-gray-400 opacity-50'
           }`}
         >
           <div className={`h-2 w-2 rounded-full ${isSearchable ? 'bg-green-500' : 'bg-gray-400'}`} />
