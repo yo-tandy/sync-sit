@@ -70,7 +70,7 @@ export function StepPreferences({ uid, onComplete }: StepPreferencesProps) {
     try {
       await updateDoc(doc(db, 'users', uid), {
         languages,
-        kidAgeRange: kidAgeMin !== '' && kidAgeMax !== '' ? { min: kidAgeMin, max: kidAgeMax } : null,
+        kidAgeRange: { min: kidAgeMin !== '' ? kidAgeMin : null, max: kidAgeMax !== '' ? kidAgeMax : null },
         maxKids: maxKids || null,
         hourlyRate: hourlyRate || null,
         aboutMe: aboutMe || null,

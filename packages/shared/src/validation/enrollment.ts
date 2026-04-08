@@ -44,6 +44,7 @@ export const babysitterProfileSchema = z.object({
 export function isBabysitterProfileComplete(user: Record<string, unknown>): boolean {
   const languages = user.languages as string[] | undefined;
   const kidAgeRange = user.kidAgeRange as { min: number; max: number } | undefined;
+  const maxKids = user.maxKids as number | undefined;
   const hourlyRate = user.hourlyRate as number | undefined;
   const areaMode = user.areaMode as string | undefined;
   const arrondissements = user.arrondissements as string[] | undefined;
@@ -51,12 +52,13 @@ export function isBabysitterProfileComplete(user: Record<string, unknown>): bool
 
   const hasLanguages = languages && languages.length > 0;
   const hasAgeRange = kidAgeRange && typeof kidAgeRange.min === 'number' && typeof kidAgeRange.max === 'number';
+  const hasMaxKids = typeof maxKids === 'number' && maxKids > 0;
   const hasRate = typeof hourlyRate === 'number' && hourlyRate > 0;
   const hasArea = areaMode === 'distance'
     ? !!areaAddress
     : (arrondissements && arrondissements.length > 0);
 
-  return !!(hasLanguages && hasAgeRange && hasRate && hasArea);
+  return !!(hasLanguages && hasAgeRange && hasMaxKids && hasRate && hasArea);
 }
 
 export const babysitterPreferencesSchema = z

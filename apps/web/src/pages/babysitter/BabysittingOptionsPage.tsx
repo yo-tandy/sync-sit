@@ -68,7 +68,7 @@ export function BabysittingOptionsPage() {
       await updateDoc(doc(db, 'users', uid), {
         aboutMe: aboutMe || null,
         languages,
-        kidAgeRange: kidAgeMin !== '' && kidAgeMax !== '' ? { min: kidAgeMin, max: kidAgeMax } : null,
+        kidAgeRange: { min: kidAgeMin !== '' ? kidAgeMin : null, max: kidAgeMax !== '' ? kidAgeMax : null },
         maxKids: maxKids || null,
         hourlyRate: hourlyRate || null,
         areaMode,
