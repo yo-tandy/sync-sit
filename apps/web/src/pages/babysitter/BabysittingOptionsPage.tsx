@@ -5,7 +5,6 @@ import { db } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { Button, Input, Textarea, Chip, TopNav, InfoBanner } from '@/components/ui';
 import { LanguagePicker } from '@/components/forms/LanguagePicker';
-import { PhoneInput } from '@/components/forms/PhoneInput';
 import { AddressAutocomplete, type AddressResult } from '@/components/forms/AddressAutocomplete';
 import { ARRONDISSEMENTS, NEARBY_TOWNS } from '@ejm/shared';
 import type { BabysitterUser } from '@ejm/shared';
@@ -23,10 +22,6 @@ export function BabysittingOptionsPage() {
   const [maxKids, setMaxKids] = useState(3);
   const [hourlyRate, setHourlyRate] = useState(15);
   const [aboutMe, setAboutMe] = useState('');
-  const [contactEmail, setContactEmail] = useState('');
-  const [contactPhone, setContactPhone] = useState('');
-  const [whatsapp, setWhatsapp] = useState('');
-  const [whatsappSameAsPhone, setWhatsappSameAsPhone] = useState(true);
   const [areaMode, setAreaMode] = useState<'arrondissement' | 'distance'>('arrondissement');
   const [arrondissements, setArrondissements] = useState<string[]>([]);
   const [areaAddress, setAreaAddress] = useState('');
@@ -47,10 +42,6 @@ export function BabysittingOptionsPage() {
     setMaxKids(babysitter.maxKids ?? 3);
     setHourlyRate(babysitter.hourlyRate ?? 15);
     setAboutMe(babysitter.aboutMe || '');
-    setContactEmail(babysitter.contactEmail || '');
-    setContactPhone(babysitter.contactPhone || '');
-    setWhatsapp(babysitter.whatsapp || '');
-    setWhatsappSameAsPhone(babysitter.whatsapp ? babysitter.whatsapp === babysitter.contactPhone : true);
     setAreaMode(babysitter.areaMode || 'arrondissement');
     setArrondissements(babysitter.arrondissements || []);
     setAreaAddress(babysitter.areaAddress || '');
@@ -81,9 +72,6 @@ export function BabysittingOptionsPage() {
         kidAgeRange: { min: kidAgeMin, max: kidAgeMax },
         maxKids,
         hourlyRate,
-        contactEmail: contactEmail || null,
-        contactPhone: contactPhone || null,
-        whatsapp: whatsappSameAsPhone ? (contactPhone || null) : (whatsapp || null),
         areaMode,
         arrondissements: areaMode === 'arrondissement' ? arrondissements : [],
         areaAddress: areaMode === 'distance' ? areaAddress : null,
@@ -132,35 +120,6 @@ export function BabysittingOptionsPage() {
         <Input label={t('enrollment.rateLabel')} type="number" value={hourlyRate || ''} onChange={(e) => setHourlyRate(e.target.value === '' ? 0 : parseFloat(e.target.value))} min={0} hint={t('enrollment.rateTooltip')} />
 
         <Textarea label={t('enrollment.aboutMe')} value={aboutMe} onChange={(e) => setAboutMe(e.target.value)} placeholder={t('enrollment.aboutMePlaceholder')} />
-
-        <hr className="my-5 border-gray-200" />
-
-        {/* Contact */}
-        <h3 className="mb-3 text-sm font-semibold text-gray-700">{t('account.contactInfo')}</h3>
-        <Input label={t('common.email')} type="email" value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} />
-        <PhoneInput label={t('account.phone')} value={contactPhone} onChange={(val) => { setContactPhone(val); if (whatsappSameAsPhone) setWhatsapp(val); }} />
-
-        <div className="mb-5">
-          <label className="mb-2 flex items-center gap-2 text-sm font-medium text-gray-700">
-            <span>WhatsApp</span>
-          </label>
-          <label className="mb-3 flex items-center gap-2 text-sm text-gray-600">
-            <input
-              type="checkbox"
-              checked={whatsappSameAsPhone}
-              onChange={(e) => {
-                setWhatsappSameAsPhone(e.target.checked);
-                if (e.target.checked) setWhatsapp(contactPhone);
-                else setWhatsapp('');
-              }}
-              className="h-4 w-4 rounded border-gray-300 text-red-600 focus:ring-red-500"
-            />
-            {t('account.whatsappSameAsPhone')}
-          </label>
-          {!whatsappSameAsPhone && (
-            <PhoneInput label="" value={whatsapp} onChange={setWhatsapp} />
-          )}
-        </div>
 
         <hr className="my-5 border-gray-200" />
 
