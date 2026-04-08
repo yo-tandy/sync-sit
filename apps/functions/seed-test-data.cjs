@@ -100,7 +100,12 @@ async function seed() {
     parentIds: [parent1Uid, parent2Uid],
     preferredBabysitters: [],
     status: 'active',
-    verification: { isFullyVerified: true, verifiedAt: NOW, method: 'admin' },
+    verification: {
+      identityStatus: 'approved',
+      enrollmentStatus: 'approved',
+      isFullyVerified: true,
+      isEjmFamily: true,
+    },
     createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
   });
 
@@ -138,7 +143,12 @@ async function seed() {
     parentIds: [parent3Uid],
     preferredBabysitters: [],
     status: 'active',
-    verification: { isFullyVerified: true, verifiedAt: NOW, method: 'admin' },
+    verification: {
+      identityStatus: 'not_submitted',
+      enrollmentStatus: 'not_submitted',
+      isFullyVerified: false,
+      isEjmFamily: false,
+    },
     createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
   });
 
