@@ -2,49 +2,34 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { db, adminAuth } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { FieldValue } from 'firebase-admin/firestore';
-import { isOldEnough, babysitterProfileSchema, babysitterPreferencesSchema } from '@ejm/shared';
+import { strongPasswordSchema } from '@ejm/shared';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
 
 interface EnrollBabysitterData {
   ejemEmail: string;
   verificationCode: string;
   password: string;
-  firstName: string;
-  lastName: string;
-  dateOfBirth: string; // ISO string
-  gender?: string;
-  classLevel: string;
-  languages: string[];
-  kidAgeMin: number;
-  kidAgeMax: number;
-  maxKids: number;
-  hourlyRate: number;
-  aboutMe?: string;
-  contactEmail?: string;
-  contactPhone?: string;
-  areaMode: 'arrondissement' | 'distance';
-  arrondissements?: string[];
-  areaAddress?: string;
-  areaLatLng?: { lat: number; lng: number };
-  areaRadiusKm?: number;
+  consentVersion: string;
 }
 
+/**
+ * Create a minimal babysitter account after email verification.
+ * Only requires: email, verification code, password, and consent.
+ * Profile fields are filled in subsequent client-side steps.
+ */
 export const enrollBabysitter = onCall(
   { region: 'europe-west1', cors: getCorsOrigin() },
   async (request) => {
     const data = request.data as EnrollBabysitterData;
 
-    // 0. Validate inputs
-    const profileResult = babysitterProfileSchema.safeParse(data);
-    if (!profileResult.success) {
-      throw new HttpsError('invalid-argument', profileResult.error.issues[0]?.message || 'Invalid profile data');
+    // 0. Validate password
+    const passwordResult = strongPasswordSchema.safeParse(data.password);
+    if (!passwordResult.success) {
+      throw new HttpsError('invalid-argument', passwordResult.error.issues[0]?.message || 'Password does not meet requirements');
     }
-    const prefsResult = babysitterPreferencesSchema.safeParse(data);
-    if (!prefsResult.success) {
-      throw new HttpsError('invalid-argument', prefsResult.error.issues[0]?.message || 'Invalid preferences data');
-    }
-    if (!data.password || data.password.length < 8) {
-      throw new HttpsError('invalid-argument', 'Password must be at least 8 characters');
+
+    if (!data.consentVersion) {
+      throw new HttpsError('invalid-argument', 'Consent is required');
     }
 
     // 1. Verify the code
@@ -72,24 +57,12 @@ export const enrollBabysitter = onCall(
       throw new HttpsError('invalid-argument', 'Invalid verification code');
     }
 
-    // 2. Validate age
-    const dob = new Date(data.dateOfBirth);
-    if (!isOldEnough(dob)) {
-      throw new HttpsError('invalid-argument', 'You must be at least 15 years old');
-    }
-
-    // 3. Validate contact info
-    if (!data.contactEmail && !data.contactPhone) {
-      throw new HttpsError('invalid-argument', 'Provide at least one contact method');
-    }
-
-    // 4. Create Firebase Auth user
+    // 2. Create Firebase Auth user
     let uid: string;
     try {
       const userRecord = await adminAuth.createUser({
         email: data.ejemEmail.toLowerCase(),
         password: data.password,
-        displayName: `${data.firstName} ${data.lastName}`,
       });
       uid = userRecord.uid;
     } catch (err: any) {
@@ -99,7 +72,7 @@ export const enrollBabysitter = onCall(
       throw new HttpsError('internal', 'Failed to create account');
     }
 
-    // 5. Create Firestore user document
+    // 3. Create minimal Firestore user document
     const now = new Date();
     await db.collection('users').doc(uid).set({
       uid,
@@ -107,26 +80,9 @@ export const enrollBabysitter = onCall(
       email: data.ejemEmail.toLowerCase(),
       ejemEmail: data.ejemEmail.toLowerCase(),
       status: 'active',
-      firstName: data.firstName,
-      lastName: data.lastName,
-      dateOfBirth: data.dateOfBirth, // Store as "yyyy-MM-dd" string
-      gender: data.gender || null,
-      classLevel: data.classLevel,
-      photoUrl: null,
+      enrollmentComplete: false,
       searchable: false,
-      languages: data.languages,
-      aboutMe: data.aboutMe || null,
-      language: 'en', // Will be updated by client
-      kidAgeRange: { min: data.kidAgeMin, max: data.kidAgeMax },
-      maxKids: data.maxKids,
-      hourlyRate: data.hourlyRate,
-      contactEmail: data.contactEmail || null,
-      contactPhone: data.contactPhone || null,
-      areaMode: data.areaMode,
-      arrondissements: data.arrondissements || null,
-      areaAddress: data.areaAddress || null,
-      areaLatLng: data.areaLatLng || null,
-      areaRadiusKm: data.areaRadiusKm || null,
+      language: 'en',
       notifPrefs: {
         newRequest: { push: true, email: true },
         confirmed: { push: true, email: true },
@@ -137,10 +93,10 @@ export const enrollBabysitter = onCall(
       createdAt: now,
       updatedAt: now,
       consentAt: now,
-      consentVersion: '1.0',
+      consentVersion: data.consentVersion,
     });
 
-    // 6. Create empty schedule
+    // 4. Create empty schedule
     const emptySlots = new Array(96).fill(false);
     await db.collection('schedules').doc(uid).set({
       userId: uid,
@@ -157,7 +113,7 @@ export const enrollBabysitter = onCall(
       updatedAt: now,
     });
 
-    // 7. Clean up verification code
+    // 5. Clean up verification code
     await codeDoc.ref.delete();
 
     await writeUserActivity(uid, 'babysitter_enrolled', { email: data.ejemEmail });

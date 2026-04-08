@@ -1,7 +1,36 @@
 import { z } from 'zod';
 
+// ── Password Validation ──
+
+export const strongPasswordSchema = z
+  .string()
+  .min(8, 'Password must be at least 8 characters')
+  .regex(/[a-z]/, 'Password must contain at least one lowercase letter')
+  .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
+  .regex(/[0-9]/, 'Password must contain at least one number');
+
+/** Check password requirements individually (for UI feedback) */
+export function checkPasswordRequirements(password: string) {
+  return {
+    minLength: password.length >= 8,
+    hasLowercase: /[a-z]/.test(password),
+    hasUppercase: /[A-Z]/.test(password),
+    hasNumber: /[0-9]/.test(password),
+  };
+}
+
 // ── Babysitter Enrollment ──
 
+/** Immutable profile fields (step 2 of enrollment) */
+export const babysitterImmutableProfileSchema = z.object({
+  firstName: z.string().min(1, 'First name is required'),
+  lastName: z.string().min(1, 'Last name is required'),
+  dateOfBirth: z.string().min(1, 'Date of birth is required'),
+  gender: z.enum(['male', 'female', 'other', 'prefer_not_to_say']).optional(),
+  classLevel: z.string().min(1, 'Class is required'),
+});
+
+/** Full profile schema (backward compatible) */
 export const babysitterProfileSchema = z.object({
   firstName: z.string().min(1, 'First name is required'),
   lastName: z.string().min(1, 'Last name is required'),
@@ -10,6 +39,27 @@ export const babysitterProfileSchema = z.object({
   classLevel: z.string().min(1, 'Class is required'),
   languages: z.array(z.string()).min(1, 'Select at least one language'),
 });
+
+/** Check if a babysitter has all mandatory fields for activation */
+export function isBabysitterProfileComplete(user: Record<string, unknown>): boolean {
+  const languages = user.languages as string[] | undefined;
+  const kidAgeRange = user.kidAgeRange as { min: number; max: number } | undefined;
+  const maxKids = user.maxKids as number | undefined;
+  const hourlyRate = user.hourlyRate as number | undefined;
+  const areaMode = user.areaMode as string | undefined;
+  const arrondissements = user.arrondissements as string[] | undefined;
+  const areaAddress = user.areaAddress as string | undefined;
+
+  const hasLanguages = languages && languages.length > 0;
+  const hasAgeRange = kidAgeRange && typeof kidAgeRange.min === 'number' && typeof kidAgeRange.max === 'number';
+  const hasMaxKids = typeof maxKids === 'number' && maxKids > 0;
+  const hasRate = typeof hourlyRate === 'number' && hourlyRate > 0;
+  const hasArea = areaMode === 'distance'
+    ? !!areaAddress
+    : (arrondissements && arrondissements.length > 0);
+
+  return !!(hasLanguages && hasAgeRange && hasMaxKids && hasRate && hasArea);
+}
 
 export const babysitterPreferencesSchema = z
   .object({
