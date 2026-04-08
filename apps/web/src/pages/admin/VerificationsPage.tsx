@@ -1,5 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
+import { httpsCallable } from 'firebase/functions';
+import { functions } from '@/config/firebase';
 import { TopNav } from '@/components/ui/TopNav';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -181,14 +183,28 @@ export function AdminVerificationsPage() {
                 )}
 
                 <div className="flex items-center gap-2">
-                  <a
-                    href={v.fileUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        // Extract the storage path from the fileUrl
+                        // fileUrl format: https://storage.googleapis.com/.../o/verification-documents%2F...?alt=media&token=...
+                        const url = new URL(v.fileUrl);
+                        const encodedPath = url.pathname.split('/o/')[1];
+                        const filePath = encodedPath ? decodeURIComponent(encodedPath) : '';
+                        if (!filePath) { window.open(v.fileUrl, '_blank'); return; }
+                        const fn = httpsCallable(functions, 'getVerificationDocument');
+                        const result = await fn({ filePath });
+                        window.open((result.data as any).url, '_blank');
+                      } catch {
+                        // Fallback to direct URL if cloud function fails
+                        window.open(v.fileUrl, '_blank');
+                      }
+                    }}
                     className="text-xs font-medium text-red-600 hover:underline"
                   >
                     {t('verification.viewDocument')}
-                  </a>
+                  </button>
 
                   {v.status === 'pending' && (
                     <div className="ml-auto flex gap-2">

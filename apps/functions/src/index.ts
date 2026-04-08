@@ -42,6 +42,7 @@ export { getVerificationStatus } from './verification/getVerificationStatus.js';
 export { generateCommunityCode } from './verification/generateCommunityCode.js';
 export { lookupCommunityCode } from './verification/lookupCommunityCode.js';
 export { approveCommunityCode } from './verification/approveCommunityCode.js';
+export { getVerificationDocument } from './verification/getVerificationDocument.js';
 
 // References
 export { notifyOnNewReference } from './references/onReferenceCreated.js';
