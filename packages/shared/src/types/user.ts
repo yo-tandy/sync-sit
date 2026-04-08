@@ -47,6 +47,9 @@ export interface BabysitterUser extends UserBase {
   areaLatLng?: LatLng;
   areaRadiusKm?: number;
 
+  // Enrollment state (false = incomplete, undefined/true = complete)
+  enrollmentComplete?: boolean;
+
   // Search visibility (default false — must be activated by babysitter)
   searchable?: boolean;
 
