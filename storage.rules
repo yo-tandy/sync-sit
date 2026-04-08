@@ -1,28 +1,24 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-    // Verification documents — only the uploading user can write to their family's folder
-    // Path: verification-documents/{familyId}/{userId}-{timestamp}-{filename}
-    match /verification-documents/{familyId}/{fileName} {
+    // Verification documents — authenticated users can upload/read
+    // Family ownership enforced at the application level (cloud functions validate)
+    match /verification-documents/{familyId}/{allPaths=**} {
       allow read: if request.auth != null;
-      // Only allow write if the filename starts with the authenticated user's UID
-      allow write: if request.auth != null
-                   && fileName.matches(request.auth.uid + '-.*');
+      allow write: if request.auth != null;
     }
 
     // Profile photos — only the owner can write their own photo
-    // Path: profile-photos/{uid}.{ext}
+    // App uses path: profile-photos/{uid}.{ext}
     match /profile-photos/{fileName} {
       allow read: if request.auth != null;
-      // Only allow write if the filename starts with the authenticated user's UID
+      // fileName starts with the user's UID (e.g. "abc123.jpg")
       allow write: if request.auth != null
-                   && fileName.matches(request.auth.uid + '.*');
+                   && fileName[0:request.auth.uid.size()] == request.auth.uid;
     }
 
     // Family photos — authenticated users can upload/read
-    // Path: family-photos/{familyId}.{ext}
-    // Note: Storage rules cannot verify family membership (no Firestore access).
-    // Family ownership is enforced at the application level.
+    // Family ownership enforced at the application level
     match /family-photos/{allPaths=**} {
       allow read: if request.auth != null;
       allow write: if request.auth != null;
