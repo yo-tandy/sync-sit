@@ -45,8 +45,6 @@ export function isBabysitterProfileComplete(user: Record<string, unknown>): bool
   const languages = user.languages as string[] | undefined;
   const kidAgeRange = user.kidAgeRange as { min: number; max: number } | undefined;
   const hourlyRate = user.hourlyRate as number | undefined;
-  const contactEmail = user.contactEmail as string | undefined;
-  const contactPhone = user.contactPhone as string | undefined;
   const areaMode = user.areaMode as string | undefined;
   const arrondissements = user.arrondissements as string[] | undefined;
   const areaAddress = user.areaAddress as string | undefined;
