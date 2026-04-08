@@ -54,12 +54,11 @@ export function isBabysitterProfileComplete(user: Record<string, unknown>): bool
   const hasLanguages = languages && languages.length > 0;
   const hasAgeRange = kidAgeRange && typeof kidAgeRange.min === 'number' && typeof kidAgeRange.max === 'number';
   const hasRate = typeof hourlyRate === 'number' && hourlyRate > 0;
-  const hasContact = !!(contactEmail || contactPhone);
   const hasArea = areaMode === 'distance'
     ? !!areaAddress
     : (arrondissements && arrondissements.length > 0);
 
-  return !!(hasLanguages && hasAgeRange && hasRate && hasContact && hasArea);
+  return !!(hasLanguages && hasAgeRange && hasRate && hasArea);
 }
 
 export const babysitterPreferencesSchema = z
