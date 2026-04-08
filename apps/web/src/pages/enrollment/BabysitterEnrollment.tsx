@@ -6,6 +6,7 @@ import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth, functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { TopNav, StepIndicator } from '@/components/ui';
+import { EnrollmentAppBar } from '@/components/ui/EnrollmentAppBar';
 import { StepEmail } from './babysitter/StepEmail';
 import { StepVerify } from './babysitter/StepVerify';
 import { StepPassword } from './babysitter/StepPassword';
@@ -199,13 +200,24 @@ export function BabysitterEnrollment() {
     }
   };
 
+  const isPostAccountStep = step >= 3;
+
   return (
     <div>
-      <TopNav
-        title={t('enrollment.babysitterTitle')}
-        backTo={step === 0 ? '/' : undefined}
-        onBack={step > 0 && step < 3 ? () => setStep(step - 1) : undefined}
-      />
+      {isPostAccountStep ? (
+        <>
+          <EnrollmentAppBar />
+          <div className="px-5 pt-3 pb-1">
+            <h2 className="text-lg font-bold text-gray-900">{t('enrollment.babysitterTitle')}</h2>
+          </div>
+        </>
+      ) : (
+        <TopNav
+          title={t('enrollment.babysitterTitle')}
+          backTo={step === 0 ? '/' : undefined}
+          onBack={step > 0 ? () => setStep(step - 1) : undefined}
+        />
+      )}
       <StepIndicator totalSteps={5} currentStep={step} />
       {renderStep()}
     </div>

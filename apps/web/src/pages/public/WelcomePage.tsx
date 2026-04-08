@@ -1,9 +1,29 @@
-import { Link } from 'react-router';
+import { useEffect } from 'react';
+import { Link, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { LanguageSelector } from '@/components/ui';
+import { useAuthStore } from '@/stores/authStore';
 
 export function WelcomePage() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
+  const { firebaseUser, userDoc, loading } = useAuthStore();
+
+  // Redirect logged-in users
+  useEffect(() => {
+    if (loading || !firebaseUser || !userDoc) return;
+    if (userDoc.role === 'babysitter') {
+      if ((userDoc as any).enrollmentComplete === false) {
+        navigate('/enroll/babysitter');
+      } else {
+        navigate('/babysitter');
+      }
+    } else if (userDoc.role === 'parent') {
+      navigate('/family');
+    } else if (userDoc.role === 'admin') {
+      navigate('/admin');
+    }
+  }, [loading, firebaseUser, userDoc, navigate]);
 
   return (
     <div className="flex h-[100svh] flex-col px-6 py-3">
