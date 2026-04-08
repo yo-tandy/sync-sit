@@ -135,7 +135,7 @@ export function StepPreferences({ uid, onComplete }: StepPreferencesProps) {
       </div>
 
       {/* Rate — separate line with tooltip */}
-      <Input label={t('enrollment.rateLabel')} type="number" value={hourlyRate || ''} onChange={(e) => setHourlyRate(e.target.value === '' ? 0 : parseFloat(e.target.value))} min={0} tooltip={t('enrollment.rateTooltip')} />
+      <Input label={t('enrollment.rateLabel')} type="number" value={hourlyRate || ''} onChange={(e) => setHourlyRate(e.target.value === '' ? 0 : parseFloat(e.target.value))} min={0} hint={t('enrollment.rateTooltip')} />
 
       <Textarea label={t('enrollment.aboutMe')} value={aboutMe} onChange={(e) => setAboutMe(e.target.value)} placeholder={t('enrollment.aboutMePlaceholder')} />
 
