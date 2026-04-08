@@ -60,6 +60,14 @@ export function BabysittingOptionsPage() {
     e.preventDefault();
     if (!uid) return;
 
+    // Prevent clearing mandatory fields that were previously set
+    if (babysitter?.languages?.length && languages.length === 0) { setError(t('enrollment.cannotClearField')); return; }
+    if (babysitter?.kidAgeRange?.min != null && kidAgeMin === '') { setError(t('enrollment.cannotClearField')); return; }
+    if (babysitter?.kidAgeRange?.max != null && kidAgeMax === '') { setError(t('enrollment.cannotClearField')); return; }
+    if (babysitter?.maxKids && maxKids === '') { setError(t('enrollment.cannotClearField')); return; }
+    if (babysitter?.hourlyRate && hourlyRate === '') { setError(t('enrollment.cannotClearField')); return; }
+    if (babysitter?.arrondissements?.length && areaMode === 'arrondissement' && arrondissements.length === 0) { setError(t('enrollment.cannotClearField')); return; }
+
     setSaving(true);
     setError(null);
     setSuccess(false);

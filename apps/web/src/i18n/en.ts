@@ -180,6 +180,7 @@ export default {
     mutableFieldsDesc: 'Set up your preferences so families can find you. You can update these anytime.',
     mandatoryFieldsMissing: 'Complete your profile to become visible to families',
     mandatoryFieldsMissingActivate: 'Please fill in your babysitting preferences before activating your profile.',
+    cannotClearField: 'You cannot clear a mandatory field that was previously set.',
   },
 
   // Babysitter Dashboard

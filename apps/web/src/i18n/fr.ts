@@ -172,6 +172,7 @@ export default {
     mutableFieldsDesc: 'Configurez vos préférences pour que les familles puissent vous trouver. Vous pouvez les modifier à tout moment.',
     mandatoryFieldsMissing: 'Complétez votre profil pour être visible par les familles',
     mandatoryFieldsMissingActivate: 'Veuillez renseigner vos préférences de babysitting avant d\'activer votre profil.',
+    cannotClearField: 'Vous ne pouvez pas effacer un champ obligatoire déjà renseigné.',
   },
 
   babysitterDashboard: {
