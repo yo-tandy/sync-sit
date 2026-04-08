@@ -17,6 +17,7 @@ interface AdminStats {
   babysitterCount: number;
   familyCount: number;
   appointmentCount: number;
+  pendingVerificationCount: number;
 }
 
 interface AdminState {

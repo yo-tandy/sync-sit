@@ -15,7 +15,7 @@ export const getAdminDashboard = onCall(
 
     await verifyAdmin(request.auth.uid);
 
-    const [babysitterSnap, familySnap, appointmentSnap] = await Promise.all([
+    const [babysitterSnap, familySnap, appointmentSnap, pendingVerSnap] = await Promise.all([
       db
         .collection('users')
         .where('role', '==', 'babysitter')
@@ -24,12 +24,17 @@ export const getAdminDashboard = onCall(
         .get(),
       db.collection('families').count().get(),
       db.collection('appointments').count().get(),
+      db.collection('families')
+        .where('verification.status', '==', 'pending')
+        .count()
+        .get(),
     ]);
 
     return {
       babysitterCount: babysitterSnap.data().count,
       familyCount: familySnap.data().count,
       appointmentCount: appointmentSnap.data().count,
+      pendingVerificationCount: pendingVerSnap.data().count,
     };
   }
 );
