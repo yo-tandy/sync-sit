@@ -5,6 +5,7 @@ import { db } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { Button, Input, Textarea, Chip, TopNav, InfoBanner } from '@/components/ui';
 import { LanguagePicker } from '@/components/forms/LanguagePicker';
+import { PhoneInput } from '@/components/forms/PhoneInput';
 import { AddressAutocomplete, type AddressResult } from '@/components/forms/AddressAutocomplete';
 import { ARRONDISSEMENTS, NEARBY_TOWNS } from '@ejm/shared';
 import type { BabysitterUser } from '@ejm/shared';
@@ -21,12 +22,16 @@ export function BabysittingOptionsPage() {
   const [kidAgeMax, setKidAgeMax] = useState(12);
   const [maxKids, setMaxKids] = useState(3);
   const [hourlyRate, setHourlyRate] = useState(15);
+  const [aboutMe, setAboutMe] = useState('');
+  const [contactEmail, setContactEmail] = useState('');
+  const [contactPhone, setContactPhone] = useState('');
+  const [whatsapp, setWhatsapp] = useState('');
+  const [whatsappSameAsPhone, setWhatsappSameAsPhone] = useState(true);
   const [areaMode, setAreaMode] = useState<'arrondissement' | 'distance'>('arrondissement');
   const [arrondissements, setArrondissements] = useState<string[]>([]);
   const [areaAddress, setAreaAddress] = useState('');
   const [areaLatLng, setAreaLatLng] = useState<{ lat: number; lng: number } | undefined>();
   const [areaRadiusKm, setAreaRadiusKm] = useState(3);
-  const [aboutMe, setAboutMe] = useState('');
 
   // UI state
   const [saving, setSaving] = useState(false);
@@ -41,12 +46,16 @@ export function BabysittingOptionsPage() {
     setKidAgeMax(babysitter.kidAgeRange?.max ?? 12);
     setMaxKids(babysitter.maxKids ?? 3);
     setHourlyRate(babysitter.hourlyRate ?? 15);
+    setAboutMe(babysitter.aboutMe || '');
+    setContactEmail(babysitter.contactEmail || '');
+    setContactPhone(babysitter.contactPhone || '');
+    setWhatsapp(babysitter.whatsapp || '');
+    setWhatsappSameAsPhone(babysitter.whatsapp ? babysitter.whatsapp === babysitter.contactPhone : true);
     setAreaMode(babysitter.areaMode || 'arrondissement');
     setArrondissements(babysitter.arrondissements || []);
     setAreaAddress(babysitter.areaAddress || '');
     setAreaLatLng(babysitter.areaLatLng);
     setAreaRadiusKm(babysitter.areaRadiusKm ?? 3);
-    setAboutMe(babysitter.aboutMe || '');
   }, [babysitter]);
 
   const toggleArea = (area: string) => {
@@ -72,6 +81,9 @@ export function BabysittingOptionsPage() {
         kidAgeRange: { min: kidAgeMin, max: kidAgeMax },
         maxKids,
         hourlyRate,
+        contactEmail: contactEmail || null,
+        contactPhone: contactPhone || null,
+        whatsapp: whatsappSameAsPhone ? (contactPhone || null) : (whatsapp || null),
         areaMode,
         arrondissements: areaMode === 'arrondissement' ? arrondissements : [],
         areaAddress: areaMode === 'distance' ? areaAddress : null,
@@ -97,40 +109,57 @@ export function BabysittingOptionsPage() {
         {success && <InfoBanner className="mb-4">{t('profile.saved')}</InfoBanner>}
         {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
 
-        {/* About Me */}
-        <Textarea
-          label={t('enrollment.aboutMe')}
-          value={aboutMe}
-          onChange={(e) => setAboutMe(e.target.value)}
-          placeholder={t('enrollment.aboutMePlaceholder')}
-        />
-
-        <hr className="my-5 border-gray-200" />
-
         {/* Languages */}
         <LanguagePicker selected={languages} onChange={setLanguages} />
+        <p className="mb-4 -mt-3 text-xs text-gray-400">{t('enrollment.languagesHint')}</p>
 
         <hr className="my-5 border-gray-200" />
 
-        {/* Kids Preferences */}
-        <h3 className="mb-3 text-sm font-semibold text-gray-700">{t('profile.babysittingPreferences')}</h3>
-
-        <div className="flex gap-3">
+        {/* Kids preferences — 3 in a row */}
+        <div className="flex gap-2">
           <div className="flex-1">
-            <Input label={t('enrollment.kidsAgeMin')} type="number" value={kidAgeMin || ''} onChange={(e) => setKidAgeMin(e.target.value === '' ? 0 : parseInt(e.target.value))} min={0} max={18} />
+            <Input label={t('enrollment.kidsAgeMin')} type="number" value={kidAgeMin || ''} onChange={(e) => setKidAgeMin(e.target.value === '' ? 0 : parseInt(e.target.value))} min={0} max={18} hint={t('enrollment.kidsAgeMinHint')} />
           </div>
           <div className="flex-1">
-            <Input label={t('enrollment.kidsAgeMax')} type="number" value={kidAgeMax || ''} onChange={(e) => setKidAgeMax(e.target.value === '' ? 0 : parseInt(e.target.value))} min={0} max={18} />
+            <Input label={t('enrollment.kidsAgeMax')} type="number" value={kidAgeMax || ''} onChange={(e) => setKidAgeMax(e.target.value === '' ? 0 : parseInt(e.target.value))} min={0} max={18} hint={t('enrollment.kidsAgeMaxHint')} />
+          </div>
+          <div className="flex-1">
+            <Input label={t('enrollment.maxKids')} type="number" value={maxKids || ''} onChange={(e) => setMaxKids(e.target.value === '' ? 0 : parseInt(e.target.value))} min={1} max={10} hint={t('enrollment.maxKidsHint')} />
           </div>
         </div>
 
-        <div className="flex gap-3">
-          <div className="flex-1">
-            <Input label={t('enrollment.maxKids')} type="number" value={maxKids || ''} onChange={(e) => setMaxKids(e.target.value === '' ? 0 : parseInt(e.target.value))} min={1} max={10} />
-          </div>
-          <div className="flex-1">
-            <Input label={t('enrollment.rateLabel')} type="number" value={hourlyRate || ''} onChange={(e) => setHourlyRate(e.target.value === '' ? 0 : parseFloat(e.target.value))} min={0} />
-          </div>
+        {/* Rate — separate line with hint */}
+        <Input label={t('enrollment.rateLabel')} type="number" value={hourlyRate || ''} onChange={(e) => setHourlyRate(e.target.value === '' ? 0 : parseFloat(e.target.value))} min={0} hint={t('enrollment.rateTooltip')} />
+
+        <Textarea label={t('enrollment.aboutMe')} value={aboutMe} onChange={(e) => setAboutMe(e.target.value)} placeholder={t('enrollment.aboutMePlaceholder')} />
+
+        <hr className="my-5 border-gray-200" />
+
+        {/* Contact */}
+        <h3 className="mb-3 text-sm font-semibold text-gray-700">{t('account.contactInfo')}</h3>
+        <Input label={t('common.email')} type="email" value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} />
+        <PhoneInput label={t('account.phone')} value={contactPhone} onChange={(val) => { setContactPhone(val); if (whatsappSameAsPhone) setWhatsapp(val); }} />
+
+        <div className="mb-5">
+          <label className="mb-2 flex items-center gap-2 text-sm font-medium text-gray-700">
+            <span>WhatsApp</span>
+          </label>
+          <label className="mb-3 flex items-center gap-2 text-sm text-gray-600">
+            <input
+              type="checkbox"
+              checked={whatsappSameAsPhone}
+              onChange={(e) => {
+                setWhatsappSameAsPhone(e.target.checked);
+                if (e.target.checked) setWhatsapp(contactPhone);
+                else setWhatsapp('');
+              }}
+              className="h-4 w-4 rounded border-gray-300 text-red-600 focus:ring-red-500"
+            />
+            {t('account.whatsappSameAsPhone')}
+          </label>
+          {!whatsappSameAsPhone && (
+            <PhoneInput label="" value={whatsapp} onChange={setWhatsapp} />
+          )}
         </div>
 
         <hr className="my-5 border-gray-200" />
@@ -140,22 +169,10 @@ export function BabysittingOptionsPage() {
           <label className="mb-4 block text-sm font-medium text-gray-700">{t('enrollment.areaLabel')}</label>
 
           <div className="mb-4 flex rounded-lg bg-gray-100 p-[3px]">
-            <button
-              type="button"
-              onClick={() => setAreaMode('arrondissement')}
-              className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition-all ${
-                areaMode === 'arrondissement' ? 'bg-white text-gray-950 shadow-sm' : 'text-gray-500'
-              }`}
-            >
+            <button type="button" onClick={() => setAreaMode('arrondissement')} className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition-all ${areaMode === 'arrondissement' ? 'bg-white text-gray-950 shadow-sm' : 'text-gray-500'}`}>
               {t('enrollment.byArea')}
             </button>
-            <button
-              type="button"
-              onClick={() => setAreaMode('distance')}
-              className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition-all ${
-                areaMode === 'distance' ? 'bg-white text-gray-950 shadow-sm' : 'text-gray-500'
-              }`}
-            >
+            <button type="button" onClick={() => setAreaMode('distance')} className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition-all ${areaMode === 'distance' ? 'bg-white text-gray-950 shadow-sm' : 'text-gray-500'}`}>
               {t('enrollment.byDistance')}
             </button>
           </div>
