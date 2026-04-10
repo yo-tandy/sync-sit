@@ -232,6 +232,7 @@ export default {
     copyMessage: 'Copier le message',
     shareByEmail: 'Partager par email',
     shareText: 'D\u00e9couvrez l\u2019application de babysitting de la communaut\u00e9 EJM ! {{link}}',
+    myFamilies: 'Mes Familles',
   },
 
   share: {
@@ -802,5 +803,18 @@ export default {
     additionalNotesPlaceholder: 'Expliquez pourquoi vous renvoyez cette demande...',
     resubmitted: 'Renvoyé',
     resubmittedBanner: 'Cette demande a été renvoyée par la famille après avoir été refusée.',
+  },
+
+  fans: {
+    title: 'Mes Familles',
+    desc: 'Ces familles vous ont ajouté(e) à leurs favoris. Choisissez qui peut voir vos coordonnées.',
+    appointmentNote: 'Quand une famille vous envoie une demande de babysitting, elle verra toujours vos coordonnées pour ce rendez-vous — indépendamment de ces réglages.',
+    noFamilies: 'Pas encore de familles',
+    noFamiliesDesc: 'Quand une famille vous ajoute à ses favoris, vous les verrez ici et pourrez choisir de partager vos coordonnées.',
+    family: '',
+    share: 'Partager',
+    decline: 'Refuser',
+    sharing: 'Partagé',
+    notSharing: 'Non partagé',
   },
 } as const;
