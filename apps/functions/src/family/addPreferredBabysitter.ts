@@ -30,10 +30,34 @@ export const addPreferredBabysitter = onCall(
       throw new HttpsError('not-found', 'Babysitter not found');
     }
 
+    // Load family for name
+    const familyDoc = await db.collection('families').doc(caller.familyId).get();
+    const familyName = familyDoc.data()?.familyName || '';
+
     // Add to family's preferred list (idempotent via arrayUnion)
     await db.collection('families').doc(caller.familyId).update({
       preferredBabysitters: FieldValue.arrayUnion(babysitterUserId),
     });
+
+    // Check if there's already a pending or existing sharing request for this pair
+    const existingRequest = await db.collection('contactSharingRequests')
+      .where('babysitterUserId', '==', babysitterUserId)
+      .where('familyId', '==', caller.familyId)
+      .limit(1)
+      .get();
+
+    if (existingRequest.empty) {
+      // Write a pending notification doc (processed after 60s by scheduled function)
+      await db.collection('contactSharingPending').add({
+        babysitterUserId,
+        familyId: caller.familyId,
+        familyName,
+        parentName: `${caller.firstName || ''} ${(caller.lastName || '').toUpperCase()}`.trim(),
+        notifyAt: new Date(Date.now() + 60 * 1000), // 1 minute from now
+        processed: false,
+        createdAt: new Date(),
+      });
+    }
 
     return { success: true };
   }

@@ -29,6 +29,21 @@ export const removePreferredBabysitter = onCall(
       preferredBabysitters: FieldValue.arrayRemove(babysitterUserId),
     });
 
+    // Cancel any unprocessed pending notifications for this pair
+    const pendingDocs = await db.collection('contactSharingPending')
+      .where('babysitterUserId', '==', babysitterUserId)
+      .where('familyId', '==', caller.familyId)
+      .where('processed', '==', false)
+      .get();
+
+    const batch = db.batch();
+    for (const doc of pendingDocs.docs) {
+      batch.delete(doc.ref);
+    }
+    if (!pendingDocs.empty) {
+      await batch.commit();
+    }
+
     return { success: true };
   }
 );

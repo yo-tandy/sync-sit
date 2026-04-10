@@ -25,6 +25,7 @@ export { sendContactRequest } from './search/sendContactRequest.js';
 export { addPreferredBabysitter } from './family/addPreferredBabysitter.js';
 export { removePreferredBabysitter } from './family/removePreferredBabysitter.js';
 export { lookupBabysitter } from './family/lookupBabysitter.js';
+export { respondToContactSharing } from './family/respondToContactSharing.js';
 
 // Appointments
 export { respondToRequest } from './appointments/respondToRequest.js';
@@ -50,6 +51,7 @@ export { notifyOnNewReference } from './references/onReferenceCreated.js';
 // Scheduled
 export { sendReminders } from './scheduled/sendReminders.js';
 export { cleanupOldData } from './scheduled/cleanupOldData.js';
+export { processContactSharing } from './scheduled/processContactSharing.js';
 
 // Admin
 export { getAdminDashboard } from './admin/getAdminDashboard.js';
