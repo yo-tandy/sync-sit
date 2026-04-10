@@ -242,26 +242,7 @@ export function PreferredBabysittersPage() {
             {b.aboutMe && (
               <p className="text-xs text-gray-600 italic">"{b.aboutMe}"</p>
             )}
-            {/* Contact details only if there's been at least one request */}
-            {appointments.length > 0 && (b.contactEmail || b.contactPhone || b.whatsapp) && (
-              <div className="mt-2 rounded-lg bg-gray-50 p-2">
-                {b.contactEmail && (
-                  <a href={`mailto:${b.contactEmail}`} onClick={(e) => e.stopPropagation()} className="flex items-center gap-2 py-1.5 text-xs text-red-600 active:bg-gray-100">
-                    <span>📧</span> <span>{b.contactEmail}</span>
-                  </a>
-                )}
-                {b.contactPhone && (
-                  <a href={`tel:${b.contactPhone}`} onClick={(e) => e.stopPropagation()} className="flex items-center gap-2 py-1.5 text-xs text-red-600 active:bg-gray-100">
-                    <span>📞</span> <span>{b.contactPhone}</span>
-                  </a>
-                )}
-                {b.whatsapp && (
-                  <a href={`https://wa.me/${b.whatsapp.replace(/[^\d+]/g, '').replace('+', '')}`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="flex items-center gap-2 py-1.5 text-xs text-green-600 active:bg-gray-100">
-                    <span>💬</span> <span>WhatsApp</span>
-                  </a>
-                )}
-              </div>
-            )}
+            {/* Contact details removed — sharing requires babysitter consent */}
           </div>
         )}
       </Card>

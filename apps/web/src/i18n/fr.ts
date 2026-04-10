@@ -465,6 +465,7 @@ export default {
     loginEmail: 'Email de connexion',
     profilePhoto: 'Photo de profil',
     contactInfo: 'Coordonnées',
+    contactSharingConsent: 'Je suis conscient(e) que les parents souhaitant me contacter pour du babysitting auront accès à mes coordonnées.',
     contactSaved: 'Coordonnées enregistrées !',
     contactSaveFailed: 'Échec de l\'enregistrement des coordonnées',
     phone: 'Numéro de téléphone',

@@ -488,6 +488,7 @@ export default {
     loginEmail: 'Login email',
     profilePhoto: 'Profile Photo',
     contactInfo: 'Contact Information',
+    contactSharingConsent: "I'm aware that parents who'd want to contact me for babysitting will get access to my contact information.",
     contactSaved: 'Contact info saved!',
     contactSaveFailed: 'Failed to save contact info',
     phone: 'Phone number',

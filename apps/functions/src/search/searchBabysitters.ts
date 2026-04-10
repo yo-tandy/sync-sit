@@ -74,8 +74,9 @@ export const searchBabysitters = onCall(
     // Verify the calling parent's family is fully verified
     const callerDoc = await db.collection('users').doc(request.auth.uid).get();
     let preferredSet = new Set<string>();
+    let callerFamilyId: string | undefined;
     if (callerDoc.exists && callerDoc.data()?.role === 'parent') {
-      const callerFamilyId = callerDoc.data()?.familyId;
+      callerFamilyId = callerDoc.data()?.familyId;
       if (callerFamilyId) {
         const callerFamilyDoc = await db.collection('families').doc(callerFamilyId).get();
         if (!callerFamilyDoc.data()?.verification?.isFullyVerified) {
@@ -189,6 +190,10 @@ export const searchBabysitters = onCall(
       const refCount = refCounts.get(uid) || 0;
       if (params.filters.requireReferences && refCount === 0) continue;
 
+      // Only share contact info if babysitter has approved this family
+      const approvedFamilies: string[] = b.approvedFamilies || [];
+      const contactApproved = callerFamilyId ? approvedFamilies.includes(callerFamilyId) : false;
+
       results.push({
         uid,
         firstName: b.firstName,
@@ -203,8 +208,8 @@ export const searchBabysitters = onCall(
         hourlyRate: b.hourlyRate,
         distance: Math.round(distance * 10) / 10,
         referenceCount: refCount,
-        contactEmail: b.contactEmail,
-        contactPhone: b.contactPhone,
+        contactEmail: contactApproved ? b.contactEmail : undefined,
+        contactPhone: contactApproved ? b.contactPhone : undefined,
         isPreferred: preferredSet.has(uid),
       });
     }
