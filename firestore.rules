@@ -121,11 +121,6 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    // Contact sharing pending: no client access (Cloud Functions only)
-    match /contactSharingPending/{docId} {
-      allow read, write: if false;
-    }
-
     // Contact sharing requests: babysitter can read own, family members can read for their family
     match /contactSharingRequests/{requestId} {
       allow read: if isAuth() && (

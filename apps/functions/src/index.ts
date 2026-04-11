@@ -51,7 +51,6 @@ export { notifyOnNewReference } from './references/onReferenceCreated.js';
 // Scheduled
 export { sendReminders } from './scheduled/sendReminders.js';
 export { cleanupOldData } from './scheduled/cleanupOldData.js';
-export { processContactSharing } from './scheduled/processContactSharing.js';
 
 // Admin
 export { getAdminDashboard } from './admin/getAdminDashboard.js';
