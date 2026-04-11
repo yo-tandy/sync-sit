@@ -139,7 +139,15 @@ export function BabysitterGuidePage() {
           </p>
         </Step>
 
-        <Step number={13} title={fr ? 'Notifications' : 'Notifications'}>
+        <Step number={13} title={fr ? 'Mes Familles' : 'My Families'}>
+          <p>
+            {fr
+              ? 'Dans le menu, allez dans "Mes Familles" pour voir les familles qui vous ont ajouté(e) à leurs favoris. Vous pouvez choisir de partager ou non vos coordonnées avec chaque famille. Quand une famille vous envoie une demande de babysitting, elle verra toujours vos coordonnées pour ce rendez-vous, indépendamment de ces réglages.'
+              : 'From the menu, go to "My Families" to see families who added you to their favorites. You can choose whether to share your contact information with each family. When a family sends you a babysitting request, they will always see your contact info for that appointment, regardless of these settings.'}
+          </p>
+        </Step>
+
+        <Step number={14} title={fr ? 'Notifications' : 'Notifications'}>
           <p>
             {fr
               ? 'Vous recevez des notifications pour les nouvelles demandes, les annulations et les rappels. Activez les notifications push pour ne pas manquer de demandes. Vous pouvez personnaliser les notifications push et email séparément dans "Mon compte".'
