@@ -83,8 +83,8 @@ export function ParentGuidePage() {
         <Step number={6} title={fr ? 'Suivre vos demandes' : 'Track your requests'}>
           <p>
             {fr
-              ? 'Votre tableau de bord affiche toutes vos demandes organisées par statut : en attente, confirmées, passées et refusées. Appuyez sur une carte pour voir les détails et les coordonnées du babysitter.'
-              : 'Your dashboard shows all your requests organized by status: pending, confirmed, past, and declined. Tap on a card to see details and the babysitter\'s contact information.'}
+              ? 'Votre tableau de bord affiche toutes vos demandes organisées par statut : en attente, confirmées, passées et refusées. Appuyez sur une carte pour voir les détails. Les coordonnées du babysitter apparaissent uniquement s\'il a accepté de les partager avec vous.'
+              : 'Your dashboard shows all your requests organized by status: pending, confirmed, past, and declined. Tap on a card to see details. The babysitter\'s contact info is only visible if they have chosen to share it with you.'}
           </p>
         </Step>
 

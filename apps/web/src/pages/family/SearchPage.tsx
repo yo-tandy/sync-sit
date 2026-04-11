@@ -10,6 +10,7 @@ import {
 } from '@/components/ui';
 import { AddressAutocomplete, type AddressResult } from '@/components/forms/AddressAutocomplete';
 import { formatBabysitterName } from '@/lib/formatName';
+import { debouncedTogglePreferred } from '@/lib/debouncedPreferred';
 import { CheckIcon, ShieldIcon } from '@/components/ui/Icons';
 import { useHolidays } from '@/hooks/useHolidays';
 import { getDateTag } from '@/lib/dateTag';
@@ -164,20 +165,18 @@ export function SearchPage() {
   // Preferred babysitter IDs
   const [preferredIds, setPreferredIds] = useState<Set<string>>(new Set());
 
-  const togglePreferred = async (babysitterUid: string) => {
+  const togglePreferred = (babysitterUid: string) => {
     const isPref = preferredIds.has(babysitterUid);
-    try {
-      const fn = httpsCallable(functions, isPref ? 'removePreferredBabysitter' : 'addPreferredBabysitter');
-      await fn({ babysitterUserId: babysitterUid });
-      setPreferredIds((prev) => {
-        const next = new Set(prev);
-        if (isPref) next.delete(babysitterUid);
-        else next.add(babysitterUid);
-        return next;
-      });
-      // Also update the results array so the UI re-renders sections
-      setResults((prev) => prev.map((r) => r.uid === babysitterUid ? { ...r, isPreferred: !isPref } : r));
-    } catch { /* silent */ }
+    // Optimistic UI update
+    setPreferredIds((prev) => {
+      const next = new Set(prev);
+      if (isPref) next.delete(babysitterUid);
+      else next.add(babysitterUid);
+      return next;
+    });
+    setResults((prev) => prev.map((r) => r.uid === babysitterUid ? { ...r, isPreferred: !isPref } : r));
+    // Debounced backend call (3s delay, cancels if toggled back)
+    debouncedTogglePreferred(babysitterUid, !isPref);
   };
 
   // Load family + kids + returning babysitters

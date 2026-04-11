@@ -97,6 +97,7 @@ export function BabysitterAccountPage() {
   const [photoSaving, setPhotoSaving] = useState(false);
 
   // Contact state
+  const [contactSharingConsent, setContactSharingConsent] = useState(false);
   const [contactEmail, setContactEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [whatsapp, setWhatsapp] = useState('');
@@ -121,6 +122,7 @@ export function BabysitterAccountPage() {
   // Initialize from userDoc
   useEffect(() => {
     if (!babysitter) return;
+    setContactSharingConsent(babysitter.contactSharingConsent || false);
     setContactEmail(babysitter.contactEmail || babysitter.email || '');
     setPhone(babysitter.contactPhone || '');
     setWhatsapp(babysitter.whatsapp || '');
@@ -222,6 +224,7 @@ export function BabysitterAccountPage() {
     setError(null);
     try {
       await updateDoc(doc(db, 'users', uid), {
+        contactSharingConsent,
         contactEmail: contactEmail || null,
         contactPhone: phone || null,
         whatsapp: whatsappSameAsPhone ? (phone || null) : (whatsapp || null),
@@ -369,8 +372,21 @@ export function BabysitterAccountPage() {
 
         {/* 3. Contact Info */}
         <h3 className="mb-3 text-sm font-semibold text-gray-700">{t('account.contactInfo')}</h3>
+
+        {/* Contact sharing consent */}
+        <label className="mb-4 flex items-start gap-2 rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700">
+          <input
+            type="checkbox"
+            checked={contactSharingConsent}
+            onChange={(e) => setContactSharingConsent(e.target.checked)}
+            className="mt-0.5 h-4 w-4 shrink-0 rounded border-gray-300 text-red-600 focus:ring-red-500"
+          />
+          <span>{t('account.contactSharingConsent')}</span>
+        </label>
+
         {contactSuccess && <InfoBanner className="mb-4">{t('account.contactSaved')}</InfoBanner>}
         <form onSubmit={handleContactSave} className="mb-6">
+          <fieldset disabled={!contactSharingConsent} className={!contactSharingConsent ? 'opacity-50' : ''}>
           <Input
             label={t('common.email')}
             type="email"
@@ -409,6 +425,7 @@ export function BabysitterAccountPage() {
             )}
           </div>
 
+          </fieldset>
           <Button type="submit" disabled={contactSaving}>
             {contactSaving ? t('common.saving') : t('account.saveContact')}
           </Button>

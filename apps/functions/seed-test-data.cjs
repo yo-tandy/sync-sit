@@ -343,6 +343,66 @@ async function seed() {
   });
   console.log(`  ${apt4Id}: Martin + Lea (pending, ${nextSatStr} 10-13h)`);
 
+  // ─── Contact Sharing: Dupont favorites Lea (approved), Martin favorites Camille (pending) ───
+  console.log('\nCreating contact sharing test data...');
+
+  // Dupont family has Lea as favorite with approved sharing
+  await db.collection('families').doc(family1Id).update({
+    preferredBabysitters: FieldValue.arrayUnion(bs1Uid),
+  });
+  await db.collection('users').doc(bs1Uid).update({
+    approvedFamilies: FieldValue.arrayUnion(family1Id),
+    contactSharingConsent: true,
+  });
+  const csReq1 = db.collection('contactSharingRequests').doc();
+  await csReq1.set({
+    requestId: csReq1.id,
+    babysitterUserId: bs1Uid,
+    familyId: family1Id,
+    familyName: 'Dupont',
+    parentName: 'Marie Dupont',
+    status: 'approved',
+    createdAt: NOW,
+    respondedAt: NOW,
+  });
+  console.log(`  Dupont → Lea: approved (contact info visible)`);
+
+  // Martin family has Camille as favorite with pending sharing
+  await db.collection('families').doc(family2Id).update({
+    preferredBabysitters: FieldValue.arrayUnion(bs3Uid),
+  });
+  await db.collection('users').doc(bs3Uid).update({
+    contactSharingConsent: true,
+  });
+  const csReq2 = db.collection('contactSharingRequests').doc();
+  await csReq2.set({
+    requestId: csReq2.id,
+    babysitterUserId: bs3Uid,
+    familyId: family2Id,
+    familyName: 'Martin',
+    parentName: 'Sophie Martin',
+    status: 'pending',
+    createdAt: NOW,
+  });
+  console.log(`  Martin → Camille: pending (waiting for response)`);
+
+  // Dupont also favorites Hugo — declined
+  await db.collection('families').doc(family1Id).update({
+    preferredBabysitters: FieldValue.arrayUnion(bs2Uid),
+  });
+  const csReq3 = db.collection('contactSharingRequests').doc();
+  await csReq3.set({
+    requestId: csReq3.id,
+    babysitterUserId: bs2Uid,
+    familyId: family1Id,
+    familyName: 'Dupont',
+    parentName: 'Marie Dupont',
+    status: 'declined',
+    createdAt: NOW,
+    respondedAt: NOW,
+  });
+  console.log(`  Dupont → Hugo: declined (contact info hidden)`);
+
   // ─── Add a reference for Lea ───
   await db.collection('references').add({
     babysitterUserId: bs1Uid, type: 'manual', status: 'approved',

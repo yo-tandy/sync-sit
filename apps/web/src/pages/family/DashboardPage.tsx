@@ -12,6 +12,7 @@ import { CalendarIcon, ChevronRightIcon, PlusIcon, SearchIcon } from '@/componen
 import { Avatar } from '@/components/ui';
 import type { AppointmentDoc, BabysitterUser } from '@ejm/shared';
 import { formatBabysitterName, capitalize, formatFamilyTitle } from '@/lib/formatName';
+import { debouncedTogglePreferred } from '@/lib/debouncedPreferred';
 import { useHolidays } from '@/hooks/useHolidays';
 import { getDateTag } from '@/lib/dateTag';
 import { DateTag } from '@/components/ui/DateTag';
@@ -500,13 +501,17 @@ export function FamilyDashboard() {
     return unsub;
   }, [familyId]);
 
-  const togglePreferred = async (babysitterUserId: string) => {
+  const togglePreferred = (babysitterUserId: string) => {
     const isPref = preferredIds.has(babysitterUserId);
-    try {
-      const fn = httpsCallable(functions, isPref ? 'removePreferredBabysitter' : 'addPreferredBabysitter');
-      await fn({ babysitterUserId });
-      // The onSnapshot listener will update preferredIds automatically
-    } catch { /* silent */ }
+    // Optimistic UI update
+    setPreferredIds((prev) => {
+      const next = new Set(prev);
+      if (isPref) next.delete(babysitterUserId);
+      else next.add(babysitterUserId);
+      return next;
+    });
+    // Debounced backend call (3s delay, cancels if toggled back)
+    debouncedTogglePreferred(babysitterUserId, !isPref);
   };
 
   // Babysitters who have had a confirmed appointment with this family

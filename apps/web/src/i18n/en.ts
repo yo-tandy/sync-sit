@@ -243,6 +243,7 @@ export default {
     copyMessage: 'Copy message',
     shareByEmail: 'Share by email',
     shareText: 'Check out the EJM community babysitting app! {{link}}',
+    myFamilies: 'My Families',
   },
 
   share: {
@@ -488,6 +489,7 @@ export default {
     loginEmail: 'Login email',
     profilePhoto: 'Profile Photo',
     contactInfo: 'Contact Information',
+    contactSharingConsent: "I'm aware that parents who'd want to contact me for babysitting will get access to my contact information.",
     contactSaved: 'Contact info saved!',
     contactSaveFailed: 'Failed to save contact info',
     phone: 'Phone number',
@@ -829,5 +831,18 @@ export default {
     additionalNotesPlaceholder: 'Explain why you are resubmitting this request...',
     resubmitted: 'Resubmitted',
     resubmittedBanner: 'This request was resubmitted by the family after being declined.',
+  },
+
+  fans: {
+    title: 'My Families',
+    desc: 'These families added you to their favorites. Choose who can see your contact information.',
+    appointmentNote: 'When a family sends you a babysitting request, they will always see your contact info for that appointment — regardless of these settings.',
+    noFamilies: 'No families yet',
+    noFamiliesDesc: 'When a family adds you to their favorites, you will see them here and can choose to share your contact info.',
+    family: 'family',
+    share: 'Share',
+    decline: 'Decline',
+    sharing: 'Sharing',
+    notSharing: 'Not sharing',
   },
 } as const;

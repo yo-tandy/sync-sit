@@ -40,6 +40,10 @@ export interface BabysitterUser extends UserBase {
   contactPhone?: string;
   whatsapp?: string;
 
+  // Contact sharing consent
+  contactSharingConsent?: boolean;
+  approvedFamilies?: string[];
+
   // Area
   areaMode: AreaMode;
   arrondissements?: string[];

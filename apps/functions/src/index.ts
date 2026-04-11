@@ -25,6 +25,7 @@ export { sendContactRequest } from './search/sendContactRequest.js';
 export { addPreferredBabysitter } from './family/addPreferredBabysitter.js';
 export { removePreferredBabysitter } from './family/removePreferredBabysitter.js';
 export { lookupBabysitter } from './family/lookupBabysitter.js';
+export { respondToContactSharing } from './family/respondToContactSharing.js';
 
 // Appointments
 export { respondToRequest } from './appointments/respondToRequest.js';

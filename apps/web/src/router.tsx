@@ -31,6 +31,7 @@ import { BabysitterAccountPage } from '@/pages/babysitter/AccountPage';
 import { BabysittingOptionsPage } from '@/pages/babysitter/BabysittingOptionsPage';
 import { SchedulePage } from '@/pages/babysitter/SchedulePage';
 import { EndorsementsPage } from '@/pages/babysitter/EndorsementsPage';
+import { FamiliesPage } from '@/pages/babysitter/FamiliesPage';
 import { RequestDetailPage } from '@/pages/babysitter/RequestDetailPage';
 import { FamilyDashboard } from '@/pages/family/DashboardPage';
 import { FamilySettingsPage } from '@/pages/family/FamilySettingsPage';
@@ -82,6 +83,7 @@ export const router = createBrowserRouter([
       { path: '/babysitter/options', element: <BabysittingOptionsPage /> },
       { path: '/babysitter/schedule', element: <SchedulePage /> },
       { path: '/babysitter/endorsements', element: <EndorsementsPage /> },
+      { path: '/babysitter/families', element: <FamiliesPage /> },
       { path: '/babysitter/references', element: <Navigate to="/babysitter/endorsements" replace /> },
       { path: '/babysitter/request/:appointmentId', element: <RequestDetailPage /> },
       // Backward-compatible redirects

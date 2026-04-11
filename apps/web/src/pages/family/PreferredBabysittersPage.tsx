@@ -6,6 +6,7 @@ import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { useFamilyAppointments } from '@/hooks/useFamilyAppointments';
+import { debouncedTogglePreferred } from '@/lib/debouncedPreferred';
 import { Card, TopNav, Spinner, Badge } from '@/components/ui';
 import { Avatar } from '@/components/ui';
 import { SearchIcon } from '@/components/ui/Icons';
@@ -52,7 +53,6 @@ export function PreferredBabysittersPage() {
   const [searchResults, setSearchResults] = useState<BabysitterInfo[]>([]);
   const [searching, setSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
-  const [toggling, setToggling] = useState<string | null>(null);
   const [expandedUid, setExpandedUid] = useState<string | null>(null);
 
   // Build a map of babysitterUserId → active appointments
@@ -138,28 +138,16 @@ export function PreferredBabysittersPage() {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  const handleAdd = async (babysitterUserId: string) => {
-    setToggling(babysitterUserId);
-    try {
-      const fn = httpsCallable(functions, 'addPreferredBabysitter');
-      await fn({ babysitterUserId });
-    } catch {
-      // silent
-    } finally {
-      setToggling(null);
+  const handleToggle = (babysitterUserId: string) => {
+    const isPref = preferredIds.includes(babysitterUserId);
+    // Optimistic UI — update immediately
+    if (isPref) {
+      setPreferredIds((prev) => prev.filter((id) => id !== babysitterUserId));
+    } else {
+      setPreferredIds((prev) => [...prev, babysitterUserId]);
     }
-  };
-
-  const handleRemove = async (babysitterUserId: string) => {
-    setToggling(babysitterUserId);
-    try {
-      const fn = httpsCallable(functions, 'removePreferredBabysitter');
-      await fn({ babysitterUserId });
-    } catch {
-      // silent
-    } finally {
-      setToggling(null);
-    }
+    // Debounced backend call (3s delay, cancels if toggled back)
+    debouncedTogglePreferred(babysitterUserId, !isPref);
   };
 
   const isPreferred = (uid: string) => preferredIds.includes(uid);
@@ -198,8 +186,7 @@ export function PreferredBabysittersPage() {
             {b.classLevel && <p className="text-xs text-gray-500">{b.classLevel}</p>}
           </div>
           <button
-            onClick={(e) => { e.stopPropagation(); preferred ? handleRemove(b.uid) : handleAdd(b.uid); }}
-            disabled={toggling === b.uid}
+            onClick={(e) => { e.stopPropagation(); handleToggle(b.uid); }}
             className="text-lg"
             title={preferred ? t('preferred.remove') : t('preferred.add')}
           >
@@ -242,26 +229,7 @@ export function PreferredBabysittersPage() {
             {b.aboutMe && (
               <p className="text-xs text-gray-600 italic">"{b.aboutMe}"</p>
             )}
-            {/* Contact details only if there's been at least one request */}
-            {appointments.length > 0 && (b.contactEmail || b.contactPhone || b.whatsapp) && (
-              <div className="mt-2 rounded-lg bg-gray-50 p-2">
-                {b.contactEmail && (
-                  <a href={`mailto:${b.contactEmail}`} onClick={(e) => e.stopPropagation()} className="flex items-center gap-2 py-1.5 text-xs text-red-600 active:bg-gray-100">
-                    <span>📧</span> <span>{b.contactEmail}</span>
-                  </a>
-                )}
-                {b.contactPhone && (
-                  <a href={`tel:${b.contactPhone}`} onClick={(e) => e.stopPropagation()} className="flex items-center gap-2 py-1.5 text-xs text-red-600 active:bg-gray-100">
-                    <span>📞</span> <span>{b.contactPhone}</span>
-                  </a>
-                )}
-                {b.whatsapp && (
-                  <a href={`https://wa.me/${b.whatsapp.replace(/[^\d+]/g, '').replace('+', '')}`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="flex items-center gap-2 py-1.5 text-xs text-green-600 active:bg-gray-100">
-                    <span>💬</span> <span>WhatsApp</span>
-                  </a>
-                )}
-              </div>
-            )}
+            {/* Contact details removed — sharing requires babysitter consent */}
           </div>
         )}
       </Card>
