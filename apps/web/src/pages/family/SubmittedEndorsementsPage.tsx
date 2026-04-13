@@ -8,15 +8,7 @@ import { Avatar } from '@/components/ui';
 import { SearchIcon, PlusIcon } from '@/components/ui/Icons';
 import { EndorsementDialog } from '@/components/endorsements/EndorsementDialog';
 import { formatBabysitterName } from '@/lib/formatName';
-import type { ReferenceDoc } from '@ejm/shared';
-
-interface BabysitterResult {
-  uid: string;
-  firstName: string;
-  lastName: string;
-  photoUrl: string | null;
-  classLevel: string;
-}
+import type { ReferenceDoc, BabysitterSummary } from '@ejm/shared';
 
 function ReferenceCard({ reference, babysitterName, onEdit, onDelete }: { reference: ReferenceDoc; babysitterName: string; onEdit: () => void; onDelete: () => void }) {
   const { t, i18n } = useTranslation();
@@ -73,9 +65,9 @@ export function SubmittedEndorsementsPage() {
   // Add reference flow
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<BabysitterResult[]>([]);
+  const [searchResults, setSearchResults] = useState<BabysitterSummary[]>([]);
   const [searching, setSearching] = useState(false);
-  const [selectedBabysitter, setSelectedBabysitter] = useState<BabysitterResult | null>(null);
+  const [selectedBabysitter, setSelectedBabysitter] = useState<BabysitterSummary | null>(null);
 
   // Load babysitter names for all references
   useEffect(() => {
@@ -118,7 +110,7 @@ export function SubmittedEndorsementsPage() {
         const snap = await getDocs(
           query(collection(db, 'users'), where('role', '==', 'babysitter'), where('status', '==', 'active'))
         );
-        const results: BabysitterResult[] = [];
+        const results: BabysitterSummary[] = [];
         for (const d of snap.docs) {
           const data = d.data();
           const fullName = `${data.firstName || ''} ${data.lastName || ''}`.toLowerCase();

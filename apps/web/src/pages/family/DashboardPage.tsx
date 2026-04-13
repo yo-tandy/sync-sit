@@ -10,7 +10,7 @@ import { useFamilyAppointments } from '@/hooks/useFamilyAppointments';
 import { Button, Badge, Card, Spinner, Input, Dialog, Textarea } from '@/components/ui';
 import { CalendarIcon, ChevronRightIcon, PlusIcon, SearchIcon } from '@/components/ui/Icons';
 import { Avatar } from '@/components/ui';
-import type { AppointmentDoc, BabysitterUser } from '@ejm/shared';
+import type { AppointmentDoc, BabysitterUser, BabysitterSummary } from '@ejm/shared';
 import { formatBabysitterName, capitalize, formatFamilyTitle } from '@/lib/formatName';
 import { debouncedTogglePreferred } from '@/lib/debouncedPreferred';
 import { useHolidays } from '@/hooks/useHolidays';
@@ -20,18 +20,6 @@ import { buildCalendarUrl } from '@/lib/calendar';
 import { EndorsementDialog } from '@/components/endorsements/EndorsementDialog';
 import type { ReferenceDoc } from '@ejm/shared';
 
-interface BabysitterInfo {
-  name: string;
-  age?: number;
-  classLevel?: string;
-  languages?: string[];
-  photoUrl?: string;
-  aboutMe?: string;
-  contactEmail?: string;
-  contactPhone?: string;
-  kidAgeRange?: { min: number; max: number };
-  maxKids?: number;
-}
 
 const borderColors: Record<string, string> = {
   pending: '#f59e0b',
@@ -71,7 +59,7 @@ function ExpandableBabysitterCard({
   existingReference,
 }: {
   appointment: AppointmentDoc;
-  info?: BabysitterInfo;
+  info?: BabysitterSummary;
   variant: string;
   isReturning?: boolean;
   isPreferred?: boolean;
@@ -447,7 +435,7 @@ export function FamilyDashboard() {
     }
   };
 
-  const [babysitters, setBabysitters] = useState<Record<string, BabysitterInfo>>({});
+  const [babysitters, setBabysitters] = useState<Record<string, BabysitterSummary>>({});
   const [preferredIds, setPreferredIds] = useState<Set<string>>(new Set());
 
   // References state
@@ -539,7 +527,10 @@ export function FamilyDashboard() {
               const m = new Date().getMonth() - dob.getMonth();
               if (m < 0 || (m === 0 && new Date().getDate() < dob.getDate())) age--;
             }
-            const info: BabysitterInfo = {
+            const info: BabysitterSummary = {
+              uid,
+              firstName: u.firstName,
+              lastName: u.lastName,
               name: formatBabysitterName(u.firstName, u.lastName),
               age,
               classLevel: u.classLevel,
@@ -551,10 +542,10 @@ export function FamilyDashboard() {
               kidAgeRange: u.kidAgeRange,
               maxKids: u.maxKids,
             };
-            return [uid, info] as [string, BabysitterInfo];
+            return [uid, info] as [string, BabysitterSummary];
           }
         } catch { /* permission error */ }
-        return [uid, { name: t('familyDashboard.babysitterFallback') }] as [string, BabysitterInfo];
+        return [uid, { uid, firstName: '', lastName: '', name: t('familyDashboard.babysitterFallback') }] as [string, BabysitterSummary];
       })
     ).then((entries) => {
       const newData = Object.fromEntries(entries);
