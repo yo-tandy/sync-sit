@@ -11,23 +11,7 @@ import { Card, TopNav, Spinner, Badge } from '@/components/ui';
 import { Avatar } from '@/components/ui';
 import { SearchIcon } from '@/components/ui/Icons';
 import { formatBabysitterName } from '@/lib/formatName';
-import type { ParentUser, AppointmentDoc } from '@ejm/shared';
-
-interface BabysitterInfo {
-  uid: string;
-  firstName: string;
-  lastName: string;
-  photoUrl: string | null;
-  classLevel: string;
-  languages?: string[];
-  aboutMe?: string;
-  kidAgeRange?: { min: number; max: number };
-  maxKids?: number;
-  contactEmail?: string;
-  contactPhone?: string;
-  whatsapp?: string;
-  worksInYourArea?: boolean;
-}
+import type { ParentUser, AppointmentDoc, BabysitterSummary } from '@ejm/shared';
 
 const statusBadge: Record<string, { variant: 'amber' | 'green' | 'gray'; label: string }> = {
   pending: { variant: 'amber', label: 'Pending' },
@@ -45,12 +29,12 @@ export function PreferredBabysittersPage() {
   const { pending, confirmed, rejectedRecent } = useFamilyAppointments();
 
   const [preferredIds, setPreferredIds] = useState<string[]>([]);
-  const [preferredInfos, setPreferredInfos] = useState<BabysitterInfo[]>([]);
+  const [preferredInfos, setPreferredInfos] = useState<BabysitterSummary[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Search state
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<BabysitterInfo[]>([]);
+  const [searchResults, setSearchResults] = useState<BabysitterSummary[]>([]);
   const [searching, setSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
   const [expandedUid, setExpandedUid] = useState<string | null>(null);
@@ -83,7 +67,7 @@ export function PreferredBabysittersPage() {
     }
 
     async function loadInfos() {
-      const infos: BabysitterInfo[] = [];
+      const infos: BabysitterSummary[] = [];
       for (const uid of preferredIds) {
         try {
           const snap = await getDoc(doc(db, 'users', uid));
@@ -170,7 +154,7 @@ export function PreferredBabysittersPage() {
     return dateStr;
   }
 
-  function renderCard(b: BabysitterInfo, preferred: boolean) {
+  function renderCard(b: BabysitterSummary, preferred: boolean) {
     const expanded = expandedUid === b.uid;
     const appointments = activeAppointments.get(b.uid) || [];
     return (
