@@ -166,7 +166,7 @@ export function RequestDetailPage() {
             <Badge
               variant={apt.status === 'pending' ? 'amber' : apt.status === 'confirmed' ? 'green' : apt.status === 'cancelled' ? 'gray' : 'gray'}
             >
-              {apt.status === 'pending' ? t('request.pending') : apt.status === 'confirmed' ? t('request.confirmed') : apt.status === 'cancelled' ? t('request.cancelled') : t('request.declined')}
+              {apt.status === 'pending' ? t('request.pending') : apt.status === 'confirmed' ? t('request.confirmed') : apt.status === 'cancelled' && apt.cancelledFromStatus === 'pending' ? t('request.cancelled') : t('request.declined')}
             </Badge>
           </div>
         </div>

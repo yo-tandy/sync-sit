@@ -819,7 +819,7 @@ export default {
     cancelReason: 'Reason for cancellation *',
     cancelReasonPlaceholder: 'Why are you cancelling this appointment?',
     cancelRequestReasonPlaceholder: 'Why are you cancelling this request?',
-    confirmCancel: 'Confirm Cancellation',
+    confirmCancel: 'Confirm',
     cancelled: 'Cancelled',
     cancelledByFamily: 'Cancelled by family',
     edit: 'Edit',
