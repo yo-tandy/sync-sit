@@ -154,7 +154,7 @@ function ExpandableBabysitterCard({
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <div className="flex flex-col items-end gap-1">
-            <Badge variant={badgeVariants[variant]}>{badgeLabels[variant]}</Badge>
+            <Badge variant={badgeVariants[variant]}>{variant === 'rejected' && appointment.status === 'cancelled' && appointment.cancelledFromStatus === 'pending' ? t('appointment.cancelled') : badgeLabels[variant]}</Badge>
             {(appointment as any).modified && (
               <Badge variant="blue">{t('appointment.modified')}</Badge>
             )}

@@ -61,6 +61,7 @@ export const cancelAppointment = onCall(
     await aptRef.update({
       status: 'cancelled',
       statusReason: cancelledBy,
+      cancelledFromStatus: apt.status,
       cancellationReason: reason.trim(),
       cancelledAt: now,
       updatedAt: now,
