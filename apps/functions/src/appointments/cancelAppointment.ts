@@ -4,6 +4,7 @@ import { getCorsOrigin } from '../config/cors.js';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
 import { sendNotificationEmail } from '../config/email.js';
 import { sendPushNotification } from '../config/push.js';
+import { notifyAllParents } from '../config/notifyParents.js';
 
 interface CancelInput {
   appointmentId: string;
@@ -109,48 +110,20 @@ export const cancelAppointment = onCall(
       }
     } else {
       // Notify all parents in family
-      const familyDoc = await db.collection('families').doc(apt.familyId).get();
-      const parentIds: string[] = familyDoc.data()?.parentIds || [];
-      const callerName = `${callerDoc.data()?.firstName || ''} ${callerDoc.data()?.lastName || ''}`.trim();
       const dateInfo = apt.date ? `${apt.date}${apt.startTime ? `, ${apt.startTime}` : ''}${apt.endTime ? `–${apt.endTime}` : ''}` : 'Recurring';
 
-      for (const parentId of parentIds) {
-        const parentDoc = await db.collection('users').doc(parentId).get();
-        const parentEmail = parentDoc.data()?.email;
-        const parentPrefs = parentDoc.data()?.notifPrefs?.cancelled;
-
-        await db.collection('notifications').add({
-          recipientUserId: parentId,
-          type: 'request_cancelled',
-          title: 'Appointment cancelled',
-          body: `The babysitter has cancelled the appointment for ${dateInfo}. Reason: ${reason.trim()}`,
-          data: { appointmentId },
-          read: false,
-          channels: ['email'],
-          emailSent: false,
-          pushSent: false,
-          createdAt: now,
-        });
-
-        if (parentPrefs?.email !== false && parentEmail) {
-          await sendNotificationEmail(
-            parentEmail,
-            'Babysitting appointment cancelled',
-            `<p>The babysitter has cancelled the appointment for <strong>${dateInfo}</strong>.</p>
-             <p><strong>Reason:</strong> ${reason.trim()}</p>
-             <p style="margin-top: 16px;"><a href="https://sync-sit.com/family/search" style="background: #DC2626; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">Search Babysitters</a></p>`
-          );
-        }
-
-        if (parentDoc.data()?.notifPrefs?.cancelled?.push !== false) {
-          await sendPushNotification(
-            parentId,
-            'Appointment cancelled',
-            'The babysitter has cancelled the appointment.',
-            { appointmentId, type: 'request_cancelled' }
-          );
-        }
-      }
+      await notifyAllParents({
+        familyId: apt.familyId,
+        prefCategory: 'cancelled',
+        type: 'request_cancelled',
+        title: 'Appointment cancelled',
+        body: `The babysitter has cancelled the appointment for ${dateInfo}. Reason: ${reason.trim()}`,
+        emailSubject: 'Babysitting appointment cancelled',
+        emailBody: `<p>The babysitter has cancelled the appointment for <strong>${dateInfo}</strong>.</p>
+           <p><strong>Reason:</strong> ${reason.trim()}</p>
+           <p style="margin-top: 16px;"><a href="https://sync-sit.com/family/search" style="background: #DC2626; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">Search Babysitters</a></p>`,
+        data: { appointmentId },
+      });
     }
 
     await writeUserActivity(uid, cancelledBy, { appointmentId, reason: reason.trim() });

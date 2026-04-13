@@ -2,8 +2,7 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
-import { sendNotificationEmail } from '../config/email.js';
-import { sendPushNotification } from '../config/push.js';
+import { notifyAllParents } from '../config/notifyParents.js';
 
 interface RespondData {
   appointmentId: string;
@@ -107,44 +106,16 @@ export const respondToRequest = onCall(
       `;
 
       if (appointment.familyId) {
-        const familyDoc = await db.collection('families').doc(appointment.familyId).get();
-        const parentIds: string[] = familyDoc.data()?.parentIds || [];
-
-        for (const parentId of parentIds) {
-          const parentDoc = await db.collection('users').doc(parentId).get();
-          const parentData = parentDoc.data();
-          if (!parentData) continue;
-
-          if (parentData.notifPrefs?.confirmed?.email !== false && parentData.email) {
-            await sendNotificationEmail(
-              parentData.email,
-              `Babysitting confirmed — ${babysitterName}`,
-              acceptEmailBody
-            );
-          }
-
-          if (parentData.notifPrefs?.confirmed?.push !== false) {
-            await sendPushNotification(
-              parentId,
-              'Babysitting confirmed',
-              `${babysitterName} has accepted your babysitting request.`,
-              { appointmentId: data.appointmentId, type: 'request_accepted' }
-            );
-          }
-
-          await db.collection('notifications').add({
-            recipientUserId: parentId,
-            type: 'request_accepted',
-            title: 'Babysitting confirmed',
-            body: `${babysitterName} has accepted your babysitting request.`,
-            data: { appointmentId: data.appointmentId },
-            read: false,
-            channels: ['email', 'push'],
-            emailSent: parentData.notifPrefs?.confirmed?.email !== false,
-            pushSent: false,
-            createdAt: now,
-          });
-        }
+        await notifyAllParents({
+          familyId: appointment.familyId,
+          prefCategory: 'confirmed',
+          type: 'request_accepted',
+          title: 'Babysitting confirmed',
+          body: `${babysitterName} has accepted your babysitting request.`,
+          emailSubject: `Babysitting confirmed — ${babysitterName}`,
+          emailBody: acceptEmailBody,
+          data: { appointmentId: data.appointmentId },
+        });
       }
 
     } else {
@@ -171,44 +142,16 @@ export const respondToRequest = onCall(
       `;
 
       if (appointment.familyId) {
-        const familyDoc = await db.collection('families').doc(appointment.familyId).get();
-        const parentIds: string[] = familyDoc.data()?.parentIds || [];
-
-        for (const parentId of parentIds) {
-          const parentDoc = await db.collection('users').doc(parentId).get();
-          const parentData = parentDoc.data();
-          if (!parentData) continue;
-
-          if (parentData.notifPrefs?.cancelled?.email !== false && parentData.email) {
-            await sendNotificationEmail(
-              parentData.email,
-              `Babysitting request declined — ${babysitterName}`,
-              declineEmailBody
-            );
-          }
-
-          if (parentData.notifPrefs?.cancelled?.push !== false) {
-            await sendPushNotification(
-              parentId,
-              'Request declined',
-              `${babysitterName} has declined your babysitting request.`,
-              { appointmentId: data.appointmentId, type: 'request_declined' }
-            );
-          }
-
-          await db.collection('notifications').add({
-            recipientUserId: parentId,
-            type: 'request_declined',
-            title: 'Request declined',
-            body: `${babysitterName} has declined your babysitting request.`,
-            data: { appointmentId: data.appointmentId },
-            read: false,
-            channels: ['email', 'push'],
-            emailSent: parentData.notifPrefs?.cancelled?.email !== false,
-            pushSent: false,
-            createdAt: now,
-          });
-        }
+        await notifyAllParents({
+          familyId: appointment.familyId,
+          prefCategory: 'cancelled',
+          type: 'request_declined',
+          title: 'Request declined',
+          body: `${babysitterName} has declined your babysitting request.`,
+          emailSubject: `Babysitting request declined — ${babysitterName}`,
+          emailBody: declineEmailBody,
+          data: { appointmentId: data.appointmentId },
+        });
       }
     }
 
