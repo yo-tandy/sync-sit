@@ -791,7 +791,7 @@ export default {
     cancelReason: 'Raison de l\'annulation *',
     cancelReasonPlaceholder: 'Pourquoi annulez-vous ce rendez-vous ?',
     cancelRequestReasonPlaceholder: 'Pourquoi annulez-vous cette demande ?',
-    confirmCancel: 'Confirmer l\'annulation',
+    confirmCancel: 'Confirmer',
     cancelled: 'Annulé',
     cancelledByFamily: 'Annulé par la famille',
     edit: 'Modifier',
