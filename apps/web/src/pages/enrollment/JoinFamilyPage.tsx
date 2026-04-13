@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router';
-import { doc, getDoc } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { signInWithEmailAndPassword } from 'firebase/auth';
-import { auth, db, functions } from '@/config/firebase';
+import { auth, functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { Button, Input, TopNav, StepIndicator, Spinner } from '@/components/ui';
 import { MailIcon } from '@/components/ui/Icons';
@@ -36,15 +35,9 @@ export function JoinFamilyPage() {
     if (!token) { setInvalidToken(true); setLoading(false); return; }
     async function validate() {
       try {
-        const inviteSnap = await getDoc(doc(db, 'inviteLinks', token!));
-        if (!inviteSnap.exists()) { setInvalidToken(true); setLoading(false); return; }
-        const invite = inviteSnap.data();
-        if (invite.used) { setInvalidToken(true); setLoading(false); return; }
-        const expiresAt = invite.expiresAt?.toDate?.();
-        if (expiresAt && expiresAt < new Date()) { setInvalidToken(true); setLoading(false); return; }
-
-        // Read family name from the invite doc (denormalized)
-        setFamilyName(invite.familyName || 'your family');
+        const validateInvite = httpsCallable<{ token: string }, { familyName: string }>(functions, 'validateInviteLink');
+        const result = await validateInvite({ token: token! });
+        setFamilyName(result.data.familyName || 'your family');
         setLoading(false);
       } catch {
         setInvalidToken(true);

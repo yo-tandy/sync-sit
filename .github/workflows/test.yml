@@ -1,0 +1,48 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Enable pnpm (Corepack)
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.13.1 --activate
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Unit tests — fast, no emulators needed
+      - name: Run unit tests
+        run: pnpm test:unit
+
+      # Setup for integration tests
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Install Firebase CLI
+        run: npm install -g firebase-tools
+
+      - name: Build shared package
+        run: pnpm --filter @ejm/shared build
+
+      - name: Build Cloud Functions
+        run: cd apps/functions && npx tsc
+
+      # Integration tests — run inside emulator lifecycle
+      - name: Run integration tests
+        run: firebase emulators:exec --project demo-test 'pnpm test:integration'

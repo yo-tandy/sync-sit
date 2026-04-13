@@ -417,6 +417,7 @@ export function FamilyDashboard() {
                       isReturning={returningBabysitterIds.has(apt.babysitterUserId)}
                       isPreferred={preferredIds.has(apt.babysitterUserId)}
                       onTogglePreferred={() => togglePreferred(apt.babysitterUserId)}
+                      onCancel={() => setCancelTarget(apt.appointmentId)}
                       onEdit={() => openEdit(apt)}
                     />
                   ))}
@@ -473,23 +474,30 @@ export function FamilyDashboard() {
       )}
 
       <Dialog open={!!cancelTarget} onClose={() => { setCancelTarget(null); setCancelReason(''); }}>
-        <h3 className="mb-2 text-lg font-semibold">{t('appointment.cancelTitle')}</h3>
-        <p className="mb-4 text-sm text-gray-500">{t('appointment.cancelDesc')}</p>
-        <Textarea
-          label={t('appointment.cancelReason')}
-          value={cancelReason}
-          onChange={(e) => setCancelReason(e.target.value)}
-          placeholder={t('appointment.cancelReasonPlaceholder')}
-          required
-        />
-        <div className="mt-4 flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => { setCancelTarget(null); setCancelReason(''); }}>
-            {t('common.back')}
-          </Button>
-          <Button size="sm" onClick={handleCancel} disabled={cancelling || !cancelReason.trim()}>
-            {cancelling ? '...' : t('appointment.confirmCancel')}
-          </Button>
-        </div>
+        {(() => {
+          const isCancellingPending = pending.some((a) => a.appointmentId === cancelTarget);
+          return (
+            <>
+              <h3 className="mb-2 text-lg font-semibold">{isCancellingPending ? t('appointment.cancelRequestTitle') : t('appointment.cancelTitle')}</h3>
+              <p className="mb-4 text-sm text-gray-500">{isCancellingPending ? t('appointment.cancelRequestDesc') : t('appointment.cancelDesc')}</p>
+              <Textarea
+                label={t('appointment.cancelReason')}
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                placeholder={isCancellingPending ? t('appointment.cancelRequestReasonPlaceholder') : t('appointment.cancelReasonPlaceholder')}
+                required
+              />
+              <div className="mt-4 flex gap-2">
+                <Button variant="outline" size="sm" onClick={() => { setCancelTarget(null); setCancelReason(''); }}>
+                  {t('common.back')}
+                </Button>
+                <Button size="sm" onClick={handleCancel} disabled={cancelling || !cancelReason.trim()}>
+                  {cancelling ? '...' : t('appointment.confirmCancel')}
+                </Button>
+              </div>
+            </>
+          );
+        })()}
       </Dialog>
 
       <Dialog open={!!editTarget} onClose={() => setEditTarget(null)}>
