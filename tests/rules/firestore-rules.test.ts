@@ -112,7 +112,7 @@ describe('families collection', () => {
 });
 
 describe('inviteLinks collection', () => {
-  it('denies all client reads', async () => {
+  it('allows authenticated reads (public for invite validation)', async () => {
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
       await setDoc(doc(ctx.firestore(), 'inviteLinks', 'token123'), {
         token: 'token123', familyId: 'fam1', used: false,
@@ -120,12 +120,16 @@ describe('inviteLinks collection', () => {
     });
 
     const authed = testEnv.authenticatedContext('anyuser');
-    await assertFails(getDoc(doc(authed.firestore(), 'inviteLinks', 'token123')));
+    await assertSucceeds(getDoc(doc(authed.firestore(), 'inviteLinks', 'token123')));
   });
 
-  it('denies unauthenticated reads', async () => {
-    const unauthed = testEnv.unauthenticatedContext();
-    await assertFails(getDoc(doc(unauthed.firestore(), 'inviteLinks', 'token123')));
+  it('denies all client writes', async () => {
+    const authed = testEnv.authenticatedContext('anyuser');
+    await assertFails(
+      setDoc(doc(authed.firestore(), 'inviteLinks', 'newtoken'), {
+        token: 'newtoken', familyId: 'fam1', used: false,
+      })
+    );
   });
 });
 

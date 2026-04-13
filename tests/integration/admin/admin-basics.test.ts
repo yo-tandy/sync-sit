@@ -45,10 +45,12 @@ describe('admin functions', () => {
 
   describe('blockUser', () => {
     it('blocks an active user', async () => {
+      // Re-fetch admin token to ensure it's fresh
+      const freshAdminToken = await getIdToken(seed.admin.uid);
       const result = await callFunction<{ success: boolean; newStatus: string }>(
         'blockUser',
         { targetUserId: seed.babysitter1.uid },
-        adminToken
+        freshAdminToken
       );
 
       expect(result.success).toBe(true);
@@ -61,10 +63,11 @@ describe('admin functions', () => {
     });
 
     it('unblocks a blocked user (toggle)', async () => {
+      const freshAdminToken = await getIdToken(seed.admin.uid);
       const result = await callFunction<{ success: boolean; newStatus: string }>(
         'blockUser',
         { targetUserId: seed.babysitter1.uid },
-        adminToken
+        freshAdminToken
       );
 
       expect(result.success).toBe(true);

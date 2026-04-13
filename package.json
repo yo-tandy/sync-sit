@@ -9,8 +9,8 @@
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r typecheck",
     "test": "vitest run",
-    "test:unit": "vitest run -c packages/shared/vitest.config.ts",
-    "test:integration": "vitest run -c tests/vitest.config.ts",
+    "test:unit": "pnpm --filter @ejm/shared test",
+    "test:integration": "pnpm --filter @ejm/tests test",
     "seed:admin": "node apps/functions/seed-admin.cjs",
     "emulators": "firebase emulators:start",
     "deploy": "firebase deploy"

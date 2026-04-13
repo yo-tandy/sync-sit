@@ -8,10 +8,16 @@ describe('enrollFamily', () => {
   beforeAll(async () => {
     await clearAll();
 
-    // Send and retrieve verification code
+    // Send verification code via the function
     await callFunction('verifyParentEmail', { email });
+
+    // Read it back from Firestore (function stores by lowercased email)
     const db = getDb();
-    const codeDoc = await db.collection('verificationCodes').doc(email).get();
+    const normalizedEmail = email.trim().toLowerCase();
+    const codeDoc = await db.collection('verificationCodes').doc(normalizedEmail).get();
+    if (!codeDoc.exists) {
+      throw new Error(`Verification code doc not found for ${normalizedEmail}`);
+    }
     verificationCode = codeDoc.data()!.code;
   });
 
