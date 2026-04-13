@@ -8,7 +8,9 @@
     "build:functions": "pnpm --filter functions build",
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r typecheck",
-    "test": "pnpm -r test",
+    "test": "vitest run",
+    "test:unit": "vitest run -c packages/shared/vitest.config.ts",
+    "test:integration": "vitest run -c tests/vitest.config.ts",
     "seed:admin": "node apps/functions/seed-admin.cjs",
     "emulators": "firebase emulators:start",
     "deploy": "firebase deploy"
@@ -17,5 +19,8 @@
     "node": ">=20",
     "pnpm": ">=9"
   },
-  "packageManager": "pnpm@10.13.1+sha512.37ebf1a5c7a30d5fabe0c5df44ee8da4c965ca0c5af3dbab28c3a1681b70a256218d05c81c9c0dcf767ef6b8551eb5b960042b9ed4300c59242336377e01cfad"
+  "packageManager": "pnpm@10.13.1+sha512.37ebf1a5c7a30d5fabe0c5df44ee8da4c965ca0c5af3dbab28c3a1681b70a256218d05c81c9c0dcf767ef6b8551eb5b960042b9ed4300c59242336377e01cfad",
+  "devDependencies": {
+    "vitest": "^4.1.4"
+  }
 }
