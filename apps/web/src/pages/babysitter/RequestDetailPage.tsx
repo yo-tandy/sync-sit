@@ -164,12 +164,21 @@ export function RequestDetailPage() {
               {isReturningFamily && <span className="ml-1.5 text-blue-500" title="Returning family">⭐</span>}
             </h2>
             <Badge
-              variant={apt.status === 'pending' ? 'amber' : apt.status === 'confirmed' ? 'green' : 'gray'}
+              variant={apt.status === 'pending' ? 'amber' : apt.status === 'confirmed' ? 'green' : apt.status === 'cancelled' ? 'gray' : 'gray'}
             >
-              {apt.status === 'pending' ? t('request.pending') : apt.status === 'confirmed' ? t('request.confirmed') : t('request.declined')}
+              {apt.status === 'pending' ? t('request.pending') : apt.status === 'confirmed' ? t('request.confirmed') : apt.status === 'cancelled' && apt.cancelledFromStatus === 'pending' ? t('request.cancelled') : t('request.declined')}
             </Badge>
           </div>
         </div>
+
+        {apt.status === 'cancelled' && apt.statusReason === 'cancelled_by_family' && (
+          <Card className="mb-4 border-red-300 bg-red-50">
+            <p className="text-sm font-semibold text-red-800">{t('request.cancelledByFamilyBanner')}</p>
+            {apt.cancellationReason && (
+              <p className="mt-1 text-xs text-red-600">{apt.cancellationReason}</p>
+            )}
+          </Card>
+        )}
 
         {apt.modified && (
           <Card className="mb-4 border-amber-300 bg-amber-50">

@@ -53,6 +53,8 @@ export interface AppointmentDoc {
   type: SearchType;
   status: AppointmentStatus;
   statusReason?: AppointmentStatusReason;
+  cancellationReason?: string;
+  cancelledFromStatus?: string;
 
   // Copied from search at creation
   date?: string;

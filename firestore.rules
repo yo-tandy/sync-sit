@@ -98,10 +98,9 @@ service cloud.firestore {
       allow create, delete: if false;
     }
 
-    // Invite links: readable by anyone (validated in Cloud Function)
+    // Invite links: no client access (validated via validateInviteLink Cloud Function)
     match /inviteLinks/{token} {
-      allow read: if true;
-      allow write: if false;
+      allow read, write: if false;
     }
 
     // Verification codes: no client access

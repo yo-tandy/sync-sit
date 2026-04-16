@@ -18,7 +18,7 @@ export function TopNav({ title, backTo, onBack, rightAction }: TopNavProps) {
     if (onBack) {
       onBack();
     } else if (backTo === 'back') {
-      navigate(-1);
+      window.history.state?.idx > 0 ? navigate(-1) : navigate('/');
     } else if (backTo) {
       navigate(backTo);
     }

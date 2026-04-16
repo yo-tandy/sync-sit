@@ -451,6 +451,8 @@ export default {
     declinedDesc: 'La famille a \u00e9t\u00e9 pr\u00e9venue.',
     goBack: 'Retour',
     notFound: 'Demande introuvable.',
+    cancelled: 'Annulé',
+    cancelledByFamilyBanner: 'Cette demande a été annulée par la famille.',
     recurringLabel: 'Récurrent',
   },
 
@@ -781,12 +783,17 @@ export default {
   // Appointment actions
   appointment: {
     cancel: 'Annuler le rendez-vous',
+    cancelRequest: 'Annuler la demande',
     cancelTitle: 'Annuler le rendez-vous',
+    cancelRequestTitle: 'Annuler la demande',
     cancelDesc: 'Veuillez indiquer la raison de l\'annulation. L\'autre partie sera notifiée.',
+    cancelRequestDesc: 'Êtes-vous sûr de vouloir annuler cette demande de babysitting ? Le/la babysitter sera notifié(e).',
     cancelReason: 'Raison de l\'annulation *',
     cancelReasonPlaceholder: 'Pourquoi annulez-vous ce rendez-vous ?',
-    confirmCancel: 'Confirmer l\'annulation',
+    cancelRequestReasonPlaceholder: 'Pourquoi annulez-vous cette demande ?',
+    confirmCancel: 'Confirmer',
     cancelled: 'Annulé',
+    cancelledByFamily: 'Annulé par la famille',
     edit: 'Modifier',
     editTitle: 'Modifier le rendez-vous',
     modified: 'Modifié',
