@@ -236,3 +236,80 @@ export async function seedTestData(): Promise<SeedData> {
     password: PASSWORD,
   };
 }
+
+/**
+ * Seed a single appointment into Firestore with sensible defaults.
+ * Required: babysitterUserId, familyId, createdByUserId.
+ * Everything else can be overridden via `overrides`.
+ */
+export interface AppointmentSeed {
+  appointmentId?: string;
+  babysitterUserId: string;
+  familyId: string;
+  familyName?: string;
+  createdByUserId: string;
+  type?: 'one_time' | 'recurring';
+  status?: 'pending' | 'confirmed' | 'rejected' | 'cancelled';
+  statusReason?: string;
+  date?: string;          // YYYY-MM-DD
+  startTime?: string;     // HH:MM
+  endTime?: string;       // HH:MM
+  kidIds?: string[];
+  kids?: Array<{ age: number; languages: string[] }>;
+  address?: string;
+  latLng?: { lat: number; lng: number };
+  offeredRate?: number;
+  message?: string;
+  additionalInfo?: string;
+  modified?: boolean;
+  modifiedFields?: string[];
+  resubmitted?: boolean;
+  isResubmission?: boolean;
+  cancelledFromStatus?: string;
+  cancellationReason?: string;
+}
+
+export async function seedAppointment(data: AppointmentSeed): Promise<string> {
+  const db = getDb();
+  const now = new Date();
+
+  // Tomorrow YYYY-MM-DD
+  const tomorrow = new Date(now);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const tomorrowStr = tomorrow.toISOString().split('T')[0];
+
+  const appointmentId = data.appointmentId ?? `apt-${Math.random().toString(36).slice(2, 10)}`;
+
+  const doc: Record<string, unknown> = {
+    appointmentId,
+    type: data.type ?? 'one_time',
+    status: data.status ?? 'pending',
+    familyId: data.familyId,
+    familyName: data.familyName ?? 'TestFamily',
+    babysitterUserId: data.babysitterUserId,
+    createdByUserId: data.createdByUserId,
+    date: data.date ?? tomorrowStr,
+    startTime: data.startTime ?? '18:00',
+    endTime: data.endTime ?? '22:00',
+    kidIds: data.kidIds ?? ['kid1'],
+    kids: data.kids ?? [{ age: 6, languages: ['French', 'English'] }],
+    address: data.address ?? '15 Rue de Passy, 75016 Paris',
+    latLng: data.latLng ?? { lat: 48.8566, lng: 2.2769 },
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  if (data.statusReason !== undefined) doc.statusReason = data.statusReason;
+  if (data.offeredRate !== undefined) doc.offeredRate = data.offeredRate;
+  if (data.message !== undefined) doc.message = data.message;
+  if (data.additionalInfo !== undefined) doc.additionalInfo = data.additionalInfo;
+  if (data.modified !== undefined) doc.modified = data.modified;
+  if (data.modifiedFields !== undefined) doc.modifiedFields = data.modifiedFields;
+  if (data.resubmitted !== undefined) doc.resubmitted = data.resubmitted;
+  if (data.isResubmission !== undefined) doc.isResubmission = data.isResubmission;
+  if (data.cancelledFromStatus !== undefined) doc.cancelledFromStatus = data.cancelledFromStatus;
+  if (data.cancellationReason !== undefined) doc.cancellationReason = data.cancellationReason;
+
+  await db.collection('appointments').doc(appointmentId).set(doc);
+  return appointmentId;
+}
