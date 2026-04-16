@@ -9,11 +9,11 @@ import { useVerificationStore } from '@/stores/verificationStore';
 import { useFamilyAppointments } from '@/hooks/useFamilyAppointments';
 import { Button, Badge, Card, Spinner, Input, Dialog, Textarea } from '@/components/ui';
 import { CalendarIcon, PlusIcon, SearchIcon } from '@/components/ui/Icons';
-import type { AppointmentDoc, BabysitterUser } from '@ejm/shared';
+import type { AppointmentDoc, BabysitterUser, BabysitterSummary } from '@ejm/shared';
 import { formatBabysitterName, capitalize, formatFamilyTitle } from '@/lib/formatName';
 import { debouncedTogglePreferred } from '@/lib/debouncedPreferred';
 import { EndorsementDialog } from '@/components/endorsements/EndorsementDialog';
-import { ExpandableBabysitterCard, type BabysitterCardInfo } from '@/components/appointments/ExpandableBabysitterCard';
+import { ExpandableBabysitterCard } from '@/components/appointments/ExpandableBabysitterCard';
 import type { ReferenceDoc } from '@ejm/shared';
 
 
@@ -150,7 +150,7 @@ export function FamilyDashboard() {
     }
   };
 
-  const [babysitters, setBabysitters] = useState<Record<string, BabysitterCardInfo>>({});
+  const [babysitters, setBabysitters] = useState<Record<string, BabysitterSummary>>({});
   const [preferredIds, setPreferredIds] = useState<Set<string>>(new Set());
 
   // References state
@@ -242,7 +242,10 @@ export function FamilyDashboard() {
               const m = new Date().getMonth() - dob.getMonth();
               if (m < 0 || (m === 0 && new Date().getDate() < dob.getDate())) age--;
             }
-            const info: BabysitterCardInfo = {
+            const info: BabysitterSummary = {
+              uid,
+              firstName: u.firstName,
+              lastName: u.lastName,
               name: formatBabysitterName(u.firstName, u.lastName),
               age,
               classLevel: u.classLevel,
@@ -254,10 +257,10 @@ export function FamilyDashboard() {
               kidAgeRange: u.kidAgeRange,
               maxKids: u.maxKids,
             };
-            return [uid, info] as [string, BabysitterCardInfo];
+            return [uid, info] as [string, BabysitterSummary];
           }
         } catch { /* permission error */ }
-        return [uid, { name: t('familyDashboard.babysitterFallback') }] as [string, BabysitterCardInfo];
+        return [uid, { uid, firstName: '', lastName: '', name: t('familyDashboard.babysitterFallback') }] as [string, BabysitterSummary];
       })
     ).then((entries) => {
       const newData = Object.fromEntries(entries);

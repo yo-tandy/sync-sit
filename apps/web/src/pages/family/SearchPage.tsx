@@ -15,7 +15,7 @@ import { CheckIcon, ShieldIcon } from '@/components/ui/Icons';
 import { useHolidays } from '@/hooks/useHolidays';
 import { getDateTag } from '@/lib/dateTag';
 import { DateTag } from '@/components/ui/DateTag';
-import type { ParentUser, FamilyDoc, KidDoc, SearchDefaults } from '@ejm/shared';
+import type { ParentUser, FamilyDoc, KidDoc, SearchDefaults, BabysitterSummary } from '@ejm/shared';
 
 // Time options 06:00–02:00
 function generateTimeOptions(): { value: string; label: string }[] {
@@ -37,24 +37,6 @@ function generateTimeOptions(): { value: string; label: string }[] {
 }
 const TIME_OPTIONS = generateTimeOptions();
 
-interface BabysitterResult {
-  uid: string;
-  firstName: string;
-  lastName: string;
-  age: number;
-  classLevel: string;
-  languages: string[];
-  photoUrl: string | null;
-  aboutMe: string | null;
-  kidAgeRange: { min: number; max: number };
-  maxKids: number;
-  hourlyRate: number;
-  distance: number;
-  referenceCount: number;
-  contactEmail?: string;
-  contactPhone?: string;
-  isPreferred?: boolean;
-}
 
 export function SearchPage() {
   const { t, i18n } = useTranslation();
@@ -104,7 +86,7 @@ export function SearchPage() {
   const [filterRequireRefs, setFilterRequireRefs] = useState(false);
 
   // Results
-  const [results, setResults] = useState<BabysitterResult[]>([]);
+  const [results, setResults] = useState<BabysitterSummary[]>([]);
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
 
@@ -154,7 +136,7 @@ export function SearchPage() {
   };
 
   // Contact dialog
-  const [contactTarget, setContactTarget] = useState<BabysitterResult | null>(null);
+  const [contactTarget, setContactTarget] = useState<BabysitterSummary | null>(null);
   const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
@@ -240,7 +222,7 @@ export function SearchPage() {
           requireReferences: filterRequireRefs || undefined,
         },
       });
-      setResults((result.data as { results: BabysitterResult[] }).results);
+      setResults((result.data as { results: BabysitterSummary[] }).results);
       setStep('results');
     } catch (err: any) {
       setSearchError(err.message || 'Search failed');
@@ -541,7 +523,7 @@ export function SearchPage() {
             ) : (() => {
               const preferred = results.filter((r) => r.isPreferred);
               const others = results.filter((r) => !r.isPreferred);
-              const renderCard = (b: BabysitterResult) => {
+              const renderCard = (b: BabysitterSummary) => {
                 const isExpanded = expandedBabysitter === b.uid;
                 return (
                 <Card key={b.uid} className="mb-3 cursor-pointer" onClick={() => { const next = isExpanded ? null : b.uid; setExpandedBabysitter(next); if (next) loadRefs(b.uid); }}>
@@ -566,15 +548,17 @@ export function SearchPage() {
                         </div>
                       </div>
                       <p className="text-xs text-gray-500">{t('familyDashboard.classLabel')} {b.classLevel}</p>
-                      <p className="text-xs text-gray-500">🗣 {b.languages.join(', ')}</p>
-                      <p className="text-xs text-gray-500">
-                        👶 {t('familyDashboard.agesRange', { min: b.kidAgeRange.min, max: b.kidAgeRange.max })}{t('familyDashboard.upToKids', { count: b.maxKids })}
-                      </p>
-                      {b.distance > 0 && (
+                      {b.languages && b.languages.length > 0 && <p className="text-xs text-gray-500">🗣 {b.languages.join(', ')}</p>}
+                      {b.kidAgeRange && (
+                        <p className="text-xs text-gray-500">
+                          👶 {t('familyDashboard.agesRange', { min: b.kidAgeRange.min, max: b.kidAgeRange.max })}{t('familyDashboard.upToKids', { count: b.maxKids })}
+                        </p>
+                      )}
+                      {(b.distance ?? 0) > 0 && (
                         <p className="text-xs text-gray-500">📍 {b.distance} km away</p>
                       )}
-                      {b.referenceCount > 0 && (
-                        <p className="text-xs text-gray-500"><span className="text-green-600">✓</span> {b.referenceCount} endorsement{b.referenceCount > 1 ? 's' : ''}</p>
+                      {(b.referenceCount ?? 0) > 0 && (
+                        <p className="text-xs text-gray-500"><span className="text-green-600">✓</span> {b.referenceCount} endorsement{(b.referenceCount ?? 0) > 1 ? 's' : ''}</p>
                       )}
                       {b.aboutMe && (
                         <p className={`mt-1 text-xs text-gray-600 ${isExpanded ? '' : 'line-clamp-2'}`}>"{b.aboutMe}"</p>

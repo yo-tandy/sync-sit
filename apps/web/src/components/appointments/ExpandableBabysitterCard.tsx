@@ -5,24 +5,11 @@ import { db } from '@/config/firebase';
 import { Button, Badge, Card } from '@/components/ui';
 import { ChevronRightIcon } from '@/components/ui/Icons';
 import { Avatar } from '@/components/ui';
-import type { AppointmentDoc, ReferenceDoc } from '@ejm/shared';
+import type { AppointmentDoc, ReferenceDoc, BabysitterSummary } from '@ejm/shared';
 import { useHolidays } from '@/hooks/useHolidays';
 import { getDateTag } from '@/lib/dateTag';
 import { DateTag } from '@/components/ui/DateTag';
 import { buildCalendarUrl } from '@/lib/calendar';
-
-export interface BabysitterCardInfo {
-  name?: string;
-  age?: number;
-  classLevel?: string;
-  languages?: string[];
-  photoUrl?: string;
-  aboutMe?: string;
-  contactEmail?: string;
-  contactPhone?: string;
-  kidAgeRange?: { min: number; max: number };
-  maxKids?: number;
-}
 
 const borderColors: Record<string, string> = {
   pending: '#f59e0b',
@@ -73,7 +60,7 @@ export function ExpandableBabysitterCard({
   existingReference,
 }: {
   appointment: AppointmentDoc;
-  info?: BabysitterCardInfo;
+  info?: BabysitterSummary;
   variant: string;
   isReturning?: boolean;
   isPreferred?: boolean;
