@@ -9,7 +9,7 @@ import { isBabysitterProfileComplete } from '@ejm/shared';
 import { useAppointments } from '@/hooks/useAppointments';
 import { useSchedule } from '@/hooks/useSchedule';
 import { AppointmentCard } from '@/components/appointments/AppointmentCard';
-import { Card, Badge, Dialog, Button, Spinner, Textarea } from '@/components/ui';
+import { Card, Badge, Dialog, Button, Spinner, Textarea, InstallAppBanner } from '@/components/ui';
 import {
   CalendarIcon,
   ChevronRightIcon,
@@ -211,6 +211,9 @@ export function BabysitterDashboard() {
           {isSearchable ? t('babysitterDashboard.active') : t('babysitterDashboard.inactive')}
         </button>
       </div>
+
+      {/* Install-as-PWA banner (only when running in a regular browser tab) */}
+      <InstallAppBanner />
 
       {/* ── Profile completion banner ── */}
       {!profileComplete && (
