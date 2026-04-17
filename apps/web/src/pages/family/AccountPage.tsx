@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { isRunningAsPWA } from '@ejm/shared';
 import { db, storage } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { TopNav, Button, Input, Card, InfoBanner, LanguageSelector } from '@/components/ui';
@@ -109,6 +111,9 @@ export function AccountPage() {
 
   // General UI state
   const [error, setError] = useState<string | null>(null);
+
+  // Push notifications only function when the app is installed as a PWA.
+  const pwaMode = isRunningAsPWA();
 
   // Initialize from userDoc
   useEffect(() => {
@@ -249,6 +254,9 @@ export function AccountPage() {
   }, [uid, refreshUserDoc]);
 
   const toggle = (scenario: keyof NotifPrefs, channel: 'push' | 'email') => {
+    // In web-app mode, push toggles are inert — notifications won't be
+    // delivered until the user installs the app to their home screen.
+    if (channel === 'push' && !pwaMode) return;
     const updated = {
       ...prefs,
       [scenario]: {
@@ -395,14 +403,29 @@ export function AccountPage() {
 
         <hr className="mb-6 border-gray-200" />
 
-        {/* 5. Push Notifications */}
-        {isPushSupported() && (
+        {/* 5. Push Notifications — status card only shown when push can actually work (PWA mode) */}
+        {pwaMode && isPushSupported() && (
           <PushStatusCard uid={uid} />
         )}
 
         {/* 6. Notification Preferences */}
         <h3 className="mb-1 text-sm font-semibold text-gray-700">{t('notifications.title')}</h3>
         <p className="mb-4 text-sm text-gray-500">{t('notifications.desc')}</p>
+
+        {/* Constant notice when push isn't available (web-app mode) */}
+        {!pwaMode && (
+          <Card className="mb-4 border-amber-200 bg-amber-50">
+            <div className="flex items-start gap-3">
+              <BellIcon className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+              <p className="text-xs text-amber-800">
+                {t('notifications.pushRequiresInstall')}{' '}
+                <Link to="/install" className="font-semibold underline">
+                  {t('notifications.pushRequiresInstallLink')}
+                </Link>
+              </p>
+            </div>
+          </Card>
+        )}
 
         {/* Header */}
         <div className="mb-3 flex items-center justify-end gap-6 pr-1">
@@ -423,7 +446,10 @@ export function AccountPage() {
                 <button
                   type="button"
                   onClick={() => toggle(s.key, 'push')}
-                  className={`flex h-6 w-10 items-center rounded-full p-0.5 transition-colors ${channel.push ? 'bg-red-600' : 'bg-gray-300'}`}
+                  disabled={!pwaMode}
+                  aria-disabled={!pwaMode}
+                  title={!pwaMode ? t('notifications.pushRequiresInstall') : undefined}
+                  className={`flex h-6 w-10 items-center rounded-full p-0.5 transition-colors ${channel.push ? 'bg-red-600' : 'bg-gray-300'} ${!pwaMode ? 'cursor-not-allowed opacity-40' : ''}`}
                 >
                   <div className={`h-5 w-5 rounded-full bg-white shadow transition-transform ${channel.push ? 'translate-x-4' : 'translate-x-0'}`} />
                 </button>

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { isRunningAsPWA } from '@ejm/shared';
 import { useAuthStore } from '@/stores/authStore';
 import { Button, Card } from '@/components/ui';
 import { BellIcon } from '@/components/ui/Icons';
@@ -12,6 +13,10 @@ export function PushPrompt() {
 
   useEffect(() => {
     if (!firebaseUser || !isPushSupported()) return;
+
+    // Never prompt when running in a regular browser tab — push won't work
+    // reliably outside installed PWA mode, so don't ask for permission here.
+    if (!isRunningAsPWA()) return;
 
     // If permission already granted, silently refresh token
     if (Notification.permission === 'granted') {

@@ -7,7 +7,7 @@ import { db, functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { useVerificationStore } from '@/stores/verificationStore';
 import { useFamilyAppointments } from '@/hooks/useFamilyAppointments';
-import { Button, Badge, Card, Spinner, Input, Dialog, Textarea } from '@/components/ui';
+import { Button, Badge, Card, Spinner, Input, Dialog, Textarea, InstallAppBanner } from '@/components/ui';
 import { CalendarIcon, PlusIcon, SearchIcon } from '@/components/ui/Icons';
 import type { AppointmentDoc, BabysitterUser } from '@ejm/shared';
 import { formatBabysitterName, capitalize, formatFamilyTitle } from '@/lib/formatName';
@@ -293,6 +293,9 @@ export function FamilyDashboard() {
         <h2 className="text-lg font-bold">{t('babysitterDashboard.hello')} {capitalize(userDoc?.firstName) || 'there'} 👋</h2>
         <p className="text-xs text-gray-500">{formatFamilyTitle(familyName)} {t('familyDashboard.family')}</p>
       </div>
+
+      {/* Install-as-PWA banner (only when running in a regular browser tab) */}
+      <InstallAppBanner />
 
       {/* Verification banner */}
       {familyVerification && !familyVerification.isFullyVerified && (
