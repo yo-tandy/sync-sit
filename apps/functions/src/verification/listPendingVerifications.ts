@@ -79,6 +79,23 @@ export const listPendingVerifications = onCall(
 
         const familyDoc = await db.collection('families').doc(fId).get();
         const parentIds: string[] = familyDoc.data()?.parentIds || [];
+
+        // userNames was only populated for verification uploaders, so
+        // co-parents who didn't submit the doc are missing. Fetch their
+        // user docs now so the enrichment reflects ALL parents.
+        const missingParentIds = parentIds.filter((pid) => !(pid in userNames));
+        if (missingParentIds.length > 0) {
+          const missingDocs = await Promise.all(
+            missingParentIds.map((id) => db.collection('users').doc(id).get())
+          );
+          for (const mDoc of missingDocs) {
+            if (mDoc.exists) {
+              const d = mDoc.data()!;
+              userNames[mDoc.id] = `${d.firstName || ''} ${d.lastName || ''}`.trim();
+            }
+          }
+        }
+
         familyParents[fId] = parentIds.map((pid) => userNames[pid] || pid);
       }
     }
