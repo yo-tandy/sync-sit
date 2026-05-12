@@ -313,3 +313,86 @@ export async function seedAppointment(data: AppointmentSeed): Promise<string> {
   await db.collection('appointments').doc(appointmentId).set(doc);
   return appointmentId;
 }
+
+/**
+ * Seed a verification document.
+ * Required: familyId, uploadedByUserId, type.
+ * Defaults: status='pending', generic fileUrl/fileName.
+ */
+export interface VerificationSeed {
+  verificationId?: string;
+  familyId: string;
+  uploadedByUserId: string;
+  type: 'identity' | 'ejm_enrollment';
+  status?: 'pending' | 'approved' | 'rejected';
+  fileUrl?: string;
+  fileName?: string;
+  rejectionReason?: string;
+  reviewedByAdminId?: string;
+  reviewedAt?: Date;
+}
+
+export async function seedVerification(data: VerificationSeed): Promise<string> {
+  const db = getDb();
+  const now = new Date();
+  const ref = data.verificationId
+    ? db.collection('verifications').doc(data.verificationId)
+    : db.collection('verifications').doc();
+
+  const doc: Record<string, unknown> = {
+    verificationId: ref.id,
+    familyId: data.familyId,
+    uploadedByUserId: data.uploadedByUserId,
+    type: data.type,
+    status: data.status ?? 'pending',
+    fileUrl: data.fileUrl ?? `verification-documents/${data.familyId}/test-file.pdf`,
+    fileName: data.fileName ?? 'test-file.pdf',
+    createdAt: now,
+  };
+
+  if (data.rejectionReason !== undefined) doc.rejectionReason = data.rejectionReason;
+  if (data.reviewedByAdminId !== undefined) doc.reviewedByAdminId = data.reviewedByAdminId;
+  if (data.reviewedAt !== undefined) doc.reviewedAt = data.reviewedAt;
+
+  await ref.set(doc);
+  return ref.id;
+}
+
+/**
+ * Seed a community verification code.
+ * Required: familyId, requestedByUserId.
+ * Defaults: 6-char code, expires in 24h, unused.
+ */
+export interface CommunityCodeSeed {
+  code?: string;
+  familyId: string;
+  requestedByUserId: string;
+  expiresAt?: Date;
+  used?: boolean;
+  usedByUserId?: string;
+  usedAt?: Date;
+}
+
+export async function seedCommunityCode(data: CommunityCodeSeed): Promise<string> {
+  const db = getDb();
+  const now = new Date();
+  const code =
+    data.code ??
+    Math.random().toString(36).slice(2, 8).toUpperCase().padEnd(6, 'A').slice(0, 6);
+  const expiresAt = data.expiresAt ?? new Date(now.getTime() + 24 * 60 * 60 * 1000);
+
+  const doc: Record<string, unknown> = {
+    code,
+    familyId: data.familyId,
+    requestedByUserId: data.requestedByUserId,
+    expiresAt,
+    used: data.used ?? false,
+    createdAt: now,
+  };
+
+  if (data.usedByUserId !== undefined) doc.usedByUserId = data.usedByUserId;
+  if (data.usedAt !== undefined) doc.usedAt = data.usedAt;
+
+  await db.collection('communityVerificationCodes').doc(code).set(doc);
+  return code;
+}

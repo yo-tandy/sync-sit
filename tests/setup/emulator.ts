@@ -9,13 +9,16 @@ import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 
 export const PROJECT_ID = 'demo-test';
-export const FUNCTIONS_URL = `http://127.0.0.1:5001/${PROJECT_ID}/europe-west1`;
-const FIRESTORE_URL = `http://127.0.0.1:8080`;
-const AUTH_URL = `http://127.0.0.1:9099`;
+const FIRESTORE_PORT = process.env.TEST_FIRESTORE_PORT ?? '8080';
+const AUTH_PORT = process.env.TEST_AUTH_PORT ?? '9099';
+const FUNCTIONS_PORT = process.env.TEST_FUNCTIONS_PORT ?? '5001';
+export const FUNCTIONS_URL = `http://127.0.0.1:${FUNCTIONS_PORT}/${PROJECT_ID}/europe-west1`;
+const FIRESTORE_URL = `http://127.0.0.1:${FIRESTORE_PORT}`;
+const AUTH_URL = `http://127.0.0.1:${AUTH_PORT}`;
 
 // Set emulator env vars before any Firebase init
-process.env.FIRESTORE_EMULATOR_HOST = '127.0.0.1:8080';
-process.env.FIREBASE_AUTH_EMULATOR_HOST = '127.0.0.1:9099';
+process.env.FIRESTORE_EMULATOR_HOST = `127.0.0.1:${FIRESTORE_PORT}`;
+process.env.FIREBASE_AUTH_EMULATOR_HOST = `127.0.0.1:${AUTH_PORT}`;
 process.env.GCLOUD_PROJECT = PROJECT_ID;
 
 let app: App;
@@ -119,7 +122,7 @@ export async function getIdToken(uid: string): Promise<string> {
 
   // Exchange custom token for ID token via Auth emulator REST API
   const res = await fetch(
-    `http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/accounts:signInWithCustomToken?key=fake-api-key`,
+    `${AUTH_URL}/identitytoolkit.googleapis.com/v1/accounts:signInWithCustomToken?key=fake-api-key`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
