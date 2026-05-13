@@ -1,15 +1,18 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { isRunningAsPWA } from '../pwa.js';
 
-type NavigatorWithStandalone = Navigator & { standalone?: boolean };
+type NavigatorWithStandalone = { standalone?: boolean };
+
+function getNavigator(): NavigatorWithStandalone | undefined {
+  return (globalThis as { navigator?: NavigatorWithStandalone }).navigator;
+}
 
 describe('isRunningAsPWA', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     // Clean up navigator.standalone if the test set it
-    if (typeof navigator !== 'undefined') {
-      delete (navigator as NavigatorWithStandalone).standalone;
-    }
+    const nav = getNavigator();
+    if (nav) delete nav.standalone;
   });
 
   it('returns false when window is undefined (SSR / Node)', () => {
@@ -28,7 +31,8 @@ describe('isRunningAsPWA', () => {
     vi.stubGlobal('window', {
       matchMedia: () => ({ matches: false }),
     });
-    (navigator as NavigatorWithStandalone).standalone = true;
+    const nav = getNavigator();
+    if (nav) nav.standalone = true;
     expect(isRunningAsPWA()).toBe(true);
   });
 
@@ -36,7 +40,8 @@ describe('isRunningAsPWA', () => {
     vi.stubGlobal('window', {
       matchMedia: () => ({ matches: false }),
     });
-    (navigator as NavigatorWithStandalone).standalone = false;
+    const nav = getNavigator();
+    if (nav) nav.standalone = false;
     expect(isRunningAsPWA()).toBe(false);
   });
 

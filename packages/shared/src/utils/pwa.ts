@@ -9,17 +9,25 @@
  *   from the home-screen icon.
  *
  * Safe to call in SSR / non-browser environments — returns `false`.
+ *
+ * Note: `window` and `navigator` are typed locally via `globalThis` so this
+ * file doesn't require the DOM lib. The shared package is consumed by both
+ * the browser app and Cloud Functions (Node), and we don't want to surface
+ * browser-only globals to the Node side.
  */
+type MatchMediaResult = { matches: boolean };
+type WindowLike = { matchMedia?: (query: string) => MatchMediaResult };
+type NavigatorLike = { standalone?: boolean };
+
 export function isRunningAsPWA(): boolean {
-  if (typeof window === 'undefined') return false;
+  const g = globalThis as { window?: WindowLike; navigator?: NavigatorLike };
+  if (!g.window) return false;
 
   const displayModeStandalone =
-    typeof window.matchMedia === 'function' &&
-    window.matchMedia('(display-mode: standalone)').matches;
+    typeof g.window.matchMedia === 'function' &&
+    g.window.matchMedia('(display-mode: standalone)').matches;
 
-  const iosStandalone =
-    typeof navigator !== 'undefined' &&
-    (navigator as unknown as { standalone?: boolean }).standalone === true;
+  const iosStandalone = g.navigator?.standalone === true;
 
   return displayModeStandalone || iosStandalone;
 }
