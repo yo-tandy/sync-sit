@@ -17,6 +17,9 @@ export interface UserBase {
   lastLoginAt?: FirestoreTimestamp;
   consentAt?: FirestoreTimestamp;
   consentVersion?: string;
+
+  /** True once the user has dismissed the "Add to Home Screen" banner. */
+  dismissedPwaInstallBanner?: boolean;
 }
 
 /** Babysitter-specific user fields */

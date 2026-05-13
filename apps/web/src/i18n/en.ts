@@ -580,6 +580,15 @@ export default {
     pushDisabled: 'Push notifications are not enabled. Enable them to get real-time alerts.',
     pushDenied: 'Push notifications are not available. This can happen in incognito/private mode, or if notifications are blocked in your browser settings. Try opening the app in a regular browser window.',
     tryAgain: 'Try again',
+    pushRequiresInstall: 'Push notifications are only available after adding the app to your home screen.',
+    pushRequiresInstallLink: 'How to install',
+  },
+
+  pwaInstall: {
+    bannerTitle: 'Install the app for the best experience',
+    bannerDesc: 'Add Sync/Sit to your home screen to receive push notifications and get quick access, just like a native app.',
+    bannerCta: 'How to install',
+    bannerDismiss: 'Dismiss',
   },
 
   // Submitted References

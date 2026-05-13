@@ -555,6 +555,15 @@ export default {
     pushDenied: 'Les notifications push ne sont pas disponibles. Cela peut arriver en mode navigation privée, ou si les notifications sont bloquées dans les paramètres de votre navigateur. Essayez d\'ouvrir l\'application dans une fenêtre de navigateur normale.',
     tryAgain: 'Réessayer',
     referenceDesc: 'Quand une famille soumet une recommandation pour vous',
+    pushRequiresInstall: "Les notifications push sont disponibles uniquement après avoir ajouté l'application à votre écran d'accueil.",
+    pushRequiresInstallLink: 'Comment installer',
+  },
+
+  pwaInstall: {
+    bannerTitle: "Installez l'application pour une meilleure expérience",
+    bannerDesc: "Ajoutez Sync/Sit à votre écran d'accueil pour recevoir les notifications push et un accès rapide, comme une application native.",
+    bannerCta: 'Comment installer',
+    bannerDismiss: 'Ignorer',
   },
 
   submittedReferences: {

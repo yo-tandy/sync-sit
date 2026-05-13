@@ -13,4 +13,5 @@ export { InfoBanner } from './InfoBanner';
 export { TopNav } from './TopNav';
 export { LanguageSelector } from './LanguageSelector';
 export { Checkbox } from './Checkbox';
+export { InstallAppBanner } from './InstallAppBanner';
 export * from './Icons';
