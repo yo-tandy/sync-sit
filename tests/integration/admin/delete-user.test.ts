@@ -168,6 +168,39 @@ describe('deleteUser', () => {
       expect((await db.collection('users').doc(seed.parent2.uid).get()).exists).toBe(false);
     });
 
+    it('deleting one of two parents: anonymizes createdByUserId on appointments they created (no cancellation)', async () => {
+      // GDPR regression: when a non-sole parent is deleted, family appointments
+      // they created must have createdByUserId redacted. Active appointments
+      // must NOT be cancelled — the family still exists and owns them.
+      const db = getDb();
+
+      const apptByDeletedParent = await seedAppointment({
+        babysitterUserId: seed.babysitter1.uid,
+        familyId: seed.family1Id,
+        createdByUserId: seed.parent2.uid, // the parent being deleted
+        status: 'confirmed',
+      });
+      const apptByRemainingParent = await seedAppointment({
+        babysitterUserId: seed.babysitter1.uid,
+        familyId: seed.family1Id,
+        createdByUserId: seed.parent1.uid, // the parent staying
+        status: 'pending',
+      });
+
+      await callFunction('deleteUser', { targetUserId: seed.parent2.uid }, adminToken);
+
+      const redacted = await db.collection('appointments').doc(apptByDeletedParent).get();
+      expect(redacted.data()!.createdByUserId).toBe('deleted');
+      // Still active — co-parent path must not cancel
+      expect(redacted.data()!.status).toBe('confirmed');
+      expect(redacted.data()!.statusReason).toBeUndefined();
+
+      // Untouched appointment created by the remaining parent
+      const untouched = await db.collection('appointments').doc(apptByRemainingParent).get();
+      expect(untouched.data()!.createdByUserId).toBe(seed.parent1.uid);
+      expect(untouched.data()!.status).toBe('pending');
+    });
+
     it('writes an audit log entry capturing role and cancelled count', async () => {
       await seedAppointment({
         babysitterUserId: seed.babysitter1.uid,
