@@ -54,6 +54,7 @@ export const deleteUser = onCall(
       : { docs: [] as any[] };
 
     const batch1 = db.batch();
+    let batch1Ops = 0;
     let cancelledCount = 0;
 
     for (const appt of babysitterAppts.docs) {
@@ -67,6 +68,7 @@ export const deleteUser = onCall(
         cancelledCount++;
       }
       batch1.update(appt.ref, updates);
+      batch1Ops++;
     }
 
     // For family appointments, only anonymize if this is the last parent
@@ -76,23 +78,32 @@ export const deleteUser = onCall(
       const parentIds: string[] = familyDoc.data()?.parentIds || [];
       isLastParent = parentIds.length <= 1;
 
-      if (isLastParent) {
-        for (const appt of (familyAppts as any).docs) {
-          const data = appt.data();
-          const updates: Record<string, any> = {};
-          if (data.status === 'pending' || data.status === 'confirmed') {
-            updates.status = 'cancelled';
-            updates.statusReason = 'account_deleted';
-            cancelledCount++;
-          }
-          if (Object.keys(updates).length > 0) {
-            batch1.update(appt.ref, updates);
-          }
+      // Walk every family appointment.
+      //   - Always anonymize `createdByUserId` if the deleted user was the
+      //     creator, regardless of whether they are the last parent. Without
+      //     this, a deleted co-parent's UID lingers on appointments the
+      //     remaining co-parent still owns. (GDPR leak.)
+      //   - Only cancel active appointments if this is the last parent —
+      //     otherwise the family still exists and can honor them.
+      for (const appt of (familyAppts as any).docs) {
+        const data = appt.data();
+        const updates: Record<string, any> = {};
+        if (data.createdByUserId === targetUserId) {
+          updates.createdByUserId = 'deleted';
+        }
+        if (isLastParent && (data.status === 'pending' || data.status === 'confirmed')) {
+          updates.status = 'cancelled';
+          updates.statusReason = 'account_deleted';
+          cancelledCount++;
+        }
+        if (Object.keys(updates).length > 0) {
+          batch1.update(appt.ref, updates);
+          batch1Ops++;
         }
       }
     }
 
-    if (babysitterAppts.docs.length > 0 || cancelledCount > 0) {
+    if (batch1Ops > 0) {
       await batch1.commit();
     }
 
