@@ -397,6 +397,41 @@ export async function seedCommunityCode(data: CommunityCodeSeed): Promise<string
   return code;
 }
 
+export interface ContactSharingRequestSeed {
+  requestId?: string;
+  babysitterUserId: string;
+  familyId: string;
+  familyName?: string;
+  parentName?: string;
+  status?: 'pending' | 'approved' | 'declined';
+  createdAt?: Date;
+  respondedAt?: Date;
+}
+
+export async function seedContactSharingRequest(
+  data: ContactSharingRequestSeed,
+): Promise<string> {
+  const db = getDb();
+  const now = new Date();
+  const ref = data.requestId
+    ? db.collection('contactSharingRequests').doc(data.requestId)
+    : db.collection('contactSharingRequests').doc();
+
+  const doc: Record<string, unknown> = {
+    requestId: ref.id,
+    babysitterUserId: data.babysitterUserId,
+    familyId: data.familyId,
+    familyName: data.familyName ?? 'TestFamily',
+    parentName: data.parentName ?? 'Test Parent',
+    status: data.status ?? 'pending',
+    createdAt: data.createdAt ?? now,
+  };
+  if (data.respondedAt !== undefined) doc.respondedAt = data.respondedAt;
+
+  await ref.set(doc);
+  return ref.id;
+}
+
 /**
  * Seed a reference document into Firestore.
  * Required: babysitterUserId, type.
