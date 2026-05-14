@@ -174,3 +174,119 @@ describe('notifications collection', () => {
     await assertFails(getDoc(doc(authed.firestore(), 'notifications', 'notif1')));
   });
 });
+
+describe('references collection', () => {
+  it('allows any authenticated user to read references', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'references', 'ref1'), {
+        babysitterUserId: 'bs1',
+        type: 'family_submitted',
+        status: 'approved',
+        submittedByUserId: 'parent1',
+      });
+    });
+
+    // Both the babysitter and an unrelated authenticated user can read
+    const bsCtx = testEnv.authenticatedContext('bs1');
+    await assertSucceeds(getDoc(doc(bsCtx.firestore(), 'references', 'ref1')));
+
+    const otherCtx = testEnv.authenticatedContext('someone-else');
+    await assertSucceeds(getDoc(doc(otherCtx.firestore(), 'references', 'ref1')));
+  });
+
+  it('denies unauthenticated reads', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'references', 'ref-unauth'), {
+        babysitterUserId: 'bs1',
+        type: 'manual',
+        status: 'approved',
+      });
+    });
+
+    const unauthed = testEnv.unauthenticatedContext();
+    await assertFails(getDoc(doc(unauthed.firestore(), 'references', 'ref-unauth')));
+  });
+
+  it('allows babysitter to create a reference for themselves (babysitterUserId matches)', async () => {
+    const bsCtx = testEnv.authenticatedContext('bs-writer');
+    await assertSucceeds(
+      setDoc(doc(bsCtx.firestore(), 'references', 'ref-by-bs'), {
+        babysitterUserId: 'bs-writer',
+        type: 'manual',
+        status: 'pending',
+      }),
+    );
+  });
+
+  it('allows submitter to create a reference they submitted (submittedByUserId matches)', async () => {
+    const parentCtx = testEnv.authenticatedContext('parent-writer');
+    await assertSucceeds(
+      setDoc(doc(parentCtx.firestore(), 'references', 'ref-by-parent'), {
+        babysitterUserId: 'some-babysitter',
+        submittedByUserId: 'parent-writer',
+        type: 'family_submitted',
+        status: 'pending',
+      }),
+    );
+  });
+
+  it('denies creating a reference where caller is neither babysitter nor submitter', async () => {
+    const outsiderCtx = testEnv.authenticatedContext('outsider');
+    await assertFails(
+      setDoc(doc(outsiderCtx.firestore(), 'references', 'ref-outsider'), {
+        babysitterUserId: 'some-babysitter',
+        submittedByUserId: 'someone-else',
+        type: 'family_submitted',
+        status: 'pending',
+      }),
+    );
+  });
+
+  it('allows babysitter to update their own reference (e.g. approve it)', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'references', 'ref-approve'), {
+        babysitterUserId: 'bs-approver',
+        submittedByUserId: 'parent1',
+        type: 'family_submitted',
+        status: 'pending',
+      });
+    });
+
+    const bsCtx = testEnv.authenticatedContext('bs-approver');
+    await assertSucceeds(
+      updateDoc(doc(bsCtx.firestore(), 'references', 'ref-approve'), { status: 'approved' }),
+    );
+  });
+
+  it('denies updating a reference by an unrelated user', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'references', 'ref-deny-update'), {
+        babysitterUserId: 'bs1',
+        submittedByUserId: 'parent1',
+        type: 'family_submitted',
+        status: 'pending',
+      });
+    });
+
+    const outsiderCtx = testEnv.authenticatedContext('outsider-updater');
+    await assertFails(
+      updateDoc(doc(outsiderCtx.firestore(), 'references', 'ref-deny-update'), {
+        status: 'approved',
+      }),
+    );
+  });
+
+  it('denies deleting references (delete is always false)', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'references', 'ref-nodelete'), {
+        babysitterUserId: 'bs1',
+        type: 'manual',
+        status: 'approved',
+      });
+    });
+
+    const bsCtx = testEnv.authenticatedContext('bs1');
+    const { deleteDoc } = await import('firebase/firestore');
+    await assertFails(deleteDoc(doc(bsCtx.firestore(), 'references', 'ref-nodelete')));
+  });
+});
