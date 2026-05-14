@@ -396,3 +396,57 @@ export async function seedCommunityCode(data: CommunityCodeSeed): Promise<string
   await db.collection('communityVerificationCodes').doc(code).set(doc);
   return code;
 }
+
+/**
+ * Seed a reference document into Firestore.
+ * Required: babysitterUserId, type.
+ * Defaults: status='pending'.
+ *
+ * Reference types:
+ *   'family_submitted' — written by a parent; triggers notifyOnNewReference
+ *   'manual'           — written directly by admin; no trigger notification
+ *
+ * Declared to teammates (contact-sharing-writer, scheduled-writer) per §12.3.
+ */
+export interface ReferenceSeed {
+  referenceId?: string;
+  babysitterUserId: string;
+  type: 'family_submitted' | 'manual';
+  status?: 'pending' | 'approved' | 'rejected';
+  // family_submitted fields
+  submittedByUserId?: string;
+  submittedByName?: string;
+  notes?: string;
+  // manual fields
+  fullName?: string;
+  phone?: string;
+  isEjmFamily?: boolean;
+  numberOfKids?: number;
+  kidAges?: number[];
+}
+
+export async function seedReference(data: ReferenceSeed): Promise<string> {
+  const db = getDb();
+  const ref = data.referenceId
+    ? db.collection('references').doc(data.referenceId)
+    : db.collection('references').doc();
+
+  const doc: Record<string, unknown> = {
+    babysitterUserId: data.babysitterUserId,
+    type: data.type,
+    status: data.status ?? 'pending',
+    createdAt: new Date(),
+  };
+
+  if (data.submittedByUserId !== undefined) doc.submittedByUserId = data.submittedByUserId;
+  if (data.submittedByName !== undefined) doc.submittedByName = data.submittedByName;
+  if (data.notes !== undefined) doc.notes = data.notes;
+  if (data.fullName !== undefined) doc.fullName = data.fullName;
+  if (data.phone !== undefined) doc.phone = data.phone;
+  if (data.isEjmFamily !== undefined) doc.isEjmFamily = data.isEjmFamily;
+  if (data.numberOfKids !== undefined) doc.numberOfKids = data.numberOfKids;
+  if (data.kidAges !== undefined) doc.kidAges = data.kidAges;
+
+  await ref.set(doc);
+  return ref.id;
+}
