@@ -398,7 +398,15 @@ These are product/legal concerns and out of Agent 9's scope to fix; flagged so l
 
 ## 7. Findings carried into Phase 1+
 
-Each item is tagged. None block Phase 0 (this is the baseline; the codebase ships today). Tags set the bar that later phases must not regress past, and `[BLOCK-LATER-*]` items are slated for explicit remediation by the responsible agent in the relevant phase. `[WORKING-AS-INTENDED-*]` items were initially raised as findings but downgraded after explicit product-owner review — they remain in the document so that any future change which contradicts the recorded design intent surfaces as a regression in the next phase review.
+Each item is tagged. None block Phase 0 (this is the baseline; the codebase ships today). Tags set the bar that later phases must not regress past, and `[BLOCK-LATER-*]` items are slated for explicit remediation by the responsible agent in the relevant phase. `[WORKING-AS-INTENDED-*]` items were initially raised as findings but downgraded after explicit product-owner review or factual correction — they remain in the document so that any future change which contradicts the recorded design intent (or re-introduces a non-finding as a finding) surfaces as a regression in the next phase review.
+
+### Baseline corrections log
+
+This baseline is a living document; corrections to original entries are recorded here so auditors have a clean signal about doc fidelity over time. Each row names the affected entry, the correction date, and the replacement entry (if any).
+
+| Date | Affected entry | Correction |
+|---|---|---|
+| 2026-05-15 | `[WATCH-15]` (original) — claimed no `@firebase/rules-unit-testing` harness existed for `firestore.rules` | **Withdrawn.** Replaced by `[WORKING-AS-INTENDED-2]` below. Original entry was a baseline-author oversight: the `tests/rules/` directory (containing `firestore-rules.test.ts` with 13 tests and `storage-rules.test.ts` with 18 tests, 31 tests total) was not searched for during the Phase 0 source inventory. Both the original Phase 0 baseline (`d4a809b`) and the Phase -1 security-fix review (`72c882d`) accepted the absence-claim without independent verification. The harness exists, runs in CI, and caught a real bug in security-fix's references-update rule on PR #43 (hotfix at commit `79215fd`, cherry-picked from `f8fa47f`). Process improvement is recorded in §8 item 6. |
 
 ### `[BLOCK-LATER-1]` — `families` doc has no field-level write guard
 
@@ -526,12 +534,20 @@ Each item is tagged. None block Phase 0 (this is the baseline; the codebase ship
 **Impact:** Second-parent invitees never have a consent record. From a GDPR-defence perspective: weaker than the first parent.
 **Recommendation:** Require + write `consentVersion` in `joinFamily` as well.
 
-### `[WATCH-15]` — No `@firebase/rules-unit-testing` harness exists for `firestore.rules`
+### `[WORKING-AS-INTENDED-2]` — Rules-test harness EXISTS at `tests/rules/` (corrects withdrawn `[WATCH-15]`)
 
-**Where:** Project-wide — there is no `apps/tests/` rules-test suite, no `@firebase/rules-unit-testing` dependency in any `package.json`, and no rule-behaviour test that runs in CI.
-**Origin:** Surfaced during the Phase -1 security-fix review (commit `72c882d`, §4 decision-on-note-2). Recorded here for the standing baseline.
-**Impact:** Every rules-change PR must be verified by manual paths only — emulator-boot syntax checks (the security-fix agent's offline approach) and reviewer-side cross-checks of every legitimate write site against the new rule (Agent 9's approach). For the security-fix delta (+66/-10 lines, narrowly scoped) the manual paths gave reasonable confidence. For larger Phase 4 rule changes (Agent 6's full firestore.rules update, plus the `BLOCK-LATER-5`/`BLOCK-LATER-6` follow-ups, plus whatever sync-study adds to the rule file) the manual-only path will miss behaviour-level regressions that a unit suite would catch (allow/deny on synthetic auth contexts, transition-table coverage on status-machine collections like `references` and `verifications`).
-**Decision:** Recommend the harness lands **before Phase 4** (the Agent-6 firestore.rules update is the natural forcing function). Until it exists, every rule-change PR after Phase -1 should either (a) land alongside a harness setup, or (b) document the manual verification path used and explicitly accept the gap in the per-phase review report. **Owner: Phase 1+ infrastructure work** (likely whoever owns testing infrastructure when sync-study extraction starts; loosely Agent 8's territory but @firebase/rules-unit-testing is its own setup task and may belong in a dedicated PR).
+**Where:** `tests/rules/firestore-rules.test.ts` (13 tests) and `tests/rules/storage-rules.test.ts` (18 tests). 31 tests total. Run via:
+```
+npx firebase-tools emulators:exec --project demo-test --only firestore,auth,storage \
+  'pnpm --filter @ejm/tests exec vitest run rules/'
+```
+A fresh worktree must first run `pnpm install --filter "@ejm/tests..."` to populate the test workspace's `node_modules`.
+
+**Origin:** Originally raised as `[WATCH-15]` in commit `d1004ee` based on the Phase -1 security-fix review's note-2 decision. **That entry was wrong.** The `tests/rules/` directory was not searched for during the Phase 0 source inventory; the security-fix review then accepted the absence-claim without independent verification; the WATCH-15 entry compounded the oversight by reporting the gap as a finding. All three documents (Phase 0 baseline, security-fix review, baseline amendment) were authored by the same reviewer (agent-9-security) and shared the same blind spot. The error was caught externally — by team-lead spotting the directory, and by the harness itself catching a real bug in security-fix's references-update rule on PR #43's CI run (an evaluation error when `submittedByUserId` was missing from a manual reference; hotfix at commit `79215fd`, cherry-picked from `f8fa47f`).
+
+**Why this stays in §7 (instead of being deleted):** Recording the design intent so that any future PR which proposes "stand up a rules-test harness" surfaces against this entry — pointing the proposer at the existing harness rather than letting them duplicate work. Also: the corrections-log row at the top of §7 would lose its target if this entry vanished.
+
+**What good looks like for future per-phase reviews:** Run the harness locally before marking PASS on any `firestore.rules` or `storage.rules` change. The harness invocation pattern is documented in `tests/rules/README.md` (if present) and in §8 item 6 below. Treat unrun-harness-on-rules-change as a process failure to be flagged, not as a content-quality gap.
 
 ### `[INFO]` — Profile-photo Storage prefix-equality check
 
@@ -552,6 +568,13 @@ Every per-phase review report (`agent-9-phase-N-review.md`) re-runs the followin
 3. **New PII fields introduced** — for each collection touched, list any new field that holds personal data and classify it per §4. Confirm minimization (e.g., why is the field needed?).
 4. **New secrets / new use sites of existing secrets** — for each new external-service integration, confirm provisioning via `defineSecret`. For each new use site of an existing secret, confirm the use site is necessary.
 5. **New cross-collection or cross-app data flow** — for each new write that copies data between collections or apps, add a row to §6.4 and confirm it does not introduce a new GDPR data-flow boundary that the privacy notice doesn't cover.
+6. **Rules-test harness — required action when `firestore.rules` or `storage.rules` is touched.** Run `tests/rules/` locally BEFORE marking PASS on any rules-affecting change. Invocation:
+   ```
+   pnpm install --filter "@ejm/tests..."   # first time per worktree only
+   npx firebase-tools emulators:exec --project demo-test --only firestore,auth,storage \
+     'pnpm --filter @ejm/tests exec vitest run rules/'
+   ```
+   Expected baseline state: 31/31 pass (13 firestore + 18 storage). Any test that fails on a PR is a BLOCKED finding regardless of how clean the diff looks on inspection. **Lesson learned:** the original Phase -1 security-fix review (commit `72c882d`) marked PASS without running this harness and missed an evaluation-error bug in the references-update rule that CI then caught (hotfix `79215fd`, cherry-pick of `f8fa47f`). Manual file-by-file inspection of a rule change is necessary but NOT sufficient when the rule references possibly-absent fields (`'X' in resource.data` checks, optional fields, sparse-document collections like `references` where `submittedByUserId` is present in one branch and absent in another). The harness exercises both branches via synthetic auth contexts; reviewer-eye inspection often misses the absent-field edge.
 
 Any item that fails these checks → BLOCKED status in the per-phase review.
 
