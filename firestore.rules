@@ -122,10 +122,28 @@ service cloud.firestore {
             && request.resource.data.type == 'family_submitted'
           )
         );
-      allow update: if isAuth() && (
-        resource.data.babysitterUserId == request.auth.uid
-        || resource.data.submittedByUserId == request.auth.uid
-      );
+      // Update: owner (babysitter or submitter) may edit their own reference,
+      // but cannot:
+      //  - mutate the identity tuple (babysitterUserId, submittedByUserId,
+      //    type, createdAt) — prevents transferring an endorsement between
+      //    babysitters or laundering an identity post-create;
+      //  - promote status to 'approved' or 'published' — kills the
+      //    BLOCK-LATER-4 reference-count inflation vector via update path.
+      //    Status may only transition to 'private' or 'removed' from the
+      //    client. The babysitter's previous "publish my own manual reference"
+      //    flow was the fraud vector itself; restoring controlled publish
+      //    requires a callable with admin/peer-approval gating.
+      allow update: if isAuth()
+        && !request.resource.data.diff(resource.data).affectedKeys()
+             .hasAny(['babysitterUserId', 'submittedByUserId', 'type', 'createdAt'])
+        && (
+          resource.data.babysitterUserId == request.auth.uid
+          || resource.data.submittedByUserId == request.auth.uid
+        )
+        && (
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['status'])
+          || request.resource.data.status in ['private', 'removed']
+        );
       allow delete: if false;
     }
 
