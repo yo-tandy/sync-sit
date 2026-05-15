@@ -140,7 +140,7 @@ A trailing `match /{document=**} { allow read, write: if false; }` denies everyt
 
 | Collection | Read | Create | Update | Delete | Field-level protections | Notes |
 |---|---|---|---|---|---|---|
-| `users/{userId}` | owner OR admin OR (any auth user, IF target is `role==babysitter, status==active`) OR (any auth user, IF target is `role==parent` AND target's `familyId == caller's familyId`) | **deny** (cloud-functions only) | owner only AND must NOT change `role,status,uid,email,ejemEmail,createdAt` | **deny** | `searchable, approvedFamilies, fcmTokens, hourlyRate, contactEmail/Phone, photoUrl, areaMode, areaLatLng, areaRadiusKm, ...` are **all writable by the owner** (see [WATCH-2] and [BLOCK-LATER-2]). | The babysitter-read clause exposes the full babysitter doc, including PII fields like `dateOfBirth, phone, whatsapp, contactEmail, contactPhone` — see §4 and [BLOCK-LATER-3]. |
+| `users/{userId}` | owner OR admin OR (any auth user, IF target is `role==babysitter, status==active`) OR (any auth user, IF target is `role==parent` AND target's `familyId == caller's familyId`) | **deny** (cloud-functions only) | owner only AND must NOT change `role,status,uid,email,ejemEmail,createdAt` | **deny** | `searchable, approvedFamilies, fcmTokens, hourlyRate, contactEmail/Phone, photoUrl, areaMode, areaLatLng, areaRadiusKm, ...` are **all writable by the owner** (see [WATCH-2], [BLOCK-LATER-2] for `approvedFamilies`, and [WORKING-AS-INTENDED-1] for `searchable`). | The babysitter-read clause exposes the full babysitter doc, including PII fields like `dateOfBirth, phone, whatsapp, contactEmail, contactPhone` — see §4 and [BLOCK-LATER-3]. |
 | `families/{familyId}` | family member OR admin | **deny** | family member, **with NO field-level guard** | **deny** | A parent can flip `verification.isFullyVerified=true`, mutate `parentIds`, or change `verification.isEjmFamily` directly via the client SDK — bypassing the admin/community-code flow. **[BLOCK-LATER-1]** |
 | `families/{familyId}/kids/{kidId}` | family member OR admin | family member | family member | family member | none | `kid.firstName, age, languages` only. |
 | `schedules/{userId}` | owner | owner | owner | owner | none | Babysitter writes their own weekly grid. |
@@ -398,7 +398,7 @@ These are product/legal concerns and out of Agent 9's scope to fix; flagged so l
 
 ## 7. Findings carried into Phase 1+
 
-Each item is tagged. None block Phase 0 (this is the baseline; the codebase ships today). Tags set the bar that later phases must not regress past, and `[BLOCK-LATER-*]` items are slated for explicit remediation by the responsible agent in the relevant phase.
+Each item is tagged. None block Phase 0 (this is the baseline; the codebase ships today). Tags set the bar that later phases must not regress past, and `[BLOCK-LATER-*]` items are slated for explicit remediation by the responsible agent in the relevant phase. `[WORKING-AS-INTENDED-*]` items were initially raised as findings but downgraded after explicit product-owner review — they remain in the document so that any future change which contradicts the recorded design intent surfaces as a regression in the next phase review.
 
 ### `[BLOCK-LATER-1]` — `families` doc has no field-level write guard
 
@@ -406,11 +406,22 @@ Each item is tagged. None block Phase 0 (this is the baseline; the codebase ship
 **Impact:** A family member can use the client SDK to write `verification.isFullyVerified=true`, `verification.isEjmFamily=true`, mutate `parentIds[]`, change `searchDefaults`, or alter any other field — bypassing `submitVerification`, `reviewVerification`, `approveCommunityCode`, `joinFamily`, and `removeCoParent`. **`searchBabysitters` then trusts `verification.isFullyVerified` as its sole gate to allow babysitter contact.**
 **Why this is here, not blocked at Phase 0:** The codebase ships today and the bar is "no regression." Sync-sit has shipped with this. But Phase 4 (Agent 6 — firestore.rules update) is the natural moment to add the field-level guard. **Agent 9 will require this fix at Phase 4 review** unless an explicit decision is made to keep the current posture.
 
-### `[BLOCK-LATER-2]` — `users` doc owner-update doesn't block `searchable` or `approvedFamilies`
+### `[BLOCK-LATER-2]` — `users` doc owner-update doesn't block `approvedFamilies`
 
 **Where:** `firestore.rules:34-36` — the `affectedKeys()` blocklist covers `role,status,uid,email,ejemEmail,createdAt` only.
-**Impact:** A babysitter can flip their own `searchable: true` after admin called `deactivateUser` to set it false (admin action undone via direct client write). They can also overwrite `approvedFamilies[]` to grant or revoke contact-sharing arbitrarily — not as severe (only their own contact info is at stake), but it bypasses the `respondToContactSharing` audit point.
-**Decision for Phase 4:** Add `searchable` and `approvedFamilies` to the blocklist; route those mutations through callables.
+**Impact:** A babysitter can overwrite their own `approvedFamilies[]` via the client SDK to grant or revoke contact-sharing arbitrarily. The data exposure is limited (only the babysitter's own `contactEmail`/`contactPhone` is at stake, and only to families that exist), but it bypasses the `respondToContactSharing` callable's GDPR audit-trail (no `auditLogs` entry is written, no `contactSharingRequests` doc is mutated). Per-family consent state is the source of truth for the consent record; allowing direct writes to `approvedFamilies` decouples the consent UI from the consent log.
+**Decision for Phase 4:** Add `approvedFamilies` to the `affectedKeys()` blocklist so all mutations route through `respondToContactSharing` (which writes the audit log).
+**History:** This entry originally also covered `users.searchable`. The `searchable` half was downgraded to `[WORKING-AS-INTENDED-1]` after product-owner triage on 2026-05-15 — see that entry below.
+
+### `[WORKING-AS-INTENDED-1]` — `users.searchable` is intentionally owner-writable
+
+**Where:** `firestore.rules:34-36` — `searchable` is deliberately absent from the `affectedKeys()` blocklist.
+**Original concern (Phase 0 baseline draft):** A babysitter can flip their own `searchable: true` after admin's `deactivateUser` set it false — appearing to undo an admin enforcement action via direct client write.
+**Product-owner decision (2026-05-15):** Working as intended. The product design is:
+- `users.searchable` is the **babysitter's own visibility toggle** (self-managed from their dashboard — "show me in search results / hide me").
+- `users.status` is the **hard enforcement gate** (`active | blocked`). `status` IS in the blocklist (line 36) and IS gated by admin-only callables (`blockUser`).
+- `admin/deactivateUser` is therefore a **soft hide / nudge** to a babysitter, not an admin-enforced ban. If an admin needs to actually prevent a babysitter from being discoverable or from logging in, the correct lever is `blockUser` (which sets `status: 'blocked'` AND disables the Firebase Auth account).
+**Why this stays in §7:** Recording the design intent so that any future PR which adds `searchable` to the blocklist (which would be a reasonable-looking "tightening" change) surfaces as a regression against the recorded product decision rather than a silent posture change. If product intent ever flips, this entry should be re-promoted to `[BLOCK-LATER-*]` and the `deactivateUser` semantics revisited at the same time.
 
 ### `[BLOCK-LATER-3]` — `references` rule lets any auth user create a reference about themselves
 
@@ -432,7 +443,7 @@ Each item is tagged. None block Phase 0 (this is the baseline; the codebase ship
 
 ### `[WATCH-2]` — `users` doc is owner-writable for fields that affect search results
 
-**Where:** `firestore.rules:34-36` (covered above in [BLOCK-LATER-2]). Listed here as a `[WATCH]` so per-phase reviews compare against the explicit blocklist.
+**Where:** `firestore.rules:34-36` (covered above in [BLOCK-LATER-2] for `approvedFamilies` and in [WORKING-AS-INTENDED-1] for `searchable`). Listed here as a `[WATCH]` so per-phase reviews compare against the explicit blocklist — any future addition of an owner-writable field to `users/{uid}` that affects search ranking, contact gating, or visibility must add a row here.
 
 ### `[WATCH-3]` — `references` are world-readable across all authenticated users
 
