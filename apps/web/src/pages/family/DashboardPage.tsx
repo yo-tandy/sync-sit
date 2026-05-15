@@ -9,7 +9,7 @@ import { useVerificationStore } from '@/stores/verificationStore';
 import { useFamilyAppointments } from '@/hooks/useFamilyAppointments';
 import { Button, Badge, Card, Spinner, Input, Dialog, Textarea, InstallAppBanner } from '@/components/ui';
 import { CalendarIcon, PlusIcon, SearchIcon } from '@/components/ui/Icons';
-import type { AppointmentDoc, BabysitterUser, BabysitterSummary } from '@ejm/shared';
+import type { AppointmentDoc, BabysitterUser, BabysitterSummary, RecurringSlot } from '@ejm/shared';
 import { formatBabysitterName, capitalize, formatFamilyTitle } from '@/lib/formatName';
 import { debouncedTogglePreferred } from '@/lib/debouncedPreferred';
 import { EndorsementDialog } from '@/components/endorsements/EndorsementDialog';
@@ -31,7 +31,7 @@ function groupByDateTime(
       key = apt.startTime && apt.endTime ? `${dateStr} · ${apt.startTime}–${apt.endTime}` : dateStr;
     } else {
       if (apt.recurringSlots && apt.recurringSlots.length > 0) {
-        key = apt.recurringSlots.map((s: any) => `${dayNames[s.day] || s.day} ${s.startTime}–${s.endTime}`).join(', ');
+        key = apt.recurringSlots.map((s: RecurringSlot) => `${dayNames[s.day] || s.day} ${s.startTime}–${s.endTime}`).join(', ');
       } else {
         key = recurringLabel;
       }
@@ -64,14 +64,14 @@ export function FamilyDashboard() {
   const [cancelReason, setCancelReason] = useState('');
   const [cancelling, setCancelling] = useState(false);
 
-  const [editTarget, setEditTarget] = useState<any>(null);
+  const [editTarget, setEditTarget] = useState<AppointmentDoc | null>(null);
   const [editStartTime, setEditStartTime] = useState('');
   const [editEndTime, setEditEndTime] = useState('');
   const [editMessage, setEditMessage] = useState('');
   const [editAdditionalInfo, setEditAdditionalInfo] = useState('');
   const [editing, setEditing] = useState(false);
 
-  const [resubmitTarget, setResubmitTarget] = useState<any>(null);
+  const [resubmitTarget, setResubmitTarget] = useState<AppointmentDoc | null>(null);
   const [resubmitStartTime, setResubmitStartTime] = useState('');
   const [resubmitEndTime, setResubmitEndTime] = useState('');
   const [resubmitRate, setResubmitRate] = useState('');
@@ -87,14 +87,15 @@ export function FamilyDashboard() {
       setCancelTarget(null);
       setCancelReason('');
       // Refresh will happen via Firestore listener
-    } catch (err: any) {
-      alert(err.message || 'Failed to cancel');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to cancel';
+      alert(message);
     } finally {
       setCancelling(false);
     }
   };
 
-  const openEdit = (apt: any) => {
+  const openEdit = (apt: AppointmentDoc) => {
     setEditTarget(apt);
     setEditStartTime(apt.startTime || '');
     setEditEndTime(apt.endTime || '');
@@ -115,14 +116,15 @@ export function FamilyDashboard() {
         additionalInfo: editAdditionalInfo,
       });
       setEditTarget(null);
-    } catch (err: any) {
-      alert(err.message || 'Failed to modify');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to modify';
+      alert(message);
     } finally {
       setEditing(false);
     }
   };
 
-  const openResubmit = (apt: any) => {
+  const openResubmit = (apt: AppointmentDoc) => {
     setResubmitTarget(apt);
     setResubmitStartTime(apt.startTime || '');
     setResubmitEndTime(apt.endTime || '');
@@ -143,8 +145,9 @@ export function FamilyDashboard() {
         additionalNotes: resubmitNotes.trim(),
       });
       setResubmitTarget(null);
-    } catch (err: any) {
-      alert(err.message || 'Failed to resubmit');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to resubmit';
+      alert(message);
     } finally {
       setResubmitting(false);
     }
@@ -155,7 +158,7 @@ export function FamilyDashboard() {
 
   // References state
   const [submittedRefs, setSubmittedRefs] = useState<ReferenceDoc[]>([]);
-  const [refTarget, setRefTarget] = useState<{ apt: any; existing?: ReferenceDoc } | null>(null);
+  const [refTarget, setRefTarget] = useState<{ apt: AppointmentDoc; existing?: ReferenceDoc } | null>(null);
   const [refPromptDismissed, setRefPromptDismissed] = useState(() => {
     const stored = localStorage.getItem('syncsit_ref_prompt_dismissed');
     return stored ? JSON.parse(stored) : false;
@@ -195,7 +198,7 @@ export function FamilyDashboard() {
   });
 
   // Load preferred babysitter IDs from family doc
-  const familyId = userDoc?.role === 'parent' ? (userDoc as any).familyId : null;
+  const familyId = userDoc?.role === 'parent' ? userDoc.familyId : null;
   useEffect(() => {
     if (!familyId) return;
     const unsub = onSnapshot(doc(db, 'families', familyId), (snap) => {
@@ -341,10 +344,10 @@ export function FamilyDashboard() {
             size="sm"
             disabled={addingKid || !newKidName.trim() || !newKidAge}
             onClick={async () => {
-              if (!(userDoc as any)?.familyId) return;
+              if (userDoc?.role !== 'parent' || !userDoc.familyId) return;
               setAddingKid(true);
               try {
-                await addDoc(collection(db, 'families', (userDoc as any).familyId, 'kids'), {
+                await addDoc(collection(db, 'families', userDoc.familyId, 'kids'), {
                   firstName: newKidName.trim(),
                   age: parseInt(newKidAge) || 0,
                   languages: [],
