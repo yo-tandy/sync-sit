@@ -268,7 +268,6 @@ export function EndorsementsPage() {
     addManualReference,
     updateManualReference,
     removeReference,
-    publishReference,
     unpublishReference,
   } = useEndorsements();
 
@@ -367,7 +366,6 @@ export function EndorsementsPage() {
               reference={ref}
               onEdit={() => openEdit(ref)}
               onRemove={() => removeReference(ref.referenceId)}
-              onPublish={() => publishReference(ref.referenceId)}
               onUnpublish={() => unpublishReference(ref.referenceId)}
             />
           ))
@@ -384,7 +382,6 @@ export function EndorsementsPage() {
                 reference={ref}
                 displayName={getFamilyRefName(ref)}
                 onRemove={() => removeReference(ref.referenceId)}
-                onPublish={() => publishReference(ref.referenceId)}
                 onUnpublish={() => unpublishReference(ref.referenceId)}
               />
             ))}
