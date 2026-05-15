@@ -7,13 +7,14 @@ import type { ReferenceDoc } from '@ejm/shared';
 export function useSubmittedEndorsements() {
   const uid = useAuthStore((s) => s.firebaseUser?.uid);
   const [references, setReferences] = useState<ReferenceDoc[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Initial loading state derives from uid: if there is no signed-in user
+  // we have nothing to fetch, so we are already "done" loading. The
+  // snapshot callback below flips this back to false once Firestore has
+  // returned the first page of data for a valid uid.
+  const [loading, setLoading] = useState<boolean>(Boolean(uid));
 
   useEffect(() => {
-    if (!uid) {
-      setLoading(false);
-      return;
-    }
+    if (!uid) return;
 
     const q = query(
       collection(db, 'references'),

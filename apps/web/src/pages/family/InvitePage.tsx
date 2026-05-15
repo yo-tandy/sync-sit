@@ -61,8 +61,9 @@ export function InvitePage() {
       const token = (result.data as { token: string }).token;
       const link = `${window.location.origin}/invite/${token}`;
       setInviteLink(link);
-    } catch (err: any) {
-      setError(err.message || 'Failed to generate invite link');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to generate invite link';
+      setError(message);
     } finally {
       setGenerating(false);
     }
@@ -92,8 +93,9 @@ export function InvitePage() {
       await fn({ targetUserId: removeTarget.uid });
       setRemoveTarget(null);
       loadMembers();
-    } catch (err: any) {
-      alert(err.message || 'Failed to remove');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to remove';
+      alert(message);
     } finally {
       setRemoving(false);
     }

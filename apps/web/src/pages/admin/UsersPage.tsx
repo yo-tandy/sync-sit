@@ -61,8 +61,9 @@ export function AdminUsersPage() {
       await addPreapprovedEmail(newPreapprovedEmail);
       setNewPreapprovedEmail('');
       await fetchPreapprovedEmails();
-    } catch (err: any) {
-      alert(err.message || 'Failed to add email');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to add email';
+      alert(message);
     }
   };
 
@@ -70,8 +71,9 @@ export function AdminUsersPage() {
     try {
       await removePreapprovedEmail(email);
       await fetchPreapprovedEmails();
-    } catch (err: any) {
-      alert(err.message || 'Failed to remove email');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to remove email';
+      alert(message);
     }
   };
 
@@ -149,8 +151,9 @@ export function AdminUsersPage() {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-    } catch (err: any) {
-      alert(err.message || 'Export failed');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Export failed';
+      alert(message);
     }
   };
 

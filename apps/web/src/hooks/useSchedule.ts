@@ -25,13 +25,14 @@ export function useSchedule() {
   const uid = useAuthStore((s) => s.firebaseUser?.uid);
   const [schedule, setSchedule] = useState<ScheduleDoc | null>(null);
   const [overrides, setOverrides] = useState<ScheduleOverrideDoc[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Initial loading state derives from uid: if there is no signed-in user
+  // we have nothing to fetch, so we are already "done" loading. The
+  // schedule snapshot callback below flips this back to false once
+  // Firestore has returned the first result for a valid uid.
+  const [loading, setLoading] = useState<boolean>(Boolean(uid));
 
   useEffect(() => {
-    if (!uid) {
-      setLoading(false);
-      return;
-    }
+    if (!uid) return;
 
     const scheduleRef = doc(db, 'schedules', uid);
     const overridesRef = collection(db, 'schedules', uid, 'overrides');

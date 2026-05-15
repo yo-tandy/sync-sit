@@ -9,8 +9,18 @@ import type { AppointmentDoc } from '@ejm/shared';
 
 type Variant = 'pending' | 'confirmed' | 'past' | 'rejected';
 
+/**
+ * AppointmentDoc with the optional family-context fields denormalized
+ * server-side (familyName, familyPhotoUrl). Both are surfaced by the
+ * babysitter request flow and by family-side cards.
+ */
+type AppointmentWithFamily = AppointmentDoc & {
+  familyName?: string;
+  familyPhotoUrl?: string;
+};
+
 interface AppointmentCardProps {
-  appointment: AppointmentDoc;
+  appointment: AppointmentWithFamily;
   variant: Variant;
   familyName?: string;
   onClick?: () => void;
@@ -75,8 +85,8 @@ export function AppointmentCard({
   };
 
   const apt = appointment;
-  const rawName = familyName || (apt as any).familyName;
-  const familyPhoto = (apt as any).familyPhotoUrl;
+  const rawName = familyName || apt.familyName;
+  const familyPhoto = apt.familyPhotoUrl;
   const title = rawName ? t('familyDashboard.familyTitle', { name: rawName.toUpperCase() }) : t('request.title');
   const kidCount = apt.kidIds?.length || 0;
   const familyInitials = rawName ? rawName.split(' ').map((w: string) => w[0] || '').join('').slice(0, 2).toUpperCase() : '?';
@@ -104,12 +114,12 @@ export function AppointmentCard({
         </div>
         <div className="flex shrink-0 flex-col items-end gap-1">
           <Badge variant={badgeVariants[variant]}>{badgeLabels[variant]}</Badge>
-          {(apt as any).modified && (
+          {apt.modified && (
             <Badge variant="blue">
               {t('appointment.modified')}
             </Badge>
           )}
-          {(apt as any).isResubmission && variant !== 'confirmed' && (
+          {apt.isResubmission && variant !== 'confirmed' && (
             <Badge variant="blue">
               {t('appointment.resubmitted')}
             </Badge>

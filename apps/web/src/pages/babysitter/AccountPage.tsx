@@ -143,11 +143,15 @@ export function BabysitterAccountPage() {
   // Format DOB for display
   const dobDisplay = (() => {
     if (!babysitter?.dateOfBirth) return '';
-    const dob = babysitter.dateOfBirth;
+    const dob: unknown = babysitter.dateOfBirth;
     if (typeof dob === 'string') return dob;
-    if (typeof (dob as any).toDate === 'function') {
-      const d = (dob as any).toDate() as Date;
-      return d.toLocaleDateString();
+    if (
+      typeof dob === 'object' &&
+      dob !== null &&
+      'toDate' in dob &&
+      typeof (dob as { toDate: unknown }).toDate === 'function'
+    ) {
+      return (dob as { toDate: () => Date }).toDate().toLocaleDateString();
     }
     return '';
   })();
@@ -207,8 +211,9 @@ export function BabysitterAccountPage() {
       });
       await refreshUserDoc();
       setPhotoFile(null);
-    } catch (err: any) {
-      setError(err.message || t('account.photoUploadFailed'));
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : t('account.photoUploadFailed');
+      setError(message);
     } finally {
       setPhotoSaving(false);
     }
@@ -238,8 +243,9 @@ export function BabysitterAccountPage() {
       await refreshUserDoc();
       setContactSuccess(true);
       setTimeout(() => setContactSuccess(false), 3000);
-    } catch (err: any) {
-      setError(err.message || t('account.contactSaveFailed'));
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : t('account.contactSaveFailed');
+      setError(message);
     } finally {
       setContactSaving(false);
     }
