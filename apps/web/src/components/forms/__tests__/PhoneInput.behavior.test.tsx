@@ -27,6 +27,13 @@
  *      onChange fires with cleaned value → parent rerenders → input
  *      reflects the cleaned value.
  *
+ * Capture pattern (post lint-fix): tests pass a vi.fn() as an
+ * onCapture callback prop into ControlledHarness. The harness forwards
+ * each onChange value through onCapture(), and the test reads the
+ * last received value via `onCapture.mock.calls.at(-1)?.[0] ?? null`.
+ * Mutation of the props object would violate the React Compiler rule
+ * that props are read-only.
+ *
  * Owned by agent-8-tester. Do not modify production code on failure.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -53,15 +60,17 @@ function readDom(container: HTMLElement): Omit<DomFrame, 'lastOnChange'> {
   return { selectValue: select.value, inputValue: input.value };
 }
 
-// Stateful test harness: holds value in a useState and forwards onChange.
-// Matches real-world usage with RHF (or any controlled parent). Exposes
-// the latest received onChange string via the lastChangeRef object.
+// Stateful test harness: holds value in a useState and forwards onChange
+// through `onCapture`. Matches real-world usage with RHF (or any
+// controlled parent). Passing onCapture as a function prop (rather than
+// mutating an object prop) satisfies the React Compiler "props are
+// read-only" rule.
 function ControlledHarness({
   initial,
-  changes,
+  onCapture,
 }: {
   initial: string;
-  changes: { last: string | null };
+  onCapture: (value: string) => void;
 }) {
   const [value, setValue] = useState(initial);
   return (
@@ -69,11 +78,18 @@ function ControlledHarness({
       label="Phone"
       value={value}
       onChange={(next) => {
-        changes.last = next;
+        onCapture(next);
         setValue(next);
       }}
     />
   );
+}
+
+// Read the most recent value forwarded through a vi.fn() onCapture spy,
+// normalized to `string | null` so frame oracles compare cleanly.
+function lastCaptured(spy: ReturnType<typeof vi.fn>): string | null {
+  const last = spy.mock.calls.at(-1)?.[0];
+  return typeof last === 'string' ? last : null;
 }
 
 beforeEach(() => {
@@ -172,15 +188,15 @@ describe('L6: PhoneInput — Gate 2 oracle-diff (direct render)', () => {
 
 describe('L6: PhoneInput — Gate 2 oracle-diff (controlled parent harness)', () => {
   it('user types "06" with +33 selected: leading-0 strip, parent shows "6"', () => {
-    const changes = { last: null as string | null };
+    const onCapture = vi.fn<(v: string) => void>();
     const { container, unmount } = render(
-      <ControlledHarness initial="+33 " changes={changes} />,
+      <ControlledHarness initial="+33 " onCapture={onCapture} />,
     );
 
     // Frame 0 — mount.
     const frame0: DomFrame = {
       ...readDom(container),
-      lastOnChange: changes.last,
+      lastOnChange: lastCaptured(onCapture),
     };
 
     const input = container.querySelector('input[type="tel"]') as HTMLInputElement;
@@ -189,7 +205,7 @@ describe('L6: PhoneInput — Gate 2 oracle-diff (controlled parent harness)', ()
     });
     const frame1: DomFrame = {
       ...readDom(container),
-      lastOnChange: changes.last,
+      lastOnChange: lastCaptured(onCapture),
     };
 
     const oracle: DomFrame[] = [
@@ -205,14 +221,14 @@ describe('L6: PhoneInput — Gate 2 oracle-diff (controlled parent harness)', ()
   });
 
   it('user types "06" with +44 selected: NO leading-0 strip, parent shows "06"', () => {
-    const changes = { last: null as string | null };
+    const onCapture = vi.fn<(v: string) => void>();
     const { container, unmount } = render(
-      <ControlledHarness initial="+44 " changes={changes} />,
+      <ControlledHarness initial="+44 " onCapture={onCapture} />,
     );
 
     const frame0: DomFrame = {
       ...readDom(container),
-      lastOnChange: changes.last,
+      lastOnChange: lastCaptured(onCapture),
     };
 
     const input = container.querySelector('input[type="tel"]') as HTMLInputElement;
@@ -221,7 +237,7 @@ describe('L6: PhoneInput — Gate 2 oracle-diff (controlled parent harness)', ()
     });
     const frame1: DomFrame = {
       ...readDom(container),
-      lastOnChange: changes.last,
+      lastOnChange: lastCaptured(onCapture),
     };
 
     const oracle: DomFrame[] = [
@@ -236,14 +252,14 @@ describe('L6: PhoneInput — Gate 2 oracle-diff (controlled parent harness)', ()
   });
 
   it('country change while non-empty number: onChange reformats, parent shows same digits under new code', () => {
-    const changes = { last: null as string | null };
+    const onCapture = vi.fn<(v: string) => void>();
     const { container, unmount } = render(
-      <ControlledHarness initial="+33 612345678" changes={changes} />,
+      <ControlledHarness initial="+33 612345678" onCapture={onCapture} />,
     );
 
     const frame0: DomFrame = {
       ...readDom(container),
-      lastOnChange: changes.last,
+      lastOnChange: lastCaptured(onCapture),
     };
 
     const select = container.querySelector('select') as HTMLSelectElement;
@@ -252,7 +268,7 @@ describe('L6: PhoneInput — Gate 2 oracle-diff (controlled parent harness)', ()
     });
     const frame1: DomFrame = {
       ...readDom(container),
-      lastOnChange: changes.last,
+      lastOnChange: lastCaptured(onCapture),
     };
 
     const oracle: DomFrame[] = [
@@ -266,14 +282,14 @@ describe('L6: PhoneInput — Gate 2 oracle-diff (controlled parent harness)', ()
   });
 
   it('clearing the input: formatFullNumber on empty digits returns "", parent goes to ""', () => {
-    const changes = { last: null as string | null };
+    const onCapture = vi.fn<(v: string) => void>();
     const { container, unmount } = render(
-      <ControlledHarness initial="+33 6" changes={changes} />,
+      <ControlledHarness initial="+33 6" onCapture={onCapture} />,
     );
 
     const frame0: DomFrame = {
       ...readDom(container),
-      lastOnChange: changes.last,
+      lastOnChange: lastCaptured(onCapture),
     };
 
     const input = container.querySelector('input[type="tel"]') as HTMLInputElement;
@@ -282,7 +298,7 @@ describe('L6: PhoneInput — Gate 2 oracle-diff (controlled parent harness)', ()
     });
     const frame1: DomFrame = {
       ...readDom(container),
-      lastOnChange: changes.last,
+      lastOnChange: lastCaptured(onCapture),
     };
 
     const oracle: DomFrame[] = [
@@ -298,9 +314,9 @@ describe('L6: PhoneInput — Gate 2 oracle-diff (controlled parent harness)', ()
   });
 
   it('formatFullNumber strips non-digit chars from user input', () => {
-    const changes = { last: null as string | null };
+    const onCapture = vi.fn<(v: string) => void>();
     const { container, unmount } = render(
-      <ControlledHarness initial="+33 " changes={changes} />,
+      <ControlledHarness initial="+33 " onCapture={onCapture} />,
     );
 
     const input = container.querySelector('input[type="tel"]') as HTMLInputElement;
@@ -312,7 +328,7 @@ describe('L6: PhoneInput — Gate 2 oracle-diff (controlled parent harness)', ()
     });
     const frame: DomFrame = {
       ...readDom(container),
-      lastOnChange: changes.last,
+      lastOnChange: lastCaptured(onCapture),
     };
 
     // Expected: cleaned digits = '612', onChange('+33 612'), parent
