@@ -40,7 +40,7 @@ export function AuthGuard({ role, children }: AuthGuardProps) {
   }
 
   // Redirect babysitters with incomplete enrollment to enrollment flow
-  if (userDoc.role === 'babysitter' && (userDoc as any).enrollmentComplete === false) {
+  if (userDoc.role === 'babysitter' && userDoc.enrollmentComplete === false) {
     return <Navigate to="/enroll/babysitter" replace />;
   }
 

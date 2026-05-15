@@ -143,7 +143,7 @@ export function ExpandableBabysitterCard({
         <div className="flex shrink-0 items-center gap-2">
           <div className="flex flex-col items-end gap-1">
             <Badge variant={badgeVariants[variant]}>{badgeLabels[variant]}</Badge>
-            {(appointment as any).modified && (
+            {appointment.modified && (
               <Badge variant="blue">{t('appointment.modified')}</Badge>
             )}
           </div>
