@@ -12,7 +12,21 @@ import { CalendarIcon, CheckIcon } from '@/components/ui/Icons';
 import { useHolidays } from '@/hooks/useHolidays';
 import { getDateTag } from '@/lib/dateTag';
 import { DateTag } from '@/components/ui/DateTag';
-import type { BabysitterUser } from '@ejm/shared';
+import type { AppointmentDoc, BabysitterUser, RecurringSlot } from '@ejm/shared';
+
+/**
+ * Appointment as it appears on the babysitter's request detail page: the
+ * stored Firestore shape plus fields denormalized from the family doc by
+ * `acceptRequest`/`createAppointmentFromSearch` (familyName, familyPhotoUrl,
+ * kids, pets, familyNote).
+ */
+interface EnrichedAppointment extends AppointmentDoc {
+  familyName?: string;
+  familyPhotoUrl?: string;
+  kids?: { age: number; languages?: string[] }[];
+  pets?: string;
+  familyNote?: string;
+}
 import { buildCalendarUrl } from '@/lib/calendar';
 
 export function RequestDetailPage() {
@@ -24,7 +38,7 @@ export function RequestDetailPage() {
   const { userDoc } = useAuthStore();
   const babysitter = userDoc as BabysitterUser | null;
 
-  const [appointment, setAppointment] = useState<any | null>(null);
+  const [appointment, setAppointment] = useState<EnrichedAppointment | null>(null);
   const [loading, setLoading] = useState(true);
   const [acceptDialog, setAcceptDialog] = useState(false);
   const [declineDialog, setDeclineDialog] = useState(false);
@@ -39,7 +53,7 @@ export function RequestDetailPage() {
     if (!appointmentId) return;
     const unsub = onSnapshot(doc(db, 'appointments', appointmentId), (snap) => {
       if (snap.exists()) {
-        setAppointment(snap.data());
+        setAppointment(snap.data() as EnrichedAppointment);
       }
       setLoading(false);
     });
@@ -49,11 +63,15 @@ export function RequestDetailPage() {
   // Load parent contacts via cloud function (bypasses Firestore rules)
   useEffect(() => {
     if (!appointmentId || !appointment) return;
+    const id = appointmentId;
     async function loadParents() {
       try {
-        const fn = httpsCallable(functions, 'getParentContacts');
-        const result = await fn({ appointmentId });
-        setParentContacts((result.data as any).contacts || []);
+        const fn = httpsCallable<
+          { appointmentId: string },
+          { contacts?: { firstName: string; lastName: string; email: string; phone?: string; whatsapp?: string }[] }
+        >(functions, 'getParentContacts');
+        const result = await fn({ appointmentId: id });
+        setParentContacts(result.data.contacts || []);
       } catch { /* function unavailable */ }
     }
     loadParents();
@@ -61,14 +79,16 @@ export function RequestDetailPage() {
 
   // Check if this is a returning family
   useEffect(() => {
-    if (!appointment?.familyId || !babysitter?.uid) return;
+    const familyId = appointment?.familyId;
+    const babysitterUid = babysitter?.uid;
+    if (!familyId || !babysitterUid) return;
     async function checkReturning() {
       try {
         const snap = await getDocs(
           query(
             collection(db, 'appointments'),
-            where('babysitterUserId', '==', babysitter!.uid),
-            where('familyId', '==', appointment.familyId),
+            where('babysitterUserId', '==', babysitterUid),
+            where('familyId', '==', familyId),
             where('status', '==', 'confirmed')
           )
         );
@@ -83,8 +103,9 @@ export function RequestDetailPage() {
     try {
       const fn = httpsCallable(functions, 'acknowledgeModification');
       await fn({ appointmentId });
-    } catch (err: any) {
-      alert(err.message || 'Failed');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed';
+      alert(message);
     } finally {
       setAcknowledging(false);
     }
@@ -103,8 +124,9 @@ export function RequestDetailPage() {
       setSuccess(action === 'accept' ? 'accepted' : 'declined');
       setAcceptDialog(false);
       setDeclineDialog(false);
-    } catch (err: any) {
-      alert(err.message || 'Something went wrong. Please try again.');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Something went wrong. Please try again.';
+      alert(message);
     } finally {
       setResponding(false);
     }
@@ -183,8 +205,8 @@ export function RequestDetailPage() {
         {apt.modified && (
           <Card className="mb-4 border-amber-300 bg-amber-50">
             <p className="mb-1 text-sm font-semibold text-amber-800">{t('appointment.modifiedBanner')}</p>
-            {apt.modifiedFields?.length > 0 && (
-              <p className="mb-3 text-xs text-amber-600">{t('appointment.modifiedFieldsLabel')}: {apt.modifiedFields.join(', ')}</p>
+            {(apt.modifiedFields?.length ?? 0) > 0 && (
+              <p className="mb-3 text-xs text-amber-600">{t('appointment.modifiedFieldsLabel')}: {apt.modifiedFields!.join(', ')}</p>
             )}
             <Button size="sm" onClick={handleAcknowledge} disabled={acknowledging}>
               {acknowledging ? '...' : t('appointment.acknowledgeChanges')}
@@ -209,8 +231,8 @@ export function RequestDetailPage() {
               </span>
             ) : (
               <span>
-                {apt.recurringSlots?.length > 0
-                  ? apt.recurringSlots.map((s: any) => {
+                {(apt.recurringSlots?.length ?? 0) > 0
+                  ? apt.recurringSlots!.map((s: RecurringSlot) => {
                       const dayNames: Record<string, string> = { mon: t('days.mondays'), tue: t('days.tuesdays'), wed: t('days.wednesdays'), thu: t('days.thursdays'), fri: t('days.fridays'), sat: t('days.saturdays'), sun: t('days.sundays') };
                       return `${dayNames[s.day] || s.day} ${s.startTime}–${s.endTime}`;
                     }).join(', ')

@@ -100,8 +100,9 @@ export function BabysitterDashboard() {
       await fn({ appointmentId: cancelTarget, reason: cancelReason.trim() });
       setCancelTarget(null);
       setCancelReason('');
-    } catch (err: any) {
-      alert(err.message || 'Failed to cancel');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to cancel';
+      alert(message);
     } finally {
       setCancelling(false);
     }
