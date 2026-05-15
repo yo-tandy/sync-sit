@@ -138,7 +138,11 @@ service cloud.firestore {
              .hasAny(['babysitterUserId', 'submittedByUserId', 'type', 'createdAt'])
         && (
           resource.data.babysitterUserId == request.auth.uid
-          || resource.data.submittedByUserId == request.auth.uid
+          || (
+            'submittedByUserId' in resource.data
+            && resource.data.submittedByUserId != null
+            && resource.data.submittedByUserId == request.auth.uid
+          )
         )
         && (
           !request.resource.data.diff(resource.data).affectedKeys().hasAny(['status'])
