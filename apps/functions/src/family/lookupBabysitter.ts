@@ -43,10 +43,11 @@ export const lookupBabysitter = onCall(
     const q = query.trim().toLowerCase();
     const results: LookupResult[] = [];
 
-    // Search all babysitters
+    // Search all babysitters — only those who opted in to being searchable
     const snap = await db.collection('users')
       .where('role', '==', 'babysitter')
       .where('status', '==', 'active')
+      .where('searchable', '==', true)
       .get();
 
     for (const doc of snap.docs) {
