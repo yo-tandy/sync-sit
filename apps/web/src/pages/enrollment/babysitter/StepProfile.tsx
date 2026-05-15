@@ -59,8 +59,9 @@ export function StepProfile({ uid, onNext }: StepProfileProps) {
         updatedAt: serverTimestamp(),
       });
       onNext();
-    } catch (err: any) {
-      setError(err.message || 'Failed to save');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to save';
+      setError(message);
     } finally {
       setSaving(false);
     }

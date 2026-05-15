@@ -62,8 +62,9 @@ export function JoinFamilyPage() {
       await verifyEmail({ email });
       setResendCooldown(60);
       setStep(1);
-    } catch (err: any) {
-      setError(err.message || 'Failed to send verification code');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to send verification code';
+      setError(message);
     } finally {
       setSubmitting(false);
     }
@@ -108,8 +109,9 @@ export function JoinFamilyPage() {
       });
 
       navigate('/family');
-    } catch (err: any) {
-      setError(err.message || 'Failed to join family');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to join family';
+      setError(message);
     } finally {
       setSubmitting(false);
     }

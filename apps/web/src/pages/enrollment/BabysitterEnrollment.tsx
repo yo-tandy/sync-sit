@@ -87,8 +87,9 @@ export function BabysitterEnrollment() {
       const verifyEjmEmail = httpsCallable(functions, 'verifyEjmEmail');
       await verifyEjmEmail({ email: ejemEmail });
       setStep(1);
-    } catch (err: any) {
-      setError(err.message || 'Failed to send verification code');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to send verification code';
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -125,8 +126,9 @@ export function BabysitterEnrollment() {
       });
 
       setStep(3);
-    } catch (err: any) {
-      setError(err.message || 'Failed to create account');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to create account';
+      setError(message);
     } finally {
       setLoading(false);
     }

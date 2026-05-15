@@ -32,8 +32,9 @@ export function StepVerify({ ejemEmail, onVerified, onResend, error }: StepVerif
       const verifyFn = httpsCallable(functions, 'verifyCode');
       await verifyFn({ email: ejemEmail, code });
       onVerified(code);
-    } catch (err: any) {
-      setCodeError(err.message || t('auth.invalidCode'));
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : t('auth.invalidCode');
+      setCodeError(message);
     } finally {
       setVerifying(false);
     }
