@@ -40,7 +40,13 @@ service cloud.firestore {
     match /families/{familyId} {
       allow read: if isFamilyMember(familyId) || isAdmin();
       allow create, delete: if false;
-      allow update: if isFamilyMember(familyId);
+      // Field-level guard: family members can only edit profile fields from the
+      // client. Sensitive state (verification.*, parentIds, preferredBabysitters,
+      // searchDefaults, status) is mutated exclusively by callables via the
+      // Admin SDK (which bypasses these rules).
+      allow update: if isFamilyMember(familyId)
+                    && request.resource.data.diff(resource.data).affectedKeys()
+                        .hasOnly(['familyName', 'address', 'latLng', 'pets', 'note', 'photoUrl', 'updatedAt']);
 
       match /kids/{kidId} {
         allow read: if isFamilyMember(familyId) || isAdmin();
