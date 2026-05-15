@@ -31,9 +31,21 @@ service cloud.firestore {
                       && resource.data.familyId != null
                       && resource.data.familyId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.familyId);
       allow create, delete: if false; // Only via Cloud Functions
+      // Owner-update blocklist:
+      // - role/status/uid/email/ejemEmail/createdAt: identity + admin-controlled
+      //   fields that must never change client-side.
+      // - approvedFamilies: contact-sharing audit trail. respondToContactSharing
+      //   writes auditLog entries on every change; allowing direct client writes
+      //   would bypass that audit point and the GDPR-required record of which
+      //   families a babysitter has shared contact with.
+      // NOTE: `searchable` is intentionally NOT in this list — it is
+      //   user-controlled by design (soft hide from search). The hard ban
+      //   gate is the `status` field (already blocked above), which
+      //   admin's blockUser callable owns.
       allow update: if isOwner(userId)
                     && !request.resource.data.diff(resource.data).affectedKeys()
-                        .hasAny(['role', 'status', 'uid', 'email', 'ejemEmail', 'createdAt']);
+                        .hasAny(['role', 'status', 'uid', 'email', 'ejemEmail', 'createdAt',
+                                 'approvedFamilies']);
     }
 
     // Families: readable + editable by family members + admin
