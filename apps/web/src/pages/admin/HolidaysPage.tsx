@@ -29,7 +29,7 @@ export function AdminHolidaysPage() {
   useEffect(() => {
     if (!loading && existingPeriods.length > 0) {
       setPeriods(
-        existingPeriods.map((p: any) => ({
+        existingPeriods.map((p) => ({
           name: p.name || '',
           startDate: p.startDate || '',
           endDate: p.endDate || '',

@@ -9,7 +9,7 @@ import { Select } from '@/components/ui/Select';
 import { Spinner } from '@/components/ui/Spinner';
 import { Dialog } from '@/components/ui/Dialog';
 import { TrashIcon } from '@/components/ui/Icons';
-import { useAdminStore } from '@/stores/adminStore';
+import { useAdminStore, type AdminAppointmentListItem } from '@/stores/adminStore';
 
 export function AdminAppointmentsPage() {
   const { t } = useTranslation();
@@ -34,7 +34,7 @@ export function AdminAppointmentsPage() {
   const filteredAppointments = useMemo(() => {
     if (!search.trim()) return appointments;
     const q = search.toLowerCase();
-    return appointments.filter((appt: any) => {
+    return appointments.filter((appt) => {
       const babysitter = (appt.babysitterName || '').toLowerCase();
       const family = (appt.familyName || '').toLowerCase();
       const parents = (appt.parentNames || '').toLowerCase();
@@ -70,7 +70,7 @@ export function AdminAppointmentsPage() {
     { value: 'cancelled', label: t('admin.statusCancelled') },
   ];
 
-  const formatAppointmentDate = (appt: any) => {
+  const formatAppointmentDate = (appt: AdminAppointmentListItem) => {
     if (appt.date) {
       const parts = [appt.date];
       if (appt.startTime) parts.push(appt.startTime);
@@ -106,7 +106,7 @@ export function AdminAppointmentsPage() {
           </p>
         ) : (
           <div className="space-y-3">
-            {filteredAppointments.map((appt: any) => (
+            {filteredAppointments.map((appt) => (
               <Card key={appt.id}>
                 <div className="flex items-start justify-between">
                   <div className="min-w-0 flex-1">

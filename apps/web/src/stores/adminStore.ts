@@ -3,7 +3,6 @@ import { httpsCallable } from 'firebase/functions';
 import { functions } from '@/config/firebase';
 import type {
   AdminDashboardStats,
-  AuditLogDoc,
   FirestoreTimestamp,
   GdprExportData,
   HolidayPeriod,
@@ -26,26 +25,55 @@ interface AdminUserListItem {
  * across as strings or {seconds,nanoseconds} objects depending on the
  * callable's serializer, so we model the unknown date fields opaquely.
  */
-interface AdminAppointmentListItem {
+export interface AdminAppointmentListItem {
   id: string;
-  babysitterUserId: string;
-  parentUserId: string;
-  familyId: string;
+  babysitterUserId?: string;
+  parentUserId?: string;
+  familyId?: string;
   status: string;
   date?: string;
   startTime?: string;
   endTime?: string;
   type?: string;
+  offeredRate?: number;
   // Enriched server-side
   babysitterName?: string;
   familyName?: string;
-  parentName?: string;
+  parentNames?: string;
 }
 
 interface PreapprovedEmail {
   email: string;
   used: boolean;
   createdAt: FirestoreTimestamp | null;
+}
+
+/**
+ * Wire shape for a timestamp coming back through a `httpsCallable` response.
+ * The Firebase callable serializer may emit either an ISO string, an
+ * Admin-SDK `_seconds`/`_nanoseconds` envelope, or a client-SDK
+ * `seconds`/`nanoseconds` one.
+ */
+export type WireTimestamp =
+  | string
+  | { _seconds: number; _nanoseconds?: number }
+  | { seconds: number; nanoseconds?: number };
+
+/**
+ * Admin-side audit log entry, as returned by the `listAuditLogs` callable.
+ * Distinct from the Firestore-storage `AuditLogDoc` in @ejm/shared because
+ * the wire shape carries an `id` field, enriched `adminInfo`/`targetInfo`,
+ * and a serialized timestamp.
+ */
+export interface AdminAuditLogEntry {
+  id: string;
+  adminUserId: string;
+  action: string;
+  targetUserId?: string;
+  details: Record<string, unknown>;
+  timestamp: WireTimestamp;
+  adminInfo: { email: string; name: string; role: string } | null;
+  targetInfo: { email: string; name: string; role: string } | null;
 }
 
 // Dashboard stats include an extra pendingVerificationCount on top of the
@@ -79,7 +107,7 @@ interface AdminState {
   updateHolidays: (schoolYear: string, zone: string, periods: HolidayPeriod[]) => Promise<void>;
 
   // Audit logs
-  auditLogs: AuditLogDoc[];
+  auditLogs: AdminAuditLogEntry[];
   auditLogsLoading: boolean;
   fetchAuditLogs: (params: { action?: string }) => Promise<void>;
 
@@ -188,7 +216,7 @@ export const useAdminStore = create<AdminState>((set) => ({
     try {
       const fn = httpsCallable<
         { actionFilter?: string },
-        { logs: AuditLogDoc[] }
+        { logs: AdminAuditLogEntry[] }
       >(functions, 'listAuditLogs');
       const result = await fn({ actionFilter: params.action });
       set({ auditLogs: result.data.logs, auditLogsLoading: false });

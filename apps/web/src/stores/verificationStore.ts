@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '@/config/firebase';
 
-interface VerificationDoc {
+export interface VerificationDoc {
   id: string;
   familyId: string;
   uploadedByUserId: string;
@@ -22,6 +22,10 @@ interface VerificationDoc {
   // Enriched (admin)
   familyName?: string;
   parentName?: string;
+  /** Enrolled family parent names (for comparison against the document). */
+  familyParentNames?: string[];
+  /** Enrolled family children (for comparison against the document). */
+  familyKids?: { firstName: string; age: number }[];
 }
 
 interface FamilyVerification {

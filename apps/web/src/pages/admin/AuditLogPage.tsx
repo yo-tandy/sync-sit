@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Spinner } from '@/components/ui/Spinner';
 import { Dialog } from '@/components/ui/Dialog';
-import { useAdminStore } from '@/stores/adminStore';
+import { useAdminStore, type WireTimestamp } from '@/stores/adminStore';
 
 interface UserInfo {
   email: string;
@@ -47,7 +47,7 @@ export function AdminAuditLogPage() {
   const filteredLogs = useMemo(() => {
     if (!search.trim()) return auditLogs;
     const q = search.toLowerCase();
-    return auditLogs.filter((log: any) => {
+    return auditLogs.filter((log) => {
       const adminEmail = (log.adminInfo?.email || '').toLowerCase();
       const adminName = (log.adminInfo?.name || '').toLowerCase();
       const targetEmail = (log.targetInfo?.email || '').toLowerCase();
@@ -81,18 +81,18 @@ export function AdminAuditLogPage() {
     { value: 'export_user_data', label: 'export_user_data' },
   ];
 
-  const formatTs = (ts: any) => {
+  const formatTs = (ts: WireTimestamp | null | undefined) => {
     if (!ts) return '—';
     try {
       let d: Date;
       if (typeof ts === 'string') {
         d = new Date(ts);
-      } else if (ts._seconds != null) {
+      } else if ('_seconds' in ts && ts._seconds != null) {
         d = new Date(ts._seconds * 1000);
-      } else if (ts.seconds != null) {
+      } else if ('seconds' in ts && ts.seconds != null) {
         d = new Date(ts.seconds * 1000);
       } else {
-        d = new Date(ts);
+        return '—';
       }
       if (isNaN(d.getTime())) return '—';
       return d.toLocaleString(i18n.language === 'fr' ? 'fr-FR' : 'en-US', {
@@ -106,7 +106,7 @@ export function AdminAuditLogPage() {
     }
   };
 
-  const formatDetails = (details: any) => {
+  const formatDetails = (details: Record<string, unknown> | null | undefined) => {
     if (!details || typeof details !== 'object') return '';
     const entries = Object.entries(details).filter(([, v]) => v != null && v !== '');
     if (entries.length === 0) return '';
@@ -157,7 +157,7 @@ export function AdminAuditLogPage() {
           </p>
         ) : (
           <div className="divide-y divide-gray-100">
-            {filteredLogs.map((log: any) => {
+            {filteredLogs.map((log) => {
               const details = formatDetails(log.details);
               return (
                 <div key={log.id} className="flex flex-wrap items-center gap-x-1.5 py-2 text-xs">
