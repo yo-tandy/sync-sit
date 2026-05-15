@@ -45,7 +45,7 @@ function ReferenceCard({
   const isPublished = reference.status === 'published';
   const name = displayName || reference.refName || t('references.unknown');
   const hasText = !!(reference.note || reference.referenceText);
-  const whatsapp = (reference as any).refWhatsapp;
+  const whatsapp = reference.refWhatsapp;
 
   return (
     <Card className="mb-3 cursor-pointer" onClick={() => setExpanded(!expanded)}>
@@ -276,7 +276,7 @@ export function EndorsementsPage() {
   const [familyNames, setFamilyNames] = useState<Record<string, string>>({});
   useEffect(() => {
     const missing = familySubmittedRefs.filter(
-      (r) => !(r as any).submittedByName && r.submittedByFamilyId && !familyNames[r.submittedByFamilyId]
+      (r) => !r.submittedByName && r.submittedByFamilyId && !familyNames[r.submittedByFamilyId]
     );
     if (missing.length === 0) return;
     Promise.all(
@@ -295,7 +295,7 @@ export function EndorsementsPage() {
   }, [familySubmittedRefs]);
 
   const getFamilyRefName = (ref: ReferenceDoc) =>
-    (ref as any).submittedByName || (ref.submittedByFamilyId ? familyNames[ref.submittedByFamilyId] : null) || undefined;
+    ref.submittedByName || (ref.submittedByFamilyId ? familyNames[ref.submittedByFamilyId] : null) || undefined;
 
   const [dialogMode, setDialogMode] = useState<'add' | 'edit' | null>(null);
   const [editingRefId, setEditingRefId] = useState<string | null>(null);

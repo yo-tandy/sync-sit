@@ -15,7 +15,7 @@ import { CheckIcon, ShieldIcon } from '@/components/ui/Icons';
 import { useHolidays } from '@/hooks/useHolidays';
 import { getDateTag } from '@/lib/dateTag';
 import { DateTag } from '@/components/ui/DateTag';
-import type { ParentUser, FamilyDoc, KidDoc, SearchDefaults, BabysitterSummary } from '@ejm/shared';
+import type { ParentUser, FamilyDoc, KidDoc, BabysitterSummary } from '@ejm/shared';
 
 // Time options 06:00–02:00
 function generateTimeOptions(): { value: string; label: string }[] {
@@ -56,7 +56,6 @@ export function SearchPage() {
   // Family data
   const [_family, setFamily] = useState<FamilyDoc | null>(null);
   const [kids, setKids] = useState<(KidDoc & { selected: boolean })[]>([]);
-  const [_defaults, setDefaults] = useState<SearchDefaults>({});
 
   // Search form — one-time
   const [date, setDate] = useState('');
@@ -173,7 +172,6 @@ export function SearchPage() {
         setLatLng(f.latLng || null);
         setPreferredIds(new Set(f.preferredBabysitters || []));
         if (f.searchDefaults) {
-          setDefaults(f.searchDefaults);
           if (f.searchDefaults.maxRate) setOfferedRate(f.searchDefaults.maxRate);
           if (f.searchDefaults.minBabysitterAge) setFilterMinAge(f.searchDefaults.minBabysitterAge);
           if (f.searchDefaults.preferredGender) setFilterGender(f.searchDefaults.preferredGender);
@@ -224,8 +222,9 @@ export function SearchPage() {
       });
       setResults((result.data as { results: BabysitterSummary[] }).results);
       setStep('results');
-    } catch (err: any) {
-      setSearchError(err.message || 'Search failed');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Search failed';
+      setSearchError(message);
     } finally {
       setSearching(false);
     }
@@ -253,8 +252,9 @@ export function SearchPage() {
         familyId: parent.familyId,
       });
       setSent(true);
-    } catch (err: any) {
-      setSearchError(err.message || 'Failed to send request');
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to send request';
+      setSearchError(errorMessage);
     } finally {
       setSending(false);
     }

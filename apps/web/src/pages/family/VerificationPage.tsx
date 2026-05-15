@@ -115,8 +115,9 @@ export function VerificationPage() {
     setApproveError('');
     try {
       await lookupCommunityCode(approveCode.trim());
-    } catch (err: any) {
-      setApproveError(err.message || 'Invalid code');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Invalid code';
+      setApproveError(message);
     }
   };
 
@@ -128,8 +129,9 @@ export function VerificationPage() {
       setApproveCode('');
       setKnowPerson(false);
       setConfirmEjm(false);
-    } catch (err: any) {
-      setApproveError(err.message || 'Approval failed');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Approval failed';
+      setApproveError(message);
     }
   };
 
