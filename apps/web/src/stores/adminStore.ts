@@ -1,6 +1,13 @@
 import { create } from 'zustand';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '@/config/firebase';
+import type {
+  AdminDashboardStats,
+  AuditLogDoc,
+  FirestoreTimestamp,
+  GdprExportData,
+  HolidayPeriod,
+} from '@ejm/shared';
 
 interface AdminUserListItem {
   uid: string;
@@ -10,19 +17,46 @@ interface AdminUserListItem {
   role: string;
   status: string;
   searchable?: boolean;
-  createdAt: any;
+  createdAt: FirestoreTimestamp | null;
 }
 
-interface AdminStats {
-  babysitterCount: number;
-  familyCount: number;
-  appointmentCount: number;
+/**
+ * Admin-side view of an appointment, as returned by the `listAppointments`
+ * callable. Shapes are wire-serialized — Firestore Timestamps may come
+ * across as strings or {seconds,nanoseconds} objects depending on the
+ * callable's serializer, so we model the unknown date fields opaquely.
+ */
+interface AdminAppointmentListItem {
+  id: string;
+  babysitterUserId: string;
+  parentUserId: string;
+  familyId: string;
+  status: string;
+  date?: string;
+  startTime?: string;
+  endTime?: string;
+  type?: string;
+  // Enriched server-side
+  babysitterName?: string;
+  familyName?: string;
+  parentName?: string;
+}
+
+interface PreapprovedEmail {
+  email: string;
+  used: boolean;
+  createdAt: FirestoreTimestamp | null;
+}
+
+// Dashboard stats include an extra pendingVerificationCount on top of the
+// base shared type.
+interface AdminStatsWithVerifications extends AdminDashboardStats {
   pendingVerificationCount: number;
 }
 
 interface AdminState {
   // Dashboard stats
-  stats: AdminStats | null;
+  stats: AdminStatsWithVerifications | null;
   statsLoading: boolean;
   fetchStats: () => Promise<void>;
 
@@ -36,25 +70,25 @@ interface AdminState {
   resetUserPassword: (uid: string) => Promise<void>;
 
   // Appointments
-  appointments: any[];
+  appointments: AdminAppointmentListItem[];
   appointmentsLoading: boolean;
   fetchAppointments: (params: { status?: string }) => Promise<void>;
   deleteAppointment: (id: string) => Promise<void>;
 
   // Holidays
-  updateHolidays: (schoolYear: string, zone: string, periods: any[]) => Promise<void>;
+  updateHolidays: (schoolYear: string, zone: string, periods: HolidayPeriod[]) => Promise<void>;
 
   // Audit logs
-  auditLogs: any[];
+  auditLogs: AuditLogDoc[];
   auditLogsLoading: boolean;
   fetchAuditLogs: (params: { action?: string }) => Promise<void>;
 
   // GDPR export
   exporting: boolean;
-  exportUserData: (uid: string) => Promise<any>;
+  exportUserData: (uid: string) => Promise<GdprExportData>;
 
   // Pre-approved emails
-  preapprovedEmails: { email: string; used: boolean; createdAt: any }[];
+  preapprovedEmails: PreapprovedEmail[];
   preapprovedLoading: boolean;
   fetchPreapprovedEmails: () => Promise<void>;
   addPreapprovedEmail: (email: string) => Promise<void>;
@@ -68,9 +102,12 @@ export const useAdminStore = create<AdminState>((set) => ({
   fetchStats: async () => {
     set({ statsLoading: true });
     try {
-      const fn = httpsCallable(functions, 'getAdminDashboard');
+      const fn = httpsCallable<Record<string, never>, AdminStatsWithVerifications>(
+        functions,
+        'getAdminDashboard',
+      );
       const result = await fn({});
-      set({ stats: result.data as AdminStats, statsLoading: false });
+      set({ stats: result.data, statsLoading: false });
     } catch (err) {
       set({ statsLoading: false });
       throw err;
@@ -83,13 +120,16 @@ export const useAdminStore = create<AdminState>((set) => ({
   fetchUsers: async (params) => {
     set({ usersLoading: true });
     try {
-      const fn = httpsCallable(functions, 'listUsers');
+      const fn = httpsCallable<
+        { searchQuery?: string; roleFilter?: string; statusFilter?: string },
+        { users: AdminUserListItem[] }
+      >(functions, 'listUsers');
       const result = await fn({
         searchQuery: params.search,
         roleFilter: params.role,
         statusFilter: params.status,
       });
-      set({ users: (result.data as any).users as AdminUserListItem[], usersLoading: false });
+      set({ users: result.data.users, usersLoading: false });
     } catch (err) {
       set({ usersLoading: false });
       throw err;
@@ -118,9 +158,12 @@ export const useAdminStore = create<AdminState>((set) => ({
   fetchAppointments: async (params) => {
     set({ appointmentsLoading: true });
     try {
-      const fn = httpsCallable(functions, 'listAppointments');
+      const fn = httpsCallable<
+        { statusFilter?: string },
+        { appointments: AdminAppointmentListItem[] }
+      >(functions, 'listAppointments');
       const result = await fn({ statusFilter: params.status });
-      set({ appointments: (result.data as any).appointments, appointmentsLoading: false });
+      set({ appointments: result.data.appointments, appointmentsLoading: false });
     } catch (err) {
       set({ appointmentsLoading: false });
       throw err;
@@ -143,9 +186,12 @@ export const useAdminStore = create<AdminState>((set) => ({
   fetchAuditLogs: async (params) => {
     set({ auditLogsLoading: true });
     try {
-      const fn = httpsCallable(functions, 'listAuditLogs');
+      const fn = httpsCallable<
+        { actionFilter?: string },
+        { logs: AuditLogDoc[] }
+      >(functions, 'listAuditLogs');
       const result = await fn({ actionFilter: params.action });
-      set({ auditLogs: (result.data as any).logs, auditLogsLoading: false });
+      set({ auditLogs: result.data.logs, auditLogsLoading: false });
     } catch (err) {
       set({ auditLogsLoading: false });
       throw err;
@@ -157,7 +203,10 @@ export const useAdminStore = create<AdminState>((set) => ({
   exportUserData: async (uid) => {
     set({ exporting: true });
     try {
-      const fn = httpsCallable(functions, 'exportUserData');
+      const fn = httpsCallable<{ targetUserId: string }, GdprExportData>(
+        functions,
+        'exportUserData',
+      );
       const result = await fn({ targetUserId: uid });
       set({ exporting: false });
       return result.data;
@@ -172,9 +221,12 @@ export const useAdminStore = create<AdminState>((set) => ({
   fetchPreapprovedEmails: async () => {
     set({ preapprovedLoading: true });
     try {
-      const fn = httpsCallable(functions, 'listPreapprovedEmails');
+      const fn = httpsCallable<
+        Record<string, never>,
+        { emails: PreapprovedEmail[] }
+      >(functions, 'listPreapprovedEmails');
       const result = await fn({});
-      set({ preapprovedEmails: (result.data as any).emails, preapprovedLoading: false });
+      set({ preapprovedEmails: result.data.emails, preapprovedLoading: false });
     } catch (err) {
       set({ preapprovedLoading: false });
       throw err;

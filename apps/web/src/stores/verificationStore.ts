@@ -87,12 +87,14 @@ export const useVerificationStore = create<VerificationState>((set) => ({
   fetchStatus: async () => {
     set({ loading: true });
     try {
-      const fn = httpsCallable(functions, 'getVerificationStatus');
+      const fn = httpsCallable<
+        Record<string, never>,
+        { verification: FamilyVerification; documents: VerificationDoc[] }
+      >(functions, 'getVerificationStatus');
       const result = await fn({});
-      const data = result.data as any;
       set({
-        familyVerification: data.verification,
-        documents: data.documents,
+        familyVerification: result.data.verification,
+        documents: result.data.documents,
         loading: false,
       });
     } catch {
@@ -115,13 +117,16 @@ export const useVerificationStore = create<VerificationState>((set) => ({
   fetchPendingVerifications: async (params) => {
     set({ pendingLoading: true });
     try {
-      const fn = httpsCallable(functions, 'listPendingVerifications');
+      const fn = httpsCallable<
+        { statusFilter?: string; typeFilter?: string },
+        { verifications: VerificationDoc[] }
+      >(functions, 'listPendingVerifications');
       const result = await fn({
         statusFilter: params.status,
         typeFilter: params.type,
       });
       set({
-        pendingVerifications: (result.data as any).verifications,
+        pendingVerifications: result.data.verifications,
         pendingLoading: false,
       });
     } catch {
@@ -137,10 +142,16 @@ export const useVerificationStore = create<VerificationState>((set) => ({
   generateCommunityCode: async () => {
     set({ communityCodeLoading: true });
     try {
-      const fn = httpsCallable(functions, 'generateCommunityCode');
+      const fn = httpsCallable<
+        Record<string, never>,
+        { code: string; expiresAt: string }
+      >(functions, 'generateCommunityCode');
       const result = await fn({});
-      const data = result.data as any;
-      set({ communityCode: data.code, communityCodeExpires: data.expiresAt, communityCodeLoading: false });
+      set({
+        communityCode: result.data.code,
+        communityCodeExpires: result.data.expiresAt,
+        communityCodeLoading: false,
+      });
     } catch (err) {
       set({ communityCodeLoading: false });
       throw err;
@@ -150,9 +161,12 @@ export const useVerificationStore = create<VerificationState>((set) => ({
   lookupCommunityCode: async (code: string) => {
     set({ lookupLoading: true, lookupResult: null });
     try {
-      const fn = httpsCallable(functions, 'lookupCommunityCode');
+      const fn = httpsCallable<
+        { code: string },
+        { familyName: string; firstName: string; lastName: string; familyId: string }
+      >(functions, 'lookupCommunityCode');
       const result = await fn({ code });
-      set({ lookupResult: result.data as any, lookupLoading: false });
+      set({ lookupResult: result.data, lookupLoading: false });
     } catch (err) {
       set({ lookupLoading: false });
       throw err;
