@@ -31,16 +31,34 @@ service cloud.firestore {
                       && resource.data.familyId != null
                       && resource.data.familyId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.familyId);
       allow create, delete: if false; // Only via Cloud Functions
+      // Owner-update blocklist:
+      // - role/status/uid/email/ejemEmail/createdAt: identity + admin-controlled
+      //   fields that must never change client-side.
+      // - approvedFamilies: contact-sharing audit trail. respondToContactSharing
+      //   writes auditLog entries on every change; allowing direct client writes
+      //   would bypass that audit point and the GDPR-required record of which
+      //   families a babysitter has shared contact with.
+      // NOTE: `searchable` is intentionally NOT in this list — it is
+      //   user-controlled by design (soft hide from search). The hard ban
+      //   gate is the `status` field (already blocked above), which
+      //   admin's blockUser callable owns.
       allow update: if isOwner(userId)
                     && !request.resource.data.diff(resource.data).affectedKeys()
-                        .hasAny(['role', 'status', 'uid', 'email', 'ejemEmail', 'createdAt']);
+                        .hasAny(['role', 'status', 'uid', 'email', 'ejemEmail', 'createdAt',
+                                 'approvedFamilies']);
     }
 
     // Families: readable + editable by family members + admin
     match /families/{familyId} {
       allow read: if isFamilyMember(familyId) || isAdmin();
       allow create, delete: if false;
-      allow update: if isFamilyMember(familyId);
+      // Field-level guard: family members can only edit profile fields from the
+      // client. Sensitive state (verification.*, parentIds, preferredBabysitters,
+      // searchDefaults, status) is mutated exclusively by callables via the
+      // Admin SDK (which bypasses these rules).
+      allow update: if isFamilyMember(familyId)
+                    && request.resource.data.diff(resource.data).affectedKeys()
+                        .hasOnly(['familyName', 'address', 'latLng', 'pets', 'note', 'photoUrl', 'updatedAt']);
 
       match /kids/{kidId} {
         allow read: if isFamilyMember(familyId) || isAdmin();
@@ -78,14 +96,54 @@ service cloud.firestore {
     // References: readable by anyone authenticated (shown in search results)
     match /references/{referenceId} {
       allow read: if isAuth();
-      allow create: if isAuth() && (
-        request.resource.data.babysitterUserId == request.auth.uid
-        || request.resource.data.submittedByUserId == request.auth.uid
-      );
-      allow update: if isAuth() && (
-        resource.data.babysitterUserId == request.auth.uid
-        || resource.data.submittedByUserId == request.auth.uid
-      );
+      // Create: force initial status='private' so newly-created references
+      // never surface in searchBabysitters (which filters status in
+      // ['approved','published']) without an explicit downstream transition.
+      // Two legitimate branches:
+      //  - Babysitter records their own offline reference (type='manual',
+      //    no submitter — recording an out-of-band endorsement).
+      //  - Parent endorses a different babysitter (type='family_submitted',
+      //    submitter is the auth user, babysitter is someone else).
+      // Self-puffery via the family_submitted branch (babysitter writing
+      // about themselves) and submitter-impersonation as oneself
+      // (submittedByUserId==babysitterUserId) are denied.
+      allow create: if isAuth()
+        && request.resource.data.status == 'private'
+        && (
+          (
+            request.resource.data.babysitterUserId == request.auth.uid
+            && request.resource.data.type == 'manual'
+            && (!('submittedByUserId' in request.resource.data)
+                || request.resource.data.submittedByUserId == null)
+          )
+          || (
+            request.resource.data.submittedByUserId == request.auth.uid
+            && request.resource.data.babysitterUserId != request.auth.uid
+            && request.resource.data.type == 'family_submitted'
+          )
+        );
+      // Update: owner (babysitter or submitter) may edit their own reference,
+      // but cannot:
+      //  - mutate the identity tuple (babysitterUserId, submittedByUserId,
+      //    type, createdAt) — prevents transferring an endorsement between
+      //    babysitters or laundering an identity post-create;
+      //  - promote status to 'approved' or 'published' — kills the
+      //    BLOCK-LATER-4 reference-count inflation vector via update path.
+      //    Status may only transition to 'private' or 'removed' from the
+      //    client. The babysitter's previous "publish my own manual reference"
+      //    flow was the fraud vector itself; restoring controlled publish
+      //    requires a callable with admin/peer-approval gating.
+      allow update: if isAuth()
+        && !request.resource.data.diff(resource.data).affectedKeys()
+             .hasAny(['babysitterUserId', 'submittedByUserId', 'type', 'createdAt'])
+        && (
+          resource.data.babysitterUserId == request.auth.uid
+          || resource.data.submittedByUserId == request.auth.uid
+        )
+        && (
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['status'])
+          || request.resource.data.status in ['private', 'removed']
+        );
       allow delete: if false;
     }
 
