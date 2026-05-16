@@ -17,6 +17,7 @@ This document is the **read-only snapshot** of the security and privacy posture 
 - All Cloud Functions in `apps/functions/src/**` (37 named exports across 11 domain folders — see §2).
 - `firestore.rules` (138 lines).
 - `storage.rules` (30 lines).
+- `tests/rules/firestore-rules.test.ts` and `tests/rules/storage-rules.test.ts` — rules-behaviour test suite (31 tests as of this baseline; encodes the per-collection allow/deny contract the rules commit to). Run via `npx firebase-tools emulators:exec --project demo-test --only firestore,auth,storage 'pnpm --filter @ejm/tests exec vitest run rules/'` after `pnpm install --filter "@ejm/tests..."`. See `[WORKING-AS-INTENDED-2]` in §7 and item 6 in §8.
 - `firebase.json` (region & runtime config).
 - `apps/functions/src/config/*` (admin SDK initialization, email, push, CORS, parent-notification fan-out).
 - The two scheduled functions in `apps/functions/src/scheduled/`.
@@ -26,6 +27,14 @@ This document is the **read-only snapshot** of the security and privacy posture 
 - Client-side React code (`apps/web/`) — Agent 9 audits server-side authorization; client-side guards are defense-in-depth, not the primary boundary.
 - Future sync-study surfaces (`apps/study/`, `study-sessions/`, `study-searches/`) — those don't exist yet; they are the subject of post-Phase-3 and post-Phase-4 reviews.
 - Build/deploy infrastructure (`scripts/bundle-shared-for-deploy.js` etc.) — out of security scope unless they touch secrets.
+
+**Source-tree inventory — required methodology for any future baseline author.** Before producing a security baseline like this one, walk the entire repo tree (NOT just `apps/`). At minimum, search for and inventory:
+- Every file matching `*.rules` (Firestore + Storage rules — already obvious, but list the explicit glob).
+- Every directory named `tests/`, `__tests__/`, or `e2e/`, plus every file matching `*.test.ts`/`*.test.tsx`/`*.spec.ts`. Test files encode which behaviours the team has committed to; they are part of the security posture even though they are "tests" rather than "production code." A rules-test suite that exists in `tests/rules/` and runs in CI is an enforcement layer on top of the rule file itself — missing it from the baseline misrepresents what the codebase actually defends.
+- Every CI workflow under `.github/workflows/` (and any other CI config) — documents which checks gate merges, including any rules-test invocation that runs in CI.
+- Every `package.json` workspace package, including non-`apps/` ones (`packages/*`, `tests/*`, root) — documents which security-relevant dependencies (`@firebase/rules-unit-testing`, etc.) are in play.
+
+The original Phase 0 baseline (commit `d4a809b`) inventoried only `apps/` and missed the `tests/rules/` rules-behaviour suite. This oversight surfaced as the now-withdrawn `[WATCH-15]` finding and is recorded in the §7 corrections log and the §8 item 6 process note. **Do not repeat this.** The pattern was: assumed-not-found instead of grepped-for-and-confirmed-absent. Treat absence claims about test infrastructure as requiring positive grep evidence (`find . -path ./node_modules -prune -o -name '*.rules' -print`, `find tests -type f -name '*.test.ts'`, etc.) before they enter the baseline.
 
 **Sibling lint-cleanup branch:** `feature/sync-study-sit-lint-cleanup` is in flight in a separate worktree. It is reviewed separately on coordinator request; this baseline reflects the state of `feature/sync-study-orchestration` (HEAD = `7eb83e7`).
 
