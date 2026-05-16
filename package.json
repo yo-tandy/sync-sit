@@ -4,8 +4,11 @@
   "private": true,
   "scripts": {
     "dev": "pnpm --filter web dev",
+    "dev:study": "echo 'study-web not yet implemented; see Phase 3 of docs/sync-study-project-plan.md'",
     "build": "pnpm --filter web build",
+    "build:study": "echo 'study-web not yet implemented; see Phase 3 of docs/sync-study-project-plan.md'",
     "build:functions": "pnpm --filter functions build",
+    "build:study-functions": "echo 'study-functions not yet implemented; see Phase 3 of docs/sync-study-project-plan.md'",
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r typecheck",
     "test": "vitest run",
