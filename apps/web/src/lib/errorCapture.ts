@@ -81,7 +81,7 @@ export function initErrorCapture() {
 
   // Capture console.error calls
   const originalConsoleError = console.error;
-  console.error = (...args: any[]) => {
+  console.error = (...args: unknown[]) => {
     originalConsoleError.apply(console, args);
     const message = args.map((a) => (typeof a === 'string' ? a : JSON.stringify(a))).join(' ').slice(0, 500);
     if (!message.includes('syncsit_recent_errors')) {

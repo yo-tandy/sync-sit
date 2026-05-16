@@ -7,17 +7,18 @@ import type { AppointmentDoc } from '@ejm/shared';
 
 export function useAppointments() {
   const uid = useAuthStore((s) => s.firebaseUser?.uid);
-  const [loading, setLoading] = useState(true);
+  // Initial loading state derives from uid: if there is no signed-in user
+  // we have nothing to fetch, so we are already "done" loading. The
+  // snapshot callback below flips this back to false once Firestore has
+  // returned the first page of data for a valid uid.
+  const [loading, setLoading] = useState<boolean>(Boolean(uid));
   const [pending, setPending] = useState<AppointmentDoc[]>([]);
   const [confirmed, setConfirmed] = useState<AppointmentDoc[]>([]);
   const [pastRecent, setPastRecent] = useState<AppointmentDoc[]>([]);
   const [rejectedRecent, setRejectedRecent] = useState<AppointmentDoc[]>([]);
 
   useEffect(() => {
-    if (!uid) {
-      setLoading(false);
-      return;
-    }
+    if (!uid) return;
 
     const q = query(
       collection(db, 'appointments'),
@@ -35,9 +36,9 @@ export function useAppointments() {
       const _rejected: AppointmentDoc[] = [];
 
       snap.docs.forEach((d) => {
-        const apt = d.data() as AppointmentDoc;
+        const apt = d.data() as AppointmentDoc & { resubmitted?: boolean };
         // Hide declined appointments that have been resubmitted
-        if ((apt as any).resubmitted) return;
+        if (apt.resubmitted) return;
 
         if (apt.status === 'pending') {
           _pending.push(apt);

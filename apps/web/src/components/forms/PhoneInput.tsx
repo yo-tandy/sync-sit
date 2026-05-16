@@ -1,5 +1,3 @@
-import { useState, useEffect } from 'react';
-
 const COUNTRY_CODES = [
   { code: '+33', country: 'FR', flag: '🇫🇷' },
   { code: '+44', country: 'UK', flag: '🇬🇧' },
@@ -63,29 +61,24 @@ interface PhoneInputProps {
 }
 
 export function PhoneInput({ label, value, onChange, placeholder, className = '' }: PhoneInputProps) {
-  const parsed = parsePhone(value);
-  const [countryCode, setCountryCode] = useState(parsed.countryCode);
-  const [number, setNumber] = useState(parsed.number);
-
-  // Sync internal state when value prop changes externally
-  useEffect(() => {
-    const p = parsePhone(value);
-    setCountryCode(p.countryCode);
-    setNumber(p.number);
-  }, [value]);
+  // PhoneInput is a fully controlled input: derive both the country code
+  // and the local number directly from the `value` prop each render. Any
+  // internal useState/useEffect mirroring would be set-state-in-effect
+  // (the values are not state, they are derived). Handlers below push the
+  // new combined value to the parent via onChange and let the new prop
+  // flow back through parsePhone on the next render.
+  const { countryCode, number } = parsePhone(value);
 
   const handleCountryChange = (code: string) => {
-    setCountryCode(code);
     onChange(formatFullNumber(code, number));
   };
 
   const handleNumberChange = (num: string) => {
-    // Remove leading 0 if present (e.g. 06... → 6...)
+    // Remove leading 0 if present (e.g. 06... → 6...) for FR numbers.
     let cleaned = num;
     if (cleaned.startsWith('0') && countryCode === '+33') {
       cleaned = cleaned.slice(1);
     }
-    setNumber(cleaned);
     onChange(formatFullNumber(countryCode, cleaned));
   };
 
@@ -115,5 +108,3 @@ export function PhoneInput({ label, value, onChange, placeholder, className = ''
     </div>
   );
 }
-
-export { parsePhone, formatFullNumber, COUNTRY_CODES };

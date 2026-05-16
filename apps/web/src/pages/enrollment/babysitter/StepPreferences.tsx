@@ -87,8 +87,9 @@ export function StepPreferences({ uid, onComplete }: StepPreferencesProps) {
       });
       await refreshUserDoc();
       onComplete();
-    } catch (err: any) {
-      setError(err.message || 'Failed to save');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to save';
+      setError(message);
     } finally {
       setSaving(false);
     }

@@ -109,9 +109,12 @@ export function PreferredBabysittersPage() {
     setSearching(true);
     const timer = setTimeout(async () => {
       try {
-        const fn = httpsCallable(functions, 'lookupBabysitter');
+        const fn = httpsCallable<{ query: string }, { results?: BabysitterSummary[] }>(
+          functions,
+          'lookupBabysitter',
+        );
         const result = await fn({ query: q });
-        setSearchResults((result.data as any).results || []);
+        setSearchResults(result.data.results || []);
         setHasSearched(true);
       } catch {
         // silent

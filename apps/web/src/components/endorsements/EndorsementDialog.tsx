@@ -7,6 +7,13 @@ import { Dialog, Button, Input } from '@/components/ui';
 import { PhoneInput } from '@/components/forms/PhoneInput';
 import type { ParentUser, ReferenceDoc } from '@ejm/shared';
 
+/**
+ * Parent contact fields used when pre-populating the endorsement form;
+ * present on production user docs but not yet on the shared ParentUser
+ * type.
+ */
+type ParentUserWithContact = ParentUser & { phone?: string; whatsapp?: string };
+
 interface EndorsementDialogProps {
   babysitterUserId: string;
   babysitterName: string;
@@ -26,7 +33,7 @@ export function EndorsementDialog({
 }: EndorsementDialogProps) {
   const { t } = useTranslation();
   const { userDoc } = useAuthStore();
-  const parent = userDoc as ParentUser | null;
+  const parent = userDoc as ParentUserWithContact | null;
 
   // Form fields
   const [text, setText] = useState(existingReference?.referenceText || '');
@@ -76,8 +83,8 @@ export function EndorsementDialog({
 
         // Pre-populate contact from parent user if not editing
         if (!existingReference) {
-          const parentPhone = (parent as any).phone || '';
-          const parentWhatsapp = (parent as any).whatsapp || '';
+          const parentPhone = parent!.phone || '';
+          const parentWhatsapp = parent!.whatsapp || '';
           setRefPhone(parentPhone || '');
           setRefWhatsapp(parentWhatsapp || parentPhone || '');
           setWhatsappSameAsPhone(parentWhatsapp === parentPhone || !parentWhatsapp);

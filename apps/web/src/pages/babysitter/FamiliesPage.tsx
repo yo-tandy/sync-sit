@@ -5,6 +5,7 @@ import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { Card, TopNav, Spinner } from '@/components/ui';
+import type { FirestoreTimestamp } from '@ejm/shared';
 
 interface SharingRequest {
   requestId: string;
@@ -12,7 +13,7 @@ interface SharingRequest {
   familyName: string;
   parentName: string;
   status: 'pending' | 'approved' | 'declined';
-  createdAt: any;
+  createdAt: FirestoreTimestamp | null;
 }
 
 export function FamiliesPage() {

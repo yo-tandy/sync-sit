@@ -51,3 +51,10 @@ apps/mobile/pubspec.lock
 firebase-debug.log
 firestore-debug.log
 ui-debug.log
+
+# Local tooling (Claude Code, agent worktrees, per-machine settings)
+.agents/
+.claude/settings.json
+.claude/skills/
+.claude/worktrees/
+_worktrees/

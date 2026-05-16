@@ -37,8 +37,9 @@ export function StepParentVerify({ data, onChange, onNext, onResend, error }: St
       await verifyFn({ email: data.email, code });
       handleCodeVerified();
       return;
-    } catch (err: any) {
-      setCodeError(err.message || 'Invalid verification code');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Invalid verification code';
+      setCodeError(message);
       setCodeVerified(false);
     } finally {
       setVerifying(false);

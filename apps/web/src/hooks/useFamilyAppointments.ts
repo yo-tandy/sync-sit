@@ -8,17 +8,18 @@ import type { AppointmentDoc, ParentUser } from '@ejm/shared';
 export function useFamilyAppointments() {
   const userDoc = useAuthStore((s) => s.userDoc);
   const familyId = (userDoc as ParentUser | null)?.familyId;
-  const [loading, setLoading] = useState(true);
+  // Initial loading state derives from familyId: if there is no signed-in
+  // parent we have nothing to fetch, so we are already "done" loading.
+  // The snapshot callback below flips this back to false once Firestore
+  // has returned the first page of data for a valid familyId.
+  const [loading, setLoading] = useState<boolean>(Boolean(familyId));
   const [pending, setPending] = useState<AppointmentDoc[]>([]);
   const [confirmed, setConfirmed] = useState<AppointmentDoc[]>([]);
   const [pastRecent, setPastRecent] = useState<AppointmentDoc[]>([]);
   const [rejectedRecent, setRejectedRecent] = useState<AppointmentDoc[]>([]);
 
   useEffect(() => {
-    if (!familyId) {
-      setLoading(false);
-      return;
-    }
+    if (!familyId) return;
 
     const q = query(
       collection(db, 'appointments'),
@@ -36,9 +37,9 @@ export function useFamilyAppointments() {
       const _rejected: AppointmentDoc[] = [];
 
       snap.docs.forEach((d) => {
-        const apt = d.data() as AppointmentDoc;
+        const apt = d.data() as AppointmentDoc & { resubmitted?: boolean };
         // Hide declined appointments that have been resubmitted
-        if ((apt as any).resubmitted) return;
+        if (apt.resubmitted) return;
 
         if (apt.status === 'pending') {
           _pending.push(apt);

@@ -40,8 +40,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const snap = await getDoc(doc(db, 'users', cred.user.uid));
       const userDoc = snap.exists() ? (snap.data() as UserDoc) : null;
       set({ firebaseUser: cred.user, userDoc, loading: false });
-    } catch (err: any) {
-      set({ error: err.message, loading: false });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Login failed';
+      set({ error: message, loading: false });
       throw err;
     }
   },
@@ -58,8 +59,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       set({ error: null });
       await sendPasswordResetEmail(auth, email);
-    } catch (err: any) {
-      set({ error: err.message });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to send reset email';
+      set({ error: message });
       throw err;
     }
   },

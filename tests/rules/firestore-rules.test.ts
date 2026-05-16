@@ -213,7 +213,7 @@ describe('references collection', () => {
       setDoc(doc(bsCtx.firestore(), 'references', 'ref-by-bs'), {
         babysitterUserId: 'bs-writer',
         type: 'manual',
-        status: 'pending',
+        status: 'private',
       }),
     );
   });
@@ -225,7 +225,7 @@ describe('references collection', () => {
         babysitterUserId: 'some-babysitter',
         submittedByUserId: 'parent-writer',
         type: 'family_submitted',
-        status: 'pending',
+        status: 'private',
       }),
     );
   });
@@ -242,19 +242,49 @@ describe('references collection', () => {
     );
   });
 
-  it('allows babysitter to update their own reference (e.g. approve it)', async () => {
+  it('allows babysitter to update their own reference body but not promote status', async () => {
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
-      await setDoc(doc(ctx.firestore(), 'references', 'ref-approve'), {
-        babysitterUserId: 'bs-approver',
+      await setDoc(doc(ctx.firestore(), 'references', 'ref-edit'), {
+        babysitterUserId: 'bs-editor',
         submittedByUserId: 'parent1',
         type: 'family_submitted',
-        status: 'pending',
+        status: 'private',
       });
     });
 
-    const bsCtx = testEnv.authenticatedContext('bs-approver');
+    const bsCtx = testEnv.authenticatedContext('bs-editor');
+    // Editing body content is allowed
     await assertSucceeds(
-      updateDoc(doc(bsCtx.firestore(), 'references', 'ref-approve'), { status: 'approved' }),
+      updateDoc(doc(bsCtx.firestore(), 'references', 'ref-edit'), { body: 'Updated text' }),
+    );
+    // Promoting to approved is denied per BL-4 (publish/approve must go through a future callable)
+    await assertFails(
+      updateDoc(doc(bsCtx.firestore(), 'references', 'ref-edit'), { status: 'approved' }),
+    );
+  });
+
+  it('denies creating a reference with non-private initial status (BL-3 closure)', async () => {
+    const bsCtx = testEnv.authenticatedContext('bs-puffer');
+    await assertFails(
+      setDoc(doc(bsCtx.firestore(), 'references', 'ref-puffery'), {
+        babysitterUserId: 'bs-puffer',
+        type: 'manual',
+        status: 'approved',  // attempted self-puffery via initial-state bypass
+      }),
+    );
+  });
+
+  it('denies promoting status to published via direct client write (BL-4 closure)', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'references', 'ref-promote'), {
+        babysitterUserId: 'bs-promoter',
+        type: 'manual',
+        status: 'private',
+      });
+    });
+    const bsCtx = testEnv.authenticatedContext('bs-promoter');
+    await assertFails(
+      updateDoc(doc(bsCtx.firestore(), 'references', 'ref-promote'), { status: 'published' }),
     );
   });
 

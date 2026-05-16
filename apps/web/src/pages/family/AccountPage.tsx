@@ -12,6 +12,18 @@ import { isPushSupported, getPushPermissionStatus, requestPushPermission } from 
 import { PhoneInput } from '@/components/forms/PhoneInput';
 import type { ParentUser, NotifPrefs } from '@ejm/shared';
 
+/**
+ * Parent contact / profile fields the family AccountPage edits. These
+ * fields exist on production user docs but are not (yet) declared on the
+ * shared ParentUser type — declare them locally so this file does not
+ * cast to any.
+ */
+type ParentUserView = ParentUser & {
+  phone?: string;
+  whatsapp?: string;
+  photoUrl?: string;
+};
+
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
 const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
 
@@ -79,7 +91,7 @@ function PushStatusCard({ uid }: { uid?: string }) {
 export function AccountPage() {
   const { t } = useTranslation();
   const { userDoc, firebaseUser, refreshUserDoc, resetPassword } = useAuthStore();
-  const parent = userDoc as ParentUser | null;
+  const parent = userDoc as ParentUserView | null;
   const uid = firebaseUser?.uid;
 
   // Photo state
@@ -119,11 +131,11 @@ export function AccountPage() {
   useEffect(() => {
     if (!parent) return;
     setEmail(parent.email || '');
-    setPhone((parent as any).phone || '');
-    setWhatsapp((parent as any).whatsapp || '');
-    setWhatsappSameAsPhone((parent as any).whatsapp ? (parent as any).whatsapp === (parent as any).phone : true);
-    if ((parent as any).photoUrl) {
-      setPhotoPreview((parent as any).photoUrl);
+    setPhone(parent.phone || '');
+    setWhatsapp(parent.whatsapp || '');
+    setWhatsappSameAsPhone(parent.whatsapp ? parent.whatsapp === parent.phone : true);
+    if (parent.photoUrl) {
+      setPhotoPreview(parent.photoUrl);
     }
     if (parent.notifPrefs) {
       setPrefs(parent.notifPrefs);
@@ -185,8 +197,9 @@ export function AccountPage() {
       });
       await refreshUserDoc();
       setPhotoFile(null);
-    } catch (err: any) {
-      setError(err.message || t('account.photoUploadFailed'));
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : t('account.photoUploadFailed');
+      setError(message);
     } finally {
       setPhotoSaving(false);
     }
@@ -217,8 +230,9 @@ export function AccountPage() {
       await refreshUserDoc();
       setContactSuccess(true);
       setTimeout(() => setContactSuccess(false), 3000);
-    } catch (err: any) {
-      setError(err.message || t('account.contactSaveFailed'));
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : t('account.contactSaveFailed');
+      setError(message);
     } finally {
       setContactSaving(false);
     }

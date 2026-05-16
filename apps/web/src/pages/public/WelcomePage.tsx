@@ -13,7 +13,7 @@ export function WelcomePage() {
   useEffect(() => {
     if (loading || !firebaseUser || !userDoc) return;
     if (userDoc.role === 'babysitter') {
-      if ((userDoc as any).enrollmentComplete === false) {
+      if (userDoc.enrollmentComplete === false) {
         navigate('/enroll/babysitter');
       } else {
         navigate('/babysitter');
