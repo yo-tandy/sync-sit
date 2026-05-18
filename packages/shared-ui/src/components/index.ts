@@ -9,3 +9,4 @@ export { Input } from './Input.js';
 export { Textarea } from './Textarea.js';
 export { Select } from './Select.js';
 export { Card } from './Card.js';
+export { InfoBanner } from './InfoBanner.js';
