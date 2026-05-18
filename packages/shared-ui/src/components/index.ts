@@ -12,3 +12,4 @@ export { Card } from './Card.js';
 export { InfoBanner } from './InfoBanner.js';
 export { DateTag } from './DateTag.js';
 export { LanguageSelector } from './LanguageSelector.js';
+export { PhotoLightbox } from './PhotoLightbox.js';
