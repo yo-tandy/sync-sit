@@ -4,3 +4,4 @@ export { Chip } from './Chip.js';
 export { Avatar } from './Avatar.js';
 export { Checkbox } from './Checkbox.js';
 export * from './Icons.js';
+export { Button } from './Button.js';
