@@ -16,6 +16,9 @@
     "typecheck": "tsc --noEmit",
     "lint": "echo 'lint inherited from apps/web for now' && exit 0"
   },
+  "dependencies": {
+    "@ejm/shared-core": "workspace:*"
+  },
   "peerDependencies": {
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
