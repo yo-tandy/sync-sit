@@ -1,0 +1,11 @@
+/* ═══════════════════════════════════════════
+   @ejm/shared-ui — sync-sit BRAND OVERRIDE
+   Red accent family. Import alongside base.css.
+   ═══════════════════════════════════════════ */
+
+@theme {
+  --color-red-600: rgb(223, 26, 48);
+  --color-red-500: rgb(233, 64, 83);
+  --color-red-100: rgb(252, 214, 219);
+  --color-red-50: rgb(254, 238, 240);
+}

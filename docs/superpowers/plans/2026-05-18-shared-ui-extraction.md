@@ -299,14 +299,19 @@ Refs Phase 1 §8 Agent 2."
 
 - [ ] **Step 2.1: Write `packages/shared-ui/src/theme/base.css`**
 
-Holds: Tailwind 4 import, font + radii + shadows + neutral/semantic colors. Brand red stays out (lives in `sit.css`).
+Holds: font + radii + shadows + neutral/semantic colors. Brand red stays out (lives in `sit.css`).
+
+> **Plan revision (during execution):** the original draft had `@import "tailwindcss"` inside this file, but Vite fails to resolve `tailwindcss` from `packages/shared-ui/src/theme/` because pnpm hoists `tailwindcss` under `apps/web/node_modules`. Fix: each app's entry CSS owns the `@import "tailwindcss"` — base.css contributes only `@theme` tokens + reset.
 
 ```css
-@import "tailwindcss";
-
 /* ═══════════════════════════════════════════
    @ejm/shared-ui — BASE THEME TOKENS
    App-agnostic. Imported by both sync-sit and sync-study.
+
+   NOTE: this file does NOT @import "tailwindcss" — each app's
+   entry CSS owns that import (because Tailwind needs to resolve
+   against the app's own node_modules under pnpm's hoisting).
+   This file contributes only @theme tokens + reset.
    ═══════════════════════════════════════════ */
 
 @theme {
@@ -388,11 +393,12 @@ Note: keeping the variable names `--color-red-*` (rather than introducing `--col
 - [ ] **Step 2.4: Rewrite `apps/web/src/index.css`**
 
 ```css
+@import "tailwindcss";
 @import "@ejm/shared-ui/theme/base.css";
 @import "@ejm/shared-ui/theme/sit.css";
 ```
 
-That's the entire file. All previously inline content now lives in the two imported sheets.
+That's the entire file. The `tailwindcss` import stays here (must resolve from apps/web's node_modules); all token content moved to the two imported sheets.
 
 - [ ] **Step 2.5: Verify build + visual smoke**
 
