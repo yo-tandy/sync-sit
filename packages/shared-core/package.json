@@ -1,0 +1,45 @@
+{
+  "name": "@ejm/shared-core",
+  "version": "1.0.0",
+  "private": true,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./src/index.ts",
+      "require": "./dist/index.js",
+      "types": "./src/index.ts"
+    },
+    "./types/*.js": {
+      "import": "./src/types/*.ts",
+      "require": "./dist/types/*.js",
+      "types": "./src/types/*.ts"
+    },
+    "./constants/*.js": {
+      "import": "./src/constants/*.ts",
+      "require": "./dist/constants/*.js",
+      "types": "./src/constants/*.ts"
+    },
+    "./utils/*.js": {
+      "import": "./src/utils/*.ts",
+      "require": "./dist/utils/*.js",
+      "types": "./src/utils/*.ts"
+    },
+    "./validation/*.js": {
+      "import": "./src/validation/*.ts",
+      "require": "./dist/validation/*.js",
+      "types": "./src/validation/*.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.cjs.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.2"
+  }
+}

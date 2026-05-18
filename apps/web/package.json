@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@ejm/shared": "workspace:*",
+    "@ejm/shared-ui": "workspace:*",
     "@hookform/resolvers": "^5.2.2",
     "@tailwindcss/vite": "^4.2.2",
     "firebase": "^12.11.0",

@@ -39,6 +39,9 @@ importers:
       '@ejm/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@ejm/shared-ui':
+        specifier: workspace:*
+        version: link:../../packages/shared-ui
       '@hookform/resolvers':
         specifier: ^5.2.2
         version: 5.2.2(react-hook-form@7.72.0(react@19.2.4))
@@ -133,6 +136,9 @@ importers:
 
   packages/shared:
     dependencies:
+      '@ejm/shared-core':
+        specifier: workspace:*
+        version: link:../shared-core
       zod:
         specifier: ^3.23.0
         version: 3.25.76
@@ -140,6 +146,44 @@ importers:
       typescript:
         specifier: ^6.0.2
         version: 6.0.2
+
+  packages/shared-core:
+    dependencies:
+      zod:
+        specifier: ^3.23.0
+        version: 3.25.76
+    devDependencies:
+      typescript:
+        specifier: ^6.0.2
+        version: 6.0.2
+
+  packages/shared-ui:
+    dependencies:
+      '@ejm/shared-core':
+        specifier: workspace:*
+        version: link:../shared-core
+    devDependencies:
+      '@types/react':
+        specifier: ^19.2.14
+        version: 19.2.14
+      '@types/react-dom':
+        specifier: ^19.2.3
+        version: 19.2.3(@types/react@19.2.14)
+      react:
+        specifier: ^19.2.4
+        version: 19.2.4
+      react-dom:
+        specifier: ^19.2.4
+        version: 19.2.4(react@19.2.4)
+      react-i18next:
+        specifier: ^17.0.1
+        version: 17.0.1(i18next@26.0.1(typescript@5.9.3))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)
+      react-router:
+        specifier: ^7.13.2
+        version: 7.13.2(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      typescript:
+        specifier: ~5.9.3
+        version: 5.9.3
 
   tests:
     dependencies:
