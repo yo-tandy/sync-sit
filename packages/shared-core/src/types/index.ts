@@ -5,3 +5,4 @@ export * from './admin.js';
 export * from './verification.js';
 export * from './family.js';
 export * from './reference.js';
+export * from './user.js';
