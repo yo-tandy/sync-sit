@@ -13,3 +13,4 @@ export { InfoBanner } from './InfoBanner.js';
 export { DateTag } from './DateTag.js';
 export { LanguageSelector } from './LanguageSelector.js';
 export { PhotoLightbox } from './PhotoLightbox.js';
+export { TopNav } from './TopNav.js';
