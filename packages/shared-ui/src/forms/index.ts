@@ -1,2 +1,1 @@
-// Populated incrementally by Task 6. Intentionally empty for skeleton.
-export {};
+export { PhoneInput } from './PhoneInput.js';
