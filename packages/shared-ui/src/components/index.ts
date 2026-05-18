@@ -15,3 +15,4 @@ export { LanguageSelector } from './LanguageSelector.js';
 export { PhotoLightbox } from './PhotoLightbox.js';
 export { TopNav } from './TopNav.js';
 export { Dialog } from './Dialog.js';
+export { StepIndicator } from './StepIndicator.js';
