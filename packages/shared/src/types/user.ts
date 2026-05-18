@@ -1,82 +1,24 @@
-import type { FirestoreTimestamp, LatLng, NotifPrefs } from './common.js';
-import type { UserRole, AccountStatus, AreaMode, Language } from '../constants/index.js';
+import type { ServiceProviderBase, ParentUser, AdminUser } from '@ejm/shared-core';
 
-/** Base user fields shared by all roles */
-export interface UserBase {
-  uid: string;
-  role: UserRole;
-  email: string;
-  status: AccountStatus;
-  firstName: string;
-  lastName: string;
-  language: Language;
-  notifPrefs: NotifPrefs;
-  fcmTokens: string[];
-  createdAt: FirestoreTimestamp;
-  updatedAt: FirestoreTimestamp;
-  lastLoginAt?: FirestoreTimestamp;
-  consentAt?: FirestoreTimestamp;
-  consentVersion?: string;
-
-  /** True once the user has dismissed the "Add to Home Screen" banner. */
-  dismissedPwaInstallBanner?: boolean;
-}
+// Re-export the generic user types so consumers importing from '@ejm/shared'
+// still see the full surface (UserBase, ServiceProviderBase, ParentUser, AdminUser).
+export * from '@ejm/shared-core';
 
 /** Babysitter-specific user fields */
-export interface BabysitterUser extends UserBase {
+export interface BabysitterUser extends ServiceProviderBase {
   role: 'babysitter';
-  ejemEmail: string;
-  dateOfBirth: FirestoreTimestamp;
-  gender?: 'male' | 'female' | 'other' | 'prefer_not_to_say';
-  classLevel: string;
-  photoUrl?: string;
-  languages: string[];
-  aboutMe?: string;
 
   // Babysitting preferences
   kidAgeRange: { min: number; max: number };
   maxKids: number;
   hourlyRate: number;
 
-  // Contact (at least one required)
-  contactEmail?: string;
-  contactPhone?: string;
-  whatsapp?: string;
-
-  // Contact sharing consent
+  // Contact sharing consent (babysitter-specific)
   contactSharingConsent?: boolean;
   approvedFamilies?: string[];
-
-  // Area
-  areaMode: AreaMode;
-  arrondissements?: string[];
-  areaAddress?: string;
-  areaLatLng?: LatLng;
-  areaRadiusKm?: number;
-
-  // Enrollment state (false = incomplete, undefined/true = complete)
-  enrollmentComplete?: boolean;
-
-  // Search visibility (default false — must be activated by babysitter)
-  searchable?: boolean;
-
-  // Revalidation
-  lastRevalidatedAt?: FirestoreTimestamp;
-  revalidationYear?: number;
 }
 
-/** Parent-specific user fields */
-export interface ParentUser extends UserBase {
-  role: 'parent';
-  familyId: string;
-}
-
-/** Admin user fields */
-export interface AdminUser extends UserBase {
-  role: 'admin';
-}
-
-/** Union type for any user document */
+/** Union type for any user document in sync-sit */
 export type UserDoc = BabysitterUser | ParentUser | AdminUser;
 
 /**
