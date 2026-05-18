@@ -7,3 +7,4 @@ export * from './Icons.js';
 export { Button } from './Button.js';
 export { Input } from './Input.js';
 export { Textarea } from './Textarea.js';
+export { Select } from './Select.js';
