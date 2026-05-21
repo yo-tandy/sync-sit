@@ -6,7 +6,15 @@
    entry CSS owns that import (because Tailwind needs to resolve
    against the app's own node_modules under pnpm's hoisting).
    This file contributes only @theme tokens + reset.
+
+   Tailwind v4 source registration: by default @tailwindcss/vite
+   only scans files under the importing app's CSS root. Files in
+   this package live outside that root, so we register them here.
+   Any consumer of @ejm/shared-ui/theme/base.css inherits this scan
+   automatically — no per-app config drift.
    ═══════════════════════════════════════════ */
+
+@source "../**/*.{ts,tsx}";
 
 @theme {
   /* Semantic feedback colors (shared) */
