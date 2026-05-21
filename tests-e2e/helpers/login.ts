@@ -12,19 +12,22 @@ const LANDING_PATH: Record<Persona, string> = {
  * Sign in via the LoginPage and wait for the role-routed landing page.
  * Assumes the dev server at http://localhost:5173 with seeded test data
  * (apps/functions/seed-test-data.cjs, password 'test1234').
+ *
+ * LoginPage (apps/web/src/pages/LoginPage.tsx) uses visual <label>s NOT
+ * associated with their inputs via for/id, so getByLabel does not work.
+ * Selecting by input type is the stable, i18n-independent option.
  */
 export async function loginAs(page: Page, email: string, password: string, persona: Persona) {
-  await page.goto('/');
-  // The login form may be on / or /login depending on route guards;
-  // fall back to /login if the email field isn't on the welcome page.
-  const emailFieldOnHome = page.getByLabel(/email/i);
-  if (!(await emailFieldOnHome.first().isVisible().catch(() => false))) {
-    await page.goto('/login');
-  }
-  await page.getByLabel(/email/i).fill(email);
-  await page.getByLabel(/password/i).fill(password);
-  await page.getByRole('button', { name: /sign in|log in|connexion/i }).click();
-  await expect(page).toHaveURL(new RegExp(LANDING_PATH[persona]));
+  await page.goto('/login');
+  const emailInput = page.locator('input[type="email"]').first();
+  const passwordInput = page.locator('input[type="password"]').first();
+  await expect(emailInput).toBeVisible({ timeout: 10_000 });
+  await emailInput.fill(email);
+  await passwordInput.fill(password);
+  // The submit button is the only <button type="submit"> on the page;
+  // its accessible name is i18n-translated (Log in / Connexion / Sign in).
+  await page.locator('button[type="submit"]').first().click();
+  await expect(page).toHaveURL(new RegExp(LANDING_PATH[persona]), { timeout: 15_000 });
 }
 
 export async function logout(page: Page) {
