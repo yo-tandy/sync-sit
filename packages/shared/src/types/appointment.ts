@@ -4,14 +4,12 @@ import type {
   AppointmentStatusReason,
   SearchType,
   SearchStatus,
-  DayOfWeek,
 } from '../constants/index.js';
+import type { RecurringSlot } from '@ejm/shared-core';
 
-export interface RecurringSlot {
-  day: DayOfWeek;
-  startTime: string; // "HH:MM"
-  endTime: string;
-}
+// Re-export RecurringSlot (and the rest of shared-core's surface) so consumers
+// importing from '@ejm/shared' still see it.
+export * from '@ejm/shared-core';
 
 export interface SearchDoc {
   searchId: string;

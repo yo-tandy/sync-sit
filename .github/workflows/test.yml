@@ -37,8 +37,8 @@ jobs:
       - name: Install Firebase CLI
         run: npm install -g firebase-tools
 
-      - name: Build shared package
-        run: pnpm --filter @ejm/shared build
+      - name: Build shared packages
+        run: pnpm -r --filter './packages/**' build
 
       - name: Build Cloud Functions
         run: cd apps/functions && npx tsc
