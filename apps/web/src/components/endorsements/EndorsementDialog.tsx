@@ -51,6 +51,7 @@ export function EndorsementDialog({
 
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Load family data for pre-population
   useEffect(() => {
@@ -98,6 +99,7 @@ export function EndorsementDialog({
   const handleSubmit = async () => {
     if (!parent || !isValid) return;
     setSaving(true);
+    setErrorMessage(null);
 
     const parsedAges = kidAges.split(',').map((s) => parseInt(s.trim())).filter((n) => !isNaN(n));
 
@@ -131,8 +133,13 @@ export function EndorsementDialog({
       setSaved(true);
       onSaved?.();
       setTimeout(() => onClose(), 1500);
-    } catch (err) {
+    } catch (err: unknown) {
       console.error('Failed to save reference:', err);
+      const message =
+        err instanceof Error && err.message
+          ? err.message
+          : t('references.submitErrorGeneric');
+      setErrorMessage(message);
     } finally {
       setSaving(false);
     }
@@ -241,6 +248,14 @@ export function EndorsementDialog({
           <p className="mb-3 text-xs text-gray-400 italic">
             {t('references.endorsementPrivacyNote')}
           </p>
+          {errorMessage && (
+            <p
+              role="alert"
+              className="mb-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700"
+            >
+              {errorMessage}
+            </p>
+          )}
           <div className="flex gap-2">
             <Button onClick={handleSubmit} disabled={saving || !isValid} className="flex-1">
               {saving ? '...' : isEdit ? t('common.save') : t('common.confirm')}

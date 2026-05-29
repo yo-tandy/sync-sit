@@ -269,13 +269,14 @@ export function EndorsementsPage() {
   const [acceptingId, setAcceptingId] = useState<string | null>(null);
 
   const handleAccept = useCallback(async (referenceId: string) => {
+    if (acceptingId) return;
     setAcceptingId(referenceId);
     try {
       await acceptFamilyEndorsement(referenceId);
     } finally {
       setAcceptingId(null);
     }
-  }, [acceptFamilyEndorsement]);
+  }, [acceptFamilyEndorsement, acceptingId]);
 
   // Load family names for family-submitted refs that don't have submittedByName
   const [familyNames, setFamilyNames] = useState<Record<string, string>>({});

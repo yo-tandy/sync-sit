@@ -343,7 +343,7 @@ export default {
     minLength: 'At least 10 characters',
     submittedBy: 'by {{name}}',
     acceptButton: 'Accept this endorsement',
-    endorsementAccepted: 'Endorsement accepted',
+    submitErrorGeneric: "We couldn't save this endorsement. Please try again.",
     endorsementPrivacyNote: 'Your endorsement will be sent to the babysitter, who can choose whether to display it to other parents.',
   },
 

@@ -330,7 +330,7 @@ export default {
     minLength: 'Au moins 10 caractères',
     submittedBy: 'par {{name}}',
     acceptButton: 'Accepter cette recommandation',
-    endorsementAccepted: 'Recommandation acceptée',
+    submitErrorGeneric: "Impossible d'enregistrer cette recommandation. Veuillez réessayer.",
     endorsementPrivacyNote: 'Votre recommandation sera envoyée au babysitter, qui pourra choisir de la rendre visible aux autres parents.',
   },
 
