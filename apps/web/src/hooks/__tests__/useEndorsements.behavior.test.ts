@@ -19,9 +19,9 @@
  *
  * In addition to the loading + partition assertions, L2 verifies
  * callback-identity stability: the mutation callbacks (addManualReference,
- * updateManualReference, removeReference, publishReference,
- * unpublishReference) are memoized via useCallback. Their reference
- * identity must be stable across rerenders where uid is unchanged.
+ * updateManualReference, removeReference) are memoized via useCallback.
+ * Their reference identity must be stable across rerenders where uid is
+ * unchanged.
  *
  * Owned by agent-8-tester. If any assertion fails, do NOT modify
  * production code — report to team-lead as a Gate 2 FAIL.
@@ -204,8 +204,6 @@ describe('L2: useEndorsements — Gate 2 oracle-diff', () => {
       addManualReference: result.current.addManualReference,
       updateManualReference: result.current.updateManualReference,
       removeReference: result.current.removeReference,
-      publishReference: result.current.publishReference,
-      unpublishReference: result.current.unpublishReference,
     };
 
     // Trigger a snap (state changes → rerender), then a no-op rerender.
@@ -220,15 +218,11 @@ describe('L2: useEndorsements — Gate 2 oracle-diff', () => {
       addManualReference: result.current.addManualReference,
       updateManualReference: result.current.updateManualReference,
       removeReference: result.current.removeReference,
-      publishReference: result.current.publishReference,
-      unpublishReference: result.current.unpublishReference,
     };
 
     expect(Object.is(before.addManualReference, after.addManualReference)).toBe(true);
     expect(Object.is(before.updateManualReference, after.updateManualReference)).toBe(true);
     expect(Object.is(before.removeReference, after.removeReference)).toBe(true);
-    expect(Object.is(before.publishReference, after.publishReference)).toBe(true);
-    expect(Object.is(before.unpublishReference, after.unpublishReference)).toBe(true);
 
     unmount();
   });

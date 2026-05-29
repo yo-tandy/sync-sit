@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { doc, getDoc, getDocs, addDoc, updateDoc, collection, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, getDocs, updateDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
+import { useReferenceActions } from '@/hooks/useReferenceActions';
 import { Dialog, Button, Input } from '@/components/ui';
 import { PhoneInput } from '@/components/forms/PhoneInput';
 import type { ParentUser, ReferenceDoc } from '@ejm/shared';
@@ -34,6 +35,7 @@ export function EndorsementDialog({
   const { t } = useTranslation();
   const { userDoc } = useAuthStore();
   const parent = userDoc as ParentUserWithContact | null;
+  const { submitFamilyEndorsement } = useReferenceActions();
 
   // Form fields
   const [text, setText] = useState(existingReference?.referenceText || '');
@@ -49,7 +51,7 @@ export function EndorsementDialog({
 
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [isEjmFamily, setIsEjmFamily] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Load family data for pre-population
   useEffect(() => {
@@ -58,10 +60,6 @@ export function EndorsementDialog({
       try {
         const famSnap = await getDoc(doc(db, 'families', parent!.familyId));
         if (famSnap.exists()) {
-          const fam = famSnap.data();
-          // fam.familyName available if needed
-          setIsEjmFamily(!!fam.verification?.isFullyVerified);
-
           // Pre-populate name as "First LAST" if not editing
           if (!existingReference) {
             // Read parent's own user doc to get lastName reliably
@@ -101,6 +99,7 @@ export function EndorsementDialog({
   const handleSubmit = async () => {
     if (!parent || !isValid) return;
     setSaving(true);
+    setErrorMessage(null);
 
     const parsedAges = kidAges.split(',').map((s) => parseInt(s.trim())).filter((n) => !isNaN(n));
 
@@ -119,32 +118,28 @@ export function EndorsementDialog({
           updatedAt: serverTimestamp(),
         });
       } else {
-        const ref = await addDoc(collection(db, 'references'), {
-          type: 'family_submitted',
-          status: 'private',
+        await submitFamilyEndorsement({
           babysitterUserId,
-          submittedByUserId: parent.uid,
-          submittedByFamilyId: parent.familyId,
-          submittedByName: refName.trim(),
-          appointmentId: appointmentId || null,
+          appointmentId,
           referenceText: text.trim(),
           refName: refName.trim(),
           refPhone: refPhone || null,
           refWhatsapp: whatsappValue,
           refEmail: refEmail || null,
-          isEjmFamily,
           numberOfKids: numberOfKids || null,
           kidAges: parsedAges.length > 0 ? parsedAges : null,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
         });
-        await updateDoc(ref, { referenceId: ref.id });
       }
       setSaved(true);
       onSaved?.();
       setTimeout(() => onClose(), 1500);
-    } catch (err) {
+    } catch (err: unknown) {
       console.error('Failed to save reference:', err);
+      const message =
+        err instanceof Error && err.message
+          ? err.message
+          : t('references.submitErrorGeneric');
+      setErrorMessage(message);
     } finally {
       setSaving(false);
     }
@@ -253,6 +248,14 @@ export function EndorsementDialog({
           <p className="mb-3 text-xs text-gray-400 italic">
             {t('references.endorsementPrivacyNote')}
           </p>
+          {errorMessage && (
+            <p
+              role="alert"
+              className="mb-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700"
+            >
+              {errorMessage}
+            </p>
+          )}
           <div className="flex gap-2">
             <Button onClick={handleSubmit} disabled={saving || !isValid} className="flex-1">
               {saving ? '...' : isEdit ? t('common.save') : t('common.confirm')}

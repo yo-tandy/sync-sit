@@ -103,19 +103,6 @@ export function useEndorsements() {
     []
   );
 
-  const publishReference = useCallback(async (referenceId: string) => {
-    await updateDoc(doc(db, 'references', referenceId), {
-      status: 'published',
-      approvedAt: serverTimestamp(),
-    });
-  }, []);
-
-  const unpublishReference = useCallback(async (referenceId: string) => {
-    await updateDoc(doc(db, 'references', referenceId), {
-      status: 'private',
-    });
-  }, []);
-
   return {
     manualRefs,
     familySubmittedRefs,
@@ -123,7 +110,5 @@ export function useEndorsements() {
     addManualReference,
     updateManualReference,
     removeReference,
-    publishReference,
-    unpublishReference,
   };
 }

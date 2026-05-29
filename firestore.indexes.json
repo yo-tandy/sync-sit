@@ -27,6 +27,15 @@
       ]
     },
     {
+      "collectionGroup": "references",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "submittedByUserId", "order": "ASCENDING" },
+        { "fieldPath": "babysitterUserId", "order": "ASCENDING" },
+        { "fieldPath": "appointmentId", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "notifications",
       "queryScope": "COLLECTION",
       "fields": [

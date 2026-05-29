@@ -218,26 +218,13 @@ describe('references collection', () => {
     );
   });
 
-  it('allows submitter to create a reference they submitted (submittedByUserId matches)', async () => {
-    const parentCtx = testEnv.authenticatedContext('parent-writer');
-    await assertSucceeds(
-      setDoc(doc(parentCtx.firestore(), 'references', 'ref-by-parent'), {
-        babysitterUserId: 'some-babysitter',
-        submittedByUserId: 'parent-writer',
-        type: 'family_submitted',
-        status: 'private',
-      }),
-    );
-  });
-
-  it('denies creating a reference where caller is neither babysitter nor submitter', async () => {
+  it('denies creating a manual reference where caller is not the babysitter', async () => {
     const outsiderCtx = testEnv.authenticatedContext('outsider');
     await assertFails(
       setDoc(doc(outsiderCtx.firestore(), 'references', 'ref-outsider'), {
         babysitterUserId: 'some-babysitter',
-        submittedByUserId: 'someone-else',
-        type: 'family_submitted',
-        status: 'pending',
+        type: 'manual',
+        status: 'private',
       }),
     );
   });
@@ -318,5 +305,65 @@ describe('references collection', () => {
     const bsCtx = testEnv.authenticatedContext('bs1');
     const { deleteDoc } = await import('firebase/firestore');
     await assertFails(deleteDoc(doc(bsCtx.firestore(), 'references', 'ref-nodelete')));
+  });
+
+  it('still allows a babysitter to create a manual reference about themselves', async () => {
+    const authed = testEnv.authenticatedContext('babysitter1');
+    await assertSucceeds(
+      setDoc(doc(authed.firestore(), 'references', 'man1'), {
+        babysitterUserId: 'babysitter1',
+        type: 'manual',
+        status: 'private',
+        refName: 'Famille Bonjour',
+        createdAt: new Date(),
+      })
+    );
+  });
+
+  it('denies a parent from creating a family_submitted reference via client SDK', async () => {
+    const authed = testEnv.authenticatedContext('parent1');
+    await assertFails(
+      setDoc(doc(authed.firestore(), 'references', 'fs1'), {
+        babysitterUserId: 'babysitter1',
+        submittedByUserId: 'parent1',
+        type: 'family_submitted',
+        status: 'private',
+        referenceText: 'I would have written this without the callable.',
+        createdAt: new Date(),
+      })
+    );
+  });
+
+  it('still denies babysitter self-create with family_submitted type', async () => {
+    const authed = testEnv.authenticatedContext('babysitter1');
+    await assertFails(
+      setDoc(doc(authed.firestore(), 'references', 'fs-self'), {
+        babysitterUserId: 'babysitter1',
+        submittedByUserId: 'babysitter1',
+        type: 'family_submitted',
+        status: 'private',
+        referenceText: 'Trying self-puffery via the removed branch.',
+        createdAt: new Date(),
+      })
+    );
+  });
+
+  it('still denies status transitions to approved/published from any client', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'references', 'r1'), {
+        babysitterUserId: 'babysitter1',
+        type: 'manual',
+        status: 'private',
+        createdAt: new Date(),
+      });
+    });
+
+    const authed = testEnv.authenticatedContext('babysitter1');
+    await assertFails(
+      updateDoc(doc(authed.firestore(), 'references', 'r1'), { status: 'published' })
+    );
+    await assertFails(
+      updateDoc(doc(authed.firestore(), 'references', 'r1'), { status: 'approved' })
+    );
   });
 });
