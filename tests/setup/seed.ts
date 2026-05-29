@@ -447,7 +447,7 @@ export interface ReferenceSeed {
   referenceId?: string;
   babysitterUserId: string;
   type: 'family_submitted' | 'manual';
-  status?: 'pending' | 'approved' | 'rejected';
+  status?: 'pending' | 'private' | 'approved' | 'rejected' | 'published' | 'removed';
   // family_submitted fields
   submittedByUserId?: string;
   submittedByName?: string;

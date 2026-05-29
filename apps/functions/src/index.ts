@@ -48,6 +48,7 @@ export { getVerificationDocument } from './verification/getVerificationDocument.
 
 // References
 export { submitFamilyEndorsement } from './references/submitFamilyEndorsement.js';
+export { acceptFamilyEndorsement } from './references/acceptFamilyEndorsement.js';
 export { notifyOnNewReference } from './references/onReferenceCreated.js';
 
 // Scheduled
