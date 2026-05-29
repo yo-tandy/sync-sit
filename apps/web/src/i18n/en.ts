@@ -342,6 +342,8 @@ export default {
     referenceUpdated: 'Endorsement updated!',
     minLength: 'At least 10 characters',
     submittedBy: 'by {{name}}',
+    acceptButton: 'Accept this endorsement',
+    endorsementAccepted: 'Endorsement accepted',
     endorsementPrivacyNote: 'Your endorsement will be sent to the babysitter, who can choose whether to display it to other parents.',
   },
 

@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { useEndorsements } from '@/hooks/useEndorsements';
+import { useReferenceActions } from '@/hooks/useReferenceActions';
 import { Button, Card, Badge, Input, Textarea, Dialog, TopNav, Spinner } from '@/components/ui';
 import { PlusIcon } from '@/components/ui/Icons';
 import type { ReferenceDoc } from '@ejm/shared';
@@ -30,15 +31,15 @@ function ReferenceCard({
   displayName,
   onRemove,
   onEdit,
-  onPublish,
-  onUnpublish,
+  onAccept,
+  acceptDisabled,
 }: {
   reference: ReferenceDoc;
   displayName?: string;
   onRemove: () => void;
   onEdit?: () => void;
-  onPublish?: () => void;
-  onUnpublish?: () => void;
+  onAccept?: () => void;
+  acceptDisabled?: boolean;
 }) {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
@@ -95,14 +96,9 @@ function ReferenceCard({
             {t('common.edit')}
           </Button>
         )}
-        {!isPublished && onPublish && (
-          <Button size="sm" onClick={onPublish}>
-            {t('references.publish')}
-          </Button>
-        )}
-        {isPublished && onUnpublish && (
-          <Button size="sm" variant="outline" onClick={onUnpublish}>
-            {t('references.unpublish')}
+        {reference.status === 'private' && onAccept && (
+          <Button size="sm" variant="primary" onClick={onAccept} disabled={acceptDisabled}>
+            {acceptDisabled ? t('common.loading') : t('references.acceptButton')}
           </Button>
         )}
         <div className="flex-1" />
@@ -268,8 +264,18 @@ export function EndorsementsPage() {
     addManualReference,
     updateManualReference,
     removeReference,
-    unpublishReference,
   } = useEndorsements();
+  const { acceptFamilyEndorsement } = useReferenceActions();
+  const [acceptingId, setAcceptingId] = useState<string | null>(null);
+
+  const handleAccept = useCallback(async (referenceId: string) => {
+    setAcceptingId(referenceId);
+    try {
+      await acceptFamilyEndorsement(referenceId);
+    } finally {
+      setAcceptingId(null);
+    }
+  }, [acceptFamilyEndorsement]);
 
   // Load family names for family-submitted refs that don't have submittedByName
   const [familyNames, setFamilyNames] = useState<Record<string, string>>({});
@@ -366,7 +372,6 @@ export function EndorsementsPage() {
               reference={ref}
               onEdit={() => openEdit(ref)}
               onRemove={() => removeReference(ref.referenceId)}
-              onUnpublish={() => unpublishReference(ref.referenceId)}
             />
           ))
         )}
@@ -382,7 +387,8 @@ export function EndorsementsPage() {
                 reference={ref}
                 displayName={getFamilyRefName(ref)}
                 onRemove={() => removeReference(ref.referenceId)}
-                onUnpublish={() => unpublishReference(ref.referenceId)}
+                onAccept={() => handleAccept(ref.referenceId)}
+                acceptDisabled={acceptingId === ref.referenceId}
               />
             ))}
           </>
