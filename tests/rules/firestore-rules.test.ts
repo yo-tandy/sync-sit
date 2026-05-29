@@ -218,14 +218,13 @@ describe('references collection', () => {
     );
   });
 
-  it('denies creating a reference where caller is neither babysitter nor submitter', async () => {
+  it('denies creating a manual reference where caller is not the babysitter', async () => {
     const outsiderCtx = testEnv.authenticatedContext('outsider');
     await assertFails(
       setDoc(doc(outsiderCtx.firestore(), 'references', 'ref-outsider'), {
         babysitterUserId: 'some-babysitter',
-        submittedByUserId: 'someone-else',
-        type: 'family_submitted',
-        status: 'pending',
+        type: 'manual',
+        status: 'private',
       }),
     );
   });
