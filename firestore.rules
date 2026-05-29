@@ -96,32 +96,20 @@ service cloud.firestore {
     // References: readable by anyone authenticated (shown in search results)
     match /references/{referenceId} {
       allow read: if isAuth();
-      // Create: force initial status='private' so newly-created references
-      // never surface in searchBabysitters (which filters status in
-      // ['approved','published']) without an explicit downstream transition.
-      // Two legitimate branches:
-      //  - Babysitter records their own offline reference (type='manual',
-      //    no submitter — recording an out-of-band endorsement).
-      //  - Parent endorses a different babysitter (type='family_submitted',
-      //    submitter is the auth user, babysitter is someone else).
-      // Self-puffery via the family_submitted branch (babysitter writing
-      // about themselves) and submitter-impersonation as oneself
-      // (submittedByUserId==babysitterUserId) are denied.
+      // Create: babysitters may record their own offline manual references.
+      // Parent endorsements (type='family_submitted') and admin/peer
+      // approvals (type='manual' moving to status='approved'/'published')
+      // are NOT writable from the client SDK — they go through the
+      // submitFamilyEndorsement / acceptFamilyEndorsement /
+      // publishManualReference callables, which validate the
+      // submitter<->babysitter relationship and admin role server-side.
+      // See agent-9-security-baseline.md §7 [BL-5] and [BL-6].
       allow create: if isAuth()
         && request.resource.data.status == 'private'
-        && (
-          (
-            request.resource.data.babysitterUserId == request.auth.uid
-            && request.resource.data.type == 'manual'
-            && (!('submittedByUserId' in request.resource.data)
-                || request.resource.data.submittedByUserId == null)
-          )
-          || (
-            request.resource.data.submittedByUserId == request.auth.uid
-            && request.resource.data.babysitterUserId != request.auth.uid
-            && request.resource.data.type == 'family_submitted'
-          )
-        );
+        && request.resource.data.babysitterUserId == request.auth.uid
+        && request.resource.data.type == 'manual'
+        && (!('submittedByUserId' in request.resource.data)
+            || request.resource.data.submittedByUserId == null);
       // Update: owner (babysitter or submitter) may edit their own reference,
       // but cannot:
       //  - mutate the identity tuple (babysitterUserId, submittedByUserId,
