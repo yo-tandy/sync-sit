@@ -1,1 +1,1 @@
-export {};
+export * from './firebase.js';

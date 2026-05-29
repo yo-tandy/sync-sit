@@ -23,6 +23,9 @@ importers:
       '@ejm/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@ejm/shared-functions':
+        specifier: workspace:*
+        version: link:../../packages/shared-functions
       firebase-admin:
         specifier: ^13.0.0
         version: 13.7.0
