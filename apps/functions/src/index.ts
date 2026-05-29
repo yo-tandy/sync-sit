@@ -47,6 +47,7 @@ export { approveCommunityCode } from './verification/approveCommunityCode.js';
 export { getVerificationDocument } from './verification/getVerificationDocument.js';
 
 // References
+export { submitFamilyEndorsement } from './references/submitFamilyEndorsement.js';
 export { notifyOnNewReference } from './references/onReferenceCreated.js';
 
 // Scheduled
