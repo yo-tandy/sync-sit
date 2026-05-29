@@ -27,7 +27,7 @@
     },
     "./verification/*.js": {
       "import": "./src/verification/*.ts",
-      "require": "./dist/verification/*.ts",
+      "require": "./dist/verification/*.js",
       "types": "./src/verification/*.ts"
     },
     "./admin/*.js": {
