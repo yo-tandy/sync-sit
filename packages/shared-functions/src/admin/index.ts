@@ -7,3 +7,4 @@ export * from './deleteUser.js';
 export * from './resetUserPassword.js';
 export * from './updateHolidays.js';
 export * from './listAuditLogs.js';
+export * from './exportUserData.js';
