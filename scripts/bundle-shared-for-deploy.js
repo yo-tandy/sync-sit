@@ -6,13 +6,13 @@
  * deploy uses npm (not pnpm) which doesn't understand the workspace: protocol.
  *
  * Bundled packages:
- *   - @ejm/shared       → apps/functions/shared-bundle/
- *   - @ejm/shared-core  → apps/functions/shared-core-bundle/
+ *   - @ejm/shared-core      → apps/functions/shared-core-bundle/
+ *   - @ejm/shared           → apps/functions/shared-bundle/
+ *   - @ejm/shared-functions → apps/functions/shared-functions-bundle/
  *
- * Within shared-bundle/package.json, the @ejm/shared-core workspace dep
- * is rewritten to file:../shared-core-bundle so npm can resolve the chain
- * apps/functions → shared-bundle → shared-core-bundle without ever seeing
- * a workspace: protocol.
+ * Within each bundle's package.json, any workspace:* deps on sibling packages
+ * are rewritten to file:../<sibling>-bundle so npm can resolve the full chain
+ * without ever seeing a workspace: protocol.
  *
  * Run before `firebase deploy --only functions`. Cleanup with
  * `unbundle-shared-after-deploy.js`.
@@ -101,15 +101,29 @@ rewriteBundlePackageJson(sharedBundleDir, {
   '@ejm/shared-core': 'shared-core-bundle',
 });
 
-// 3. Update apps/functions/package.json to use the bundled shared package.
-//    @ejm/shared-core is reached transitively via shared-bundle's rewritten
-//    dependency, so we don't add it as a direct dep here.
+// 3. Bundle @ejm/shared-functions and rewrite its workspace deps.
+//    It depends on both @ejm/shared-core and @ejm/shared, so both must be
+//    rewritten to point at the sibling bundles already created above.
+const sharedFunctionsDir = path.resolve(repoRoot, 'packages/shared-functions');
+const sharedFunctionsBundleDir = bundlePackage(
+  '@ejm/shared-functions',
+  sharedFunctionsDir,
+  'shared-functions-bundle',
+);
+rewriteBundlePackageJson(sharedFunctionsBundleDir, {
+  '@ejm/shared-core': 'shared-core-bundle',
+  '@ejm/shared': 'shared-bundle',
+});
+
+// 4. Update apps/functions/package.json to use the bundled shared packages.
 const pkgPath = path.join(functionsDir, 'package.json');
 const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
 pkg.dependencies['@ejm/shared'] = 'file:./shared-bundle';
+pkg.dependencies['@ejm/shared-functions'] = 'file:./shared-functions-bundle';
 fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
 
 console.log('✔ Shared packages bundled for deploy');
-console.log('  → shared-bundle/ + shared-core-bundle/ created in apps/functions/');
+console.log('  → shared-bundle/ + shared-core-bundle/ + shared-functions-bundle/ created in apps/functions/');
 console.log('  → shared-bundle/package.json rewrites @ejm/shared-core → file:../shared-core-bundle');
-console.log('  → apps/functions/package.json updated with file: reference for @ejm/shared');
+console.log('  → shared-functions-bundle/package.json rewrites @ejm/shared-core + @ejm/shared to file: refs');
+console.log('  → apps/functions/package.json updated with file: references for @ejm/shared + @ejm/shared-functions');

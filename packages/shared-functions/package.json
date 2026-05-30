@@ -1,0 +1,53 @@
+{
+  "name": "@ejm/shared-functions",
+  "version": "1.0.0",
+  "private": true,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./src/index.ts",
+      "require": "./dist/index.js",
+      "types": "./src/index.ts"
+    },
+    "./config/*.js": {
+      "import": "./src/config/*.ts",
+      "require": "./dist/config/*.js",
+      "types": "./src/config/*.ts"
+    },
+    "./auth/*.js": {
+      "import": "./src/auth/*.ts",
+      "require": "./dist/auth/*.js",
+      "types": "./src/auth/*.ts"
+    },
+    "./enrollment/*.js": {
+      "import": "./src/enrollment/*.ts",
+      "require": "./dist/enrollment/*.js",
+      "types": "./src/enrollment/*.ts"
+    },
+    "./verification/*.js": {
+      "import": "./src/verification/*.ts",
+      "require": "./dist/verification/*.js",
+      "types": "./src/verification/*.ts"
+    },
+    "./admin/*.js": {
+      "import": "./src/admin/*.ts",
+      "require": "./dist/admin/*.js",
+      "types": "./src/admin/*.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.cjs.json",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@ejm/shared-core": "workspace:*",
+    "@ejm/shared": "workspace:*",
+    "firebase-admin": "^13.0.0",
+    "firebase-functions": "^6.0.0",
+    "resend": "^4.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.2"
+  }
+}
