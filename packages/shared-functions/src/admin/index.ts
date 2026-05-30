@@ -6,3 +6,4 @@ export * from './blockUser.js';
 export * from './deleteUser.js';
 export * from './resetUserPassword.js';
 export * from './updateHolidays.js';
+export * from './listAuditLogs.js';
