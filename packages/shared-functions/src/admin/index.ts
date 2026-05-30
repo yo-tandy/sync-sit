@@ -9,3 +9,4 @@ export * from './updateHolidays.js';
 export * from './listAuditLogs.js';
 export * from './exportUserData.js';
 export * from './deactivateUser.js';
+export * from './managePreapprovedEmails.js';
