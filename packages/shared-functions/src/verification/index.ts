@@ -5,3 +5,4 @@ export * from './getVerificationStatus.js';
 export * from './generateCommunityCode.js';
 export * from './lookupCommunityCode.js';
 export * from './approveCommunityCode.js';
+export * from './getVerificationDocument.js';
