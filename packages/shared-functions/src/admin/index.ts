@@ -8,3 +8,4 @@ export * from './resetUserPassword.js';
 export * from './updateHolidays.js';
 export * from './listAuditLogs.js';
 export * from './exportUserData.js';
+export * from './deactivateUser.js';
