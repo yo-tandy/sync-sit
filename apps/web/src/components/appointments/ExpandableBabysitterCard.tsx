@@ -275,10 +275,10 @@ export function ExpandableBabysitterCard({
               </Button>
             </div>
           )}
-          {variant === 'confirmed' && onCancel && (
+          {(variant === 'pending' || variant === 'confirmed') && onCancel && (
             <div className="mt-3">
               <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); onCancel(); }} className="w-full">
-                {t('appointment.cancel')}
+                {variant === 'pending' ? t('appointment.cancelRequest') : t('appointment.cancel')}
               </Button>
             </div>
           )}
