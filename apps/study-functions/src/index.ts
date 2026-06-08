@@ -1,1 +1,1 @@
-export {}; // No callables yet — subsequent PRs add enrollment, search, booking
+export { enrollTutor } from './enrollment/enrollTutor.js';
