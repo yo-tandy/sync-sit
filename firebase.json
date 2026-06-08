@@ -49,19 +49,29 @@
       }
     ]
   },
-  "functions": {
-    "source": "apps/functions",
-    "runtime": "nodejs20",
-    "codebase": "default",
-    "predeploy": [
-      "node scripts/bundle-shared-for-deploy.js",
-      "pnpm --filter functions build"
-    ],
-    "postdeploy": [
-      "node scripts/unbundle-shared-after-deploy.js",
-      "bash scripts/fix-cloud-run-permissions.sh"
-    ]
-  },
+  "functions": [
+    {
+      "source": "apps/functions",
+      "runtime": "nodejs20",
+      "codebase": "default",
+      "predeploy": [
+        "node scripts/bundle-shared-for-deploy.js",
+        "pnpm --filter functions build"
+      ],
+      "postdeploy": [
+        "node scripts/unbundle-shared-after-deploy.js",
+        "bash scripts/fix-cloud-run-permissions.sh"
+      ]
+    },
+    {
+      "source": "apps/study-functions",
+      "runtime": "nodejs20",
+      "codebase": "study",
+      "predeploy": [
+        "pnpm --filter study-functions build"
+      ]
+    }
+  ],
   "storage": {
     "rules": "storage.rules"
   },
