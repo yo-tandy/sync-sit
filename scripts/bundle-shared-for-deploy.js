@@ -24,6 +24,7 @@ const { execSync } = require('child_process');
 
 const repoRoot = path.resolve(__dirname, '..');
 const functionsDir = path.resolve(repoRoot, 'apps/functions');
+const studyFunctionsDir = path.resolve(repoRoot, 'apps/study-functions');
 
 /**
  * Bundle one workspace package into apps/functions/<bundleName>/.
@@ -89,6 +90,17 @@ function rewriteBundlePackageJson(bundleDir, workspaceDepToBundleName) {
   }
 }
 
+function updateSourcePackageJson(sourceDir, dependencyToBundlePath) {
+  const pkgPath = path.join(sourceDir, 'package.json');
+  const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+  for (const [depName, depPath] of Object.entries(dependencyToBundlePath)) {
+    if (pkg.dependencies && depName in pkg.dependencies) {
+      pkg.dependencies[depName] = depPath;
+    }
+  }
+  fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
+}
+
 // 1. Bundle @ejm/shared-core first (leaf — no workspace deps of its own).
 const sharedCoreDir = path.resolve(repoRoot, 'packages/shared-core');
 bundlePackage('@ejm/shared-core', sharedCoreDir, 'shared-core-bundle');
@@ -116,14 +128,31 @@ rewriteBundlePackageJson(sharedFunctionsBundleDir, {
 });
 
 // 4. Update apps/functions/package.json to use the bundled shared packages.
-const pkgPath = path.join(functionsDir, 'package.json');
-const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
-pkg.dependencies['@ejm/shared'] = 'file:./shared-bundle';
-pkg.dependencies['@ejm/shared-functions'] = 'file:./shared-functions-bundle';
-fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
+updateSourcePackageJson(functionsDir, {
+  '@ejm/shared': 'file:./shared-bundle',
+  '@ejm/shared-functions': 'file:./shared-functions-bundle',
+});
+
+// 5. Mirror shared bundles into apps/study-functions and rewrite workspace deps.
+for (const bundleName of ['shared-core-bundle', 'shared-bundle', 'shared-functions-bundle']) {
+  const sourceBundleDir = path.join(functionsDir, bundleName);
+  const targetBundleDir = path.join(studyFunctionsDir, bundleName);
+  if (fs.existsSync(targetBundleDir)) {
+    fs.rmSync(targetBundleDir, { recursive: true });
+  }
+  fs.cpSync(sourceBundleDir, targetBundleDir, { recursive: true });
+}
+updateSourcePackageJson(studyFunctionsDir, {
+  '@ejm/shared-core': 'file:./shared-core-bundle',
+  '@ejm/shared': 'file:./shared-bundle',
+  '@ejm/shared-functions': 'file:./shared-functions-bundle',
+});
 
 console.log('✔ Shared packages bundled for deploy');
 console.log('  → shared-bundle/ + shared-core-bundle/ + shared-functions-bundle/ created in apps/functions/');
 console.log('  → shared-bundle/package.json rewrites @ejm/shared-core → file:../shared-core-bundle');
 console.log('  → shared-functions-bundle/package.json rewrites @ejm/shared-core + @ejm/shared to file: refs');
 console.log('  → apps/functions/package.json updated with file: references for @ejm/shared + @ejm/shared-functions');
+console.log(
+  '  → apps/study-functions/package.json updated with file: references for @ejm/shared-core + @ejm/shared + @ejm/shared-functions',
+);

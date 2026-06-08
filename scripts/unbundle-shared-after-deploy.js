@@ -11,20 +11,33 @@ const fs = require('fs');
 const path = require('path');
 
 const functionsDir = path.resolve(__dirname, '../apps/functions');
+const studyFunctionsDir = path.resolve(__dirname, '../apps/study-functions');
+
+function restoreWorkspaceDeps(sourceDir, depNames) {
+  const pkgPath = path.join(sourceDir, 'package.json');
+  const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+  for (const depName of depNames) {
+    if (pkg.dependencies && depName in pkg.dependencies) {
+      pkg.dependencies[depName] = 'workspace:*';
+    }
+  }
+  fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
+}
 
 // 1. Restore workspace references.
-const pkgPath = path.join(functionsDir, 'package.json');
-const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
-pkg.dependencies['@ejm/shared'] = 'workspace:*';
-pkg.dependencies['@ejm/shared-functions'] = 'workspace:*';
-fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
+restoreWorkspaceDeps(functionsDir, ['@ejm/shared', '@ejm/shared-functions']);
+restoreWorkspaceDeps(studyFunctionsDir, ['@ejm/shared-core', '@ejm/shared', '@ejm/shared-functions']);
 
 // 2. Clean up bundles.
-for (const bundleName of ['shared-bundle', 'shared-core-bundle', 'shared-functions-bundle']) {
-  const bundleDir = path.join(functionsDir, bundleName);
-  if (fs.existsSync(bundleDir)) {
-    fs.rmSync(bundleDir, { recursive: true });
+for (const sourceDir of [functionsDir, studyFunctionsDir]) {
+  for (const bundleName of ['shared-bundle', 'shared-core-bundle', 'shared-functions-bundle']) {
+    const bundleDir = path.join(sourceDir, bundleName);
+    if (fs.existsSync(bundleDir)) {
+      fs.rmSync(bundleDir, { recursive: true });
+    }
   }
 }
 
-console.log('✔ Restored workspace:* references and cleaned up shared-bundle + shared-core-bundle + shared-functions-bundle');
+console.log(
+  '✔ Restored workspace:* references and cleaned up shared-bundle + shared-core-bundle + shared-functions-bundle',
+);
