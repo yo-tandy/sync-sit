@@ -1,0 +1,28 @@
+{
+  "name": "study-functions",
+  "version": "1.0.0",
+  "private": true,
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "typecheck": "tsc --noEmit",
+    "lint": "echo 'no eslint config for study-functions yet' && exit 0",
+    "predeploy": "node ../../scripts/bundle-shared-for-deploy.js"
+  },
+  "dependencies": {
+    "@ejm/shared": "workspace:*",
+    "@ejm/shared-core": "workspace:*",
+    "@ejm/shared-functions": "workspace:*",
+    "firebase-admin": "^13.0.0",
+    "firebase-functions": "^6.0.0",
+    "resend": "^4.0.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0"
+  },
+  "engines": {
+    "node": "20"
+  }
+}
