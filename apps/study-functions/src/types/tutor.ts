@@ -8,14 +8,8 @@ import type { SubjectOffering, LocationPref } from './subject.js';
  * contactEmail, contactPhone, whatsapp, areaMode, arrondissements,
  * areaAddress, areaLatLng, areaRadiusKm, enrollmentComplete, searchable,
  * lastRevalidatedAt, revalidationYear).
- *
- * `role` is omitted from ServiceProviderBase (which constrains it to the
- * existing UserRole union) and re-narrowed to the literal 'tutor'. This
- * avoids a TS2430 error while staying structurally compatible. When the
- * roles constant is extended to include 'tutor' in shared-core, this Omit
- * can be removed.
  */
-export interface TutorUser extends Omit<ServiceProviderBase, 'role'> {
+export interface TutorUser extends ServiceProviderBase {
   role: 'tutor';
 
   /** Subjects the tutor offers with per-subject rates and covered levels. */
