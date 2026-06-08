@@ -524,13 +524,14 @@
 │  [🔍 Find a Babysitter]         │
 │                                  │
 │  ┌─ Pending Requests ──────────┐│
-│  │ Search: Mar 28, 18h–22h    ││
-│  │  → Marie D. — waiting      ││
-│  │  → Lucas R. — waiting      ││
-│  │ [Cancel all in this search] ││
+│  │ Mar 28, 18h–22h             ││
+│  │  ▸ Marie D.       ⏳ Pending ││
+│  │  ▾ Lucas R.       ⏳ Pending ││
+│  │    💬 langs · 💰 rate · …    ││
+│  │    [Edit] [Cancel Request]  ││
 │  ├─────────────────────────────┤│
-│  │ Search: Recurring Tue/Thu   ││
-│  │  → Emma B. — waiting       ││
+│  │ Recurring Tue/Thu           ││
+│  │  ▸ Emma B.        ⏳ Pending ││
 │  └─────────────────────────────┘│
 │                                  │
 │  ┌─ Confirmed (2) ────────────┐ │
@@ -550,6 +551,7 @@
 │  [Family Settings] [Edit Kids]  │
 └─────────────────────────────────┘
 ```
+* Each pending/confirmed request is its own expandable card (tap to expand). Pending cards reveal **[Edit]** and **[Cancel Request]**; confirmed cards reveal **[Edit]** and **[Cancel]**. Cancelling a pending request prompts for a reason and moves it to Rejected/Cancelled.
 * "Be a reference" button appears on past confirmed appointments
 
 ---
