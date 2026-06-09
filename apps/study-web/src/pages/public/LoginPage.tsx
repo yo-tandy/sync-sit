@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '@/stores/authStore';
+import { ArrowLeftIcon } from '@ejm/shared-ui';
 
 export function LoginPage() {
   const { t } = useTranslation();
@@ -14,8 +15,16 @@ export function LoginPage() {
     e.preventDefault();
     try {
       await login(email, password);
-      // For this PR there are no role dashboards yet — navigate to home
-      navigate('/');
+      // login() fetches userDoc before returning, so state is ready
+      const { userDoc } = useAuthStore.getState();
+      const role = userDoc?.role;
+      // Role dashboards aren't built yet — fall back to home for now.
+      const path =
+        role === 'tutor' ? '/tutor' :
+        role === 'parent' ? '/family' :
+        role === 'admin' ? '/admin' :
+        '/';
+      navigate(path);
     } catch {
       // Error is set in the store
     }
@@ -29,13 +38,16 @@ export function LoginPage() {
           to="/"
           className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-100 transition-colors hover:bg-gray-200"
         >
-          <span className="text-sm">←</span>
+          <ArrowLeftIcon className="h-[18px] w-[18px]" />
         </Link>
         <span className="text-base font-semibold">{t('auth.login')}</span>
         <div className="w-9" />
       </div>
 
       <div className="px-6 pt-8">
+        <div className="mb-6 flex justify-center">
+          <img src="/logo.png" alt="Sync/Study" className="h-20 w-20 rounded-2xl object-cover" />
+        </div>
         <h2 className="mb-2 text-2xl font-bold">{t('auth.loginTitle')}</h2>
         <p className="mb-8 text-sm text-gray-500">{t('auth.loginSubtitle')}</p>
 
@@ -47,7 +59,10 @@ export function LoginPage() {
             <input
               type="email"
               value={email}
-              onChange={(e) => { setEmail(e.target.value); clearError(); }}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                clearError();
+              }}
               placeholder="your@email.com"
               className="h-12 w-full rounded-lg border-[1.5px] border-gray-300 bg-white px-4 text-base text-gray-950 outline-none transition-colors placeholder:text-gray-400 focus:border-red-600"
               required
@@ -61,7 +76,10 @@ export function LoginPage() {
             <input
               type="password"
               value={password}
-              onChange={(e) => { setPassword(e.target.value); clearError(); }}
+              onChange={(e) => {
+                setPassword(e.target.value);
+                clearError();
+              }}
               placeholder="Enter your password"
               className="h-12 w-full rounded-lg border-[1.5px] border-gray-300 bg-white px-4 text-base text-gray-950 outline-none transition-colors placeholder:text-gray-400 focus:border-red-600"
               required
@@ -71,6 +89,15 @@ export function LoginPage() {
           {error && (
             <p className="mb-4 text-sm text-red-600">{error}</p>
           )}
+
+          <div className="mb-6 text-right">
+            <Link
+              to="/forgot-password"
+              className="text-sm font-medium text-red-600 hover:underline"
+            >
+              {t('auth.forgotPassword')}
+            </Link>
+          </div>
 
           <button
             type="submit"
@@ -82,8 +109,13 @@ export function LoginPage() {
         </form>
 
         <div className="mt-6 text-center">
-          <span className="text-sm text-gray-500">{t('auth.noAccount')}{' '}</span>
-          <Link to="/signup" className="text-sm font-semibold text-red-600 hover:underline">
+          <span className="text-sm text-gray-500">
+            {t('auth.noAccount')}{' '}
+          </span>
+          <Link
+            to="/signup"
+            className="text-sm font-semibold text-red-600 hover:underline"
+          >
             {t('auth.signUp')}
           </Link>
         </div>
