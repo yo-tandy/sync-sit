@@ -8,9 +8,11 @@ export function WelcomePage() {
     <div className="flex h-[100svh] flex-col px-6 py-3">
       {/* Logo + Title */}
       <div className="flex flex-1 flex-col items-center justify-center">
-        <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-2xl bg-red-600 text-3xl font-bold text-white sm:h-28 sm:w-28 sm:text-4xl">
-          S
-        </div>
+        <img
+          src="/logo.png"
+          alt={t('welcome.title')}
+          className="mb-4 h-40 w-40 rounded-2xl object-cover sm:h-52 sm:w-52"
+        />
         <h1 className="mb-1 text-center text-3xl font-bold text-gray-950">
           {t('welcome.title')}
         </h1>
