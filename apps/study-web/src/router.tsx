@@ -26,6 +26,7 @@ export const router = createBrowserRouter([
       { path: '/privacy', element: <StaticPage titleKey="welcome.privacy" /> },
       { path: '/terms', element: <StaticPage titleKey="welcome.terms" /> },
       { path: '/report', element: <StaticPage titleKey="welcome.help" /> },
+      { path: '/enroll/parent', element: <StaticPage titleKey="welcome.signUpParent" /> },
       { path: '*', element: <Navigate to="/" replace /> },
     ],
   },

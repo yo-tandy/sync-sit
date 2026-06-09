@@ -49,21 +49,16 @@ export default {
     subtitle: 'Connecter les familles EJM avec des tuteurs de confiance',
     signUp: "S'inscrire",
     logIn: 'Se connecter',
+    signUpRole: "S'inscrire en tant que...",
+    signUpTutor: 'Tuteur',
+    signUpTutorDesc: "Réservé aux lycéens de l'EJM. Vous devrez vérifier votre adresse email @ejm.org pour vous inscrire.",
+    signUpParent: 'Parent',
+    signUpParentDesc: 'Pour les familles EJM. Votre compte devra être vérifié avant de pouvoir rechercher un tuteur.',
+    alreadyHaveAccount: 'Vous avez déjà un compte ?',
     about: 'À propos',
     privacy: 'Confidentialité',
     terms: 'Conditions',
     help: 'Aide',
-  },
-
-  signup: {
-    chooseRole: 'Qui êtes-vous ?',
-    subtitle: 'Choisissez comment vous souhaitez utiliser Sync/Study',
-    asTutor: 'Je suis tuteur',
-    tutorDesc: 'Élève EJM souhaitant proposer des cours',
-    asParent: 'Je suis parent',
-    parentDesc: 'Je cherche un tuteur pour mon enfant',
-    parentComingSoon: 'Inscription parents bientôt disponible',
-    alreadyHaveAccount: 'Vous avez déjà un compte ?',
   },
 
   enrollment: {

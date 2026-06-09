@@ -49,21 +49,16 @@ export default {
     subtitle: 'Connecting EJM families with trusted student tutors',
     signUp: 'Sign up',
     logIn: 'Log in',
+    signUpRole: 'Sign up as...',
+    signUpTutor: 'Tutor',
+    signUpTutorDesc: 'For EJM high school students only. You will need to verify your @ejm.org email address to enroll.',
+    signUpParent: 'Parent',
+    signUpParentDesc: 'For EJM families. Your account will need to be verified before you can search for a tutor.',
+    alreadyHaveAccount: 'Already have an account?',
     about: 'About',
     privacy: 'Privacy',
     terms: 'Terms',
     help: 'Help',
-  },
-
-  signup: {
-    chooseRole: 'Who are you?',
-    subtitle: 'Choose how you want to use Sync/Study',
-    asTutor: "I'm a tutor",
-    tutorDesc: 'EJM student looking to offer tutoring sessions',
-    asParent: "I'm a parent",
-    parentDesc: 'Looking for a tutor for my child',
-    parentComingSoon: 'Parent enrollment coming soon',
-    alreadyHaveAccount: 'Already have an account?',
   },
 
   enrollment: {
