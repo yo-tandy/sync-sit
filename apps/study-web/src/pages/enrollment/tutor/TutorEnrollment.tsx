@@ -103,29 +103,35 @@ export function TutorEnrollment() {
     setError(null);
     try {
       const enrollTutorFn = httpsCallable<EnrollTutorInput, { uid: string }>(functions, 'enrollTutor');
+      // Firebase v2 callable client serializes undefined as null on the wire,
+      // which breaks server-side Zod .optional() validation. Strip undefined
+      // keys via JSON round-trip so the schema sees the field as absent
+      // (which .optional() handles) rather than as null (which it rejects).
+      const enrollmentRaw = {
+        firstName: profileData.firstName,
+        lastName: profileData.lastName,
+        dateOfBirth: profileData.dateOfBirth,
+        classLevel: profileData.classLevel,
+        gender: profileData.gender,
+        subjects,
+        sessionLengthsMin: prefsData.sessionLengthsMin,
+        locationPrefs: prefsData.locationPrefs,
+        paddingMin: prefsData.paddingMin,
+        aboutMe: prefsData.aboutMe,
+        contactEmail: prefsData.contactEmail,
+        contactPhone: prefsData.contactPhone,
+        areaMode: prefsData.areaMode,
+        arrondissements: prefsData.arrondissements,
+        areaAddress: prefsData.areaAddress,
+        areaRadiusKm: prefsData.areaRadiusKm,
+      };
+      const enrollment = JSON.parse(JSON.stringify(enrollmentRaw)) as typeof enrollmentRaw;
       await enrollTutorFn({
         ejemEmail,
         verificationCode,
         password,
         consentVersion: '2025-12-01',
-        enrollment: {
-          firstName: profileData.firstName,
-          lastName: profileData.lastName,
-          dateOfBirth: profileData.dateOfBirth,
-          classLevel: profileData.classLevel,
-          gender: profileData.gender,
-          subjects,
-          sessionLengthsMin: prefsData.sessionLengthsMin,
-          locationPrefs: prefsData.locationPrefs,
-          paddingMin: prefsData.paddingMin,
-          aboutMe: prefsData.aboutMe,
-          contactEmail: prefsData.contactEmail,
-          contactPhone: prefsData.contactPhone,
-          areaMode: prefsData.areaMode,
-          arrondissements: prefsData.arrondissements,
-          areaAddress: prefsData.areaAddress,
-          areaRadiusKm: prefsData.areaRadiusKm,
-        },
+        enrollment,
       });
       navigate('/enroll/tutor/success', { state: { firstName: profileData.firstName } });
 
