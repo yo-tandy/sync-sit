@@ -1,9 +1,11 @@
 /**
  * Supported class levels for sync-study.
- * Matches plan §6 "Subject Taxonomy" — covers French elementary, collège,
- * lycée, and EJM IB programme tracks.
+ * Covers French maternelle (MS, GS), elementary, collège, and lycée.
+ * IB programme tracks removed — no longer part of the taxonomy.
  */
 export const CLASS_LEVELS = [
+  'MS',
+  'GS', // maternelle
   'CP',
   'CE1',
   'CE2',
@@ -16,10 +18,6 @@ export const CLASS_LEVELS = [
   '2nde',
   '1ere',
   'Terminale', // lycee
-  'IB_MYP4',
-  'IB_MYP5',
-  'IB_DP1',
-  'IB_DP2', // IB programme
 ] as const;
 
 export type ClassLevel = (typeof CLASS_LEVELS)[number];
