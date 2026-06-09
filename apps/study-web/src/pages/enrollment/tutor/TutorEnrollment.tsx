@@ -12,8 +12,11 @@ import { StepPrefs } from './StepPrefs';
 import type { ProfileData } from './StepProfile';
 import type { PrefsData } from './StepPrefs';
 
-// Steps: 0=Email, 1=Verify, 2=Password+consent, 3=Profile, 4=Prefs
-const TOTAL_STEPS = 5;
+// Steps: 0=Email, 1=Verify, 2=Password+consent, 3=Profile, 4=Prefs.
+// The visible step indicator only covers the 3 pre-account-creation
+// steps (matching sync-sit's babysitter flow). After step 2 we drop
+// the indicator entirely.
+const AUTH_STEPS = 3;
 
 interface EnrollTutorInput {
   ejemEmail: string;
@@ -190,7 +193,9 @@ export function TutorEnrollment() {
         backTo={step === 0 ? '/' : undefined}
         onBack={step > 0 ? handleBack : undefined}
       />
-      <StepIndicator totalSteps={TOTAL_STEPS} currentStep={step} />
+      {step < AUTH_STEPS && (
+        <StepIndicator totalSteps={AUTH_STEPS} currentStep={step} />
+      )}
       {renderStep()}
     </div>
   );
