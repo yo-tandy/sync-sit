@@ -15,9 +15,12 @@ export function LoginPage() {
     e.preventDefault();
     try {
       await login(email, password);
-      // login() fetches userDoc before returning, so state is ready
+      // login() fetches userDoc before returning, so state is ready.
+      // Cast because TutorUser lives in apps/study-functions and isn't yet
+      // part of the shared UserDoc union — follow-up: lift TutorUser into
+      // shared-core so this cast disappears.
       const { userDoc } = useAuthStore.getState();
-      const role = userDoc?.role;
+      const role = userDoc?.role as 'tutor' | 'parent' | 'admin' | undefined;
       // Role dashboards aren't built yet — fall back to home for now.
       const path =
         role === 'tutor' ? '/tutor' :
