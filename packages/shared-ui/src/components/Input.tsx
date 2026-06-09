@@ -49,12 +49,12 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
           id={inputId}
           className={`h-12 w-full rounded-lg border-[1.5px] bg-white px-4 text-base text-gray-950 outline-none transition-colors placeholder:text-gray-400 ${
             error
-              ? 'border-red-600 focus:border-red-600'
+              ? 'border-error-600 focus:border-error-600'
               : 'border-gray-300 focus:border-red-600'
           } ${className}`}
           {...props}
         />
-        {error && <p className="mt-1 text-sm text-red-600">{error}</p>}
+        {error && <p className="mt-1 text-sm text-error-600">{error}</p>}
         {hint && !error && (
           <p className="mt-1 text-xs text-gray-400">{hint}</p>
         )}
