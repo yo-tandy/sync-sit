@@ -27,21 +27,36 @@ export function WelcomePage() {
         </p>
       </div>
 
-      {/* Actions */}
+      {/* Actions + Footer */}
       <div className="shrink-0">
         <Link
-          to="/signup"
+          to="/login"
           className="mb-2.5 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-red-600 text-base font-semibold text-white transition-colors hover:bg-red-600/90"
         >
-          {t('welcome.ctaSignUp')}
+          {t('welcome.logIn')}
         </Link>
 
         <Link
-          to="/login"
+          to="/signup"
           className="mb-4 flex h-12 w-full items-center justify-center gap-2 rounded-xl border-[1.5px] border-gray-300 bg-white text-base font-semibold text-gray-950 transition-colors hover:border-gray-950"
         >
-          {t('welcome.ctaLogin')}
+          {t('welcome.signUp')}
         </Link>
+
+        <div className="flex justify-center gap-4 pb-1 pt-1">
+          <Link to="/about" className="text-xs text-gray-400 hover:text-gray-600">
+            {t('welcome.about')}
+          </Link>
+          <Link to="/privacy" className="text-xs text-gray-400 hover:text-gray-600">
+            {t('welcome.privacy')}
+          </Link>
+          <Link to="/terms" className="text-xs text-gray-400 hover:text-gray-600">
+            {t('welcome.terms')}
+          </Link>
+          <Link to="/report" className="text-xs text-gray-400 hover:text-gray-600">
+            {t('welcome.help')}
+          </Link>
+        </div>
       </div>
     </div>
   );

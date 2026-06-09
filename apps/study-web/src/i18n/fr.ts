@@ -11,6 +11,7 @@ export default {
     password: 'Mot de passe',
     error: 'Une erreur est survenue',
     optional: 'Facultatif',
+    comingSoon: 'Bientôt disponible.',
   },
 
   auth: {
@@ -45,11 +46,13 @@ export default {
 
   welcome: {
     title: 'Sync/Study',
-    subtitle: 'Connectez-vous avec les tuteurs EJM pour des sessions personnalisées',
-    ctaSignUp: 'Commencer',
-    ctaLogin: 'Se connecter',
+    subtitle: 'Connecter les familles EJM avec des tuteurs de confiance',
     signUp: "S'inscrire",
     logIn: 'Se connecter',
+    about: 'À propos',
+    privacy: 'Confidentialité',
+    terms: 'Conditions',
+    help: 'Aide',
   },
 
   signup: {
