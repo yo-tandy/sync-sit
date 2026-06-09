@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { httpsCallable } from 'firebase/functions';
+import { TopNav, StepIndicator } from '@ejm/shared-ui';
 import { functions } from '@/config/firebase';
 import { StepEmail } from './StepEmail';
 import { StepVerify } from './StepVerify';
@@ -183,32 +184,13 @@ export function TutorEnrollment() {
   };
 
   return (
-    <div className="mx-auto max-w-lg">
-      {/* Top nav */}
-      <div className="flex h-[52px] items-center justify-between px-5">
-        <button
-          type="button"
-          onClick={step === 0 ? () => navigate('/') : handleBack}
-          className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-100 transition-colors hover:bg-gray-200"
-        >
-          <span className="text-sm">←</span>
-        </button>
-        <span className="text-base font-semibold">{t('enrollment.tutor.title')}</span>
-        <div className="w-9" />
-      </div>
-
-      {/* Step indicator */}
-      <div className="mb-6 flex gap-1 px-5">
-        {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
-          <div
-            key={i}
-            className={`h-1 flex-1 rounded-full transition-colors ${
-              i <= step ? 'bg-red-600' : 'bg-gray-200'
-            }`}
-          />
-        ))}
-      </div>
-
+    <div>
+      <TopNav
+        title={t('enrollment.tutorTitle')}
+        backTo={step === 0 ? '/' : undefined}
+        onBack={step > 0 ? handleBack : undefined}
+      />
+      <StepIndicator totalSteps={TOTAL_STEPS} currentStep={step} />
       {renderStep()}
     </div>
   );

@@ -62,6 +62,7 @@ export default {
   },
 
   enrollment: {
+    tutorTitle: 'Inscription Tuteur',
     tutor: {
       title: 'Inscription tuteur',
       stepEmail: 'Vérifiez votre email EJM',
