@@ -7,14 +7,12 @@ import { StepEmail } from './StepEmail';
 import { StepVerify } from './StepVerify';
 import { StepPassword } from './StepPassword';
 import { StepProfile } from './StepProfile';
-import { StepSubjects } from './StepSubjects';
 import { StepPrefs } from './StepPrefs';
 import type { ProfileData } from './StepProfile';
-import type { SubjectOffering } from './StepSubjects';
 import type { PrefsData } from './StepPrefs';
 
-// Steps: 0=Email, 1=Verify, 2=Password+consent, 3=Profile, 4=Subjects, 5=Prefs
-const TOTAL_STEPS = 6;
+// Steps: 0=Email, 1=Verify, 2=Password+consent, 3=Profile, 4=Prefs
+const TOTAL_STEPS = 5;
 
 interface EnrollTutorInput {
   ejemEmail: string;
@@ -27,7 +25,7 @@ interface EnrollTutorInput {
     dateOfBirth: string;
     classLevel: string;
     gender?: string;
-    subjects: SubjectOffering[];
+    subjects: never[];
     sessionLengthsMin: number[];
     locationPrefs: string[];
     paddingMin: number;
@@ -50,7 +48,6 @@ export function TutorEnrollment() {
   const [verificationCode, setVerificationCode] = useState('');
   const [password, setPassword] = useState('');
   const [profileData, setProfileData] = useState<ProfileData | null>(null);
-  const [subjects, setSubjects] = useState<SubjectOffering[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -92,11 +89,6 @@ export function TutorEnrollment() {
     setStep(4);
   };
 
-  const handleSubjectsNext = (subs: SubjectOffering[]) => {
-    setSubjects(subs);
-    setStep(5);
-  };
-
   const handlePrefsNext = async (prefsData: PrefsData) => {
     if (!profileData) return;
     setLoading(true);
@@ -113,7 +105,7 @@ export function TutorEnrollment() {
         dateOfBirth: profileData.dateOfBirth,
         classLevel: profileData.classLevel,
         gender: profileData.gender,
-        subjects,
+        subjects: [] as never[],
         sessionLengthsMin: prefsData.sessionLengthsMin,
         locationPrefs: prefsData.locationPrefs,
         paddingMin: prefsData.paddingMin,
@@ -178,8 +170,6 @@ export function TutorEnrollment() {
       case 3:
         return <StepProfile onNext={handleProfileNext} />;
       case 4:
-        return <StepSubjects onNext={handleSubjectsNext} />;
-      case 5:
         return (
           <StepPrefs
             onNext={handlePrefsNext}
