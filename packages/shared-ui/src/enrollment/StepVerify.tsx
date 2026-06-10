@@ -24,6 +24,7 @@ export function StepVerify({ ejemEmail, onVerify, onResend, error }: StepVerifyP
   }, [resendCooldown]);
 
   const handleCodeComplete = async (code: string) => {
+    if (verifying) return;
     setCodeError(null);
     setVerifying(true);
     try {
@@ -42,7 +43,11 @@ export function StepVerify({ ejemEmail, onVerify, onResend, error }: StepVerifyP
     setCodeError(null);
     try {
       await onResend();
-    } catch { /* silent — surface via error prop if orchestrator wants */ }
+    } catch {
+      // Resend failed — reset cooldown so user can retry immediately.
+      // Don't surface the error here; orchestrator's error prop will if it wants.
+      setResendCooldown(0);
+    }
   };
 
   return (
@@ -64,7 +69,9 @@ export function StepVerify({ ejemEmail, onVerify, onResend, error }: StepVerifyP
       />
 
       {verifying && (
-        <p className="mt-3 text-sm text-gray-500">{t('auth.verifying')}</p>
+        <p role="status" aria-live="polite" className="mt-3 text-sm text-gray-500">
+          {t('auth.verifying')}
+        </p>
       )}
 
       <p className="mt-4 text-sm text-gray-500">
