@@ -17,13 +17,21 @@
 @source "../**/*.{ts,tsx}";
 
 @theme {
-  /* Semantic feedback colors (shared) */
+  /* Semantic feedback colors (shared) — always the same hue regardless
+     of which app's brand palette is active. Components use these for
+     error/warning/info/success states; brand-primary still maps via
+     --color-red-* (sit) or --color-red-* remapped to blue (study). */
   --color-green-600: #16A34A;
   --color-green-100: #DCFCE7;
   --color-amber-600: #D97706;
   --color-amber-100: #FEF3C7;
   --color-blue-600: #2563EB;
   --color-blue-100: #DBEAFE;
+  --color-error-50:  #FEF2F2;
+  --color-error-100: #FEE2E2;
+  --color-error-500: #EF4444;
+  --color-error-600: #DC2626;
+  --color-error-700: #B91C1C;
 
   /* Radii */
   --radius-sm: 0.5rem;

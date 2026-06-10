@@ -35,13 +35,11 @@ export const tutorImmutableProfileSchema = z.object({
 });
 
 /**
- * Subjects the tutor offers. At least one subject with at least one level
- * and a valid rate is required.
+ * Subjects the tutor offers. Empty array is valid — subjects are deferred to
+ * the profile-edit flow after enrollment completes.
  */
 export const tutorSubjectsSchema = z.object({
-  subjects: z
-    .array(subjectOfferingSchema)
-    .min(1, 'At least one subject offering is required'),
+  subjects: z.array(subjectOfferingSchema),
 });
 
 /**

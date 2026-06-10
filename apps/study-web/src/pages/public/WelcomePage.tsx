@@ -1,39 +1,62 @@
 import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
+import { LanguageSelector } from '@ejm/shared-ui';
 
 export function WelcomePage() {
   const { t } = useTranslation();
 
   return (
     <div className="flex h-[100svh] flex-col px-6 py-3">
+      {/* Top: language picker */}
+      <div className="flex shrink-0 justify-end">
+        <LanguageSelector />
+      </div>
+
       {/* Logo + Title */}
       <div className="flex flex-1 flex-col items-center justify-center">
-        <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-2xl bg-red-600 text-3xl font-bold text-white sm:h-28 sm:w-28 sm:text-4xl">
-          S
-        </div>
-        <h1 className="mb-1 text-center text-3xl font-bold text-gray-950">
+        <img
+          src="/logo.png"
+          alt={t('welcome.title')}
+          className="mb-3 h-32 w-32 rounded-2xl object-cover sm:h-40 sm:w-40"
+        />
+        <h1 className="mb-1 text-center text-2xl font-bold text-gray-950">
           {t('welcome.title')}
         </h1>
-        <p className="max-w-[280px] text-center text-sm leading-relaxed text-gray-500">
+        <p className="max-w-[260px] text-center text-sm leading-relaxed text-gray-500">
           {t('welcome.subtitle')}
         </p>
       </div>
 
-      {/* Actions */}
-      <div className="shrink-0 pb-6">
+      {/* Actions + Footer */}
+      <div className="shrink-0">
         <Link
-          to="/signup"
-          className="mb-3 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-red-600 text-base font-semibold text-white transition-colors hover:bg-red-600/90"
+          to="/login"
+          className="mb-2.5 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-red-600 text-base font-semibold text-white transition-colors hover:bg-red-600/90"
         >
-          {t('welcome.ctaSignUp')}
+          {t('welcome.logIn')}
         </Link>
 
         <Link
-          to="/login"
-          className="flex h-12 w-full items-center justify-center gap-2 rounded-xl border-[1.5px] border-gray-300 bg-white text-base font-semibold text-gray-950 transition-colors hover:border-gray-950"
+          to="/signup"
+          className="mb-4 flex h-12 w-full items-center justify-center gap-2 rounded-xl border-[1.5px] border-gray-300 bg-white text-base font-semibold text-gray-950 transition-colors hover:border-gray-950"
         >
-          {t('welcome.ctaLogin')}
+          {t('welcome.signUp')}
         </Link>
+
+        <div className="flex justify-center gap-4 pb-1 pt-1">
+          <Link to="/about" className="text-xs text-gray-400 hover:text-gray-600">
+            {t('welcome.about')}
+          </Link>
+          <Link to="/privacy" className="text-xs text-gray-400 hover:text-gray-600">
+            {t('welcome.privacy')}
+          </Link>
+          <Link to="/terms" className="text-xs text-gray-400 hover:text-gray-600">
+            {t('welcome.terms')}
+          </Link>
+          <Link to="/report" className="text-xs text-gray-400 hover:text-gray-600">
+            {t('welcome.help')}
+          </Link>
+        </div>
       </div>
     </div>
   );

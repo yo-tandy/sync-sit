@@ -1,8 +1,6 @@
 /* ═══════════════════════════════════════════
    @ejm/shared-ui — sync-study BRAND OVERRIDE
-   Blue/teal accent family. Placeholder values —
-   final palette will be ratified by design before
-   sync-study UI work begins (Agent 5).
+   sync-study primary blue palette.
 
    NOTE: variable names remain --color-red-* so
    components can reuse their existing bg-red-600
@@ -11,8 +9,12 @@
    ═══════════════════════════════════════════ */
 
 @theme {
-  --color-red-600: #0D9488;  /* teal-600 placeholder */
-  --color-red-500: #14B8A6;  /* teal-500 placeholder */
-  --color-red-100: #CCFBF1;  /* teal-100 placeholder */
-  --color-red-50:  #F0FDFA;  /* teal-50 placeholder */
+  --color-red-50:  #adc8ef;
+  --color-red-100: #adc8ef;
+  --color-red-200: #adc8ef;
+  --color-red-300: #adc8ef;
+  --color-red-500: #3179df;
+  --color-red-600: #094ad4;
+  --color-red-700: #0538a8;
+  --color-red-800: #0538a8;
 }
