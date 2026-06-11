@@ -12,33 +12,6 @@ import { StepProfile } from './babysitter/StepProfile';
 import { StepPreferences } from './babysitter/StepPreferences';
 import type { BabysitterUser } from '@ejm/shared';
 
-// Used by the local babysitter step files (StepProfile, StepPreferences) and by
-// the babysitter/StepEmail|Verify|Password files that will be deleted in Task 6.
-export interface BabysitterFormData {
-  ejemEmail: string;
-  verificationCode: string;
-  password: string;
-  firstName: string;
-  lastName: string;
-  dateOfBirth: string;
-  gender?: string;
-  classLevel: string;
-  languages: string[];
-  kidAgeMin: number;
-  kidAgeMax: number;
-  maxKids: number;
-  hourlyRate: number;
-  aboutMe?: string;
-  contactEmail?: string;
-  contactPhone?: string;
-  areaMode: 'arrondissement' | 'distance';
-  arrondissements?: string[];
-  areaAddress?: string;
-  areaLatLng?: { lat: number; lng: number };
-  areaRadiusKm?: number;
-  photoFile?: File;
-  consentAccepted: boolean;
-}
 
 export function BabysitterEnrollment() {
   const { t } = useTranslation();

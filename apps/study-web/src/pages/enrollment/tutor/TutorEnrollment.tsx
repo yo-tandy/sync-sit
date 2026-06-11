@@ -165,7 +165,7 @@ export function TutorEnrollment() {
       case 2:
         return (
           <StepPassword
-            onSubmit={async (password, _consentVersion) => {
+            onSubmit={async (password) => {
               handlePasswordNext(password);
             }}
             consentVersion="2025-12-01"
