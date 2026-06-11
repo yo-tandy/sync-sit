@@ -126,6 +126,34 @@ export default {
     skipForNow: 'Skip for now',
   },
 
+  privacy: {
+    title: 'Privacy Policy',
+  },
+  terms: {
+    title: 'Terms & Conditions',
+  },
+  report: {
+    title: 'Report a Problem',
+    desc: "If you're experiencing an issue, tap the button below to send us an email. We'll pre-fill some diagnostic info to help us investigate.",
+    whatIncluded: 'WHAT WILL BE INCLUDED',
+    userId: 'User ID',
+    time: 'Time',
+    version: 'Version',
+    platform: 'Platform',
+    recentErrors: 'Recent errors',
+    none: 'None',
+    errorsFound: 'error(s) captured',
+    privacyNote: 'Only your user ID is included to help us investigate. No personal data is sent automatically.',
+    openEmail: 'Open email to support',
+    notLoggedIn: 'Not logged in',
+  },
+  about: {
+    title: 'About',
+    heading: 'About Sync/Study',
+    body1: 'Sync/Study connects EJM high school students who tutor with EJM families looking for academic support. The app helps families find trusted tutors based on subjects, availability, and location.',
+    body2: 'This is a coordination tool — it helps families and tutors connect, but does not handle payment or serve as a booking system of record.',
+  },
+
   validation: {
     validEmail: 'Please enter a valid email address',
     required: 'This field is required',

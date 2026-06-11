@@ -632,6 +632,7 @@ export default {
     errorsFound: 'error(s) captured',
     privacyNote: 'Only your user ID is included to help us investigate. No personal data is sent automatically.',
     openEmail: 'Open email to support',
+    notLoggedIn: 'Not logged in',
   },
 
   // Validation
