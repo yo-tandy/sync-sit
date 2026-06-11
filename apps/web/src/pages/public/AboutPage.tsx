@@ -1,6 +1,6 @@
 import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
-import { TopNav } from '@/components/ui';
+import { AboutPageShell } from '@ejm/shared-ui';
 import { ShieldIcon, SearchIcon, UsersIcon, CalendarIcon, DownloadIcon } from '@/components/ui/Icons';
 
 export function AboutPage() {
@@ -8,8 +8,7 @@ export function AboutPage() {
   const isFr = i18n.language?.startsWith('fr');
 
   return (
-    <div>
-      <TopNav title={t('about.title')} backTo="back" />
+    <AboutPageShell title={t('about.title')}>
       <div className="px-6 pt-4 pb-8">
         {/* Logo + tagline */}
         <div className="mb-6 flex flex-col items-center">
@@ -167,6 +166,6 @@ export function AboutPage() {
           <p className="text-xs text-gray-400">Version 1.0.0</p>
         </div>
       </div>
-    </div>
+    </AboutPageShell>
   );
 }

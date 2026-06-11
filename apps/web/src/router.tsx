@@ -11,9 +11,16 @@ import { WelcomePage } from '@/pages/public/WelcomePage';
 import { LoginPage } from '@/pages/public/LoginPage';
 import { ForgotPasswordPage } from '@/pages/public/ForgotPasswordPage';
 import { AboutPage } from '@/pages/public/AboutPage';
-import { PrivacyPage } from '@/pages/public/PrivacyPage';
-import { TermsPage } from '@/pages/public/TermsPage';
-import { ReportProblemPage } from '@/pages/public/ReportProblemPage';
+import { PrivacyPage, TermsPage, ReportProblemPage } from '@ejm/shared-ui';
+import { useAuthStore } from '@/stores/authStore';
+
+const SUPPORT_EMAIL = 'support@sync-sit.com';
+const BRAND = 'Sync/Sit';
+
+function SyncSitReportProblemPage() {
+  const { userDoc } = useAuthStore();
+  return <ReportProblemPage brand={BRAND} supportEmail={SUPPORT_EMAIL} userId={userDoc?.uid} />;
+}
 import { SharePage } from '@/pages/public/SharePage';
 import { SignUpRolePage } from '@/pages/public/SignUpRolePage';
 import { ParentGuidePage } from '@/pages/public/ParentGuidePage';
@@ -61,9 +68,9 @@ export const router = createBrowserRouter([
       { path: '/signup', element: <SignUpRolePage /> },
       { path: '/forgot-password', element: <ForgotPasswordPage /> },
       { path: '/about', element: <AboutPage /> },
-      { path: '/privacy', element: <PrivacyPage /> },
-      { path: '/terms', element: <TermsPage /> },
-      { path: '/report', element: <ReportProblemPage /> },
+      { path: '/privacy', element: <PrivacyPage brand={BRAND} supportEmail={SUPPORT_EMAIL} /> },
+      { path: '/terms', element: <TermsPage brand={BRAND} supportEmail={SUPPORT_EMAIL} /> },
+      { path: '/report', element: <SyncSitReportProblemPage /> },
       { path: '/share', element: <SharePage /> },
       { path: '/guide/parents', element: <ParentGuidePage /> },
       { path: '/guide/babysitters', element: <BabysitterGuidePage /> },
