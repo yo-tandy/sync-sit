@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { httpsCallable } from 'firebase/functions';
 import { signInWithEmailAndPassword } from 'firebase/auth';
@@ -7,14 +7,13 @@ import { auth, functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { TopNav, StepIndicator } from '@/components/ui';
 import { EnrollmentAppBar } from '@/components/ui/EnrollmentAppBar';
-import { StepEmail } from './babysitter/StepEmail';
-import { StepVerify } from './babysitter/StepVerify';
-import { StepPassword } from './babysitter/StepPassword';
+import { StepEmail, StepVerify, StepPassword } from '@ejm/shared-ui';
 import { StepProfile } from './babysitter/StepProfile';
 import { StepPreferences } from './babysitter/StepPreferences';
 import type { BabysitterUser } from '@ejm/shared';
 
-// Kept for StepEmail compatibility
+// Used by the local babysitter step files (StepProfile, StepPreferences) and by
+// the babysitter/StepEmail|Verify|Password files that will be deleted in Task 6.
 export interface BabysitterFormData {
   ejemEmail: string;
   verificationCode: string;
@@ -70,15 +69,8 @@ export function BabysitterEnrollment() {
     }
   }, [authLoading, firebaseUser, userDoc, navigate]);
 
-  // StepEmail compatibility
-  const formDataForEmail = {
-    ejemEmail,
-    verificationCode: '',
-    password: '',
-    firstName: '', lastName: '', dateOfBirth: '', classLevel: '', languages: [],
-    kidAgeMin: 3, kidAgeMax: 12, maxKids: 3, hourlyRate: 15,
-    areaMode: 'arrondissement' as const, consentAccepted: false,
-  };
+  const [searchParams] = useSearchParams();
+  const isInvite = searchParams.get('invite') === 'true';
 
   const handleSendCode = async () => {
     setLoading(true);
@@ -134,13 +126,6 @@ export function BabysitterEnrollment() {
     }
   };
 
-  const handleResendCode = async () => {
-    try {
-      const verifyEjmEmail = httpsCallable(functions, 'verifyEjmEmail');
-      await verifyEjmEmail({ email: ejemEmail });
-    } catch { /* silent */ }
-  };
-
   const handleProfileComplete = () => {
     useAuthStore.getState().refreshUserDoc();
     setStep(4);
@@ -157,28 +142,39 @@ export function BabysitterEnrollment() {
       case 0:
         return (
           <StepEmail
-            data={formDataForEmail}
-            onChange={(partial) => {
-              if (partial.ejemEmail !== undefined) setEjemEmail(partial.ejemEmail);
-            }}
-            onNext={handleSendCode}
+            ejemEmail={ejemEmail}
+            onChange={(email) => setEjemEmail(email)}
+            onSubmit={handleSendCode}
             loading={loading}
             error={error}
+            isInvite={isInvite}
+            logoSrc="/logo.png"
+            logoAlt="Sync/Sit"
           />
         );
       case 1:
         return (
           <StepVerify
             ejemEmail={ejemEmail}
-            onVerified={handleCodeVerified}
-            onResend={handleResendCode}
+            onVerify={async (code) => {
+              const verifyFn = httpsCallable(functions, 'verifyCode');
+              await verifyFn({ email: ejemEmail, code });
+              handleCodeVerified(code);
+            }}
+            onResend={async () => {
+              const verifyEjmEmail = httpsCallable(functions, 'verifyEjmEmail');
+              await verifyEjmEmail({ email: ejemEmail });
+            }}
             error={error}
           />
         );
       case 2:
         return (
           <StepPassword
-            onCreateAccount={handleCreateAccount}
+            onSubmit={async (password, consentVersion) => {
+              await handleCreateAccount(password, consentVersion);
+            }}
+            consentVersion="1.0"
             loading={loading}
             error={error}
           />
