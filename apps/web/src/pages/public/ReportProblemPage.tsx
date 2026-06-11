@@ -2,7 +2,7 @@ import { useTranslation } from 'react-i18next';
 import { TopNav, Button, InfoBanner, Card } from '@/components/ui';
 import { MailIcon } from '@/components/ui/Icons';
 import { useAuthStore } from '@/stores/authStore';
-import { getRecentErrors, formatErrorsForEmail } from '@/lib/errorCapture';
+import { getRecentErrors, formatErrorsForEmail } from '@ejm/shared-ui';
 
 export function ReportProblemPage() {
   const { t } = useTranslation();
