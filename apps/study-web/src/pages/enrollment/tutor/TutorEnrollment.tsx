@@ -2,11 +2,9 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { httpsCallable } from 'firebase/functions';
-import { TopNav, StepIndicator } from '@ejm/shared-ui';
+import { TopNav, StepIndicator, StepEmail, StepVerify, StepPassword } from '@ejm/shared-ui';
 import { functions } from '@/config/firebase';
-import { StepEmail } from './StepEmail';
-import { StepVerify } from './StepVerify';
-import { StepPassword } from './StepPassword';
+import { EnrollmentAppBar } from '@/components/ui/EnrollmentAppBar';
 import { StepProfile } from './StepProfile';
 import { StepPrefs } from './StepPrefs';
 import type { ProfileData } from './StepProfile';
@@ -75,13 +73,6 @@ export function TutorEnrollment() {
     setStep(2);
   };
 
-  const handleResendCode = async () => {
-    try {
-      const verifyEjmEmail = httpsCallable(functions, 'verifyEjmEmail');
-      await verifyEjmEmail({ email: ejemEmail });
-    } catch { /* silent */ }
-  };
-
   const handlePasswordNext = (pw: string) => {
     setPassword(pw);
     setError(null);
@@ -148,25 +139,37 @@ export function TutorEnrollment() {
         return (
           <StepEmail
             ejemEmail={ejemEmail}
-            onChange={setEjemEmail}
-            onNext={handleSendCode}
+            onChange={(email) => setEjemEmail(email)}
+            onSubmit={handleSendCode}
             loading={loading}
             error={error}
+            logoSrc="/logo.png"
+            logoAlt="Sync/Study"
           />
         );
       case 1:
         return (
           <StepVerify
             ejemEmail={ejemEmail}
-            onVerified={handleCodeVerified}
-            onResend={handleResendCode}
+            onVerify={async (code) => {
+              const verifyFn = httpsCallable(functions, 'verifyCode');
+              await verifyFn({ email: ejemEmail, code });
+              handleCodeVerified(code);
+            }}
+            onResend={async () => {
+              const verifyEjmEmail = httpsCallable(functions, 'verifyEjmEmail');
+              await verifyEjmEmail({ email: ejemEmail });
+            }}
             error={error}
           />
         );
       case 2:
         return (
           <StepPassword
-            onNext={handlePasswordNext}
+            onSubmit={async (password) => {
+              handlePasswordNext(password);
+            }}
+            consentVersion="2025-12-01"
             loading={loading}
             error={error}
           />
@@ -186,15 +189,21 @@ export function TutorEnrollment() {
     }
   };
 
+  const isPostAuthStep = step >= AUTH_STEPS;
+
   return (
     <div>
-      <TopNav
-        title={t('enrollment.tutorTitle')}
-        backTo={step === 0 ? '/' : undefined}
-        onBack={step > 0 ? handleBack : undefined}
-      />
-      {step < AUTH_STEPS && (
-        <StepIndicator totalSteps={AUTH_STEPS} currentStep={step} />
+      {isPostAuthStep ? (
+        <EnrollmentAppBar />
+      ) : (
+        <>
+          <TopNav
+            title={t('enrollment.tutorTitle')}
+            backTo={step === 0 ? '/' : undefined}
+            onBack={step > 0 ? handleBack : undefined}
+          />
+          <StepIndicator totalSteps={AUTH_STEPS} currentStep={step} />
+        </>
       )}
       {renderStep()}
     </div>

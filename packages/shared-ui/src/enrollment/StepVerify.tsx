@@ -1,18 +1,16 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { httpsCallable } from 'firebase/functions';
-import { functions } from '@/config/firebase';
-import { MailIcon } from '@/components/ui/Icons';
-import { CodeInput } from '@/components/forms/CodeInput';
+import { MailIcon } from '../components/Icons.js';
+import { CodeInput } from '../forms/CodeInput.js';
 
 interface StepVerifyProps {
   ejemEmail: string;
-  onVerified: (verificationCode: string) => void;
-  onResend: () => void;
+  onVerify: (code: string) => Promise<void>;
+  onResend: () => Promise<void>;
   error: string | null;
 }
 
-export function StepVerify({ ejemEmail, onVerified, onResend, error }: StepVerifyProps) {
+export function StepVerify({ ejemEmail, onVerify, onResend, error }: StepVerifyProps) {
   const { t } = useTranslation();
   const [codeError, setCodeError] = useState<string | null>(null);
   const [resendCooldown, setResendCooldown] = useState(60);
@@ -26,12 +24,11 @@ export function StepVerify({ ejemEmail, onVerified, onResend, error }: StepVerif
   }, [resendCooldown]);
 
   const handleCodeComplete = async (code: string) => {
+    if (verifying) return;
     setCodeError(null);
     setVerifying(true);
     try {
-      const verifyFn = httpsCallable(functions, 'verifyCode');
-      await verifyFn({ email: ejemEmail, code });
-      onVerified(code);
+      await onVerify(code);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : t('auth.invalidCode');
       setCodeError(message);
@@ -40,11 +37,17 @@ export function StepVerify({ ejemEmail, onVerified, onResend, error }: StepVerif
     }
   };
 
-  const handleResend = () => {
+  const handleResend = async () => {
     setResendCooldown(60);
     setResendCount((c) => c + 1);
     setCodeError(null);
-    onResend();
+    try {
+      await onResend();
+    } catch {
+      // Resend failed — reset cooldown so user can retry immediately.
+      // Don't surface the error here; orchestrator's error prop will if it wants.
+      setResendCooldown(0);
+    }
   };
 
   return (
@@ -66,7 +69,9 @@ export function StepVerify({ ejemEmail, onVerified, onResend, error }: StepVerif
       />
 
       {verifying && (
-        <p className="mt-3 text-sm text-gray-500">{t('auth.verifying')}</p>
+        <p role="status" aria-live="polite" className="mt-3 text-sm text-gray-500">
+          {t('auth.verifying')}
+        </p>
       )}
 
       <p className="mt-4 text-sm text-gray-500">

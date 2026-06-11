@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Button, Input, Select } from '@ejm/shared-ui';
 
 export interface ProfileData {
   firstName: string;
@@ -15,9 +16,9 @@ interface StepProfileProps {
 
 const CLASS_LEVELS_TUTOR = [
   'Terminale',
-  '1ere',
+  '1ère',
   '2nde',
-  '3e',
+  '3ème',
 ] as const;
 
 const GENDER_OPTIONS = [
@@ -67,22 +68,18 @@ export function StepProfile({ onNext }: StepProfileProps) {
 
       <div className="flex gap-3">
         <div className="flex-1">
-          <label className="mb-2 block text-sm font-medium text-gray-700">{t('enrollment.firstName')}</label>
-          <input
-            type="text"
+          <Input
+            label={t('enrollment.firstName')}
             value={firstName}
             onChange={(e) => setFirstName(e.target.value)}
-            className="h-12 w-full rounded-lg border-[1.5px] border-gray-300 bg-white px-4 text-base outline-none transition-colors focus:border-red-600"
             required
           />
         </div>
         <div className="flex-1">
-          <label className="mb-2 block text-sm font-medium text-gray-700">{t('enrollment.lastName')}</label>
-          <input
-            type="text"
+          <Input
+            label={t('enrollment.lastName')}
             value={lastName}
             onChange={(e) => setLastName(e.target.value)}
-            className="h-12 w-full rounded-lg border-[1.5px] border-gray-300 bg-white px-4 text-base outline-none transition-colors focus:border-red-600"
             required
           />
         </div>
@@ -90,31 +87,24 @@ export function StepProfile({ onNext }: StepProfileProps) {
 
       <div className="grid grid-cols-2 gap-3">
         <div className="min-w-0">
-          <label className="mb-2 block text-sm font-medium text-gray-700">{t('enrollment.dateOfBirth')}</label>
-          <input
+          <Input
+            label={t('enrollment.dateOfBirth')}
             type="date"
             value={dateOfBirth}
             onChange={(e) => setDateOfBirth(e.target.value)}
-            className={`h-12 w-full rounded-lg border-[1.5px] bg-white px-4 text-base outline-none transition-colors focus:border-red-600 ${showAgeError ? 'border-red-600' : 'border-gray-300'}`}
+            error={showAgeError ? t('enrollment.ageError') : undefined}
             required
           />
-          {showAgeError && (
-            <p className="mt-1 text-xs text-red-600">{t('enrollment.ageError')}</p>
-          )}
         </div>
         <div className="min-w-0">
-          <label className="mb-2 block text-sm font-medium text-gray-700">{t('enrollment.classLabel')}</label>
-          <select
+          <Select
+            label={t('enrollment.classLabel')}
             value={classLevel}
             onChange={(e) => setClassLevel(e.target.value)}
-            className="h-12 w-full rounded-lg border-[1.5px] border-gray-300 bg-white px-4 text-base outline-none transition-colors focus:border-red-600"
+            placeholder={t('enrollment.selectClass')}
+            options={CLASS_LEVELS_TUTOR.map((level) => ({ value: level, label: level }))}
             required
-          >
-            <option value="">{t('enrollment.selectClass')}</option>
-            {CLASS_LEVELS_TUTOR.map((level) => (
-              <option key={level} value={level}>{level}</option>
-            ))}
-          </select>
+          />
         </div>
       </div>
 
@@ -138,13 +128,9 @@ export function StepProfile({ onNext }: StepProfileProps) {
         </div>
       </div>
 
-      <button
-        type="submit"
-        disabled={!isValid}
-        className="mt-4 flex h-[52px] w-full items-center justify-center rounded-xl bg-red-600 text-base font-semibold text-white transition-colors hover:bg-red-600/90 disabled:opacity-50"
-      >
+      <Button type="submit" disabled={!isValid}>
         {t('common.continue')}
-      </button>
+      </Button>
     </form>
   );
 }
