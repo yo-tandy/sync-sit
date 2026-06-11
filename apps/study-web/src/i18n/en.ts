@@ -61,6 +61,13 @@ export default {
     help: 'Help',
   },
 
+  menu: {
+    about: 'About',
+    reportProblem: 'Report a Problem',
+    privacyPolicy: 'Privacy Policy',
+    terms: 'Terms & Conditions',
+  },
+
   enrollment: {
     tutorTitle: 'Tutor Sign Up',
     tutor: {

@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { httpsCallable } from 'firebase/functions';
 import { TopNav, StepIndicator, StepEmail, StepVerify, StepPassword } from '@ejm/shared-ui';
 import { functions } from '@/config/firebase';
+import { EnrollmentAppBar } from '@/components/ui/EnrollmentAppBar';
 import { StepProfile } from './StepProfile';
 import { StepPrefs } from './StepPrefs';
 import type { ProfileData } from './StepProfile';
@@ -188,15 +189,21 @@ export function TutorEnrollment() {
     }
   };
 
+  const isPostAuthStep = step >= AUTH_STEPS;
+
   return (
     <div>
-      <TopNav
-        title={t('enrollment.tutorTitle')}
-        backTo={step === 0 ? '/' : undefined}
-        onBack={step > 0 ? handleBack : undefined}
-      />
-      {step < AUTH_STEPS && (
-        <StepIndicator totalSteps={AUTH_STEPS} currentStep={step} />
+      {isPostAuthStep ? (
+        <EnrollmentAppBar />
+      ) : (
+        <>
+          <TopNav
+            title={t('enrollment.tutorTitle')}
+            backTo={step === 0 ? '/' : undefined}
+            onBack={step > 0 ? handleBack : undefined}
+          />
+          <StepIndicator totalSteps={AUTH_STEPS} currentStep={step} />
+        </>
       )}
       {renderStep()}
     </div>
