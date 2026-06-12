@@ -4,3 +4,4 @@ export { TermsPage } from './TermsPage.js';
 export { ReportProblemPage } from './ReportProblemPage.js';
 export { WelcomePage } from './WelcomePage.js';
 export { SignUpRolePage, type SignUpRoleOption } from './SignUpRolePage.js';
+export { LoginPage } from './LoginPage.js';
