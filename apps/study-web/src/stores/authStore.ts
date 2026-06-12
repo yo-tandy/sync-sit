@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import {
   onAuthStateChanged,
+  sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signOut,
   type User as FirebaseUser,
@@ -17,6 +18,7 @@ interface AuthState {
 
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  resetPassword: (email: string) => Promise<void>;
   refreshUserDoc: () => Promise<void>;
   clearError: () => void;
 }
@@ -44,6 +46,17 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   logout: async () => {
     await signOut(auth);
     set({ firebaseUser: null, userDoc: null });
+  },
+
+  resetPassword: async (email: string) => {
+    try {
+      set({ error: null });
+      await sendPasswordResetEmail(auth, email);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to send reset email';
+      set({ error: message });
+      throw err;
+    }
   },
 
   refreshUserDoc: async () => {
