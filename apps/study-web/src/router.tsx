@@ -9,6 +9,7 @@ import { LoginPage } from '@/pages/public/LoginPage';
 import { SignUpRolePage } from '@/pages/public/SignUpRolePage';
 import { StaticPage } from '@/pages/public/StaticPage';
 import { AboutPage } from '@/pages/public/AboutPage';
+import { ForgotPasswordPage } from '@/pages/public/ForgotPasswordPage';
 import { PrivacyPage, TermsPage, ReportProblemPage } from '@ejm/shared-ui';
 import { useAuthStore } from '@/stores/authStore';
 
@@ -38,7 +39,7 @@ export const router = createBrowserRouter([
       { path: '/terms', element: <TermsPage brand={BRAND} supportEmail={SUPPORT_EMAIL} /> },
       { path: '/report', element: <SyncStudyReportProblemPage /> },
       { path: '/enroll/parent', element: <StaticPage titleKey="welcome.signUpParent" /> },
-      { path: '/forgot-password', element: <StaticPage titleKey="auth.forgotPassword" /> },
+      { path: '/forgot-password', element: <ForgotPasswordPage /> },
       { path: '*', element: <Navigate to="/" replace /> },
     ],
   },
