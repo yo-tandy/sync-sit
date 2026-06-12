@@ -1,17 +1,28 @@
 import { useTranslation } from 'react-i18next';
-import { TopNav, Button, InfoBanner, Card } from '@/components/ui';
-import { MailIcon } from '@/components/ui/Icons';
-import { useAuthStore } from '@/stores/authStore';
-import { getRecentErrors, formatErrorsForEmail } from '@/lib/errorCapture';
+import { TopNav } from '../components/TopNav.js';
+import { Button } from '../components/Button.js';
+import { InfoBanner } from '../components/InfoBanner.js';
+import { Card } from '../components/Card.js';
+import { MailIcon } from '../components/Icons.js';
+import { getRecentErrors, formatErrorsForEmail } from '../lib/errorCapture.js';
 
-export function ReportProblemPage() {
+interface ReportProblemPageProps {
+  brand: string;
+  supportEmail: string;
+  userId?: string;
+  appVersion?: string;
+}
+
+export function ReportProblemPage({
+  brand,
+  supportEmail,
+  userId,
+  appVersion = '1.0.0',
+}: ReportProblemPageProps) {
   const { t } = useTranslation();
-  const { userDoc } = useAuthStore();
-
-  const userId = userDoc?.uid ?? 'Not logged in';
+  const resolvedUserId = userId ?? t('report.notLoggedIn');
   const now = new Date();
   const timeStr = now.toISOString().replace('T', ' ').slice(0, 19) + ' UTC';
-  const version = '1.0.0';
   const platform = navigator.userAgent.includes('iPhone')
     ? 'iOS'
     : navigator.userAgent.includes('Android')
@@ -22,11 +33,11 @@ export function ReportProblemPage() {
   const errorsForEmail = formatErrorsForEmail();
   const errorCount = recentErrors.length;
 
-  const subject = encodeURIComponent('Problem Report');
+  const subject = encodeURIComponent(`${brand} Problem Report`);
   const body = encodeURIComponent(
-    `User ID: ${userId}\nTime: ${timeStr}\nVersion: ${version}\nPlatform: ${platform}\n\nRecent errors (${errorCount}):\n${errorsForEmail}\n\n---\nDescribe your issue:\n`
+    `User ID: ${resolvedUserId}\nTime: ${timeStr}\nVersion: ${appVersion}\nPlatform: ${platform}\n\nRecent errors (${errorCount}):\n${errorsForEmail}\n\n---\nDescribe your issue:\n`
   );
-  const mailtoHref = `mailto:support@sync-sit.com?subject=${subject}&body=${body}`;
+  const mailtoHref = `mailto:${supportEmail}?subject=${subject}&body=${body}`;
 
   return (
     <div>
@@ -43,7 +54,7 @@ export function ReportProblemPage() {
           <div className="space-y-2 text-sm text-gray-700">
             <div className="flex justify-between">
               <span>{t('report.userId')}</span>
-              <span className="font-mono text-xs text-gray-500">{userId}</span>
+              <span className="font-mono text-xs text-gray-500">{resolvedUserId}</span>
             </div>
             <div className="flex justify-between">
               <span>{t('report.time')}</span>
@@ -51,7 +62,7 @@ export function ReportProblemPage() {
             </div>
             <div className="flex justify-between">
               <span>{t('report.version')}</span>
-              <span className="font-mono text-xs text-gray-500">{version}</span>
+              <span className="font-mono text-xs text-gray-500">{appVersion}</span>
             </div>
             <div className="flex justify-between">
               <span>{t('report.platform')}</span>
@@ -65,7 +76,6 @@ export function ReportProblemPage() {
             </div>
           </div>
 
-          {/* Show recent errors */}
           {errorCount > 0 && (
             <div className="mt-3 max-h-40 overflow-y-auto rounded border border-red-200 bg-red-50 p-2">
               {recentErrors.map((err, i) => (

@@ -1,5 +1,10 @@
 import { useTranslation } from 'react-i18next';
-import { TopNav } from '@/components/ui';
+import { TopNav } from '../components/TopNav.js';
+
+interface TermsPageProps {
+  brand: string;
+  supportEmail: string;
+}
 
 interface Section {
   titleEn: string;
@@ -13,17 +18,17 @@ const sections: Section[] = [
     titleEn: '1. Acceptance of Terms',
     titleFr: '1. Acceptation des conditions',
     contentEn:
-      'By creating an account on Sync/Sit or using the platform in any way, you agree to be bound by these Terms of Service and our Privacy Policy. If you do not agree with any part of these terms, you must not use the platform.\n\n' +
-      'These terms constitute a legally binding agreement between you and Tandy SARL, the operator of Sync/Sit, based in Paris, France. Please read them carefully before using the service.',
+      'By creating an account on {{brand}} or using the platform in any way, you agree to be bound by these Terms of Service and our Privacy Policy. If you do not agree with any part of these terms, you must not use the platform.\n\n' +
+      'These terms constitute a legally binding agreement between you and Tandy SARL, the operator of {{brand}}, based in Paris, France. Please read them carefully before using the service.',
     contentFr:
-      'En créant un compte sur Sync/Sit ou en utilisant la plateforme de quelque manière que ce soit, vous acceptez d\'être lié(e) par les présentes Conditions Générales d\'Utilisation et notre Politique de confidentialité. Si vous n\'acceptez pas tout ou partie de ces conditions, vous ne devez pas utiliser la plateforme.\n\n' +
-      'Les présentes conditions constituent un accord juridiquement contraignant entre vous et Tandy SARL, l\'exploitant de Sync/Sit, basée à Paris, France. Veuillez les lire attentivement avant d\'utiliser le service.',
+      'En créant un compte sur {{brand}} ou en utilisant la plateforme de quelque manière que ce soit, vous acceptez d\'être lié(e) par les présentes Conditions Générales d\'Utilisation et notre Politique de confidentialité. Si vous n\'acceptez pas tout ou partie de ces conditions, vous ne devez pas utiliser la plateforme.\n\n' +
+      'Les présentes conditions constituent un accord juridiquement contraignant entre vous et Tandy SARL, l\'exploitant de {{brand}}, basée à Paris, France. Veuillez les lire attentivement avant d\'utiliser le service.',
   },
   {
     titleEn: '2. Description of Service',
     titleFr: '2. Description du service',
     contentEn:
-      'Sync/Sit is a non-commercial platform that connects families of the École Jeannine Manuel (EJM) community in Paris with EJM student babysitters aged 15 to 18.\n\n' +
+      '{{brand}} is a non-commercial platform that connects families of the École Jeannine Manuel (EJM) community in Paris with EJM student babysitters aged 15 to 18.\n\n' +
       'The platform provides the following features:\n' +
       '- Profile creation for parents and babysitters\n' +
       '- School affiliation verification for families and babysitters\n' +
@@ -31,9 +36,9 @@ const sections: Section[] = [
       '- Scheduling and appointment management\n' +
       '- In-app communication via notifications\n' +
       '- Community verification through peer vouching\n\n' +
-      'Sync/Sit is a facilitator only. It connects families with babysitters but does not employ, supervise, or manage babysitters in any way.',
+      '{{brand}} is a facilitator only. It connects families with babysitters but does not employ, supervise, or manage babysitters in any way.',
     contentFr:
-      'Sync/Sit est une plateforme non commerciale qui met en relation les familles de la communauté de l\'École Jeannine Manuel (EJM) à Paris avec des élèves babysitters de l\'EJM âgés de 15 à 18 ans.\n\n' +
+      '{{brand}} est une plateforme non commerciale qui met en relation les familles de la communauté de l\'École Jeannine Manuel (EJM) à Paris avec des élèves babysitters de l\'EJM âgés de 15 à 18 ans.\n\n' +
       'La plateforme offre les fonctionnalités suivantes :\n' +
       '- Création de profils pour les parents et les babysitters\n' +
       '- Vérification de l\'affiliation scolaire des familles et des babysitters\n' +
@@ -41,13 +46,13 @@ const sections: Section[] = [
       '- Gestion des disponibilités et des rendez-vous\n' +
       '- Communication via notifications dans l\'application\n' +
       '- Vérification communautaire par parrainage entre pairs\n\n' +
-      'Sync/Sit agit uniquement en tant qu\'intermédiaire. La plateforme met en relation les familles avec les babysitters mais n\'emploie, ne supervise et ne gère les babysitters d\'aucune manière.',
+      '{{brand}} agit uniquement en tant qu\'intermédiaire. La plateforme met en relation les familles avec les babysitters mais n\'emploie, ne supervise et ne gère les babysitters d\'aucune manière.',
   },
   {
     titleEn: '3. Eligibility',
     titleFr: '3. Conditions d\'éligibilité',
     contentEn:
-      'To use Sync/Sit, you must meet the following eligibility requirements:\n\n' +
+      'To use {{brand}}, you must meet the following eligibility requirements:\n\n' +
       'Parents:\n' +
       '- Must be a parent or legal guardian within the EJM community\n' +
       '- Must provide a valid email address for verification\n' +
@@ -59,7 +64,7 @@ const sections: Section[] = [
       '- Must verify their school affiliation through their @ejm.org email address\n\n' +
       'In accordance with French law (Article 8 of the GDPR, as implemented in France), individuals aged 15 and over may consent to the processing of their personal data. Babysitters aged 15 to 18 create their accounts with their own consent.',
     contentFr:
-      'Pour utiliser Sync/Sit, vous devez remplir les conditions d\'éligibilité suivantes :\n\n' +
+      'Pour utiliser {{brand}}, vous devez remplir les conditions d\'éligibilité suivantes :\n\n' +
       'Parents :\n' +
       '- Être parent ou représentant légal au sein de la communauté EJM\n' +
       '- Fournir une adresse e-mail valide pour la vérification\n' +
@@ -75,27 +80,27 @@ const sections: Section[] = [
     titleEn: '4. Account Creation and Verification',
     titleFr: '4. Création de compte et vérification',
     contentEn:
-      'All users must create an account to access Sync/Sit. Account creation requires:\n\n' +
+      'All users must create an account to access {{brand}}. Account creation requires:\n\n' +
       '- Providing accurate and complete personal information\n' +
       '- Verifying your email address through a magic link sent to your email\n' +
       '- For babysitters: verifying their school affiliation through their @ejm.org email address\n' +
       '- For parents: completing the parent verification process\n\n' +
-      'You are responsible for maintaining the security of your account. You must not share your authentication links with anyone. You must notify us immediately at support@sync-sit.com if you suspect unauthorised access to your account.\n\n' +
+      'You are responsible for maintaining the security of your account. You must not share your authentication links with anyone. You must notify us immediately at {{supportEmail}} if you suspect unauthorised access to your account.\n\n' +
       'We reserve the right to refuse, suspend, or terminate any account that fails verification or provides false information.',
     contentFr:
-      'Tous les utilisateurs doivent créer un compte pour accéder à Sync/Sit. La création de compte nécessite :\n\n' +
+      'Tous les utilisateurs doivent créer un compte pour accéder à {{brand}}. La création de compte nécessite :\n\n' +
       '- La fourniture d\'informations personnelles exactes et complètes\n' +
       '- La vérification de votre adresse e-mail via un lien magique envoyé à votre adresse\n' +
       '- Pour les babysitters : la vérification de leur affiliation scolaire par leur adresse e-mail @ejm.org\n' +
       '- Pour les parents : la réalisation du processus de vérification parentale\n\n' +
-      'Vous êtes responsable de la sécurité de votre compte. Vous ne devez en aucun cas partager vos liens d\'authentification. Vous devez nous notifier immédiatement à support@sync-sit.com si vous soupçonnez un accès non autorisé à votre compte.\n\n' +
+      'Vous êtes responsable de la sécurité de votre compte. Vous ne devez en aucun cas partager vos liens d\'authentification. Vous devez nous notifier immédiatement à {{supportEmail}} si vous soupçonnez un accès non autorisé à votre compte.\n\n' +
       'Nous nous réservons le droit de refuser, suspendre ou résilier tout compte qui échoue à la vérification ou fournit de fausses informations.',
   },
   {
     titleEn: '5. User Responsibilities',
     titleFr: '5. Responsabilités des utilisateurs',
     contentEn:
-      'All users of Sync/Sit agree to:\n\n' +
+      'All users of {{brand}} agree to:\n\n' +
       '- Provide accurate, current, and complete information in their profile\n' +
       '- Update their information promptly if it changes\n' +
       '- Treat all other users with respect and courtesy\n' +
@@ -104,7 +109,7 @@ const sections: Section[] = [
       '- Not harass, threaten, or intimidate other users\n' +
       '- Comply with all applicable laws and regulations, including French law regarding childcare and employment of minors',
     contentFr:
-      'Tous les utilisateurs de Sync/Sit s\'engagent à :\n\n' +
+      'Tous les utilisateurs de {{brand}} s\'engagent à :\n\n' +
       '- Fournir des informations exactes, à jour et complètes dans leur profil\n' +
       '- Mettre à jour leurs informations dans les meilleurs délais en cas de changement\n' +
       '- Traiter tous les autres utilisateurs avec respect et courtoisie\n' +
@@ -117,7 +122,7 @@ const sections: Section[] = [
     titleEn: '6. Babysitter Responsibilities',
     titleFr: '6. Responsabilités des babysitters',
     contentEn:
-      'Babysitters using Sync/Sit agree to:\n\n' +
+      'Babysitters using {{brand}} agree to:\n\n' +
       '- Be reliable and honour confirmed appointments\n' +
       '- Inform families promptly if they need to cancel or reschedule\n' +
       '- Behave appropriately and responsibly when caring for children\n' +
@@ -127,7 +132,7 @@ const sections: Section[] = [
       '- Keep all personal information about families and children confidential\n' +
       '- Accurately represent their availability and qualifications',
     contentFr:
-      'Les babysitters utilisant Sync/Sit s\'engagent à :\n\n' +
+      'Les babysitters utilisant {{brand}} s\'engagent à :\n\n' +
       '- Être fiables et honorer les rendez-vous confirmés\n' +
       '- Informer les familles dans les meilleurs délais en cas d\'annulation ou de report nécessaire\n' +
       '- Se comporter de manière appropriée et responsable lors de la garde d\'enfants\n' +
@@ -141,7 +146,7 @@ const sections: Section[] = [
     titleEn: '7. Parent Responsibilities',
     titleFr: '7. Responsabilités des parents',
     contentEn:
-      'Parents using Sync/Sit agree to:\n\n' +
+      'Parents using {{brand}} agree to:\n\n' +
       '- Provide accurate information about their children (names, ages, languages, any special needs or instructions)\n' +
       '- Clearly communicate expectations, house rules, and emergency procedures to the babysitter before each appointment\n' +
       '- Ensure the babysitter has all necessary contact numbers and instructions\n' +
@@ -151,7 +156,7 @@ const sections: Section[] = [
       '- Complete the verification process to help maintain community trust\n' +
       '- Treat babysitters with respect, keeping in mind they are students aged 15 to 18',
     contentFr:
-      'Les parents utilisant Sync/Sit s\'engagent à :\n\n' +
+      'Les parents utilisant {{brand}} s\'engagent à :\n\n' +
       '- Fournir des informations exactes concernant leurs enfants (prénoms, âges, langues, besoins particuliers ou instructions spécifiques)\n' +
       '- Communiquer clairement les attentes, les règles de la maison et les procédures d\'urgence au babysitter avant chaque rendez-vous\n' +
       '- S\'assurer que le babysitter dispose de tous les numéros de téléphone et instructions nécessaires\n' +
@@ -165,28 +170,28 @@ const sections: Section[] = [
     titleEn: '8. Platform Role and Limitation of Liability',
     titleFr: '8. Rôle de la plateforme et limitation de responsabilité',
     contentEn:
-      'Sync/Sit acts solely as an intermediary that facilitates connections between families and babysitters within the EJM community. Sync/Sit:\n\n' +
+      '{{brand}} acts solely as an intermediary that facilitates connections between families and babysitters within the EJM community. {{brand}}:\n\n' +
       '- Is not an employer, agency, or contractor of any babysitter\n' +
       '- Does not supervise, direct, or control babysitting activities\n' +
       '- Does not guarantee the quality, safety, or outcome of any babysitting arrangement\n' +
       '- Does not participate in or mediate financial transactions between users\n' +
       '- Does not verify the suitability of any babysitter for any particular child or family\n\n' +
       'The babysitting relationship is exclusively between the parent and the babysitter. Parents are responsible for interviewing, selecting, and supervising the babysitters they choose.\n\n' +
-      'To the maximum extent permitted by applicable law, including Articles 1240 and following of the French Civil Code, Sync/Sit and its operator shall not be held liable for:\n' +
+      'To the maximum extent permitted by applicable law, including Articles 1240 and following of the French Civil Code, {{brand}} and its operator shall not be held liable for:\n' +
       '- Any damage, injury, loss, or harm arising from babysitting arrangements made through the platform\n' +
       '- The conduct, actions, or omissions of any user, whether parent or babysitter\n' +
       '- The accuracy or completeness of information provided by users\n' +
       '- Service interruptions, technical errors, or data loss\n\n' +
       'Nothing in these terms excludes or limits liability for death or personal injury caused by negligence, fraud, or any other liability that cannot be excluded or limited under French law.',
     contentFr:
-      'Sync/Sit agit uniquement en tant qu\'intermédiaire facilitant la mise en relation entre les familles et les babysitters au sein de la communauté EJM. Sync/Sit :\n\n' +
+      '{{brand}} agit uniquement en tant qu\'intermédiaire facilitant la mise en relation entre les familles et les babysitters au sein de la communauté EJM. {{brand}} :\n\n' +
       '- N\'est pas l\'employeur, l\'agence ou le prestataire d\'aucun babysitter\n' +
       '- Ne supervise, ne dirige et ne contrôle pas les activités de garde d\'enfants\n' +
       '- Ne garantit pas la qualité, la sécurité ou le résultat de toute garde d\'enfants\n' +
       '- Ne participe pas aux transactions financières entre utilisateurs et n\'en assure pas la médiation\n' +
       '- Ne vérifie pas l\'adéquation d\'un babysitter pour un enfant ou une famille en particulier\n\n' +
       'La relation de garde est exclusivement établie entre le parent et le babysitter. Les parents sont responsables de l\'entretien, de la sélection et de la supervision des babysitters qu\'ils choisissent.\n\n' +
-      'Dans la limite maximale autorisée par le droit applicable, y compris les articles 1240 et suivants du Code civil français, Sync/Sit et son exploitant ne sauraient être tenus responsables :\n' +
+      'Dans la limite maximale autorisée par le droit applicable, y compris les articles 1240 et suivants du Code civil français, {{brand}} et son exploitant ne sauraient être tenus responsables :\n' +
       '- De tout dommage, blessure, perte ou préjudice résultant de gardes d\'enfants organisées via la plateforme\n' +
       '- Du comportement, des actes ou des omissions de tout utilisateur, qu\'il soit parent ou babysitter\n' +
       '- De l\'exactitude ou de l\'exhaustivité des informations fournies par les utilisateurs\n' +
@@ -197,21 +202,21 @@ const sections: Section[] = [
     titleEn: '9. Payment',
     titleFr: '9. Rémunération',
     contentEn:
-      'Sync/Sit is a free, non-commercial platform. It does not charge any fees, commissions, or subscriptions.\n\n' +
-      'Payment for babysitting services is arranged and made directly between the parent and the babysitter. Sync/Sit does not process, facilitate, or mediate any financial transactions.\n\n' +
-      'Parents and babysitters are solely responsible for agreeing on compensation, payment method, and timing. Sync/Sit has no visibility into and accepts no liability for these arrangements.\n\n' +
+      '{{brand}} is a free, non-commercial platform. It does not charge any fees, commissions, or subscriptions.\n\n' +
+      'Payment for babysitting services is arranged and made directly between the parent and the babysitter. {{brand}} does not process, facilitate, or mediate any financial transactions.\n\n' +
+      'Parents and babysitters are solely responsible for agreeing on compensation, payment method, and timing. {{brand}} has no visibility into and accepts no liability for these arrangements.\n\n' +
       'Users are responsible for complying with all applicable tax and employment regulations, including regulations regarding the employment of minors under French law.',
     contentFr:
-      'Sync/Sit est une plateforme gratuite et non commerciale. Elle ne facture aucun frais, commission ou abonnement.\n\n' +
-      'La rémunération des services de garde est convenue et versée directement entre le parent et le babysitter. Sync/Sit ne traite, ne facilite et n\'assure la médiation d\'aucune transaction financière.\n\n' +
-      'Les parents et les babysitters sont seuls responsables de convenir de la rémunération, du mode de paiement et des délais. Sync/Sit n\'a aucune visibilité sur ces arrangements et n\'accepte aucune responsabilité à leur égard.\n\n' +
+      '{{brand}} est une plateforme gratuite et non commerciale. Elle ne facture aucun frais, commission ou abonnement.\n\n' +
+      'La rémunération des services de garde est convenue et versée directement entre le parent et le babysitter. {{brand}} ne traite, ne facilite et n\'assure la médiation d\'aucune transaction financière.\n\n' +
+      'Les parents et les babysitters sont seuls responsables de convenir de la rémunération, du mode de paiement et des délais. {{brand}} n\'a aucune visibilité sur ces arrangements et n\'accepte aucune responsabilité à leur égard.\n\n' +
       'Les utilisateurs sont responsables du respect de toutes les réglementations fiscales et sociales applicables, y compris les réglementations relatives à l\'emploi des mineurs en droit français.',
   },
   {
     titleEn: '10. Prohibited Uses',
     titleFr: '10. Utilisations interdites',
     contentEn:
-      'The following uses of Sync/Sit are strictly prohibited:\n\n' +
+      'The following uses of {{brand}} are strictly prohibited:\n\n' +
       '- Creating a fake or misleading profile\n' +
       '- Impersonating another person or providing false identity documents\n' +
       '- Using the platform for any purpose other than arranging babysitting within the EJM community\n' +
@@ -223,7 +228,7 @@ const sections: Section[] = [
       '- Using automated tools (bots, scrapers) to access the platform\n' +
       '- Any activity that violates applicable French or European law',
     contentFr:
-      'Les utilisations suivantes de Sync/Sit sont strictement interdites :\n\n' +
+      'Les utilisations suivantes de {{brand}} sont strictement interdites :\n\n' +
       '- Créer un profil faux ou trompeur\n' +
       '- Usurper l\'identité d\'une autre personne ou fournir de faux documents d\'identité\n' +
       '- Utiliser la plateforme à toute fin autre que l\'organisation de gardes d\'enfants au sein de la communauté EJM\n' +
@@ -239,14 +244,14 @@ const sections: Section[] = [
     titleEn: '11. Community Verification Obligations',
     titleFr: '11. Obligations relatives à la vérification communautaire',
     contentEn:
-      'Sync/Sit offers a community verification feature allowing verified members to vouch for other users. When you vouch for another user, you:\n\n' +
+      '{{brand}} offers a community verification feature allowing verified members to vouch for other users. When you vouch for another user, you:\n\n' +
       '- Confirm that you personally know the individual\n' +
       '- Attest to your genuine belief that they are a trustworthy member of the EJM community\n' +
       '- Accept that your name may be recorded and visible to administrators in connection with the vouching\n\n' +
       'Vouching must be honest and made in good faith. Providing false vouches or vouching for individuals you do not know personally is a violation of these terms and may result in account suspension or termination.\n\n' +
       'Community verification is an additional trust signal and does not replace the platform\'s formal identity and school verification process.',
     contentFr:
-      'Sync/Sit propose une fonctionnalité de vérification communautaire permettant aux membres vérifiés de se porter garants d\'autres utilisateurs. Lorsque vous vous portez garant d\'un autre utilisateur, vous :\n\n' +
+      '{{brand}} propose une fonctionnalité de vérification communautaire permettant aux membres vérifiés de se porter garants d\'autres utilisateurs. Lorsque vous vous portez garant d\'un autre utilisateur, vous :\n\n' +
       '- Confirmez que vous connaissez personnellement cette personne\n' +
       '- Attestez de votre conviction sincère qu\'il s\'agit d\'un membre digne de confiance de la communauté EJM\n' +
       '- Acceptez que votre nom puisse être enregistré et visible par les administrateurs dans le cadre du parrainage\n\n' +
@@ -279,24 +284,24 @@ const sections: Section[] = [
     titleEn: '13. Intellectual Property',
     titleFr: '13. Propriété intellectuelle',
     contentEn:
-      'The Sync/Sit name, logo, design, and all software code and visual elements of the platform are the intellectual property of its operator and are protected by applicable intellectual property laws.\n\n' +
+      'The {{brand}} name, logo, design, and all software code and visual elements of the platform are the intellectual property of its operator and are protected by applicable intellectual property laws.\n\n' +
       'You may not copy, modify, distribute, or create derivative works from any part of the platform without prior written consent.\n\n' +
-      'Content you upload to the platform (profile photos, documents) remains your property. By uploading content, you grant Sync/Sit a limited, non-exclusive licence to store, display, and process this content solely for the purpose of providing the service.',
+      'Content you upload to the platform (profile photos, documents) remains your property. By uploading content, you grant {{brand}} a limited, non-exclusive licence to store, display, and process this content solely for the purpose of providing the service.',
     contentFr:
-      'Le nom Sync/Sit, le logo, le design et l\'ensemble du code logiciel et des éléments visuels de la plateforme sont la propriété intellectuelle de son exploitant et sont protégés par les lois applicables en matière de propriété intellectuelle.\n\n' +
+      'Le nom {{brand}}, le logo, le design et l\'ensemble du code logiciel et des éléments visuels de la plateforme sont la propriété intellectuelle de son exploitant et sont protégés par les lois applicables en matière de propriété intellectuelle.\n\n' +
       'Vous ne pouvez pas copier, modifier, distribuer ou créer des oeuvres dérivées de tout ou partie de la plateforme sans consentement écrit préalable.\n\n' +
-      'Le contenu que vous téléchargez sur la plateforme (photos de profil, documents) reste votre propriété. En téléchargeant du contenu, vous accordez à Sync/Sit une licence limitée et non exclusive pour stocker, afficher et traiter ce contenu aux seules fins de fourniture du service.',
+      'Le contenu que vous téléchargez sur la plateforme (photos de profil, documents) reste votre propriété. En téléchargeant du contenu, vous accordez à {{brand}} une licence limitée et non exclusive pour stocker, afficher et traiter ce contenu aux seules fins de fourniture du service.',
   },
   {
     titleEn: '14. Modifications to Terms',
     titleFr: '14. Modifications des conditions',
     contentEn:
       'We may modify these Terms of Service at any time. When we make material changes, we will notify you through the app and update the "Last updated" date at the top of this page.\n\n' +
-      'Your continued use of Sync/Sit after the publication of modified terms constitutes acceptance of the changes. If you do not agree with the modified terms, you must stop using the platform and delete your account.\n\n' +
+      'Your continued use of {{brand}} after the publication of modified terms constitutes acceptance of the changes. If you do not agree with the modified terms, you must stop using the platform and delete your account.\n\n' +
       'We encourage you to review these terms periodically.',
     contentFr:
       'Nous pouvons modifier les présentes Conditions Générales d\'Utilisation à tout moment. En cas de modification substantielle, nous vous en informerons via l\'application et mettrons à jour la date de « Dernière mise à jour » en haut de cette page.\n\n' +
-      'Votre utilisation continue de Sync/Sit après la publication des conditions modifiées vaut acceptation des modifications. Si vous n\'acceptez pas les conditions modifiées, vous devez cesser d\'utiliser la plateforme et supprimer votre compte.\n\n' +
+      'Votre utilisation continue de {{brand}} après la publication des conditions modifiées vaut acceptation des modifications. Si vous n\'acceptez pas les conditions modifiées, vous devez cesser d\'utiliser la plateforme et supprimer votre compte.\n\n' +
       'Nous vous encourageons à consulter régulièrement les présentes conditions.',
   },
   {
@@ -315,35 +320,40 @@ const sections: Section[] = [
     titleEn: '16. Disclaimer of Warranties',
     titleFr: '16. Exclusion de garanties',
     contentEn:
-      'Sync/Sit is provided on an "as is" and "as available" basis. To the maximum extent permitted by applicable law, we make no warranties, express or implied, regarding the platform, including but not limited to:\n\n' +
+      '{{brand}} is provided on an "as is" and "as available" basis. To the maximum extent permitted by applicable law, we make no warranties, express or implied, regarding the platform, including but not limited to:\n\n' +
       '- The availability, reliability, or continuity of the service\n' +
       '- The accuracy, completeness, or timeliness of any information on the platform\n' +
       '- The suitability of any babysitter for any particular family or child\n' +
       '- The absence of errors, bugs, or security vulnerabilities\n\n' +
-      'The verification processes on Sync/Sit (identity verification, school enrollment verification, community vouching) are designed to enhance trust within the community but do not constitute a guarantee of any user\'s character, reliability, or competence.',
+      'The verification processes on {{brand}} (identity verification, school enrollment verification, community vouching) are designed to enhance trust within the community but do not constitute a guarantee of any user\'s character, reliability, or competence.',
     contentFr:
-      'Sync/Sit est fourni « en l\'état » et « selon disponibilité ». Dans la limite maximale autorisée par le droit applicable, nous ne donnons aucune garantie, expresse ou implicite, concernant la plateforme, y compris mais sans s\'y limiter :\n\n' +
+      '{{brand}} est fourni « en l\'état » et « selon disponibilité ». Dans la limite maximale autorisée par le droit applicable, nous ne donnons aucune garantie, expresse ou implicite, concernant la plateforme, y compris mais sans s\'y limiter :\n\n' +
       '- La disponibilité, la fiabilité ou la continuité du service\n' +
       '- L\'exactitude, l\'exhaustivité ou l\'actualité des informations présentes sur la plateforme\n' +
       '- L\'adéquation d\'un babysitter pour une famille ou un enfant en particulier\n' +
       '- L\'absence d\'erreurs, de bugs ou de failles de sécurité\n\n' +
-      'Les processus de vérification de Sync/Sit (vérification d\'identité, vérification de scolarité, parrainage communautaire) sont conçus pour renforcer la confiance au sein de la communauté mais ne constituent pas une garantie du caractère, de la fiabilité ou des compétences d\'un utilisateur.',
+      'Les processus de vérification de {{brand}} (vérification d\'identité, vérification de scolarité, parrainage communautaire) sont conçus pour renforcer la confiance au sein de la communauté mais ne constituent pas une garantie du caractère, de la fiabilité ou des compétences d\'un utilisateur.',
   },
   {
     titleEn: '17. Contact',
     titleFr: '17. Contact',
     contentEn:
       'For any questions about these Terms of Service, please contact us at:\n\n' +
-      'Email: support@sync-sit.com',
+      'Email: {{supportEmail}}',
     contentFr:
       'Pour toute question relative aux présentes Conditions Générales d\'Utilisation, veuillez nous contacter à :\n\n' +
-      'E-mail : support@sync-sit.com',
+      'E-mail : {{supportEmail}}',
   },
 ];
 
-export function TermsPage() {
+function interpolate(text: string, vars: Record<string, string>): string {
+  return text.replace(/\{\{(\w+)\}\}/g, (_, k) => vars[k] ?? `{{${k}}}`);
+}
+
+export function TermsPage({ brand, supportEmail }: TermsPageProps) {
   const { t, i18n } = useTranslation();
   const isFr = i18n.language?.startsWith('fr');
+  const vars = { brand, supportEmail };
 
   return (
     <div>
@@ -363,7 +373,7 @@ export function TermsPage() {
                 {isFr ? section.titleFr : section.titleEn}
               </h3>
               <div className="whitespace-pre-line text-sm leading-relaxed text-gray-600">
-                {isFr ? section.contentFr : section.contentEn}
+                {interpolate(isFr ? section.contentFr : section.contentEn, vars)}
               </div>
             </div>
           ))}

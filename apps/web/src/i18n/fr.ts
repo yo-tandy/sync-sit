@@ -605,6 +605,7 @@ export default {
     errorsFound: 'erreur(s) capturée(s)',
     privacyNote: "Seul votre identifiant utilisateur est inclus pour nous aider \u00e0 enqu\u00eater. Aucune donn\u00e9e personnelle n'est envoy\u00e9e automatiquement.",
     openEmail: "Ouvrir l'email au support",
+    notLoggedIn: 'Non connecté',
   },
 
   validation: {

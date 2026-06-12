@@ -1,5 +1,10 @@
 import { useTranslation } from 'react-i18next';
-import { TopNav } from '@/components/ui';
+import { TopNav } from '../components/TopNav.js';
+
+interface PrivacyPageProps {
+  brand: string;
+  supportEmail: string;
+}
 
 interface Section {
   titleEn: string;
@@ -13,9 +18,9 @@ const sections: Section[] = [
     titleEn: '1. Data Controller',
     titleFr: '1. Responsable du traitement',
     contentEn:
-      'Sync/Sit is operated by Tandy SARL, a company based in Paris, France. The data controller within the meaning of the General Data Protection Regulation (GDPR) and the French Data Protection Act (Loi Informatique et Libertés) can be contacted at: support@sync-sit.com.\n\nSync/Sit is a non-commercial platform designed to connect families and student babysitters within the École Jeannine Manuel (EJM) community in Paris.',
+      '{{brand}} is operated by Tandy SARL, a company based in Paris, France. The data controller within the meaning of the General Data Protection Regulation (GDPR) and the French Data Protection Act (Loi Informatique et Libertés) can be contacted at: {{supportEmail}}.\n\n{{brand}} is a non-commercial platform designed to connect families and student babysitters within the École Jeannine Manuel (EJM) community in Paris.',
     contentFr:
-      'Sync/Sit est exploitée par la société Tandy SARL, basée à Paris, France. Le responsable du traitement au sens du Règlement Général sur la Protection des Données (RGPD) et de la loi Informatique et Libertés est joignable à l\'adresse : support@sync-sit.com.\n\nSync/Sit est une plateforme non commerciale destinée à mettre en relation les familles et les élèves babysitters au sein de la communauté de l\'École Jeannine Manuel (EJM) à Paris.',
+      '{{brand}} est exploitée par la société Tandy SARL, basée à Paris, France. Le responsable du traitement au sens du Règlement Général sur la Protection des Données (RGPD) et de la loi Informatique et Libertés est joignable à l\'adresse : {{supportEmail}}.\n\n{{brand}} est une plateforme non commerciale destinée à mettre en relation les familles et les élèves babysitters au sein de la communauté de l\'École Jeannine Manuel (EJM) à Paris.',
   },
   {
     titleEn: '2. Personal Data Collected',
@@ -109,13 +114,13 @@ const sections: Section[] = [
       'These transfers are governed by appropriate safeguards in compliance with the GDPR, including:\n' +
       '- Standard Contractual Clauses (SCCs) adopted by the European Commission\n' +
       '- The EU-US Data Privacy Framework where applicable\n\n' +
-      'You may request a copy of the applicable safeguards by contacting us at support@sync-sit.com.',
+      'You may request a copy of the applicable safeguards by contacting us at {{supportEmail}}.',
     contentFr:
       'Vos données sont principalement stockées et traitées au sein de l\'Union européenne (région Firebase europe-west1). Toutefois, certains traitements effectués par Google LLC et Resend Inc. peuvent impliquer des transferts vers les États-Unis.\n\n' +
       'Ces transferts sont encadrés par des garanties appropriées conformément au RGPD, notamment :\n' +
       '- Les Clauses Contractuelles Types (CCT) adoptées par la Commission européenne\n' +
       '- Le cadre de protection des données UE-États-Unis (Data Privacy Framework), le cas échéant\n\n' +
-      'Vous pouvez demander une copie des garanties applicables en nous contactant à support@sync-sit.com.',
+      'Vous pouvez demander une copie des garanties applicables en nous contactant à {{supportEmail}}.',
   },
   {
     titleEn: '7. Data Retention',
@@ -153,7 +158,7 @@ const sections: Section[] = [
       '- Right to withdraw consent: you may withdraw your consent at any time, without affecting the lawfulness of processing carried out prior to withdrawal\n\n' +
       'To exercise any of these rights, you may:\n' +
       '- Use the in-app data export and account deletion features in your profile settings\n' +
-      '- Contact us at support@sync-sit.com\n\n' +
+      '- Contact us at {{supportEmail}}\n\n' +
       'We will respond to your request within 30 days. If you believe your rights have not been respected, you have the right to lodge a complaint with the Commission Nationale de l\'Informatique et des Libertés (CNIL), the French data protection authority: www.cnil.fr.',
     contentFr:
       'En vertu du RGPD et de la loi française sur la protection des données, vous disposez des droits suivants concernant vos données personnelles :\n\n' +
@@ -166,22 +171,22 @@ const sections: Section[] = [
       '- Droit de retrait du consentement : vous pouvez retirer votre consentement à tout moment, sans que cela n\'affecte la licéité du traitement effectué avant le retrait\n\n' +
       'Pour exercer l\'un de ces droits, vous pouvez :\n' +
       '- Utiliser les fonctionnalités d\'export de données et de suppression de compte disponibles dans les paramètres de votre profil\n' +
-      '- Nous contacter à support@sync-sit.com\n\n' +
+      '- Nous contacter à {{supportEmail}}\n\n' +
       'Nous répondrons à votre demande dans un délai de 30 jours. Si vous estimez que vos droits n\'ont pas été respectés, vous avez le droit d\'introduire une réclamation auprès de la Commission Nationale de l\'Informatique et des Libertés (CNIL), autorité française de protection des données : www.cnil.fr.',
   },
   {
     titleEn: '9. Children\'s Data',
     titleFr: '9. Données relatives aux enfants',
     contentEn:
-      'Sync/Sit collects limited data about children for the sole purpose of facilitating babysitting arrangements. This data consists of first names, ages, and spoken languages of children, and is entered exclusively by their parent or legal guardian.\n\n' +
+      '{{brand}} collects limited data about children for the sole purpose of facilitating babysitting arrangements. This data consists of first names, ages, and spoken languages of children, and is entered exclusively by their parent or legal guardian.\n\n' +
       'We do not collect data directly from children. All children\'s data is provided with parental consent as part of the parent\'s account creation and profile management.\n\n' +
       'Children\'s data is visible only to verified babysitters on the platform and platform administrators. It is deleted immediately when the parent deletes their account.\n\n' +
-      'Babysitters on Sync/Sit may be minors aged 15 to 18. In accordance with Article 8 of the GDPR and French law (which sets the age of digital consent at 15), babysitter accounts for users aged 15 and older are created with the babysitter\'s own consent. No parental consent is required for these users under French law.',
+      'Babysitters on {{brand}} may be minors aged 15 to 18. In accordance with Article 8 of the GDPR and French law (which sets the age of digital consent at 15), babysitter accounts for users aged 15 and older are created with the babysitter\'s own consent. No parental consent is required for these users under French law.',
     contentFr:
-      'Sync/Sit collecte des données limitées concernant les enfants dans le seul but de faciliter l\'organisation de gardes d\'enfants. Ces données consistent en les prénoms, âges et langues parlées des enfants, et sont saisies exclusivement par leur parent ou représentant légal.\n\n' +
+      '{{brand}} collecte des données limitées concernant les enfants dans le seul but de faciliter l\'organisation de gardes d\'enfants. Ces données consistent en les prénoms, âges et langues parlées des enfants, et sont saisies exclusivement par leur parent ou représentant légal.\n\n' +
       'Nous ne collectons aucune donnée directement auprès des enfants. Toutes les données relatives aux enfants sont fournies avec le consentement parental dans le cadre de la création du compte et de la gestion du profil du parent.\n\n' +
       'Les données des enfants ne sont visibles que par les babysitters vérifiés sur la plateforme et les administrateurs. Elles sont supprimées immédiatement lorsque le parent supprime son compte.\n\n' +
-      'Les babysitters sur Sync/Sit peuvent être des mineurs âgés de 15 à 18 ans. Conformément à l\'article 8 du RGPD et au droit français (qui fixe l\'âge du consentement numérique à 15 ans), les comptes de babysitters pour les utilisateurs de 15 ans et plus sont créés avec le consentement propre du babysitter. Aucun consentement parental n\'est requis pour ces utilisateurs en vertu du droit français.',
+      'Les babysitters sur {{brand}} peuvent être des mineurs âgés de 15 à 18 ans. Conformément à l\'article 8 du RGPD et au droit français (qui fixe l\'âge du consentement numérique à 15 ans), les comptes de babysitters pour les utilisateurs de 15 ans et plus sont créés avec le consentement propre du babysitter. Aucun consentement parental n\'est requis pour ces utilisateurs en vertu du droit français.',
   },
   {
     titleEn: '10. Security Measures',
@@ -194,7 +199,7 @@ const sections: Section[] = [
       '- Firestore security rules restricting data access based on user role and ownership\n' +
       '- Verification requirements: babysitters must verify their school affiliation through their @ejm.org email address; families must provide government ID and school enrollment proof before their profiles are published\n' +
       '- Secure file storage via Firebase Cloud Storage with restricted access rules\n\n' +
-      'While we take reasonable steps to protect your data, no system is completely secure. We encourage you to use a secure email provider and to contact us immediately at support@sync-sit.com if you suspect any unauthorised access to your account.',
+      'While we take reasonable steps to protect your data, no system is completely secure. We encourage you to use a secure email provider and to contact us immediately at {{supportEmail}} if you suspect any unauthorised access to your account.',
     contentFr:
       'Nous mettons en oeuvre des mesures techniques et organisationnelles appropriées pour protéger vos données personnelles, notamment :\n\n' +
       '- Authentification via Firebase Auth par liens magiques envoyés par e-mail (aucun mot de passe stocké)\n' +
@@ -203,19 +208,19 @@ const sections: Section[] = [
       '- Règles de sécurité Firestore limitant l\'accès aux données en fonction du rôle et de la propriété de l\'utilisateur\n' +
       '- Exigences de vérification : les babysitters doivent vérifier leur affiliation scolaire par leur adresse e-mail @ejm.org ; les familles doivent fournir une pièce d\'identité officielle et un justificatif de scolarité avant la publication de leur profil\n' +
       '- Stockage sécurisé des fichiers via Firebase Cloud Storage avec des règles d\'accès restreintes\n\n' +
-      'Bien que nous prenions des mesures raisonnables pour protéger vos données, aucun système n\'est totalement infaillible. Nous vous encourageons à utiliser un fournisseur de messagerie sécurisé et à nous contacter immédiatement à support@sync-sit.com si vous soupçonnez un accès non autorisé à votre compte.',
+      'Bien que nous prenions des mesures raisonnables pour protéger vos données, aucun système n\'est totalement infaillible. Nous vous encourageons à utiliser un fournisseur de messagerie sécurisé et à nous contacter immédiatement à {{supportEmail}} si vous soupçonnez un accès non autorisé à votre compte.',
   },
   {
     titleEn: '11. Cookies and Local Storage',
     titleFr: '11. Cookies et stockage local',
     contentEn:
-      'Sync/Sit does not use cookies.\n\n' +
+      '{{brand}} does not use cookies.\n\n' +
       'We use browser local storage (localStorage) exclusively for the following purposes:\n' +
       '- Storing your language preference (English or French)\n' +
       '- Storing a limited error log for troubleshooting (recent client-side errors, automatically cleared)\n\n' +
       'This data remains on your device and is not transmitted to our servers. Firebase Auth may use local storage or IndexedDB to maintain your authentication session; this is managed by Firebase and is necessary for the service to function.',
     contentFr:
-      'Sync/Sit n\'utilise pas de cookies.\n\n' +
+      '{{brand}} n\'utilise pas de cookies.\n\n' +
       'Nous utilisons le stockage local du navigateur (localStorage) exclusivement aux fins suivantes :\n' +
       '- Stockage de votre préférence linguistique (anglais ou français)\n' +
       '- Stockage d\'un journal d\'erreurs limité pour le dépannage (erreurs récentes côté client, automatiquement effacé)\n\n' +
@@ -225,13 +230,13 @@ const sections: Section[] = [
     titleEn: '12. Community Verification',
     titleFr: '12. Vérification communautaire',
     contentEn:
-      'Sync/Sit includes a community verification feature that allows verified members to vouch for other users they know personally. When a member vouches for another user:\n\n' +
+      '{{brand}} includes a community verification feature that allows verified members to vouch for other users they know personally. When a member vouches for another user:\n\n' +
       '- The vouching member\'s name is recorded and may be visible to administrators\n' +
       '- The fact that a user has been vouched for (and the number of vouches) may be visible on their profile\n' +
       '- The identity of the vouching member is not disclosed to other regular users\n\n' +
       'Community vouching is voluntary. By vouching for another user, you confirm that you know them personally and believe they are a trustworthy member of the EJM community.',
     contentFr:
-      'Sync/Sit inclut une fonctionnalité de vérification communautaire qui permet aux membres vérifiés de se porter garants d\'autres utilisateurs qu\'ils connaissent personnellement. Lorsqu\'un membre se porte garant d\'un autre utilisateur :\n\n' +
+      '{{brand}} inclut une fonctionnalité de vérification communautaire qui permet aux membres vérifiés de se porter garants d\'autres utilisateurs qu\'ils connaissent personnellement. Lorsqu\'un membre se porte garant d\'un autre utilisateur :\n\n' +
       '- Le nom du membre garant est enregistré et peut être visible par les administrateurs\n' +
       '- Le fait qu\'un utilisateur ait été parrainé (et le nombre de parrainages) peut être visible sur son profil\n' +
       '- L\'identité du membre garant n\'est pas divulguée aux autres utilisateurs ordinaires\n\n' +
@@ -261,18 +266,18 @@ const sections: Section[] = [
     contentEn:
       'We may update this privacy policy from time to time to reflect changes to our practices or for legal, regulatory, or operational reasons. When we make material changes, we will notify you through the app.\n\n' +
       'The "Last updated" date at the top of this policy indicates when the most recent revision was made. We encourage you to review this policy periodically.\n\n' +
-      'Your continued use of Sync/Sit after any changes to this policy constitutes your acceptance of the updated terms.',
+      'Your continued use of {{brand}} after any changes to this policy constitutes your acceptance of the updated terms.',
     contentFr:
       'Nous pouvons mettre à jour la présente politique de confidentialité de temps à autre pour refléter des changements dans nos pratiques ou pour des raisons juridiques, réglementaires ou opérationnelles. En cas de modification substantielle, nous vous en informerons via l\'application.\n\n' +
       'La date de « Dernière mise à jour » en haut de cette politique indique la date de la révision la plus récente. Nous vous encourageons à consulter régulièrement cette politique.\n\n' +
-      'Votre utilisation continue de Sync/Sit après toute modification de la présente politique vaut acceptation des conditions mises à jour.',
+      'Votre utilisation continue de {{brand}} après toute modification de la présente politique vaut acceptation des conditions mises à jour.',
   },
   {
     titleEn: '15. Contact',
     titleFr: '15. Contact',
     contentEn:
       'For any questions about this privacy policy, or to exercise your data protection rights, please contact us at:\n\n' +
-      'Email: support@sync-sit.com\n\n' +
+      'Email: {{supportEmail}}\n\n' +
       'You also have the right to lodge a complaint with the CNIL:\n' +
       'Commission Nationale de l\'Informatique et des Libertés\n' +
       '3 Place de Fontenoy, TSA 80715\n' +
@@ -280,7 +285,7 @@ const sections: Section[] = [
       'www.cnil.fr',
     contentFr:
       'Pour toute question relative à la présente politique de confidentialité, ou pour exercer vos droits en matière de protection des données, veuillez nous contacter à :\n\n' +
-      'E-mail : support@sync-sit.com\n\n' +
+      'E-mail : {{supportEmail}}\n\n' +
       'Vous disposez également du droit d\'introduire une réclamation auprès de la CNIL :\n' +
       'Commission Nationale de l\'Informatique et des Libertés\n' +
       '3 Place de Fontenoy, TSA 80715\n' +
@@ -289,9 +294,14 @@ const sections: Section[] = [
   },
 ];
 
-export function PrivacyPage() {
+function interpolate(text: string, vars: Record<string, string>): string {
+  return text.replace(/\{\{(\w+)\}\}/g, (_, k) => vars[k] ?? `{{${k}}}`);
+}
+
+export function PrivacyPage({ brand, supportEmail }: PrivacyPageProps) {
   const { t, i18n } = useTranslation();
   const isFr = i18n.language?.startsWith('fr');
+  const vars = { brand, supportEmail };
 
   return (
     <div>
@@ -311,7 +321,7 @@ export function PrivacyPage() {
                 {isFr ? section.titleFr : section.titleEn}
               </h3>
               <div className="whitespace-pre-line text-sm leading-relaxed text-gray-600">
-                {isFr ? section.contentFr : section.contentEn}
+                {interpolate(isFr ? section.contentFr : section.contentEn, vars)}
               </div>
             </div>
           ))}
