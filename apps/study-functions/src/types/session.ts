@@ -1,6 +1,6 @@
 import type { FirestoreTimestamp, LatLng } from '@ejm/shared-core';
 import type { RecurringSlot } from '@ejm/shared-core';
-import type { LocationPref } from './subject.js';
+import type { LocationPref } from '@ejm/study-core';
 import type { SessionStatus } from './status.js';
 
 /**

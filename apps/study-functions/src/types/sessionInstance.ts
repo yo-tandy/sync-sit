@@ -1,5 +1,5 @@
 import type { FirestoreTimestamp } from '@ejm/shared-core';
-import type { LocationPref } from './subject.js';
+import type { LocationPref } from '@ejm/study-core';
 import type { InstanceStatus } from './status.js';
 
 /**
