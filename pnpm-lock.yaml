@@ -332,6 +332,16 @@ importers:
         specifier: ^6.0.2
         version: 6.0.2
 
+  packages/study-core:
+    dependencies:
+      '@ejm/shared-core':
+        specifier: workspace:*
+        version: link:../shared-core
+    devDependencies:
+      typescript:
+        specifier: ^6.0.2
+        version: 6.0.2
+
   tests:
     dependencies:
       '@ejm/sit-core':
