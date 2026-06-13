@@ -26,9 +26,6 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      # Build shared package
-      - run: pnpm --filter @ejm/shared build
-
       # Build web (Firebase config is public/client-side, not secret)
       - name: Build web
         run: pnpm --filter web build
