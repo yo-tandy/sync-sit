@@ -1,7 +1,60 @@
 import type { FirestoreTimestamp, LatLng, NotifPrefs } from './common.js';
 import type { UserRole, AccountStatus, AreaMode, Language } from '../constants/index.js';
 
-/** Base user fields shared by all roles */
+// ---------------------------------------------------------------------------
+// New schema (Plan D — portable user entity)
+// ---------------------------------------------------------------------------
+//
+// Generic User entity that supports a single person being both a babysitter
+// (sync-sit side) and a tutor (sync-study side), or any combination of roles.
+// Each app's concrete profile shape lives in its respective package:
+// BabysitterProfile in @ejm/sit-core, TutorProfile in @ejm/study-core.
+// ParentProfile is shared across both apps (one familyId per person).
+
+export interface User {
+  uid: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  status: AccountStatus;
+  dateOfBirth?: FirestoreTimestamp;
+  photoUrl?: string;
+  language: Language;
+  notifPrefs: NotifPrefs;
+  fcmTokens: string[];
+  createdAt: FirestoreTimestamp;
+  updatedAt: FirestoreTimestamp;
+  lastLoginAt?: FirestoreTimestamp;
+  consentAt?: FirestoreTimestamp;
+  consentVersion?: string;
+  dismissedPwaInstallBanner?: boolean;
+
+  profiles: {
+    babysitter?: ProfileBase;
+    tutor?: ProfileBase;
+    parent?: ParentProfile;
+  };
+
+  isAdmin?: boolean;
+}
+
+export interface ProfileBase {
+  enrollmentComplete: boolean;
+}
+
+export interface ParentProfile extends ProfileBase {
+  familyId: string;
+}
+
+// ---------------------------------------------------------------------------
+// Legacy schema (pre-Plan D)
+// ---------------------------------------------------------------------------
+//
+// Kept exported during the transition so consumers can migrate one
+// reader at a time. After Tier E lands and prod is migrated, a follow-up
+// PR deletes everything below.
+
+/** @deprecated Use {@link User} (Plan D). Removed after prod migration. */
 export interface UserBase {
   uid: string;
   role: UserRole;
@@ -22,12 +75,7 @@ export interface UserBase {
   dismissedPwaInstallBanner?: boolean;
 }
 
-/**
- * Fields common to any service provider (babysitter, tutor, ...).
- * Apps extend this with role-specific fields (e.g. BabysitterUser in sync-sit,
- * TutorUser in sync-study). `role` is inherited from UserBase as `UserRole`;
- * subtypes narrow it to a literal (e.g. `'babysitter'` or `'tutor'`).
- */
+/** @deprecated Use {@link User} + per-app profile types (Plan D). */
 export interface ServiceProviderBase extends UserBase {
   ejemEmail: string;
   dateOfBirth: FirestoreTimestamp;
@@ -60,13 +108,13 @@ export interface ServiceProviderBase extends UserBase {
   revalidationYear?: number;
 }
 
-/** Parent-specific user fields */
+/** @deprecated Use {@link User} with `profiles.parent` (Plan D). */
 export interface ParentUser extends UserBase {
   role: 'parent';
   familyId: string;
 }
 
-/** Admin user fields */
+/** @deprecated Use {@link User} with `isAdmin: true` (Plan D). */
 export interface AdminUser extends UserBase {
   role: 'admin';
 }

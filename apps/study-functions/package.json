@@ -13,6 +13,7 @@
   "dependencies": {
     "@ejm/sit-core": "workspace:*",
     "@ejm/shared-core": "workspace:*",
+    "@ejm/study-core": "workspace:*",
     "@ejm/shared-functions": "workspace:*",
     "firebase-admin": "^13.0.0",
     "firebase-functions": "^6.0.0",
