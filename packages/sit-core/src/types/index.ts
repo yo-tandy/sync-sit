@@ -1,6 +1,7 @@
 export * from './common.js';
 export * from './user.js';
 export * from './babysitterProfile.js';
+export * from './sitUserAdapter.js';
 export * from './family.js';
 export * from './appointment.js';
 export * from './schedule.js';
