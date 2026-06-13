@@ -8,7 +8,7 @@ import { Avatar } from '@/components/ui';
 import { SearchIcon, PlusIcon } from '@/components/ui/Icons';
 import { EndorsementDialog } from '@/components/endorsements/EndorsementDialog';
 import { formatBabysitterName } from '@/lib/formatName';
-import type { ReferenceDoc, BabysitterSummary } from '@ejm/shared';
+import type { ReferenceDoc, BabysitterSummary } from '@ejm/sit-core';
 
 function ReferenceCard({ reference, babysitterName, onEdit, onDelete }: { reference: ReferenceDoc; babysitterName: string; onEdit: () => void; onDelete: () => void }) {
   const { t, i18n } = useTranslation();

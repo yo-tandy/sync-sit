@@ -8,8 +8,8 @@ import { DayEditor } from '@/components/schedule/DayEditor';
 import { OverrideList } from '@/components/schedule/OverrideList';
 import { Button, Card, Dialog, TopNav, Textarea, Spinner, InfoBanner } from '@/components/ui';
 import { ChevronRightIcon } from '@/components/ui/Icons';
-import { DAYS_OF_WEEK, createEmptySlots } from '@ejm/shared';
-import type { DayOfWeek, HolidayMode, HolidayPeriod } from '@ejm/shared';
+import { DAYS_OF_WEEK, createEmptySlots } from '@ejm/sit-core';
+import type { DayOfWeek, HolidayMode, HolidayPeriod } from '@ejm/sit-core';
 
 function getHolidayOptions(t: (key: string) => string): { value: HolidayMode; label: string; description: string }[] {
   return [

@@ -6,7 +6,7 @@ import type {
   FirestoreTimestamp,
   GdprExportData,
   HolidayPeriod,
-} from '@ejm/shared';
+} from '@ejm/sit-core';
 
 interface AdminUserListItem {
   uid: string;
@@ -61,7 +61,7 @@ export type WireTimestamp =
 
 /**
  * Admin-side audit log entry, as returned by the `listAuditLogs` callable.
- * Distinct from the Firestore-storage `AuditLogDoc` in @ejm/shared because
+ * Distinct from the Firestore-storage `AuditLogDoc` in @ejm/sit-core because
  * the wire shape carries an `id` field, enriched `adminInfo`/`targetInfo`,
  * and a serialized timestamp.
  */

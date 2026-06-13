@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 // Re-export the cross-app schemas (password, kid, family, search, joinFamily)
-// so consumers importing from '@ejm/shared' still see the full surface.
+// so consumers importing from '@ejm/sit-core' still see the full surface.
 export * from '@ejm/shared-core';
 
 // ── Babysitter Enrollment (babysitter-specific) ──

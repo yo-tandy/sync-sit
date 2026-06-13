@@ -20,7 +20,7 @@ import {
   ShareIcon,
 } from './Icons';
 import { LanguageSelector } from './LanguageSelector';
-import type { UserRole } from '@ejm/shared';
+import type { UserRole } from '@ejm/sit-core';
 
 function MenuIcon({ className }: { className?: string }) {
   return (

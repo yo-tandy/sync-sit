@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { isRunningAsPWA } from '@ejm/shared';
+import { isRunningAsPWA } from '@ejm/sit-core';
 import { useAuthStore } from '@/stores/authStore';
 import { Button, Card } from '@/components/ui';
 import { BellIcon } from '@/components/ui/Icons';

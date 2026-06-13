@@ -7,8 +7,8 @@ import { Button, Input, Textarea, Chip } from '@/components/ui';
 import { LanguagePicker } from '@/components/forms/LanguagePicker';
 import { PhoneInput } from '@/components/forms/PhoneInput';
 import { AddressAutocomplete, type AddressResult } from '@/components/forms/AddressAutocomplete';
-import { ARRONDISSEMENTS, NEARBY_TOWNS } from '@ejm/shared';
-import type { BabysitterUser } from '@ejm/shared';
+import { ARRONDISSEMENTS, NEARBY_TOWNS } from '@ejm/sit-core';
+import type { BabysitterUser } from '@ejm/sit-core';
 
 interface StepPreferencesProps {
   uid: string;

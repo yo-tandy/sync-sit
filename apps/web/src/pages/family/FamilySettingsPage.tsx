@@ -16,7 +16,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { Button, Input, Textarea, TopNav, InfoBanner, Card } from '@/components/ui';
 import { AddressAutocomplete, type AddressResult } from '@/components/forms/AddressAutocomplete';
 import { XIcon, PlusIcon } from '@/components/ui/Icons';
-import type { ParentUser, FamilyDoc, KidDoc } from '@ejm/shared';
+import type { ParentUser, FamilyDoc, KidDoc } from '@ejm/sit-core';
 
 interface KidForm {
   kidId?: string; // undefined = new kid

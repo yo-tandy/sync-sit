@@ -15,7 +15,7 @@ import { CheckIcon, ShieldIcon } from '@/components/ui/Icons';
 import { useHolidays } from '@/hooks/useHolidays';
 import { getDateTag } from '@/lib/dateTag';
 import { DateTag } from '@/components/ui/DateTag';
-import type { ParentUser, FamilyDoc, KidDoc, BabysitterSummary } from '@ejm/shared';
+import type { ParentUser, FamilyDoc, KidDoc, BabysitterSummary } from '@ejm/sit-core';
 
 // Time options 06:00–02:00
 function generateTimeOptions(): { value: string; label: string }[] {

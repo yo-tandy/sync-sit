@@ -32,7 +32,7 @@ import {
   DAYS_OF_WEEK,
   createEmptySlots,
   type DayOfWeek,
-} from '@ejm/shared';
+} from '@ejm/sit-core';
 import { diffFrames } from './_helpers/replayHook';
 
 // --- vi.hoisted state for mocks ---------------------------------------------

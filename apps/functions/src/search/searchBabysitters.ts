@@ -1,8 +1,8 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
-import { haversineDistance } from '@ejm/shared';
-import type { LatLng } from '@ejm/shared';
+import { haversineDistance } from '@ejm/sit-core';
+import type { LatLng } from '@ejm/sit-core';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
 
 interface SearchParams {

@@ -20,12 +20,12 @@ importers:
 
   apps/functions:
     dependencies:
-      '@ejm/shared':
-        specifier: workspace:*
-        version: link:../../packages/shared
       '@ejm/shared-functions':
         specifier: workspace:*
         version: link:../../packages/shared-functions
+      '@ejm/sit-core':
+        specifier: workspace:*
+        version: link:../../packages/sit-core
       firebase-admin:
         specifier: ^13.0.0
         version: 13.7.0
@@ -45,15 +45,15 @@ importers:
 
   apps/study-functions:
     dependencies:
-      '@ejm/shared':
-        specifier: workspace:*
-        version: link:../../packages/shared
       '@ejm/shared-core':
         specifier: workspace:*
         version: link:../../packages/shared-core
       '@ejm/shared-functions':
         specifier: workspace:*
         version: link:../../packages/shared-functions
+      '@ejm/sit-core':
+        specifier: workspace:*
+        version: link:../../packages/sit-core
       firebase-admin:
         specifier: ^13.0.0
         version: 13.7.0
@@ -73,15 +73,15 @@ importers:
 
   apps/study-web:
     dependencies:
-      '@ejm/shared':
-        specifier: workspace:*
-        version: link:../../packages/shared
       '@ejm/shared-core':
         specifier: workspace:*
         version: link:../../packages/shared-core
       '@ejm/shared-ui':
         specifier: workspace:*
         version: link:../../packages/shared-ui
+      '@ejm/sit-core':
+        specifier: workspace:*
+        version: link:../../packages/sit-core
       '@hookform/resolvers':
         specifier: ^5.2.2
         version: 5.2.2(react-hook-form@7.72.0(react@19.2.4))
@@ -161,12 +161,12 @@ importers:
 
   apps/web:
     dependencies:
-      '@ejm/shared':
-        specifier: workspace:*
-        version: link:../../packages/shared
       '@ejm/shared-ui':
         specifier: workspace:*
         version: link:../../packages/shared-ui
+      '@ejm/sit-core':
+        specifier: workspace:*
+        version: link:../../packages/sit-core
       '@hookform/resolvers':
         specifier: ^5.2.2
         version: 5.2.2(react-hook-form@7.72.0(react@19.2.4))
@@ -259,19 +259,6 @@ importers:
         specifier: ^4.1.4
         version: 4.1.4(@opentelemetry/api@1.9.1)(@types/node@24.12.0)(jsdom@29.1.1)(vite@8.0.3(@emnapi/core@1.9.1)(@emnapi/runtime@1.9.1)(@types/node@24.12.0)(jiti@2.6.1))
 
-  packages/shared:
-    dependencies:
-      '@ejm/shared-core':
-        specifier: workspace:*
-        version: link:../shared-core
-      zod:
-        specifier: ^3.23.0
-        version: 3.25.76
-    devDependencies:
-      typescript:
-        specifier: ^6.0.2
-        version: 6.0.2
-
   packages/shared-core:
     dependencies:
       zod:
@@ -284,12 +271,12 @@ importers:
 
   packages/shared-functions:
     dependencies:
-      '@ejm/shared':
-        specifier: workspace:*
-        version: link:../shared
       '@ejm/shared-core':
         specifier: workspace:*
         version: link:../shared-core
+      '@ejm/sit-core':
+        specifier: workspace:*
+        version: link:../sit-core
       firebase-admin:
         specifier: ^13.0.0
         version: 13.7.0
@@ -332,11 +319,34 @@ importers:
         specifier: ~5.9.3
         version: 5.9.3
 
+  packages/sit-core:
+    dependencies:
+      '@ejm/shared-core':
+        specifier: workspace:*
+        version: link:../shared-core
+      zod:
+        specifier: ^3.23.0
+        version: 3.25.76
+    devDependencies:
+      typescript:
+        specifier: ^6.0.2
+        version: 6.0.2
+
+  packages/study-core:
+    dependencies:
+      '@ejm/shared-core':
+        specifier: workspace:*
+        version: link:../shared-core
+    devDependencies:
+      typescript:
+        specifier: ^6.0.2
+        version: 6.0.2
+
   tests:
     dependencies:
-      '@ejm/shared':
+      '@ejm/sit-core':
         specifier: workspace:*
-        version: link:../packages/shared
+        version: link:../packages/sit-core
       '@firebase/rules-unit-testing':
         specifier: ^4.0.0
         version: 4.0.1(firebase@12.11.0)

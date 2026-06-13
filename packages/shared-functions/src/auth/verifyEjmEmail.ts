@@ -2,7 +2,7 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import * as crypto from 'crypto';
 import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
-import { validateEjmEmail } from '@ejm/shared';
+import { validateEjmEmail } from '@ejm/sit-core';
 import { sendVerificationEmail } from '../config/email.js';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
 

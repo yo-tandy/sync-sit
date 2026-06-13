@@ -6,7 +6,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { useReferenceActions } from '@/hooks/useReferenceActions';
 import { Dialog, Button, Input } from '@/components/ui';
 import { PhoneInput } from '@/components/forms/PhoneInput';
-import type { ParentUser, ReferenceDoc } from '@ejm/shared';
+import type { ParentUser, ReferenceDoc } from '@ejm/sit-core';
 
 /**
  * Parent contact fields used when pre-populating the endorsement form;

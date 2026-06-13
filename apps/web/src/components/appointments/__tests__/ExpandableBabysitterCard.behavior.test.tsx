@@ -18,7 +18,7 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import type { AppointmentDoc, BabysitterSummary } from '@ejm/shared';
+import type { AppointmentDoc, BabysitterSummary } from '@ejm/sit-core';
 import { ExpandableBabysitterCard } from '../ExpandableBabysitterCard';
 
 // Echo translation keys so we can assert on them directly.

@@ -11,7 +11,7 @@
     "typecheck": "tsc -b --noEmit"
   },
   "dependencies": {
-    "@ejm/shared": "workspace:*",
+    "@ejm/sit-core": "workspace:*",
     "@ejm/shared-core": "workspace:*",
     "@ejm/shared-ui": "workspace:*",
     "@hookform/resolvers": "^5.2.2",

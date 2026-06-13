@@ -8,7 +8,7 @@ import type {
 import type { RecurringSlot } from '@ejm/shared-core';
 
 // Re-export RecurringSlot (and the rest of shared-core's surface) so consumers
-// importing from '@ejm/shared' still see it.
+// importing from '@ejm/sit-core' still see it.
 export * from '@ejm/shared-core';
 
 export interface SearchDoc {

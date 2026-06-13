@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
-import type { ReferenceDoc } from '@ejm/shared';
+import type { ReferenceDoc } from '@ejm/sit-core';
 
 export function useSubmittedEndorsements() {
   const uid = useAuthStore((s) => s.firebaseUser?.uid);

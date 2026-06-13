@@ -5,7 +5,7 @@ import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { Card, TopNav, Spinner } from '@/components/ui';
-import type { FirestoreTimestamp } from '@ejm/shared';
+import type { FirestoreTimestamp } from '@ejm/sit-core';
 
 interface SharingRequest {
   requestId: string;

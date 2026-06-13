@@ -6,8 +6,8 @@ import { useAuthStore } from '@/stores/authStore';
 import { Button, Input, Textarea, Chip, TopNav } from '@/components/ui';
 import { LanguagePicker } from '@/components/forms/LanguagePicker';
 import { AddressAutocomplete, type AddressResult } from '@/components/forms/AddressAutocomplete';
-import { ARRONDISSEMENTS, NEARBY_TOWNS } from '@ejm/shared';
-import type { BabysitterUser } from '@ejm/shared';
+import { ARRONDISSEMENTS, NEARBY_TOWNS } from '@ejm/sit-core';
+import type { BabysitterUser } from '@ejm/sit-core';
 
 export function BabysittingOptionsPage() {
   const { t } = useTranslation();

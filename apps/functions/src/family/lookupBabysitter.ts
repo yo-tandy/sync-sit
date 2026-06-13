@@ -1,7 +1,7 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
-import { haversineDistance } from '@ejm/shared';
+import { haversineDistance } from '@ejm/sit-core';
 
 interface LookupResult {
   uid: string;
