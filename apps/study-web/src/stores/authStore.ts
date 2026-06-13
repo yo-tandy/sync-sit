@@ -8,7 +8,7 @@ import {
 } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '@/config/firebase';
-import type { UserDoc } from '@ejm/shared';
+import type { UserDoc } from '@ejm/sit-core';
 
 interface AuthState {
   firebaseUser: FirebaseUser | null;

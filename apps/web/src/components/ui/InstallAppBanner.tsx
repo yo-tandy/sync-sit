@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { isRunningAsPWA } from '@ejm/shared';
+import { isRunningAsPWA } from '@ejm/sit-core';
 import { db } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { Card } from './Card';

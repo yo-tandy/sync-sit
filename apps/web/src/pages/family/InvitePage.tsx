@@ -5,7 +5,7 @@ import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { Button, Card, TopNav, InfoBanner, Spinner, Dialog } from '@/components/ui';
-import type { ParentUser } from '@ejm/shared';
+import type { ParentUser } from '@ejm/sit-core';
 
 interface MemberInfo {
   uid: string;

@@ -1,7 +1,7 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { db, adminAuth } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
-import { familyEnrollmentSchema } from '@ejm/shared';
+import { familyEnrollmentSchema } from '@ejm/sit-core';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
 
 interface KidInput {

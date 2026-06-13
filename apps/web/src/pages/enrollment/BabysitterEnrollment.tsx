@@ -10,7 +10,7 @@ import { EnrollmentAppBar } from '@/components/ui/EnrollmentAppBar';
 import { StepEmail, StepVerify, StepPassword } from '@ejm/shared-ui';
 import { StepProfile } from './babysitter/StepProfile';
 import { StepPreferences } from './babysitter/StepPreferences';
-import type { BabysitterUser } from '@ejm/shared';
+import type { BabysitterUser } from '@ejm/sit-core';
 
 
 export function BabysitterEnrollment() {

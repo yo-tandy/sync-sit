@@ -5,7 +5,7 @@ import { PhotoLightbox } from '@/components/ui/PhotoLightbox';
 import { useHolidays } from '@/hooks/useHolidays';
 import { getDateTag } from '@/lib/dateTag';
 import { DateTag } from '@/components/ui/DateTag';
-import type { AppointmentDoc } from '@ejm/shared';
+import type { AppointmentDoc } from '@ejm/sit-core';
 
 type Variant = 'pending' | 'confirmed' | 'past' | 'rejected';
 

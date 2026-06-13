@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
-import { PAST_VISIBILITY_DAYS } from '@ejm/shared';
-import type { AppointmentDoc, ParentUser } from '@ejm/shared';
+import { PAST_VISIBILITY_DAYS } from '@ejm/sit-core';
+import type { AppointmentDoc, ParentUser } from '@ejm/sit-core';
 
 export function useFamilyAppointments() {
   const userDoc = useAuthStore((s) => s.userDoc);

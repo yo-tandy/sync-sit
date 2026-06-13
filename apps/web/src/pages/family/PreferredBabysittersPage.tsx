@@ -11,7 +11,7 @@ import { Card, TopNav, Spinner, Badge } from '@/components/ui';
 import { Avatar } from '@/components/ui';
 import { SearchIcon } from '@/components/ui/Icons';
 import { formatBabysitterName } from '@/lib/formatName';
-import type { ParentUser, AppointmentDoc, BabysitterSummary } from '@ejm/shared';
+import type { ParentUser, AppointmentDoc, BabysitterSummary } from '@ejm/sit-core';
 
 const statusBadge: Record<string, { variant: 'amber' | 'green' | 'gray'; label: string }> = {
   pending: { variant: 'amber', label: 'Pending' },

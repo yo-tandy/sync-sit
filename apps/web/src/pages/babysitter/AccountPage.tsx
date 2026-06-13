@@ -3,14 +3,14 @@ import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { isRunningAsPWA } from '@ejm/shared';
+import { isRunningAsPWA } from '@ejm/sit-core';
 import { db, storage } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { TopNav, Button, Input, Card, InfoBanner, LanguageSelector } from '@/components/ui';
 import { BellIcon } from '@/components/ui/Icons';
 import { isPushSupported, getPushPermissionStatus, requestPushPermission } from '@/lib/pushNotifications';
 import { PhoneInput } from '@/components/forms/PhoneInput';
-import type { BabysitterUser, NotifPrefs } from '@ejm/shared';
+import type { BabysitterUser, NotifPrefs } from '@ejm/sit-core';
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
 const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];

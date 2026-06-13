@@ -1,4 +1,4 @@
-import type { HolidayPeriod } from '@ejm/shared';
+import type { HolidayPeriod } from '@ejm/sit-core';
 
 /**
  * Get a contextual tag for a babysitting date.

@@ -1,6 +1,6 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
-import { strongPasswordSchema } from '@ejm/shared';
+import { strongPasswordSchema } from '@ejm/sit-core';
 import { db, adminAuth } from '@ejm/shared-functions/config/firebase.js';
 import { writeUserActivity } from '@ejm/shared-functions/admin/writeAuditLog.js';
 import { getCorsOrigin } from '@ejm/shared-functions/config/cors.js';

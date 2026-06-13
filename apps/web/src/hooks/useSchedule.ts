@@ -9,9 +9,9 @@ import {
 } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
-import { createEmptySlots, DAYS_OF_WEEK } from '@ejm/shared';
-import type { ScheduleDoc, ScheduleOverrideDoc } from '@ejm/shared';
-import type { DayOfWeek, HolidayMode } from '@ejm/shared';
+import { createEmptySlots, DAYS_OF_WEEK } from '@ejm/sit-core';
+import type { ScheduleDoc, ScheduleOverrideDoc } from '@ejm/sit-core';
+import type { DayOfWeek, HolidayMode } from '@ejm/sit-core';
 
 function createDefaultSchedule(): ScheduleDoc['weekly'] {
   const weekly = {} as Record<DayOfWeek, boolean[]>;

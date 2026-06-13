@@ -5,14 +5,14 @@ import { doc, collection, query, where, getDocs, onSnapshot } from 'firebase/fir
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
-import { haversineDistance } from '@ejm/shared';
+import { haversineDistance } from '@ejm/sit-core';
 import { Button, Card, Badge, Dialog, TopNav, Spinner } from '@/components/ui';
 import { PhotoLightbox } from '@/components/ui/PhotoLightbox';
 import { CalendarIcon, CheckIcon } from '@/components/ui/Icons';
 import { useHolidays } from '@/hooks/useHolidays';
 import { getDateTag } from '@/lib/dateTag';
 import { DateTag } from '@/components/ui/DateTag';
-import type { AppointmentDoc, BabysitterUser, RecurringSlot } from '@ejm/shared';
+import type { AppointmentDoc, BabysitterUser, RecurringSlot } from '@ejm/sit-core';
 
 /**
  * Appointment as it appears on the babysitter's request detail page: the

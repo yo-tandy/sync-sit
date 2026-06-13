@@ -11,7 +11,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
-import type { ReferenceDoc } from '@ejm/shared';
+import type { ReferenceDoc } from '@ejm/sit-core';
 
 interface ManualRefInput {
   refName: string;

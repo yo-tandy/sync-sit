@@ -1,7 +1,7 @@
 import { Navigate } from 'react-router';
 import { useAuthStore } from '@/stores/authStore';
 import { Spinner } from '@/components/ui';
-import type { UserRole } from '@ejm/shared';
+import type { UserRole } from '@ejm/sit-core';
 
 interface AuthGuardProps {
   role: UserRole;

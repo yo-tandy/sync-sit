@@ -4,7 +4,7 @@ import { clearAll, getDb } from '../../setup/emulator.js';
 import { seedTestData, type SeedData } from '../../setup/seed.js';
 
 const require = createRequire(import.meta.url);
-// Imported after `pnpm --filter @ejm/shared build && cd apps/functions && npx tsc`
+// Imported after `pnpm --filter @ejm/sit-core build && cd apps/functions && npx tsc`
 const { runSendReminders } = require(
   '../../../apps/functions/dist/scheduled/sendReminders.js'
 ) as typeof import('../../../apps/functions/src/scheduled/sendReminders.js');

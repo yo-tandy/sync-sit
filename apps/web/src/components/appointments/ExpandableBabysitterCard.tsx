@@ -5,7 +5,7 @@ import { db } from '@/config/firebase';
 import { Button, Badge, Card } from '@/components/ui';
 import { ChevronRightIcon } from '@/components/ui/Icons';
 import { Avatar } from '@/components/ui';
-import type { AppointmentDoc, ReferenceDoc, BabysitterSummary } from '@ejm/shared';
+import type { AppointmentDoc, ReferenceDoc, BabysitterSummary } from '@ejm/sit-core';
 import { useHolidays } from '@/hooks/useHolidays';
 import { getDateTag } from '@/lib/dateTag';
 import { DateTag } from '@/components/ui/DateTag';

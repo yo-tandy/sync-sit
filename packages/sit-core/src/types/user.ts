@@ -1,6 +1,6 @@
 import type { ServiceProviderBase, ParentUser, AdminUser } from '@ejm/shared-core';
 
-// Re-export the generic user types so consumers importing from '@ejm/shared'
+// Re-export the generic user types so consumers importing from '@ejm/sit-core'
 // still see the full surface (UserBase, ServiceProviderBase, ParentUser, AdminUser).
 export * from '@ejm/shared-core';
 

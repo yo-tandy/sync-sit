@@ -9,7 +9,7 @@ import {
 import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '@/config/firebase';
 import { removePushToken } from '@/lib/pushNotifications';
-import type { UserDoc } from '@ejm/shared';
+import type { UserDoc } from '@ejm/sit-core';
 
 interface AuthState {
   firebaseUser: FirebaseUser | null;

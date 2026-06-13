@@ -6,7 +6,7 @@ import { useEndorsements } from '@/hooks/useEndorsements';
 import { useReferenceActions } from '@/hooks/useReferenceActions';
 import { Button, Card, Badge, Input, Textarea, Dialog, TopNav, Spinner } from '@/components/ui';
 import { PlusIcon } from '@/components/ui/Icons';
-import type { ReferenceDoc } from '@ejm/shared';
+import type { ReferenceDoc } from '@ejm/sit-core';
 
 // ── Validation ──
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;

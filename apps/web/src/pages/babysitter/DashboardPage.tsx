@@ -5,7 +5,7 @@ import { doc, updateDoc, serverTimestamp, collection, query, where, getDocs } fr
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
-import { isBabysitterProfileComplete } from '@ejm/shared';
+import { isBabysitterProfileComplete } from '@ejm/sit-core';
 import { useAppointments } from '@/hooks/useAppointments';
 import { useSchedule } from '@/hooks/useSchedule';
 import { AppointmentCard } from '@/components/appointments/AppointmentCard';
@@ -14,8 +14,8 @@ import {
   CalendarIcon,
   ChevronRightIcon,
 } from '@/components/ui/Icons';
-import type { AppointmentDoc, BabysitterUser } from '@ejm/shared';
-import { DAYS_OF_WEEK } from '@ejm/shared';
+import type { AppointmentDoc, BabysitterUser } from '@ejm/sit-core';
+import { DAYS_OF_WEEK } from '@ejm/sit-core';
 
 // ── Appointment Section ──
 function Section({

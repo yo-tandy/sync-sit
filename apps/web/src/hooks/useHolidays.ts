@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '@/config/firebase';
-import type { HolidayPeriod } from '@ejm/shared';
+import type { HolidayPeriod } from '@ejm/sit-core';
 
 function getCurrentSchoolYear(): string {
   const now = new Date();

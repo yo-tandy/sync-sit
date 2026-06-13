@@ -9,12 +9,12 @@ import { useVerificationStore } from '@/stores/verificationStore';
 import { useFamilyAppointments } from '@/hooks/useFamilyAppointments';
 import { Button, Badge, Card, Spinner, Input, Dialog, Textarea, InstallAppBanner } from '@/components/ui';
 import { CalendarIcon, PlusIcon, SearchIcon } from '@/components/ui/Icons';
-import type { AppointmentDoc, BabysitterUser, BabysitterSummary, RecurringSlot } from '@ejm/shared';
+import type { AppointmentDoc, BabysitterUser, BabysitterSummary, RecurringSlot } from '@ejm/sit-core';
 import { formatBabysitterName, capitalize, formatFamilyTitle } from '@/lib/formatName';
 import { debouncedTogglePreferred } from '@/lib/debouncedPreferred';
 import { EndorsementDialog } from '@/components/endorsements/EndorsementDialog';
 import { ExpandableBabysitterCard } from '@/components/appointments/ExpandableBabysitterCard';
-import type { ReferenceDoc } from '@ejm/shared';
+import type { ReferenceDoc } from '@ejm/sit-core';
 
 
 function groupByDateTime(
