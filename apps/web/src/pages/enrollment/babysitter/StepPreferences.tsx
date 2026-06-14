@@ -8,7 +8,7 @@ import { LanguagePicker } from '@/components/forms/LanguagePicker';
 import { PhoneInput } from '@/components/forms/PhoneInput';
 import { AddressAutocomplete, type AddressResult } from '@/components/forms/AddressAutocomplete';
 import { ARRONDISSEMENTS, NEARBY_TOWNS } from '@ejm/sit-core';
-import type { BabysitterUser } from '@ejm/sit-core';
+import { getBabysitterView } from '@ejm/sit-core';
 
 interface StepPreferencesProps {
   uid: string;
@@ -18,7 +18,7 @@ interface StepPreferencesProps {
 export function StepPreferences({ uid, onComplete }: StepPreferencesProps) {
   const { t } = useTranslation();
   const { userDoc, refreshUserDoc } = useAuthStore();
-  const babysitter = userDoc as BabysitterUser | null;
+  const babysitter = getBabysitterView(userDoc);
 
   const [languages, setLanguages] = useState<string[]>([]);
   const [kidAgeMin, setKidAgeMin] = useState<number | ''>('');

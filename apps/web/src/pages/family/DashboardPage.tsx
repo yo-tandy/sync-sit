@@ -9,7 +9,8 @@ import { useVerificationStore } from '@/stores/verificationStore';
 import { useFamilyAppointments } from '@/hooks/useFamilyAppointments';
 import { Button, Badge, Card, Spinner, Input, Dialog, Textarea, InstallAppBanner } from '@/components/ui';
 import { CalendarIcon, PlusIcon, SearchIcon } from '@/components/ui/Icons';
-import type { AppointmentDoc, BabysitterUser, BabysitterSummary, RecurringSlot } from '@ejm/sit-core';
+import type { AppointmentDoc, BabysitterSummary, RecurringSlot, User } from '@ejm/sit-core';
+import { getBabysitterProfile, getParentProfile } from '@ejm/sit-core';
 import { formatBabysitterName, capitalize, formatFamilyTitle } from '@/lib/formatName';
 import { debouncedTogglePreferred } from '@/lib/debouncedPreferred';
 import { EndorsementDialog } from '@/components/endorsements/EndorsementDialog';
@@ -198,7 +199,7 @@ export function FamilyDashboard() {
   });
 
   // Load preferred babysitter IDs from family doc
-  const familyId = userDoc?.role === 'parent' ? userDoc.familyId : null;
+  const familyId = getParentProfile(userDoc)?.familyId ?? null;
   useEffect(() => {
     if (!familyId) return;
     const unsub = onSnapshot(doc(db, 'families', familyId), (snap) => {
@@ -237,7 +238,8 @@ export function FamilyDashboard() {
         try {
           const snap = await getDoc(doc(db, 'users', uid));
           if (snap.exists()) {
-            const u = snap.data() as BabysitterUser;
+            const u = snap.data() as User;
+            const bp = getBabysitterProfile(u);
             const dob = typeof u.dateOfBirth === 'string' ? new Date(u.dateOfBirth) : u.dateOfBirth?.toDate?.() ? u.dateOfBirth.toDate() : null;
             let age: number | undefined;
             if (dob) {
@@ -251,14 +253,14 @@ export function FamilyDashboard() {
               lastName: u.lastName,
               name: formatBabysitterName(u.firstName, u.lastName),
               age,
-              classLevel: u.classLevel,
-              languages: u.languages,
+              classLevel: bp?.classLevel,
+              languages: bp?.languages,
               photoUrl: u.photoUrl,
-              aboutMe: u.aboutMe,
-              contactEmail: u.contactEmail,
-              contactPhone: u.contactPhone,
-              kidAgeRange: u.kidAgeRange,
-              maxKids: u.maxKids,
+              aboutMe: bp?.aboutMe,
+              contactEmail: bp?.contactEmail,
+              contactPhone: bp?.contactPhone,
+              kidAgeRange: bp?.kidAgeRange,
+              maxKids: bp?.maxKids,
             };
             return [uid, info] as [string, BabysitterSummary];
           }
@@ -273,21 +275,21 @@ export function FamilyDashboard() {
 
   useEffect(() => {
     async function loadFamily() {
-      if (userDoc?.role === 'parent' && userDoc.familyId) {
-        const familySnap = await getDoc(doc(db, 'families', userDoc.familyId));
+      if (familyId) {
+        const familySnap = await getDoc(doc(db, 'families', familyId));
         if (familySnap.exists()) {
           setFamilyName(familySnap.data().familyName || '');
         }
-        const kidsSnap = await getDocs(collection(db, 'families', userDoc.familyId, 'kids'));
+        const kidsSnap = await getDocs(collection(db, 'families', familyId, 'kids'));
         setKids(kidsSnap.docs.map((d) => ({ kidId: d.id, firstName: d.data().firstName, age: d.data().age })));
         setKidsLoaded(true);
       }
     }
     loadFamily();
-  }, [userDoc]);
+  }, [familyId]);
 
   useEffect(() => {
-    if (userDoc?.role === 'parent') {
+    if (getParentProfile(userDoc)) {
       fetchVerificationStatus();
     }
   }, []);
@@ -344,10 +346,10 @@ export function FamilyDashboard() {
             size="sm"
             disabled={addingKid || !newKidName.trim() || !newKidAge}
             onClick={async () => {
-              if (userDoc?.role !== 'parent' || !userDoc.familyId) return;
+              if (!familyId) return;
               setAddingKid(true);
               try {
-                await addDoc(collection(db, 'families', userDoc.familyId, 'kids'), {
+                await addDoc(collection(db, 'families', familyId, 'kids'), {
                   firstName: newKidName.trim(),
                   age: parseInt(newKidAge) || 0,
                   languages: [],

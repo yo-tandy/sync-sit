@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Spinner } from '@/components/ui/Spinner';
 import { Checkbox } from '@/components/ui/Checkbox';
-import type { ParentUser } from '@ejm/sit-core';
+import { getParentProfile } from '@ejm/sit-core';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
@@ -27,7 +27,7 @@ function statusBadgeVariant(status: string): 'green' | 'amber' | 'red' | 'gray' 
 export function VerificationPage() {
   const { t, i18n } = useTranslation();
   const { userDoc } = useAuthStore();
-  const familyId = (userDoc as ParentUser | null)?.familyId;
+  const familyId = getParentProfile(userDoc)?.familyId;
 
   const {
     familyVerification,

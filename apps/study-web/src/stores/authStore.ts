@@ -8,11 +8,11 @@ import {
 } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '@/config/firebase';
-import type { UserDoc } from '@ejm/sit-core';
+import type { StudyUser } from '@ejm/study-core';
 
 interface AuthState {
   firebaseUser: FirebaseUser | null;
-  userDoc: UserDoc | null;
+  userDoc: StudyUser | null;
   loading: boolean;
   error: string | null;
 
@@ -34,7 +34,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({ loading: true, error: null });
       const cred = await signInWithEmailAndPassword(auth, email, password);
       const snap = await getDoc(doc(db, 'users', cred.user.uid));
-      const userDoc = snap.exists() ? (snap.data() as UserDoc) : null;
+      const userDoc = snap.exists() ? (snap.data() as StudyUser) : null;
       set({ firebaseUser: cred.user, userDoc, loading: false });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Login failed';
@@ -64,7 +64,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     if (!firebaseUser) return;
     const snap = await getDoc(doc(db, 'users', firebaseUser.uid));
     if (snap.exists()) {
-      set({ userDoc: snap.data() as UserDoc });
+      set({ userDoc: snap.data() as StudyUser });
     }
   },
 
@@ -76,7 +76,7 @@ onAuthStateChanged(auth, async (firebaseUser) => {
   if (firebaseUser) {
     try {
       const snap = await getDoc(doc(db, 'users', firebaseUser.uid));
-      const userDoc = snap.exists() ? (snap.data() as UserDoc) : null;
+      const userDoc = snap.exists() ? (snap.data() as StudyUser) : null;
       useAuthStore.setState({ firebaseUser, userDoc, loading: false });
     } catch {
       useAuthStore.setState({ firebaseUser, userDoc: null, loading: false });

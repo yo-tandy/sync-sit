@@ -44,6 +44,9 @@ export interface ProfileBase {
 
 export interface ParentProfile extends ProfileBase {
   familyId: string;
+  /** Parent contact (optional — collected during family enrollment). */
+  phone?: string;
+  whatsapp?: string;
 }
 
 // ---------------------------------------------------------------------------

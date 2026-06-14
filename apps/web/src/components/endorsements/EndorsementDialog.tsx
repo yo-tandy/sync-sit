@@ -6,14 +6,8 @@ import { useAuthStore } from '@/stores/authStore';
 import { useReferenceActions } from '@/hooks/useReferenceActions';
 import { Dialog, Button, Input } from '@/components/ui';
 import { PhoneInput } from '@/components/forms/PhoneInput';
-import type { ParentUser, ReferenceDoc } from '@ejm/sit-core';
-
-/**
- * Parent contact fields used when pre-populating the endorsement form;
- * present on production user docs but not yet on the shared ParentUser
- * type.
- */
-type ParentUserWithContact = ParentUser & { phone?: string; whatsapp?: string };
+import type { ReferenceDoc } from '@ejm/sit-core';
+import { getParentView } from '@ejm/sit-core';
 
 interface EndorsementDialogProps {
   babysitterUserId: string;
@@ -34,7 +28,7 @@ export function EndorsementDialog({
 }: EndorsementDialogProps) {
   const { t } = useTranslation();
   const { userDoc } = useAuthStore();
-  const parent = userDoc as ParentUserWithContact | null;
+  const parent = getParentView(userDoc);
   const { submitFamilyEndorsement } = useReferenceActions();
 
   // Form fields

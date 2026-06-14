@@ -3,11 +3,12 @@ import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { PAST_VISIBILITY_DAYS } from '@ejm/sit-core';
-import type { AppointmentDoc, ParentUser } from '@ejm/sit-core';
+import type { AppointmentDoc } from '@ejm/sit-core';
+import { getParentProfile } from '@ejm/sit-core';
 
 export function useFamilyAppointments() {
   const userDoc = useAuthStore((s) => s.userDoc);
-  const familyId = (userDoc as ParentUser | null)?.familyId;
+  const familyId = getParentProfile(userDoc)?.familyId;
   // Initial loading state derives from familyId: if there is no signed-in
   // parent we have nothing to fetch, so we are already "done" loading.
   // The snapshot callback below flips this back to false once Firestore
