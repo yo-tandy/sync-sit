@@ -15,7 +15,8 @@ import { CheckIcon, ShieldIcon } from '@/components/ui/Icons';
 import { useHolidays } from '@/hooks/useHolidays';
 import { getDateTag } from '@/lib/dateTag';
 import { DateTag } from '@/components/ui/DateTag';
-import type { ParentUser, FamilyDoc, KidDoc, BabysitterSummary } from '@ejm/sit-core';
+import type { FamilyDoc, KidDoc, BabysitterSummary } from '@ejm/sit-core';
+import { getParentView } from '@ejm/sit-core';
 
 // Time options 06:00–02:00
 function generateTimeOptions(): { value: string; label: string }[] {
@@ -41,7 +42,7 @@ const TIME_OPTIONS = generateTimeOptions();
 export function SearchPage() {
   const { t, i18n } = useTranslation();
   const { userDoc } = useAuthStore();
-  const parent = userDoc as ParentUser | null;
+  const parent = getParentView(userDoc);
   const navigate = useNavigate();
 
   const GENDER_OPTIONS = [

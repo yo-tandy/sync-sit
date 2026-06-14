@@ -14,7 +14,8 @@ import {
   CalendarIcon,
   ChevronRightIcon,
 } from '@/components/ui/Icons';
-import type { AppointmentDoc, BabysitterUser } from '@ejm/sit-core';
+import type { AppointmentDoc } from '@ejm/sit-core';
+import { getBabysitterView } from '@ejm/sit-core';
 import { DAYS_OF_WEEK } from '@ejm/sit-core';
 
 // ── Appointment Section ──
@@ -84,7 +85,7 @@ export function BabysitterDashboard() {
   const { pending, confirmed, pastRecent, rejectedRecent, loading } = useAppointments();
   const { weekly, loading: scheduleLoading } = useSchedule();
   const navigate = useNavigate();
-  const babysitter = userDoc as BabysitterUser | null;
+  const babysitter = getBabysitterView(userDoc);
   const uid = firebaseUser?.uid;
   const { t } = useTranslation();
 

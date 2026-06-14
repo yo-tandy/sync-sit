@@ -1,13 +1,15 @@
 import { useAuthStore } from '@/stores/authStore';
+import { getSitRole, getBabysitterProfile } from '@ejm/sit-core';
 import { WelcomePage as SharedWelcomePage } from '@ejm/shared-ui';
 
 function computeRedirect(userDoc: ReturnType<typeof useAuthStore.getState>['userDoc']): string | null {
   if (!userDoc) return null;
-  if (userDoc.role === 'babysitter') {
-    return userDoc.enrollmentComplete === false ? '/enroll/babysitter' : '/babysitter';
+  const role = getSitRole(userDoc);
+  if (role === 'babysitter') {
+    return getBabysitterProfile(userDoc)?.enrollmentComplete === false ? '/enroll/babysitter' : '/babysitter';
   }
-  if (userDoc.role === 'parent') return '/family';
-  if (userDoc.role === 'admin') return '/admin';
+  if (role === 'parent') return '/family';
+  if (role === 'admin') return '/admin';
   return null;
 }
 

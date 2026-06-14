@@ -10,7 +10,7 @@ import { EnrollmentAppBar } from '@/components/ui/EnrollmentAppBar';
 import { StepEmail, StepVerify, StepPassword } from '@ejm/shared-ui';
 import { StepProfile } from './babysitter/StepProfile';
 import { StepPreferences } from './babysitter/StepPreferences';
-import type { BabysitterUser } from '@ejm/sit-core';
+import { getBabysitterProfile } from '@ejm/sit-core';
 
 
 export function BabysitterEnrollment() {
@@ -28,10 +28,10 @@ export function BabysitterEnrollment() {
   // Detect if user is already authenticated with incomplete enrollment (resume flow)
   useEffect(() => {
     if (authLoading) return;
-    if (firebaseUser && userDoc?.role === 'babysitter') {
-      const babysitter = userDoc as BabysitterUser;
+    const babysitter = getBabysitterProfile(userDoc);
+    if (firebaseUser && babysitter) {
       if (babysitter.enrollmentComplete === false) {
-        if (!babysitter.firstName) {
+        if (!userDoc?.firstName) {
           setStep(3); // Need immutable fields
         } else {
           setStep(4); // Need mutable fields

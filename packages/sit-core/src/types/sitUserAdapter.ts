@@ -66,6 +66,22 @@ export function getBabysitterProfile(
   };
 }
 
+/**
+ * Flattened babysitter record: User base fields merged with the babysitter
+ * profile — equivalent to the pre-Plan-D flat babysitter doc. Lets consumer
+ * code that reads both user-level and babysitter-level fields off one object
+ * migrate with a one-line swap.
+ */
+export type BabysitterView = User & BabysitterProfile;
+
+export function getBabysitterView(
+  user: MaybeLegacy | null | undefined,
+): BabysitterView | null {
+  const profile = getBabysitterProfile(user);
+  if (!user || !profile) return null;
+  return { ...user, ...profile };
+}
+
 /** The user's role within sync-sit, for routing and guards. */
 export function getSitRole(
   user: MaybeLegacy | null | undefined,

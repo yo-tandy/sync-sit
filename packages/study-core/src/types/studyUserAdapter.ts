@@ -65,6 +65,20 @@ export function getTutorProfile(
   };
 }
 
+/**
+ * Flattened tutor record: User base fields merged with the tutor profile —
+ * equivalent to the pre-Plan-D flat tutor doc.
+ */
+export type TutorView = User & TutorProfile;
+
+export function getTutorView(
+  user: MaybeLegacy | null | undefined,
+): TutorView | null {
+  const profile = getTutorProfile(user);
+  if (!user || !profile) return null;
+  return { ...user, ...profile };
+}
+
 /** The user's role within sync-study, for routing and guards. */
 export function getStudyRole(
   user: MaybeLegacy | null | undefined,

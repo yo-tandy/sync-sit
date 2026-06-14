@@ -7,12 +7,12 @@ import { Button, Input, Textarea, Chip, TopNav } from '@/components/ui';
 import { LanguagePicker } from '@/components/forms/LanguagePicker';
 import { AddressAutocomplete, type AddressResult } from '@/components/forms/AddressAutocomplete';
 import { ARRONDISSEMENTS, NEARBY_TOWNS } from '@ejm/sit-core';
-import type { BabysitterUser } from '@ejm/sit-core';
+import { getBabysitterView } from '@ejm/sit-core';
 
 export function BabysittingOptionsPage() {
   const { t } = useTranslation();
   const { userDoc, firebaseUser, refreshUserDoc } = useAuthStore();
-  const babysitter = userDoc as BabysitterUser | null;
+  const babysitter = getBabysitterView(userDoc);
   const uid = firebaseUser?.uid;
 
   // Form state

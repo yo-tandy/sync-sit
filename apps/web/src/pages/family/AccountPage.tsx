@@ -10,19 +10,8 @@ import { TopNav, Button, Input, Card, InfoBanner, LanguageSelector } from '@/com
 import { BellIcon } from '@/components/ui/Icons';
 import { isPushSupported, getPushPermissionStatus, requestPushPermission } from '@/lib/pushNotifications';
 import { PhoneInput } from '@/components/forms/PhoneInput';
-import type { ParentUser, NotifPrefs } from '@ejm/sit-core';
-
-/**
- * Parent contact / profile fields the family AccountPage edits. These
- * fields exist on production user docs but are not (yet) declared on the
- * shared ParentUser type — declare them locally so this file does not
- * cast to any.
- */
-type ParentUserView = ParentUser & {
-  phone?: string;
-  whatsapp?: string;
-  photoUrl?: string;
-};
+import type { NotifPrefs } from '@ejm/sit-core';
+import { getParentView } from '@ejm/sit-core';
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
 const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
@@ -91,7 +80,7 @@ function PushStatusCard({ uid }: { uid?: string }) {
 export function AccountPage() {
   const { t } = useTranslation();
   const { userDoc, firebaseUser, refreshUserDoc, resetPassword } = useAuthStore();
-  const parent = userDoc as ParentUserView | null;
+  const parent = getParentView(userDoc);
   const uid = firebaseUser?.uid;
 
   // Photo state

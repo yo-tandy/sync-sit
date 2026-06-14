@@ -9,11 +9,11 @@ import {
 import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '@/config/firebase';
 import { removePushToken } from '@/lib/pushNotifications';
-import type { UserDoc } from '@ejm/sit-core';
+import type { SitUser } from '@ejm/sit-core';
 
 interface AuthState {
   firebaseUser: FirebaseUser | null;
-  userDoc: UserDoc | null;
+  userDoc: SitUser | null;
   loading: boolean;
   error: string | null;
 
@@ -38,7 +38,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       // Fetch userDoc immediately so state is ready when login() returns
       // (don't rely solely on onAuthStateChanged which may resolve after redirect)
       const snap = await getDoc(doc(db, 'users', cred.user.uid));
-      const userDoc = snap.exists() ? (snap.data() as UserDoc) : null;
+      const userDoc = snap.exists() ? (snap.data() as SitUser) : null;
       set({ firebaseUser: cred.user, userDoc, loading: false });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Login failed';
@@ -71,7 +71,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     if (!firebaseUser) return;
     const snap = await getDoc(doc(db, 'users', firebaseUser.uid));
     if (snap.exists()) {
-      set({ userDoc: snap.data() as UserDoc });
+      set({ userDoc: snap.data() as SitUser });
     }
   },
 
@@ -84,7 +84,7 @@ onAuthStateChanged(auth, async (firebaseUser) => {
     try {
       const userDocRef = doc(db, 'users', firebaseUser.uid);
       const snap = await getDoc(userDocRef);
-      const userDoc = snap.exists() ? (snap.data() as UserDoc) : null;
+      const userDoc = snap.exists() ? (snap.data() as SitUser) : null;
       useAuthStore.setState({ firebaseUser, userDoc, loading: false });
     } catch {
       useAuthStore.setState({ firebaseUser, userDoc: null, loading: false });

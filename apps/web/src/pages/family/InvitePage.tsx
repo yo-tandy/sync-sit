@@ -5,7 +5,7 @@ import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { Button, Card, TopNav, InfoBanner, Spinner, Dialog } from '@/components/ui';
-import type { ParentUser } from '@ejm/sit-core';
+import { getParentView } from '@ejm/sit-core';
 
 interface MemberInfo {
   uid: string;
@@ -15,7 +15,7 @@ interface MemberInfo {
 export function InvitePage() {
   const { t } = useTranslation();
   const { userDoc } = useAuthStore();
-  const parent = userDoc as ParentUser | null;
+  const parent = getParentView(userDoc);
   const familyId = parent?.familyId;
 
   const [members, setMembers] = useState<MemberInfo[]>([]);

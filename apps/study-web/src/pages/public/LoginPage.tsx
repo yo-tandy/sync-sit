@@ -1,4 +1,5 @@
 import { useAuthStore } from '@/stores/authStore';
+import { getStudyRole } from '@ejm/study-core';
 import { LoginPage as SharedLoginPage } from '@ejm/shared-ui';
 
 function postLoginRouter(role: string | undefined): string {
@@ -13,7 +14,7 @@ export function LoginPage() {
 
   const handleLogin = async (email: string, password: string): Promise<string | undefined> => {
     await login(email, password);
-    return useAuthStore.getState().userDoc?.role as string | undefined;
+    return getStudyRole(useAuthStore.getState().userDoc);
   };
 
   return (

@@ -46,3 +46,19 @@ export function isAdmin(
   if (user.isAdmin === true) return true;
   return user.role === 'admin';
 }
+
+/**
+ * Flattened parent record: the User base fields merged with the parent
+ * profile. Equivalent to the pre-Plan-D flat parent doc, so existing
+ * consumers that read both user-level (email, firstName) and parent-level
+ * (familyId, phone) fields off one object keep working with a one-line swap.
+ */
+export type ParentView = User & ParentProfile;
+
+export function getParentView(
+  user: (User & Partial<LegacyUserFields>) | null | undefined,
+): ParentView | null {
+  const profile = getParentProfile(user);
+  if (!user || !profile) return null;
+  return { ...user, ...profile };
+}

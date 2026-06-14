@@ -12,7 +12,8 @@ import { CalendarIcon, CheckIcon } from '@/components/ui/Icons';
 import { useHolidays } from '@/hooks/useHolidays';
 import { getDateTag } from '@/lib/dateTag';
 import { DateTag } from '@/components/ui/DateTag';
-import type { AppointmentDoc, BabysitterUser, RecurringSlot } from '@ejm/sit-core';
+import type { AppointmentDoc, RecurringSlot } from '@ejm/sit-core';
+import { getBabysitterView } from '@ejm/sit-core';
 
 /**
  * Appointment as it appears on the babysitter's request detail page: the
@@ -36,7 +37,7 @@ export function RequestDetailPage() {
   const { appointmentId } = useParams<{ appointmentId: string }>();
   const navigate = useNavigate();
   const { userDoc } = useAuthStore();
-  const babysitter = userDoc as BabysitterUser | null;
+  const babysitter = getBabysitterView(userDoc);
 
   const [appointment, setAppointment] = useState<EnrichedAppointment | null>(null);
   const [loading, setLoading] = useState(true);

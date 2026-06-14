@@ -16,7 +16,8 @@ import { useAuthStore } from '@/stores/authStore';
 import { Button, Input, Textarea, TopNav, InfoBanner, Card } from '@/components/ui';
 import { AddressAutocomplete, type AddressResult } from '@/components/forms/AddressAutocomplete';
 import { XIcon, PlusIcon } from '@/components/ui/Icons';
-import type { ParentUser, FamilyDoc, KidDoc } from '@ejm/sit-core';
+import type { FamilyDoc, KidDoc } from '@ejm/sit-core';
+import { getParentView } from '@ejm/sit-core';
 
 interface KidForm {
   kidId?: string; // undefined = new kid
@@ -28,7 +29,7 @@ interface KidForm {
 export function FamilySettingsPage() {
   const { t } = useTranslation();
   const { userDoc } = useAuthStore();
-  const parent = userDoc as ParentUser | null;
+  const parent = getParentView(userDoc);
   const familyId = parent?.familyId;
 
   const [familyName, setFamilyName] = useState('');

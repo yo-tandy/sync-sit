@@ -1,10 +1,12 @@
 import { Navigate } from 'react-router';
 import { useAuthStore } from '@/stores/authStore';
 import { Spinner } from '@/components/ui';
-import type { UserRole } from '@ejm/sit-core';
+import { getSitRole, getBabysitterProfile } from '@ejm/sit-core';
+
+type SitRole = 'babysitter' | 'parent' | 'admin';
 
 interface AuthGuardProps {
-  role: UserRole;
+  role: SitRole;
   children: React.ReactNode;
 }
 
@@ -31,16 +33,18 @@ export function AuthGuard({ role, children }: AuthGuardProps) {
     );
   }
 
-  if (userDoc.role !== role) {
+  const sitRole = getSitRole(userDoc);
+
+  if (sitRole !== role) {
     // Redirect to correct portal
-    if (userDoc.role === 'babysitter') return <Navigate to="/babysitter" replace />;
-    if (userDoc.role === 'parent') return <Navigate to="/family" replace />;
-    if (userDoc.role === 'admin') return <Navigate to="/admin" replace />;
+    if (sitRole === 'babysitter') return <Navigate to="/babysitter" replace />;
+    if (sitRole === 'parent') return <Navigate to="/family" replace />;
+    if (sitRole === 'admin') return <Navigate to="/admin" replace />;
     return <Navigate to="/" replace />;
   }
 
   // Redirect babysitters with incomplete enrollment to enrollment flow
-  if (userDoc.role === 'babysitter' && userDoc.enrollmentComplete === false) {
+  if (sitRole === 'babysitter' && getBabysitterProfile(userDoc)?.enrollmentComplete === false) {
     return <Navigate to="/enroll/babysitter" replace />;
   }
 

@@ -1,4 +1,5 @@
 import { useAuthStore } from '@/stores/authStore';
+import { getSitRole } from '@ejm/sit-core';
 import { LoginPage as SharedLoginPage } from '@ejm/shared-ui';
 
 function postLoginRouter(role: string | undefined): string {
@@ -13,7 +14,7 @@ export function LoginPage() {
 
   const handleLogin = async (email: string, password: string): Promise<string | undefined> => {
     await login(email, password);
-    return useAuthStore.getState().userDoc?.role;
+    return getSitRole(useAuthStore.getState().userDoc);
   };
 
   return (
