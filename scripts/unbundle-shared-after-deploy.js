@@ -3,8 +3,8 @@
  *
  * Reverses the bundle-shared-for-deploy.js work:
  *   - Restores apps/functions/package.json workspace:* references.
- *   - Removes apps/functions/sit-core-bundle/, shared-core-bundle/, and
- *     shared-functions-bundle/.
+ *   - Removes apps/functions/sit-core-bundle/, shared-core-bundle/,
+ *     study-core-bundle/, and shared-functions-bundle/.
  */
 
 const fs = require('fs');
@@ -26,11 +26,21 @@ function restoreWorkspaceDeps(sourceDir, depNames) {
 
 // 1. Restore workspace references.
 restoreWorkspaceDeps(functionsDir, ['@ejm/sit-core', '@ejm/shared-functions']);
-restoreWorkspaceDeps(studyFunctionsDir, ['@ejm/shared-core', '@ejm/sit-core', '@ejm/shared-functions']);
+restoreWorkspaceDeps(studyFunctionsDir, [
+  '@ejm/shared-core',
+  '@ejm/sit-core',
+  '@ejm/study-core',
+  '@ejm/shared-functions',
+]);
 
 // 2. Clean up bundles.
 for (const sourceDir of [functionsDir, studyFunctionsDir]) {
-  for (const bundleName of ['shared-core-bundle', 'sit-core-bundle', 'shared-functions-bundle']) {
+  for (const bundleName of [
+    'shared-core-bundle',
+    'sit-core-bundle',
+    'study-core-bundle',
+    'shared-functions-bundle',
+  ]) {
     const bundleDir = path.join(sourceDir, bundleName);
     if (fs.existsSync(bundleDir)) {
       fs.rmSync(bundleDir, { recursive: true });
@@ -39,5 +49,5 @@ for (const sourceDir of [functionsDir, studyFunctionsDir]) {
 }
 
 console.log(
-  '✔ Restored workspace:* references and cleaned up shared-core-bundle + sit-core-bundle + shared-functions-bundle',
+  '✔ Restored workspace:* references and cleaned up shared-core-bundle + sit-core-bundle + study-core-bundle + shared-functions-bundle',
 );
