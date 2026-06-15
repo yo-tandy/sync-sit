@@ -136,7 +136,11 @@ rewriteBundlePackageJson(studyCoreBundleDir, {
 });
 
 // 5. Update apps/functions/package.json to use the bundled shared packages.
+//    @ejm/shared-core became a direct dependency of apps/functions in the
+//    Plan D backend-reader migration; without rewriting it here it stays as
+//    workspace:* in the deployed package and npm rejects it (EUNSUPPORTEDPROTOCOL).
 updateSourcePackageJson(functionsDir, {
+  '@ejm/shared-core': 'file:./shared-core-bundle',
   '@ejm/sit-core': 'file:./sit-core-bundle',
   '@ejm/shared-functions': 'file:./shared-functions-bundle',
 });
