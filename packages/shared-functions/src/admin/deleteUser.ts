@@ -1,4 +1,5 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { getUserRole, getParentProfile, type User } from '@ejm/shared-core';
 import { db, adminAuth } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { verifyAdmin } from './verifyAdmin.js';
@@ -36,8 +37,8 @@ export const deleteUser = onCall(
     }
 
     const userData = userDoc.data()!;
-    const role = userData.role;
-    const familyId = userData.familyId || null;
+    const role = getUserRole(userData as User);
+    const familyId = getParentProfile(userData as User)?.familyId || null;
     const email = userData.email || '';
 
     // 1. Cancel active/pending appointments and anonymize user references

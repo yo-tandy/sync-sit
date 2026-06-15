@@ -1,4 +1,5 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { getParentProfile, type User } from '@ejm/shared-core';
 import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 
@@ -12,11 +13,12 @@ export const getVerificationStatus = onCall(
     const uid = request.auth.uid;
     const userDoc = await db.collection('users').doc(uid).get();
 
-    if (!userDoc.exists || userDoc.data()?.role !== 'parent') {
+    const parent = getParentProfile(userDoc.data() as User | undefined);
+    if (!parent) {
       throw new HttpsError('permission-denied', 'Only parents can check verification status');
     }
 
-    const familyId = userDoc.data()?.familyId;
+    const familyId = parent.familyId;
     if (!familyId) {
       throw new HttpsError('failed-precondition', 'No family associated');
     }

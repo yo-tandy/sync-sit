@@ -1,4 +1,5 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { getParentProfile, type User } from '@ejm/shared-core';
 import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
@@ -13,11 +14,12 @@ export const generateCommunityCode = onCall(
 
     const uid = request.auth.uid;
     const userDoc = await db.collection('users').doc(uid).get();
-    if (!userDoc.exists || userDoc.data()?.role !== 'parent') {
+    const parent = getParentProfile(userDoc.data() as User | undefined);
+    if (!parent) {
       throw new HttpsError('permission-denied', 'Only parents can request community verification');
     }
 
-    const familyId = userDoc.data()?.familyId;
+    const familyId = parent.familyId;
     if (!familyId) {
       throw new HttpsError('failed-precondition', 'No family associated');
     }

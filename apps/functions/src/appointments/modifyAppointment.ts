@@ -4,6 +4,7 @@ import { getCorsOrigin } from '../config/cors.js';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
 import { sendNotificationEmail } from '../config/email.js';
 import { sendPushNotification } from '../config/push.js';
+import { getParentProfile, type User } from '@ejm/shared-core';
 
 interface ModifyInput {
   appointmentId: string;
@@ -30,7 +31,8 @@ export const modifyAppointment = onCall(
 
     // Verify caller is a parent in the appointment's family
     const callerDoc = await db.collection('users').doc(uid).get();
-    if (!callerDoc.exists || callerDoc.data()?.role !== 'parent') {
+    const caller = getParentProfile(callerDoc.data() as User | undefined);
+    if (!caller) {
       throw new HttpsError('permission-denied', 'Only parents can modify appointments');
     }
 
@@ -47,7 +49,7 @@ export const modifyAppointment = onCall(
       throw new HttpsError('failed-precondition', 'Only pending or confirmed appointments can be modified');
     }
 
-    const callerFamilyId = callerDoc.data()?.familyId;
+    const callerFamilyId = caller.familyId;
     if (callerFamilyId !== apt.familyId) {
       throw new HttpsError('permission-denied', 'You are not part of this appointment');
     }

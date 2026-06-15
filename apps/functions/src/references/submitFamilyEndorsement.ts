@@ -2,6 +2,7 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { FieldValue } from 'firebase-admin/firestore';
 import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
+import { getParentProfile, type User } from '@ejm/shared-core';
 
 interface SubmitFamilyEndorsementData {
   babysitterUserId: string;
@@ -35,11 +36,11 @@ export const submitFamilyEndorsement = onCall(
     }
 
     const callerSnap = await db.collection('users').doc(uid).get();
-    const caller = callerSnap.data();
-    if (!callerSnap.exists || caller?.role !== 'parent' || !caller?.familyId) {
+    const caller = getParentProfile(callerSnap.data() as User | undefined);
+    if (!caller || !caller.familyId) {
       throw new HttpsError('permission-denied', 'Only parents in a family can submit endorsements');
     }
-    const familyId = caller.familyId as string;
+    const familyId = caller.familyId;
 
     const aptSnap = await db.collection('appointments').doc(data.appointmentId).get();
     if (!aptSnap.exists) {

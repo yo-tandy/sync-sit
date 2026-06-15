@@ -1,4 +1,5 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { isAdmin, getParentProfile, type User } from '@ejm/shared-core';
 import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { getStorage } from 'firebase-admin/storage';
@@ -36,14 +37,14 @@ export const getVerificationDocument = onCall(
       throw new HttpsError('permission-denied', 'User not found');
     }
 
-    const isAdmin = caller.role === 'admin';
+    const isAdminCaller = isAdmin(caller as User | undefined);
     let isFamilyMember = false;
 
-    if (caller.role === 'parent' && caller.familyId === familyId) {
+    if (getParentProfile(caller as User | undefined)?.familyId === familyId) {
       isFamilyMember = true;
     }
 
-    if (!isAdmin && !isFamilyMember) {
+    if (!isAdminCaller && !isFamilyMember) {
       throw new HttpsError('permission-denied', 'You do not have access to this document');
     }
 

@@ -1,8 +1,8 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
-import { haversineDistance } from '@ejm/sit-core';
-import type { LatLng } from '@ejm/sit-core';
+import { haversineDistance, getParentProfile, getBabysitterView } from '@ejm/sit-core';
+import type { LatLng, User, FirestoreTimestamp } from '@ejm/sit-core';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
 
 interface SearchParams {
@@ -44,8 +44,8 @@ interface BabysitterResult {
   isPreferred?: boolean;
 }
 
-function calculateAge(dob: string | Date): number {
-  const birthDate = typeof dob === 'string' ? new Date(dob) : dob instanceof Date ? dob : (dob as any).toDate();
+function calculateAge(dob: string | Date | FirestoreTimestamp): number {
+  const birthDate = typeof dob === 'string' ? new Date(dob) : dob instanceof Date ? dob : (dob as FirestoreTimestamp).toDate();
   const today = new Date();
   let age = today.getFullYear() - birthDate.getFullYear();
   const m = today.getMonth() - birthDate.getMonth();
@@ -75,8 +75,9 @@ export const searchBabysitters = onCall(
     const callerDoc = await db.collection('users').doc(request.auth.uid).get();
     let preferredSet = new Set<string>();
     let callerFamilyId: string | undefined;
-    if (callerDoc.exists && callerDoc.data()?.role === 'parent') {
-      callerFamilyId = callerDoc.data()?.familyId;
+    const callerParent = getParentProfile(callerDoc.data() as User | undefined);
+    if (callerParent) {
+      callerFamilyId = callerParent.familyId;
       if (callerFamilyId) {
         const callerFamilyDoc = await db.collection('families').doc(callerFamilyId).get();
         if (!callerFamilyDoc.data()?.verification?.isFullyVerified) {
@@ -87,7 +88,11 @@ export const searchBabysitters = onCall(
       }
     }
 
-    // 1. Get all searchable, active babysitters
+    // 1. Get all searchable, active babysitters.
+    // NOTE: this query still filters on the legacy top-level role/searchable
+    // fields. It is migrated to the profiles.babysitter shape in Tier D,
+    // together with the writer flip + data migration (a single Firestore
+    // query cannot span both shapes).
     const usersSnap = await db.collection('users')
       .where('role', '==', 'babysitter')
       .where('status', '==', 'active')
@@ -112,7 +117,10 @@ export const searchBabysitters = onCall(
     const results: BabysitterResult[] = [];
 
     for (const userDoc of usersSnap.docs) {
-      const b = userDoc.data();
+      // Flattened babysitter view (User + babysitter profile), tolerant of
+      // both legacy flat docs and new profiles.babysitter docs.
+      const b = getBabysitterView(userDoc.data() as User);
+      if (!b) continue;
       const uid = userDoc.id;
 
       // Rate filter
@@ -180,7 +188,7 @@ export const searchBabysitters = onCall(
       }
 
       // Filter: minimum age
-      const babysitterAge = calculateAge(b.dateOfBirth);
+      const babysitterAge = b.dateOfBirth ? calculateAge(b.dateOfBirth) : 0;
       if (params.filters.minAge && babysitterAge < params.filters.minAge) continue;
 
       // Filter: gender
