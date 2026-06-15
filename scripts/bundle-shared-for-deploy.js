@@ -30,7 +30,7 @@ const studyFunctionsDir = path.resolve(repoRoot, 'apps/study-functions');
 /**
  * Bundle one workspace package into apps/functions/<bundleName>/.
  *
- * @param {string} pkgFilter      pnpm filter, e.g. '@ejm/shared'
+ * @param {string} pkgFilter      pnpm filter, e.g. '@ejm/sit-core'
  * @param {string} pkgDirAbs      absolute path to packages/<name>
  * @param {string} bundleName     dir name under apps/functions/, e.g. 'shared-bundle'
  */
