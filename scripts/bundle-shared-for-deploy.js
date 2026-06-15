@@ -8,8 +8,8 @@
  * Bundled packages:
  *   - @ejm/shared-core      → apps/functions/shared-core-bundle/
  *   - @ejm/sit-core         → apps/functions/sit-core-bundle/
- *   - @ejm/shared-functions → apps/functions/shared-functions-bundle/
  *   - @ejm/study-core       → apps/functions/study-core-bundle/
+ *   - @ejm/shared-functions → apps/functions/shared-functions-bundle/
  *
  * Within each bundle's package.json, any workspace:* deps on sibling packages
  * are rewritten to file:../<sibling>-bundle so npm can resolve the full chain
@@ -114,15 +114,7 @@ rewriteBundlePackageJson(sitCoreBundleDir, {
   '@ejm/shared-core': 'shared-core-bundle',
 });
 
-// 3. Bundle @ejm/study-core and rewrite its @ejm/shared-core dep to point at
-//    the sibling shared-core-bundle.
-const studyCoreDir = path.resolve(repoRoot, 'packages/study-core');
-const studyCoreBundleDir = bundlePackage('@ejm/study-core', studyCoreDir, 'study-core-bundle');
-rewriteBundlePackageJson(studyCoreBundleDir, {
-  '@ejm/shared-core': 'shared-core-bundle',
-});
-
-// 4. Bundle @ejm/shared-functions and rewrite its workspace deps.
+// 3. Bundle @ejm/shared-functions and rewrite its workspace deps.
 //    It depends on both @ejm/shared-core and @ejm/sit-core, so both must be
 //    rewritten to point at the sibling bundles already created above.
 const sharedFunctionsDir = path.resolve(repoRoot, 'packages/shared-functions');
@@ -134,6 +126,13 @@ const sharedFunctionsBundleDir = bundlePackage(
 rewriteBundlePackageJson(sharedFunctionsBundleDir, {
   '@ejm/shared-core': 'shared-core-bundle',
   '@ejm/sit-core': 'sit-core-bundle',
+});
+
+// 4. Bundle @ejm/study-core and rewrite its @ejm/shared-core dep.
+const studyCoreDir = path.resolve(repoRoot, 'packages/study-core');
+const studyCoreBundleDir = bundlePackage('@ejm/study-core', studyCoreDir, 'study-core-bundle');
+rewriteBundlePackageJson(studyCoreBundleDir, {
+  '@ejm/shared-core': 'shared-core-bundle',
 });
 
 // 5. Update apps/functions/package.json to use the bundled shared packages.
@@ -159,18 +158,18 @@ for (const bundleName of [
 updateSourcePackageJson(studyFunctionsDir, {
   '@ejm/shared-core': 'file:./shared-core-bundle',
   '@ejm/sit-core': 'file:./sit-core-bundle',
- '@ejm/study-core': 'file:./study-core-bundle',
- '@ejm/shared-functions': 'file:./shared-functions-bundle',
+  '@ejm/study-core': 'file:./study-core-bundle',
+  '@ejm/shared-functions': 'file:./shared-functions-bundle',
 });
 
 console.log('✔ Shared packages bundled for deploy');
 console.log(
- '  → shared-core-bundle/ + sit-core-bundle/ + study-core-bundle/ + shared-functions-bundle/ created in apps/functions/',
+  '  → shared-core-bundle/ + sit-core-bundle/ + study-core-bundle/ + shared-functions-bundle/ created in apps/functions/',
 );
 console.log('  → sit-core-bundle/package.json rewrites @ejm/shared-core → file:../shared-core-bundle');
 console.log('  → study-core-bundle/package.json rewrites @ejm/shared-core → file:../shared-core-bundle');
 console.log('  → shared-functions-bundle/package.json rewrites @ejm/shared-core + @ejm/sit-core to file: refs');
 console.log('  → apps/functions/package.json updated with file: references for @ejm/sit-core + @ejm/shared-functions');
 console.log(
- '  → apps/study-functions/package.json updated with file: references for @ejm/shared-core + @ejm/sit-core + @ejm/study-core + @ejm/shared-functions',
+  '  → apps/study-functions/package.json updated with file: references for @ejm/shared-core + @ejm/sit-core + @ejm/study-core + @ejm/shared-functions',
 );

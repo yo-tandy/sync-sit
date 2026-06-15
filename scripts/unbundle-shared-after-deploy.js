@@ -3,7 +3,7 @@
  *
  * Reverses the bundle-shared-for-deploy.js work:
  *   - Restores apps/functions/package.json workspace:* references.
- *   - Removes apps/functions/sit-core-bundle/, shared-core-bundle/,
+ *   - Removes apps/functions/sit-core-bundle/, shared-core-bundle/, and
  *     study-core-bundle/, and shared-functions-bundle/.
  */
 
