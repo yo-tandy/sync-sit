@@ -27,7 +27,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       # Build shared package
-      - run: pnpm --filter @ejm/shared build
+      - run: pnpm --filter @ejm/sit-core build
 
       # Build web
       - name: Build web
