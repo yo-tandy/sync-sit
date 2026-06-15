@@ -1,4 +1,6 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { isBabysitter, type User } from '@ejm/shared-core';
+import { getBabysitterProfile } from '@ejm/sit-core';
 import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { verifyAdmin } from './verifyAdmin.js';
@@ -36,11 +38,11 @@ export const deactivateUser = onCall(
 
     const userData = userSnap.data()!;
 
-    if (userData.role !== 'babysitter') {
+    if (!isBabysitter(userData as User)) {
       throw new HttpsError('failed-precondition', 'Only babysitter accounts can be activated/deactivated');
     }
 
-    const currentSearchable = userData.searchable === true;
+    const currentSearchable = getBabysitterProfile(userData as User)?.searchable === true;
     const newSearchable = !currentSearchable;
 
     await userRef.update({ searchable: newSearchable });

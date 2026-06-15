@@ -1,4 +1,5 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { getParentProfile, type User } from '@ejm/shared-core';
 import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { verifyAdmin } from './verifyAdmin.js';
@@ -36,7 +37,7 @@ export const exportUserData = onCall(
     const userData = userDoc.data()!;
 
     // Collect all related data in parallel
-    const familyId = userData.familyId || null;
+    const familyId = getParentProfile(userData as User)?.familyId || null;
     const [familySnap, babysitterApptsSnap, familyApptsSnap, notificationsSnap, auditLogsSnap] =
       await Promise.all([
         // Family doc if user is a parent

@@ -1,4 +1,5 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { getParentProfile, type User } from '@ejm/shared-core';
 import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
@@ -14,11 +15,12 @@ export const approveCommunityCode = onCall(
 
     // Verify approver is fully verified + EJM family
     const userDoc = await db.collection('users').doc(uid).get();
-    if (!userDoc.exists || userDoc.data()?.role !== 'parent') {
+    const parent = getParentProfile(userDoc.data() as User | undefined);
+    if (!parent) {
       throw new HttpsError('permission-denied', 'Only parents can approve');
     }
 
-    const approverFamilyId = userDoc.data()?.familyId;
+    const approverFamilyId = parent.familyId;
     if (!approverFamilyId) {
       throw new HttpsError('failed-precondition', 'No family associated');
     }

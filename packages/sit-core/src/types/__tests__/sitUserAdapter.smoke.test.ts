@@ -1,6 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import { getBabysitterProfile, getBabysitterView, getSitRole } from '../sitUserAdapter.js';
-import { getParentProfile, getParentView } from '@ejm/shared-core';
+import {
+  getParentProfile,
+  getParentView,
+  getUserRole,
+  isParent,
+  isBabysitter,
+  isTutor,
+  isAdmin,
+} from '@ejm/shared-core';
 
 // New-shape doc (Plan D): profiles map, no top-level role.
 const newBabysitter = {
@@ -68,5 +76,42 @@ describe('sit dual-read adapters', () => {
     expect(getBabysitterProfile(newParent)).toBeUndefined();
     expect(getParentProfile(newBabysitter)).toBeUndefined();
     expect(getBabysitterView(null)).toBeNull();
+  });
+});
+
+// Cross-app role/predicate helpers (backend gating).
+const newTutor = {
+  uid: 't1', email: 't@b.com', firstName: 'Tom', lastName: 'T',
+  status: 'active', language: 'en', notifPrefs: {}, fcmTokens: [],
+  createdAt: {}, updatedAt: {},
+  profiles: { tutor: { enrollmentComplete: true, ejemEmail: 'tom@ejm.org' } },
+} as any;
+const legacyAdmin = { uid: 'ad1', email: 'ad@b.com', role: 'admin' } as any;
+const newAdmin = { uid: 'ad2', email: 'ad2@b.com', isAdmin: true, profiles: {} } as any;
+
+describe('cross-app role predicates', () => {
+  it('getUserRole resolves both shapes', () => {
+    expect(getUserRole(newBabysitter)).toBe('babysitter');
+    expect(getUserRole(legacyBabysitter)).toBe('babysitter');
+    expect(getUserRole(newTutor)).toBe('tutor');
+    expect(getUserRole(newParent)).toBe('parent');
+    expect(getUserRole(legacyParent)).toBe('parent');
+    expect(getUserRole(legacyAdmin)).toBe('admin');
+    expect(getUserRole(newAdmin)).toBe('admin');
+    expect(getUserRole(null)).toBeUndefined();
+  });
+
+  it('predicates match the right role across shapes', () => {
+    expect(isParent(newParent)).toBe(true);
+    expect(isParent(legacyParent)).toBe(true);
+    expect(isParent(newBabysitter)).toBe(false);
+    expect(isBabysitter(legacyBabysitter)).toBe(true);
+    expect(isBabysitter(newBabysitter)).toBe(true);
+    expect(isBabysitter(newParent)).toBe(false);
+    expect(isTutor(newTutor)).toBe(true);
+    expect(isTutor(newBabysitter)).toBe(false);
+    expect(isAdmin(legacyAdmin)).toBe(true);
+    expect(isAdmin(newAdmin)).toBe(true);
+    expect(isAdmin(newParent)).toBe(false);
   });
 });

@@ -47,6 +47,45 @@ export function isAdmin(
   return user.role === 'admin';
 }
 
+export function isParent(
+  user: (User & Partial<LegacyUserFields>) | null | undefined,
+): boolean {
+  if (!user) return false;
+  return !!user.profiles?.parent || user.role === 'parent';
+}
+
+export function isBabysitter(
+  user: (User & Partial<LegacyUserFields>) | null | undefined,
+): boolean {
+  if (!user) return false;
+  return !!user.profiles?.babysitter || user.role === 'babysitter';
+}
+
+export function isTutor(
+  user: (User & Partial<LegacyUserFields>) | null | undefined,
+): boolean {
+  if (!user) return false;
+  return !!user.profiles?.tutor || user.role === 'tutor';
+}
+
+/**
+ * The user's primary role as a string, cross-app (covers tutor). For
+ * display/audit and backend gating that doesn't need the concrete profile.
+ * Admin is reported only when no service/parent profile is present, matching
+ * the legacy single-role model; callers needing "is also admin" use isAdmin().
+ */
+export function getUserRole(
+  user: (User & Partial<LegacyUserFields>) | null | undefined,
+): 'babysitter' | 'tutor' | 'parent' | 'admin' | undefined {
+  if (!user) return undefined;
+  if (user.profiles?.babysitter) return 'babysitter';
+  if (user.profiles?.tutor) return 'tutor';
+  if (user.profiles?.parent) return 'parent';
+  if (user.role) return user.role;
+  if (user.isAdmin) return 'admin';
+  return undefined;
+}
+
 /**
  * Flattened parent record: the User base fields merged with the parent
  * profile. Equivalent to the pre-Plan-D flat parent doc, so existing

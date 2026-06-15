@@ -4,6 +4,7 @@ import { getCorsOrigin } from '../config/cors.js';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
 import { sendNotificationEmail } from '../config/email.js';
 import { sendPushNotification } from '../config/push.js';
+import { getParentProfile, type User } from '@ejm/shared-core';
 
 interface ResubmitInput {
   originalAppointmentId: string;
@@ -30,7 +31,8 @@ export const resubmitAppointment = onCall(
 
     // Verify caller is a parent
     const callerDoc = await db.collection('users').doc(uid).get();
-    if (!callerDoc.exists || callerDoc.data()?.role !== 'parent') {
+    const caller = getParentProfile(callerDoc.data() as User | undefined);
+    if (!caller) {
       throw new HttpsError('permission-denied', 'Only parents can resubmit requests');
     }
 
@@ -50,7 +52,7 @@ export const resubmitAppointment = onCall(
     }
 
     // Verify caller is in the family
-    const callerFamilyId = callerDoc.data()?.familyId;
+    const callerFamilyId = caller.familyId;
     if (callerFamilyId !== original.familyId) {
       throw new HttpsError('permission-denied', 'You are not part of this appointment');
     }

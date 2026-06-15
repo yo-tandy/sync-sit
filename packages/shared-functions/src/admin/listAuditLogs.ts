@@ -1,4 +1,5 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { getUserRole, type User } from '@ejm/shared-core';
 import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { verifyAdmin } from './verifyAdmin.js';
@@ -61,7 +62,7 @@ export const listAuditLogs = onCall(
           userInfo[userDoc.id] = {
             email: d.email || '',
             name: `${d.firstName || ''} ${d.lastName || ''}`.trim(),
-            role: d.role || '',
+            role: getUserRole(d as User) || '',
           };
         }
       }

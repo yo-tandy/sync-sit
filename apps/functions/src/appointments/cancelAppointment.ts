@@ -5,6 +5,7 @@ import { writeUserActivity } from '../admin/writeAuditLog.js';
 import { sendNotificationEmail } from '../config/email.js';
 import { sendPushNotification } from '../config/push.js';
 import { notifyAllParents } from '../config/notifyParents.js';
+import { getParentProfile, isBabysitter, type User } from '@ejm/shared-core';
 
 interface CancelInput {
   appointmentId: string;
@@ -40,13 +41,13 @@ export const cancelAppointment = onCall(
 
     // Determine if caller is the babysitter or a parent
     const callerDoc = await db.collection('users').doc(uid).get();
-    const callerRole = callerDoc.data()?.role;
+    const callerParent = getParentProfile(callerDoc.data() as User | undefined);
     let cancelledBy: string;
 
-    if (callerRole === 'babysitter' && apt.babysitterUserId === uid) {
+    if (isBabysitter(callerDoc.data() as User | undefined) && apt.babysitterUserId === uid) {
       cancelledBy = 'cancelled_by_babysitter';
-    } else if (callerRole === 'parent') {
-      const callerFamilyId = callerDoc.data()?.familyId;
+    } else if (callerParent) {
+      const callerFamilyId = callerParent.familyId;
       if (callerFamilyId === apt.familyId) {
         cancelledBy = 'cancelled_by_family';
       } else {

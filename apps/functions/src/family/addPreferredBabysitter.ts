@@ -1,5 +1,6 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { FieldValue } from 'firebase-admin/firestore';
+import { getParentView, isBabysitter, type User } from '@ejm/shared-core';
 import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { sendNotificationEmail } from '../config/email.js';
@@ -21,14 +22,14 @@ export const addPreferredBabysitter = onCall(
 
     // Verify caller is a parent with a family
     const callerDoc = await db.collection('users').doc(uid).get();
-    const caller = callerDoc.data();
-    if (!caller || caller.role !== 'parent' || !caller.familyId) {
+    const caller = getParentView(callerDoc.data() as User | undefined);
+    if (!caller || !caller.familyId) {
       throw new HttpsError('permission-denied', 'Only parents can manage preferred babysitters');
     }
 
     // Verify babysitter exists and is a babysitter
     const babysitterDoc = await db.collection('users').doc(babysitterUserId).get();
-    if (!babysitterDoc.exists || babysitterDoc.data()?.role !== 'babysitter') {
+    if (!isBabysitter(babysitterDoc.data() as User | undefined)) {
       throw new HttpsError('not-found', 'Babysitter not found');
     }
 

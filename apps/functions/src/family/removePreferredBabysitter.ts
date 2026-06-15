@@ -1,5 +1,6 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { FieldValue } from 'firebase-admin/firestore';
+import { getParentProfile, type User } from '@ejm/shared-core';
 import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 
@@ -19,8 +20,8 @@ export const removePreferredBabysitter = onCall(
 
     // Verify caller is a parent with a family
     const callerDoc = await db.collection('users').doc(uid).get();
-    const caller = callerDoc.data();
-    if (!caller || caller.role !== 'parent' || !caller.familyId) {
+    const caller = getParentProfile(callerDoc.data() as User | undefined);
+    if (!caller || !caller.familyId) {
       throw new HttpsError('permission-denied', 'Only parents can manage preferred babysitters');
     }
 

@@ -1,7 +1,8 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
-import { haversineDistance } from '@ejm/sit-core';
+import { haversineDistance, getParentProfile, getBabysitterView } from '@ejm/sit-core';
+import type { User } from '@ejm/sit-core';
 
 interface LookupResult {
   uid: string;
@@ -32,8 +33,8 @@ export const lookupBabysitter = onCall(
 
     // Verify caller is a parent and load family location
     const callerDoc = await db.collection('users').doc(uid).get();
-    const caller = callerDoc.data();
-    if (!caller || caller.role !== 'parent' || !caller.familyId) {
+    const caller = getParentProfile(callerDoc.data() as User | undefined);
+    if (!caller || !caller.familyId) {
       throw new HttpsError('permission-denied', 'Only parents can search babysitters');
     }
 
@@ -43,7 +44,9 @@ export const lookupBabysitter = onCall(
     const q = query.trim().toLowerCase();
     const results: LookupResult[] = [];
 
-    // Search all babysitters — only those who opted in to being searchable
+    // Search all babysitters — only those who opted in to being searchable.
+    // NOTE: legacy-shape query (role/searchable top-level); migrated to
+    // profiles.babysitter in Tier D alongside the writer flip + migration.
     const snap = await db.collection('users')
       .where('role', '==', 'babysitter')
       .where('status', '==', 'active')
@@ -51,7 +54,8 @@ export const lookupBabysitter = onCall(
       .get();
 
     for (const doc of snap.docs) {
-      const data = doc.data();
+      const data = getBabysitterView(doc.data() as User);
+      if (!data) continue;
       const fullName = `${data.firstName || ''} ${data.lastName || ''}`.toLowerCase();
       const email = (data.email || '').toLowerCase();
       const ejemEmail = (data.ejemEmail || '').toLowerCase();
