@@ -25,7 +25,7 @@ function restoreWorkspaceDeps(sourceDir, depNames) {
 }
 
 // 1. Restore workspace references.
-restoreWorkspaceDeps(functionsDir, ['@ejm/sit-core', '@ejm/shared-functions']);
+restoreWorkspaceDeps(functionsDir, ['@ejm/shared-core', '@ejm/sit-core', '@ejm/shared-functions']);
 restoreWorkspaceDeps(studyFunctionsDir, [
   '@ejm/shared-core',
   '@ejm/sit-core',
