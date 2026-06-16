@@ -12,9 +12,35 @@ service cloud.firestore {
       return isAuth() && request.auth.uid == userId;
     }
 
+    // Helper: the requester's own user document data.
+    function callerData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    // Plan D dual-read helpers — tolerate BOTH the legacy flat shape
+    // (top-level `role`/`familyId`) and the new shape (`profiles.{role}`,
+    // `isAdmin`). `.get(key, default)` avoids errors when a field is absent
+    // in one of the two shapes.
+
     // Helper: check if the requester is an admin
     function isAdmin() {
-      return isAuth() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      return isAuth()
+             && (callerData().get('role', '') == 'admin'
+                 || callerData().get('isAdmin', false) == true);
+    }
+
+    // Helper: is the given user-doc data a babysitter (either shape)?
+    function isBabysitterData(d) {
+      return d.get('role', '') == 'babysitter'
+             || d.get('profiles', {}).get('babysitter', null) != null;
+    }
+
+    // Helper: the parent familyId on a user-doc data map, or null if the
+    // user is not a parent. New shape: profiles.parent.familyId; legacy: the
+    // top-level familyId when role == 'parent'.
+    function parentFamilyId(d) {
+      return d.get('profiles', {}).get('parent', {}).get('familyId',
+               d.get('role', '') == 'parent' ? d.get('familyId', null) : null);
     }
 
     // Helper: check if the requester is a member of a family
@@ -26,10 +52,9 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if isOwner(userId)
                   || isAdmin()
-                  || (isAuth() && resource.data.role == 'babysitter' && resource.data.status == 'active')
-                  || (isAuth() && resource.data.role == 'parent'
-                      && resource.data.familyId != null
-                      && resource.data.familyId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.familyId);
+                  || (isAuth() && isBabysitterData(resource.data) && resource.data.status == 'active')
+                  || (isAuth() && parentFamilyId(resource.data) != null
+                      && parentFamilyId(resource.data) == parentFamilyId(callerData()));
       allow create, delete: if false; // Only via Cloud Functions
       // Owner-update blocklist:
       // - role/status/uid/email/ejemEmail/createdAt: identity + admin-controlled
