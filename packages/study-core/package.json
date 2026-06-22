@@ -13,12 +13,14 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.cjs.json",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@ejm/shared-core": "workspace:*"
   },
   "devDependencies": {
-    "typescript": "^6.0.2"
+    "typescript": "^6.0.2",
+    "vitest": "^4.1.4"
   }
 }

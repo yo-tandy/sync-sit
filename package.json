@@ -12,7 +12,7 @@
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r typecheck",
     "test": "vitest run",
-    "test:unit": "pnpm --filter @ejm/sit-core test",
+    "test:unit": "pnpm --filter @ejm/sit-core --filter @ejm/study-core --filter study-functions --filter study-web test",
     "test:integration": "pnpm --filter @ejm/tests test",
     "seed:admin": "node apps/functions/seed-admin.cjs",
     "emulators": "firebase emulators:start",
