@@ -51,7 +51,7 @@ export const respondToContactSharing = onCall(
 
       // Add familyId to babysitter's approvedFamilies
       await db.collection('users').doc(uid).update({
-        approvedFamilies: FieldValue.arrayUnion(reqData.familyId),
+        'profiles.babysitter.approvedFamilies': FieldValue.arrayUnion(reqData.familyId),
       });
     } else {
       // Decline

@@ -3,7 +3,7 @@ import { clearAll, callFunction, getIdToken, getDb } from '../../setup/emulator.
 import { seedTestData, seedAppointment, type SeedData } from '../../setup/seed.js';
 
 interface ExportResponse {
-  user: { id: string; email: string; role: string };
+  user: { id: string; email: string; profiles?: { parent?: unknown; babysitter?: unknown } };
   family: { id: string; familyName: string } | null;
   appointments: Array<{ id: string }>;
   notifications: Array<{ id: string }>;
@@ -56,7 +56,7 @@ describe('exportUserData', () => {
 
       expect(result.user.id).toBe(seed.parent1.uid);
       expect(result.user.email).toBe(seed.parent1.email);
-      expect(result.user.role).toBe('parent');
+      expect(result.user.profiles?.parent).toBeTruthy();
 
       expect(result.family).not.toBeNull();
       expect(result.family!.id).toBe(seed.family1Id);
@@ -76,7 +76,7 @@ describe('exportUserData', () => {
         adminToken,
       );
 
-      expect(result.user.role).toBe('babysitter');
+      expect(result.user.profiles?.babysitter).toBeTruthy();
       expect(result.family).toBeNull();
       expect(result.appointments.length).toBeGreaterThanOrEqual(1);
     });

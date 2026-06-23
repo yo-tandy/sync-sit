@@ -30,7 +30,7 @@ describe('respondToContactSharing', () => {
     const reqDoc = await db.collection('contactSharingRequests').doc(requestId).get();
     expect(reqDoc.data()!.status).toBe('approved');
     const userDoc = await db.collection('users').doc(seed.babysitter1.uid).get();
-    expect(userDoc.data()!.approvedFamilies).toContain(seed.family1Id);
+    expect(userDoc.data()!.profiles.babysitter.approvedFamilies).toContain(seed.family1Id);
   });
 
   it('decline sets status=declined', async () => {

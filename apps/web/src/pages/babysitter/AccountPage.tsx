@@ -235,10 +235,10 @@ export function BabysitterAccountPage() {
     setError(null);
     try {
       await updateDoc(doc(db, 'users', uid), {
-        contactSharingConsent,
-        contactEmail: contactEmail || null,
-        contactPhone: phone || null,
-        whatsapp: whatsappSameAsPhone ? (phone || null) : (whatsapp || null),
+        'profiles.babysitter.contactSharingConsent': contactSharingConsent,
+        'profiles.babysitter.contactEmail': contactEmail || null,
+        'profiles.babysitter.contactPhone': phone || null,
+        'profiles.babysitter.whatsapp': whatsappSameAsPhone ? (phone || null) : (whatsapp || null),
         updatedAt: serverTimestamp(),
       });
       await refreshUserDoc();

@@ -96,13 +96,17 @@ export const joinFamily = onCall(
     // 5. Create parent user document
     await db.collection('users').doc(uid).set({
       uid,
-      role: 'parent',
       email: data.email.toLowerCase(),
       status: 'active',
       firstName: data.firstName,
       lastName: data.lastName,
       language: 'en',
-      familyId,
+      profiles: {
+        parent: {
+          enrollmentComplete: true,
+          familyId,
+        },
+      },
       notifPrefs: {
         newRequest: { push: true, email: true },
         confirmed: { push: true, email: true },

@@ -1,4 +1,5 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { getParentProfile, type User } from '@ejm/shared-core';
 import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 
@@ -44,12 +45,17 @@ export const getParentContacts = onCall(
       const pSnap = await db.collection('users').doc(pid).get();
       if (pSnap.exists) {
         const p = pSnap.data()!;
+        // phone/whatsapp moved into profiles.parent (Plan D); read via adapter
+        // with legacy fallback.
+        const parent = getParentProfile(p as User);
+        const phone = parent?.phone ?? p.phone;
+        const whatsapp = parent?.whatsapp ?? p.whatsapp;
         contacts.push({
           firstName: p.firstName || '',
           lastName: p.lastName || '',
           email: p.email || '',
-          ...(p.phone && { phone: p.phone }),
-          ...(p.whatsapp && { whatsapp: p.whatsapp }),
+          ...(phone && { phone }),
+          ...(whatsapp && { whatsapp }),
         });
       }
     }

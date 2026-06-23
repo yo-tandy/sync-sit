@@ -41,6 +41,7 @@ export { updateHolidays } from './admin/updateHolidays.js';
 export { listAuditLogs } from './admin/listAuditLogs.js';
 export { exportUserData } from './admin/exportUserData.js';
 export { deactivateUser } from './admin/deactivateUser.js';
+export { migrateUsersToProfiles } from './admin/migrateUsersToProfiles.js';
 export {
   addPreapprovedEmail,
   removePreapprovedEmail,

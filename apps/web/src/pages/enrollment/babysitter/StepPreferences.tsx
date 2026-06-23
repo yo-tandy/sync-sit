@@ -69,20 +69,20 @@ export function StepPreferences({ uid, onComplete }: StepPreferencesProps) {
     setError(null);
     try {
       await updateDoc(doc(db, 'users', uid), {
-        languages,
-        kidAgeRange: { min: kidAgeMin !== '' ? kidAgeMin : null, max: kidAgeMax !== '' ? kidAgeMax : null },
-        maxKids: maxKids || null,
-        hourlyRate: hourlyRate || null,
-        aboutMe: aboutMe || null,
-        contactEmail: contactEmail || null,
-        contactPhone: contactPhone || null,
-        whatsapp: whatsappSameAsPhone ? (contactPhone || null) : (whatsapp || null),
-        areaMode,
-        arrondissements: areaMode === 'arrondissement' ? arrondissements : [],
-        areaAddress: areaMode === 'distance' ? areaAddress : null,
-        areaLatLng: areaMode === 'distance' ? areaLatLng : null,
-        areaRadiusKm: areaMode === 'distance' ? areaRadiusKm : null,
-        enrollmentComplete: true,
+        'profiles.babysitter.languages': languages,
+        'profiles.babysitter.kidAgeRange': { min: kidAgeMin !== '' ? kidAgeMin : null, max: kidAgeMax !== '' ? kidAgeMax : null },
+        'profiles.babysitter.maxKids': maxKids || null,
+        'profiles.babysitter.hourlyRate': hourlyRate || null,
+        'profiles.babysitter.aboutMe': aboutMe || null,
+        'profiles.babysitter.contactEmail': contactEmail || null,
+        'profiles.babysitter.contactPhone': contactPhone || null,
+        'profiles.babysitter.whatsapp': whatsappSameAsPhone ? (contactPhone || null) : (whatsapp || null),
+        'profiles.babysitter.areaMode': areaMode,
+        'profiles.babysitter.arrondissements': areaMode === 'arrondissement' ? arrondissements : [],
+        'profiles.babysitter.areaAddress': areaMode === 'distance' ? areaAddress : null,
+        'profiles.babysitter.areaLatLng': areaMode === 'distance' ? areaLatLng : null,
+        'profiles.babysitter.areaRadiusKm': areaMode === 'distance' ? areaRadiusKm : null,
+        'profiles.babysitter.enrollmentComplete': true,
         updatedAt: serverTimestamp(),
       });
       await refreshUserDoc();
@@ -99,7 +99,7 @@ export function StepPreferences({ uid, onComplete }: StepPreferencesProps) {
     setSaving(true);
     try {
       await updateDoc(doc(db, 'users', uid), {
-        enrollmentComplete: true,
+        'profiles.babysitter.enrollmentComplete': true,
         updatedAt: serverTimestamp(),
       });
       await refreshUserDoc();
