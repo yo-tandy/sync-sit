@@ -89,14 +89,12 @@ export const searchBabysitters = onCall(
     }
 
     // 1. Get all searchable, active babysitters.
-    // NOTE: this query still filters on the legacy top-level role/searchable
-    // fields. It is migrated to the profiles.babysitter shape in Tier D,
-    // together with the writer flip + data migration (a single Firestore
-    // query cannot span both shapes).
+    // Filters on the Plan D profiles.babysitter shape: a doc with
+    // profiles.babysitter.searchable == true necessarily has a babysitter
+    // profile, so this subsumes the old role == 'babysitter' predicate.
     const usersSnap = await db.collection('users')
-      .where('role', '==', 'babysitter')
       .where('status', '==', 'active')
-      .where('searchable', '==', true)
+      .where('profiles.babysitter.searchable', '==', true)
       .get();
 
     console.log(`Found ${usersSnap.size} searchable babysitters`);

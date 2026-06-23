@@ -45,12 +45,11 @@ export const lookupBabysitter = onCall(
     const results: LookupResult[] = [];
 
     // Search all babysitters — only those who opted in to being searchable.
-    // NOTE: legacy-shape query (role/searchable top-level); migrated to
-    // profiles.babysitter in Tier D alongside the writer flip + migration.
+    // Plan D profiles.babysitter shape: profiles.babysitter.searchable == true
+    // implies a babysitter profile, subsuming the old role predicate.
     const snap = await db.collection('users')
-      .where('role', '==', 'babysitter')
       .where('status', '==', 'active')
-      .where('searchable', '==', true)
+      .where('profiles.babysitter.searchable', '==', true)
       .get();
 
     for (const doc of snap.docs) {

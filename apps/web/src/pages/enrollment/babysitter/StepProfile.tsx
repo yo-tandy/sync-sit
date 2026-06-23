@@ -54,8 +54,8 @@ export function StepProfile({ uid, onNext }: StepProfileProps) {
         firstName,
         lastName,
         dateOfBirth,
-        classLevel,
-        gender: gender || null,
+        'profiles.babysitter.classLevel': classLevel,
+        'profiles.babysitter.gender': gender || null,
         updatedAt: serverTimestamp(),
       });
       onNext();

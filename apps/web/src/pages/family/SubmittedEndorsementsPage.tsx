@@ -8,7 +8,7 @@ import { Avatar } from '@/components/ui';
 import { SearchIcon, PlusIcon } from '@/components/ui/Icons';
 import { EndorsementDialog } from '@/components/endorsements/EndorsementDialog';
 import { formatBabysitterName } from '@/lib/formatName';
-import type { ReferenceDoc, BabysitterSummary } from '@ejm/sit-core';
+import { getBabysitterView, type ReferenceDoc, type BabysitterSummary, type User } from '@ejm/sit-core';
 
 function ReferenceCard({ reference, babysitterName, onEdit, onDelete }: { reference: ReferenceDoc; babysitterName: string; onEdit: () => void; onDelete: () => void }) {
   const { t, i18n } = useTranslation();
@@ -108,19 +108,24 @@ export function SubmittedEndorsementsPage() {
     const timer = setTimeout(async () => {
       try {
         const snap = await getDocs(
-          query(collection(db, 'users'), where('role', '==', 'babysitter'), where('status', '==', 'active'))
+          query(
+            collection(db, 'users'),
+            where('status', '==', 'active'),
+            where('profiles.babysitter.enrollmentComplete', 'in', [true, false]),
+          )
         );
         const results: BabysitterSummary[] = [];
         for (const d of snap.docs) {
-          const data = d.data();
-          const fullName = `${data.firstName || ''} ${data.lastName || ''}`.toLowerCase();
+          const b = getBabysitterView(d.data() as User);
+          if (!b) continue;
+          const fullName = `${b.firstName || ''} ${b.lastName || ''}`.toLowerCase();
           if (fullName.includes(q)) {
             results.push({
               uid: d.id,
-              firstName: data.firstName || '',
-              lastName: data.lastName || '',
-              photoUrl: data.photoUrl || null,
-              classLevel: data.classLevel || '',
+              firstName: b.firstName || '',
+              lastName: b.lastName || '',
+              photoUrl: b.photoUrl || null,
+              classLevel: b.classLevel || '',
             });
           }
           if (results.length >= 10) break;

@@ -45,7 +45,7 @@ export const deactivateUser = onCall(
     const currentSearchable = getBabysitterProfile(userData as User)?.searchable === true;
     const newSearchable = !currentSearchable;
 
-    await userRef.update({ searchable: newSearchable });
+    await userRef.update({ 'profiles.babysitter.searchable': newSearchable });
 
     const action = newSearchable ? 'activate_user' : 'deactivate_user';
 

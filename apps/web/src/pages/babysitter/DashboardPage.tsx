@@ -167,7 +167,7 @@ export function BabysitterDashboard() {
     setToggling(true);
     try {
       await updateDoc(doc(db, 'users', uid), {
-        searchable: !isSearchable,
+        'profiles.babysitter.searchable': !isSearchable,
         updatedAt: serverTimestamp(),
       });
       await refreshUserDoc();

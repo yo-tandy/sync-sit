@@ -76,12 +76,15 @@ export const enrollBabysitter = onCall(
     const now = new Date();
     await db.collection('users').doc(uid).set({
       uid,
-      role: 'babysitter',
       email: data.ejemEmail.toLowerCase(),
-      ejemEmail: data.ejemEmail.toLowerCase(),
       status: 'active',
-      enrollmentComplete: false,
-      searchable: false,
+      profiles: {
+        babysitter: {
+          enrollmentComplete: false,
+          ejemEmail: data.ejemEmail.toLowerCase(),
+          searchable: false,
+        },
+      },
       language: 'en',
       notifPrefs: {
         newRequest: { push: true, email: true },

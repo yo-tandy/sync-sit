@@ -212,8 +212,8 @@ export function AccountPage() {
     try {
       await updateDoc(doc(db, 'users', uid), {
         email,
-        phone: phone || null,
-        whatsapp: whatsappSameAsPhone ? (phone || null) : (whatsapp || null),
+        'profiles.parent.phone': phone || null,
+        'profiles.parent.whatsapp': whatsappSameAsPhone ? (phone || null) : (whatsapp || null),
         updatedAt: serverTimestamp(),
       });
       await refreshUserDoc();

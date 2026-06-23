@@ -1,4 +1,5 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { getUserRole, type User, type LegacyUserFields } from '@ejm/shared-core';
 import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { verifyAdmin } from './verifyAdmin.js';
@@ -34,10 +35,6 @@ export const listUsers = onCall(
 
     let query: FirebaseFirestore.Query = db.collection('users');
 
-    if (roleFilter) {
-      query = query.where('role', '==', roleFilter);
-    }
-
     if (statusFilter) {
       query = query.where('status', '==', statusFilter);
     }
@@ -49,14 +46,23 @@ export const listUsers = onCall(
       }
     }
 
-    // Fetch more than needed if searching (will filter in-memory)
-    const fetchLimit = searchQuery ? 500 : limit;
+    // Role is resolved from the Plan D profiles map (with legacy fallback), so
+    // it cannot be a Firestore predicate — filter it in-memory like search.
+    // Fetch a larger window when either in-memory filter is active.
+    const fetchLimit = searchQuery || roleFilter ? 500 : limit;
     const snapshot = await query.limit(fetchLimit).get();
 
     let users = snapshot.docs.map((doc) => ({
       id: doc.id,
       ...doc.data(),
     }));
+
+    // In-memory role filter (shape-tolerant via the adapter)
+    if (roleFilter) {
+      users = users.filter(
+        (user) => getUserRole(user as unknown as User & Partial<LegacyUserFields>) === roleFilter,
+      );
+    }
 
     // In-memory search filter
     if (searchQuery) {

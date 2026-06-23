@@ -152,21 +152,97 @@ describe('users collection — Plan D dual-shape reads', () => {
     await assertFails(getDoc(doc(authed.firestore(), 'users', 'otherFamN')));
   });
 
-  // The babysitter-read gate backs the searchBabysitters client query. The
-  // rewritten rule must keep that query provably allowed (the query still
-  // filters the legacy role/status/searchable fields during the pre-Tier-D
-  // window). Regression guard for the rule's query-provability.
-  it('allows the searchBabysitters client query (role+status+searchable)', async () => {
-    await seed('bsQ', { role: 'babysitter', status: 'active', searchable: true, email: 'b@ejm.org' });
-    await seed('callerQ', { role: 'parent', status: 'active', familyId: 'famQ', email: 'c@x.com' });
+  // The babysitter-read gate backs the client babysitter-search query
+  // (SubmittedEndorsementsPage). Under Plan D the client filters the new
+  // profiles.babysitter shape; the rule must keep that list query provably
+  // allowed. Regression guard for the rule's query-provability.
+  it('allows the Plan D babysitter list query (status + profiles.babysitter)', async () => {
+    await seed('bsQ', { status: 'active', email: 'b@ejm.org', profiles: { babysitter: { ejemEmail: 'b@ejm.org', enrollmentComplete: true, searchable: true } } });
+    await seed('callerQ', { status: 'active', email: 'c@x.com', profiles: { parent: { familyId: 'famQ' } } });
     const authed = testEnv.authenticatedContext('callerQ');
     const q = query(
       collection(authed.firestore(), 'users'),
-      where('role', '==', 'babysitter'),
       where('status', '==', 'active'),
-      where('searchable', '==', true),
+      where('profiles.babysitter.enrollmentComplete', 'in', [true, false]),
     );
     await assertSucceeds(getDocs(q));
+  });
+});
+
+// Plan D owner-update guards: owners may edit mutable fields inside their own
+// profile, but may not escalate roles or mutate server-owned identity fields.
+describe('users collection — Plan D owner-update guards', () => {
+  async function seed(id: string, data: Record<string, unknown>) {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'users', id), { uid: id, ...data });
+    });
+  }
+
+  it('babysitter may toggle their own searchable flag', async () => {
+    await seed('bs1', { status: 'active', email: 'b@ejm.org', profiles: { babysitter: { ejemEmail: 'b@ejm.org', enrollmentComplete: true, searchable: false } } });
+    const authed = testEnv.authenticatedContext('bs1');
+    await assertSucceeds(
+      updateDoc(doc(authed.firestore(), 'users', 'bs1'), { 'profiles.babysitter.searchable': true })
+    );
+  });
+
+  it('babysitter may edit mutable profile fields (hourlyRate, contactEmail)', async () => {
+    await seed('bs2', { status: 'active', email: 'b@ejm.org', profiles: { babysitter: { ejemEmail: 'b@ejm.org', enrollmentComplete: true } } });
+    const authed = testEnv.authenticatedContext('bs2');
+    await assertSucceeds(
+      updateDoc(doc(authed.firestore(), 'users', 'bs2'), {
+        'profiles.babysitter.hourlyRate': 20,
+        'profiles.babysitter.contactEmail': 'me@x.com',
+      })
+    );
+  });
+
+  it('babysitter may NOT change profiles.babysitter.ejemEmail', async () => {
+    await seed('bs3', { status: 'active', email: 'b@ejm.org', profiles: { babysitter: { ejemEmail: 'b@ejm.org', enrollmentComplete: true } } });
+    const authed = testEnv.authenticatedContext('bs3');
+    await assertFails(
+      updateDoc(doc(authed.firestore(), 'users', 'bs3'), { 'profiles.babysitter.ejemEmail': 'evil@x.com' })
+    );
+  });
+
+  it('babysitter may NOT change profiles.babysitter.approvedFamilies', async () => {
+    await seed('bs4', { status: 'active', email: 'b@ejm.org', profiles: { babysitter: { ejemEmail: 'b@ejm.org', enrollmentComplete: true, approvedFamilies: [] } } });
+    const authed = testEnv.authenticatedContext('bs4');
+    await assertFails(
+      updateDoc(doc(authed.firestore(), 'users', 'bs4'), { 'profiles.babysitter.approvedFamilies': ['famX'] })
+    );
+  });
+
+  it('parent may NOT inject a babysitter profile (role escalation)', async () => {
+    await seed('par1', { status: 'active', email: 'p@x.com', profiles: { parent: { familyId: 'famP', enrollmentComplete: true } } });
+    const authed = testEnv.authenticatedContext('par1');
+    await assertFails(
+      updateDoc(doc(authed.firestore(), 'users', 'par1'), { 'profiles.babysitter.searchable': true })
+    );
+  });
+
+  it('parent may NOT change their profiles.parent.familyId', async () => {
+    await seed('par2', { status: 'active', email: 'p@x.com', profiles: { parent: { familyId: 'famP', enrollmentComplete: true } } });
+    const authed = testEnv.authenticatedContext('par2');
+    await assertFails(
+      updateDoc(doc(authed.firestore(), 'users', 'par2'), { 'profiles.parent.familyId': 'famOther' })
+    );
+  });
+
+  it('owner may NOT grant themselves isAdmin', async () => {
+    await seed('bs5', { status: 'active', email: 'b@ejm.org', profiles: { babysitter: { ejemEmail: 'b@ejm.org', enrollmentComplete: true } } });
+    const authed = testEnv.authenticatedContext('bs5');
+    await assertFails(
+      updateDoc(doc(authed.firestore(), 'users', 'bs5'), { isAdmin: true })
+    );
+  });
+
+  it('owner may NOT change their own status (ban gate)', async () => {
+    await seed('bs6', { status: 'active', email: 'b@ejm.org', profiles: { babysitter: { ejemEmail: 'b@ejm.org', enrollmentComplete: true } } });
+    const authed = testEnv.authenticatedContext('bs6');
+    await assertFails(
+      updateDoc(doc(authed.firestore(), 'users', 'bs6'), { status: 'blocked' })
+    );
   });
 });
 

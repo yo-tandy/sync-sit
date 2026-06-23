@@ -16,10 +16,14 @@ export const getAdminDashboard = onCall(
     await verifyAdmin(request.auth.uid);
 
     const [babysitterSnap, familySnap, appointmentSnap, pendingVerSnap] = await Promise.all([
+      // Plan D: a doc carrying profiles.babysitter.enrollmentComplete (always
+      // a boolean on any babysitter profile) is a babysitter, regardless of
+      // value — `in [true,false]` acts as an existence predicate. Equality/in
+      // filters need no composite index.
       db
         .collection('users')
-        .where('role', '==', 'babysitter')
         .where('status', '==', 'active')
+        .where('profiles.babysitter.enrollmentComplete', 'in', [true, false])
         .count()
         .get(),
       db.collection('families').count().get(),
