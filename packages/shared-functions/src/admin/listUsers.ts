@@ -1,5 +1,6 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { getUserRole, type User, type LegacyUserFields } from '@ejm/shared-core';
+import { getBabysitterProfile } from '@ejm/sit-core';
 import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { verifyAdmin } from './verifyAdmin.js';
@@ -79,6 +80,19 @@ export const listUsers = onCall(
       });
     }
 
-    return { users: users.slice(0, limit) };
+    // Project the admin list-item wire shape: `role` and `searchable` are
+    // derived from the Plan D profiles map (with legacy fallback) so the admin
+    // UI keeps rendering role badges + the activate/deactivate toggle without
+    // reading now-removed top-level fields.
+    const projected = users.slice(0, limit).map((user) => {
+      const u = user as unknown as User & Partial<LegacyUserFields>;
+      return {
+        ...user,
+        role: getUserRole(u) ?? '',
+        searchable: getBabysitterProfile(u)?.searchable ?? false,
+      };
+    });
+
+    return { users: projected };
   }
 );
