@@ -47,8 +47,9 @@ describe('enrollFamily', () => {
     // Verify Firestore docs
     const db = getDb();
     const userDoc = await db.collection('users').doc(result.uid).get();
-    expect(userDoc.data()!.role).toBe('parent');
-    expect(userDoc.data()!.familyId).toBe(result.familyId);
+    expect(userDoc.data()!.profiles.parent.familyId).toBe(result.familyId);
+    expect(userDoc.data()!.profiles.parent.enrollmentComplete).toBe(true);
+    expect(userDoc.data()!.role).toBeUndefined();
 
     const familyDoc = await db.collection('families').doc(result.familyId).get();
     expect(familyDoc.data()!.familyName).toBe('TestFamily');

@@ -29,7 +29,7 @@ describe('deactivateUser', () => {
 
       expect(result.searchable).toBe(false);
       const userDoc = await getDb().collection('users').doc(seed.babysitter1.uid).get();
-      expect(userDoc.data()!.searchable).toBe(false);
+      expect(userDoc.data()!.profiles.babysitter.searchable).toBe(false);
     });
 
     it('toggles inactive babysitter back to searchable (reactivate)', async () => {
@@ -42,7 +42,7 @@ describe('deactivateUser', () => {
 
       expect(result.searchable).toBe(true);
       const userDoc = await getDb().collection('users').doc(seed.babysitter4.uid).get();
-      expect(userDoc.data()!.searchable).toBe(true);
+      expect(userDoc.data()!.profiles.babysitter.searchable).toBe(true);
     });
 
     it('writes an audit log entry with action reflecting direction', async () => {
