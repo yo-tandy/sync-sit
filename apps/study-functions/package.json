@@ -7,6 +7,7 @@
     "build": "tsc",
     "dev": "tsc --watch",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
     "lint": "echo 'no eslint config for study-functions yet' && exit 0",
     "predeploy": "node ../../scripts/bundle-shared-for-deploy.js"
   },
@@ -21,7 +22,8 @@
     "zod": "^3.23.0"
   },
   "devDependencies": {
-    "typescript": "^5.6.0"
+    "typescript": "^5.6.0",
+    "vitest": "^4.1.4"
   },
   "engines": {
     "node": "20"
