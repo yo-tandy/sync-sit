@@ -107,7 +107,7 @@ export const enrollTutor = onCall(
     // Parse dateOfBirth string ("YYYY-MM-DD") into a Firestore Timestamp
     const dobTimestamp = Timestamp.fromDate(new Date(enrollment.dateOfBirth));
 
-    // 6a. Write the users/{uid} document — full TutorUser shape
+    // 6a. Write the users/{uid} document — Plan D shape (profiles.tutor)
     await db.collection('users').doc(uid).set({
       uid,
       email: ejemEmailLower,

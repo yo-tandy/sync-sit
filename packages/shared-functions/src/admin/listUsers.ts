@@ -1,5 +1,5 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
-import { getUserRole, type User, type LegacyUserFields } from '@ejm/shared-core';
+import { getUserRole, type User } from '@ejm/shared-core';
 import { getBabysitterProfile } from '@ejm/sit-core';
 import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
@@ -61,7 +61,7 @@ export const listUsers = onCall(
     // In-memory role filter (shape-tolerant via the adapter)
     if (roleFilter) {
       users = users.filter(
-        (user) => getUserRole(user as unknown as User & Partial<LegacyUserFields>) === roleFilter,
+        (user) => getUserRole(user as unknown as User) === roleFilter,
       );
     }
 
@@ -81,11 +81,10 @@ export const listUsers = onCall(
     }
 
     // Project the admin list-item wire shape: `role` and `searchable` are
-    // derived from the Plan D profiles map (with legacy fallback) so the admin
-    // UI keeps rendering role badges + the activate/deactivate toggle without
-    // reading now-removed top-level fields.
+    // derived from the Plan D profiles map so the admin UI keeps rendering role
+    // badges + the activate/deactivate toggle without reading top-level fields.
     const projected = users.slice(0, limit).map((user) => {
-      const u = user as unknown as User & Partial<LegacyUserFields>;
+      const u = user as unknown as User;
       return {
         ...user,
         role: getUserRole(u) ?? '',

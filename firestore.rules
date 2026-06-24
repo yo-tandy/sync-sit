@@ -17,37 +17,30 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
 
-    // Plan D dual-read helpers — tolerate BOTH the legacy flat shape
-    // (top-level `role`/`familyId`) and the new shape (`profiles.{role}`,
-    // `isAdmin`). `.get(key, default)` avoids errors when a field is absent
-    // in one of the two shapes.
+    // Plan D user-doc helpers. Identity lives at the top level, role-specific
+    // data under `profiles.{role}`, admin via `isAdmin`. `.get(key, default)`
+    // avoids errors when a field is absent (e.g. admin docs have no `profiles`).
 
     // Helper: check if the requester is an admin
     function isAdmin() {
-      return isAuth()
-             && (callerData().get('role', '') == 'admin'
-                 || callerData().get('isAdmin', false) == true);
+      return isAuth() && callerData().get('isAdmin', false) == true;
     }
 
-    // Helper: is the given user-doc data a babysitter (either shape)?
+    // Helper: is the given user-doc data a babysitter?
     function isBabysitterData(d) {
-      return d.get('role', '') == 'babysitter'
-             || d.get('profiles', {}).get('babysitter', null) != null;
+      return d.get('profiles', {}).get('babysitter', null) != null;
     }
 
-    // Helper: the parent familyId on a user-doc data map, or null if the
-    // user is not a parent. New shape: profiles.parent.familyId; legacy: the
-    // top-level familyId when role == 'parent'.
+    // Helper: the parent familyId on a user-doc data map, or null if the user
+    // is not a parent.
     function parentFamilyId(d) {
-      return d.get('profiles', {}).get('parent', {}).get('familyId',
-               d.get('role', '') == 'parent' ? d.get('familyId', null) : null);
+      return d.get('profiles', {}).get('parent', {}).get('familyId', null);
     }
 
     // Helper: the set of profile-role keys a user-doc holds (babysitter,
     // parent, tutor). Owners may edit fields WITHIN their profiles, but may
     // not add or remove a role slot — that is a privilege escalation (e.g. a
-    // parent granting themselves a searchable babysitter profile). Under Plan
-    // D this replaces the old top-level `role` blocklist entry.
+    // parent granting themselves a searchable babysitter profile).
     function profileRolesUnchanged() {
       return request.resource.data.get('profiles', {}).keys()
                .hasOnly(resource.data.get('profiles', {}).keys())
@@ -98,11 +91,7 @@ service cloud.firestore {
       // - Top-level identity/admin fields must never change client-side:
       //   * uid/email/status/createdAt: identity; `status` is the hard ban gate
       //     that admin's blockUser callable owns.
-      //   * isAdmin: the new-shape admin-escalation vector.
-      //   * role/ejemEmail/approvedFamilies: LEGACY top-level fields. They are
-      //     gone after migration, but during the dual-read window a not-yet-
-      //     migrated doc still carries them, and isAdmin() still honors a legacy
-      //     `role == 'admin'`. Keep blocking them until the fallback is removed.
+      //   * isAdmin: the admin-escalation vector.
       // - profileRolesUnchanged: the SET of role slots can't change — blocks a
       //   client granting itself a new role (e.g. injecting profiles.babysitter).
       // - babysitterIdentityUnchanged / parentFamilyIdUnchanged: server-owned
@@ -111,8 +100,7 @@ service cloud.firestore {
       //   is user-controlled by design (soft hide from search).
       allow update: if isOwner(userId)
                     && !request.resource.data.diff(resource.data).affectedKeys()
-                        .hasAny(['uid', 'email', 'status', 'createdAt', 'isAdmin',
-                                 'role', 'ejemEmail', 'approvedFamilies'])
+                        .hasAny(['uid', 'email', 'status', 'createdAt', 'isAdmin'])
                     && profileRolesUnchanged()
                     && babysitterIdentityUnchanged()
                     && parentFamilyIdUnchanged();

@@ -1,29 +1,10 @@
-import type { ServiceProviderBase, ParentUser, AdminUser } from '@ejm/shared-core';
-
 // Re-export the generic user types so consumers importing from '@ejm/sit-core'
-// still see the full surface (UserBase, ServiceProviderBase, ParentUser, AdminUser).
+// see the full surface (User, SitUser, BabysitterProfile, ParentProfile, …).
 export * from '@ejm/shared-core';
-
-/** Babysitter-specific user fields */
-export interface BabysitterUser extends ServiceProviderBase {
-  role: 'babysitter';
-
-  // Babysitting preferences
-  kidAgeRange: { min: number; max: number };
-  maxKids: number;
-  hourlyRate: number;
-
-  // Contact sharing consent (babysitter-specific)
-  contactSharingConsent?: boolean;
-  approvedFamilies?: string[];
-}
-
-/** Union type for any user document in sync-sit */
-export type UserDoc = BabysitterUser | ParentUser | AdminUser;
 
 /**
  * Lightweight babysitter info used in family-facing UI (search results,
- * favorites, dashboard cards). A subset of BabysitterUser with a few
+ * favorites, dashboard cards) — a subset of the babysitter profile plus a few
  * computed fields (age, distance, name).
  */
 export interface BabysitterSummary {
