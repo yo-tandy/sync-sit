@@ -43,7 +43,8 @@ describe('users collection', () => {
     // Seed user doc first via admin
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
       await setDoc(doc(ctx.firestore(), 'users', 'user1'), {
-        uid: 'user1', role: 'babysitter', status: 'active', email: 'test@ejm.org',
+        uid: 'user1', status: 'active', email: 'test@ejm.org',
+        profiles: { babysitter: { enrollmentComplete: true, ejemEmail: 'test@ejm.org' } },
       });
     });
 
@@ -54,7 +55,8 @@ describe('users collection', () => {
   it('denies user from reading another users profile directly (unless babysitter)', async () => {
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
       await setDoc(doc(ctx.firestore(), 'users', 'other'), {
-        uid: 'other', role: 'parent', status: 'active', email: 'other@test.com',
+        uid: 'other', status: 'active', email: 'other@test.com',
+        profiles: { parent: { familyId: 'famOther' } },
       });
     });
 
@@ -63,65 +65,36 @@ describe('users collection', () => {
     await assertFails(getDoc(doc(authed.firestore(), 'users', 'other')));
   });
 
-  it('denies user from modifying protected fields (role)', async () => {
-    await testEnv.withSecurityRulesDisabled(async (ctx) => {
-      await setDoc(doc(ctx.firestore(), 'users', 'user1'), {
-        uid: 'user1', role: 'babysitter', status: 'active', email: 'test@ejm.org',
-        firstName: 'Test', lastName: 'User',
-      });
-    });
-
-    const authed = testEnv.authenticatedContext('user1');
-    await assertFails(
-      updateDoc(doc(authed.firestore(), 'users', 'user1'), { role: 'admin' })
-    );
-  });
-
   it('denies creating user docs from client', async () => {
     const authed = testEnv.authenticatedContext('newuser');
     await assertFails(
       setDoc(doc(authed.firestore(), 'users', 'newuser'), {
-        uid: 'newuser', role: 'babysitter', status: 'active',
+        uid: 'newuser', status: 'active', profiles: { babysitter: { enrollmentComplete: false } },
       })
     );
   });
 });
 
-// Plan D: the user-read gates must tolerate BOTH the legacy flat shape
-// (top-level role/familyId) and the new shape (profiles.{role}, isAdmin).
-describe('users collection — Plan D dual-shape reads', () => {
+// Plan D user-read gates: identity at top level, role data under profiles.{role}.
+describe('users collection — Plan D reads', () => {
   async function seed(id: string, data: Record<string, unknown>) {
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
       await setDoc(doc(ctx.firestore(), 'users', id), { uid: id, ...data });
     });
   }
 
-  it('new-shape admin (isAdmin:true, no role) can read another user doc', async () => {
+  it('admin (isAdmin:true) can read another user doc', async () => {
     await seed('adminN', { isAdmin: true, status: 'active', email: 'a@x.com', profiles: {} });
     await seed('someParent', { status: 'active', email: 'p@x.com', profiles: { parent: { familyId: 'famZ' } } });
     const authed = testEnv.authenticatedContext('adminN');
     await assertSucceeds(getDoc(doc(authed.firestore(), 'users', 'someParent')));
   });
 
-  it('legacy admin (role:admin) still reads another user doc', async () => {
-    await seed('adminL', { role: 'admin', status: 'active', email: 'a@x.com' });
-    await seed('someParent', { role: 'parent', status: 'active', familyId: 'famZ', email: 'p@x.com' });
-    const authed = testEnv.authenticatedContext('adminL');
-    await assertSucceeds(getDoc(doc(authed.firestore(), 'users', 'someParent')));
-  });
-
-  it('new-shape active babysitter is readable by any authed user', async () => {
+  it('active babysitter is readable by any authed user', async () => {
     await seed('bsN', { status: 'active', email: 'b@ejm.org', profiles: { babysitter: { ejemEmail: 'b@ejm.org', searchable: true } } });
     await seed('caller', { status: 'active', email: 'c@x.com', profiles: { parent: { familyId: 'famC' } } });
     const authed = testEnv.authenticatedContext('caller');
     await assertSucceeds(getDoc(doc(authed.firestore(), 'users', 'bsN')));
-  });
-
-  it('legacy active babysitter is still readable', async () => {
-    await seed('bsL', { role: 'babysitter', status: 'active', email: 'b@ejm.org' });
-    await seed('caller', { role: 'parent', status: 'active', familyId: 'famC', email: 'c@x.com' });
-    const authed = testEnv.authenticatedContext('caller');
-    await assertSucceeds(getDoc(doc(authed.firestore(), 'users', 'bsL')));
   });
 
   it('inactive new-shape babysitter is NOT readable by others', async () => {
@@ -136,13 +109,6 @@ describe('users collection — Plan D dual-shape reads', () => {
     await seed('meN', { status: 'active', email: 'me@x.com', profiles: { parent: { familyId: 'famSame' } } });
     const authed = testEnv.authenticatedContext('meN');
     await assertSucceeds(getDoc(doc(authed.firestore(), 'users', 'coN')));
-  });
-
-  it('legacy parent reads a same-family member doc', async () => {
-    await seed('coL', { role: 'parent', status: 'active', familyId: 'famSame', email: 'co@x.com' });
-    await seed('meL', { role: 'parent', status: 'active', familyId: 'famSame', email: 'me@x.com' });
-    const authed = testEnv.authenticatedContext('meL');
-    await assertSucceeds(getDoc(doc(authed.firestore(), 'users', 'coL')));
   });
 
   it('parent canNOT read a different-family parent doc', async () => {

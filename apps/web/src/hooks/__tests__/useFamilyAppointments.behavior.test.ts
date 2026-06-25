@@ -7,7 +7,7 @@
  * Post-cleanup pattern (read from apps/web/src/hooks/useFamilyAppointments.ts
  * after merge 8e1272f):
  *   - Selector: useAuthStore((s) => s.userDoc); familyId derived as
- *     (userDoc as ParentUser | null)?.familyId.
+ *     getParentProfile(userDoc)?.familyId.
  *   - useState<boolean>(Boolean(familyId)) — loading initialises from
  *     familyId.
  *   - useEffect deps on [familyId]: `if (!familyId) return;` — no
