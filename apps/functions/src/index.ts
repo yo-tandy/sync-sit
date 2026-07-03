@@ -36,7 +36,6 @@ export {
   listAuditLogs,
   exportUserData,
   deactivateUser,
-  migrateUsersToProfiles,
   addPreapprovedEmail,
   removePreapprovedEmail,
   listPreapprovedEmails,
