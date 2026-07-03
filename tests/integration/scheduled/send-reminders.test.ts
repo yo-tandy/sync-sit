@@ -9,6 +9,30 @@ const { runSendReminders } = require(
   '../../../apps/functions/dist/scheduled/sendReminders.js'
 ) as typeof import('../../../apps/functions/src/scheduled/sendReminders.js');
 
+// Appointment date/startTime are Paris wall-clock strings (see
+// apps/functions/src/scheduled/parisTime.ts). Built here with Intl
+// directly — independently of the implementation under test — so the
+// suite passes regardless of the machine's timezone.
+function parisWallClock(instant: Date): { date: string; startTime: string } {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Europe/Paris',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+    })
+      .formatToParts(instant)
+      .map((p) => [p.type, p.value]),
+  );
+  return {
+    date: `${parts.year}-${parts.month}-${parts.day}`,
+    startTime: `${parts.hour}:${parts.minute}`,
+  };
+}
+
 describe('runSendReminders', () => {
   let seed: SeedData;
 
@@ -33,9 +57,9 @@ describe('runSendReminders', () => {
     const db = getDb();
     const now = new Date();
     // Place appointment at now + 24h exactly (within 23–25h window)
-    const aptTime = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-    const dateStr = aptTime.toISOString().split('T')[0];
-    const startTime = `${String(aptTime.getUTCHours()).padStart(2, '0')}:${String(aptTime.getUTCMinutes()).padStart(2, '0')}`;
+    const { date: dateStr, startTime } = parisWallClock(
+      new Date(now.getTime() + 24 * 60 * 60 * 1000),
+    );
 
     await db.collection('appointments').add({
       familyId: seed.family1Id,
@@ -71,9 +95,9 @@ describe('runSendReminders', () => {
   it('skips appointment that already has reminderSent=true', async () => {
     const db = getDb();
     const now = new Date();
-    const aptTime = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-    const dateStr = aptTime.toISOString().split('T')[0];
-    const startTime = `${String(aptTime.getUTCHours()).padStart(2, '0')}:${String(aptTime.getUTCMinutes()).padStart(2, '0')}`;
+    const { date: dateStr, startTime } = parisWallClock(
+      new Date(now.getTime() + 24 * 60 * 60 * 1000),
+    );
 
     await db.collection('appointments').add({
       familyId: seed.family1Id,
@@ -96,9 +120,9 @@ describe('runSendReminders', () => {
     const db = getDb();
     const now = new Date();
     // 26h away — outside the window
-    const aptTime = new Date(now.getTime() + 26 * 60 * 60 * 1000);
-    const dateStr = aptTime.toISOString().split('T')[0];
-    const startTime = `${String(aptTime.getUTCHours()).padStart(2, '0')}:${String(aptTime.getUTCMinutes()).padStart(2, '0')}`;
+    const { date: dateStr, startTime } = parisWallClock(
+      new Date(now.getTime() + 26 * 60 * 60 * 1000),
+    );
 
     await db.collection('appointments').add({
       familyId: seed.family1Id,
@@ -117,9 +141,9 @@ describe('runSendReminders', () => {
     const db = getDb();
     const now = new Date();
     // 22h away — too soon
-    const aptTime = new Date(now.getTime() + 22 * 60 * 60 * 1000);
-    const dateStr = aptTime.toISOString().split('T')[0];
-    const startTime = `${String(aptTime.getUTCHours()).padStart(2, '0')}:${String(aptTime.getUTCMinutes()).padStart(2, '0')}`;
+    const { date: dateStr, startTime } = parisWallClock(
+      new Date(now.getTime() + 22 * 60 * 60 * 1000),
+    );
 
     await db.collection('appointments').add({
       familyId: seed.family1Id,
@@ -137,9 +161,9 @@ describe('runSendReminders', () => {
   it('skips appointment with non-confirmed status (pending/cancelled)', async () => {
     const db = getDb();
     const now = new Date();
-    const aptTime = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-    const dateStr = aptTime.toISOString().split('T')[0];
-    const startTime = `${String(aptTime.getUTCHours()).padStart(2, '0')}:${String(aptTime.getUTCMinutes()).padStart(2, '0')}`;
+    const { date: dateStr, startTime } = parisWallClock(
+      new Date(now.getTime() + 24 * 60 * 60 * 1000),
+    );
 
     // Non-confirmed status — query filters these out
     await db.collection('appointments').add({
