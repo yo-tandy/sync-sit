@@ -33,15 +33,20 @@ export const verifyEjmEmail = onCall(
       graduationYear = validation.graduationYear ?? null;
     }
 
-    // Check if account already exists
+    // Check if the email already belongs to an account. An authenticated
+    // caller may verify their OWN account email (cross-app add-profile:
+    // e.g. a babysitter whose account email is their EJM email enrolling
+    // as a tutor) — anyone else's email is still rejected.
     const existingUsers = await db
       .collection('users')
       .where('email', '==', email.toLowerCase())
       .limit(1)
       .get();
 
-    if (!existingUsers.empty) {
-      throw new HttpsError('already-exists', 'An account with this email already exists');
+    if (!existingUsers.empty && existingUsers.docs[0].id !== request.auth?.uid) {
+      throw new HttpsError('already-exists', 'An account with this email already exists', {
+        reason: 'account-exists',
+      });
     }
 
     // Generate cryptographically secure 6-digit code
