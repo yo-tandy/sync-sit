@@ -103,9 +103,11 @@ export async function callFunction<T = unknown>(
     const err = new Error(body.error.message || 'Function error') as Error & {
       code: string;
       status: string;
+      details?: unknown;
     };
     err.code = body.error.status;
     err.status = body.error.status;
+    err.details = body.error.details;
     throw err;
   }
 
