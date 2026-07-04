@@ -14,6 +14,14 @@ export { verifyEjmEmail } from './auth/verifyEjmEmail.js';
 export { verifyParentEmail } from './auth/verifyParentEmail.js';
 export { verifyCode } from './auth/verifyCode.js';
 
+// Enrollment helpers — shared merge utilities
+export {
+  addProfileToUser,
+  assertCanAddProfile,
+  ensureScheduleDoc,
+} from './enrollment/addProfileToUser.js';
+export type { AddProfileParams, ProfileKey } from './enrollment/addProfileToUser.js';
+
 // Callables — enrollment (family-related only)
 export { enrollFamily } from './enrollment/enrollFamily.js';
 export { generateInviteLink } from './enrollment/generateInviteLink.js';
