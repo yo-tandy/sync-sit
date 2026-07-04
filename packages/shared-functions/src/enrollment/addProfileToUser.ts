@@ -9,7 +9,11 @@ export interface AddProfileParams {
   uid: string;
   profileKey: ProfileKey;
   profileData: Record<string, unknown>;
-  /** Written only when the field is absent on the existing doc. */
+  /**
+   * Written only when the field is absent on the existing doc. Keys must be
+   * top-level field names; dotted paths are not supported (the absence check
+   * reads plain object keys while update() would treat dots as field paths).
+   */
   fillBaseFields?: Record<string, unknown>;
   auditAction: string;
   auditDetails?: Record<string, unknown>;
