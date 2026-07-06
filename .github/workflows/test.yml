@@ -41,7 +41,9 @@ jobs:
         run: pnpm -r --filter './packages/**' build
 
       - name: Build Cloud Functions
-        run: cd apps/functions && npx tsc
+        run: |
+          pnpm build:functions
+          pnpm build:study-functions
 
       # Integration tests — run inside emulator lifecycle
       - name: Run integration tests
