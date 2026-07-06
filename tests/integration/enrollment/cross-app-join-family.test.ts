@@ -64,7 +64,9 @@ describe('joinFamily cross-app add-profile', () => {
     const idToken = await getIdToken(TUTOR_UID);
     const result = await callFunction<{ success: boolean; uid: string; familyId: string }>(
       'joinFamily',
-      { token },
+      // firstName is deliberately supplied to prove the existing doc's value
+      // wins over a fillBaseFields candidate (not just that it isn't erased).
+      { token, firstName: 'Override' },
       idToken,
     );
     expect(result.success).toBe(true);
