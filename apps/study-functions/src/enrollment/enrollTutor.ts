@@ -4,17 +4,17 @@ import { strongPasswordSchema } from '@ejm/sit-core';
 import { db, adminAuth } from '@ejm/shared-functions/config/firebase.js';
 import { writeUserActivity } from '@ejm/shared-functions/admin/writeAuditLog.js';
 import { getCorsOrigin } from '@ejm/shared-functions/config/cors.js';
+import {
+  addProfileToUser,
+  ensureScheduleDoc,
+} from '@ejm/shared-functions/enrollment/addProfileToUser.js';
 import { tutorEnrollmentSchema } from '../validation/tutor.js';
 import type { TutorEnrollmentInput } from '../validation/tutor.js';
-
-// TODO: Cross-app enrollment (existing sync-sit user becoming a tutor) is deferred.
-// When implemented, detect an existing uid for the ejemEmail and branch into an
-// "add study profile" path rather than creating a new Auth user and user doc.
 
 interface EnrollTutorData {
   ejemEmail: string;
   verificationCode: string;
-  password: string;
+  password?: string;
   consentVersion: string;
   enrollment: TutorEnrollmentInput;
 }
@@ -23,14 +23,17 @@ export const enrollTutor = onCall(
   { region: 'europe-west1', cors: getCorsOrigin() },
   async (request) => {
     const data = request.data as EnrollTutorData;
+    const isAddProfile = !!request.auth;
 
-    // 1. Validate password
-    const passwordResult = strongPasswordSchema.safeParse(data.password);
-    if (!passwordResult.success) {
-      throw new HttpsError(
-        'invalid-argument',
-        passwordResult.error.issues[0]?.message || 'Password does not meet requirements',
-      );
+    // 1. Validate password (only for the new-account path)
+    if (!isAddProfile) {
+      const passwordResult = strongPasswordSchema.safeParse(data.password);
+      if (!passwordResult.success) {
+        throw new HttpsError(
+          'invalid-argument',
+          passwordResult.error.issues[0]?.message || 'Password does not meet requirements',
+        );
+      }
     }
 
     // 2. Require consent
@@ -85,8 +88,61 @@ export const enrollTutor = onCall(
       throw new HttpsError('invalid-argument', 'At least one contact field is required');
     }
 
-    // 5. Create Firebase Auth user
+    // 5. Build the tutor profile (shared by both the add-profile and the
+    // new-account paths).
     const ejemEmailLower = data.ejemEmail.toLowerCase();
+    const now = new Date();
+
+    // Parse dateOfBirth string ("YYYY-MM-DD") into a Firestore Timestamp
+    const dobTimestamp = Timestamp.fromDate(new Date(enrollment.dateOfBirth));
+
+    const tutorProfile = {
+      enrollmentComplete: false, // false until admin verification completes
+      ejemEmail: ejemEmailLower,
+      classLevel: enrollment.classLevel,
+      gender: enrollment.gender ?? null,
+      subjects: enrollment.subjects,
+      sessionLengthsMin: enrollment.sessionLengthsMin,
+      locationPrefs: enrollment.locationPrefs,
+      paddingMin: enrollment.paddingMin,
+      aboutMe: enrollment.aboutMe ?? null,
+      contactEmail: enrollment.contactEmail ?? null,
+      contactPhone: enrollment.contactPhone ?? null,
+      whatsapp: enrollment.whatsapp ?? null,
+      areaMode: enrollment.areaMode,
+      arrondissements: enrollment.arrondissements ?? [],
+      areaAddress: enrollment.areaAddress ?? null,
+      areaRadiusKm: enrollment.areaRadiusKm ?? null,
+      languages: [],
+      searchable: true,
+    };
+
+    // 5a. Add-profile path — an authenticated existing user gains a tutor
+    // profile. Base fields and consent on the existing doc are preserved.
+    if (isAddProfile) {
+      const uid = request.auth!.uid;
+      await addProfileToUser({
+        uid,
+        profileKey: 'tutor',
+        profileData: tutorProfile,
+        fillBaseFields: {
+          firstName: enrollment.firstName,
+          lastName: enrollment.lastName,
+          dateOfBirth: dobTimestamp,
+        },
+        auditAction: 'tutor.profile_added',
+        auditDetails: {
+          ejemEmail: ejemEmailLower,
+          consentVersion: data.consentVersion,
+          subjects: enrollment.subjects.map((s) => s.subject),
+        },
+      });
+      await ensureScheduleDoc(uid);
+      await codeDoc.ref.delete();
+      return { uid };
+    }
+
+    // 5b. New-account path — create a Firebase Auth user.
     let uid: string;
     try {
       const userRecord = await adminAuth.createUser({
@@ -97,15 +153,12 @@ export const enrollTutor = onCall(
     } catch (err: unknown) {
       const fbErr = err as { code?: string };
       if (fbErr.code === 'auth/email-already-exists') {
-        throw new HttpsError('already-exists', 'An account with this email already exists');
+        throw new HttpsError('already-exists', 'An account with this email already exists', {
+          reason: 'account-exists',
+        });
       }
       throw new HttpsError('internal', 'Failed to create account');
     }
-
-    const now = new Date();
-
-    // Parse dateOfBirth string ("YYYY-MM-DD") into a Firestore Timestamp
-    const dobTimestamp = Timestamp.fromDate(new Date(enrollment.dateOfBirth));
 
     // 6a. Write the users/{uid} document — Plan D shape (profiles.tutor)
     await db.collection('users').doc(uid).set({
@@ -123,26 +176,7 @@ export const enrollTutor = onCall(
       },
       fcmTokens: [],
       profiles: {
-        tutor: {
-          enrollmentComplete: false, // false until admin verification completes
-          ejemEmail: ejemEmailLower,
-          classLevel: enrollment.classLevel,
-          gender: enrollment.gender ?? null,
-          subjects: enrollment.subjects,
-          sessionLengthsMin: enrollment.sessionLengthsMin,
-          locationPrefs: enrollment.locationPrefs,
-          paddingMin: enrollment.paddingMin,
-          aboutMe: enrollment.aboutMe ?? null,
-          contactEmail: enrollment.contactEmail ?? null,
-          contactPhone: enrollment.contactPhone ?? null,
-          whatsapp: enrollment.whatsapp ?? null,
-          areaMode: enrollment.areaMode,
-          arrondissements: enrollment.arrondissements ?? [],
-          areaAddress: enrollment.areaAddress ?? null,
-          areaRadiusKm: enrollment.areaRadiusKm ?? null,
-          languages: [],
-          searchable: true,
-        },
+        tutor: tutorProfile,
       },
       consentAt: now,
       consentVersion: data.consentVersion,
@@ -151,22 +185,7 @@ export const enrollTutor = onCall(
     });
 
     // 6b. Write the schedules/{uid} document — empty weekly grid + empty overrides
-    const emptySlots = new Array(96).fill(false);
-    await db.collection('schedules').doc(uid).set({
-      userId: uid,
-      weekly: {
-        mon: emptySlots,
-        tue: emptySlots,
-        wed: emptySlots,
-        thu: emptySlots,
-        fri: emptySlots,
-        sat: emptySlots,
-        sun: emptySlots,
-      },
-      overrides: {},
-      holidayMode: 'same',
-      updatedAt: now,
-    });
+    await ensureScheduleDoc(uid);
 
     // 6c. Audit log
     await writeUserActivity(uid, 'tutor.enroll', {
