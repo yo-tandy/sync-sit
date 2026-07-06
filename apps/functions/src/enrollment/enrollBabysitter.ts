@@ -97,8 +97,9 @@ export const enrollBabysitter = onCall(
         password: data.password,
       });
       uid = userRecord.uid;
-    } catch (err: any) {
-      if (err.code === 'auth/email-already-exists') {
+    } catch (err: unknown) {
+      const fbErr = err as { code?: string };
+      if (fbErr.code === 'auth/email-already-exists') {
         throw new HttpsError('already-exists', 'An account with this email already exists', {
           reason: 'account-exists',
         });
