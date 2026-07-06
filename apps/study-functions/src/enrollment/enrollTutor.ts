@@ -121,6 +121,10 @@ export const enrollTutor = onCall(
     // profile. Base fields and consent on the existing doc are preserved.
     if (isAddProfile) {
       const uid = request.auth!.uid;
+      // Idempotent, so it runs before the profile merge: if anything below
+      // fails, no permanent state was created; once the merge commits, a
+      // failed code-doc cleanup is harmless (retry hits profile-exists).
+      await ensureScheduleDoc(uid);
       await addProfileToUser({
         uid,
         profileKey: 'tutor',
@@ -137,7 +141,6 @@ export const enrollTutor = onCall(
           subjects: enrollment.subjects.map((s) => s.subject),
         },
       });
-      await ensureScheduleDoc(uid);
       await codeDoc.ref.delete();
       return { uid };
     }
