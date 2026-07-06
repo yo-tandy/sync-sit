@@ -37,6 +37,8 @@ export const verifyEjmEmail = onCall(
     // caller may verify their OWN account email (cross-app add-profile:
     // e.g. a babysitter whose account email is their EJM email enrolling
     // as a tutor) — anyone else's email is still rejected.
+    // limit(1) assumes at most one user doc per email (enforced by the
+    // enrollment write paths); the own-email bypass below relies on it.
     const existingUsers = await db
       .collection('users')
       .where('email', '==', email.toLowerCase())

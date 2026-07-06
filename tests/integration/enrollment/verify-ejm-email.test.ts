@@ -41,7 +41,10 @@ describe('verifyEjmEmail cross-app cases', () => {
     const token = await getIdToken(seed.parent1.uid);
     await expect(
       callFunction('verifyEjmEmail', { email: seed.babysitter1.email }, token),
-    ).rejects.toMatchObject({ code: 'ALREADY_EXISTS' });
+    ).rejects.toMatchObject({
+      code: 'ALREADY_EXISTS',
+      details: { reason: 'account-exists' },
+    });
   });
 
   it('unauthenticated request for an existing email is still rejected with account-exists details', async () => {
