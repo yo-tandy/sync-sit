@@ -4,11 +4,15 @@ import { getCorsOrigin } from '../config/cors.js';
 import { FieldValue } from 'firebase-admin/firestore';
 import { strongPasswordSchema } from '@ejm/sit-core';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
+import {
+  addProfileToUser,
+  ensureScheduleDoc,
+} from '@ejm/shared-functions/enrollment/addProfileToUser.js';
 
 interface EnrollBabysitterData {
   ejemEmail: string;
   verificationCode: string;
-  password: string;
+  password?: string;
   consentVersion: string;
 }
 
@@ -21,11 +25,14 @@ export const enrollBabysitter = onCall(
   { region: 'europe-west1', cors: getCorsOrigin() },
   async (request) => {
     const data = request.data as EnrollBabysitterData;
+    const isAddProfile = !!request.auth;
 
-    // 0. Validate password
-    const passwordResult = strongPasswordSchema.safeParse(data.password);
-    if (!passwordResult.success) {
-      throw new HttpsError('invalid-argument', passwordResult.error.issues[0]?.message || 'Password does not meet requirements');
+    // 0. Validate password (only for the new-account path)
+    if (!isAddProfile) {
+      const passwordResult = strongPasswordSchema.safeParse(data.password);
+      if (!passwordResult.success) {
+        throw new HttpsError('invalid-argument', passwordResult.error.issues[0]?.message || 'Password does not meet requirements');
+      }
     }
 
     if (!data.consentVersion) {
@@ -57,6 +64,31 @@ export const enrollBabysitter = onCall(
       throw new HttpsError('invalid-argument', 'Invalid verification code');
     }
 
+    // 1a. Add-profile path — an authenticated existing user gains a babysitter
+    // profile. Base fields and consent on the existing doc are preserved.
+    if (isAddProfile) {
+      const uid = request.auth!.uid;
+      const ejemEmailLower = data.ejemEmail.toLowerCase();
+      // Idempotent, so it runs before the profile merge: if anything below
+      // fails, no permanent state was created; once the merge commits, a
+      // failed code-doc cleanup is harmless (retry hits profile-exists).
+      await ensureScheduleDoc(uid);
+      await addProfileToUser({
+        uid,
+        profileKey: 'babysitter',
+        profileData: {
+          enrollmentComplete: false,
+          ejemEmail: ejemEmailLower,
+          searchable: false,
+        },
+        fillBaseFields: { language: 'en' },
+        auditAction: 'babysitter_profile_added',
+        auditDetails: { ejemEmail: ejemEmailLower, consentVersion: data.consentVersion },
+      });
+      await codeDoc.ref.delete();
+      return { success: true, uid };
+    }
+
     // 2. Create Firebase Auth user
     let uid: string;
     try {
@@ -67,7 +99,9 @@ export const enrollBabysitter = onCall(
       uid = userRecord.uid;
     } catch (err: any) {
       if (err.code === 'auth/email-already-exists') {
-        throw new HttpsError('already-exists', 'An account with this email already exists');
+        throw new HttpsError('already-exists', 'An account with this email already exists', {
+          reason: 'account-exists',
+        });
       }
       throw new HttpsError('internal', 'Failed to create account');
     }
@@ -100,21 +134,7 @@ export const enrollBabysitter = onCall(
     });
 
     // 4. Create empty schedule
-    const emptySlots = new Array(96).fill(false);
-    await db.collection('schedules').doc(uid).set({
-      userId: uid,
-      weekly: {
-        mon: emptySlots,
-        tue: emptySlots,
-        wed: emptySlots,
-        thu: emptySlots,
-        fri: emptySlots,
-        sat: emptySlots,
-        sun: emptySlots,
-      },
-      holidayMode: 'same',
-      updatedAt: now,
-    });
+    await ensureScheduleDoc(uid);
 
     // 5. Clean up verification code
     await codeDoc.ref.delete();
