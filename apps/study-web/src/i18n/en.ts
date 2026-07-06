@@ -47,6 +47,8 @@ export default {
     passwordMinLength: 'At least 8 characters',
     createAccount: 'Create Account',
     creatingAccount: 'Creating account...',
+    agreeAndContinue: 'Agree & continue',
+    saving: 'Saving...',
     signingIn: 'Signing in...',
     tooManyAttempts: 'Too many failed attempts. Please request a new code.',
   },
@@ -68,6 +70,10 @@ export default {
     help: 'Help',
   },
 
+  signup: {
+    crossAppBanner: "You're signed in — pick a role to add to your existing account.",
+  },
+
   menu: {
     about: 'About',
     reportProblem: 'Report a Problem',
@@ -76,6 +82,10 @@ export default {
   },
 
   enrollment: {
+    confirmConsentTitle: 'Almost there',
+    accountExistsCta: 'An account with this email already exists. Log in to add this role.',
+    alreadyEnrolled: 'This account already has this role.',
+    alreadyInFamily: 'You already belong to a family.',
     tutorTitle: 'Tutor Sign Up',
     tutor: {
       title: 'Tutor enrollment',
