@@ -29,10 +29,18 @@ import { diffFrames } from './_helpers/replayHook';
 
 // --- vi.hoisted state for mocks ---------------------------------------------
 
-type MockUserDoc = { role: 'parent'; familyId?: string };
+// Plan D user shape: the hook derives familyId via
+// getParentProfile(userDoc)?.familyId, i.e. from profiles.parent.
+type MockUserDoc = {
+  profiles: { parent: { enrollmentComplete: boolean; familyId?: string } };
+};
+
+function parentDoc(familyId?: string): MockUserDoc {
+  return { profiles: { parent: { enrollmentComplete: true, familyId } } };
+}
 
 const { authState, snapState } = vi.hoisted(() => ({
-  authState: { userDoc: null as { role: 'parent'; familyId?: string } | null },
+  authState: { userDoc: null as MockUserDoc | null },
   snapState: {
     cb: null as
       | null
@@ -196,7 +204,7 @@ describe('L3: useFamilyAppointments — Gate 2 oracle-diff', () => {
   });
 
   it('cold mount with userDoc that has no familyId: loading=false, no subscription', async () => {
-    setUserDoc({ role: 'parent', familyId: undefined });
+    setUserDoc(parentDoc(undefined));
     const { result, unmount } = renderHook(() => useFamilyAppointments());
     await act(async () => {});
 
@@ -221,7 +229,7 @@ describe('L3: useFamilyAppointments — Gate 2 oracle-diff', () => {
   });
 
   it('cold mount with familyId="f1": loading=true, snap partitions and drops outside-cutoff cancellations', async () => {
-    setUserDoc({ role: 'parent', familyId: 'f1' });
+    setUserDoc(parentDoc('f1'));
     const { result, unmount } = renderHook(() => useFamilyAppointments());
     await act(async () => {});
 
@@ -260,7 +268,7 @@ describe('L3: useFamilyAppointments — Gate 2 oracle-diff', () => {
   });
 
   it('familyId change f1 → f2: state retained between switch and new snap; unsub fires', async () => {
-    setUserDoc({ role: 'parent', familyId: 'f1' });
+    setUserDoc(parentDoc('f1'));
     const { result, rerender, unmount } = renderHook(() => useFamilyAppointments());
     await act(async () => {});
 
@@ -275,7 +283,7 @@ describe('L3: useFamilyAppointments — Gate 2 oracle-diff', () => {
     // Switch family. The effect cleanup runs (unsub f1), then re-runs
     // to subscribe to f2. State (useState) is retained, so loading
     // stays false and arrays still show f1 data until the f2 snap fires.
-    setUserDoc({ role: 'parent', familyId: 'f2' });
+    setUserDoc(parentDoc('f2'));
     await act(async () => {
       rerender();
     });
@@ -324,7 +332,7 @@ describe('L3: useFamilyAppointments — Gate 2 oracle-diff', () => {
     await act(async () => {});
     const frame1 = captureFrame(result);
 
-    setUserDoc({ role: 'parent', familyId: 'f1' });
+    setUserDoc(parentDoc('f1'));
     await act(async () => {
       rerender();
     });

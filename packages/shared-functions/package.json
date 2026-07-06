@@ -38,8 +38,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.cjs.json",
-    "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@ejm/shared-core": "workspace:*",
@@ -49,7 +48,6 @@
     "resend": "^4.0.0"
   },
   "devDependencies": {
-    "typescript": "^6.0.2",
-    "vitest": "^4.1.4"
+    "typescript": "^6.0.2"
   }
 }

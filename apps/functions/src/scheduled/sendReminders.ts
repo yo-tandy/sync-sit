@@ -3,6 +3,7 @@ import type { Firestore } from 'firebase-admin/firestore';
 import { db } from '../config/firebase.js';
 import { sendNotificationEmail } from '../config/email.js';
 import { sendPushNotification } from '../config/push.js';
+import { parisDateString, parisWallTimeToUtc } from './parisTime.js';
 
 export interface SendRemindersStats {
   remindersSent: number;
@@ -19,10 +20,11 @@ export async function runSendReminders(
   const in24h = new Date(now.getTime() + 24 * 60 * 60 * 1000);
   const in25h = new Date(now.getTime() + 25 * 60 * 60 * 1000);
 
-  // Format dates for comparison
-  const today = now.toISOString().split('T')[0];
-  const tomorrow = in24h.toISOString().split('T')[0];
-  const dayAfter = in25h.toISOString().split('T')[0];
+  // Candidate `date` values for the window, as Paris calendar dates
+  // (appointment date/startTime are Paris wall-clock strings).
+  const today = parisDateString(now);
+  const tomorrow = parisDateString(in24h);
+  const dayAfter = parisDateString(in25h);
 
   // Find confirmed appointments with dates in the 24-25h window
   const appointmentsSnap = await firestoreDb.collection('appointments')
@@ -43,7 +45,7 @@ export async function runSendReminders(
     // Check if appointment is within the 24-25h window
     if (!apt.date || !apt.startTime) continue;
 
-    const aptDateTime = new Date(`${apt.date}T${apt.startTime}:00`);
+    const aptDateTime = parisWallTimeToUtc(apt.date, apt.startTime);
     const hoursUntil = (aptDateTime.getTime() - now.getTime()) / (1000 * 60 * 60);
 
     if (hoursUntil < 23 || hoursUntil > 25) continue;
