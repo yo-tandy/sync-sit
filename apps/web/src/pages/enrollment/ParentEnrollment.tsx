@@ -1,9 +1,12 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useState, useEffect } from 'react';
+import { Link, useNavigate } from 'react-router';
+import { useTranslation } from 'react-i18next';
 import { httpsCallable } from 'firebase/functions';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth, functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
+import { getParentProfile } from '@ejm/sit-core';
+import { enrollmentErrorReason } from '@ejm/shared-ui';
 import { TopNav, StepIndicator } from '@/components/ui';
 import { StepParentEmail } from './parent/StepParentEmail';
 import { StepParentVerify } from './parent/StepParentVerify';
@@ -61,27 +64,72 @@ const INITIAL_DATA: ParentFormData = {
 };
 
 export function ParentEnrollment() {
+  const { t } = useTranslation();
   const [step, setStep] = useState(0);
   const [formData, setFormData] = useState<ParentFormData>(INITIAL_DATA);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // When true, render the account-exists CTA (message + login link) instead of
+  // the plain error string. Other failures keep using `error`.
+  const [showLoginCta, setShowLoginCta] = useState(false);
   const navigate = useNavigate();
+  const { firebaseUser, userDoc, loading: authLoading, refreshUserDoc } = useAuthStore();
+
+  // Add-profile mode: an already-authenticated user with no parent profile yet.
+  // Steps 0-2 are all credentials (email/verify/password), so add-profile jumps
+  // straight to FamilyInfo (step 3) via the mount effect below and never sends
+  // credential keys to the callable.
+  const isAddProfile = !!firebaseUser && !getParentProfile(userDoc);
+
+  // For a signed-in user, resolve where the flow starts. Guard on step === 0 so
+  // this only fires before the flow begins: after an add-profile success,
+  // refreshUserDoc() adds profiles.parent and this effect must NOT hijack the
+  // success navigation to /family.
+  useEffect(() => {
+    if (step !== 0 || authLoading || !firebaseUser) return;
+    if (getParentProfile(userDoc)) {
+      // Already a parent — nothing to add here.
+      navigate('/family', { replace: true });
+    } else {
+      // Skip the credential steps and go straight to family info.
+      setStep(3);
+    }
+  }, [step, authLoading, firebaseUser, userDoc, navigate]);
 
   const updateData = (partial: Partial<ParentFormData>) => {
     setFormData((prev) => ({ ...prev, ...partial }));
     setError(null);
   };
 
+  // Maps a callable error to the right UI state; returns true if it produced a
+  // specialised message (account-exists CTA or already-in-family notice).
+  const applyEnrollmentError = (err: unknown): boolean => {
+    const reason = enrollmentErrorReason(err);
+    if (reason === 'account-exists') {
+      setError(null);
+      setShowLoginCta(true);
+      return true;
+    }
+    if (reason === 'profile-exists') {
+      setError(t('enrollment.alreadyInFamily'));
+      setShowLoginCta(false);
+      return true;
+    }
+    return false;
+  };
+
   const handleSendCode = async () => {
     setLoading(true);
     setError(null);
+    setShowLoginCta(false);
     try {
       const verifyEmail = httpsCallable(functions, 'verifyParentEmail');
       await verifyEmail({ email: formData.email });
       setStep(1);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to send verification code';
-      setError(message);
+      if (!applyEnrollmentError(err)) {
+        setError(err instanceof Error ? err.message : 'Failed to send verification code');
+      }
     } finally {
       setLoading(false);
     }
@@ -102,16 +150,31 @@ export function ParentEnrollment() {
   const handleComplete = async () => {
     setLoading(true);
     setError(null);
+    setShowLoginCta(false);
     try {
       const enrollFamily = httpsCallable(functions, 'enrollFamily');
-      await enrollFamily({
+      const basePayload = {
         ...formData,
         kids: [],
         address: formData.address?.fullAddress || '',
         latLng: formData.address
           ? { lat: formData.address.lat, lng: formData.address.lng }
           : { lat: 48.8566, lng: 2.3522 },
-      });
+      };
+
+      if (isAddProfile) {
+        // Authed add-profile: send only the family payload. Omit the credential
+        // keys (email/verificationCode/password) so the backend takes the
+        // add-profile branch on the existing account, then refresh and navigate
+        // without a new sign-in.
+        const { email, verificationCode, password, ...familyPayload } = basePayload;
+        await enrollFamily(familyPayload);
+        await refreshUserDoc();
+        navigate('/family');
+        return;
+      }
+
+      await enrollFamily(basePayload);
 
       await signInWithEmailAndPassword(auth, formData.email, formData.password);
 
@@ -133,8 +196,9 @@ export function ParentEnrollment() {
 
       navigate('/family');
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to create account';
-      setError(message);
+      if (!applyEnrollmentError(err)) {
+        setError(err instanceof Error ? err.message : 'Failed to create account');
+      }
     } finally {
       setLoading(false);
     }
@@ -175,6 +239,11 @@ export function ParentEnrollment() {
     />,
   ];
 
+  // Wait for auth resolution before mounting the wizard: this keeps the
+  // add-profile decision (jump to step 3 vs. redirect to /family) from being
+  // made against a not-yet-known auth state.
+  if (authLoading) return null;
+
   return (
     <div>
       <TopNav
@@ -183,6 +252,14 @@ export function ParentEnrollment() {
         onBack={step > 0 ? () => setStep(step - 1) : undefined}
       />
       <StepIndicator totalSteps={4} currentStep={step} />
+      {showLoginCta && (
+        <div className="mx-auto mb-4 max-w-md px-6 text-center text-sm text-red-600">
+          <p>{t('enrollment.accountExistsCta')}</p>
+          <Link to="/login" className="mt-1 inline-block font-semibold text-red-600 underline">
+            {t('auth.login')}
+          </Link>
+        </div>
+      )}
       {steps[step]}
     </div>
   );

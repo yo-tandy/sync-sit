@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router';
+import { Link, useNavigate, useSearchParams } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { httpsCallable } from 'firebase/functions';
 import { signInWithEmailAndPassword } from 'firebase/auth';
@@ -7,7 +7,7 @@ import { auth, functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { TopNav, StepIndicator } from '@/components/ui';
 import { EnrollmentAppBar } from '@/components/ui/EnrollmentAppBar';
-import { StepEmail, StepVerify, StepPassword } from '@ejm/shared-ui';
+import { StepEmail, StepVerify, StepPassword, enrollmentErrorReason } from '@ejm/shared-ui';
 import { StepProfile } from './babysitter/StepProfile';
 import { StepPreferences } from './babysitter/StepPreferences';
 import { getBabysitterProfile } from '@ejm/sit-core';
@@ -16,7 +16,14 @@ import { getBabysitterProfile } from '@ejm/sit-core';
 export function BabysitterEnrollment() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { firebaseUser, userDoc, loading: authLoading } = useAuthStore();
+  const { firebaseUser, userDoc, loading: authLoading, refreshUserDoc } = useAuthStore();
+
+  // Add-profile mode: an already-authenticated user with no babysitter profile
+  // yet. They still pass the EJM email gate (steps 0-1) but skip password
+  // collection and account creation — enrollBabysitter merges into their
+  // existing account. Users who already have a babysitter profile are handled
+  // by the resume effect below (which takes precedence).
+  const isAddProfile = !!firebaseUser && !getBabysitterProfile(userDoc);
 
   // Steps: 0=Email, 1=Verify code, 2=Password+consent, 3=Immutable profile, 4=Mutable prefs
   const [step, setStep] = useState(0);
@@ -24,6 +31,9 @@ export function BabysitterEnrollment() {
   const [verificationCode, setVerificationCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // When true, render the account-exists CTA (message + login link) instead of
+  // the plain error string. Other failures keep using `error`.
+  const [showLoginCta, setShowLoginCta] = useState(false);
 
   // Detect if user is already authenticated with incomplete enrollment (resume flow)
   useEffect(() => {
@@ -45,16 +55,37 @@ export function BabysitterEnrollment() {
   const [searchParams] = useSearchParams();
   const isInvite = searchParams.get('invite') === 'true';
 
+  // Maps a callable error to the right UI state; returns true if it produced a
+  // specialised message (account-exists CTA or already-enrolled notice).
+  const applyEnrollmentError = (err: unknown): boolean => {
+    const reason = enrollmentErrorReason(err);
+    if (reason === 'account-exists') {
+      // The CTA block below renders the message + login link; keep `error` clear
+      // so the step component doesn't duplicate the text.
+      setError(null);
+      setShowLoginCta(true);
+      return true;
+    }
+    if (reason === 'profile-exists') {
+      setError(t('enrollment.alreadyEnrolled'));
+      setShowLoginCta(false);
+      return true;
+    }
+    return false;
+  };
+
   const handleSendCode = async () => {
     setLoading(true);
     setError(null);
+    setShowLoginCta(false);
     try {
       const verifyEjmEmail = httpsCallable(functions, 'verifyEjmEmail');
       await verifyEjmEmail({ email: ejemEmail });
       setStep(1);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to send verification code';
-      setError(message);
+      if (!applyEnrollmentError(err)) {
+        setError(err instanceof Error ? err.message : 'Failed to send verification code');
+      }
     } finally {
       setLoading(false);
     }
@@ -69,14 +100,27 @@ export function BabysitterEnrollment() {
   const handleCreateAccount = async (password: string, consentVersion: string) => {
     setLoading(true);
     setError(null);
+    setShowLoginCta(false);
     try {
       const enrollFn = httpsCallable(functions, 'enrollBabysitter');
       await enrollFn({
         ejemEmail,
         verificationCode,
-        password,
+        // Add-profile mode runs in an authenticated context and merges into the
+        // existing account — omit `password` entirely (not '') so the backend
+        // takes the add-profile branch.
+        ...(isAddProfile ? {} : { password }),
         consentVersion,
       });
+
+      if (isAddProfile) {
+        // Already signed in: skip the new-account sign-in and the auth-store
+        // wait. Just refresh the user doc so the new babysitter profile is
+        // visible, then continue to the immutable-profile step.
+        await refreshUserDoc();
+        setStep(3);
+        return;
+      }
 
       // Sign in with the new account
       await signInWithEmailAndPassword(auth, ejemEmail, password);
@@ -92,8 +136,9 @@ export function BabysitterEnrollment() {
 
       setStep(3);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to create account';
-      setError(message);
+      if (!applyEnrollmentError(err)) {
+        setError(err instanceof Error ? err.message : 'Failed to create account');
+      }
     } finally {
       setLoading(false);
     }
@@ -144,6 +189,7 @@ export function BabysitterEnrollment() {
       case 2:
         return (
           <StepPassword
+            collectPassword={!isAddProfile}
             onSubmit={async (password, consentVersion) => {
               await handleCreateAccount(password, consentVersion);
             }}
@@ -171,6 +217,11 @@ export function BabysitterEnrollment() {
     }
   };
 
+  // Wait for auth resolution before mounting the wizard: this keeps the
+  // collectPassword decision and the resume redirect from being made against a
+  // not-yet-known auth state (which would flicker step 2's password fields).
+  if (authLoading) return null;
+
   const isPostAccountStep = step >= 3;
 
   return (
@@ -186,6 +237,14 @@ export function BabysitterEnrollment() {
           />
           <StepIndicator totalSteps={3} currentStep={step} />
         </>
+      )}
+      {showLoginCta && (
+        <div className="mx-auto mb-4 max-w-md px-6 text-center text-sm text-red-600">
+          <p>{t('enrollment.accountExistsCta')}</p>
+          <Link to="/login" className="mt-1 inline-block font-semibold text-red-600 underline">
+            {t('auth.login')}
+          </Link>
+        </div>
       )}
       {renderStep()}
     </div>
