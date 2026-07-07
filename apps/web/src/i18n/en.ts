@@ -71,6 +71,8 @@ export default {
     passwordMinLength: 'At least 8 characters',
     createAccount: 'Create Account',
     creatingAccount: 'Creating account...',
+    agreeAndContinue: 'Agree & continue',
+    saving: 'Saving...',
     signingIn: 'Signing in...',
     invalidCode: 'Invalid verification code',
     tooManyAttempts: 'Too many failed attempts. Please request a new code.',
@@ -102,8 +104,17 @@ export default {
     help: 'Help',
   },
 
+  signup: {
+    crossAppBanner: "You're signed in — pick a role to add to your existing account.",
+  },
+
   // Enrollment
   enrollment: {
+    confirmConsentTitle: 'Almost there',
+    accountExistsCta: 'An account with this email already exists. Log in to add this role.',
+    alreadyEnrolled: 'This account already has this role.',
+    alreadyInFamily: 'You already belong to a family.',
+    joinFamilyConfirm: 'Join the {{familyName}} family',
     babysitterTitle: 'Babysitter Sign Up',
     parentTitle: 'Parent Sign Up',
     joinFamily: 'Join Family',

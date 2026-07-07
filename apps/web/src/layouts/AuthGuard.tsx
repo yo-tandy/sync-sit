@@ -40,7 +40,9 @@ export function AuthGuard({ role, children }: AuthGuardProps) {
     if (sitRole === 'babysitter') return <Navigate to="/babysitter" replace />;
     if (sitRole === 'parent') return <Navigate to="/family" replace />;
     if (sitRole === 'admin') return <Navigate to="/admin" replace />;
-    return <Navigate to="/" replace />;
+    // Signed-in user with no sit role (foreign-profile-only) — send to /signup
+    // to add a sit role rather than dead-ending at '/'.
+    return <Navigate to="/signup" replace />;
   }
 
   // Redirect babysitters with incomplete enrollment to enrollment flow

@@ -1,9 +1,11 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useEffect, useState } from 'react';
+import { Link, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { httpsCallable } from 'firebase/functions';
-import { TopNav, StepIndicator, StepEmail, StepVerify, StepPassword } from '@ejm/shared-ui';
+import { TopNav, StepIndicator, StepEmail, StepVerify, StepPassword, enrollmentErrorReason } from '@ejm/shared-ui';
+import { getTutorProfile } from '@ejm/study-core';
 import { functions } from '@/config/firebase';
+import { useAuthStore } from '@/stores/authStore';
 import { EnrollmentAppBar } from '@/components/ui/EnrollmentAppBar';
 import { StepProfile } from './StepProfile';
 import { StepPrefs } from './StepPrefs';
@@ -19,7 +21,7 @@ const AUTH_STEPS = 3;
 interface EnrollTutorInput {
   ejemEmail: string;
   verificationCode: string;
-  password: string;
+  password?: string;
   consentVersion: string;
   enrollment: {
     firstName: string;
@@ -44,6 +46,8 @@ interface EnrollTutorInput {
 export function TutorEnrollment() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { firebaseUser, userDoc, loading: authLoading, refreshUserDoc } = useAuthStore();
+  const isAddProfile = !!firebaseUser;
 
   const [step, setStep] = useState(0);
   const [ejemEmail, setEjemEmail] = useState('');
@@ -52,16 +56,51 @@ export function TutorEnrollment() {
   const [profileData, setProfileData] = useState<ProfileData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // When true, render the account-exists CTA (message + login link) instead of
+  // the plain error string. Other failures keep using `error`.
+  const [showLoginCta, setShowLoginCta] = useState(false);
+
+  // Already-enrolled tutors have nothing to add here — send them home. Guard on
+  // step === 0 so this only fires before the flow starts: after an add-profile
+  // success, refreshUserDoc() adds profiles.tutor to userDoc, and this effect
+  // must NOT hijack the success navigation.
+  useEffect(() => {
+    if (step === 0 && !authLoading && firebaseUser && getTutorProfile(userDoc)) {
+      navigate('/', { replace: true });
+    }
+  }, [step, authLoading, firebaseUser, userDoc, navigate]);
+
+  // Maps a callable error to the right UI state; returns true if it produced a
+  // specialised message (account-exists CTA or already-enrolled notice).
+  const applyEnrollmentError = (err: unknown): boolean => {
+    const reason = enrollmentErrorReason(err);
+    if (reason === 'account-exists') {
+      // The CTA block below renders the message + login link; keep `error` clear
+      // so the step component doesn't duplicate the text.
+      setError(null);
+      setShowLoginCta(true);
+      return true;
+    }
+    if (reason === 'profile-exists') {
+      setError(t('enrollment.alreadyEnrolled'));
+      setShowLoginCta(false);
+      return true;
+    }
+    return false;
+  };
 
   const handleSendCode = async () => {
     setLoading(true);
     setError(null);
+    setShowLoginCta(false);
     try {
       const verifyEjmEmail = httpsCallable(functions, 'verifyEjmEmail');
       await verifyEjmEmail({ email: ejemEmail });
       setStep(1);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to send verification code');
+      if (!applyEnrollmentError(err)) {
+        setError(err instanceof Error ? err.message : 'Failed to send verification code');
+      }
     } finally {
       setLoading(false);
     }
@@ -88,6 +127,7 @@ export function TutorEnrollment() {
     if (!profileData) return;
     setLoading(true);
     setError(null);
+    setShowLoginCta(false);
     try {
       const enrollTutorFn = httpsCallable<EnrollTutorInput, { uid: string }>(functions, 'enrollTutor');
       // Firebase v2 callable client serializes undefined as null on the wire,
@@ -116,14 +156,20 @@ export function TutorEnrollment() {
       await enrollTutorFn({
         ejemEmail,
         verificationCode,
-        password,
+        // Add-profile mode runs against an authenticated context and merges into
+        // the existing account — omit `password` entirely (not '') so the
+        // backend takes the add-profile branch.
+        ...(isAddProfile ? {} : { password }),
         consentVersion: '2025-12-01',
         enrollment,
       });
+      if (isAddProfile) await refreshUserDoc();
       navigate('/enroll/tutor/success', { state: { firstName: profileData.firstName } });
 
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Enrollment failed. Please try again.');
+      if (!applyEnrollmentError(err)) {
+        setError(err instanceof Error ? err.message : 'Enrollment failed. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
@@ -166,6 +212,7 @@ export function TutorEnrollment() {
       case 2:
         return (
           <StepPassword
+            collectPassword={!isAddProfile}
             onSubmit={async (password) => {
               handlePasswordNext(password);
             }}
@@ -189,6 +236,11 @@ export function TutorEnrollment() {
     }
   };
 
+  // Wait for auth resolution before mounting the wizard: this keeps the
+  // collectPassword decision and the already-a-tutor redirect from being made
+  // against a not-yet-known auth state (which would flicker step 2).
+  if (authLoading) return null;
+
   const isPostAuthStep = step >= AUTH_STEPS;
 
   return (
@@ -204,6 +256,14 @@ export function TutorEnrollment() {
           />
           <StepIndicator totalSteps={AUTH_STEPS} currentStep={step} />
         </>
+      )}
+      {showLoginCta && (
+        <div className="mx-auto mb-4 max-w-md px-6 text-center text-sm text-red-600">
+          <p>{t('enrollment.accountExistsCta')}</p>
+          <Link to="/login" className="mt-1 inline-block font-semibold text-red-600 underline">
+            {t('auth.login')}
+          </Link>
+        </div>
       )}
       {renderStep()}
     </div>

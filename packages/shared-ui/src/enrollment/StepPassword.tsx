@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { checkPasswordRequirements } from '@ejm/shared-core';
@@ -21,6 +21,12 @@ interface StepPasswordProps {
   consentVersion: string;
   loading: boolean;
   error: string | null;
+  /**
+   * When false (add-profile mode for an already-authenticated user), the
+   * password inputs and requirements are hidden and submitting only records
+   * consent — onSubmit is called with an empty password.
+   */
+  collectPassword?: boolean;
 }
 
 function Req({ met, label }: { met: boolean; label: string }) {
@@ -31,53 +37,69 @@ function Req({ met, label }: { met: boolean; label: string }) {
   );
 }
 
-export function StepPassword({ onSubmit, consentVersion, loading, error }: StepPasswordProps) {
+export function StepPassword({ onSubmit, consentVersion, loading, error, collectPassword = true }: StepPasswordProps) {
   const { t } = useTranslation();
   const [password, setPassword] = useState('');
   const [passwordConfirm, setPasswordConfirm] = useState('');
   const [consent, setConsent] = useState(false);
 
+  // Wizards resolve auth state asynchronously, so collectPassword can flip
+  // after mount; clear any partially-typed password when entering
+  // consent-only mode so a later flip back doesn't resurface stale input.
+  useEffect(() => {
+    if (!collectPassword) {
+      setPassword('');
+      setPasswordConfirm('');
+    }
+  }, [collectPassword]);
+
   const reqs = checkPasswordRequirements(password);
   const allReqsMet = reqs.minLength && reqs.hasLowercase && reqs.hasUppercase && reqs.hasNumber;
   const passwordsMatch = password === passwordConfirm && passwordConfirm.length > 0;
-  const canSubmit = allReqsMet && passwordsMatch && consent && !loading;
+  const canSubmit = (collectPassword ? allReqsMet && passwordsMatch : true) && consent && !loading;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!canSubmit) return;
-    await onSubmit(password, consentVersion);
+    await onSubmit(collectPassword ? password : '', consentVersion);
   };
 
   return (
     <form onSubmit={handleSubmit} className="px-6">
-      <h2 className="mb-2 text-xl font-bold">{t('auth.createPassword')}</h2>
-      <p className="mb-6 text-sm text-gray-500">{t('auth.passwordRequirements')}</p>
+      <h2 className="mb-2 text-xl font-bold">
+        {t(collectPassword ? 'auth.createPassword' : 'enrollment.confirmConsentTitle')}
+      </h2>
+      {collectPassword && <p className="mb-6 text-sm text-gray-500">{t('auth.passwordRequirements')}</p>}
 
-      <Input
-        label={t('common.password')}
-        type="password"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-        autoComplete="new-password"
-        required
-      />
-      <Input
-        label={t('auth.confirmPassword')}
-        type="password"
-        value={passwordConfirm}
-        onChange={(e) => setPasswordConfirm(e.target.value)}
-        error={passwordConfirm && !passwordsMatch ? t('auth.passwordMismatch') : undefined}
-        autoComplete="new-password"
-        required
-      />
+      {collectPassword && (
+        <>
+          <Input
+            label={t('common.password')}
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            autoComplete="new-password"
+            required
+          />
+          <Input
+            label={t('auth.confirmPassword')}
+            type="password"
+            value={passwordConfirm}
+            onChange={(e) => setPasswordConfirm(e.target.value)}
+            error={passwordConfirm && !passwordsMatch ? t('auth.passwordMismatch') : undefined}
+            autoComplete="new-password"
+            required
+          />
 
-      {password.length > 0 && (
-        <div className="mb-5 space-y-1">
-          <Req met={reqs.minLength} label={t('auth.passwordMinLength')} />
-          <Req met={reqs.hasLowercase} label={t('auth.passwordHasLowercase')} />
-          <Req met={reqs.hasUppercase} label={t('auth.passwordHasUppercase')} />
-          <Req met={reqs.hasNumber} label={t('auth.passwordHasNumber')} />
-        </div>
+          {password.length > 0 && (
+            <div className="mb-5 space-y-1">
+              <Req met={reqs.minLength} label={t('auth.passwordMinLength')} />
+              <Req met={reqs.hasLowercase} label={t('auth.passwordHasLowercase')} />
+              <Req met={reqs.hasUppercase} label={t('auth.passwordHasUppercase')} />
+              <Req met={reqs.hasNumber} label={t('auth.passwordHasNumber')} />
+            </div>
+          )}
+        </>
       )}
 
       <label className="mb-6 flex items-start gap-2 text-sm text-gray-700">
@@ -102,7 +124,9 @@ export function StepPassword({ onSubmit, consentVersion, loading, error }: StepP
       {error && <p className="mb-4 text-sm text-error-600">{error}</p>}
 
       <Button type="submit" disabled={!canSubmit}>
-        {loading ? t('auth.creatingAccount') : t('auth.createAccount')}
+        {loading
+          ? t(collectPassword ? 'auth.creatingAccount' : 'auth.saving')
+          : t(collectPassword ? 'auth.createAccount' : 'auth.agreeAndContinue')}
       </Button>
     </form>
   );

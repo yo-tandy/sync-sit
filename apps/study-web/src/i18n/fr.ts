@@ -47,6 +47,8 @@ export default {
     passwordMinLength: 'Au moins 8 caractères',
     createAccount: 'Créer un compte',
     creatingAccount: 'Création du compte...',
+    agreeAndContinue: 'Accepter et continuer',
+    saving: 'Enregistrement...',
     signingIn: 'Connexion...',
     tooManyAttempts: 'Trop de tentatives. Veuillez demander un nouveau code.',
   },
@@ -68,6 +70,10 @@ export default {
     help: 'Aide',
   },
 
+  signup: {
+    crossAppBanner: 'Vous êtes connecté — choisissez un rôle à ajouter à votre compte existant.',
+  },
+
   menu: {
     about: 'À propos',
     reportProblem: 'Signaler un problème',
@@ -76,6 +82,11 @@ export default {
   },
 
   enrollment: {
+    confirmConsentTitle: 'Presque terminé',
+    accountExistsCta: 'Un compte existe déjà avec cet e-mail. Connectez-vous pour ajouter ce rôle.',
+    alreadyEnrolled: 'Ce compte possède déjà ce rôle.',
+    alreadyInFamily: 'Vous appartenez déjà à une famille.',
+    joinFamilyConfirm: 'Rejoindre la famille {{familyName}}',
     tutorTitle: 'Inscription Tuteur',
     tutor: {
       title: 'Inscription tuteur',

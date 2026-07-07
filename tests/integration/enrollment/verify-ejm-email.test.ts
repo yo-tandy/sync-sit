@@ -55,4 +55,13 @@ describe('verifyEjmEmail cross-app cases', () => {
       details: { reason: 'account-exists' },
     });
   });
+
+  it('unauthenticated verifyParentEmail for an existing email carries account-exists details', async () => {
+    await expect(
+      callFunction('verifyParentEmail', { email: seed.parent1.email }),
+    ).rejects.toMatchObject({
+      code: 'ALREADY_EXISTS',
+      details: { reason: 'account-exists' },
+    });
+  });
 });

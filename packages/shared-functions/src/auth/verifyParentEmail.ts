@@ -29,7 +29,9 @@ export const verifyParentEmail = onCall(
       .get();
 
     if (!existingUsers.empty) {
-      throw new HttpsError('already-exists', 'An account with this email already exists');
+      throw new HttpsError('already-exists', 'An account with this email already exists', {
+        reason: 'account-exists',
+      });
     }
 
     // Generate cryptographically secure 6-digit code

@@ -15,9 +15,15 @@ interface SignUpRolePageProps {
   logoSrc: string;
   logoAlt?: string;
   roles: SignUpRoleOption[];
+  /**
+   * Optional cross-app banner shown above the role cards — e.g. when an
+   * already-signed-in user has no profile for this app and is picking a role
+   * to add to their existing account.
+   */
+  banner?: string;
 }
 
-export function SignUpRolePage({ logoSrc, logoAlt, roles }: SignUpRolePageProps) {
+export function SignUpRolePage({ logoSrc, logoAlt, roles, banner }: SignUpRolePageProps) {
   const { t } = useTranslation();
 
   return (
@@ -37,6 +43,10 @@ export function SignUpRolePage({ logoSrc, logoAlt, roles }: SignUpRolePageProps)
 
         <h2 className="mb-2 text-center text-2xl font-bold text-gray-950">{t('welcome.signUpRole')}</h2>
         <p className="mb-8 text-center text-sm text-gray-500">{t('welcome.subtitle')}</p>
+
+        {banner && (
+          <p className="mb-4 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800">{banner}</p>
+        )}
 
         {roles.map((role) => {
           const Icon = role.icon;
