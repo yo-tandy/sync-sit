@@ -167,12 +167,8 @@ export function ParentEnrollment() {
         // keys (email/verificationCode/password) so the backend takes the
         // add-profile branch on the existing account, then refresh and navigate
         // without a new sign-in.
-        const {
-          email: _email,
-          verificationCode: _verificationCode,
-          password: _password,
-          ...familyPayload
-        } = basePayload;
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars -- rest-omit of credential keys
+        const { email, verificationCode, password, ...familyPayload } = basePayload;
         await enrollFamily(familyPayload);
         await refreshUserDoc();
         navigate('/family');
