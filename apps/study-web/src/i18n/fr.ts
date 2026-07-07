@@ -88,6 +88,25 @@ export default {
     subjectsTitle: 'Matières et tarifs',
     scheduleTitle: 'Disponibilités',
     verificationTitle: "Vérification d'identité",
+    verification: {
+      whyRequired:
+        "Pour protéger les familles, nous vérifions chaque tuteur avant qu'il apparaisse dans la recherche. Téléversez une photo de votre pièce d'identité et notre équipe l'examinera.",
+      statusLabel: 'Statut de vérification',
+      status_not_submitted: 'Non soumis',
+      status_pending: 'En attente',
+      status_approved: 'Approuvé',
+      status_rejected: 'Refusé',
+      pendingReview: "Votre document est en cours d'examen. Cela prend généralement un jour ou deux.",
+      approvedMessage: 'Votre identité est vérifiée. Vous pouvez désormais apparaître dans la recherche.',
+      rejectedReason: 'Motif du refus',
+      uploadCta: "Téléversez votre pièce d'identité",
+      resubmitCta: "Téléversez à nouveau votre pièce d'identité",
+      identityDesc: "Une photo ou un scan d'une pièce d'identité officielle (image ou PDF, max 10 Mo).",
+      upload: 'Téléverser le document',
+      fileTooLarge: 'Fichier trop volumineux. La taille maximale est de 10 Mo.',
+      invalidFileType: "Type de fichier non pris en charge. Veuillez téléverser une image ou un PDF.",
+      uploadError: 'Échec du téléversement. Veuillez réessayer.',
+    },
   },
 
   enrollment: {

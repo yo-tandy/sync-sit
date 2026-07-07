@@ -88,6 +88,25 @@ export default {
     subjectsTitle: 'Subjects & Rates',
     scheduleTitle: 'Schedule',
     verificationTitle: 'Identity Verification',
+    verification: {
+      whyRequired:
+        'To keep families safe, we verify every tutor before they appear in search. Upload a photo of your ID and our team will review it.',
+      statusLabel: 'Verification status',
+      status_not_submitted: 'Not submitted',
+      status_pending: 'Pending',
+      status_approved: 'Approved',
+      status_rejected: 'Rejected',
+      pendingReview: 'Your document is under review. This usually takes a day or two.',
+      approvedMessage: 'Your identity is verified. You can now be listed in search.',
+      rejectedReason: 'Reason for rejection',
+      uploadCta: 'Upload your ID',
+      resubmitCta: 'Upload your ID again',
+      identityDesc: 'A photo or scan of an official ID (image or PDF, max 10 MB).',
+      upload: 'Upload document',
+      fileTooLarge: 'File is too large. Maximum size is 10 MB.',
+      invalidFileType: 'Unsupported file type. Please upload an image or PDF.',
+      uploadError: 'Upload failed. Please try again.',
+    },
   },
 
   enrollment: {
