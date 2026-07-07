@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { checkPasswordRequirements } from '@ejm/shared-core';
@@ -42,6 +42,16 @@ export function StepPassword({ onSubmit, consentVersion, loading, error, collect
   const [password, setPassword] = useState('');
   const [passwordConfirm, setPasswordConfirm] = useState('');
   const [consent, setConsent] = useState(false);
+
+  // Wizards resolve auth state asynchronously, so collectPassword can flip
+  // after mount; clear any partially-typed password when entering
+  // consent-only mode so a later flip back doesn't resurface stale input.
+  useEffect(() => {
+    if (!collectPassword) {
+      setPassword('');
+      setPasswordConfirm('');
+    }
+  }, [collectPassword]);
 
   const reqs = checkPasswordRequirements(password);
   const allReqsMet = reqs.minLength && reqs.hasLowercase && reqs.hasUppercase && reqs.hasNumber;

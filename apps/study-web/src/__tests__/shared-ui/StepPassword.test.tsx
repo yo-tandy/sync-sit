@@ -9,8 +9,9 @@ describe('StepPassword collectPassword=false', () => {
     renderWithProviders(
       <StepPassword onSubmit={onSubmit} consentVersion="1.0" loading={false} error={null} collectPassword={false} />,
     );
-    // No password inputs rendered
+    // No password inputs rendered; consent-only heading resolves from i18n
     expect(document.querySelectorAll('input[type="password"]')).toHaveLength(0);
+    expect(screen.getByRole('heading', { name: /almost there/i })).toBeInTheDocument();
     // Submit disabled until consent checked
     const button = screen.getByRole('button');
     expect(button).toBeDisabled();
