@@ -167,7 +167,12 @@ export function ParentEnrollment() {
         // keys (email/verificationCode/password) so the backend takes the
         // add-profile branch on the existing account, then refresh and navigate
         // without a new sign-in.
-        const { email, verificationCode, password, ...familyPayload } = basePayload;
+        const {
+          email: _email,
+          verificationCode: _verificationCode,
+          password: _password,
+          ...familyPayload
+        } = basePayload;
         await enrollFamily(familyPayload);
         await refreshUserDoc();
         navigate('/family');
