@@ -61,7 +61,10 @@ describe('tutor DashboardPage', () => {
   it('pending / not live: shows the under-review banner', () => {
     h.auth.userDoc = tutor({ enrollmentComplete: false, verification: { identityStatus: 'pending' } });
     renderWithProviders(<DashboardPage />);
-    expect(screen.getByText(/under review/i)).toBeInTheDocument();
+    // Body copy unique to this row — /under review/ alone would also match the
+    // pending/live row's "New document under review" banner.
+    expect(screen.getByText(/your id is being reviewed/i)).toBeInTheDocument();
+    expect(screen.queryByText(/new document under review/i)).not.toBeInTheDocument();
   });
 
   it('approved / live: shows the verified banner', () => {
