@@ -88,6 +88,43 @@ export default {
     subjectsTitle: 'Subjects & Rates',
     scheduleTitle: 'Schedule',
     verificationTitle: 'Identity Verification',
+    dashboard: {
+      greeting: 'Manage your tutor profile and availability.',
+      bannerNotSubmittedTitle: 'Verify your identity',
+      bannerNotSubmittedDesc:
+        'Upload a photo of your ID so families can find you in search. It only takes a minute.',
+      bannerNotSubmittedCta: 'Upload your ID',
+      bannerPendingTitle: 'Under review',
+      bannerPendingDesc:
+        'Your ID is being reviewed. This usually takes a day or two — we\'ll let you know once it\'s done.',
+      bannerRejectedTitle: 'Verification unsuccessful',
+      bannerRejectedDesc:
+        'Your document was not accepted. Open verification to see the reason and upload a new one.',
+      bannerRejectedCta: 'Review and resubmit',
+      bannerApprovedTitle: 'You\'re verified',
+      bannerApprovedDesc: 'Your identity is verified. You can be listed in search.',
+      bannerPendingLiveTitle: 'New document under review',
+      bannerPendingLiveDesc:
+        'Your new ID is being reviewed. You stay listed in search in the meantime.',
+      searchTitle: 'Search visibility',
+      searchableLive: 'Live — families can find you in search.',
+      searchableHidden: 'Hidden — you are not shown in search.',
+      activate: 'Show me in search',
+      deactivate: 'Hide me from search',
+      updating: 'Updating...',
+      gateNoSubjects: 'Add at least one subject before you can appear in search.',
+      gateNoSlots: 'Set your weekly availability before you can appear in search.',
+      sessionsTitle: 'Upcoming sessions',
+      noSessions: 'No sessions yet — session booking is coming soon.',
+      subjectsCard: 'Subjects & rates',
+      subjectsCardDesc: 'Manage what you teach and your hourly rates.',
+      scheduleCard: 'Availability',
+      scheduleCardDesc: 'Set the times you can tutor each week.',
+      accountCard: 'Account',
+      accountCardDesc: 'Contact details and notification preferences.',
+      verificationCard: 'Identity verification',
+      verificationCardDesc: 'Manage your ID verification.',
+    },
     verification: {
       whyRequired:
         'To keep families safe, we verify every tutor before they appear in search. Upload a photo of your ID and our team will review it.',

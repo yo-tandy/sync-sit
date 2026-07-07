@@ -88,6 +88,43 @@ export default {
     subjectsTitle: 'Matières et tarifs',
     scheduleTitle: 'Disponibilités',
     verificationTitle: "Vérification d'identité",
+    dashboard: {
+      greeting: 'Gérez votre profil de tuteur et vos disponibilités.',
+      bannerNotSubmittedTitle: 'Vérifiez votre identité',
+      bannerNotSubmittedDesc:
+        "Téléversez une photo de votre pièce d'identité pour que les familles puissent vous trouver dans la recherche. Cela ne prend qu'une minute.",
+      bannerNotSubmittedCta: "Téléversez votre pièce d'identité",
+      bannerPendingTitle: "En cours d'examen",
+      bannerPendingDesc:
+        "Votre pièce d'identité est en cours d'examen. Cela prend généralement un jour ou deux — nous vous préviendrons une fois terminé.",
+      bannerRejectedTitle: 'Vérification échouée',
+      bannerRejectedDesc:
+        "Votre document n'a pas été accepté. Ouvrez la vérification pour voir le motif et en téléverser un nouveau.",
+      bannerRejectedCta: 'Consulter et resoumettre',
+      bannerApprovedTitle: 'Vous êtes vérifié',
+      bannerApprovedDesc: 'Votre identité est vérifiée. Vous pouvez apparaître dans la recherche.',
+      bannerPendingLiveTitle: "Nouveau document en cours d'examen",
+      bannerPendingLiveDesc:
+        "Votre nouvelle pièce d'identité est en cours d'examen. Vous restez visible dans la recherche entre-temps.",
+      searchTitle: 'Visibilité dans la recherche',
+      searchableLive: 'En ligne — les familles peuvent vous trouver dans la recherche.',
+      searchableHidden: "Masqué — vous n'apparaissez pas dans la recherche.",
+      activate: 'Apparaître dans la recherche',
+      deactivate: 'Me masquer de la recherche',
+      updating: 'Mise à jour...',
+      gateNoSubjects: 'Ajoutez au moins une matière avant de pouvoir apparaître dans la recherche.',
+      gateNoSlots: 'Définissez vos disponibilités hebdomadaires avant de pouvoir apparaître dans la recherche.',
+      sessionsTitle: 'Séances à venir',
+      noSessions: 'Aucune séance pour le moment — la réservation de séances arrive bientôt.',
+      subjectsCard: 'Matières et tarifs',
+      subjectsCardDesc: 'Gérez ce que vous enseignez et vos tarifs horaires.',
+      scheduleCard: 'Disponibilités',
+      scheduleCardDesc: 'Définissez les créneaux où vous pouvez donner des cours chaque semaine.',
+      accountCard: 'Compte',
+      accountCardDesc: 'Coordonnées et préférences de notification.',
+      verificationCard: "Vérification d'identité",
+      verificationCardDesc: "Gérez votre vérification d'identité.",
+    },
     verification: {
       whyRequired:
         "Pour protéger les familles, nous vérifions chaque tuteur avant qu'il apparaisse dans la recherche. Téléversez une photo de votre pièce d'identité et notre équipe l'examinera.",
