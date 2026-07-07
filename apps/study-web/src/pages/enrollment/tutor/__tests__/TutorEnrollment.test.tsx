@@ -4,11 +4,11 @@ import { screen, fireEvent } from '@testing-library/react';
 // Hoisted shared state the mocks record into.
 const h = vi.hoisted(() => ({
   calls: [] as { name: string; payload: unknown }[],
-  navigate: (..._a: unknown[]) => {},
+  navigate: () => {},
   // Controllable authStore state — default is signed out so existing tests
   // keep their original (unauthenticated) behavior.
   auth: { firebaseUser: null as unknown, userDoc: null as unknown, loading: false },
-  refreshUserDoc: (..._a: unknown[]) => Promise.resolve(),
+  refreshUserDoc: () => Promise.resolve(),
   // Controllable error reason so tests can drive the account-exists /
   // profile-exists CTAs. Default null = plain-error behavior.
   errorReason: null as 'account-exists' | 'profile-exists' | null,
