@@ -1,7 +1,10 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router';
+import { useParams, useNavigate, Link } from 'react-router';
+import { useTranslation } from 'react-i18next';
 import { httpsCallable } from 'firebase/functions';
 import { signInWithEmailAndPassword } from 'firebase/auth';
+import { getParentProfile } from '@ejm/sit-core';
+import { enrollmentErrorReason } from '@ejm/shared-ui';
 import { auth, functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { Button, Input, TopNav, StepIndicator, Spinner } from '@/components/ui';
@@ -9,8 +12,10 @@ import { MailIcon } from '@/components/ui/Icons';
 import { CodeInput } from '@/components/forms/CodeInput';
 
 export function JoinFamilyPage() {
+  const { t } = useTranslation();
   const { token } = useParams<{ token: string }>();
   const navigate = useNavigate();
+  const { firebaseUser, userDoc, loading: authLoading, refreshUserDoc } = useAuthStore();
 
   const [step, setStep] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -27,6 +32,9 @@ export function JoinFamilyPage() {
   const [lastName, setLastName] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // When true, render the account-exists CTA (message + login link) instead of
+  // the plain error string. Other failures keep using `error`.
+  const [showLoginCta, setShowLoginCta] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
   const [resendCount, setResendCount] = useState(0);
 
@@ -53,6 +61,44 @@ export function JoinFamilyPage() {
     const timer = setInterval(() => setResendCooldown((c) => c - 1), 1000);
     return () => clearInterval(timer);
   }, [resendCooldown]);
+
+  // Maps a callable error to the right UI state; returns true if it produced a
+  // specialised message (account-exists CTA or already-in-family notice).
+  const applyEnrollmentError = (err: unknown): boolean => {
+    const reason = enrollmentErrorReason(err);
+    if (reason === 'account-exists') {
+      setError(null);
+      setShowLoginCta(true);
+      return true;
+    }
+    if (reason === 'profile-exists') {
+      setError(t('enrollment.alreadyInFamily'));
+      setShowLoginCta(false);
+      return true;
+    }
+    return false;
+  };
+
+  // Authed add-profile confirm: the user is already signed in but has no parent
+  // profile. Join with the token alone (no credentials), refresh the user doc so
+  // profiles.parent is present, then navigate to the family dashboard.
+  const handleConfirmJoin = async () => {
+    if (!token) return;
+    setSubmitting(true);
+    setError(null);
+    setShowLoginCta(false);
+    try {
+      const joinFamilyFn = httpsCallable(functions, 'joinFamily');
+      await joinFamilyFn({ token });
+      await refreshUserDoc();
+      navigate('/family');
+    } catch (err: unknown) {
+      if (!applyEnrollmentError(err)) {
+        setError(err instanceof Error ? err.message : 'Failed to join family');
+      }
+      setSubmitting(false);
+    }
+  };
 
   const handleSendCode = async () => {
     setSubmitting(true);
@@ -87,6 +133,7 @@ export function JoinFamilyPage() {
     if (!token) return;
     setSubmitting(true);
     setError(null);
+    setShowLoginCta(false);
     try {
       const joinFamilyFn = httpsCallable(functions, 'joinFamily');
       await joinFamilyFn({
@@ -110,12 +157,18 @@ export function JoinFamilyPage() {
 
       navigate('/family');
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to join family';
-      setError(message);
+      if (!applyEnrollmentError(err)) {
+        setError(err instanceof Error ? err.message : 'Failed to join family');
+      }
     } finally {
       setSubmitting(false);
     }
   };
+
+  // Wait for auth resolution before deciding which view to render: this keeps
+  // the authed-confirm vs. credential-wizard decision from being made against a
+  // not-yet-known auth state.
+  if (authLoading) return null;
 
   if (loading) {
     return (
@@ -136,6 +189,44 @@ export function JoinFamilyPage() {
             This invite link is invalid, expired, or has already been used.
           </p>
           <Button onClick={() => navigate('/')}>Go to home</Button>
+        </div>
+      </div>
+    );
+  }
+
+  // Authed with a parent profile already: nothing to join here.
+  if (firebaseUser && getParentProfile(userDoc)) {
+    return (
+      <div>
+        <TopNav title="Join Family" backTo="/" />
+        <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
+          <h2 className="mb-6 text-xl font-bold">{t('enrollment.alreadyInFamily')}</h2>
+          <Link
+            to="/family"
+            className="inline-flex h-12 items-center justify-center rounded-xl bg-red-600 px-6 font-semibold text-white"
+          >
+            Go to my family
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  // Authed without a parent profile: skip the credential steps and offer a
+  // single confirm button that joins with the token alone.
+  if (firebaseUser) {
+    return (
+      <div>
+        <TopNav title="Join Family" backTo="/" />
+        <div className="px-6 py-8">
+          <h2 className="mb-2 text-xl font-bold">Join the {familyName} family</h2>
+          <p className="mb-8 text-sm text-gray-500">
+            You've been invited to join as a parent.
+          </p>
+          {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
+          <Button onClick={handleConfirmJoin} disabled={submitting}>
+            {submitting ? 'Joining...' : t('enrollment.joinFamilyConfirm', { familyName })}
+          </Button>
         </div>
       </div>
     );
@@ -263,6 +354,14 @@ export function JoinFamilyPage() {
           </div>
 
           {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
+          {showLoginCta && (
+            <div className="mb-4 text-center text-sm text-red-600">
+              <p>{t('enrollment.accountExistsCta')}</p>
+              <Link to="/login" className="mt-1 inline-block font-semibold text-red-600 underline">
+                {t('auth.login')}
+              </Link>
+            </div>
+          )}
 
           <Button
             onClick={handleComplete}

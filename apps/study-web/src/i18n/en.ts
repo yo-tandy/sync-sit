@@ -86,6 +86,7 @@ export default {
     accountExistsCta: 'An account with this email already exists. Log in to add this role.',
     alreadyEnrolled: 'This account already has this role.',
     alreadyInFamily: 'You already belong to a family.',
+    joinFamilyConfirm: 'Join the {{familyName}} family',
     tutorTitle: 'Tutor Sign Up',
     tutor: {
       title: 'Tutor enrollment',
