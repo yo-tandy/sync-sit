@@ -5,6 +5,10 @@ import { screen, fireEvent } from '@testing-library/react';
 const h = vi.hoisted(() => ({
   calls: [] as { name: string; payload: unknown }[],
   navigate: (..._a: unknown[]) => {},
+  // Controllable authStore state — default is signed out so existing tests
+  // keep their original (unauthenticated) behavior.
+  auth: { firebaseUser: null as unknown, userDoc: null as unknown, loading: false },
+  refreshUserDoc: (..._a: unknown[]) => Promise.resolve(),
 }));
 
 vi.mock('@/config/firebase', () => ({ functions: {} }));
@@ -18,10 +22,23 @@ vi.mock('react-router', async (orig) => ({
   ...(await orig<typeof import('react-router')>()),
   useNavigate: () => h.navigate,
 }));
+vi.mock('@/stores/authStore', () => ({
+  useAuthStore: () => ({
+    firebaseUser: h.auth.firebaseUser,
+    userDoc: h.auth.userDoc,
+    loading: h.auth.loading,
+    refreshUserDoc: h.refreshUserDoc,
+  }),
+}));
+vi.mock('@ejm/study-core', () => ({
+  getTutorProfile: (userDoc: { profiles?: { tutor?: unknown } } | null) =>
+    userDoc?.profiles?.tutor ?? null,
+}));
 
 // Lightweight stand-ins for the child step components: each exposes a button
 // that fires its callback so we can drive the orchestrator deterministically.
 vi.mock('@ejm/shared-ui', () => ({
+  enrollmentErrorReason: () => null,
   TopNav: ({ title }: { title: string }) => <div>{title}</div>,
   StepIndicator: ({ currentStep }: { currentStep: number }) => <div>step-{currentStep}</div>,
   StepEmail: ({ onSubmit }: { onSubmit: () => void }) => (
@@ -30,8 +47,14 @@ vi.mock('@ejm/shared-ui', () => ({
   StepVerify: ({ onVerify }: { onVerify: (c: string) => void }) => (
     <button onClick={() => onVerify('123456')}>verify-submit</button>
   ),
-  StepPassword: ({ onSubmit }: { onSubmit: (pw: string) => void }) => (
-    <button onClick={() => onSubmit('Pw123456!')}>password-submit</button>
+  StepPassword: (props: { onSubmit: (pw: string, c: string) => void; collectPassword?: boolean }) => (
+    <button
+      data-testid="step-password"
+      data-collect={String(props.collectPassword)}
+      onClick={() => props.onSubmit('Pw123456!', '2025-12-01')}
+    >
+      password-submit
+    </button>
   ),
 }));
 vi.mock('@/components/ui/EnrollmentAppBar', () => ({
@@ -71,6 +94,8 @@ function renderFlow() {
 beforeEach(() => {
   h.calls.length = 0;
   h.navigate = vi.fn();
+  h.auth = { firebaseUser: null, userDoc: null, loading: false };
+  h.refreshUserDoc = vi.fn().mockResolvedValue(undefined);
 });
 
 describe('TutorEnrollment orchestrator', () => {
@@ -91,6 +116,9 @@ describe('TutorEnrollment orchestrator', () => {
     fireEvent.click(screen.getByText('verify-submit'));
     expect(await screen.findByText('password-submit')).toBeInTheDocument();
     expect(h.calls.map((c) => c.name)).toContain('verifyCode');
+
+    // Signed-out (default): password is collected.
+    expect(screen.getByTestId('step-password')).toHaveAttribute('data-collect', 'true');
 
     // Step 2 -> 3 crosses into the post-auth phase: app bar replaces TopNav.
     fireEvent.click(screen.getByText('password-submit'));
@@ -115,5 +143,39 @@ describe('TutorEnrollment orchestrator', () => {
       sessionLengthsMin: [60], locationPrefs: ['online'], contactEmail: 'flow@ejm.org',
     });
     expect(h.navigate).toHaveBeenCalledWith('/enroll/tutor/success', { state: { firstName: 'Flow' } });
+  });
+
+  it('authed without a tutor profile: consent-only StepPassword, enrollTutor omits password, refreshes doc', async () => {
+    h.auth = { firebaseUser: { uid: 'p1' }, userDoc: { profiles: { parent: {} } }, loading: false };
+    renderFlow();
+
+    fireEvent.click(screen.getByText('email-submit'));
+    fireEvent.click(await screen.findByText('verify-submit'));
+
+    const passwordStep = await screen.findByTestId('step-password');
+    expect(passwordStep).toHaveAttribute('data-collect', 'false');
+
+    fireEvent.click(passwordStep);
+    fireEvent.click(await screen.findByText('profile-next'));
+    fireEvent.click(await screen.findByText('prefs-next'));
+
+    const enroll = await vi.waitFor(() => {
+      const c = h.calls.find((x) => x.name === 'enrollTutor');
+      expect(c).toBeTruthy();
+      return c!;
+    });
+    const payload = enroll.payload as Record<string, unknown>;
+    expect(payload).not.toHaveProperty('password');
+    // refreshUserDoc must be awaited before the success navigation.
+    await vi.waitFor(() =>
+      expect(h.navigate).toHaveBeenCalledWith('/enroll/tutor/success', { state: { firstName: 'Flow' } }),
+    );
+    expect(h.refreshUserDoc).toHaveBeenCalled();
+  });
+
+  it('authed WITH a tutor profile: redirects home instead of enrolling', () => {
+    h.auth = { firebaseUser: { uid: 'p1' }, userDoc: { profiles: { tutor: {} } }, loading: false };
+    renderFlow();
+    expect(h.navigate).toHaveBeenCalledWith('/', { replace: true });
   });
 });
