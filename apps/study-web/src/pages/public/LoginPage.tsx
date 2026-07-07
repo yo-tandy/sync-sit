@@ -4,9 +4,12 @@ import { LoginPage as SharedLoginPage } from '@ejm/shared-ui';
 
 function postLoginRouter(role: string | undefined): string {
   if (role === 'tutor') return '/tutor';
-  if (role === 'parent') return '/family';
+  // study-web has no /family route — a sit parent must add a study role via
+  // /signup rather than 404 on /family.
+  if (role === 'parent') return '/signup';
   if (role === 'admin') return '/admin';
-  return '/';
+  // Foreign-profile-only users (no study role) go to /signup, not dead-end '/'.
+  return '/signup';
 }
 
 export function LoginPage() {

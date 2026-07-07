@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 
-// Capture the props the study LoginPage passes into the shared LoginPage.
+// Capture the props the sit LoginPage passes into the shared LoginPage.
 let captured: Record<string, unknown> = {};
 vi.mock('@ejm/shared-ui', () => ({
   LoginPage: (props: Record<string, unknown>) => {
@@ -20,16 +20,14 @@ vi.mock('@/stores/authStore', () => {
 import { render } from '@testing-library/react';
 import { LoginPage } from '../LoginPage';
 
-describe('study LoginPage wrapper', () => {
-  it('passes Sync/Study branding and a study-role postLoginRouter', () => {
+describe('sit LoginPage wrapper', () => {
+  it('passes Sync/Sit branding and a sit-role postLoginRouter', () => {
     render(<LoginPage />);
 
-    expect(captured.logoAlt).toBe('Sync/Study');
+    expect(captured.logoAlt).toBe('Sync/Sit');
     const route = captured.postLoginRouter as (r: string | undefined) => string;
-    expect(route('tutor')).toBe('/tutor');
-    // study-web has no /family route — a sit parent logging in must land on
-    // /signup (cross-app add-profile), not a dead 404.
-    expect(route('parent')).toBe('/signup');
+    expect(route('babysitter')).toBe('/babysitter');
+    expect(route('parent')).toBe('/family');
     expect(route('admin')).toBe('/admin');
     // Foreign-profile-only / unknown users fall back to /signup, not dead-end '/'.
     expect(route(undefined)).toBe('/signup');
