@@ -102,13 +102,20 @@ export const listPendingVerifications = onCall(
 
     const verifications = snapshot.docs.map((doc) => {
       const d = doc.data();
+      // Tutor docs carry no familyId — family enrichment is family-only.
+      // The uploader's name is exposed as tutorName for those docs.
+      const isTutorDoc = !d.familyId;
       return {
         id: doc.id,
         ...d,
-        familyName: familyNames[d.familyId] || 'Unknown',
-        parentName: userNames[d.uploadedByUserId] || 'Unknown',
-        familyKids: familyKids[d.familyId] || [],
-        familyParentNames: familyParents[d.familyId] || [],
+        ...(isTutorDoc
+          ? { tutorName: userNames[d.uploadedByUserId] || 'Unknown' }
+          : {
+              familyName: familyNames[d.familyId] || 'Unknown',
+              parentName: userNames[d.uploadedByUserId] || 'Unknown',
+              familyKids: familyKids[d.familyId] || [],
+              familyParentNames: familyParents[d.familyId] || [],
+            }),
         createdAt: d.createdAt?.toDate?.() ? d.createdAt.toDate().toISOString() : '',
         reviewedAt: d.reviewedAt?.toDate?.() ? d.reviewedAt.toDate().toISOString() : '',
       };

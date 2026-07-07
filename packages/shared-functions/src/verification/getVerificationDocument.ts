@@ -22,14 +22,15 @@ export const getVerificationDocument = onCall(
       throw new HttpsError('invalid-argument', 'Invalid file path');
     }
 
-    // Extract familyId from path: verification-documents/{familyId}/{filename}
+    // Extract the owning id from path: verification-documents/{ownerId}/{filename}
+    // ownerId is a familyId for family docs and the uploader's uid for tutor docs.
     const parts = filePath.split('/');
     if (parts.length < 3) {
       throw new HttpsError('invalid-argument', 'Invalid file path');
     }
-    const familyId = parts[1];
+    const ownerId = parts[1];
 
-    // Check authorization: must be a family member or admin
+    // Check authorization: must be the document owner, a family member, or admin
     const callerDoc = await db.collection('users').doc(request.auth.uid).get();
     const caller = callerDoc.data();
 
@@ -38,13 +39,15 @@ export const getVerificationDocument = onCall(
     }
 
     const isAdminCaller = isAdmin(caller as User | undefined);
+    // Tutor docs are keyed by the uploader's uid: the owner reads their own.
+    const isOwner = ownerId === request.auth.uid;
     let isFamilyMember = false;
 
-    if (getParentProfile(caller as User | undefined)?.familyId === familyId) {
+    if (getParentProfile(caller as User | undefined)?.familyId === ownerId) {
       isFamilyMember = true;
     }
 
-    if (!isAdminCaller && !isFamilyMember) {
+    if (!isAdminCaller && !isOwner && !isFamilyMember) {
       throw new HttpsError('permission-denied', 'You do not have access to this document');
     }
 
