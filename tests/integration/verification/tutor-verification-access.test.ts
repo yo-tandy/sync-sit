@@ -37,8 +37,8 @@ interface ListResponse {
     type: string;
     status: string;
     familyId?: string;
-    familyName: string;
-    parentName: string;
+    familyName?: string;
+    parentName?: string;
     tutorName?: string;
   }>;
 }

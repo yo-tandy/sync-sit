@@ -6,7 +6,8 @@ import { getStorage } from 'firebase-admin/storage';
 
 /**
  * Proxy for reading verification documents.
- * Only allows access if the caller is a family member or an admin.
+ * Only allows access if the caller is the document owner (tutor uploads
+ * live under their own uid), a member of the owning family, or an admin.
  * Returns a short-lived signed URL (15 minutes).
  */
 export const getVerificationDocument = onCall(
