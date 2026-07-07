@@ -67,6 +67,29 @@ service cloud.firestore {
                == bsField(resource.data, 'approvedFamilies', []);
     }
 
+    // Helper: a tutor-profile field on a user-doc data map (safe default).
+    function tutorField(d, key, def) {
+      return d.get('profiles', {}).get('tutor', {}).get(key, def);
+    }
+
+    // Helper: server-owned identity/state fields inside profiles.tutor that the
+    // client must never mutate directly. The tutor state machine is server-owned:
+    // - ejemEmail: EJM identity, set by enrollTutor only.
+    // - enrollmentComplete: flipped false->true ONLY by reviewVerification on
+    //   admin approval. (Contrast profiles.babysitter.enrollmentComplete, which
+    //   is intentionally client-writable and left untouched here.)
+    // - verification: identity-verification state, driven exclusively by the
+    //   submitVerification / reviewVerification callables.
+    // Defaults keep the guard trivially true for users WITHOUT a tutor profile.
+    function tutorIdentityUnchanged() {
+      return tutorField(request.resource.data, 'ejemEmail', '')
+               == tutorField(resource.data, 'ejemEmail', '')
+             && tutorField(request.resource.data, 'enrollmentComplete', false)
+               == tutorField(resource.data, 'enrollmentComplete', false)
+             && tutorField(request.resource.data, 'verification', {})
+               == tutorField(resource.data, 'verification', {});
+    }
+
     // Helper: profiles.parent.familyId is server-controlled (enrollFamily /
     // joinFamily). A client must not move themselves between families.
     function parentFamilyIdUnchanged() {
@@ -94,15 +117,18 @@ service cloud.firestore {
       //   * isAdmin: the admin-escalation vector.
       // - profileRolesUnchanged: the SET of role slots can't change — blocks a
       //   client granting itself a new role (e.g. injecting profiles.babysitter).
-      // - babysitterIdentityUnchanged / parentFamilyIdUnchanged: server-owned
-      //   fields nested inside a profile the owner otherwise may edit.
-      // NOTE: `profiles.babysitter.searchable` is intentionally editable — it
-      //   is user-controlled by design (soft hide from search).
+      // - babysitterIdentityUnchanged / tutorIdentityUnchanged /
+      //   parentFamilyIdUnchanged: server-owned fields nested inside a profile
+      //   the owner otherwise may edit.
+      // NOTE: `profiles.babysitter.searchable` and `profiles.tutor.searchable`
+      //   are intentionally editable — they are user-controlled by design
+      //   (soft hide from search).
       allow update: if isOwner(userId)
                     && !request.resource.data.diff(resource.data).affectedKeys()
                         .hasAny(['uid', 'email', 'status', 'createdAt', 'isAdmin'])
                     && profileRolesUnchanged()
                     && babysitterIdentityUnchanged()
+                    && tutorIdentityUnchanged()
                     && parentFamilyIdUnchanged();
     }
 

@@ -6,7 +6,7 @@ import { writeUserActivity } from '../admin/writeAuditLog.js';
 import { sendAdminNotification } from '../config/email.js';
 
 interface SubmitVerificationInput {
-  type: 'identity' | 'ejm_enrollment';
+  type: 'identity' | 'ejm_enrollment' | 'tutor_identity';
   fileUrl: string;
   fileName: string;
   // EJM enrollment fields (optional)
@@ -26,8 +26,67 @@ export const submitVerification = onCall(
 
     const uid = request.auth.uid;
 
-    // Verify caller is a parent
     const userDoc = await db.collection('users').doc(uid).get();
+    const data = request.data as SubmitVerificationInput;
+
+    // Tutor identity docs follow a separate, uploader-keyed path: no familyId,
+    // driving users/{uid}.profiles.tutor.verification instead of a family.
+    if (data.type === 'tutor_identity') {
+      const tutor = (userDoc.data() as User | undefined)?.profiles?.tutor;
+      if (!tutor) {
+        throw new HttpsError('permission-denied', 'Only tutors can submit tutor verification');
+      }
+
+      if (!data.fileUrl || !data.fileName) {
+        throw new HttpsError('invalid-argument', 'Missing required fields');
+      }
+
+      // Delete any existing tutor_identity docs for this uploader
+      const existing = await db.collection('verifications')
+        .where('uploadedByUserId', '==', uid)
+        .where('type', '==', 'tutor_identity')
+        .get();
+
+      if (!existing.empty) {
+        const batch = db.batch();
+        for (const doc of existing.docs) {
+          batch.delete(doc.ref);
+        }
+        await batch.commit();
+      }
+
+      const now = new Date();
+      const verificationRef = db.collection('verifications').doc();
+
+      await verificationRef.set({
+        verificationId: verificationRef.id,
+        uploadedByUserId: uid,
+        type: 'tutor_identity',
+        status: 'pending',
+        fileUrl: data.fileUrl,
+        fileName: data.fileName,
+        createdAt: now,
+      });
+
+      // Drive tutor verification state (not the family recompute)
+      await db.collection('users').doc(uid).update({
+        'profiles.tutor.verification.identityStatus': 'pending',
+      });
+
+      await writeUserActivity(uid, 'verification_submitted', { type: 'tutor_identity', role: 'tutor' });
+
+      // Notify admin
+      const tutorName = `${userDoc.data()?.firstName || ''} ${userDoc.data()?.lastName || ''}`.trim();
+      await sendAdminNotification(
+        `New verification request: Tutor Identity Document`,
+        `<p><strong>${tutorName}</strong> has submitted a new <strong>Tutor Identity Document</strong> for review.</p>
+         <p style="color: #6B7280; font-size: 14px;">File: ${data.fileName}</p>`
+      );
+
+      return { verificationId: verificationRef.id };
+    }
+
+    // Verify caller is a parent
     const parent = getParentProfile(userDoc.data() as User | undefined);
     if (!parent) {
       throw new HttpsError('permission-denied', 'Only parents can submit verification');
@@ -37,8 +96,6 @@ export const submitVerification = onCall(
     if (!familyId) {
       throw new HttpsError('failed-precondition', 'No family associated with this account');
     }
-
-    const data = request.data as SubmitVerificationInput;
 
     if (!data.type || !data.fileUrl || !data.fileName) {
       throw new HttpsError('invalid-argument', 'Missing required fields');

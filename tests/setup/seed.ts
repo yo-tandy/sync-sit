@@ -42,6 +42,7 @@ export interface SeedData {
   babysitter2: { uid: string; email: string };
   babysitter3: { uid: string; email: string };
   babysitter4: { uid: string; email: string }; // inactive
+  tutor1: { uid: string; email: string };
   family1Id: string;
   family2Id: string;
   password: string;
@@ -219,6 +220,33 @@ export async function seedTestData(): Promise<SeedData> {
     createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
   });
 
+  // Tutor 1: Noa — enrolled, not yet verified (unsearchable, not_submitted)
+  const tutor1Uid = await createUser('noa.katz@ejm.org', 'Noa Katz');
+  await db.collection('users').doc(tutor1Uid).set({
+    uid: tutor1Uid, email: 'noa.katz@ejm.org', status: 'active',
+    firstName: 'Noa', lastName: 'Katz', dateOfBirth: new Date('2005-04-12'),
+    profiles: { tutor: {
+      enrollmentComplete: false, ejemEmail: 'noa.katz@ejm.org', searchable: false,
+      verification: { identityStatus: 'not_submitted' },
+      classLevel: 'L2', gender: 'female', languages: ['French', 'English'],
+      subjects: [{ subject: 'math', levels: ['6e', '5e', '4e'], rate: 25 }],
+      sessionLengthsMin: [60], locationPrefs: ['online', 'family_home'], paddingMin: 15,
+      contactEmail: 'noa.katz@ejm.org',
+      areaMode: 'arrondissement', arrondissements: ['15e', '16e'],
+      areaLatLng: { lat: 48.8530, lng: 2.2750 },
+    } },
+    notifPrefs: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true }, reminders: { push: true, email: true } },
+    fcmTokens: [], language: 'fr',
+    createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+  });
+  await db.collection('schedules').doc(tutor1Uid).set({
+    weekly: {
+      mon: makeSlots([[16, 20]]), tue: makeSlots([[16, 20]]), wed: makeSlots([[10, 18]]),
+      thu: makeSlots([[16, 20]]), fri: makeSlots([[16, 20]]),
+      sat: makeSlots([]), sun: makeSlots([[10, 18]]),
+    },
+  });
+
   // References for Lea
   await db.collection('references').add({
     babysitterUserId: bs1Uid, type: 'manual', status: 'approved',
@@ -237,6 +265,7 @@ export async function seedTestData(): Promise<SeedData> {
     babysitter2: { uid: bs2Uid, email: 'hugo.leroy@ejm.org' },
     babysitter3: { uid: bs3Uid, email: 'camille.moreau@ejm.org' },
     babysitter4: { uid: bs4Uid, email: 'tom.petit@ejm.org' },
+    tutor1: { uid: tutor1Uid, email: 'noa.katz@ejm.org' },
     family1Id,
     family2Id,
     password: PASSWORD,

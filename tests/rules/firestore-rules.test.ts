@@ -210,6 +210,84 @@ describe('users collection — Plan D owner-update guards', () => {
       updateDoc(doc(authed.firestore(), 'users', 'bs6'), { status: 'blocked' })
     );
   });
+
+  // Tutor state machine is server-owned: enrollmentComplete is flipped only by
+  // admin approval (reviewVerification), ejemEmail by enrollTutor, and the
+  // verification block by the verification callables. Owners may edit the rest
+  // of their tutor profile freely.
+  function seedTutor(id: string) {
+    return seed(id, {
+      status: 'active', email: 't@ejm.org',
+      profiles: {
+        tutor: {
+          ejemEmail: 't@ejm.org',
+          enrollmentComplete: false,
+          searchable: false,
+          subjects: ['math'],
+          contactEmail: 't@x.com',
+          verification: { identityStatus: 'not_submitted' },
+        },
+      },
+    });
+  }
+
+  it('tutor may edit their own subjects', async () => {
+    await seedTutor('tu1');
+    const authed = testEnv.authenticatedContext('tu1');
+    await assertSucceeds(
+      updateDoc(doc(authed.firestore(), 'users', 'tu1'), { 'profiles.tutor.subjects': ['math', 'physics'] })
+    );
+  });
+
+  it('tutor may edit their own contactEmail', async () => {
+    await seedTutor('tu2');
+    const authed = testEnv.authenticatedContext('tu2');
+    await assertSucceeds(
+      updateDoc(doc(authed.firestore(), 'users', 'tu2'), { 'profiles.tutor.contactEmail': 'new@x.com' })
+    );
+  });
+
+  it('tutor may toggle their own searchable flag', async () => {
+    await seedTutor('tu3');
+    const authed = testEnv.authenticatedContext('tu3');
+    await assertSucceeds(
+      updateDoc(doc(authed.firestore(), 'users', 'tu3'), { 'profiles.tutor.searchable': true })
+    );
+  });
+
+  it('tutor may NOT change profiles.tutor.enrollmentComplete', async () => {
+    await seedTutor('tu4');
+    const authed = testEnv.authenticatedContext('tu4');
+    await assertFails(
+      updateDoc(doc(authed.firestore(), 'users', 'tu4'), { 'profiles.tutor.enrollmentComplete': true })
+    );
+  });
+
+  it('tutor may NOT change profiles.tutor.ejemEmail', async () => {
+    await seedTutor('tu5');
+    const authed = testEnv.authenticatedContext('tu5');
+    await assertFails(
+      updateDoc(doc(authed.firestore(), 'users', 'tu5'), { 'profiles.tutor.ejemEmail': 'evil@x.com' })
+    );
+  });
+
+  it('tutor may NOT change profiles.tutor.verification.identityStatus', async () => {
+    await seedTutor('tu6');
+    const authed = testEnv.authenticatedContext('tu6');
+    await assertFails(
+      updateDoc(doc(authed.firestore(), 'users', 'tu6'), { 'profiles.tutor.verification.identityStatus': 'approved' })
+    );
+  });
+
+  // The tutor guard must default safely for users WITHOUT a tutor profile,
+  // otherwise a parent-only user's ordinary profile edit would break.
+  it('parent-only user may still edit their own profile (tutor guard defaults safely)', async () => {
+    await seed('par3', { status: 'active', email: 'p@x.com', profiles: { parent: { familyId: 'famP', enrollmentComplete: true } } });
+    const authed = testEnv.authenticatedContext('par3');
+    await assertSucceeds(
+      updateDoc(doc(authed.firestore(), 'users', 'par3'), { 'profiles.parent.note': 'hello' })
+    );
+  });
 });
 
 describe('families collection', () => {
