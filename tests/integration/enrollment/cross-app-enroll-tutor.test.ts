@@ -71,6 +71,8 @@ describe('enrollTutor cross-app add-profile', () => {
     // New tutor profile with the verified EJM email inside it
     expect(after.profiles.tutor.ejemEmail).toBe(EJEM_EMAIL.toLowerCase());
     expect(after.profiles.tutor.enrollmentComplete).toBe(false);
+    expect(after.profiles.tutor.searchable).toBe(false);
+    expect(after.profiles.tutor.verification).toEqual({ identityStatus: 'not_submitted' });
     expect(after.profiles.tutor.subjects).toHaveLength(1);
     // Existing profile untouched
     expect(after.profiles.parent).toEqual(before.profiles.parent);

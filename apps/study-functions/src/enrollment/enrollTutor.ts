@@ -114,7 +114,8 @@ export const enrollTutor = onCall(
       areaAddress: enrollment.areaAddress ?? null,
       areaRadiusKm: enrollment.areaRadiusKm ?? null,
       languages: [],
-      searchable: true,
+      searchable: false,
+      verification: { identityStatus: 'not_submitted' as const },
     };
 
     // 5a. Add-profile path — an authenticated existing user gains a tutor

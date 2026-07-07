@@ -59,7 +59,8 @@ describe('enrollTutor (unauthenticated create path)', () => {
     const tutor = user.profiles.tutor;
     expect(tutor.enrollmentComplete).toBe(false);
     expect(tutor.ejemEmail).toBe(EMAIL);
-    expect(tutor.searchable).toBe(true);
+    expect(tutor.searchable).toBe(false);
+    expect(tutor.verification).toEqual({ identityStatus: 'not_submitted' });
     expect(tutor.classLevel).toBe('CP');
     expect(tutor.subjects).toEqual([{ subject: 'math', levels: ['CP'], rate: 20 }]);
     expect(tutor.sessionLengthsMin).toEqual([60]);
