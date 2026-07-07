@@ -130,6 +130,39 @@ describe('reviewVerification (tutor_identity)', () => {
     expect(userDoc.data()!.profiles.tutor.enrollmentComplete).toBe(true);
   });
 
+  it('rejection revokes a prior approval: approve→resubmit(pending, still complete)→reject clears enrollmentComplete', async () => {
+    const db = getDb();
+
+    // Approve first submission → enrolled
+    const first = await submitTutorDoc('a.pdf');
+    await callFunction(
+      'reviewVerification',
+      { verificationId: first, decision: 'approved' },
+      adminToken,
+    );
+    let userDoc = await db.collection('users').doc(seed.tutor1.uid).get();
+    expect(userDoc.data()!.profiles.tutor.verification.identityStatus).toBe('approved');
+    expect(userDoc.data()!.profiles.tutor.enrollmentComplete).toBe(true);
+
+    // Resubmit → identityStatus back to pending, but a previously-approved enrollment survives a pending re-check.
+    // submitVerification must NOT touch enrollmentComplete.
+    const second = await submitTutorDoc('b.pdf');
+    expect(second).not.toBe(first);
+    userDoc = await db.collection('users').doc(seed.tutor1.uid).get();
+    expect(userDoc.data()!.profiles.tutor.verification.identityStatus).toBe('pending');
+    expect(userDoc.data()!.profiles.tutor.enrollmentComplete).toBe(true);
+
+    // Reject the resubmission → revokes approval.
+    await callFunction(
+      'reviewVerification',
+      { verificationId: second, decision: 'rejected', rejectionReason: 'No longer valid' },
+      adminToken,
+    );
+    userDoc = await db.collection('users').doc(seed.tutor1.uid).get();
+    expect(userDoc.data()!.profiles.tutor.verification.identityStatus).toBe('rejected');
+    expect(userDoc.data()!.profiles.tutor.enrollmentComplete).toBe(false);
+  });
+
   it('regression: family identity review by admin still recomputes family verification', async () => {
     const verificationId = await seedVerification({
       familyId: seed.family2Id,

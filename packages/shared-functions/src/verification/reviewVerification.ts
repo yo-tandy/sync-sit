@@ -50,9 +50,11 @@ export const reviewVerification = onCall(
 
     // Tutor identity docs drive the tutor state machine, not the family recompute.
     if (verificationData.type === 'tutor_identity') {
+      // reject revokes approval — enrollmentComplete mirrors "currently approved",
+      // which searchTutors will gate on.
       await db.collection('users').doc(verificationData.uploadedByUserId).update({
         'profiles.tutor.verification.identityStatus': decision,
-        ...(decision === 'approved' ? { 'profiles.tutor.enrollmentComplete': true } : {}),
+        'profiles.tutor.enrollmentComplete': decision === 'approved',
       });
 
       await writeAuditLog({
