@@ -35,9 +35,16 @@ export function BabysitterEnrollment() {
   // the plain error string. Other failures keep using `error`.
   const [showLoginCta, setShowLoginCta] = useState(false);
 
-  // Detect if user is already authenticated with incomplete enrollment (resume flow)
+  // Detect if user is already authenticated with incomplete enrollment (resume flow).
+  // Guard on step === 0 so this only acts as a mount/login resume aid: once the
+  // user is mid-flow it must never jump steps. Critically, in add-profile mode
+  // handleCreateAccount → refreshUserDoc() adds profiles.babysitter
+  // {enrollmentComplete:false} to userDoc, and add-profile users already carry a
+  // top-level firstName from their other profile — without this guard the effect
+  // would re-fire on that userDoc change and setStep(4), skipping StepProfile
+  // (the immutable classLevel/dateOfBirth/gender step and its 15–19 age gate).
   useEffect(() => {
-    if (authLoading) return;
+    if (step !== 0 || authLoading) return;
     const babysitter = getBabysitterProfile(userDoc);
     if (firebaseUser && babysitter) {
       if (babysitter.enrollmentComplete === false) {
@@ -50,7 +57,7 @@ export function BabysitterEnrollment() {
         navigate('/babysitter');
       }
     }
-  }, [authLoading, firebaseUser, userDoc, navigate]);
+  }, [step, authLoading, firebaseUser, userDoc, navigate]);
 
   const [searchParams] = useSearchParams();
   const isInvite = searchParams.get('invite') === 'true';
