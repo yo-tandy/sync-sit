@@ -48,6 +48,23 @@ export const reviewVerification = onCall(
       ...(decision === 'rejected' && { rejectionReason }),
     });
 
+    // Tutor identity docs drive the tutor state machine, not the family recompute.
+    if (verificationData.type === 'tutor_identity') {
+      await db.collection('users').doc(verificationData.uploadedByUserId).update({
+        'profiles.tutor.verification.identityStatus': decision,
+        ...(decision === 'approved' ? { 'profiles.tutor.enrollmentComplete': true } : {}),
+      });
+
+      await writeAuditLog({
+        adminUserId: request.auth.uid,
+        action: decision === 'approved' ? 'approve_verification' : 'reject_verification',
+        targetUserId: verificationData.uploadedByUserId,
+        details: { verificationId, type: verificationData.type, decision, rejectionReason: rejectionReason || null },
+      });
+
+      return { success: true };
+    }
+
     // Recompute family verification status
     const allVerifications = await db.collection('verifications')
       .where('familyId', '==', familyId)
