@@ -12,6 +12,7 @@ export default {
     error: 'An error occurred',
     optional: 'Optional',
     comingSoon: 'Coming soon.',
+    signOut: 'Sign out',
   },
 
   auth: {
@@ -79,6 +80,14 @@ export default {
     reportProblem: 'Report a Problem',
     privacyPolicy: 'Privacy Policy',
     terms: 'Terms & Conditions',
+  },
+
+  tutor: {
+    dashboardTitle: 'Dashboard',
+    accountTitle: 'My Account',
+    subjectsTitle: 'Subjects & Rates',
+    scheduleTitle: 'Schedule',
+    verificationTitle: 'Identity Verification',
   },
 
   enrollment: {

@@ -2,6 +2,7 @@ import { createBrowserRouter, Navigate } from 'react-router';
 
 // Layouts
 import { PublicLayout } from '@/layouts/PublicLayout';
+import { TutorLayout } from '@/layouts/TutorLayout';
 
 // Public pages
 import { WelcomePage } from '@/pages/public/WelcomePage';
@@ -16,6 +17,13 @@ import { useAuthStore } from '@/stores/authStore';
 // Enrollment
 import { TutorEnrollment } from '@/pages/enrollment/tutor/TutorEnrollment';
 import { TutorSuccessPage } from '@/pages/enrollment/tutor/TutorSuccessPage';
+
+// Tutor portal (stubs in this PR — real pages land in Tasks 2-5)
+import { DashboardPage } from '@/pages/tutor/DashboardPage';
+import { AccountPage } from '@/pages/tutor/AccountPage';
+import { SubjectsPage } from '@/pages/tutor/SubjectsPage';
+import { SchedulePage } from '@/pages/tutor/SchedulePage';
+import { VerificationPage } from '@/pages/tutor/VerificationPage';
 
 const SUPPORT_EMAIL = 'support@sync-study.com';
 const BRAND = 'Sync/Study';
@@ -41,6 +49,16 @@ export const router = createBrowserRouter([
       { path: '/enroll/parent', element: <StaticPage titleKey="welcome.signUpParent" /> },
       { path: '/forgot-password', element: <ForgotPasswordPage /> },
       { path: '*', element: <Navigate to="/" replace /> },
+    ],
+  },
+  {
+    element: <TutorLayout />,
+    children: [
+      { path: '/tutor', element: <DashboardPage /> },
+      { path: '/tutor/account', element: <AccountPage /> },
+      { path: '/tutor/subjects', element: <SubjectsPage /> },
+      { path: '/tutor/schedule', element: <SchedulePage /> },
+      { path: '/tutor/verification', element: <VerificationPage /> },
     ],
   },
 ]);

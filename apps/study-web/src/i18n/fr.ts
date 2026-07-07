@@ -12,6 +12,7 @@ export default {
     error: 'Une erreur est survenue',
     optional: 'Facultatif',
     comingSoon: 'Bientôt disponible.',
+    signOut: 'Se déconnecter',
   },
 
   auth: {
@@ -79,6 +80,14 @@ export default {
     reportProblem: 'Signaler un problème',
     privacyPolicy: 'Politique de confidentialité',
     terms: 'Conditions générales',
+  },
+
+  tutor: {
+    dashboardTitle: 'Tableau de bord',
+    accountTitle: 'Mon compte',
+    subjectsTitle: 'Matières et tarifs',
+    scheduleTitle: 'Disponibilités',
+    verificationTitle: "Vérification d'identité",
   },
 
   enrollment: {
