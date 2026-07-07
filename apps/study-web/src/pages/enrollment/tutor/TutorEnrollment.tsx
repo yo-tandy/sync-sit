@@ -60,12 +60,15 @@ export function TutorEnrollment() {
   // the plain error string. Other failures keep using `error`.
   const [showLoginCta, setShowLoginCta] = useState(false);
 
-  // Already-enrolled tutors have nothing to add here — send them home.
+  // Already-enrolled tutors have nothing to add here — send them home. Guard on
+  // step === 0 so this only fires before the flow starts: after an add-profile
+  // success, refreshUserDoc() adds profiles.tutor to userDoc, and this effect
+  // must NOT hijack the success navigation.
   useEffect(() => {
-    if (!authLoading && firebaseUser && getTutorProfile(userDoc)) {
+    if (step === 0 && !authLoading && firebaseUser && getTutorProfile(userDoc)) {
       navigate('/', { replace: true });
     }
-  }, [authLoading, firebaseUser, userDoc, navigate]);
+  }, [step, authLoading, firebaseUser, userDoc, navigate]);
 
   // Maps a callable error to the right UI state; returns true if it produced a
   // specialised message (account-exists CTA or already-enrolled notice).
@@ -232,6 +235,11 @@ export function TutorEnrollment() {
         return null;
     }
   };
+
+  // Wait for auth resolution before mounting the wizard: this keeps the
+  // collectPassword decision and the already-a-tutor redirect from being made
+  // against a not-yet-known auth state (which would flicker step 2).
+  if (authLoading) return null;
 
   const isPostAuthStep = step >= AUTH_STEPS;
 
