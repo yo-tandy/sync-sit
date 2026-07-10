@@ -193,7 +193,7 @@ export function SubjectsPage() {
                 onChange={(e) => setRate(index, e.target.value)}
                 min={0}
                 step="0.5"
-                placeholder="e.g. 20"
+                placeholder={t('tutor.subjects.ratePlaceholder')}
               />
             </Card>
           ))}

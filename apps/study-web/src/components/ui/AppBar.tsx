@@ -59,7 +59,7 @@ export function AppBar() {
         <button
           onClick={() => setMenuOpen(true)}
           className="flex h-8 w-8 items-center justify-center text-white"
-          aria-label="Open menu"
+          aria-label={t('menu.openMenu')}
         >
           <MenuIcon className="h-5 w-5" />
         </button>

@@ -170,6 +170,7 @@ export default {
 
   menu: {
     about: 'À propos',
+    openMenu: 'Ouvrir le menu',
     reportProblem: 'Signaler un problème',
     privacyPolicy: 'Politique de confidentialité',
     terms: 'Conditions générales',
@@ -244,6 +245,7 @@ export default {
       selectSubject: 'Choisir une matière',
       levelsLabel: 'Niveaux',
       rateLabel: 'Tarif (€/h)',
+      ratePlaceholder: 'p. ex. 20',
       addRow: 'Ajouter une matière',
       remove: 'Supprimer',
       saved: 'Enregistré',
