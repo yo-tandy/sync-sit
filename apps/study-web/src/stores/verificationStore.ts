@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { httpsCallable } from 'firebase/functions';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { ref, uploadBytes } from 'firebase/storage';
 import { auth, functions, storage } from '@/config/firebase';
 
 /**
@@ -71,7 +71,13 @@ export const useVerificationStore = create<VerificationState>((set) => ({
       const path = `verification-documents/${uid}/${Date.now()}-${file.name}`;
       const storageRef = ref(storage, path);
       await uploadBytes(storageRef, file);
-      const fileUrl = await getDownloadURL(storageRef);
+      // Do NOT getDownloadURL here: storage.rules deny reads on
+      // verification-documents (reads go through the getVerificationDocument
+      // callable), so the metadata read behind getDownloadURL is rejected.
+      // The stored fileUrl only needs to be parseable back to the storage
+      // path (the admin UI splits on '/o/'), so build the canonical URL.
+      const bucket = storage.app.options.storageBucket;
+      const fileUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket}/o/${encodeURIComponent(path)}`;
       const fn = httpsCallable(functions, 'submitVerification');
       await fn({ type: 'tutor_identity', fileUrl, fileName: file.name });
       set({ uploading: false });
