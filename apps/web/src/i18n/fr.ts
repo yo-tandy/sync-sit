@@ -775,6 +775,7 @@ export default {
     allTypes: 'Tous les types',
     typeIdentity: 'Identité',
     typeEnrollment: 'Inscription',
+    typeTutorIdentity: 'Pièce d\'identité tuteur',
     noVerifications: 'Aucune vérification trouvée',
     unknownFamily: 'Famille inconnue',
     viewDocument: 'Voir le document',
