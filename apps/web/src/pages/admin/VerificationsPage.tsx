@@ -20,8 +20,10 @@ function statusBadgeVariant(status: string): 'green' | 'amber' | 'red' | 'gray' 
   }
 }
 
-function typeBadgeVariant(type: string): 'blue' | 'green' {
-  return type === 'identity' ? 'blue' : 'green';
+function typeBadgeVariant(type: string): 'blue' | 'green' | 'amber' {
+  if (type === 'identity') return 'blue';
+  if (type === 'tutor_identity') return 'amber';
+  return 'green';
 }
 
 export function AdminVerificationsPage() {
@@ -127,6 +129,7 @@ export function AdminVerificationsPage() {
               { value: 'all', label: t('verification.allTypes') },
               { value: 'identity', label: t('verification.typeIdentity') },
               { value: 'ejm_enrollment', label: t('verification.typeEnrollment') },
+              { value: 'tutor_identity', label: t('verification.typeTutorIdentity') },
             ]}
           />
         </div>
@@ -146,15 +149,25 @@ export function AdminVerificationsPage() {
               <Card key={v.id}>
                 <div className="mb-2 flex items-start justify-between">
                   <div>
-                    <p className="text-sm font-bold text-gray-900">{v.familyName || t('verification.unknownFamily')}</p>
-                    <p className="text-xs text-gray-500">{v.parentName}</p>
+                    {v.type === 'tutor_identity' ? (
+                      <p className="text-sm font-bold text-gray-900">{v.tutorName}</p>
+                    ) : (
+                      <>
+                        <p className="text-sm font-bold text-gray-900">{v.familyName || t('verification.unknownFamily')}</p>
+                        <p className="text-xs text-gray-500">{v.parentName}</p>
+                      </>
+                    )}
                     <p className="text-xs text-gray-400">
                       {new Date(v.createdAt).toLocaleDateString(locale, { year: 'numeric', month: 'short', day: 'numeric' })}
                     </p>
                   </div>
                   <div className="flex gap-1.5">
                     <Badge variant={typeBadgeVariant(v.type)}>
-                      {v.type === 'identity' ? t('verification.typeIdentity') : t('verification.typeEnrollment')}
+                      {v.type === 'identity'
+                        ? t('verification.typeIdentity')
+                        : v.type === 'tutor_identity'
+                          ? t('verification.typeTutorIdentity')
+                          : t('verification.typeEnrollment')}
                     </Badge>
                     <Badge variant={statusBadgeVariant(v.status)}>
                       {t(`verification.status_${v.status}`)}

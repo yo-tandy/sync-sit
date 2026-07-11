@@ -4,9 +4,10 @@ import { functions } from '@/config/firebase';
 
 export interface VerificationDoc {
   id: string;
-  familyId: string;
+  /** Present for family docs; absent for tutor identity docs. */
+  familyId?: string;
   uploadedByUserId: string;
-  type: 'identity' | 'ejm_enrollment';
+  type: 'identity' | 'ejm_enrollment' | 'tutor_identity';
   status: string;
   fileUrl: string;
   fileName: string;
@@ -26,6 +27,8 @@ export interface VerificationDoc {
   familyParentNames?: string[];
   /** Enrolled family children (for comparison against the document). */
   familyKids?: { firstName: string; age: number }[];
+  /** Tutor display name (tutor_identity docs only). */
+  tutorName?: string;
 }
 
 interface FamilyVerification {
