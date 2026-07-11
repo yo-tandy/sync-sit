@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { ref, uploadBytes } from 'firebase/storage';
 import { storage } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { useVerificationStore } from '@/stores/verificationStore';
@@ -74,7 +74,14 @@ export function VerificationPage() {
     const path = `verification-documents/${familyId}/${Date.now()}-${file.name}`;
     const storageRef = ref(storage, path);
     await uploadBytes(storageRef, file);
-    const fileUrl = await getDownloadURL(storageRef);
+    // Do NOT getDownloadURL here: storage.rules deny reads on
+    // verification-documents (reads go through the getVerificationDocument
+    // callable), so the metadata read behind getDownloadURL is rejected and
+    // the upload flow always failed. The stored fileUrl only needs to be
+    // parseable back to the storage path (the admin UI splits on '/o/'), so
+    // build the canonical URL. Mirrors the study-web fix (8f7802c).
+    const bucket = storage.app.options.storageBucket;
+    const fileUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket}/o/${encodeURIComponent(path)}`;
     await submitDocument({ type, fileUrl, fileName: file.name, ...metadata });
     await fetchStatus();
   };
