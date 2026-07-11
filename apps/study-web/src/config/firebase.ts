@@ -2,6 +2,7 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, connectAuthEmulator } from 'firebase/auth';
 import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
 import { getFunctions, connectFunctionsEmulator } from 'firebase/functions';
+import { getStorage, connectStorageEmulator } from 'firebase/storage';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || 'demo-api-key',
@@ -16,6 +17,7 @@ const app = initializeApp(firebaseConfig, 'study-web');
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const functions = getFunctions(app, 'europe-west1');
+export const storage = getStorage(app);
 
 // Connect to emulators in development
 if (import.meta.env.DEV) {
@@ -25,6 +27,7 @@ if (import.meta.env.DEV) {
     });
     connectFirestoreEmulator(db, 'localhost', 8080);
     connectFunctionsEmulator(functions, 'localhost', 5001);
+    connectStorageEmulator(storage, 'localhost', 9199);
   } catch {
     // Already connected
   }
