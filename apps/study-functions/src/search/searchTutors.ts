@@ -135,8 +135,14 @@ export const searchTutors = onCall(
       // Contact fields only for families the tutor has approved.
       const contactApproved = (tutor.approvedFamilies ?? []).includes(callerFamilyId);
 
+      // Whitelist known lifecycle statuses; anything unexpected falls back to
+      // 'none' so an unrecognized stored value can't leak into the payload.
+      const KNOWN_REQUEST_STATUSES = ['pending', 'accepted', 'declined'] as const;
       const latest = latestRequest.get(uid);
-      const requestStatus = (latest?.status ?? 'none') as TutorSearchResult['requestStatus'];
+      const requestStatus: TutorSearchResult['requestStatus'] =
+        latest && (KNOWN_REQUEST_STATUSES as readonly string[]).includes(latest.status)
+          ? (latest.status as TutorSearchResult['requestStatus'])
+          : 'none';
 
       const result: TutorSearchResult = {
         uid,

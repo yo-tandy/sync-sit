@@ -6,8 +6,10 @@ import { LOCATION_PREFS } from '../constants/locationPrefs.js';
 // ── Sub-schemas ──
 
 const latLngSchema = z.object({
-  lat: z.number(),
-  lng: z.number(),
+  // Bounded to valid geographic ranges; this also rejects ±Infinity, which
+  // would otherwise yield NaN distances that silently defeat the radius cap.
+  lat: z.number().min(-90).max(90),
+  lng: z.number().min(-180).max(180),
 });
 
 const searchFiltersSchema = z.object({

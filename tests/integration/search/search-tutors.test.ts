@@ -1,6 +1,49 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { clearAll, callFunction, getIdToken } from '../../setup/emulator.js';
+import { clearAll, callFunction, getIdToken, getDb } from '../../setup/emulator.js';
 import { seedTestData, type SeedData } from '../../setup/seed.js';
+
+// Minimal tutor user doc — status/searchable/enrollmentComplete are the
+// candidate-query axes we vary; the offering matches math/6e so exclusion can
+// only come from the gate under test. Written directly (no auth user needed:
+// candidate tutors never authenticate for search).
+function tutorDoc(overrides: {
+  uid: string;
+  status: string;
+  searchable: boolean;
+  enrollmentComplete: boolean;
+}): Record<string, unknown> {
+  return {
+    uid: overrides.uid,
+    email: `${overrides.uid}@ejm-test.org`,
+    status: overrides.status,
+    firstName: 'Temp',
+    lastName: 'Tutor',
+    language: 'fr',
+    profiles: {
+      tutor: {
+        enrollmentComplete: overrides.enrollmentComplete,
+        searchable: overrides.searchable,
+        ejemEmail: `${overrides.uid}@ejm-test.org`,
+        classLevel: 'L3',
+        languages: ['French'],
+        subjects: [{ subject: 'math', levels: ['6e', '5e', '4e'], rate: 25 }],
+        sessionLengthsMin: [60],
+        locationPrefs: ['online'],
+        paddingMin: 15,
+        areaMode: 'distance',
+        areaLatLng: { lat: 48.8566, lng: 2.3522 },
+        areaRadiusKm: 5,
+      },
+    },
+    notifPrefs: {
+      newRequest: { push: true, email: true },
+      confirmed: { push: true, email: true },
+      cancelled: { push: true, email: true },
+      reminders: { push: true, email: true },
+    },
+    fcmTokens: [],
+  };
+}
 
 interface TutorResult {
   uid: string;
@@ -184,5 +227,62 @@ describe('searchTutors', () => {
     expect(t2?.hourlyRate).toBeUndefined();
     expect(t2?.age).toBeUndefined();
     expect(t2?.maxKids).toBeUndefined();
+  });
+
+  // ── Unconfounded approval-gate negatives ──
+  // tutor1 carries BOTH enrollmentComplete:false and searchable:false, so it
+  // cannot prove the enrollmentComplete clause on its own. These temp users
+  // isolate a single failing axis each.
+
+  it('excludes an active, searchable tutor whose enrollmentComplete is false', async () => {
+    const uid = 'temp-tutor-enrollment-false';
+    await getDb().collection('users').doc(uid).set(
+      tutorDoc({ uid, status: 'active', searchable: true, enrollmentComplete: false })
+    );
+    try {
+      const result = await callFunction<{ results: TutorResult[] }>(
+        'searchTutors',
+        { subject: 'math', level: '6e', latLng: PARIS_CENTER },
+        parentToken
+      );
+      const uids = result.results.map((r) => r.uid);
+      expect(uids).not.toContain(uid);
+      // tutor2 still the only match — the temp user changed nothing else.
+      expect(uids).toEqual([seed.tutor2.uid]);
+    } finally {
+      await getDb().collection('users').doc(uid).delete();
+    }
+  });
+
+  it('excludes a searchable, enrolled tutor whose account status is not active', async () => {
+    const uid = 'temp-tutor-blocked';
+    await getDb().collection('users').doc(uid).set(
+      tutorDoc({ uid, status: 'blocked', searchable: true, enrollmentComplete: true })
+    );
+    try {
+      const result = await callFunction<{ results: TutorResult[] }>(
+        'searchTutors',
+        { subject: 'math', level: '6e', latLng: PARIS_CENTER },
+        parentToken
+      );
+      const uids = result.results.map((r) => r.uid);
+      expect(uids).not.toContain(uid);
+      expect(uids).toEqual([seed.tutor2.uid]);
+    } finally {
+      await getDb().collection('users').doc(uid).delete();
+    }
+  });
+
+  it('rejects out-of-range latLng with invalid-argument', async () => {
+    try {
+      await callFunction(
+        'searchTutors',
+        { subject: 'math', level: '6e', latLng: { lat: 999, lng: 0 } },
+        parentToken
+      );
+      throw new Error('should have thrown');
+    } catch (err) {
+      expect((err as { code?: string }).code).toBe('INVALID_ARGUMENT');
+    }
   });
 });
