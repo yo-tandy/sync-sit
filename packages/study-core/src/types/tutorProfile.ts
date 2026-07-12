@@ -51,6 +51,15 @@ export interface TutorProfile extends ProfileBase {
   // Search visibility
   searchable?: boolean;
 
+  /**
+   * Family IDs the tutor has approved for contact-field sharing. Server-owned:
+   * written only by the respondToTutorContactRequest callable (accept path,
+   * via arrayUnion) and pinned immutable against owner writes by security
+   * rules. Contact fields are projected in search results only for callers
+   * whose familyId appears here.
+   */
+  approvedFamilies?: string[];
+
   /** Identity-verification state; server-owned (see verification callables). */
   verification?: TutorVerificationStatus;
 
