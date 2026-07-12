@@ -273,6 +273,13 @@ export default {
     },
   },
 
+  family: {
+    dashboardTitle: 'Dashboard',
+    accountTitle: 'My Account',
+    settingsTitle: 'Family Settings',
+    searchTitle: 'Find a Tutor',
+  },
+
   enrollment: {
     confirmConsentTitle: 'Almost there',
     accountExistsCta: 'An account with this email already exists. Log in to add this role.',

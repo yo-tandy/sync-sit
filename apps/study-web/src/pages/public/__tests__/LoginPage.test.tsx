@@ -27,9 +27,8 @@ describe('study LoginPage wrapper', () => {
     expect(captured.logoAlt).toBe('Sync/Study');
     const route = captured.postLoginRouter as (r: string | undefined) => string;
     expect(route('tutor')).toBe('/tutor');
-    // study-web has no /family route — a sit parent logging in must land on
-    // /signup (cross-app add-profile), not a dead 404.
-    expect(route('parent')).toBe('/signup');
+    // A study parent lands on the family portal.
+    expect(route('parent')).toBe('/family');
     expect(route('admin')).toBe('/admin');
     // Foreign-profile-only / unknown users fall back to /signup, not dead-end '/'.
     expect(route(undefined)).toBe('/signup');

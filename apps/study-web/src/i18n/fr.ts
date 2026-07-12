@@ -273,6 +273,13 @@ export default {
     },
   },
 
+  family: {
+    dashboardTitle: 'Tableau de bord',
+    accountTitle: 'Mon compte',
+    settingsTitle: 'Paramètres de la famille',
+    searchTitle: 'Trouver un professeur',
+  },
+
   enrollment: {
     confirmConsentTitle: 'Presque terminé',
     accountExistsCta: 'Un compte existe déjà avec cet e-mail. Connectez-vous pour ajouter ce rôle.',
