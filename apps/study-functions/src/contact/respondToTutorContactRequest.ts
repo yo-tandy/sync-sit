@@ -1,0 +1,109 @@
+import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { FieldValue } from 'firebase-admin/firestore';
+import { db } from '@ejm/shared-functions/config/firebase.js';
+import { getCorsOrigin } from '@ejm/shared-functions/config/cors.js';
+import { writeUserActivity } from '@ejm/shared-functions/admin/writeAuditLog.js';
+import { notifyAllParents } from '@ejm/shared-functions/config/notifyParents.js';
+import type { StudyUser, TutorProfile } from '@ejm/study-core';
+import { respondTutorContactRequestSchema } from '../validation/contact.js';
+
+export const respondToTutorContactRequest = onCall(
+  { region: 'europe-west1', cors: getCorsOrigin() },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', 'Must be logged in');
+    }
+    const uid = request.auth.uid;
+
+    const parsed = respondTutorContactRequestSchema.safeParse(request.data);
+    if (!parsed.success) {
+      throw new HttpsError(
+        'invalid-argument',
+        parsed.error.issues[0]?.message || 'Invalid request parameters',
+      );
+    }
+    const { requestId, action } = parsed.data;
+
+    const requestRef = db.collection('studyContactRequests').doc(requestId);
+    const now = new Date();
+
+    // Load → check → update atomically; on accept, also unlock the family in the
+    // tutor's approvedFamilies within the same transaction. arrayUnion works
+    // inside tx.update.
+    const result = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(requestRef);
+      if (!snap.exists) {
+        throw new HttpsError('not-found', 'Request not found');
+      }
+      const data = snap.data()!;
+      if (data.tutorUserId !== uid) {
+        throw new HttpsError('permission-denied', 'You are not the tutor for this request');
+      }
+      if (data.status !== 'pending') {
+        throw new HttpsError('failed-precondition', 'This request is no longer pending');
+      }
+
+      const newStatus = action === 'accept' ? 'accepted' : 'declined';
+      tx.update(requestRef, { status: newStatus, respondedAt: now, updatedAt: now });
+
+      if (action === 'accept') {
+        tx.update(db.collection('users').doc(uid), {
+          'profiles.tutor.approvedFamilies': FieldValue.arrayUnion(data.familyId),
+        });
+      }
+
+      return { familyId: data.familyId as string, subject: data.subject as string, level: data.level as string };
+    });
+
+    // ── Notify the family (after the transaction commits) ──
+    const tutorDoc = await db.collection('users').doc(uid).get();
+    const tutorUser = tutorDoc.data() as StudyUser | undefined;
+    const tutor: TutorProfile | undefined = tutorUser?.profiles?.tutor;
+    const tutorName = `${tutorUser?.firstName || ''} ${tutorUser?.lastName || ''}`.trim() || 'A tutor';
+
+    if (action === 'accept') {
+      const contactEmail = tutor?.contactEmail;
+      const contactPhone = tutor?.contactPhone;
+      const whatsapp = tutor?.whatsapp;
+      const contactBlock = [
+        contactEmail ? `<p><strong>Email:</strong> ${contactEmail}</p>` : '',
+        contactPhone ? `<p><strong>Phone:</strong> ${contactPhone}</p>` : '',
+        whatsapp ? `<p><strong>WhatsApp:</strong> ${whatsapp}</p>` : '',
+      ].join('');
+
+      await notifyAllParents({
+        familyId: result.familyId,
+        prefCategory: 'confirmed',
+        type: 'study_request_accepted',
+        title: 'Tutoring request accepted',
+        body: `${tutorName} accepted your tutoring request.`,
+        emailSubject: `Tutoring request accepted — ${tutorName}`,
+        emailBody: `
+          <p><strong>${tutorName}</strong> accepted your tutoring request for <strong>${result.subject} (${result.level})</strong>.</p>
+          ${contactBlock}
+          <p style="margin-top: 16px;"><a href="https://sync-study.com/family" style="background: #2563EB; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View in app</a></p>
+        `,
+        data: { requestId },
+      });
+    } else {
+      await notifyAllParents({
+        familyId: result.familyId,
+        prefCategory: 'cancelled',
+        type: 'study_request_declined',
+        title: 'Tutoring request declined',
+        body: `${tutorName} declined your tutoring request.`,
+        emailSubject: `Tutoring request declined — ${tutorName}`,
+        emailBody: `
+          <p><strong>${tutorName}</strong> declined your tutoring request for <strong>${result.subject} (${result.level})</strong>.</p>
+          <p>You can search for other available tutors.</p>
+          <p style="margin-top: 16px;"><a href="https://sync-study.com/family" style="background: #2563EB; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View in app</a></p>
+        `,
+        data: { requestId },
+      });
+    }
+
+    await writeUserActivity(uid, action === 'accept' ? 'tutor_contact_request_accepted' : 'tutor_contact_request_declined', { requestId });
+
+    return { success: true };
+  },
+);
