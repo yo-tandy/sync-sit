@@ -45,6 +45,7 @@ export default {
     sendPasswordReset: 'Envoyer un email de réinitialisation',
     passwordResetSent: 'Email de réinitialisation envoyé à {{email}}',
     passwordResetFailed: 'Échec de l\'envoi de l\'email de réinitialisation',
+    notifSaveFailed: 'Échec de l\'enregistrement de la préférence de notification',
   },
 
   notifications: {

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   doc,
@@ -41,6 +41,7 @@ import {
 // write these, so no new backend is needed.
 
 interface KidForm {
+  clientId: string; // stable React key for the row (persisted or not)
   kidId?: string; // undefined = new kid (not yet persisted)
   firstName: string;
   age: string;
@@ -61,38 +62,68 @@ export function FamilySettingsPage() {
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Track kid docs the user removed (by their persisted kidId) so handleSave can
+  // delete exactly those — no re-read of the collection, which avoids a TOCTOU
+  // race with concurrent edits from the sit app.
+  const deletedIdsRef = useRef<Set<string>>(new Set());
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   // Load family + kids
   useEffect(() => {
     if (!familyId) return;
     let cancelled = false;
     async function load() {
-      const familySnap = await getDoc(doc(db, 'families', familyId!));
-      if (!cancelled && familySnap.exists()) {
-        const f = familySnap.data() as FamilyDoc;
-        setFamilyName(f.familyName || '');
-        setAddress(f.address || '');
-        setLatLng(f.latLng);
-      }
+      try {
+        const familySnap = await getDoc(doc(db, 'families', familyId!));
+        if (!cancelled && familySnap.exists()) {
+          const f = familySnap.data() as FamilyDoc;
+          setFamilyName(f.familyName || '');
+          setAddress(f.address || '');
+          setLatLng(f.latLng);
+        }
 
-      const kidsSnap = await getDocs(collection(db, 'families', familyId!, 'kids'));
-      if (!cancelled) {
-        setKids(
-          kidsSnap.docs.map((d) => {
-            const k = d.data() as KidDoc;
-            return { kidId: d.id, firstName: k.firstName, age: String(k.age), note: k.note || '' };
-          }),
-        );
-        setLoading(false);
+        const kidsSnap = await getDocs(collection(db, 'families', familyId!, 'kids'));
+        if (!cancelled) {
+          setKids(
+            kidsSnap.docs.map((d) => {
+              const k = d.data() as KidDoc;
+              return {
+                clientId: d.id,
+                kidId: d.id,
+                firstName: k.firstName,
+                age: String(k.age),
+                note: k.note || '',
+              };
+            }),
+          );
+        }
+      } catch (err: unknown) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : t('family.settings.saveFailed'));
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
       }
     }
     load();
     return () => {
       cancelled = true;
     };
-  }, [familyId]);
+  }, [familyId, t]);
 
-  const addKid = () => setKids([...kids, { firstName: '', age: '' }]);
-  const removeKid = (index: number) => setKids(kids.filter((_, i) => i !== index));
+  const addKid = () =>
+    setKids([...kids, { clientId: crypto.randomUUID(), firstName: '', age: '' }]);
+  const removeKid = (index: number) => {
+    const kid = kids[index];
+    if (kid.kidId) deletedIdsRef.current.add(kid.kidId);
+    setKids(kids.filter((_, i) => i !== index));
+  };
   const updateKid = (index: number, field: keyof KidForm, value: string) =>
     setKids(kids.map((k, i) => (i === index ? { ...k, [field]: value } : k)));
 
@@ -111,39 +142,53 @@ export function FamilySettingsPage() {
         updatedAt: serverTimestamp(),
       });
 
-      // Sync kids: delete removed, update existing, add new.
-      const existingKidsSnap = await getDocs(collection(db, 'families', familyId, 'kids'));
-      const existingIds = new Set(existingKidsSnap.docs.map((d) => d.id));
-      const currentIds = new Set(kids.filter((k) => k.kidId).map((k) => k.kidId!));
-
-      for (const existingId of existingIds) {
-        if (!currentIds.has(existingId)) {
-          await deleteDoc(doc(db, 'families', familyId, 'kids', existingId));
+      // Delete exactly the kids the user removed this session. Tolerate
+      // NOT_FOUND: the sit app may have already deleted the same doc.
+      for (const deletedId of deletedIdsRef.current) {
+        try {
+          await deleteDoc(doc(db, 'families', familyId, 'kids', deletedId));
+        } catch (err: unknown) {
+          if ((err as { code?: string })?.code !== 'not-found') throw err;
         }
       }
+      deletedIdsRef.current.clear();
 
       for (const kid of kids) {
         if (!kid.firstName.trim()) continue;
-        const kidData = {
-          firstName: kid.firstName.trim(),
-          age: parseInt(kid.age) || 0,
-          languages: [],
-          note: kid.note?.trim() || null,
-        };
         if (kid.kidId) {
-          await updateDoc(doc(db, 'families', familyId, 'kids', kid.kidId), kidData);
+          // updateDoc field-merges: DELIBERATELY omit `languages` so the values
+          // sit's enrollment writes on this shared doc survive a save here.
+          try {
+            await updateDoc(doc(db, 'families', familyId, 'kids', kid.kidId), {
+              firstName: kid.firstName.trim(),
+              age: parseInt(kid.age) || 0,
+              note: kid.note?.trim() || null,
+            });
+          } catch (err: unknown) {
+            if ((err as { code?: string })?.code !== 'not-found') throw err;
+          }
         } else {
-          await addDoc(collection(db, 'families', familyId, 'kids'), kidData);
+          // New kid — initialize languages to an empty array.
+          await addDoc(collection(db, 'families', familyId, 'kids'), {
+            firstName: kid.firstName.trim(),
+            age: parseInt(kid.age) || 0,
+            languages: [],
+            note: kid.note?.trim() || null,
+          });
         }
       }
 
-      setSuccess(true);
-      setTimeout(() => setSuccess(false), 3000);
+      if (isMountedRef.current) {
+        setSuccess(true);
+        setTimeout(() => {
+          if (isMountedRef.current) setSuccess(false);
+        }, 3000);
+      }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : t('family.settings.saveFailed');
-      setError(message);
+      if (isMountedRef.current) setError(message);
     } finally {
-      setSaving(false);
+      if (isMountedRef.current) setSaving(false);
     }
   };
 
@@ -193,7 +238,7 @@ export function FamilySettingsPage() {
         <h3 className="mb-3 text-sm font-semibold text-gray-700">{t('family.settings.children')}</h3>
 
         {kids.map((kid, i) => (
-          <Card key={kid.kidId || `new-${i}`} className="mb-3">
+          <Card key={kid.clientId} className="mb-3">
             <div className="flex items-start gap-2">
               <div className="flex flex-1 gap-3">
                 <div className="flex-1">

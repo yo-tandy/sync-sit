@@ -109,27 +109,34 @@ export function AccountPage() {
   };
 
   // --- Notification prefs (email channel only — no FCM in study-web yet) ---
-  const savePrefs = useCallback(async (updated: NotifPrefs) => {
-    if (!uid) return;
-    try {
+  // Write ONLY the single email channel via a dot-path. A full-object
+  // `notifPrefs` write would clobber the push.* values the sit app may have
+  // written after this page mounted (push channels are not editable here, so
+  // our in-memory `prefs.push` can be stale).
+  const savePrefs = useCallback(
+    async (scenario: keyof NotifPrefs, email: boolean) => {
+      if (!uid) return;
       await updateDoc(doc(db, 'users', uid), {
-        notifPrefs: updated,
+        [`notifPrefs.${scenario}.email`]: email,
         updatedAt: serverTimestamp(),
       });
       await refreshUserDoc();
-    } catch {
-      // silent
-    }
-  }, [uid, refreshUserDoc]);
+    },
+    [uid, refreshUserDoc],
+  );
 
-  const toggleEmail = (scenario: keyof NotifPrefs) => {
+  const toggleEmail = async (scenario: keyof NotifPrefs) => {
+    const previous = prefs;
     const current = prefs[scenario] || { push: false, email: true };
-    const updated = {
-      ...prefs,
-      [scenario]: { ...current, email: !current.email },
-    };
-    setPrefs(updated);
-    savePrefs(updated);
+    const next = !current.email;
+    setPrefs({ ...prefs, [scenario]: { ...current, email: next } });
+    try {
+      await savePrefs(scenario, next);
+    } catch {
+      // Revert the optimistic toggle and surface the failure.
+      setPrefs(previous);
+      setError(t('account.notifSaveFailed'));
+    }
   };
 
   return (

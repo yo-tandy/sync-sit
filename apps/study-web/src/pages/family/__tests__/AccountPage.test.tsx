@@ -91,6 +91,21 @@ describe('family AccountPage', () => {
     await waitFor(() => expect(h.auth.refreshUserDoc).toHaveBeenCalled());
   });
 
+  it('writes notif prefs as per-scenario email dot-paths (never clobbers push)', async () => {
+    renderWithProviders(<AccountPage />);
+    // confirmed.email starts true; toggling writes only that email channel.
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmation' }));
+
+    await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
+    const payload = h.updateDoc.mock.calls[0][1] as Record<string, unknown>;
+    expect(payload).toHaveProperty('notifPrefs.confirmed.email', false);
+    const keys = Object.keys(payload);
+    // Every key is either updatedAt or a `notifPrefs.<scenario>.email` dot-path.
+    expect(keys.every((k) => k === 'updatedAt' || /^notifPrefs\.[a-z]+\.email$/.test(k))).toBe(true);
+    // No push channel is ever written from this page.
+    expect(keys.some((k) => k.includes('push'))).toBe(false);
+  });
+
   it('sends a password reset email to the login address', async () => {
     renderWithProviders(<AccountPage />);
     fireEvent.click(screen.getByRole('button', { name: /password reset/i }));

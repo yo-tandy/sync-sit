@@ -45,6 +45,7 @@ export default {
     sendPasswordReset: 'Send password reset email',
     passwordResetSent: 'Password reset email sent to {{email}}',
     passwordResetFailed: 'Failed to send reset email',
+    notifSaveFailed: 'Failed to save notification preference',
   },
 
   notifications: {

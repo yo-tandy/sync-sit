@@ -79,6 +79,25 @@ describe('family FamilySettingsPage', () => {
     );
   });
 
+  it('updating an existing kid does NOT write the languages key (preserves cross-app data)', async () => {
+    h.kids = [{ id: 'kid1', data: { firstName: 'Existing', age: 5, languages: ['en', 'fr'] } }];
+    renderWithProviders(<FamilySettingsPage />);
+    await screen.findByLabelText(/family name/i);
+
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
+
+    await waitFor(() =>
+      expect(
+        h.updateDoc.mock.calls.some((c) => (c[0] as { path: string }).path === 'families/fam1/kids/kid1'),
+      ).toBe(true),
+    );
+    const kidCall = h.updateDoc.mock.calls.find(
+      (c) => (c[0] as { path: string }).path === 'families/fam1/kids/kid1',
+    )!;
+    expect(kidCall[1]).not.toHaveProperty('languages');
+    expect(kidCall[1]).toMatchObject({ firstName: 'Existing', age: 5 });
+  });
+
   it('adds a new child to families/{id}/kids on save', async () => {
     renderWithProviders(<FamilySettingsPage />);
     await screen.findByLabelText(/family name/i);
