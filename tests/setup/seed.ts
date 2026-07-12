@@ -288,9 +288,15 @@ export async function seedTestData(): Promise<SeedData> {
       enrollmentComplete: true, ejemEmail: 'daniel.levy@ejm.org', searchable: false,
       verification: { identityStatus: 'approved' },
       classLevel: 'M1', gender: 'male', languages: ['French', 'English'],
-      subjects: [{ subject: 'math', levels: ['6e', '5e', '4e'], rate: 25 }],
-      sessionLengthsMin: [60], locationPrefs: ['online', 'family_home'], paddingMin: 15,
-      contactEmail: 'daniel.levy@ejm.org', contactPhone: '+33 677889900',
+      // Offerings deliberately IDENTICAL to tutor2's so tutor3 is a clean
+      // negative for the searchable gate — any search that matches tutor2
+      // must exclude tutor3 for exactly one reason: searchable === false.
+      subjects: [
+        { subject: 'math', levels: ['6e', '5e', '4e'], rate: 25 },
+        { subject: 'english', levels: ['6e'], rate: 22 },
+      ],
+      sessionLengthsMin: [45, 60], locationPrefs: ['online', 'family_home'], paddingMin: 15,
+      contactEmail: 'daniel.levy@ejm.org', contactPhone: '+33 677889900', whatsapp: '+33 677889900',
       areaMode: 'distance', areaAddress: 'Paris center',
       areaLatLng: { lat: 48.8566, lng: 2.3522 }, areaRadiusKm: 5,
     } },
