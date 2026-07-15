@@ -213,6 +213,12 @@ service cloud.firestore {
       //    client. The babysitter's previous "publish my own manual reference"
       //    flow was the fraud vector itself; restoring controlled publish
       //    requires a callable with admin/peer-approval gating.
+      // SUBMITTER content freeze: a parent submitter may edit their endorsement
+      // ONLY while it is still 'private'. Once the recipient accepts (status
+      // 'approved'/'published') the text becomes profile-visible, so it is
+      // frozen — otherwise "approve-innocuous-then-edit" would defeat consent.
+      // The babysitter-owner branch is intentionally unconstrained here (they
+      // manage their own manual references through the existing flows).
       allow update: if isAuth()
         && !request.resource.data.diff(resource.data).affectedKeys()
              .hasAny(['babysitterUserId', 'submittedByUserId', 'type', 'createdAt',
@@ -223,6 +229,7 @@ service cloud.firestore {
             'submittedByUserId' in resource.data
             && resource.data.submittedByUserId != null
             && resource.data.submittedByUserId == request.auth.uid
+            && resource.data.status == 'private'
           )
         )
         && (

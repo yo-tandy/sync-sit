@@ -669,6 +669,77 @@ describe('references collection', () => {
       updateDoc(doc(subCtx.firestore(), 'references', 'ref-study-4'), { referenceText: 'Updated endorsement text' }),
     );
   });
+
+  // Content freeze after acceptance: once the tutor/babysitter accepts an
+  // endorsement its text becomes profile-visible. If the submitter could still
+  // rewrite referenceText post-approval, "approve-innocuous-then-edit" would
+  // defeat the consent model. Submitter edits are therefore private-only.
+  it('denies a study-endorsement submitter from editing referenceText after acceptance', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'references', 'ref-frozen-study'), {
+        babysitterUserId: null,
+        tutorUserId: 'tutor-a',
+        appSource: 'study',
+        submittedByUserId: 'parentSub',
+        submittedByFamilyId: 'famSub',
+        type: 'family_submitted',
+        status: 'approved',
+        referenceText: 'Original innocuous text.',
+      });
+    });
+    const subCtx = testEnv.authenticatedContext('parentSub');
+    await assertFails(
+      updateDoc(doc(subCtx.firestore(), 'references', 'ref-frozen-study'), { referenceText: 'Rewritten after approval.' }),
+    );
+  });
+
+  it('denies a sit-endorsement submitter from editing referenceText after acceptance', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'references', 'ref-frozen-sit'), {
+        babysitterUserId: 'bs-a',
+        submittedByUserId: 'parentSub',
+        type: 'family_submitted',
+        status: 'approved',
+        referenceText: 'Original innocuous text.',
+      });
+    });
+    const subCtx = testEnv.authenticatedContext('parentSub');
+    await assertFails(
+      updateDoc(doc(subCtx.firestore(), 'references', 'ref-frozen-sit'), { referenceText: 'Rewritten after approval.' }),
+    );
+  });
+
+  it('still allows a submitter to edit referenceText while the doc is private', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'references', 'ref-private-edit'), {
+        babysitterUserId: 'bs-a',
+        submittedByUserId: 'parentSub',
+        type: 'family_submitted',
+        status: 'private',
+        referenceText: 'Original text.',
+      });
+    });
+    const subCtx = testEnv.authenticatedContext('parentSub');
+    await assertSucceeds(
+      updateDoc(doc(subCtx.firestore(), 'references', 'ref-private-edit'), { referenceText: 'Edited while private.' }),
+    );
+  });
+
+  it('still allows a submitter to remove their own private endorsement', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'references', 'ref-private-remove'), {
+        babysitterUserId: 'bs-a',
+        submittedByUserId: 'parentSub',
+        type: 'family_submitted',
+        status: 'private',
+        referenceText: 'Some text.',
+      });
+    });
+    const subCtx = testEnv.authenticatedContext('parentSub');
+    await assertSucceeds(
+      updateDoc(doc(subCtx.firestore(), 'references', 'ref-private-remove'), { status: 'removed' }),
+    );
+  });
 });
 
 // studyContactRequests: consent-flow docs written exclusively by callables via
