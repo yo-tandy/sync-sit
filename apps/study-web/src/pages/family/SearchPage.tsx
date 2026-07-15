@@ -23,6 +23,7 @@ import {
   AddressAutocomplete,
   type AddressResult,
 } from '@ejm/shared-ui';
+import { TutorCard } from '@/components/family/TutorCard';
 
 /**
  * Tutor search for verified families. A single-step form (subject + level +
@@ -39,8 +40,8 @@ import {
  * the caller is not a parent); we surface the dashboard's verification copy and
  * link back rather than an opaque error.
  *
- * NOTE: Task 1 renders a minimal inline row (TutorResultRow); Task 2 swaps it
- * for the full TutorCard with the consent-gated contact CTA.
+ * Each result renders as a TutorCard (avatar, endorsements, consent-gated
+ * contact CTA).
  */
 export function SearchPage() {
   const { t } = useTranslation();
@@ -303,47 +304,12 @@ export function SearchPage() {
           {!loading && !error && results !== null && results.length > 0 && (
             <div className="space-y-3">
               {results.map((r) => (
-                <TutorResultRow key={r.uid} result={r} />
+                <TutorCard key={r.uid} result={r} />
               ))}
             </div>
           )}
         </div>
       </div>
     </div>
-  );
-}
-
-/**
- * Minimal inline result row for Task 1. Task 2 replaces this with the full
- * TutorCard (avatar, endorsements list, consent-gated contact CTA).
- */
-function TutorResultRow({ result }: { result: TutorSearchResult }) {
-  const { t } = useTranslation();
-  return (
-    <Card>
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-sm font-semibold text-gray-900">
-            {result.firstName} {result.lastName}
-          </p>
-          <p className="text-xs text-gray-500">
-            {t(`tutor.subjects.names.${result.subject}`)} · {result.level}
-          </p>
-          {result.distance !== null && (
-            <p className="text-xs text-gray-400">
-              {t('family.search.distance', { km: result.distance.toFixed(1) })}
-            </p>
-          )}
-        </div>
-        <div className="shrink-0 text-right">
-          <p className="text-sm font-semibold text-gray-900">
-            {t('family.search.rate', { rate: result.rate })}
-          </p>
-          <p className="text-xs text-gray-400">
-            {t('family.search.endorsements', { count: result.endorsementCount })}
-          </p>
-        </div>
-      </div>
-    </Card>
   );
 }
