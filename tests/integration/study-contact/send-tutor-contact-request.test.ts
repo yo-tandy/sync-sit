@@ -46,6 +46,7 @@ describe('sendTutorContactRequest', () => {
     expect(doc.familyId).toBe(seed.family1Id);
     expect(doc.familyName).toBe('Dupont');
     expect(doc.parentName).toBe('Marie Dupont');
+    expect(doc.tutorName).toBe('Yael Cohen');
     expect(doc.createdByUserId).toBe(seed.parent1.uid);
     expect(doc.subject).toBe('math');
     expect(doc.level).toBe('6e');

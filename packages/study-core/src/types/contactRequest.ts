@@ -26,6 +26,12 @@ export interface StudyContactRequestDoc {
   familyName: string;
   /** Denormalized display name of the parent who sent the request. */
   parentName: string;
+  /**
+   * Denormalized tutor display name so the FAMILY's requests list can render
+   * without a users/{tutorUserId} read (rules do not let parents read tutor
+   * user docs).
+   */
+  tutorName: string;
   /** users/{uid} of the parent who created the request. */
   createdByUserId: string;
   /** Subject key requested (must be in SUBJECTS). */

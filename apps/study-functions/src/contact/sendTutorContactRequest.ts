@@ -117,6 +117,9 @@ export const sendTutorContactRequest = onCall(
     const now = new Date();
     const familyName: string = familyData.familyName || '';
     const parentName = `${callerUser?.firstName || ''} ${callerUser?.lastName || ''}`.trim();
+    // Denormalized for the FAMILY's requests list — rules do not let parents
+    // read tutor user docs, so the name must live on the request itself.
+    const tutorName = `${tutorUser.firstName || ''} ${tutorUser.lastName || ''}`.trim();
 
     const requestRef = db.collection('studyContactRequests').doc();
     const doc: Record<string, unknown> = {
@@ -125,6 +128,7 @@ export const sendTutorContactRequest = onCall(
       familyId,
       familyName,
       parentName,
+      tutorName,
       createdByUserId: uid,
       subject,
       level,
