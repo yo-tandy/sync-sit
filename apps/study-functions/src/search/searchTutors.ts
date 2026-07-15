@@ -113,6 +113,13 @@ export const searchTutors = onCall(
         continue;
       }
 
+      // Contact fields only for families the tutor has approved. Computed BEFORE
+      // the distance gate because an existing consent relationship overrides
+      // geography: an approved family reaching this tutor (e.g. via the
+      // accepted-request deep-link, which replays the family's saved latLng) must
+      // never be filtered out by the tutor's radius or the maxDistanceKm filter.
+      const contactApproved = (tutor.approvedFamilies ?? []).includes(callerFamilyId);
+
       // Distance + range gate.
       let distance: number | null = null;
       if (tutor.areaMode === 'distance' && tutor.areaLatLng && params.latLng) {
@@ -121,7 +128,9 @@ export const searchTutors = onCall(
           tutor.areaRadiusKm ?? 5,
           params.filters?.maxDistanceKm ?? Infinity,
         );
-        if (distance > cap) continue;
+        // Skip the cap entirely for approved families — relationship over
+        // geography — but still compute+round the distance for display.
+        if (!contactApproved && distance > cap) continue;
         distance = Math.round(distance * 10) / 10;
       } else if (tutor.areaMode === 'arrondissement') {
         // For now, include all arrondissement-based tutors — we still surface a
@@ -131,9 +140,6 @@ export const searchTutors = onCall(
           distance = Math.round(haversineDistance(tutor.areaLatLng, params.latLng) * 10) / 10;
         }
       }
-
-      // Contact fields only for families the tutor has approved.
-      const contactApproved = (tutor.approvedFamilies ?? []).includes(callerFamilyId);
 
       // Whitelist known lifecycle statuses; anything unexpected falls back to
       // 'none' so an unrecognized stored value can't leak into the payload.

@@ -273,6 +273,58 @@ describe('searchTutors', () => {
     }
   });
 
+  // ── Approved families bypass the distance gate ──
+  // Deep-link regression: an accepted request deep-links back to search with the
+  // family's saved latLng, which may sit outside the tutor's radius. The tutor
+  // the family is already approved for must NOT vanish behind the distance cap.
+  // ~5.5 km west of Paris center (radius is 5 km): lng 2.2769 @ lat 48.8566.
+  const FAR = { lat: 48.8566, lng: 2.2769 };
+
+  it('returns an APPROVED tutor beyond the distance radius, with contact fields', async () => {
+    const uid = 'temp-tutor-approved-far';
+    const doc = tutorDoc({ uid, status: 'active', searchable: true, enrollmentComplete: true });
+    const tutorProfile = (doc.profiles as { tutor: Record<string, unknown> }).tutor;
+    tutorProfile.approvedFamilies = [seed.family1Id];
+    tutorProfile.contactEmail = 'temp@ejm-test.org';
+    tutorProfile.contactPhone = '+33100000000';
+    tutorProfile.whatsapp = '+33100000000';
+    await getDb().collection('users').doc(uid).set(doc);
+    try {
+      const result = await callFunction<{ results: TutorResult[] }>(
+        'searchTutors',
+        { subject: 'math', level: '6e', latLng: FAR },
+        parentToken
+      );
+      const row = result.results.find((r) => r.uid === uid);
+      expect(row).toBeDefined();
+      // Still surfaces a (now out-of-radius) distance for display.
+      expect(row?.distance).not.toBeNull();
+      // Contact fields projected because the family is approved.
+      expect(row?.contactEmail).toBe('temp@ejm-test.org');
+      expect(row?.contactPhone).toBe('+33100000000');
+    } finally {
+      await getDb().collection('users').doc(uid).delete();
+    }
+  });
+
+  it('still EXCLUDES a non-approved tutor beyond the distance radius (gate intact for strangers)', async () => {
+    const uid = 'temp-tutor-unapproved-far';
+    await getDb().collection('users').doc(uid).set(
+      tutorDoc({ uid, status: 'active', searchable: true, enrollmentComplete: true })
+    );
+    try {
+      const result = await callFunction<{ results: TutorResult[] }>(
+        'searchTutors',
+        { subject: 'math', level: '6e', latLng: FAR },
+        parentToken
+      );
+      const uids = result.results.map((r) => r.uid);
+      expect(uids).not.toContain(uid);
+    } finally {
+      await getDb().collection('users').doc(uid).delete();
+    }
+  });
+
   it('rejects out-of-range latLng with invalid-argument', async () => {
     try {
       await callFunction(
