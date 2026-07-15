@@ -279,6 +279,29 @@ describe('users collection — Plan D owner-update guards', () => {
     );
   });
 
+  // approvedFamilies is the consent audit trail: written ONLY by
+  // respondToTutorContactRequest on accept. A tutor granting themselves a
+  // family would bypass the contact-request flow and its audit record.
+  it('tutor may NOT change profiles.tutor.approvedFamilies', async () => {
+    await seed('tu7', {
+      status: 'active', email: 't@ejm.org',
+      profiles: {
+        tutor: {
+          ejemEmail: 't@ejm.org',
+          enrollmentComplete: false,
+          searchable: false,
+          subjects: ['math'],
+          approvedFamilies: [],
+          verification: { identityStatus: 'not_submitted' },
+        },
+      },
+    });
+    const authed = testEnv.authenticatedContext('tu7');
+    await assertFails(
+      updateDoc(doc(authed.firestore(), 'users', 'tu7'), { 'profiles.tutor.approvedFamilies': ['famX'] })
+    );
+  });
+
   // The tutor guard must default safely for users WITHOUT a tutor profile,
   // otherwise a parent-only user's ordinary profile edit would break.
   it('parent-only user may still edit their own profile (tutor guard defaults safely)', async () => {
@@ -568,5 +591,149 @@ describe('references collection', () => {
     await assertFails(
       updateDoc(doc(authed.firestore(), 'references', 'r1'), { status: 'approved' })
     );
+  });
+
+  // Tutor endorsements reuse the references collection keyed by
+  // (tutorUserId, appSource:'study', submittedByFamilyId). Those keys are the
+  // identity tuple for a study endorsement — a submitter must not transfer their
+  // endorsement to a different tutor, relabel its app, or move it to a different
+  // family, exactly as babysitterUserId is pinned for sit references.
+  it('denies a study-endorsement submitter from flipping tutorUserId', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'references', 'ref-study-1'), {
+        babysitterUserId: null,
+        tutorUserId: 'tutor-a',
+        appSource: 'study',
+        submittedByUserId: 'parentSub',
+        submittedByFamilyId: 'famSub',
+        type: 'family_submitted',
+        status: 'private',
+      });
+    });
+    const subCtx = testEnv.authenticatedContext('parentSub');
+    await assertFails(
+      updateDoc(doc(subCtx.firestore(), 'references', 'ref-study-1'), { tutorUserId: 'tutor-b' }),
+    );
+  });
+
+  it('denies a study-endorsement submitter from flipping appSource', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'references', 'ref-study-2'), {
+        babysitterUserId: null,
+        tutorUserId: 'tutor-a',
+        appSource: 'study',
+        submittedByUserId: 'parentSub',
+        submittedByFamilyId: 'famSub',
+        type: 'family_submitted',
+        status: 'private',
+      });
+    });
+    const subCtx = testEnv.authenticatedContext('parentSub');
+    await assertFails(
+      updateDoc(doc(subCtx.firestore(), 'references', 'ref-study-2'), { appSource: 'sit' }),
+    );
+  });
+
+  it('denies a study-endorsement submitter from flipping submittedByFamilyId', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'references', 'ref-study-3'), {
+        babysitterUserId: null,
+        tutorUserId: 'tutor-a',
+        appSource: 'study',
+        submittedByUserId: 'parentSub',
+        submittedByFamilyId: 'famSub',
+        type: 'family_submitted',
+        status: 'private',
+      });
+    });
+    const subCtx = testEnv.authenticatedContext('parentSub');
+    await assertFails(
+      updateDoc(doc(subCtx.firestore(), 'references', 'ref-study-3'), { submittedByFamilyId: 'famOther' }),
+    );
+  });
+
+  it('still allows a study-endorsement submitter to edit the reference body', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'references', 'ref-study-4'), {
+        babysitterUserId: null,
+        tutorUserId: 'tutor-a',
+        appSource: 'study',
+        submittedByUserId: 'parentSub',
+        submittedByFamilyId: 'famSub',
+        type: 'family_submitted',
+        status: 'private',
+      });
+    });
+    const subCtx = testEnv.authenticatedContext('parentSub');
+    await assertSucceeds(
+      updateDoc(doc(subCtx.firestore(), 'references', 'ref-study-4'), { referenceText: 'Updated endorsement text' }),
+    );
+  });
+});
+
+// studyContactRequests: consent-flow docs written exclusively by callables via
+// the Admin SDK. Readable by the involved tutor, the requesting family's
+// members, or an admin; never writable from the client SDK.
+describe('studyContactRequests collection', () => {
+  async function seedRequest() {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'studyContactRequests', 'req1'), {
+        requestId: 'req1',
+        tutorUserId: 'tutorX',
+        familyId: 'famX',
+        status: 'pending',
+      });
+      await setDoc(doc(ctx.firestore(), 'families', 'famX'), {
+        familyId: 'famX', parentIds: ['parentX'],
+      });
+    });
+  }
+
+  it('allows the involved tutor to read their contact request', async () => {
+    await seedRequest();
+    const authed = testEnv.authenticatedContext('tutorX');
+    await assertSucceeds(getDoc(doc(authed.firestore(), 'studyContactRequests', 'req1')));
+  });
+
+  it('allows a family member to read their family contact request', async () => {
+    await seedRequest();
+    const authed = testEnv.authenticatedContext('parentX');
+    await assertSucceeds(getDoc(doc(authed.firestore(), 'studyContactRequests', 'req1')));
+  });
+
+  it('denies a stranger from reading a contact request', async () => {
+    await seedRequest();
+    const authed = testEnv.authenticatedContext('stranger');
+    await assertFails(getDoc(doc(authed.firestore(), 'studyContactRequests', 'req1')));
+  });
+
+  it('denies unauthenticated reads', async () => {
+    await seedRequest();
+    const unauthed = testEnv.unauthenticatedContext();
+    await assertFails(getDoc(doc(unauthed.firestore(), 'studyContactRequests', 'req1')));
+  });
+
+  it('denies client create even by the involved tutor', async () => {
+    const authed = testEnv.authenticatedContext('tutorX');
+    await assertFails(
+      setDoc(doc(authed.firestore(), 'studyContactRequests', 'req-new'), {
+        requestId: 'req-new', tutorUserId: 'tutorX', familyId: 'famX', status: 'pending',
+      }),
+    );
+  });
+
+  it('denies client update even by the involved tutor', async () => {
+    await seedRequest();
+    const authed = testEnv.authenticatedContext('tutorX');
+    await assertFails(
+      updateDoc(doc(authed.firestore(), 'studyContactRequests', 'req1'), { status: 'accepted' }),
+    );
+  });
+
+  it('denies client delete even by the involved family member', async () => {
+    await seedRequest();
+    const authed = testEnv.authenticatedContext('parentX');
+    const { deleteDoc } = await import('firebase/firestore');
+    await assertFails(deleteDoc(doc(authed.firestore(), 'studyContactRequests', 'req1')));
   });
 });
