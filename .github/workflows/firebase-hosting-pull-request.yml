@@ -55,4 +55,4 @@ jobs:
       - name: Deploy Preview
         run: |
           CHANNEL="pr-${{ github.event.pull_request.number }}"
-          npx firebase-tools hosting:channel:deploy "$CHANNEL" --project sync-sit --non-interactive --expires 7d
+          pnpm exec firebase hosting:channel:deploy "$CHANNEL" --project sync-sit --non-interactive --expires 7d

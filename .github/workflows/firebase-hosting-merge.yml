@@ -50,7 +50,7 @@ jobs:
 
       # Deploy hosting (uses ADC from auth step)
       - name: Deploy Hosting
-        run: npx firebase-tools deploy --only hosting --project sync-sit --non-interactive
+        run: pnpm exec firebase deploy --only hosting --project sync-sit --non-interactive
 
       # Bundle shared for functions deploy
       - run: node scripts/bundle-shared-for-deploy.js
@@ -60,7 +60,7 @@ jobs:
 
       # Deploy functions (uses ADC from auth step)
       - name: Deploy Cloud Functions
-        run: npx firebase-tools deploy --only functions --project sync-sit --non-interactive --force
+        run: pnpm exec firebase deploy --only functions --project sync-sit --non-interactive --force
 
       # Unbundle shared
       - run: node scripts/unbundle-shared-after-deploy.js
