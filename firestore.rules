@@ -80,6 +80,10 @@ service cloud.firestore {
     //   is intentionally client-writable and left untouched here.)
     // - verification: identity-verification state, driven exclusively by the
     //   submitVerification / reviewVerification callables.
+    // - approvedFamilies: consent audit trail. respondToTutorContactRequest is
+    //   the ONLY writer (on accept); allowing direct client writes would bypass
+    //   the contact-request flow and its GDPR-required record of which families
+    //   the tutor has shared contact fields with. Mirrors babysitter approvedFamilies.
     // Defaults keep the guard trivially true for users WITHOUT a tutor profile.
     function tutorIdentityUnchanged() {
       return tutorField(request.resource.data, 'ejemEmail', '')
@@ -87,7 +91,9 @@ service cloud.firestore {
              && tutorField(request.resource.data, 'enrollmentComplete', false)
                == tutorField(resource.data, 'enrollmentComplete', false)
              && tutorField(request.resource.data, 'verification', {})
-               == tutorField(resource.data, 'verification', {});
+               == tutorField(resource.data, 'verification', {})
+             && tutorField(request.resource.data, 'approvedFamilies', [])
+               == tutorField(resource.data, 'approvedFamilies', []);
     }
 
     // Helper: profiles.parent.familyId is server-controlled (enrollFamily /
@@ -197,23 +203,33 @@ service cloud.firestore {
       // Update: owner (babysitter or submitter) may edit their own reference,
       // but cannot:
       //  - mutate the identity tuple (babysitterUserId, submittedByUserId,
-      //    type, createdAt) — prevents transferring an endorsement between
-      //    babysitters or laundering an identity post-create;
+      //    type, createdAt, and — for study endorsements reusing this
+      //    collection — tutorUserId, appSource, submittedByFamilyId) — prevents
+      //    transferring an endorsement between babysitters/tutors or families,
+      //    relabeling its app, or laundering an identity post-create;
       //  - promote status to 'approved' or 'published' — kills the
       //    BLOCK-LATER-4 reference-count inflation vector via update path.
       //    Status may only transition to 'private' or 'removed' from the
       //    client. The babysitter's previous "publish my own manual reference"
       //    flow was the fraud vector itself; restoring controlled publish
       //    requires a callable with admin/peer-approval gating.
+      // SUBMITTER content freeze: a parent submitter may edit their endorsement
+      // ONLY while it is still 'private'. Once the recipient accepts (status
+      // 'approved'/'published') the text becomes profile-visible, so it is
+      // frozen — otherwise "approve-innocuous-then-edit" would defeat consent.
+      // The babysitter-owner branch is intentionally unconstrained here (they
+      // manage their own manual references through the existing flows).
       allow update: if isAuth()
         && !request.resource.data.diff(resource.data).affectedKeys()
-             .hasAny(['babysitterUserId', 'submittedByUserId', 'type', 'createdAt'])
+             .hasAny(['babysitterUserId', 'submittedByUserId', 'type', 'createdAt',
+                      'tutorUserId', 'appSource', 'submittedByFamilyId'])
         && (
           resource.data.babysitterUserId == request.auth.uid
           || (
             'submittedByUserId' in resource.data
             && resource.data.submittedByUserId != null
             && resource.data.submittedByUserId == request.auth.uid
+            && resource.data.status == 'private'
           )
         )
         && (
@@ -258,6 +274,19 @@ service cloud.firestore {
     match /contactSharingRequests/{requestId} {
       allow read: if isAuth() && (
         request.auth.uid == resource.data.babysitterUserId
+        || isFamilyMember(resource.data.familyId)
+        || isAdmin()
+      );
+      allow create, update, delete: if false; // Only via Cloud Functions
+    }
+
+    // Study contact requests: the involved tutor can read own, family members
+    // can read for their family. Writes go exclusively through the
+    // sendTutorContactRequest / respondToTutorContactRequest callables (Admin
+    // SDK), which own the consent state machine and its approvedFamilies unlock.
+    match /studyContactRequests/{requestId} {
+      allow read: if isAuth() && (
+        request.auth.uid == resource.data.tutorUserId
         || isFamilyMember(resource.data.familyId)
         || isAdmin()
       );

@@ -43,6 +43,8 @@ export interface SeedData {
   babysitter3: { uid: string; email: string };
   babysitter4: { uid: string; email: string }; // inactive
   tutor1: { uid: string; email: string };
+  tutor2: { uid: string; email: string };
+  tutor3: { uid: string; email: string };
   family1Id: string;
   family2Id: string;
   password: string;
@@ -247,6 +249,69 @@ export async function seedTestData(): Promise<SeedData> {
     },
   });
 
+  // Tutor 2: Yael — VERIFIED and searchable (the happy-path search result)
+  const tutor2Uid = await createUser('yael.cohen@ejm.org', 'Yael Cohen');
+  await db.collection('users').doc(tutor2Uid).set({
+    uid: tutor2Uid, email: 'yael.cohen@ejm.org', status: 'active',
+    firstName: 'Yael', lastName: 'Cohen', dateOfBirth: new Date('2004-08-19'),
+    profiles: { tutor: {
+      enrollmentComplete: true, ejemEmail: 'yael.cohen@ejm.org', searchable: true,
+      verification: { identityStatus: 'approved' },
+      classLevel: 'L3', gender: 'female', languages: ['French', 'English'],
+      subjects: [
+        { subject: 'math', levels: ['6e', '5e', '4e'], rate: 25 },
+        { subject: 'english', levels: ['6e'], rate: 22 },
+      ],
+      sessionLengthsMin: [45, 60], locationPrefs: ['online', 'family_home'], paddingMin: 15,
+      contactEmail: 'yael.cohen@ejm.org', contactPhone: '+33 655667788', whatsapp: '+33 655667788',
+      areaMode: 'distance', areaAddress: 'Paris center',
+      areaLatLng: { lat: 48.8566, lng: 2.3522 }, areaRadiusKm: 5,
+    } },
+    notifPrefs: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true }, reminders: { push: true, email: true } },
+    fcmTokens: [], language: 'en',
+    createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+  });
+  await db.collection('schedules').doc(tutor2Uid).set({
+    weekly: {
+      mon: makeSlots([[16, 20]]), tue: makeSlots([[16, 20]]), wed: makeSlots([[10, 18]]),
+      thu: makeSlots([[16, 20]]), fri: makeSlots([[16, 20]]),
+      sat: makeSlots([]), sun: makeSlots([[10, 18]]),
+    },
+  });
+
+  // Tutor 3: Daniel — VERIFIED but NOT searchable (approval-gate negative)
+  const tutor3Uid = await createUser('daniel.levy@ejm.org', 'Daniel Levy');
+  await db.collection('users').doc(tutor3Uid).set({
+    uid: tutor3Uid, email: 'daniel.levy@ejm.org', status: 'active',
+    firstName: 'Daniel', lastName: 'Levy', dateOfBirth: new Date('2003-11-05'),
+    profiles: { tutor: {
+      enrollmentComplete: true, ejemEmail: 'daniel.levy@ejm.org', searchable: false,
+      verification: { identityStatus: 'approved' },
+      classLevel: 'M1', gender: 'male', languages: ['French', 'English'],
+      // Offerings deliberately IDENTICAL to tutor2's so tutor3 is a clean
+      // negative for the searchable gate — any search that matches tutor2
+      // must exclude tutor3 for exactly one reason: searchable === false.
+      subjects: [
+        { subject: 'math', levels: ['6e', '5e', '4e'], rate: 25 },
+        { subject: 'english', levels: ['6e'], rate: 22 },
+      ],
+      sessionLengthsMin: [45, 60], locationPrefs: ['online', 'family_home'], paddingMin: 15,
+      contactEmail: 'daniel.levy@ejm.org', contactPhone: '+33 677889900', whatsapp: '+33 677889900',
+      areaMode: 'distance', areaAddress: 'Paris center',
+      areaLatLng: { lat: 48.8566, lng: 2.3522 }, areaRadiusKm: 5,
+    } },
+    notifPrefs: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true }, reminders: { push: true, email: true } },
+    fcmTokens: [], language: 'fr',
+    createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+  });
+  await db.collection('schedules').doc(tutor3Uid).set({
+    weekly: {
+      mon: makeSlots([[16, 20]]), tue: makeSlots([[16, 20]]), wed: makeSlots([[10, 18]]),
+      thu: makeSlots([[16, 20]]), fri: makeSlots([[16, 20]]),
+      sat: makeSlots([]), sun: makeSlots([[10, 18]]),
+    },
+  });
+
   // References for Lea
   await db.collection('references').add({
     babysitterUserId: bs1Uid, type: 'manual', status: 'approved',
@@ -266,6 +331,8 @@ export async function seedTestData(): Promise<SeedData> {
     babysitter3: { uid: bs3Uid, email: 'camille.moreau@ejm.org' },
     babysitter4: { uid: bs4Uid, email: 'tom.petit@ejm.org' },
     tutor1: { uid: tutor1Uid, email: 'noa.katz@ejm.org' },
+    tutor2: { uid: tutor2Uid, email: 'yael.cohen@ejm.org' },
+    tutor3: { uid: tutor3Uid, email: 'daniel.levy@ejm.org' },
     family1Id,
     family2Id,
     password: PASSWORD,
@@ -461,6 +528,58 @@ export async function seedContactSharingRequest(
     status: data.status ?? 'pending',
     createdAt: data.createdAt ?? now,
   };
+  if (data.respondedAt !== undefined) doc.respondedAt = data.respondedAt;
+
+  await ref.set(doc);
+  return ref.id;
+}
+
+/**
+ * Seed a study contact request (studyContactRequests collection).
+ * Required: tutorUserId, familyId, createdByUserId.
+ * Defaults: status='pending', subject='math', level='6e', generic display names.
+ *
+ * `createdAt` is overridable so cooldown tests can backdate a declined request.
+ */
+export interface StudyContactRequestSeed {
+  requestId?: string;
+  tutorUserId: string;
+  familyId: string;
+  familyName?: string;
+  parentName?: string;
+  createdByUserId: string;
+  subject?: string;
+  level?: string;
+  message?: string;
+  status?: 'pending' | 'accepted' | 'declined';
+  createdAt?: Date;
+  respondedAt?: Date;
+  updatedAt?: Date;
+}
+
+export async function seedStudyContactRequest(
+  data: StudyContactRequestSeed,
+): Promise<string> {
+  const db = getDb();
+  const now = new Date();
+  const ref = data.requestId
+    ? db.collection('studyContactRequests').doc(data.requestId)
+    : db.collection('studyContactRequests').doc();
+
+  const doc: Record<string, unknown> = {
+    requestId: ref.id,
+    tutorUserId: data.tutorUserId,
+    familyId: data.familyId,
+    familyName: data.familyName ?? 'TestFamily',
+    parentName: data.parentName ?? 'Test Parent',
+    createdByUserId: data.createdByUserId,
+    subject: data.subject ?? 'math',
+    level: data.level ?? '6e',
+    status: data.status ?? 'pending',
+    createdAt: data.createdAt ?? now,
+    updatedAt: data.updatedAt ?? data.createdAt ?? now,
+  };
+  if (data.message !== undefined) doc.message = data.message;
   if (data.respondedAt !== undefined) doc.respondedAt = data.respondedAt;
 
   await ref.set(doc);
