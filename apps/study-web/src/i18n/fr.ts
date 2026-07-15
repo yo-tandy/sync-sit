@@ -329,6 +329,7 @@ export default {
       },
       maxRateLabel: 'Tarif max (€/h)',
       maxDistanceLabel: 'Distance max (km)',
+      addressLabel: 'Rechercher depuis l\'adresse',
       submit: 'Rechercher des professeurs',
       searching: 'Recherche…',
       empty: 'Aucun professeur trouvé — essayez d\'ajuster la matière, le niveau ou les filtres.',

@@ -329,6 +329,7 @@ export default {
       },
       maxRateLabel: 'Max rate (€/h)',
       maxDistanceLabel: 'Max distance (km)',
+      addressLabel: 'Search from address',
       submit: 'Search tutors',
       searching: 'Searching…',
       empty: 'No tutors found — try adjusting your subject, level or filters.',

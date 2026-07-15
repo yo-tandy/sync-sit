@@ -20,6 +20,8 @@ import {
   Card,
   TopNav,
   Spinner,
+  AddressAutocomplete,
+  type AddressResult,
 } from '@ejm/shared-ui';
 
 /**
@@ -66,7 +68,10 @@ export function SearchPage() {
   const [maxRate, setMaxRate] = useState<number | ''>('');
   const [maxDistanceKm, setMaxDistanceKm] = useState<number | ''>('');
 
-  // Caller's saved coordinates (from the shared family doc), used for distance.
+  // Caller's search origin. Seeded from the shared family doc but user-editable
+  // via AddressAutocomplete — a family whose doc has no latLng can type one in,
+  // and clearing the field drops latLng (and any maxDistanceKm filter) entirely.
+  const [address, setAddress] = useState('');
   const [latLng, setLatLng] = useState<{ lat: number; lng: number } | undefined>();
   const [familyLoaded, setFamilyLoaded] = useState(false);
 
@@ -85,7 +90,10 @@ export function SearchPage() {
     getDoc(doc(db, 'families', familyId))
       .then((snap) => {
         if (cancelled) return;
-        if (snap.exists()) setLatLng(snap.data()?.latLng ?? undefined);
+        if (snap.exists()) {
+          setAddress(snap.data()?.address ?? '');
+          setLatLng(snap.data()?.latLng ?? undefined);
+        }
       })
       .catch(() => {
         /* leave latLng unset — distance is optional */
@@ -227,6 +235,31 @@ export function SearchPage() {
               />
             </div>
           </div>
+
+          {/* Search origin — seeded from the family doc, overridable. Distance is
+              only computed by the backend when latLng is present. The `key` remounts
+              the input once the (async) family doc resolves so its internal query
+              state picks up the seeded address (it initialises from `value` once). */}
+          <AddressAutocomplete
+            key={familyLoaded ? 'addr-loaded' : 'addr-loading'}
+            label={t('family.search.addressLabel')}
+            value={
+              address
+                ? {
+                    fullAddress: address,
+                    street: '',
+                    city: '',
+                    postcode: '',
+                    lat: latLng?.lat || 0,
+                    lng: latLng?.lng || 0,
+                  }
+                : null
+            }
+            onChange={(addr: AddressResult | null) => {
+              setAddress(addr?.fullAddress || '');
+              setLatLng(addr ? { lat: addr.lat, lng: addr.lng } : undefined);
+            }}
+          />
 
           <Button type="submit" disabled={!canSearch}>
             {loading ? t('family.search.searching') : t('family.search.submit')}

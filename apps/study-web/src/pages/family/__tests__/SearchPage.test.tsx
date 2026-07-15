@@ -101,8 +101,11 @@ describe('family SearchPage', () => {
     );
   });
 
-  it('auto-searches on mount when ?subject= & ?level= are both valid', async () => {
-    renderWithProviders(<SearchPage />, '/family/search?subject=math&level=6e');
+  it('auto-searches once on mount when ?subject= & ?level= are both valid', async () => {
+    const { rerender } = renderWithProviders(
+      <SearchPage />,
+      '/family/search?subject=math&level=6e',
+    );
 
     await waitFor(() =>
       expect(h.callable).toHaveBeenCalledWith(
@@ -110,6 +113,30 @@ describe('family SearchPage', () => {
         expect.objectContaining({ subject: 'math', level: '6e', latLng: { lat: 48, lng: 2 } }),
       ),
     );
+
+    // A re-render must NOT re-trigger the auto-search (once-only guard).
+    rerender(<SearchPage />);
+    await waitFor(() => expect(h.callable).toHaveBeenCalledTimes(1));
+  });
+
+  it('seeds the address input from the family doc', async () => {
+    renderWithProviders(<SearchPage />);
+    expect(await screen.findByDisplayValue('1 Rue de Paris')).toBeInTheDocument();
+  });
+
+  it('omits `filters` from the payload when no optional filter is set', async () => {
+    renderWithProviders(<SearchPage />);
+    await waitFor(() => expect(h.getDoc).toHaveBeenCalled());
+
+    fireEvent.change(screen.getByLabelText(/subject/i), { target: { value: 'math' } });
+    fireEvent.change(screen.getByLabelText(/level/i), { target: { value: '6e' } });
+    fireEvent.click(screen.getByRole('button', { name: /search tutors/i }));
+
+    await waitFor(() => expect(h.callable).toHaveBeenCalled());
+    const payload = h.callable.mock.calls[0][1];
+    expect(payload).not.toHaveProperty('filters');
+    // latLng is still seeded from the family doc — only `filters` is dropped.
+    expect(payload).toMatchObject({ subject: 'math', level: '6e', latLng: { lat: 48, lng: 2 } });
   });
 
   it('does NOT auto-search when the query params are invalid', async () => {
