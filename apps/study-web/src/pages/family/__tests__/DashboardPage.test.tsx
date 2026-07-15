@@ -113,6 +113,13 @@ describe('family DashboardPage', () => {
     expect(await screen.findByText(/no requests yet/i)).toBeInTheDocument();
   });
 
+  it('does not flash the no-requests message while counts are still loading', () => {
+    // getDocs never resolves → counts stay null → no empty message yet.
+    h.getDocs.mockImplementation(() => new Promise(() => {}));
+    renderWithProviders(<DashboardPage />);
+    expect(screen.queryByText(/no requests yet/i)).not.toBeInTheDocument();
+  });
+
   it('renders entry cards linking to settings and account', () => {
     renderWithProviders(<DashboardPage />);
     expect(screen.getByRole('link', { name: /family settings/i })).toHaveAttribute(

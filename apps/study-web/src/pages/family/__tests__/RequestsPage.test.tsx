@@ -114,4 +114,18 @@ describe('family RequestsPage', () => {
     renderWithProviders(<RequestsPage />);
     expect(await screen.findByText(/no requests yet/i)).toBeInTheDocument();
   });
+
+  it('resolves to the empty state (no permanent spinner) when there is no familyId', async () => {
+    h.auth.userDoc = { uid: 'p1', profiles: { parent: { enrollmentComplete: true } } };
+    renderWithProviders(<RequestsPage />);
+    expect(await screen.findByText(/no requests yet/i)).toBeInTheDocument();
+    expect(h.getDocs).not.toHaveBeenCalled();
+  });
+
+  it('formats a plain Date createdAt (emulator rows) instead of blanking it', async () => {
+    h.requests = [reqDoc({ createdAt: new Date('2026-07-10T12:00:00') })];
+    renderWithProviders(<RequestsPage />);
+    await screen.findByText(/Alex Roy/);
+    expect(screen.getByText(/2026/)).toBeInTheDocument();
+  });
 });

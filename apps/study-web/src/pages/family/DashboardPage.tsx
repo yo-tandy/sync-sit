@@ -123,7 +123,11 @@ export function DashboardPage() {
           className="block"
         >
           <Card interactive>
-            {counts && counts.pending + counts.accepted > 0 ? (
+            {counts === null ? (
+              // Counts still loading — render the card without a body rather than
+              // flashing the empty message before data resolves.
+              <div className="py-4" />
+            ) : counts.pending + counts.accepted > 0 ? (
               <div className="flex items-center gap-6 py-2">
                 <div>
                   <p className="text-2xl font-bold text-gray-900">{counts.pending}</p>

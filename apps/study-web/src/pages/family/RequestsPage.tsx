@@ -57,15 +57,21 @@ export function RequestsPage() {
   }, [familyId]);
 
   const formatDate = (ts: StudyContactRequestDoc['createdAt']): string => {
-    try {
-      return ts.toDate().toLocaleDateString(i18n.language === 'fr' ? 'fr-FR' : 'en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-      });
-    } catch {
-      return '';
-    }
+    const raw: unknown = ts;
+    // Emulator-written rows can arrive as a plain Date; production Firestore
+    // returns a Timestamp with .toDate(). Handle both, then fall back to ''.
+    const date =
+      raw instanceof Date
+        ? raw
+        : raw && typeof (raw as { toDate?: unknown }).toDate === 'function'
+          ? (raw as { toDate: () => Date }).toDate()
+          : null;
+    if (!date) return '';
+    return date.toLocaleDateString(i18n.language === 'fr' ? 'fr-FR' : 'en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
   };
 
   return (
@@ -73,19 +79,22 @@ export function RequestsPage() {
       <TopNav title={t('family.requests.title')} backTo="/family" />
 
       <div className="px-5 pt-4 pb-8">
-        {requests === null && (
+        {/* Spinner only while a real fetch is in flight — with no familyId there
+            is nothing to load, so fall through to the empty state. */}
+        {familyId != null && requests === null && (
           <div className="flex justify-center py-20">
             <Spinner />
           </div>
         )}
 
-        {requests !== null && requests.length === 0 && (
+        {(!familyId || (requests !== null && requests.length === 0)) && (
           <Card>
             <p className="py-4 text-center text-sm text-gray-500">{t('family.requests.empty')}</p>
           </Card>
         )}
 
-        {requests !== null &&
+        {familyId != null &&
+          requests !== null &&
           requests.length > 0 &&
           STATUS_ORDER.map((status) => {
             const rows = requests.filter((r) => r.status === status);
