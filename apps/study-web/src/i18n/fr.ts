@@ -185,6 +185,7 @@ export default {
     subjectsTitle: 'Matières et tarifs',
     scheduleTitle: 'Disponibilités',
     verificationTitle: "Vérification d'identité",
+    requestsTitle: 'Demandes',
     dashboard: {
       greeting: 'Gérez votre profil de tuteur et vos disponibilités.',
       bannerNotSubmittedTitle: 'Vérifiez votre identité',
@@ -221,6 +222,27 @@ export default {
       accountCardDesc: 'Coordonnées et préférences de notification.',
       verificationCard: "Vérification d'identité",
       verificationCardDesc: "Gérez votre vérification d'identité.",
+      requestsCardTitle: 'Demandes de contact',
+      requestsCardDesc: 'Les familles qui souhaitent travailler avec vous.',
+    },
+    requests: {
+      title: 'Demandes de contact',
+      empty: 'Aucune demande pour le moment — les familles qui souhaitent travailler avec vous apparaîtront ici.',
+      pendingTitle: 'En attente de votre réponse',
+      historyTitle: 'Historique',
+      accept: 'Accepter',
+      decline: 'Refuser',
+      confirmDeclineTitle: 'Refuser cette demande ?',
+      confirmDeclineDesc:
+        'La famille sera notifiée et ne pourra pas vous envoyer une autre demande pendant 7 jours.',
+      confirmDeclineCta: 'Oui, refuser',
+      actionError: 'Impossible de mettre à jour la demande. Veuillez réessayer.',
+      sentOn: 'Envoyée le {{date}}',
+      status: {
+        pending: 'En attente',
+        accepted: 'Acceptée',
+        declined: 'Refusée',
+      },
     },
     verification: {
       whyRequired:

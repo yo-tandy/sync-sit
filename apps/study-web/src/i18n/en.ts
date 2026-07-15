@@ -185,6 +185,7 @@ export default {
     subjectsTitle: 'Subjects & Rates',
     scheduleTitle: 'Schedule',
     verificationTitle: 'Identity Verification',
+    requestsTitle: 'Requests',
     dashboard: {
       greeting: 'Manage your tutor profile and availability.',
       bannerNotSubmittedTitle: 'Verify your identity',
@@ -221,6 +222,27 @@ export default {
       accountCardDesc: 'Contact details and notification preferences.',
       verificationCard: 'Identity verification',
       verificationCardDesc: 'Manage your ID verification.',
+      requestsCardTitle: 'Contact requests',
+      requestsCardDesc: 'Families who want to work with you.',
+    },
+    requests: {
+      title: 'Contact requests',
+      empty: 'No requests yet — families who want to work with you will show up here.',
+      pendingTitle: 'Awaiting your response',
+      historyTitle: 'History',
+      accept: 'Accept',
+      decline: 'Decline',
+      confirmDeclineTitle: 'Decline this request?',
+      confirmDeclineDesc:
+        'The family will be notified and won\'t be able to send you another request for 7 days.',
+      confirmDeclineCta: 'Yes, decline',
+      actionError: 'Couldn\'t update the request. Please try again.',
+      sentOn: 'Sent {{date}}',
+      status: {
+        pending: 'Pending',
+        accepted: 'Accepted',
+        declined: 'Declined',
+      },
     },
     verification: {
       whyRequired:
