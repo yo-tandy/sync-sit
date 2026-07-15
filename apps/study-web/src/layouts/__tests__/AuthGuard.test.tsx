@@ -23,15 +23,28 @@ vi.mock('@/stores/authStore', () => ({
 
 import { AuthGuard } from '../AuthGuard';
 
-function renderGuard() {
+type GuardRole = 'tutor' | 'parent';
+
+function renderGuard(
+  role: GuardRole = 'tutor',
+  initialPath: string = role === 'parent' ? '/family' : '/tutor',
+) {
   return render(
-    <MemoryRouter initialEntries={['/tutor']}>
+    <MemoryRouter initialEntries={[initialPath]}>
       <Routes>
         <Route
           path="/tutor"
           element={
             <AuthGuard role="tutor">
               <div>tutor-portal</div>
+            </AuthGuard>
+          }
+        />
+        <Route
+          path="/family"
+          element={
+            <AuthGuard role="parent">
+              <div>family-portal</div>
             </AuthGuard>
           }
         />
@@ -119,15 +132,36 @@ describe('study-web AuthGuard', () => {
     expect(screen.getByText('tutor-portal')).toBeInTheDocument();
   });
 
-  it('routes a study parent (non-tutor) away to /signup', () => {
+  it('lets a study parent into the family portal', () => {
+    h.auth = {
+      firebaseUser: { uid: 'p0' },
+      userDoc: { uid: 'p0', profiles: { parent: {} } },
+      loading: false,
+    };
+    renderGuard('parent');
+    expect(screen.getByText('family-portal')).toBeInTheDocument();
+  });
+
+  it('routes a study parent hitting the tutor guard to /family', () => {
     h.auth = {
       firebaseUser: { uid: 'p1' },
       userDoc: { uid: 'p1', profiles: { parent: {} } },
       loading: false,
     };
-    renderGuard();
-    expect(screen.getByText('signup-page')).toBeInTheDocument();
+    renderGuard('tutor');
+    expect(screen.getByText('family-portal')).toBeInTheDocument();
     expect(screen.queryByText('tutor-portal')).toBeNull();
+  });
+
+  it('routes a tutor hitting the parent guard to /tutor', () => {
+    h.auth = {
+      firebaseUser: { uid: 't5' },
+      userDoc: { uid: 't5', profiles: { tutor: { enrollmentComplete: true } } },
+      loading: false,
+    };
+    renderGuard('parent');
+    expect(screen.getByText('tutor-portal')).toBeInTheDocument();
+    expect(screen.queryByText('family-portal')).toBeNull();
   });
 
   it('routes a foreign sit-only account (no study role) away to /signup', () => {

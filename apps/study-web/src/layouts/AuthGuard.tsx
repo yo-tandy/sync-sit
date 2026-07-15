@@ -33,11 +33,13 @@ export function AuthGuard({ role, children }: AuthGuardProps) {
   // and reaches the portal. Surfacing and gating on verification state is the
   // dashboard's job (PR #77 state contract), never the guard's.
   if (studyRole !== role) {
-    // Non-tutor fallback mirrors LoginPage.postLoginRouter so the guard and the
-    // post-login router agree: admins to /admin; everyone else (study parents,
-    // and foreign sit-only accounts with no study role) to /signup to add a
-    // study role rather than dead-ending. study-web has no /family route.
+    // Role-mismatch fallback mirrors LoginPage.postLoginRouter so the guard and
+    // the post-login router agree: admins to /admin, tutors to /tutor, study
+    // parents to /family. Foreign sit-only accounts with no study role fall
+    // through to /signup to add a study role rather than dead-ending.
     if (studyRole === 'admin') return <Navigate to="/admin" replace />;
+    if (studyRole === 'tutor') return <Navigate to="/tutor" replace />;
+    if (studyRole === 'parent') return <Navigate to="/family" replace />;
     return <Navigate to="/signup" replace />;
   }
 

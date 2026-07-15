@@ -45,6 +45,7 @@ export default {
     sendPasswordReset: 'Send password reset email',
     passwordResetSent: 'Password reset email sent to {{email}}',
     passwordResetFailed: 'Failed to send reset email',
+    notifSaveFailed: 'Failed to save notification preference',
   },
 
   notifications: {
@@ -52,6 +53,8 @@ export default {
     emailOnlyDesc: 'Choose which email notifications you want to receive.',
     newRequest: 'New request',
     newRequestDesc: 'When a family sends you a tutoring request',
+    confirmation: 'Confirmation',
+    confirmationDesc: 'When a tutor accepts your request',
     cancellation: 'Cancellation',
     cancellationDesc: 'When a session is cancelled',
     reminder: 'Reminder',
@@ -270,6 +273,46 @@ export default {
         art: 'Art',
         music: 'Music',
       },
+    },
+  },
+
+  family: {
+    dashboardTitle: 'Dashboard',
+    accountTitle: 'My Account',
+    settingsTitle: 'Family Settings',
+    searchTitle: 'Find a Tutor',
+    contactDesc: 'Tutors you connect with will use these details to reach you.',
+    dashboard: {
+      hello: 'Hello',
+      greeting: 'Find and manage tutors for your family.',
+      verifyBannerTitle: 'Verify your family',
+      verifyBannerDesc:
+        'Your family is verified in the Sync/Sit app. Until that\'s done, searching for tutors stays locked.',
+      searchCardTitle: 'Find a tutor',
+      searchCardDesc: 'Browse verified EJM student tutors by subject and availability.',
+      requestsTitle: 'Your requests',
+      noRequests: 'No requests yet — once you contact a tutor, your requests show up here.',
+      settingsCard: 'Family settings',
+      settingsCardDesc: 'Update your family details and children.',
+      accountCard: 'Account',
+      accountCardDesc: 'Contact details and notification preferences.',
+    },
+    settings: {
+      saved: 'Family details saved!',
+      saveFailed: 'Failed to save family details',
+      sharedHint:
+        'Your family details and children are shared with the Sync/Sit babysitting app — changes here update both.',
+      familyName: 'Family name',
+      address: 'Address',
+      children: 'Children',
+      childName: 'Name',
+      childFirstNamePlaceholder: 'First name',
+      childAge: 'Age',
+      addChild: 'Add child',
+      removeChild: 'Remove child',
+      kidNote: 'Note (optional)',
+      kidNotePlaceholder: 'Anything a tutor should know about this child...',
+      save: 'Save',
     },
   },
 
