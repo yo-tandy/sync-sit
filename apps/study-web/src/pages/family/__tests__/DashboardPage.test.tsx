@@ -12,14 +12,22 @@ const h = vi.hoisted(() => ({
   },
   // What getDoc(families/{id}) resolves to. null => doc absent.
   familyData: null as { familyName?: string; verification?: { isFullyVerified?: boolean } } | null,
+  // studyContactRequests docs for the pending/accepted counts.
+  requests: [] as Record<string, unknown>[],
   getDoc: vi.fn(),
+  where: vi.fn((field: string, op: string, val: unknown) => ({ where: [field, op, val] })),
+  getDocs: vi.fn(),
 }));
 
 vi.mock('@/config/firebase', () => ({ db: {} }));
 
 vi.mock('firebase/firestore', () => ({
   doc: (_db: unknown, ...path: string[]) => ({ path: path.join('/') }),
+  collection: (_db: unknown, ...path: string[]) => ({ path: path.join('/') }),
+  query: (...args: unknown[]) => ({ query: args }),
+  where: (...args: [string, string, unknown]) => h.where(...args),
   getDoc: (...args: unknown[]) => h.getDoc(...args),
+  getDocs: (...args: unknown[]) => h.getDocs(...args),
 }));
 
 vi.mock('@/stores/authStore', () => ({
@@ -42,6 +50,12 @@ function reset() {
   h.familyData = { familyName: 'Cohen', verification: { isFullyVerified: false } };
   h.getDoc.mockImplementation(() =>
     Promise.resolve({ exists: () => h.familyData != null, data: () => h.familyData }),
+  );
+  h.requests = [];
+  h.where.mockClear();
+  h.getDocs.mockReset();
+  h.getDocs.mockImplementation(() =>
+    Promise.resolve({ docs: h.requests.map((r) => ({ id: r.requestId, data: () => r })) }),
   );
 }
 
@@ -76,9 +90,27 @@ describe('family DashboardPage', () => {
     expect(screen.queryByText(/verify your family/i)).not.toBeInTheDocument();
   });
 
-  it('renders the requests placeholder card', () => {
+  it('renders live pending/accepted request counts linking to the requests page', async () => {
+    h.requests = [
+      { requestId: 'r1', familyId: 'fam1', status: 'pending' },
+      { requestId: 'r2', familyId: 'fam1', status: 'pending' },
+      { requestId: 'r3', familyId: 'fam1', status: 'accepted' },
+      { requestId: 'r4', familyId: 'fam1', status: 'declined' },
+    ];
     renderWithProviders(<DashboardPage />);
-    expect(screen.getByText(/no requests yet/i)).toBeInTheDocument();
+
+    const link = await screen.findByRole('link', { name: /requests/i });
+    expect(link).toHaveAttribute('href', '/family/requests');
+    expect(h.where).toHaveBeenCalledWith('familyId', '==', 'fam1');
+    // 2 pending, 1 accepted.
+    expect(await screen.findByText('2')).toBeInTheDocument();
+    expect(screen.getByText('1')).toBeInTheDocument();
+  });
+
+  it('shows the empty requests message when the family has none', async () => {
+    h.requests = [];
+    renderWithProviders(<DashboardPage />);
+    expect(await screen.findByText(/no requests yet/i)).toBeInTheDocument();
   });
 
   it('renders entry cards linking to settings and account', () => {

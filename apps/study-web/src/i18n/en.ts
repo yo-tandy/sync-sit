@@ -281,6 +281,7 @@ export default {
     accountTitle: 'My Account',
     settingsTitle: 'Family Settings',
     searchTitle: 'Find a Tutor',
+    requestsTitle: 'Requests',
     contactDesc: 'Tutors you connect with will use these details to reach you.',
     dashboard: {
       hello: 'Hello',
@@ -292,6 +293,9 @@ export default {
       searchCardDesc: 'Browse verified EJM student tutors by subject and availability.',
       requestsTitle: 'Your requests',
       noRequests: 'No requests yet — once you contact a tutor, your requests show up here.',
+      viewRequests: 'View your requests',
+      requestsPending: 'Pending',
+      requestsAccepted: 'Accepted',
       settingsCard: 'Family settings',
       settingsCardDesc: 'Update your family details and children.',
       accountCard: 'Account',
@@ -366,6 +370,22 @@ export default {
         title: 'Request sent',
         desc: 'We\'ve let {{name}} know. They\'ll need to accept before you can see their contact details.',
       },
+    },
+    requests: {
+      title: 'Your requests',
+      empty: 'No requests yet — once you contact a tutor, your requests show up here.',
+      section: {
+        pending: 'Pending',
+        accepted: 'Accepted',
+        declined: 'Declined',
+      },
+      status: {
+        pending: 'Pending',
+        accepted: 'Accepted',
+        declined: 'Declined',
+      },
+      sentOn: 'Sent {{date}}',
+      viewContact: 'View contact details',
     },
   },
 

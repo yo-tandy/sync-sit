@@ -281,6 +281,7 @@ export default {
     accountTitle: 'Mon compte',
     settingsTitle: 'Paramètres de la famille',
     searchTitle: 'Trouver un professeur',
+    requestsTitle: 'Demandes',
     contactDesc: 'Les professeurs avec qui vous êtes en contact utiliseront ces coordonnées pour vous joindre.',
     dashboard: {
       hello: 'Bonjour',
@@ -292,6 +293,9 @@ export default {
       searchCardDesc: 'Parcourez les étudiants professeurs EJM vérifiés par matière et disponibilité.',
       requestsTitle: 'Vos demandes',
       noRequests: 'Aucune demande pour le moment — dès que vous contactez un professeur, vos demandes apparaissent ici.',
+      viewRequests: 'Voir vos demandes',
+      requestsPending: 'En attente',
+      requestsAccepted: 'Acceptées',
       settingsCard: 'Paramètres de la famille',
       settingsCardDesc: 'Mettez à jour les détails de votre famille et vos enfants.',
       accountCard: 'Compte',
@@ -366,6 +370,22 @@ export default {
         title: 'Demande envoyée',
         desc: 'Nous avons prévenu {{name}}. Il devra accepter avant que vous puissiez voir ses coordonnées.',
       },
+    },
+    requests: {
+      title: 'Vos demandes',
+      empty: 'Aucune demande pour le moment — dès que vous contactez un professeur, vos demandes apparaissent ici.',
+      section: {
+        pending: 'En attente',
+        accepted: 'Acceptées',
+        declined: 'Refusées',
+      },
+      status: {
+        pending: 'En attente',
+        accepted: 'Acceptée',
+        declined: 'Refusée',
+      },
+      sentOn: 'Envoyée le {{date}}',
+      viewContact: 'Voir les coordonnées',
     },
   },
 

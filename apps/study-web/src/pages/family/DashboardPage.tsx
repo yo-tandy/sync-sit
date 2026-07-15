@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { getParentProfile } from '@ejm/shared-core';
@@ -23,8 +23,8 @@ import {
  * it is true, keeps tutor search locked and surfaces an explanatory banner. A
  * missing `verification` field is treated as not-verified.
  *
- * Requests are a placeholder here: real request data is wired in PR C alongside
- * the tutor-search page that currently lives behind the /family/search stub.
+ * The requests summary shows live pending/accepted counts from
+ * `studyContactRequests` (where familyId==mine) and links to /family/requests.
  */
 export function DashboardPage() {
   const { t } = useTranslation();
@@ -33,6 +33,8 @@ export function DashboardPage() {
 
   // null = still loading; true/false once the family doc has resolved.
   const [isVerified, setIsVerified] = useState<boolean | null>(null);
+  // Live pending/accepted request counts (null while loading).
+  const [counts, setCounts] = useState<{ pending: number; accepted: number } | null>(null);
 
   useEffect(() => {
     // A parent always has a familyId; if it is somehow absent we leave the gate
@@ -49,6 +51,30 @@ export function DashboardPage() {
       })
       .catch(() => {
         if (!cancelled) setIsVerified(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [familyId]);
+
+  // Live request counts for the summary card.
+  useEffect(() => {
+    if (!familyId) return;
+    let cancelled = false;
+    getDocs(query(collection(db, 'studyContactRequests'), where('familyId', '==', familyId)))
+      .then((snap) => {
+        if (cancelled) return;
+        let pending = 0;
+        let accepted = 0;
+        snap.docs.forEach((d) => {
+          const status = d.data()?.status;
+          if (status === 'pending') pending += 1;
+          else if (status === 'accepted') accepted += 1;
+        });
+        setCounts({ pending, accepted });
+      })
+      .catch(() => {
+        if (!cancelled) setCounts({ pending: 0, accepted: 0 });
       });
     return () => {
       cancelled = true;
@@ -86,16 +112,36 @@ export function DashboardPage() {
         </Link>
       )}
 
-      {/* ── Requests summary (placeholder — real data lands in PR C) ── */}
+      {/* ── Requests summary (live counts → /family/requests) ── */}
       <div className="mb-6">
         <h2 className="mb-2 text-sm font-semibold text-gray-700">
           {t('family.dashboard.requestsTitle')}
         </h2>
-        <Card>
-          <p className="py-4 text-center text-sm text-gray-500">
-            {t('family.dashboard.noRequests')}
-          </p>
-        </Card>
+        <Link
+          to="/family/requests"
+          aria-label={t('family.dashboard.viewRequests')}
+          className="block"
+        >
+          <Card interactive>
+            {counts && counts.pending + counts.accepted > 0 ? (
+              <div className="flex items-center gap-6 py-2">
+                <div>
+                  <p className="text-2xl font-bold text-gray-900">{counts.pending}</p>
+                  <p className="text-xs text-gray-500">{t('family.dashboard.requestsPending')}</p>
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-gray-900">{counts.accepted}</p>
+                  <p className="text-xs text-gray-500">{t('family.dashboard.requestsAccepted')}</p>
+                </div>
+                <ChevronRightIcon className="ml-auto h-5 w-5 text-gray-400" />
+              </div>
+            ) : (
+              <p className="py-4 text-center text-sm text-gray-500">
+                {t('family.dashboard.noRequests')}
+              </p>
+            )}
+          </Card>
+        </Link>
       </div>
 
       {/* ── Entry cards ── */}
