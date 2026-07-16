@@ -13,52 +13,48 @@ import {
   timeToSlotIndex,
   slotIndexToTime,
 } from '@ejm/shared-core';
-import type { User, DayOfWeek } from '@ejm/shared-core';
+import type { User } from '@ejm/shared-core';
 import type {
   StudyUser,
   TutorProfile,
   SubjectOffering,
   LocationPref,
 } from '@ejm/study-core';
-import {
-  computeDayAvailability,
-  getSchoolYearsInRange,
-  dayOfWeek,
-  type ConfirmedBlock,
-  type DayOverride,
-} from '@ejm/study-core';
+import { getSchoolYearsInRange, type DayOverride } from '@ejm/study-core';
 import { bookSessionInputSchema } from '../validation/session.js';
+import {
+  computeDateAvailability,
+  sessionToConfirmedBlock,
+  type WeeklyGrid,
+  type HolidayPeriod,
+  type DateAvailabilityInputs,
+} from '../availability/computeDateAvailability.js';
 
 /** Notice window: families cannot book within this many hours of "now". */
 const NOTICE_HOURS = 24;
 const SLOT_MINUTES = 15;
 
-type WeeklyGrid = Partial<Record<DayOfWeek, boolean[]>>;
-
 /**
  * Best-effort single-date availability grid for the requested tutor+date.
  *
- * This mirrors the per-date computation getTutorAvailability performs so the
- * family sees the same picture at book time — weekly grid, per-date override,
- * holiday-period substitution, confirmed-session subtraction, and the notice
- * cutoff. It is deliberately BEST-EFFORT: pending sessions never block (only
- * confirmed blocks are subtracted), and the authoritative claim is the confirm
- * transaction (PR 3). A pass here only means "worth requesting".
+ * Loads this one date's inputs and runs the SHARED per-date composition
+ * (computeDateAvailability) — the same one getTutorAvailability and the confirm
+ * transaction use — so the family sees, requests, and gets exactly one picture.
+ * Deliberately BEST-EFFORT: pending sessions never block (only confirmed blocks
+ * are subtracted); the authoritative claim is the confirm transaction.
  */
 async function computeSingleDateAvailability(
   tutorUserId: string,
   date: string,
   paddingMin: number,
 ): Promise<boolean[]> {
-  const dow = dayOfWeek(date);
-
   const scheduleSnap = await db.collection('schedules').doc(tutorUserId).get();
   const schedule = scheduleSnap.data();
   const weekly: WeeklyGrid = (schedule?.weekly as WeeklyGrid) ?? {};
   const holidayMode = schedule?.holidayMode as string | undefined;
-  const holidaySchedules =
-    (schedule?.holidaySchedules as Record<string, WeeklyGrid> | undefined) ??
-    undefined;
+  const holidaySchedules = schedule?.holidaySchedules as
+    | Record<string, WeeklyGrid>
+    | undefined;
 
   const overrideSnap = await db
     .collection('schedules')
@@ -74,20 +70,17 @@ async function computeSingleDateAvailability(
       }
     : undefined;
 
-  // Holiday-period grid substitution (only when holidayMode is 'different').
-  let holidayGrid: boolean[] | undefined;
+  // Holiday periods for this date's school year (only when holidayMode differs).
+  let holidayPeriods: HolidayPeriod[] = [];
   if (holidayMode === 'different') {
     const years = getSchoolYearsInRange(date, date);
     const holidaySnaps = await Promise.all(
       years.map((y) => db.collection('holidays').doc(y).get()),
     );
-    const periods: { name: string; startDate: string; endDate: string }[] = [];
     for (const snap of holidaySnaps) {
-      const p = snap.data()?.periods as typeof periods | undefined;
-      if (p) periods.push(...p);
+      const p = snap.data()?.periods as HolidayPeriod[] | undefined;
+      if (p) holidayPeriods.push(...p);
     }
-    const period = periods.find((p) => date >= p.startDate && date <= p.endDate);
-    if (period) holidayGrid = holidaySchedules?.[period.name]?.[dow];
   }
 
   // Confirmed sessions on this date → blocks subtracted from the grid.
@@ -98,27 +91,27 @@ async function computeSingleDateAvailability(
     .where('status', '==', 'confirmed')
     .where('date', '==', date)
     .get();
-  const confirmedBlocks: ConfirmedBlock[] = [];
-  for (const doc of sessionsSnap.docs) {
-    const s = doc.data();
-    if (!s.date) continue;
-    confirmedBlocks.push({
-      startIdx: timeToSlotIndex(s.startTime as string),
-      endIdx: timeToSlotIndex(s.endTime as string),
-      location: s.location as LocationPref,
+  const confirmedBlocks = sessionsSnap.docs
+    .filter((doc) => doc.data().date)
+    .map((doc) => {
+      const s = doc.data();
+      return sessionToConfirmedBlock({
+        startTime: s.startTime as string,
+        endTime: s.endTime as string,
+        location: s.location as LocationPref,
+      });
     });
-  }
 
-  return computeDayAvailability({
-    date,
-    weeklySlots: weekly[dow] ?? [],
+  const inputs: DateAvailabilityInputs = {
+    weekly,
+    holidayMode,
+    holidaySchedules,
+    holidayPeriods,
     override,
-    holidayGrid,
     confirmedBlocks,
     paddingMin,
-    nowParis: parisWallClockPosition(new Date()),
-    noticeHours: NOTICE_HOURS,
-  });
+  };
+  return computeDateAvailability(date, inputs, parisWallClockPosition(new Date()), NOTICE_HOURS);
 }
 
 /**

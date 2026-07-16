@@ -5,15 +5,15 @@ import { writeUserActivity } from '@ejm/shared-functions/admin/writeAuditLog.js'
 import { notifyAllParents } from '@ejm/shared-functions/config/notifyParents.js';
 import { parisWallClockPosition, parisWallTimeToUtc } from '@ejm/shared-functions/scheduled/parisTime.js';
 import { timeToSlotIndex } from '@ejm/shared-core';
-import type { DayOfWeek } from '@ejm/shared-core';
 import type { LocationPref } from '@ejm/study-core';
-import {
-  computeDayAvailability,
-  dayOfWeek,
-  type ConfirmedBlock,
-  type DayOverride,
-} from '@ejm/study-core';
+import { getSchoolYearsInRange, dayOfWeek, type DayOverride } from '@ejm/study-core';
 import { respondToSessionSchema } from '../validation/session.js';
+import {
+  computeDateAvailability,
+  sessionToConfirmedBlock,
+  type WeeklyGrid,
+  type HolidayPeriod,
+} from '../availability/computeDateAvailability.js';
 
 /** Notice window: a session cannot be confirmed within this many hours of "now". */
 const NOTICE_HOURS = 24;
@@ -25,8 +25,6 @@ const PADDED_LOCATIONS: ReadonlySet<LocationPref> = new Set<LocationPref>([
   'family_home',
   'tutor_home',
 ]);
-
-type WeeklyGrid = Partial<Record<DayOfWeek, boolean[]>>;
 
 /** The padded slot range [start, end) a session claims, given its location. */
 function paddedBlock(
@@ -83,6 +81,46 @@ export const respondToSession = onCall(
     const now = new Date();
     const sessionRef = db.collection('study-sessions').doc(sessionId);
 
+    // ── Pre-load static availability config OUTSIDE the transaction (confirm) ──
+    // The tutor's weekly grid and holiday schedule/periods are static per-tutor
+    // config, NOT the contended claim state two racing confirms fight over — that
+    // is the override doc + the confirmed sessions, which ARE read via tx.get
+    // below. So this config needs no tx.get: a stale weekly/holiday read cannot
+    // cause a double-book (the override/confirmed reads that gate the claim are
+    // transactional). We peek the session here only to resolve its date for the
+    // holiday-period lookup; the transaction re-reads it authoritatively.
+    let config: {
+      weekly: WeeklyGrid;
+      holidayMode?: string;
+      holidaySchedules?: Record<string, WeeklyGrid>;
+      holidayPeriods: HolidayPeriod[];
+    } | null = null;
+    if (action === 'confirm') {
+      const [sessionPeek, scheduleSnap] = await Promise.all([
+        sessionRef.get(),
+        db.collection('schedules').doc(uid).get(),
+      ]);
+      const scheduleData = scheduleSnap.data();
+      const weekly: WeeklyGrid = (scheduleData?.weekly as WeeklyGrid) ?? {};
+      const holidayMode = scheduleData?.holidayMode as string | undefined;
+      const holidaySchedules = scheduleData?.holidaySchedules as
+        | Record<string, WeeklyGrid>
+        | undefined;
+      const peekDate = sessionPeek.data()?.date as string | undefined;
+      const holidayPeriods: HolidayPeriod[] = [];
+      if (holidayMode === 'different' && peekDate) {
+        const years = getSchoolYearsInRange(peekDate, peekDate);
+        const holidaySnaps = await Promise.all(
+          years.map((y) => db.collection('holidays').doc(y).get()),
+        );
+        for (const snap of holidaySnaps) {
+          const p = snap.data()?.periods as HolidayPeriod[] | undefined;
+          if (p) holidayPeriods.push(...p);
+        }
+      }
+      config = { weekly, holidayMode, holidaySchedules, holidayPeriods };
+    }
+
     // ── The claim transaction: all reads before any writes ──
     const outcome = await db.runTransaction(async (tx) => {
       const sessionSnap = await tx.get(sessionRef);
@@ -125,7 +163,10 @@ export const respondToSession = onCall(
         );
       }
 
-      // Reads: weekly grid, the current override doc, other confirmed sessions.
+      // Claim-participating reads (transactional): ONLY the contended state —
+      // the current override doc and the other confirmed sessions on this date.
+      // Weekly grid + holiday config came from the pre-tx `config` load above.
+      const cfg = config!; // set whenever action === 'confirm'
       const scheduleRef = db.collection('schedules').doc(uid);
       const overrideRef = scheduleRef.collection('overrides').doc(date);
       const confirmedQuery = db
@@ -134,13 +175,12 @@ export const respondToSession = onCall(
         .where('status', '==', 'confirmed')
         .where('date', '==', date);
 
-      const [scheduleSnap, overrideSnap, confirmedSnap] = await Promise.all([
-        tx.get(scheduleRef),
+      const [overrideSnap, confirmedSnap] = await Promise.all([
         tx.get(overrideRef),
         tx.get(confirmedQuery),
       ]);
 
-      const weekly: WeeklyGrid = (scheduleSnap.data()?.weekly as WeeklyGrid) ?? {};
+      const weekly = cfg.weekly;
       const dow = dayOfWeek(date);
       const weeklySlots = weekly[dow] ?? [];
 
@@ -152,25 +192,33 @@ export const respondToSession = onCall(
           }
         : undefined;
 
-      const otherBlocks: ConfirmedBlock[] = confirmedSnap.docs.map((d) => {
+      const otherBlocks = confirmedSnap.docs.map((d) => {
         const s = d.data();
-        return {
-          startIdx: timeToSlotIndex(s.startTime as string),
-          endIdx: timeToSlotIndex(s.endTime as string),
+        return sessionToConfirmedBlock({
+          startTime: s.startTime as string,
+          endTime: s.endTime as string,
           location: s.location as LocationPref,
-        };
+        });
       });
 
-      // Recompute the day's availability against the CURRENT state.
-      const grid = computeDayAvailability({
+      // Recompute the day's availability against the CURRENT state (shared
+      // composition — identical to book-time and the range view). Holiday
+      // substitution is included so a slot the tutor's HOLIDAY schedule excludes
+      // (but the weekly grid allows) cannot be confirmed into their downtime.
+      const grid = computeDateAvailability(
         date,
-        weeklySlots,
-        override: currentOverride,
-        confirmedBlocks: otherBlocks,
-        paddingMin: paddingMinutes,
-        nowParis: parisWallClockPosition(now),
-        noticeHours: NOTICE_HOURS,
-      });
+        {
+          weekly,
+          holidayMode: cfg.holidayMode,
+          holidaySchedules: cfg.holidaySchedules,
+          holidayPeriods: cfg.holidayPeriods,
+          override: currentOverride,
+          confirmedBlocks: otherBlocks,
+          paddingMin: paddingMinutes,
+        },
+        parisWallClockPosition(now),
+        NOTICE_HOURS,
+      );
 
       // The raw session slots must all still be free.
       const rawStart = timeToSlotIndex(startTime);
@@ -182,6 +230,13 @@ export const respondToSession = onCall(
       }
 
       // ── Build the restorable override (read-modify-write) ──
+      // NOTE on holiday dates: study-core's availability precedence is
+      // `holidayGrid ?? customOverride ?? weekly`, so on a holiday-period date a
+      // custom override's slots are IGNORED — the claim we AND into the override
+      // below is INVISIBLE to availability computation. There, the operative
+      // double-booking guard is the confirmed-sessions subtraction (this session
+      // is now `confirmed`, so getTutorAvailability and bookSession subtract it).
+      // We still write the override ledger for restorability and off-holiday dates.
       const block = paddedBlock(startTime, endTime, location, paddingMinutes);
 
       // Base = existing override's slots, else all-false for an 'unavailable'

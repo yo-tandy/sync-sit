@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
+import { FieldValue } from 'firebase-admin/firestore';
 import { clearAll, callFunction, getIdToken, getDb } from '../../setup/emulator.js';
 import { seedTestData, type SeedData } from '../../setup/seed.js';
 
@@ -90,6 +91,13 @@ describe('respondToSession', () => {
     const overrides = await db
       .collection('schedules').doc(seed.tutor2.uid).collection('overrides').get();
     await Promise.all(overrides.docs.map((d) => d.ref.delete()));
+    // Reset any holiday config a holiday-mode test set on tutor2 / the year doc.
+    await db.collection('schedules').doc(seed.tutor2.uid).update({
+      holidayMode: FieldValue.delete(),
+      holidaySchedules: FieldValue.delete(),
+    });
+    const holidayDoc = db.collection('holidays').doc('2026-2027');
+    if ((await holidayDoc.get()).exists) await holidayDoc.delete();
   });
 
   // ── Confirm: the claim ──
@@ -301,5 +309,66 @@ describe('respondToSession', () => {
     const notifs = await db.collection('notifications')
       .where('recipientUserId', '==', seed.parent1.uid).get();
     expect(notifs.docs.some((d) => d.data().type === 'study_session_confirmed')).toBe(true);
+  });
+
+  // ── Holiday coherence at confirm ──
+
+  /** Put tutor2 into holidayMode 'different' with a Monday holiday grid covering
+   * FUTURE_MON (June 2027 → school year 2026-2027). */
+  async function seedHolidayMonday(mondayGrid: boolean[]) {
+    const db = getDb();
+    await db.collection('schedules').doc(seed.tutor2.uid).update({
+      holidayMode: 'different',
+      holidaySchedules: { Break: { mon: mondayGrid } },
+    });
+    await db.collection('holidays').doc('2026-2027').set({
+      schoolYear: '2026-2027',
+      periods: [{ name: 'Break', startDate: FUTURE_MON, endDate: FUTURE_MON }],
+      updatedAt: new Date(),
+    });
+  }
+
+  it('rejects confirming a slot the tutor\'s holiday schedule excludes (weekly allows it)', async () => {
+    // Holiday grid excludes 16:00 (slot 64) though the weekly grid allows it;
+    // only 08:00 (slot 32) is open that day.
+    const holidayGrid = new Array(96).fill(false);
+    holidayGrid[32] = true;
+    await seedHolidayMonday(holidayGrid);
+
+    const id = await seedSession({ startTime: '16:00', endTime: '17:00', location: 'online' });
+    await expect(
+      callFunction('respondToSession', { sessionId: id, action: 'confirm' }, tutor2Token),
+    ).rejects.toMatchObject({
+      code: 'FAILED_PRECONDITION',
+      message: 'This time is no longer available',
+    });
+  });
+
+  it('blocks a second booking on a holiday date via the confirmed-sessions subtraction', async () => {
+    // On holiday dates the override is invisible to availability (holidayGrid
+    // supersedes custom overrides), so a confirmed session's OWN subtraction is
+    // the operative double-booking guard. Holiday grid opens 16:00–19:00.
+    const holidayGrid = new Array(96).fill(false);
+    for (let i = 64; i < 76; i++) holidayGrid[i] = true; // 16:00–19:00
+    await seedHolidayMonday(holidayGrid);
+
+    // A confirmed session already occupies 16:00–17:00 (seeded directly).
+    await seedSession({ sessionId: 'confirmed-holiday', startTime: '16:00', endTime: '17:00', status: 'confirmed' });
+
+    const bookInput = (startTime: string) => ({
+      tutorUserId: seed.tutor2.uid, subject: 'math', level: '6e',
+      date: FUTURE_MON, startTime, sessionLengthMinutes: 60,
+      location: 'online', studentIds: ['kid1'],
+    });
+
+    // Same slot as the confirmed session → blocked by confirmed-subtraction.
+    await expect(
+      callFunction('bookSession', bookInput('16:00'), parent1Token),
+    ).rejects.toMatchObject({ code: 'INVALID_ARGUMENT', message: 'slot not available' });
+
+    // A different holiday-open slot (17:00) with no confirmed session → bookable,
+    // proving the holiday grid opens the window and only the taken slot is blocked.
+    const ok = await callFunction<{ sessionId: string }>('bookSession', bookInput('17:00'), parent1Token);
+    expect(ok.sessionId).toBeTruthy();
   });
 });

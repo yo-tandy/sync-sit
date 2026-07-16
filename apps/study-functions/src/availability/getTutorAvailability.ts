@@ -4,18 +4,21 @@ import { db } from '@ejm/shared-functions/config/firebase.js';
 import { getCorsOrigin } from '@ejm/shared-functions/config/cors.js';
 import { writeUserActivity } from '@ejm/shared-functions/admin/writeAuditLog.js';
 import { parisWallClockPosition } from '@ejm/shared-functions/scheduled/parisTime.js';
-import { getParentProfile, timeToSlotIndex } from '@ejm/shared-core';
+import { getParentProfile } from '@ejm/shared-core';
 import type { User, DayOfWeek } from '@ejm/shared-core';
 import type { StudyUser, TutorProfile, LocationPref } from '@ejm/study-core';
 import {
-  computeDayAvailability,
   getSchoolYearsInRange,
   incrementDate,
-  dayOfWeek,
   type ConfirmedBlock,
   type DayOverride,
 } from '@ejm/study-core';
 import { getTutorAvailabilitySchema } from '../validation/availability.js';
+import {
+  computeDateAvailability,
+  sessionToConfirmedBlock,
+  type HolidayPeriod,
+} from './computeDateAvailability.js';
 
 /** Notice window: families cannot book within this many hours of "now". */
 const NOTICE_HOURS = 24;
@@ -115,27 +118,17 @@ export const getTutorAvailability = onCall(
     }
 
     // ── Holiday-period grid substitution (only when holidayMode is 'different') ──
-    let holidayPeriods: { name: string; startDate: string; endDate: string }[] = [];
+    let holidayPeriods: HolidayPeriod[] = [];
     if (holidayMode === 'different') {
       const years = getSchoolYearsInRange(startDate, endDate);
       const holidaySnaps = await Promise.all(
         years.map((y) => db.collection('holidays').doc(y).get()),
       );
       for (const snap of holidaySnaps) {
-        const periods = snap.data()?.periods as
-          | { name: string; startDate: string; endDate: string }[]
-          | undefined;
+        const periods = snap.data()?.periods as HolidayPeriod[] | undefined;
         if (periods) holidayPeriods.push(...periods);
       }
     }
-    const holidayGridFor = (date: string, dow: DayOfWeek): boolean[] | undefined => {
-      if (holidayMode !== 'different') return undefined;
-      const period = holidayPeriods.find(
-        (p) => date >= p.startDate && date <= p.endDate,
-      );
-      if (!period) return undefined;
-      return holidaySchedules?.[period.name]?.[dow];
-    };
 
     // ── Confirmed sessions in range → per-date blocks (defense-in-depth) ──
     // Needs the (tutorUserId, status, date) composite index (added in this PR).
@@ -151,32 +144,36 @@ export const getTutorAvailability = onCall(
       const s = doc.data();
       const date = s.date as string | undefined;
       if (!date) continue; // recurring sessions carry no single date — skipped here
-      const block: ConfirmedBlock = {
-        startIdx: timeToSlotIndex(s.startTime as string),
-        endIdx: timeToSlotIndex(s.endTime as string),
-        location: s.location as LocationPref,
-      };
       const list = blocksByDate.get(date) ?? [];
-      list.push(block);
+      list.push(
+        sessionToConfirmedBlock({
+          startTime: s.startTime as string,
+          endTime: s.endTime as string,
+          location: s.location as LocationPref,
+        }),
+      );
       blocksByDate.set(date, list);
     }
 
-    // ── Compute each date's grid ──
+    // ── Compute each date's grid (shared per-date composition) ──
     const nowParis = parisWallClockPosition(new Date());
-    const dates = eachDateInRange(startDate, endDate).map((date) => {
-      const dow = dayOfWeek(date);
-      const slots = computeDayAvailability({
+    const dates = eachDateInRange(startDate, endDate).map((date) => ({
+      date,
+      slots: computeDateAvailability(
         date,
-        weeklySlots: weekly[dow] ?? [],
-        override: overrideByDate.get(date),
-        holidayGrid: holidayGridFor(date, dow),
-        confirmedBlocks: blocksByDate.get(date) ?? [],
-        paddingMin,
+        {
+          weekly,
+          holidayMode,
+          holidaySchedules,
+          holidayPeriods,
+          override: overrideByDate.get(date),
+          confirmedBlocks: blocksByDate.get(date) ?? [],
+          paddingMin,
+        },
         nowParis,
-        noticeHours: NOTICE_HOURS,
-      });
-      return { date, slots };
-    });
+        NOTICE_HOURS,
+      ),
+    }));
 
     await writeUserActivity(uid, 'availability_viewed', { tutorUserId });
 
