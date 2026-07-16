@@ -186,6 +186,7 @@ export default {
     scheduleTitle: 'Disponibilités',
     verificationTitle: "Vérification d'identité",
     requestsTitle: 'Demandes',
+    endorsementsTitle: 'Recommandations',
     dashboard: {
       greeting: 'Gérez votre profil de tuteur et vos disponibilités.',
       bannerNotSubmittedTitle: 'Vérifiez votre identité',
@@ -224,6 +225,8 @@ export default {
       verificationCardDesc: "Gérez votre vérification d'identité.",
       requestsCardTitle: 'Demandes de contact',
       requestsCardDesc: 'Les familles qui souhaitent travailler avec vous.',
+      endorsementsCardTitle: 'Recommandations',
+      endorsementsCardDesc: 'Les avis des familles avec qui vous avez travaillé.',
     },
     requests: {
       title: 'Demandes de contact',
@@ -243,6 +246,23 @@ export default {
         accepted: 'Acceptée',
         declined: 'Refusée',
       },
+    },
+    endorsements: {
+      title: 'Recommandations',
+      empty:
+        'Aucune recommandation pour le moment — les familles avec qui vous avez travaillé peuvent vous recommander, et elles apparaîtront ici pour votre validation.',
+      pendingTitle: 'En attente de votre validation',
+      pendingHint:
+        'Acceptez pour publier une recommandation sur votre profil de recherche, ou rejetez-la. Le rejet est définitif.',
+      publishedTitle: 'Publiées',
+      accept: 'Accepter',
+      dismiss: 'Rejeter',
+      confirmDismissTitle: 'Rejeter cette recommandation ?',
+      confirmDismissDesc: 'Cela supprime définitivement la recommandation. Cette action est irréversible.',
+      confirmDismissCta: 'Oui, rejeter',
+      actionError: 'Impossible de mettre à jour la recommandation. Veuillez réessayer.',
+      submittedOn: 'Soumise le {{date}}',
+      anonymous: 'Une famille',
     },
     verification: {
       whyRequired:
@@ -408,6 +428,34 @@ export default {
       },
       sentOn: 'Envoyée le {{date}}',
       viewContact: 'Voir les coordonnées',
+      endorse: 'Recommander {{name}}',
+      endorsed: 'Recommandé',
+      endorsementsTitle: 'Vos recommandations',
+      endorsementStatus: {
+        private: 'En attente du professeur',
+        approved: 'Publiée',
+        published: 'Publiée',
+        removed: 'Retirée',
+      },
+    },
+    endorse: {
+      title: 'Recommander {{name}}',
+      intro: 'Racontez comment {{name}} vous a aidé. Votre recommandation reste privée jusqu\'à ce qu\'il l\'accepte.',
+      textLabel: 'Votre recommandation',
+      textPlaceholder: 'p. ex. Patient et bien préparé — les notes de ma fille se sont beaucoup améliorées.',
+      refNameLabel: 'Votre nom (affiché avec la recommandation)',
+      subjectLabel: 'Matière (facultatif)',
+      subjectNone: 'Aucune matière précise',
+      submit: 'Envoyer la recommandation',
+      submitting: 'Envoi…',
+      successTitle: 'Merci !',
+      successDesc:
+        'Votre recommandation a été envoyée à {{name}}. Elle apparaîtra sur son profil seulement après qu\'il l\'aura acceptée.',
+      errorTooShort: 'Veuillez écrire au moins 10 caractères.',
+      errorAlreadyExists: 'Vous avez déjà recommandé ce professeur.',
+      errorPermission: 'Les recommandations nécessitent une demande de contact acceptée avec ce professeur.',
+      errorInvalid: 'Cette recommandation ne peut pas être envoyée — veuillez vérifier le texte et réessayer.',
+      error: 'Une erreur est survenue. Veuillez réessayer.',
     },
   },
 

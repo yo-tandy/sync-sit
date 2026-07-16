@@ -22,6 +22,7 @@ import {
   Badge,
   BellIcon,
   CalendarIcon,
+  CheckIcon,
   ChevronRightIcon,
   ClipboardListIcon,
   SettingsIcon,
@@ -56,6 +57,7 @@ export function DashboardPage() {
   const [scheduleLoaded, setScheduleLoaded] = useState(false);
   const [toggling, setToggling] = useState(false);
   const [pendingRequests, setPendingRequests] = useState(0);
+  const [pendingEndorsements, setPendingEndorsements] = useState(0);
 
   useEffect(() => {
     if (!uid) return;
@@ -90,6 +92,26 @@ export function DashboardPage() {
       .then((snap) => {
         if (cancelled) return;
         setPendingRequests(snap.docs.filter((d) => d.data()?.status === 'pending').length);
+      })
+      .catch(() => {
+        /* leave count at 0 */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [uid]);
+
+  // Pending-endorsement count for the endorsements card. Endorsements live in
+  // the shared `references` collection keyed by tutorUserId; count status
+  // 'private' (awaiting the tutor) client-side. (Sit references are keyed by
+  // babysitterUserId, so this query never sees them.)
+  useEffect(() => {
+    if (!uid) return;
+    let cancelled = false;
+    getDocs(query(collection(db, 'references'), where('tutorUserId', '==', uid)))
+      .then((snap) => {
+        if (cancelled) return;
+        setPendingEndorsements(snap.docs.filter((d) => d.data()?.status === 'private').length);
       })
       .catch(() => {
         /* leave count at 0 */
@@ -189,6 +211,27 @@ export function DashboardPage() {
             <p className="text-xs text-gray-500">{t('tutor.dashboard.requestsCardDesc')}</p>
           </div>
           {pendingRequests > 0 && <Badge variant="red">{pendingRequests}</Badge>}
+          <ChevronRightIcon className="h-5 w-5 text-gray-400" />
+        </Card>
+      </Link>
+
+      {/* ── Endorsements card ── */}
+      <Link
+        to="/tutor/endorsements"
+        aria-label={t('tutor.dashboard.endorsementsCardTitle')}
+        className="mb-4 block"
+      >
+        <Card interactive className="flex items-center gap-3 py-4">
+          <CheckIcon className="h-6 w-6 text-red-600" />
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-gray-900">
+              {t('tutor.dashboard.endorsementsCardTitle')}
+            </p>
+            <p className="text-xs text-gray-500">
+              {t('tutor.dashboard.endorsementsCardDesc')}
+            </p>
+          </div>
+          {pendingEndorsements > 0 && <Badge variant="red">{pendingEndorsements}</Badge>}
           <ChevronRightIcon className="h-5 w-5 text-gray-400" />
         </Card>
       </Link>

@@ -26,6 +26,7 @@ import { SubjectsPage } from '@/pages/tutor/SubjectsPage';
 import { SchedulePage } from '@/pages/tutor/SchedulePage';
 import { VerificationPage } from '@/pages/tutor/VerificationPage';
 import { RequestsPage as TutorRequestsPage } from '@/pages/tutor/RequestsPage';
+import { EndorsementsPage as TutorEndorsementsPage } from '@/pages/tutor/EndorsementsPage';
 
 // Family portal (stubs in this PR — real pages land in Tasks 2-3; the search
 // page is a "coming soon" stub replaced by PR C)
@@ -70,6 +71,7 @@ export const router = createBrowserRouter([
       { path: '/tutor/schedule', element: <SchedulePage /> },
       { path: '/tutor/verification', element: <VerificationPage /> },
       { path: '/tutor/requests', element: <TutorRequestsPage /> },
+      { path: '/tutor/endorsements', element: <TutorEndorsementsPage /> },
     ],
   },
   {

@@ -15,6 +15,8 @@ const h = vi.hoisted(() => ({
   scheduleData: null as { weekly?: Record<string, boolean[]> } | null,
   // studyContactRequests docs for the pending-count card.
   requests: [] as Record<string, unknown>[],
+  // references docs (endorsements) for the pending-endorsements count card.
+  refs: [] as Record<string, unknown>[],
   updateDoc: vi.fn(() => Promise.resolve()),
   getDoc: vi.fn(),
   where: vi.fn((field: string, op: string, val: unknown) => ({ where: [field, op, val] })),
@@ -50,15 +52,22 @@ function reset() {
   h.auth.refreshUserDoc.mockClear();
   h.scheduleData = null;
   h.requests = [];
+  h.refs = [];
   h.updateDoc.mockClear();
   h.getDoc.mockImplementation(() =>
     Promise.resolve({ exists: () => h.scheduleData != null, data: () => h.scheduleData })
   );
   h.where.mockClear();
   h.getDocs.mockReset();
-  h.getDocs.mockImplementation(() =>
-    Promise.resolve({ docs: h.requests.map((r) => ({ id: r.requestId, data: () => r })) }),
-  );
+  // Route by collection path: studyContactRequests => requests, references =>
+  // endorsements. (Both count cards read by tutorUserId==me.)
+  h.getDocs.mockImplementation((q: { query: { path: string }[] }) => {
+    const path = q?.query?.[0]?.path;
+    const rows = path === 'references' ? h.refs : h.requests;
+    return Promise.resolve({
+      docs: rows.map((r) => ({ id: r.referenceId ?? r.requestId, data: () => r })),
+    });
+  });
 }
 
 describe('tutor DashboardPage', () => {
@@ -217,6 +226,24 @@ describe('tutor DashboardPage', () => {
     const link = await screen.findByRole('link', { name: /requests/i });
     expect(link).toHaveAttribute('href', '/tutor/requests');
     expect(h.where).toHaveBeenCalledWith('tutorUserId', '==', 't1');
+    expect(await screen.findByText('2')).toBeInTheDocument();
+  });
+
+  // ── Pending-endorsements card ──
+
+  it('renders a pending-endorsements card counting private refs, linking to /tutor/endorsements', async () => {
+    h.auth.userDoc = tutor({ enrollmentComplete: true, verification: { identityStatus: 'approved' } });
+    h.refs = [
+      { referenceId: 'e1', tutorUserId: 't1', status: 'private' },
+      { referenceId: 'e2', tutorUserId: 't1', status: 'private' },
+      { referenceId: 'e3', tutorUserId: 't1', status: 'approved' },
+      { referenceId: 'e4', tutorUserId: 't1', status: 'removed' },
+    ];
+    renderWithProviders(<DashboardPage />);
+
+    const link = await screen.findByRole('link', { name: /endorsements/i });
+    expect(link).toHaveAttribute('href', '/tutor/endorsements');
+    // Only the two private ones count as pending.
     expect(await screen.findByText('2')).toBeInTheDocument();
   });
 });
