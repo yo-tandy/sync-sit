@@ -46,6 +46,9 @@ export interface SessionDoc {
   address?: string;
   latLng?: LatLng;
 
+  // Optional free-text note from the family to the tutor, captured at book time.
+  message?: string;
+
   // Padding (stored for override calculation)
   paddingMinutes: number;
 
