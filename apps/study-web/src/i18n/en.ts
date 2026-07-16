@@ -186,6 +186,7 @@ export default {
     scheduleTitle: 'Schedule',
     verificationTitle: 'Identity Verification',
     requestsTitle: 'Requests',
+    endorsementsTitle: 'Endorsements',
     dashboard: {
       greeting: 'Manage your tutor profile and availability.',
       bannerNotSubmittedTitle: 'Verify your identity',
@@ -224,6 +225,8 @@ export default {
       verificationCardDesc: 'Manage your ID verification.',
       requestsCardTitle: 'Contact requests',
       requestsCardDesc: 'Families who want to work with you.',
+      endorsementsCardTitle: 'Endorsements',
+      endorsementsCardDesc: 'Reviews from families you\'ve worked with.',
     },
     requests: {
       title: 'Contact requests',
@@ -243,6 +246,23 @@ export default {
         accepted: 'Accepted',
         declined: 'Declined',
       },
+    },
+    endorsements: {
+      title: 'Endorsements',
+      empty:
+        'No endorsements yet — families you\'ve worked with can endorse you, and they\'ll show up here for your review.',
+      pendingTitle: 'Awaiting your review',
+      pendingHint:
+        'Accept to publish an endorsement on your search profile, or dismiss it. Dismissing is permanent.',
+      publishedTitle: 'Published',
+      accept: 'Accept',
+      dismiss: 'Dismiss',
+      confirmDismissTitle: 'Dismiss this endorsement?',
+      confirmDismissDesc: 'This permanently removes the endorsement. This can\'t be undone.',
+      confirmDismissCta: 'Yes, dismiss',
+      actionError: 'Couldn\'t update the endorsement. Please try again.',
+      submittedOn: 'Submitted {{date}}',
+      anonymous: 'A family',
     },
     verification: {
       whyRequired:

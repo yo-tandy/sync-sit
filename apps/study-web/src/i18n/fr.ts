@@ -186,6 +186,7 @@ export default {
     scheduleTitle: 'Disponibilités',
     verificationTitle: "Vérification d'identité",
     requestsTitle: 'Demandes',
+    endorsementsTitle: 'Recommandations',
     dashboard: {
       greeting: 'Gérez votre profil de tuteur et vos disponibilités.',
       bannerNotSubmittedTitle: 'Vérifiez votre identité',
@@ -224,6 +225,8 @@ export default {
       verificationCardDesc: "Gérez votre vérification d'identité.",
       requestsCardTitle: 'Demandes de contact',
       requestsCardDesc: 'Les familles qui souhaitent travailler avec vous.',
+      endorsementsCardTitle: 'Recommandations',
+      endorsementsCardDesc: 'Les avis des familles avec qui vous avez travaillé.',
     },
     requests: {
       title: 'Demandes de contact',
@@ -243,6 +246,23 @@ export default {
         accepted: 'Acceptée',
         declined: 'Refusée',
       },
+    },
+    endorsements: {
+      title: 'Recommandations',
+      empty:
+        'Aucune recommandation pour le moment — les familles avec qui vous avez travaillé peuvent vous recommander, et elles apparaîtront ici pour votre validation.',
+      pendingTitle: 'En attente de votre validation',
+      pendingHint:
+        'Acceptez pour publier une recommandation sur votre profil de recherche, ou rejetez-la. Le rejet est définitif.',
+      publishedTitle: 'Publiées',
+      accept: 'Accepter',
+      dismiss: 'Rejeter',
+      confirmDismissTitle: 'Rejeter cette recommandation ?',
+      confirmDismissDesc: 'Cela supprime définitivement la recommandation. Cette action est irréversible.',
+      confirmDismissCta: 'Oui, rejeter',
+      actionError: 'Impossible de mettre à jour la recommandation. Veuillez réessayer.',
+      submittedOn: 'Soumise le {{date}}',
+      anonymous: 'Une famille',
     },
     verification: {
       whyRequired:
