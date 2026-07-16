@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { screen } from '@testing-library/react';
+import { screen, fireEvent, waitFor } from '@testing-library/react';
 import { renderWithProviders } from '@/__tests__/test-utils';
 
 // Hoisted, test-controllable state. RequestsPage reads studyContactRequests
@@ -8,12 +8,15 @@ import { renderWithProviders } from '@/__tests__/test-utils';
 const h = vi.hoisted(() => ({
   auth: { userDoc: null as unknown },
   requests: [] as Record<string, unknown>[],
+  // references docs (this family's submitted endorsements).
+  refs: [] as Record<string, unknown>[],
   where: vi.fn((field: string, op: string, val: unknown) => ({ where: [field, op, val] })),
   orderBy: vi.fn((field: string, dir: string) => ({ orderBy: [field, dir] })),
   getDocs: vi.fn(),
+  callable: vi.fn(),
 }));
 
-vi.mock('@/config/firebase', () => ({ db: {} }));
+vi.mock('@/config/firebase', () => ({ db: {}, functions: {} }));
 
 vi.mock('firebase/firestore', () => ({
   collection: (_db: unknown, ...path: string[]) => ({ path: path.join('/') }),
@@ -23,6 +26,10 @@ vi.mock('firebase/firestore', () => ({
   getDocs: (...args: unknown[]) => h.getDocs(...args),
 }));
 
+vi.mock('firebase/functions', () => ({
+  httpsCallable: (_fns: unknown, name: string) => (payload: unknown) => h.callable(name, payload),
+}));
+
 vi.mock('@/stores/authStore', () => ({
   useAuthStore: () => h.auth,
 }));
@@ -30,7 +37,8 @@ vi.mock('@/stores/authStore', () => ({
 import { RequestsPage } from '../RequestsPage';
 
 function ts(iso: string) {
-  return { seconds: 0, nanoseconds: 0, toDate: () => new Date(iso) };
+  const date = new Date(iso);
+  return { seconds: Math.floor(date.getTime() / 1000), nanoseconds: 0, toDate: () => date };
 }
 
 function reqDoc(overrides: Record<string, unknown> = {}) {
@@ -47,18 +55,44 @@ function reqDoc(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function refDoc(overrides: Record<string, unknown> = {}) {
+  return {
+    referenceId: 'e1',
+    tutorUserId: 't1',
+    appSource: 'study',
+    submittedByFamilyId: 'fam1',
+    refName: 'Dana Weiss',
+    referenceText: 'Alex was patient and my daughter improved.',
+    subject: 'math',
+    status: 'private',
+    createdAt: ts('2026-07-01'),
+    ...overrides,
+  };
+}
+
 function reset() {
   h.auth.userDoc = {
     uid: 'p1',
+    firstName: 'Dana',
+    lastName: 'Weiss',
     profiles: { parent: { enrollmentComplete: true, familyId: 'fam1' } },
   };
   h.requests = [];
+  h.refs = [];
   h.where.mockClear();
   h.orderBy.mockClear();
   h.getDocs.mockReset();
-  h.getDocs.mockImplementation(() =>
-    Promise.resolve({ docs: h.requests.map((r) => ({ id: r.requestId, data: () => r })) }),
-  );
+  // Route by collection path: studyContactRequests => requests, references =>
+  // this family's submitted endorsements.
+  h.getDocs.mockImplementation((q: { query: { path: string }[] }) => {
+    const path = q?.query?.[0]?.path;
+    const rows = path === 'references' ? h.refs : h.requests;
+    return Promise.resolve({
+      docs: rows.map((r) => ({ id: r.referenceId ?? r.requestId, data: () => r })),
+    });
+  });
+  h.callable.mockReset();
+  h.callable.mockResolvedValue({ data: { referenceId: 'e1' } });
 }
 
 describe('family RequestsPage', () => {
@@ -83,9 +117,11 @@ describe('family RequestsPage', () => {
     ];
     renderWithProviders(<RequestsPage />);
 
-    expect(await screen.findByText(/Pending Tutor/)).toBeInTheDocument();
-    expect(screen.getByText(/Accepted Tutor/)).toBeInTheDocument();
-    expect(screen.getByText(/Declined Tutor/)).toBeInTheDocument();
+    // Exact strings: the accepted row now also renders an "Endorse Accepted
+    // Tutor" button, so a /Accepted Tutor/ substring match would be ambiguous.
+    expect(await screen.findByText('Pending Tutor')).toBeInTheDocument();
+    expect(screen.getByText('Accepted Tutor')).toBeInTheDocument();
+    expect(screen.getByText('Declined Tutor')).toBeInTheDocument();
   });
 
   it('renders subject taxonomy label + level for a row', async () => {
@@ -127,5 +163,89 @@ describe('family RequestsPage', () => {
     renderWithProviders(<RequestsPage />);
     await screen.findByText(/Alex Roy/);
     expect(screen.getByText(/2026/)).toBeInTheDocument();
+  });
+
+  // ── Endorse entry point (accepted rows) ──
+
+  it('accepted rows expose an "Endorse {tutorName}" button; other statuses do not', async () => {
+    h.requests = [
+      reqDoc({ requestId: 'r1', tutorName: 'Accepted Tutor', status: 'accepted' }),
+      reqDoc({ requestId: 'r2', tutorName: 'Pending Tutor', status: 'pending' }),
+    ];
+    renderWithProviders(<RequestsPage />);
+    expect(await screen.findByRole('button', { name: /endorse accepted tutor/i })).toBeInTheDocument();
+    // Only the accepted row gets an endorse button.
+    expect(screen.getAllByRole('button', { name: /endorse/i })).toHaveLength(1);
+  });
+
+  it('endorsing a tutor opens the dialog, submits, then shows a disabled "Endorsed" state', async () => {
+    h.requests = [reqDoc({ status: 'accepted', tutorName: 'Alex Roy', tutorUserId: 't1', subject: 'math' })];
+    renderWithProviders(<RequestsPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /endorse alex roy/i }));
+
+    // Dialog open — fill the endorsement and submit.
+    fireEvent.change(await screen.findByLabelText(/your endorsement/i), {
+      target: { value: 'Alex was patient and my daughter improved a lot.' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /submit/i }));
+
+    await waitFor(() =>
+      expect(h.callable).toHaveBeenCalledWith(
+        'submitTutorEndorsement',
+        expect.objectContaining({ tutorUserId: 't1', refName: 'Dana Weiss', subject: 'math' }),
+      ),
+    );
+
+    // The row's endorse button becomes a disabled "Endorsed" state.
+    const endorsed = await screen.findByRole('button', { name: /^endorsed$/i });
+    expect(endorsed).toBeDisabled();
+    expect(screen.queryByRole('button', { name: /endorse alex roy/i })).not.toBeInTheDocument();
+  });
+
+  // ── "Your endorsements" section ──
+
+  it('queries references for this family\'s study endorsements (equality-only)', async () => {
+    h.refs = [refDoc()];
+    renderWithProviders(<RequestsPage />);
+    await screen.findByText(/Alex was patient/);
+
+    expect(h.where).toHaveBeenCalledWith('submittedByFamilyId', '==', 'fam1');
+    expect(h.where).toHaveBeenCalledWith('appSource', '==', 'study');
+    const refsCall = h.getDocs.mock.calls.find(
+      (c) => (c[0] as { query: { path: string }[] }).query[0].path === 'references',
+    );
+    expect(refsCall).toBeTruthy();
+  });
+
+  it('renders submitted endorsements with a status chip per status', async () => {
+    h.refs = [
+      refDoc({ referenceId: 'e1', referenceText: 'Pending endorsement', status: 'private' }),
+      refDoc({ referenceId: 'e2', referenceText: 'Published endorsement', status: 'approved' }),
+      refDoc({ referenceId: 'e3', referenceText: 'Removed endorsement', status: 'removed' }),
+    ];
+    renderWithProviders(<RequestsPage />);
+
+    // All three are shown to the family (unlike the tutor side, removed is visible).
+    expect(await screen.findByText(/Pending endorsement/)).toBeInTheDocument();
+    expect(screen.getByText(/Published endorsement/)).toBeInTheDocument();
+    expect(screen.getByText(/Removed endorsement/)).toBeInTheDocument();
+  });
+
+  it('client-sorts submitted endorsements newest-first (no composite index)', async () => {
+    h.refs = [
+      refDoc({ referenceId: 'old', referenceText: 'Older endorsement', createdAt: ts('2026-01-01') }),
+      refDoc({ referenceId: 'new', referenceText: 'Newer endorsement', createdAt: ts('2026-06-01') }),
+    ];
+    renderWithProviders(<RequestsPage />);
+    await screen.findByText(/Newer endorsement/);
+
+    const newer = screen.getByText(/Newer endorsement/);
+    const older = screen.getByText(/Older endorsement/);
+    // Newer appears before older in DOM order.
+    expect(newer.compareDocumentPosition(older) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // The endorsements query does NOT use orderBy (equality-only, sorted client-side);
+    // the requests query is the only orderBy caller.
+    expect(h.orderBy).toHaveBeenCalledTimes(1);
   });
 });

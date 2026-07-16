@@ -5,8 +5,13 @@ import { collection, query, where, orderBy, getDocs } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { getParentProfile } from '@ejm/shared-core';
-import type { StudyContactRequestDoc, StudyContactRequestStatus } from '@ejm/study-core';
-import { Card, Badge, TopNav, Spinner } from '@ejm/shared-ui';
+import type {
+  StudyContactRequestDoc,
+  StudyContactRequestStatus,
+  TutorEndorsementDoc,
+} from '@ejm/study-core';
+import { Card, Button, Badge, TopNav, Spinner } from '@ejm/shared-ui';
+import { EndorseTutorDialog } from '@/components/family/EndorseTutorDialog';
 
 /**
  * Family-side list of the contact requests this family has sent. Reads
@@ -27,12 +32,35 @@ const STATUS_VARIANT: Record<StudyContactRequestStatus, 'amber' | 'green' | 'gra
   declined: 'gray',
 };
 
+/** Endorsement status → chip variant for the "Your endorsements" section. */
+const ENDORSEMENT_VARIANT: Record<string, 'amber' | 'green' | 'gray'> = {
+  private: 'amber',
+  approved: 'green',
+  published: 'green',
+  removed: 'gray',
+};
+
+/** Epoch seconds for a createdAt that may be a Timestamp or a plain Date. */
+function createdAtSeconds(ts: TutorEndorsementDoc['createdAt']): number {
+  const raw: unknown = ts;
+  if (raw instanceof Date) return raw.getTime() / 1000;
+  const seconds = (raw as { seconds?: number })?.seconds;
+  return typeof seconds === 'number' ? seconds : 0;
+}
+
 export function RequestsPage() {
   const { t, i18n } = useTranslation();
   const { userDoc } = useAuthStore();
   const familyId = getParentProfile(userDoc)?.familyId ?? null;
+  const defaultRefName = `${userDoc?.firstName ?? ''} ${userDoc?.lastName ?? ''}`.trim();
 
   const [requests, setRequests] = useState<StudyContactRequestDoc[] | null>(null);
+  const [endorsements, setEndorsements] = useState<TutorEndorsementDoc[]>([]);
+  // The accepted request whose endorse dialog is open, or null.
+  const [endorsing, setEndorsing] = useState<StudyContactRequestDoc | null>(null);
+  // tutorUserIds endorsed this session (submit succeeded or already-exists) — the
+  // matching accepted row shows a disabled "Endorsed" state (persisted nothing).
+  const [endorsedTutors, setEndorsedTutors] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (!familyId) return;
@@ -55,6 +83,36 @@ export function RequestsPage() {
       cancelled = true;
     };
   }, [familyId]);
+
+  // This family's submitted endorsements for the "Your endorsements" section.
+  // Equality-only (submittedByFamilyId + appSource) — no composite needed — so we
+  // sort newest-first client-side.
+  useEffect(() => {
+    if (!familyId) return;
+    let cancelled = false;
+    getDocs(
+      query(
+        collection(db, 'references'),
+        where('submittedByFamilyId', '==', familyId),
+        where('appSource', '==', 'study'),
+      ),
+    )
+      .then((snap) => {
+        if (cancelled) return;
+        const rows = snap.docs.map((d) => d.data() as TutorEndorsementDoc);
+        rows.sort((a, b) => createdAtSeconds(b.createdAt) - createdAtSeconds(a.createdAt));
+        setEndorsements(rows);
+      })
+      .catch(() => {
+        if (!cancelled) setEndorsements([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [familyId]);
+
+  const markEndorsed = (tutorUserId: string) =>
+    setEndorsedTutors((prev) => new Set(prev).add(tutorUserId));
 
   const formatDate = (ts: StudyContactRequestDoc['createdAt']): string => {
     const raw: unknown = ts;
@@ -123,14 +181,25 @@ export function RequestsPage() {
                       </div>
 
                       {r.status === 'accepted' && (
-                        <Link
-                          to={`/family/search?subject=${encodeURIComponent(
-                            r.subject,
-                          )}&level=${encodeURIComponent(r.level)}`}
-                          className="mt-3 inline-block text-xs font-semibold text-red-600 hover:underline"
-                        >
-                          {t('family.requests.viewContact')}
-                        </Link>
+                        <div className="mt-3 flex flex-wrap items-center gap-3">
+                          <Link
+                            to={`/family/search?subject=${encodeURIComponent(
+                              r.subject,
+                            )}&level=${encodeURIComponent(r.level)}`}
+                            className="text-xs font-semibold text-red-600 hover:underline"
+                          >
+                            {t('family.requests.viewContact')}
+                          </Link>
+                          {endorsedTutors.has(r.tutorUserId) ? (
+                            <Button size="sm" variant="outline" disabled>
+                              {t('family.requests.endorsed')}
+                            </Button>
+                          ) : (
+                            <Button size="sm" variant="outline" onClick={() => setEndorsing(r)}>
+                              {t('family.requests.endorse', { name: r.tutorName })}
+                            </Button>
+                          )}
+                        </div>
                       )}
                     </Card>
                   ))}
@@ -138,7 +207,44 @@ export function RequestsPage() {
               </div>
             );
           })}
+
+        {/* ── Your endorsements ── */}
+        {familyId != null && endorsements.length > 0 && (
+          <div className="mb-6">
+            <h2 className="mb-2 text-sm font-semibold text-gray-700">
+              {t('family.requests.endorsementsTitle')}
+            </h2>
+            <div className="space-y-3">
+              {endorsements.map((e) => (
+                <Card key={e.referenceId}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm text-gray-800">{e.referenceText}</p>
+                      {e.refName && (
+                        <p className="mt-1 text-xs text-gray-500">{e.refName}</p>
+                      )}
+                    </div>
+                    <Badge variant={ENDORSEMENT_VARIANT[e.status] ?? 'gray'}>
+                      {t(`family.requests.endorsementStatus.${e.status}`)}
+                    </Badge>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
+
+      {endorsing && (
+        <EndorseTutorDialog
+          tutorUserId={endorsing.tutorUserId}
+          tutorName={endorsing.tutorName}
+          subject={endorsing.subject}
+          defaultRefName={defaultRefName}
+          onClose={() => setEndorsing(null)}
+          onEndorsed={() => markEndorsed(endorsing.tutorUserId)}
+        />
+      )}
     </div>
   );
 }
