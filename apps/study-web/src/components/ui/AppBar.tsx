@@ -9,6 +9,7 @@ import {
   UserIcon,
   CalendarIcon,
   ClipboardListIcon,
+  BellIcon,
   InfoIcon,
   ShieldIcon,
   FileTextIcon,
@@ -72,6 +73,7 @@ export function AppBar() {
             <p className="text-xs text-gray-500">{userDoc?.email}</p>
           </div>
 
+          <MenuItem icon={<BellIcon className="h-5 w-5" />} label={t('tutor.requestsTitle')} to="/tutor/requests" onNavigate={() => setMenuOpen(false)} />
           <MenuItem icon={<UserIcon className="h-5 w-5" />} label={t('tutor.accountTitle')} to="/tutor/account" onNavigate={() => setMenuOpen(false)} />
           <MenuItem icon={<ClipboardListIcon className="h-5 w-5" />} label={t('tutor.subjectsTitle')} to="/tutor/subjects" onNavigate={() => setMenuOpen(false)} />
           <MenuItem icon={<CalendarIcon className="h-5 w-5" />} label={t('tutor.scheduleTitle')} to="/tutor/schedule" onNavigate={() => setMenuOpen(false)} />

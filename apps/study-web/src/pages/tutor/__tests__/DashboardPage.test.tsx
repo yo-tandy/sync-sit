@@ -13,15 +13,23 @@ const h = vi.hoisted(() => ({
   },
   // What getDoc(schedules/uid) resolves to. null => doc absent (no slots).
   scheduleData: null as { weekly?: Record<string, boolean[]> } | null,
+  // studyContactRequests docs for the pending-count card.
+  requests: [] as Record<string, unknown>[],
   updateDoc: vi.fn(() => Promise.resolve()),
   getDoc: vi.fn(),
+  where: vi.fn((field: string, op: string, val: unknown) => ({ where: [field, op, val] })),
+  getDocs: vi.fn(),
 }));
 
 vi.mock('@/config/firebase', () => ({ db: {} }));
 
 vi.mock('firebase/firestore', () => ({
   doc: (_db: unknown, ...path: string[]) => ({ path: path.join('/') }),
+  collection: (_db: unknown, ...path: string[]) => ({ path: path.join('/') }),
+  query: (...args: unknown[]) => ({ query: args }),
+  where: (...args: [string, string, unknown]) => h.where(...args),
   getDoc: (...args: unknown[]) => h.getDoc(...args),
+  getDocs: (...args: unknown[]) => h.getDocs(...args),
   updateDoc: (...args: unknown[]) => h.updateDoc(...args),
   serverTimestamp: () => 'ts',
 }));
@@ -41,9 +49,15 @@ function reset() {
   h.auth.userDoc = null;
   h.auth.refreshUserDoc.mockClear();
   h.scheduleData = null;
+  h.requests = [];
   h.updateDoc.mockClear();
   h.getDoc.mockImplementation(() =>
     Promise.resolve({ exists: () => h.scheduleData != null, data: () => h.scheduleData })
+  );
+  h.where.mockClear();
+  h.getDocs.mockReset();
+  h.getDocs.mockImplementation(() =>
+    Promise.resolve({ docs: h.requests.map((r) => ({ id: r.requestId, data: () => r })) }),
   );
 }
 
@@ -187,5 +201,22 @@ describe('tutor DashboardPage', () => {
     expect(screen.getByRole('link', { name: /subjects/i })).toHaveAttribute('href', '/tutor/subjects');
     expect(screen.getByRole('link', { name: /availability|schedule/i })).toHaveAttribute('href', '/tutor/schedule');
     expect(screen.getByRole('link', { name: /account/i })).toHaveAttribute('href', '/tutor/account');
+  });
+
+  // ── Pending-requests card ──
+
+  it('renders a pending-requests card with the count, linking to /tutor/requests', async () => {
+    h.auth.userDoc = tutor({ enrollmentComplete: true, verification: { identityStatus: 'approved' } });
+    h.requests = [
+      { requestId: 'r1', tutorUserId: 't1', status: 'pending' },
+      { requestId: 'r2', tutorUserId: 't1', status: 'pending' },
+      { requestId: 'r3', tutorUserId: 't1', status: 'accepted' },
+    ];
+    renderWithProviders(<DashboardPage />);
+
+    const link = await screen.findByRole('link', { name: /requests/i });
+    expect(link).toHaveAttribute('href', '/tutor/requests');
+    expect(h.where).toHaveBeenCalledWith('tutorUserId', '==', 't1');
+    expect(await screen.findByText('2')).toBeInTheDocument();
   });
 });

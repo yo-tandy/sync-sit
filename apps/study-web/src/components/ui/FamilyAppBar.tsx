@@ -12,6 +12,7 @@ import {
   ShieldIcon,
   FileTextIcon,
   MailIcon,
+  BellIcon,
   LogOutIcon,
 } from '@ejm/shared-ui';
 
@@ -75,6 +76,7 @@ export function FamilyAppBar() {
             <p className="text-xs text-gray-500">{userDoc?.email}</p>
           </div>
 
+          <MenuItem icon={<BellIcon className="h-5 w-5" />} label={t('family.requestsTitle')} to="/family/requests" onNavigate={() => setMenuOpen(false)} />
           <MenuItem icon={<UserIcon className="h-5 w-5" />} label={t('family.accountTitle')} to="/family/account" onNavigate={() => setMenuOpen(false)} />
           <MenuItem icon={<SettingsIcon className="h-5 w-5" />} label={t('family.settingsTitle')} to="/family/settings" onNavigate={() => setMenuOpen(false)} />
 

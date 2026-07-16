@@ -1,7 +1,16 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
-import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import {
+  doc,
+  getDoc,
+  updateDoc,
+  serverTimestamp,
+  collection,
+  query,
+  where,
+  getDocs,
+} from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { getTutorProfile } from '@ejm/study-core';
@@ -10,6 +19,8 @@ import {
   Card,
   Button,
   Spinner,
+  Badge,
+  BellIcon,
   CalendarIcon,
   ChevronRightIcon,
   ClipboardListIcon,
@@ -44,6 +55,7 @@ export function DashboardPage() {
   const [hasSlots, setHasSlots] = useState(false);
   const [scheduleLoaded, setScheduleLoaded] = useState(false);
   const [toggling, setToggling] = useState(false);
+  const [pendingRequests, setPendingRequests] = useState(0);
 
   useEffect(() => {
     if (!uid) return;
@@ -62,6 +74,25 @@ export function DashboardPage() {
       })
       .catch(() => {
         if (!cancelled) setScheduleLoaded(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [uid]);
+
+  // Pending contact-request count for the inbox card. Queried by tutorUserId
+  // only (single-field index) and counted client-side — see RequestsPage for
+  // the index rationale.
+  useEffect(() => {
+    if (!uid) return;
+    let cancelled = false;
+    getDocs(query(collection(db, 'studyContactRequests'), where('tutorUserId', '==', uid)))
+      .then((snap) => {
+        if (cancelled) return;
+        setPendingRequests(snap.docs.filter((d) => d.data()?.status === 'pending').length);
+      })
+      .catch(() => {
+        /* leave count at 0 */
       });
     return () => {
       cancelled = true;
@@ -142,6 +173,25 @@ export function DashboardPage() {
           </Button>
         </Card>
       )}
+
+      {/* ── Contact requests inbox card ── */}
+      <Link
+        to="/tutor/requests"
+        aria-label={t('tutor.dashboard.requestsCardTitle')}
+        className="mb-4 block"
+      >
+        <Card interactive className="flex items-center gap-3 py-4">
+          <BellIcon className="h-6 w-6 text-red-600" />
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-gray-900">
+              {t('tutor.dashboard.requestsCardTitle')}
+            </p>
+            <p className="text-xs text-gray-500">{t('tutor.dashboard.requestsCardDesc')}</p>
+          </div>
+          {pendingRequests > 0 && <Badge variant="red">{pendingRequests}</Badge>}
+          <ChevronRightIcon className="h-5 w-5 text-gray-400" />
+        </Card>
+      </Link>
 
       {/* ── Upcoming sessions (empty state — booking not built yet) ── */}
       <div className="mb-6">

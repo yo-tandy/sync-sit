@@ -25,6 +25,7 @@ import { AccountPage } from '@/pages/tutor/AccountPage';
 import { SubjectsPage } from '@/pages/tutor/SubjectsPage';
 import { SchedulePage } from '@/pages/tutor/SchedulePage';
 import { VerificationPage } from '@/pages/tutor/VerificationPage';
+import { RequestsPage as TutorRequestsPage } from '@/pages/tutor/RequestsPage';
 
 // Family portal (stubs in this PR — real pages land in Tasks 2-3; the search
 // page is a "coming soon" stub replaced by PR C)
@@ -32,6 +33,7 @@ import { DashboardPage as FamilyDashboardPage } from '@/pages/family/DashboardPa
 import { AccountPage as FamilyAccountPage } from '@/pages/family/AccountPage';
 import { FamilySettingsPage } from '@/pages/family/FamilySettingsPage';
 import { SearchPage as FamilySearchPage } from '@/pages/family/SearchPage';
+import { RequestsPage as FamilyRequestsPage } from '@/pages/family/RequestsPage';
 
 const SUPPORT_EMAIL = 'support@sync-study.com';
 const BRAND = 'Sync/Study';
@@ -67,6 +69,7 @@ export const router = createBrowserRouter([
       { path: '/tutor/subjects', element: <SubjectsPage /> },
       { path: '/tutor/schedule', element: <SchedulePage /> },
       { path: '/tutor/verification', element: <VerificationPage /> },
+      { path: '/tutor/requests', element: <TutorRequestsPage /> },
     ],
   },
   {
@@ -76,6 +79,7 @@ export const router = createBrowserRouter([
       { path: '/family/account', element: <FamilyAccountPage /> },
       { path: '/family/settings', element: <FamilySettingsPage /> },
       { path: '/family/search', element: <FamilySearchPage /> },
+      { path: '/family/requests', element: <FamilyRequestsPage /> },
     ],
   },
 ]);
