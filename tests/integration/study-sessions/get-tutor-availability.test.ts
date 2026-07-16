@@ -61,6 +61,11 @@ describe('getTutorAvailability', () => {
     await Promise.all(overrides.docs.map((d) => d.ref.delete()));
     const sessions = await db.collection('study-sessions').get();
     await Promise.all(sessions.docs.map((d) => d.ref.delete()));
+    // Reset any holiday config a prior test set on tutor2's schedule doc.
+    await db.collection('schedules').doc(seed.tutor2.uid).update({
+      holidayMode: FieldValue.delete(),
+      holidaySchedules: FieldValue.delete(),
+    });
   });
 
   // ── Gate negatives ──
@@ -126,6 +131,29 @@ describe('getTutorAvailability', () => {
     ).rejects.toMatchObject({ code: 'INVALID_ARGUMENT' });
   });
 
+  it('rejects a calendar-impossible month with invalid-argument', async () => {
+    await expect(
+      callFunction('getTutorAvailability', { tutorUserId: seed.tutor2.uid, startDate: '2026-13-01', endDate: '2026-13-01' }, parent1Token),
+    ).rejects.toMatchObject({ code: 'INVALID_ARGUMENT' });
+  });
+
+  it('rejects a calendar-impossible day with invalid-argument', async () => {
+    await expect(
+      callFunction('getTutorAvailability', { tutorUserId: seed.tutor2.uid, startDate: '2026-02-30', endDate: '2026-02-30' }, parent1Token),
+    ).rejects.toMatchObject({ code: 'INVALID_ARGUMENT' });
+  });
+
+  it('accepts a span of exactly 28 days but rejects 29', async () => {
+    // 2027-06-01 → 2027-06-29 is a 28-day difference (29 dates); one day more is 29.
+    const ok = await callFunction<AvailabilityResponse>(
+      'getTutorAvailability', { tutorUserId: seed.tutor2.uid, startDate: '2027-06-01', endDate: '2027-06-29' }, parent1Token,
+    );
+    expect(ok.dates).toHaveLength(29);
+    await expect(
+      callFunction('getTutorAvailability', { tutorUserId: seed.tutor2.uid, startDate: '2027-06-01', endDate: '2027-06-30' }, parent1Token),
+    ).rejects.toMatchObject({ code: 'INVALID_ARGUMENT' });
+  });
+
   // ── Grid correctness ──
 
   it("returns tutor2's Monday grid (16:00–20:00 available)", async () => {
@@ -182,6 +210,38 @@ describe('getTutorAvailability', () => {
     const slots = res.dates[0].slots;
     expect(slots[50]).toBe(true);
     expect(slots[64]).toBe(false); // weekly 16:00 no longer applies
+  });
+
+  // ── Holiday-period grid substitution ──
+
+  it('substitutes the holiday grid for dates inside a holiday period', async () => {
+    const db = getDb();
+    // A holiday grid distinct from tutor2's weekly Monday (16:00–20:00): only 07:30.
+    const holidayGrid = new Array(96).fill(false);
+    holidayGrid[30] = true; // 07:30
+    await db.collection('schedules').doc(seed.tutor2.uid).update({
+      holidayMode: 'different',
+      holidaySchedules: { TestBreak: { mon: holidayGrid } },
+    });
+    // June 2027 falls in school year 2026-2027; the period covers only MON.
+    await db.collection('holidays').doc('2026-2027').set({
+      schoolYear: '2026-2027', zone: 'C',
+      periods: [{ name: 'TestBreak', startDate: MON, endDate: MON }],
+      updatedAt: new Date(), updatedByUserId: seed.admin.uid,
+    });
+
+    const res = await callFunction<AvailabilityResponse>(
+      'getTutorAvailability', { tutorUserId: seed.tutor2.uid, startDate: SUN, endDate: MON }, parent1Token,
+    );
+    const mon = res.dates.find((d) => d.date === MON)!.slots;
+    const sun = res.dates.find((d) => d.date === SUN)!.slots;
+    // MON is inside the period → holiday grid, NOT the weekly 16:00–20:00.
+    expect(mon[30]).toBe(true);
+    expect(mon[64]).toBe(false);
+    // SUN is outside the period → weekly Sunday grid (10:00–18:00).
+    expect(sun[40]).toBe(true);
+
+    await db.collection('holidays').doc('2026-2027').delete();
   });
 
   // ── Confirmed-session subtraction (defense-in-depth) ──
