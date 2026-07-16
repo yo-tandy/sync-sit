@@ -34,11 +34,17 @@
       "import": "./src/admin/*.ts",
       "require": "./dist/admin/*.js",
       "types": "./src/admin/*.ts"
+    },
+    "./scheduled/*.js": {
+      "import": "./src/scheduled/*.ts",
+      "require": "./dist/scheduled/*.js",
+      "types": "./src/scheduled/*.ts"
     }
   },
   "scripts": {
     "build": "tsc -p tsconfig.cjs.json",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@ejm/shared-core": "workspace:*",
