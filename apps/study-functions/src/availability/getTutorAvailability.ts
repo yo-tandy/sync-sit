@@ -10,6 +10,8 @@ import type { StudyUser, TutorProfile, LocationPref } from '@ejm/study-core';
 import {
   computeDayAvailability,
   getSchoolYearsInRange,
+  incrementDate,
+  dayOfWeek,
   type ConfirmedBlock,
   type DayOverride,
 } from '@ejm/study-core';
@@ -18,53 +20,10 @@ import { getTutorAvailabilitySchema } from '../validation/availability.js';
 /** Notice window: families cannot book within this many hours of "now". */
 const NOTICE_HOURS = 24;
 
-// ── Pure calendar helpers ────────────────────────────────────────────────────
-// Local to this callable so it needs no cross-package date dependency. Both are
-// pure Y-M-D integer arithmetic — never epoch-ms stepping — so they are exact
-// across Europe/Paris DST transitions (the invariant the study crons share).
-
-const DAYS_IN_MONTH = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
-
-function isLeapYear(year: number): boolean {
-  return (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
-}
-
-/** Add one calendar day to a "YYYY-MM-DD" string, rolling month/year over. */
-function incrementDate(date: string): string {
-  let [year, month, day] = date.split('-').map(Number);
-  const daysThisMonth =
-    month === 2 && isLeapYear(year) ? 29 : DAYS_IN_MONTH[month - 1];
-  day += 1;
-  if (day > daysThisMonth) {
-    day = 1;
-    month += 1;
-    if (month > 12) {
-      month = 1;
-      year += 1;
-    }
-  }
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${year}-${pad(month)}-${pad(day)}`;
-}
-
-/** Weekday key for a "YYYY-MM-DD" date via Sakamoto's algorithm (pure int). */
-function dayOfWeek(date: string): DayOfWeek {
-  const [year, month, day] = date.split('-').map(Number);
-  const t = [0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4];
-  const y = month < 3 ? year - 1 : year;
-  const sundayZero =
-    (y +
-      Math.floor(y / 4) -
-      Math.floor(y / 100) +
-      Math.floor(y / 400) +
-      t[month - 1] +
-      day) %
-    7; // 0 = Sunday
-  const keys: DayOfWeek[] = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
-  return keys[sundayZero];
-}
-
-/** Every "YYYY-MM-DD" date from startDate to endDate inclusive. */
+/**
+ * Every "YYYY-MM-DD" date from startDate to endDate inclusive. Composes
+ * study-core's pure incrementDate — no epoch-ms stepping, DST-safe.
+ */
 function eachDateInRange(startDate: string, endDate: string): string[] {
   const dates: string[] = [];
   let cursor = startDate;

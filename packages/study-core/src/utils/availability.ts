@@ -39,9 +39,10 @@ function parseDate(date: string): Ymd {
 
 /**
  * Add one calendar day to a "YYYY-MM-DD" string by incrementing the day field
- * and rolling month/year over — pure calendar arithmetic, DST-immune.
+ * and rolling month/year over — pure calendar arithmetic, DST-immune. Exported
+ * so backend callables can iterate date ranges without carrying their own copy.
  */
-function incrementDate(date: string): string {
+export function incrementDate(date: string): string {
   let { year, month, day } = parseDate(date);
   const daysThisMonth =
     month === 2 && isLeapYear(year) ? 29 : DAYS_IN_MONTH[month - 1];
@@ -59,9 +60,10 @@ function incrementDate(date: string): string {
 
 /**
  * Day of week for a "YYYY-MM-DD" date via Sakamoto's algorithm — pure integer
- * math, no Date object, no timezone. Returns our 'mon'..'sun' key.
+ * math, no Date object, no timezone. Returns our 'mon'..'sun' key. Exported so
+ * backend callables can index a weekly grid without carrying their own copy.
  */
-function dayOfWeek(date: string): DayOfWeek {
+export function dayOfWeek(date: string): DayOfWeek {
   const { year, month, day } = parseDate(date);
   const t = [0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4];
   const y = month < 3 ? year - 1 : year;
