@@ -35,7 +35,10 @@ export function RequestsPage() {
   const [requests, setRequests] = useState<StudyContactRequestDoc[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [declineTarget, setDeclineTarget] = useState<StudyContactRequestDoc | null>(null);
-  const [acting, setActing] = useState(false);
+  // requestId currently awaiting the callable, or null. A row is "in flight"
+  // while its id is here — its actions are disabled and its status is NOT yet
+  // changed (see respond).
+  const [actingId, setActingId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!uid) return;
@@ -56,37 +59,43 @@ export function RequestsPage() {
   }, [uid]);
 
   const formatDate = (ts: StudyContactRequestDoc['createdAt']): string => {
-    try {
-      return ts.toDate().toLocaleDateString(i18n.language === 'fr' ? 'fr-FR' : 'en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-      });
-    } catch {
-      return '';
-    }
+    const raw: unknown = ts;
+    // Emulator-written rows can arrive as a plain Date; production Firestore
+    // returns a Timestamp with .toDate(). Handle both, then fall back to ''
+    // (mirrors the family RequestsPage).
+    const date =
+      raw instanceof Date
+        ? raw
+        : raw && typeof (raw as { toDate?: unknown }).toDate === 'function'
+          ? (raw as { toDate: () => Date }).toDate()
+          : null;
+    if (!date) return '';
+    return date.toLocaleDateString(i18n.language === 'fr' ? 'fr-FR' : 'en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
   };
 
   const respond = async (req: StudyContactRequestDoc, action: 'accept' | 'decline') => {
-    const previous = req.status;
-    const optimistic: StudyContactRequestStatus = action === 'accept' ? 'accepted' : 'declined';
+    // NON-OPTIMISTIC: accepted-state is consent, so we must never display it
+    // before the backend confirms. Mark the row in-flight, and apply the status
+    // change ONLY after the callable resolves; on failure the row stays pending
+    // and re-enables. (A crashed/never-settling worker leaves the row pending,
+    // matching Firestore — no phantom "accepted".)
+    const next: StudyContactRequestStatus = action === 'accept' ? 'accepted' : 'declined';
     setError(null);
-    setActing(true);
-    // Optimistic flip.
-    setRequests((rs) =>
-      (rs ?? []).map((r) => (r.requestId === req.requestId ? { ...r, status: optimistic } : r)),
-    );
+    setActingId(req.requestId);
     try {
       const fn = httpsCallable(functions, 'respondToTutorContactRequest');
       await fn({ requestId: req.requestId, action });
-    } catch {
-      // Rollback + surface the error.
       setRequests((rs) =>
-        (rs ?? []).map((r) => (r.requestId === req.requestId ? { ...r, status: previous } : r)),
+        (rs ?? []).map((r) => (r.requestId === req.requestId ? { ...r, status: next } : r)),
       );
+    } catch {
       setError(t('tutor.requests.actionError'));
     } finally {
-      setActing(false);
+      setActingId(null);
     }
   };
 
@@ -135,13 +144,17 @@ export function RequestsPage() {
                     {t('tutor.requests.sentOn', { date: formatDate(r.createdAt) })}
                   </p>
                   <div className="mt-3 flex gap-2">
-                    <Button size="sm" disabled={acting} onClick={() => respond(r, 'accept')}>
+                    <Button
+                      size="sm"
+                      disabled={actingId === r.requestId}
+                      onClick={() => respond(r, 'accept')}
+                    >
                       {t('tutor.requests.accept')}
                     </Button>
                     <Button
                       size="sm"
                       variant="outline"
-                      disabled={acting}
+                      disabled={actingId === r.requestId}
                       onClick={() => setDeclineTarget(r)}
                     >
                       {t('tutor.requests.decline')}
@@ -191,7 +204,7 @@ export function RequestsPage() {
           <Button
             variant="outline"
             className="flex-1"
-            disabled={acting}
+            disabled={actingId !== null}
             onClick={() => {
               const target = declineTarget;
               setDeclineTarget(null);

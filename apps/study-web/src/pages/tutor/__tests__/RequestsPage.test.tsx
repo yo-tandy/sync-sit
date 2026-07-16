@@ -32,6 +32,17 @@ vi.mock('@/stores/authStore', () => ({
 
 import { RequestsPage } from '../RequestsPage';
 
+/** A promise whose settlement the test controls, for asserting in-flight state. */
+function deferred<T>() {
+  let resolve!: (v: T) => void;
+  let reject!: (e: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
 function ts(seconds: number) {
   return { seconds, nanoseconds: 0, toDate: () => new Date(seconds * 1000) };
 }
@@ -120,25 +131,47 @@ describe('tutor RequestsPage', () => {
     );
   });
 
-  it('optimistically removes the Accept/Decline buttons after accepting', async () => {
+  it('applies the accepted status ONLY after the callable resolves (non-optimistic)', async () => {
+    const d = deferred<{ data: { success: boolean } }>();
+    h.callable.mockReturnValue(d.promise);
     h.requests = [reqDoc()];
     renderWithProviders(<RequestsPage />);
     fireEvent.click(await screen.findByRole('button', { name: /accept/i }));
 
+    // In flight: row is STILL pending (Accept present) but its actions are disabled.
+    expect(screen.getByRole('button', { name: /accept/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /^decline$/i })).toBeDisabled();
+
+    // Resolve → row moves to history, actions disappear.
+    d.resolve({ data: { success: true } });
     await waitFor(() =>
       expect(screen.queryByRole('button', { name: /accept/i })).not.toBeInTheDocument(),
     );
   });
 
-  it('rolls back the optimistic flip and shows an error when the callable fails', async () => {
-    h.callable.mockRejectedValue({ code: 'functions/internal' });
+  it('keeps the row pending + re-enabled and shows an error when the callable rejects', async () => {
+    const d = deferred<{ data: { success: boolean } }>();
+    h.callable.mockReturnValue(d.promise);
     h.requests = [reqDoc()];
     renderWithProviders(<RequestsPage />);
     fireEvent.click(await screen.findByRole('button', { name: /accept/i }));
+    expect(screen.getByRole('button', { name: /accept/i })).toBeDisabled();
 
-    // Error surfaced and the pending actions come back.
+    d.reject({ code: 'functions/internal' });
+
+    // Error surfaced; the row never flipped and its actions come back enabled.
     expect(await screen.findByText(/couldn.?t update|something went wrong/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /accept/i })).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /accept/i })).toBeEnabled(),
+    );
+    expect(screen.getByRole('button', { name: /^decline$/i })).toBeInTheDocument();
+  });
+
+  it('formats a plain Date createdAt (emulator rows) instead of blanking it', async () => {
+    h.requests = [reqDoc({ createdAt: new Date('2026-07-10T12:00:00') })];
+    renderWithProviders(<RequestsPage />);
+    await screen.findByText(/Cohen/);
+    expect(screen.getByText(/2026/)).toBeInTheDocument();
   });
 
   it('history rows (accepted/declined) are read-only', async () => {
