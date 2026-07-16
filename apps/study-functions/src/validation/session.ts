@@ -76,3 +76,16 @@ export const bookSessionInputSchema = z
   });
 
 export type BookSessionInput = z.infer<typeof bookSessionInputSchema>;
+
+/**
+ * Input schema for the `respondToSession` callable: a tutor confirms or
+ * declines a pending session request.
+ */
+export const respondToSessionSchema = z.object({
+  sessionId: z.string().min(1, 'Session ID is required'),
+  action: z.enum(['confirm', 'decline'], {
+    errorMap: () => ({ message: "Action must be 'confirm' or 'decline'" }),
+  }),
+});
+
+export type RespondToSessionInput = z.infer<typeof respondToSessionSchema>;

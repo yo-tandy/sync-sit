@@ -4,5 +4,6 @@ export { sendTutorContactRequest } from './contact/sendTutorContactRequest.js';
 export { getTutorAvailability } from './availability/getTutorAvailability.js';
 export { respondToTutorContactRequest } from './contact/respondToTutorContactRequest.js';
 export { bookSession } from './sessions/bookSession.js';
+export { respondToSession } from './sessions/respondToSession.js';
 export { submitTutorEndorsement } from './endorsements/submitTutorEndorsement.js';
 export { respondToTutorEndorsement } from './endorsements/respondToTutorEndorsement.js';
