@@ -74,3 +74,25 @@ export function parisWallTimeToUtc(date: string, time: string): Date {
   }
   return instant;
 }
+
+// ── Added for study session-booking (getTutorAvailability) ───────────────────
+// Not part of the original sit reminder-cron block above; kept separate so the
+// DST-conversion code stays byte-for-byte as extracted.
+
+/**
+ * The Europe/Paris wall-clock position of an instant, as the calendar-relative
+ * shape study-core's availability math consumes: the Paris calendar date plus
+ * minutes since Paris midnight. Used for the notice-window cutoff so "now" is
+ * compared to slot start times without leaving the Paris timezone.
+ */
+export function parisWallClockPosition(instant: Date): {
+  date: string;
+  minutesSinceMidnight: number;
+} {
+  const c = parisClock(instant);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return {
+    date: `${c.year}-${pad(c.month)}-${pad(c.day)}`,
+    minutesSinceMidnight: c.hour * 60 + c.minute,
+  };
+}

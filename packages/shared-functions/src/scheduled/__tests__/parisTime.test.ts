@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { parisDateString, parisWallTimeToUtc } from '../parisTime.js';
+import {
+  parisDateString,
+  parisWallTimeToUtc,
+  parisWallClockPosition,
+} from '../parisTime.js';
 
 // These exercise the shared-functions copy of the Paris wall-clock helpers.
 // The study crons and the sit reminder cron both consume this same code path
@@ -58,5 +62,31 @@ describe('parisDateString', () => {
   it('reports the Paris date in winter (CET offset)', () => {
     // 23:30 UTC in winter (CET) is 00:30 the next day in Paris.
     expect(parisDateString(new Date('2026-01-14T23:30:00Z'))).toBe('2026-01-15');
+  });
+});
+
+describe('parisWallClockPosition', () => {
+  it('reports the Paris date and minutes-since-midnight in summer (CEST)', () => {
+    // 12:30 UTC in summer is 14:30 Paris → 14*60 + 30 = 870.
+    expect(parisWallClockPosition(new Date('2026-07-15T12:30:00Z'))).toEqual({
+      date: '2026-07-15',
+      minutesSinceMidnight: 870,
+    });
+  });
+
+  it('reports the Paris date and minutes-since-midnight in winter (CET)', () => {
+    // 12:30 UTC in winter is 13:30 Paris → 13*60 + 30 = 810.
+    expect(parisWallClockPosition(new Date('2026-01-15T12:30:00Z'))).toEqual({
+      date: '2026-01-15',
+      minutesSinceMidnight: 810,
+    });
+  });
+
+  it('rolls the date forward when the instant is past Paris midnight', () => {
+    // 23:30 UTC summer is 01:30 the next day in Paris → date advances, 90 min.
+    expect(parisWallClockPosition(new Date('2026-07-15T23:30:00Z'))).toEqual({
+      date: '2026-07-16',
+      minutesSinceMidnight: 90,
+    });
   });
 });
