@@ -89,6 +89,22 @@ describe('computeDayAvailability', () => {
     expect(out[46]).toBe(true); // just after
   });
 
+  it('rounds fractional padding UP to whole slots (ceil, not floor)', () => {
+    // paddingMin=20 → 20/15 = 1.33 slots → ceil = 2 (floor would be 1).
+    const out = computeDayAvailability({
+      date: '2026-07-15',
+      weeklySlots: allTrue(),
+      confirmedBlocks: [{ startIdx: 40, endIdx: 44, location: 'tutor_home' }],
+      paddingMin: 20,
+      nowParis: PAST,
+      noticeHours: 24,
+    });
+    expect(out[38]).toBe(false); // leading edge: ceil pads 2 (floor would leave 38 true)
+    expect(out[45]).toBe(false); // trailing edge: symmetric 2-slot pad
+    expect(out[37]).toBe(true); // one slot further out stays available
+    expect(out[46]).toBe(true);
+  });
+
   it('subtracts a confirmed block WITHOUT padding for online/library', () => {
     for (const location of ['online', 'library'] as const) {
       const out = computeDayAvailability({
