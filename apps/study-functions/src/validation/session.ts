@@ -8,7 +8,8 @@ import { LOCATION_PREFS } from '../constants/locationPrefs.js';
  * Input schema for booking a tutoring session.
  * Used by the `bookSession` callable (to be implemented in a subsequent PR).
  */
-export const bookSessionInputSchema = z.object({
+export const bookSessionInputSchema = z
+  .object({
   tutorUid: z.string().min(1, 'Tutor UID is required'),
   subject: z.enum(SUBJECTS, {
     errorMap: () => ({ message: 'Subject must be one of the supported subjects' }),
@@ -54,6 +55,18 @@ export const bookSessionInputSchema = z.object({
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/, 'End date must be in YYYY-MM-DD format')
     .optional(),
-});
+})
+  // Recurring bookings are gated off in this PR (PR 3 wires them). The
+  // recurring fields remain in the shape so the schema is forward-compatible;
+  // only the `type` discriminator is rejected here.
+  .superRefine((val, ctx) => {
+    if (val.type === 'recurring') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['type'],
+        message: 'Recurring booking is not yet available',
+      });
+    }
+  });
 
 export type BookSessionInput = z.infer<typeof bookSessionInputSchema>;
