@@ -155,6 +155,36 @@ export const getTutorAvailability = onCall(
       blocksByDate.set(date, list);
     }
 
+    // ── Scheduled recurring INSTANCES in range → per-date blocks ──
+    // Defense-in-depth AND the operative guard on holiday-schedule dates: study-
+    // core's precedence is `holidayGrid ?? customOverride ?? weekly`, so on a
+    // holiday-period date a recurring occurrence's per-date override claim is
+    // precedence-INVISIBLE. Subtracting the scheduled instance directly closes
+    // that gap. Only 'scheduled' instances block — 'cancelled'/conflict_skip
+    // occurrences are visible gaps and must NOT subtract. Needs the
+    // (tutorUserId, status, date) COLLECTION_GROUP index (added this PR).
+    const instancesSnap = await db
+      .collectionGroup('instances')
+      .where('tutorUserId', '==', tutorUserId)
+      .where('status', '==', 'scheduled')
+      .where('date', '>=', startDate)
+      .where('date', '<=', endDate)
+      .get();
+    for (const doc of instancesSnap.docs) {
+      const s = doc.data();
+      const date = s.date as string | undefined;
+      if (!date) continue;
+      const list = blocksByDate.get(date) ?? [];
+      list.push(
+        sessionToConfirmedBlock({
+          startTime: s.startTime as string,
+          endTime: s.endTime as string,
+          location: s.location as LocationPref,
+        }),
+      );
+      blocksByDate.set(date, list);
+    }
+
     // ── Compute each date's grid (shared per-date composition) ──
     const nowParis = parisWallClockPosition(new Date());
     const dates = eachDateInRange(startDate, endDate).map((date) => ({

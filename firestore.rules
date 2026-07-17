@@ -304,6 +304,22 @@ service cloud.firestore {
         || isAdmin()
       );
       allow create, update, delete: if false; // Only via Cloud Functions
+
+      // Concrete occurrences of a recurring series, written exclusively by the
+      // respondToSession / extendRecurring callables (Admin SDK). Read via the
+      // instance's OWN denormalized tutorUserId/familyId — no parent get()
+      // needed (provable from the doc itself). NO collection-group read rule in
+      // v1: clients read instances per-series through this nested path, and the
+      // callables' collectionGroup('instances') queries use the Admin SDK, which
+      // bypasses rules. Client writes are always denied.
+      match /instances/{instanceId} {
+        allow read: if isAuth() && (
+          request.auth.uid == resource.data.tutorUserId
+          || isFamilyMember(resource.data.familyId)
+          || isAdmin()
+        );
+        allow create, update, delete: if false; // Only via Cloud Functions
+      }
     }
 
     // Deny everything else

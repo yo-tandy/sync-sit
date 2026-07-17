@@ -122,6 +122,28 @@ async function computeSingleDateAvailability(
       });
     });
 
+  // Scheduled recurring INSTANCES on this date → also subtracted. On a holiday-
+  // schedule date a recurring occurrence's override claim is precedence-invisible
+  // (holidayGrid ?? override ?? weekly), so this direct subtraction is the guard
+  // that keeps a family from requesting a slot already held by an instance. Only
+  // 'scheduled' instances block. Uses the (tutorUserId, status, date) CG index.
+  const instancesSnap = await db
+    .collectionGroup('instances')
+    .where('tutorUserId', '==', tutorUserId)
+    .where('status', '==', 'scheduled')
+    .where('date', '==', date)
+    .get();
+  for (const doc of instancesSnap.docs) {
+    const s = doc.data();
+    confirmedBlocks.push(
+      sessionToConfirmedBlock({
+        startTime: s.startTime as string,
+        endTime: s.endTime as string,
+        location: s.location as LocationPref,
+      }),
+    );
+  }
+
   const inputs: DateAvailabilityInputs = {
     weekly,
     holidayMode,
