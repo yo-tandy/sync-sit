@@ -31,6 +31,18 @@ function schoolYearKey(s: string): string {
   const start = mo >= 9 ? y : y - 1;
   return `${start}-${start + 1}`;
 }
+function toHHMM(min: number): string {
+  return `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
+}
+/** Current Paris wall-clock minutes-since-midnight. */
+function parisNowMinutes(): number {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/Paris', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+  }).formatToParts(new Date());
+  const h = Number(parts.find((p) => p.type === 'hour')!.value);
+  const m = Number(parts.find((p) => p.type === 'minute')!.value);
+  return h * 60 + m;
+}
 /** The first date the confirm anchors expansion at: now+24h Paris. */
 function fromDate(): string {
   return parisDateOf(new Date(Date.now() + 24 * 60 * 60 * 1000));
@@ -209,6 +221,32 @@ describe('respondToSession — recurring confirm', () => {
       expect(entry.startIdx).toBe(48); // 12:00
       expect(entry.endIdx).toBe(52); // 13:00
     }
+  });
+
+  // ── Notice window: a within-notice first occurrence rolls to next week ──
+
+  it('drops a within-notice first occurrence entirely (rolls to next week, no cancelled gap)', async () => {
+    const db = getDb();
+    // slot.day == the weekday of now+24h (the anchor date). A startTime EARLIER
+    // than now's wall time puts that first occurrence inside the precise 24h
+    // window: it must be dropped ENTIRELY (no instance), NOT conflict_skipped.
+    const day = weekdayOf(fromDate());
+    const startMin = Math.floor(Math.max(0, parisNowMinutes() - 60) / 15) * 15;
+    const startTime = toHHMM(startMin);
+    const all = candidatesFor(day, 8); // all[0] is the within-notice anchor date
+    const expected = all.slice(1); // first occurrence rolled to next week
+
+    const id = await seedRecurring({ tutorUserId: flexTutorUid, day, startTime });
+    const res = await callFunction<ConfirmResponse>(
+      'respondToSession', { sessionId: id, action: 'confirm' }, flexToken,
+    );
+
+    expect(res.scheduledDates).toEqual(expected);
+    expect(res.skippedDates).toEqual([]); // dropped, NOT skipped
+    const instances = await instancesOf(id);
+    expect(instances.length).toBe(expected.length);
+    // The within-notice date has NO instance at all (no visible cancelled gap).
+    expect(instances.find((i) => i.date === all[0])).toBeUndefined();
   });
 
   // ── Holiday-skip (schoolWeeksOnly): the holiday date gets NO instance ──

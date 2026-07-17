@@ -28,6 +28,7 @@ import {
 } from '../availability/computeDateAvailability.js';
 import { paddedBlock, overlaps, buildMergedOverride } from './sessionOverride.js';
 import { generateInstances, type PerDateClaimInputs } from './generateInstances.js';
+import { dropWithinNotice } from './recurringWindow.js';
 
 /** How many weeks of occurrences a recurring confirm materializes up front. */
 const RECURRING_HORIZON_WEEKS = 8;
@@ -127,17 +128,21 @@ export const respondToSession = onCall(
           }
         }
 
-        const candidates = slot
-          ? expandRecurringDates(
-              slot,
-              fromDate,
-              RECURRING_HORIZON_WEEKS,
-              endDate,
-              schoolWeeksOnly,
-              holidayPeriods,
-            )
-          : [];
-        if (slot) recurringPlan = { slot, candidates };
+        if (slot) {
+          const rawCandidates = expandRecurringDates(
+            slot,
+            fromDate,
+            RECURRING_HORIZON_WEEKS,
+            endDate,
+            schoolWeeksOnly,
+            holidayPeriods,
+          );
+          // Drop occurrences inside the precise 24h notice window ENTIRELY (no
+          // instance), so the date-granular anchor never yields a spurious
+          // conflict_skip for the first occurrence — it simply rolls to next week.
+          const candidates = dropWithinNotice(rawCandidates, slot.startTime, now, NOTICE_HOURS);
+          recurringPlan = { slot, candidates };
+        }
       } else {
         const peekDate = peek?.date as string | undefined;
         if (holidayMode === 'different' && peekDate) {

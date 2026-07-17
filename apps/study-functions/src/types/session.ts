@@ -44,7 +44,10 @@ export interface SessionDoc {
   type: 'one_time' | 'recurring';
   date?: string; // one-time: "YYYY-MM-DD"
   startTime: string; // "HH:MM"
-  endTime: string; // "HH:MM" (calculated from startTime + sessionLengthMinutes)
+  // one-time: end of the single occurrence. A recurring parent deliberately
+  // OMITS this (its per-occurrence times live in recurringSlots), mirroring the
+  // already-optional `date?` above.
+  endTime?: string; // "HH:MM" (calculated from startTime + sessionLengthMinutes)
   sessionLengthMinutes: number;
   recurringSlots?: RecurringSlot[];
   schoolWeeksOnly?: boolean;

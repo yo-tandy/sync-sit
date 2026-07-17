@@ -9,8 +9,12 @@ import {
 } from '../availability/computeDateAvailability.js';
 import { paddedBlock, buildMergedOverride } from './sessionOverride.js';
 
-/** Notice window: an occurrence cannot be scheduled within this many hours of "now". */
-const NOTICE_HOURS = 24;
+// The notice window is enforced UPSTREAM by dropWithinNotice (recurringWindow.ts)
+// — within-notice candidates never reach here. So availability is computed with
+// NO notice window: a survivor is scheduled iff the slot is a real conflict-free
+// slot, and a notice artifact can never be mis-marked 'conflict_skip'. (The
+// candidates are all future dates, so a zero notice window is inert regardless.)
+const NOTICE_HOURS = 0;
 
 /** Pre-loaded, transactionally-read claim state for one candidate date. */
 export interface PerDateClaimInputs {
