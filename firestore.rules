@@ -293,6 +293,19 @@ service cloud.firestore {
       allow create, update, delete: if false; // Only via Cloud Functions
     }
 
+    // Study sessions: booking docs written exclusively by the bookSession /
+    // respondToSession callables (Admin SDK), which own the pending→confirmed
+    // state machine and its transactional override claim. Readable by the
+    // involved tutor, the booking family's members, or an admin.
+    match /study-sessions/{sessionId} {
+      allow read: if isAuth() && (
+        request.auth.uid == resource.data.tutorUserId
+        || isFamilyMember(resource.data.familyId)
+        || isAdmin()
+      );
+      allow create, update, delete: if false; // Only via Cloud Functions
+    }
+
     // Deny everything else
     match /{document=**} {
       allow read, write: if false;
