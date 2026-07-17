@@ -6,6 +6,14 @@ import type { SessionStatus } from './status.js';
 /**
  * A tutoring session document (sync-study equivalent of sync-sit's
  * AppointmentDoc). Stored in `study-sessions/{sessionId}`.
+ *
+ * AUTHORITY SPLIT (milestone design): for a recurring series this parent doc's
+ * `status` governs the SERIES lifecycle (pending → confirmed → cancelled |
+ * completed). The concrete weekly occurrences live in the `instances`
+ * subcollection and each carries its own InstanceStatus (see
+ * SessionInstanceDoc). Parent 'confirmed' + an instance 'cancelled' = the series
+ * is live but that one date is off. Instances exist ONLY once the series is
+ * confirmed — a pending recurring request has recurringSlots but NO instances.
  */
 export interface SessionDoc {
   sessionId: string;
@@ -40,6 +48,10 @@ export interface SessionDoc {
   sessionLengthMinutes: number;
   recurringSlots?: RecurringSlot[];
   schoolWeeksOnly?: boolean;
+  // Open-ended when absent: the series runs indefinitely (the extendRecurring
+  // cron keeps a rolling 8-week horizon of instances). When present, no
+  // occurrence is generated on or after truncation past this date.
+  endDate?: string; // "YYYY-MM-DD" — last date the series may schedule
 
   // Where
   location: LocationPref;
