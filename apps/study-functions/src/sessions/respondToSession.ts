@@ -3,10 +3,22 @@ import { db } from '@ejm/shared-functions/config/firebase.js';
 import { getCorsOrigin } from '@ejm/shared-functions/config/cors.js';
 import { writeUserActivity } from '@ejm/shared-functions/admin/writeAuditLog.js';
 import { notifyAllParents } from '@ejm/shared-functions/config/notifyParents.js';
-import { parisWallClockPosition, parisWallTimeToUtc } from '@ejm/shared-functions/scheduled/parisTime.js';
+import {
+  parisWallClockPosition,
+  parisWallTimeToUtc,
+  parisDateString,
+} from '@ejm/shared-functions/scheduled/parisTime.js';
 import { timeToSlotIndex } from '@ejm/shared-core';
+import type { RecurringSlot } from '@ejm/shared-core';
 import type { LocationPref } from '@ejm/study-core';
-import { getSchoolYearsInRange, dayOfWeek, type DayOverride } from '@ejm/study-core';
+import {
+  getSchoolYearsInRange,
+  expandRecurringDates,
+  incrementDate,
+  dayOfWeek,
+  type DayOverride,
+  type ConfirmedBlock,
+} from '@ejm/study-core';
 import { respondToSessionSchema } from '../validation/session.js';
 import {
   computeDateAvailability,
@@ -14,40 +26,14 @@ import {
   type WeeklyGrid,
   type HolidayPeriod,
 } from '../availability/computeDateAvailability.js';
+import { paddedBlock, overlaps, buildMergedOverride } from './sessionOverride.js';
+import { generateInstances, type PerDateClaimInputs } from './generateInstances.js';
+
+/** How many weeks of occurrences a recurring confirm materializes up front. */
+const RECURRING_HORIZON_WEEKS = 8;
 
 /** Notice window: a session cannot be confirmed within this many hours of "now". */
 const NOTICE_HOURS = 24;
-const SLOTS_PER_DAY = 96;
-const SLOT_MINUTES = 15;
-
-/** Locations whose in-person sessions need travel/prep padding (mirrors study-core). */
-const PADDED_LOCATIONS: ReadonlySet<LocationPref> = new Set<LocationPref>([
-  'family_home',
-  'tutor_home',
-]);
-
-/** The padded slot range [start, end) a session claims, given its location. */
-function paddedBlock(
-  startTime: string,
-  endTime: string,
-  location: LocationPref,
-  paddingMinutes: number,
-): { start: number; end: number } {
-  const startIdx = timeToSlotIndex(startTime);
-  const endIdx = timeToSlotIndex(endTime);
-  const pad = PADDED_LOCATIONS.has(location)
-    ? Math.ceil((paddingMinutes ?? 0) / SLOT_MINUTES)
-    : 0;
-  return {
-    start: Math.max(0, startIdx - pad),
-    end: Math.min(SLOTS_PER_DAY, endIdx + pad),
-  };
-}
-
-/** Half-open ranges [a0,a1) and [b0,b1) overlap. */
-function overlaps(a0: number, a1: number, b0: number, b1: number): boolean {
-  return a0 < b1 && b0 < a1;
-}
 
 /**
  * respondToSession — the tutor confirms or declines a pending session request.
@@ -95,6 +81,10 @@ export const respondToSession = onCall(
       holidaySchedules?: Record<string, WeeklyGrid>;
       holidayPeriods: HolidayPeriod[];
     } | null = null;
+    // For a recurring confirm: the slot + the candidate dates RECOMPUTED at
+    // confirm time (never trusted from book time), anchored exactly as booking
+    // did (first occurrence ≥ now+24h Paris).
+    let recurringPlan: { slot: RecurringSlot; candidates: string[] } | null = null;
     if (action === 'confirm') {
       const [sessionPeek, scheduleSnap] = await Promise.all([
         sessionRef.get(),
@@ -106,16 +96,59 @@ export const respondToSession = onCall(
       const holidaySchedules = scheduleData?.holidaySchedules as
         | Record<string, WeeklyGrid>
         | undefined;
-      const peekDate = sessionPeek.data()?.date as string | undefined;
+      const peek = sessionPeek.data();
       const holidayPeriods: HolidayPeriod[] = [];
-      if (holidayMode === 'different' && peekDate) {
-        const years = getSchoolYearsInRange(peekDate, peekDate);
-        const holidaySnaps = await Promise.all(
-          years.map((y) => db.collection('holidays').doc(y).get()),
+
+      if (peek?.type === 'recurring') {
+        const slot = (peek.recurringSlots as RecurringSlot[] | undefined)?.[0];
+        const schoolWeeksOnly = peek.schoolWeeksOnly !== false; // default true
+        const endDate = peek.endDate as string | undefined;
+
+        // Anchor the horizon at now+24h Paris — SHARED SEAM with bookSession's
+        // first-occurrence notice logic. (A Task-1 review finding about
+        // hour-granularity on this date-anchored window, if it lands, fixes both.)
+        const fromDate = parisDateString(
+          new Date(now.getTime() + NOTICE_HOURS * 60 * 60 * 1000),
         );
-        for (const snap of holidaySnaps) {
-          const p = snap.data()?.periods as HolidayPeriod[] | undefined;
-          if (p) holidayPeriods.push(...p);
+        let horizonEnd = fromDate;
+        for (let i = 0; i < RECURRING_HORIZON_WEEKS * 7; i++) horizonEnd = incrementDate(horizonEnd);
+        const rangeEnd = endDate !== undefined && endDate < horizonEnd ? endDate : horizonEnd;
+
+        // School-holiday periods across the window — drives schoolWeeksOnly AND
+        // (when holidayMode==='different') the per-date grid substitution.
+        if (rangeEnd >= fromDate) {
+          const years = getSchoolYearsInRange(fromDate, rangeEnd);
+          const holidaySnaps = await Promise.all(
+            years.map((y) => db.collection('holidays').doc(y).get()),
+          );
+          for (const snap of holidaySnaps) {
+            const p = snap.data()?.periods as HolidayPeriod[] | undefined;
+            if (p) holidayPeriods.push(...p);
+          }
+        }
+
+        const candidates = slot
+          ? expandRecurringDates(
+              slot,
+              fromDate,
+              RECURRING_HORIZON_WEEKS,
+              endDate,
+              schoolWeeksOnly,
+              holidayPeriods,
+            )
+          : [];
+        if (slot) recurringPlan = { slot, candidates };
+      } else {
+        const peekDate = peek?.date as string | undefined;
+        if (holidayMode === 'different' && peekDate) {
+          const years = getSchoolYearsInRange(peekDate, peekDate);
+          const holidaySnaps = await Promise.all(
+            years.map((y) => db.collection('holidays').doc(y).get()),
+          );
+          for (const snap of holidaySnaps) {
+            const p = snap.data()?.periods as HolidayPeriod[] | undefined;
+            if (p) holidayPeriods.push(...p);
+          }
         }
       }
       config = { weekly, holidayMode, holidaySchedules, holidayPeriods };
@@ -136,21 +169,154 @@ export const respondToSession = onCall(
       }
 
       const familyId = session.familyId as string;
-      const date = session.date as string;
       const location = session.location as LocationPref;
       const paddingMinutes = (session.paddingMinutes as number) ?? 0;
 
-      // ── Decline: flip status, no override, no schedule mutation ──
+      // ── Decline: flip status, no override/instances, no schedule mutation ──
       if (action === 'decline') {
         tx.update(sessionRef, {
           status: 'declined',
           statusReason: 'declined_by_tutor',
           updatedAt: now,
         });
-        return { familyId, date, action } as const;
+        return { action: 'decline' as const, type: session.type as string, familyId };
       }
 
-      // ── Confirm: re-check notice, recompute availability, claim the block ──
+      const cfg = config!; // set whenever action === 'confirm'
+      const scheduleRef = db.collection('schedules').doc(uid);
+
+      // ── Recurring confirm: materialize the 8-week instance window ──
+      // Instances become the dated, availability-participating docs (the parent
+      // has no top-level `date`). Zero bookable dates → failed-precondition and
+      // the parent stays pending (the throw rolls back every instance/override).
+      if (session.type === 'recurring') {
+        const plan = recurringPlan;
+        if (!plan || plan.candidates.length === 0) {
+          throw new HttpsError('failed-precondition', 'No bookable dates for this recurring series');
+        }
+        const candidates = plan.candidates;
+        const minDate = candidates[0];
+        const maxDate = candidates[candidates.length - 1];
+
+        // ── ALL claim-participating reads BEFORE any write (tx reads-first rule) ──
+        // Other recurring series' `scheduled` instances in range via a
+        // collection-group query — the Admin SDK runs CG queries inside a
+        // transaction, so this is the authoritative cross-series claim read. The
+        // (tutorUserId, status, date) COLLECTION_GROUP index lands in Task 4.
+        const cgQuery = db
+          .collectionGroup('instances')
+          .where('tutorUserId', '==', uid)
+          .where('status', '==', 'scheduled')
+          .where('date', '>=', minDate)
+          .where('date', '<=', maxDate);
+        const overrideRefs = candidates.map((d) => scheduleRef.collection('overrides').doc(d));
+        const confirmedQueries = candidates.map((d) =>
+          db
+            .collection('study-sessions')
+            .where('tutorUserId', '==', uid)
+            .where('status', '==', 'confirmed')
+            .where('date', '==', d),
+        );
+
+        const cgSnap = await tx.get(cgQuery);
+        const overrideSnaps = await Promise.all(overrideRefs.map((r) => tx.get(r)));
+        const confirmedSnaps = await Promise.all(confirmedQueries.map((q) => tx.get(q)));
+
+        // Group OTHER series' scheduled instances by date (skip our own, if any —
+        // idempotency guard, though a pending series has none yet).
+        const cgByDate = new Map<string, ConfirmedBlock[]>();
+        for (const doc of cgSnap.docs) {
+          const s = doc.data();
+          if (s.sessionId === sessionId) continue;
+          const d = s.date as string;
+          const arr = cgByDate.get(d) ?? [];
+          arr.push(
+            sessionToConfirmedBlock({
+              startTime: s.startTime as string,
+              endTime: s.endTime as string,
+              location: s.location as LocationPref,
+            }),
+          );
+          cgByDate.set(d, arr);
+        }
+
+        const perDate = new Map<string, PerDateClaimInputs>();
+        for (let i = 0; i < candidates.length; i++) {
+          const d = candidates[i];
+          const oSnap = overrideSnaps[i];
+          const existing = oSnap.exists ? oSnap.data()! : null;
+          const override: DayOverride | null = existing
+            ? {
+                type: existing.type as DayOverride['type'],
+                slots: existing.slots as boolean[] | undefined,
+              }
+            : null;
+          const confirmedBlocks = confirmedSnaps[i].docs.map((doc) => {
+            const s = doc.data();
+            return sessionToConfirmedBlock({
+              startTime: s.startTime as string,
+              endTime: s.endTime as string,
+              location: s.location as LocationPref,
+            });
+          });
+          perDate.set(d, {
+            override,
+            existingOverride: existing,
+            confirmedBlocks,
+            cgInstanceBlocks: cgByDate.get(d) ?? [],
+          });
+        }
+
+        const slot = plan.slot;
+        const { scheduledDates, skippedDates } = generateInstances({
+          tx,
+          sessionRef,
+          scheduleRef,
+          parent: {
+            sessionId,
+            familyId,
+            tutorUserId: uid,
+            subject: session.subject as string,
+            level: session.level as string,
+            rate: session.rate as number,
+            location,
+            sessionLengthMinutes: session.sessionLengthMinutes as number,
+            paddingMinutes,
+            startTime: slot.startTime,
+            endTime: slot.endTime,
+          },
+          candidateDates: candidates,
+          perDate,
+          config: {
+            weekly: cfg.weekly,
+            holidayMode: cfg.holidayMode,
+            holidaySchedules: cfg.holidaySchedules,
+            holidayPeriods: cfg.holidayPeriods,
+          },
+          nowParis: parisWallClockPosition(now),
+          now,
+        });
+
+        if (scheduledDates.length === 0) {
+          throw new HttpsError('failed-precondition', 'No bookable dates for this recurring series');
+        }
+
+        tx.update(sessionRef, { status: 'confirmed', confirmedAt: now, updatedAt: now });
+        // The overlap block auto-decline uses against one_time pendings — the
+        // weekly slot claims the same [start,end) on every scheduled date.
+        const block = paddedBlock(slot.startTime, slot.endTime, location, paddingMinutes);
+        return {
+          action: 'confirm' as const,
+          type: 'recurring' as const,
+          familyId,
+          block,
+          scheduledDates,
+          skippedDates,
+        };
+      }
+
+      // ── one_time confirm: re-check notice, recompute availability, claim ──
+      const date = session.date as string;
       const startTime = session.startTime as string;
       const endTime = session.endTime as string;
 
@@ -166,8 +332,6 @@ export const respondToSession = onCall(
       // Claim-participating reads (transactional): ONLY the contended state —
       // the current override doc and the other confirmed sessions on this date.
       // Weekly grid + holiday config came from the pre-tx `config` load above.
-      const cfg = config!; // set whenever action === 'confirm'
-      const scheduleRef = db.collection('schedules').doc(uid);
       const overrideRef = scheduleRef.collection('overrides').doc(date);
       const confirmedQuery = db
         .collection('study-sessions')
@@ -238,75 +402,55 @@ export const respondToSession = onCall(
       // is now `confirmed`, so getTutorAvailability and bookSession subtract it).
       // We still write the override ledger for restorability and off-holiday dates.
       const block = paddedBlock(startTime, endTime, location, paddingMinutes);
-
-      // Base = existing override's slots, else all-false for an 'unavailable'
-      // day, else the weekly grid. We only ever AND our block to false — never
-      // resurrect a slot we did not block.
-      let baseSlots: boolean[];
-      if (existing?.slots) {
-        baseSlots = [...(existing.slots as boolean[])];
-      } else if (existing?.type === 'unavailable') {
-        baseSlots = new Array(SLOTS_PER_DAY).fill(false);
-      } else {
-        baseSlots = new Array(SLOTS_PER_DAY);
-        for (let i = 0; i < SLOTS_PER_DAY; i++) baseSlots[i] = weeklySlots[i] ?? false;
-      }
-      for (let i = block.start; i < block.end; i++) baseSlots[i] = false;
-
-      const priorBlocks = Array.isArray(existing?.sessionBlocks)
-        ? (existing!.sessionBlocks as unknown[])
-        : [];
-      const sessionBlocks = [
-        ...priorBlocks,
-        { sessionId, startIdx: block.start, endIdx: block.end },
-      ];
-
-      // Preserve every field of a pre-existing (opaque) override; only fill
-      // appSource/reason/type when they are absent, so a foreign override keeps
-      // its own identity while gaining our restorable ledger entry.
-      const mergedOverride: Record<string, unknown> = {
-        ...(existing ?? {}),
+      const mergedOverride = buildMergedOverride({
+        existing,
         date,
-        type: existing?.type ?? 'custom',
-        slots: baseSlots,
-        sessionBlocks,
-        appSource: existing?.appSource ?? 'study',
-        reason: existing?.reason ?? 'study_session',
-        updatedAt: now,
-      };
-      if (!existing) mergedOverride.createdAt = now;
+        weeklySlots,
+        block,
+        entry: { sessionId, startIdx: block.start, endIdx: block.end },
+        now,
+      });
 
       tx.update(sessionRef, { status: 'confirmed', confirmedAt: now, updatedAt: now });
       tx.set(overrideRef, mergedOverride);
 
-      return { familyId, date, action, block } as const;
+      return { action: 'confirm' as const, type: 'one_time' as const, familyId, date, block };
     });
 
-    // ── POST-transaction: auto-decline overlapping pendings (confirm only) ──
+    // ── POST-transaction: auto-decline overlapping one_time pendings (confirm) ──
+    // one_time: the single claimed date. recurring: every scheduled date. Only
+    // dated one_time pendings can collide (a recurring pending carries no date).
     const autoDeclined: { sessionId: string; familyId: string }[] = [];
-    if (outcome.action === 'confirm' && outcome.block) {
-      const pendingSnap = await db
-        .collection('study-sessions')
-        .where('tutorUserId', '==', uid)
-        .where('status', '==', 'pending')
-        .where('date', '==', outcome.date)
-        .get();
-      for (const doc of pendingSnap.docs) {
-        if (doc.id === sessionId) continue; // the just-confirmed one is no longer pending, but guard anyway
-        const p = doc.data();
-        const pb = paddedBlock(
-          p.startTime as string,
-          p.endTime as string,
-          p.location as LocationPref,
-          (p.paddingMinutes as number) ?? 0,
-        );
-        if (!overlaps(outcome.block.start, outcome.block.end, pb.start, pb.end)) continue;
-        await doc.ref.update({
-          status: 'declined',
-          statusReason: 'slot_taken',
-          updatedAt: new Date(),
-        });
-        autoDeclined.push({ sessionId: doc.id, familyId: p.familyId as string });
+    if (outcome.action === 'confirm') {
+      const claimDates =
+        outcome.type === 'recurring' ? outcome.scheduledDates : [outcome.date];
+      const seen = new Set<string>();
+      for (const claimDate of claimDates) {
+        const pendingSnap = await db
+          .collection('study-sessions')
+          .where('tutorUserId', '==', uid)
+          .where('status', '==', 'pending')
+          .where('date', '==', claimDate)
+          .get();
+        for (const doc of pendingSnap.docs) {
+          if (doc.id === sessionId || seen.has(doc.id)) continue;
+          const p = doc.data();
+          if (p.type !== 'one_time') continue;
+          const pb = paddedBlock(
+            p.startTime as string,
+            p.endTime as string,
+            p.location as LocationPref,
+            (p.paddingMinutes as number) ?? 0,
+          );
+          if (!overlaps(outcome.block.start, outcome.block.end, pb.start, pb.end)) continue;
+          await doc.ref.update({
+            status: 'declined',
+            statusReason: 'slot_taken',
+            updatedAt: new Date(),
+          });
+          seen.add(doc.id);
+          autoDeclined.push({ sessionId: doc.id, familyId: p.familyId as string });
+        }
       }
     }
 
@@ -335,7 +479,28 @@ export const respondToSession = onCall(
     }
 
     // The requesting family (confirmed on confirm, cancelled on decline).
-    if (outcome.action === 'confirm') {
+    if (outcome.action === 'confirm' && outcome.type === 'recurring') {
+      const count = outcome.scheduledDates.length;
+      const first = outcome.scheduledDates[0];
+      const skippedNote = outcome.skippedDates.length
+        ? `<p>Some dates could not be scheduled (already booked, or a school holiday): ${outcome.skippedDates.join(', ')}.</p>`
+        : '';
+      await notifyAllParents({
+        familyId: outcome.familyId,
+        prefCategory: 'confirmed',
+        type: 'study_session_confirmed',
+        title: 'Recurring sessions confirmed',
+        body: `${tutorName} confirmed your recurring tutoring sessions.`,
+        emailSubject: `Recurring sessions confirmed — ${tutorName}`,
+        emailBody: `
+          <p><strong>${tutorName}</strong> confirmed your recurring tutoring sessions.</p>
+          <p><strong>${count}</strong> session${count === 1 ? '' : 's'} scheduled, starting <strong>${first}</strong>.</p>
+          ${skippedNote}
+          <p style="margin-top: 16px;"><a href="https://sync-study.com/family" style="background: #2563EB; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View in app</a></p>
+        `,
+        data: { sessionId },
+      });
+    } else if (outcome.action === 'confirm') {
       await notifyAllParents({
         familyId: outcome.familyId,
         prefCategory: 'confirmed',
@@ -372,6 +537,14 @@ export const respondToSession = onCall(
       { sessionId },
     );
 
+    if (outcome.action === 'confirm' && outcome.type === 'recurring') {
+      return {
+        success: true,
+        confirmed: true,
+        scheduledDates: outcome.scheduledDates,
+        skippedDates: outcome.skippedDates,
+      };
+    }
     return { success: true };
   },
 );
