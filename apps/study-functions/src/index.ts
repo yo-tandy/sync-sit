@@ -11,3 +11,4 @@ export { submitTutorEndorsement } from './endorsements/submitTutorEndorsement.js
 export { respondToTutorEndorsement } from './endorsements/respondToTutorEndorsement.js';
 export { extendRecurring } from './scheduled/extendRecurring.js';
 export { markSessionsCompleted } from './scheduled/markSessionsCompleted.js';
+export { sendStudySessionReminders } from './scheduled/sendStudySessionReminders.js';
