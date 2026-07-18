@@ -130,3 +130,19 @@ export const respondToSessionSchema = z.object({
 });
 
 export type RespondToSessionInput = z.infer<typeof respondToSessionSchema>;
+
+/**
+ * Input schema for the `cancelSession` callable: the session's tutor OR a parent
+ * of the session's family cancels a pending/confirmed session (one_time or the
+ * whole recurring series). A reason is REQUIRED (≥3 chars after trimming) — the
+ * counterparty is always told why.
+ */
+export const cancelSessionSchema = z.object({
+  sessionId: z.string().min(1, 'Session ID is required'),
+  reason: z
+    .string()
+    .trim()
+    .min(3, 'A cancellation reason of at least 3 characters is required'),
+});
+
+export type CancelSessionInput = z.infer<typeof cancelSessionSchema>;

@@ -104,3 +104,89 @@ export function buildMergedOverride(args: {
   if (!existing) merged.createdAt = now;
   return merged;
 }
+
+/**
+ * The result of restoring one claim from an override doc — a Firestore action
+ * the caller applies inside its cancel transaction:
+ *   • 'delete' — the doc was purely ours and held ONLY this claim; remove it so
+ *     the day reverts to the bare weekly grid (its natural, override-free state).
+ *   • 'set'    — write the returned doc (recomputed-ours, or foreign-conserved).
+ *   • 'none'   — no override doc existed; nothing to restore.
+ */
+export type RestoreResult =
+  | { action: 'delete' }
+  | { action: 'set'; doc: Record<string, unknown> }
+  | { action: 'none' };
+
+/**
+ * The inverse of buildMergedOverride: remove ONE session's claim from an
+ * override doc and restore exactly the slots that claim held — nothing more.
+ *
+ * THE CORE INVARIANT (lossless restoration). You cannot naively flip the removed
+ * block's slots back to true: a foreign override, or an overlapping REMAINING
+ * block, may also cover them. So restoration splits on the doc's PROVENANCE:
+ *
+ *   FOREIGN doc (reason !== 'study_session' OR appSource !== 'study' — i.e. a
+ *   sit-style / manual override we merged our claim INTO, or a doc predating us):
+ *   we can NEVER safely flip a slot true. A slot that is false may be false
+ *   because the foreign owner blocked it, not (only) because of our claim, and
+ *   that is UNKNOWABLE per-slot. SAFE, CONSERVATIVE rule → drop only our ledger
+ *   entry and leave every slot exactly as-is; the slot stays blocked until the
+ *   foreign owner clears it. The doc is never deleted (it isn't ours to delete).
+ *
+ *   OURS doc (reason 'study_session' AND appSource 'study' — a doc this app
+ *   created and solely owns): recompute from scratch — base = the WEEKLY-day
+ *   grid (NOT the holiday grid; this mirrors the base buildMergedOverride merged
+ *   from) AND-blocked by every REMAINING ledger entry. With no entries left the
+ *   doc only ever recorded our now-removed claim → DELETE it.
+ *
+ * Matching an entry: by sessionId AND instanceId. A one_time claim carries no
+ * instanceId, so both must be undefined-equal; a recurring occurrence's claim is
+ * keyed by its instanceId (=== the date).
+ */
+export function buildRestoredOverride(args: {
+  existing: Record<string, unknown> | null;
+  sessionId: string;
+  instanceId?: string;
+  weeklySlots: boolean[];
+  now: Date;
+}): RestoreResult {
+  const { existing, sessionId, instanceId, weeklySlots, now } = args;
+
+  // No override doc on this date → the claim wrote nothing here to restore.
+  if (!existing) return { action: 'none' };
+
+  const priorBlocks: SessionBlockEntry[] = Array.isArray(existing.sessionBlocks)
+    ? (existing.sessionBlocks as SessionBlockEntry[])
+    : [];
+  const remaining = priorBlocks.filter(
+    (b) => !(b.sessionId === sessionId && (b.instanceId ?? undefined) === (instanceId ?? undefined)),
+  );
+
+  // ── Provenance gate ──
+  const isOurs = existing.reason === 'study_session' && existing.appSource === 'study';
+
+  if (!isOurs) {
+    // Foreign: conserve the slots, drop only our ledger entry.
+    return {
+      action: 'set',
+      doc: { ...existing, sessionBlocks: remaining, updatedAt: now },
+    };
+  }
+
+  // Purely ours with no surviving claim → the doc has no reason to exist.
+  if (remaining.length === 0) {
+    return { action: 'delete' };
+  }
+
+  // Purely ours with survivors → recompute weekly-grid AND all remaining blocks.
+  const slots = new Array(SLOTS_PER_DAY);
+  for (let i = 0; i < SLOTS_PER_DAY; i++) slots[i] = weeklySlots[i] ?? false;
+  for (const b of remaining) {
+    for (let i = b.startIdx; i < b.endIdx; i++) slots[i] = false;
+  }
+  return {
+    action: 'set',
+    doc: { ...existing, slots, sessionBlocks: remaining, updatedAt: now },
+  };
+}
