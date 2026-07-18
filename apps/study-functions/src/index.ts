@@ -10,3 +10,4 @@ export { cancelSessionInstance } from './sessions/cancelSessionInstance.js';
 export { submitTutorEndorsement } from './endorsements/submitTutorEndorsement.js';
 export { respondToTutorEndorsement } from './endorsements/respondToTutorEndorsement.js';
 export { extendRecurring } from './scheduled/extendRecurring.js';
+export { markSessionsCompleted } from './scheduled/markSessionsCompleted.js';
