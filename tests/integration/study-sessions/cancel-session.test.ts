@@ -211,7 +211,6 @@ describe('cancelSession', () => {
   // ── Confirmed one_time: lossless restoration ──
 
   it('restores the FULL 96-slot grid exactly on cancel and DELETES the ours-and-empty override', async () => {
-    const db = getDb();
     // Snapshot the tutor's availability grid BEFORE any booking exists.
     const before = await callFunction<{ dates: { date: string; slots: boolean[] }[] }>(
       'getTutorAvailability',
@@ -246,7 +245,34 @@ describe('cancelSession', () => {
       parent1Token,
     );
     expect(after.dates[0].slots).toEqual(preGrid);
-    void db;
+  });
+
+  it('preserves a ledgerless FOREIGN block in OUR doc: cross-app slot stays closed, our range restored, doc kept', async () => {
+    // A study-owned override (reason study_session / appSource study) that ALSO
+    // carries a sit-written block: sit's respondToRequest merges slots WITHOUT a
+    // sessionBlocks entry, so slot 76 (19:00, weekly-open) is false with no
+    // ledger record. Our own claim (64..68) is the only ledger entry.
+    const slots = weeklyMonGrid();
+    for (let i = 64; i < 68; i++) slots[i] = false; // our claim
+    slots[76] = false; // ledgerless sit block, OUTSIDE our range
+    const id = await seedSession({ status: 'confirmed', startTime: '16:00', endTime: '17:00', location: 'online' });
+    await overrideRef(FUTURE_MON).set({
+      date: FUTURE_MON, type: 'custom', slots,
+      sessionBlocks: [{ sessionId: id, startIdx: 64, endIdx: 68 }],
+      appSource: 'study', reason: 'study_session', createdAt: new Date(), updatedAt: new Date(),
+    });
+
+    await callFunction('cancelSession', { sessionId: id, reason: 'tutor unavailable' }, tutor2Token);
+
+    const ov = (await overrideRef(FUTURE_MON).get()).data();
+    // Doc NOT deleted despite an empty ledger — a foreign block still lives here.
+    expect(ov).toBeTruthy();
+    expect(ov!.sessionBlocks).toEqual([]);
+    // Our claimed range restored to the weekly grid.
+    expect(ov!.slots[64]).toBe(true);
+    expect(ov!.slots[67]).toBe(true);
+    // The ledgerless sit block is UNTOUCHED (no cross-app double-booking).
+    expect(ov!.slots[76]).toBe(false);
   });
 
   it('recomputes the override losslessly when a SURVIVING claim remains', async () => {

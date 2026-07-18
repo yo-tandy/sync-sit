@@ -135,10 +135,22 @@ export type RestoreResult =
  *   foreign owner clears it. The doc is never deleted (it isn't ours to delete).
  *
  *   OURS doc (reason 'study_session' AND appSource 'study' — a doc this app
- *   created and solely owns): recompute from scratch — base = the WEEKLY-day
- *   grid (NOT the holiday grid; this mirrors the base buildMergedOverride merged
- *   from) AND-blocked by every REMAINING ledger entry. With no entries left the
- *   doc only ever recorded our now-removed claim → DELETE it.
+ *   created and solely owns): a CURRENT-SLOTS restore. Start from the doc's
+ *   EXISTING slots and reopen ONLY the removed claim's own padded range — there,
+ *   a slot goes true iff the WEEKLY-day grid allows it (NOT the holiday grid;
+ *   mirrors the base buildMergedOverride merged from) AND no REMAINING ledger
+ *   entry still covers it. Everything OUTSIDE the removed range is left exactly
+ *   as-is. This is deliberate: sit's respondToRequest merges availability into
+ *   an override doc's `slots` WITHOUT a sessionBlocks entry (and without
+ *   rewriting reason/appSource), so a dual-role same-uid user can carry a sit
+ *   appointment block inside a doc we own; recomputing the whole day from the
+ *   weekly grid would silently erase it and reopen the slot for cross-app
+ *   double-booking. KNOWN RESIDUAL: a ledgerless foreign block that OVERLAPS our
+ *   removed range is still reopened — unavoidable without a sit-side ledger to
+ *   consult (tracked for sit-side ledger adoption). The doc is DELETEd only when
+ *   the ledger is empty AND the restored slots equal the weekly grid exactly
+ *   (else a ledgerless foreign block remains and deletion would erase it — keep
+ *   the doc with an empty ledger instead).
  *
  * Matching an entry: by sessionId AND instanceId. A one_time claim carries no
  * instanceId, so both must be undefined-equal; a recurring occurrence's claim is
@@ -159,9 +171,10 @@ export function buildRestoredOverride(args: {
   const priorBlocks: SessionBlockEntry[] = Array.isArray(existing.sessionBlocks)
     ? (existing.sessionBlocks as SessionBlockEntry[])
     : [];
-  const remaining = priorBlocks.filter(
-    (b) => !(b.sessionId === sessionId && (b.instanceId ?? undefined) === (instanceId ?? undefined)),
-  );
+  const matches = (b: SessionBlockEntry) =>
+    b.sessionId === sessionId && (b.instanceId ?? undefined) === (instanceId ?? undefined);
+  const removed = priorBlocks.filter(matches);
+  const remaining = priorBlocks.filter((b) => !matches(b));
 
   // ── Provenance gate ──
   const isOurs = existing.reason === 'study_session' && existing.appSource === 'study';
@@ -174,17 +187,41 @@ export function buildRestoredOverride(args: {
     };
   }
 
-  // Purely ours with no surviving claim → the doc has no reason to exist.
-  if (remaining.length === 0) {
-    return { action: 'delete' };
+  // ── Ours: CURRENT-SLOTS restore (preserves ledgerless foreign blocks) ──
+  // Start from the doc's existing slots; reopen ONLY the removed claim's own
+  // padded range, and only where the weekly grid allows AND no REMAINING entry
+  // still covers the slot. Slots outside the removed range are never touched, so
+  // a sit-written (ledgerless) block elsewhere on the day survives.
+  const slots = Array.isArray(existing.slots)
+    ? [...(existing.slots as boolean[])]
+    : new Array(SLOTS_PER_DAY).fill(false);
+  const coveredByRemaining = (i: number) =>
+    remaining.some((b) => i >= b.startIdx && i < b.endIdx);
+  for (const r of removed) {
+    for (let i = r.startIdx; i < r.endIdx; i++) {
+      if ((weeklySlots[i] ?? false) && !coveredByRemaining(i)) slots[i] = true;
+    }
   }
 
-  // Purely ours with survivors → recompute weekly-grid AND all remaining blocks.
-  const slots = new Array(SLOTS_PER_DAY);
-  for (let i = 0; i < SLOTS_PER_DAY; i++) slots[i] = weeklySlots[i] ?? false;
-  for (const b of remaining) {
-    for (let i = b.startIdx; i < b.endIdx; i++) slots[i] = false;
+  // Conditional delete: only when nothing else claims the day AND the restored
+  // slots are exactly the weekly grid (a truly-ours-only doc). A residual
+  // difference means a ledgerless foreign block remains → keep the doc (empty
+  // ledger) so deletion never erases it.
+  if (remaining.length === 0) {
+    let equalsWeekly = true;
+    for (let i = 0; i < SLOTS_PER_DAY; i++) {
+      if (slots[i] !== (weeklySlots[i] ?? false)) {
+        equalsWeekly = false;
+        break;
+      }
+    }
+    if (equalsWeekly) return { action: 'delete' };
+    return {
+      action: 'set',
+      doc: { ...existing, slots, sessionBlocks: [], updatedAt: now },
+    };
   }
+
   return {
     action: 'set',
     doc: { ...existing, slots, sessionBlocks: remaining, updatedAt: now },
