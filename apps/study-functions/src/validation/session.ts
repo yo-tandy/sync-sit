@@ -146,3 +146,19 @@ export const cancelSessionSchema = z.object({
 });
 
 export type CancelSessionInput = z.infer<typeof cancelSessionSchema>;
+
+/**
+ * Input schema for the `cancelSessionInstance` callable: cancel ONE occurrence
+ * of a confirmed recurring series (the parent series stays live). Same party
+ * model and reason requirement as cancelSession.
+ */
+export const cancelSessionInstanceSchema = z.object({
+  sessionId: z.string().min(1, 'Session ID is required'),
+  instanceId: z.string().min(1, 'Instance ID is required'),
+  reason: z
+    .string()
+    .trim()
+    .min(3, 'A cancellation reason of at least 3 characters is required'),
+});
+
+export type CancelSessionInstanceInput = z.infer<typeof cancelSessionInstanceSchema>;

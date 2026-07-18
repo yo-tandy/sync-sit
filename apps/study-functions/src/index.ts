@@ -6,6 +6,7 @@ export { respondToTutorContactRequest } from './contact/respondToTutorContactReq
 export { bookSession } from './sessions/bookSession.js';
 export { respondToSession } from './sessions/respondToSession.js';
 export { cancelSession } from './sessions/cancelSession.js';
+export { cancelSessionInstance } from './sessions/cancelSessionInstance.js';
 export { submitTutorEndorsement } from './endorsements/submitTutorEndorsement.js';
 export { respondToTutorEndorsement } from './endorsements/respondToTutorEndorsement.js';
 export { extendRecurring } from './scheduled/extendRecurring.js';
