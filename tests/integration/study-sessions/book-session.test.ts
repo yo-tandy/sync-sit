@@ -264,14 +264,16 @@ describe('bookSession', () => {
     ).rejects.toMatchObject({ code: 'ALREADY_EXISTS' });
   });
 
-  // ── Recurring gated off ──
+  // ── Recurring input validation (full recurring behavior: book-recurring.test.ts) ──
 
-  it('rejects a recurring booking input with invalid-argument', async () => {
+  it('rejects a recurring booking with no weekly slot (invalid-argument)', async () => {
+    // happyInput carries date+startTime but no recurringSlot — a recurring
+    // request requires the slot (the one-time date/startTime are ignored).
     await expect(
       callFunction('bookSession', { ...happyInput(), type: 'recurring' }, parent1Token),
     ).rejects.toMatchObject({
       code: 'INVALID_ARGUMENT',
-      message: 'Recurring booking is not yet available',
+      message: 'Recurring bookings require a weekly slot',
     });
   });
 

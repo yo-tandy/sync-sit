@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { DAYS_OF_WEEK } from '@ejm/shared-core';
 import { SUBJECTS } from '../constants/subjects.js';
 import { CLASS_LEVELS } from '../constants/classLevels.js';
 import { SESSION_LENGTHS } from '../constants/sessionLengths.js';
@@ -7,9 +8,17 @@ import { LOCATION_PREFS } from '../constants/locationPrefs.js';
 /**
  * Input schema for booking a tutoring session (the `bookSession` callable).
  *
- * Recurring bookings are gated OFF in this PR (PR 3 wires them): the recurring
- * fields remain in the shape so the schema is forward-compatible, but a
- * `type: 'recurring'` input is rejected by the superRefine below.
+ * Two shapes, discriminated by `type` (enforced in the superRefine below):
+ *   • one_time  — a concrete `date` + `startTime`.
+ *   • recurring — a weekly `recurringSlot` {day, startTime}; the concrete
+ *     occurrence dates are derived server-side (never trusted from the client),
+ *     `schoolWeeksOnly` (default true) drops French school-holiday weeks, and an
+ *     optional `endDate` truncates the series.
+ *
+ * CONSCIOUS SCAFFOLD AMENDMENT: the scaffold's `recurringDayOfWeek: number` is
+ * superseded by `recurringSlot.day` keyed on shared-core's DayOfWeek vocabulary
+ * ('mon'..'sun') — the same keys the weekly grid, RecurringSlot, and the
+ * availability engine already use, so no 0-6 ↔ key translation is needed.
  */
 export const bookSessionInputSchema = z
   .object({
@@ -24,12 +33,15 @@ export const bookSessionInputSchema = z
     level: z.enum(CLASS_LEVELS, {
       errorMap: () => ({ message: 'Level must be one of the supported class levels' }),
     }),
+    // one_time only (required when type === 'one_time'; see superRefine).
     date: z
       .string()
-      .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format'),
+      .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format')
+      .optional(),
     startTime: z
       .string()
-      .regex(/^\d{2}:\d{2}$/, 'Start time must be in HH:MM format'),
+      .regex(/^\d{2}:\d{2}$/, 'Start time must be in HH:MM format')
+      .optional(),
     sessionLengthMinutes: z.union([
       z.literal(SESSION_LENGTHS[0]),
       z.literal(SESSION_LENGTHS[1]),
@@ -56,10 +68,22 @@ export const bookSessionInputSchema = z
         lng: z.number(),
       })
       .optional(),
-    // Recurring fields (gated off this PR — see superRefine)
+    // ── Recurring ──
     type: z.enum(['one_time', 'recurring']).default('one_time'),
-    recurringDayOfWeek: z.number().int().min(0).max(6).optional(),
-    schoolWeeksOnly: z.boolean().optional(),
+    // The weekly slot (required when type === 'recurring'; see superRefine). Its
+    // endTime is derived server-side from startTime + sessionLengthMinutes.
+    recurringSlot: z
+      .object({
+        day: z.enum(DAYS_OF_WEEK, {
+          errorMap: () => ({ message: 'Recurring day must be one of mon..sun' }),
+        }),
+        startTime: z
+          .string()
+          .regex(/^\d{2}:\d{2}$/, 'Start time must be in HH:MM format'),
+      })
+      .optional(),
+    // Skip French school-holiday weeks entirely (default on).
+    schoolWeeksOnly: z.boolean().optional().default(true),
     endDate: z
       .string()
       .regex(/^\d{4}-\d{2}-\d{2}$/, 'End date must be in YYYY-MM-DD format')
@@ -67,11 +91,28 @@ export const bookSessionInputSchema = z
   })
   .superRefine((val, ctx) => {
     if (val.type === 'recurring') {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['type'],
-        message: 'Recurring booking is not yet available',
-      });
+      if (!val.recurringSlot) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['recurringSlot'],
+          message: 'Recurring bookings require a weekly slot',
+        });
+      }
+    } else {
+      if (!val.date) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['date'],
+          message: 'Date is required for a one-time booking',
+        });
+      }
+      if (!val.startTime) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['startTime'],
+          message: 'Start time is required for a one-time booking',
+        });
+      }
     }
   });
 

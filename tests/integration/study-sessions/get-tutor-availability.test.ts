@@ -59,6 +59,8 @@ describe('getTutorAvailability', () => {
     const overrides = await db
       .collection('schedules').doc(seed.tutor2.uid).collection('overrides').get();
     await Promise.all(overrides.docs.map((d) => d.ref.delete()));
+    const instances = await db.collectionGroup('instances').get();
+    await Promise.all(instances.docs.map((d) => d.ref.delete()));
     const sessions = await db.collection('study-sessions').get();
     await Promise.all(sessions.docs.map((d) => d.ref.delete()));
     // Reset any holiday config a prior test set on tutor2's schedule doc.
@@ -262,6 +264,76 @@ describe('getTutorAvailability', () => {
     expect(slots[64]).toBe(false);
     expect(slots[67]).toBe(false);
     expect(slots[68]).toBe(true);
+  });
+
+  // ── Scheduled recurring instance subtraction ──
+
+  async function seedInstance(
+    date: string,
+    startTime: string,
+    endTime: string,
+    status: string,
+    statusReason?: string,
+  ) {
+    const db = getDb();
+    const doc: Record<string, unknown> = {
+      instanceId: date, sessionId: 'seriesA', tutorUserId: seed.tutor2.uid, familyId: seed.family1Id,
+      date, startTime, endTime, location: 'online', sessionLengthMinutes: 60, paddingMinutes: 0,
+      status, subject: 'math', level: '6e', rate: 25, createdAt: new Date(), updatedAt: new Date(),
+    };
+    if (statusReason) doc.statusReason = statusReason;
+    await db
+      .collection('study-sessions').doc('seriesA').collection('instances').doc(date).set(doc);
+  }
+
+  it('subtracts a scheduled recurring instance from the grid', async () => {
+    await seedInstance(MON, '16:00', '17:00', 'scheduled');
+    const res = await callFunction<AvailabilityResponse>(
+      'getTutorAvailability', { tutorUserId: seed.tutor2.uid, startDate: MON, endDate: MON }, parent1Token,
+    );
+    const slots = res.dates[0].slots;
+    expect(slots[64]).toBe(false); // 16:00 held by the scheduled instance
+    expect(slots[67]).toBe(false); // …through 16:45
+    expect(slots[68]).toBe(true); // 17:00 free
+  });
+
+  it('does NOT subtract a cancelled/conflict_skip instance', async () => {
+    await seedInstance(MON, '16:00', '17:00', 'cancelled', 'conflict_skip');
+    const res = await callFunction<AvailabilityResponse>(
+      'getTutorAvailability', { tutorUserId: seed.tutor2.uid, startDate: MON, endDate: MON }, parent1Token,
+    );
+    // A cancelled occurrence is a visible gap, not a claim — 16:00 stays bookable.
+    expect(res.dates[0].slots[64]).toBe(true);
+  });
+
+  it('subtracts a scheduled instance on a HOLIDAY-schedule date (override precedence-invisible)', async () => {
+    const db = getDb();
+    // On a holiday-period date, base = holidayGrid (a per-date override's slots are
+    // IGNORED by precedence). So the ONLY thing that can subtract a recurring
+    // occurrence here is the instance itself — this is the case the CG subtraction
+    // exists for. Holiday grid: available 16:00–19:00 (slots 64..75).
+    const holidayGrid = new Array(96).fill(false);
+    for (let i = 64; i < 76; i++) holidayGrid[i] = true;
+    await db.collection('schedules').doc(seed.tutor2.uid).update({
+      holidayMode: 'different',
+      holidaySchedules: { TestBreak: { mon: holidayGrid } },
+    });
+    await db.collection('holidays').doc('2026-2027').set({
+      schoolYear: '2026-2027', zone: 'C',
+      periods: [{ name: 'TestBreak', startDate: MON, endDate: MON }],
+      updatedAt: new Date(), updatedByUserId: seed.admin.uid,
+    });
+    await seedInstance(MON, '16:00', '17:00', 'scheduled');
+
+    const res = await callFunction<AvailabilityResponse>(
+      'getTutorAvailability', { tutorUserId: seed.tutor2.uid, startDate: MON, endDate: MON }, parent1Token,
+    );
+    const slots = res.dates[0].slots;
+    expect(slots[64]).toBe(false); // instance subtracts on top of the holiday grid
+    expect(slots[72]).toBe(true); // 18:00 holiday-available, not instance-covered
+    expect(slots[76]).toBe(false); // 19:00 — proves the HOLIDAY grid is the base (weekly would allow it)
+
+    await db.collection('holidays').doc('2026-2027').delete();
   });
 
   // ── Privacy: response shape leaks nothing beyond boolean grids ──

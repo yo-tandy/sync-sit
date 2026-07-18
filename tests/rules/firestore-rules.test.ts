@@ -875,3 +875,69 @@ describe('study-sessions collection', () => {
     await assertFails(deleteDoc(doc(authed.firestore(), 'study-sessions', 'sess1')));
   });
 });
+
+// study-session instances: concrete recurring occurrences, written only by the
+// callables (Admin SDK). Read via the instance's OWN denormalized fields —
+// party reads, no client writes. (Nested path only; no collection-group rule.)
+describe('study-session instances subcollection', () => {
+  const INST_PATH = ['study-sessions', 'seriesR', 'instances', '2027-06-07'] as const;
+  async function seedInstance() {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), ...INST_PATH), {
+        instanceId: '2027-06-07', sessionId: 'seriesR',
+        tutorUserId: 'tutorR', familyId: 'famR', status: 'scheduled',
+      });
+      await setDoc(doc(ctx.firestore(), 'families', 'famR'), {
+        familyId: 'famR', parentIds: ['parentR'],
+      });
+    });
+  }
+
+  it('allows the involved tutor to read an instance', async () => {
+    await seedInstance();
+    const authed = testEnv.authenticatedContext('tutorR');
+    await assertSucceeds(getDoc(doc(authed.firestore(), ...INST_PATH)));
+  });
+
+  it('allows a family member to read an instance', async () => {
+    await seedInstance();
+    const authed = testEnv.authenticatedContext('parentR');
+    await assertSucceeds(getDoc(doc(authed.firestore(), ...INST_PATH)));
+  });
+
+  it('denies a stranger from reading an instance', async () => {
+    await seedInstance();
+    const authed = testEnv.authenticatedContext('stranger');
+    await assertFails(getDoc(doc(authed.firestore(), ...INST_PATH)));
+  });
+
+  it('denies unauthenticated instance reads', async () => {
+    await seedInstance();
+    const unauthed = testEnv.unauthenticatedContext();
+    await assertFails(getDoc(doc(unauthed.firestore(), ...INST_PATH)));
+  });
+
+  it('denies client create even by the involved tutor', async () => {
+    const authed = testEnv.authenticatedContext('tutorR');
+    await assertFails(
+      setDoc(doc(authed.firestore(), 'study-sessions', 'seriesR', 'instances', 'new'), {
+        instanceId: 'new', sessionId: 'seriesR', tutorUserId: 'tutorR', familyId: 'famR', status: 'scheduled',
+      }),
+    );
+  });
+
+  it('denies client update even by the involved tutor', async () => {
+    await seedInstance();
+    const authed = testEnv.authenticatedContext('tutorR');
+    await assertFails(
+      updateDoc(doc(authed.firestore(), ...INST_PATH), { status: 'cancelled' }),
+    );
+  });
+
+  it('denies client delete even by the involved family member', async () => {
+    await seedInstance();
+    const authed = testEnv.authenticatedContext('parentR');
+    const { deleteDoc } = await import('firebase/firestore');
+    await assertFails(deleteDoc(doc(authed.firestore(), ...INST_PATH)));
+  });
+});
