@@ -273,8 +273,15 @@ export default {
         online: 'Online',
         library: 'Library',
       },
-      conflictPreview: {
+      preview: {
         loading: 'Checking availability…',
+        summary: '{{available}} of {{total}} dates available',
+        status: {
+          available: 'Available',
+          conflict: 'Unavailable',
+          holiday: 'School holiday',
+        },
+        disclaimer: 'Conflicting dates are skipped automatically when you accept.',
       },
       result: {
         title: 'Recurring sessions scheduled',

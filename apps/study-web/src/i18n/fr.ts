@@ -273,8 +273,15 @@ export default {
         online: 'En ligne',
         library: 'Bibliothèque',
       },
-      conflictPreview: {
+      preview: {
         loading: 'Vérification des disponibilités…',
+        summary: '{{available}} dates disponibles sur {{total}}',
+        status: {
+          available: 'Disponible',
+          conflict: 'Indisponible',
+          holiday: 'Vacances scolaires',
+        },
+        disclaimer: 'Les dates en conflit sont automatiquement ignorées lorsque vous acceptez.',
       },
       result: {
         title: 'Séances récurrentes programmées',

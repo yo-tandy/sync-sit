@@ -30,9 +30,13 @@ vi.mock('@/stores/authStore', () => ({
   useAuthStore: () => h.auth,
 }));
 
-// The recurring conflict preview is a separate component (Task 2). Task 1 only
-// renders its placeholder slot, so it needs no mock here — the stub renders a
-// static "Checking availability…" line.
+// The recurring conflict preview does its OWN firestore reads (Task 2); stub it
+// here so this page test stays focused on the inbox and isn't coupled to the
+// child's data loading. It keeps the "Checking availability…" text the recurring
+// card asserts on.
+vi.mock('@/components/tutor/RecurringConflictPreview', () => ({
+  RecurringConflictPreview: () => <div>Checking availability…</div>,
+}));
 
 import { SessionsPage } from '../SessionsPage';
 
