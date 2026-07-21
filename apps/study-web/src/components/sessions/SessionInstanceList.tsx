@@ -52,6 +52,10 @@ export function SessionInstanceList({
         const label = chip(i);
         const cancelable = i.status === 'scheduled' && i.date >= today;
         const key = `${sessionId}::${i.instanceId}`;
+        // Disable while THIS date's cancel is in flight OR while the whole series
+        // is being cancelled (cancelKey === sessionId) — the series cancel voids
+        // every date, so per-date actions must lock too.
+        const rowBusy = cancelKey === key || cancelKey === sessionId;
         return (
           <li key={i.instanceId} className="flex items-center justify-between gap-2 text-xs">
             <span className="text-gray-700">
@@ -63,7 +67,7 @@ export function SessionInstanceList({
                 <Button
                   size="sm"
                   variant="ghost"
-                  disabled={cancelKey === key}
+                  disabled={rowBusy}
                   onClick={() => onCancelInstance(i)}
                 >
                   {copy.cancelInstance}

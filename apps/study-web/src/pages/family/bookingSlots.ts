@@ -42,10 +42,14 @@ export interface WeeklyCandidate {
  * CLIENT HEURISTIC — the server is authoritative. A weekly start is offered when
  * it is a valid start chip in at least `minOccurrences` (default 3) of the first
  * `windowOccurrences` (default 4) occurrences of that weekday inside the window.
- * The tutor's accept flow re-expands and re-checks every concrete date, skipping
- * any that conflict — so this heuristic only ever OVER-offers (it can propose a
- * cadence a later individual date declines), never under-offers, which is why
- * the confirm-time "conflicting dates are skipped" disclaimer holds.
+ * It is APPROXIMATE in both directions: it over-offers (it can propose a cadence
+ * a later individual date declines — the tutor's accept flow re-expands and skips
+ * those, which is why the confirm-time "conflicting dates are skipped" disclaimer
+ * holds), and it can under-offer — e.g. when a weekday's earliest occurrences fall
+ * inside the tutor's notice window (returned unavailable in the grid), the count
+ * can dip below the threshold and a genuinely-bookable cadence isn't shown. The
+ * server never rejects a cadence for that reason, so this only hides options, it
+ * doesn't mis-book.
  */
 export function deriveWeeklySlots(
   dates: { date: string; slots: boolean[] }[],

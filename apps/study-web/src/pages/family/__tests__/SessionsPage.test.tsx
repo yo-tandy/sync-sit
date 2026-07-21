@@ -277,6 +277,27 @@ describe('family SessionsPage — management', () => {
     );
   });
 
+  it('disables per-date cancel while a whole-series cancel is in flight', async () => {
+    let resolve!: (v: unknown) => void;
+    h.callable.mockReturnValue(new Promise((r) => (resolve = r)));
+    h.sessions = [confirmedRecurring({ sessionId: 'sR' })];
+    h.instances = { sR: [instanceDoc({ instanceId: '2026-08-05', date: '2026-08-05' })] };
+    renderWithProviders(<SessionsPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /view dates|occurrences/i }));
+    expect(await screen.findByRole('button', { name: /cancel this date/i })).toBeEnabled();
+
+    // Start a whole-series cancel — it voids every date, so per-date actions lock.
+    fireEvent.click(screen.getByRole('button', { name: /cancel series/i }));
+    fireEvent.change(await screen.findByRole('textbox'), { target: { value: 'stopping lessons' } });
+    fireEvent.click(screen.getByRole('button', { name: /confirm cancellation/i }));
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /cancel this date/i })).toBeDisabled(),
+    );
+    resolve({ data: { success: true } });
+  });
+
   it('filters the nested instance read by familyId (rule provability)', async () => {
     h.sessions = [confirmedRecurring({ sessionId: 'sR' })];
     h.instances = { sR: [instanceDoc({ instanceId: '2026-08-05', date: '2026-08-05' })] };
