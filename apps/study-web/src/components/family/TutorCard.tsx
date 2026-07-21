@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { collection, query, where, limit, getDocs } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
@@ -159,7 +160,27 @@ export function TutorCard({ result }: { result: TutorSearchResult }) {
             <p className="mt-1 text-xs text-gray-400">{t('family.search.card.declinedHint')}</p>
           </>
         )}
-        {status === 'accepted' && <ContactBlock result={result} />}
+        {status === 'accepted' && (
+          <>
+            <ContactBlock result={result} />
+            {/* Carry the full card context so the booking page can build its
+                form + calendar without a refetch (router-state-first). */}
+            <Link
+              to={`/family/book/${result.uid}`}
+              state={{
+                subject: result.subject,
+                level: result.level,
+                rate: result.rate,
+                sessionLengthsMin: result.sessionLengthsMin,
+                locationPrefs: result.locationPrefs,
+                tutorName: result.firstName,
+              }}
+              className="mt-3 block"
+            >
+              <Button className="w-full">{t('family.search.card.book')}</Button>
+            </Link>
+          </>
+        )}
       </div>
 
       {dialogOpen && (

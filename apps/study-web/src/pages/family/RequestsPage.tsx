@@ -190,6 +190,19 @@ export function RequestsPage() {
                           >
                             {t('family.requests.viewContact')}
                           </Link>
+                          {/* Deep link into booking: the page re-derives the
+                              tutor's card data via searchTutors from these
+                              subject/level values (router-state-first fallback). */}
+                          <Link
+                            to={`/family/book/${r.tutorUserId}`}
+                            state={{
+                              subject: r.subject,
+                              level: r.level,
+                              tutorName: r.tutorName,
+                            }}
+                          >
+                            <Button size="sm">{t('family.requests.book')}</Button>
+                          </Link>
                           {endorsedTutors.has(r.tutorUserId) ? (
                             <Button size="sm" variant="outline" disabled>
                               {t('family.requests.endorsed')}
