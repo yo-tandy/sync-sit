@@ -15,6 +15,8 @@ const h = vi.hoisted(() => ({
   scheduleData: null as { weekly?: Record<string, boolean[]> } | null,
   // studyContactRequests docs for the pending-count card.
   requests: [] as Record<string, unknown>[],
+  // study-sessions docs for the pending-sessions count card.
+  sessions: [] as Record<string, unknown>[],
   // references docs (endorsements) for the pending-endorsements count card.
   refs: [] as Record<string, unknown>[],
   updateDoc: vi.fn(() => Promise.resolve()),
@@ -52,6 +54,7 @@ function reset() {
   h.auth.refreshUserDoc.mockClear();
   h.scheduleData = null;
   h.requests = [];
+  h.sessions = [];
   h.refs = [];
   h.updateDoc.mockClear();
   h.getDoc.mockImplementation(() =>
@@ -59,13 +62,14 @@ function reset() {
   );
   h.where.mockClear();
   h.getDocs.mockReset();
-  // Route by collection path: studyContactRequests => requests, references =>
-  // endorsements. (Both count cards read by tutorUserId==me.)
+  // Route by collection path: references => endorsements, study-sessions =>
+  // sessions, else => contact requests. (All count cards read by
+  // tutorUserId==me.)
   h.getDocs.mockImplementation((q: { query: { path: string }[] }) => {
     const path = q?.query?.[0]?.path;
-    const rows = path === 'references' ? h.refs : h.requests;
+    const rows = path === 'references' ? h.refs : path === 'study-sessions' ? h.sessions : h.requests;
     return Promise.resolve({
-      docs: rows.map((r) => ({ id: r.referenceId ?? r.requestId, data: () => r })),
+      docs: rows.map((r) => ({ id: r.referenceId ?? r.sessionId ?? r.requestId, data: () => r })),
     });
   });
 }
@@ -226,6 +230,23 @@ describe('tutor DashboardPage', () => {
     const link = await screen.findByRole('link', { name: /requests/i });
     expect(link).toHaveAttribute('href', '/tutor/requests');
     expect(h.where).toHaveBeenCalledWith('tutorUserId', '==', 't1');
+    expect(await screen.findByText('2')).toBeInTheDocument();
+  });
+
+  // ── Pending-sessions card ──
+
+  it('renders a pending-sessions card with the count, linking to /tutor/sessions', async () => {
+    h.auth.userDoc = tutor({ enrollmentComplete: true, verification: { identityStatus: 'approved' } });
+    h.sessions = [
+      { sessionId: 's1', tutorUserId: 't1', status: 'pending' },
+      { sessionId: 's2', tutorUserId: 't1', status: 'pending' },
+      { sessionId: 's3', tutorUserId: 't1', status: 'confirmed' },
+    ];
+    renderWithProviders(<DashboardPage />);
+
+    const link = await screen.findByRole('link', { name: /^sessions$/i });
+    expect(link).toHaveAttribute('href', '/tutor/sessions');
+    // Only the two pending ones count.
     expect(await screen.findByText('2')).toBeInTheDocument();
   });
 

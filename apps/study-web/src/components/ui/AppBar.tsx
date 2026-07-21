@@ -75,6 +75,7 @@ export function AppBar() {
           </div>
 
           <MenuItem icon={<BellIcon className="h-5 w-5" />} label={t('tutor.requestsTitle')} to="/tutor/requests" onNavigate={() => setMenuOpen(false)} />
+          <MenuItem icon={<CalendarIcon className="h-5 w-5" />} label={t('tutor.sessionsTitle')} to="/tutor/sessions" onNavigate={() => setMenuOpen(false)} />
           <MenuItem icon={<CheckIcon className="h-5 w-5" />} label={t('tutor.endorsementsTitle')} to="/tutor/endorsements" onNavigate={() => setMenuOpen(false)} />
           <MenuItem icon={<UserIcon className="h-5 w-5" />} label={t('tutor.accountTitle')} to="/tutor/account" onNavigate={() => setMenuOpen(false)} />
           <MenuItem icon={<ClipboardListIcon className="h-5 w-5" />} label={t('tutor.subjectsTitle')} to="/tutor/subjects" onNavigate={() => setMenuOpen(false)} />

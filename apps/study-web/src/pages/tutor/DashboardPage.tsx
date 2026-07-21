@@ -57,6 +57,7 @@ export function DashboardPage() {
   const [scheduleLoaded, setScheduleLoaded] = useState(false);
   const [toggling, setToggling] = useState(false);
   const [pendingRequests, setPendingRequests] = useState(0);
+  const [pendingSessions, setPendingSessions] = useState(0);
   const [pendingEndorsements, setPendingEndorsements] = useState(0);
 
   useEffect(() => {
@@ -92,6 +93,25 @@ export function DashboardPage() {
       .then((snap) => {
         if (cancelled) return;
         setPendingRequests(snap.docs.filter((d) => d.data()?.status === 'pending').length);
+      })
+      .catch(() => {
+        /* leave count at 0 */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [uid]);
+
+  // Pending-session count for the sessions card. Queried by tutorUserId only
+  // (single-field index) and counted client-side — see SessionsPage for the
+  // index rationale.
+  useEffect(() => {
+    if (!uid) return;
+    let cancelled = false;
+    getDocs(query(collection(db, 'study-sessions'), where('tutorUserId', '==', uid)))
+      .then((snap) => {
+        if (cancelled) return;
+        setPendingSessions(snap.docs.filter((d) => d.data()?.status === 'pending').length);
       })
       .catch(() => {
         /* leave count at 0 */
@@ -211,6 +231,25 @@ export function DashboardPage() {
             <p className="text-xs text-gray-500">{t('tutor.dashboard.requestsCardDesc')}</p>
           </div>
           {pendingRequests > 0 && <Badge variant="red">{pendingRequests}</Badge>}
+          <ChevronRightIcon className="h-5 w-5 text-gray-400" />
+        </Card>
+      </Link>
+
+      {/* ── Session requests card ── */}
+      <Link
+        to="/tutor/sessions"
+        aria-label={t('tutor.dashboard.sessionsCardTitle')}
+        className="mb-4 block"
+      >
+        <Card interactive className="flex items-center gap-3 py-4">
+          <CalendarIcon className="h-6 w-6 text-red-600" />
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-gray-900">
+              {t('tutor.dashboard.sessionsCardTitle')}
+            </p>
+            <p className="text-xs text-gray-500">{t('tutor.dashboard.sessionsCardDesc')}</p>
+          </div>
+          {pendingSessions > 0 && <Badge variant="red">{pendingSessions}</Badge>}
           <ChevronRightIcon className="h-5 w-5 text-gray-400" />
         </Card>
       </Link>
