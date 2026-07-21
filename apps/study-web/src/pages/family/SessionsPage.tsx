@@ -5,17 +5,11 @@ import { httpsCallable } from 'firebase/functions';
 import type { RecurringSlot } from '@ejm/shared-core';
 import { db, functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
-import { Card, Button, Badge, TopNav, Spinner, Dialog } from '@ejm/shared-ui';
-import { RecurringConflictPreview } from '@/components/tutor/RecurringConflictPreview';
+import { getParentProfile } from '@ejm/shared-core';
+import { Card, Button, Badge, TopNav, Spinner } from '@ejm/shared-ui';
 import { ReasonModal } from '@/components/sessions/ReasonModal';
 import { SessionInstanceList } from '@/components/sessions/SessionInstanceList';
 import type { StudySessionDoc, StudySessionInstanceDoc } from '@/types/studySession';
-
-/** Shape of a recurring respondToSession result — drives the outcome dialog. */
-interface RecurringResult {
-  scheduledDates: string[];
-  skippedDates: string[];
-}
 
 /** What the cancel modal is targeting. */
 type CancelTarget =
@@ -46,59 +40,50 @@ function parisToday(): string {
 }
 
 /**
- * Tutor sessions hub. Reads `study-sessions` where `tutorUserId == me` (plus the
- * per-series `instances` subcollection for confirmed recurring series) and
- * presents three sections:
- *   • Pending  — accept / decline (with the recurring conflict preview).
- *   • Upcoming — confirmed one_time sessions and confirmed series interleaved by
- *     date; series expand to their instance list; cancel session / series / date.
- *   • History  — declined / cancelled / completed parents, read-only.
+ * Family sessions hub — the family-perspective mirror of the tutor SessionsPage.
+ * Reads `study-sessions` where `familyId == mine` (single-field query, sorted
+ * CLIENT-SIDE — the same index constraint the tutor page documents) plus the
+ * per-series `instances` subcollection via the NESTED path (no collection-group
+ * rule client-side). Three sections:
+ *   • Pending  — awaiting the tutor's confirmation; the family may cancel.
+ *   • Upcoming — confirmed one_time + series interleaved by date; series expand
+ *     to their instances (per-date cancel + whole-series cancel).
+ *   • History  — declined / cancelled / completed, read-only.
  *
- * INDEX NOTE: the only study-sessions composite keyed on tutorUserId is
- * (tutorUserId, status, date), which cannot serve `where(tutorUserId ==) +
- * orderBy(createdAt)`, so — like the tutor RequestsPage — we query by
- * tutorUserId alone (single-field, always indexed) and sort CLIENT-SIDE.
- * Instances are read via the NESTED per-series path (no collection-group query —
- * the client has no CG rule).
- *
- * Every mutation is NON-OPTIMISTIC: a confirmed session and a cancellation are
- * both commitments, so a row only changes state after its callable resolves; on
- * failure it stays put and re-enables.
+ * Every cancel is NON-OPTIMISTIC and calls the SAME callables as the tutor page
+ * (cancelSession / cancelSessionInstance); the backend records the party as
+ * cancelled_by_family from the caller's auth. The ReasonModal + instance list
+ * are the shared components from components/sessions/*.
  */
 export function SessionsPage() {
   const { t, i18n } = useTranslation();
-  const { firebaseUser } = useAuthStore();
-  const uid = firebaseUser?.uid ?? null;
+  const { userDoc } = useAuthStore();
+  const familyId = getParentProfile(userDoc)?.familyId ?? null;
 
   const [sessions, setSessions] = useState<StudySessionDoc[] | null>(null);
   const [instancesBySeries, setInstancesBySeries] = useState<
     Record<string, StudySessionInstanceDoc[]>
   >({});
-  const [error, setError] = useState<string | null>(null);
-  const [declineTarget, setDeclineTarget] = useState<StudySessionDoc | null>(null);
-  const [recurringResult, setRecurringResult] = useState<RecurringResult | null>(null);
   const [cancelTarget, setCancelTarget] = useState<CancelTarget | null>(null);
   const [cancelError, setCancelError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  // Key of the row awaiting the respond callable (a session id).
-  const [actingId, setActingId] = useState<string | null>(null);
   // Key of the row awaiting a cancel callable (session id, or `sid::instanceId`).
   const [cancelKey, setCancelKey] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!uid) return;
+    if (!familyId) return;
     let cancelled = false;
     (async () => {
       try {
         const snap = await getDocs(
-          query(collection(db, 'study-sessions'), where('tutorUserId', '==', uid)),
+          query(collection(db, 'study-sessions'), where('familyId', '==', familyId)),
         );
         if (cancelled) return;
         const rows = snap.docs.map((d) => d.data() as StudySessionDoc);
         rows.sort((a, b) => (b.createdAt?.seconds ?? 0) - (a.createdAt?.seconds ?? 0));
 
-        // Load the instance subcollections for confirmed recurring series via the
-        // nested path (own-uid reads; rules permit).
+        // Load instance subcollections for confirmed recurring series (nested
+        // path — the family is a session member; rules permit the read).
         const series = rows.filter((r) => r.status === 'confirmed' && r.type === 'recurring');
         const instanceLists = await Promise.all(
           series.map((s) =>
@@ -120,10 +105,10 @@ export function SessionsPage() {
     return () => {
       cancelled = true;
     };
-  }, [uid]);
+  }, [familyId]);
 
-  // Format a "YYYY-MM-DD" date. Parsed field-by-field (not `new Date(str)`, which
-  // reads as UTC midnight and can slip a day in negative offsets).
+  // Format a "YYYY-MM-DD" date field-by-field (never `new Date(str)`, which reads
+  // as UTC midnight and can slip a day in negative offsets).
   const formatDateStr = (s?: string): string => {
     if (!s) return '';
     const [y, m, d] = s.split('-').map(Number);
@@ -135,51 +120,13 @@ export function SessionsPage() {
     });
   };
 
-  const respond = async (session: StudySessionDoc, action: 'confirm' | 'decline') => {
-    const next: StudySessionDoc['status'] = action === 'confirm' ? 'confirmed' : 'declined';
-    setError(null);
-    setActingId(session.sessionId);
-    try {
-      const fn = httpsCallable<
-        { sessionId: string; action: 'confirm' | 'decline' },
-        { success: boolean; confirmed?: boolean; scheduledDates?: string[]; skippedDates?: string[] }
-      >(functions, 'respondToSession');
-      const res = await fn({ sessionId: session.sessionId, action });
-      setSessions((rs) =>
-        (rs ?? []).map((s) => (s.sessionId === session.sessionId ? { ...s, status: next } : s)),
-      );
-      if (action === 'confirm' && session.type === 'recurring' && res.data.scheduledDates) {
-        setRecurringResult({
-          scheduledDates: res.data.scheduledDates,
-          skippedDates: res.data.skippedDates ?? [],
-        });
-      }
-    } catch (e) {
-      setError(mapRespondError(e));
-    } finally {
-      setActingId(null);
-    }
-  };
-
-  // Map callable errors by CODE, not message. respondToSession raises the same
-  // `failed-precondition` for every "can't claim now" case, so it maps to ONE
-  // generic message that quotes none of them.
-  const mapRespondError = (e: unknown): string => {
-    const code = (e as { code?: string })?.code ?? '';
-    if (code.includes('failed-precondition')) return t('tutor.sessions.errorCannotConfirm');
-    if (code.includes('permission-denied')) return t('tutor.sessions.errorPermission');
-    if (code.includes('not-found')) return t('tutor.sessions.errorNotFound');
-    return t('tutor.sessions.actionError');
-  };
-
   const openCancel = (target: CancelTarget) => {
     setCancelError(null);
     setCancelTarget(target);
   };
 
   const submitCancel = async (reason: string) => {
-    if (!cancelTarget) return;
-    if (reason.length < 3) return; // client gate; the callable also enforces ≥3
+    if (!cancelTarget || reason.length < 3) return;
     const { session } = cancelTarget;
     const key =
       cancelTarget.kind === 'instance'
@@ -193,16 +140,12 @@ export function SessionsPage() {
           { sessionId: string; instanceId: string; reason: string },
           { success: boolean }
         >(functions, 'cancelSessionInstance');
-        await fn({
-          sessionId: session.sessionId,
-          instanceId: cancelTarget.instance.instanceId,
-          reason,
-        });
+        await fn({ sessionId: session.sessionId, instanceId: cancelTarget.instance.instanceId, reason });
         setInstancesBySeries((m) => ({
           ...m,
           [session.sessionId]: (m[session.sessionId] ?? []).map((i) =>
             i.instanceId === cancelTarget.instance.instanceId
-              ? { ...i, status: 'cancelled', statusReason: 'cancelled_by_tutor' }
+              ? { ...i, status: 'cancelled', statusReason: 'cancelled_by_family' }
               : i,
           ),
         }));
@@ -220,7 +163,7 @@ export function SessionsPage() {
       }
       setCancelTarget(null);
     } catch {
-      setCancelError(t('tutor.sessions.actionError'));
+      setCancelError(t('family.sessions.actionError'));
     } finally {
       setCancelKey(null);
     }
@@ -236,7 +179,7 @@ export function SessionsPage() {
   };
 
   const slotLine = (slot: RecurringSlot): string =>
-    t('tutor.sessions.recurringSlot', {
+    t('family.sessions.recurringSlot', {
       day: t(`days.${DAY_FULL[slot.day]}`),
       start: slot.startTime,
       end: slot.endTime,
@@ -266,18 +209,29 @@ export function SessionsPage() {
   }
   upcomingEntries.sort((a, b) => (a.sortDate < b.sortDate ? -1 : a.sortDate > b.sortDate ? 1 : 0));
 
-  function renderOneTimeUpcoming(s: StudySessionDoc) {
+  function sessionHeader(s: StudySessionDoc) {
     return (
-      <Card key={s.sessionId}>
-        <p className="text-sm font-semibold text-gray-900">{s.familyName}</p>
+      <>
+        <p className="text-sm font-semibold text-gray-900">{s.tutorName}</p>
         <p className="text-xs text-gray-500">
           {t(`tutor.subjects.names.${s.subject}`)} · {s.level}
         </p>
+        <p className="mt-1 text-xs text-gray-600">
+          {s.students.map((st) => `${st.firstName} (${st.age})`).join(', ')}
+        </p>
+      </>
+    );
+  }
+
+  function renderOneTimeUpcoming(s: StudySessionDoc) {
+    return (
+      <Card key={s.sessionId}>
+        {sessionHeader(s)}
         <p className="mt-1 text-xs text-gray-700">
           {formatDateStr(s.date)} · {s.startTime}
           {s.endTime ? `–${s.endTime}` : ''}
         </p>
-        <p className="text-xs text-gray-500">{t(`tutor.sessions.location.${s.location}`)}</p>
+        <p className="text-xs text-gray-500">{t(`family.sessions.location.${s.location}`)}</p>
         <div className="mt-3">
           <Button
             size="sm"
@@ -285,7 +239,7 @@ export function SessionsPage() {
             disabled={cancelKey === s.sessionId}
             onClick={() => openCancel({ kind: 'session', session: s })}
           >
-            {t('tutor.sessions.cancelSession')}
+            {t('family.sessions.cancelSession')}
           </Button>
         </div>
       </Card>
@@ -296,16 +250,13 @@ export function SessionsPage() {
     const isOpen = expanded.has(s.sessionId);
     return (
       <Card key={s.sessionId}>
-        <p className="text-sm font-semibold text-gray-900">{s.familyName}</p>
-        <p className="text-xs text-gray-500">
-          {t(`tutor.subjects.names.${s.subject}`)} · {s.level}
-        </p>
+        {sessionHeader(s)}
         {s.recurringSlots?.[0] && (
           <p className="mt-1 text-xs text-gray-700">{slotLine(s.recurringSlots[0])}</p>
         )}
         <div className="mt-3 flex gap-2">
           <Button size="sm" variant="ghost" onClick={() => toggleExpanded(s.sessionId)}>
-            {isOpen ? t('tutor.sessions.hideDates') : t('tutor.sessions.viewDates')}
+            {isOpen ? t('family.sessions.hideDates') : t('family.sessions.viewDates')}
           </Button>
           <Button
             size="sm"
@@ -313,7 +264,7 @@ export function SessionsPage() {
             disabled={cancelKey === s.sessionId}
             onClick={() => openCancel({ kind: 'series', session: s })}
           >
-            {t('tutor.sessions.cancelSeries')}
+            {t('family.sessions.cancelSeries')}
           </Button>
         </div>
 
@@ -326,11 +277,11 @@ export function SessionsPage() {
             onCancelInstance={(instance) => openCancel({ kind: 'instance', session: s, instance })}
             formatDate={formatDateStr}
             copy={{
-              noOccurrences: t('tutor.sessions.noOccurrences'),
-              cancelInstance: t('tutor.sessions.cancelInstance'),
-              statusCompleted: t('tutor.sessions.instanceStatus.completed'),
-              statusSkipped: t('tutor.sessions.instanceStatus.skipped'),
-              statusCancelled: t('tutor.sessions.instanceStatus.cancelled'),
+              noOccurrences: t('family.sessions.noOccurrences'),
+              cancelInstance: t('family.sessions.cancelInstance'),
+              statusCompleted: t('family.sessions.instanceStatus.completed'),
+              statusSkipped: t('family.sessions.instanceStatus.skipped'),
+              statusCancelled: t('family.sessions.instanceStatus.cancelled'),
             }}
           />
         )}
@@ -340,11 +291,9 @@ export function SessionsPage() {
 
   return (
     <div>
-      <TopNav title={t('tutor.sessionsTitle')} backTo="/tutor" />
+      <TopNav title={t('family.sessions.title')} backTo="/family" />
 
       <div className="px-5 pt-4 pb-8">
-        {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
-
         {sessions === null && (
           <div className="flex justify-center py-20">
             <Spinner />
@@ -356,29 +305,22 @@ export function SessionsPage() {
           upcomingEntries.length === 0 &&
           history.length === 0 && (
             <Card>
-              <p className="py-4 text-center text-sm text-gray-500">{t('tutor.sessions.empty')}</p>
+              <p className="py-4 text-center text-sm text-gray-500">
+                {t('family.sessions.empty')}
+              </p>
             </Card>
           )}
 
-        {/* ── Pending (actionable) ── */}
+        {/* ── Pending (awaiting the tutor) ── */}
         {pending.length > 0 && (
           <div className="mb-6">
             <h2 className="mb-2 text-sm font-semibold text-gray-700">
-              {t('tutor.sessions.pendingTitle')}
+              {t('family.sessions.pendingTitle')}
             </h2>
             <div className="space-y-3">
               {pending.map((s) => (
                 <Card key={s.sessionId}>
-                  <p className="text-sm font-semibold text-gray-900">{s.familyName}</p>
-                  <p className="text-xs text-gray-500">{s.parentName}</p>
-                  <p className="mt-1 text-xs text-gray-500">
-                    {t(`tutor.subjects.names.${s.subject}`)} · {s.level}
-                  </p>
-
-                  <p className="mt-1 text-xs text-gray-600">
-                    {s.students.map((st) => `${st.firstName} (${st.age})`).join(', ')}
-                  </p>
-
+                  {sessionHeader(s)}
                   <div className="mt-2 space-y-0.5 text-xs text-gray-700">
                     {s.type === 'one_time' ? (
                       <p>
@@ -386,49 +328,19 @@ export function SessionsPage() {
                         {s.endTime ? `–${s.endTime}` : ''}
                       </p>
                     ) : (
-                      <>
-                        {s.recurringSlots?.[0] && <p>{slotLine(s.recurringSlots[0])}</p>}
-                        <div className="flex flex-wrap items-center gap-2 pt-0.5">
-                          {s.schoolWeeksOnly && (
-                            <Badge variant="gray">{t('tutor.sessions.schoolWeeksOnly')}</Badge>
-                          )}
-                          {s.endDate && (
-                            <span className="text-gray-500">
-                              {t('tutor.sessions.until', { date: formatDateStr(s.endDate) })}
-                            </span>
-                          )}
-                        </div>
-                      </>
+                      s.recurringSlots?.[0] && <p>{slotLine(s.recurringSlots[0])}</p>
                     )}
-                    <p>
-                      {t(`tutor.sessions.location.${s.location}`)} ·{' '}
-                      {t('tutor.sessions.rate', { rate: s.rate })}
-                    </p>
+                    <p>{t(`family.sessions.location.${s.location}`)}</p>
                   </div>
-
-                  {s.type === 'recurring' && <RecurringConflictPreview session={s} />}
-
-                  {s.message && (
-                    <p className="mt-2 rounded-lg bg-gray-50 p-2 text-xs italic text-gray-600">
-                      {s.message}
-                    </p>
-                  )}
-
-                  <div className="mt-3 flex gap-2">
-                    <Button
-                      size="sm"
-                      disabled={actingId === s.sessionId}
-                      onClick={() => respond(s, 'confirm')}
-                    >
-                      {t('tutor.sessions.accept')}
-                    </Button>
+                  <p className="mt-1 text-xs text-amber-700">{t('family.sessions.awaitingTutor')}</p>
+                  <div className="mt-3">
                     <Button
                       size="sm"
                       variant="outline"
-                      disabled={actingId === s.sessionId}
-                      onClick={() => setDeclineTarget(s)}
+                      disabled={cancelKey === s.sessionId}
+                      onClick={() => openCancel({ kind: 'session', session: s })}
                     >
-                      {t('tutor.sessions.decline')}
+                      {t('family.sessions.cancelRequest')}
                     </Button>
                   </div>
                 </Card>
@@ -441,7 +353,7 @@ export function SessionsPage() {
         {upcomingEntries.length > 0 && (
           <div className="mb-6">
             <h2 className="mb-2 text-sm font-semibold text-gray-700">
-              {t('tutor.sessions.upcomingTitle')}
+              {t('family.sessions.upcomingTitle')}
             </h2>
             <div className="space-y-3">{upcomingEntries.map((e) => e.el)}</div>
           </div>
@@ -451,19 +363,19 @@ export function SessionsPage() {
         {history.length > 0 && (
           <div className="mb-6">
             <h2 className="mb-2 text-sm font-semibold text-gray-700">
-              {t('tutor.sessions.historyTitle')}
+              {t('family.sessions.historyTitle')}
             </h2>
             <div className="space-y-3">
               {history.map((s) => (
                 <Card key={s.sessionId}>
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="text-sm font-semibold text-gray-900">{s.familyName}</p>
+                      <p className="text-sm font-semibold text-gray-900">{s.tutorName}</p>
                       <p className="text-xs text-gray-500">
                         {t(`tutor.subjects.names.${s.subject}`)} · {s.level}
                       </p>
                     </div>
-                    <Badge variant="gray">{t(`tutor.sessions.status.${s.status}`)}</Badge>
+                    <Badge variant="gray">{t(`family.sessions.status.${s.status}`)}</Badge>
                   </div>
                 </Card>
               ))}
@@ -472,80 +384,25 @@ export function SessionsPage() {
         )}
       </div>
 
-      {/* ── Decline confirmation (no reason — a decline carries none) ── */}
-      <Dialog open={declineTarget !== null} onClose={() => setDeclineTarget(null)}>
-        <h3 className="mb-2 text-lg font-bold">{t('tutor.sessions.confirmDeclineTitle')}</h3>
-        <p className="mb-5 text-sm text-gray-600">{t('tutor.sessions.confirmDeclineDesc')}</p>
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            className="flex-1"
-            disabled={actingId !== null}
-            onClick={() => {
-              const target = declineTarget;
-              setDeclineTarget(null);
-              if (target) respond(target, 'decline');
-            }}
-          >
-            {t('tutor.sessions.confirmDeclineCta')}
-          </Button>
-          <Button variant="ghost" className="flex-1" onClick={() => setDeclineTarget(null)}>
-            {t('common.cancel')}
-          </Button>
-        </div>
-      </Dialog>
-
       {/* ── Cancellation (reason required, ≥3 chars) ── */}
       <ReasonModal
         open={cancelTarget !== null}
         title={
           cancelTarget?.kind === 'series'
-            ? t('tutor.sessions.cancelSeriesTitle')
+            ? t('family.sessions.cancelSeriesTitle')
             : cancelTarget?.kind === 'instance'
-              ? t('tutor.sessions.cancelInstanceTitle')
-              : t('tutor.sessions.cancelTitle')
+              ? t('family.sessions.cancelInstanceTitle')
+              : t('family.sessions.cancelTitle')
         }
-        description={t('tutor.sessions.cancelDesc')}
-        placeholder={t('tutor.sessions.cancelReasonPlaceholder')}
-        confirmLabel={t('tutor.sessions.cancelConfirm')}
-        keepLabel={t('tutor.sessions.cancelKeep')}
+        description={t('family.sessions.cancelDesc')}
+        placeholder={t('family.sessions.cancelReasonPlaceholder')}
+        confirmLabel={t('family.sessions.cancelConfirm')}
+        keepLabel={t('family.sessions.cancelKeep')}
         submitting={cancelKey !== null}
         error={cancelError}
         onConfirm={submitCancel}
         onClose={() => setCancelTarget(null)}
       />
-
-      {/* ── Recurring confirm result ── */}
-      <Dialog open={recurringResult !== null} onClose={() => setRecurringResult(null)}>
-        {recurringResult && (
-          <>
-            <h3 className="mb-2 text-lg font-bold">{t('tutor.sessions.result.title')}</h3>
-            <p className="mb-3 text-sm text-gray-600">
-              {t('tutor.sessions.result.summary', {
-                scheduled: recurringResult.scheduledDates.length,
-                total: recurringResult.scheduledDates.length + recurringResult.skippedDates.length,
-              })}
-            </p>
-            {recurringResult.skippedDates.length > 0 && (
-              <div className="mb-4 rounded-lg bg-amber-50 p-3">
-                <p className="mb-1 text-xs font-semibold text-amber-800">
-                  {t('tutor.sessions.result.skippedTitle')}
-                </p>
-                <ul className="space-y-0.5">
-                  {recurringResult.skippedDates.map((d) => (
-                    <li key={d} className="text-xs text-amber-700">
-                      {formatDateStr(d)}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            <Button className="w-full" onClick={() => setRecurringResult(null)}>
-              {t('common.done')}
-            </Button>
-          </>
-        )}
-      </Dialog>
     </div>
   );
 }

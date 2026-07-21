@@ -35,6 +35,10 @@ export function DashboardPage() {
   const [isVerified, setIsVerified] = useState<boolean | null>(null);
   // Live pending/accepted request counts (null while loading).
   const [counts, setCounts] = useState<{ pending: number; accepted: number } | null>(null);
+  // Live pending/upcoming session counts (null while loading).
+  const [sessionCounts, setSessionCounts] = useState<{ pending: number; upcoming: number } | null>(
+    null,
+  );
 
   useEffect(() => {
     // A parent always has a familyId; if it is somehow absent we leave the gate
@@ -75,6 +79,31 @@ export function DashboardPage() {
       })
       .catch(() => {
         if (!cancelled) setCounts({ pending: 0, accepted: 0 });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [familyId]);
+
+  // Live session counts for the sessions summary card (equality-only query,
+  // counted client-side — mirrors the requests card).
+  useEffect(() => {
+    if (!familyId) return;
+    let cancelled = false;
+    getDocs(query(collection(db, 'study-sessions'), where('familyId', '==', familyId)))
+      .then((snap) => {
+        if (cancelled) return;
+        let pending = 0;
+        let upcoming = 0;
+        snap.docs.forEach((d) => {
+          const status = d.data()?.status;
+          if (status === 'pending') pending += 1;
+          else if (status === 'confirmed') upcoming += 1;
+        });
+        setSessionCounts({ pending, upcoming });
+      })
+      .catch(() => {
+        if (!cancelled) setSessionCounts({ pending: 0, upcoming: 0 });
       });
     return () => {
       cancelled = true;
@@ -142,6 +171,40 @@ export function DashboardPage() {
             ) : (
               <p className="py-4 text-center text-sm text-gray-500">
                 {t('family.dashboard.noRequests')}
+              </p>
+            )}
+          </Card>
+        </Link>
+      </div>
+
+      {/* ── Sessions summary (live counts → /family/sessions) ── */}
+      <div className="mb-6">
+        <h2 className="mb-2 text-sm font-semibold text-gray-700">
+          {t('family.dashboard.sessionsTitle')}
+        </h2>
+        <Link
+          to="/family/sessions"
+          aria-label={t('family.dashboard.sessionsTitle')}
+          className="block"
+        >
+          <Card interactive>
+            {sessionCounts === null ? (
+              <div className="py-4" />
+            ) : sessionCounts.pending + sessionCounts.upcoming > 0 ? (
+              <div className="flex items-center gap-6 py-2">
+                <div>
+                  <p className="text-2xl font-bold text-gray-900">{sessionCounts.pending}</p>
+                  <p className="text-xs text-gray-500">{t('family.dashboard.sessionsPending')}</p>
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-gray-900">{sessionCounts.upcoming}</p>
+                  <p className="text-xs text-gray-500">{t('family.dashboard.sessionsUpcoming')}</p>
+                </div>
+                <ChevronRightIcon className="ml-auto h-5 w-5 text-gray-400" />
+              </div>
+            ) : (
+              <p className="py-4 text-center text-sm text-gray-500">
+                {t('family.dashboard.noSessions')}
               </p>
             )}
           </Card>
