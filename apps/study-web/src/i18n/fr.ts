@@ -500,6 +500,23 @@ export default {
       booking: 'Réservation…',
       loadError: 'Impossible de charger ce professeur. Revenez en arrière et réessayez.',
       theTutor: 'le professeur',
+      mode: {
+        oneTime: 'Ponctuel',
+        weekly: 'Hebdomadaire',
+      },
+      weekly: {
+        pickSlot: 'Choisissez un créneau hebdomadaire',
+        noSlots: 'Aucun créneau hebdomadaire n\'est disponible assez souvent — essayez un cours ponctuel.',
+        schoolWeeksOnly: 'Ignorer les semaines de vacances scolaires',
+        endDateLabel: 'Date de fin (facultatif)',
+        projectionTitle: 'Prochaines séances',
+        skippedHoliday: 'ignorée — vacances scolaires',
+        conflictNote: 'Toute date où le professeur n\'est pas disponible est ignorée automatiquement lors de sa confirmation.',
+        submit: 'Demander des cours hebdomadaires',
+        success: {
+          desc: 'Demande hebdomadaire envoyée — {{name}} doit confirmer. Nous réserverons les {{day}} à {{time}} une fois acceptée.',
+        },
+      },
       success: {
         title: 'Demande envoyée',
         desc: 'Demande envoyée — {{name}} doit confirmer avant que le cours soit réservé.',

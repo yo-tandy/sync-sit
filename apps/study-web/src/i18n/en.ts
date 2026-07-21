@@ -500,6 +500,23 @@ export default {
       booking: 'Booking…',
       loadError: 'Could not load this tutor. Please go back and try again.',
       theTutor: 'the tutor',
+      mode: {
+        oneTime: 'One-time',
+        weekly: 'Weekly',
+      },
+      weekly: {
+        pickSlot: 'Pick a weekly time',
+        noSlots: 'No weekly time is open often enough — try a one-time session instead.',
+        schoolWeeksOnly: 'Skip school-holiday weeks',
+        endDateLabel: 'End date (optional)',
+        projectionTitle: 'Next sessions',
+        skippedHoliday: 'skipped — school holidays',
+        conflictNote: 'Any date the tutor is unavailable is skipped automatically when they confirm.',
+        submit: 'Request weekly sessions',
+        success: {
+          desc: 'Weekly request sent — {{name}} must confirm. We\'ll book {{day}}s at {{time}} once accepted.',
+        },
+      },
       success: {
         title: 'Request sent',
         desc: 'Request sent — {{name}} must confirm before the session is booked.',

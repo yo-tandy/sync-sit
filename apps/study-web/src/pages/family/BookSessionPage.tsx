@@ -6,10 +6,12 @@ import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { getParentProfile } from '@ejm/shared-core';
-import type { KidDoc } from '@ejm/shared-core';
+import type { KidDoc, DayOfWeek } from '@ejm/shared-core';
 import type { LocationPref, TutorSearchResult } from '@ejm/study-core';
-import { Button, Select, Textarea, Checkbox, Chip, Card, TopNav, Spinner, Dialog } from '@ejm/shared-ui';
-import { deriveStartChips } from './bookingSlots';
+import { expandRecurringDates } from '@ejm/study-core';
+import { useHolidays } from '@/hooks/useHolidays';
+import { Button, Input, Select, Textarea, Checkbox, Chip, Card, TopNav, Spinner, Dialog } from '@ejm/shared-ui';
+import { deriveStartChips, deriveWeeklySlots, type WeeklyCandidate } from './bookingSlots';
 
 /**
  * Family booking page. Reached from an accepted-tutor context (TutorCard or the
@@ -30,6 +32,12 @@ import { deriveStartChips } from './bookingSlots';
  * START times for the chosen session length from the boolean[96] grid; picking a
  * chip arms Book. A `permission-denied` (no accepted request) renders a friendly
  * "request contact first" screen — we NEVER surface a raw backend message.
+ *
+ * WEEKLY mode books a recurring series. It loads the full 28-day window in one
+ * call and derives offerable weekly (day, startTime) slots via deriveWeeklySlots
+ * (a ≥3-of-4-occurrences client heuristic; the server re-checks each concrete
+ * date and skips conflicts). A projection panel lists the next 8 occurrences,
+ * greying school-holiday weeks when schoolWeeksOnly is on.
  */
 
 /** Router state carried into the page from an accepted-tutor entry point. */
@@ -64,6 +72,21 @@ interface AvailabilityDate {
 /** Two 14-day pages = a 28-day look-ahead (the callable's hard cap). */
 const PAGE_DAYS = 14;
 const MAX_PAGE = 1;
+/** Weekly derivation window: the full 28-day span (4 occurrences per weekday). */
+const WEEKLY_WINDOW_DAYS = 28;
+/** Occurrences the tutor's accept flow materializes — mirror in the projection. */
+const PROJECTION_WEEKS = 8;
+
+/** 3-letter weekday code → the full-name i18n key under `days.*`. */
+const DAY_FULL: Record<DayOfWeek, string> = {
+  mon: 'monday',
+  tue: 'tuesday',
+  wed: 'wednesday',
+  thu: 'thursday',
+  fri: 'friday',
+  sat: 'saturday',
+  sun: 'sunday',
+};
 
 /** Paris "YYYY-MM-DD" today (en-CA renders ISO order; tz-correct via runtime). */
 function parisToday(): string {
@@ -115,6 +138,16 @@ export function BookSessionPage() {
 
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedStart, setSelectedStart] = useState<string | null>(null);
+
+  // ── Weekly (recurring) mode ──
+  const { periods: holidayPeriods } = useHolidays();
+  const [mode, setMode] = useState<'one_time' | 'weekly'>('one_time');
+  const [weeklyDates, setWeeklyDates] = useState<AvailabilityDate[] | null>(null);
+  const [weeklyLoading, setWeeklyLoading] = useState(false);
+  const [weeklyError, setWeeklyError] = useState(false);
+  const [weeklySlot, setWeeklySlot] = useState<WeeklyCandidate | null>(null);
+  const [schoolWeeksOnly, setSchoolWeeksOnly] = useState(true);
+  const [endDate, setEndDate] = useState('');
 
   const [submitting, setSubmitting] = useState(false);
   const [bookError, setBookError] = useState<string | null>(null);
@@ -250,9 +283,70 @@ export function BookSessionPage() {
     return availability.map((d) => ({ date: d.date, chips: deriveStartChips(d.slots, sessionLength) }));
   }, [availability, sessionLength]);
 
+  // ── Weekly: fetch the full 28-day window once when weekly mode is opened ──
+  useEffect(() => {
+    if (mode !== 'weekly' || !card || accessDenied || weeklyDates !== null) return;
+    let cancelled = false;
+    (async () => {
+      if (!tutorUserId) return;
+      setWeeklyLoading(true);
+      setWeeklyError(false);
+      const startDate = parisToday();
+      const finalEndDate = addDays(startDate, WEEKLY_WINDOW_DAYS - 1);
+      try {
+        const fn = httpsCallable<
+          { tutorUserId: string; startDate: string; endDate: string },
+          { dates: AvailabilityDate[] }
+        >(functions, 'getTutorAvailability');
+        const res = await fn({ tutorUserId, startDate, endDate: finalEndDate });
+        if (!cancelled) setWeeklyDates(res.data.dates ?? []);
+      } catch (err: unknown) {
+        if (cancelled) return;
+        if ((err as { code?: string })?.code === 'functions/permission-denied') {
+          setAccessDenied(true);
+        } else {
+          setWeeklyError(true);
+          setWeeklyDates([]);
+        }
+      } finally {
+        if (!cancelled) setWeeklyLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [mode, card, accessDenied, weeklyDates, tutorUserId]);
+
+  // Offerable weekly slots re-derive with the length (same ≥3-of-4 heuristic).
+  const weeklyCandidates = useMemo(() => {
+    if (!weeklyDates || !sessionLength) return [] as WeeklyCandidate[];
+    return deriveWeeklySlots(weeklyDates, sessionLength);
+  }, [weeklyDates, sessionLength]);
+
+  // Projection: the next 8 occurrences of the chosen weekly slot. Expanded with
+  // schoolWeeksOnly=false so holiday dates still appear as explicit skip rows;
+  // the per-row holiday classification below greys them when the toggle is on.
+  const projection = useMemo(() => {
+    if (!weeklySlot) return [] as { date: string; holiday: boolean }[];
+    const fromDate = addDays(parisToday(), 1); // ~notice buffer; server authoritative
+    const dates = expandRecurringDates(
+      { day: weeklySlot.day, startTime: weeklySlot.startTime, endTime: '' },
+      fromDate,
+      PROJECTION_WEEKS,
+      endDate || undefined,
+      false,
+      [],
+    );
+    return dates.map((date) => ({
+      date,
+      holiday: holidayPeriods.some((p) => date >= p.startDate && date <= p.endDate),
+    }));
+  }, [weeklySlot, endDate, holidayPeriods]);
+
   const clearArmed = () => {
     setSelectedDate(null);
     setSelectedStart(null);
+    setWeeklySlot(null);
   };
 
   const toggleStudent = (kidId: string) =>
@@ -273,30 +367,39 @@ export function BookSessionPage() {
     });
   };
 
+  const studentIds = students.filter((s) => selectedStudents.has(s.kidId)).map((s) => s.kidId);
+
   const canBook =
-    !!selectedDate &&
-    !!selectedStart &&
     selectedStudents.size > 0 &&
     !!sessionLength &&
     !!locationPref &&
-    !submitting;
+    !submitting &&
+    (mode === 'one_time' ? !!selectedDate && !!selectedStart : !!weeklySlot);
 
   const handleBook = async () => {
-    if (!canBook || !tutorUserId || !selectedDate || !selectedStart || !sessionLength) return;
+    if (!canBook || !tutorUserId || !sessionLength) return;
     setSubmitting(true);
     setBookError(null);
     const trimmed = message.trim();
-    const payload = {
+    const common = {
       tutorUserId,
       subject,
       level,
-      date: selectedDate,
-      startTime: selectedStart,
       sessionLengthMinutes: sessionLength,
       location: locationPref as LocationPref,
-      studentIds: students.filter((s) => selectedStudents.has(s.kidId)).map((s) => s.kidId),
+      studentIds,
       ...(trimmed ? { message: trimmed } : {}),
     };
+    const payload =
+      mode === 'weekly'
+        ? {
+            ...common,
+            type: 'recurring' as const,
+            recurringSlot: { day: weeklySlot!.day, startTime: weeklySlot!.startTime },
+            schoolWeeksOnly,
+            ...(endDate ? { endDate } : {}),
+          }
+        : { ...common, date: selectedDate!, startTime: selectedStart! };
     try {
       const fn = httpsCallable(functions, 'bookSession');
       await fn(payload);
@@ -306,11 +409,13 @@ export function BookSessionPage() {
       if (code.includes('permission-denied')) {
         setAccessDenied(true);
       } else if (code.includes('invalid-argument')) {
-        // The slot was claimed between load and submit — refresh the page and
-        // ask for another time (never quote the backend).
+        // The slot was claimed between load and submit (or the recurring window
+        // yielded zero candidates) — refresh and ask for another time. We never
+        // quote the backend message.
         clearArmed();
         setBookError(t('family.book.error.slotTaken'));
-        loadAvailability(pageIndex);
+        if (mode === 'weekly') setWeeklyDates(null);
+        else loadAvailability(pageIndex);
       } else if (code.includes('already-exists')) {
         setBookError(t('family.book.error.duplicate'));
       } else if (code.includes('failed-precondition')) {
@@ -388,6 +493,25 @@ export function BookSessionPage() {
           </p>
         </Card>
 
+        {/* Mode toggle — one-time vs weekly recurring. Shared fields below
+            (students/length/location/message) persist across the switch. */}
+        <div className="mb-5 flex gap-2">
+          <Button
+            size="sm"
+            variant={mode === 'one_time' ? 'primary' : 'ghost'}
+            onClick={() => setMode('one_time')}
+          >
+            {t('family.book.mode.oneTime')}
+          </Button>
+          <Button
+            size="sm"
+            variant={mode === 'weekly' ? 'primary' : 'ghost'}
+            onClick={() => setMode('weekly')}
+          >
+            {t('family.book.mode.weekly')}
+          </Button>
+        </div>
+
         {/* Students */}
         <p className="mb-2 text-sm font-semibold text-gray-700">{t('family.book.studentsLabel')}</p>
         {students.length === 0 ? (
@@ -439,7 +563,9 @@ export function BookSessionPage() {
           placeholder={t('family.book.messagePlaceholder')}
         />
 
-        {/* ── Availability calendar ── */}
+        {/* ── One-time: availability calendar ── */}
+        {mode === 'one_time' && (
+          <>
         <div className="mb-2 flex items-center justify-between">
           <p className="text-sm font-semibold text-gray-700">{t('family.book.pickTime')}</p>
           <div className="flex items-center gap-2">
@@ -508,11 +634,102 @@ export function BookSessionPage() {
               </div>
             ),
           )}
+          </>
+        )}
+
+        {/* ── Weekly: recurring slot picker + projection ── */}
+        {mode === 'weekly' && (
+          <>
+            {weeklyLoading && (
+              <div className="flex justify-center py-10">
+                <Spinner />
+              </div>
+            )}
+
+            {!weeklyLoading && weeklyError && (
+              <p className="py-6 text-center text-sm text-red-600">{t('family.book.availError')}</p>
+            )}
+
+            {!weeklyLoading && !weeklyError && (
+              <>
+                <p className="mb-2 text-sm font-semibold text-gray-700">
+                  {t('family.book.weekly.pickSlot')}
+                </p>
+                {weeklyCandidates.length === 0 ? (
+                  <Card className="mb-5">
+                    <p className="py-4 text-center text-sm text-gray-500">
+                      {t('family.book.weekly.noSlots')}
+                    </p>
+                  </Card>
+                ) : (
+                  <div className="mb-5 flex flex-wrap gap-2">
+                    {weeklyCandidates.map((c) => (
+                      <Chip
+                        key={`${c.day}-${c.startTime}`}
+                        selected={weeklySlot?.day === c.day && weeklySlot?.startTime === c.startTime}
+                        onClick={() => setWeeklySlot(c)}
+                      >
+                        {t(`days.${DAY_FULL[c.day]}`)} · {c.startTime}
+                      </Chip>
+                    ))}
+                  </div>
+                )}
+
+                <Checkbox
+                  checked={schoolWeeksOnly}
+                  onChange={(e) => setSchoolWeeksOnly(e.target.checked)}
+                  label={t('family.book.weekly.schoolWeeksOnly')}
+                  className="mb-4"
+                />
+
+                <Input
+                  label={t('family.book.weekly.endDateLabel')}
+                  type="date"
+                  value={endDate}
+                  min={weeklySlot ? projection[0]?.date : undefined}
+                  onChange={(e) => setEndDate(e.target.value)}
+                />
+
+                {weeklySlot && projection.length > 0 && (
+                  <div className="mb-5">
+                    <p className="mb-2 text-xs font-semibold text-gray-600">
+                      {t('family.book.weekly.projectionTitle')}
+                    </p>
+                    <ul className="space-y-1">
+                      {projection.map((p) => {
+                        const skipped = schoolWeeksOnly && p.holiday;
+                        return (
+                          <li key={p.date} className="flex items-center justify-between text-xs">
+                            <span className={skipped ? 'text-gray-400 line-through' : 'text-gray-700'}>
+                              {formatDateStr(p.date)}
+                            </span>
+                            {skipped && (
+                              <span className="text-gray-400">
+                                {t('family.book.weekly.skippedHoliday')}
+                              </span>
+                            )}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                    <p className="mt-2 text-[11px] leading-tight text-gray-400">
+                      {t('family.book.weekly.conflictNote')}
+                    </p>
+                  </div>
+                )}
+              </>
+            )}
+          </>
+        )}
 
         {bookError && <p className="mt-4 mb-2 text-sm text-red-600">{bookError}</p>}
 
         <Button className="mt-4" disabled={!canBook} onClick={handleBook}>
-          {submitting ? t('family.book.booking') : t('family.book.submit')}
+          {submitting
+            ? t('family.book.booking')
+            : mode === 'weekly'
+              ? t('family.book.weekly.submit')
+              : t('family.book.submit')}
         </Button>
       </div>
 
@@ -520,7 +737,13 @@ export function BookSessionPage() {
       <Dialog open={successOpen} onClose={() => navigate('/family')}>
         <h3 className="mb-2 text-lg font-bold">{t('family.book.success.title')}</h3>
         <p className="mb-5 text-sm text-gray-600">
-          {t('family.book.success.desc', { name: card.tutorName || t('family.book.theTutor') })}
+          {mode === 'weekly' && weeklySlot
+            ? t('family.book.weekly.success.desc', {
+                name: card.tutorName || t('family.book.theTutor'),
+                day: t(`days.${DAY_FULL[weeklySlot.day]}`),
+                time: weeklySlot.startTime,
+              })
+            : t('family.book.success.desc', { name: card.tutorName || t('family.book.theTutor') })}
         </p>
         <Button className="w-full" onClick={() => navigate('/family')}>
           {t('common.done')}

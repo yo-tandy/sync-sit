@@ -13,12 +13,17 @@ const h = vi.hoisted(() => ({
     userDoc: null as unknown,
   },
   kids: [] as { id: string; data: Record<string, unknown> }[],
+  holidays: { periods: [] as { startDate: string; endDate: string }[], loading: false },
   getDocs: vi.fn(),
   // (name, payload) => Promise<{ data }>. Reassigned per test.
   callable: vi.fn(),
 }));
 
 vi.mock('@/config/firebase', () => ({ db: {}, functions: {} }));
+
+vi.mock('@/hooks/useHolidays', () => ({
+  useHolidays: () => ({ ...h.holidays, schoolYear: '2026-2027' }),
+}));
 
 vi.mock('firebase/firestore', () => ({
   collection: (_db: unknown, ...path: string[]) => ({ path: path.join('/') }),
@@ -84,6 +89,7 @@ function reset() {
     { id: 'k1', data: { firstName: 'Noa', age: 10 } },
     { id: 'k2', data: { firstName: 'Eli', age: 8 } },
   ];
+  h.holidays = { periods: [], loading: false };
   h.getDocs.mockReset();
   h.getDocs.mockImplementation(() =>
     Promise.resolve({ docs: h.kids.map((k) => ({ id: k.id, data: () => k.data })) }),
@@ -276,5 +282,114 @@ describe('family BookSessionPage', () => {
     );
     // The tutor's session length feeds the calendar chips.
     expect(await screen.findByRole('button', { name: '14:00' })).toBeInTheDocument();
+  });
+});
+
+/** A weekly availability window: four Mondays, each with 14:00–15:00 free. */
+function weeklyWindow() {
+  const slots = new Array(96).fill(false);
+  for (let i = 56; i < 60; i++) slots[i] = true;
+  return {
+    data: {
+      dates: ['2026-07-06', '2026-07-13', '2026-07-20', '2026-07-27'].map((date) => ({
+        date,
+        slots,
+      })),
+    },
+  };
+}
+
+/** Switch to weekly mode and select the offered Monday 14:00 slot. */
+async function armWeekly() {
+  fireEvent.click(await screen.findByRole('button', { name: /^Weekly$/i }));
+  const chip = await screen.findByRole('button', { name: /Monday.*14:00/ });
+  fireEvent.click(chip);
+  fireEvent.click(await screen.findByLabelText(/Noa/));
+}
+
+describe('family BookSessionPage — weekly mode', () => {
+  beforeEach(() => {
+    reset();
+    // getTutorAvailability serves the 4-Monday window for weekly derivation.
+    h.callable.mockImplementation((name: string) => {
+      if (name === 'getTutorAvailability') return Promise.resolve(weeklyWindow());
+      if (name === 'bookSession') return Promise.resolve({ data: { sessionId: 's1' } });
+      return Promise.resolve({ data: {} });
+    });
+  });
+
+  it('sends an exact recurring bookSession payload (schoolWeeksOnly default true, endDate omitted)', async () => {
+    renderBook(fullState());
+    await armWeekly();
+    fireEvent.click(screen.getByRole('button', { name: /request weekly/i }));
+
+    await waitFor(() => {
+      const call = h.callable.mock.calls.find((c) => c[0] === 'bookSession');
+      expect(call?.[1]).toEqual({
+        tutorUserId: 't1',
+        subject: 'math',
+        level: '6e',
+        type: 'recurring',
+        recurringSlot: { day: 'mon', startTime: '14:00' },
+        schoolWeeksOnly: true,
+        sessionLengthMinutes: 60,
+        location: 'online',
+        studentIds: ['k1'],
+      });
+    });
+  });
+
+  it('includes endDate in the payload only when set', async () => {
+    renderBook(fullState());
+    await armWeekly();
+    fireEvent.change(screen.getByLabelText(/end date/i), { target: { value: '2026-12-31' } });
+    fireEvent.click(screen.getByRole('button', { name: /request weekly/i }));
+
+    await waitFor(() => {
+      const call = h.callable.mock.calls.find((c) => c[0] === 'bookSession');
+      expect(call?.[1]).toMatchObject({ endDate: '2026-12-31' });
+    });
+  });
+
+  it('preserves shared form state (students, length) across a mode toggle', async () => {
+    renderBook(fullState());
+    // In one-time mode, pick a student and a 30-min length.
+    fireEvent.click(await screen.findByLabelText(/Noa/));
+    fireEvent.change(screen.getByLabelText(/session length/i), { target: { value: '30' } });
+
+    // Toggle to weekly — the student + length selections must survive.
+    fireEvent.click(screen.getByRole('button', { name: /^Weekly$/i }));
+
+    expect((screen.getByLabelText(/Noa/) as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByLabelText(/session length/i) as HTMLSelectElement).value).toBe('30');
+  });
+
+  it('greys holiday dates in the projection when schoolWeeksOnly is on', async () => {
+    // Every date falls in a holiday period → all projected dates are skipped.
+    h.holidays = { periods: [{ startDate: '2000-01-01', endDate: '2100-12-31' }], loading: false };
+    renderBook(fullState());
+    await armWeekly();
+
+    expect(await screen.findAllByText(/school holidays/i)).not.toHaveLength(0);
+
+    // Turning schoolWeeksOnly off keeps holiday dates in the series (no skip copy).
+    fireEvent.click(screen.getByLabelText(/school-holiday weeks/i));
+    await waitFor(() => expect(screen.queryByText(/school holidays/i)).not.toBeInTheDocument());
+  });
+
+  it('defaults schoolWeeksOnly to checked', async () => {
+    renderBook(fullState());
+    await armWeekly();
+    expect((screen.getByLabelText(/school-holiday weeks/i) as HTMLInputElement).checked).toBe(true);
+  });
+
+  it('shows a weekly-cadence success dialog naming the tutor', async () => {
+    renderBook(fullState());
+    await armWeekly();
+    fireEvent.click(screen.getByRole('button', { name: /request weekly/i }));
+
+    // The weekly success copy states the cadence + that the tutor confirms.
+    expect(await screen.findByText(/must confirm/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Mondays at 14:00|once accepted/i)).toBeInTheDocument();
   });
 });
