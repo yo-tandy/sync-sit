@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { screen, fireEvent, waitFor } from '@testing-library/react';
 import { renderWithProviders } from '@/__tests__/test-utils';
 
@@ -8,6 +8,8 @@ import { renderWithProviders } from '@/__tests__/test-utils';
 const h = vi.hoisted(() => ({
   auth: { firebaseUser: { uid: 't1' } as { uid: string } | null },
   sessions: [] as Record<string, unknown>[],
+  // Instance docs per series (study-sessions/{sid}/instances), keyed by sessionId.
+  instances: {} as Record<string, Record<string, unknown>[]>,
   where: vi.fn((field: string, op: string, val: unknown) => ({ where: [field, op, val] })),
   getDocs: vi.fn(),
   callable: vi.fn(),
@@ -106,11 +108,21 @@ function recurring(overrides: Record<string, unknown> = {}) {
 function reset() {
   h.auth.firebaseUser = { uid: 't1' };
   h.sessions = [];
+  h.instances = {};
   h.where.mockClear();
   h.getDocs.mockReset();
-  h.getDocs.mockImplementation(() =>
-    Promise.resolve({ docs: h.sessions.map((s) => ({ id: s.sessionId, data: () => s })) }),
-  );
+  // Route by collection path: 'study-sessions' → the sessions query;
+  // 'study-sessions/{sid}/instances' → that series' instance subcollection.
+  // Handles both a query() (→ .query[0].path) and a bare collection() ref (→ .path).
+  h.getDocs.mockImplementation((q: { query?: { path: string }[]; path?: string }) => {
+    const path = q?.query?.[0]?.path ?? q?.path ?? '';
+    if (path.endsWith('/instances')) {
+      const sid = path.split('/')[1];
+      const rows = h.instances[sid] ?? [];
+      return Promise.resolve({ docs: rows.map((r) => ({ id: r.instanceId, data: () => r })) });
+    }
+    return Promise.resolve({ docs: h.sessions.map((s) => ({ id: s.sessionId, data: () => s })) });
+  });
   h.callable.mockReset();
   h.callable.mockResolvedValue({ data: { success: true } });
 }
@@ -266,5 +278,206 @@ describe('tutor SessionsPage', () => {
     h.sessions = [];
     renderWithProviders(<SessionsPage />);
     expect(await screen.findByText(/no session requests|no sessions/i)).toBeInTheDocument();
+  });
+});
+
+// ── Upcoming / history / cancellation (Task 3) ──
+// "today" is pinned so date>=today filtering is deterministic. 2026-08-01T09:00Z
+// is Paris 2026-08-01.
+describe('tutor SessionsPage — management', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-08-01T09:00:00Z'));
+    reset();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  function confirmedOneTime(overrides: Record<string, unknown> = {}) {
+    return oneTime({ status: 'confirmed', ...overrides });
+  }
+  function confirmedRecurring(overrides: Record<string, unknown> = {}) {
+    return recurring({ status: 'confirmed', ...overrides });
+  }
+  function instanceDoc(overrides: Record<string, unknown> = {}) {
+    return {
+      instanceId: '2026-08-10',
+      sessionId: 'sR',
+      date: '2026-08-10',
+      startTime: '17:00',
+      endTime: '18:00',
+      status: 'scheduled',
+      location: 'online',
+      ...overrides,
+    };
+  }
+
+  it('interleaves confirmed one_time sessions and recurring series by date', async () => {
+    h.sessions = [
+      confirmedOneTime({ sessionId: 's1', familyName: 'Cohen', date: '2026-08-20' }),
+      confirmedRecurring({ sessionId: 'sR', familyName: 'Levy' }),
+    ];
+    h.instances = {
+      sR: [
+        instanceDoc({ instanceId: '2026-08-05', date: '2026-08-05' }),
+        instanceDoc({ instanceId: '2026-08-12', date: '2026-08-12' }),
+      ],
+    };
+    renderWithProviders(<SessionsPage />);
+
+    const levy = await screen.findByText('Levy');
+    const cohen = await screen.findByText('Cohen');
+    // Series' earliest instance (Aug 5) precedes the one_time (Aug 20).
+    expect(levy.compareDocumentPosition(cohen) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('expands a series to its instance list with status chips (skipped, completed)', async () => {
+    h.sessions = [confirmedRecurring({ sessionId: 'sR', familyName: 'Levy' })];
+    h.instances = {
+      sR: [
+        instanceDoc({ instanceId: '2026-08-05', date: '2026-08-05', status: 'scheduled' }),
+        instanceDoc({
+          instanceId: '2026-08-12',
+          date: '2026-08-12',
+          status: 'cancelled',
+          statusReason: 'conflict_skip',
+        }),
+        instanceDoc({ instanceId: '2026-07-22', date: '2026-07-22', status: 'completed' }),
+      ],
+    };
+    renderWithProviders(<SessionsPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /view dates|expand|occurrences/i }));
+
+    expect(await screen.findByText(/skipped/i)).toBeInTheDocument();
+    expect(screen.getByText(/completed/i)).toBeInTheDocument();
+    // The scheduled future date is cancelable.
+    expect(screen.getByRole('button', { name: /cancel this date/i })).toBeInTheDocument();
+  });
+
+  it('cancel session → reason modal → cancelSession({sessionId, reason}) trimmed', async () => {
+    h.sessions = [confirmedOneTime({ sessionId: 'sOT', date: '2026-08-20' })];
+    renderWithProviders(<SessionsPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /cancel session/i }));
+    fireEvent.change(await screen.findByRole('textbox'), {
+      target: { value: '  scheduling clash  ' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /confirm cancellation/i }));
+
+    await waitFor(() =>
+      expect(h.callable).toHaveBeenCalledWith('cancelSession', {
+        sessionId: 'sOT',
+        reason: 'scheduling clash',
+      }),
+    );
+  });
+
+  it('cancel this date → cancelSessionInstance({sessionId, instanceId, reason})', async () => {
+    h.sessions = [confirmedRecurring({ sessionId: 'sR' })];
+    h.instances = { sR: [instanceDoc({ instanceId: '2026-08-05', date: '2026-08-05' })] };
+    renderWithProviders(<SessionsPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /view dates|expand|occurrences/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /cancel this date/i }));
+    fireEvent.change(await screen.findByRole('textbox'), { target: { value: 'moving away' } });
+    fireEvent.click(screen.getByRole('button', { name: /confirm cancellation/i }));
+
+    await waitFor(() =>
+      expect(h.callable).toHaveBeenCalledWith('cancelSessionInstance', {
+        sessionId: 'sR',
+        instanceId: '2026-08-05',
+        reason: 'moving away',
+      }),
+    );
+  });
+
+  it('cancel series → cancelSession on the parent', async () => {
+    h.sessions = [confirmedRecurring({ sessionId: 'sR' })];
+    h.instances = { sR: [instanceDoc({ instanceId: '2026-08-05', date: '2026-08-05' })] };
+    renderWithProviders(<SessionsPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /cancel series/i }));
+    fireEvent.change(await screen.findByRole('textbox'), { target: { value: 'family paused' } });
+    fireEvent.click(screen.getByRole('button', { name: /confirm cancellation/i }));
+
+    await waitFor(() =>
+      expect(h.callable).toHaveBeenCalledWith('cancelSession', {
+        sessionId: 'sR',
+        reason: 'family paused',
+      }),
+    );
+  });
+
+  it('requires a reason of ≥3 chars before the confirm button enables', async () => {
+    h.sessions = [confirmedOneTime({ sessionId: 'sOT', date: '2026-08-20' })];
+    renderWithProviders(<SessionsPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /cancel session/i }));
+    const confirm = screen.getByRole('button', { name: /confirm cancellation/i });
+    expect(confirm).toBeDisabled();
+
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'no' } });
+    expect(confirm).toBeDisabled();
+
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'busy that week' } });
+    expect(confirm).toBeEnabled();
+  });
+
+  it('applies cancelled status ONLY after the callable resolves (non-optimistic)', async () => {
+    const d = deferred<{ data: { success: boolean } }>();
+    h.callable.mockReturnValue(d.promise);
+    h.sessions = [confirmedOneTime({ sessionId: 'sOT', date: '2026-08-20' })];
+    renderWithProviders(<SessionsPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /cancel session/i }));
+    fireEvent.change(await screen.findByRole('textbox'), { target: { value: 'conflict' } });
+    const confirm = screen.getByRole('button', { name: /confirm cancellation/i });
+    fireEvent.click(confirm);
+
+    // In flight: disabled, and the cancel action still exists (not yet cancelled).
+    expect(confirm).toBeDisabled();
+
+    d.resolve({ data: { success: true } });
+    // Resolves → session leaves upcoming; the trigger is gone.
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: /cancel session/i })).not.toBeInTheDocument(),
+    );
+  });
+
+  it('re-enables and shows an error when a cancel callable rejects', async () => {
+    const d = deferred<{ data: { success: boolean } }>();
+    h.callable.mockReturnValue(d.promise);
+    h.sessions = [confirmedOneTime({ sessionId: 'sOT', date: '2026-08-20' })];
+    renderWithProviders(<SessionsPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /cancel session/i }));
+    fireEvent.change(await screen.findByRole('textbox'), { target: { value: 'conflict' } });
+    const confirm = screen.getByRole('button', { name: /confirm cancellation/i });
+    fireEvent.click(confirm);
+
+    d.reject({ code: 'functions/internal' });
+
+    expect(await screen.findByText(/something went wrong|couldn.?t/i)).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /confirm cancellation/i })).toBeEnabled(),
+    );
+  });
+
+  it('renders terminal parents in a read-only history section', async () => {
+    h.sessions = [
+      confirmedOneTime({ sessionId: 'd1', familyName: 'Declined Fam', status: 'declined' }),
+      confirmedOneTime({ sessionId: 'c1', familyName: 'Cancelled Fam', status: 'cancelled' }),
+      confirmedOneTime({ sessionId: 'x1', familyName: 'Completed Fam', status: 'completed' }),
+    ];
+    renderWithProviders(<SessionsPage />);
+
+    expect(await screen.findByText('Declined Fam')).toBeInTheDocument();
+    expect(screen.getByText('Cancelled Fam')).toBeInTheDocument();
+    expect(screen.getByText('Completed Fam')).toBeInTheDocument();
+    // Read-only: no accept / cancel actions on history rows.
+    expect(screen.queryByRole('button', { name: /accept/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /cancel session/i })).not.toBeInTheDocument();
   });
 });

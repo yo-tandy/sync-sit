@@ -14,7 +14,7 @@ import { db } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { useHolidays } from '@/hooks/useHolidays';
 import { Spinner } from '@ejm/shared-ui';
-import type { StudySessionDoc } from '@/pages/tutor/SessionsPage';
+import type { StudySessionDoc } from '@/types/studySession';
 
 /** Weeks of occurrences the accept flow materializes — mirror the callable. */
 const HORIZON_WEEKS = 8;
