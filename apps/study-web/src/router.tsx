@@ -36,6 +36,8 @@ import { AccountPage as FamilyAccountPage } from '@/pages/family/AccountPage';
 import { FamilySettingsPage } from '@/pages/family/FamilySettingsPage';
 import { SearchPage as FamilySearchPage } from '@/pages/family/SearchPage';
 import { RequestsPage as FamilyRequestsPage } from '@/pages/family/RequestsPage';
+import { BookSessionPage } from '@/pages/family/BookSessionPage';
+import { SessionsPage as FamilySessionsPage } from '@/pages/family/SessionsPage';
 
 const SUPPORT_EMAIL = 'support@sync-study.com';
 const BRAND = 'Sync/Study';
@@ -84,6 +86,8 @@ export const router = createBrowserRouter([
       { path: '/family/settings', element: <FamilySettingsPage /> },
       { path: '/family/search', element: <FamilySearchPage /> },
       { path: '/family/requests', element: <FamilyRequestsPage /> },
+      { path: '/family/sessions', element: <FamilySessionsPage /> },
+      { path: '/family/book/:tutorUserId', element: <BookSessionPage /> },
     ],
   },
 ]);

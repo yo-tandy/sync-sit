@@ -465,6 +465,24 @@ describe('tutor SessionsPage — management', () => {
     );
   });
 
+  it('filters the nested instance read by tutorUserId (rule provability)', async () => {
+    h.sessions = [confirmedRecurring({ sessionId: 'sR', familyName: 'Levy' })];
+    h.instances = { sR: [instanceDoc({ instanceId: '2026-08-05', date: '2026-08-05' })] };
+    renderWithProviders(<SessionsPage />);
+    await screen.findByText('Levy');
+
+    // The instances query MUST carry where('tutorUserId','==',me) — an unfiltered
+    // list is unprovable against the per-doc rule → PERMISSION_DENIED.
+    const instanceCall = h.getDocs.mock.calls.find((c) => {
+      const q = c[0] as { query?: { path: string }[]; path?: string };
+      return (q?.query?.[0]?.path ?? q?.path ?? '').endsWith('/instances');
+    });
+    expect(instanceCall).toBeTruthy();
+    expect((instanceCall![0] as { query: unknown[] }).query).toContainEqual({
+      where: ['tutorUserId', '==', 't1'],
+    });
+  });
+
   it('renders terminal parents in a read-only history section', async () => {
     h.sessions = [
       confirmedOneTime({ sessionId: 'd1', familyName: 'Declined Fam', status: 'declined' }),

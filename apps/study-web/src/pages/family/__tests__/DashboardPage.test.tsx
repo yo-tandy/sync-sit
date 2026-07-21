@@ -14,6 +14,8 @@ const h = vi.hoisted(() => ({
   familyData: null as { familyName?: string; verification?: { isFullyVerified?: boolean } } | null,
   // studyContactRequests docs for the pending/accepted counts.
   requests: [] as Record<string, unknown>[],
+  // study-sessions docs for the sessions pending/upcoming counts.
+  sessions: [] as Record<string, unknown>[],
   getDoc: vi.fn(),
   where: vi.fn((field: string, op: string, val: unknown) => ({ where: [field, op, val] })),
   getDocs: vi.fn(),
@@ -52,11 +54,17 @@ function reset() {
     Promise.resolve({ exists: () => h.familyData != null, data: () => h.familyData }),
   );
   h.requests = [];
+  h.sessions = [];
   h.where.mockClear();
   h.getDocs.mockReset();
-  h.getDocs.mockImplementation(() =>
-    Promise.resolve({ docs: h.requests.map((r) => ({ id: r.requestId, data: () => r })) }),
-  );
+  // Route by collection path: study-sessions vs studyContactRequests.
+  h.getDocs.mockImplementation((q: { query?: { path: string }[] }) => {
+    const path = q?.query?.[0]?.path ?? '';
+    if (path === 'study-sessions') {
+      return Promise.resolve({ docs: h.sessions.map((s) => ({ id: s.sessionId, data: () => s })) });
+    }
+    return Promise.resolve({ docs: h.requests.map((r) => ({ id: r.requestId, data: () => r })) });
+  });
 }
 
 describe('family DashboardPage', () => {
@@ -118,6 +126,23 @@ describe('family DashboardPage', () => {
     h.getDocs.mockImplementation(() => new Promise(() => {}));
     renderWithProviders(<DashboardPage />);
     expect(screen.queryByText(/no requests yet/i)).not.toBeInTheDocument();
+  });
+
+  it('renders a sessions card with pending/upcoming counts linking to /family/sessions', async () => {
+    h.sessions = [
+      { sessionId: 's1', familyId: 'fam1', status: 'pending' },
+      { sessionId: 's2', familyId: 'fam1', status: 'confirmed' },
+      { sessionId: 's3', familyId: 'fam1', status: 'confirmed' },
+      { sessionId: 's4', familyId: 'fam1', status: 'completed' },
+    ];
+    renderWithProviders(<DashboardPage />);
+
+    const link = await screen.findByRole('link', { name: /your sessions/i });
+    expect(link).toHaveAttribute('href', '/family/sessions');
+    expect(h.where).toHaveBeenCalledWith('familyId', '==', 'fam1');
+    // 1 pending, 2 upcoming (confirmed).
+    expect(await screen.findByText('1')).toBeInTheDocument();
+    expect(screen.getByText('2')).toBeInTheDocument();
   });
 
   it('renders entry cards linking to settings and account', () => {

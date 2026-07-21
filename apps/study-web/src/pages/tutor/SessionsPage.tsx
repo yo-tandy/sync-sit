@@ -7,6 +7,8 @@ import { db, functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { Card, Button, Badge, TopNav, Spinner, Dialog } from '@ejm/shared-ui';
 import { RecurringConflictPreview } from '@/components/tutor/RecurringConflictPreview';
+import { ReasonModal } from '@/components/sessions/ReasonModal';
+import { SessionInstanceList } from '@/components/sessions/SessionInstanceList';
 import type { StudySessionDoc, StudySessionInstanceDoc } from '@/types/studySession';
 
 /** Shape of a recurring respondToSession result — drives the outcome dialog. */
@@ -72,11 +74,11 @@ export function SessionsPage() {
   const [instancesBySeries, setInstancesBySeries] = useState<
     Record<string, StudySessionInstanceDoc[]>
   >({});
+  const [loadError, setLoadError] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [declineTarget, setDeclineTarget] = useState<StudySessionDoc | null>(null);
   const [recurringResult, setRecurringResult] = useState<RecurringResult | null>(null);
   const [cancelTarget, setCancelTarget] = useState<CancelTarget | null>(null);
-  const [cancelReason, setCancelReason] = useState('');
   const [cancelError, setCancelError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   // Key of the row awaiting the respond callable (a session id).
@@ -97,11 +99,19 @@ export function SessionsPage() {
         rows.sort((a, b) => (b.createdAt?.seconds ?? 0) - (a.createdAt?.seconds ?? 0));
 
         // Load the instance subcollections for confirmed recurring series via the
-        // nested path (own-uid reads; rules permit).
+        // nested path. The read MUST be filtered on the instance's denormalized
+        // tutorUserId: the security rule proves access per-doc from
+        // resource.data.tutorUserId, and an unconstrained list is unprovable →
+        // PERMISSION_DENIED. Single-field equality (no composite needed).
         const series = rows.filter((r) => r.status === 'confirmed' && r.type === 'recurring');
         const instanceLists = await Promise.all(
           series.map((s) =>
-            getDocs(collection(db, 'study-sessions', s.sessionId, 'instances')).then((isnap) => ({
+            getDocs(
+              query(
+                collection(db, 'study-sessions', s.sessionId, 'instances'),
+                where('tutorUserId', '==', uid),
+              ),
+            ).then((isnap) => ({
               sessionId: s.sessionId,
               rows: isnap.docs.map((d) => d.data() as StudySessionInstanceDoc),
             })),
@@ -113,7 +123,9 @@ export function SessionsPage() {
         setInstancesBySeries(byId);
         setSessions(rows);
       } catch {
-        if (!cancelled) setSessions([]);
+        // A THROW is a load failure — surface it, don't conflate it with the
+        // tutor having no sessions (the empty state).
+        if (!cancelled) setLoadError(true);
       }
     })();
     return () => {
@@ -172,14 +184,12 @@ export function SessionsPage() {
   };
 
   const openCancel = (target: CancelTarget) => {
-    setCancelReason('');
     setCancelError(null);
     setCancelTarget(target);
   };
 
-  const submitCancel = async () => {
+  const submitCancel = async (reason: string) => {
     if (!cancelTarget) return;
-    const reason = cancelReason.trim();
     if (reason.length < 3) return; // client gate; the callable also enforces ≥3
     const { session } = cancelTarget;
     const key =
@@ -220,7 +230,6 @@ export function SessionsPage() {
         );
       }
       setCancelTarget(null);
-      setCancelReason('');
     } catch {
       setCancelError(t('tutor.sessions.actionError'));
     } finally {
@@ -294,18 +303,8 @@ export function SessionsPage() {
     );
   }
 
-  function instanceChip(i: StudySessionInstanceDoc): string | null {
-    if (i.status === 'completed') return t('tutor.sessions.instanceStatus.completed');
-    if (i.status === 'cancelled')
-      return i.statusReason === 'conflict_skip'
-        ? t('tutor.sessions.instanceStatus.skipped')
-        : t('tutor.sessions.instanceStatus.cancelled');
-    return null; // scheduled
-  }
-
   function renderSeries(s: StudySessionDoc, instances: StudySessionInstanceDoc[]) {
     const isOpen = expanded.has(s.sessionId);
-    const sorted = [...instances].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
     return (
       <Card key={s.sessionId}>
         <p className="text-sm font-semibold text-gray-900">{s.familyName}</p>
@@ -330,36 +329,21 @@ export function SessionsPage() {
         </div>
 
         {isOpen && (
-          <ul className="mt-3 space-y-2 border-t border-gray-100 pt-3">
-            {sorted.length === 0 && (
-              <li className="text-xs text-gray-400">{t('tutor.sessions.noOccurrences')}</li>
-            )}
-            {sorted.map((i) => {
-              const chip = instanceChip(i);
-              const cancelable = i.status === 'scheduled' && i.date >= today;
-              const key = `${s.sessionId}::${i.instanceId}`;
-              return (
-                <li key={i.instanceId} className="flex items-center justify-between gap-2 text-xs">
-                  <span className="text-gray-700">
-                    {formatDateStr(i.date)} · {i.startTime}–{i.endTime}
-                  </span>
-                  <span className="flex items-center gap-2">
-                    {chip && <Badge variant="gray">{chip}</Badge>}
-                    {cancelable && (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        disabled={cancelKey === key}
-                        onClick={() => openCancel({ kind: 'instance', session: s, instance: i })}
-                      >
-                        {t('tutor.sessions.cancelInstance')}
-                      </Button>
-                    )}
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
+          <SessionInstanceList
+            sessionId={s.sessionId}
+            instances={instances}
+            today={today}
+            cancelKey={cancelKey}
+            onCancelInstance={(instance) => openCancel({ kind: 'instance', session: s, instance })}
+            formatDate={formatDateStr}
+            copy={{
+              noOccurrences: t('tutor.sessions.noOccurrences'),
+              cancelInstance: t('tutor.sessions.cancelInstance'),
+              statusCompleted: t('tutor.sessions.instanceStatus.completed'),
+              statusSkipped: t('tutor.sessions.instanceStatus.skipped'),
+              statusCancelled: t('tutor.sessions.instanceStatus.cancelled'),
+            }}
+          />
         )}
       </Card>
     );
@@ -372,10 +356,14 @@ export function SessionsPage() {
       <div className="px-5 pt-4 pb-8">
         {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
 
-        {sessions === null && (
+        {sessions === null && !loadError && (
           <div className="flex justify-center py-20">
             <Spinner />
           </div>
+        )}
+
+        {loadError && (
+          <p className="py-10 text-center text-sm text-red-600">{t('tutor.sessions.loadError')}</p>
         )}
 
         {sessions !== null &&
@@ -523,42 +511,24 @@ export function SessionsPage() {
       </Dialog>
 
       {/* ── Cancellation (reason required, ≥3 chars) ── */}
-      <Dialog open={cancelTarget !== null} onClose={() => setCancelTarget(null)}>
-        <h3 className="mb-2 text-lg font-bold">
-          {cancelTarget?.kind === 'series'
+      <ReasonModal
+        open={cancelTarget !== null}
+        title={
+          cancelTarget?.kind === 'series'
             ? t('tutor.sessions.cancelSeriesTitle')
             : cancelTarget?.kind === 'instance'
               ? t('tutor.sessions.cancelInstanceTitle')
-              : t('tutor.sessions.cancelTitle')}
-        </h3>
-        <p className="mb-3 text-sm text-gray-600">{t('tutor.sessions.cancelDesc')}</p>
-        <textarea
-          className="mb-3 w-full rounded-lg border border-gray-300 p-2 text-sm"
-          rows={3}
-          value={cancelReason}
-          onChange={(e) => setCancelReason(e.target.value)}
-          placeholder={t('tutor.sessions.cancelReasonPlaceholder')}
-        />
-        {cancelError && <p className="mb-3 text-sm text-red-600">{cancelError}</p>}
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            className="flex-1"
-            disabled={cancelReason.trim().length < 3 || cancelKey !== null}
-            onClick={submitCancel}
-          >
-            {t('tutor.sessions.cancelConfirm')}
-          </Button>
-          <Button
-            variant="ghost"
-            className="flex-1"
-            disabled={cancelKey !== null}
-            onClick={() => setCancelTarget(null)}
-          >
-            {t('tutor.sessions.cancelKeep')}
-          </Button>
-        </div>
-      </Dialog>
+              : t('tutor.sessions.cancelTitle')
+        }
+        description={t('tutor.sessions.cancelDesc')}
+        placeholder={t('tutor.sessions.cancelReasonPlaceholder')}
+        confirmLabel={t('tutor.sessions.cancelConfirm')}
+        keepLabel={t('tutor.sessions.cancelKeep')}
+        submitting={cancelKey !== null}
+        error={cancelError}
+        onConfirm={submitCancel}
+        onClose={() => setCancelTarget(null)}
+      />
 
       {/* ── Recurring confirm result ── */}
       <Dialog open={recurringResult !== null} onClose={() => setRecurringResult(null)}>
