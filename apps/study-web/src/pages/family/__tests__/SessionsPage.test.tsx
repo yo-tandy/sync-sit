@@ -277,6 +277,38 @@ describe('family SessionsPage — management', () => {
     );
   });
 
+  it('filters the nested instance read by familyId (rule provability)', async () => {
+    h.sessions = [confirmedRecurring({ sessionId: 'sR' })];
+    h.instances = { sR: [instanceDoc({ instanceId: '2026-08-05', date: '2026-08-05' })] };
+    renderWithProviders(<SessionsPage />);
+    await screen.findByText('Sam Tutor');
+
+    // The instances query MUST carry where('familyId','==',mine) — an unfiltered
+    // list is unprovable against the per-doc rule → PERMISSION_DENIED.
+    const instanceCall = h.getDocs.mock.calls.find((c) => {
+      const q = c[0] as { query?: { path: string }[]; path?: string };
+      return (q?.query?.[0]?.path ?? q?.path ?? '').endsWith('/instances');
+    });
+    expect(instanceCall).toBeTruthy();
+    expect((instanceCall![0] as { query: unknown[] }).query).toContainEqual({
+      where: ['familyId', '==', 'fam1'],
+    });
+  });
+
+  it('shows a load error (not the empty state) when the instances read is denied', async () => {
+    h.sessions = [confirmedRecurring({ sessionId: 'sR' })];
+    h.getDocs.mockImplementation((q: { query?: { path: string }[]; path?: string }) => {
+      const path = q?.query?.[0]?.path ?? q?.path ?? '';
+      if (path.endsWith('/instances')) return Promise.reject({ code: 'permission-denied' });
+      return Promise.resolve({ docs: h.sessions.map((s) => ({ id: s.sessionId, data: () => s })) });
+    });
+    renderWithProviders(<SessionsPage />);
+
+    expect(await screen.findByText(/could not load your sessions/i)).toBeInTheDocument();
+    // The denial must NOT masquerade as "no sessions".
+    expect(screen.queryByText(/no sessions yet/i)).not.toBeInTheDocument();
+  });
+
   it('renders terminal sessions in a read-only history section', async () => {
     h.sessions = [
       confirmedOneTime({ sessionId: 'd1', tutorName: 'Declined Tutor', status: 'declined' }),

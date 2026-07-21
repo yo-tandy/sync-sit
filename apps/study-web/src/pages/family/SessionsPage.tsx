@@ -64,6 +64,7 @@ export function SessionsPage() {
   const [instancesBySeries, setInstancesBySeries] = useState<
     Record<string, StudySessionInstanceDoc[]>
   >({});
+  const [loadError, setLoadError] = useState(false);
   const [cancelTarget, setCancelTarget] = useState<CancelTarget | null>(null);
   const [cancelError, setCancelError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -82,12 +83,20 @@ export function SessionsPage() {
         const rows = snap.docs.map((d) => d.data() as StudySessionDoc);
         rows.sort((a, b) => (b.createdAt?.seconds ?? 0) - (a.createdAt?.seconds ?? 0));
 
-        // Load instance subcollections for confirmed recurring series (nested
-        // path — the family is a session member; rules permit the read).
+        // Load instance subcollections for confirmed recurring series via the
+        // nested path. The read MUST be filtered on the instance's denormalized
+        // familyId: the security rule proves access per-doc from
+        // resource.data.familyId, and an unconstrained list is unprovable →
+        // PERMISSION_DENIED. Single-field equality (no composite needed).
         const series = rows.filter((r) => r.status === 'confirmed' && r.type === 'recurring');
         const instanceLists = await Promise.all(
           series.map((s) =>
-            getDocs(collection(db, 'study-sessions', s.sessionId, 'instances')).then((isnap) => ({
+            getDocs(
+              query(
+                collection(db, 'study-sessions', s.sessionId, 'instances'),
+                where('familyId', '==', familyId),
+              ),
+            ).then((isnap) => ({
               sessionId: s.sessionId,
               rows: isnap.docs.map((d) => d.data() as StudySessionInstanceDoc),
             })),
@@ -99,7 +108,9 @@ export function SessionsPage() {
         setInstancesBySeries(byId);
         setSessions(rows);
       } catch {
-        if (!cancelled) setSessions([]);
+        // A THROW is a load failure — surface it honestly rather than
+        // conflating it with the family having no sessions (the empty state).
+        if (!cancelled) setLoadError(true);
       }
     })();
     return () => {
@@ -294,10 +305,16 @@ export function SessionsPage() {
       <TopNav title={t('family.sessions.title')} backTo="/family" />
 
       <div className="px-5 pt-4 pb-8">
-        {sessions === null && (
+        {sessions === null && !loadError && (
           <div className="flex justify-center py-20">
             <Spinner />
           </div>
+        )}
+
+        {loadError && (
+          <p className="py-10 text-center text-sm text-red-600">
+            {t('family.sessions.loadError')}
+          </p>
         )}
 
         {sessions !== null &&

@@ -74,6 +74,7 @@ export function SessionsPage() {
   const [instancesBySeries, setInstancesBySeries] = useState<
     Record<string, StudySessionInstanceDoc[]>
   >({});
+  const [loadError, setLoadError] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [declineTarget, setDeclineTarget] = useState<StudySessionDoc | null>(null);
   const [recurringResult, setRecurringResult] = useState<RecurringResult | null>(null);
@@ -98,11 +99,19 @@ export function SessionsPage() {
         rows.sort((a, b) => (b.createdAt?.seconds ?? 0) - (a.createdAt?.seconds ?? 0));
 
         // Load the instance subcollections for confirmed recurring series via the
-        // nested path (own-uid reads; rules permit).
+        // nested path. The read MUST be filtered on the instance's denormalized
+        // tutorUserId: the security rule proves access per-doc from
+        // resource.data.tutorUserId, and an unconstrained list is unprovable →
+        // PERMISSION_DENIED. Single-field equality (no composite needed).
         const series = rows.filter((r) => r.status === 'confirmed' && r.type === 'recurring');
         const instanceLists = await Promise.all(
           series.map((s) =>
-            getDocs(collection(db, 'study-sessions', s.sessionId, 'instances')).then((isnap) => ({
+            getDocs(
+              query(
+                collection(db, 'study-sessions', s.sessionId, 'instances'),
+                where('tutorUserId', '==', uid),
+              ),
+            ).then((isnap) => ({
               sessionId: s.sessionId,
               rows: isnap.docs.map((d) => d.data() as StudySessionInstanceDoc),
             })),
@@ -114,7 +123,9 @@ export function SessionsPage() {
         setInstancesBySeries(byId);
         setSessions(rows);
       } catch {
-        if (!cancelled) setSessions([]);
+        // A THROW is a load failure — surface it, don't conflate it with the
+        // tutor having no sessions (the empty state).
+        if (!cancelled) setLoadError(true);
       }
     })();
     return () => {
@@ -345,10 +356,14 @@ export function SessionsPage() {
       <div className="px-5 pt-4 pb-8">
         {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
 
-        {sessions === null && (
+        {sessions === null && !loadError && (
           <div className="flex justify-center py-20">
             <Spinner />
           </div>
+        )}
+
+        {loadError && (
+          <p className="py-10 text-center text-sm text-red-600">{t('tutor.sessions.loadError')}</p>
         )}
 
         {sessions !== null &&

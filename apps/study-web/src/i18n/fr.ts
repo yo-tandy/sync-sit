@@ -252,6 +252,7 @@ export default {
     },
     sessions: {
       empty: 'Aucune demande de séance pour le moment — lorsqu\'une famille vous réserve, elle apparaîtra ici.',
+      loadError: 'Impossible de charger vos cours. Veuillez actualiser et réessayer.',
       pendingTitle: 'En attente de votre réponse',
       accept: 'Accepter',
       decline: 'Refuser',
@@ -566,6 +567,7 @@ export default {
     sessions: {
       title: 'Vos cours',
       empty: 'Aucun cours pour le moment — dès que vous réservez un professeur, vos cours apparaissent ici.',
+      loadError: 'Impossible de charger vos cours. Veuillez actualiser et réessayer.',
       pendingTitle: 'En attente de confirmation',
       upcomingTitle: 'À venir',
       historyTitle: 'Historique',

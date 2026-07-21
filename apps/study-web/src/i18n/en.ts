@@ -252,6 +252,7 @@ export default {
     },
     sessions: {
       empty: 'No session requests yet — when a family books you, it will show up here.',
+      loadError: 'Could not load your sessions. Please refresh and try again.',
       pendingTitle: 'Awaiting your response',
       accept: 'Accept',
       decline: 'Decline',
@@ -566,6 +567,7 @@ export default {
     sessions: {
       title: 'Your sessions',
       empty: 'No sessions yet — once you book a tutor, your sessions show up here.',
+      loadError: 'Could not load your sessions. Please refresh and try again.',
       pendingTitle: 'Awaiting confirmation',
       upcomingTitle: 'Upcoming',
       historyTitle: 'History',
