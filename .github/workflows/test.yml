@@ -44,4 +44,6 @@ jobs:
 
       # Integration tests — run inside emulator lifecycle
       - name: Run integration tests
-        run: pnpm exec firebase emulators:exec --project demo-test 'pnpm test:integration'
+        # --only: the hosting emulator would otherwise auto-start (hosting is
+        # configured with named targets that don't resolve under demo-test).
+        run: pnpm exec firebase emulators:exec --only auth,functions,firestore,storage --project demo-test 'pnpm test:integration'
