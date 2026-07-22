@@ -51,7 +51,22 @@ jobs:
           create_credentials_file: true
           export_environment_variables: true
 
-      # Deploy preview channel
+      # Build study-web so the channel deploy can cover both hosting targets
+      # (see firebase.json: targets `web` and `study`).
+      - name: Build study-web
+        run: |
+          pnpm --filter @ejm/shared-core build
+          pnpm --filter @ejm/study-core build
+          pnpm --filter study-web build
+        env:
+          VITE_FIREBASE_API_KEY: AIzaSyDyYp2GQdH-8h16B6XNx3sdI8tdDcY1tEw
+          VITE_FIREBASE_AUTH_DOMAIN: sync-sit.firebaseapp.com
+          VITE_FIREBASE_PROJECT_ID: sync-sit
+          VITE_FIREBASE_STORAGE_BUCKET: sync-sit.firebasestorage.app
+          VITE_FIREBASE_MESSAGING_SENDER_ID: '652129443234'
+          VITE_FIREBASE_APP_ID: '1:652129443234:web:b1addb8ca9204154aba6fb'
+
+      # Deploy preview channel (both hosting targets)
       - name: Deploy Preview
         run: |
           CHANNEL="pr-${{ github.event.pull_request.number }}"
