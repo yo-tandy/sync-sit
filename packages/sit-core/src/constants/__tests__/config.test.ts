@@ -8,23 +8,29 @@ import {
 } from '../config.js';
 
 describe('getValidGraduationYears', () => {
+  // Construct the boundary dates from explicit LOCAL components — never
+  // `new Date('2026-09-01')`. A date-only ISO string parses as UTC midnight,
+  // and getValidGraduationYears reads the month with the local-time getMonth();
+  // in a negative-offset zone (e.g. America/New_York) UTC "Sep 1 00:00" is
+  // still Aug 31 locally, silently flipping this boundary test. `new Date(year,
+  // monthIndex, day)` builds local midnight, so getMonth() is TZ-stable.
   it('returns 4 years before September', () => {
-    const march2026 = new Date('2026-03-15');
+    const march2026 = new Date(2026, 2, 15);
     expect(getValidGraduationYears(march2026)).toEqual([26, 27, 28, 29]);
   });
 
   it('shifts range after September', () => {
-    const oct2026 = new Date('2026-10-01');
+    const oct2026 = new Date(2026, 9, 1);
     expect(getValidGraduationYears(oct2026)).toEqual([27, 28, 29, 30]);
   });
 
   it('September 1 is in the new range', () => {
-    const sep1 = new Date('2026-09-01');
+    const sep1 = new Date(2026, 8, 1);
     expect(getValidGraduationYears(sep1)).toEqual([27, 28, 29, 30]);
   });
 
   it('August 31 is still in the old range', () => {
-    const aug31 = new Date('2026-08-31');
+    const aug31 = new Date(2026, 7, 31);
     expect(getValidGraduationYears(aug31)).toEqual([26, 27, 28, 29]);
   });
 });
