@@ -6,7 +6,7 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { isRunningAsPWA } from '@ejm/sit-core';
 import { db, storage } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
-import { TopNav, Button, Input, Card, InfoBanner, LanguageSelector } from '@/components/ui';
+import { TopNav, Button, Card, InfoBanner, LanguageSelector } from '@/components/ui';
 import { BellIcon } from '@/components/ui/Icons';
 import { isPushSupported, getPushPermissionStatus, requestPushPermission } from '@/lib/pushNotifications';
 import { PhoneInput } from '@/components/forms/PhoneInput';
@@ -91,7 +91,6 @@ export function AccountPage() {
   const [photoSaving, setPhotoSaving] = useState(false);
 
   // Contact state
-  const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [whatsapp, setWhatsapp] = useState('');
   const [whatsappSameAsPhone, setWhatsappSameAsPhone] = useState(true);
@@ -119,7 +118,6 @@ export function AccountPage() {
   // Initialize from userDoc
   useEffect(() => {
     if (!parent) return;
-    setEmail(parent.email || '');
     setPhone(parent.phone || '');
     setWhatsapp(parent.whatsapp || '');
     setWhatsappSameAsPhone(parent.whatsapp ? parent.whatsapp === parent.phone : true);
@@ -210,8 +208,11 @@ export function AccountPage() {
     setContactSuccess(false);
     setError(null);
     try {
+      // The login email is DELIBERATELY not written here. It is Firebase Auth's
+      // identity; changing it via Firestore would silently desync Auth (login
+      // still uses the old address) — so it is display-only above and edited,
+      // if ever, through an Auth-aware flow. Only parent contact fields go here.
       await updateDoc(doc(db, 'users', uid), {
-        email,
         'profiles.parent.phone': phone || null,
         'profiles.parent.whatsapp': whatsappSameAsPhone ? (phone || null) : (whatsapp || null),
         updatedAt: serverTimestamp(),
@@ -342,12 +343,6 @@ export function AccountPage() {
         <h3 className="mb-3 text-sm font-semibold text-gray-700">{t('account.contactInfo')}</h3>
         {contactSuccess && <InfoBanner className="mb-4">{t('account.contactSaved')}</InfoBanner>}
         <form onSubmit={handleContactSave} className="mb-6">
-          <Input
-            label={t('common.email')}
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
           <PhoneInput
             label={t('account.phone')}
             value={phone}
@@ -380,7 +375,7 @@ export function AccountPage() {
             )}
           </div>
 
-          <Button type="submit" disabled={contactSaving || !email}>
+          <Button type="submit" disabled={contactSaving}>
             {contactSaving ? t('common.saving') : t('account.saveContact')}
           </Button>
         </form>
