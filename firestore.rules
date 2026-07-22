@@ -183,9 +183,33 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    // References: readable by anyone authenticated (shown in search results)
+    // References: read restricted to publicly-visible statuses, involved
+    // parties, or admin (Hardening PR H2). Before H2 `allow read: if isAuth()`
+    // let any authenticated user harvest PRIVATE/REMOVED endorsements
+    // (referenceText, submittedByName, submittedByFamilyId; sit and study).
+    // Disjuncts, each provable from a client query's constraints:
+    //   - public status: approved/published are profile-visible to everyone;
+    //   - recipient: babysitterUserId (sit) or tutorUserId (study) == caller;
+    //   - submitter: submittedByUserId == caller;
+    //   - submitting family: caller is a member of submittedByFamilyId;
+    //   - admin.
+    // .get(...) defaults keep the mixed sit/study shapes from erroring (sit
+    // manual docs have no tutorUserId/submittedByUserId/submittedByFamilyId;
+    // study docs have no babysitterUserId). The family disjunct is guarded by a
+    // non-empty check so isFamilyMember() — which get()s the family doc — is
+    // only evaluated for docs that actually carry a submittedByFamilyId; a
+    // missing family would otherwise error the whole || chain and deny reads a
+    // LATER disjunct (isAdmin) should grant. See the H2 rules tests.
     match /references/{referenceId} {
-      allow read: if isAuth();
+      allow read: if isAuth() && (
+        resource.data.status in ['approved', 'published']
+        || resource.data.get('babysitterUserId', '') == request.auth.uid
+        || resource.data.get('tutorUserId', '') == request.auth.uid
+        || resource.data.get('submittedByUserId', '') == request.auth.uid
+        || (resource.data.get('submittedByFamilyId', '') != ''
+            && isFamilyMember(resource.data.get('submittedByFamilyId', '')))
+        || isAdmin()
+      );
       // Create: babysitters may record their own offline manual references.
       // Parent endorsements (type='family_submitted') and admin/peer
       // approvals (type='manual' moving to status='approved'/'published')
