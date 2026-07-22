@@ -1,0 +1,17 @@
+{
+  "projects": {
+    "default": "sync-sit"
+  },
+  "targets": {
+    "sync-sit": {
+      "hosting": {
+        "web": [
+          "sync-sit"
+        ],
+        "study": [
+          "sync-study-app"
+        ]
+      }
+    }
+  }
+}

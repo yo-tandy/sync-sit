@@ -9,7 +9,6 @@ build/
 
 # Firebase
 .firebase/
-.firebaserc
 apps/functions/shared-bundle/
 
 # Environment
