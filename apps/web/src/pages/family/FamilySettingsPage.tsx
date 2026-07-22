@@ -149,16 +149,23 @@ export function FamilySettingsPage() {
       // Update/create kids
       for (const kid of kids) {
         if (!kid.firstName.trim()) continue;
-        const kidData = {
-          firstName: kid.firstName.trim(),
-          age: parseInt(kid.age) || 0,
-          languages: [],
-          note: kid.note?.trim() || null,
-        };
         if (kid.kidId) {
-          await updateDoc(doc(db, 'families', familyId, 'kids', kid.kidId), kidData);
+          // updateDoc field-merges: DELIBERATELY omit `languages` so the values
+          // study's enrollment writes on this shared cross-app doc survive a
+          // save here (`families/{id}/kids` is the SAME doc both apps read/write).
+          await updateDoc(doc(db, 'families', familyId, 'kids', kid.kidId), {
+            firstName: kid.firstName.trim(),
+            age: parseInt(kid.age) || 0,
+            note: kid.note?.trim() || null,
+          });
         } else {
-          await addDoc(collection(db, 'families', familyId, 'kids'), kidData);
+          // New kid — initialize languages to an empty array.
+          await addDoc(collection(db, 'families', familyId, 'kids'), {
+            firstName: kid.firstName.trim(),
+            age: parseInt(kid.age) || 0,
+            languages: [],
+            note: kid.note?.trim() || null,
+          });
         }
       }
 
