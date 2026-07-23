@@ -10,6 +10,9 @@ lerna-debug.log*
 node_modules
 dist
 .env
+# Emulator-backed local dev env (non-secret demo-test values) — committed on
+# purpose; re-includes it past the root .gitignore's `.env.*` rule.
+!.env.development
 dist-ssr
 *.local
 
