@@ -261,6 +261,10 @@ export default {
       recurringSlot: 'Chaque {{day}} {{start}}–{{end}}',
       schoolWeeksOnly: 'Semaines scolaires uniquement',
       until: 'jusqu\'au {{date}}',
+      trial: {
+        badge: 'Essai',
+        request: 'La famille souhaite que la première séance soit un essai.',
+      },
       confirmDeclineTitle: 'Refuser cette séance ?',
       confirmDeclineDesc: 'La famille sera informée que vous avez refusé cette demande de réservation.',
       confirmDeclineCta: 'Oui, refuser',
@@ -534,6 +538,11 @@ export default {
           desc: 'Demande hebdomadaire envoyée — {{name}} doit confirmer. Nous réserverons les {{day}} à {{time}} une fois acceptée.',
         },
       },
+      trial: {
+        toggle: 'Faire de la première séance un essai',
+        explainer: 'La première séance est indiquée comme un essai, pour que vous et le professeur voyiez comment cela se passe. Cela ne change pas le tarif.',
+        badge: 'Essai',
+      },
       success: {
         title: 'Demande envoyée',
         desc: 'Demande envoyée — {{name}} doit confirmer avant que le cours soit réservé.',
@@ -595,6 +604,9 @@ export default {
       awaitingTutor: 'En attente de la confirmation du professeur.',
       endorse: 'Recommander {{name}}',
       recurringSlot: 'Chaque {{day}} {{start}}–{{end}}',
+      trial: {
+        badge: 'Essai',
+      },
       viewDates: 'Voir les dates',
       hideDates: 'Masquer les dates',
       noOccurrences: 'Aucune séance programmée pour le moment.',

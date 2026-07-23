@@ -64,6 +64,19 @@ export interface GenerateInstancesParams {
   config: StaticAvailabilityConfig;
   nowParis: ParisNow;
   now: Date;
+  /**
+   * Trial-first-session (V1.1 feature 2): when true, the FIRST instance this call
+   * creates with status 'scheduled' is marked `isTrial: true` (a conflict_skip
+   * instance never carries it — the flag follows the first instance actually
+   * SCHEDULED, not the first candidate). ONLY the recurring confirm passes this
+   * (from the parent's trialFirstSession). extendRecurring MUST leave it false:
+   * confirm is the only creator of a series' first-ever scheduled instance —
+   * a series with zero scheduled instances stays `pending` (respondToSession
+   * throws on scheduledDates.length === 0, rolling back), so no confirmed series
+   * ever reaches the cron without its first scheduled instance already existing.
+   * Defaults false.
+   */
+  markFirstScheduledAsTrial?: boolean;
 }
 
 export interface GenerateInstancesResult {
@@ -92,12 +105,15 @@ export interface GenerateInstancesResult {
  */
 export function generateInstances(params: GenerateInstancesParams): GenerateInstancesResult {
   const { tx, sessionRef, scheduleRef, parent, candidateDates, perDate, config, nowParis, now } = params;
+  const markFirstScheduledAsTrial = params.markFirstScheduledAsTrial ?? false;
 
   const startIdx = timeToSlotIndex(parent.startTime);
   const endIdx = timeToSlotIndex(parent.endTime);
 
   const scheduledDates: string[] = [];
   const skippedDates: string[] = [];
+  // Set once, on the first 'scheduled' instance, when marking a trial series.
+  let trialAssigned = false;
 
   // Denorms copied onto every instance regardless of status.
   const baseInstance = {
@@ -148,11 +164,16 @@ export function generateInstances(params: GenerateInstancesParams): GenerateInst
     }
 
     if (available) {
+      // The trial flag lands on the FIRST scheduled instance only (never on a
+      // conflict_skip above — that path falls through to the else branch).
+      const isTrial = markFirstScheduledAsTrial && !trialAssigned;
+      if (isTrial) trialAssigned = true;
       tx.set(instanceRef, {
         ...baseInstance,
         instanceId: date,
         date,
         status: 'scheduled',
+        ...(isTrial ? { isTrial: true } : {}),
         createdAt: now,
         updatedAt: now,
       });

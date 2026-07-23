@@ -171,6 +171,24 @@ describe('tutor SessionsPage', () => {
     expect(screen.getByText(/checking availability/i)).toBeInTheDocument();
   });
 
+  it('badges a pending recurring trial series and states the trial request', async () => {
+    h.sessions = [recurring({ trialFirstSession: true })];
+    renderWithProviders(<SessionsPage />);
+
+    expect(await screen.findByText('Levy')).toBeInTheDocument();
+    // A Trial badge on the card, plus the request copy for the tutor.
+    expect(screen.getByText(/^Trial$/)).toBeInTheDocument();
+    expect(screen.getByText(/first session as a trial/i)).toBeInTheDocument();
+  });
+
+  it('does NOT badge a non-trial pending recurring series', async () => {
+    h.sessions = [recurring()];
+    renderWithProviders(<SessionsPage />);
+
+    await screen.findByText('Levy');
+    expect(screen.queryByText(/^Trial$/)).not.toBeInTheDocument();
+  });
+
   it('accept → respondToSession({sessionId, action:confirm})', async () => {
     h.sessions = [oneTime({ sessionId: 'sA' })];
     renderWithProviders(<SessionsPage />);
@@ -356,6 +374,22 @@ describe('tutor SessionsPage — management', () => {
     expect(screen.getByText(/completed/i)).toBeInTheDocument();
     // The scheduled future date is cancelable.
     expect(screen.getByRole('button', { name: /cancel this date/i })).toBeInTheDocument();
+  });
+
+  it('badges the isTrial instance in the expanded series list', async () => {
+    h.sessions = [confirmedRecurring({ sessionId: 'sR', familyName: 'Levy' })];
+    h.instances = {
+      sR: [
+        instanceDoc({ instanceId: '2026-08-05', date: '2026-08-05', isTrial: true }),
+        instanceDoc({ instanceId: '2026-08-12', date: '2026-08-12' }),
+      ],
+    };
+    renderWithProviders(<SessionsPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /view dates|expand|occurrences/i }));
+    // Exactly the flagged occurrence is badged.
+    const marks = await screen.findAllByText(/^Trial$/);
+    expect(marks).toHaveLength(1);
   });
 
   it('cancel session → reason modal → cancelSession({sessionId, reason}) trimmed', async () => {

@@ -94,6 +94,7 @@ describe('runExtendRecurring', () => {
   async function seedSeries(opts: {
     day: string; startTime?: string; lengthMin?: number; endDate?: string;
     schoolWeeksOnly?: boolean; familyId?: string; recurringSlots?: unknown;
+    trialFirstSession?: boolean;
   }): Promise<string> {
     const db = getDb();
     const now = new Date();
@@ -115,6 +116,7 @@ describe('runExtendRecurring', () => {
       createdAt: now, updatedAt: now, confirmedAt: now,
     };
     if (opts.endDate) doc.endDate = opts.endDate;
+    if (opts.trialFirstSession) doc.trialFirstSession = true;
     await db.collection('study-sessions').doc(id).set(doc);
     return id;
   }
@@ -246,6 +248,22 @@ describe('runExtendRecurring', () => {
     const notifs = await db
       .collection('notifications').where('type', '==', 'study_session_cancelled').get();
     expect(notifs.docs.some((d) => d.data().data?.sessionId === id)).toBe(false);
+  });
+
+  // ── Trial flag is confirm-only: extension instances are NEVER flagged ──
+  // (A confirmed series always has its first scheduled instance from confirm, so
+  // the cron never materializes a series' first-ever occurrence. This pins that
+  // even a trial series' cron-created instances carry no isTrial flag.)
+
+  it('never flags extension instances as trial, even on a trial series', async () => {
+    const now = new Date();
+    const { day } = pickDay(now);
+    const id = await seedSeries({ day, trialFirstSession: true });
+
+    await runExtendRecurring(getDb(), now);
+    const instances = await instancesOf(id);
+    expect(instances.length).toBe(8);
+    expect(instances.some((i) => i.isTrial === true)).toBe(false);
   });
 
   // ── Per-session isolation: a corrupt series can't block a healthy one ──

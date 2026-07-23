@@ -300,6 +300,11 @@ export const respondToSession = onCall(
           },
           nowParis: parisWallClockPosition(now),
           now,
+          // Trial-first-session (V1.1 feature 2): mark the first scheduled
+          // instance as the trial when the family opted in at book time. This is
+          // the ONLY generateInstances caller that sets this — the extendRecurring
+          // cron never does (see generateInstances' markFirstScheduledAsTrial doc).
+          markFirstScheduledAsTrial: session.trialFirstSession === true,
         });
 
         if (scheduledDates.length === 0) {

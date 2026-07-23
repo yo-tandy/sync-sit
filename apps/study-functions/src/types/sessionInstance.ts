@@ -31,6 +31,13 @@ export interface SessionInstanceDoc {
   sessionLengthMinutes: number;
   paddingMinutes: number;
 
+  // ── Trial marker (V1.1 feature 2) ──
+  // Denormalized onto the FIRST occurrence actually materialized with status
+  // 'scheduled' at confirm, when the parent series has trialFirstSession. Both
+  // portals badge it. Only ever set on that one instance (never on a
+  // conflict_skip, never by the extendRecurring cron). Omitted otherwise.
+  isTrial?: boolean;
+
   // Status (independent of parent session)
   status: InstanceStatus;
   // Why this occurrence is off (only set when status !== 'scheduled').

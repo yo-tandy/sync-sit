@@ -458,6 +458,7 @@ export function SessionsPage() {
               statusCompleted: t('tutor.sessions.instanceStatus.completed'),
               statusSkipped: t('tutor.sessions.instanceStatus.skipped'),
               statusCancelled: t('tutor.sessions.instanceStatus.cancelled'),
+              trial: t('tutor.sessions.trial.badge'),
             }}
             renderNotes={(i) => (
               <SessionNotes
@@ -533,6 +534,9 @@ export function SessionsPage() {
                       <>
                         {s.recurringSlots?.[0] && <p>{slotLine(s.recurringSlots[0])}</p>}
                         <div className="flex flex-wrap items-center gap-2 pt-0.5">
+                          {s.trialFirstSession && (
+                            <Badge variant="blue">{t('tutor.sessions.trial.badge')}</Badge>
+                          )}
                           {s.schoolWeeksOnly && (
                             <Badge variant="gray">{t('tutor.sessions.schoolWeeksOnly')}</Badge>
                           )}
@@ -542,6 +546,9 @@ export function SessionsPage() {
                             </span>
                           )}
                         </div>
+                        {s.trialFirstSession && (
+                          <p className="text-gray-500">{t('tutor.sessions.trial.request')}</p>
+                        )}
                       </>
                     )}
                     <p>

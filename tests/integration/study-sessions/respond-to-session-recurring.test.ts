@@ -89,6 +89,7 @@ describe('respondToSession — recurring confirm', () => {
     location?: string;
     paddingMinutes?: number;
     endDate?: string;
+    trialFirstSession?: boolean;
   }): Promise<string> {
     const db = getDb();
     const now = new Date();
@@ -120,6 +121,7 @@ describe('respondToSession — recurring confirm', () => {
       updatedAt: now,
     };
     if (opts.endDate) doc.endDate = opts.endDate;
+    if (opts.trialFirstSession) doc.trialFirstSession = true;
     await db.collection('study-sessions').doc(id).set(doc);
     return id;
   }
@@ -380,6 +382,73 @@ describe('respondToSession — recurring confirm', () => {
     expect(parent.status).toBe('declined');
     const instances = await instancesOf(id);
     expect(instances.length).toBe(0);
+  });
+
+  // ── Trial flag: the first SCHEDULED instance carries isTrial ──
+
+  it('flags exactly the first scheduled instance as a trial', async () => {
+    const day = testDay();
+    const expected = candidatesFor(day, 8);
+    const id = await seedRecurring({
+      tutorUserId: flexTutorUid, day, startTime: '12:00', trialFirstSession: true,
+    });
+
+    const res = await callFunction<ConfirmResponse>(
+      'respondToSession', { sessionId: id, action: 'confirm' }, flexToken,
+    );
+    expect(res.scheduledDates).toEqual(expected);
+
+    const instances = await instancesOf(id);
+    const byDate = new Map(instances.map((i) => [i.date as string, i]));
+    // Exactly the first date is the trial; every later occurrence is not.
+    expect(byDate.get(expected[0])!.isTrial).toBe(true);
+    for (const date of expected.slice(1)) {
+      expect(byDate.get(date)!.isTrial).toBeUndefined();
+    }
+    // Sanity: exactly one instance carries the flag.
+    expect(instances.filter((i) => i.isTrial === true).length).toBe(1);
+  });
+
+  it('carries the trial flag to instance 2 when the first candidate conflict-skips', async () => {
+    const db = getDb();
+    const day = testDay();
+    const all = candidatesFor(day, 8);
+    const conflictDate = all[0]; // block the FIRST candidate
+    await db.collection('study-sessions').doc('one-time-blocker-trial').set({
+      sessionId: 'one-time-blocker-trial', tutorUserId: flexTutorUid, familyId: seed.family2Id,
+      type: 'one_time', status: 'confirmed',
+      date: conflictDate, startTime: '12:00', endTime: '13:00',
+      location: 'online', paddingMinutes: 0, sessionLengthMinutes: 60,
+      createdAt: new Date(), updatedAt: new Date(),
+    });
+    const id = await seedRecurring({
+      tutorUserId: flexTutorUid, day, startTime: '12:00', trialFirstSession: true,
+    });
+
+    const res = await callFunction<ConfirmResponse>(
+      'respondToSession', { sessionId: id, action: 'confirm' }, flexToken,
+    );
+    expect(res.skippedDates).toEqual([conflictDate]);
+
+    const instances = await instancesOf(id);
+    const byDate = new Map(instances.map((i) => [i.date as string, i]));
+    // The conflict-skipped candidate (a cancelled instance) NEVER carries the flag.
+    expect(byDate.get(all[0])!.status).toBe('cancelled');
+    expect(byDate.get(all[0])!.isTrial).toBeUndefined();
+    // The flag lands on the first SCHEDULED instance — the second candidate.
+    expect(byDate.get(all[1])!.isTrial).toBe(true);
+    expect(instances.filter((i) => i.isTrial === true).length).toBe(1);
+  });
+
+  it('flags no instance for a non-trial series', async () => {
+    const day = testDay();
+    const id = await seedRecurring({ tutorUserId: flexTutorUid, day, startTime: '12:00' });
+
+    await callFunction<ConfirmResponse>(
+      'respondToSession', { sessionId: id, action: 'confirm' }, flexToken,
+    );
+    const instances = await instancesOf(id);
+    expect(instances.some((i) => i.isTrial === true)).toBe(false);
   });
 
   // ── Recurring vs recurring: a second series skips the first's dates via CG ──

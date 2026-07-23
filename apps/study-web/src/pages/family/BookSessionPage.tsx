@@ -10,7 +10,7 @@ import type { KidDoc, DayOfWeek } from '@ejm/shared-core';
 import type { LocationPref, TutorSearchResult } from '@ejm/study-core';
 import { expandRecurringDates } from '@ejm/study-core';
 import { useHolidays } from '@/hooks/useHolidays';
-import { Button, Input, Select, Textarea, Checkbox, Chip, Card, TopNav, Spinner, Dialog } from '@ejm/shared-ui';
+import { Button, Input, Select, Textarea, Checkbox, Chip, Card, TopNav, Spinner, Dialog, Badge } from '@ejm/shared-ui';
 import { deriveStartChips, deriveWeeklySlots, type WeeklyCandidate } from './bookingSlots';
 
 /**
@@ -147,6 +147,7 @@ export function BookSessionPage() {
   const [weeklyError, setWeeklyError] = useState(false);
   const [weeklySlot, setWeeklySlot] = useState<WeeklyCandidate | null>(null);
   const [schoolWeeksOnly, setSchoolWeeksOnly] = useState(true);
+  const [trialFirstSession, setTrialFirstSession] = useState(false);
   const [endDate, setEndDate] = useState('');
 
   const [submitting, setSubmitting] = useState(false);
@@ -397,6 +398,8 @@ export function BookSessionPage() {
             type: 'recurring' as const,
             recurringSlot: { day: weeklySlot!.day, startTime: weeklySlot!.startTime },
             schoolWeeksOnly,
+            // Omit-when-false (mirrors endDate) so a non-trial request sends no field.
+            ...(trialFirstSession ? { trialFirstSession: true } : {}),
             ...(endDate ? { endDate } : {}),
           }
         : { ...common, date: selectedDate!, startTime: selectedStart! };
@@ -682,6 +685,18 @@ export function BookSessionPage() {
                   className="mb-4"
                 />
 
+                {/* Trial first session (V1.1): a labelling opt-in — the first
+                    materialized occurrence is badged as a trial for both parties. */}
+                <Checkbox
+                  checked={trialFirstSession}
+                  onChange={(e) => setTrialFirstSession(e.target.checked)}
+                  label={t('family.book.trial.toggle')}
+                  className="mb-1"
+                />
+                <p className="mb-4 text-[11px] leading-tight text-gray-400">
+                  {t('family.book.trial.explainer')}
+                </p>
+
                 <Input
                   label={t('family.book.weekly.endDateLabel')}
                   type="date"
@@ -696,21 +711,32 @@ export function BookSessionPage() {
                       {t('family.book.weekly.projectionTitle')}
                     </p>
                     <ul className="space-y-1">
-                      {projection.map((p) => {
-                        const skipped = schoolWeeksOnly && p.holiday;
-                        return (
-                          <li key={p.date} className="flex items-center justify-between text-xs">
-                            <span className={skipped ? 'text-gray-400 line-through' : 'text-gray-700'}>
-                              {formatDateStr(p.date)}
-                            </span>
-                            {skipped && (
-                              <span className="text-gray-400">
-                                {t('family.book.weekly.skippedHoliday')}
+                      {(() => {
+                        // The trial lands on the first occurrence that actually
+                        // materializes — i.e. the first NON-greyed (non-skipped) date.
+                        const trialDate = trialFirstSession
+                          ? projection.find((p) => !(schoolWeeksOnly && p.holiday))?.date
+                          : undefined;
+                        return projection.map((p) => {
+                          const skipped = schoolWeeksOnly && p.holiday;
+                          return (
+                            <li key={p.date} className="flex items-center justify-between text-xs">
+                              <span className={skipped ? 'text-gray-400 line-through' : 'text-gray-700'}>
+                                {formatDateStr(p.date)}
                               </span>
-                            )}
-                          </li>
-                        );
-                      })}
+                              {skipped ? (
+                                <span className="text-gray-400">
+                                  {t('family.book.weekly.skippedHoliday')}
+                                </span>
+                              ) : (
+                                p.date === trialDate && (
+                                  <Badge variant="blue">{t('family.book.trial.badge')}</Badge>
+                                )
+                              )}
+                            </li>
+                          );
+                        });
+                      })()}
                     </ul>
                     <p className="mt-2 text-[11px] leading-tight text-gray-400">
                       {t('family.book.weekly.conflictNote')}

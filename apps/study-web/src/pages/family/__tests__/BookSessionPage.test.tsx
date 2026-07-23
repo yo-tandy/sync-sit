@@ -351,6 +351,40 @@ describe('family BookSessionPage — weekly mode', () => {
     });
   });
 
+  it('includes trialFirstSession in the payload only when the toggle is on', async () => {
+    renderBook(fullState());
+    await armWeekly();
+    fireEvent.click(screen.getByLabelText(/first session a trial/i));
+    fireEvent.click(screen.getByRole('button', { name: /request weekly/i }));
+
+    await waitFor(() => {
+      const call = h.callable.mock.calls.find((c) => c[0] === 'bookSession');
+      expect(call?.[1]).toMatchObject({ trialFirstSession: true });
+    });
+  });
+
+  it('omits trialFirstSession when the toggle is off (default, omit-when-false)', async () => {
+    renderBook(fullState());
+    await armWeekly();
+    fireEvent.click(screen.getByRole('button', { name: /request weekly/i }));
+
+    await waitFor(() => expect(h.callable).toHaveBeenCalledWith('bookSession', expect.anything()));
+    const call = h.callable.mock.calls.find((c) => c[0] === 'bookSession');
+    expect(call?.[1]).not.toHaveProperty('trialFirstSession');
+  });
+
+  it('marks the first non-greyed projected date as a trial when the toggle is on', async () => {
+    renderBook(fullState());
+    await armWeekly();
+    // No trial marker until the family opts in.
+    expect(screen.queryByText(/^Trial$/)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText(/first session a trial/i));
+    // Exactly one projected date is flagged as the trial.
+    const marks = await screen.findAllByText(/^Trial$/);
+    expect(marks).toHaveLength(1);
+  });
+
   it('preserves shared form state (students, length) across a mode toggle', async () => {
     renderBook(fullState());
     // In one-time mode, pick a student and a 30-min length.

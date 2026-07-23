@@ -218,6 +218,21 @@ describe('family SessionsPage — management', () => {
     expect(series.compareDocumentPosition(oneT) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
+  it('badges the isTrial instance in the expanded series list', async () => {
+    h.sessions = [confirmedRecurring({ sessionId: 'sR' })];
+    h.instances = {
+      sR: [
+        instanceDoc({ instanceId: '2026-08-05', date: '2026-08-05', isTrial: true }),
+        instanceDoc({ instanceId: '2026-08-12', date: '2026-08-12' }),
+      ],
+    };
+    renderWithProviders(<SessionsPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /view dates|occurrences/i }));
+    const marks = await screen.findAllByText(/^Trial$/);
+    expect(marks).toHaveLength(1);
+  });
+
   it('expands a series to its instances and cancels one date → cancelSessionInstance', async () => {
     h.sessions = [confirmedRecurring({ sessionId: 'sR' })];
     h.instances = {
