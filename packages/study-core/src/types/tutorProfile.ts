@@ -52,6 +52,15 @@ export interface TutorProfile extends ProfileBase {
   searchable?: boolean;
 
   /**
+   * Server-owned denormalized count of the tutor's approved/published study
+   * endorsements. Written only by respondToTutorEndorsement (accept path,
+   * FieldValue.increment) and pinned immutable against owner writes by security
+   * rules (a client must not inflate it). searchTutors reads this instead of
+   * scanning the references collection per call. Absent → treated as 0.
+   */
+  endorsementCount?: number;
+
+  /**
    * Family IDs the tutor has approved for contact-field sharing. Server-owned:
    * written only by the respondToTutorContactRequest callable (accept path,
    * via arrayUnion) and pinned immutable against owner writes by security

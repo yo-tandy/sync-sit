@@ -31,6 +31,13 @@ describe('respondToTutorEndorsement', () => {
     const db = getDb();
     const refs = await db.collection('references').get();
     await Promise.all(refs.docs.map((d) => d.ref.delete()));
+    // Reset the server-owned counter — accept increments it and it would
+    // otherwise accumulate across tests.
+    await Promise.all(
+      [seed.tutor2.uid, seed.tutor3.uid].map((uid) =>
+        db.collection('users').doc(uid).update({ 'profiles.tutor.endorsementCount': 0 }),
+      ),
+    );
   });
 
   // Seed a private tutor endorsement directly (keyed by tutorUserId + appSource).
@@ -56,7 +63,7 @@ describe('respondToTutorEndorsement', () => {
     return ref.id;
   }
 
-  it('accept flips status to approved and stamps approvedAt', async () => {
+  it('accept flips status to approved, stamps approvedAt, and increments the tutor endorsementCount', async () => {
     const referenceId = await seedPrivateEndorsement(seed.tutor2.uid);
     const res = await callFunction<{ ok: boolean }>(
       'respondToTutorEndorsement',
@@ -64,16 +71,23 @@ describe('respondToTutorEndorsement', () => {
       tutor2Token
     );
     expect(res.ok).toBe(true);
-    const doc = (await getDb().collection('references').doc(referenceId).get()).data()!;
+    const db = getDb();
+    const doc = (await db.collection('references').doc(referenceId).get()).data()!;
     expect(doc.status).toBe('approved');
     expect(doc.approvedAt).toBeTruthy();
+    // Server-owned counter incremented from the beforeEach baseline of 0.
+    const tutorDoc = (await db.collection('users').doc(seed.tutor2.uid).get()).data()!;
+    expect(tutorDoc.profiles.tutor.endorsementCount).toBe(1);
   });
 
-  it('dismiss flips status to removed', async () => {
+  it('dismiss flips status to removed and does NOT change the endorsementCount', async () => {
     const referenceId = await seedPrivateEndorsement(seed.tutor2.uid);
     await callFunction('respondToTutorEndorsement', { referenceId, action: 'dismiss' }, tutor2Token);
-    const doc = (await getDb().collection('references').doc(referenceId).get()).data()!;
+    const db = getDb();
+    const doc = (await db.collection('references').doc(referenceId).get()).data()!;
     expect(doc.status).toBe('removed');
+    const tutorDoc = (await db.collection('users').doc(seed.tutor2.uid).get()).data()!;
+    expect(tutorDoc.profiles.tutor.endorsementCount).toBe(0);
   });
 
   it('rejects a response from a tutor who is not the endorsed one (permission-denied)', async () => {
@@ -115,5 +129,26 @@ describe('respondToTutorEndorsement', () => {
       parent1Token
     );
     expect(after.results.find((r) => r.uid === seed.tutor2.uid)?.endorsementCount).toBe(1);
+  });
+
+  // Proves the per-search references SCAN is gone: searchTutors reads the
+  // denormalized counter, so emptying the references collection out-of-band
+  // AFTER acceptance must not change the reported count.
+  it('searchTutors reports the endorsementCount from the counter even when the references collection is emptied', async () => {
+    const referenceId = await seedPrivateEndorsement(seed.tutor2.uid);
+    await callFunction('respondToTutorEndorsement', { referenceId, action: 'accept' }, tutor2Token);
+
+    // Delete every reference doc directly — if search still scanned them, the
+    // count would drop to 0.
+    const db = getDb();
+    const refs = await db.collection('references').get();
+    await Promise.all(refs.docs.map((d) => d.ref.delete()));
+
+    const result = await callFunction<{ results: SearchResult[] }>(
+      'searchTutors',
+      { subject: 'math', level: '6e', latLng: PARIS_CENTER },
+      parent1Token
+    );
+    expect(result.results.find((r) => r.uid === seed.tutor2.uid)?.endorsementCount).toBe(1);
   });
 });

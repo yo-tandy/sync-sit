@@ -53,20 +53,10 @@ export const searchTutors = onCall(
       return { results: [] };
     }
 
-    // ── Endorsement counts: study references that are visible (approved/published) ──
-    // Single equality filter (appSource) keeps this index-free; the small
-    // status set is filtered in memory and counted per tutor.
-    const refsSnap = await db.collection('references')
-      .where('appSource', '==', 'study')
-      .get();
-    const endorsementCounts = new Map<string, number>();
-    refsSnap.docs.forEach((d) => {
-      const data = d.data();
-      if (data.status !== 'approved' && data.status !== 'published') return;
-      const tutorId = data.tutorUserId as string | undefined;
-      if (!tutorId) return;
-      endorsementCounts.set(tutorId, (endorsementCounts.get(tutorId) || 0) + 1);
-    });
+    // Endorsement counts are read from the tutor's denormalized, server-owned
+    // `endorsementCount` on the profile (below) — respondToTutorEndorsement
+    // maintains it. This replaces a per-call scan of the entire study
+    // references collection.
 
     // ── This family's request status per tutor (latest wins) ──
     const requestsSnap = await db.collection('studyContactRequests')
@@ -168,7 +158,7 @@ export const searchTutors = onCall(
         sessionLengthsMin: tutor.sessionLengthsMin || [],
         locationPrefs: tutor.locationPrefs || [],
         distance,
-        endorsementCount: endorsementCounts.get(uid) || 0,
+        endorsementCount: tutor.endorsementCount ?? 0,
         requestStatus,
       };
       if (contactApproved) {

@@ -302,6 +302,29 @@ describe('users collection — Plan D owner-update guards', () => {
     );
   });
 
+  // endorsementCount is a server-owned counter: written ONLY by
+  // respondToTutorEndorsement on accept. A tutor inflating it would fake social
+  // proof and distort search ranking.
+  it('tutor may NOT change profiles.tutor.endorsementCount', async () => {
+    await seed('tu8', {
+      status: 'active', email: 't@ejm.org',
+      profiles: {
+        tutor: {
+          ejemEmail: 't@ejm.org',
+          enrollmentComplete: false,
+          searchable: false,
+          subjects: ['math'],
+          endorsementCount: 0,
+          verification: { identityStatus: 'not_submitted' },
+        },
+      },
+    });
+    const authed = testEnv.authenticatedContext('tu8');
+    await assertFails(
+      updateDoc(doc(authed.firestore(), 'users', 'tu8'), { 'profiles.tutor.endorsementCount': 99 })
+    );
+  });
+
   // The tutor guard must default safely for users WITHOUT a tutor profile,
   // otherwise a parent-only user's ordinary profile edit would break.
   it('parent-only user may still edit their own profile (tutor guard defaults safely)', async () => {

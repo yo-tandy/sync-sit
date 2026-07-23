@@ -84,6 +84,9 @@ service cloud.firestore {
     //   the ONLY writer (on accept); allowing direct client writes would bypass
     //   the contact-request flow and its GDPR-required record of which families
     //   the tutor has shared contact fields with. Mirrors babysitter approvedFamilies.
+    // - endorsementCount: server-owned denormalized counter of approved/published
+    //   endorsements, written ONLY by respondToTutorEndorsement on accept. A
+    //   tutor inflating it would fake social proof and distort search ranking.
     // Defaults keep the guard trivially true for users WITHOUT a tutor profile.
     function tutorIdentityUnchanged() {
       return tutorField(request.resource.data, 'ejemEmail', '')
@@ -93,7 +96,9 @@ service cloud.firestore {
              && tutorField(request.resource.data, 'verification', {})
                == tutorField(resource.data, 'verification', {})
              && tutorField(request.resource.data, 'approvedFamilies', [])
-               == tutorField(resource.data, 'approvedFamilies', []);
+               == tutorField(resource.data, 'approvedFamilies', [])
+             && tutorField(request.resource.data, 'endorsementCount', 0)
+               == tutorField(resource.data, 'endorsementCount', 0);
     }
 
     // Helper: profiles.parent.familyId is server-controlled (enrollFamily /
