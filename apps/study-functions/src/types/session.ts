@@ -51,6 +51,16 @@ export interface SessionDoc {
   sessionLengthMinutes: number;
   recurringSlots?: RecurringSlot[];
   schoolWeeksOnly?: boolean;
+  // ── Trial first session (V1.1 feature 2; recurring only) ──
+  // A booking-time family choice: flag the series' FIRST materialized occurrence
+  // as a trial. DELIBERATE DEVIATION from the roadmap's `type: 'trial'` — a third
+  // top-level type would ripple through every `type === 'one_time' | 'recurring'`
+  // switch, so this is an additive boolean on the recurring parent instead. The
+  // denormalized per-occurrence marker lives on SessionInstanceDoc.isTrial (set on
+  // whichever instance actually materializes first at confirm). v1 is labeling
+  // only — no pricing/cancellation mechanics attach (nothing to enforce without
+  // payments). Omitted (not stored false) when the family does not opt in.
+  trialFirstSession?: boolean;
   // Open-ended when absent: the series runs indefinitely (the extendRecurring
   // cron keeps a rolling 8-week horizon of instances). When present, no
   // occurrence is generated on or after truncation past this date.

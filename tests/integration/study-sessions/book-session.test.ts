@@ -154,6 +154,22 @@ describe('bookSession', () => {
     expect(overrides.empty).toBe(true);
   });
 
+  // Trial flag is a recurring-only concept; a one_time input carrying it is
+  // ACCEPTED but the field is ignored (never persisted) — mirrors the
+  // schoolWeeksOnly precedent (top-level, parsed on any input, used only by the
+  // recurring path).
+  it('ignores trialFirstSession on a one_time booking (accepted, not persisted)', async () => {
+    const db = getDb();
+    const res = await callFunction<BookResponse>(
+      'bookSession',
+      { ...happyInput(), trialFirstSession: true },
+      parent1Token,
+    );
+    expect(res.sessionId).toBeTruthy(); // accepted, not rejected
+    const doc = (await db.collection('study-sessions').doc(res.sessionId).get()).data()!;
+    expect(doc.trialFirstSession).toBeUndefined(); // ignored on the one_time path
+  });
+
   // ── Gate negatives ──
 
   it('rejects unauthenticated calls', async () => {

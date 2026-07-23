@@ -194,6 +194,7 @@ export const bookSession = onCall(
       recurringSlot,
       schoolWeeksOnly,
       endDate,
+      trialFirstSession,
     } = parsed.data;
 
     // ── Caller gate: parent with a fully-verified family ──
@@ -405,6 +406,9 @@ export const bookSession = onCall(
         updatedAt: now,
       };
       if (endDate !== undefined) sessionDoc.endDate = endDate;
+      // Omit-when-false (mirrors endDate): only a true opt-in is stored, so a
+      // non-trial series carries no field at all.
+      if (trialFirstSession) sessionDoc.trialFirstSession = true;
       if (message !== undefined) sessionDoc.message = message;
       if (address !== undefined) sessionDoc.address = address;
       if (latLng !== undefined) sessionDoc.latLng = latLng;
@@ -488,13 +492,16 @@ export const bookSession = onCall(
     }
 
     // ── Notify the tutor (respecting notifPrefs.newRequest) ──
+    // trialFirstSession is recurring-only; ignore it on the one_time path.
+    const isTrialRequest = type === 'recurring' && trialFirstSession === true;
     const notifPrefs = tutorUser.notifPrefs?.newRequest;
     const title = 'New session request';
-    const body = `${familyName || 'A family'} requested a tutoring session.`;
+    const body = `${familyName || 'A family'} requested a tutoring session${isTrialRequest ? ' (first session as a trial)' : ''}.`;
     const emailBody = `
       <p>You have a new ${type === 'recurring' ? 'recurring ' : ''}session request from <strong>${familyName || 'a family'}</strong>.</p>
       <p><strong>Subject:</strong> ${subject} (${level})</p>
       <p><strong>When:</strong> ${whenLine}</p>
+      ${isTrialRequest ? `<p>The family would like the <strong>first session as a trial</strong>.</p>` : ''}
       ${message ? `<p><strong>Message:</strong> ${message}</p>` : ''}
       <p style="margin-top: 16px;"><a href="https://sync-study.com/tutor/sessions" style="background: #2563EB; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View Request</a></p>
     `;

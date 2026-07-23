@@ -223,4 +223,34 @@ describe('bookSession — recurring', () => {
     expect(notifs.size).toBe(1);
     expect(notifs.docs[0].data().data.sessionId).toBe(res.sessionId);
   });
+
+  // ── Trial-first-session flag (V1.1) ──
+
+  it('persists trialFirstSession when the family opts in', async () => {
+    const db = getDb();
+    const res = await callFunction<BookResponse>(
+      'bookSession',
+      { ...recurringInput(), trialFirstSession: true },
+      parent1Token,
+    );
+    const doc = (await db.collection('study-sessions').doc(res.sessionId).get()).data()!;
+    expect(doc.trialFirstSession).toBe(true);
+  });
+
+  it('omits trialFirstSession when absent or false (omit-when-false)', async () => {
+    const db = getDb();
+    // Absent → not persisted.
+    const res1 = await callFunction<BookResponse>('bookSession', recurringInput(), parent1Token);
+    const doc1 = (await db.collection('study-sessions').doc(res1.sessionId).get()).data()!;
+    expect(doc1.trialFirstSession).toBeUndefined();
+
+    // Explicit false → also omitted (distinct slot to dodge the duplicate guard).
+    const res2 = await callFunction<BookResponse>(
+      'bookSession',
+      { ...recurringInput(), recurringSlot: { day: 'mon', startTime: '17:00' }, trialFirstSession: false },
+      parent1Token,
+    );
+    const doc2 = (await db.collection('study-sessions').doc(res2.sessionId).get()).data()!;
+    expect(doc2.trialFirstSession).toBeUndefined();
+  });
 });

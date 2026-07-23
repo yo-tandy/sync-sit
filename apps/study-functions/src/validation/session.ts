@@ -84,6 +84,12 @@ export const bookSessionInputSchema = z
       .optional(),
     // Skip French school-holiday weeks entirely (default on).
     schoolWeeksOnly: z.boolean().optional().default(true),
+    // Recurring only: flag the series' first materialized occurrence as a trial
+    // (V1.1 feature 2). Like schoolWeeksOnly it lives top-level and is parsed on
+    // ANY input; a one_time input carrying it is ACCEPTED but the flag is IGNORED
+    // — only bookSession's recurring path persists it (omit-when-false). No
+    // default: absence means "not a trial".
+    trialFirstSession: z.boolean().optional(),
     endDate: z
       .string()
       .regex(/^\d{4}-\d{2}-\d{2}$/, 'End date must be in YYYY-MM-DD format')
