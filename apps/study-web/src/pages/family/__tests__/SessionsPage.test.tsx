@@ -473,3 +473,126 @@ describe('family SessionsPage — endorse after completion', () => {
     return recurring({ status: 'confirmed', ...overrides });
   }
 });
+
+// ── Task 2: session notes (the family authors the PRE-note) ──
+// The window: the pre-note is editable until the session STARTS, so it surfaces
+// on upcoming (not-started) rows. Completed rows show the tutor's post-note
+// read-only, with no family edit affordance. Time is pinned for deterministic
+// timing (Paris CEST → 2026-08-01 11:00).
+describe('family SessionsPage — session notes (pre)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-08-01T09:00:00Z'));
+    reset();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  function confirmedOneTime(overrides: Record<string, unknown> = {}) {
+    return oneTime({ status: 'confirmed', date: '2026-08-20', ...overrides });
+  }
+  function confirmedRecurring(overrides: Record<string, unknown> = {}) {
+    return recurring({ status: 'confirmed', ...overrides });
+  }
+
+  it('an upcoming one_time offers an add-note (pre) affordance', async () => {
+    h.sessions = [confirmedOneTime({ sessionId: 'sN' })];
+    renderWithProviders(<SessionsPage />);
+
+    expect(await screen.findByRole('button', { name: /add a note/i })).toBeInTheDocument();
+  });
+
+  it('saving a pre-note calls setSessionNote with {sessionId, kind:pre, text}', async () => {
+    h.sessions = [confirmedOneTime({ sessionId: 'sN' })];
+    renderWithProviders(<SessionsPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /add a note/i }));
+    fireEvent.change(await screen.findByRole('textbox'), {
+      target: { value: 'Please focus on fractions.' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /save note/i }));
+
+    await waitFor(() =>
+      expect(h.callable).toHaveBeenCalledWith('setSessionNote', {
+        sessionId: 'sN',
+        kind: 'pre',
+        text: 'Please focus on fractions.',
+      }),
+    );
+  });
+
+  it('does not offer a pre-edit once the session has started', async () => {
+    // Today (2026-08-01) at 09:00 Paris has already passed (now is 11:00).
+    h.sessions = [confirmedOneTime({ sessionId: 'sS', date: '2026-08-01', startTime: '09:00' })];
+    renderWithProviders(<SessionsPage />);
+
+    await screen.findByText('Alex Roy');
+    expect(
+      screen.queryByRole('button', { name: /add a note|edit note/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('a completed one_time shows both notes with author labels and no family edit', async () => {
+    h.sessions = [
+      oneTime({
+        sessionId: 'sC',
+        status: 'completed',
+        preSessionNote: 'Focus on fractions',
+        postSessionNote: 'Covered fractions; homework p.42',
+      }),
+    ];
+    renderWithProviders(<SessionsPage />);
+
+    expect(await screen.findByText(/from the tutor/i)).toBeInTheDocument();
+    expect(screen.getByText('Covered fractions; homework p.42')).toBeInTheDocument();
+    expect(screen.getByText(/from the family/i)).toBeInTheDocument();
+    expect(screen.getByText('Focus on fractions')).toBeInTheDocument();
+    // Read-only for the family on a completed row.
+    expect(
+      screen.queryByRole('button', { name: /add a note|edit note/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('editing an existing pre-note seeds the textarea and clearing it sends empty text', async () => {
+    h.sessions = [confirmedOneTime({ sessionId: 'sN', preSessionNote: 'old ask' })];
+    renderWithProviders(<SessionsPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /edit note/i }));
+    const textarea = await screen.findByRole('textbox');
+    expect(textarea).toHaveValue('old ask');
+
+    fireEvent.change(textarea, { target: { value: '' } });
+    fireEvent.click(screen.getByRole('button', { name: /save note/i }));
+
+    await waitFor(() =>
+      expect(h.callable).toHaveBeenCalledWith('setSessionNote', {
+        sessionId: 'sN',
+        kind: 'pre',
+        text: '',
+      }),
+    );
+  });
+
+  it('adds a pre-note to a series occurrence → setSessionNote carries instanceId', async () => {
+    h.sessions = [confirmedRecurring({ sessionId: 'sR' })];
+    h.instances = {
+      sR: [instanceDoc({ instanceId: '2026-08-12', date: '2026-08-12', status: 'scheduled' })],
+    };
+    renderWithProviders(<SessionsPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /view dates/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /add a note/i }));
+    fireEvent.change(await screen.findByRole('textbox'), { target: { value: 'ratios please' } });
+    fireEvent.click(screen.getByRole('button', { name: /save note/i }));
+
+    await waitFor(() =>
+      expect(h.callable).toHaveBeenCalledWith('setSessionNote', {
+        sessionId: 'sR',
+        instanceId: '2026-08-12',
+        kind: 'pre',
+        text: 'ratios please',
+      }),
+    );
+  });
+});

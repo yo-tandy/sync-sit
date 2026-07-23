@@ -25,6 +25,10 @@ interface SessionInstanceListProps {
   onCancelInstance: (instance: StudySessionInstanceDoc) => void;
   formatDate: (date: string) => string;
   copy: InstanceListCopy;
+  // Per-occurrence session notes (V1.1). The parent owns role + timing (it decides
+  // whose note is editable within which window), so it injects the note block for
+  // each occurrence; the list stays presentation-only. Omitted → no notes shown.
+  renderNotes?: (instance: StudySessionInstanceDoc) => React.ReactNode;
 }
 
 export function SessionInstanceList({
@@ -35,6 +39,7 @@ export function SessionInstanceList({
   onCancelInstance,
   formatDate,
   copy,
+  renderNotes,
 }: SessionInstanceListProps) {
   const sorted = [...instances].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
 
@@ -57,23 +62,26 @@ export function SessionInstanceList({
         // every date, so per-date actions must lock too.
         const rowBusy = cancelKey === key || cancelKey === sessionId;
         return (
-          <li key={i.instanceId} className="flex items-center justify-between gap-2 text-xs">
-            <span className="text-gray-700">
-              {formatDate(i.date)} · {i.startTime}–{i.endTime}
-            </span>
-            <span className="flex items-center gap-2">
-              {label && <Badge variant="gray">{label}</Badge>}
-              {cancelable && (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  disabled={rowBusy}
-                  onClick={() => onCancelInstance(i)}
-                >
-                  {copy.cancelInstance}
-                </Button>
-              )}
-            </span>
+          <li key={i.instanceId} className="text-xs">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-gray-700">
+                {formatDate(i.date)} · {i.startTime}–{i.endTime}
+              </span>
+              <span className="flex items-center gap-2">
+                {label && <Badge variant="gray">{label}</Badge>}
+                {cancelable && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={rowBusy}
+                    onClick={() => onCancelInstance(i)}
+                  >
+                    {copy.cancelInstance}
+                  </Button>
+                )}
+              </span>
+            </div>
+            {renderNotes?.(i)}
           </li>
         );
       })}
