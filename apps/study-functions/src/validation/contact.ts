@@ -31,3 +31,14 @@ export const respondTutorContactRequestSchema = z.object({
 });
 
 export type RespondTutorContactRequestInput = z.infer<typeof respondTutorContactRequestSchema>;
+
+/**
+ * Input for cancelContactRequest. The family that OWNS the request (enforced in
+ * the callable against the caller's derived familyId) may cancel it while it is
+ * still pending. familyId is never accepted from the client.
+ */
+export const cancelContactRequestSchema = z.object({
+  requestId: z.string().min(1, 'requestId is required'),
+});
+
+export type CancelContactRequestInput = z.infer<typeof cancelContactRequestSchema>;

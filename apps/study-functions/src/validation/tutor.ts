@@ -76,6 +76,15 @@ export const tutorSessionPrefsSchema = z.object({
   areaMode: z.enum(['arrondissement', 'distance']),
   arrondissements: z.array(z.string()).optional(),
   areaAddress: z.string().optional(),
+  // Geocoded coordinates for the area address (distance mode). Bounds mirror the
+  // searchTutors latLng schema — they also reject ±Infinity, which would yield
+  // NaN haversine distances. searchTutors already tolerates a missing value.
+  areaLatLng: z
+    .object({
+      lat: z.number().min(-90).max(90),
+      lng: z.number().min(-180).max(180),
+    })
+    .optional(),
   areaRadiusKm: z.number().min(0).max(50).optional(),
 });
 

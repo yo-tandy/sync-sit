@@ -39,6 +39,7 @@ interface EnrollTutorInput {
     areaMode: 'arrondissement' | 'distance';
     arrondissements?: string[];
     areaAddress?: string;
+    areaLatLng?: { lat: number; lng: number };
     areaRadiusKm?: number;
   };
 }
@@ -150,6 +151,7 @@ export function TutorEnrollment() {
         areaMode: prefsData.areaMode,
         arrondissements: prefsData.arrondissements,
         areaAddress: prefsData.areaAddress,
+        areaLatLng: prefsData.areaLatLng,
         areaRadiusKm: prefsData.areaRadiusKm,
       };
       const enrollment = JSON.parse(JSON.stringify(enrollmentRaw)) as typeof enrollmentRaw;

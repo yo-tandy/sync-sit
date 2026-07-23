@@ -551,7 +551,7 @@ export interface StudyContactRequestSeed {
   subject?: string;
   level?: string;
   message?: string;
-  status?: 'pending' | 'accepted' | 'declined';
+  status?: 'pending' | 'accepted' | 'declined' | 'cancelled';
   createdAt?: Date;
   respondedAt?: Date;
   updatedAt?: Date;

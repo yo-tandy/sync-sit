@@ -15,6 +15,7 @@
     "test:unit": "pnpm --filter @ejm/sit-core --filter @ejm/study-core --filter @ejm/shared-functions --filter web --filter study-functions --filter study-web test",
     "test:integration": "pnpm --filter @ejm/tests test",
     "seed:admin": "node apps/functions/seed-admin.cjs",
+    "backfill:endorsement-counts": "node apps/study-functions/backfill-endorsement-counts.cjs",
     "emulators": "firebase emulators:start",
     "deploy": "firebase deploy"
   },

@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { collection, query, where, orderBy, getDocs } from 'firebase/firestore';
-import { db } from '@/config/firebase';
+import { httpsCallable } from 'firebase/functions';
+import { db, functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { getParentProfile } from '@ejm/shared-core';
 import type {
@@ -10,7 +11,7 @@ import type {
   StudyContactRequestStatus,
   TutorEndorsementDoc,
 } from '@ejm/study-core';
-import { Card, Button, Badge, TopNav, Spinner } from '@ejm/shared-ui';
+import { Card, Button, Badge, TopNav, Spinner, Dialog } from '@ejm/shared-ui';
 import { EndorseTutorDialog } from '@/components/family/EndorseTutorDialog';
 
 /**
@@ -24,12 +25,13 @@ import { EndorseTutorDialog } from '@/components/family/EndorseTutorDialog';
  * prefilled; that page auto-runs the search and reveals the tutor's contact
  * block on the matching card (Task 1 auto-search contract).
  */
-const STATUS_ORDER: StudyContactRequestStatus[] = ['pending', 'accepted', 'declined'];
+const STATUS_ORDER: StudyContactRequestStatus[] = ['pending', 'accepted', 'declined', 'cancelled'];
 
 const STATUS_VARIANT: Record<StudyContactRequestStatus, 'amber' | 'green' | 'gray'> = {
   pending: 'amber',
   accepted: 'green',
   declined: 'gray',
+  cancelled: 'gray',
 };
 
 /** Endorsement status → chip variant for the "Your endorsements" section. */
@@ -58,6 +60,11 @@ export function RequestsPage() {
   const [endorsements, setEndorsements] = useState<TutorEndorsementDoc[]>([]);
   // The accepted request whose endorse dialog is open, or null.
   const [endorsing, setEndorsing] = useState<StudyContactRequestDoc | null>(null);
+  // The pending request whose cancel-confirmation dialog is open, or null.
+  const [cancelTarget, setCancelTarget] = useState<StudyContactRequestDoc | null>(null);
+  // requestId currently awaiting the cancel callable, or null (row in-flight).
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [cancelError, setCancelError] = useState<string | null>(null);
   // tutorUserIds endorsed this session (submit succeeded or already-exists) — the
   // matching accepted row shows a disabled "Endorsed" state (persisted nothing).
   const [endorsedTutors, setEndorsedTutors] = useState<Set<string>>(new Set());
@@ -114,6 +121,27 @@ export function RequestsPage() {
   const markEndorsed = (tutorUserId: string) =>
     setEndorsedTutors((prev) => new Set(prev).add(tutorUserId));
 
+  // NON-OPTIMISTIC: a cancel is a state change the backend owns, so we only move
+  // the row to 'cancelled' after the callable resolves. The row is disabled
+  // while in flight; on failure it stays pending and an error shows.
+  const cancelRequest = async (req: StudyContactRequestDoc) => {
+    setCancelError(null);
+    setCancellingId(req.requestId);
+    try {
+      const fn = httpsCallable(functions, 'cancelContactRequest');
+      await fn({ requestId: req.requestId });
+      setRequests((rs) =>
+        (rs ?? []).map((r) =>
+          r.requestId === req.requestId ? { ...r, status: 'cancelled' } : r,
+        ),
+      );
+    } catch {
+      setCancelError(t('family.requests.actionError'));
+    } finally {
+      setCancellingId(null);
+    }
+  };
+
   const formatDate = (ts: StudyContactRequestDoc['createdAt']): string => {
     const raw: unknown = ts;
     // Emulator-written rows can arrive as a plain Date; production Firestore
@@ -137,6 +165,8 @@ export function RequestsPage() {
       <TopNav title={t('family.requests.title')} backTo="/family" />
 
       <div className="px-5 pt-4 pb-8">
+        {cancelError && <p className="mb-4 text-sm text-red-600">{cancelError}</p>}
+
         {/* Spinner only while a real fetch is in flight — with no familyId there
             is nothing to load, so fall through to the empty state. */}
         {familyId != null && requests === null && (
@@ -179,6 +209,19 @@ export function RequestsPage() {
                           {t(`family.requests.status.${r.status}`)}
                         </Badge>
                       </div>
+
+                      {r.status === 'pending' && (
+                        <div className="mt-3">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={cancellingId === r.requestId}
+                            onClick={() => setCancelTarget(r)}
+                          >
+                            {t('family.requests.cancel')}
+                          </Button>
+                        </div>
+                      )}
 
                       {r.status === 'accepted' && (
                         <div className="mt-3 flex flex-wrap items-center gap-3">
@@ -258,6 +301,29 @@ export function RequestsPage() {
           onEndorsed={() => markEndorsed(endorsing.tutorUserId)}
         />
       )}
+
+      {/* ── Cancel confirmation ── */}
+      <Dialog open={cancelTarget !== null} onClose={() => setCancelTarget(null)}>
+        <h3 className="mb-2 text-lg font-bold">{t('family.requests.confirmCancelTitle')}</h3>
+        <p className="mb-5 text-sm text-gray-600">{t('family.requests.confirmCancelDesc')}</p>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            className="flex-1"
+            disabled={cancellingId !== null}
+            onClick={() => {
+              const target = cancelTarget;
+              setCancelTarget(null);
+              if (target) cancelRequest(target);
+            }}
+          >
+            {t('family.requests.confirmCancelCta')}
+          </Button>
+          <Button variant="ghost" className="flex-1" onClick={() => setCancelTarget(null)}>
+            {t('family.requests.keepRequest')}
+          </Button>
+        </div>
+      </Dialog>
     </div>
   );
 }

@@ -203,6 +203,57 @@ describe('family RequestsPage', () => {
     expect(screen.queryByRole('button', { name: /endorse alex roy/i })).not.toBeInTheDocument();
   });
 
+  // ── Cancel a pending request ──
+
+  it('pending rows expose a "Cancel request" action; other statuses do not', async () => {
+    h.requests = [
+      reqDoc({ requestId: 'r1', tutorName: 'Pending Tutor', status: 'pending' }),
+      reqDoc({ requestId: 'r2', tutorName: 'Accepted Tutor', status: 'accepted' }),
+      reqDoc({ requestId: 'r3', tutorName: 'Declined Tutor', status: 'declined' }),
+    ];
+    renderWithProviders(<RequestsPage />);
+    await screen.findByText('Pending Tutor');
+    // Exactly one cancel action (only the pending row).
+    expect(screen.getAllByRole('button', { name: /cancel request/i })).toHaveLength(1);
+  });
+
+  it('cancelling a pending request confirms, calls cancelContactRequest with the requestId, then moves the row to cancelled (non-optimistic)', async () => {
+    h.callable.mockReset();
+    h.callable.mockResolvedValue({ data: { success: true } });
+    h.requests = [reqDoc({ requestId: 'r1', tutorName: 'Alex Roy', status: 'pending' })];
+    renderWithProviders(<RequestsPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /cancel request/i }));
+
+    // Confirm dialog — click the confirm CTA.
+    fireEvent.click(await screen.findByRole('button', { name: /yes, cancel request/i }));
+
+    await waitFor(() =>
+      expect(h.callable).toHaveBeenCalledWith('cancelContactRequest', { requestId: 'r1' }),
+    );
+
+    // Row moves from the Pending section to a Cancelled chip; the cancel action
+    // is gone (row is no longer pending).
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: /cancel request/i })).not.toBeInTheDocument(),
+    );
+    expect(screen.getByText(/Alex Roy/)).toBeInTheDocument();
+  });
+
+  it('does not call the callable if the family keeps the request (dismisses the dialog)', async () => {
+    h.callable.mockReset();
+    h.callable.mockResolvedValue({ data: { success: true } });
+    h.requests = [reqDoc({ requestId: 'r1', tutorName: 'Alex Roy', status: 'pending' })];
+    renderWithProviders(<RequestsPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /cancel request/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /keep request/i }));
+
+    expect(h.callable).not.toHaveBeenCalled();
+    // Row is still pending with its cancel action.
+    expect(screen.getByRole('button', { name: /cancel request/i })).toBeInTheDocument();
+  });
+
   // ── "Your endorsements" section ──
 
   it('queries references for this family\'s study endorsements (equality-only)', async () => {

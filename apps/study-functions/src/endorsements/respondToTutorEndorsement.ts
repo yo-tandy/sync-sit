@@ -23,39 +23,53 @@ export const respondToTutorEndorsement = onCall(
     const { referenceId, action } = parsed.data;
 
     const refDoc = db.collection('references').doc(referenceId);
-    const snap = await refDoc.get();
-    if (!snap.exists) {
-      throw new HttpsError('not-found', 'Endorsement not found');
-    }
-    const ref = snap.data()!;
 
-    if (ref.tutorUserId !== uid) {
-      throw new HttpsError('permission-denied', 'Only the endorsed tutor can respond to this endorsement');
-    }
-    if (ref.type !== 'family_submitted') {
-      throw new HttpsError('failed-precondition', 'Only family-submitted endorsements can be responded to');
-    }
-    if (ref.status !== 'private') {
-      throw new HttpsError('failed-precondition', 'Endorsement is no longer pending');
-    }
+    // Load → check → update atomically. On accept we ALSO increment the tutor's
+    // server-owned endorsementCount in the same transaction, so the denormalized
+    // counter searchTutors reads can never drift from the reference it counts.
+    // Nothing decrements here: 'removed' only happens pre-approval via dismiss
+    // (which never incremented). If a future admin-moderation flow ever removes
+    // an already-approved endorsement, THAT flow owns the matching decrement.
+    const submittedByFamilyId = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(refDoc);
+      if (!snap.exists) {
+        throw new HttpsError('not-found', 'Endorsement not found');
+      }
+      const ref = snap.data()!;
 
-    if (action === 'accept') {
-      await refDoc.update({
-        status: 'approved',
-        approvedAt: FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp(),
-      });
-    } else {
-      await refDoc.update({
-        status: 'removed',
-        updatedAt: FieldValue.serverTimestamp(),
-      });
-    }
+      if (ref.tutorUserId !== uid) {
+        throw new HttpsError('permission-denied', 'Only the endorsed tutor can respond to this endorsement');
+      }
+      if (ref.type !== 'family_submitted') {
+        throw new HttpsError('failed-precondition', 'Only family-submitted endorsements can be responded to');
+      }
+      if (ref.status !== 'private') {
+        throw new HttpsError('failed-precondition', 'Endorsement is no longer pending');
+      }
+
+      if (action === 'accept') {
+        tx.update(refDoc, {
+          status: 'approved',
+          approvedAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+        tx.update(db.collection('users').doc(uid), {
+          'profiles.tutor.endorsementCount': FieldValue.increment(1),
+        });
+      } else {
+        tx.update(refDoc, {
+          status: 'removed',
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+      }
+
+      return (ref.submittedByFamilyId as string | undefined) ?? null;
+    });
 
     await writeUserActivity(
       uid,
       action === 'accept' ? 'tutor_endorsement_accepted' : 'tutor_endorsement_dismissed',
-      { referenceId, submittedByFamilyId: ref.submittedByFamilyId ?? null },
+      { referenceId, submittedByFamilyId },
     );
 
     return { ok: true };

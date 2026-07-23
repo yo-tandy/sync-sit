@@ -25,6 +25,8 @@ const STATUS_VARIANT: Record<StudyContactRequestStatus, 'amber' | 'green' | 'gra
   pending: 'amber',
   accepted: 'green',
   declined: 'gray',
+  // A family can withdraw its request while pending; it then lands in history.
+  cancelled: 'gray',
 };
 
 export function RequestsPage() {

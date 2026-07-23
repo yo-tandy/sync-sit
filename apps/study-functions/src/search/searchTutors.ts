@@ -53,20 +53,10 @@ export const searchTutors = onCall(
       return { results: [] };
     }
 
-    // ── Endorsement counts: study references that are visible (approved/published) ──
-    // Single equality filter (appSource) keeps this index-free; the small
-    // status set is filtered in memory and counted per tutor.
-    const refsSnap = await db.collection('references')
-      .where('appSource', '==', 'study')
-      .get();
-    const endorsementCounts = new Map<string, number>();
-    refsSnap.docs.forEach((d) => {
-      const data = d.data();
-      if (data.status !== 'approved' && data.status !== 'published') return;
-      const tutorId = data.tutorUserId as string | undefined;
-      if (!tutorId) return;
-      endorsementCounts.set(tutorId, (endorsementCounts.get(tutorId) || 0) + 1);
-    });
+    // Endorsement counts are read from the tutor's denormalized, server-owned
+    // `endorsementCount` on the profile (below) — respondToTutorEndorsement
+    // maintains it. This replaces a per-call scan of the entire study
+    // references collection.
 
     // ── This family's request status per tutor (latest wins) ──
     const requestsSnap = await db.collection('studyContactRequests')
@@ -141,8 +131,11 @@ export const searchTutors = onCall(
         }
       }
 
-      // Whitelist known lifecycle statuses; anything unexpected falls back to
-      // 'none' so an unrecognized stored value can't leak into the payload.
+      // Whitelist the ACTIONABLE lifecycle statuses; anything else falls back to
+      // 'none'. 'cancelled' is deliberately excluded here: a family that
+      // withdrew its request is free to re-send, so search must surface the
+      // tutor as 'none' (fresh) rather than echoing the withdrawn state. Any
+      // other unrecognized stored value likewise can't leak into the payload.
       const KNOWN_REQUEST_STATUSES = ['pending', 'accepted', 'declined'] as const;
       const latest = latestRequest.get(uid);
       const requestStatus: TutorSearchResult['requestStatus'] =
@@ -165,7 +158,7 @@ export const searchTutors = onCall(
         sessionLengthsMin: tutor.sessionLengthsMin || [],
         locationPrefs: tutor.locationPrefs || [],
         distance,
-        endorsementCount: endorsementCounts.get(uid) || 0,
+        endorsementCount: tutor.endorsementCount ?? 0,
         requestStatus,
       };
       if (contactApproved) {
