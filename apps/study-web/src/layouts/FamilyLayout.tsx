@@ -1,4 +1,6 @@
+import { Suspense } from 'react';
 import { Outlet } from 'react-router';
+import { Spinner } from '@ejm/shared-ui';
 import { AuthGuard } from './AuthGuard';
 import { FamilyAppBar } from '@/components/ui/FamilyAppBar';
 import { ScrollToTop } from '@/components/ScrollToTop';
@@ -13,7 +15,15 @@ export function FamilyLayout() {
       <div className="min-h-screen bg-white">
         <ScrollToTop />
         <FamilyAppBar />
-        <Outlet />
+        <Suspense
+          fallback={
+            <div className="flex justify-center py-20">
+              <Spinner />
+            </div>
+          }
+        >
+          <Outlet />
+        </Suspense>
       </div>
     </AuthGuard>
   );

@@ -582,6 +582,7 @@ export default {
       upcomingTitle: 'À venir',
       historyTitle: 'Historique',
       awaitingTutor: 'En attente de la confirmation du professeur.',
+      endorse: 'Recommander {{name}}',
       recurringSlot: 'Chaque {{day}} {{start}}–{{end}}',
       viewDates: 'Voir les dates',
       hideDates: 'Masquer les dates',

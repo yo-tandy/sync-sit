@@ -6,9 +6,11 @@ import type { RecurringSlot } from '@ejm/shared-core';
 import { db, functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { getParentProfile } from '@ejm/shared-core';
+import type { TutorEndorsementDoc } from '@ejm/study-core';
 import { Card, Button, Badge, TopNav, Spinner } from '@ejm/shared-ui';
 import { ReasonModal } from '@/components/sessions/ReasonModal';
 import { SessionInstanceList } from '@/components/sessions/SessionInstanceList';
+import { EndorseTutorDialog } from '@/components/family/EndorseTutorDialog';
 import type { StudySessionDoc, StudySessionInstanceDoc } from '@/types/studySession';
 
 /** What the cancel modal is targeting. */
@@ -59,6 +61,7 @@ export function SessionsPage() {
   const { t, i18n } = useTranslation();
   const { userDoc } = useAuthStore();
   const familyId = getParentProfile(userDoc)?.familyId ?? null;
+  const defaultRefName = `${userDoc?.firstName ?? ''} ${userDoc?.lastName ?? ''}`.trim();
 
   const [sessions, setSessions] = useState<StudySessionDoc[] | null>(null);
   const [instancesBySeries, setInstancesBySeries] = useState<
@@ -70,6 +73,11 @@ export function SessionsPage() {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   // Key of the row awaiting a cancel callable (session id, or `sid::instanceId`).
   const [cancelKey, setCancelKey] = useState<string | null>(null);
+  // tutorUserIds this family has already endorsed (from their own references) —
+  // completed work with a tutor in this set shows no endorse prompt.
+  const [endorsedTutors, setEndorsedTutors] = useState<Set<string>>(new Set());
+  // The completed session whose endorse dialog is open, or null.
+  const [endorsing, setEndorsing] = useState<StudySessionDoc | null>(null);
 
   useEffect(() => {
     if (!familyId) return;
@@ -117,6 +125,38 @@ export function SessionsPage() {
       cancelled = true;
     };
   }, [familyId]);
+
+  // This family's submitted endorsements, to gate the post-completion prompt.
+  // Equality-only (submittedByFamilyId + appSource) — no composite needed — and
+  // we only need the tutor ids, so no sort. Mirrors the family RequestsPage query.
+  useEffect(() => {
+    if (!familyId) return;
+    let cancelled = false;
+    getDocs(
+      query(
+        collection(db, 'references'),
+        where('submittedByFamilyId', '==', familyId),
+        where('appSource', '==', 'study'),
+      ),
+    )
+      .then((snap) => {
+        if (cancelled) return;
+        const rows = snap.docs.map((d) => d.data() as TutorEndorsementDoc);
+        setEndorsedTutors(new Set(rows.map((r) => r.tutorUserId)));
+      })
+      .catch(() => {
+        // A denied/failed endorsements read must not block sessions — fall back to
+        // "none endorsed" (the worst case is offering a prompt the callable then
+        // rejects with already-exists, which the dialog handles gracefully).
+        if (!cancelled) setEndorsedTutors(new Set());
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [familyId]);
+
+  const markEndorsed = (tutorUserId: string) =>
+    setEndorsedTutors((prev) => new Set(prev).add(tutorUserId));
 
   // Format a "YYYY-MM-DD" date field-by-field (never `new Date(str)`, which reads
   // as UTC midnight and can slip a day in negative offsets).
@@ -195,6 +235,25 @@ export function SessionsPage() {
       start: slot.startTime,
       end: slot.endTime,
     });
+
+  // "Completed work" the family can endorse: a completed one_time, or a series
+  // with at least one completed occurrence. `completed` is the status the hook
+  // exists for — this is what turns it into an endorsement.
+  const hasCompletedWork = (s: StudySessionDoc): boolean =>
+    s.type === 'one_time'
+      ? s.status === 'completed'
+      : (instancesBySeries[s.sessionId] ?? []).some((i) => i.status === 'completed');
+
+  // The endorse prompt for a session, or null when it isn't completed work or the
+  // family has already endorsed this tutor (one endorsement per family+tutor).
+  const endorseButton = (s: StudySessionDoc): React.ReactNode => {
+    if (!hasCompletedWork(s) || endorsedTutors.has(s.tutorUserId)) return null;
+    return (
+      <Button size="sm" variant="outline" onClick={() => setEndorsing(s)}>
+        {t('family.sessions.endorse', { name: s.tutorName })}
+      </Button>
+    );
+  };
 
   const all = sessions ?? [];
   const pending = all.filter((s) => s.status === 'pending');
@@ -277,6 +336,7 @@ export function SessionsPage() {
           >
             {t('family.sessions.cancelSeries')}
           </Button>
+          {endorseButton(s)}
         </div>
 
         {isOpen && (
@@ -383,23 +443,39 @@ export function SessionsPage() {
               {t('family.sessions.historyTitle')}
             </h2>
             <div className="space-y-3">
-              {history.map((s) => (
-                <Card key={s.sessionId}>
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-gray-900">{s.tutorName}</p>
-                      <p className="text-xs text-gray-500">
-                        {t(`tutor.subjects.names.${s.subject}`)} · {s.level}
-                      </p>
+              {history.map((s) => {
+                const endorse = endorseButton(s);
+                return (
+                  <Card key={s.sessionId}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-gray-900">{s.tutorName}</p>
+                        <p className="text-xs text-gray-500">
+                          {t(`tutor.subjects.names.${s.subject}`)} · {s.level}
+                        </p>
+                      </div>
+                      <Badge variant="gray">{t(`family.sessions.status.${s.status}`)}</Badge>
                     </div>
-                    <Badge variant="gray">{t(`family.sessions.status.${s.status}`)}</Badge>
-                  </div>
-                </Card>
-              ))}
+                    {endorse && <div className="mt-3">{endorse}</div>}
+                  </Card>
+                );
+              })}
             </div>
           </div>
         )}
       </div>
+
+      {/* ── Endorse-after-completion (the completed status' payoff) ── */}
+      {endorsing && (
+        <EndorseTutorDialog
+          tutorUserId={endorsing.tutorUserId}
+          tutorName={endorsing.tutorName}
+          subject={endorsing.subject}
+          defaultRefName={defaultRefName}
+          onClose={() => setEndorsing(null)}
+          onEndorsed={() => markEndorsed(endorsing.tutorUserId)}
+        />
+      )}
 
       {/* ── Cancellation (reason required, ≥3 chars) ── */}
       <ReasonModal
