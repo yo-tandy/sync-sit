@@ -1,6 +1,9 @@
 // Scheduled cron helpers (Paris-time wall-clock conversion)
 export * from './scheduled/parisTime.js';
 
+// Schedule override-ledger helpers (shared by study session + sit appointment claims)
+export * from './schedule/sessionOverride.js';
+
 // Config (shared backend infrastructure)
 export * from './config/firebase.js';
 export * from './config/cors.js';

@@ -88,6 +88,93 @@ describe('respondToRequest', () => {
     });
   });
 
+  // ── H3: sit schedule claims carry the restorable sessionBlocks ledger ──
+  // A far-future Monday; babysitter1's Monday grid is 17:00–22:00 (slots 68..87).
+  // An 18:00–20:00 appointment claims slots 72..79 (block [72,80)).
+  describe('schedule ledger', () => {
+    const MON = '2027-06-07';
+    const overrideRef = () =>
+      getDb().collection('schedules').doc(seed.babysitter1.uid)
+        .collection('overrides').doc(MON);
+
+    beforeEach(async () => {
+      await overrideRef().delete().catch(() => {});
+    });
+    afterAll(async () => {
+      await overrideRef().delete().catch(() => {});
+    });
+
+    it('writes a per-slot custom block with a sit ledger entry when no override exists', async () => {
+      const apptId = await seedAppointment({
+        babysitterUserId: seed.babysitter1.uid,
+        familyId: seed.family1Id,
+        createdByUserId: seed.parent1.uid,
+        date: MON, startTime: '18:00', endTime: '20:00',
+      });
+
+      await callFunction(
+        'respondToRequest',
+        { appointmentId: apptId, action: 'accept', blockSchedule: true },
+        babysitterToken
+      );
+
+      const doc = (await overrideRef().get()).data()!;
+      // Provenance + ledger (the new, previously-missing record).
+      expect(doc.appSource).toBe('sit');
+      expect(doc.reason).toBe('appointment');
+      expect(doc.sessionBlocks).toEqual([
+        { appointmentId: apptId, startIdx: 72, endIdx: 80 },
+      ]);
+      // Slots: the appointment's own range blocked; the rest of the weekly-open
+      // window (68..71, 80..87) stays available (NOT a whole-day block).
+      const slots = doc.slots as boolean[];
+      expect(slots[72]).toBe(false);
+      expect(slots[79]).toBe(false);
+      expect(slots[68]).toBe(true);
+      expect(slots[80]).toBe(true);
+      expect(slots[0]).toBe(false); // weekly-closed slot stays closed
+    });
+
+    it('merges the claim into an existing override, preserving its slots + fields', async () => {
+      // A pre-existing (foreign/manual) custom override: all-true with a manual
+      // block at slot 50, no ledger.
+      const existingSlots = new Array(96).fill(true);
+      existingSlots[50] = false;
+      await overrideRef().set({
+        date: MON, type: 'custom', slots: existingSlots,
+        reason: 'manual_block', createdAt: new Date(), updatedAt: new Date(),
+      });
+
+      const apptId = await seedAppointment({
+        babysitterUserId: seed.babysitter1.uid,
+        familyId: seed.family1Id,
+        createdByUserId: seed.parent1.uid,
+        date: MON, startTime: '18:00', endTime: '20:00',
+      });
+
+      await callFunction(
+        'respondToRequest',
+        { appointmentId: apptId, action: 'accept', blockSchedule: true },
+        babysitterToken
+      );
+
+      const doc = (await overrideRef().get()).data()!;
+      const slots = doc.slots as boolean[];
+      // Byte-identical to the old lossy merge: our range ANDed false...
+      expect(slots[72]).toBe(false);
+      expect(slots[79]).toBe(false);
+      // ...pre-existing manual block preserved, unrelated slots preserved.
+      expect(slots[50]).toBe(false);
+      expect(slots[60]).toBe(true);
+      // The foreign owner's reason is preserved (only-fill provenance).
+      expect(doc.reason).toBe('manual_block');
+      // ...but the sit claim is now RECORDED in the ledger.
+      expect(doc.sessionBlocks).toEqual([
+        { appointmentId: apptId, startIdx: 72, endIdx: 80 },
+      ]);
+    });
+  });
+
   describe('errors', () => {
     it('rejects unauthenticated calls', async () => {
       await expect(

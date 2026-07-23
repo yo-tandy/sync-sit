@@ -39,6 +39,11 @@
       "import": "./src/scheduled/*.ts",
       "require": "./dist/scheduled/*.js",
       "types": "./src/scheduled/*.ts"
+    },
+    "./schedule/*.js": {
+      "import": "./src/schedule/*.ts",
+      "require": "./dist/schedule/*.js",
+      "types": "./src/schedule/*.ts"
     }
   },
   "scripts": {

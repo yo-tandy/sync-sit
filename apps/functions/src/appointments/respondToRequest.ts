@@ -3,6 +3,11 @@ import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
 import { notifyAllParents } from '../config/notifyParents.js';
+import { buildMergedOverride } from '@ejm/shared-functions/schedule/sessionOverride.js';
+
+/** sit stamps the override docs it creates so its cancel can restore losslessly. */
+const SIT_PROVENANCE = { appSource: 'sit', reason: 'appointment' } as const;
+const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
 
 interface RespondData {
   appointmentId: string;
@@ -53,33 +58,39 @@ export const respondToRequest = onCall(
         updatedAt: now,
       });
 
-      // Block schedule if requested (one-time only)
+      // Block schedule if requested (one-time only). The claim ANDs the
+      // appointment's slots to false in the babysitter's date override AND
+      // records a restorable `sessionBlocks` ledger entry (buildMergedOverride,
+      // shared with study). This makes the claim per-slot (not a whole-day
+      // 'unavailable' block) and lossslessly reversible by cancelAppointment, and
+      // lets it coexist with a study claim in one doc for a dual-role uid.
       if (data.blockSchedule && appointment.date && appointment.startTime && appointment.endTime) {
         const startIdx = timeToSlotIndex(appointment.startTime);
         const endIdx = timeToSlotIndex(appointment.endTime);
-        const slots = new Array(96).fill(false);
-        // Mark the appointment time as unavailable (override)
-        const overrideRef = db.collection('schedules').doc(uid)
-          .collection('overrides').doc(appointment.date);
+        const scheduleRef = db.collection('schedules').doc(uid);
+        const overrideRef = scheduleRef.collection('overrides').doc(appointment.date);
 
-        const existingOverride = await overrideRef.get();
-        if (existingOverride.exists && existingOverride.data()?.slots) {
-          // Merge: mark requested slots as unavailable in existing override
-          const existingSlots = [...existingOverride.data()!.slots];
-          for (let i = startIdx; i < endIdx && i < 96; i++) {
-            existingSlots[i] = false;
-          }
-          await overrideRef.update({ slots: existingSlots });
-        } else {
-          // Create unavailable override for this date
-          await overrideRef.set({
+        // The babysitter's weekly grid for this date's weekday is the merge base
+        // for a day with no prior override (mirrors searchBabysitters' day-key
+        // derivation). Static config → read once, outside the override tx.
+        const scheduleSnap = await scheduleRef.get();
+        const dayKey = DAY_KEYS[new Date(`${appointment.date}T00:00:00`).getDay()];
+        const weeklySlots: boolean[] = scheduleSnap.data()?.weekly?.[dayKey] ?? [];
+
+        await db.runTransaction(async (tx) => {
+          const snap = await tx.get(overrideRef);
+          const existing = snap.exists ? snap.data()! : null;
+          const merged = buildMergedOverride({
+            existing,
             date: appointment.date,
-            type: 'unavailable',
-            reason: 'appointment',
-            appointmentId: data.appointmentId,
-            createdAt: now,
+            weeklySlots,
+            block: { start: startIdx, end: endIdx },
+            entry: { appointmentId: data.appointmentId, startIdx, endIdx },
+            ownProvenance: SIT_PROVENANCE,
+            now,
           });
-        }
+          tx.set(overrideRef, merged);
+        });
       }
 
       // Send confirmation notification to family
