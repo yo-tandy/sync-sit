@@ -76,3 +76,73 @@ describe('enrollTutor (unauthenticated create path)', () => {
     expect(codeDoc.exists).toBe(false);
   });
 });
+
+describe('enrollTutor area coordinates (distance mode)', () => {
+  const DIST_EMAIL = 'disttutor@ejm-test.org';
+  const BOUNDS_EMAIL = 'boundstutor@ejm-test.org';
+
+  beforeAll(async () => {
+    await clearAll();
+    const db = getDb();
+    for (const email of [DIST_EMAIL, BOUNDS_EMAIL]) {
+      await db.collection('verificationCodes').doc(email).set({
+        code: CODE,
+        email,
+        expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+        attempts: 0,
+        createdAt: new Date(),
+      });
+    }
+  });
+
+  afterAll(async () => {
+    await clearAll();
+  });
+
+  function distanceEnrollment(overrides: Record<string, unknown> = {}) {
+    return {
+      firstName: 'Dana',
+      lastName: 'Distance',
+      dateOfBirth: '2006-05-20',
+      classLevel: 'L1',
+      subjects: [{ subject: 'math', levels: ['6e'], rate: 30 }],
+      sessionLengthsMin: [60],
+      locationPrefs: ['family_home'],
+      paddingMin: 15,
+      contactEmail: 'dana@test.com',
+      areaMode: 'distance',
+      areaAddress: '16 rue de Passy, 75016 Paris',
+      areaLatLng: { lat: 48.8571, lng: 2.2795 },
+      areaRadiusKm: 5,
+      ...overrides,
+    };
+  }
+
+  it('persists areaLatLng from the address pick onto the tutor profile', async () => {
+    const result = await callFunction<{ uid: string }>('enrollTutor', {
+      ejemEmail: DIST_EMAIL,
+      verificationCode: CODE,
+      password: 'Str0ngPass1',
+      consentVersion: '1.0',
+      enrollment: distanceEnrollment(),
+    });
+
+    const tutor = (await getDb().collection('users').doc(result.uid).get()).data()!.profiles.tutor;
+    expect(tutor.areaMode).toBe('distance');
+    expect(tutor.areaAddress).toBe('16 rue de Passy, 75016 Paris');
+    expect(tutor.areaLatLng).toEqual({ lat: 48.8571, lng: 2.2795 });
+    expect(tutor.areaRadiusKm).toBe(5);
+  });
+
+  it('rejects an out-of-bounds areaLatLng with invalid-argument', async () => {
+    await expect(
+      callFunction('enrollTutor', {
+        ejemEmail: BOUNDS_EMAIL,
+        verificationCode: CODE,
+        password: 'Str0ngPass1',
+        consentVersion: '1.0',
+        enrollment: distanceEnrollment({ areaLatLng: { lat: 999, lng: 2.2795 } }),
+      }),
+    ).rejects.toMatchObject({ code: 'INVALID_ARGUMENT' });
+  });
+});

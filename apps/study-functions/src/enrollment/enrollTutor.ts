@@ -112,6 +112,7 @@ export const enrollTutor = onCall(
       areaMode: enrollment.areaMode,
       arrondissements: enrollment.arrondissements ?? [],
       areaAddress: enrollment.areaAddress ?? null,
+      areaLatLng: enrollment.areaLatLng ?? null,
       areaRadiusKm: enrollment.areaRadiusKm ?? null,
       languages: [],
       searchable: false,

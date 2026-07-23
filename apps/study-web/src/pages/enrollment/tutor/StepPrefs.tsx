@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { AddressAutocomplete, type AddressResult } from '@ejm/shared-ui';
 
 export interface PrefsData {
   sessionLengthsMin: number[];
@@ -11,6 +12,8 @@ export interface PrefsData {
   areaMode: 'arrondissement' | 'distance';
   arrondissements?: string[];
   areaAddress?: string;
+  /** Geocoded from the address pick (distance mode) — powers search distance. */
+  areaLatLng?: { lat: number; lng: number };
   areaRadiusKm?: number;
 }
 
@@ -38,7 +41,12 @@ export function StepPrefs({ onNext, loading, error }: StepPrefsProps) {
   const [contactEmail, setContactEmail] = useState('');
   const [contactPhone, setContactPhone] = useState('');
   const [areaMode, setAreaMode] = useState<'arrondissement' | 'distance'>('arrondissement');
+  // Arrondissement mode: a free-text area string. Distance mode: an address
+  // picked via AddressAutocomplete, which also yields the coordinates search
+  // distance needs.
   const [city, setCity] = useState('');
+  const [areaAddress, setAreaAddress] = useState('');
+  const [areaLatLng, setAreaLatLng] = useState<{ lat: number; lng: number } | undefined>();
 
   const toggleSessionLength = (len: number) => {
     setSessionLengths((prev) =>
@@ -67,7 +75,8 @@ export function StepPrefs({ onNext, loading, error }: StepPrefsProps) {
       contactPhone: contactPhone || undefined,
       areaMode,
       arrondissements: areaMode === 'arrondissement' && city ? [city] : undefined,
-      areaAddress: areaMode === 'distance' && city ? city : undefined,
+      areaAddress: areaMode === 'distance' && areaAddress ? areaAddress : undefined,
+      areaLatLng: areaMode === 'distance' ? areaLatLng : undefined,
     });
   };
 
@@ -192,16 +201,43 @@ export function StepPrefs({ onNext, loading, error }: StepPrefsProps) {
             {t('enrollment.byDistance')}
           </button>
         </div>
-        <label className="mb-2 block text-sm font-medium text-gray-700">
-          {areaMode === 'arrondissement' ? t('enrollment.arrondissements') : t('enrollment.yourAddress')}
-        </label>
-        <input
-          type="text"
-          value={city}
-          onChange={(e) => setCity(e.target.value)}
-          placeholder={areaMode === 'arrondissement' ? 'e.g. 75016' : 'e.g. 16 rue de Passy, Paris'}
-          className="h-12 w-full rounded-lg border-[1.5px] border-gray-300 bg-white px-4 text-base outline-none transition-colors focus:border-red-600"
-        />
+        {areaMode === 'arrondissement' ? (
+          <>
+            <label className="mb-2 block text-sm font-medium text-gray-700">
+              {t('enrollment.arrondissements')}
+            </label>
+            <input
+              type="text"
+              value={city}
+              onChange={(e) => setCity(e.target.value)}
+              placeholder="e.g. 75016"
+              className="h-12 w-full rounded-lg border-[1.5px] border-gray-300 bg-white px-4 text-base outline-none transition-colors focus:border-red-600"
+            />
+          </>
+        ) : (
+          // Distance mode: an address pick geocodes to areaLatLng, which search
+          // distance depends on. A plain text field would leave areaLatLng null
+          // and make every distance null.
+          <AddressAutocomplete
+            label={t('enrollment.yourAddress')}
+            value={
+              areaAddress
+                ? {
+                    fullAddress: areaAddress,
+                    street: '',
+                    city: '',
+                    postcode: '',
+                    lat: areaLatLng?.lat ?? 0,
+                    lng: areaLatLng?.lng ?? 0,
+                  }
+                : null
+            }
+            onChange={(addr: AddressResult | null) => {
+              setAreaAddress(addr?.fullAddress ?? '');
+              setAreaLatLng(addr ? { lat: addr.lat, lng: addr.lng } : undefined);
+            }}
+          />
+        )}
       </div>
 
       {error && <p className="mb-4 text-sm text-red-600">{error}</p>}

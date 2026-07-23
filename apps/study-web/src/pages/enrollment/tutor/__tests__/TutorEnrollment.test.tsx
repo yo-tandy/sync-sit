@@ -82,7 +82,7 @@ vi.mock('../StepPrefs', () => ({
   StepPrefs: ({ onNext, error }: { onNext: (d: unknown) => void; error: string | null }) => (
     <div>
       {error && <p>{error}</p>}
-      <button onClick={() => onNext({ sessionLengthsMin: [60], locationPrefs: ['online'], paddingMin: 0, contactEmail: 'flow@ejm.org', areaMode: 'arrondissement' })}>
+      <button onClick={() => onNext({ sessionLengthsMin: [60], locationPrefs: ['online'], paddingMin: 0, contactEmail: 'flow@ejm.org', areaMode: 'distance', areaAddress: '16 rue de Passy, 75016 Paris', areaLatLng: { lat: 48.8571, lng: 2.2795 } })}>
         prefs-next
       </button>
     </div>
@@ -156,6 +156,9 @@ describe('TutorEnrollment orchestrator', () => {
     expect(payload.enrollment).toMatchObject({
       firstName: 'Flow', classLevel: 'Terminale',
       sessionLengthsMin: [60], locationPrefs: ['online'], contactEmail: 'flow@ejm.org',
+      // Area coordinates from the address pick flow through to the callable.
+      areaMode: 'distance', areaAddress: '16 rue de Passy, 75016 Paris',
+      areaLatLng: { lat: 48.8571, lng: 2.2795 },
     });
     expect(h.navigate).toHaveBeenCalledWith('/enroll/tutor/success', { state: { firstName: 'Flow' } });
   });
