@@ -212,6 +212,8 @@ describe('tutor SessionsPage', () => {
     expect(screen.getByRole('button', { name: /accept/i })).toBeDisabled();
     expect(screen.getByRole('button', { name: /^decline$/i })).toBeDisabled();
 
+    // Backend has now confirmed it; the post-confirm reload observes that state.
+    h.sessions = [oneTime({ status: 'confirmed' })];
     // Resolve → row leaves the pending list, actions disappear.
     d.resolve({ data: { success: true } });
     await waitFor(() =>
@@ -497,5 +499,82 @@ describe('tutor SessionsPage — management', () => {
     // Read-only: no accept / cancel actions on history rows.
     expect(screen.queryByRole('button', { name: /accept/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /cancel session/i })).not.toBeInTheDocument();
+  });
+});
+
+// ── Task 1: refetch after a successful confirm ──
+// A confirm materialises server state (recurring instances especially), so the
+// page re-runs its own load rather than only flipping the row's status locally.
+describe('tutor SessionsPage — refetch after confirm', () => {
+  beforeEach(() => reset());
+
+  it('refetches sessions + instances after a recurring confirm so new dates appear', async () => {
+    // Starts as a pending recurring series with no instances yet.
+    h.sessions = [recurring({ sessionId: 'sR', status: 'pending' })];
+    h.instances = {};
+    const d = deferred<{ data: Record<string, unknown> }>();
+    h.callable.mockReturnValue(d.promise);
+
+    renderWithProviders(<SessionsPage />);
+    await screen.findByText('Levy');
+    const before = h.getDocs.mock.calls.length;
+
+    fireEvent.click(await screen.findByRole('button', { name: /accept/i }));
+
+    // Backend confirmed the series and materialised its instances; the reload
+    // must observe them (the whole point — the series shows its dates with no
+    // manual refresh).
+    h.sessions = [recurring({ sessionId: 'sR', status: 'confirmed' })];
+    h.instances = {
+      sR: [
+        {
+          instanceId: '2026-09-07',
+          sessionId: 'sR',
+          date: '2026-09-07',
+          startTime: '17:00',
+          endTime: '18:00',
+          status: 'scheduled',
+          location: 'online',
+        },
+      ],
+    };
+    d.resolve({
+      data: { success: true, confirmed: true, scheduledDates: ['2026-09-07'], skippedDates: [] },
+    });
+
+    // getDocs re-ran (sessions + the now-confirmed series' instance subcollection).
+    await waitFor(() => expect(h.getDocs.mock.calls.length).toBeGreaterThan(before));
+
+    // Dismiss the result dialog, expand the series → the new instance date shows.
+    fireEvent.click(await screen.findByRole('button', { name: /^done$/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /view dates/i }));
+    expect(await screen.findByText(/Sep 7, 2026/)).toBeInTheDocument();
+  });
+
+  it('refetches after a one_time confirm', async () => {
+    h.sessions = [oneTime({ sessionId: 'sA', status: 'pending' })];
+    renderWithProviders(<SessionsPage />);
+    await screen.findByText('Cohen');
+    const before = h.getDocs.mock.calls.length;
+
+    // Backend flips it to confirmed; the reload observes the new state.
+    h.sessions = [oneTime({ sessionId: 'sA', status: 'confirmed' })];
+    fireEvent.click(await screen.findByRole('button', { name: /accept/i }));
+
+    await waitFor(() => expect(h.getDocs.mock.calls.length).toBeGreaterThan(before));
+  });
+
+  it('does NOT refetch when the confirm fails', async () => {
+    h.sessions = [oneTime({ sessionId: 'sF', status: 'pending' })];
+    h.callable.mockRejectedValue({ code: 'functions/internal' });
+    renderWithProviders(<SessionsPage />);
+    await screen.findByText('Cohen');
+    const before = h.getDocs.mock.calls.length;
+
+    fireEvent.click(await screen.findByRole('button', { name: /accept/i }));
+
+    // Error surfaces; a failed confirm must not trigger a reload.
+    await screen.findByText(/something went wrong|couldn.?t/i);
+    expect(h.getDocs.mock.calls.length).toBe(before);
   });
 });

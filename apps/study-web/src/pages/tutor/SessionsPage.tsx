@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
@@ -86,52 +86,62 @@ export function SessionsPage() {
   // Key of the row awaiting a cancel callable (session id, or `sid::instanceId`).
   const [cancelKey, setCancelKey] = useState<string | null>(null);
 
+  // A mounted guard shared by the initial load and every post-action reload, so a
+  // late-resolving fetch never writes state after unmount.
+  const mountedRef = useRef(true);
   useEffect(() => {
-    if (!uid) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const snap = await getDocs(
-          query(collection(db, 'study-sessions'), where('tutorUserId', '==', uid)),
-        );
-        if (cancelled) return;
-        const rows = snap.docs.map((d) => d.data() as StudySessionDoc);
-        rows.sort((a, b) => (b.createdAt?.seconds ?? 0) - (a.createdAt?.seconds ?? 0));
-
-        // Load the instance subcollections for confirmed recurring series via the
-        // nested path. The read MUST be filtered on the instance's denormalized
-        // tutorUserId: the security rule proves access per-doc from
-        // resource.data.tutorUserId, and an unconstrained list is unprovable →
-        // PERMISSION_DENIED. Single-field equality (no composite needed).
-        const series = rows.filter((r) => r.status === 'confirmed' && r.type === 'recurring');
-        const instanceLists = await Promise.all(
-          series.map((s) =>
-            getDocs(
-              query(
-                collection(db, 'study-sessions', s.sessionId, 'instances'),
-                where('tutorUserId', '==', uid),
-              ),
-            ).then((isnap) => ({
-              sessionId: s.sessionId,
-              rows: isnap.docs.map((d) => d.data() as StudySessionInstanceDoc),
-            })),
-          ),
-        );
-        if (cancelled) return;
-        const byId: Record<string, StudySessionInstanceDoc[]> = {};
-        for (const { sessionId, rows: irows } of instanceLists) byId[sessionId] = irows;
-        setInstancesBySeries(byId);
-        setSessions(rows);
-      } catch {
-        // A THROW is a load failure — surface it, don't conflate it with the
-        // tutor having no sessions (the empty state).
-        if (!cancelled) setLoadError(true);
-      }
-    })();
+    mountedRef.current = true;
     return () => {
-      cancelled = true;
+      mountedRef.current = false;
     };
+  }, []);
+
+  // The page's load, reusable so a successful confirm can re-run it (a confirm
+  // materialises server state — recurring instances especially — that a local
+  // status flip alone can't show).
+  const load = useCallback(async () => {
+    if (!uid) return;
+    try {
+      const snap = await getDocs(
+        query(collection(db, 'study-sessions'), where('tutorUserId', '==', uid)),
+      );
+      const rows = snap.docs.map((d) => d.data() as StudySessionDoc);
+      rows.sort((a, b) => (b.createdAt?.seconds ?? 0) - (a.createdAt?.seconds ?? 0));
+
+      // Load the instance subcollections for confirmed recurring series via the
+      // nested path. The read MUST be filtered on the instance's denormalized
+      // tutorUserId: the security rule proves access per-doc from
+      // resource.data.tutorUserId, and an unconstrained list is unprovable →
+      // PERMISSION_DENIED. Single-field equality (no composite needed).
+      const series = rows.filter((r) => r.status === 'confirmed' && r.type === 'recurring');
+      const instanceLists = await Promise.all(
+        series.map((s) =>
+          getDocs(
+            query(
+              collection(db, 'study-sessions', s.sessionId, 'instances'),
+              where('tutorUserId', '==', uid),
+            ),
+          ).then((isnap) => ({
+            sessionId: s.sessionId,
+            rows: isnap.docs.map((d) => d.data() as StudySessionInstanceDoc),
+          })),
+        ),
+      );
+      if (!mountedRef.current) return;
+      const byId: Record<string, StudySessionInstanceDoc[]> = {};
+      for (const { sessionId, rows: irows } of instanceLists) byId[sessionId] = irows;
+      setInstancesBySeries(byId);
+      setSessions(rows);
+    } catch {
+      // A THROW is a load failure — surface it, don't conflate it with the
+      // tutor having no sessions (the empty state).
+      if (mountedRef.current) setLoadError(true);
+    }
   }, [uid]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
 
   // Format a "YYYY-MM-DD" date. Parsed field-by-field (not `new Date(str)`, which
   // reads as UTC midnight and can slip a day in negative offsets).
@@ -156,6 +166,8 @@ export function SessionsPage() {
         { success: boolean; confirmed?: boolean; scheduledDates?: string[]; skippedDates?: string[] }
       >(functions, 'respondToSession');
       const res = await fn({ sessionId: session.sessionId, action });
+      // Immediate feedback: flip the row so it leaves Pending without waiting on
+      // the reload below.
       setSessions((rs) =>
         (rs ?? []).map((s) => (s.sessionId === session.sessionId ? { ...s, status: next } : s)),
       );
@@ -165,6 +177,10 @@ export function SessionsPage() {
           skippedDates: res.data.skippedDates ?? [],
         });
       }
+      // A confirm creates server state the flip can't reflect — a recurring
+      // series' instances, and any fields the backend stamps on confirm — so
+      // re-run the page's load to show it immediately. A decline creates none.
+      if (action === 'confirm') await load();
     } catch (e) {
       setError(mapRespondError(e));
     } finally {
