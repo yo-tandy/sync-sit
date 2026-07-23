@@ -582,6 +582,7 @@ export default {
       upcomingTitle: 'Upcoming',
       historyTitle: 'History',
       awaitingTutor: 'Waiting for the tutor to confirm.',
+      endorse: 'Endorse {{name}}',
       recurringSlot: 'Every {{day}} {{start}}–{{end}}',
       viewDates: 'View dates',
       hideDates: 'Hide dates',

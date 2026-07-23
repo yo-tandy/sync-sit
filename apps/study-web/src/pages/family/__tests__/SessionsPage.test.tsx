@@ -9,6 +9,9 @@ const h = vi.hoisted(() => ({
   auth: { userDoc: null as unknown },
   sessions: [] as Record<string, unknown>[],
   instances: {} as Record<string, Record<string, unknown>[]>,
+  // references docs (this family's submitted study endorsements) — feeds the
+  // "already endorsed" gate on completed sessions.
+  refs: [] as Record<string, unknown>[],
   where: vi.fn((field: string, op: string, val: unknown) => ({ where: [field, op, val] })),
   getDocs: vi.fn(),
   callable: vi.fn(),
@@ -110,6 +113,7 @@ function reset() {
   h.auth.userDoc = parent();
   h.sessions = [];
   h.instances = {};
+  h.refs = [];
   h.where.mockClear();
   h.getDocs.mockReset();
   h.getDocs.mockImplementation((q: { query?: { path: string }[]; path?: string }) => {
@@ -118,6 +122,9 @@ function reset() {
       const sid = path.split('/')[1];
       const rows = h.instances[sid] ?? [];
       return Promise.resolve({ docs: rows.map((r) => ({ id: r.instanceId, data: () => r })) });
+    }
+    if (path === 'references') {
+      return Promise.resolve({ docs: h.refs.map((r) => ({ id: r.referenceId, data: () => r })) });
     }
     return Promise.resolve({ docs: h.sessions.map((s) => ({ id: s.sessionId, data: () => s })) });
   });
@@ -343,4 +350,126 @@ describe('family SessionsPage — management', () => {
     expect(screen.getByText('Completed Tutor')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /cancel session/i })).not.toBeInTheDocument();
   });
+});
+
+// ── Task 2: endorse-after-completion prompt ──
+// Completed work with a tutor the family hasn't endorsed yet surfaces an
+// 'Endorse {tutor}' button opening the shared EndorseTutorDialog. "Already
+// endorsed" is computed from this family's own references (submittedByFamilyId +
+// appSource=='study').
+describe('family SessionsPage — endorse after completion', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-08-01T09:00:00Z'));
+    reset();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  function refDoc(overrides: Record<string, unknown> = {}) {
+    return {
+      referenceId: 'e1',
+      tutorUserId: 't1',
+      appSource: 'study',
+      submittedByFamilyId: 'fam1',
+      refName: 'Dana Cohen',
+      referenceText: 'Great tutor.',
+      subject: 'math',
+      status: 'private',
+      ...overrides,
+    };
+  }
+
+  it('queries references for this family (submittedByFamilyId + appSource study)', async () => {
+    h.sessions = [oneTime({ status: 'completed', tutorName: 'Alex Roy' })];
+    renderWithProviders(<SessionsPage />);
+    await screen.findByText('Alex Roy');
+
+    expect(h.where).toHaveBeenCalledWith('submittedByFamilyId', '==', 'fam1');
+    expect(h.where).toHaveBeenCalledWith('appSource', '==', 'study');
+    const refCall = h.getDocs.mock.calls.find(
+      (c) => (c[0] as { query?: { path: string }[] }).query?.[0]?.path === 'references',
+    );
+    expect(refCall).toBeTruthy();
+  });
+
+  it('shows an Endorse button for a completed session with an un-endorsed tutor', async () => {
+    h.sessions = [oneTime({ sessionId: 'sC', status: 'completed', tutorName: 'Alex Roy' })];
+    renderWithProviders(<SessionsPage />);
+
+    expect(await screen.findByRole('button', { name: /endorse alex roy/i })).toBeInTheDocument();
+  });
+
+  it('shows NO Endorse button when the tutor is already endorsed', async () => {
+    h.sessions = [
+      oneTime({ sessionId: 'sC', status: 'completed', tutorName: 'Alex Roy', tutorUserId: 't1' }),
+    ];
+    h.refs = [refDoc({ tutorUserId: 't1' })];
+    renderWithProviders(<SessionsPage />);
+
+    // Wait for the completed row, then confirm no endorse affordance.
+    await screen.findByText('Alex Roy');
+    expect(screen.queryByRole('button', { name: /endorse/i })).not.toBeInTheDocument();
+  });
+
+  it('shows NO Endorse button on a non-completed (upcoming) session', async () => {
+    h.sessions = [
+      oneTime({ sessionId: 'sU', status: 'confirmed', tutorName: 'Alex Roy', date: '2026-08-20' }),
+    ];
+    renderWithProviders(<SessionsPage />);
+
+    await screen.findByText('Alex Roy');
+    expect(screen.queryByRole('button', { name: /endorse/i })).not.toBeInTheDocument();
+  });
+
+  it('shows an Endorse button for a series with ≥1 completed instance', async () => {
+    h.sessions = [confirmedRecurring({ sessionId: 'sR', tutorName: 'Sam Tutor', tutorUserId: 't9' })];
+    h.instances = {
+      sR: [
+        instanceDoc({ instanceId: '2026-07-22', date: '2026-07-22', status: 'completed' }),
+        instanceDoc({ instanceId: '2026-08-12', date: '2026-08-12', status: 'scheduled' }),
+      ],
+    };
+    renderWithProviders(<SessionsPage />);
+
+    expect(await screen.findByRole('button', { name: /endorse sam tutor/i })).toBeInTheDocument();
+  });
+
+  it('endorse dialog payload carries the session tutorUserId + subject; the set updates on success', async () => {
+    h.sessions = [
+      oneTime({
+        sessionId: 'sC',
+        status: 'completed',
+        tutorName: 'Alex Roy',
+        tutorUserId: 't1',
+        subject: 'math',
+      }),
+    ];
+    renderWithProviders(<SessionsPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /endorse alex roy/i }));
+
+    fireEvent.change(await screen.findByLabelText(/your endorsement/i), {
+      target: { value: 'Alex was patient and my daughter improved a lot.' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /submit/i }));
+
+    await waitFor(() =>
+      expect(h.callable).toHaveBeenCalledWith(
+        'submitTutorEndorsement',
+        expect.objectContaining({ tutorUserId: 't1', subject: 'math' }),
+      ),
+    );
+
+    // The set updates: the endorse affordance is gone for that tutor.
+    fireEvent.click(screen.getByRole('button', { name: /done/i }));
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: /endorse alex roy/i })).not.toBeInTheDocument(),
+    );
+  });
+
+  function confirmedRecurring(overrides: Record<string, unknown> = {}) {
+    return recurring({ status: 'confirmed', ...overrides });
+  }
 });
