@@ -164,6 +164,80 @@ describe('cancelAppointment', () => {
     });
   });
 
+  // ── H3: cancelling a confirmed appointment restores its claimed slots ──
+  // Far-future Monday; babysitter1's Monday grid is 17:00–22:00 (slots 68..87).
+  describe('schedule ledger restoration', () => {
+    const MON = '2027-06-07';
+    const overrideRef = () =>
+      getDb().collection('schedules').doc(seed.babysitter1.uid)
+        .collection('overrides').doc(MON);
+
+    beforeEach(async () => {
+      await overrideRef().delete().catch(() => {});
+    });
+    afterAll(async () => {
+      await overrideRef().delete().catch(() => {});
+    });
+
+    it('restores the claimed slots and DELETES the clean override on cancel', async () => {
+      // Claim end-to-end: accept with blockSchedule writes the ledger'd override.
+      const apptId = await seedAppointment({
+        babysitterUserId: seed.babysitter1.uid,
+        familyId: seed.family1Id,
+        createdByUserId: seed.parent1.uid,
+        status: 'pending',
+        date: MON, startTime: '18:00', endTime: '20:00',
+      });
+      await callFunction(
+        'respondToRequest',
+        { appointmentId: apptId, action: 'accept', blockSchedule: true },
+        babysitterToken
+      );
+      const claimed = (await overrideRef().get()).data()!;
+      expect(claimed.slots[72]).toBe(false);
+      expect(claimed.sessionBlocks).toEqual([
+        { appointmentId: apptId, startIdx: 72, endIdx: 80 },
+      ]);
+
+      // Cancel → the day was purely this claim → override deleted (day reverts
+      // to the bare weekly grid; the slots are finally FREED).
+      await callFunction(
+        'cancelAppointment',
+        { appointmentId: apptId, reason: 'Plans changed' },
+        babysitterToken
+      );
+      expect((await overrideRef().get()).exists).toBe(false);
+    });
+
+    it('leaves a LEGACY ledgerless override untouched on cancel (conservative)', async () => {
+      // A pre-H3 override: whole-day unavailable, no appSource, no sessionBlocks.
+      await overrideRef().set({
+        date: MON, type: 'unavailable', reason: 'appointment',
+        appointmentId: 'legacy-apt', createdAt: new Date(),
+      });
+      const apptId = await seedAppointment({
+        babysitterUserId: seed.babysitter1.uid,
+        familyId: seed.family1Id,
+        createdByUserId: seed.parent1.uid,
+        status: 'confirmed',
+        date: MON, startTime: '18:00', endTime: '20:00',
+      });
+
+      await callFunction(
+        'cancelAppointment',
+        { appointmentId: apptId, reason: 'Emergency' },
+        babysitterToken
+      );
+
+      // No matching ledger entry → the legacy doc is byte-untouched.
+      const doc = (await overrideRef().get()).data()!;
+      expect(doc.type).toBe('unavailable');
+      expect(doc.sessionBlocks).toBeUndefined();
+      expect(doc.appSource).toBeUndefined();
+      expect(doc.appointmentId).toBe('legacy-apt');
+    });
+  });
+
   describe('edge cases', () => {
     it('rejects cancel on already-cancelled appointment', async () => {
       const apptId = await seedAppointment({

@@ -6,6 +6,14 @@ import { sendNotificationEmail } from '../config/email.js';
 import { sendPushNotification } from '../config/push.js';
 import { notifyAllParents } from '../config/notifyParents.js';
 import { getParentProfile, isBabysitter, type User } from '@ejm/shared-core';
+import {
+  buildRestoredOverride,
+  type SessionBlockEntry,
+} from '@ejm/shared-functions/schedule/sessionOverride.js';
+
+/** sit's provenance stamp + ownership gate (see buildRestoredOverride). */
+const SIT_PROVENANCE = { appSource: 'sit', reason: 'appointment' } as const;
+const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
 
 interface CancelInput {
   appointmentId: string;
@@ -68,6 +76,44 @@ export const cancelAppointment = onCall(
       cancelledAt: now,
       updatedAt: now,
     });
+
+    // ── Restore the schedule slots this appointment claimed (H3) ──
+    // A confirmed appointment that blocked the babysitter's schedule recorded a
+    // `sessionBlocks` ledger entry (respondToRequest). Remove ONLY that entry and
+    // give back exactly the slots it held (buildRestoredOverride, shared with
+    // study) so cross-app claims survive. LEGACY pre-H3 overrides carry no ledger
+    // entry for this appointment → nothing matches → the doc is left untouched
+    // (conservative, status quo). Transactional: read the override before writing.
+    if (apt.status === 'confirmed' && apt.date) {
+      const scheduleRef = db.collection('schedules').doc(apt.babysitterUserId);
+      const overrideRef = scheduleRef.collection('overrides').doc(apt.date as string);
+      const scheduleSnap = await scheduleRef.get();
+      const dayKey = DAY_KEYS[new Date(`${apt.date}T00:00:00`).getDay()];
+      const weeklySlots: boolean[] = scheduleSnap.data()?.weekly?.[dayKey] ?? [];
+      const matches = (b: SessionBlockEntry) => b.appointmentId === appointmentId;
+
+      await db.runTransaction(async (tx) => {
+        const snap = await tx.get(overrideRef);
+        if (!snap.exists) return;
+        const existing = snap.data()!;
+        const ledger = Array.isArray(existing.sessionBlocks)
+          ? (existing.sessionBlocks as SessionBlockEntry[])
+          : [];
+        // No entry to remove (legacy/ledgerless, or blockSchedule was never set)
+        // → leave the doc exactly as it is.
+        if (!ledger.some(matches)) return;
+
+        const restore = buildRestoredOverride({
+          existing,
+          matches,
+          weeklySlots,
+          ownProvenance: SIT_PROVENANCE,
+          now,
+        });
+        if (restore.action === 'delete') tx.delete(overrideRef);
+        else if (restore.action === 'set') tx.set(overrideRef, restore.doc);
+      });
+    }
 
     // Send notifications to the OTHER party
     if (cancelledBy === 'cancelled_by_family') {
