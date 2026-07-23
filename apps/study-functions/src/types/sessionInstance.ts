@@ -43,6 +43,13 @@ export interface SessionInstanceDoc {
   // Pre-session reminder fan-out guard (set once the reminder is dispatched).
   reminderSent?: boolean;
 
+  // ── Session notes (V1.1 feature 1; set via the setSessionNote callable) ──
+  // Recurring notes live PER-OCCURRENCE here (one_time notes live on SessionDoc).
+  // FAMILY-authored pre-note, editable until this occurrence's start time passes.
+  preSessionNote?: string;
+  // TUTOR-authored post-note, writable once this occurrence has started.
+  postSessionNote?: string;
+
   // Denormalized for display
   subject: string;
   level: string;

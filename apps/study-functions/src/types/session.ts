@@ -64,6 +64,14 @@ export interface SessionDoc {
   // Optional free-text note from the family to the tutor, captured at book time.
   message?: string;
 
+  // ── Session notes (V1.1 feature 1; set via the setSessionNote callable) ──
+  // For a one_time session these live on this parent doc; for a recurring series
+  // they live per-occurrence on SessionInstanceDoc instead.
+  // FAMILY-authored, editable until the session's start time passes.
+  preSessionNote?: string;
+  // TUTOR-authored, writable once the session's start time has passed.
+  postSessionNote?: string;
+
   // Padding (stored for override calculation)
   paddingMinutes: number;
 
