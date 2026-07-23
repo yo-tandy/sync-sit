@@ -141,8 +141,11 @@ export const searchTutors = onCall(
         }
       }
 
-      // Whitelist known lifecycle statuses; anything unexpected falls back to
-      // 'none' so an unrecognized stored value can't leak into the payload.
+      // Whitelist the ACTIONABLE lifecycle statuses; anything else falls back to
+      // 'none'. 'cancelled' is deliberately excluded here: a family that
+      // withdrew its request is free to re-send, so search must surface the
+      // tutor as 'none' (fresh) rather than echoing the withdrawn state. Any
+      // other unrecognized stored value likewise can't leak into the payload.
       const KNOWN_REQUEST_STATUSES = ['pending', 'accepted', 'declined'] as const;
       const latest = latestRequest.get(uid);
       const requestStatus: TutorSearchResult['requestStatus'] =

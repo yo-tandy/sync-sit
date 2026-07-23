@@ -3,6 +3,7 @@ export { searchTutors } from './search/searchTutors.js';
 export { sendTutorContactRequest } from './contact/sendTutorContactRequest.js';
 export { getTutorAvailability } from './availability/getTutorAvailability.js';
 export { respondToTutorContactRequest } from './contact/respondToTutorContactRequest.js';
+export { cancelContactRequest } from './contact/cancelContactRequest.js';
 export { bookSession } from './sessions/bookSession.js';
 export { respondToSession } from './sessions/respondToSession.js';
 export { cancelSession } from './sessions/cancelSession.js';

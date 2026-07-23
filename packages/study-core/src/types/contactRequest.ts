@@ -2,10 +2,14 @@ import type { FirestoreTimestamp } from '@ejm/shared-core';
 
 /**
  * Lifecycle status of a study contact request.
- * pending → accepted | declined (terminal). Only the tutor transitions it,
- * via the respondToTutorContactRequest callable.
+ * pending → accepted | declined (tutor-driven, terminal) OR pending → cancelled
+ * (family-driven, terminal). The tutor transitions accepted/declined via
+ * respondToTutorContactRequest; 'cancelled' is FAMILY-initiated (the family
+ * withdraws its own pending request via cancelContactRequest) and is distinct
+ * from the tutor's 'declined' — notably it does NOT trigger the 7-day re-request
+ * cooldown, so a family may re-send immediately after cancelling.
  */
-export type StudyContactRequestStatus = 'pending' | 'accepted' | 'declined';
+export type StudyContactRequestStatus = 'pending' | 'accepted' | 'declined' | 'cancelled';
 
 /**
  * A parent's request to unlock a tutor's contact details. Lives at
@@ -43,5 +47,7 @@ export interface StudyContactRequestDoc {
   status: StudyContactRequestStatus;
   createdAt: FirestoreTimestamp;
   respondedAt?: FirestoreTimestamp;
+  /** When the family cancelled its own pending request (status → 'cancelled'). */
+  cancelledAt?: FirestoreTimestamp;
   updatedAt: FirestoreTimestamp;
 }
