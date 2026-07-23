@@ -9,7 +9,11 @@ import { Card, Button, Badge, TopNav, Spinner, Dialog } from '@ejm/shared-ui';
 import { RecurringConflictPreview } from '@/components/tutor/RecurringConflictPreview';
 import { ReasonModal } from '@/components/sessions/ReasonModal';
 import { SessionInstanceList } from '@/components/sessions/SessionInstanceList';
+import { SessionNotes } from '@/components/sessions/SessionNotes';
+import { SessionNoteDialog } from '@/components/sessions/SessionNoteDialog';
 import type { StudySessionDoc, StudySessionInstanceDoc } from '@/types/studySession';
+
+const NOTE_MAX = 2000;
 
 /** Shape of a recurring respondToSession result — drives the outcome dialog. */
 interface RecurringResult {
@@ -21,6 +25,13 @@ interface RecurringResult {
 type CancelTarget =
   | { kind: 'session' | 'series'; session: StudySessionDoc }
   | { kind: 'instance'; session: StudySessionDoc; instance: StudySessionInstanceDoc };
+
+/** What the note dialog is targeting (one_time on the parent, recurring on an instance). */
+type NoteTarget = {
+  session: StudySessionDoc;
+  instance?: StudySessionInstanceDoc;
+  initialText: string;
+};
 
 /** 3-letter weekday code → the full-name i18n key under `days.*`. */
 const DAY_FULL: Record<RecurringSlot['day'], string> = {
@@ -43,6 +54,28 @@ function parisToday(): string {
     month: '2-digit',
     day: '2-digit',
   }).format(new Date());
+}
+
+/** Paris "YYYY-MM-DDTHH:MM" now — a sortable stamp for the note timing window. */
+function parisNowStamp(): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Paris',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(new Date());
+  const g = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
+  return `${g('year')}-${g('month')}-${g('day')}T${g('hour')}:${g('minute')}`;
+}
+
+/** Has the given Paris wall-clock start (date + HH:MM) already passed? The tutor's
+ * post-note becomes writable once this is true (the session has started). */
+function hasStarted(date?: string, startTime?: string): boolean {
+  if (!date || !startTime) return false;
+  return `${date}T${startTime}` <= parisNowStamp();
 }
 
 /**
@@ -85,6 +118,11 @@ export function SessionsPage() {
   const [actingId, setActingId] = useState<string | null>(null);
   // Key of the row awaiting a cancel callable (session id, or `sid::instanceId`).
   const [cancelKey, setCancelKey] = useState<string | null>(null);
+  // The note dialog target (the tutor authors the POST-note), plus its in-flight
+  // guard and error. Non-optimistic — local state updates from the callable success.
+  const [noteTarget, setNoteTarget] = useState<NoteTarget | null>(null);
+  const [noteSaving, setNoteSaving] = useState(false);
+  const [noteError, setNoteError] = useState<string | null>(null);
 
   // A mounted guard shared by the initial load and every post-action reload, so a
   // late-resolving fetch never writes state after unmount.
@@ -253,6 +291,60 @@ export function SessionsPage() {
     }
   };
 
+  const noteCopy = {
+    fromFamily: t('tutor.sessions.notes.fromFamily'),
+    fromTutor: t('tutor.sessions.notes.fromTutor'),
+    add: t('tutor.sessions.notes.add'),
+    edit: t('tutor.sessions.notes.edit'),
+  };
+
+  const openNote = (target: NoteTarget) => {
+    setNoteError(null);
+    setNoteTarget(target);
+  };
+
+  // Save (or clear) the tutor's POST-note. Non-optimistic: local state changes
+  // only after the callable resolves. Empty text clears the note (field removed).
+  const submitNote = async (text: string) => {
+    if (!noteTarget) return;
+    const { session, instance } = noteTarget;
+    const trimmed = text.trim();
+    setNoteError(null);
+    setNoteSaving(true);
+    try {
+      const fn = httpsCallable<
+        { sessionId: string; instanceId?: string; kind: 'post'; text: string },
+        { success: boolean }
+      >(functions, 'setSessionNote');
+      await fn({
+        sessionId: session.sessionId,
+        ...(instance ? { instanceId: instance.instanceId } : {}),
+        kind: 'post',
+        text,
+      });
+      const applied = trimmed.length ? trimmed : undefined;
+      if (instance) {
+        setInstancesBySeries((m) => ({
+          ...m,
+          [session.sessionId]: (m[session.sessionId] ?? []).map((i) =>
+            i.instanceId === instance.instanceId ? { ...i, postSessionNote: applied } : i,
+          ),
+        }));
+      } else {
+        setSessions((rs) =>
+          (rs ?? []).map((s) =>
+            s.sessionId === session.sessionId ? { ...s, postSessionNote: applied } : s,
+          ),
+        );
+      }
+      setNoteTarget(null);
+    } catch {
+      setNoteError(t('tutor.sessions.notes.error'));
+    } finally {
+      setNoteSaving(false);
+    }
+  };
+
   const toggleExpanded = (sessionId: string) => {
     setExpanded((prev) => {
       const next = new Set(prev);
@@ -315,6 +407,14 @@ export function SessionsPage() {
             {t('tutor.sessions.cancelSession')}
           </Button>
         </div>
+        <SessionNotes
+          pre={s.preSessionNote}
+          post={s.postSessionNote}
+          editKind="post"
+          canEdit={hasStarted(s.date, s.startTime)}
+          onEdit={() => openNote({ session: s, initialText: s.postSessionNote ?? '' })}
+          copy={noteCopy}
+        />
       </Card>
     );
   }
@@ -359,6 +459,19 @@ export function SessionsPage() {
               statusSkipped: t('tutor.sessions.instanceStatus.skipped'),
               statusCancelled: t('tutor.sessions.instanceStatus.cancelled'),
             }}
+            renderNotes={(i) => (
+              <SessionNotes
+                pre={i.preSessionNote}
+                post={i.postSessionNote}
+                editKind="post"
+                canEdit={
+                  i.status === 'completed' ||
+                  (i.status === 'scheduled' && hasStarted(i.date, i.startTime))
+                }
+                onEdit={() => openNote({ session: s, instance: i, initialText: i.postSessionNote ?? '' })}
+                copy={noteCopy}
+              />
+            )}
           />
         )}
       </Card>
@@ -496,6 +609,16 @@ export function SessionsPage() {
                     </div>
                     <Badge variant="gray">{t(`tutor.sessions.status.${s.status}`)}</Badge>
                   </div>
+                  {s.type === 'one_time' && s.status === 'completed' && (
+                    <SessionNotes
+                      pre={s.preSessionNote}
+                      post={s.postSessionNote}
+                      editKind="post"
+                      canEdit
+                      onEdit={() => openNote({ session: s, initialText: s.postSessionNote ?? '' })}
+                      copy={noteCopy}
+                    />
+                  )}
                 </Card>
               ))}
             </div>
@@ -544,6 +667,22 @@ export function SessionsPage() {
         error={cancelError}
         onConfirm={submitCancel}
         onClose={() => setCancelTarget(null)}
+      />
+
+      {/* ── Session note (tutor authors the post-note) ── */}
+      <SessionNoteDialog
+        open={noteTarget !== null}
+        title={t('tutor.sessions.notes.dialogTitle')}
+        description={t('tutor.sessions.notes.dialogDesc')}
+        placeholder={t('tutor.sessions.notes.placeholder')}
+        initialText={noteTarget?.initialText ?? ''}
+        saveLabel={t('tutor.sessions.notes.save')}
+        cancelLabel={t('common.cancel')}
+        maxLength={NOTE_MAX}
+        submitting={noteSaving}
+        error={noteError}
+        onSave={submitNote}
+        onClose={() => setNoteTarget(null)}
       />
 
       {/* ── Recurring confirm result ── */}

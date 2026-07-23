@@ -10,13 +10,24 @@ import type { TutorEndorsementDoc } from '@ejm/study-core';
 import { Card, Button, Badge, TopNav, Spinner } from '@ejm/shared-ui';
 import { ReasonModal } from '@/components/sessions/ReasonModal';
 import { SessionInstanceList } from '@/components/sessions/SessionInstanceList';
+import { SessionNotes } from '@/components/sessions/SessionNotes';
+import { SessionNoteDialog } from '@/components/sessions/SessionNoteDialog';
 import { EndorseTutorDialog } from '@/components/family/EndorseTutorDialog';
 import type { StudySessionDoc, StudySessionInstanceDoc } from '@/types/studySession';
+
+const NOTE_MAX = 2000;
 
 /** What the cancel modal is targeting. */
 type CancelTarget =
   | { kind: 'session' | 'series'; session: StudySessionDoc }
   | { kind: 'instance'; session: StudySessionDoc; instance: StudySessionInstanceDoc };
+
+/** What the note dialog is targeting (one_time on the parent, recurring on an instance). */
+type NoteTarget = {
+  session: StudySessionDoc;
+  instance?: StudySessionInstanceDoc;
+  initialText: string;
+};
 
 /** 3-letter weekday code → the full-name i18n key under `days.*`. */
 const DAY_FULL: Record<RecurringSlot['day'], string> = {
@@ -39,6 +50,28 @@ function parisToday(): string {
     month: '2-digit',
     day: '2-digit',
   }).format(new Date());
+}
+
+/** Paris "YYYY-MM-DDTHH:MM" now — a sortable stamp for the note timing window. */
+function parisNowStamp(): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Paris',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(new Date());
+  const g = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
+  return `${g('year')}-${g('month')}-${g('day')}T${g('hour')}:${g('minute')}`;
+}
+
+/** Has the given Paris wall-clock start (date + HH:MM) already passed? The
+ * pre-note edit window closes once this is true (the family's ask is moot). */
+function hasStarted(date?: string, startTime?: string): boolean {
+  if (!date || !startTime) return false;
+  return `${date}T${startTime}` <= parisNowStamp();
 }
 
 /**
@@ -73,6 +106,11 @@ export function SessionsPage() {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   // Key of the row awaiting a cancel callable (session id, or `sid::instanceId`).
   const [cancelKey, setCancelKey] = useState<string | null>(null);
+  // The note dialog target (the family authors the PRE-note), plus its in-flight
+  // guard and error. Non-optimistic — local state updates from the callable success.
+  const [noteTarget, setNoteTarget] = useState<NoteTarget | null>(null);
+  const [noteSaving, setNoteSaving] = useState(false);
+  const [noteError, setNoteError] = useState<string | null>(null);
   // tutorUserIds this family has already endorsed (from their own references) —
   // completed work with a tutor in this set shows no endorse prompt.
   const [endorsedTutors, setEndorsedTutors] = useState<Set<string>>(new Set());
@@ -220,6 +258,60 @@ export function SessionsPage() {
     }
   };
 
+  const noteCopy = {
+    fromFamily: t('family.sessions.notes.fromFamily'),
+    fromTutor: t('family.sessions.notes.fromTutor'),
+    add: t('family.sessions.notes.add'),
+    edit: t('family.sessions.notes.edit'),
+  };
+
+  const openNote = (target: NoteTarget) => {
+    setNoteError(null);
+    setNoteTarget(target);
+  };
+
+  // Save (or clear) the family's PRE-note. Non-optimistic: local state changes
+  // only after the callable resolves. Empty text clears the note (field removed).
+  const submitNote = async (text: string) => {
+    if (!noteTarget) return;
+    const { session, instance } = noteTarget;
+    const trimmed = text.trim();
+    setNoteError(null);
+    setNoteSaving(true);
+    try {
+      const fn = httpsCallable<
+        { sessionId: string; instanceId?: string; kind: 'pre'; text: string },
+        { success: boolean }
+      >(functions, 'setSessionNote');
+      await fn({
+        sessionId: session.sessionId,
+        ...(instance ? { instanceId: instance.instanceId } : {}),
+        kind: 'pre',
+        text,
+      });
+      const applied = trimmed.length ? trimmed : undefined;
+      if (instance) {
+        setInstancesBySeries((m) => ({
+          ...m,
+          [session.sessionId]: (m[session.sessionId] ?? []).map((i) =>
+            i.instanceId === instance.instanceId ? { ...i, preSessionNote: applied } : i,
+          ),
+        }));
+      } else {
+        setSessions((rs) =>
+          (rs ?? []).map((s) =>
+            s.sessionId === session.sessionId ? { ...s, preSessionNote: applied } : s,
+          ),
+        );
+      }
+      setNoteTarget(null);
+    } catch {
+      setNoteError(t('family.sessions.notes.error'));
+    } finally {
+      setNoteSaving(false);
+    }
+  };
+
   const toggleExpanded = (sessionId: string) => {
     setExpanded((prev) => {
       const next = new Set(prev);
@@ -312,6 +404,14 @@ export function SessionsPage() {
             {t('family.sessions.cancelSession')}
           </Button>
         </div>
+        <SessionNotes
+          pre={s.preSessionNote}
+          post={s.postSessionNote}
+          editKind="pre"
+          canEdit={!hasStarted(s.date, s.startTime)}
+          onEdit={() => openNote({ session: s, initialText: s.preSessionNote ?? '' })}
+          copy={noteCopy}
+        />
       </Card>
     );
   }
@@ -354,6 +454,16 @@ export function SessionsPage() {
               statusSkipped: t('family.sessions.instanceStatus.skipped'),
               statusCancelled: t('family.sessions.instanceStatus.cancelled'),
             }}
+            renderNotes={(i) => (
+              <SessionNotes
+                pre={i.preSessionNote}
+                post={i.postSessionNote}
+                editKind="pre"
+                canEdit={i.status === 'scheduled' && !hasStarted(i.date, i.startTime)}
+                onEdit={() => openNote({ session: s, instance: i, initialText: i.preSessionNote ?? '' })}
+                copy={noteCopy}
+              />
+            )}
           />
         )}
       </Card>
@@ -457,6 +567,16 @@ export function SessionsPage() {
                       <Badge variant="gray">{t(`family.sessions.status.${s.status}`)}</Badge>
                     </div>
                     {endorse && <div className="mt-3">{endorse}</div>}
+                    {s.type === 'one_time' && s.status === 'completed' && (
+                      <SessionNotes
+                        pre={s.preSessionNote}
+                        post={s.postSessionNote}
+                        editKind="pre"
+                        canEdit={false}
+                        onEdit={() => {}}
+                        copy={noteCopy}
+                      />
+                    )}
                   </Card>
                 );
               })}
@@ -495,6 +615,22 @@ export function SessionsPage() {
         error={cancelError}
         onConfirm={submitCancel}
         onClose={() => setCancelTarget(null)}
+      />
+
+      {/* ── Session note (family authors the pre-note) ── */}
+      <SessionNoteDialog
+        open={noteTarget !== null}
+        title={t('family.sessions.notes.dialogTitle')}
+        description={t('family.sessions.notes.dialogDesc')}
+        placeholder={t('family.sessions.notes.placeholder')}
+        initialText={noteTarget?.initialText ?? ''}
+        saveLabel={t('family.sessions.notes.save')}
+        cancelLabel={t('common.cancel')}
+        maxLength={NOTE_MAX}
+        submitting={noteSaving}
+        error={noteError}
+        onSave={submitNote}
+        onClose={() => setNoteTarget(null)}
       />
     </div>
   );

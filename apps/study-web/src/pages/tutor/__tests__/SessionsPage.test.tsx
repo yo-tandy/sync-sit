@@ -578,3 +578,158 @@ describe('tutor SessionsPage — refetch after confirm', () => {
     expect(h.getDocs.mock.calls.length).toBe(before);
   });
 });
+
+// ── Task 2: session notes (the tutor authors the POST-note) ──
+// The window: the post-note is writable only once a session has STARTED, so it
+// surfaces on started/completed targets — never on a not-yet-started row (where
+// the family's pre-note shows read-only). Time is pinned so timing is deterministic.
+describe('tutor SessionsPage — session notes (post)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    // Paris (CEST, UTC+2) reads 2026-08-01 11:00.
+    vi.setSystemTime(new Date('2026-08-01T09:00:00Z'));
+    reset();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  function confirmedOneTime(overrides: Record<string, unknown> = {}) {
+    return oneTime({ status: 'confirmed', date: '2026-08-20', ...overrides });
+  }
+  function confirmedRecurring(overrides: Record<string, unknown> = {}) {
+    return recurring({ status: 'confirmed', ...overrides });
+  }
+  function instanceDoc(overrides: Record<string, unknown> = {}) {
+    return {
+      instanceId: '2026-08-12',
+      sessionId: 'sR',
+      date: '2026-08-12',
+      startTime: '17:00',
+      endTime: '18:00',
+      status: 'scheduled',
+      location: 'online',
+      ...overrides,
+    };
+  }
+
+  it('shows the family pre-note read-only on an upcoming (not-started) row — no post affordance', async () => {
+    h.sessions = [confirmedOneTime({ sessionId: 'sN', preSessionNote: 'Please cover fractions.' })];
+    renderWithProviders(<SessionsPage />);
+
+    expect(await screen.findByText('Please cover fractions.')).toBeInTheDocument();
+    expect(screen.getByText(/from the family/i)).toBeInTheDocument();
+    // Not started yet → the tutor cannot write the post-note.
+    expect(
+      screen.queryByRole('button', { name: /add session notes|edit session notes/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('a started one_time (completed) offers an add-post affordance', async () => {
+    h.sessions = [oneTime({ sessionId: 'sC', status: 'completed', date: '2026-07-20' })];
+    renderWithProviders(<SessionsPage />);
+
+    expect(
+      await screen.findByRole('button', { name: /add session notes/i }),
+    ).toBeInTheDocument();
+  });
+
+  it('saving a post-note calls setSessionNote with {sessionId, kind:post, text}', async () => {
+    h.sessions = [oneTime({ sessionId: 'sC', status: 'completed', date: '2026-07-20' })];
+    renderWithProviders(<SessionsPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /add session notes/i }));
+    fireEvent.change(await screen.findByRole('textbox'), {
+      target: { value: 'Covered fractions; homework p.42.' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /save note/i }));
+
+    await waitFor(() =>
+      expect(h.callable).toHaveBeenCalledWith('setSessionNote', {
+        sessionId: 'sC',
+        kind: 'post',
+        text: 'Covered fractions; homework p.42.',
+      }),
+    );
+  });
+
+  it('editing a post-note seeds the textarea and clearing it sends empty text', async () => {
+    h.sessions = [
+      oneTime({ sessionId: 'sC', status: 'completed', date: '2026-07-20', postSessionNote: 'old summary' }),
+    ];
+    renderWithProviders(<SessionsPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /edit session notes/i }));
+    const textarea = await screen.findByRole('textbox');
+    expect(textarea).toHaveValue('old summary');
+
+    fireEvent.change(textarea, { target: { value: '' } });
+    fireEvent.click(screen.getByRole('button', { name: /save note/i }));
+
+    await waitFor(() =>
+      expect(h.callable).toHaveBeenCalledWith('setSessionNote', {
+        sessionId: 'sC',
+        kind: 'post',
+        text: '',
+      }),
+    );
+  });
+
+  it('adds a post-note to a started series occurrence → setSessionNote carries instanceId', async () => {
+    h.sessions = [confirmedRecurring({ sessionId: 'sR' })];
+    // A past occurrence (already started) — post is writable.
+    h.instances = { sR: [instanceDoc({ instanceId: '2026-07-20', date: '2026-07-20', status: 'scheduled' })] };
+    renderWithProviders(<SessionsPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /view dates/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /add session notes/i }));
+    fireEvent.change(await screen.findByRole('textbox'), { target: { value: 'went well' } });
+    fireEvent.click(screen.getByRole('button', { name: /save note/i }));
+
+    await waitFor(() =>
+      expect(h.callable).toHaveBeenCalledWith('setSessionNote', {
+        sessionId: 'sR',
+        instanceId: '2026-07-20',
+        kind: 'post',
+        text: 'went well',
+      }),
+    );
+  });
+
+  it('does NOT offer the post affordance on a future series occurrence (pre shows read-only)', async () => {
+    h.sessions = [confirmedRecurring({ sessionId: 'sR' })];
+    h.instances = {
+      sR: [
+        instanceDoc({
+          instanceId: '2026-08-12',
+          date: '2026-08-12',
+          status: 'scheduled',
+          preSessionNote: 'Ratios please',
+        }),
+      ],
+    };
+    renderWithProviders(<SessionsPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /view dates/i }));
+    expect(await screen.findByText('Ratios please')).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /add session notes|edit session notes/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('post-save is non-optimistic — the callable resolves before the dialog closes', async () => {
+    const d = deferred<{ data: { success: boolean } }>();
+    h.callable.mockReturnValue(d.promise);
+    h.sessions = [oneTime({ sessionId: 'sC', status: 'completed', date: '2026-07-20' })];
+    renderWithProviders(<SessionsPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /add session notes/i }));
+    fireEvent.change(await screen.findByRole('textbox'), { target: { value: 'summary' } });
+    const save = screen.getByRole('button', { name: /save note/i });
+    fireEvent.click(save);
+    expect(save).toBeDisabled();
+
+    d.resolve({ data: { success: true } });
+    await waitFor(() => expect(screen.queryByRole('textbox')).not.toBeInTheDocument());
+  });
+});

@@ -30,6 +30,11 @@ export interface StudySessionDoc {
   endDate?: string;
   location: LocationPref;
   message?: string;
+  // Session notes (V1.1): family-authored pre-note, tutor-authored post-note.
+  // For a one_time session these live on this doc; recurring notes live per
+  // instance (see StudySessionInstanceDoc).
+  preSessionNote?: string;
+  postSessionNote?: string;
   status: 'pending' | 'confirmed' | 'declined' | 'cancelled' | 'modified' | 'completed';
   statusReason?: string;
   createdAt?: { seconds?: number } | null;
@@ -45,4 +50,7 @@ export interface StudySessionInstanceDoc {
   status: 'scheduled' | 'cancelled' | 'completed' | 'rescheduled';
   statusReason?: 'cancelled_by_family' | 'cancelled_by_tutor' | 'conflict_skip';
   location: LocationPref;
+  // Per-occurrence session notes (V1.1); see StudySessionDoc.
+  preSessionNote?: string;
+  postSessionNote?: string;
 }

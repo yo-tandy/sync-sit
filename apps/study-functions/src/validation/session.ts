@@ -162,3 +162,26 @@ export const cancelSessionInstanceSchema = z.object({
 });
 
 export type CancelSessionInstanceInput = z.infer<typeof cancelSessionInstanceSchema>;
+
+/**
+ * Input schema for the `setSessionNote` callable: a family member writes/edits
+ * the pre-session note, or the tutor writes/edits the post-session note.
+ *
+ * `instanceId` is only meaningful for a recurring series (targets one occurrence);
+ * a one_time session's notes live on the parent doc. `kind` selects which note
+ * (and thus which party may write and which timing window applies). Empty `text`
+ * (after trimming) is ALLOWED and clears the note (the field is deleted).
+ */
+export const setSessionNoteSchema = z.object({
+  sessionId: z.string().min(1, 'Session ID is required'),
+  instanceId: z.string().min(1).optional(),
+  kind: z.enum(['pre', 'post'], {
+    errorMap: () => ({ message: "Note kind must be 'pre' or 'post'" }),
+  }),
+  text: z
+    .string()
+    .trim()
+    .max(2000, 'A session note may be at most 2000 characters'),
+});
+
+export type SetSessionNoteInput = z.infer<typeof setSessionNoteSchema>;
