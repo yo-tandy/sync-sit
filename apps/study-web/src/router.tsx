@@ -1,51 +1,45 @@
 import { createBrowserRouter, Navigate } from 'react-router';
+import { PrivacyPage, TermsPage } from '@ejm/shared-ui';
 
-// Layouts
+// Layouts stay EAGER — the shell (AuthGuard, app bars) renders on every route, so
+// deferring it would only put a spinner in front of itself.
 import { PublicLayout } from '@/layouts/PublicLayout';
 import { TutorLayout } from '@/layouts/TutorLayout';
 import { FamilyLayout } from '@/layouts/FamilyLayout';
 
-// Public pages
-import { WelcomePage } from '@/pages/public/WelcomePage';
-import { LoginPage } from '@/pages/public/LoginPage';
-import { SignUpRolePage } from '@/pages/public/SignUpRolePage';
-import { StaticPage } from '@/pages/public/StaticPage';
-import { AboutPage } from '@/pages/public/AboutPage';
-import { ForgotPasswordPage } from '@/pages/public/ForgotPasswordPage';
-import { PrivacyPage, TermsPage, ReportProblemPage } from '@ejm/shared-ui';
-import { useAuthStore } from '@/stores/authStore';
-
-// Enrollment
-import { TutorEnrollment } from '@/pages/enrollment/tutor/TutorEnrollment';
-import { TutorSuccessPage } from '@/pages/enrollment/tutor/TutorSuccessPage';
-
-// Tutor portal (stubs in this PR — real pages land in Tasks 2-5)
-import { DashboardPage } from '@/pages/tutor/DashboardPage';
-import { AccountPage } from '@/pages/tutor/AccountPage';
-import { SubjectsPage } from '@/pages/tutor/SubjectsPage';
-import { SchedulePage } from '@/pages/tutor/SchedulePage';
-import { VerificationPage } from '@/pages/tutor/VerificationPage';
-import { RequestsPage as TutorRequestsPage } from '@/pages/tutor/RequestsPage';
-import { EndorsementsPage as TutorEndorsementsPage } from '@/pages/tutor/EndorsementsPage';
-import { SessionsPage as TutorSessionsPage } from '@/pages/tutor/SessionsPage';
-
-// Family portal (stubs in this PR — real pages land in Tasks 2-3; the search
-// page is a "coming soon" stub replaced by PR C)
-import { DashboardPage as FamilyDashboardPage } from '@/pages/family/DashboardPage';
-import { AccountPage as FamilyAccountPage } from '@/pages/family/AccountPage';
-import { FamilySettingsPage } from '@/pages/family/FamilySettingsPage';
-import { SearchPage as FamilySearchPage } from '@/pages/family/SearchPage';
-import { RequestsPage as FamilyRequestsPage } from '@/pages/family/RequestsPage';
-import { BookSessionPage } from '@/pages/family/BookSessionPage';
-import { SessionsPage as FamilySessionsPage } from '@/pages/family/SessionsPage';
+// Route pages are code-split — each is a lazy() dynamic import (its own chunk,
+// fetched on first visit). Defined in a dedicated module so this file exports
+// only `router` (no component definitions), keeping fast-refresh happy. The
+// Suspense fallback lives in each layout (around <Outlet>).
+import {
+  WelcomePage,
+  LoginPage,
+  SignUpRolePage,
+  StaticPage,
+  AboutPage,
+  ForgotPasswordPage,
+  ReportProblemPage,
+  TutorEnrollment,
+  TutorSuccessPage,
+  TutorDashboardPage,
+  TutorAccountPage,
+  SubjectsPage,
+  SchedulePage,
+  VerificationPage,
+  TutorRequestsPage,
+  TutorEndorsementsPage,
+  TutorSessionsPage,
+  FamilyDashboardPage,
+  FamilyAccountPage,
+  FamilySettingsPage,
+  FamilySearchPage,
+  FamilyRequestsPage,
+  BookSessionPage,
+  FamilySessionsPage,
+} from '@/lazyPages';
 
 const SUPPORT_EMAIL = 'support@sync-study.com';
 const BRAND = 'Sync/Study';
-
-function SyncStudyReportProblemPage() {
-  const { userDoc } = useAuthStore();
-  return <ReportProblemPage brand={BRAND} supportEmail={SUPPORT_EMAIL} userId={userDoc?.uid} />;
-}
 
 export const router = createBrowserRouter([
   {
@@ -59,7 +53,7 @@ export const router = createBrowserRouter([
       { path: '/about', element: <AboutPage /> },
       { path: '/privacy', element: <PrivacyPage brand={BRAND} supportEmail={SUPPORT_EMAIL} /> },
       { path: '/terms', element: <TermsPage brand={BRAND} supportEmail={SUPPORT_EMAIL} /> },
-      { path: '/report', element: <SyncStudyReportProblemPage /> },
+      { path: '/report', element: <ReportProblemPage /> },
       { path: '/enroll/parent', element: <StaticPage titleKey="welcome.signUpParent" /> },
       { path: '/forgot-password', element: <ForgotPasswordPage /> },
       { path: '*', element: <Navigate to="/" replace /> },
@@ -68,8 +62,8 @@ export const router = createBrowserRouter([
   {
     element: <TutorLayout />,
     children: [
-      { path: '/tutor', element: <DashboardPage /> },
-      { path: '/tutor/account', element: <AccountPage /> },
+      { path: '/tutor', element: <TutorDashboardPage /> },
+      { path: '/tutor/account', element: <TutorAccountPage /> },
       { path: '/tutor/subjects', element: <SubjectsPage /> },
       { path: '/tutor/schedule', element: <SchedulePage /> },
       { path: '/tutor/verification', element: <VerificationPage /> },
