@@ -453,6 +453,7 @@ export function SessionsPage() {
               statusCompleted: t('family.sessions.instanceStatus.completed'),
               statusSkipped: t('family.sessions.instanceStatus.skipped'),
               statusCancelled: t('family.sessions.instanceStatus.cancelled'),
+              trial: t('family.sessions.trial.badge'),
             }}
             renderNotes={(i) => (
               <SessionNotes

@@ -13,7 +13,7 @@ import {
 import { db } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { useHolidays } from '@/hooks/useHolidays';
-import { Spinner } from '@ejm/shared-ui';
+import { Spinner, Badge } from '@ejm/shared-ui';
 import type { StudySessionDoc } from '@/types/studySession';
 
 /** Weeks of occurrences the accept flow materializes — mirror the callable. */
@@ -218,14 +218,26 @@ export function RecurringConflictPreview({ session }: { session: StudySessionDoc
       </p>
       {result.rows.length > 0 && (
         <ul className="mt-1 space-y-0.5">
-          {result.rows.map((r) => (
-            <li key={r.date} className="flex items-center justify-between text-xs">
-              <span className="text-gray-600">{formatDateStr(r.date)}</span>
-              <span className={STATUS_CLASS[r.status]}>
-                {t(`tutor.sessions.preview.status.${r.status}`)}
-              </span>
-            </li>
-          ))}
+          {(() => {
+            // The trial lands on the first date that actually materializes — i.e.
+            // the first 'available' row (the same date the confirm schedules first).
+            const trialDate = session.trialFirstSession
+              ? result.rows.find((r) => r.status === 'available')?.date
+              : undefined;
+            return result.rows.map((r) => (
+              <li key={r.date} className="flex items-center justify-between text-xs">
+                <span className="text-gray-600">{formatDateStr(r.date)}</span>
+                <span className="flex items-center gap-1.5">
+                  {r.date === trialDate && (
+                    <Badge variant="blue">{t('tutor.sessions.trial.badge')}</Badge>
+                  )}
+                  <span className={STATUS_CLASS[r.status]}>
+                    {t(`tutor.sessions.preview.status.${r.status}`)}
+                  </span>
+                </span>
+              </li>
+            ));
+          })()}
         </ul>
       )}
       <p className="mt-1.5 text-[11px] leading-tight text-gray-400">

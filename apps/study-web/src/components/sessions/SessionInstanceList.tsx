@@ -15,6 +15,8 @@ export interface InstanceListCopy {
   statusCompleted: string;
   statusSkipped: string;
   statusCancelled: string;
+  // Badge shown on the first materialized occurrence of a trial series (V1.1).
+  trial: string;
 }
 
 interface SessionInstanceListProps {
@@ -68,6 +70,7 @@ export function SessionInstanceList({
                 {formatDate(i.date)} · {i.startTime}–{i.endTime}
               </span>
               <span className="flex items-center gap-2">
+                {i.isTrial && <Badge variant="blue">{copy.trial}</Badge>}
                 {label && <Badge variant="gray">{label}</Badge>}
                 {cancelable && (
                   <Button

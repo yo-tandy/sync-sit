@@ -261,6 +261,10 @@ export default {
       recurringSlot: 'Every {{day}} {{start}}–{{end}}',
       schoolWeeksOnly: 'School weeks only',
       until: 'until {{date}}',
+      trial: {
+        badge: 'Trial',
+        request: 'The family would like the first session as a trial.',
+      },
       confirmDeclineTitle: 'Decline this session?',
       confirmDeclineDesc: 'The family will be notified that you declined this booking request.',
       confirmDeclineCta: 'Yes, decline',
@@ -534,6 +538,11 @@ export default {
           desc: 'Weekly request sent — {{name}} must confirm. We\'ll book {{day}}s at {{time}} once accepted.',
         },
       },
+      trial: {
+        toggle: 'Make the first session a trial',
+        explainer: 'The first session is labelled a trial so you and the tutor can see how it goes. It doesn\'t change pricing.',
+        badge: 'Trial',
+      },
       success: {
         title: 'Request sent',
         desc: 'Request sent — {{name}} must confirm before the session is booked.',
@@ -595,6 +604,9 @@ export default {
       awaitingTutor: 'Waiting for the tutor to confirm.',
       endorse: 'Endorse {{name}}',
       recurringSlot: 'Every {{day}} {{start}}–{{end}}',
+      trial: {
+        badge: 'Trial',
+      },
       viewDates: 'View dates',
       hideDates: 'Hide dates',
       noOccurrences: 'No occurrences scheduled yet.',

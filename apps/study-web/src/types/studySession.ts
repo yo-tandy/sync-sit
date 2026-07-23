@@ -27,6 +27,9 @@ export interface StudySessionDoc {
   endTime?: string;
   recurringSlots?: RecurringSlot[];
   schoolWeeksOnly?: boolean;
+  // Recurring only (V1.1): the family asked for the first session to be a trial.
+  // Both portals badge it; the per-occurrence marker is StudySessionInstanceDoc.isTrial.
+  trialFirstSession?: boolean;
   endDate?: string;
   location: LocationPref;
   message?: string;
@@ -49,6 +52,8 @@ export interface StudySessionInstanceDoc {
   endTime: string;
   status: 'scheduled' | 'cancelled' | 'completed' | 'rescheduled';
   statusReason?: 'cancelled_by_family' | 'cancelled_by_tutor' | 'conflict_skip';
+  // The first materialized occurrence of a trial series (V1.1); badged in the list.
+  isTrial?: boolean;
   location: LocationPref;
   // Per-occurrence session notes (V1.1); see StudySessionDoc.
   preSessionNote?: string;
