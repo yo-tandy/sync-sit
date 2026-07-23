@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
-import { doc, getDoc, collection, getDocs, addDoc, onSnapshot } from 'firebase/firestore';
+import { doc, getDoc, collection, getDocs, addDoc, onSnapshot, query, where } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
@@ -172,12 +172,16 @@ export function FamilyDashboard() {
   // Load submitted references for this user
   useEffect(() => {
     if (!userDoc?.uid) return;
+    // Constrain by submittedByUserId so the rules engine can prove the read
+    // via the involved-party (submitter) disjunct (H2). An unfiltered
+    // collection read is no longer allowed for non-admins. type/status are
+    // still narrowed client-side.
     const unsub = onSnapshot(
-      collection(db, 'references'),
+      query(collection(db, 'references'), where('submittedByUserId', '==', userDoc.uid)),
       (snap) => {
         const refs = snap.docs
           .map((d) => ({ ...d.data(), referenceId: d.id }) as ReferenceDoc)
-          .filter((r) => r.submittedByUserId === userDoc.uid && r.type === 'family_submitted' && r.status !== 'removed');
+          .filter((r) => r.type === 'family_submitted' && r.status !== 'removed');
         setSubmittedRefs(refs);
       }
     );

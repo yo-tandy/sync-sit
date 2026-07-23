@@ -11,7 +11,7 @@ import {
 } from '@firebase/rules-unit-testing';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
-import { doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs, limit, orderBy } from 'firebase/firestore';
 
 let testEnv: RulesTestEnvironment;
 
@@ -739,6 +739,246 @@ describe('references collection', () => {
     await assertSucceeds(
       updateDoc(doc(subCtx.firestore(), 'references', 'ref-private-remove'), { status: 'removed' }),
     );
+  });
+});
+
+// References READ hardening (Hardening PR H2).
+// Before H2 the read rule was `allow read: if isAuth()`, so ANY authenticated
+// user could read PRIVATE and REMOVED endorsements — referenceText,
+// submittedByName, submittedByFamilyId — for both sit and study, and the
+// tutor/babysitter-keyed composite made harvesting efficient. H2 restricts
+// reads to: publicly-visible statuses ('approved'/'published') OR an involved
+// party (recipient babysitter/tutor, the submitter, or a member of the
+// submitting family) OR an admin. Because a LIST is allowed only if the rules
+// engine can prove the read rule for every matching doc from the QUERY
+// CONSTRAINTS alone, every audited client query is replayed here in list mode
+// with its real filters (see the PR audit matrix). The stranger-reads-private
+// tests are RED against the pre-H2 rule (they assert a deny the old rule
+// allowed) and GREEN after.
+describe('references collection — read hardening (H2)', () => {
+  async function seed(id: string, data: Record<string, unknown>) {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'references', id), data);
+    });
+  }
+  async function seedFamily(id: string, parentIds: string[]) {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'families', id), { familyId: id, parentIds });
+    });
+  }
+  async function seedAdmin(id: string) {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'users', id), {
+        uid: id, isAdmin: true, status: 'active', email: `${id}@x.com`, profiles: {},
+      });
+    });
+  }
+
+  // ── Exposure closure: RED against the pre-H2 `if isAuth()` rule ──
+  it('denies a stranger reading a PRIVATE study endorsement', async () => {
+    await seed('h2-priv-study', {
+      tutorUserId: 'tutorA', appSource: 'study', submittedByUserId: 'parentSub',
+      submittedByFamilyId: 'famSub', type: 'family_submitted', status: 'private',
+      referenceText: 'Private endorsement text',
+    });
+    const stranger = testEnv.authenticatedContext('stranger');
+    await assertFails(getDoc(doc(stranger.firestore(), 'references', 'h2-priv-study')));
+  });
+
+  it('denies a stranger reading a PRIVATE sit reference', async () => {
+    await seed('h2-priv-sit', {
+      babysitterUserId: 'bsA', submittedByUserId: 'parentSub', submittedByFamilyId: 'famSub',
+      type: 'family_submitted', status: 'private', referenceText: 'Private reference text',
+    });
+    const stranger = testEnv.authenticatedContext('stranger');
+    await assertFails(getDoc(doc(stranger.firestore(), 'references', 'h2-priv-sit')));
+  });
+
+  it('denies a stranger reading a REMOVED reference', async () => {
+    await seed('h2-removed', {
+      babysitterUserId: 'bsA', type: 'manual', status: 'removed', referenceText: 'redacted',
+    });
+    const stranger = testEnv.authenticatedContext('stranger');
+    await assertFails(getDoc(doc(stranger.firestore(), 'references', 'h2-removed')));
+  });
+
+  // ── Public statuses stay world-readable (green before & after) ──
+  it('allows a stranger to read an APPROVED reference', async () => {
+    await seed('h2-approved', { babysitterUserId: 'bsA', type: 'family_submitted', status: 'approved' });
+    const stranger = testEnv.authenticatedContext('stranger');
+    await assertSucceeds(getDoc(doc(stranger.firestore(), 'references', 'h2-approved')));
+  });
+
+  it('allows a stranger to read a PUBLISHED study endorsement', async () => {
+    await seed('h2-published', { tutorUserId: 'tutorA', appSource: 'study', status: 'published' });
+    const stranger = testEnv.authenticatedContext('stranger');
+    await assertSucceeds(getDoc(doc(stranger.firestore(), 'references', 'h2-published')));
+  });
+
+  // ── Involved parties read their own private docs ──
+  it('allows the recipient babysitter to read their own private reference', async () => {
+    await seed('h2-bs-own', {
+      babysitterUserId: 'bsOwner', submittedByUserId: 'parentSub', type: 'family_submitted', status: 'private',
+    });
+    const bs = testEnv.authenticatedContext('bsOwner');
+    await assertSucceeds(getDoc(doc(bs.firestore(), 'references', 'h2-bs-own')));
+  });
+
+  it('allows the recipient tutor to read their own private endorsement', async () => {
+    await seed('h2-tutor-own', {
+      tutorUserId: 'tutorOwner', appSource: 'study', submittedByUserId: 'parentSub',
+      submittedByFamilyId: 'famSub', type: 'family_submitted', status: 'private',
+    });
+    const tutor = testEnv.authenticatedContext('tutorOwner');
+    await assertSucceeds(getDoc(doc(tutor.firestore(), 'references', 'h2-tutor-own')));
+  });
+
+  it('allows the submitter to read their own private endorsement', async () => {
+    await seed('h2-sub-own', {
+      tutorUserId: 'tutorA', appSource: 'study', submittedByUserId: 'parentSub',
+      submittedByFamilyId: 'famSub', type: 'family_submitted', status: 'private',
+    });
+    const sub = testEnv.authenticatedContext('parentSub');
+    await assertSucceeds(getDoc(doc(sub.firestore(), 'references', 'h2-sub-own')));
+  });
+
+  it("allows a member of the submitting family to read the family's private endorsement (submitted by the OTHER parent)", async () => {
+    await seedFamily('famTwo', ['parentSub', 'parentOther']);
+    await seed('h2-fam', {
+      tutorUserId: 'tutorA', appSource: 'study', submittedByUserId: 'parentSub',
+      submittedByFamilyId: 'famTwo', type: 'family_submitted', status: 'private',
+    });
+    const other = testEnv.authenticatedContext('parentOther'); // NOT the submitter
+    await assertSucceeds(getDoc(doc(other.firestore(), 'references', 'h2-fam')));
+  });
+
+  // ── Admin ──
+  it('allows an admin to read a private reference', async () => {
+    await seedAdmin('adminH2');
+    await seed('h2-admin-read', { babysitterUserId: 'bsA', type: 'family_submitted', status: 'private' });
+    const admin = testEnv.authenticatedContext('adminH2');
+    await assertSucceeds(getDoc(doc(admin.firestore(), 'references', 'h2-admin-read')));
+  });
+
+  // isFamilyMember-on-sentinel behavior (explicit): a sit MANUAL doc carries NO
+  // submittedByFamilyId. The family disjunct must resolve to a clean false for
+  // such a doc and must NOT hard-error the whole || chain — otherwise a LATER
+  // disjunct (isAdmin) is never reached. This test pins that: an admin reading a
+  // manual doc lacking submittedByFamilyId must be ALLOWED via the isAdmin()
+  // disjunct that follows the family disjunct. If this FAILS, the family
+  // disjunct is erroring the chain and must be guarded with a has-key check.
+  it('allows an admin to read a manual reference lacking submittedByFamilyId (family disjunct must not error the chain)', async () => {
+    await seedAdmin('adminH2b');
+    await seed('h2-manual-nofam', { babysitterUserId: 'bsA', type: 'manual', status: 'private' });
+    const admin = testEnv.authenticatedContext('adminH2b');
+    await assertSucceeds(getDoc(doc(admin.firestore(), 'references', 'h2-manual-nofam')));
+  });
+
+  it('denies a stranger reading a manual reference lacking submittedByFamilyId', async () => {
+    await seed('h2-manual-nofam2', { babysitterUserId: 'bsA', type: 'manual', status: 'private' });
+    const stranger = testEnv.authenticatedContext('stranger');
+    await assertFails(getDoc(doc(stranger.firestore(), 'references', 'h2-manual-nofam2')));
+  });
+
+  // ── Audited client queries replayed as list-mode rules tests ──
+  // (site → proving disjunct; see the PR audit matrix)
+  it('LIST #1/#2 public-status: babysitterUserId + status in [approved,published] (SearchPage / ExpandableBabysitterCard)', async () => {
+    await seed('h2-l1a', { babysitterUserId: 'bsL', type: 'family_submitted', status: 'approved' });
+    await seed('h2-l1b', { babysitterUserId: 'bsL', type: 'manual', status: 'published' });
+    const searcher = testEnv.authenticatedContext('searcher');
+    await assertSucceeds(getDocs(query(
+      collection(searcher.firestore(), 'references'),
+      where('babysitterUserId', '==', 'bsL'),
+      where('status', 'in', ['approved', 'published']),
+      limit(10),
+    )));
+  });
+
+  it('LIST #3/#4 involved: babysitterUserId == own uid (useEndorsements / babysitter DashboardPage)', async () => {
+    await seed('h2-l3', { babysitterUserId: 'bsSelf', type: 'manual', status: 'private' });
+    const bs = testEnv.authenticatedContext('bsSelf');
+    await assertSucceeds(getDocs(query(
+      collection(bs.firestore(), 'references'),
+      where('babysitterUserId', '==', 'bsSelf'),
+    )));
+  });
+
+  it('LIST #5 involved: submittedByUserId == own uid (useSubmittedEndorsements / family DashboardPage after fix)', async () => {
+    await seed('h2-l5', {
+      babysitterUserId: 'bsX', submittedByUserId: 'parentSelf', submittedByFamilyId: 'famZ',
+      type: 'family_submitted', status: 'private',
+    });
+    const sub = testEnv.authenticatedContext('parentSelf');
+    await assertSucceeds(getDocs(query(
+      collection(sub.firestore(), 'references'),
+      where('submittedByUserId', '==', 'parentSelf'),
+    )));
+  });
+
+  it('LIST #7 public-status: tutorUserId + status in [approved,published] (TutorCard)', async () => {
+    await seed('h2-l7', { tutorUserId: 'tutorL', appSource: 'study', status: 'approved' });
+    const viewer = testEnv.authenticatedContext('familyViewer');
+    await assertSucceeds(getDocs(query(
+      collection(viewer.firestore(), 'references'),
+      where('tutorUserId', '==', 'tutorL'),
+      where('status', 'in', ['approved', 'published']),
+      limit(10),
+    )));
+  });
+
+  it('LIST #8/#9 involved: tutorUserId == own uid (EndorsementsPage / tutor DashboardPage)', async () => {
+    await seed('h2-l8', {
+      tutorUserId: 'tutorSelf', appSource: 'study', submittedByUserId: 'p', submittedByFamilyId: 'f',
+      type: 'family_submitted', status: 'private', createdAt: new Date(),
+    });
+    const tutor = testEnv.authenticatedContext('tutorSelf');
+    await assertSucceeds(getDocs(query(
+      collection(tutor.firestore(), 'references'),
+      where('tutorUserId', '==', 'tutorSelf'),
+      orderBy('createdAt', 'desc'),
+    )));
+  });
+
+  it('LIST #10 family: submittedByFamilyId == mine + appSource == study (family RequestsPage)', async () => {
+    await seedFamily('famReq', ['parentReq']);
+    await seed('h2-l10', {
+      tutorUserId: 'tutorA', appSource: 'study', submittedByUserId: 'parentReq',
+      submittedByFamilyId: 'famReq', type: 'family_submitted', status: 'private',
+    });
+    const fam = testEnv.authenticatedContext('parentReq');
+    await assertSucceeds(getDocs(query(
+      collection(fam.firestore(), 'references'),
+      where('submittedByFamilyId', '==', 'famReq'),
+      where('appSource', '==', 'study'),
+    )));
+  });
+
+  it('LIST admin: an unfiltered list is allowed for an admin (isAdmin is doc-independent)', async () => {
+    await seedAdmin('adminList');
+    await seed('h2-la1', { babysitterUserId: 'bsA', type: 'manual', status: 'private' });
+    await seed('h2-la2', { tutorUserId: 'tutorA', appSource: 'study', status: 'private' });
+    const admin = testEnv.authenticatedContext('adminList');
+    await assertSucceeds(getDocs(collection(admin.firestore(), 'references')));
+  });
+
+  it('LIST denied: an unfiltered non-admin list is not provable', async () => {
+    await seed('h2-ld1', { babysitterUserId: 'bsA', type: 'manual', status: 'approved' });
+    const stranger = testEnv.authenticatedContext('stranger');
+    await assertFails(getDocs(collection(stranger.firestore(), 'references')));
+  });
+
+  it("LIST denied: querying another family's endorsements (not a member) is denied", async () => {
+    await seedFamily('famNotMine', ['someoneElse']);
+    await seed('h2-ld2', {
+      tutorUserId: 'tutorA', appSource: 'study', submittedByUserId: 'someoneElse',
+      submittedByFamilyId: 'famNotMine', type: 'family_submitted', status: 'private',
+    });
+    const outsider = testEnv.authenticatedContext('outsiderFam');
+    await assertFails(getDocs(query(
+      collection(outsider.firestore(), 'references'),
+      where('submittedByFamilyId', '==', 'famNotMine'),
+      where('appSource', '==', 'study'),
+    )));
   });
 });
 
