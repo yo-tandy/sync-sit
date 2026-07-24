@@ -4,10 +4,7 @@ import { getCorsOrigin } from '@ejm/shared-functions/config/cors.js';
 import { writeUserActivity } from '@ejm/shared-functions/admin/writeAuditLog.js';
 import { sendNotificationEmail } from '@ejm/shared-functions/config/email.js';
 import { sendPushNotification } from '@ejm/shared-functions/config/push.js';
-import {
-  parisWallClockPosition,
-  parisWallTimeToUtc,
-} from '@ejm/shared-functions/scheduled/parisTime.js';
+import { parisWallTimeToUtc } from '@ejm/shared-functions/scheduled/parisTime.js';
 import {
   getParentProfile,
   timeToSlotIndex,
@@ -18,23 +15,16 @@ import type {
   StudyUser,
   TutorProfile,
   SubjectOffering,
-  LocationPref,
 } from '@ejm/study-core';
 import {
   getSchoolYearsInRange,
   expandRecurringDates,
   incrementDate,
-  type DayOverride,
 } from '@ejm/study-core';
 import { parisDateString } from '@ejm/shared-functions/scheduled/parisTime.js';
 import { bookSessionInputSchema } from '../validation/session.js';
-import {
-  computeDateAvailability,
-  sessionToConfirmedBlock,
-  type WeeklyGrid,
-  type HolidayPeriod,
-  type DateAvailabilityInputs,
-} from '../availability/computeDateAvailability.js';
+import { computeSingleDateAvailability } from '../availability/singleDateAvailability.js';
+import type { HolidayPeriod } from '../availability/computeDateAvailability.js';
 
 /** Notice window: families cannot book within this many hours of "now". */
 const NOTICE_HOURS = 24;
@@ -53,108 +43,6 @@ const DAY_LABELS: Record<DayOfWeek, string> = {
   sat: 'Saturday',
   sun: 'Sunday',
 };
-
-/**
- * Best-effort single-date availability grid for the requested tutor+date.
- *
- * Loads this one date's inputs and runs the SHARED per-date composition
- * (computeDateAvailability) — the same one getTutorAvailability and the confirm
- * transaction use — so the family sees, requests, and gets exactly one picture.
- * Deliberately BEST-EFFORT: pending sessions never block (only confirmed blocks
- * are subtracted); the authoritative claim is the confirm transaction.
- */
-async function computeSingleDateAvailability(
-  tutorUserId: string,
-  date: string,
-  paddingMin: number,
-): Promise<boolean[]> {
-  const scheduleSnap = await db.collection('schedules').doc(tutorUserId).get();
-  const schedule = scheduleSnap.data();
-  const weekly: WeeklyGrid = (schedule?.weekly as WeeklyGrid) ?? {};
-  const holidayMode = schedule?.holidayMode as string | undefined;
-  const holidaySchedules = schedule?.holidaySchedules as
-    | Record<string, WeeklyGrid>
-    | undefined;
-
-  const overrideSnap = await db
-    .collection('schedules')
-    .doc(tutorUserId)
-    .collection('overrides')
-    .doc(date)
-    .get();
-  const overrideData = overrideSnap.data();
-  const override: DayOverride | undefined = overrideData
-    ? {
-        type: overrideData.type as DayOverride['type'],
-        slots: overrideData.slots as boolean[] | undefined,
-      }
-    : undefined;
-
-  // Holiday periods for this date's school year (only when holidayMode differs).
-  let holidayPeriods: HolidayPeriod[] = [];
-  if (holidayMode === 'different') {
-    const years = getSchoolYearsInRange(date, date);
-    const holidaySnaps = await Promise.all(
-      years.map((y) => db.collection('holidays').doc(y).get()),
-    );
-    for (const snap of holidaySnaps) {
-      const p = snap.data()?.periods as HolidayPeriod[] | undefined;
-      if (p) holidayPeriods.push(...p);
-    }
-  }
-
-  // Confirmed sessions on this date → blocks subtracted from the grid.
-  // Uses the (tutorUserId, status, date) composite index.
-  const sessionsSnap = await db
-    .collection('study-sessions')
-    .where('tutorUserId', '==', tutorUserId)
-    .where('status', '==', 'confirmed')
-    .where('date', '==', date)
-    .get();
-  const confirmedBlocks = sessionsSnap.docs
-    .filter((doc) => doc.data().date)
-    .map((doc) => {
-      const s = doc.data();
-      return sessionToConfirmedBlock({
-        startTime: s.startTime as string,
-        endTime: s.endTime as string,
-        location: s.location as LocationPref,
-      });
-    });
-
-  // Scheduled recurring INSTANCES on this date → also subtracted. On a holiday-
-  // schedule date a recurring occurrence's override claim is precedence-invisible
-  // (holidayGrid ?? override ?? weekly), so this direct subtraction is the guard
-  // that keeps a family from requesting a slot already held by an instance. Only
-  // 'scheduled' instances block. Uses the (tutorUserId, status, date) CG index.
-  const instancesSnap = await db
-    .collectionGroup('instances')
-    .where('tutorUserId', '==', tutorUserId)
-    .where('status', '==', 'scheduled')
-    .where('date', '==', date)
-    .get();
-  for (const doc of instancesSnap.docs) {
-    const s = doc.data();
-    confirmedBlocks.push(
-      sessionToConfirmedBlock({
-        startTime: s.startTime as string,
-        endTime: s.endTime as string,
-        location: s.location as LocationPref,
-      }),
-    );
-  }
-
-  const inputs: DateAvailabilityInputs = {
-    weekly,
-    holidayMode,
-    holidaySchedules,
-    holidayPeriods,
-    override,
-    confirmedBlocks,
-    paddingMin,
-  };
-  return computeDateAvailability(date, inputs, parisWallClockPosition(new Date()), NOTICE_HOURS);
-}
 
 /**
  * bookSession — a verified family with an accepted contact request requests a

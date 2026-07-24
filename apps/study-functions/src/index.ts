@@ -5,6 +5,7 @@ export { getTutorAvailability } from './availability/getTutorAvailability.js';
 export { respondToTutorContactRequest } from './contact/respondToTutorContactRequest.js';
 export { cancelContactRequest } from './contact/cancelContactRequest.js';
 export { bookSession } from './sessions/bookSession.js';
+export { proposeSession } from './sessions/proposeSession.js';
 export { respondToSession } from './sessions/respondToSession.js';
 export { cancelSession } from './sessions/cancelSession.js';
 export { cancelSessionInstance } from './sessions/cancelSessionInstance.js';
