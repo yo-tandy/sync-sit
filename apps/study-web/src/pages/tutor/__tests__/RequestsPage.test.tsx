@@ -186,4 +186,17 @@ describe('tutor RequestsPage', () => {
     expect(screen.queryByRole('button', { name: /accept/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^decline$/i })).not.toBeInTheDocument();
   });
+
+  // ── Task 2: accepted requests unlock a tutor-initiated proposal ──
+  it('offers "Propose a session" on an accepted row only (not pending/declined)', async () => {
+    h.requests = [
+      reqDoc({ requestId: 'r1', familyName: 'Accepted Fam', status: 'accepted' }),
+      reqDoc({ requestId: 'r2', familyName: 'Declined Fam', status: 'declined' }),
+      reqDoc({ requestId: 'r3', familyName: 'Pending Fam', status: 'pending' }),
+    ];
+    renderWithProviders(<RequestsPage />);
+    await screen.findByText(/Accepted Fam/);
+
+    expect(screen.getAllByRole('button', { name: /propose a session/i })).toHaveLength(1);
+  });
 });

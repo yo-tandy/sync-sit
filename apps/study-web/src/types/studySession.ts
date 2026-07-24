@@ -14,6 +14,11 @@ export interface StudySessionDoc {
   sessionId: string;
   familyId: string;
   tutorUserId: string;
+  // Who initiated: absent/`'family'` = a family-initiated request (the tutor
+  // confirms); `'provider'` = a TUTOR PROPOSAL (V1.1 feature 3) the FAMILY
+  // confirms, picking students at accept. Drives the pending-row rendering on
+  // both portals (family sees Accept/Decline; tutor sees "Awaiting the family").
+  proposedBy?: 'provider' | 'family';
   subject: string;
   level: string;
   rate: number;

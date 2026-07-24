@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
@@ -31,6 +32,7 @@ const STATUS_VARIANT: Record<StudyContactRequestStatus, 'amber' | 'green' | 'gra
 
 export function RequestsPage() {
   const { t, i18n } = useTranslation();
+  const navigate = useNavigate();
   const { firebaseUser } = useAuthStore();
   const uid = firebaseUser?.uid ?? null;
 
@@ -191,6 +193,26 @@ export function RequestsPage() {
                       {t(`tutor.requests.status.${r.status}`)}
                     </Badge>
                   </div>
+                  {/* An accepted request unlocks tutor-initiated proposals. */}
+                  {r.status === 'accepted' && (
+                    <div className="mt-3">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() =>
+                          navigate(`/tutor/propose/${r.familyId}`, {
+                            state: {
+                              familyName: r.familyName,
+                              subject: r.subject,
+                              level: r.level,
+                            },
+                          })
+                        }
+                      >
+                        {t('tutor.sessions.propose.cta')}
+                      </Button>
+                    </div>
+                  )}
                 </Card>
               ))}
             </div>
