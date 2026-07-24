@@ -70,6 +70,9 @@ export const TutorEndorsementsPage = lazy(() =>
 export const TutorSessionsPage = lazy(() =>
   import('@/pages/tutor/SessionsPage').then((m) => ({ default: m.SessionsPage })),
 );
+export const TutorProposeSessionPage = lazy(() =>
+  import('@/pages/tutor/ProposeSessionPage').then((m) => ({ default: m.ProposeSessionPage })),
+);
 
 // Family portal
 export const FamilyDashboardPage = lazy(() =>

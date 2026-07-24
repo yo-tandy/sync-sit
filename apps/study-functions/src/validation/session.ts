@@ -125,14 +125,68 @@ export const bookSessionInputSchema = z
 export type BookSessionInput = z.infer<typeof bookSessionInputSchema>;
 
 /**
- * Input schema for the `respondToSession` callable: a tutor confirms or
- * declines a pending session request.
+ * Input schema for the `proposeSession` callable: a tutor proposes a concrete
+ * one-time session to an approved, verified family (V1.1 feature 3). The
+ * tutor-side mirror of a one_time bookSession — no `type` (one_time only, a
+ * locked v1 decision), no `studentIds` (the family picks students at accept),
+ * no recurring fields. `familyId` is the target family (validated against the
+ * tutor's own approvedFamilies server-side).
+ */
+export const proposeSessionInputSchema = z.object({
+  familyId: z.string().min(1, 'Family ID is required'),
+  subject: z.enum(SUBJECTS, {
+    errorMap: () => ({ message: 'Subject must be one of the supported subjects' }),
+  }),
+  level: z.enum(CLASS_LEVELS, {
+    errorMap: () => ({ message: 'Level must be one of the supported class levels' }),
+  }),
+  date: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format'),
+  startTime: z
+    .string()
+    .regex(/^\d{2}:\d{2}$/, 'Start time must be in HH:MM format'),
+  sessionLengthMinutes: z.union([
+    z.literal(SESSION_LENGTHS[0]),
+    z.literal(SESSION_LENGTHS[1]),
+    z.literal(SESSION_LENGTHS[2]),
+    z.literal(SESSION_LENGTHS[3]),
+  ], {
+    errorMap: () => ({
+      message: `Session length must be one of: ${SESSION_LENGTHS.join(', ')} minutes`,
+    }),
+  }),
+  location: z.enum(LOCATION_PREFS, {
+    errorMap: () => ({ message: 'Location must be one of the supported location preferences' }),
+  }),
+  message: z.string().optional(),
+  address: z.string().optional(),
+  latLng: z
+    .object({ lat: z.number(), lng: z.number() })
+    .optional(),
+});
+
+export type ProposeSessionInput = z.infer<typeof proposeSessionInputSchema>;
+
+/**
+ * Input schema for the `respondToSession` callable: the responding party
+ * confirms or declines a pending session. For a family-initiated request the
+ * TUTOR responds; for a tutor PROPOSAL (proposedBy === 'provider') the FAMILY
+ * responds and MUST pass `studentIds` on confirm (they pick students at accept).
+ * `studentIds` is ignored on a family-initiated confirm (the roster is already on
+ * the doc from book time) — validated here as optional, enforced-when-required in
+ * the callable so the exact code ('invalid-argument' when a proposal confirm omits
+ * it) stays server-authoritative.
  */
 export const respondToSessionSchema = z.object({
   sessionId: z.string().min(1, 'Session ID is required'),
   action: z.enum(['confirm', 'decline'], {
     errorMap: () => ({ message: "Action must be 'confirm' or 'decline'" }),
   }),
+  studentIds: z
+    .array(z.string().min(1))
+    .min(1, 'At least one student must be specified')
+    .optional(),
 });
 
 export type RespondToSessionInput = z.infer<typeof respondToSessionSchema>;

@@ -1,0 +1,31 @@
+# Tutor-Initiated Booking (V1.1 feature 3 — study-only v1) Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: superpowers:subagent-driven-development.
+
+**Goal:** tutors propose concrete one_time sessions to approved families; the family accepts (picking students) or declines. The family's accept runs the SAME transactional slot claim as a tutor confirm — the claim is always on the tutor's schedule; only the roles flip.
+
+**Locked decisions (user + design):** study-only v1 (`ProposedBy` type seeded in shared-core as sit's adoption seam — document as the deliberate roadmap deviation, trial-sessions precedent); one_time-only proposals; accept-as-is (no counter-offers); eligibility = approvedFamilies + family isFullyVerified (bookSession's gate mirrored); family picks students at accept; 24h notice both ends; silent design decisions per the design doc.
+
+**Core invariants:** "pending is a proposal, confirm is the claim" — proposals claim NOTHING at propose time; the proposer can NEVER confirm their own doc (a tutor self-confirming fabricates family consent — the role guard is exclusive-by-proposedBy, test-pinned); legacy docs (no proposedBy) behave exactly as before (absent = 'family').
+
+**Templates (the design traced these precisely — follow it):** respondToSession.ts one_time confirm (reusable: notice re-check, tx claim reads, computeDateAvailability, buildMergedOverride, post-tx auto-decline sweep — all keyed on session.tutorUserId already EXCEPT the pre-tx schedule config load at :90-93 which keys on the CALLER and must re-key to session.tutorUserId; role-bound: auth guard, confirm payload gains students, decline reason 'declined_by_family', notification direction); bookSession.ts (gate mirror for proposeSession; extract computeSingleDateAvailability to availability/singleDateAvailability.ts shared by both; kid-snapshot loop :253-265 reused at confirm-time); cancelSession.ts (dual-role resolution precedent).
+
+## Task 1: backend (TDD, red-first)
+- shared-core: `export type ProposedBy = 'provider' | 'family';` in types/appointment.ts (+index). SessionDoc: `proposedBy?: ProposedBy` (comment: absent='family'; study invariant proposedBy==='provider' ⟺ createdByUserId===tutorUserId; stored explicitly as the cross-app seam). studySession.ts web mirror comes in Task 2.
+- Extract computeSingleDateAvailability from bookSession (unchanged behavior — its 20 tests are the proof).
+- `proposeSession` callable + zod: tutor-side mirror of bookSession one_time (gates per the design: active+enrolled tutor; familyId ∈ own approvedFamilies; family exists+isFullyVerified; own offering subject/level → rate snapshot; length/location in own profile; 24h notice; best-effort availability; duplicate-pending guard — same equality query, no new index). Doc: proposedBy 'provider', createdByUserId=tutor, studentIds [], students [], parentName '', familyName denormalized server-side. notifyAllParents type 'study_session_proposed'.
+- respondToSession dual-role: re-key the pre-tx schedule load to session.tutorUserId (peek session first — THE hot-path re-sequencing; the existing respond suites staying green is the regression gate); auth by proposedBy (provider→caller must be parent of session.familyId, else→tutor, NEVER the proposer); zod gains optional studentIds (min 1 when present); confirm of a provider proposal REQUIRES studentIds (invalid-argument otherwise), validates kid ownership + denormalizes students/parentName pre-tx (non-contended reads, comment); decline → statusReason 'declined_by_family'; family-responds notifications go TO the tutor (bookSession's tutor-notify block pattern); auto-decline sweep untouched (verified proposedBy-agnostic) but generalize the slot_taken copy to 'is no longer available'.
+- cancelSession: verify pending proposals cancel as a pure flip by either party (should already work via the dual-role detection — pin with a test, don't change code unless it fails).
+- Tests per the design's matrix: propose-session.test.ts (happy shape incl. empty students; every gate negative with exact codes; occupied slot; duplicate; notification) + respond-to-proposal.test.ts (family confirm → claim + students/parentName; SELF-CONFIRM REJECTED; unrelated caller; slot-taken-between → pending preserved + no override delta; stale notice; decline reason; missing studentIds; foreign kid; auto-decline both directions; LEGACY doc regression — family respond rejected, tutor respond works) + cancel pin.
+- Commit: `feat(study-functions): tutor session proposals with family-confirmed claims`
+
+## Task 2: UI (TDD)
+- `pages/tutor/ProposeSessionPage.tsx` (lazy route): entry from RequestsPage ACCEPTED rows + SessionsPage History COMPLETED cards ('Propose a session', params familyId/familyName/subject/level); form from own profile (subjects/lengths/locations), date+time picker with client-side hinting from useSchedule's weekly grid (note: getTutorAvailability is parent-gated — do NOT call it as the tutor; server is authority, surface 'slot not available' like BookSessionPage). Payload exact; success dialog 'sent — {family} must accept'.
+- Family SessionsPage: pending rows with proposedBy==='provider' → 'Proposed by {tutorName}' badge + Accept/Decline (non-optimistic); Accept opens a student-picker dialog (kids load per BookSessionPage) → respondToSession({sessionId, action:'confirm', studentIds}); Decline = confirm dialog, no reason. Tutor SessionsPage: own proposal rows show 'Awaiting family', cancel only, NO accept/decline.
+- Sweep both portals + notification copy for students.length===0 rendering on pending proposals ('students: chosen on accept' i18n).
+- i18n EN+FR ({tutor,family}.sessions.propose.* etc.); studySession.ts mirror gains proposedBy.
+- Tests: propose payload + error surfacing; entry-button visibility (accepted/completed only); family Accept/Decline render only for provider proposals; student-picker payload; empty-students rendering; non-optimistic transitions.
+- Commit: `feat(study-web): propose-a-session flow for tutors and family accept`
+
+## Task 3: gates + push
+- FULL emulator suite (baseline post-#99: expect 567/64 + yours — verify and report); study-web (256 + yours), typecheck, lint (study-web ZERO — keep), build. Push feat/tutor-proposals. NO PR.

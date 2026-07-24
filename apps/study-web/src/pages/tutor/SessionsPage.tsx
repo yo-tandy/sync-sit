@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
@@ -100,6 +101,7 @@ function hasStarted(date?: string, startTime?: string): boolean {
  */
 export function SessionsPage() {
   const { t, i18n } = useTranslation();
+  const navigate = useNavigate();
   const { firebaseUser } = useAuthStore();
   const uid = firebaseUser?.uid ?? null;
 
@@ -521,7 +523,9 @@ export function SessionsPage() {
                   </p>
 
                   <p className="mt-1 text-xs text-gray-600">
-                    {s.students.map((st) => `${st.firstName} (${st.age})`).join(', ')}
+                    {s.students.length > 0
+                      ? s.students.map((st) => `${st.firstName} (${st.age})`).join(', ')
+                      : t('tutor.sessions.studentsOnAccept')}
                   </p>
 
                   <div className="mt-2 space-y-0.5 text-xs text-gray-700">
@@ -565,23 +569,43 @@ export function SessionsPage() {
                     </p>
                   )}
 
-                  <div className="mt-3 flex gap-2">
-                    <Button
-                      size="sm"
-                      disabled={actingId === s.sessionId}
-                      onClick={() => respond(s, 'confirm')}
-                    >
-                      {t('tutor.sessions.accept')}
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={actingId === s.sessionId}
-                      onClick={() => setDeclineTarget(s)}
-                    >
-                      {t('tutor.sessions.decline')}
-                    </Button>
-                  </div>
+                  {s.proposedBy === 'provider' ? (
+                    // The tutor's OWN proposal — the family accepts/declines. The
+                    // tutor may only withdraw it (cancelSession); NO accept/decline.
+                    <>
+                      <p className="mt-2 text-xs text-amber-700">
+                        {t('tutor.sessions.awaitingFamily')}
+                      </p>
+                      <div className="mt-3">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={cancelKey === s.sessionId}
+                          onClick={() => openCancel({ kind: 'session', session: s })}
+                        >
+                          {t('tutor.sessions.cancelSession')}
+                        </Button>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="mt-3 flex gap-2">
+                      <Button
+                        size="sm"
+                        disabled={actingId === s.sessionId}
+                        onClick={() => respond(s, 'confirm')}
+                      >
+                        {t('tutor.sessions.accept')}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={actingId === s.sessionId}
+                        onClick={() => setDeclineTarget(s)}
+                      >
+                        {t('tutor.sessions.decline')}
+                      </Button>
+                    </div>
+                  )}
                 </Card>
               ))}
             </div>
@@ -625,6 +649,26 @@ export function SessionsPage() {
                       onEdit={() => openNote({ session: s, initialText: s.postSessionNote ?? '' })}
                       copy={noteCopy}
                     />
+                  )}
+                  {/* Completed work → offer a fresh proposal to the same family. */}
+                  {s.status === 'completed' && (
+                    <div className="mt-3">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() =>
+                          navigate(`/tutor/propose/${s.familyId}`, {
+                            state: {
+                              familyName: s.familyName,
+                              subject: s.subject,
+                              level: s.level,
+                            },
+                          })
+                        }
+                      >
+                        {t('tutor.sessions.propose.cta')}
+                      </Button>
+                    </div>
                   )}
                 </Card>
               ))}

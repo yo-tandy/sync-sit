@@ -1,5 +1,5 @@
 import type { FirestoreTimestamp, LatLng } from '@ejm/shared-core';
-import type { RecurringSlot } from '@ejm/shared-core';
+import type { RecurringSlot, ProposedBy } from '@ejm/shared-core';
 import type { LocationPref } from '@ejm/study-core';
 import type { SessionStatus } from './status.js';
 
@@ -20,6 +20,13 @@ export interface SessionDoc {
   familyId: string;
   tutorUserId: string;
   createdByUserId: string;
+
+  // Who initiated this session. Absent on legacy docs (all pre-feature bookings)
+  // and treated as 'family' — a family-initiated request the tutor confirms. When
+  // 'provider' this is a TUTOR-INITIATED proposal (V1.1 feature 3): the tutor
+  // created it (createdByUserId === tutorUserId) and the FAMILY confirms/declines
+  // it (picking students at accept). The proposer can never confirm their own doc.
+  proposedBy?: ProposedBy;
 
   // What
   subject: string;

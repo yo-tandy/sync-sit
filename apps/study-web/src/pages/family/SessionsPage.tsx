@@ -2,12 +2,12 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
-import type { RecurringSlot } from '@ejm/shared-core';
+import type { RecurringSlot, KidDoc } from '@ejm/shared-core';
 import { db, functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { getParentProfile } from '@ejm/shared-core';
 import type { TutorEndorsementDoc } from '@ejm/study-core';
-import { Card, Button, Badge, TopNav, Spinner } from '@ejm/shared-ui';
+import { Card, Button, Badge, TopNav, Spinner, Dialog, Checkbox } from '@ejm/shared-ui';
 import { ReasonModal } from '@/components/sessions/ReasonModal';
 import { SessionInstanceList } from '@/components/sessions/SessionInstanceList';
 import { SessionNotes } from '@/components/sessions/SessionNotes';
@@ -117,6 +117,17 @@ export function SessionsPage() {
   // The completed session whose endorse dialog is open, or null.
   const [endorsing, setEndorsing] = useState<StudySessionDoc | null>(null);
 
+  // ── Provider-proposal response (V1.1 feature 3) ──
+  // The family's kids (for the accept student-picker), the accept/decline dialog
+  // targets, the picked students, and the in-flight/error state. NON-OPTIMISTIC:
+  // a proposal row only changes state after respondToSession resolves.
+  const [kids, setKids] = useState<{ kidId: string; firstName: string; age: number }[]>([]);
+  const [acceptTarget, setAcceptTarget] = useState<StudySessionDoc | null>(null);
+  const [declineTarget, setDeclineTarget] = useState<StudySessionDoc | null>(null);
+  const [selectedKids, setSelectedKids] = useState<Set<string>>(new Set());
+  const [respondingId, setRespondingId] = useState<string | null>(null);
+  const [respondError, setRespondError] = useState<string | null>(null);
+
   useEffect(() => {
     if (!familyId) return;
     let cancelled = false;
@@ -195,6 +206,101 @@ export function SessionsPage() {
 
   const markEndorsed = (tutorUserId: string) =>
     setEndorsedTutors((prev) => new Set(prev).add(tutorUserId));
+
+  // Load the family's kids (for the proposal accept picker), like BookSessionPage.
+  useEffect(() => {
+    if (!familyId) return;
+    let cancelled = false;
+    getDocs(collection(db, 'families', familyId, 'kids'))
+      .then((snap) => {
+        if (cancelled) return;
+        setKids(
+          snap.docs.map((d) => {
+            const k = d.data() as KidDoc;
+            return { kidId: d.id, firstName: k.firstName, age: k.age };
+          }),
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setKids([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [familyId]);
+
+  const openAccept = (s: StudySessionDoc) => {
+    setRespondError(null);
+    setSelectedKids(new Set());
+    setAcceptTarget(s);
+  };
+
+  const toggleKid = (id: string) =>
+    setSelectedKids((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  // Accept a tutor proposal, picking the attending students. Non-optimistic: the
+  // row flips to confirmed only after respondToSession resolves. We merge the
+  // chosen roster into the local doc so Upcoming renders it without a reload.
+  const submitAccept = async () => {
+    if (!acceptTarget || selectedKids.size === 0) return;
+    const s = acceptTarget;
+    const studentIds = [...selectedKids];
+    const chosen = kids
+      .filter((k) => selectedKids.has(k.kidId))
+      .map((k) => ({ firstName: k.firstName, age: k.age }));
+    setRespondError(null);
+    setRespondingId(s.sessionId);
+    try {
+      const fn = httpsCallable<
+        { sessionId: string; action: 'confirm'; studentIds: string[] },
+        { success: boolean }
+      >(functions, 'respondToSession');
+      await fn({ sessionId: s.sessionId, action: 'confirm', studentIds });
+      setSessions((rs) =>
+        (rs ?? []).map((x) =>
+          x.sessionId === s.sessionId ? { ...x, status: 'confirmed', students: chosen } : x,
+        ),
+      );
+      setAcceptTarget(null);
+    } catch (e) {
+      const code = (e as { code?: string })?.code ?? '';
+      setRespondError(
+        code.includes('failed-precondition')
+          ? t('family.sessions.proposalErrorSlot')
+          : t('family.sessions.proposalError'),
+      );
+    } finally {
+      setRespondingId(null);
+    }
+  };
+
+  // Decline a tutor proposal (no reason — a decline carries none). Non-optimistic.
+  const submitDecline = async () => {
+    if (!declineTarget) return;
+    const s = declineTarget;
+    setRespondError(null);
+    setRespondingId(s.sessionId);
+    try {
+      const fn = httpsCallable<{ sessionId: string; action: 'decline' }, { success: boolean }>(
+        functions,
+        'respondToSession',
+      );
+      await fn({ sessionId: s.sessionId, action: 'decline' });
+      setSessions((rs) =>
+        (rs ?? []).map((x) => (x.sessionId === s.sessionId ? { ...x, status: 'declined' } : x)),
+      );
+      setDeclineTarget(null);
+    } catch {
+      setRespondError(t('family.sessions.proposalError'));
+    } finally {
+      setRespondingId(null);
+    }
+  };
 
   // Format a "YYYY-MM-DD" date field-by-field (never `new Date(str)`, which reads
   // as UTC midnight and can slip a day in negative offsets).
@@ -506,33 +612,85 @@ export function SessionsPage() {
               {t('family.sessions.pendingTitle')}
             </h2>
             <div className="space-y-3">
-              {pending.map((s) => (
-                <Card key={s.sessionId}>
-                  {sessionHeader(s)}
-                  <div className="mt-2 space-y-0.5 text-xs text-gray-700">
-                    {s.type === 'one_time' ? (
-                      <p>
-                        {formatDateStr(s.date)} · {s.startTime}
-                        {s.endTime ? `–${s.endTime}` : ''}
-                      </p>
+              {pending.map((s) => {
+                const isProposal = s.proposedBy === 'provider';
+                return (
+                  <Card key={s.sessionId}>
+                    <p className="text-sm font-semibold text-gray-900">{s.tutorName}</p>
+                    <p className="text-xs text-gray-500">
+                      {t(`tutor.subjects.names.${s.subject}`)} · {s.level}
+                    </p>
+                    <p className="mt-1 text-xs text-gray-600">
+                      {s.students.length > 0
+                        ? s.students.map((st) => `${st.firstName} (${st.age})`).join(', ')
+                        : t('family.sessions.studentsOnAccept')}
+                    </p>
+                    <div className="mt-2 space-y-0.5 text-xs text-gray-700">
+                      {s.type === 'one_time' ? (
+                        <p>
+                          {formatDateStr(s.date)} · {s.startTime}
+                          {s.endTime ? `–${s.endTime}` : ''}
+                        </p>
+                      ) : (
+                        s.recurringSlots?.[0] && <p>{slotLine(s.recurringSlots[0])}</p>
+                      )}
+                      <p>{t(`family.sessions.location.${s.location}`)}</p>
+                    </div>
+
+                    {isProposal ? (
+                      // A TUTOR PROPOSAL — the family accepts (picking students) or declines.
+                      <>
+                        <div className="mt-2">
+                          <Badge variant="blue">
+                            {t('family.sessions.proposedBy', { name: s.tutorName })}
+                          </Badge>
+                        </div>
+                        {s.message && (
+                          <p className="mt-2 rounded-lg bg-gray-50 p-2 text-xs italic text-gray-600">
+                            {s.message}
+                          </p>
+                        )}
+                        <div className="mt-3 flex gap-2">
+                          <Button
+                            size="sm"
+                            disabled={respondingId === s.sessionId}
+                            onClick={() => openAccept(s)}
+                          >
+                            {t('family.sessions.accept')}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={respondingId === s.sessionId}
+                            onClick={() => {
+                              setRespondError(null);
+                              setDeclineTarget(s);
+                            }}
+                          >
+                            {t('family.sessions.decline')}
+                          </Button>
+                        </div>
+                      </>
                     ) : (
-                      s.recurringSlots?.[0] && <p>{slotLine(s.recurringSlots[0])}</p>
+                      <>
+                        <p className="mt-1 text-xs text-amber-700">
+                          {t('family.sessions.awaitingTutor')}
+                        </p>
+                        <div className="mt-3">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={cancelKey === s.sessionId}
+                            onClick={() => openCancel({ kind: 'session', session: s })}
+                          >
+                            {t('family.sessions.cancelRequest')}
+                          </Button>
+                        </div>
+                      </>
                     )}
-                    <p>{t(`family.sessions.location.${s.location}`)}</p>
-                  </div>
-                  <p className="mt-1 text-xs text-amber-700">{t('family.sessions.awaitingTutor')}</p>
-                  <div className="mt-3">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={cancelKey === s.sessionId}
-                      onClick={() => openCancel({ kind: 'session', session: s })}
-                    >
-                      {t('family.sessions.cancelRequest')}
-                    </Button>
-                  </div>
-                </Card>
-              ))}
+                  </Card>
+                );
+              })}
             </div>
           </div>
         )}
@@ -597,6 +755,61 @@ export function SessionsPage() {
           onEndorsed={() => markEndorsed(endorsing.tutorUserId)}
         />
       )}
+
+      {/* ── Accept a proposal: pick the attending students ── */}
+      <Dialog open={acceptTarget !== null} onClose={() => setAcceptTarget(null)}>
+        <h3 className="mb-2 text-lg font-bold">{t('family.sessions.proposalAcceptTitle')}</h3>
+        <p className="mb-4 text-sm text-gray-600">{t('family.sessions.proposalAcceptDesc')}</p>
+        {kids.length === 0 ? (
+          <p className="mb-4 text-xs text-gray-500">{t('family.sessions.noStudents')}</p>
+        ) : (
+          <div className="mb-4 space-y-2">
+            {kids.map((k) => (
+              <Checkbox
+                key={k.kidId}
+                checked={selectedKids.has(k.kidId)}
+                onChange={() => toggleKid(k.kidId)}
+                label={`${k.firstName} (${k.age})`}
+              />
+            ))}
+          </div>
+        )}
+        {respondError && <p className="mb-2 text-sm text-red-600">{respondError}</p>}
+        <div className="flex gap-2">
+          <Button
+            className="flex-1"
+            disabled={selectedKids.size === 0 || respondingId !== null}
+            onClick={submitAccept}
+          >
+            {respondingId !== null
+              ? t('family.sessions.proposalAccepting')
+              : t('family.sessions.proposalAcceptCta')}
+          </Button>
+          <Button variant="ghost" className="flex-1" onClick={() => setAcceptTarget(null)}>
+            {t('common.cancel')}
+          </Button>
+        </div>
+      </Dialog>
+
+      {/* ── Decline a proposal (no reason) ── */}
+      <Dialog open={declineTarget !== null} onClose={() => setDeclineTarget(null)}>
+        <h3 className="mb-2 text-lg font-bold">{t('family.sessions.proposalDeclineTitle')}</h3>
+        <p className="mb-5 text-sm text-gray-600">{t('family.sessions.proposalDeclineDesc')}</p>
+        {respondError && <p className="mb-2 text-sm text-red-600">{respondError}</p>}
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            className="flex-1"
+            disabled={respondingId !== null}
+            onClick={submitDecline}
+          >
+            {t('family.sessions.proposalDeclineCta')}
+          </Button>
+          <Button variant="ghost" className="flex-1" onClick={() => setDeclineTarget(null)}>
+            {t('common.cancel')}
+          </Button>
+        </div>
+      </Dialog>
 
       {/* ── Cancellation (reason required, ≥3 chars) ── */}
       <ReasonModal

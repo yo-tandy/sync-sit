@@ -489,6 +489,124 @@ describe('family SessionsPage — endorse after completion', () => {
   }
 });
 
+// ── Task 2: tutor proposals — the family accepts (picking students) / declines ──
+// A pending proposedBy:'provider' doc is the FAMILY's to act on: a Proposed-by
+// badge + Accept/Decline. Accept opens a student picker → respondToSession
+// confirm with studentIds; decline → respondToSession decline (no reason). A
+// family-initiated pending is UNCHANGED (cancel-request, no accept/decline).
+describe('family SessionsPage — tutor proposals', () => {
+  beforeEach(() => {
+    reset();
+    // Serve the family's kids for the accept student-picker alongside the
+    // sessions/instances/references reads.
+    const kids = [
+      { kidId: 'k1', firstName: 'Emma', age: 10 },
+      { kidId: 'k2', firstName: 'Noah', age: 8 },
+    ];
+    h.getDocs.mockImplementation((q: { query?: { path: string }[]; path?: string }) => {
+      const path = q?.query?.[0]?.path ?? q?.path ?? '';
+      if (path.endsWith('/kids')) {
+        return Promise.resolve({
+          docs: kids.map((k) => ({ id: k.kidId, data: () => ({ firstName: k.firstName, age: k.age }) })),
+        });
+      }
+      if (path.endsWith('/instances')) {
+        const sid = path.split('/')[1];
+        const rows = h.instances[sid] ?? [];
+        return Promise.resolve({ docs: rows.map((r) => ({ id: r.instanceId, data: () => r })) });
+      }
+      if (path === 'references') {
+        return Promise.resolve({ docs: h.refs.map((r) => ({ id: r.referenceId, data: () => r })) });
+      }
+      return Promise.resolve({ docs: h.sessions.map((s) => ({ id: s.sessionId, data: () => s })) });
+    });
+  });
+
+  function proposal(overrides: Record<string, unknown> = {}) {
+    return oneTime({
+      sessionId: 'sPr',
+      proposedBy: 'provider',
+      students: [],
+      parentName: '',
+      tutorName: 'Alex Roy',
+      status: 'pending',
+      ...overrides,
+    });
+  }
+
+  it('renders a proposal with the Proposed-by badge + Accept/Decline and the empty-roster hint', async () => {
+    h.sessions = [proposal()];
+    renderWithProviders(<SessionsPage />);
+
+    expect(await screen.findByText(/proposed by alex roy/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^accept$/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^decline$/i })).toBeInTheDocument();
+    // A proposal is not the family's to cancel (they accept or decline).
+    expect(screen.queryByRole('button', { name: /cancel request/i })).not.toBeInTheDocument();
+    // Empty roster → 'chosen when you accept' hint.
+    expect(screen.getByText(/you choose when you accept/i)).toBeInTheDocument();
+  });
+
+  it('a family-initiated pending shows cancel-request, NOT Accept/Decline', async () => {
+    h.sessions = [oneTime({ status: 'pending' })]; // no proposedBy
+    renderWithProviders(<SessionsPage />);
+    await screen.findByText(/Alex Roy/);
+
+    expect(screen.queryByRole('button', { name: /^accept$/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /cancel request/i })).toBeInTheDocument();
+  });
+
+  it('accept → student picker → respondToSession confirm with the chosen studentIds', async () => {
+    h.sessions = [proposal()];
+    renderWithProviders(<SessionsPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /^accept$/i }));
+    fireEvent.click(await screen.findByLabelText(/Emma \(10\)/));
+    fireEvent.click(screen.getByRole('button', { name: /accept session/i }));
+
+    await waitFor(() =>
+      expect(h.callable).toHaveBeenCalledWith('respondToSession', {
+        sessionId: 'sPr',
+        action: 'confirm',
+        studentIds: ['k1'],
+      }),
+    );
+  });
+
+  it('decline → respondToSession decline (no reason)', async () => {
+    h.sessions = [proposal()];
+    renderWithProviders(<SessionsPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /^decline$/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /yes, decline/i }));
+
+    await waitFor(() =>
+      expect(h.callable).toHaveBeenCalledWith('respondToSession', {
+        sessionId: 'sPr',
+        action: 'decline',
+      }),
+    );
+  });
+
+  it('accept is non-optimistic — the row flips only after the callable resolves', async () => {
+    let resolve!: (v: unknown) => void;
+    h.callable.mockReturnValue(new Promise((r) => (resolve = r)));
+    h.sessions = [proposal()];
+    renderWithProviders(<SessionsPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /^accept$/i }));
+    fireEvent.click(await screen.findByLabelText(/Emma \(10\)/));
+    const cta = screen.getByRole('button', { name: /accept session/i });
+    fireEvent.click(cta);
+    expect(cta).toBeDisabled();
+
+    resolve({ data: { success: true } });
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: /accept session/i })).not.toBeInTheDocument(),
+    );
+  });
+});
+
 // ── Task 2: session notes (the family authors the PRE-note) ──
 // The window: the pre-note is editable until the session STARTS, so it surfaces
 // on upcoming (not-started) rows. Completed rows show the tutor's post-note

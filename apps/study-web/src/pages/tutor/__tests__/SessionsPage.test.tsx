@@ -767,3 +767,43 @@ describe('tutor SessionsPage — session notes (post)', () => {
     await waitFor(() => expect(screen.queryByRole('textbox')).not.toBeInTheDocument());
   });
 });
+
+// ── Task 2: the tutor's OWN proposals + propose entry points ──
+// A pending proposedBy:'provider' doc is the FAMILY's to accept — the tutor sees
+// "Awaiting the family" and may only withdraw it (cancel), NEVER accept/decline.
+// Completed cards offer "Propose a session" to re-engage the family.
+describe('tutor SessionsPage — proposals & entry', () => {
+  beforeEach(() => reset());
+
+  it('renders a provider proposal as awaiting-family, cancel-only (no accept/decline)', async () => {
+    h.sessions = [oneTime({ sessionId: 'sPr', proposedBy: 'provider', students: [], status: 'pending' })];
+    renderWithProviders(<SessionsPage />);
+
+    expect(await screen.findByText(/awaiting the family/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /accept/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^decline$/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /cancel session/i })).toBeInTheDocument();
+    // Empty roster → 'chosen when the family accepts' hint.
+    expect(screen.getByText(/chosen when the family accepts/i)).toBeInTheDocument();
+  });
+
+  it('a family-initiated pending still shows Accept/Decline (not awaiting-family)', async () => {
+    h.sessions = [oneTime({ status: 'pending' })]; // no proposedBy
+    renderWithProviders(<SessionsPage />);
+
+    expect(await screen.findByRole('button', { name: /accept/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^decline$/i })).toBeInTheDocument();
+    expect(screen.queryByText(/awaiting the family/i)).not.toBeInTheDocument();
+  });
+
+  it('offers "Propose a session" on a completed card only (not declined/cancelled)', async () => {
+    h.sessions = [
+      oneTime({ sessionId: 'c1', status: 'completed' }),
+      oneTime({ sessionId: 'd1', status: 'declined' }),
+    ];
+    renderWithProviders(<SessionsPage />);
+
+    await screen.findByText(/History/i);
+    expect(screen.getAllByRole('button', { name: /propose a session/i })).toHaveLength(1);
+  });
+});

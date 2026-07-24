@@ -420,4 +420,44 @@ describe('cancelSession', () => {
     expect(parent.statusReason).toBe('cancelled_by_family');
     expect(parent.cancelledFromStatus).toBe('pending');
   });
+
+  // ── Pending provider PROPOSAL cancels as a pure flip by either party ──
+  // The dual-role detection already keys off tutorUserId vs family membership,
+  // so a proposal (proposedBy:'provider', createdBy:tutor) needs no special path.
+
+  /** Seed a pending provider proposal (created by the tutor, empty roster). */
+  async function seedProposal(sessionId: string): Promise<string> {
+    await getDb().collection('study-sessions').doc(sessionId).set({
+      sessionId, tutorUserId: seed.tutor2.uid, familyId: seed.family1Id,
+      createdByUserId: seed.tutor2.uid, proposedBy: 'provider',
+      subject: 'math', level: '6e', rate: 25, studentIds: [], students: [],
+      familyName: 'Dupont', parentName: '', tutorName: 'Yael Cohen',
+      type: 'one_time', date: FUTURE_MON, startTime: '16:00', endTime: '17:00',
+      sessionLengthMinutes: 60, location: 'online', paddingMinutes: 0,
+      status: 'pending', createdAt: new Date(), updatedAt: new Date(),
+    });
+    return sessionId;
+  }
+
+  it('cancels a pending proposal by the proposing tutor (pure flip, cancelled_by_tutor)', async () => {
+    const id = await seedProposal('prop-cancel-tutor');
+    const res = await callFunction('cancelSession', { sessionId: id, reason: 'changed my mind' }, tutor2Token);
+    expect(res).toMatchObject({ success: true });
+    const s = await sessionData(id);
+    expect(s.status).toBe('cancelled');
+    expect(s.statusReason).toBe('cancelled_by_tutor');
+    expect(s.cancelledFromStatus).toBe('pending');
+    expect((await overrideRef(FUTURE_MON).get()).exists).toBe(false);
+  });
+
+  it('cancels a pending proposal by the family (pure flip, cancelled_by_family)', async () => {
+    const id = await seedProposal('prop-cancel-family');
+    const res = await callFunction('cancelSession', { sessionId: id, reason: 'not needed' }, parent1Token);
+    expect(res).toMatchObject({ success: true });
+    const s = await sessionData(id);
+    expect(s.status).toBe('cancelled');
+    expect(s.statusReason).toBe('cancelled_by_family');
+    expect(s.cancelledFromStatus).toBe('pending');
+    expect((await overrideRef(FUTURE_MON).get()).exists).toBe(false);
+  });
 });

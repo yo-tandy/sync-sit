@@ -3,13 +3,15 @@ import { db } from '@ejm/shared-functions/config/firebase.js';
 import { getCorsOrigin } from '@ejm/shared-functions/config/cors.js';
 import { writeUserActivity } from '@ejm/shared-functions/admin/writeAuditLog.js';
 import { notifyAllParents } from '@ejm/shared-functions/config/notifyParents.js';
+import { sendNotificationEmail } from '@ejm/shared-functions/config/email.js';
+import { sendPushNotification } from '@ejm/shared-functions/config/push.js';
 import {
   parisWallClockPosition,
   parisWallTimeToUtc,
   parisDateString,
 } from '@ejm/shared-functions/scheduled/parisTime.js';
-import { timeToSlotIndex } from '@ejm/shared-core';
-import type { RecurringSlot } from '@ejm/shared-core';
+import { timeToSlotIndex, getParentProfile } from '@ejm/shared-core';
+import type { RecurringSlot, User } from '@ejm/shared-core';
 import type { LocationPref } from '@ejm/study-core';
 import {
   getSchoolYearsInRange,
@@ -63,10 +65,79 @@ export const respondToSession = onCall(
         parsed.error.issues[0]?.message || 'Invalid request parameters',
       );
     }
-    const { sessionId, action } = parsed.data;
+    const { sessionId, action, studentIds } = parsed.data;
 
     const now = new Date();
     const sessionRef = db.collection('study-sessions').doc(sessionId);
+
+    // ── Peek the session FIRST (THE hot-path re-sequencing) ──
+    // The pre-tx schedule/holiday config load below must key on the session's
+    // TUTOR, not the caller — for a tutor PROPOSAL the caller is the family, not
+    // the tutor whose schedule is claimed. So we resolve tutorUserId (and the
+    // role/consent gate) from a peek here; the transaction still re-reads the
+    // session authoritatively. For a family-initiated session caller === tutor,
+    // so this peek changes nothing (the existing respond suites stay green).
+    const peekSnap = await sessionRef.get();
+    if (!peekSnap.exists) {
+      throw new HttpsError('not-found', 'Session not found');
+    }
+    const peekSession = peekSnap.data()!;
+    const sessionTutorUserId = peekSession.tutorUserId as string;
+    const proposedBy = (peekSession.proposedBy as string | undefined) ?? 'family';
+    const respondedByFamily = proposedBy === 'provider';
+
+    // ── Role/consent gate (exclusive-by-proposedBy) ──
+    // provider proposal → the FAMILY responds; the proposer (the tutor) can NEVER
+    // respond to their own proposal (self-confirming would fabricate family
+    // consent — the consent hole this guard closes). Otherwise (family-initiated
+    // or legacy no-proposedBy) → the TUTOR responds.
+    const callerDoc = await db.collection('users').doc(uid).get();
+    const callerUser = callerDoc.data() as User | undefined;
+    const callerFamilyId = getParentProfile(callerUser)?.familyId;
+    if (respondedByFamily) {
+      if (sessionTutorUserId === uid) {
+        throw new HttpsError('permission-denied', 'You cannot respond to your own proposal');
+      }
+      if (!callerFamilyId || callerFamilyId !== peekSession.familyId) {
+        throw new HttpsError('permission-denied', 'You are not part of this session');
+      }
+    } else if (sessionTutorUserId !== uid) {
+      throw new HttpsError('permission-denied', 'You are not the tutor for this session');
+    }
+
+    // ── Provider-proposal confirm: the family picks students at accept ──
+    // studentIds is REQUIRED here (a proposal carries an empty roster); validate
+    // kid ownership + denormalize the roster and the accepting parent's name.
+    // These are NON-CONTENDED reads (a family's own kids + the caller's own name),
+    // so they belong OUTSIDE the claim transaction. Written into the doc at confirm.
+    let providerConfirmDenorm:
+      | { studentIds: string[]; students: { firstName: string; age: number }[]; parentName: string }
+      | null = null;
+    if (action === 'confirm' && respondedByFamily) {
+      if (!studentIds || studentIds.length === 0) {
+        throw new HttpsError('invalid-argument', 'Select at least one student to confirm');
+      }
+      const kidSnaps = await Promise.all(
+        studentIds.map((id) =>
+          db
+            .collection('families')
+            .doc(peekSession.familyId as string)
+            .collection('kids')
+            .doc(id)
+            .get(),
+        ),
+      );
+      const students: { firstName: string; age: number }[] = [];
+      for (const snap of kidSnaps) {
+        if (!snap.exists) {
+          throw new HttpsError('not-found', 'One or more selected students were not found');
+        }
+        const kid = snap.data()!;
+        students.push({ firstName: (kid.firstName as string) ?? '', age: (kid.age as number) ?? 0 });
+      }
+      const parentName = `${callerUser?.firstName || ''} ${callerUser?.lastName || ''}`.trim();
+      providerConfirmDenorm = { studentIds, students, parentName };
+    }
 
     // ── Pre-load static availability config OUTSIDE the transaction (confirm) ──
     // The tutor's weekly grid and holiday schedule/periods are static per-tutor
@@ -87,17 +158,16 @@ export const respondToSession = onCall(
     // did (first occurrence ≥ now+24h Paris).
     let recurringPlan: { slot: RecurringSlot; candidates: string[] } | null = null;
     if (action === 'confirm') {
-      const [sessionPeek, scheduleSnap] = await Promise.all([
-        sessionRef.get(),
-        db.collection('schedules').doc(uid).get(),
-      ]);
+      // Re-keyed to session.tutorUserId (not the caller): the claim is always on
+      // the tutor's schedule, whoever is confirming.
+      const scheduleSnap = await db.collection('schedules').doc(sessionTutorUserId).get();
       const scheduleData = scheduleSnap.data();
       const weekly: WeeklyGrid = (scheduleData?.weekly as WeeklyGrid) ?? {};
       const holidayMode = scheduleData?.holidayMode as string | undefined;
       const holidaySchedules = scheduleData?.holidaySchedules as
         | Record<string, WeeklyGrid>
         | undefined;
-      const peek = sessionPeek.data();
+      const peek = peekSession;
       const holidayPeriods: HolidayPeriod[] = [];
 
       if (peek?.type === 'recurring') {
@@ -166,9 +236,10 @@ export const respondToSession = onCall(
         throw new HttpsError('not-found', 'Session not found');
       }
       const session = sessionSnap.data()!;
-      if (session.tutorUserId !== uid) {
-        throw new HttpsError('permission-denied', 'You are not the tutor for this session');
-      }
+      // Role was gated pre-tx (peek); re-derive the tutor whose schedule is
+      // claimed. The claim is ALWAYS on session.tutorUserId — for a provider
+      // proposal the confirming caller is the family, not this tutor.
+      const tutorUserId = session.tutorUserId as string;
       if (session.status !== 'pending') {
         throw new HttpsError('failed-precondition', 'This session is no longer pending');
       }
@@ -178,17 +249,25 @@ export const respondToSession = onCall(
       const paddingMinutes = (session.paddingMinutes as number) ?? 0;
 
       // ── Decline: flip status, no override/instances, no schedule mutation ──
+      // A family declining a provider proposal reads 'declined_by_family'; a tutor
+      // declining a family request reads 'declined_by_tutor'.
       if (action === 'decline') {
         tx.update(sessionRef, {
           status: 'declined',
-          statusReason: 'declined_by_tutor',
+          statusReason: respondedByFamily ? 'declined_by_family' : 'declined_by_tutor',
           updatedAt: now,
         });
-        return { action: 'decline' as const, type: session.type as string, familyId };
+        return {
+          action: 'decline' as const,
+          type: session.type as string,
+          familyId,
+          tutorUserId,
+          respondedByFamily,
+        };
       }
 
       const cfg = config!; // set whenever action === 'confirm'
-      const scheduleRef = db.collection('schedules').doc(uid);
+      const scheduleRef = db.collection('schedules').doc(tutorUserId);
 
       // ── Recurring confirm: materialize the 8-week instance window ──
       // Instances become the dated, availability-participating docs (the parent
@@ -210,7 +289,7 @@ export const respondToSession = onCall(
         // (tutorUserId, status, date) COLLECTION_GROUP index lands in Task 4.
         const cgQuery = db
           .collectionGroup('instances')
-          .where('tutorUserId', '==', uid)
+          .where('tutorUserId', '==', tutorUserId)
           .where('status', '==', 'scheduled')
           .where('date', '>=', minDate)
           .where('date', '<=', maxDate);
@@ -218,7 +297,7 @@ export const respondToSession = onCall(
         const confirmedQueries = candidates.map((d) =>
           db
             .collection('study-sessions')
-            .where('tutorUserId', '==', uid)
+            .where('tutorUserId', '==', tutorUserId)
             .where('status', '==', 'confirmed')
             .where('date', '==', d),
         );
@@ -280,7 +359,7 @@ export const respondToSession = onCall(
           parent: {
             sessionId,
             familyId,
-            tutorUserId: uid,
+            tutorUserId,
             subject: session.subject as string,
             level: session.level as string,
             rate: session.rate as number,
@@ -319,6 +398,8 @@ export const respondToSession = onCall(
           action: 'confirm' as const,
           type: 'recurring' as const,
           familyId,
+          tutorUserId,
+          respondedByFamily,
           block,
           scheduledDates,
           skippedDates,
@@ -345,7 +426,7 @@ export const respondToSession = onCall(
       const overrideRef = scheduleRef.collection('overrides').doc(date);
       const confirmedQuery = db
         .collection('study-sessions')
-        .where('tutorUserId', '==', uid)
+        .where('tutorUserId', '==', tutorUserId)
         .where('status', '==', 'confirmed')
         .where('date', '==', date);
 
@@ -421,10 +502,31 @@ export const respondToSession = onCall(
         now,
       });
 
-      tx.update(sessionRef, { status: 'confirmed', confirmedAt: now, updatedAt: now });
+      // A provider proposal confirm also stamps the family's chosen roster +
+      // accepting parent's name (denormalized pre-tx above). A family-initiated
+      // confirm leaves the book-time roster untouched.
+      const confirmUpdate: Record<string, unknown> = {
+        status: 'confirmed',
+        confirmedAt: now,
+        updatedAt: now,
+      };
+      if (providerConfirmDenorm) {
+        confirmUpdate.studentIds = providerConfirmDenorm.studentIds;
+        confirmUpdate.students = providerConfirmDenorm.students;
+        confirmUpdate.parentName = providerConfirmDenorm.parentName;
+      }
+      tx.update(sessionRef, confirmUpdate);
       tx.set(overrideRef, mergedOverride);
 
-      return { action: 'confirm' as const, type: 'one_time' as const, familyId, date, block };
+      return {
+        action: 'confirm' as const,
+        type: 'one_time' as const,
+        familyId,
+        tutorUserId,
+        respondedByFamily,
+        date,
+        block,
+      };
     });
 
     // ── POST-transaction: auto-decline overlapping one_time pendings (confirm) ──
@@ -438,7 +540,7 @@ export const respondToSession = onCall(
       for (const claimDate of claimDates) {
         const pendingSnap = await db
           .collection('study-sessions')
-          .where('tutorUserId', '==', uid)
+          .where('tutorUserId', '==', outcome.tutorUserId)
           .where('status', '==', 'pending')
           .where('date', '==', claimDate)
           .get();
@@ -465,21 +567,25 @@ export const respondToSession = onCall(
     }
 
     // ── Notifications ──
-    const tutorDoc = await db.collection('users').doc(uid).get();
+    // The tutor whose schedule was claimed (keyed on the session, not the caller
+    // — for a provider proposal the caller is the family).
+    const tutorDoc = await db.collection('users').doc(outcome.tutorUserId).get();
     const tutorUser = tutorDoc.data();
     const tutorName = `${tutorUser?.firstName || ''} ${tutorUser?.lastName || ''}`.trim() || 'Your tutor';
 
-    // Each auto-declined family (their slot got taken).
+    // Each auto-declined family (their slot got taken). Generalized copy: the slot
+    // could have been taken by another family's booking OR by a family accepting a
+    // tutor's proposal — either way it "is no longer available".
     for (const ad of autoDeclined) {
       await notifyAllParents({
         familyId: ad.familyId,
         prefCategory: 'cancelled',
         type: 'study_session_declined',
         title: 'Session no longer available',
-        body: `That time with ${tutorName} was just booked by another family.`,
+        body: `That time with ${tutorName} is no longer available.`,
         emailSubject: `Session time no longer available — ${tutorName}`,
         emailBody: `
-          <p>The time you requested with <strong>${tutorName}</strong> is no longer available — it was just booked.</p>
+          <p>The time you requested with <strong>${tutorName}</strong> is no longer available.</p>
           <p>You can request another time.</p>
           <p style="margin-top: 16px;"><a href="https://sync-study.com/family" style="background: #2563EB; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View in app</a></p>
         `,
@@ -488,8 +594,43 @@ export const respondToSession = onCall(
       await writeUserActivity(uid, 'session_auto_declined', { sessionId: ad.sessionId });
     }
 
-    // The requesting family (confirmed on confirm, cancelled on decline).
-    if (outcome.action === 'confirm' && outcome.type === 'recurring') {
+    if (outcome.respondedByFamily) {
+      // ── Provider proposal: the FAMILY responded → notify the TUTOR ──
+      // (bookSession's tutor-notify block pattern: in-app doc + email + push,
+      // respecting the tutor's confirmed/cancelled prefs.)
+      const familyName = (peekSession.familyName as string) || 'A family';
+      const tutorEmail = tutorUser?.email as string | undefined;
+      const isConfirm = outcome.action === 'confirm';
+      const prefs = isConfirm ? tutorUser?.notifPrefs?.confirmed : tutorUser?.notifPrefs?.cancelled;
+      const notifType = isConfirm ? 'study_session_confirmed' : 'study_session_declined';
+      const title = isConfirm ? 'Proposal accepted' : 'Proposal declined';
+      const body = isConfirm
+        ? `${familyName} accepted your session proposal.`
+        : `${familyName} declined your session proposal.`;
+      await db.collection('notifications').add({
+        recipientUserId: outcome.tutorUserId,
+        type: notifType,
+        title,
+        body,
+        data: { sessionId },
+        read: false,
+        channels: ['email', 'push'],
+        emailSent: prefs?.email !== false,
+        pushSent: false,
+        createdAt: now,
+      });
+      if (prefs?.email !== false && tutorEmail) {
+        await sendNotificationEmail(
+          tutorEmail,
+          title,
+          `<p><strong>${familyName}</strong> ${isConfirm ? 'accepted' : 'declined'} your session proposal.</p>
+           <p style="margin-top: 16px;"><a href="https://sync-study.com/tutor/sessions" style="background: #2563EB; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View in app</a></p>`,
+        );
+      }
+      if (prefs?.push !== false) {
+        await sendPushNotification(outcome.tutorUserId, title, body, { sessionId, type: notifType });
+      }
+    } else if (outcome.action === 'confirm' && outcome.type === 'recurring') {
       const count = outcome.scheduledDates.length;
       const first = outcome.scheduledDates[0];
       const skippedNote = outcome.skippedDates.length
