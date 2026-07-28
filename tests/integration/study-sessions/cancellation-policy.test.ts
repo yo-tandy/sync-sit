@@ -14,6 +14,25 @@ type ProposeResponse = { sessionId: string };
 const sessionData = (id: string) =>
   getDb().collection('study-sessions').doc(id).get().then((s) => s.data()!);
 
+const instanceData = (id: string, date: string) =>
+  getDb()
+    .collection('study-sessions').doc(id).collection('instances').doc(date)
+    .get().then((s) => s.data());
+
+// A Paris wall-clock date + HH:MM roughly `hoursFromNow` from the real now. Used
+// to place a confirmed commitment INSIDE or OUTSIDE a notice window relative to
+// the callable's live `new Date()` (the flag is computed against real time).
+function parisAt(hoursFromNow: number): { date: string; startTime: string } {
+  const target = new Date(Date.now() + hoursFromNow * 3600 * 1000);
+  const fmt = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Paris', hourCycle: 'h23',
+    year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
+  });
+  const p: Record<string, string> = {};
+  for (const part of fmt.formatToParts(target)) p[part.type] = part.value;
+  return { date: `${p.year}-${p.month}-${p.day}`, startTime: `${p.hour}:${p.minute}` };
+}
+
 describe('cancellation policy', () => {
   let seed: SeedData;
   let parent1Token: string; // verified family1 (Dupont)
@@ -64,6 +83,68 @@ describe('cancellation policy', () => {
   afterAll(async () => {
     await clearAll();
   });
+
+  // Seed a study session doc directly (bypasses booking/availability so we can
+  // place a CONFIRMED commitment inside a notice window on any date).
+  interface SeedOverrides {
+    sessionId?: string;
+    type?: 'one_time' | 'recurring';
+    status?: string;
+    date?: string;
+    startTime?: string;
+    endTime?: string;
+    cancellationNoticeHours?: number;
+  }
+  async function seedSession(over: SeedOverrides = {}): Promise<string> {
+    const db = getDb();
+    const id = over.sessionId ?? `sess-${Math.random().toString(36).slice(2, 9)}`;
+    const doc: Record<string, unknown> = {
+      sessionId: id,
+      tutorUserId: seed.tutor2.uid,
+      familyId: seed.family1Id,
+      createdByUserId: seed.parent1.uid,
+      subject: 'math', level: '6e', rate: 25,
+      studentIds: ['kid1'], students: [{ firstName: 'Lucas', age: 6 }],
+      familyName: 'Dupont', parentName: 'Marie Dupont', tutorName: 'Yael Cohen',
+      type: over.type ?? 'one_time',
+      startTime: over.startTime ?? '16:00',
+      endTime: over.endTime ?? '17:00',
+      sessionLengthMinutes: 60,
+      location: 'online', paddingMinutes: 0,
+      status: over.status ?? 'confirmed',
+      createdAt: new Date(), updatedAt: new Date(),
+    };
+    if (over.type !== 'recurring') doc.date = over.date ?? parisAt(24).date;
+    if (over.cancellationNoticeHours !== undefined) {
+      doc.cancellationNoticeHours = over.cancellationNoticeHours;
+    }
+    await db.collection('study-sessions').doc(id).set(doc);
+    return id;
+  }
+
+  async function seedInstance(
+    sessionId: string,
+    date: string,
+    startTime: string,
+    status = 'scheduled',
+  ) {
+    await getDb()
+      .collection('study-sessions').doc(sessionId).collection('instances').doc(date)
+      .set({
+        instanceId: date, sessionId, tutorUserId: seed.tutor2.uid, familyId: seed.family1Id,
+        date, startTime, endTime: '11:00', sessionLengthMinutes: 60, paddingMinutes: 0,
+        subject: 'math', level: '6e', rate: 25, location: 'online',
+        status, createdAt: new Date(), updatedAt: new Date(),
+      });
+  }
+
+  const notifBodiesFor = async (uid: string): Promise<string[]> => {
+    const snap = await getDb().collection('notifications')
+      .where('recipientUserId', '==', uid).get();
+    return snap.docs
+      .filter((d) => d.data().type === 'study_session_cancelled')
+      .map((d) => d.data().body as string);
+  };
 
   beforeEach(async () => {
     const db = getDb();
@@ -116,6 +197,96 @@ describe('cancellation policy', () => {
       const res = await callFunction<BookResponse>('bookSession', bookInput(), parent1Token);
       const doc = await sessionData(res.sessionId);
       expect(doc.cancellationNoticeHours).toBe(0);
+    });
+  });
+
+  // ── Task 4: late flagging in cancelSession ──
+
+  describe('cancelSession flagging', () => {
+    it('flags a late one_time cancelled by the FAMILY (both directions)', async () => {
+      const { date, startTime } = parisAt(24); // inside a 48h window
+      const id = await seedSession({ status: 'confirmed', date, startTime, cancellationNoticeHours: 48 });
+      await callFunction('cancelSession', { sessionId: id, reason: 'family emergency' }, parent1Token);
+
+      const s = await sessionData(id);
+      expect(s.lateCancellation).toBe(true);
+      expect(s.statusReason).toBe('cancelled_by_family');
+      // In-app notification to the tutor carries the late suffix.
+      const bodies = await notifBodiesFor(seed.tutor2.uid);
+      expect(bodies.some((b) => b.includes('(late cancellation)'))).toBe(true);
+    });
+
+    it('flags a late one_time cancelled by the TUTOR (both directions)', async () => {
+      const { date, startTime } = parisAt(24);
+      const id = await seedSession({ status: 'confirmed', date, startTime, cancellationNoticeHours: 48 });
+      await callFunction('cancelSession', { sessionId: id, reason: 'tutor is ill' }, tutor2Token);
+
+      const s = await sessionData(id);
+      expect(s.lateCancellation).toBe(true);
+      expect(s.statusReason).toBe('cancelled_by_tutor');
+    });
+
+    it('does NOT flag an on-time one_time cancel (assert absence)', async () => {
+      const id = await seedSession({ status: 'confirmed', date: FUTURE_MON, startTime: '16:00', cancellationNoticeHours: 48 });
+      await callFunction('cancelSession', { sessionId: id, reason: 'plenty of notice' }, parent1Token);
+
+      const s = await sessionData(id);
+      expect(s.lateCancellation).toBeUndefined();
+      expect(s.status).toBe('cancelled');
+    });
+
+    it('does NOT flag when policy is 0, even seconds before start', async () => {
+      const { date, startTime } = parisAt(1); // 1h out — but no policy
+      const id = await seedSession({ status: 'confirmed', date, startTime, cancellationNoticeHours: 0 });
+      await callFunction('cancelSession', { sessionId: id, reason: 'no policy set' }, parent1Token);
+
+      const s = await sessionData(id);
+      expect(s.lateCancellation).toBeUndefined();
+    });
+
+    it('does NOT flag a PENDING request even inside the window (pending is never late)', async () => {
+      const { date, startTime } = parisAt(2);
+      const id = await seedSession({ status: 'pending', date, startTime, cancellationNoticeHours: 48 });
+      await callFunction('cancelSession', { sessionId: id, reason: 'withdrawing the request' }, parent1Token);
+
+      const s = await sessionData(id);
+      expect(s.lateCancellation).toBeUndefined();
+      expect(s.status).toBe('cancelled');
+    });
+
+    it('flags only the in-window instance of a recurring series; parent never flagged', async () => {
+      const near = parisAt(24); // inside 48h
+      const far = parisAt(24 + 168); // +7d, outside 48h
+      const id = await seedSession({
+        sessionId: 'series-late', type: 'recurring', status: 'confirmed', cancellationNoticeHours: 48,
+      });
+      await seedInstance(id, near.date, near.startTime, 'scheduled');
+      await seedInstance(id, far.date, far.startTime, 'scheduled');
+
+      await callFunction('cancelSession', { sessionId: id, reason: 'moving away' }, tutor2Token);
+
+      const nearInst = await instanceData(id, near.date);
+      const farInst = await instanceData(id, far.date);
+      expect(nearInst!.lateCancellation).toBe(true);
+      expect(farInst!.lateCancellation).toBeUndefined();
+      // The recurring PARENT is never flagged (commitment granularity is the instance).
+      const parent = await sessionData(id);
+      expect(parent.status).toBe('cancelled');
+      expect(parent.lateCancellation).toBeUndefined();
+    });
+
+    it('retro-edit protection: the DOC snapshot governs, not the live profile', async () => {
+      const { date, startTime } = parisAt(30); // 30h out — inside 168h, outside 24h
+      const id = await seedSession({ status: 'confirmed', date, startTime, cancellationNoticeHours: 24 });
+      // Tutor later widens their live policy to a week — must NOT retro-classify.
+      await getDb().collection('users').doc(seed.tutor2.uid).update({
+        'profiles.tutor.cancellationNoticeHours': 168,
+      });
+      await callFunction('cancelSession', { sessionId: id, reason: 'still on-time under snapshot' }, parent1Token);
+
+      const s = await sessionData(id);
+      // 30h > the snapshot's 24h → on-time. The live 168h is inert for this doc.
+      expect(s.lateCancellation).toBeUndefined();
     });
   });
 });
