@@ -361,6 +361,18 @@ export default {
         completed: 'Completed',
       },
     },
+    account: {
+      cancellationPolicy: {
+        title: 'Cancellation policy',
+        help: 'Set how much notice families must give to cancel a confirmed session. Cancelling later is still allowed, but is flagged as a late cancellation. Only new bookings use the policy you set here.',
+        none: 'No policy',
+        hours24: '24 hours',
+        hours48: '48 hours',
+        week1: '1 week',
+        save: 'Save policy',
+        saved: 'Cancellation policy saved',
+      },
+    },
     endorsements: {
       title: 'Endorsements',
       empty:
@@ -517,6 +529,7 @@ export default {
         whatsapp: 'WhatsApp',
         book: 'Book a session',
       },
+      cancellationNotice: '{{window}} cancellation notice',
       contactDialog: {
         title: 'Request contact with {{name}}',
         messageLabel: 'Message (optional)',
@@ -551,6 +564,7 @@ export default {
       booking: 'Booking…',
       loadError: 'Could not load this tutor. Please go back and try again.',
       theTutor: 'the tutor',
+      cancellationPolicy: 'This tutor asks for {{window}} notice to cancel a confirmed session. Later cancellations are still allowed but are flagged as late.',
       mode: {
         oneTime: 'One-time',
         weekly: 'Weekly',
@@ -714,6 +728,17 @@ export default {
       errorInvalid: 'That endorsement can\'t be submitted — please check the text and try again.',
       error: 'Something went wrong. Please try again.',
     },
+  },
+
+  // Shared cancellation-policy copy (V2 feature 7), used by both portals' cancel
+  // flows and the late badge on cancelled cards/instances.
+  sessions: {
+    window: {
+      week: '1 week',
+    },
+    lateCancelWarning:
+      'Heads up — this is inside the {{window}} notice window, so it will be recorded as a late cancellation.',
+    cancelledLateBadge: 'Cancelled late',
   },
 
   enrollment: {

@@ -45,6 +45,13 @@ export interface StudySessionDoc {
   postSessionNote?: string;
   status: 'pending' | 'confirmed' | 'declined' | 'cancelled' | 'modified' | 'completed';
   statusReason?: string;
+  // ── Cancellation policy (V2 feature 7) ──
+  // Snapshot of the tutor's policy taken at request creation (0 = no policy).
+  // Drives the client-side late-cancel warning; the server flag is authoritative.
+  cancellationNoticeHours?: number;
+  // Set true (one_time only) by the backend when this session was cancelled
+  // inside the notice window while confirmed. Recurring lateness is per-instance.
+  lateCancellation?: boolean;
   createdAt?: { seconds?: number } | null;
 }
 
@@ -59,6 +66,9 @@ export interface StudySessionInstanceDoc {
   statusReason?: 'cancelled_by_family' | 'cancelled_by_tutor' | 'conflict_skip';
   // The first materialized occurrence of a trial series (V1.1); badged in the list.
   isTrial?: boolean;
+  // Set true by the backend when this occurrence was cancelled inside the parent
+  // series' notice window while scheduled (V2 feature 7). Only ever written true.
+  lateCancellation?: boolean;
   location: LocationPref;
   // Per-occurrence session notes (V1.1); see StudySessionDoc.
   preSessionNote?: string;

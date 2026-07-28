@@ -242,6 +242,28 @@ describe('family BookSessionPage', () => {
     expect(screen.queryByRole('button', { name: '14:45' })).not.toBeInTheDocument();
   });
 
+  // ── Cancellation policy note (V2 feature 7) ──
+  it('shows a cancellation-policy note when the tutor has a policy', async () => {
+    renderBook(fullState({ cancellationNoticeHours: 48 }));
+    expect(await screen.findByText(/48h notice to cancel/i)).toBeInTheDocument();
+  });
+
+  it('shows no cancellation-policy note when the tutor has none (0)', async () => {
+    renderBook(fullState({ cancellationNoticeHours: 0 }));
+    await screen.findByRole('button', { name: '14:00' });
+    expect(screen.queryByText(/notice to cancel/i)).not.toBeInTheDocument();
+  });
+
+  it('does not send cancellationNoticeHours in the bookSession payload', async () => {
+    renderBook(fullState({ cancellationNoticeHours: 48 }));
+    await armBooking();
+    fireEvent.click(screen.getByRole('button', { name: /^Book session$/i }));
+
+    await waitFor(() => expect(h.callable).toHaveBeenCalledWith('bookSession', expect.anything()));
+    const call = h.callable.mock.calls.find((c) => c[0] === 'bookSession');
+    expect(call?.[1]).not.toHaveProperty('cancellationNoticeHours');
+  });
+
   it('falls back to searchTutors for card data when router state lacks it (deep link)', async () => {
     h.callable.mockImplementation((name: string) => {
       if (name === 'getTutorAvailability') return Promise.resolve(availabilityPage());

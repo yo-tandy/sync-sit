@@ -45,6 +45,7 @@ function tutor(overrides: Partial<TutorSearchResult> = {}): TutorSearchResult {
     locationPrefs: ['online'],
     distance: 3.4,
     endorsementCount: 2,
+    cancellationNoticeHours: 0,
     requestStatus: 'none',
     ...overrides,
   };
@@ -161,6 +162,22 @@ describe('TutorCard', () => {
     fireEvent.click(screen.getByRole('button', { name: /send request/i }));
 
     expect(await screen.findByText(matcher)).toBeInTheDocument();
+  });
+
+  // ── Cancellation policy line (V2 feature 7) ──
+  it('renders a humanized cancellation-notice line when the policy is set', () => {
+    renderWithProviders(<TutorCard result={tutor({ cancellationNoticeHours: 48 })} />);
+    expect(screen.getByText(/48h cancellation notice/i)).toBeInTheDocument();
+  });
+
+  it('renders the 1-week policy as a week window', () => {
+    renderWithProviders(<TutorCard result={tutor({ cancellationNoticeHours: 168 })} />);
+    expect(screen.getByText(/1 week cancellation notice/i)).toBeInTheDocument();
+  });
+
+  it('shows no cancellation-notice line when the policy is 0', () => {
+    renderWithProviders(<TutorCard result={tutor({ cancellationNoticeHours: 0 })} />);
+    expect(screen.queryByText(/cancellation notice/i)).not.toBeInTheDocument();
   });
 
   // ── Endorsements lazy-load ──

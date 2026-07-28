@@ -519,6 +519,38 @@ describe('tutor SessionsPage — management', () => {
     });
   });
 
+  // ── Cancellation policy (V2 feature 7): tutor cancels against their own policy ──
+  it('warns in the cancel modal when a confirmed one_time is inside the notice window', async () => {
+    h.sessions = [
+      confirmedOneTime({ sessionId: 'sL', familyName: 'Levy', date: '2026-08-02', startTime: '10:00', cancellationNoticeHours: 48 }),
+    ];
+    renderWithProviders(<SessionsPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /cancel session/i }));
+    expect(await screen.findByText(/late cancellation/i)).toBeInTheDocument();
+  });
+
+  it('shows no late-cancel warning when outside the notice window', async () => {
+    h.sessions = [
+      confirmedOneTime({ sessionId: 'sE', familyName: 'Levy', date: '2026-08-20', startTime: '10:00', cancellationNoticeHours: 48 }),
+    ];
+    renderWithProviders(<SessionsPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /cancel session/i }));
+    await screen.findByRole('button', { name: /confirm cancellation/i });
+    expect(screen.queryByText(/late cancellation/i)).not.toBeInTheDocument();
+  });
+
+  it('renders a "Cancelled late" badge on a late-cancelled history session', async () => {
+    h.sessions = [
+      confirmedOneTime({ sessionId: 'cL', familyName: 'Late Fam', status: 'cancelled', lateCancellation: true }),
+    ];
+    renderWithProviders(<SessionsPage />);
+
+    await screen.findByText('Late Fam');
+    expect(screen.getByText(/cancelled late/i)).toBeInTheDocument();
+  });
+
   it('renders terminal parents in a read-only history section', async () => {
     h.sessions = [
       confirmedOneTime({ sessionId: 'd1', familyName: 'Declined Fam', status: 'declined' }),
