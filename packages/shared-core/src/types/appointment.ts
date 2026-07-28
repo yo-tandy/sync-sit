@@ -24,3 +24,17 @@ export interface RecurringSlot {
  * keys off one field. Absent on legacy docs — treat absence as `'family'`.
  */
 export type ProposedBy = 'provider' | 'family';
+
+/**
+ * Cancellation-notice policy presets (V2 feature 7). A provider-chosen minimum
+ * notice for cancelling a CONFIRMED commitment, in hours before the session's
+ * Paris wall-clock start. 0 = no policy (never flags). Cancellations inside the
+ * window still succeed but are recorded with `lateCancellation: true` on the
+ * commitment (soft enforcement — this is a school community; emergencies happen).
+ * The value is SNAPSHOTTED onto the session at request-creation time, so a
+ * provider editing their policy later cannot retroactively re-classify existing
+ * bookings. Study-only in v1; lives here (like ProposedBy) as the seam for
+ * sync-sit adoption.
+ */
+export const CANCELLATION_NOTICE_PRESETS = [0, 24, 48, 168] as const;
+export type CancellationNoticeHours = (typeof CANCELLATION_NOTICE_PRESETS)[number];

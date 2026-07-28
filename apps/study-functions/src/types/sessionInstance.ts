@@ -44,6 +44,10 @@ export interface SessionInstanceDoc {
   statusReason?: 'cancelled_by_family' | 'cancelled_by_tutor' | 'conflict_skip';
   cancelledAt?: FirestoreTimestamp;
   cancellationReason?: string; // free-text/enum reason captured on cancel
+  // True when this occurrence was cancelled inside the parent session's
+  // cancellationNoticeHours window while scheduled (V2 feature 7). Never set
+  // on conflict_skip or pending-cancel paths.
+  lateCancellation?: boolean;
   rescheduledTo?: string; // new date if rescheduled (never written in v1)
   completedAt?: FirestoreTimestamp;
 
