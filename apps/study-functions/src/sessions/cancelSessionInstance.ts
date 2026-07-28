@@ -11,6 +11,7 @@ import { dayOfWeek } from '@ejm/study-core';
 import type { WeeklyGrid } from '../availability/computeDateAvailability.js';
 import { cancelSessionInstanceSchema } from '../validation/session.js';
 import { buildRestoredOverride, type RestoreResult } from './sessionOverride.js';
+import { isLateCancellation } from './lateCancellation.js';
 
 type CancelStatusReason = 'cancelled_by_tutor' | 'cancelled_by_family';
 
@@ -113,9 +114,12 @@ export const cancelSessionInstance = onCall(
     const weekly: WeeklyGrid = (scheduleSnap.data()?.weekly as WeeklyGrid) ?? {};
 
     const date = instance.date as string; // === instanceId
+    // Notice policy lives on the PARENT snapshot (taken at request creation); the
+    // instance is late iff cancelled inside that window before its own start.
+    const noticeHours = (session.cancellationNoticeHours as number | undefined) ?? 0;
 
     // ── The cancel transaction (all reads before any writes) ──
-    await db.runTransaction(async (tx) => {
+    const late = await db.runTransaction(async (tx) => {
       // Re-read the parent + instance authoritatively (guards double-cancel and a
       // parent cancelled out from under us between load and lock).
       const [freshParentSnap, freshInstSnap] = await Promise.all([
@@ -146,20 +150,32 @@ export const cancelSessionInstance = onCall(
         now,
       });
 
+      const instLate = isLateCancellation(
+        freshInstSnap.data()!.date as string,
+        freshInstSnap.data()!.startTime as string,
+        noticeHours,
+        now,
+      );
       tx.update(instanceRef, {
         status: 'cancelled',
         statusReason,
         cancellationReason: reason,
         cancelledAt: now,
         updatedAt: now,
+        ...(instLate ? { lateCancellation: true } : {}),
       });
       applyRestore(tx, overrideRef, restore);
+      return instLate;
     });
 
     // ── ONE single-date notification to the OTHER side ──
     const startTime = instance.startTime as string | undefined;
     const endTime = instance.endTime as string | undefined;
     const whenInfo = `${date}${startTime ? `, ${startTime}` : ''}${endTime ? `–${endTime}` : ''}`;
+    const latePolicyNote = late
+      ? `<p>This was a <strong>late cancellation</strong> under the ${noticeHours}-hour notice policy.</p>`
+      : '';
+    const lateSuffix = late ? ' (late cancellation)' : '';
 
     if (statusReason === 'cancelled_by_family') {
       // Notify the TUTOR directly (email + push + in-app).
@@ -169,7 +185,7 @@ export const cancelSessionInstance = onCall(
       const cancelPrefs = tutorData?.notifPrefs?.cancelled;
       const familyName = (session.familyName as string) || 'A family';
       const title = 'Session cancelled';
-      const body = `${familyName} cancelled the session on ${whenInfo}. Reason: ${reason}`;
+      const body = `${familyName} cancelled the session on ${whenInfo}. Reason: ${reason}${lateSuffix}`;
 
       await db.collection('notifications').add({
         recipientUserId: tutorUserId,
@@ -191,6 +207,7 @@ export const cancelSessionInstance = onCall(
           `<p><strong>${familyName}</strong> cancelled the session on <strong>${whenInfo}</strong>.</p>
            <p>Your other sessions in this series are unaffected.</p>
            <p><strong>Reason:</strong> ${reason}</p>
+           ${latePolicyNote}
            <p style="margin-top: 16px;"><a href="https://sync-study.com/tutor" style="background: #2563EB; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View in app</a></p>`,
         );
       }
@@ -214,6 +231,7 @@ export const cancelSessionInstance = onCall(
         emailBody: `<p><strong>${tutorName}</strong> cancelled the session on <strong>${whenInfo}</strong>.</p>
            <p>Your other sessions in this series are unaffected.</p>
            <p><strong>Reason:</strong> ${reason}</p>
+           ${latePolicyNote}
            <p style="margin-top: 16px;"><a href="https://sync-study.com/family" style="background: #2563EB; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View in app</a></p>`,
         data: { sessionId, instanceId },
       });
@@ -223,6 +241,7 @@ export const cancelSessionInstance = onCall(
       sessionId,
       instanceId,
       reason,
+      late,
     });
 
     return { success: true };

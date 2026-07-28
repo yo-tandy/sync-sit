@@ -289,4 +289,47 @@ describe('cancellation policy', () => {
       expect(s.lateCancellation).toBeUndefined();
     });
   });
+
+  // ── Task 5: late flagging in cancelSessionInstance ──
+
+  describe('cancelSessionInstance flagging', () => {
+    it('flags a single in-window instance; parent stays confirmed and unflagged', async () => {
+      const near = parisAt(24); // inside 48h
+      const id = await seedSession({
+        sessionId: 'series-inst-late', type: 'recurring', status: 'confirmed', cancellationNoticeHours: 48,
+      });
+      await seedInstance(id, near.date, near.startTime, 'scheduled');
+
+      await callFunction(
+        'cancelSessionInstance',
+        { sessionId: id, instanceId: near.date, reason: 'sick that day' },
+        parent1Token,
+      );
+
+      const inst = await instanceData(id, near.date);
+      expect(inst!.lateCancellation).toBe(true);
+      expect(inst!.statusReason).toBe('cancelled_by_family');
+      const parent = await sessionData(id);
+      expect(parent.status).toBe('confirmed');
+      expect(parent.lateCancellation).toBeUndefined();
+    });
+
+    it('does NOT flag an out-of-window instance (assert absence)', async () => {
+      const far = parisAt(24 + 168); // +7d, outside 48h
+      const id = await seedSession({
+        sessionId: 'series-inst-ontime', type: 'recurring', status: 'confirmed', cancellationNoticeHours: 48,
+      });
+      await seedInstance(id, far.date, far.startTime, 'scheduled');
+
+      await callFunction(
+        'cancelSessionInstance',
+        { sessionId: id, instanceId: far.date, reason: 'plenty of notice' },
+        parent1Token,
+      );
+
+      const inst = await instanceData(id, far.date);
+      expect(inst!.status).toBe('cancelled');
+      expect(inst!.lateCancellation).toBeUndefined();
+    });
+  });
 });
