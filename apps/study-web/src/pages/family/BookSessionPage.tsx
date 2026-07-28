@@ -12,6 +12,7 @@ import { expandRecurringDates } from '@ejm/study-core';
 import { useHolidays } from '@/hooks/useHolidays';
 import { Button, Input, Select, Textarea, Checkbox, Chip, Card, TopNav, Spinner, Dialog, Badge } from '@ejm/shared-ui';
 import { deriveStartChips, deriveWeeklySlots, type WeeklyCandidate } from './bookingSlots';
+import { humanizeNoticeWindow } from '@/utils/cancellationPolicy';
 
 /**
  * Family booking page. Reached from an accepted-tutor context (TutorCard or the
@@ -48,6 +49,7 @@ interface BookNavState {
   sessionLengthsMin?: number[];
   locationPrefs?: LocationPref[];
   tutorName?: string;
+  cancellationNoticeHours?: number;
 }
 
 /** The tutor card data the form needs — resolved from state or a fallback search. */
@@ -55,6 +57,8 @@ interface CardData {
   sessionLengthsMin: number[];
   locationPrefs: LocationPref[];
   tutorName: string;
+  // Cancellation-notice policy in hours (0 = none); shown near submit (V2 feat 7).
+  cancellationNoticeHours: number;
 }
 
 /** A kid the family can book for. */
@@ -164,6 +168,7 @@ export function BookSessionPage() {
           sessionLengthsMin: navState.sessionLengthsMin,
           locationPrefs: navState.locationPrefs,
           tutorName: navState.tutorName ?? '',
+          cancellationNoticeHours: navState.cancellationNoticeHours ?? 0,
         });
         setCardLoading(false);
         return;
@@ -192,6 +197,7 @@ export function BookSessionPage() {
             sessionLengthsMin: row.sessionLengthsMin,
             locationPrefs: row.locationPrefs,
             tutorName: navState?.tutorName ?? row.firstName,
+            cancellationNoticeHours: row.cancellationNoticeHours ?? 0,
           });
         }
       } catch (err: unknown) {
@@ -746,6 +752,14 @@ export function BookSessionPage() {
               </>
             )}
           </>
+        )}
+
+        {card.cancellationNoticeHours > 0 && (
+          <p className="mt-4 text-xs text-gray-500">
+            {t('family.book.cancellationPolicy', {
+              window: humanizeNoticeWindow(card.cancellationNoticeHours, t),
+            })}
+          </p>
         )}
 
         {bookError && <p className="mt-4 mb-2 text-sm text-red-600">{bookError}</p>}

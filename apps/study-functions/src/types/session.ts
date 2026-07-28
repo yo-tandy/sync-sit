@@ -92,6 +92,15 @@ export interface SessionDoc {
   // Padding (stored for override calculation)
   paddingMinutes: number;
 
+  // ── Cancellation policy (V2 feature 7) ──
+  // Snapshot of the tutor's profiles.tutor.cancellationNoticeHours taken when
+  // the request was CREATED (bookSession / proposeSession). Late determination
+  // always reads this snapshot; later profile edits are inert for this session.
+  cancellationNoticeHours?: number;
+  // Set true (one_time only) when the cancel happened inside the notice window
+  // while the session was CONFIRMED. Recurring lateness lives per-instance.
+  lateCancellation?: boolean;
+
   // Status
   status: SessionStatus;
   statusReason?: string;

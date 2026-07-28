@@ -14,6 +14,7 @@ import {
   InfoBanner,
   LanguageSelector,
   PhoneInput,
+  Select,
 } from '@ejm/shared-ui';
 
 // Copy-adapted from apps/web/src/pages/babysitter/AccountPage.tsx, DELIBERATELY
@@ -61,6 +62,11 @@ export function AccountPage() {
   // Notification prefs
   const [prefs, setPrefs] = useState<NotifPrefs>(DEFAULT_NOTIF_PREFS);
 
+  // Cancellation policy (V2 feature 7) — a preset notice window in hours.
+  const [noticeHours, setNoticeHours] = useState(0);
+  const [policySaving, setPolicySaving] = useState(false);
+  const [policySuccess, setPolicySuccess] = useState(false);
+
   const [error, setError] = useState<string | null>(null);
 
   // Initialize from userDoc
@@ -70,6 +76,7 @@ export function AccountPage() {
     setPhone(tutor?.contactPhone || '');
     setWhatsapp(tutor?.whatsapp || '');
     setWhatsappSameAsPhone(tutor?.whatsapp ? tutor.whatsapp === tutor.contactPhone : true);
+    setNoticeHours(tutor?.cancellationNoticeHours ?? 0);
     if (userDoc.notifPrefs) {
       setPrefs(userDoc.notifPrefs);
     }
@@ -114,6 +121,30 @@ export function AccountPage() {
       setError(message);
     } finally {
       setContactSaving(false);
+    }
+  };
+
+  // --- Cancellation policy ---
+  // Writes only the preset dot-path (like SubjectsPage.handleSave), refreshes the
+  // user doc, then shows a transient success. The value is snapshotted onto future
+  // bookings server-side; editing it never retro-flags existing sessions.
+  const handleSavePolicy = async () => {
+    if (!uid) return;
+    setPolicySaving(true);
+    setPolicySuccess(false);
+    setError(null);
+    try {
+      await updateDoc(doc(db, 'users', uid), {
+        'profiles.tutor.cancellationNoticeHours': noticeHours,
+        updatedAt: serverTimestamp(),
+      });
+      await refreshUserDoc();
+      setPolicySuccess(true);
+      setTimeout(() => setPolicySuccess(false), 3000);
+    } catch {
+      setError(t('common.error'));
+    } finally {
+      setPolicySaving(false);
     }
   };
 
@@ -251,7 +282,36 @@ export function AccountPage() {
 
         <hr className="mb-6 border-gray-200" />
 
-        {/* 3. Change Password */}
+        {/* 3. Cancellation policy */}
+        <h3 className="mb-1 text-sm font-semibold text-gray-700">
+          {t('tutor.account.cancellationPolicy.title')}
+        </h3>
+        <p className="mb-4 text-xs text-gray-500">{t('tutor.account.cancellationPolicy.help')}</p>
+
+        {policySuccess && (
+          <InfoBanner className="mb-4">{t('tutor.account.cancellationPolicy.saved')}</InfoBanner>
+        )}
+        <Select
+          aria-label={t('tutor.account.cancellationPolicy.title')}
+          value={String(noticeHours)}
+          onChange={(e) => {
+            setNoticeHours(Number(e.target.value));
+            setPolicySuccess(false);
+          }}
+          options={[
+            { value: '0', label: t('tutor.account.cancellationPolicy.none') },
+            { value: '24', label: t('tutor.account.cancellationPolicy.hours24') },
+            { value: '48', label: t('tutor.account.cancellationPolicy.hours48') },
+            { value: '168', label: t('tutor.account.cancellationPolicy.week1') },
+          ]}
+        />
+        <Button onClick={handleSavePolicy} disabled={policySaving} className="mb-6">
+          {policySaving ? t('common.saving') : t('tutor.account.cancellationPolicy.save')}
+        </Button>
+
+        <hr className="mb-6 border-gray-200" />
+
+        {/* 4. Change Password */}
         <h3 className="mb-3 text-sm font-semibold text-gray-700">{t('account.changePassword')}</h3>
         {passwordResetSent && (
           <InfoBanner className="mb-4">
@@ -270,7 +330,7 @@ export function AccountPage() {
 
         <hr className="mb-6 border-gray-200" />
 
-        {/* 4. Notification Preferences (email only — no FCM in study-web yet) */}
+        {/* 5. Notification Preferences (email only — no FCM in study-web yet) */}
         <h3 className="mb-1 text-sm font-semibold text-gray-700">{t('notifications.title')}</h3>
         <p className="mb-4 text-sm text-gray-500">{t('notifications.emailOnlyDesc')}</p>
 
@@ -296,7 +356,7 @@ export function AccountPage() {
 
         <hr className="my-6 border-gray-200" />
 
-        {/* 5. Language */}
+        {/* 6. Language */}
         <h3 className="mb-3 text-sm font-semibold text-gray-700">{t('common.language')}</h3>
         <LanguageSelector />
       </div>

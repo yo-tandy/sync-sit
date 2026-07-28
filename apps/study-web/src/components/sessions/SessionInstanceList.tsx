@@ -17,6 +17,8 @@ export interface InstanceListCopy {
   statusCancelled: string;
   // Badge shown on the first materialized occurrence of a trial series (V1.1).
   trial: string;
+  // Badge shown on an occurrence cancelled inside the notice window (V2 feat 7).
+  cancelledLate: string;
 }
 
 interface SessionInstanceListProps {
@@ -71,6 +73,7 @@ export function SessionInstanceList({
               </span>
               <span className="flex items-center gap-2">
                 {i.isTrial && <Badge variant="blue">{copy.trial}</Badge>}
+                {i.lateCancellation && <Badge variant="amber">{copy.cancelledLate}</Badge>}
                 {label && <Badge variant="gray">{label}</Badge>}
                 {cancelable && (
                   <Button

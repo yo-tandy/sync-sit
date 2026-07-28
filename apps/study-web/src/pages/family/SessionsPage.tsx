@@ -13,6 +13,7 @@ import { SessionInstanceList } from '@/components/sessions/SessionInstanceList';
 import { SessionNotes } from '@/components/sessions/SessionNotes';
 import { SessionNoteDialog } from '@/components/sessions/SessionNoteDialog';
 import { EndorseTutorDialog } from '@/components/family/EndorseTutorDialog';
+import { humanizeNoticeWindow, isLateCancellationClient } from '@/utils/cancellationPolicy';
 import type { StudySessionDoc, StudySessionInstanceDoc } from '@/types/studySession';
 
 const NOTE_MAX = 2000;
@@ -560,6 +561,7 @@ export function SessionsPage() {
               statusSkipped: t('family.sessions.instanceStatus.skipped'),
               statusCancelled: t('family.sessions.instanceStatus.cancelled'),
               trial: t('family.sessions.trial.badge'),
+              cancelledLate: t('sessions.cancelledLateBadge'),
             }}
             renderNotes={(i) => (
               <SessionNotes
@@ -576,6 +578,32 @@ export function SessionsPage() {
       </Card>
     );
   }
+
+  // Client-side late-cancel heads-up for the reason modal (V2 feature 7). Only
+  // CONFIRMED commitments can be late; a series warns on its NEXT scheduled date.
+  // Approximate-by-design — the server flag on the doc is authoritative.
+  const cancelWarning = ((): string | undefined => {
+    if (!cancelTarget) return undefined;
+    const { session } = cancelTarget;
+    if (session.status !== 'confirmed') return undefined;
+    const noticeHours = session.cancellationNoticeHours ?? 0;
+    if (noticeHours <= 0) return undefined;
+    let late = false;
+    if (cancelTarget.kind === 'instance') {
+      const { date, startTime } = cancelTarget.instance;
+      late = isLateCancellationClient(date, startTime, noticeHours);
+    } else if (cancelTarget.kind === 'series') {
+      const next = (instancesBySeries[session.sessionId] ?? [])
+        .filter((i) => i.status === 'scheduled' && i.date >= today)
+        .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))[0];
+      late = !!next && isLateCancellationClient(next.date, next.startTime, noticeHours);
+    } else if (session.date) {
+      late = isLateCancellationClient(session.date, session.startTime, noticeHours);
+    }
+    return late
+      ? t('sessions.lateCancelWarning', { window: humanizeNoticeWindow(noticeHours, t) })
+      : undefined;
+  })();
 
   return (
     <div>
@@ -723,7 +751,12 @@ export function SessionsPage() {
                           {t(`tutor.subjects.names.${s.subject}`)} · {s.level}
                         </p>
                       </div>
-                      <Badge variant="gray">{t(`family.sessions.status.${s.status}`)}</Badge>
+                      <div className="flex shrink-0 flex-wrap items-center justify-end gap-1">
+                        {s.type === 'one_time' && s.lateCancellation && (
+                          <Badge variant="amber">{t('sessions.cancelledLateBadge')}</Badge>
+                        )}
+                        <Badge variant="gray">{t(`family.sessions.status.${s.status}`)}</Badge>
+                      </div>
                     </div>
                     {endorse && <div className="mt-3">{endorse}</div>}
                     {s.type === 'one_time' && s.status === 'completed' && (
@@ -827,6 +860,7 @@ export function SessionsPage() {
         keepLabel={t('family.sessions.cancelKeep')}
         submitting={cancelKey !== null}
         error={cancelError}
+        warning={cancelWarning}
         onConfirm={submitCancel}
         onClose={() => setCancelTarget(null)}
       />

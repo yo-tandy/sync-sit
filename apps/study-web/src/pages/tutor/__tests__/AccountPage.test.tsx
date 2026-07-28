@@ -104,4 +104,55 @@ describe('tutor AccountPage', () => {
       expect(h.auth.resetPassword).toHaveBeenCalledWith('login@ejm.org'),
     );
   });
+
+  // ── Cancellation policy (V2 feature 7) ──
+  it('seeds the cancellation-policy selector from the stored value', () => {
+    const userDoc = makeUserDoc();
+    (userDoc.profiles.tutor as Record<string, unknown>).cancellationNoticeHours = 48;
+    h.auth.userDoc = userDoc;
+    renderWithProviders(<AccountPage />);
+    const select = screen.getByLabelText(/cancellation policy/i) as HTMLSelectElement;
+    expect(select.value).toBe('48');
+  });
+
+  it('defaults the selector to 0 (no policy) when the field is absent', () => {
+    renderWithProviders(<AccountPage />);
+    const select = screen.getByLabelText(/cancellation policy/i) as HTMLSelectElement;
+    expect(select.value).toBe('0');
+  });
+
+  it('saves the selected policy to the numeric dot-path and refreshes', async () => {
+    renderWithProviders(<AccountPage />);
+    fireEvent.change(screen.getByLabelText(/cancellation policy/i), { target: { value: '48' } });
+    fireEvent.click(screen.getByRole('button', { name: /save policy/i }));
+
+    await waitFor(() =>
+      expect(h.updateDoc).toHaveBeenCalledWith(
+        expect.objectContaining({ path: 'users/t1' }),
+        expect.objectContaining({
+          'profiles.tutor.cancellationNoticeHours': 48,
+          updatedAt: 'ts',
+        }),
+      ),
+    );
+    // The value is the NUMBER 48, never the string '48'.
+    const call = h.updateDoc.mock.calls.find(
+      (c) => (c[1] as Record<string, unknown>)['profiles.tutor.cancellationNoticeHours'] !== undefined,
+    );
+    expect(call?.[1]['profiles.tutor.cancellationNoticeHours']).toBe(48);
+    await waitFor(() => expect(h.auth.refreshUserDoc).toHaveBeenCalled());
+  });
+
+  it('saves the 1-week (168) preset as its numeric value', async () => {
+    renderWithProviders(<AccountPage />);
+    fireEvent.change(screen.getByLabelText(/cancellation policy/i), { target: { value: '168' } });
+    fireEvent.click(screen.getByRole('button', { name: /save policy/i }));
+
+    await waitFor(() =>
+      expect(h.updateDoc).toHaveBeenCalledWith(
+        expect.objectContaining({ path: 'users/t1' }),
+        expect.objectContaining({ 'profiles.tutor.cancellationNoticeHours': 168 }),
+      ),
+    );
+  });
 });

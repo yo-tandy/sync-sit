@@ -6,6 +6,7 @@ import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '@/config/firebase';
 import type { TutorSearchResult, StudyContactRequestStatus } from '@ejm/study-core';
 import { Card, Button, Badge, Avatar, Dialog, Textarea } from '@ejm/shared-ui';
+import { humanizeNoticeWindow } from '@/utils/cancellationPolicy';
 
 /**
  * A single tutor result row with a consent-gated contact CTA.
@@ -96,6 +97,13 @@ export function TutorCard({ result }: { result: TutorSearchResult }) {
             {result.distance !== null && (
               <span>{t('family.search.distance', { km: result.distance.toFixed(1) })}</span>
             )}
+            {result.cancellationNoticeHours > 0 && (
+              <span>
+                {t('family.search.cancellationNotice', {
+                  window: humanizeNoticeWindow(result.cancellationNoticeHours, t),
+                })}
+              </span>
+            )}
           </div>
 
           {result.endorsementCount > 0 && (
@@ -174,6 +182,7 @@ export function TutorCard({ result }: { result: TutorSearchResult }) {
                 sessionLengthsMin: result.sessionLengthsMin,
                 locationPrefs: result.locationPrefs,
                 tutorName: result.firstName,
+                cancellationNoticeHours: result.cancellationNoticeHours,
               }}
               className="mt-3 block"
             >

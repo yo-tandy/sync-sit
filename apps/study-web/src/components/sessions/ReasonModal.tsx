@@ -22,6 +22,9 @@ export interface ReasonModalProps {
   keepLabel: string;
   submitting: boolean;
   error?: string | null;
+  // Optional amber heads-up shown ABOVE the reason field (e.g. a late-cancel
+  // warning, V2 feature 7). Purely informational — it changes no behavior.
+  warning?: string;
   onConfirm: (reason: string) => void;
   onClose: () => void;
 }
@@ -42,6 +45,7 @@ function ReasonForm({
   keepLabel,
   submitting,
   error,
+  warning,
   onConfirm,
   onClose,
 }: Omit<ReasonModalProps, 'open'>) {
@@ -50,6 +54,9 @@ function ReasonForm({
     <>
       <h3 className="mb-2 text-lg font-bold">{title}</h3>
       <p className="mb-3 text-sm text-gray-600">{description}</p>
+      {warning && (
+        <p className="mb-3 rounded-lg bg-amber-50 p-2 text-sm text-amber-800">{warning}</p>
+      )}
       <textarea
         className="mb-3 w-full rounded-lg border border-gray-300 p-2 text-sm"
         rows={3}

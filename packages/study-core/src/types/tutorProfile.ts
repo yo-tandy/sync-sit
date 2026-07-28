@@ -47,6 +47,13 @@ export interface TutorProfile extends ProfileBase {
    * (applies when location is family_home or tutor_home).
    */
   paddingMin: number;
+  /**
+   * Cancellation-notice policy in hours (one of CANCELLATION_NOTICE_PRESETS;
+   * absent → 0 = no policy). Tutor-editable directly (like paddingMin) and
+   * deliberately NOT rules-pinned: enforcement reads the snapshot taken onto
+   * each session at request time, never this live value.
+   */
+  cancellationNoticeHours?: number;
 
   // Search visibility
   searchable?: boolean;

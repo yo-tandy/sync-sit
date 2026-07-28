@@ -361,6 +361,18 @@ export default {
         completed: 'Terminée',
       },
     },
+    account: {
+      cancellationPolicy: {
+        title: 'Politique d\'annulation',
+        help: 'Définissez le préavis que les familles doivent respecter pour annuler un cours confirmé. Une annulation plus tardive reste possible, mais elle est signalée comme annulation tardive. Seules les nouvelles réservations utilisent la politique définie ici.',
+        none: 'Aucune politique',
+        hours24: '24 heures',
+        hours48: '48 heures',
+        week1: '1 semaine',
+        save: 'Enregistrer la politique',
+        saved: 'Politique d\'annulation enregistrée',
+      },
+    },
     endorsements: {
       title: 'Recommandations',
       empty:
@@ -517,6 +529,7 @@ export default {
         whatsapp: 'WhatsApp',
         book: 'Réserver un cours',
       },
+      cancellationNotice: 'Préavis d\'annulation de {{window}}',
       contactDialog: {
         title: 'Demander le contact de {{name}}',
         messageLabel: 'Message (facultatif)',
@@ -551,6 +564,7 @@ export default {
       booking: 'Réservation…',
       loadError: 'Impossible de charger ce professeur. Revenez en arrière et réessayez.',
       theTutor: 'le professeur',
+      cancellationPolicy: 'Ce professeur demande un préavis de {{window}} pour annuler un cours confirmé. Les annulations plus tardives restent possibles mais sont signalées comme tardives.',
       mode: {
         oneTime: 'Ponctuel',
         weekly: 'Hebdomadaire',
@@ -714,6 +728,17 @@ export default {
       errorInvalid: 'Cette recommandation ne peut pas être envoyée — veuillez vérifier le texte et réessayer.',
       error: 'Une erreur est survenue. Veuillez réessayer.',
     },
+  },
+
+  // Textes partagés de la politique d'annulation (V2 fonctionnalité 7), utilisés
+  // par les parcours d'annulation des deux portails et le badge d'annulation tardive.
+  sessions: {
+    window: {
+      week: '1 semaine',
+    },
+    lateCancelWarning:
+      'Attention — cette annulation est dans la fenêtre de préavis de {{window}}, elle sera donc enregistrée comme une annulation tardive.',
+    cancelledLateBadge: 'Annulée tardivement',
   },
 
   enrollment: {

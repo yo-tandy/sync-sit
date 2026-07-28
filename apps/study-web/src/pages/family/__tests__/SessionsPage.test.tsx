@@ -352,6 +352,50 @@ describe('family SessionsPage — management', () => {
     expect(screen.queryByText(/no sessions yet/i)).not.toBeInTheDocument();
   });
 
+  // ── Cancellation policy (V2 feature 7) ──
+  // Now is 2026-08-01 11:00 Paris (CEST). A confirmed one_time on 2026-08-02
+  // 10:00 with a 48h policy is inside the window → the modal warns.
+  it('warns in the cancel modal when a confirmed one_time is inside the notice window', async () => {
+    h.sessions = [
+      confirmedOneTime({ sessionId: 'sL', date: '2026-08-02', startTime: '10:00', cancellationNoticeHours: 48 }),
+    ];
+    renderWithProviders(<SessionsPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /cancel session/i }));
+    expect(await screen.findByText(/late cancellation/i)).toBeInTheDocument();
+  });
+
+  it('shows no late-cancel warning when outside the notice window', async () => {
+    h.sessions = [
+      confirmedOneTime({ sessionId: 'sE', date: '2026-08-20', startTime: '10:00', cancellationNoticeHours: 48 }),
+    ];
+    renderWithProviders(<SessionsPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /cancel session/i }));
+    await screen.findByRole('button', { name: /confirm cancellation/i });
+    expect(screen.queryByText(/late cancellation/i)).not.toBeInTheDocument();
+  });
+
+  it('renders a "Cancelled late" badge on a late-cancelled history session', async () => {
+    h.sessions = [
+      confirmedOneTime({ sessionId: 'sH', status: 'cancelled', lateCancellation: true, tutorName: 'Late Tutor' }),
+    ];
+    renderWithProviders(<SessionsPage />);
+
+    await screen.findByText('Late Tutor');
+    expect(screen.getByText(/cancelled late/i)).toBeInTheDocument();
+  });
+
+  it('renders no "Cancelled late" badge on an on-time cancelled history session', async () => {
+    h.sessions = [
+      confirmedOneTime({ sessionId: 'sH2', status: 'cancelled', tutorName: 'OnTime Tutor' }),
+    ];
+    renderWithProviders(<SessionsPage />);
+
+    await screen.findByText('OnTime Tutor');
+    expect(screen.queryByText(/cancelled late/i)).not.toBeInTheDocument();
+  });
+
   it('renders terminal sessions in a read-only history section', async () => {
     h.sessions = [
       confirmedOneTime({ sessionId: 'd1', tutorName: 'Declined Tutor', status: 'declined' }),

@@ -171,6 +171,7 @@ export const proposeSession = onCall(
       sessionLengthMinutes,
       location,
       paddingMinutes,
+      cancellationNoticeHours: tutor.cancellationNoticeHours ?? 0,
       status: 'pending',
       createdAt: now,
       updatedAt: now,

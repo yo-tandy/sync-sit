@@ -32,6 +32,8 @@ export interface TutorSearchResult {
   distance: number | null;
   /** Count of the tutor's approved/published endorsements. */
   endorsementCount: number;
+  /** Tutor's cancellation-notice policy in hours (0 = no policy). */
+  cancellationNoticeHours: number;
   /** This family's contact-request status toward the tutor. */
   requestStatus: 'none' | StudyContactRequestStatus;
 

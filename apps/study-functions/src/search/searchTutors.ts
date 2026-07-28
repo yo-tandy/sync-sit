@@ -159,6 +159,7 @@ export const searchTutors = onCall(
         locationPrefs: tutor.locationPrefs || [],
         distance,
         endorsementCount: tutor.endorsementCount ?? 0,
+        cancellationNoticeHours: tutor.cancellationNoticeHours ?? 0,
         requestStatus,
       };
       if (contactApproved) {

@@ -15,6 +15,7 @@ import { dayOfWeek } from '@ejm/study-core';
 import type { WeeklyGrid } from '../availability/computeDateAvailability.js';
 import { cancelSessionSchema } from '../validation/session.js';
 import { buildRestoredOverride, type RestoreResult } from './sessionOverride.js';
+import { isLateCancellation } from './lateCancellation.js';
 
 type CancelStatusReason = 'cancelled_by_tutor' | 'cancelled_by_family';
 
@@ -121,6 +122,11 @@ export const cancelSession = onCall(
       updatedAt: now,
     };
 
+    // Snapshot taken at request creation (bookSession/proposeSession) — immutable
+    // for this session, so a later profile edit cannot retro-classify it. For a
+    // recurring series this lives on the parent and governs every instance.
+    const noticeHours = (session.cancellationNoticeHours as number | undefined) ?? 0;
+
     // ── The cancel transaction (all reads before any writes) ──
     const outcome = await db.runTransaction(async (tx) => {
       const freshSnap = await tx.get(sessionRef);
@@ -137,10 +143,11 @@ export const cancelSession = onCall(
       }
       const isRecurring = fresh.type === 'recurring';
 
-      // Pending: a proposal that never claimed slots → pure status flip.
+      // Pending: a proposal that never claimed slots → pure status flip. A
+      // pending request is never a late cancellation (nothing was committed).
       if (fresh.status === 'pending') {
         tx.update(sessionRef, cancelFields);
-        return { type: fresh.type as string };
+        return { type: fresh.type as string, late: false };
       }
 
       // Confirmed one_time: restore the single date's override, flip the session.
@@ -155,9 +162,15 @@ export const cancelSession = onCall(
           weeklySlots: weekly[dayOfWeek(date)] ?? [],
           now,
         });
-        tx.update(sessionRef, cancelFields);
+        const late = isLateCancellation(
+          fresh.date as string,
+          fresh.startTime as string,
+          noticeHours,
+          now,
+        );
+        tx.update(sessionRef, late ? { ...cancelFields, lateCancellation: true } : cancelFields);
         applyRestore(tx, overrideRef, restore);
-        return { type: 'one_time' };
+        return { type: 'one_time', late };
       }
 
       // Confirmed recurring: flip the parent, cancel every FUTURE scheduled
@@ -173,14 +186,24 @@ export const cancelSession = onCall(
       const overrideSnaps = await Promise.all(overrideRefs.map((r) => tx.get(r)));
 
       tx.update(sessionRef, cancelFields);
+      let anyLate = false;
       for (let i = 0; i < affected.length; i++) {
-        const date = affected[i].data().date as string;
+        const instData = affected[i].data();
+        const date = instData.date as string;
+        const instLate = isLateCancellation(
+          date,
+          instData.startTime as string,
+          noticeHours,
+          now,
+        );
+        if (instLate) anyLate = true;
         tx.update(affected[i].ref, {
           status: 'cancelled',
           statusReason,
           cancellationReason: reason,
           cancelledAt: now,
           updatedAt: now,
+          ...(instLate ? { lateCancellation: true } : {}),
         });
         const existing = overrideSnaps[i].exists ? overrideSnaps[i].data()! : null;
         const restore = buildRestoredOverride({
@@ -192,7 +215,7 @@ export const cancelSession = onCall(
         });
         applyRestore(tx, overrideRefs[i], restore);
       }
-      return { type: 'recurring' };
+      return { type: 'recurring', late: anyLate };
     });
 
     // ── ONE notification to the OTHER side ──
@@ -205,6 +228,12 @@ export const cancelSession = onCall(
     const seriesNote = isSeries
       ? '<p>This cancels the entire recurring series (all upcoming sessions).</p>'
       : '';
+    // Accountability note when the cancel fell inside the notice window (soft
+    // enforcement — the cancel still succeeded).
+    const latePolicyNote = outcome.late
+      ? `<p>This was a <strong>late cancellation</strong> under the ${noticeHours}-hour notice policy.</p>`
+      : '';
+    const lateSuffix = outcome.late ? ' (late cancellation)' : '';
 
     if (statusReason === 'cancelled_by_family') {
       // Notify the TUTOR directly (email + push + in-app), à la cancelAppointment.
@@ -214,7 +243,7 @@ export const cancelSession = onCall(
       const cancelPrefs = tutorData?.notifPrefs?.cancelled;
       const familyName = (session.familyName as string) || 'A family';
       const title = isSeries ? 'Recurring sessions cancelled' : 'Session cancelled';
-      const body = `${familyName} cancelled ${isSeries ? 'the recurring series' : `the session for ${whenInfo}`}. Reason: ${reason}`;
+      const body = `${familyName} cancelled ${isSeries ? 'the recurring series' : `the session for ${whenInfo}`}. Reason: ${reason}${lateSuffix}`;
 
       await db.collection('notifications').add({
         recipientUserId: tutorUserId,
@@ -238,6 +267,7 @@ export const cancelSession = onCall(
           }.</p>
            ${seriesNote}
            <p><strong>Reason:</strong> ${reason}</p>
+           ${latePolicyNote}
            <p style="margin-top: 16px;"><a href="https://sync-study.com/tutor" style="background: #2563EB; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View in app</a></p>`,
         );
       }
@@ -257,13 +287,14 @@ export const cancelSession = onCall(
         title: isSeries ? 'Recurring sessions cancelled' : 'Session cancelled',
         body: `${tutorName} cancelled ${
           isSeries ? 'your recurring tutoring series' : `the session for ${whenInfo}`
-        }. Reason: ${reason}`,
+        }. Reason: ${reason}${lateSuffix}`,
         emailSubject: `Session cancelled — ${tutorName}`,
         emailBody: `<p><strong>${tutorName}</strong> cancelled ${
           isSeries ? 'your recurring tutoring series' : `the session for <strong>${whenInfo}</strong>`
         }.</p>
            ${seriesNote}
            <p><strong>Reason:</strong> ${reason}</p>
+           ${latePolicyNote}
            <p style="margin-top: 16px;"><a href="https://sync-study.com/family" style="background: #2563EB; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View in app</a></p>`,
         data: { sessionId },
       });
@@ -274,6 +305,7 @@ export const cancelSession = onCall(
       reason,
       cancelledFromStatus: session.status,
       type: outcome.type,
+      late: outcome.late === true,
     });
 
     return { success: true };
