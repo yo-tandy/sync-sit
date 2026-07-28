@@ -134,6 +134,10 @@ service cloud.firestore {
       // NOTE: `profiles.babysitter.searchable` and `profiles.tutor.searchable`
       //   are intentionally editable — they are user-controlled by design
       //   (soft hide from search).
+      // NOTE: `profiles.tutor.cancellationNoticeHours` is also intentionally
+      //   editable — enforcement reads the per-session SNAPSHOT taken at
+      //   request time (bookSession/proposeSession), so live edits cannot
+      //   retro-classify existing bookings.
       allow update: if isOwner(userId)
                     && !request.resource.data.diff(resource.data).affectedKeys()
                         .hasAny(['uid', 'email', 'status', 'createdAt', 'isAdmin'])

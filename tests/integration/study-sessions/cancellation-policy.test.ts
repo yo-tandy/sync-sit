@@ -332,4 +332,35 @@ describe('cancellation policy', () => {
       expect(inst!.lateCancellation).toBeUndefined();
     });
   });
+
+  // ── Task 6: searchTutors projects the policy ──
+
+  describe('search projection', () => {
+    // tutor2's own area (Paris center) — the search origin so tutor2 matches.
+    const PARIS_CENTER = { lat: 48.8566, lng: 2.3522 };
+    type TutorResult = { uid: string; cancellationNoticeHours: number };
+
+    it('projects the tutor policy into search results', async () => {
+      const res = await callFunction<{ results: TutorResult[] }>(
+        'searchTutors',
+        { subject: 'math', level: '6e', latLng: PARIS_CENTER },
+        parent1Token,
+      );
+      const tutor = res.results.find((r) => r.uid === seed.tutor2.uid);
+      expect(tutor?.cancellationNoticeHours).toBe(48);
+    });
+
+    it('projects 0 when the tutor has no policy set', async () => {
+      await getDb().collection('users').doc(seed.tutor2.uid).update({
+        'profiles.tutor.cancellationNoticeHours': FieldValue.delete(),
+      });
+      const res = await callFunction<{ results: TutorResult[] }>(
+        'searchTutors',
+        { subject: 'math', level: '6e', latLng: PARIS_CENTER },
+        parent1Token,
+      );
+      const tutor = res.results.find((r) => r.uid === seed.tutor2.uid);
+      expect(tutor?.cancellationNoticeHours).toBe(0);
+    });
+  });
 });
