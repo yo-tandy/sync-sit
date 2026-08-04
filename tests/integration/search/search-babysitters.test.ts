@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { clearAll, callFunction, getIdToken } from '../../setup/emulator.js';
+import { clearAll, callFunction, getIdToken, getDb } from '../../setup/emulator.js';
 import { seedTestData, type SeedData } from '../../setup/seed.js';
 
 describe('searchBabysitters', () => {
@@ -106,6 +106,145 @@ describe('searchBabysitters', () => {
     } catch {
       // Function threw permission-denied — also acceptable
     }
+  });
+});
+
+// Age backstop (governance PR 1): sit enforces the under-15 floor and the
+// DOB/grad-year consistency check at the consumption point — search.
+// Fixtures are computed relative to the real clock (September school-year
+// boundary), mirroring the tutor-age-gate integration tests.
+describe('searchBabysitters age backstop', () => {
+  let seed: SeedData;
+  let parentToken: string;
+  let adminToken: string;
+
+  function schoolYearEnd(): number {
+    const d = new Date();
+    return d.getMonth() >= 8 ? d.getFullYear() + 1 : d.getFullYear();
+  }
+
+  function gradYearForExpectedAge(expectedAge: number): number {
+    return (schoolYearEnd() + (18 - expectedAge)) % 100;
+  }
+
+  /** A DOB Date for someone who turned `age` about five months ago. */
+  function dobWithAge(age: number): Date {
+    const d = new Date();
+    let y = d.getFullYear();
+    let m = d.getMonth() - 5;
+    if (m < 0) {
+      m += 12;
+      y -= 1;
+    }
+    return new Date(`${y - age}-${String(m + 1).padStart(2, '0')}-15T00:00:00Z`);
+  }
+
+  async function seedSitter(
+    uid: string,
+    ejemEmail: string,
+    dateOfBirth: Date | null,
+  ) {
+    await getDb().collection('users').doc(uid).set({
+      uid,
+      email: ejemEmail,
+      status: 'active',
+      firstName: `First-${uid}`,
+      lastName: `Last-${uid}`,
+      ...(dateOfBirth ? { dateOfBirth } : {}),
+      profiles: {
+        babysitter: {
+          enrollmentComplete: true,
+          ejemEmail,
+          searchable: true,
+          gender: 'female',
+          classLevel: 'Seconde',
+          languages: ['French'],
+          kidAgeRange: { min: 0, max: 18 },
+          maxKids: 3,
+          hourlyRate: 10,
+          contactEmail: ejemEmail,
+          areaMode: 'arrondissement',
+          arrondissements: ['15e', '16e'],
+          areaLatLng: { lat: 48.8530, lng: 2.2750 },
+        },
+      },
+      fcmTokens: [],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+  }
+
+  const GRAD_15 = gradYearForExpectedAge(15);
+  const GRAD_16 = gradYearForExpectedAge(16);
+
+  const UNDER_15_UID = 'bs-gate-under15';
+  const MISMATCH_UID = 'bs-gate-mismatch';
+  const EXEMPT_UID = 'bs-gate-exempt';
+  const NO_DOB_UID = 'bs-gate-nodob';
+  const FINE_UID = 'bs-gate-fine';
+
+  const EXEMPT_EMAIL = `gate.exempt${GRAD_15}@ejm.org`;
+
+  beforeAll(async () => {
+    await clearAll();
+    seed = await seedTestData();
+    parentToken = await getIdToken(seed.parent1.uid);
+    adminToken = await getIdToken(seed.admin.uid);
+
+    // Under-15 by DOB, email cohort expects 15 (within tolerance — the floor
+    // alone must exclude).
+    await seedSitter(UNDER_15_UID, `gate.under${GRAD_15}@ejm.org`, dobWithAge(14));
+    // DOB says 21, email cohort expects 15 → mismatch beyond one class.
+    await seedSitter(MISMATCH_UID, `gate.mismatch${GRAD_15}@ejm.org`, dobWithAge(21));
+    // Same mismatch, but with an admin exemption → visible.
+    await seedSitter(EXEMPT_UID, EXEMPT_EMAIL, dobWithAge(21));
+    await callFunction('setEnrollmentExemption', { email: EXEMPT_EMAIL, note: 'ok' }, adminToken);
+    // Legacy profile without a DOB → NOT excluded.
+    await seedSitter(NO_DOB_UID, `gate.nodob${GRAD_15}@ejm.org`, null);
+    // Consistent 16-year-old → visible.
+    await seedSitter(FINE_UID, `gate.fine${GRAD_16}@ejm.org`, dobWithAge(16));
+  });
+
+  afterAll(async () => {
+    await clearAll();
+  });
+
+  async function searchUids(): Promise<string[]> {
+    const result = await callFunction<{ results: Array<{ uid: string }> }>(
+      'searchBabysitters',
+      {
+        type: 'one_time',
+        date: getNextSaturday(),
+        startTime: '10:00',
+        endTime: '13:00',
+        kidAges: [6],
+        numberOfKids: 1,
+        latLng: { lat: 48.8566, lng: 2.2769 },
+        filters: {},
+      },
+      parentToken,
+    );
+    return result.results.map((r) => r.uid);
+  }
+
+  it('excludes an under-15 babysitter', async () => {
+    expect(await searchUids()).not.toContain(UNDER_15_UID);
+  });
+
+  it('excludes a DOB/grad-year mismatched babysitter', async () => {
+    expect(await searchUids()).not.toContain(MISMATCH_UID);
+  });
+
+  it('includes a mismatched babysitter with an admin exemption', async () => {
+    expect(await searchUids()).toContain(EXEMPT_UID);
+  });
+
+  it('does NOT exclude a legacy profile missing its DOB', async () => {
+    expect(await searchUids()).toContain(NO_DOB_UID);
+  });
+
+  it('includes a consistent 16-year-old (regression guard)', async () => {
+    expect(await searchUids()).toContain(FINE_UID);
   });
 });
 

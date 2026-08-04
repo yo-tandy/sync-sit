@@ -3,6 +3,7 @@ import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { haversineDistance, getParentProfile, getBabysitterView } from '@ejm/sit-core';
 import type { LatLng, User, FirestoreTimestamp } from '@ejm/sit-core';
+import { validateEjmEmail, checkEnrollmentAge } from '@ejm/shared-core';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
 
 interface SearchParams {
@@ -44,8 +45,12 @@ interface BabysitterResult {
   isPreferred?: boolean;
 }
 
+function toDate(dob: string | Date | FirestoreTimestamp): Date {
+  return typeof dob === 'string' ? new Date(dob) : dob instanceof Date ? dob : (dob as FirestoreTimestamp).toDate();
+}
+
 function calculateAge(dob: string | Date | FirestoreTimestamp): number {
-  const birthDate = typeof dob === 'string' ? new Date(dob) : dob instanceof Date ? dob : (dob as FirestoreTimestamp).toDate();
+  const birthDate = toDate(dob);
   const today = new Date();
   let age = today.getFullYear() - birthDate.getFullYear();
   const m = today.getMonth() - birthDate.getMonth();
@@ -188,6 +193,33 @@ export const searchBabysitters = onCall(
       // Filter: minimum age
       const babysitterAge = b.dateOfBirth ? calculateAge(b.dateOfBirth) : 0;
       if (params.filters.minAge && babysitterAge < params.filters.minAge) continue;
+
+      // Age backstop (governance PR 1): sit has no server-side DOB at
+      // enrollment, so search is the operative gate. A provider whose DOB says
+      // under-15 is excluded outright; one whose DOB contradicts the EJM
+      // email's graduation year beyond one class is excluded unless an admin
+      // exemption exists (exemption doc read only on failure — rare path).
+      // Missing DOB or unparseable stored email (legacy profiles) are NOT
+      // excluded — the count script measures those first.
+      if (b.dateOfBirth) {
+        if (babysitterAge < 15) continue;
+        const emailCheck = validateEjmEmail(b.ejemEmail || '');
+        if (emailCheck.valid && emailCheck.graduationYear !== undefined) {
+          const verdict = checkEnrollmentAge({
+            dateOfBirth: toDate(b.dateOfBirth),
+            graduationYear: emailCheck.graduationYear,
+          });
+          // The floor is never waivable; only a mismatch consults exemptions.
+          if (verdict === 'under_15') continue;
+          if (verdict === 'age_mismatch') {
+            const exemption = await db
+              .collection('enrollmentExemptions')
+              .doc(b.ejemEmail.toLowerCase())
+              .get();
+            if (!exemption.exists) continue;
+          }
+        }
+      }
 
       // Filter: gender
       if (params.filters.gender && params.filters.gender !== 'any' && b.gender !== params.filters.gender) continue;
