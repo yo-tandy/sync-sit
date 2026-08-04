@@ -134,6 +134,10 @@ export default {
     dateOfBirth: 'Date of birth *',
     dobTooltip: 'We collect your date of birth so families can see the age of their potential babysitter.',
     ageError: 'You must be between 15 and 18 years old',
+    age: {
+      under15: 'You need to be at least 15 to enroll on your own. Your parents can create an account and enroll you from theirs.',
+      mismatch: "Your date of birth doesn't match your school year. Please contact the EJM administrator.",
+    },
     classLabel: 'Class *',
     selectClass: 'Select class',
     gender: 'Gender',
@@ -767,6 +771,15 @@ export default {
     preapprovedPending: 'Pending',
     preapprovedUsed: 'Used',
     noPreapprovedEmails: 'No pre-approved emails',
+    exemptions: {
+      title: 'Enrollment Exemptions',
+      desc: 'Waive the date-of-birth / school-year consistency check for an EJM email. Never waives the under-15 minimum.',
+      add: 'Add Exemption',
+      email: 'EJM email',
+      note: 'Note (optional)',
+      remove: 'Remove Exemption',
+      empty: 'No exemptions',
+    },
   },
 
   // Verification

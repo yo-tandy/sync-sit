@@ -49,6 +49,18 @@ interface PreapprovedEmail {
 }
 
 /**
+ * Enrollment exemption as returned by the `listEnrollmentExemptions`
+ * callable: waives the DOB/grad-year consistency check for one EJM email
+ * (never the under-15 floor). Doc id on the backend = the lowercased email.
+ */
+export interface EnrollmentExemption {
+  email: string;
+  note: string | null;
+  createdByUid: string;
+  createdAt: WireTimestamp | null;
+}
+
+/**
  * Wire shape for a timestamp coming back through a `httpsCallable` response.
  * The Firebase callable serializer may emit either an ISO string, an
  * Admin-SDK `_seconds`/`_nanoseconds` envelope, or a client-SDK
@@ -121,6 +133,13 @@ interface AdminState {
   fetchPreapprovedEmails: () => Promise<void>;
   addPreapprovedEmail: (email: string) => Promise<void>;
   removePreapprovedEmail: (email: string) => Promise<void>;
+
+  // Enrollment exemptions
+  exemptions: EnrollmentExemption[];
+  exemptionsLoading: boolean;
+  fetchExemptions: () => Promise<void>;
+  addExemption: (email: string, note?: string) => Promise<void>;
+  removeExemption: (email: string) => Promise<void>;
 }
 
 export const useAdminStore = create<AdminState>((set) => ({
@@ -266,6 +285,34 @@ export const useAdminStore = create<AdminState>((set) => ({
   },
   removePreapprovedEmail: async (email) => {
     const fn = httpsCallable(functions, 'removePreapprovedEmail');
+    await fn({ email });
+  },
+
+  // Enrollment exemptions
+  exemptions: [],
+  exemptionsLoading: false,
+  fetchExemptions: async () => {
+    set({ exemptionsLoading: true });
+    try {
+      const fn = httpsCallable<
+        Record<string, never>,
+        { exemptions: EnrollmentExemption[] }
+      >(functions, 'listEnrollmentExemptions');
+      const result = await fn({});
+      set({ exemptions: result.data.exemptions, exemptionsLoading: false });
+    } catch (err) {
+      set({ exemptionsLoading: false });
+      throw err;
+    }
+  },
+  addExemption: async (email, note) => {
+    const fn = httpsCallable(functions, 'setEnrollmentExemption');
+    // Omit `note` entirely when empty: the callable client serializes
+    // undefined as null, which the backend's zod .optional() rejects.
+    await fn(note ? { email, note } : { email });
+  },
+  removeExemption: async (email) => {
+    const fn = httpsCallable(functions, 'removeEnrollmentExemption');
     await fn({ email });
   },
 }));

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { enrollmentErrorReason } from '@ejm/shared-ui';
+import { enrollmentErrorReason, ageGateErrorCode } from '@ejm/shared-ui';
 
 describe('enrollmentErrorReason', () => {
   it('extracts account-exists', () => {
@@ -14,5 +14,21 @@ describe('enrollmentErrorReason', () => {
     expect(enrollmentErrorReason(new Error('boom'))).toBeNull();
     expect(enrollmentErrorReason(null)).toBeNull();
     expect(enrollmentErrorReason({ details: { reason: 'other' } })).toBeNull();
+  });
+});
+
+describe('ageGateErrorCode', () => {
+  it('extracts age/under-15', () => {
+    expect(ageGateErrorCode({ code: 'functions/failed-precondition', details: { code: 'age/under-15' } }))
+      .toBe('age/under-15');
+  });
+  it('extracts age/mismatch', () => {
+    expect(ageGateErrorCode({ details: { code: 'age/mismatch' } })).toBe('age/mismatch');
+  });
+  it('returns null for plain errors, non-errors, and other codes', () => {
+    expect(ageGateErrorCode(new Error('boom'))).toBeNull();
+    expect(ageGateErrorCode(null)).toBeNull();
+    expect(ageGateErrorCode({ details: { code: 'other' } })).toBeNull();
+    expect(ageGateErrorCode({ details: { reason: 'account-exists' } })).toBeNull();
   });
 });

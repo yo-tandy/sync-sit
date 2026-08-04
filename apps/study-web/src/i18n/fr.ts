@@ -745,6 +745,10 @@ export default {
     confirmConsentTitle: 'Presque terminé',
     accountExistsCta: 'Un compte existe déjà avec cet e-mail. Connectez-vous pour ajouter ce rôle.',
     alreadyEnrolled: 'Ce compte possède déjà ce rôle.',
+    age: {
+      under15: "Vous devez avoir au moins 15 ans pour vous inscrire seul(e). Vos parents peuvent créer un compte et vous inscrire depuis le leur.",
+      mismatch: "Votre date de naissance ne correspond pas à votre année scolaire. Veuillez contacter l'administrateur de l'EJM.",
+    },
     alreadyInFamily: 'Vous appartenez déjà à une famille.',
     joinFamilyConfirm: 'Rejoindre la famille {{familyName}}',
     tutorTitle: 'Inscription Tuteur',

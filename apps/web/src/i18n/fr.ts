@@ -130,6 +130,10 @@ export default {
     dateOfBirth: 'Date de naissance *',
     dobTooltip: 'Nous collectons votre date de naissance afin que les familles puissent voir l\u2019\u00e2ge de leur potentiel(le) babysitter.',
     ageError: 'Vous devez avoir entre 15 et 18 ans',
+    age: {
+      under15: "Vous devez avoir au moins 15 ans pour vous inscrire seul(e). Vos parents peuvent créer un compte et vous inscrire depuis le leur.",
+      mismatch: "Votre date de naissance ne correspond pas à votre année scolaire. Veuillez contacter l'administrateur de l'EJM.",
+    },
     classLabel: 'Classe *',
     selectClass: 'S\u00e9lectionner la classe',
     gender: 'Genre',
@@ -739,6 +743,15 @@ export default {
     preapprovedPending: 'En attente',
     preapprovedUsed: 'Utilisé',
     noPreapprovedEmails: 'Aucun email pré-approuvé',
+    exemptions: {
+      title: "Exemptions d'inscription",
+      desc: "Lève le contrôle de cohérence entre la date de naissance et l'année scolaire pour un email EJM. Ne lève jamais le minimum de 15 ans.",
+      add: 'Ajouter une exemption',
+      email: 'Email EJM',
+      note: 'Note (facultatif)',
+      remove: "Retirer l'exemption",
+      empty: 'Aucune exemption',
+    },
   },
 
   // Verification

@@ -12,6 +12,9 @@ const h = vi.hoisted(() => ({
   // Controllable error reason so tests can drive the account-exists /
   // profile-exists CTAs. Default null = plain-error behavior.
   errorReason: null as 'account-exists' | 'profile-exists' | null,
+  // Controllable age-gate code so tests can drive the under-15 / mismatch
+  // rejection branches. Default null = no age-gate rejection.
+  ageCode: null as 'age/under-15' | 'age/mismatch' | null,
 }));
 
 vi.mock('@/config/firebase', () => ({ functions: {} }));
@@ -21,6 +24,11 @@ vi.mock('firebase/functions', () => ({
     // Model a backend rejection carrying the details.reason the SDK surfaces.
     if (name === 'enrollTutor' && h.errorReason) {
       return Promise.reject({ details: { reason: h.errorReason } });
+    }
+    // Model the age-gate rejection: HttpsError('failed-precondition', msg,
+    // { code }) reaches the client as FunctionsError with details.code.
+    if (name === 'enrollTutor' && h.ageCode) {
+      return Promise.reject({ code: 'functions/failed-precondition', details: { code: h.ageCode } });
     }
     return Promise.resolve({ data: { uid: 'u1' } });
   },
@@ -49,6 +57,11 @@ vi.mock('@ejm/shared-ui', () => ({
   enrollmentErrorReason: (err: { details?: { reason?: unknown } } | null) => {
     const reason = err?.details?.reason;
     return reason === 'account-exists' || reason === 'profile-exists' ? reason : null;
+  },
+  // Mirrors the real helper: read details.code off the rejected value.
+  ageGateErrorCode: (err: { details?: { code?: unknown } } | null) => {
+    const code = err?.details?.code;
+    return code === 'age/under-15' || code === 'age/mismatch' ? code : null;
   },
   TopNav: ({ title }: { title: string }) => <div>{title}</div>,
   StepIndicator: ({ currentStep }: { currentStep: number }) => <div>step-{currentStep}</div>,
@@ -111,6 +124,7 @@ beforeEach(() => {
   h.auth = { firebaseUser: null, userDoc: null, loading: false };
   h.refreshUserDoc = vi.fn().mockResolvedValue(undefined);
   h.errorReason = null;
+  h.ageCode = null;
 });
 
 describe('TutorEnrollment orchestrator', () => {
@@ -234,5 +248,27 @@ describe('TutorEnrollment orchestrator', () => {
     const msg = i18n.t('enrollment.alreadyEnrolled');
     expect(await screen.findByText(msg)).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: i18n.t('auth.login') })).toBeNull();
+  });
+
+  it("enrollTutor 'age/under-15' rejection renders the parental-enrollment message", async () => {
+    h.ageCode = 'age/under-15';
+    await driveToEnrollTutor();
+
+    const msg = i18n.t('enrollment.age.under15');
+    expect(await screen.findByText(msg)).toBeInTheDocument();
+    // Distinct from the mismatch message and from the login CTA.
+    expect(screen.queryByText(i18n.t('enrollment.age.mismatch'))).toBeNull();
+    expect(screen.queryByRole('link', { name: i18n.t('auth.login') })).toBeNull();
+    expect(h.navigate).not.toHaveBeenCalledWith('/enroll/tutor/success', expect.anything());
+  });
+
+  it("enrollTutor 'age/mismatch' rejection renders the contact-admin message", async () => {
+    h.ageCode = 'age/mismatch';
+    await driveToEnrollTutor();
+
+    const msg = i18n.t('enrollment.age.mismatch');
+    expect(await screen.findByText(msg)).toBeInTheDocument();
+    expect(screen.queryByText(i18n.t('enrollment.age.under15'))).toBeNull();
+    expect(h.navigate).not.toHaveBeenCalledWith('/enroll/tutor/success', expect.anything());
   });
 });

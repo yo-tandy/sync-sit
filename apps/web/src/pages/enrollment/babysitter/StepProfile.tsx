@@ -1,11 +1,14 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { validateEjmEmail, checkEnrollmentAge } from '@ejm/shared-core';
 import { db } from '@/config/firebase';
 import { Button, Input, Select } from '@/components/ui';
 
 interface StepProfileProps {
   uid: string;
+  /** The signed-in user's EJM email — supplies the grad-year signal. */
+  email: string;
   onNext: () => void;
 }
 
@@ -21,6 +24,29 @@ function getAge(dateOfBirth: string): number | null {
   return age;
 }
 
+/**
+ * Client-only UX for the enrollment age gate (governance design): sit's
+ * enrollBabysitter never sees the DOB, so the server truth is the
+ * searchBabysitters backstop — this just surfaces the friendly message at the
+ * moment the DOB is entered. Dual signal: entered DOB vs the grad year in the
+ * signed-in EJM email; when the email carries no parseable grad year we fall
+ * back to the plain 15–18 range check.
+ */
+function ageGateErrorKey(dateOfBirth: string, age: number | null, email: string): string | null {
+  if (!dateOfBirth || age === null) return null;
+  const emailCheck = validateEjmEmail(email);
+  if (emailCheck.valid && emailCheck.graduationYear !== undefined) {
+    const verdict = checkEnrollmentAge({
+      dateOfBirth: new Date(dateOfBirth),
+      graduationYear: emailCheck.graduationYear,
+    });
+    if (verdict === 'under_15') return 'enrollment.age.under15';
+    if (verdict === 'age_mismatch') return 'enrollment.age.mismatch';
+    return null;
+  }
+  return age >= 15 && age < 19 ? null : 'enrollment.ageError';
+}
+
 const GENDER_OPTIONS = [
   { value: 'female', labelKey: 'enrollment.genderFemale' },
   { value: 'male', labelKey: 'enrollment.genderMale' },
@@ -28,7 +54,7 @@ const GENDER_OPTIONS = [
   { value: 'prefer_not_to_say', labelKey: 'enrollment.genderPreferNot' },
 ];
 
-export function StepProfile({ uid, onNext }: StepProfileProps) {
+export function StepProfile({ uid, email, onNext }: StepProfileProps) {
   const { t } = useTranslation();
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -39,8 +65,8 @@ export function StepProfile({ uid, onNext }: StepProfileProps) {
   const [error, setError] = useState<string | null>(null);
 
   const age = getAge(dateOfBirth);
-  const ageValid = age !== null && age >= 15 && age < 19;
-  const showAgeError = dateOfBirth && !ageValid;
+  const ageErrorKey = ageGateErrorKey(dateOfBirth, age, email);
+  const ageValid = age !== null && ageErrorKey === null;
 
   const isValid = firstName && lastName && dateOfBirth && ageValid && classLevel;
 
@@ -98,7 +124,7 @@ export function StepProfile({ uid, onNext }: StepProfileProps) {
             type="date"
             value={dateOfBirth}
             onChange={(e) => setDateOfBirth(e.target.value)}
-            error={showAgeError ? t('enrollment.ageError') : undefined}
+            error={ageErrorKey ? t(ageErrorKey) : undefined}
             required
           />
         </div>

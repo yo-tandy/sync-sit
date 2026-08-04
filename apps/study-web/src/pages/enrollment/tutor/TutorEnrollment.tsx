@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { httpsCallable } from 'firebase/functions';
-import { TopNav, StepIndicator, StepEmail, StepVerify, StepPassword, enrollmentErrorReason } from '@ejm/shared-ui';
+import { TopNav, StepIndicator, StepEmail, StepVerify, StepPassword, enrollmentErrorReason, ageGateErrorCode } from '@ejm/shared-ui';
 import { getTutorProfile } from '@ejm/study-core';
 import { functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
@@ -84,6 +84,12 @@ export function TutorEnrollment() {
     }
     if (reason === 'profile-exists') {
       setError(t('enrollment.alreadyEnrolled'));
+      setShowLoginCta(false);
+      return true;
+    }
+    const ageCode = ageGateErrorCode(err);
+    if (ageCode) {
+      setError(t(ageCode === 'age/under-15' ? 'enrollment.age.under15' : 'enrollment.age.mismatch'));
       setShowLoginCta(false);
       return true;
     }

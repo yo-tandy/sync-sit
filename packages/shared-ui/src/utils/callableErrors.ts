@@ -11,3 +11,16 @@ export function enrollmentErrorReason(err: unknown): EnrollmentErrorReason | nul
   const reason = details?.reason;
   return reason === 'account-exists' || reason === 'profile-exists' ? reason : null;
 }
+
+/**
+ * Extracts the machine-readable age-gate code set by the enrollment callables
+ * (HttpsError details: { code: 'age/under-15' | 'age/mismatch' }). Returns
+ * null for anything else.
+ */
+export type AgeGateErrorCode = 'age/under-15' | 'age/mismatch';
+
+export function ageGateErrorCode(err: unknown): AgeGateErrorCode | null {
+  const details = (err as { details?: { code?: unknown } } | null)?.details;
+  const code = details?.code;
+  return code === 'age/under-15' || code === 'age/mismatch' ? code : null;
+}
