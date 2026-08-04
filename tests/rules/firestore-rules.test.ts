@@ -1204,3 +1204,77 @@ describe('study-session instances subcollection', () => {
     await assertFails(deleteDoc(doc(authed.firestore(), ...INST_PATH)));
   });
 });
+
+// Enrollment exemptions: admin-managed waivers for the DOB/grad-year
+// consistency check. Read is admin-only; ALL writes go through the admin
+// callables (Admin SDK), so client writes are denied even for admins.
+describe('enrollmentExemptions collection', () => {
+  const EXEMPTION_PATH = ['enrollmentExemptions', 'kid29@ejm.org'] as const;
+
+  async function seedExemption() {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), ...EXEMPTION_PATH), {
+        createdByUid: 'adminE', createdAt: new Date(), note: 'repeated a year',
+      });
+    });
+  }
+
+  async function seedUser(id: string, data: Record<string, unknown>) {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'users', id), { uid: id, ...data });
+    });
+  }
+
+  it('admin can read an exemption doc', async () => {
+    await seedExemption();
+    await seedUser('adminE', { isAdmin: true, status: 'active', email: 'a@x.com', profiles: {} });
+    const authed = testEnv.authenticatedContext('adminE');
+    await assertSucceeds(getDoc(doc(authed.firestore(), ...EXEMPTION_PATH)));
+  });
+
+  it('non-admin authed user cannot read', async () => {
+    await seedExemption();
+    await seedUser('plainE', { status: 'active', email: 'p@x.com', profiles: { parent: { familyId: 'famE' } } });
+    const authed = testEnv.authenticatedContext('plainE');
+    await assertFails(getDoc(doc(authed.firestore(), ...EXEMPTION_PATH)));
+  });
+
+  it('the exempted student themself cannot read their exemption', async () => {
+    await seedExemption();
+    await seedUser('kidE', { status: 'active', email: 'kid29@ejm.org', profiles: {} });
+    const authed = testEnv.authenticatedContext('kidE');
+    await assertFails(getDoc(doc(authed.firestore(), ...EXEMPTION_PATH)));
+  });
+
+  it('unauthenticated cannot read', async () => {
+    await seedExemption();
+    const unauthed = testEnv.unauthenticatedContext();
+    await assertFails(getDoc(doc(unauthed.firestore(), ...EXEMPTION_PATH)));
+  });
+
+  it('even an admin cannot write client-side (callable-only)', async () => {
+    await seedUser('adminE', { isAdmin: true, status: 'active', email: 'a@x.com', profiles: {} });
+    const authed = testEnv.authenticatedContext('adminE');
+    await assertFails(
+      setDoc(doc(authed.firestore(), ...EXEMPTION_PATH), {
+        createdByUid: 'adminE', createdAt: new Date(),
+      }),
+    );
+  });
+
+  it('non-admin cannot write', async () => {
+    await seedUser('plainE', { status: 'active', email: 'p@x.com', profiles: {} });
+    const authed = testEnv.authenticatedContext('plainE');
+    await assertFails(
+      setDoc(doc(authed.firestore(), ...EXEMPTION_PATH), { createdByUid: 'plainE', createdAt: new Date() }),
+    );
+  });
+
+  it('non-admin cannot delete', async () => {
+    await seedExemption();
+    await seedUser('plainE', { status: 'active', email: 'p@x.com', profiles: {} });
+    const authed = testEnv.authenticatedContext('plainE');
+    const { deleteDoc } = await import('firebase/firestore');
+    await assertFails(deleteDoc(doc(authed.firestore(), ...EXEMPTION_PATH)));
+  });
+});

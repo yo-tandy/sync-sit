@@ -63,3 +63,8 @@ export { sendReminders } from './scheduled/sendReminders.js';
 export { cleanupOldData } from './scheduled/cleanupOldData.js';
 export { listAppointments } from './admin/listAppointments.js';
 export { deleteAppointment } from './admin/deleteAppointment.js';
+export {
+  setEnrollmentExemption,
+  removeEnrollmentExemption,
+  listEnrollmentExemptions,
+} from './admin/enrollmentExemptions.js';
