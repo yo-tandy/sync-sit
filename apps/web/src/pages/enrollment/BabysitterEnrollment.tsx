@@ -209,6 +209,7 @@ export function BabysitterEnrollment() {
         return (
           <StepProfile
             uid={uid}
+            email={firebaseUser?.email || ejemEmail}
             onNext={handleProfileComplete}
           />
         );

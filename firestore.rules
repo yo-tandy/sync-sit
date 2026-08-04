@@ -303,6 +303,14 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Enrollment exemptions: admin-managed waivers for the DOB/grad-year
+    // consistency check (never the under-15 floor). Doc id = lowercased EJM
+    // email. Written only by admin callables.
+    match /enrollmentExemptions/{email} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
     // Contact sharing requests: babysitter can read own, family members can read for their family
     match /contactSharingRequests/{requestId} {
       allow read: if isAuth() && (

@@ -1,6 +1,7 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { strongPasswordSchema } from '@ejm/sit-core';
+import { validateEjmEmail, checkEnrollmentAge } from '@ejm/shared-core';
 import { db, adminAuth } from '@ejm/shared-functions/config/firebase.js';
 import { writeUserActivity } from '@ejm/shared-functions/admin/writeAuditLog.js';
 import { getCorsOrigin } from '@ejm/shared-functions/config/cors.js';
@@ -92,6 +93,38 @@ export const enrollTutor = onCall(
     // new-account paths).
     const ejemEmailLower = data.ejemEmail.toLowerCase();
     const now = new Date();
+
+    // 5-bis. Self-enrollment age gate (governance PR 1): dual-signal check of
+    // the entered DOB against the graduation year embedded in the EJM email.
+    // Runs on BOTH paths, before any account/profile write. In production the
+    // email is always EJM-valid (verifyEjmEmail gates code issuance), so an
+    // unparseable email (legacy fixtures) skips the check rather than adding a
+    // new rejection here. The under-15 floor is never waivable; a mismatch is
+    // waived only by an admin-managed enrollmentExemptions doc.
+    const emailCheck = validateEjmEmail(data.ejemEmail);
+    if (emailCheck.valid && emailCheck.graduationYear !== undefined) {
+      const verdict = checkEnrollmentAge({
+        dateOfBirth: new Date(enrollment.dateOfBirth),
+        graduationYear: emailCheck.graduationYear,
+      });
+      if (verdict === 'under_15') {
+        throw new HttpsError(
+          'failed-precondition',
+          'You need to be at least 15 to enroll on your own. Your parents can create an account and enroll you from theirs.',
+          { code: 'age/under-15' },
+        );
+      }
+      if (verdict === 'age_mismatch') {
+        const exemption = await db.collection('enrollmentExemptions').doc(ejemEmailLower).get();
+        if (!exemption.exists) {
+          throw new HttpsError(
+            'failed-precondition',
+            "Your date of birth doesn't match your school year. Please contact the EJM administrator.",
+            { code: 'age/mismatch' },
+          );
+        }
+      }
+    }
 
     // Parse dateOfBirth string ("YYYY-MM-DD") into a Firestore Timestamp
     const dobTimestamp = Timestamp.fromDate(new Date(enrollment.dateOfBirth));

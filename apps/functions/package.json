@@ -7,7 +7,8 @@
     "build": "tsc",
     "dev": "tsc --watch",
     "typecheck": "tsc --noEmit",
-    "predeploy": "node ../../scripts/bundle-shared-for-deploy.js"
+    "predeploy": "node ../../scripts/bundle-shared-for-deploy.js",
+    "count:underage-providers": "node count-underage-providers.cjs"
   },
   "dependencies": {
     "@ejm/sit-core": "workspace:*",
