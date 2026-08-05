@@ -101,8 +101,20 @@ export const enrollTutor = onCall(
     // unparseable email (legacy fixtures) skips the check rather than adding a
     // new rejection here. The under-15 floor is never waivable; a mismatch is
     // waived only by an admin-managed enrollmentExemptions doc.
+    //
+    // GOVERNED bypass (governance PR 2): an account whose guardianLinks doc is
+    // ACTIVE carries the server-owned governedBy mirror and a parent-attested
+    // DOB — supervision, not gating, is its protection, so the whole gate
+    // stands down. Only the add-profile path can be governed (a governed kid
+    // always has an account); the new-account path keeps the full gate, and a
+    // revoked link (mirror deleted) restores it.
+    let isGoverned = false;
+    if (isAddProfile) {
+      const callerSnap = await db.collection('users').doc(request.auth!.uid).get();
+      isGoverned = !!callerSnap.data()?.governedBy;
+    }
     const emailCheck = validateEjmEmail(data.ejemEmail);
-    if (emailCheck.valid && emailCheck.graduationYear !== undefined) {
+    if (!isGoverned && emailCheck.valid && emailCheck.graduationYear !== undefined) {
       const verdict = checkEnrollmentAge({
         dateOfBirth: new Date(enrollment.dateOfBirth),
         graduationYear: emailCheck.graduationYear,
