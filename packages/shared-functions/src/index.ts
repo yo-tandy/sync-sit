@@ -49,6 +49,9 @@ export { getVerificationDocument } from './verification/getVerificationDocument.
 export { createKidInvite } from './guardian/createKidInvite.js';
 export { cancelKidInvite, resendKidInvite } from './guardian/manageKidInvite.js';
 export { redeemKidInvite } from './guardian/redeemKidInvite.js';
+export { respondToSupervisionRequest } from './guardian/respondToSupervisionRequest.js';
+export { revokeSupervision } from './guardian/revokeSupervision.js';
+export { correctChildIdentity } from './guardian/correctChildIdentity.js';
 
 // Callables — admin
 export { getAdminDashboard } from './admin/getAdminDashboard.js';

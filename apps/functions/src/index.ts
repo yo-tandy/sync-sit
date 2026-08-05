@@ -22,6 +22,9 @@ export {
   cancelKidInvite,
   resendKidInvite,
   redeemKidInvite,
+  respondToSupervisionRequest,
+  revokeSupervision,
+  correctChildIdentity,
   // Verification
   submitVerification,
   reviewVerification,

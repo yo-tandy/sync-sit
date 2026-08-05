@@ -83,6 +83,21 @@ export function requireCurrentConsent(
   return { ...c, approvedAt: now, approvedByUid };
 }
 
+/**
+ * Resolve the caller for guardian authorization: admin flag + parent familyId
+ * (either may be absent).
+ */
+export async function resolveGuardianCaller(
+  uid: string,
+): Promise<{ isAdminCaller: boolean; familyId?: string }> {
+  const snap = await db.collection('users').doc(uid).get();
+  const data = snap.data() as (User & { isAdmin?: boolean }) | undefined;
+  return {
+    isAdminCaller: data?.isAdmin === true,
+    familyId: getParentProfile(data)?.familyId,
+  };
+}
+
 /** Email the kid their invite link. The RAW token appears here and nowhere else. */
 export async function sendKidInviteEmail(
   kidEmail: string,
