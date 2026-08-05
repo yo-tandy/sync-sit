@@ -3,6 +3,7 @@ import {
   schoolYearEnd,
   expectedAgeForGradYear,
   checkEnrollmentAge,
+  ageFromDob,
 } from '../agePolicy.js';
 
 describe('schoolYearEnd', () => {
@@ -75,5 +76,22 @@ describe('checkEnrollmentAge (dual-signal)', () => {
     expect(
       checkEnrollmentAge({ dateOfBirth: new Date('2005-01-15'), graduationYear: 26, now }),
     ).toBe('age_mismatch');
+  });
+});
+
+describe('ageFromDob', () => {
+  const now = new Date('2026-03-01T12:00:00Z');
+  it('counts full years elapsed', () => {
+    expect(ageFromDob(new Date('2011-01-15'), now)).toBe(15);
+  });
+  it('is one less the day before the birthday', () => {
+    expect(ageFromDob(new Date('2011-03-02'), now)).toBe(14);
+  });
+  it('increments exactly on the birthday', () => {
+    expect(ageFromDob(new Date('2011-03-01'), now)).toBe(15);
+  });
+  it('matches checkEnrollmentAge floor semantics (Paris wall clock)', () => {
+    // 23:30Z on Feb 28 is already Mar 1 00:30 in Paris → birthday reached.
+    expect(ageFromDob(new Date('2011-03-01'), new Date('2026-02-28T23:30:00Z'))).toBe(15);
   });
 });

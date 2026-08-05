@@ -32,9 +32,13 @@ export function expectedAgeForGradYear(twoDigitGradYear: number, now: Date): num
 export type AgeGateVerdict = 'ok' | 'under_15' | 'age_mismatch';
 
 /** Full years elapsed between dob and now (calendar-accurate, Paris). */
-function fullYears(dob: Date, now: Date): number {
+export function ageFromDob(dateOfBirth: Date, now: Date = new Date()): number {
   const n = parisYmd(now);
-  const b = { y: dob.getUTCFullYear(), m: dob.getUTCMonth() + 1, day: dob.getUTCDate() };
+  const b = {
+    y: dateOfBirth.getUTCFullYear(),
+    m: dateOfBirth.getUTCMonth() + 1,
+    day: dateOfBirth.getUTCDate(),
+  };
   let age = n.y - b.y;
   if (n.m < b.m || (n.m === b.m && n.day < b.day)) age -= 1;
   return age;
@@ -51,7 +55,7 @@ export function checkEnrollmentAge(opts: {
   now?: Date;
 }): AgeGateVerdict {
   const now = opts.now ?? new Date();
-  const age = fullYears(opts.dateOfBirth, now);
+  const age = ageFromDob(opts.dateOfBirth, now);
   if (age < 15) return 'under_15';
   const expected = expectedAgeForGradYear(opts.graduationYear, now);
   if (Math.abs(age - expected) > 1) return 'age_mismatch';

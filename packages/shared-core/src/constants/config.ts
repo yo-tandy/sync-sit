@@ -10,6 +10,21 @@ export const MAX_PHOTO_SIZE = 5 * 1024 * 1024;
 /** Invite link expiry in milliseconds (1 hour) */
 export const INVITE_LINK_EXPIRY_MS = 60 * 60 * 1000;
 
+/**
+ * Current consent-document versions. The guardian callables require callers
+ * to send versions EQUAL to these (stale consent → invalid-argument), so a
+ * bump here forces clients to re-present the documents.
+ * NOTE: the enrollment flows historically hardcode their consentVersion in
+ * the web apps ('1.0' in sit, '2025-12-01' in study); these constants are the
+ * server-side source of truth for the guardian consent record.
+ */
+export const TOS_VERSION = '1.0';
+export const PRIVACY_POLICY_VERSION = '1.0';
+export const SUPERVISION_AGREEMENT_VERSION = '1.0';
+
+/** Kid-invite validity window in days (resend resets the clock) */
+export const KID_INVITE_VALIDITY_DAYS = 7;
+
 /** Verification code length */
 export const VERIFICATION_CODE_LENGTH = 6;
 

@@ -29,6 +29,18 @@ export interface User {
   consentVersion?: string;
   dismissedPwaInstallBanner?: boolean;
 
+  /**
+   * Supervision mirror, present iff the guardianLinks/{uid} doc is ACTIVE
+   * (a pending claim does NOT set it). Server-owned, rules-pinned.
+   */
+  governedBy?: { familyId: string; linkedAt: FirestoreTimestamp };
+  /**
+   * Parent-created accounts only: firstName/lastName/dateOfBirth are
+   * parent-attested and immutable client-side (corrections go through the
+   * correctChildIdentity callable or admin). Permanent — survives revocation.
+   */
+  identityLocked?: true;
+
   profiles: {
     babysitter?: ProfileBase;
     tutor?: ProfileBase;
