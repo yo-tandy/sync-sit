@@ -521,8 +521,11 @@ describe('family SessionsPage — endorse after completion', () => {
       ),
     );
 
+    // The dialog flips to its success view only after the callable's promise
+    // resolves and React re-renders — the waitFor above only proves the call
+    // was MADE, so the Done button must be awaited (raced flakily on main CI).
     // The set updates: the endorse affordance is gone for that tutor.
-    fireEvent.click(screen.getByRole('button', { name: /done/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /done/i }));
     await waitFor(() =>
       expect(screen.queryByRole('button', { name: /endorse alex roy/i })).not.toBeInTheDocument(),
     );
