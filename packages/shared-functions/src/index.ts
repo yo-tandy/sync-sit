@@ -48,6 +48,7 @@ export { getVerificationDocument } from './verification/getVerificationDocument.
 // Callables — guardian (parental governance)
 export { createKidInvite } from './guardian/createKidInvite.js';
 export { cancelKidInvite, resendKidInvite } from './guardian/manageKidInvite.js';
+export { redeemKidInvite } from './guardian/redeemKidInvite.js';
 
 // Callables — admin
 export { getAdminDashboard } from './admin/getAdminDashboard.js';

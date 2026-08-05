@@ -21,6 +21,7 @@ export {
   createKidInvite,
   cancelKidInvite,
   resendKidInvite,
+  redeemKidInvite,
   // Verification
   submitVerification,
   reviewVerification,
