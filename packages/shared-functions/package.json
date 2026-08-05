@@ -25,6 +25,11 @@
       "require": "./dist/enrollment/*.js",
       "types": "./src/enrollment/*.ts"
     },
+    "./guardian/*.js": {
+      "import": "./src/guardian/*.ts",
+      "require": "./dist/guardian/*.js",
+      "types": "./src/guardian/*.ts"
+    },
     "./verification/*.js": {
       "import": "./src/verification/*.ts",
       "require": "./dist/verification/*.js",

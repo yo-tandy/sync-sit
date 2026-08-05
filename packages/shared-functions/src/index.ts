@@ -45,6 +45,10 @@ export { lookupCommunityCode } from './verification/lookupCommunityCode.js';
 export { approveCommunityCode } from './verification/approveCommunityCode.js';
 export { getVerificationDocument } from './verification/getVerificationDocument.js';
 
+// Callables — guardian (parental governance)
+export { createKidInvite } from './guardian/createKidInvite.js';
+export { cancelKidInvite, resendKidInvite } from './guardian/manageKidInvite.js';
+
 // Callables — admin
 export { getAdminDashboard } from './admin/getAdminDashboard.js';
 export { listUsers } from './admin/listUsers.js';
