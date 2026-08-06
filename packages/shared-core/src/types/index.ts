@@ -7,4 +7,5 @@ export * from './family.js';
 export * from './reference.js';
 export * from './user.js';
 export * from './userAdapter.js';
+export * from './guardian.js';
 export * from './appointment.js';

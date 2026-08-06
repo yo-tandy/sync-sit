@@ -11,7 +11,7 @@ import {
 } from '@firebase/rules-unit-testing';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
-import { doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs, limit, orderBy } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, deleteDoc, deleteField, collection, query, where, getDocs, limit, orderBy } from 'firebase/firestore';
 
 let testEnv: RulesTestEnvironment;
 
@@ -1276,5 +1276,295 @@ describe('enrollmentExemptions collection', () => {
     const authed = testEnv.authenticatedContext('plainE');
     const { deleteDoc } = await import('firebase/firestore');
     await assertFails(deleteDoc(doc(authed.firestore(), ...EXEMPTION_PATH)));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Guardian foundation (governance PR 2): kidInvites / guardianLinks /
+// adminAlerts access matrices, plus the users-doc governedBy/identityLocked
+// pins. All guardian writes are callable-only (Admin SDK bypasses rules).
+// ---------------------------------------------------------------------------
+
+describe('guardian collections', () => {
+  async function seedUser(id: string, data: Record<string, unknown>) {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'users', id), { uid: id, ...data });
+    });
+  }
+
+  async function seedFamily(id: string, parentIds: string[]) {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'families', id), {
+        familyId: id, familyName: 'G', parentIds, status: 'active',
+      });
+    });
+  }
+
+  async function seedRaw(path: [string, string], data: Record<string, unknown>) {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), ...path), data);
+    });
+  }
+
+  /** famG (parentG1, parentG2), famX (parentX), an admin, and a stranger. */
+  async function seedActors() {
+    await seedFamily('famG', ['parentG1', 'parentG2']);
+    await seedFamily('famX', ['parentX']);
+    await seedUser('parentG1', { status: 'active', email: 'g1@x.com', profiles: { parent: { familyId: 'famG', enrollmentComplete: true } } });
+    await seedUser('parentG2', { status: 'active', email: 'g2@x.com', profiles: { parent: { familyId: 'famG', enrollmentComplete: true } } });
+    await seedUser('parentX', { status: 'active', email: 'x@x.com', profiles: { parent: { familyId: 'famX', enrollmentComplete: true } } });
+    await seedUser('adminG', { isAdmin: true, status: 'active', email: 'a@x.com', profiles: {} });
+    await seedUser('strangerG', { status: 'active', email: 's@x.com', profiles: {} });
+  }
+
+  const INVITE: [string, string] = ['kidInvites', 'inv1'];
+  function inviteDoc() {
+    return seedRaw(INVITE, {
+      kidEmailLower: 'kid29@ejm.org', firstName: 'Kid', lastName: 'G',
+      dateOfBirth: '2013-05-01', familyId: 'famG', createdByParentUid: 'parentG1',
+      tokenHash: 'deadbeef', status: 'pending',
+      createdAt: new Date(), expiresAt: new Date(Date.now() + 7 * 86400_000),
+      consent: { tosVersion: '1.0', privacyVersion: '1.0', supervisionAgreementVersion: '1.0', approvedAt: new Date(), approvedByUid: 'parentG1' },
+    });
+  }
+
+  describe('kidInvites', () => {
+    it('creating family parent can read', async () => {
+      await seedActors(); await inviteDoc();
+      const authed = testEnv.authenticatedContext('parentG1');
+      await assertSucceeds(getDoc(doc(authed.firestore(), ...INVITE)));
+    });
+
+    it('co-parent of the same family can read', async () => {
+      await seedActors(); await inviteDoc();
+      const authed = testEnv.authenticatedContext('parentG2');
+      await assertSucceeds(getDoc(doc(authed.firestore(), ...INVITE)));
+    });
+
+    it('admin can read', async () => {
+      await seedActors(); await inviteDoc();
+      const authed = testEnv.authenticatedContext('adminG');
+      await assertSucceeds(getDoc(doc(authed.firestore(), ...INVITE)));
+    });
+
+    it('parent of a DIFFERENT family cannot read', async () => {
+      await seedActors(); await inviteDoc();
+      const authed = testEnv.authenticatedContext('parentX');
+      await assertFails(getDoc(doc(authed.firestore(), ...INVITE)));
+    });
+
+    it('a stranger cannot read', async () => {
+      await seedActors(); await inviteDoc();
+      const authed = testEnv.authenticatedContext('strangerG');
+      await assertFails(getDoc(doc(authed.firestore(), ...INVITE)));
+    });
+
+    it('the invited kid (authed under some uid) cannot read — token path only', async () => {
+      await seedActors(); await inviteDoc();
+      await seedUser('kidUid', { status: 'active', email: 'kid29@ejm.org', profiles: {} });
+      const authed = testEnv.authenticatedContext('kidUid');
+      await assertFails(getDoc(doc(authed.firestore(), ...INVITE)));
+    });
+
+    it('unauthenticated cannot read', async () => {
+      await seedActors(); await inviteDoc();
+      await assertFails(getDoc(doc(testEnv.unauthenticatedContext().firestore(), ...INVITE)));
+    });
+
+    it('family parent cannot create an invite client-side', async () => {
+      await seedActors();
+      const authed = testEnv.authenticatedContext('parentG1');
+      await assertFails(setDoc(doc(authed.firestore(), ...INVITE), { familyId: 'famG', status: 'pending' }));
+    });
+
+    it('family parent cannot update (e.g. un-expire) an invite', async () => {
+      await seedActors(); await inviteDoc();
+      const authed = testEnv.authenticatedContext('parentG1');
+      await assertFails(updateDoc(doc(authed.firestore(), ...INVITE), { status: 'cancelled' }));
+    });
+
+    it('even admin cannot write client-side (callable-only)', async () => {
+      await seedActors(); await inviteDoc();
+      const authed = testEnv.authenticatedContext('adminG');
+      await assertFails(updateDoc(doc(authed.firestore(), ...INVITE), { status: 'cancelled' }));
+      await assertFails(deleteDoc(doc(authed.firestore(), ...INVITE)));
+    });
+  });
+
+  const LINK: [string, string] = ['guardianLinks', 'kidUid'];
+  function linkDoc(status = 'active') {
+    return seedRaw(LINK, {
+      childUid: 'kidUid', familyId: 'famG', createdByParentUid: 'parentG1',
+      status, origin: 'claim', requestedAt: new Date(),
+      consent: { tosVersion: '1.0', privacyVersion: '1.0', supervisionAgreementVersion: '1.0', approvedAt: new Date(), approvedByUid: 'parentG1' },
+    });
+  }
+
+  describe('guardianLinks', () => {
+    it('the child can read their own link', async () => {
+      await seedActors(); await linkDoc();
+      await seedUser('kidUid', { status: 'active', email: 'kid29@ejm.org', profiles: {} });
+      const authed = testEnv.authenticatedContext('kidUid');
+      await assertSucceeds(getDoc(doc(authed.firestore(), ...LINK)));
+    });
+
+    it('supervising family parents can read', async () => {
+      await seedActors(); await linkDoc();
+      await assertSucceeds(getDoc(doc(testEnv.authenticatedContext('parentG1').firestore(), ...LINK)));
+      await assertSucceeds(getDoc(doc(testEnv.authenticatedContext('parentG2').firestore(), ...LINK)));
+    });
+
+    it('admin can read', async () => {
+      await seedActors(); await linkDoc();
+      await assertSucceeds(getDoc(doc(testEnv.authenticatedContext('adminG').firestore(), ...LINK)));
+    });
+
+    it('a parent from a DIFFERENT family cannot read', async () => {
+      await seedActors(); await linkDoc();
+      await assertFails(getDoc(doc(testEnv.authenticatedContext('parentX').firestore(), ...LINK)));
+    });
+
+    it('a stranger cannot read', async () => {
+      await seedActors(); await linkDoc();
+      await assertFails(getDoc(doc(testEnv.authenticatedContext('strangerG').firestore(), ...LINK)));
+    });
+
+    it('unauthenticated cannot read', async () => {
+      await seedActors(); await linkDoc();
+      await assertFails(getDoc(doc(testEnv.unauthenticatedContext().firestore(), ...LINK)));
+    });
+
+    it('the child cannot self-activate a pending link', async () => {
+      await seedActors(); await linkDoc('pending');
+      await seedUser('kidUid', { status: 'active', email: 'kid29@ejm.org', profiles: {} });
+      const authed = testEnv.authenticatedContext('kidUid');
+      await assertFails(updateDoc(doc(authed.firestore(), ...LINK), { status: 'active' }));
+    });
+
+    it('a parent cannot create a link client-side', async () => {
+      await seedActors();
+      const authed = testEnv.authenticatedContext('parentG1');
+      await assertFails(setDoc(doc(authed.firestore(), ...LINK), { childUid: 'kidUid', familyId: 'famG', status: 'active' }));
+    });
+
+    it('the child cannot delete their link (no self-revoke)', async () => {
+      await seedActors(); await linkDoc();
+      await seedUser('kidUid', { status: 'active', email: 'kid29@ejm.org', profiles: {} });
+      await assertFails(deleteDoc(doc(testEnv.authenticatedContext('kidUid').firestore(), ...LINK)));
+    });
+  });
+
+  const ALERT: [string, string] = ['adminAlerts', 'alert1'];
+  function alertDoc() {
+    return seedRaw(ALERT, {
+      type: 'guardian_conflicting_claim', createdAt: new Date(),
+      data: { attemptedByUid: 'parentX', familyId: 'famX', kidEmailLower: 'kid29@ejm.org', existingLinkFamilyId: 'famG' },
+    });
+  }
+
+  describe('adminAlerts', () => {
+    it('admin can read', async () => {
+      await seedActors(); await alertDoc();
+      await assertSucceeds(getDoc(doc(testEnv.authenticatedContext('adminG').firestore(), ...ALERT)));
+    });
+
+    it('the parent whose claim raised the alert cannot read it', async () => {
+      await seedActors(); await alertDoc();
+      await assertFails(getDoc(doc(testEnv.authenticatedContext('parentX').firestore(), ...ALERT)));
+    });
+
+    it('a stranger cannot read', async () => {
+      await seedActors(); await alertDoc();
+      await assertFails(getDoc(doc(testEnv.authenticatedContext('strangerG').firestore(), ...ALERT)));
+    });
+
+    it('unauthenticated cannot read', async () => {
+      await seedActors(); await alertDoc();
+      await assertFails(getDoc(doc(testEnv.unauthenticatedContext().firestore(), ...ALERT)));
+    });
+
+    it('even admin cannot write client-side', async () => {
+      await seedActors();
+      const authed = testEnv.authenticatedContext('adminG');
+      await assertFails(setDoc(doc(authed.firestore(), ...ALERT), { type: 'guardian_conflicting_claim', createdAt: new Date(), data: {} }));
+    });
+  });
+
+  // users-doc pins: governedBy + identityLocked are server-owned; when
+  // identityLocked, the parent-attested identity fields are frozen.
+  describe('users governedBy / identityLocked pins', () => {
+    function kidBase(extra: Record<string, unknown> = {}) {
+      return {
+        status: 'active', email: 'kid29@ejm.org',
+        firstName: 'Kid', lastName: 'G', dateOfBirth: new Date('2013-05-01'),
+        profiles: { babysitter: { ejemEmail: 'kid29@ejm.org', enrollmentComplete: true, searchable: false } },
+        ...extra,
+      };
+    }
+
+    it('owner cannot set governedBy on themselves', async () => {
+      await seedUser('kidU1', kidBase());
+      const authed = testEnv.authenticatedContext('kidU1');
+      await assertFails(updateDoc(doc(authed.firestore(), 'users', 'kidU1'), {
+        governedBy: { familyId: 'famEvil', linkedAt: new Date() },
+      }));
+    });
+
+    it('owner cannot clear an existing governedBy mirror', async () => {
+      await seedUser('kidU2', kidBase({ governedBy: { familyId: 'famG', linkedAt: new Date() } }));
+      const authed = testEnv.authenticatedContext('kidU2');
+      await assertFails(updateDoc(doc(authed.firestore(), 'users', 'kidU2'), { governedBy: deleteField() }));
+    });
+
+    it('owner cannot set identityLocked', async () => {
+      await seedUser('kidU3', kidBase());
+      const authed = testEnv.authenticatedContext('kidU3');
+      await assertFails(updateDoc(doc(authed.firestore(), 'users', 'kidU3'), { identityLocked: true }));
+    });
+
+    it('owner cannot clear identityLocked', async () => {
+      await seedUser('kidU4', kidBase({ identityLocked: true }));
+      const authed = testEnv.authenticatedContext('kidU4');
+      await assertFails(updateDoc(doc(authed.firestore(), 'users', 'kidU4'), { identityLocked: deleteField() }));
+    });
+
+    it('identity-locked owner cannot change firstName', async () => {
+      await seedUser('kidU5', kidBase({ identityLocked: true }));
+      const authed = testEnv.authenticatedContext('kidU5');
+      await assertFails(updateDoc(doc(authed.firestore(), 'users', 'kidU5'), { firstName: 'Other' }));
+    });
+
+    it('identity-locked owner cannot change lastName', async () => {
+      await seedUser('kidU6', kidBase({ identityLocked: true }));
+      const authed = testEnv.authenticatedContext('kidU6');
+      await assertFails(updateDoc(doc(authed.firestore(), 'users', 'kidU6'), { lastName: 'Other' }));
+    });
+
+    it('identity-locked owner cannot change dateOfBirth', async () => {
+      await seedUser('kidU7', kidBase({ identityLocked: true }));
+      const authed = testEnv.authenticatedContext('kidU7');
+      await assertFails(updateDoc(doc(authed.firestore(), 'users', 'kidU7'), { dateOfBirth: new Date('2009-01-01') }));
+    });
+
+    it('identity-locked owner CAN still edit photoUrl and profile fields', async () => {
+      await seedUser('kidU8', kidBase({ identityLocked: true }));
+      const authed = testEnv.authenticatedContext('kidU8');
+      await assertSucceeds(updateDoc(doc(authed.firestore(), 'users', 'kidU8'), {
+        photoUrl: 'https://x.com/p.png',
+        'profiles.babysitter.searchable': true,
+      }));
+    });
+
+    it('an UNLOCKED owner can still change their own name (regression guard)', async () => {
+      await seedUser('kidU9', kidBase());
+      const authed = testEnv.authenticatedContext('kidU9');
+      await assertSucceeds(updateDoc(doc(authed.firestore(), 'users', 'kidU9'), { firstName: 'NewName' }));
+    });
+
+    it('a governed owner without identityLocked can also change their name (claim path)', async () => {
+      await seedUser('kidU10', kidBase({ governedBy: { familyId: 'famG', linkedAt: new Date() } }));
+      const authed = testEnv.authenticatedContext('kidU10');
+      await assertSucceeds(updateDoc(doc(authed.firestore(), 'users', 'kidU10'), { firstName: 'NewName' }));
+    });
   });
 });

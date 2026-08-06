@@ -113,6 +113,16 @@ service cloud.firestore {
       return isAuth() && request.auth.uid in get(/databases/$(database)/documents/families/$(familyId)).data.parentIds;
     }
 
+    // Helper: when identityLocked, the parent-attested identity fields
+    // (firstName/lastName/dateOfBirth) are frozen client-side — corrections go
+    // through the correctChildIdentity callable or admin. Trivially true for
+    // unlocked accounts.
+    function identityUnlockedOrUnchanged() {
+      return resource.data.get('identityLocked', false) != true
+             || !request.resource.data.diff(resource.data).affectedKeys()
+                 .hasAny(['firstName', 'lastName', 'dateOfBirth']);
+    }
+
     // Users: read own profile; parents can read active babysitters (for search results)
     match /users/{userId} {
       allow read: if isOwner(userId)
@@ -138,13 +148,18 @@ service cloud.firestore {
       //   editable — enforcement reads the per-session SNAPSHOT taken at
       //   request time (bookSession/proposeSession), so live edits cannot
       //   retro-classify existing bookings.
+      // - governedBy / identityLocked: supervision mirrors owned by the
+      //   guardian callables (governedBy present iff the guardianLinks doc is
+      //   ACTIVE; identityLocked marks parent-attested identity).
       allow update: if isOwner(userId)
                     && !request.resource.data.diff(resource.data).affectedKeys()
-                        .hasAny(['uid', 'email', 'status', 'createdAt', 'isAdmin'])
+                        .hasAny(['uid', 'email', 'status', 'createdAt', 'isAdmin',
+                                 'governedBy', 'identityLocked'])
                     && profileRolesUnchanged()
                     && babysitterIdentityUnchanged()
                     && tutorIdentityUnchanged()
-                    && parentFamilyIdUnchanged();
+                    && parentFamilyIdUnchanged()
+                    && identityUnlockedOrUnchanged();
     }
 
     // Families: readable + editable by family members + admin
@@ -299,6 +314,36 @@ service cloud.firestore {
 
     // Audit log: admin only
     match /auditLog/{logId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    // Kid invites: parent-created invitations for kids without an account.
+    // Readable only by the creating family + admin; the kid redeems via a
+    // hashed-token callable (redeemKidInvite), never a doc read — the doc
+    // stores only the sha256 of the emailed token. All writes callable-only.
+    match /kidInvites/{inviteId} {
+      allow read: if isFamilyMember(resource.data.familyId) || isAdmin();
+      allow write: if false;
+    }
+
+    // Guardian links: one supervising family per child (doc id = child uid).
+    // The doc is the GDPR consent record. Readable by the child, the
+    // supervising family, and admin; the whole lifecycle (pending/active/
+    // revoked) is driven exclusively by the guardian callables.
+    match /guardianLinks/{childUid} {
+      allow read: if isAuth() && (
+        request.auth.uid == resource.data.childUid
+        || isFamilyMember(resource.data.familyId)
+        || isAdmin()
+      );
+      allow write: if false;
+    }
+
+    // Admin alerts (e.g. conflicting supervision claims): admin-only reads.
+    // Written exclusively by callables — never by clients, even admins, so
+    // every alert provably originates from a server-observed event.
+    match /adminAlerts/{alertId} {
       allow read: if isAdmin();
       allow write: if false;
     }

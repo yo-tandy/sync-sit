@@ -201,7 +201,12 @@ export const searchBabysitters = onCall(
       // exemption exists (exemption doc read only on failure — rare path).
       // Missing DOB or unparseable stored email (legacy profiles) are NOT
       // excluded — the count script measures those first.
-      if (b.dateOfBirth) {
+      // GOVERNED bypass (governance PR 2): a supervised account (server-owned
+      // governedBy mirror, present iff its guardian link is ACTIVE) is
+      // deliberately searchable at any age — supervision is its protection.
+      // Read off the raw doc: the flattened view need not carry the mirror.
+      const isGoverned = !!userDoc.data().governedBy;
+      if (!isGoverned && b.dateOfBirth) {
         if (babysitterAge < 15) continue;
         const emailCheck = validateEjmEmail(b.ejemEmail || '');
         if (emailCheck.valid && emailCheck.graduationYear !== undefined) {

@@ -90,6 +90,40 @@ export const exportUserData = onCall(
       ...doc.data(),
     }));
 
+    // Guardian data (governance PR 2): the user's own link (as a child), the
+    // links their family holds (as a parent), and the kid invites they
+    // created or that are addressed to their email.
+    const emailLower = (userData.email || '').toLowerCase();
+    const [ownLinkSnap, familyLinksSnap, createdInvitesSnap, addressedInvitesSnap] =
+      await Promise.all([
+        db.collection('guardianLinks').doc(targetUserId).get(),
+        familyId
+          ? db.collection('guardianLinks').where('familyId', '==', familyId).get()
+          : Promise.resolve({ docs: [] } as any),
+        db.collection('kidInvites').where('createdByParentUid', '==', targetUserId).get(),
+        emailLower
+          ? db.collection('kidInvites').where('kidEmailLower', '==', emailLower).get()
+          : Promise.resolve({ docs: [] } as any),
+      ]);
+
+    const guardianLinks = Array.from(
+      new Map(
+        [
+          ...(ownLinkSnap.exists ? [{ id: ownLinkSnap.id, ...ownLinkSnap.data() }] : []),
+          ...familyLinksSnap.docs.map((doc: any) => ({ id: doc.id, ...doc.data() })),
+        ].map((l: any) => [l.id, l]),
+      ).values(),
+    );
+
+    const kidInvites = Array.from(
+      new Map(
+        [
+          ...createdInvitesSnap.docs.map((doc: any) => ({ id: doc.id, ...doc.data() })),
+          ...addressedInvitesSnap.docs.map((doc: any) => ({ id: doc.id, ...doc.data() })),
+        ].map((i: any) => [i.id, i]),
+      ).values(),
+    );
+
     await writeAuditLog({
       adminUserId: request.auth.uid,
       action: 'export_user_data',
@@ -102,6 +136,8 @@ export const exportUserData = onCall(
       appointments: uniqueAppointments,
       notifications,
       auditLogs,
+      guardianLinks,
+      kidInvites,
     };
   }
 );

@@ -1,5 +1,6 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
-import { getUserRole, getParentProfile, type User } from '@ejm/shared-core';
+import { FieldValue } from 'firebase-admin/firestore';
+import { ageFromDob, getUserRole, getParentProfile, type User } from '@ejm/shared-core';
 import { db, adminAuth } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { verifyAdmin } from './verifyAdmin.js';
@@ -167,6 +168,97 @@ export const deleteUser = onCall(
       }
     }
 
+    // 4-bis. Guardian cleanup (governance PR 2).
+    // As a CHILD: their link and the invites addressed to them are personal
+    // data — remove both.
+    await db.collection('guardianLinks').doc(targetUserId).delete();
+    if (email) {
+      const ownInvites = await db
+        .collection('kidInvites')
+        .where('kidEmailLower', '==', email.toLowerCase())
+        .get();
+      for (const doc of ownInvites.docs) {
+        await doc.ref.delete();
+      }
+    }
+
+    // As a PARENT: supervision is family-level, so a remaining co-parent
+    // keeps every link untouched — only the deleted parent's uid is
+    // anonymized off the invites they created (mirroring the appointment
+    // createdByUserId anonymization above). When the LAST parent goes, the
+    // family's supervision ends: every ACTIVE link is revoked and the
+    // governedBy mirror removed; an under-15 child must not keep operating
+    // unsupervised, so their account is hard-blocked (status is the ban
+    // gate, matching blockUser semantics) and admin is alerted to resolve.
+    // The dead family's pending invites are cancelled — redeeming one would
+    // mint a link to a family that no longer exists.
+    if (familyId && role === 'parent') {
+      if (!isLastParent) {
+        const createdInvites = await db
+          .collection('kidInvites')
+          .where('createdByParentUid', '==', targetUserId)
+          .get();
+        for (const doc of createdInvites.docs) {
+          await doc.ref.update({ createdByParentUid: 'deleted' });
+        }
+      } else {
+        const familyLinks = await db
+          .collection('guardianLinks')
+          .where('familyId', '==', familyId)
+          .get();
+        const now = new Date();
+        for (const linkDoc of familyLinks.docs) {
+          if (linkDoc.data().status !== 'active') continue;
+          const childUid = linkDoc.data().childUid;
+          await linkDoc.ref.update({
+            status: 'revoked',
+            revokedAt: now,
+            revokedByUid: request.auth.uid,
+          });
+          const childRef = db.collection('users').doc(childUid);
+          const child = (await childRef.get()).data();
+          if (!child) continue;
+          const dob = child.dateOfBirth?.toDate?.() ?? null;
+          // A missing DOB cannot prove 15+, so it is treated as a minor.
+          const isMinor = !dob || ageFromDob(dob) < 15;
+          const childUpdates: Record<string, unknown> = {
+            governedBy: FieldValue.delete(),
+            updatedAt: now,
+          };
+          if (isMinor) {
+            childUpdates.status = 'blocked';
+          }
+          await childRef.update(childUpdates);
+          if (isMinor) {
+            try {
+              await adminAuth.updateUser(childUid, { disabled: true });
+            } catch (err: any) {
+              if (err.code !== 'auth/user-not-found') throw err;
+            }
+            await db.collection('adminAlerts').add({
+              type: 'guardian_orphaned_minor',
+              createdAt: now,
+              data: { childUid, familyId, deletedParentUid: targetUserId },
+            });
+          }
+        }
+        const familyInvites = await db
+          .collection('kidInvites')
+          .where('familyId', '==', familyId)
+          .get();
+        for (const doc of familyInvites.docs) {
+          const updates: Record<string, unknown> = {};
+          if (doc.data().status === 'pending') updates.status = 'cancelled';
+          if (doc.data().createdByParentUid === targetUserId) {
+            updates.createdByParentUid = 'deleted';
+          }
+          if (Object.keys(updates).length > 0) {
+            await doc.ref.update(updates);
+          }
+        }
+      }
+    }
+
     // 5. Delete the user document from Firestore
     await userRef.delete();
 
@@ -186,7 +278,9 @@ export const deleteUser = onCall(
       action: 'delete_user',
       targetUserId,
       details: {
-        role,
+        // A user may hold no profile at all (e.g. a governed kid deleted
+        // before enrolling) — undefined is not a Firestore value.
+        role: role ?? null,
         email,
         cancelledAppointments: cancelledCount,
         familyDeleted: isLastParent && !!familyId,

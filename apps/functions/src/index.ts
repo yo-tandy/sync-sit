@@ -17,6 +17,14 @@ export {
   joinFamily,
   validateInviteLink,
   removeCoParent,
+  // Guardian (parental governance)
+  createKidInvite,
+  cancelKidInvite,
+  resendKidInvite,
+  redeemKidInvite,
+  respondToSupervisionRequest,
+  revokeSupervision,
+  correctChildIdentity,
   // Verification
   submitVerification,
   reviewVerification,
