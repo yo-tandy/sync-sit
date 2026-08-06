@@ -27,6 +27,7 @@ export {
   correctChildIdentity,
   getGovernedChildren,
   getGovernedChildDetail,
+  guardianSetChildSearchable,
   // Verification
   submitVerification,
   reviewVerification,
