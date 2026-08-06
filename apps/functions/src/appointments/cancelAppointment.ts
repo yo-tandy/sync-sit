@@ -7,6 +7,10 @@ import { sendPushNotification } from '../config/push.js';
 import { notifyAllParents } from '../config/notifyParents.js';
 import { getParentProfile, isBabysitter, type User } from '@ejm/shared-core';
 import {
+  isActiveGuardianOf,
+  notifyChildOfGuardianAction,
+} from '@ejm/shared-functions/guardian/guardianAccess.js';
+import {
   buildRestoredOverride,
   type SessionBlockEntry,
 } from '@ejm/shared-functions/schedule/sessionOverride.js';
@@ -47,20 +51,22 @@ export const cancelAppointment = onCall(
       throw new HttpsError('failed-precondition', 'Only confirmed or pending appointments can be cancelled');
     }
 
-    // Determine if caller is the babysitter or a parent
+    // Determine if caller is the babysitter, a parent of the appointment's
+    // family, or a GUARDIAN (a parent of the babysitter's ACTIVE supervising
+    // family) acting on the babysitter's side — same statusReason, same
+    // machinery.
     const callerDoc = await db.collection('users').doc(uid).get();
     const callerParent = getParentProfile(callerDoc.data() as User | undefined);
     let cancelledBy: string;
+    let guardianActor = false;
 
     if (isBabysitter(callerDoc.data() as User | undefined) && apt.babysitterUserId === uid) {
       cancelledBy = 'cancelled_by_babysitter';
-    } else if (callerParent) {
-      const callerFamilyId = callerParent.familyId;
-      if (callerFamilyId === apt.familyId) {
-        cancelledBy = 'cancelled_by_family';
-      } else {
-        throw new HttpsError('permission-denied', 'You are not part of this appointment');
-      }
+    } else if (callerParent && callerParent.familyId === apt.familyId) {
+      cancelledBy = 'cancelled_by_family';
+    } else if (await isActiveGuardianOf(uid, apt.babysitterUserId as string)) {
+      cancelledBy = 'cancelled_by_babysitter';
+      guardianActor = true;
     } else {
       throw new HttpsError('permission-denied', 'You are not part of this appointment');
     }
@@ -174,7 +180,21 @@ export const cancelAppointment = onCall(
       });
     }
 
-    await writeUserActivity(uid, cancelledBy, { appointmentId, reason: reason.trim() });
+    if (guardianActor) {
+      await notifyChildOfGuardianAction(
+        apt.babysitterUserId as string,
+        `A parent of your family cancelled your appointment${
+          apt.date ? ` for ${apt.date}` : ''
+        }. Reason: ${reason.trim()}`,
+        { appointmentId },
+      );
+    }
+
+    await writeUserActivity(uid, cancelledBy, {
+      appointmentId,
+      reason: reason.trim(),
+      ...(guardianActor ? { actorRole: 'guardian' } : {}),
+    });
 
     return { success: true };
   }
