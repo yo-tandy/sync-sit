@@ -25,6 +25,8 @@ export {
   respondToSupervisionRequest,
   revokeSupervision,
   correctChildIdentity,
+  getGovernedChildren,
+  getGovernedChildDetail,
   // Verification
   submitVerification,
   reviewVerification,

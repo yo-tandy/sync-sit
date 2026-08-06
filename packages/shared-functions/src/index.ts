@@ -52,6 +52,8 @@ export { redeemKidInvite } from './guardian/redeemKidInvite.js';
 export { respondToSupervisionRequest } from './guardian/respondToSupervisionRequest.js';
 export { revokeSupervision } from './guardian/revokeSupervision.js';
 export { correctChildIdentity } from './guardian/correctChildIdentity.js';
+export { getGovernedChildren } from './guardian/getGovernedChildren.js';
+export { getGovernedChildDetail } from './guardian/getGovernedChildDetail.js';
 
 // Callables — admin
 export { getAdminDashboard } from './admin/getAdminDashboard.js';
