@@ -10,6 +10,10 @@ import { notifyAllParents } from '@ejm/shared-functions/config/notifyParents.js'
 import { sendNotificationEmail } from '@ejm/shared-functions/config/email.js';
 import { sendPushNotification } from '@ejm/shared-functions/config/push.js';
 import { parisDateString } from '@ejm/shared-functions/scheduled/parisTime.js';
+import {
+  isActiveGuardianOf,
+  notifyChildOfGuardianAction,
+} from '@ejm/shared-functions/guardian/guardianAccess.js';
 import { getParentProfile, type User } from '@ejm/shared-core';
 import { dayOfWeek } from '@ejm/study-core';
 import type { WeeklyGrid } from '../availability/computeDateAvailability.js';
@@ -90,14 +94,20 @@ export const cancelSession = onCall(
       );
     }
 
-    // Caller = the session's tutor, else a parent of the session's family.
+    // Caller = the session's tutor, else a parent of the session's family,
+    // else a GUARDIAN (a parent of the tutor's ACTIVE supervising family)
+    // acting on the provider's side — same statusReason, same machinery.
     let statusReason: CancelStatusReason;
+    let guardianActor = false;
     if (session.tutorUserId === uid) {
       statusReason = 'cancelled_by_tutor';
     } else {
       const callerParent = getParentProfile(callerDoc.data() as User | undefined);
       if (callerParent?.familyId && callerParent.familyId === session.familyId) {
         statusReason = 'cancelled_by_family';
+      } else if (await isActiveGuardianOf(uid, session.tutorUserId as string)) {
+        statusReason = 'cancelled_by_tutor';
+        guardianActor = true;
       } else {
         throw new HttpsError('permission-denied', 'You are not part of this session');
       }
@@ -300,12 +310,23 @@ export const cancelSession = onCall(
       });
     }
 
+    if (guardianActor) {
+      await notifyChildOfGuardianAction(
+        tutorUserId,
+        `A parent of your family cancelled ${
+          isSeries ? 'your recurring series' : `your session on ${whenInfo}`
+        }. Reason: ${reason}`,
+        { sessionId },
+      );
+    }
+
     await writeUserActivity(uid, 'session_cancelled', {
       sessionId,
       reason,
       cancelledFromStatus: session.status,
       type: outcome.type,
       late: outcome.late === true,
+      ...(guardianActor ? { actorRole: 'guardian' } : {}),
     });
 
     return { success: true };

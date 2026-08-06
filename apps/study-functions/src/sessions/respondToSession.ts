@@ -6,6 +6,10 @@ import { notifyAllParents } from '@ejm/shared-functions/config/notifyParents.js'
 import { sendNotificationEmail } from '@ejm/shared-functions/config/email.js';
 import { sendPushNotification } from '@ejm/shared-functions/config/push.js';
 import {
+  isActiveGuardianOf,
+  notifyChildOfGuardianAction,
+} from '@ejm/shared-functions/guardian/guardianAccess.js';
+import {
   parisWallClockPosition,
   parisWallTimeToUtc,
   parisDateString,
@@ -90,10 +94,13 @@ export const respondToSession = onCall(
     // provider proposal → the FAMILY responds; the proposer (the tutor) can NEVER
     // respond to their own proposal (self-confirming would fabricate family
     // consent — the consent hole this guard closes). Otherwise (family-initiated
-    // or legacy no-proposedBy) → the TUTOR responds.
+    // or legacy no-proposedBy) → the TUTOR responds, or a GUARDIAN of the tutor
+    // — but DECLINE-ONLY: a guardian protects, they never consent on the kid's
+    // behalf, so a confirm attempt via the guardian path is refused outright.
     const callerDoc = await db.collection('users').doc(uid).get();
     const callerUser = callerDoc.data() as User | undefined;
     const callerFamilyId = getParentProfile(callerUser)?.familyId;
+    let guardianActor = false;
     if (respondedByFamily) {
       if (sessionTutorUserId === uid) {
         throw new HttpsError('permission-denied', 'You cannot respond to your own proposal');
@@ -102,7 +109,18 @@ export const respondToSession = onCall(
         throw new HttpsError('permission-denied', 'You are not part of this session');
       }
     } else if (sessionTutorUserId !== uid) {
-      throw new HttpsError('permission-denied', 'You are not the tutor for this session');
+      if (await isActiveGuardianOf(uid, sessionTutorUserId)) {
+        if (action !== 'decline') {
+          throw new HttpsError(
+            'permission-denied',
+            'A guardian can decline on behalf of the kid, never accept.',
+            { code: 'guardian/decline-only' },
+          );
+        }
+        guardianActor = true;
+      } else {
+        throw new HttpsError('permission-denied', 'You are not the tutor for this session');
+      }
     }
 
     // ── Provider-proposal confirm: the family picks students at accept ──
@@ -682,10 +700,18 @@ export const respondToSession = onCall(
       });
     }
 
+    if (guardianActor) {
+      await notifyChildOfGuardianAction(
+        outcome.tutorUserId,
+        'A parent of your family declined a session request for you.',
+        { sessionId },
+      );
+    }
+
     await writeUserActivity(
       uid,
       outcome.action === 'confirm' ? 'session_confirmed' : 'session_declined',
-      { sessionId },
+      { sessionId, ...(guardianActor ? { actorRole: 'guardian' } : {}) },
     );
 
     if (outcome.action === 'confirm' && outcome.type === 'recurring') {
