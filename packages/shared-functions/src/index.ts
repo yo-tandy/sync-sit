@@ -55,6 +55,12 @@ export { correctChildIdentity } from './guardian/correctChildIdentity.js';
 export { getGovernedChildren } from './guardian/getGovernedChildren.js';
 export { getGovernedChildDetail } from './guardian/getGovernedChildDetail.js';
 export { guardianSetChildSearchable } from './guardian/guardianSetChildSearchable.js';
+export {
+  listSupervisedAccounts,
+  listAdminAlerts,
+  reviewAdminAlert,
+} from './guardian/adminGovernance.js';
+export { forceRevokeSupervision } from './guardian/forceRevokeSupervision.js';
 
 // Callables — admin
 export { getAdminDashboard } from './admin/getAdminDashboard.js';

@@ -28,6 +28,10 @@ export {
   getGovernedChildren,
   getGovernedChildDetail,
   guardianSetChildSearchable,
+  listSupervisedAccounts,
+  listAdminAlerts,
+  reviewAdminAlert,
+  forceRevokeSupervision,
   // Verification
   submitVerification,
   reviewVerification,
