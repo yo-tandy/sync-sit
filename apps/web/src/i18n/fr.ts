@@ -752,6 +752,51 @@ export default {
       remove: "Retirer l'exemption",
       empty: 'Aucune exemption',
     },
+    governance: {
+      menuTitle: 'Supervision',
+      title: 'Supervision et gouvernance',
+      accountsTitle: 'Comptes supervisés',
+      accountsDesc:
+        'Tous les liens de supervision, quel que soit leur statut — les liens révoqués restent des preuves de consentement auditables (RGPD).',
+      accountsEmpty: 'Aucun compte supervisé pour le moment.',
+      age: '{{age}} ans',
+      identityLocked: 'Identité verrouillée',
+      origin: {
+        parent_created: 'Créé par un parent',
+        claim: 'Rattachement',
+      },
+      linkStatus: {
+        pending: 'En attente',
+        active: 'Active',
+        revoked: 'Révoquée',
+      },
+      consentLine: 'CGU {{tos}} · Confidentialité {{privacy}} · Accord {{agreement}}',
+      consentApproved: 'Approuvé le {{date}}',
+      requestedAt: 'Demandé le {{date}}',
+      confirmedAt: 'Confirmé le {{date}}',
+      revokedAt: 'Révoqué le {{date}}',
+      alertsTitle: 'Alertes',
+      alertsEmpty: 'Aucune alerte.',
+      onlyUnreviewed: 'Non traitées uniquement',
+      markReviewed: 'Marquer comme traitée',
+      reviewedAt: 'Traitée le {{date}}',
+      alertType: {
+        guardian_conflicting_claim: 'Demande de supervision en conflit',
+        guardian_claim_identity_mismatch: 'Incohérence d\'identité sur une demande de supervision',
+        guardian_forced_revoke_minor: 'Révocation forcée d\'un mineur',
+        guardian_orphaned_minor: 'Mineur supervisé resté sans parents',
+      },
+      forceRevoke: 'Révocation forcée',
+      forceRevokeTitle: 'Forcer la révocation de la supervision ?',
+      forceRevokeDesc:
+        'Met fin à la supervision de {{name}} par la famille {{family}}. La famille et l\'enfant sont notifiés, et l\'action est journalisée avec votre raison.',
+      forceRevokeMinorWarning:
+        'Cet enfant a moins de 15 ans : son compte sera bloqué et sa connexion désactivée — la supervision est ce qui rend sa participation acceptable.',
+      forceRevokeReasonPlaceholder: 'Raison de la révocation…',
+      forceRevokeConfirm: 'Oui, révoquer la supervision',
+      forceRevokeKeep: 'Conserver la supervision',
+      error: 'Une erreur est survenue. Veuillez réessayer.',
+    },
   },
 
   // Verification
@@ -867,5 +912,241 @@ export default {
     decline: 'Refuser',
     sharing: 'Partagé',
     notSharing: 'Non partagé',
+  },
+
+  // Copie AUTORITATIVE du plan de gouvernance — ne pas reformuler sans
+  // incrémenter SUPERVISION_AGREEMENT_VERSION. Identique octet pour octet au
+  // bloc supervisionAgreement de sync-study (parité vérifiée par test).
+  supervisionAgreement: {
+    title: 'Accord de supervision',
+    versionNote:
+      'Version {{version}} — vous acceptez cet accord lorsque vous créez ou demandez la supervision du compte d\'un enfant.',
+    confirmTitle: 'Ce que vous confirmez',
+    confirmBullet1:
+      'Vous êtes un parent ou le tuteur légal de l\'enfant, et un parent du compte famille que vous utilisez.',
+    confirmBullet2:
+      'Vous consentez, au nom de l\'enfant, aux Conditions générales et à la Politique de confidentialité, ainsi qu\'au traitement des données de l\'enfant nécessaires au fonctionnement de ce service.',
+    seeTitle: 'Ce que vous pouvez voir',
+    seeBody:
+      'La supervision est une visibilité totale : les parents de votre famille voient les sessions et les gardes de l\'enfant, ses plannings, ses demandes entrantes et sortantes avec leurs messages, et toutes les notes de session. L\'enfant est informé que la supervision est active.',
+    doTitle: 'Ce que vous pouvez faire',
+    doBody:
+      'Vous pouvez masquer l\'enfant de la recherche, annuler ses sessions ou ses gardes (avec une raison) et refuser des demandes en son nom. Vous ne pouvez jamais accepter ni vous engager à sa place — l\'enfant prend toujours ses propres engagements.',
+    responsibilitiesTitle: 'Vos responsabilités',
+    responsibilitiesBody:
+      'Vous vous engagez à superviser l\'utilisation du service par l\'enfant, à veiller à ce que les engagements qu\'il accepte soient honorés ou annulés avec un préavis convenable, et à rester joignable par les familles et par l\'administration EJM pour toute question concernant l\'enfant.',
+    sharingTitle: 'Partage des droits',
+    sharingBody:
+      'Chaque parent de votre compte famille détient les mêmes droits de supervision, et chacun est informé de l\'activité de l\'enfant.',
+    durationTitle: 'Durée',
+    durationBody:
+      'Pour un enfant de moins de 15 ans, la supervision est obligatoire et ne peut pas être retirée. À partir de 15 ans, tout parent de la famille (ou un administrateur) peut mettre fin à la supervision. L\'enfant ne peut pas la retirer lui-même.',
+  },
+  // Surfaces de supervision côté enfant — identique au bloc supervision de
+  // sync-study (parité vérifiée par test).
+  supervision: {
+    requestTitle: 'Demande de supervision',
+    requestBody: 'Un parent a demandé à superviser votre compte.',
+    requestBodyFamily:
+      'Un parent de la famille {{familyName}} a demandé à superviser votre compte.',
+    whatItMeans: 'Ce que signifie la supervision',
+    accept: 'Accepter',
+    decline: 'Refuser',
+    confirmDeclineTitle: 'Refuser cette demande ?',
+    confirmDeclineDesc:
+      'La demande sera supprimée. Le parent n\'est pas informé de votre refus, et il pourra redemander plus tard.',
+    confirmDeclineCta: 'Oui, refuser',
+    error: 'Une erreur est survenue. Veuillez réessayer.',
+    indicatorTitle: 'Compte supervisé',
+    indicatorDesc: 'Les parents de votre famille suivent votre activité sur cette application.',
+    info: {
+      title: 'Ce que signifie la supervision',
+      intro:
+        'Quand votre compte est supervisé, les parents de votre famille suivent votre activité. Voici exactement ce que cela couvre — rien de ce qu\'ils peuvent voir ne vous est caché.',
+      seeTitle: 'Ce qu\'ils voient',
+      seeBody:
+        'Vos sessions et vos gardes, votre planning, vos demandes entrantes et sortantes avec leurs messages, et toutes les notes de session.',
+      doTitle: 'Ce qu\'ils peuvent faire',
+      doBody:
+        'Ils peuvent vous masquer de la recherche, annuler vos sessions ou vos gardes (avec une raison), et refuser des demandes en votre nom. Ils ne peuvent jamais accepter à votre place — vous prenez toujours vos propres engagements.',
+      sharedTitle: 'Qui détient ces droits',
+      sharedBody:
+        'Chaque parent de la famille superviseuse détient les mêmes droits et est informé de votre activité.',
+      endTitle: 'Comment cela se termine',
+      endBody:
+        'Avant 15 ans, la supervision est obligatoire et ne peut pas être retirée. À partir de 15 ans, tout parent de la famille (ou un administrateur EJM) peut y mettre fin. Vous ne pouvez pas la retirer vous-même.',
+      agreementLink: 'Lire l\'Accord de supervision',
+    },
+  },
+
+  // Page PUBLIQUE d'activation d'invitation enfant (gouvernance parentale).
+  kidInvite: {
+    title: 'Créez votre compte',
+    intro:
+      'Un parent a créé ce compte pour vous. Choisissez un mot de passe pour l\'activer et commencer à utiliser Sync/Sit.',
+    supervisedNote:
+      'En continuant, vous obtenez un compte supervisé — les parents de votre famille suivent votre activité.',
+    whatItMeans: 'Voici ce que cela signifie',
+    docsIntro: 'En continuant, vous acceptez les',
+    submit: 'Créer mon compte',
+    submitting: 'Création…',
+    error: 'Une erreur est survenue. Veuillez réessayer.',
+    invalidTitle: 'Cette invitation n\'est pas valide',
+    invalidDesc:
+      'Le lien est invalide ou a expiré. Demandez à votre parent d\'en renvoyer un nouveau depuis son compte.',
+  },
+
+  // Gouvernance parentale (surfaces famille). Copie adaptée des clés
+  // family.governance de sync-study — les deux applications gardent ces
+  // textes alignés.
+  governance: {
+    menuTitle: 'Comptes supervisés',
+    title: 'Comptes supervisés',
+    kidsTitle: 'Vos enfants',
+    invitesTitle: 'Invitations en attente',
+    addChild: 'Ajouter un enfant',
+    addChildDesc: 'Invitez votre enfant ou créez son compte supervisé.',
+    empty: 'Aucun enfant supervisé pour le moment — ajoutez votre enfant pour commencer.',
+    loadError: 'Impossible de charger vos enfants supervisés. Veuillez réessayer.',
+    actionError: 'Une erreur est survenue. Veuillez réessayer.',
+    linkStatus: {
+      pending: 'En attente de confirmation',
+      active: 'Active',
+      revoked: 'Terminée',
+    },
+    age: '{{age}} ans',
+    profileTutor: 'Professeur',
+    profileBabysitter: 'Baby-sitter',
+    searchableOn: 'visible dans la recherche',
+    searchableOff: 'masqué de la recherche',
+    upcoming30: '30 prochains jours : {{sit}} baby-sitting · {{study}} tutorat',
+    inviteExpires: 'Expire le {{date}}',
+    inviteExpired: 'Expirée le {{date}}',
+    resend: 'Renvoyer',
+    cancelInvite: 'Annuler l\'invitation',
+    confirmCancelInviteTitle: 'Annuler cette invitation ?',
+    confirmCancelInviteDesc: 'L\'invitation envoyée à {{name}} ne fonctionnera plus.',
+    confirmCancelInviteCta: 'Oui, annuler l\'invitation',
+    keepInvite: 'Garder l\'invitation',
+    inviteSent: 'Invitation envoyée',
+    inviteSentDesc:
+      'Votre enfant recevra un email pour créer son compte supervisé — ou, s\'il utilise déjà l\'application, une demande dans l\'application pour confirmer votre supervision.',
+    inviteSentNeutral:
+      'Pour la confidentialité de votre enfant, nous ne révélons pas si un compte existe déjà.',
+    inviteSentBack: 'Retour aux comptes supervisés',
+    invite: {
+      title: 'Ajouter un enfant',
+      intro:
+        'Saisissez les informations de votre enfant telles qu\'elles figurent à l\'école. Il devra confirmer de son côté avant que la supervision ne commence.',
+      emailLabel: 'Email EJM de l\'enfant',
+      emailHint: 'Son adresse scolaire officielle, se terminant par son année de promotion.',
+      emailInvalid:
+        'Veuillez utiliser son adresse @ejm.org se terminant par son année de promotion (p. ex. nom28@ejm.org).',
+      firstName: 'Prénom',
+      lastName: 'Nom',
+      dateOfBirth: 'Date de naissance',
+      consentTitle: 'Au nom de votre enfant, vous acceptez :',
+      consentAgree: 'J\'accepte',
+      consentVersion: '(version {{version}})',
+      tos: 'les Conditions générales',
+      privacy: 'la Politique de confidentialité',
+      supervision: 'l\'Accord de supervision',
+      submit: 'Envoyer l\'invitation',
+      submitting: 'Envoi…',
+      needsFamilyTitle: 'Un profil famille est d\'abord nécessaire',
+      needsFamilyDesc:
+        'Seul un parent disposant d\'un profil famille peut superviser un enfant. Terminez l\'inscription de votre famille, puis revenez ici.',
+    },
+    child: {
+      supervisedSince: 'Supervisé depuis le {{date}}',
+      profilesTitle: 'Profils',
+      noBabysitterProfile: 'Pas encore de profil baby-sitter.',
+      studyPresence: 'Également inscrit comme professeur dans Sync/Study.',
+      toggleSit: 'Visibilité du profil baby-sitter dans la recherche',
+      toggleStudy: 'Visibilité du profil professeur dans la recherche',
+      confirmHideTitle: 'Masquer de la recherche ?',
+      confirmHideDesc:
+        'Les familles ne trouveront plus {{name}} dans les résultats de recherche. {{name}} en sera informé.',
+      confirmShowTitle: 'Rendre visible dans la recherche ?',
+      confirmShowDesc:
+        'Les familles pourront trouver {{name}} dans les résultats de recherche. {{name}} en sera informé.',
+      confirmHideCta: 'Oui, masquer de la recherche',
+      confirmShowCta: 'Oui, rendre visible',
+      scheduleTitle: 'Planning',
+      scheduleSet: 'Disponibilités hebdomadaires définies · {{count}} exceptions de dates',
+      scheduleNone: 'Aucune disponibilité hebdomadaire définie.',
+      pendingTitle: 'Demandes en attente',
+      sitUpcomingTitle: 'Rendez-vous de baby-sitting',
+      studyUpcomingTitle: 'Sessions de tutorat',
+      historyTitle: 'Historique',
+      emptyItems: 'Aucun rendez-vous, session ni demande pour le moment.',
+      decline: 'Refuser',
+      confirmDeclineTitle: 'Refuser cette demande ?',
+      confirmDeclineDesc:
+        'La demande sera refusée au nom de {{name}}. En tant que parent, vous pouvez refuser, mais jamais accepter à sa place.',
+      confirmDeclineCta: 'Oui, refuser',
+      keepRequest: 'Garder la demande',
+      contactSharingLabel: 'Demande de partage de coordonnées',
+      cancelAppointment: 'Annuler le rendez-vous',
+      cancelAppointmentTitle: 'Annuler ce rendez-vous ?',
+      cancelAppointmentConfirm: 'Oui, annuler le rendez-vous',
+      cancelSession: 'Annuler la session',
+      cancelSeries: 'Annuler la série',
+      cancelOccurrence: 'Annuler cette date',
+      cancelTitle: 'Annuler cette session ?',
+      cancelSeriesTitle: 'Annuler cette série ?',
+      cancelOccurrenceTitle: 'Annuler cette occurrence ?',
+      cancelOccurrenceConfirm: 'Oui, annuler cette date',
+      cancelDesc: 'Indiquez une brève raison — elle sera partagée avec la famille et avec {{name}}.',
+      cancelPlaceholder: 'Raison de l\'annulation…',
+      cancelConfirm: 'Oui, annuler la session',
+      cancelKeep: 'Garder la session',
+      proposedByChild: 'Proposé par {{name}} — en attente de la réponse de la famille.',
+      withdrawProposal: 'Retirer la proposition',
+      withdrawTitle: 'Retirer cette proposition ?',
+      withdrawDesc:
+        'La session proposée par {{name}} sera retirée. Indiquez une brève raison — elle sera partagée avec la famille et avec {{name}}.',
+      withdrawConfirm: 'Oui, retirer la proposition',
+      withdrawKeep: 'Garder la proposition',
+      viewDates: 'Voir les dates',
+      hideDates: 'Masquer les dates',
+      notePre: 'Note avant session',
+      notePost: 'Note après session',
+      status: {
+        pending: 'En attente',
+        confirmed: 'Confirmée',
+        declined: 'Refusée',
+        rejected: 'Refusée',
+        cancelled: 'Annulée',
+        completed: 'Terminée',
+      },
+      instanceStatus: {
+        scheduled: 'Prévue',
+        completed: 'Terminée',
+        skipped: 'Sautée',
+        cancelled: 'Annulée',
+      },
+      deniedTitle: 'Supervision non active',
+      deniedDesc:
+        'Ce compte n\'est pas sous votre supervision active. Si cela vous semble incorrect, consultez votre liste d\'enfants supervisés.',
+      deniedBack: 'Retour aux comptes supervisés',
+      loadError: 'Impossible de charger ce compte. Veuillez réessayer.',
+    },
+    subjects: {
+      math: 'Mathématiques',
+      french: 'Français',
+      english: 'Anglais',
+      spanish: 'Espagnol',
+      german: 'Allemand',
+      physics: 'Physique',
+      chemistry: 'Chimie',
+      svt: 'SVT',
+      history_geo: 'Histoire-Géographie',
+      philosophy: 'Philosophie',
+      ses: 'SES',
+      nsi: 'NSI',
+      art: 'Arts',
+      music: 'Musique',
+    },
   },
 } as const;

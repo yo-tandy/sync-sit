@@ -421,7 +421,8 @@ describe('guardian oversight callables', () => {
         createdAt: new Date(),
         updatedAt: new Date(),
       });
-      // Recurring session whose instance carries its own notes.
+      // Recurring session whose instance carries its own notes. Tutor-proposed
+      // (proposedBy present), with the weekly slot line.
       await getDb().collection('study-sessions').doc('gdSes2').set({
         sessionId: 'gdSes2',
         tutorUserId: 'gdKid4',
@@ -431,6 +432,8 @@ describe('guardian oversight callables', () => {
         status: 'confirmed',
         subject: 'english',
         level: '6e',
+        proposedBy: 'provider',
+        recurringSlots: [{ day: 'wed', startTime: '17:00', endTime: '18:00' }],
         createdAt: new Date(),
         updatedAt: new Date(),
       });
@@ -518,9 +521,16 @@ describe('guardian oversight callables', () => {
         preSessionNote: 'Please focus on fractions',
         postSessionNote: 'Great progress today',
       });
+      // Legacy docs carry no proposedBy — the payload defaults it to 'family'
+      // (shared-core contract) so clients never have to special-case absence.
+      expect(ses1.proposedBy).toBe('family');
       const ses2 = detail.study.sessions.find((s: any) => s.sessionId === 'gdSes2');
+      expect(ses2.proposedBy).toBe('provider');
+      expect(ses2.recurringSlots).toEqual([{ day: 'wed', startTime: '17:00', endTime: '18:00' }]);
+      expect(ses1.recurringSlots).toBeNull();
       expect(ses2.instances).toHaveLength(1);
       expect(ses2.instances[0]).toMatchObject({
+        instanceId: dateFromToday(6),
         date: dateFromToday(6),
         preSessionNote: 'Irregular verbs please',
         postSessionNote: 'Did well on the quiz',

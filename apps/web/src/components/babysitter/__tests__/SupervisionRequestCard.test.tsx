@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { screen, fireEvent, waitFor } from '@testing-library/react';
-import { renderWithProviders } from '@/__tests__/test-utils';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
+import { MemoryRouter } from 'react-router';
 
 // The card performs the ONLY client-side guardian Firestore read: a doc get of
 // guardianLinks/{ownUid} (child-readable by rules). Responses go through the
@@ -15,7 +15,7 @@ const h = vi.hoisted(() => ({
   callable: vi.fn(),
 }));
 
-vi.mock('@/config/firebase', () => ({ db: {}, functions: {} }));
+vi.mock('@/config/firebase', () => ({ functions: {}, auth: {}, db: {}, storage: {} }));
 
 vi.mock('firebase/firestore', () => ({
   doc: (_db: unknown, ...path: string[]) => ({ path: path.join('/') }),
@@ -30,6 +30,7 @@ vi.mock('@/stores/authStore', () => ({
   useAuthStore: () => h.auth,
 }));
 
+import i18n from '@/i18n';
 import { SupervisionRequestCard } from '../SupervisionRequestCard';
 
 function pendingClaim(overrides: Record<string, unknown> = {}) {
@@ -43,7 +44,16 @@ function pendingClaim(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function renderCard() {
+  return render(
+    <MemoryRouter>
+      <SupervisionRequestCard />
+    </MemoryRouter>,
+  );
+}
+
 function reset() {
+  i18n.changeLanguage('en');
   h.auth.firebaseUser = { uid: 'kid1' };
   h.auth.refreshUserDoc.mockClear();
   h.linkData = null;
@@ -55,11 +65,12 @@ function reset() {
   h.callable.mockResolvedValue({ data: { success: true } });
 }
 
-describe('SupervisionRequestCard', () => {
+describe('SupervisionRequestCard (sit)', () => {
   beforeEach(() => reset());
+  afterEach(() => cleanup());
 
   it('reads guardianLinks/{ownUid} (doc get) and renders nothing without a link doc', async () => {
-    renderWithProviders(<SupervisionRequestCard />);
+    renderCard();
     await waitFor(() => expect(h.getDoc).toHaveBeenCalled());
 
     const ref = h.getDoc.mock.calls[0][0] as { path: string };
@@ -69,20 +80,20 @@ describe('SupervisionRequestCard', () => {
 
   it('renders nothing for an active link or a parent_created pending link', async () => {
     h.linkData = pendingClaim({ status: 'active' });
-    const { unmount } = renderWithProviders(<SupervisionRequestCard />);
+    const { unmount } = renderCard();
     await waitFor(() => expect(h.getDoc).toHaveBeenCalled());
     expect(screen.queryByText(/supervise your account/i)).not.toBeInTheDocument();
     unmount();
 
     h.linkData = pendingClaim({ origin: 'parent_created' });
-    renderWithProviders(<SupervisionRequestCard />);
+    renderCard();
     await waitFor(() => expect(h.getDoc).toHaveBeenCalledTimes(2));
     expect(screen.queryByText(/supervise your account/i)).not.toBeInTheDocument();
   });
 
   it('names the asking family when the link carries familyName', async () => {
     h.linkData = pendingClaim({ familyName: 'Dupont' });
-    renderWithProviders(<SupervisionRequestCard />);
+    renderCard();
 
     expect(
       await screen.findByText(/A parent of the Dupont family asked to supervise your account/i),
@@ -91,10 +102,12 @@ describe('SupervisionRequestCard', () => {
 
   it('renders the request with accept/decline for a pending claim', async () => {
     h.linkData = pendingClaim();
-    renderWithProviders(<SupervisionRequestCard />);
+    renderCard();
 
     // No familyName on the link → the generic fallback copy.
-    expect(await screen.findByText(/^A parent asked to supervise your account/i)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/^A parent asked to supervise your account/i),
+    ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /accept/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /decline/i })).toBeInTheDocument();
     // Explains what supervision means before deciding.
@@ -106,7 +119,7 @@ describe('SupervisionRequestCard', () => {
 
   it('accept calls respondToSupervisionRequest {accept:true}, refetches and refreshes the user doc', async () => {
     h.linkData = pendingClaim();
-    renderWithProviders(<SupervisionRequestCard />);
+    renderCard();
 
     fireEvent.click(await screen.findByRole('button', { name: /accept/i }));
 
@@ -121,7 +134,7 @@ describe('SupervisionRequestCard', () => {
 
   it('decline confirms first (the parent is not told), then sends {accept:false}', async () => {
     h.linkData = pendingClaim();
-    renderWithProviders(<SupervisionRequestCard />);
+    renderCard();
 
     fireEvent.click(await screen.findByRole('button', { name: /decline/i }));
     // Nothing sent before the confirmation.
@@ -138,7 +151,7 @@ describe('SupervisionRequestCard', () => {
 
   it('dismissing the decline confirmation sends nothing', async () => {
     h.linkData = pendingClaim();
-    renderWithProviders(<SupervisionRequestCard />);
+    renderCard();
 
     fireEvent.click(await screen.findByRole('button', { name: /decline/i }));
     fireEvent.click(screen.getByRole('button', { name: /cancel/i }));

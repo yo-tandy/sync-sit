@@ -276,6 +276,9 @@ describe('createKidInvite', () => {
     expect(link.requestedAt).toBeTruthy();
     expect(link.confirmedAt).toBeUndefined();
     expect(link.consent.supervisionAgreementVersion).toBe('1.0');
+    // Denormalized at creation so the kid-side card can name the family
+    // without a families read (families are not child-readable).
+    expect(link.familyName).toBe('Dupont');
 
     // A pending link must NOT set the governedBy mirror (present iff ACTIVE).
     const kid = (await getDb().collection('users').doc('kidClaim1').get()).data()!;

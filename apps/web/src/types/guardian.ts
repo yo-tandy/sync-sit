@@ -1,11 +1,15 @@
 import type { DayOfWeek, ProposedBy, RecurringSlot } from '@ejm/shared-core';
-import type { TutorProfile } from '@ejm/study-core';
 
 /**
- * Client mirrors of the guardian callable payloads (PRs #102/#104/#105).
- * Typed from the backend sources in packages/shared-functions/src/guardian/ —
- * every field below is one the backend actually returns; none are invented.
- * Timestamps arrive as ISO strings (the backend's `iso()` helper) or null.
+ * Client mirrors of the guardian callable payloads (PRs #102/#104/#105, PR 5
+ * payload enrichment). Typed from the backend sources in
+ * packages/shared-functions/src/guardian/ — every field below is one the
+ * backend actually returns; none are invented. Timestamps arrive as ISO
+ * strings (the backend's `iso()` helper) or null.
+ *
+ * Copy-adapted from apps/study-web/src/types/guardian.ts (the repo's
+ * cross-app convention); sync-sit has no study-core dependency, so the tutor
+ * profile is typed structurally here.
  */
 
 export type GuardianLinkStatus = 'pending' | 'active' | 'revoked';
@@ -131,6 +135,14 @@ export interface GovernedSitContactRequest {
   createdAt: string | null;
 }
 
+/** The full tutor profile as the oversight payload carries it (raw profile map). */
+export interface GovernedTutorProfile {
+  searchable?: boolean;
+  enrollmentComplete?: boolean;
+  subjects?: { subject: string; levels: string[]; rate: number }[];
+  [key: string]: unknown;
+}
+
 /** The full oversight payload of getGovernedChildDetail (ruling 8). */
 export interface GovernedChildDetail {
   child: {
@@ -158,7 +170,7 @@ export interface GovernedChildDetail {
   };
   providerProfiles: {
     babysitter: Record<string, unknown> | null;
-    tutor: TutorProfile | null;
+    tutor: GovernedTutorProfile | null;
   };
   schedule: {
     weekly: Record<DayOfWeek, boolean[]> | null;

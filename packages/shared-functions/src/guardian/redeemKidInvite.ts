@@ -125,6 +125,10 @@ export const redeemKidInvite = onCall(
       governedBy: { familyId: invite.familyId, linkedAt: now },
     });
 
+    const familyName: string | undefined = (
+      await db.collection('families').doc(invite.familyId).get()
+    ).data()?.familyName;
+
     await db.collection('guardianLinks').doc(uid).set({
       childUid: uid,
       familyId: invite.familyId,
@@ -134,6 +138,9 @@ export const redeemKidInvite = onCall(
       requestedAt: invite.createdAt,
       confirmedAt: now,
       consent: invite.consent, // the GDPR consent record, copied verbatim
+      // Denormalized so kid-side surfaces can name the supervising family
+      // without a families read (families are not child-readable).
+      ...(familyName ? { familyName } : {}),
     });
 
     await inviteRef.update({ status: 'accepted' });
@@ -154,6 +161,9 @@ export const redeemKidInvite = onCall(
       familyId: invite.familyId,
     });
 
-    return { success: true, uid };
+    // The email rides along so the (unauthenticated) redemption page can sign
+    // the kid in with their new credentials — the token holder received the
+    // invite AT this address, so nothing new is disclosed.
+    return { success: true, uid, email: invite.kidEmailLower };
   },
 );

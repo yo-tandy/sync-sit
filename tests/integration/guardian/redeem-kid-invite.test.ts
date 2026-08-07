@@ -100,12 +100,18 @@ describe('redeemKidInvite', () => {
     const { inviteId, email, token } = await createInviteWithToken();
     const before = new Date();
 
-    const result = await callFunction<{ success: boolean; uid: string }>('redeemKidInvite', {
-      token,
-      password: PASSWORD,
-    });
+    const result = await callFunction<{ success: boolean; uid: string; email: string }>(
+      'redeemKidInvite',
+      {
+        token,
+        password: PASSWORD,
+      },
+    );
     expect(result.success).toBe(true);
     expect(result.uid).toBeTruthy();
+    // The account email rides along so the (unauthenticated) redemption page
+    // can sign the kid in — the token holder received it BY email already.
+    expect(result.email).toBe(email);
     const uid = result.uid;
 
     // Auth user exists with the invite identity, and the password works.
@@ -152,6 +158,7 @@ describe('redeemKidInvite', () => {
     expect(link.consent.approvedAt.toDate().getTime()).toBe(
       invite.consent.approvedAt.toDate().getTime(),
     );
+    expect(link.familyName).toBe('Dupont');
 
     // Invite consumed.
     expect(invite.status).toBe('accepted');

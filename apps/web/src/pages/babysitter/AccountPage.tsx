@@ -303,6 +303,22 @@ export function BabysitterAccountPage() {
       <div className="px-5 pt-4 pb-8">
         {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
 
+        {/* 0. Supervised-account indicator (governedBy mirror — server-owned) */}
+        {userDoc?.governedBy && (
+          <div className="mb-6 rounded-xl border border-blue-200 bg-blue-50 p-4">
+            <p className="mb-1 text-sm font-semibold text-blue-900">
+              {t('supervision.indicatorTitle')}
+            </p>
+            <p className="mb-2 text-xs text-blue-800">{t('supervision.indicatorDesc')}</p>
+            <Link
+              to="/supervision-info"
+              className="text-xs font-semibold text-red-600 hover:underline"
+            >
+              {t('supervision.whatItMeans')}
+            </Link>
+          </div>
+        )}
+
         {/* 1. Personal Info */}
         <h3 className="mb-3 text-sm font-semibold text-gray-700">{t('account.personalInfo')}</h3>
         <Card className="mb-4 bg-gray-50">

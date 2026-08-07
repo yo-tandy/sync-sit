@@ -26,6 +26,9 @@ import { SignUpRolePage } from '@/pages/public/SignUpRolePage';
 import { ParentGuidePage } from '@/pages/public/ParentGuidePage';
 import { BabysitterGuidePage } from '@/pages/public/BabysitterGuidePage';
 import { AddToHomescreenPage } from '@/pages/public/AddToHomescreenPage';
+import { KidInvitePage } from '@/pages/public/KidInvitePage';
+import { SupervisionInfoPage } from '@/pages/public/SupervisionInfoPage';
+import { SupervisionAgreementPage } from '@/pages/public/SupervisionAgreementPage';
 
 // Enrollment
 import { BabysitterEnrollment } from '@/pages/enrollment/BabysitterEnrollment';
@@ -48,6 +51,9 @@ import { SearchPage } from '@/pages/family/SearchPage';
 import { VerificationPage } from '@/pages/family/VerificationPage';
 import { AccountPage } from '@/pages/family/AccountPage';
 import { PreferredBabysittersPage } from '@/pages/family/PreferredBabysittersPage';
+import { GovernancePage } from '@/pages/family/GovernancePage';
+import { CreateKidInvitePage } from '@/pages/family/CreateKidInvitePage';
+import { GovernedChildPage } from '@/pages/family/GovernedChildPage';
 
 // Admin pages
 import { AdminDashboard } from '@/pages/admin/DashboardPage';
@@ -57,6 +63,7 @@ import { AdminHolidaysPage } from '@/pages/admin/HolidaysPage';
 import { AdminAuditLogPage } from '@/pages/admin/AuditLogPage';
 import { AdminGdprExportPage } from '@/pages/admin/GdprExportPage';
 import { AdminVerificationsPage } from '@/pages/admin/VerificationsPage';
+import { AdminGovernancePage } from '@/pages/admin/GovernancePage';
 
 export const router = createBrowserRouter([
   // Public routes
@@ -78,6 +85,10 @@ export const router = createBrowserRouter([
       { path: '/enroll/babysitter', element: <BabysitterEnrollment /> },
       { path: '/enroll/parent', element: <ParentEnrollment /> },
       { path: '/invite/:token', element: <JoinFamilyPage /> },
+      // PUBLIC by design: the kid redeems with the emailed token, no account yet.
+      { path: '/kid-invite', element: <KidInvitePage /> },
+      { path: '/supervision-info', element: <SupervisionInfoPage /> },
+      { path: '/supervision-agreement', element: <SupervisionAgreementPage /> },
     ],
   },
 
@@ -112,6 +123,9 @@ export const router = createBrowserRouter([
       { path: '/family/preferred', element: <PreferredBabysittersPage /> },
       { path: '/family/account', element: <AccountPage /> },
       { path: '/family/verification', element: <VerificationPage /> },
+      { path: '/family/governance', element: <GovernancePage /> },
+      { path: '/family/governance/new', element: <CreateKidInvitePage /> },
+      { path: '/family/governance/:childUid', element: <GovernedChildPage /> },
     ],
   },
 
@@ -126,6 +140,7 @@ export const router = createBrowserRouter([
       { path: '/admin/audit-log', element: <AdminAuditLogPage /> },
       { path: '/admin/gdpr-export', element: <AdminGdprExportPage /> },
       { path: '/admin/verifications', element: <AdminVerificationsPage /> },
+      { path: '/admin/governance', element: <AdminGovernancePage /> },
     ],
   },
 ]);

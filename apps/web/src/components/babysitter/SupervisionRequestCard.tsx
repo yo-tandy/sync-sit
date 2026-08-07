@@ -5,11 +5,12 @@ import { doc, getDoc } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
-import { Card, Button, Dialog, ShieldIcon } from '@ejm/shared-ui';
+import { Card, Button, Dialog } from '@/components/ui';
+import { ShieldIcon } from '@/components/ui/Icons';
 import type { GuardianLinkDoc } from '@/types/guardian';
 
 /**
- * The kid's ask-to-supervise prompt on the tutor dashboard. Reads
+ * The kid's ask-to-supervise prompt on the babysitter dashboard. Reads
  * guardianLinks/{ownUid} — the ONLY client-side guardian Firestore read
  * (child-readable by rules) — and renders only for a pending CLAIM (a
  * parent_created pending link activates through the invite email instead).
@@ -18,6 +19,7 @@ import type { GuardianLinkDoc } from '@/types/guardian';
  * callable resolves (accept → active, decline → deleted; either way the card
  * goes away), and refreshes the user doc so the governedBy mirror lands.
  * Declining is private — the parent is never told, so the confirm says so.
+ * Copy-adapted from sync-study's SupervisionRequestCard.
  */
 export function SupervisionRequestCard() {
   const { t } = useTranslation();
