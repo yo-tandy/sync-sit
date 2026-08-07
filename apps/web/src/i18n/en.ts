@@ -897,6 +897,23 @@ export default {
     notSharing: 'Not sharing',
   },
 
+  // PUBLIC kid-invite redemption page (parental governance).
+  kidInvite: {
+    title: 'Create your account',
+    intro:
+      'A parent created this account for you. Choose a password to activate it and start using Sync/Sit.',
+    supervisedNote:
+      'By continuing you get a supervised account — the parents of your family follow your activity.',
+    whatItMeans: 'Here\'s what that means',
+    docsIntro: 'By continuing you accept the',
+    submit: 'Create my account',
+    submitting: 'Creating…',
+    error: 'Something went wrong. Please try again.',
+    invalidTitle: 'This invitation isn\'t valid',
+    invalidDesc:
+      'The link is invalid or has expired. Ask your parent to send a new one from their account.',
+  },
+
   // Parental governance (family surfaces). Copy-adapted from sync-study's
   // family.governance keys — the two apps keep this copy aligned.
   governance: {

@@ -869,6 +869,23 @@ export default {
     notSharing: 'Non partagé',
   },
 
+  // Page PUBLIQUE d'activation d'invitation enfant (gouvernance parentale).
+  kidInvite: {
+    title: 'Créez votre compte',
+    intro:
+      'Un parent a créé ce compte pour vous. Choisissez un mot de passe pour l\'activer et commencer à utiliser Sync/Sit.',
+    supervisedNote:
+      'En continuant, vous obtenez un compte supervisé — les parents de votre famille suivent votre activité.',
+    whatItMeans: 'Voici ce que cela signifie',
+    docsIntro: 'En continuant, vous acceptez les',
+    submit: 'Créer mon compte',
+    submitting: 'Création…',
+    error: 'Une erreur est survenue. Veuillez réessayer.',
+    invalidTitle: 'Cette invitation n\'est pas valide',
+    invalidDesc:
+      'Le lien est invalide ou a expiré. Demandez à votre parent d\'en renvoyer un nouveau depuis son compte.',
+  },
+
   // Gouvernance parentale (surfaces famille). Copie adaptée des clés
   // family.governance de sync-study — les deux applications gardent ces
   // textes alignés.

@@ -26,6 +26,7 @@ import { SignUpRolePage } from '@/pages/public/SignUpRolePage';
 import { ParentGuidePage } from '@/pages/public/ParentGuidePage';
 import { BabysitterGuidePage } from '@/pages/public/BabysitterGuidePage';
 import { AddToHomescreenPage } from '@/pages/public/AddToHomescreenPage';
+import { KidInvitePage } from '@/pages/public/KidInvitePage';
 
 // Enrollment
 import { BabysitterEnrollment } from '@/pages/enrollment/BabysitterEnrollment';
@@ -81,6 +82,8 @@ export const router = createBrowserRouter([
       { path: '/enroll/babysitter', element: <BabysitterEnrollment /> },
       { path: '/enroll/parent', element: <ParentEnrollment /> },
       { path: '/invite/:token', element: <JoinFamilyPage /> },
+      // PUBLIC by design: the kid redeems with the emailed token, no account yet.
+      { path: '/kid-invite', element: <KidInvitePage /> },
     ],
   },
 

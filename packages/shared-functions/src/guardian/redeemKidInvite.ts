@@ -161,6 +161,9 @@ export const redeemKidInvite = onCall(
       familyId: invite.familyId,
     });
 
-    return { success: true, uid };
+    // The email rides along so the (unauthenticated) redemption page can sign
+    // the kid in with their new credentials — the token holder received the
+    // invite AT this address, so nothing new is disclosed.
+    return { success: true, uid, email: invite.kidEmailLower };
   },
 );
