@@ -897,6 +897,70 @@ export default {
     notSharing: 'Not sharing',
   },
 
+  // AUTHORITATIVE copy from the governance plan — do not reword without a
+  // version bump of SUPERVISION_AGREEMENT_VERSION. Kept byte-identical to
+  // sync-study's supervisionAgreement block (parity-pinned by test).
+  supervisionAgreement: {
+    title: 'Supervision Agreement',
+    versionNote:
+      'Version {{version}} — you accept this agreement when creating or requesting supervision of a child\'s account.',
+    confirmTitle: 'What you confirm',
+    confirmBullet1:
+      'You are a parent or legal guardian of the child, and a parent of the family account you are using.',
+    confirmBullet2:
+      'You consent, on the child\'s behalf, to the Terms of Service and Privacy Policy, and to the processing of the child\'s data needed to run this service.',
+    seeTitle: 'What you can see',
+    seeBody:
+      'Supervision is full visibility: your family\'s parents see the child\'s sessions and appointments, schedules, incoming and outgoing requests with their messages, and all session notes. The child is informed that supervision is active.',
+    doTitle: 'What you can do',
+    doBody:
+      'You can hide the child from search, cancel their sessions or appointments (with a reason), and decline requests on their behalf. You can never accept or commit on their behalf — the child always makes their own commitments.',
+    responsibilitiesTitle: 'Your responsibilities',
+    responsibilitiesBody:
+      'You agree to supervise the child\'s use of the service, to make sure commitments the child accepts are honored or cancelled with proper notice, and to remain reachable by families and by the EJM administration for matters concerning the child.',
+    sharingTitle: 'Sharing of rights',
+    sharingBody:
+      'Every parent in your family account holds the same supervision rights, and each is notified of the child\'s activity.',
+    durationTitle: 'Duration',
+    durationBody:
+      'For a child under 15, supervision is required and cannot be removed. From 15, any parent of the family (or an administrator) may end supervision. The child cannot remove it themselves.',
+  },
+  // Kid-side supervision surfaces — byte-identical to sync-study's
+  // supervision block (parity-pinned by test).
+  supervision: {
+    requestTitle: 'Supervision request',
+    requestBody: 'A parent asked to supervise your account.',
+    requestBodyFamily: 'A parent of the {{familyName}} family asked to supervise your account.',
+    whatItMeans: 'What supervision means',
+    accept: 'Accept',
+    decline: 'Decline',
+    confirmDeclineTitle: 'Decline this request?',
+    confirmDeclineDesc:
+      'The request will be removed. The parent is not notified that you declined, and they can ask again later.',
+    confirmDeclineCta: 'Yes, decline',
+    error: 'Something went wrong. Please try again.',
+    indicatorTitle: 'Supervised account',
+    indicatorDesc: 'The parents of your family follow your activity on this app.',
+    info: {
+      title: 'What supervision means',
+      intro:
+        'When your account is supervised, the parents of your family follow your activity. Here is exactly what that covers — nothing they can see is hidden from you.',
+      seeTitle: 'What they see',
+      seeBody:
+        'Your sessions and appointments, your schedule, your incoming and outgoing requests with their messages, and all session notes.',
+      doTitle: 'What they can do',
+      doBody:
+        'They can hide you from search, cancel your sessions or appointments (with a reason), and decline requests on your behalf. They can never accept for you — you always make your own commitments.',
+      sharedTitle: 'Who holds these rights',
+      sharedBody:
+        'Every parent in the supervising family holds the same rights and is notified of your activity.',
+      endTitle: 'How it ends',
+      endBody:
+        'Under 15, supervision is required and cannot be removed. From 15, any parent of the family (or an EJM administrator) can end it. You cannot remove it yourself.',
+      agreementLink: 'Read the Supervision Agreement',
+    },
+  },
+
   // PUBLIC kid-invite redemption page (parental governance).
   kidInvite: {
     title: 'Create your account',

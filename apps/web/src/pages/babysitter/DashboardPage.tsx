@@ -9,6 +9,7 @@ import { isBabysitterProfileComplete } from '@ejm/sit-core';
 import { useAppointments } from '@/hooks/useAppointments';
 import { useSchedule } from '@/hooks/useSchedule';
 import { AppointmentCard } from '@/components/appointments/AppointmentCard';
+import { SupervisionRequestCard } from '@/components/babysitter/SupervisionRequestCard';
 import { Card, Badge, Dialog, Button, Spinner, Textarea, InstallAppBanner } from '@/components/ui';
 import {
   CalendarIcon,
@@ -216,6 +217,9 @@ export function BabysitterDashboard() {
 
       {/* Install-as-PWA banner (only when running in a regular browser tab) */}
       <InstallAppBanner />
+
+      {/* Pending ask-to-supervise claim (renders only when one exists) */}
+      <SupervisionRequestCard />
 
       {/* ── Profile completion banner ── */}
       {!profileComplete && (
