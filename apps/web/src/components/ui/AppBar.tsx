@@ -20,6 +20,7 @@ import {
   ShareIcon,
 } from './Icons';
 import { LanguageSelector } from './LanguageSelector';
+import { AppSwitchMenuItem } from './AppSwitchMenuItem';
 import type { UserRole } from '@ejm/sit-core';
 
 function MenuIcon({ className }: { className?: string }) {
@@ -118,6 +119,7 @@ export function AppBar({ role }: { role: UserRole }) {
           <div className="border-t border-gray-100" />
 
           <MenuItem icon={<ShareIcon className="h-5 w-5" />} label={t('share.title')} to="/share" onNavigate={() => setMenuOpen(false)} />
+          <AppSwitchMenuItem />
 
           <div className="border-t border-gray-100" />
 

@@ -17,6 +17,7 @@ import {
   MailIcon,
   LogOutIcon,
 } from '@ejm/shared-ui';
+import { AppSwitchMenuItem } from './AppSwitchMenuItem';
 
 function MenuIcon({ className }: { className?: string }) {
   return (
@@ -88,6 +89,10 @@ export function AppBar() {
           <MenuItem icon={<MailIcon className="h-5 w-5" />} label={t('menu.reportProblem')} to="/report" onNavigate={() => setMenuOpen(false)} />
           <MenuItem icon={<ShieldIcon className="h-5 w-5" />} label={t('menu.privacyPolicy')} to="/privacy" onNavigate={() => setMenuOpen(false)} />
           <MenuItem icon={<FileTextIcon className="h-5 w-5" />} label={t('menu.terms')} to="/terms" onNavigate={() => setMenuOpen(false)} />
+
+          <div className="border-t border-gray-100" />
+
+          <AppSwitchMenuItem />
 
           <div className="px-4 py-3">
             <LanguageSelector />

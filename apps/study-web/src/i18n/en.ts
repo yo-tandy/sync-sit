@@ -179,6 +179,18 @@ export default {
     terms: 'Terms & Conditions',
   },
 
+  appSwitch: {
+    toSit: 'Open sync-sit',
+    error: 'Could not switch apps. Please try again.',
+  },
+
+  handoff: {
+    switching: 'Switching apps…',
+    errorTitle: 'This link has expired',
+    errorDesc: 'Switch apps again from the other app.',
+    goToLogin: 'Go to login',
+  },
+
   tutor: {
     dashboardTitle: 'Dashboard',
     accountTitle: 'My Account',

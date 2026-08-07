@@ -107,6 +107,9 @@ export const CreateKidInvitePage = lazy(() =>
 );
 
 // Public governance documents
+export const HandoffPage = lazy(() =>
+  import('@/pages/public/HandoffPage').then((m) => ({ default: m.HandoffPage })),
+);
 export const SupervisionAgreementPage = lazy(() =>
   import('@/pages/public/SupervisionAgreementPage').then((m) => ({
     default: m.SupervisionAgreementPage,

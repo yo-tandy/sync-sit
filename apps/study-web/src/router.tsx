@@ -42,6 +42,7 @@ import {
   CreateKidInvitePage,
   SupervisionAgreementPage,
   SupervisionInfoPage,
+  HandoffPage,
 } from '@/lazyPages';
 
 const SUPPORT_EMAIL = 'support@sync-study.com';
@@ -64,6 +65,9 @@ export const router = createBrowserRouter([
       { path: '/forgot-password', element: <ForgotPasswordPage /> },
       { path: '/supervision-agreement', element: <SupervisionAgreementPage /> },
       { path: '/supervision-info', element: <SupervisionInfoPage /> },
+      // PUBLIC by design: arrival point of the cross-app switch — the one-time
+      // fragment code is the capability; the page signs the user in itself.
+      { path: '/handoff', element: <HandoffPage /> },
       { path: '*', element: <Navigate to="/" replace /> },
     ],
   },
