@@ -933,8 +933,32 @@ export default {
   terms: {
     title: 'Conditions générales',
   },
+  // Traduction de la copie AUTORITATIVE du plan de gouvernance — ne pas
+  // reformuler sans incrémenter SUPERVISION_AGREEMENT_VERSION.
   supervisionAgreement: {
     title: 'Accord de supervision',
+    versionNote:
+      'Version {{version}} — vous acceptez cet accord lorsque vous créez ou demandez la supervision du compte d\'un enfant.',
+    confirmTitle: 'Ce que vous confirmez',
+    confirmBullet1:
+      'Vous êtes un parent ou le tuteur légal de l\'enfant, et un parent du compte famille que vous utilisez.',
+    confirmBullet2:
+      'Vous consentez, au nom de l\'enfant, aux Conditions générales et à la Politique de confidentialité, ainsi qu\'au traitement des données de l\'enfant nécessaires au fonctionnement de ce service.',
+    seeTitle: 'Ce que vous pouvez voir',
+    seeBody:
+      'La supervision est une visibilité totale : les parents de votre famille voient les sessions et les gardes de l\'enfant, ses plannings, ses demandes entrantes et sortantes avec leurs messages, et toutes les notes de session. L\'enfant est informé que la supervision est active.',
+    doTitle: 'Ce que vous pouvez faire',
+    doBody:
+      'Vous pouvez masquer l\'enfant de la recherche, annuler ses sessions ou ses gardes (avec une raison) et refuser des demandes en son nom. Vous ne pouvez jamais accepter ni vous engager à sa place — l\'enfant prend toujours ses propres engagements.',
+    responsibilitiesTitle: 'Vos responsabilités',
+    responsibilitiesBody:
+      'Vous vous engagez à superviser l\'utilisation du service par l\'enfant, à veiller à ce que les engagements qu\'il accepte soient honorés ou annulés avec un préavis convenable, et à rester joignable par les familles et par l\'administration EJM pour toute question concernant l\'enfant.',
+    sharingTitle: 'Partage des droits',
+    sharingBody:
+      'Chaque parent de votre compte famille détient les mêmes droits de supervision, et chacun est informé de l\'activité de l\'enfant.',
+    durationTitle: 'Durée',
+    durationBody:
+      'Pour un enfant de moins de 15 ans, la supervision est obligatoire et ne peut pas être retirée. À partir de 15 ans, tout parent de la famille (ou un administrateur) peut mettre fin à la supervision. L\'enfant ne peut pas la retirer lui-même.',
   },
   supervision: {
     requestTitle: 'Demande de supervision',
