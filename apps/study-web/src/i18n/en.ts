@@ -728,6 +728,11 @@ export default {
       errorInvalid: 'That endorsement can\'t be submitted — please check the text and try again.',
       error: 'Something went wrong. Please try again.',
     },
+    governance: {
+      navTitle: 'Supervised kids',
+      navDesc: 'Create and follow your kids\' supervised accounts.',
+      title: 'Supervised kids',
+    },
   },
 
   // Shared cancellation-policy copy (V2 feature 7), used by both portals' cancel
@@ -813,6 +818,9 @@ export default {
   },
   terms: {
     title: 'Terms & Conditions',
+  },
+  supervisionAgreement: {
+    title: 'Supervision Agreement',
   },
   report: {
     title: 'Report a Problem',

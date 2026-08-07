@@ -9,6 +9,7 @@ import {
   Card,
   SearchIcon,
   SettingsIcon,
+  ShieldIcon,
   UserIcon,
   ChevronRightIcon,
 } from '@ejm/shared-ui';
@@ -213,6 +214,12 @@ export function DashboardPage() {
 
       {/* ── Entry cards ── */}
       <div className="space-y-3">
+        <EntryCard
+          to="/family/governance"
+          icon={<ShieldIcon className="h-6 w-6 text-red-600" />}
+          title={t('family.governance.navTitle')}
+          desc={t('family.governance.navDesc')}
+        />
         <EntryCard
           to="/family/settings"
           icon={<SettingsIcon className="h-6 w-6 text-red-600" />}

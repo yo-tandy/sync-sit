@@ -37,6 +37,9 @@ import {
   FamilyRequestsPage,
   BookSessionPage,
   FamilySessionsPage,
+  GovernancePage,
+  GovernedChildPage,
+  SupervisionAgreementPage,
 } from '@/lazyPages';
 
 const SUPPORT_EMAIL = 'support@sync-study.com';
@@ -57,6 +60,7 @@ export const router = createBrowserRouter([
       { path: '/report', element: <ReportProblemPage /> },
       { path: '/enroll/parent', element: <StaticPage titleKey="welcome.signUpParent" /> },
       { path: '/forgot-password', element: <ForgotPasswordPage /> },
+      { path: '/supervision-agreement', element: <SupervisionAgreementPage /> },
       { path: '*', element: <Navigate to="/" replace /> },
     ],
   },
@@ -84,6 +88,8 @@ export const router = createBrowserRouter([
       { path: '/family/requests', element: <FamilyRequestsPage /> },
       { path: '/family/sessions', element: <FamilySessionsPage /> },
       { path: '/family/book/:tutorUserId', element: <BookSessionPage /> },
+      { path: '/family/governance', element: <GovernancePage /> },
+      { path: '/family/governance/:childUid', element: <GovernedChildPage /> },
     ],
   },
 ]);

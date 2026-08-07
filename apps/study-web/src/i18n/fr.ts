@@ -728,6 +728,11 @@ export default {
       errorInvalid: 'Cette recommandation ne peut pas être envoyée — veuillez vérifier le texte et réessayer.',
       error: 'Une erreur est survenue. Veuillez réessayer.',
     },
+    governance: {
+      navTitle: 'Comptes supervisés',
+      navDesc: 'Créez et suivez les comptes supervisés de vos enfants.',
+      title: 'Comptes supervisés',
+    },
   },
 
   // Textes partagés de la politique d'annulation (V2 fonctionnalité 7), utilisés
@@ -813,6 +818,9 @@ export default {
   },
   terms: {
     title: 'Conditions générales',
+  },
+  supervisionAgreement: {
+    title: 'Accord de supervision',
   },
   report: {
     title: 'Signaler un problème',

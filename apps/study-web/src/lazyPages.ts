@@ -96,3 +96,16 @@ export const BookSessionPage = lazy(() =>
 export const FamilySessionsPage = lazy(() =>
   import('@/pages/family/SessionsPage').then((m) => ({ default: m.SessionsPage })),
 );
+export const GovernancePage = lazy(() =>
+  import('@/pages/family/GovernancePage').then((m) => ({ default: m.GovernancePage })),
+);
+export const GovernedChildPage = lazy(() =>
+  import('@/pages/family/GovernedChildPage').then((m) => ({ default: m.GovernedChildPage })),
+);
+
+// Public governance documents
+export const SupervisionAgreementPage = lazy(() =>
+  import('@/pages/public/SupervisionAgreementPage').then((m) => ({
+    default: m.SupervisionAgreementPage,
+  })),
+);
