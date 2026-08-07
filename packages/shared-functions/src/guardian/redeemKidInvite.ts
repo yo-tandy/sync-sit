@@ -125,6 +125,10 @@ export const redeemKidInvite = onCall(
       governedBy: { familyId: invite.familyId, linkedAt: now },
     });
 
+    const familyName: string | undefined = (
+      await db.collection('families').doc(invite.familyId).get()
+    ).data()?.familyName;
+
     await db.collection('guardianLinks').doc(uid).set({
       childUid: uid,
       familyId: invite.familyId,
@@ -134,6 +138,9 @@ export const redeemKidInvite = onCall(
       requestedAt: invite.createdAt,
       confirmedAt: now,
       consent: invite.consent, // the GDPR consent record, copied verbatim
+      // Denormalized so kid-side surfaces can name the supervising family
+      // without a families read (families are not child-readable).
+      ...(familyName ? { familyName } : {}),
     });
 
     await inviteRef.update({ status: 'accepted' });

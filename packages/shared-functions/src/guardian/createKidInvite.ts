@@ -72,8 +72,10 @@ export const createKidInvite = onCall(
     }
     const kidEmailLower = data.kidEmail.trim().toLowerCase();
 
-    const familyName: string =
-      (await db.collection('families').doc(familyId).get()).data()?.familyName || 'your';
+    const familyNameRaw: string | undefined = (
+      await db.collection('families').doc(familyId).get()
+    ).data()?.familyName;
+    const familyName: string = familyNameRaw || 'your';
 
     const audit = (branch: string, details: Record<string, unknown> = {}) =>
       writeUserActivity(callerUid, 'guardian.create_kid_invite', {
@@ -179,6 +181,9 @@ export const createKidInvite = onCall(
       origin: 'claim',
       requestedAt: now,
       consent,
+      // Denormalized so the kid-side card can name the asking family without
+      // a families read (families are not child-readable).
+      ...(familyNameRaw ? { familyName: familyNameRaw } : {}),
     });
 
     const title = 'Supervision request';

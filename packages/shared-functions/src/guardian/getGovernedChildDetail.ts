@@ -75,6 +75,7 @@ export const getGovernedChildDetail = onCall(
               .map((i) => {
                 const inst = i.data();
                 return {
+                  instanceId: i.id,
                   date: inst.date,
                   startTime: inst.startTime,
                   endTime: inst.endTime,
@@ -93,6 +94,9 @@ export const getGovernedChildDetail = onCall(
             type: s.type,
             status: s.status,
             statusReason: s.statusReason ?? null,
+            // Absent on legacy docs ⟹ family-initiated (shared-core contract).
+            proposedBy: s.proposedBy ?? 'family',
+            recurringSlots: s.recurringSlots ?? null,
             familyName: s.familyName ?? null,
             subject: s.subject ?? null,
             level: s.level ?? null,

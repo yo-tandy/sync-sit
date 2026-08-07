@@ -152,6 +152,7 @@ describe('redeemKidInvite', () => {
     expect(link.consent.approvedAt.toDate().getTime()).toBe(
       invite.consent.approvedAt.toDate().getTime(),
     );
+    expect(link.familyName).toBe('Dupont');
 
     // Invite consumed.
     expect(invite.status).toBe('accepted');
