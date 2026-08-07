@@ -936,6 +936,38 @@ export default {
   supervisionAgreement: {
     title: 'Supervision Agreement',
   },
+  supervision: {
+    requestTitle: 'Supervision request',
+    requestBody: 'A parent asked to supervise your account.',
+    whatItMeans: 'What supervision means',
+    accept: 'Accept',
+    decline: 'Decline',
+    confirmDeclineTitle: 'Decline this request?',
+    confirmDeclineDesc:
+      'The request will be removed. The parent is not notified that you declined, and they can ask again later.',
+    confirmDeclineCta: 'Yes, decline',
+    error: 'Something went wrong. Please try again.',
+    indicatorTitle: 'Supervised account',
+    indicatorDesc: 'The parents of your family follow your activity on this app.',
+    info: {
+      title: 'What supervision means',
+      intro:
+        'When your account is supervised, the parents of your family follow your activity. Here is exactly what that covers — nothing they can see is hidden from you.',
+      seeTitle: 'What they see',
+      seeBody:
+        'Your sessions and appointments, your schedule, your incoming and outgoing requests with their messages, and all session notes.',
+      doTitle: 'What they can do',
+      doBody:
+        'They can hide you from search, cancel your sessions or appointments (with a reason), and decline requests on your behalf. They can never accept for you — you always make your own commitments.',
+      sharedTitle: 'Who holds these rights',
+      sharedBody:
+        'Every parent in the supervising family holds the same rights and is notified of your activity.',
+      endTitle: 'How it ends',
+      endBody:
+        'Under 15, supervision is required and cannot be removed. From 15, any parent of the family (or an EJM administrator) can end it. You cannot remove it yourself.',
+      agreementLink: 'Read the Supervision Agreement',
+    },
+  },
   report: {
     title: 'Report a Problem',
     desc: "If you're experiencing an issue, tap the button below to send us an email. We'll pre-fill some diagnostic info to help us investigate.",

@@ -155,4 +155,25 @@ describe('tutor AccountPage', () => {
       ),
     );
   });
+
+  // ── Supervised-account indicator (governedBy mirror) ──
+
+  it('shows the supervised-account indicator when governedBy is set', () => {
+    h.auth.userDoc = {
+      ...makeUserDoc(),
+      governedBy: { familyId: 'fam1', linkedAt: { seconds: 1, nanoseconds: 0 } },
+    };
+    renderWithProviders(<AccountPage />);
+
+    expect(screen.getByText(/supervised account/i)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /what supervision means/i })).toHaveAttribute(
+      'href',
+      '/supervision-info',
+    );
+  });
+
+  it('shows no supervised-account indicator without governedBy', () => {
+    renderWithProviders(<AccountPage />);
+    expect(screen.queryByText(/supervised account/i)).not.toBeInTheDocument();
+  });
 });

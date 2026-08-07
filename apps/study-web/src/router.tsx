@@ -41,6 +41,7 @@ import {
   GovernedChildPage,
   CreateKidInvitePage,
   SupervisionAgreementPage,
+  SupervisionInfoPage,
 } from '@/lazyPages';
 
 const SUPPORT_EMAIL = 'support@sync-study.com';
@@ -62,6 +63,7 @@ export const router = createBrowserRouter([
       { path: '/enroll/parent', element: <StaticPage titleKey="welcome.signUpParent" /> },
       { path: '/forgot-password', element: <ForgotPasswordPage /> },
       { path: '/supervision-agreement', element: <SupervisionAgreementPage /> },
+      { path: '/supervision-info', element: <SupervisionInfoPage /> },
       { path: '*', element: <Navigate to="/" replace /> },
     ],
   },

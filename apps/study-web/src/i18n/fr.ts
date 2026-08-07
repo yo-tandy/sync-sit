@@ -936,6 +936,38 @@ export default {
   supervisionAgreement: {
     title: 'Accord de supervision',
   },
+  supervision: {
+    requestTitle: 'Demande de supervision',
+    requestBody: 'Un parent a demandé à superviser votre compte.',
+    whatItMeans: 'Ce que signifie la supervision',
+    accept: 'Accepter',
+    decline: 'Refuser',
+    confirmDeclineTitle: 'Refuser cette demande ?',
+    confirmDeclineDesc:
+      'La demande sera supprimée. Le parent n\'est pas informé de votre refus, et il pourra redemander plus tard.',
+    confirmDeclineCta: 'Oui, refuser',
+    error: 'Une erreur est survenue. Veuillez réessayer.',
+    indicatorTitle: 'Compte supervisé',
+    indicatorDesc: 'Les parents de votre famille suivent votre activité sur cette application.',
+    info: {
+      title: 'Ce que signifie la supervision',
+      intro:
+        'Quand votre compte est supervisé, les parents de votre famille suivent votre activité. Voici exactement ce que cela couvre — rien de ce qu\'ils peuvent voir ne vous est caché.',
+      seeTitle: 'Ce qu\'ils voient',
+      seeBody:
+        'Vos sessions et vos gardes, votre planning, vos demandes entrantes et sortantes avec leurs messages, et toutes les notes de session.',
+      doTitle: 'Ce qu\'ils peuvent faire',
+      doBody:
+        'Ils peuvent vous masquer de la recherche, annuler vos sessions ou vos gardes (avec une raison), et refuser des demandes en votre nom. Ils ne peuvent jamais accepter à votre place — vous prenez toujours vos propres engagements.',
+      sharedTitle: 'Qui détient ces droits',
+      sharedBody:
+        'Chaque parent de la famille superviseuse détient les mêmes droits et est informé de votre activité.',
+      endTitle: 'Comment cela se termine',
+      endBody:
+        'Avant 15 ans, la supervision est obligatoire et ne peut pas être retirée. À partir de 15 ans, tout parent de la famille (ou un administrateur EJM) peut y mettre fin. Vous ne pouvez pas la retirer vous-même.',
+      agreementLink: 'Lire l\'Accord de supervision',
+    },
+  },
   report: {
     title: 'Signaler un problème',
     desc: "Si vous rencontrez un problème, appuyez sur le bouton ci-dessous pour nous envoyer un email. Nous pré-remplirons des informations de diagnostic pour nous aider à enquêter.",

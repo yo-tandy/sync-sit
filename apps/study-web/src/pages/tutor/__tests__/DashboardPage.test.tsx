@@ -267,4 +267,29 @@ describe('tutor DashboardPage', () => {
     // Only the two private ones count as pending.
     expect(await screen.findByText('2')).toBeInTheDocument();
   });
+
+  // ── Supervision request card (guardianLinks/{ownUid} pending claim) ──
+
+  it('shows the supervision request card when a pending claim exists', async () => {
+    h.auth.userDoc = tutor();
+    h.getDoc.mockImplementation((ref: { path: string }) => {
+      if (ref.path === 'guardianLinks/t1') {
+        return Promise.resolve({
+          exists: () => true,
+          data: () => ({ childUid: 't1', familyId: 'fam1', status: 'pending', origin: 'claim' }),
+        });
+      }
+      return Promise.resolve({ exists: () => h.scheduleData != null, data: () => h.scheduleData });
+    });
+    renderWithProviders(<DashboardPage />);
+
+    expect(await screen.findByText(/supervise your account/i)).toBeInTheDocument();
+  });
+
+  it('shows no supervision request card without a pending claim', async () => {
+    h.auth.userDoc = tutor();
+    renderWithProviders(<DashboardPage />);
+    await waitFor(() => expect(h.getDoc).toHaveBeenCalled());
+    expect(screen.queryByText(/supervise your account/i)).not.toBeInTheDocument();
+  });
 });

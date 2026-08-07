@@ -15,6 +15,7 @@ import { db } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { getTutorProfile } from '@ejm/study-core';
 import { DAYS_OF_WEEK } from '@ejm/shared-core';
+import { SupervisionRequestCard } from '@/components/tutor/SupervisionRequestCard';
 import {
   Card,
   Button,
@@ -171,6 +172,9 @@ export function DashboardPage() {
     <div className="px-5 pt-4 pb-8">
       <h1 className="mb-1 text-lg font-bold text-gray-900">{t('tutor.dashboardTitle')}</h1>
       <p className="mb-5 text-sm text-gray-500">{t('tutor.dashboard.greeting')}</p>
+
+      {/* ── Ask-to-supervise prompt (pending claim on guardianLinks/{uid}) ── */}
+      <SupervisionRequestCard />
 
       {/* ── Verification-state banner (keyed on identityStatus + liveness) ── */}
       <VerificationBanner
