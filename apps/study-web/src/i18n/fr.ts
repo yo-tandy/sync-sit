@@ -758,6 +758,35 @@ export default {
       confirmCancelInviteDesc: 'L\'invitation envoyée à {{name}} ne fonctionnera plus.',
       confirmCancelInviteCta: 'Oui, annuler l\'invitation',
       keepInvite: 'Garder l\'invitation',
+      inviteSent: 'Invitation envoyée',
+      inviteSentDesc:
+        'Votre enfant recevra un email pour créer son compte supervisé — ou, s\'il utilise déjà l\'application, une demande dans l\'application pour confirmer votre supervision.',
+      inviteSentNeutral:
+        'Pour la confidentialité de votre enfant, nous ne révélons pas si un compte existe déjà.',
+      inviteSentBack: 'Retour aux comptes supervisés',
+      invite: {
+        title: 'Ajouter un enfant',
+        intro:
+          'Saisissez les informations de votre enfant telles qu\'elles figurent à l\'école. Il devra confirmer de son côté avant que la supervision ne commence.',
+        emailLabel: 'Email EJM de l\'enfant',
+        emailHint: 'Son adresse scolaire officielle, se terminant par son année de promotion.',
+        emailInvalid:
+          'Veuillez utiliser son adresse @ejm.org se terminant par son année de promotion (p. ex. nom28@ejm.org).',
+        firstName: 'Prénom',
+        lastName: 'Nom',
+        dateOfBirth: 'Date de naissance',
+        consentTitle: 'Au nom de votre enfant, vous acceptez :',
+        consentAgree: 'J\'accepte',
+        consentVersion: '(version {{version}})',
+        tos: 'les Conditions générales',
+        privacy: 'la Politique de confidentialité',
+        supervision: 'l\'Accord de supervision',
+        submit: 'Envoyer l\'invitation',
+        submitting: 'Envoi…',
+        needsFamilyTitle: 'Un profil famille est d\'abord nécessaire',
+        needsFamilyDesc:
+          'Seul un parent disposant d\'un profil famille peut superviser un enfant. Créez votre famille dans l\'application Sync/Sit, puis revenez ici.',
+      },
     },
   },
 

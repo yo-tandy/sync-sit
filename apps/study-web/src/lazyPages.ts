@@ -102,6 +102,9 @@ export const GovernancePage = lazy(() =>
 export const GovernedChildPage = lazy(() =>
   import('@/pages/family/GovernedChildPage').then((m) => ({ default: m.GovernedChildPage })),
 );
+export const CreateKidInvitePage = lazy(() =>
+  import('@/pages/family/CreateKidInvitePage').then((m) => ({ default: m.CreateKidInvitePage })),
+);
 
 // Public governance documents
 export const SupervisionAgreementPage = lazy(() =>

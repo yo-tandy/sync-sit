@@ -39,6 +39,7 @@ import {
   FamilySessionsPage,
   GovernancePage,
   GovernedChildPage,
+  CreateKidInvitePage,
   SupervisionAgreementPage,
 } from '@/lazyPages';
 
@@ -89,6 +90,8 @@ export const router = createBrowserRouter([
       { path: '/family/sessions', element: <FamilySessionsPage /> },
       { path: '/family/book/:tutorUserId', element: <BookSessionPage /> },
       { path: '/family/governance', element: <GovernancePage /> },
+      // Static 'new' outranks the :childUid dynamic segment (route ranking).
+      { path: '/family/governance/new', element: <CreateKidInvitePage /> },
       { path: '/family/governance/:childUid', element: <GovernedChildPage /> },
     ],
   },

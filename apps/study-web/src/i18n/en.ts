@@ -758,6 +758,35 @@ export default {
       confirmCancelInviteDesc: 'The invitation sent to {{name}} will stop working.',
       confirmCancelInviteCta: 'Yes, cancel invitation',
       keepInvite: 'Keep invitation',
+      inviteSent: 'Invitation sent',
+      inviteSentDesc:
+        'Your child will receive an email to create their supervised account — or, if they already use the app, an in-app request to confirm your supervision.',
+      inviteSentNeutral:
+        'For your child\'s privacy, we don\'t reveal whether an account already exists.',
+      inviteSentBack: 'Back to supervised kids',
+      invite: {
+        title: 'Add a child',
+        intro:
+          'Enter your child\'s details as they appear at school. They will confirm on their side before supervision starts.',
+        emailLabel: 'Kid\'s EJM email',
+        emailHint: 'Their official school address, ending with their graduation year.',
+        emailInvalid:
+          'Please use their @ejm.org address ending with their graduation year (e.g. name28@ejm.org).',
+        firstName: 'First name',
+        lastName: 'Last name',
+        dateOfBirth: 'Date of birth',
+        consentTitle: 'On behalf of your child, you accept:',
+        consentAgree: 'I accept the',
+        consentVersion: '(version {{version}})',
+        tos: 'Terms of Service',
+        privacy: 'Privacy Policy',
+        supervision: 'Supervision Agreement',
+        submit: 'Send invitation',
+        submitting: 'Sending…',
+        needsFamilyTitle: 'A family profile is needed first',
+        needsFamilyDesc:
+          'Only a parent with a family profile can supervise a child. Create your family in the Sync/Sit app, then come back here.',
+      },
     },
   },
 
