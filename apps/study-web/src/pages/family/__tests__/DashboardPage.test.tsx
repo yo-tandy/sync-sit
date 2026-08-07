@@ -145,13 +145,22 @@ describe('family DashboardPage', () => {
     expect(screen.getByText('2')).toBeInTheDocument();
   });
 
+  it('renders a governance entry card linking to /family/governance', () => {
+    renderWithProviders(<DashboardPage />);
+    expect(screen.getByRole('link', { name: /supervised kids/i })).toHaveAttribute(
+      'href',
+      '/family/governance',
+    );
+  });
+
   it('renders entry cards linking to settings and account', () => {
     renderWithProviders(<DashboardPage />);
     expect(screen.getByRole('link', { name: /family settings/i })).toHaveAttribute(
       'href',
       '/family/settings',
     );
-    expect(screen.getByRole('link', { name: /account/i })).toHaveAttribute(
+    // Anchored: the governance card's description also contains "accounts".
+    expect(screen.getByRole('link', { name: /^account\b/i })).toHaveAttribute(
       'href',
       '/family/account',
     );

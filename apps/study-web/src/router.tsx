@@ -37,6 +37,11 @@ import {
   FamilyRequestsPage,
   BookSessionPage,
   FamilySessionsPage,
+  GovernancePage,
+  GovernedChildPage,
+  CreateKidInvitePage,
+  SupervisionAgreementPage,
+  SupervisionInfoPage,
 } from '@/lazyPages';
 
 const SUPPORT_EMAIL = 'support@sync-study.com';
@@ -57,6 +62,8 @@ export const router = createBrowserRouter([
       { path: '/report', element: <ReportProblemPage /> },
       { path: '/enroll/parent', element: <StaticPage titleKey="welcome.signUpParent" /> },
       { path: '/forgot-password', element: <ForgotPasswordPage /> },
+      { path: '/supervision-agreement', element: <SupervisionAgreementPage /> },
+      { path: '/supervision-info', element: <SupervisionInfoPage /> },
       { path: '*', element: <Navigate to="/" replace /> },
     ],
   },
@@ -84,6 +91,10 @@ export const router = createBrowserRouter([
       { path: '/family/requests', element: <FamilyRequestsPage /> },
       { path: '/family/sessions', element: <FamilySessionsPage /> },
       { path: '/family/book/:tutorUserId', element: <BookSessionPage /> },
+      { path: '/family/governance', element: <GovernancePage /> },
+      // Static 'new' outranks the :childUid dynamic segment (route ranking).
+      { path: '/family/governance/new', element: <CreateKidInvitePage /> },
+      { path: '/family/governance/:childUid', element: <GovernedChildPage /> },
     ],
   },
 ]);

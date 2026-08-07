@@ -728,6 +728,125 @@ export default {
       errorInvalid: 'That endorsement can\'t be submitted — please check the text and try again.',
       error: 'Something went wrong. Please try again.',
     },
+    governance: {
+      navTitle: 'Supervised kids',
+      navDesc: 'Create and follow your kids\' supervised accounts.',
+      title: 'Supervised kids',
+      kidsTitle: 'Your kids',
+      invitesTitle: 'Pending invitations',
+      addChild: 'Add a child',
+      addChildDesc: 'Invite your child or create their supervised account.',
+      empty: 'No supervised kids yet — add your child to get started.',
+      loadError: 'Couldn\'t load your supervised kids. Please try again.',
+      actionError: 'Something went wrong. Please try again.',
+      linkStatus: {
+        pending: 'Awaiting confirmation',
+        active: 'Active',
+        revoked: 'Ended',
+      },
+      age: '{{age}} years old',
+      profileTutor: 'Tutor',
+      profileBabysitter: 'Babysitter',
+      searchableOn: 'visible in search',
+      searchableOff: 'hidden from search',
+      upcoming30: 'Next 30 days: {{study}} tutoring · {{sit}} babysitting',
+      inviteExpires: 'Expires {{date}}',
+      inviteExpired: 'Expired {{date}}',
+      resend: 'Resend',
+      cancelInvite: 'Cancel invitation',
+      confirmCancelInviteTitle: 'Cancel this invitation?',
+      confirmCancelInviteDesc: 'The invitation sent to {{name}} will stop working.',
+      confirmCancelInviteCta: 'Yes, cancel invitation',
+      keepInvite: 'Keep invitation',
+      inviteSent: 'Invitation sent',
+      inviteSentDesc:
+        'Your child will receive an email to create their supervised account — or, if they already use the app, an in-app request to confirm your supervision.',
+      inviteSentNeutral:
+        'For your child\'s privacy, we don\'t reveal whether an account already exists.',
+      inviteSentBack: 'Back to supervised kids',
+      invite: {
+        title: 'Add a child',
+        intro:
+          'Enter your child\'s details as they appear at school. They will confirm on their side before supervision starts.',
+        emailLabel: 'Kid\'s EJM email',
+        emailHint: 'Their official school address, ending with their graduation year.',
+        emailInvalid:
+          'Please use their @ejm.org address ending with their graduation year (e.g. name28@ejm.org).',
+        firstName: 'First name',
+        lastName: 'Last name',
+        dateOfBirth: 'Date of birth',
+        consentTitle: 'On behalf of your child, you accept:',
+        consentAgree: 'I accept the',
+        consentVersion: '(version {{version}})',
+        tos: 'Terms of Service',
+        privacy: 'Privacy Policy',
+        supervision: 'Supervision Agreement',
+        submit: 'Send invitation',
+        submitting: 'Sending…',
+        needsFamilyTitle: 'A family profile is needed first',
+        needsFamilyDesc:
+          'Only a parent with a family profile can supervise a child. Create your family in the Sync/Sit app, then come back here.',
+      },
+      child: {
+        supervisedSince: 'Supervised since {{date}}',
+        profilesTitle: 'Profiles',
+        noTutorProfile: 'No tutor profile yet.',
+        sitPresence: 'Also enrolled as a babysitter in Sync/Sit.',
+        toggleStudy: 'Tutor search visibility',
+        toggleSit: 'Babysitter search visibility',
+        confirmHideTitle: 'Hide from search?',
+        confirmHideDesc:
+          'Families will no longer find {{name}} in search results. {{name}} will be notified.',
+        confirmShowTitle: 'Make visible in search?',
+        confirmShowDesc:
+          'Families will be able to find {{name}} in search results. {{name}} will be notified.',
+        confirmHideCta: 'Yes, hide from search',
+        confirmShowCta: 'Yes, make visible',
+        scheduleTitle: 'Schedule',
+        scheduleSet: 'Weekly availability set · {{count}} date overrides',
+        scheduleNone: 'No weekly availability set.',
+        pendingTitle: 'Pending requests',
+        upcomingTitle: 'Sessions',
+        historyTitle: 'History',
+        emptySessions: 'No sessions or requests yet.',
+        decline: 'Decline',
+        confirmDeclineTitle: 'Decline this request?',
+        confirmDeclineDesc:
+          'The request will be declined on {{name}}\'s behalf. As a parent you can decline, but never accept for them.',
+        confirmDeclineCta: 'Yes, decline',
+        keepRequest: 'Keep request',
+        cancelSession: 'Cancel session',
+        cancelSeries: 'Cancel series',
+        cancelTitle: 'Cancel this session?',
+        cancelSeriesTitle: 'Cancel this series?',
+        cancelDesc: 'Give a short reason — it is shared with the family and with {{name}}.',
+        cancelPlaceholder: 'Reason for the cancellation…',
+        cancelConfirm: 'Yes, cancel session',
+        cancelKeep: 'Keep session',
+        viewDates: 'View dates',
+        hideDates: 'Hide dates',
+        notePre: 'Pre-session note',
+        notePost: 'Post-session note',
+        status: {
+          pending: 'Pending',
+          confirmed: 'Confirmed',
+          declined: 'Declined',
+          cancelled: 'Cancelled',
+          completed: 'Completed',
+        },
+        instanceStatus: {
+          scheduled: 'Scheduled',
+          completed: 'Completed',
+          skipped: 'Skipped',
+          cancelled: 'Cancelled',
+        },
+        deniedTitle: 'Supervision not active',
+        deniedDesc:
+          'This account is not under your active supervision. If this seems wrong, check your supervised kids list.',
+        deniedBack: 'Back to supervised kids',
+        loadError: 'Couldn\'t load this account. Please try again.',
+      },
+    },
   },
 
   // Shared cancellation-policy copy (V2 feature 7), used by both portals' cancel
@@ -813,6 +932,65 @@ export default {
   },
   terms: {
     title: 'Terms & Conditions',
+  },
+  // AUTHORITATIVE copy from the governance plan — do not reword without a
+  // version bump of SUPERVISION_AGREEMENT_VERSION.
+  supervisionAgreement: {
+    title: 'Supervision Agreement',
+    versionNote:
+      'Version {{version}} — you accept this agreement when creating or requesting supervision of a child\'s account.',
+    confirmTitle: 'What you confirm',
+    confirmBullet1:
+      'You are a parent or legal guardian of the child, and a parent of the family account you are using.',
+    confirmBullet2:
+      'You consent, on the child\'s behalf, to the Terms of Service and Privacy Policy, and to the processing of the child\'s data needed to run this service.',
+    seeTitle: 'What you can see',
+    seeBody:
+      'Supervision is full visibility: your family\'s parents see the child\'s sessions and appointments, schedules, incoming and outgoing requests with their messages, and all session notes. The child is informed that supervision is active.',
+    doTitle: 'What you can do',
+    doBody:
+      'You can hide the child from search, cancel their sessions or appointments (with a reason), and decline requests on their behalf. You can never accept or commit on their behalf — the child always makes their own commitments.',
+    responsibilitiesTitle: 'Your responsibilities',
+    responsibilitiesBody:
+      'You agree to supervise the child\'s use of the service, to make sure commitments the child accepts are honored or cancelled with proper notice, and to remain reachable by families and by the EJM administration for matters concerning the child.',
+    sharingTitle: 'Sharing of rights',
+    sharingBody:
+      'Every parent in your family account holds the same supervision rights, and each is notified of the child\'s activity.',
+    durationTitle: 'Duration',
+    durationBody:
+      'For a child under 15, supervision is required and cannot be removed. From 15, any parent of the family (or an administrator) may end supervision. The child cannot remove it themselves.',
+  },
+  supervision: {
+    requestTitle: 'Supervision request',
+    requestBody: 'A parent asked to supervise your account.',
+    whatItMeans: 'What supervision means',
+    accept: 'Accept',
+    decline: 'Decline',
+    confirmDeclineTitle: 'Decline this request?',
+    confirmDeclineDesc:
+      'The request will be removed. The parent is not notified that you declined, and they can ask again later.',
+    confirmDeclineCta: 'Yes, decline',
+    error: 'Something went wrong. Please try again.',
+    indicatorTitle: 'Supervised account',
+    indicatorDesc: 'The parents of your family follow your activity on this app.',
+    info: {
+      title: 'What supervision means',
+      intro:
+        'When your account is supervised, the parents of your family follow your activity. Here is exactly what that covers — nothing they can see is hidden from you.',
+      seeTitle: 'What they see',
+      seeBody:
+        'Your sessions and appointments, your schedule, your incoming and outgoing requests with their messages, and all session notes.',
+      doTitle: 'What they can do',
+      doBody:
+        'They can hide you from search, cancel your sessions or appointments (with a reason), and decline requests on your behalf. They can never accept for you — you always make your own commitments.',
+      sharedTitle: 'Who holds these rights',
+      sharedBody:
+        'Every parent in the supervising family holds the same rights and is notified of your activity.',
+      endTitle: 'How it ends',
+      endBody:
+        'Under 15, supervision is required and cannot be removed. From 15, any parent of the family (or an EJM administrator) can end it. You cannot remove it yourself.',
+      agreementLink: 'Read the Supervision Agreement',
+    },
   },
   report: {
     title: 'Report a Problem',
