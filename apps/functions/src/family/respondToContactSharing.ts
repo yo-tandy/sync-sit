@@ -2,6 +2,11 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { FieldValue } from 'firebase-admin/firestore';
 import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
+import { writeUserActivity } from '../admin/writeAuditLog.js';
+import {
+  isActiveGuardianOf,
+  notifyChildOfGuardianAction,
+} from '@ejm/shared-functions/guardian/guardianAccess.js';
 
 interface RespondInput {
   requestId: string;
@@ -35,9 +40,23 @@ export const respondToContactSharing = onCall(
 
     const reqData = requestDoc.data()!;
 
-    // Verify the caller is the babysitter for this request
+    // Verify the caller is the babysitter for this request, else a GUARDIAN
+    // of the babysitter — DECLINE-ONLY: approving would share the kid's
+    // contact details, which only the kid consents to.
+    let guardianActor = false;
     if (reqData.babysitterUserId !== uid) {
-      throw new HttpsError('permission-denied', 'You are not the babysitter for this request');
+      if (await isActiveGuardianOf(uid, reqData.babysitterUserId as string)) {
+        if (action !== 'decline') {
+          throw new HttpsError(
+            'permission-denied',
+            'A guardian can decline on behalf of the kid, never accept.',
+            { code: 'guardian/decline-only' },
+          );
+        }
+        guardianActor = true;
+      } else {
+        throw new HttpsError('permission-denied', 'You are not the babysitter for this request');
+      }
     }
 
     const now = new Date();
@@ -58,6 +77,20 @@ export const respondToContactSharing = onCall(
       await requestDoc.ref.update({
         status: 'declined',
         respondedAt: now,
+      });
+    }
+
+    if (guardianActor) {
+      await notifyChildOfGuardianAction(
+        reqData.babysitterUserId as string,
+        'A parent of your family declined a contact sharing request for you.',
+        { requestId },
+      );
+      // Guardian actions are always audited (the babysitter's own responses
+      // predate auditing here and stay as they were).
+      await writeUserActivity(uid, 'contact_sharing_declined', {
+        requestId,
+        actorRole: 'guardian',
       });
     }
 

@@ -4,6 +4,10 @@ import { getCorsOrigin } from '../config/cors.js';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
 import { notifyAllParents } from '../config/notifyParents.js';
 import { buildMergedOverride } from '@ejm/shared-functions/schedule/sessionOverride.js';
+import {
+  isActiveGuardianOf,
+  notifyChildOfGuardianAction,
+} from '@ejm/shared-functions/guardian/guardianAccess.js';
 
 /** sit stamps the override docs it creates so its cancel can restore losslessly. */
 const SIT_PROVENANCE = { appSource: 'sit', reason: 'appointment' } as const;
@@ -38,9 +42,23 @@ export const respondToRequest = onCall(
 
     const appointment = appointmentSnap.data()!;
 
-    // Verify the caller is the babysitter for this appointment
+    // Verify the caller is the babysitter for this appointment, else a
+    // GUARDIAN of the babysitter — DECLINE-ONLY: a guardian protects, they
+    // never accept a commitment on the kid's behalf.
+    let guardianActor = false;
     if (appointment.babysitterUserId !== uid) {
-      throw new HttpsError('permission-denied', 'You are not the babysitter for this appointment');
+      if (await isActiveGuardianOf(uid, appointment.babysitterUserId as string)) {
+        if (data.action !== 'decline') {
+          throw new HttpsError(
+            'permission-denied',
+            'A guardian can decline on behalf of the kid, never accept.',
+            { code: 'guardian/decline-only' },
+          );
+        }
+        guardianActor = true;
+      } else {
+        throw new HttpsError('permission-denied', 'You are not the babysitter for this appointment');
+      }
     }
 
     console.log(`[respondToRequest] aptId=${data.appointmentId} action=${data.action} status=${appointment.status} familyId=${appointment.familyId}`);
@@ -137,8 +155,12 @@ export const respondToRequest = onCall(
         updatedAt: now,
       });
 
-      // Load babysitter name for notification
-      const babysitterDoc = await db.collection('users').doc(uid).get();
+      // Load babysitter name for notification — keyed on the BABYSITTER, not
+      // the caller, so a guardian decline shows the kid's name to the family.
+      const babysitterDoc = await db
+        .collection('users')
+        .doc(appointment.babysitterUserId as string)
+        .get();
       const babysitterUser = babysitterDoc.data()!;
       const babysitterName = `${babysitterUser.firstName} ${babysitterUser.lastName}`;
 
@@ -166,7 +188,15 @@ export const respondToRequest = onCall(
       }
     }
 
-    await writeUserActivity(request.auth!.uid, data.action === 'accept' ? 'appointment_accepted' : 'appointment_declined', { appointmentId: data.appointmentId });
+    if (guardianActor) {
+      await notifyChildOfGuardianAction(
+        appointment.babysitterUserId as string,
+        'A parent of your family declined a babysitting request for you.',
+        { appointmentId: data.appointmentId },
+      );
+    }
+
+    await writeUserActivity(request.auth!.uid, data.action === 'accept' ? 'appointment_accepted' : 'appointment_declined', { appointmentId: data.appointmentId, ...(guardianActor ? { actorRole: 'guardian' } : {}) });
 
     return { success: true };
   }

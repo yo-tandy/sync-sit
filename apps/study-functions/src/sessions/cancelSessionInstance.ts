@@ -6,6 +6,10 @@ import { writeUserActivity } from '@ejm/shared-functions/admin/writeAuditLog.js'
 import { notifyAllParents } from '@ejm/shared-functions/config/notifyParents.js';
 import { sendNotificationEmail } from '@ejm/shared-functions/config/email.js';
 import { sendPushNotification } from '@ejm/shared-functions/config/push.js';
+import {
+  isActiveGuardianOf,
+  notifyChildOfGuardianAction,
+} from '@ejm/shared-functions/guardian/guardianAccess.js';
 import { getParentProfile, type User } from '@ejm/shared-core';
 import { dayOfWeek } from '@ejm/study-core';
 import type { WeeklyGrid } from '../availability/computeDateAvailability.js';
@@ -92,16 +96,21 @@ export const cancelSessionInstance = onCall(
       );
     }
 
-    // Party check against the INSTANCE's own denormalized fields.
+    // Party check against the INSTANCE's own denormalized fields. Third
+    // resolution: a GUARDIAN of the tutor acts on the provider's side.
     const tutorUserId = instance.tutorUserId as string;
     const familyId = instance.familyId as string;
     let statusReason: CancelStatusReason;
+    let guardianActor = false;
     if (tutorUserId === uid) {
       statusReason = 'cancelled_by_tutor';
     } else {
       const callerParent = getParentProfile(callerDoc.data() as User | undefined);
       if (callerParent?.familyId && callerParent.familyId === familyId) {
         statusReason = 'cancelled_by_family';
+      } else if (await isActiveGuardianOf(uid, tutorUserId)) {
+        statusReason = 'cancelled_by_tutor';
+        guardianActor = true;
       } else {
         throw new HttpsError('permission-denied', 'You are not part of this session');
       }
@@ -237,11 +246,20 @@ export const cancelSessionInstance = onCall(
       });
     }
 
+    if (guardianActor) {
+      await notifyChildOfGuardianAction(
+        tutorUserId,
+        `A parent of your family cancelled your session on ${whenInfo}. Reason: ${reason}`,
+        { sessionId, instanceId },
+      );
+    }
+
     await writeUserActivity(uid, 'session_instance_cancelled', {
       sessionId,
       instanceId,
       reason,
       late,
+      ...(guardianActor ? { actorRole: 'guardian' } : {}),
     });
 
     return { success: true };
