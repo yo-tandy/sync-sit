@@ -48,6 +48,9 @@ import { SearchPage } from '@/pages/family/SearchPage';
 import { VerificationPage } from '@/pages/family/VerificationPage';
 import { AccountPage } from '@/pages/family/AccountPage';
 import { PreferredBabysittersPage } from '@/pages/family/PreferredBabysittersPage';
+import { GovernancePage } from '@/pages/family/GovernancePage';
+import { CreateKidInvitePage } from '@/pages/family/CreateKidInvitePage';
+import { GovernedChildPage } from '@/pages/family/GovernedChildPage';
 
 // Admin pages
 import { AdminDashboard } from '@/pages/admin/DashboardPage';
@@ -112,6 +115,9 @@ export const router = createBrowserRouter([
       { path: '/family/preferred', element: <PreferredBabysittersPage /> },
       { path: '/family/account', element: <AccountPage /> },
       { path: '/family/verification', element: <VerificationPage /> },
+      { path: '/family/governance', element: <GovernancePage /> },
+      { path: '/family/governance/new', element: <CreateKidInvitePage /> },
+      { path: '/family/governance/:childUid', element: <GovernedChildPage /> },
     ],
   },
 
