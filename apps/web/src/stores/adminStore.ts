@@ -94,6 +94,51 @@ interface AdminStatsWithVerifications extends AdminDashboardStats {
   pendingVerificationCount: number;
 }
 
+/**
+ * One row of the `listSupervisedAccounts` callable — a guardian link (any
+ * status; revoked links stay auditable) joined with the child summary, the
+ * family name, and the GDPR consent record.
+ */
+export interface SupervisedAccountRow {
+  childUid: string;
+  child: {
+    firstName: string | null;
+    lastName: string | null;
+    email: string | null;
+    status: string | null;
+    age: number | null;
+    identityLocked: boolean;
+  };
+  familyId: string;
+  familyName: string | null;
+  link: {
+    status: 'pending' | 'active' | 'revoked';
+    origin: 'parent_created' | 'claim';
+    createdByParentUid: string;
+    requestedAt: string | null;
+    confirmedAt: string | null;
+    revokedAt: string | null;
+    revokedByUid: string | null;
+  };
+  consent: {
+    tosVersion: string | null;
+    privacyVersion: string | null;
+    supervisionAgreementVersion: string | null;
+    approvedAt: string | null;
+    approvedByUid: string | null;
+  };
+}
+
+/** One governance alert of the `listAdminAlerts` callable. */
+export interface GovernanceAlert {
+  alertId: string;
+  type: string;
+  data: Record<string, unknown>;
+  createdAt: string | null;
+  reviewedAt: string | null;
+  reviewedByUid: string | null;
+}
+
 interface AdminState {
   // Dashboard stats
   stats: AdminStatsWithVerifications | null;
@@ -140,6 +185,16 @@ interface AdminState {
   fetchExemptions: () => Promise<void>;
   addExemption: (email: string, note?: string) => Promise<void>;
   removeExemption: (email: string) => Promise<void>;
+
+  // Parental governance
+  supervisedAccounts: SupervisedAccountRow[];
+  supervisedLoading: boolean;
+  fetchSupervisedAccounts: () => Promise<void>;
+  governanceAlerts: GovernanceAlert[];
+  governanceAlertsLoading: boolean;
+  fetchGovernanceAlerts: (onlyUnreviewed: boolean) => Promise<void>;
+  reviewGovernanceAlert: (alertId: string) => Promise<void>;
+  forceRevokeSupervision: (childUid: string, reason: string) => Promise<void>;
 }
 
 export const useAdminStore = create<AdminState>((set) => ({
@@ -314,5 +369,47 @@ export const useAdminStore = create<AdminState>((set) => ({
   removeExemption: async (email) => {
     const fn = httpsCallable(functions, 'removeEnrollmentExemption');
     await fn({ email });
+  },
+
+  // Parental governance
+  supervisedAccounts: [],
+  supervisedLoading: false,
+  fetchSupervisedAccounts: async () => {
+    set({ supervisedLoading: true });
+    try {
+      const fn = httpsCallable<Record<string, never>, { accounts: SupervisedAccountRow[] }>(
+        functions,
+        'listSupervisedAccounts',
+      );
+      const result = await fn({});
+      set({ supervisedAccounts: result.data.accounts, supervisedLoading: false });
+    } catch (err) {
+      set({ supervisedLoading: false });
+      throw err;
+    }
+  },
+  governanceAlerts: [],
+  governanceAlertsLoading: false,
+  fetchGovernanceAlerts: async (onlyUnreviewed) => {
+    set({ governanceAlertsLoading: true });
+    try {
+      const fn = httpsCallable<{ onlyUnreviewed: boolean }, { alerts: GovernanceAlert[] }>(
+        functions,
+        'listAdminAlerts',
+      );
+      const result = await fn({ onlyUnreviewed });
+      set({ governanceAlerts: result.data.alerts, governanceAlertsLoading: false });
+    } catch (err) {
+      set({ governanceAlertsLoading: false });
+      throw err;
+    }
+  },
+  reviewGovernanceAlert: async (alertId) => {
+    const fn = httpsCallable(functions, 'reviewAdminAlert');
+    await fn({ alertId });
+  },
+  forceRevokeSupervision: async (childUid, reason) => {
+    const fn = httpsCallable(functions, 'forceRevokeSupervision');
+    await fn({ childUid, reason });
   },
 }));

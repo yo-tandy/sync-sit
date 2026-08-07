@@ -752,6 +752,51 @@ export default {
       remove: "Retirer l'exemption",
       empty: 'Aucune exemption',
     },
+    governance: {
+      menuTitle: 'Supervision',
+      title: 'Supervision et gouvernance',
+      accountsTitle: 'Comptes supervisés',
+      accountsDesc:
+        'Tous les liens de supervision, quel que soit leur statut — les liens révoqués restent des preuves de consentement auditables (RGPD).',
+      accountsEmpty: 'Aucun compte supervisé pour le moment.',
+      age: '{{age}} ans',
+      identityLocked: 'Identité verrouillée',
+      origin: {
+        parent_created: 'Créé par un parent',
+        claim: 'Rattachement',
+      },
+      linkStatus: {
+        pending: 'En attente',
+        active: 'Active',
+        revoked: 'Révoquée',
+      },
+      consentLine: 'CGU {{tos}} · Confidentialité {{privacy}} · Accord {{agreement}}',
+      consentApproved: 'Approuvé le {{date}}',
+      requestedAt: 'Demandé le {{date}}',
+      confirmedAt: 'Confirmé le {{date}}',
+      revokedAt: 'Révoqué le {{date}}',
+      alertsTitle: 'Alertes',
+      alertsEmpty: 'Aucune alerte.',
+      onlyUnreviewed: 'Non traitées uniquement',
+      markReviewed: 'Marquer comme traitée',
+      reviewedAt: 'Traitée le {{date}}',
+      alertType: {
+        guardian_conflicting_claim: 'Demande de supervision en conflit',
+        guardian_claim_identity_mismatch: 'Incohérence d\'identité sur une demande de supervision',
+        guardian_forced_revoke_minor: 'Révocation forcée d\'un mineur',
+        guardian_orphaned_minor: 'Mineur supervisé resté sans parents',
+      },
+      forceRevoke: 'Révocation forcée',
+      forceRevokeTitle: 'Forcer la révocation de la supervision ?',
+      forceRevokeDesc:
+        'Met fin à la supervision de {{name}} par la famille {{family}}. La famille et l\'enfant sont notifiés, et l\'action est journalisée avec votre raison.',
+      forceRevokeMinorWarning:
+        'Cet enfant a moins de 15 ans : son compte sera bloqué et sa connexion désactivée — la supervision est ce qui rend sa participation acceptable.',
+      forceRevokeReasonPlaceholder: 'Raison de la révocation…',
+      forceRevokeConfirm: 'Oui, révoquer la supervision',
+      forceRevokeKeep: 'Conserver la supervision',
+      error: 'Une erreur est survenue. Veuillez réessayer.',
+    },
   },
 
   // Verification

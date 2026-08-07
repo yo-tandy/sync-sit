@@ -780,6 +780,51 @@ export default {
       remove: 'Remove Exemption',
       empty: 'No exemptions',
     },
+    governance: {
+      menuTitle: 'Supervision',
+      title: 'Supervision & Governance',
+      accountsTitle: 'Supervised accounts',
+      accountsDesc:
+        'Every guardian link, any status — revoked links remain auditable consent records (GDPR).',
+      accountsEmpty: 'No supervised accounts yet.',
+      age: '{{age}} yrs',
+      identityLocked: 'Identity locked',
+      origin: {
+        parent_created: 'Parent-created',
+        claim: 'Claim',
+      },
+      linkStatus: {
+        pending: 'Pending',
+        active: 'Active',
+        revoked: 'Revoked',
+      },
+      consentLine: 'ToS {{tos}} · Privacy {{privacy}} · Agreement {{agreement}}',
+      consentApproved: 'Approved {{date}}',
+      requestedAt: 'Requested {{date}}',
+      confirmedAt: 'Confirmed {{date}}',
+      revokedAt: 'Revoked {{date}}',
+      alertsTitle: 'Alerts',
+      alertsEmpty: 'No alerts.',
+      onlyUnreviewed: 'Only unreviewed',
+      markReviewed: 'Mark reviewed',
+      reviewedAt: 'Reviewed {{date}}',
+      alertType: {
+        guardian_conflicting_claim: 'Conflicting supervision claim',
+        guardian_claim_identity_mismatch: 'Identity mismatch on supervision claim',
+        guardian_forced_revoke_minor: 'Forced revocation of a minor',
+        guardian_orphaned_minor: 'Supervised minor left without parents',
+      },
+      forceRevoke: 'Force revoke',
+      forceRevokeTitle: 'Force-revoke supervision?',
+      forceRevokeDesc:
+        'Ends the {{family}} family\'s supervision of {{name}}. The family and the kid are notified, and the action is audit-logged with your reason.',
+      forceRevokeMinorWarning:
+        'This kid is under 15: their account will be blocked and their login disabled — supervision is what makes their participation acceptable.',
+      forceRevokeReasonPlaceholder: 'Reason for the revocation…',
+      forceRevokeConfirm: 'Yes, revoke supervision',
+      forceRevokeKeep: 'Keep supervision',
+      error: 'Something went wrong. Please try again.',
+    },
   },
 
   // Verification

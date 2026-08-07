@@ -63,6 +63,7 @@ import { AdminHolidaysPage } from '@/pages/admin/HolidaysPage';
 import { AdminAuditLogPage } from '@/pages/admin/AuditLogPage';
 import { AdminGdprExportPage } from '@/pages/admin/GdprExportPage';
 import { AdminVerificationsPage } from '@/pages/admin/VerificationsPage';
+import { AdminGovernancePage } from '@/pages/admin/GovernancePage';
 
 export const router = createBrowserRouter([
   // Public routes
@@ -139,6 +140,7 @@ export const router = createBrowserRouter([
       { path: '/admin/audit-log', element: <AdminAuditLogPage /> },
       { path: '/admin/gdpr-export', element: <AdminGdprExportPage /> },
       { path: '/admin/verifications', element: <AdminVerificationsPage /> },
+      { path: '/admin/governance', element: <AdminGovernancePage /> },
     ],
   },
 ]);
