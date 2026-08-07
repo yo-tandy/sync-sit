@@ -5,11 +5,22 @@ import { httpsCallable } from 'firebase/functions';
 import { functions } from '@/config/firebase';
 import { Card, Button, Badge, TopNav, Spinner, Dialog } from '@ejm/shared-ui';
 import { ReasonModal } from '@/components/sessions/ReasonModal';
+import type { RecurringSlot } from '@ejm/shared-core';
 import type {
   GovernedChildDetail,
   GovernedStudySession,
   GovernedSessionInstance,
 } from '@/types/guardian';
+
+const DAY_FULL: Record<RecurringSlot['day'], string> = {
+  mon: 'monday',
+  tue: 'tuesday',
+  wed: 'wednesday',
+  thu: 'thursday',
+  fri: 'friday',
+  sat: 'saturday',
+  sun: 'sunday',
+};
 
 /** Machine-readable guardian error code from an HttpsError's details, if any. */
 function guardianErrorCode(err: unknown): string | null {
@@ -27,6 +38,17 @@ const STATUS_VARIANT: Record<string, 'amber' | 'green' | 'gray'> = {
 
 /** What the decline-confirmation dialog is targeting. */
 type DeclineTarget = { kind: 'session'; sessionId: string } | { kind: 'contact'; requestId: string };
+
+/**
+ * What the reason-required cancellation modal is targeting: a whole
+ * session/series, one recurring occurrence, or the withdrawal of the kid's
+ * own pending proposal (also a cancelSession — declining one's own proposal
+ * is refused server-side).
+ */
+type CancelTarget =
+  | { kind: 'session'; session: GovernedStudySession }
+  | { kind: 'instance'; session: GovernedStudySession; instance: GovernedSessionInstance }
+  | { kind: 'withdraw'; session: GovernedStudySession };
 
 /** What the searchable-toggle confirmation is targeting. */
 type SearchableTarget = { app: 'study' | 'sit'; searchable: boolean };
@@ -55,7 +77,7 @@ export function GovernedChildPage() {
   const [acting, setActing] = useState(false);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [searchTarget, setSearchTarget] = useState<SearchableTarget | null>(null);
-  const [cancelTarget, setCancelTarget] = useState<GovernedStudySession | null>(null);
+  const [cancelTarget, setCancelTarget] = useState<CancelTarget | null>(null);
   const [cancelError, setCancelError] = useState<string | null>(null);
   const [declineTarget, setDeclineTarget] = useState<DeclineTarget | null>(null);
 
@@ -144,8 +166,17 @@ export function GovernedChildPage() {
     setCancelError(null);
     setActing(true);
     try {
-      const fn = httpsCallable(functions, 'cancelSession');
-      await fn({ sessionId: cancelTarget.sessionId, reason });
+      if (cancelTarget.kind === 'instance') {
+        const fn = httpsCallable(functions, 'cancelSessionInstance');
+        await fn({
+          sessionId: cancelTarget.session.sessionId,
+          instanceId: cancelTarget.instance.instanceId,
+          reason,
+        });
+      } else {
+        const fn = httpsCallable(functions, 'cancelSession');
+        await fn({ sessionId: cancelTarget.session.sessionId, reason });
+      }
       setCancelTarget(null);
       await load();
     } catch {
@@ -241,6 +272,15 @@ export function GovernedChildPage() {
           {s.endTime ? `–${s.endTime}` : ''}
         </p>
       )}
+      {s.type === 'recurring' && s.recurringSlots?.[0] && (
+        <p className="mt-1 text-xs text-gray-700">
+          {t('family.sessions.recurringSlot', {
+            day: t(`days.${DAY_FULL[s.recurringSlots[0].day]}`),
+            start: s.recurringSlots[0].startTime,
+            end: s.recurringSlots[0].endTime,
+          })}
+        </p>
+      )}
     </>
   );
 
@@ -269,8 +309,8 @@ export function GovernedChildPage() {
     </>
   );
 
-  const instanceRow = (inst: GovernedSessionInstance, idx: number) => (
-    <li key={`${inst.date}-${idx}`} className="border-t border-gray-100 py-2 first:border-t-0">
+  const instanceRow = (s: GovernedStudySession, inst: GovernedSessionInstance) => (
+    <li key={inst.instanceId} className="border-t border-gray-100 py-2 first:border-t-0">
       <div className="flex items-center justify-between gap-2">
         <p className="text-xs text-gray-700">
           {formatDateStr(inst.date)}
@@ -282,6 +322,21 @@ export function GovernedChildPage() {
         </Badge>
       </div>
       {sessionTransparency({ message: null, ...inst })}
+      {inst.status === 'scheduled' && (
+        <div className="mt-2">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={acting}
+            onClick={() => {
+              setCancelError(null);
+              setCancelTarget({ kind: 'instance', session: s, instance: inst });
+            }}
+          >
+            {t('family.governance.child.cancelOccurrence')}
+          </Button>
+        </div>
+      )}
     </li>
   );
 
@@ -396,16 +451,39 @@ export function GovernedChildPage() {
                 <Card key={s.sessionId}>
                   {sessionMeta(s)}
                   {sessionTransparency(s)}
-                  <div className="mt-3">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={acting}
-                      onClick={() => setDeclineTarget({ kind: 'session', sessionId: s.sessionId })}
-                    >
-                      {t('family.governance.child.decline')}
-                    </Button>
-                  </div>
+                  {s.proposedBy === 'provider' ? (
+                    // The kid's OWN proposal — declining it would be refused
+                    // server-side; the guardian may only withdraw it (a cancel).
+                    <>
+                      <p className="mt-2 text-xs text-amber-700">
+                        {t('family.governance.child.proposedByChild', { name: firstName })}
+                      </p>
+                      <div className="mt-3">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={acting}
+                          onClick={() => {
+                            setCancelError(null);
+                            setCancelTarget({ kind: 'withdraw', session: s });
+                          }}
+                        >
+                          {t('family.governance.child.withdrawProposal')}
+                        </Button>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="mt-3">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={acting}
+                        onClick={() => setDeclineTarget({ kind: 'session', sessionId: s.sessionId })}
+                      >
+                        {t('family.governance.child.decline')}
+                      </Button>
+                    </div>
+                  )}
                 </Card>
               ))}
               {pendingContacts.map((r) => (
@@ -462,7 +540,7 @@ export function GovernedChildPage() {
                       disabled={acting}
                       onClick={() => {
                         setCancelError(null);
-                        setCancelTarget(s);
+                        setCancelTarget({ kind: 'session', session: s });
                       }}
                     >
                       {s.type === 'recurring'
@@ -471,7 +549,7 @@ export function GovernedChildPage() {
                     </Button>
                   </div>
                   {expanded.has(s.sessionId) && (
-                    <ul className="mt-2">{s.instances.map(instanceRow)}</ul>
+                    <ul className="mt-2">{s.instances.map((inst) => instanceRow(s, inst))}</ul>
                   )}
                 </Card>
               ))}
@@ -567,18 +645,36 @@ export function GovernedChildPage() {
         </div>
       </Dialog>
 
-      {/* ── Cancellation (reason required) ── */}
+      {/* ── Cancellation / withdrawal (reason required) ── */}
       <ReasonModal
         open={cancelTarget !== null}
         title={
-          cancelTarget?.type === 'recurring'
-            ? t('family.governance.child.cancelSeriesTitle')
-            : t('family.governance.child.cancelTitle')
+          cancelTarget?.kind === 'withdraw'
+            ? t('family.governance.child.withdrawTitle')
+            : cancelTarget?.kind === 'instance'
+              ? t('family.governance.child.cancelOccurrenceTitle')
+              : cancelTarget?.session.type === 'recurring'
+                ? t('family.governance.child.cancelSeriesTitle')
+                : t('family.governance.child.cancelTitle')
         }
-        description={t('family.governance.child.cancelDesc', { name: firstName })}
+        description={
+          cancelTarget?.kind === 'withdraw'
+            ? t('family.governance.child.withdrawDesc', { name: firstName })
+            : t('family.governance.child.cancelDesc', { name: firstName })
+        }
         placeholder={t('family.governance.child.cancelPlaceholder')}
-        confirmLabel={t('family.governance.child.cancelConfirm')}
-        keepLabel={t('family.governance.child.cancelKeep')}
+        confirmLabel={
+          cancelTarget?.kind === 'withdraw'
+            ? t('family.governance.child.withdrawConfirm')
+            : cancelTarget?.kind === 'instance'
+              ? t('family.governance.child.cancelOccurrenceConfirm')
+              : t('family.governance.child.cancelConfirm')
+        }
+        keepLabel={
+          cancelTarget?.kind === 'withdraw'
+            ? t('family.governance.child.withdrawKeep')
+            : t('family.governance.child.cancelKeep')
+        }
         submitting={acting}
         error={cancelError}
         onConfirm={submitCancel}

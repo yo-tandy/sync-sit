@@ -79,7 +79,25 @@ function session(overrides: Record<string, unknown> = {}) {
     lateCancellation: false,
     cancellationReason: null,
     createdAt: '2026-08-01T10:00:00.000Z',
+    proposedBy: 'family',
+    recurringSlots: null,
     instances: [],
+    ...overrides,
+  };
+}
+
+function instance(overrides: Record<string, unknown> = {}) {
+  return {
+    instanceId: '2099-01-17',
+    date: '2099-01-17',
+    startTime: '17:00',
+    endTime: '18:00',
+    status: 'scheduled',
+    statusReason: null,
+    cancellationReason: null,
+    lateCancellation: false,
+    preSessionNote: null,
+    postSessionNote: null,
     ...overrides,
   };
 }
@@ -149,19 +167,7 @@ describe('GovernedChildPage', () => {
           session({
             sessionId: 's2',
             type: 'recurring',
-            instances: [
-              {
-                date: '2099-01-17',
-                startTime: '17:00',
-                endTime: '18:00',
-                status: 'scheduled',
-                statusReason: null,
-                cancellationReason: null,
-                lateCancellation: false,
-                preSessionNote: 'Chapter 4 revision',
-                postSessionNote: null,
-              },
-            ],
+            instances: [instance({ preSessionNote: 'Chapter 4 revision' })],
           }),
         ],
         contactRequests: [],
@@ -177,17 +183,114 @@ describe('GovernedChildPage', () => {
   it('renders NO accept affordance for pending sessions or contact requests', async () => {
     h.detail = detail({
       study: {
-        sessions: [session({ sessionId: 's3', status: 'pending' })],
+        sessions: [
+          session({ sessionId: 's3', status: 'pending' }),
+          session({ sessionId: 's4', status: 'pending', proposedBy: 'provider' }),
+        ],
         contactRequests: [contactRequest()],
       },
     });
     renderPage();
-    await screen.findByText(/Hello from the family/);
+    await screen.findByText(/Could you help our son\?/);
 
     expect(screen.queryByRole('button', { name: /accept/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^confirm$/i })).not.toBeInTheDocument();
-    // Both pending items expose decline only.
+    // Family-proposed pending + contact request expose decline; the kid's own
+    // proposal exposes withdraw (a cancel) — never accept.
     expect(screen.getAllByRole('button', { name: /decline/i })).toHaveLength(2);
+    expect(screen.getAllByRole('button', { name: /withdraw proposal/i })).toHaveLength(1);
+  });
+
+  it('shows the weekly slot line for a recurring session', async () => {
+    h.detail = detail({
+      study: {
+        sessions: [
+          session({
+            sessionId: 's2',
+            type: 'recurring',
+            recurringSlots: [{ day: 'wed', startTime: '17:00', endTime: '18:00' }],
+            instances: [instance()],
+          }),
+        ],
+        contactRequests: [],
+      },
+    });
+    renderPage();
+
+    expect(await screen.findByText(/Every Wednesday 17:00–18:00/)).toBeInTheDocument();
+  });
+
+  it('cancelling one occurrence requires a reason and calls cancelSessionInstance, then refetches', async () => {
+    h.detail = detail({
+      study: {
+        sessions: [
+          session({ sessionId: 's2', type: 'recurring', instances: [instance()] }),
+        ],
+        contactRequests: [],
+      },
+    });
+    renderPage();
+
+    fireEvent.click(await screen.findByRole('button', { name: /view dates/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /cancel this date/i }));
+    fireEvent.change(await screen.findByPlaceholderText(/reason/i), {
+      target: { value: 'Doctor appointment' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /yes, cancel this date/i }));
+
+    await waitFor(() =>
+      expect(h.callable).toHaveBeenCalledWith('cancelSessionInstance', {
+        sessionId: 's2',
+        instanceId: '2099-01-17',
+        reason: 'Doctor appointment',
+      }),
+    );
+    await waitFor(() => expect(detailCalls()).toHaveLength(2));
+  });
+
+  it('cancelled occurrences get no cancel affordance', async () => {
+    h.detail = detail({
+      study: {
+        sessions: [
+          session({
+            sessionId: 's2',
+            type: 'recurring',
+            instances: [instance({ status: 'cancelled' })],
+          }),
+        ],
+        contactRequests: [],
+      },
+    });
+    renderPage();
+
+    fireEvent.click(await screen.findByRole('button', { name: /view dates/i }));
+    expect(screen.queryByRole('button', { name: /cancel this date/i })).not.toBeInTheDocument();
+  });
+
+  it('withdrawing a kid-proposed pending session goes through cancelSession with a reason', async () => {
+    h.detail = detail({
+      study: {
+        sessions: [session({ sessionId: 's4', status: 'pending', proposedBy: 'provider' })],
+        contactRequests: [],
+      },
+    });
+    renderPage();
+
+    fireEvent.click(await screen.findByRole('button', { name: /withdraw proposal/i }));
+    fireEvent.change(await screen.findByPlaceholderText(/reason/i), {
+      target: { value: 'Too many commitments' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /yes, withdraw/i }));
+
+    await waitFor(() =>
+      expect(h.callable).toHaveBeenCalledWith('cancelSession', {
+        sessionId: 's4',
+        reason: 'Too many commitments',
+      }),
+    );
+    await waitFor(() => expect(detailCalls()).toHaveLength(2));
+    // Decline would refuse server-side for the proposer's own doc — never offered.
+    expect(h.callable).not.toHaveBeenCalledWith('respondToSession', expect.anything());
   });
 
   it('toggling searchable confirms, calls guardianSetChildSearchable, then refetches', async () => {

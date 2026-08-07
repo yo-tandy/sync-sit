@@ -1,4 +1,4 @@
-import type { DayOfWeek } from '@ejm/shared-core';
+import type { DayOfWeek, ProposedBy, RecurringSlot } from '@ejm/shared-core';
 import type { TutorProfile } from '@ejm/study-core';
 
 /**
@@ -56,9 +56,9 @@ export interface GovernedChildrenResult {
   invites: KidInviteRow[];
 }
 
-/** A recurring occurrence inside a GovernedStudySession. NOTE: the backend
- * payload carries no instanceId, so instances are display-only here. */
+/** A recurring occurrence inside a GovernedStudySession. */
 export interface GovernedSessionInstance {
+  instanceId: string;
   date: string;
   startTime: string | null;
   endTime: string | null;
@@ -90,6 +90,9 @@ export interface GovernedStudySession {
   lateCancellation: boolean;
   cancellationReason: string | null;
   createdAt: string | null;
+  /** Absent on legacy docs server-side — the payload always defaults it to 'family'. */
+  proposedBy: ProposedBy;
+  recurringSlots: RecurringSlot[] | null;
   instances: GovernedSessionInstance[];
 }
 
@@ -183,6 +186,8 @@ export interface GuardianLinkDoc {
   createdByParentUid: string;
   status: GuardianLinkStatus;
   origin: GuardianLinkOrigin;
+  /** Denormalized at link creation; absent on links created before PR 5. */
+  familyName?: string;
   requestedAt?: unknown;
   confirmedAt?: unknown;
   consent?: Record<string, unknown>;

@@ -80,11 +80,21 @@ describe('SupervisionRequestCard', () => {
     expect(screen.queryByText(/supervise your account/i)).not.toBeInTheDocument();
   });
 
+  it('names the asking family when the link carries familyName', async () => {
+    h.linkData = pendingClaim({ familyName: 'Dupont' });
+    renderWithProviders(<SupervisionRequestCard />);
+
+    expect(
+      await screen.findByText(/A parent of the Dupont family asked to supervise your account/i),
+    ).toBeInTheDocument();
+  });
+
   it('renders the request with accept/decline for a pending claim', async () => {
     h.linkData = pendingClaim();
     renderWithProviders(<SupervisionRequestCard />);
 
-    expect(await screen.findByText(/supervise your account/i)).toBeInTheDocument();
+    // No familyName on the link → the generic fallback copy.
+    expect(await screen.findByText(/^A parent asked to supervise your account/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /accept/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /decline/i })).toBeInTheDocument();
     // Explains what supervision means before deciding.

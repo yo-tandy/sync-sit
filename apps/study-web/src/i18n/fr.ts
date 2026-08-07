@@ -817,8 +817,18 @@ export default {
         keepRequest: 'Garder la demande',
         cancelSession: 'Annuler la session',
         cancelSeries: 'Annuler la série',
+        cancelOccurrence: 'Annuler cette date',
         cancelTitle: 'Annuler cette session ?',
         cancelSeriesTitle: 'Annuler cette série ?',
+        cancelOccurrenceTitle: 'Annuler cette occurrence ?',
+        cancelOccurrenceConfirm: 'Oui, annuler cette date',
+        proposedByChild: 'Proposé par {{name}} — en attente de la réponse de la famille.',
+        withdrawProposal: 'Retirer la proposition',
+        withdrawTitle: 'Retirer cette proposition ?',
+        withdrawDesc:
+          'La session proposée par {{name}} sera retirée. Indiquez une brève raison — elle sera partagée avec la famille et avec {{name}}.',
+        withdrawConfirm: 'Oui, retirer la proposition',
+        withdrawKeep: 'Garder la proposition',
         cancelDesc: 'Indiquez une brève raison — elle sera partagée avec la famille et avec {{name}}.',
         cancelPlaceholder: 'Raison de l\'annulation…',
         cancelConfirm: 'Oui, annuler la session',
@@ -963,6 +973,8 @@ export default {
   supervision: {
     requestTitle: 'Demande de supervision',
     requestBody: 'Un parent a demandé à superviser votre compte.',
+    requestBodyFamily:
+      'Un parent de la famille {{familyName}} a demandé à superviser votre compte.',
     whatItMeans: 'Ce que signifie la supervision',
     accept: 'Accepter',
     decline: 'Refuser',

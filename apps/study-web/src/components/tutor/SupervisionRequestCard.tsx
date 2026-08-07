@@ -79,7 +79,11 @@ export function SupervisionRequestCard() {
         <ShieldIcon className="h-6 w-6 shrink-0 text-red-600" />
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold text-gray-900">{t('supervision.requestTitle')}</p>
-          <p className="mt-0.5 text-xs text-gray-600">{t('supervision.requestBody')}</p>
+          <p className="mt-0.5 text-xs text-gray-600">
+            {link.familyName
+              ? t('supervision.requestBodyFamily', { familyName: link.familyName })
+              : t('supervision.requestBody')}
+          </p>
           <Link
             to="/supervision-info"
             className="mt-1 inline-block text-xs font-semibold text-red-600 hover:underline"
