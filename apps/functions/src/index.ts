@@ -32,6 +32,9 @@ export {
   listAdminAlerts,
   reviewAdminAlert,
   forceRevokeSupervision,
+  // Cross-app session handoff
+  createAppHandoffCode,
+  redeemAppHandoffCode,
   // Verification
   submitVerification,
   reviewVerification,

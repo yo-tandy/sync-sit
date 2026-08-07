@@ -1568,3 +1568,64 @@ describe('guardian collections', () => {
     });
   });
 });
+
+// ---------------------------------------------------------------------------
+// Cross-app session handoff codes: NOBODY — not even admin — reads or writes
+// these from a client. The docs hold sha256 hashes of one-time switch codes;
+// the mint/redeem callables (Admin SDK, bypasses rules) are the only path.
+// ---------------------------------------------------------------------------
+
+describe('appHandoffCodes', () => {
+  const CODE: [string, string] = ['appHandoffCodes', 'code1'];
+
+  async function seedHandoff() {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), ...CODE), {
+        uid: 'minterH', tokenHash: 'deadbeef',
+        createdAt: new Date(), expiresAt: new Date(Date.now() + 60_000),
+      });
+      await setDoc(doc(ctx.firestore(), 'users', 'adminH'), {
+        uid: 'adminH', isAdmin: true, status: 'active', email: 'a@x.com', profiles: {},
+      });
+      await setDoc(doc(ctx.firestore(), 'users', 'minterH'), {
+        uid: 'minterH', status: 'active', email: 'm@x.com', profiles: {},
+      });
+    });
+  }
+
+  it('the minter cannot read their own code doc', async () => {
+    await seedHandoff();
+    await assertFails(getDoc(doc(testEnv.authenticatedContext('minterH').firestore(), ...CODE)));
+  });
+
+  it('even admin cannot read', async () => {
+    await seedHandoff();
+    await assertFails(getDoc(doc(testEnv.authenticatedContext('adminH').firestore(), ...CODE)));
+  });
+
+  it('even admin cannot query the collection', async () => {
+    await seedHandoff();
+    await assertFails(
+      getDocs(query(collection(testEnv.authenticatedContext('adminH').firestore(), 'appHandoffCodes'))),
+    );
+  });
+
+  it('unauthenticated cannot read', async () => {
+    await seedHandoff();
+    await assertFails(getDoc(doc(testEnv.unauthenticatedContext().firestore(), ...CODE)));
+  });
+
+  it('no client can create a code doc', async () => {
+    await seedHandoff();
+    await assertFails(setDoc(doc(testEnv.authenticatedContext('minterH').firestore(), 'appHandoffCodes', 'forged'), {
+      uid: 'minterH', tokenHash: 'beef', createdAt: new Date(), expiresAt: new Date(Date.now() + 60_000),
+    }));
+  });
+
+  it('even admin cannot update or delete (callable-only)', async () => {
+    await seedHandoff();
+    const authed = testEnv.authenticatedContext('adminH');
+    await assertFails(updateDoc(doc(authed.firestore(), ...CODE), { expiresAt: new Date(Date.now() + 3600_000) }));
+    await assertFails(deleteDoc(doc(authed.firestore(), ...CODE)));
+  });
+});

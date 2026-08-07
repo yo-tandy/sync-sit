@@ -340,6 +340,13 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Cross-app session handoff codes: one-time sha256-hashed switch tokens.
+    // NOBODY — not even admin — reads or writes these from clients; the
+    // mint/redeem callables (Admin SDK) are the only path to them.
+    match /appHandoffCodes/{codeId} {
+      allow read, write: if false;
+    }
+
     // Admin alerts (e.g. conflicting supervision claims): admin-only reads.
     // Written exclusively by callables — never by clients, even admins, so
     // every alert provably originates from a server-observed event.
