@@ -201,6 +201,11 @@ VITE_FIREBASE_APP_ID=1:123456789:web:abc123
 
 ## Deployment
 
+Merges to `main` auto-deploy to production via GitHub Actions
+(`firebase-hosting-merge.yml`): Firestore rules + indexes, hosting (both
+sites), and functions (both codebases). Storage rules are NOT auto-deployed —
+ship them manually. Manual full deploy, if ever needed:
+
 ```bash
 # Build and deploy everything
 pnpm build
