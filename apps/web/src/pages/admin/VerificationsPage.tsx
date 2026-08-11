@@ -47,7 +47,7 @@ export function AdminVerificationsPage() {
   }>({ open: false, verificationId: '' });
   const [rejectionReason, setRejectionReason] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
-  // Document-view failures surface per-row (verificationId → message key).
+  // Document-view failures surface per-row (verificationId → hasError).
   const [docError, setDocError] = useState<Record<string, boolean>>({});
 
   // Confirmation dialog state
@@ -59,6 +59,7 @@ export function AdminVerificationsPage() {
   }>({ open: false, title: '', message: '', action: async () => {} });
 
   const loadVerifications = useCallback(() => {
+    setDocError({});
     fetchPendingVerifications({
       status: statusFilter !== 'all' ? statusFilter : undefined,
       type: typeFilter !== 'all' ? typeFilter : undefined,
@@ -214,12 +215,17 @@ export function AdminVerificationsPage() {
                           'getVerificationDocument',
                         );
                         const result = await fn({ filePath });
-                        window.open(result.data.url, '_blank');
-                      } catch {
+                        // After the await we are outside the user-gesture
+                        // window — a popup blocker makes open() return null,
+                        // which must surface as an error, not silence.
+                        const win = window.open(result.data.url, '_blank');
+                        if (!win) throw new Error('popup blocked');
+                      } catch (err) {
                         // No raw-fileUrl fallback: new uploads store TOKENLESS
                         // fileUrls (path carriers only), so opening one 403s —
                         // the fallback masked a prod signed-URL outage for
                         // weeks. Surface the failure instead.
+                        console.error('getVerificationDocument failed', err);
                         setDocError((prev) => ({ ...prev, [v.id]: true }));
                       }
                     }}

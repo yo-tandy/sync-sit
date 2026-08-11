@@ -148,7 +148,7 @@ describe('AdminVerificationsPage view-document error surfacing', () => {
     const { httpsCallable } = await import('firebase/functions');
     const fn = vi.fn().mockResolvedValue({ data: { url: 'https://signed.example/u' } });
     (httpsCallable as ReturnType<typeof vi.fn>).mockReturnValue(fn);
-    const openSpy = vi.spyOn(window, 'open').mockReturnValue(null);
+    const openSpy = vi.spyOn(window, 'open').mockReturnValue({} as Window);
 
     renderPage();
     const { fireEvent, waitFor } = await import('@testing-library/react');
@@ -157,5 +157,35 @@ describe('AdminVerificationsPage view-document error surfacing', () => {
     await waitFor(() => expect(openSpy).toHaveBeenCalledWith('https://signed.example/u', '_blank'));
     expect(fn).toHaveBeenCalledWith({ filePath: 'verification-documents/fam1/id.pdf' });
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('surfaces an error for an unparseable fileUrl instead of opening it raw', async () => {
+    storeState.pendingVerifications[0].fileUrl = 'https://example.com/no-object-segment';
+    const { httpsCallable } = await import('firebase/functions');
+    const fn = vi.fn();
+    (httpsCallable as ReturnType<typeof vi.fn>).mockReturnValue(fn);
+    const openSpy = vi.spyOn(window, 'open').mockReturnValue({} as Window);
+
+    renderPage();
+    const { fireEvent, waitFor } = await import('@testing-library/react');
+    fireEvent.click(screen.getByText(i18n.t('verification.viewDocument')));
+
+    await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
+    expect(fn).not.toHaveBeenCalled();
+    expect(openSpy).not.toHaveBeenCalled();
+  });
+
+  it('treats a popup-blocked open (null return) as a surfaced error', async () => {
+    const { httpsCallable } = await import('firebase/functions');
+    (httpsCallable as ReturnType<typeof vi.fn>).mockReturnValue(
+      vi.fn().mockResolvedValue({ data: { url: 'https://signed.example/u' } }),
+    );
+    vi.spyOn(window, 'open').mockReturnValue(null);
+
+    renderPage();
+    const { fireEvent, waitFor } = await import('@testing-library/react');
+    fireEvent.click(screen.getByText(i18n.t('verification.viewDocument')));
+
+    await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
   });
 });
