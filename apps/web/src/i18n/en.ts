@@ -268,6 +268,18 @@ export default {
     myFamilies: 'My Families',
   },
 
+  appSwitch: {
+    toStudy: 'Open sync-study',
+    error: 'Could not switch apps. Please try again.',
+  },
+
+  handoff: {
+    switching: 'Switching apps…',
+    errorTitle: 'This link has expired',
+    errorDesc: 'Switch apps again from the other app.',
+    goToLogin: 'Go to login',
+  },
+
   share: {
     title: 'Share Sync/Sit',
     desc: 'Help grow our community! Share Sync/Sit with other EJM families and babysitters.',

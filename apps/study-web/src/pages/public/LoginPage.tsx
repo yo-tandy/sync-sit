@@ -1,14 +1,7 @@
 import { useAuthStore } from '@/stores/authStore';
 import { getStudyRole } from '@ejm/study-core';
 import { LoginPage as SharedLoginPage } from '@ejm/shared-ui';
-
-function postLoginRouter(role: string | undefined): string {
-  if (role === 'tutor') return '/tutor';
-  if (role === 'parent') return '/family';
-  if (role === 'admin') return '/admin';
-  // Foreign-profile-only users (no study role) go to /signup, not dead-end '/'.
-  return '/signup';
-}
+import { postLoginRouter } from '@/utils/postLoginRouter';
 
 export function LoginPage() {
   const { login, loading, error, clearError } = useAuthStore();

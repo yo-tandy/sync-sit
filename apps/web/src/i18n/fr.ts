@@ -257,6 +257,18 @@ export default {
     myFamilies: 'Mes Familles',
   },
 
+  appSwitch: {
+    toStudy: 'Ouvrir sync-study',
+    error: "Impossible de changer d'application. Veuillez réessayer.",
+  },
+
+  handoff: {
+    switching: "Changement d'application…",
+    errorTitle: 'Ce lien a expiré',
+    errorDesc: "Relancez le changement depuis l'autre application.",
+    goToLogin: 'Aller à la connexion',
+  },
+
   share: {
     title: 'Partager Sync/Sit',
     desc: 'Aidez à faire grandir notre communauté ! Partagez Sync/Sit avec les familles et babysitters EJM.',

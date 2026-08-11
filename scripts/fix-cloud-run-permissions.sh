@@ -22,6 +22,33 @@ for svc in $SERVICES; do
     --quiet 2>/dev/null | grep -q "allUsers" && echo "  ✔ $svc" || echo "  ✗ $svc (failed)"
 done
 
+# createCustomToken (cross-app handoff) requires the runtime service account
+# to sign blobs as itself (iam.serviceAccounts.signBlob) — not included in
+# editor/firebase.admin, and the emulator doesn't enforce it, so a missing
+# binding only fails in prod. Discover each service's actual SA rather than
+# assuming the default; an empty serviceAccountName means the default compute
+# SA. Idempotent: re-granting is a no-op.
+echo ""
+echo "Granting Token Creator (signBlob) to runtime service accounts..."
+PROJECT_NUMBER=$(gcloud projects describe $PROJECT --format="value(projectNumber)")
+DEFAULT_SA="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
+RUNTIME_SAS=$(
+  {
+    for svc in $SERVICES; do
+      gcloud run services describe "$svc" --region=$REGION --project=$PROJECT \
+        --format="value(spec.template.spec.serviceAccountName)" 2>/dev/null
+    done
+    echo "$DEFAULT_SA"
+  } | grep -v '^$' | sort -u
+)
+for sa in $RUNTIME_SAS; do
+  gcloud iam service-accounts add-iam-policy-binding "$sa" \
+    --project=$PROJECT \
+    --member="serviceAccount:$sa" \
+    --role="roles/iam.serviceAccountTokenCreator" \
+    --quiet >/dev/null 2>&1 && echo "  ✔ $sa" || echo "  ✗ $sa (failed)"
+done
+
 # Re-set Resend API key on email functions
 # IMPORTANT: Use --update-env-vars with || delimiter to avoid wiping Firebase env vars.
 # The gcloud update creates a new revision that inherits from the current template,

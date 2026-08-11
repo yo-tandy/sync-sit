@@ -179,6 +179,18 @@ export default {
     terms: 'Conditions générales',
   },
 
+  appSwitch: {
+    toSit: 'Ouvrir sync-sit',
+    error: "Impossible de changer d'application. Veuillez réessayer.",
+  },
+
+  handoff: {
+    switching: "Changement d'application…",
+    errorTitle: 'Ce lien a expiré',
+    errorDesc: "Relancez le changement depuis l'autre application.",
+    goToLogin: 'Aller à la connexion',
+  },
+
   tutor: {
     dashboardTitle: 'Tableau de bord',
     accountTitle: 'Mon compte',

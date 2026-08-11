@@ -62,6 +62,9 @@ export {
 } from './guardian/adminGovernance.js';
 export { forceRevokeSupervision } from './guardian/forceRevokeSupervision.js';
 
+// Callables — cross-app session handoff
+export { createAppHandoffCode, redeemAppHandoffCode } from './handoff/appHandoff.js';
+
 // Callables — admin
 export { getAdminDashboard } from './admin/getAdminDashboard.js';
 export { listUsers } from './admin/listUsers.js';
