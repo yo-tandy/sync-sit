@@ -184,6 +184,12 @@ export default {
     error: "Impossible de changer d'application. Veuillez réessayer.",
   },
 
+  adminInfo: {
+    title: 'L’administration se trouve dans sync-sit',
+    desc: 'sync-study n’a pas de panneau d’administration distinct — les vérifications, exemptions, la supervision et les familles se gèrent depuis le panneau d’administration de sync-sit.',
+    backHome: 'Retour à l’accueil',
+  },
+
   handoff: {
     switching: "Changement d'application…",
     errorTitle: 'Ce lien a expiré',

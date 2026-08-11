@@ -20,13 +20,17 @@ import { postLoginRouter } from '@/utils/postLoginRouter';
  * ONE identical "switch again" screen — the backend refuses them
  * indistinguishably, and a missing code renders the same screen locally.
  */
-function codeFromHash(): string | null {
+function hashParams(): URLSearchParams {
   const hash = window.location.hash;
-  return new URLSearchParams(hash.startsWith('#') ? hash.slice(1) : hash).get('code');
+  return new URLSearchParams(hash.startsWith('#') ? hash.slice(1) : hash);
+}
+
+function codeFromHash(): string | null {
+  return hashParams().get('code');
 }
 
 export function HandoffPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   // A missing code IS the error state from the first render (same screen as a
   // rejected code — no oracle in the UI either).
@@ -38,7 +42,13 @@ export function HandoffPage() {
     if (started.current) return;
     started.current = true;
 
-    const code = codeFromHash();
+    const params = hashParams();
+    const code = params.get('code');
+    // The origin app passes its CURRENT language (i18n caches are per-origin):
+    // apply it before any screen renders so the user keeps their language
+    // across the switch, in both directions. Harmless if absent/unknown.
+    const lang = params.get('lang');
+    if (lang === 'en' || lang === 'fr') void i18n.changeLanguage(lang);
     // Strip the fragment IMMEDIATELY — before any await — so the code never
     // survives in the address bar or a history entry.
     window.history.replaceState(null, '', window.location.pathname + window.location.search);
@@ -74,7 +84,7 @@ export function HandoffPage() {
         setFailed(true);
       }
     })();
-  }, [navigate]);
+  }, [navigate, i18n]);
 
   if (failed) {
     return (

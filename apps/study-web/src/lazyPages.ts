@@ -118,3 +118,9 @@ export const SupervisionAgreementPage = lazy(() =>
 export const SupervisionInfoPage = lazy(() =>
   import('@/pages/public/SupervisionInfoPage').then((m) => ({ default: m.SupervisionInfoPage })),
 );
+
+export const AdminInfoPage = lazy(() =>
+  import('@/pages/public/AdminInfoPage').then((m) => ({
+    default: m.AdminInfoPage,
+  })),
+);

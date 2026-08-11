@@ -184,6 +184,12 @@ export default {
     error: 'Could not switch apps. Please try again.',
   },
 
+  adminInfo: {
+    title: 'Administration lives in sync-sit',
+    desc: 'sync-study has no separate admin panel — verifications, exemptions, governance, and families are all managed from the sync-sit admin panel.',
+    backHome: 'Back to home',
+  },
+
   handoff: {
     switching: 'Switching apps…',
     errorTitle: 'This link has expired',

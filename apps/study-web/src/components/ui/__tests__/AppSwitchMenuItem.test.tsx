@@ -33,7 +33,7 @@ describe('AppSwitchMenuItem (study → sit)', () => {
     expect(h.callable).toHaveBeenCalledWith('createAppHandoffCode', {});
     // The fragment pin: #code=… (never a query param — fragments never reach
     // servers or logs), URL-encoded, on the prod sit origin by default.
-    expect(h.assign).toHaveBeenCalledWith('https://sync-sit.web.app/handoff#code=abc%2B%2F%3D');
+    expect(h.assign).toHaveBeenCalledWith('https://sync-sit.web.app/handoff#code=abc%2B%2F%3D&lang=en');
   });
 
   it('is non-optimistic: disabled while the callable is in flight', async () => {

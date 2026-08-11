@@ -4,7 +4,7 @@ import { httpsCallable } from 'firebase/functions';
 import { functions } from '@/config/firebase';
 import { STUDY_APP_URL } from '@/lib/appSwitch';
 import { Spinner } from './Spinner';
-import { ShareIcon } from './Icons';
+import studyLogo from '@/assets/sync-study-logo.png';
 
 /**
  * Burger-menu entry that jumps to sync-study without re-login: mints a
@@ -14,7 +14,7 @@ import { ShareIcon } from './Icons';
  * on failure.
  */
 export function AppSwitchMenuItem() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
 
@@ -28,8 +28,11 @@ export function AppSwitchMenuItem() {
         'createAppHandoffCode',
       );
       const res = await mint({});
+      // Carry the CURRENT language across origins (i18n caches are
+      // per-origin localStorage): the handoff page applies it on arrival.
+      const lang = i18n.language.split('-')[0];
       window.location.assign(
-        `${STUDY_APP_URL}/handoff#code=${encodeURIComponent(res.data.code)}`,
+        `${STUDY_APP_URL}/handoff#code=${encodeURIComponent(res.data.code)}&lang=${lang}`,
       );
       // Stay busy: the browser is navigating away.
     } catch {
@@ -42,7 +45,11 @@ export function AppSwitchMenuItem() {
     <button type="button" onClick={handleClick} disabled={busy} className="w-full text-left">
       <div className="flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 active:bg-gray-100">
         <span className="text-gray-400">
-          {busy ? <Spinner className="h-5 w-5" /> : <ShareIcon className="h-5 w-5" />}
+          {busy ? (
+            <Spinner className="h-5 w-5" />
+          ) : (
+            <img src={studyLogo} alt="" className="h-5 w-5 rounded object-contain" />
+          )}
         </span>
         <span>{t('appSwitch.toStudy')}</span>
       </div>

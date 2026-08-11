@@ -88,6 +88,15 @@ describe('HandoffPage (study)', () => {
     expect(h.signInWithCustomToken.mock.calls[0][1]).toBe('custom-tok');
   });
 
+  it('applies the lang carried in the fragment before anything renders', async () => {
+    await i18n.changeLanguage('en');
+    window.location.hash = '#code=xyz&lang=fr';
+    h.callable.mockResolvedValue({ data: { token: 'custom-tok' } });
+    renderHandoff();
+    await waitFor(() => expect(i18n.language).toBe('fr'));
+    await i18n.changeLanguage('en');
+  });
+
   it('still redeems + signs in when a user is ALREADY signed in (handoff wins)', async () => {
     h.state.firebaseUser = { uid: 'previous-user' };
     h.state.userDoc = { uid: 'previous-user', profiles: { parent: { familyId: 'f' } } };

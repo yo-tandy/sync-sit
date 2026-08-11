@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { httpsCallable } from 'firebase/functions';
-import { Spinner, ShareIcon } from '@ejm/shared-ui';
+import { Spinner } from '@ejm/shared-ui';
+import sitLogo from '@/assets/sync-sit-logo.png';
 import { functions } from '@/config/firebase';
 import { SIT_APP_URL } from '@/utils/appSwitch';
 
@@ -13,7 +14,7 @@ import { SIT_APP_URL } from '@/utils/appSwitch';
  * on failure. Shared by the tutor AppBar and the FamilyAppBar.
  */
 export function AppSwitchMenuItem() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
 
@@ -27,8 +28,11 @@ export function AppSwitchMenuItem() {
         'createAppHandoffCode',
       );
       const res = await mint({});
+      // Carry the CURRENT language across origins (i18n caches are
+      // per-origin localStorage): the handoff page applies it on arrival.
+      const lang = i18n.language.split('-')[0];
       window.location.assign(
-        `${SIT_APP_URL}/handoff#code=${encodeURIComponent(res.data.code)}`,
+        `${SIT_APP_URL}/handoff#code=${encodeURIComponent(res.data.code)}&lang=${lang}`,
       );
       // Stay busy: the browser is navigating away.
     } catch {
@@ -41,7 +45,11 @@ export function AppSwitchMenuItem() {
     <button type="button" onClick={handleClick} disabled={busy} className="w-full text-left">
       <div className="flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 active:bg-gray-100">
         <span className="text-gray-400">
-          {busy ? <Spinner className="h-5 w-5" /> : <ShareIcon className="h-5 w-5" />}
+          {busy ? (
+            <Spinner className="h-5 w-5" />
+          ) : (
+            <img src={sitLogo} alt="" className="h-5 w-5 rounded object-contain" />
+          )}
         </span>
         <span>{t('appSwitch.toSit')}</span>
       </div>

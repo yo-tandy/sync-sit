@@ -46,7 +46,7 @@ describe('AppSwitchMenuItem (sit → study)', () => {
     // The fragment pin: #code=… (never a query param — fragments never reach
     // servers or logs), URL-encoded, on the prod study origin by default.
     expect(h.assign).toHaveBeenCalledWith(
-      'https://sync-study-app.web.app/handoff#code=abc%2B%2F%3D',
+      'https://sync-study-app.web.app/handoff#code=abc%2B%2F%3D&lang=en',
     );
   });
 
