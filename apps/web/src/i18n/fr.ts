@@ -837,6 +837,7 @@ export default {
     noVerifications: 'Aucune vérification trouvée',
     unknownFamily: 'Famille inconnue',
     viewDocument: 'Voir le document',
+    viewDocumentError: 'Impossible d’ouvrir le document. Veuillez réessayer ou consulter les journaux de la fonction.',
     approve: 'Approuver',
     reject: 'Rejeter',
     approveTitle: 'Approuver la vérification',

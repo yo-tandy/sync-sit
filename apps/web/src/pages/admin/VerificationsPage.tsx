@@ -47,6 +47,8 @@ export function AdminVerificationsPage() {
   }>({ open: false, verificationId: '' });
   const [rejectionReason, setRejectionReason] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
+  // Document-view failures surface per-row (verificationId → message key).
+  const [docError, setDocError] = useState<Record<string, boolean>>({});
 
   // Confirmation dialog state
   const [confirmDialog, setConfirmDialog] = useState<{
@@ -199,13 +201,14 @@ export function AdminVerificationsPage() {
                   <button
                     type="button"
                     onClick={async () => {
+                      setDocError((prev) => ({ ...prev, [v.id]: false }));
                       try {
                         // Extract the storage path from the fileUrl
-                        // fileUrl format: https://storage.googleapis.com/.../o/verification-documents%2F...?alt=media&token=...
+                        // fileUrl format: https://firebasestorage.googleapis.com/v0/b/.../o/verification-documents%2F...
                         const url = new URL(v.fileUrl);
                         const encodedPath = url.pathname.split('/o/')[1];
                         const filePath = encodedPath ? decodeURIComponent(encodedPath) : '';
-                        if (!filePath) { window.open(v.fileUrl, '_blank'); return; }
+                        if (!filePath) throw new Error('unparseable fileUrl');
                         const fn = httpsCallable<{ filePath: string }, { url: string }>(
                           functions,
                           'getVerificationDocument',
@@ -213,14 +216,22 @@ export function AdminVerificationsPage() {
                         const result = await fn({ filePath });
                         window.open(result.data.url, '_blank');
                       } catch {
-                        // Fallback to direct URL if cloud function fails
-                        window.open(v.fileUrl, '_blank');
+                        // No raw-fileUrl fallback: new uploads store TOKENLESS
+                        // fileUrls (path carriers only), so opening one 403s —
+                        // the fallback masked a prod signed-URL outage for
+                        // weeks. Surface the failure instead.
+                        setDocError((prev) => ({ ...prev, [v.id]: true }));
                       }
                     }}
                     className="text-xs font-medium text-red-600 hover:underline"
                   >
                     {t('verification.viewDocument')}
                   </button>
+                  {docError[v.id] && (
+                    <span className="text-xs text-red-600" role="alert">
+                      {t('verification.viewDocumentError')}
+                    </span>
+                  )}
 
                   {v.status === 'pending' && (
                     <div className="ml-auto flex gap-2">
