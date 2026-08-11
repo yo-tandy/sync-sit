@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { I18nextProvider } from 'react-i18next';
@@ -15,6 +15,10 @@ import i18n from '@/i18n';
 import { AdminInfoPage } from '../AdminInfoPage';
 
 describe('AdminInfoPage', () => {
+  beforeEach(() => {
+    authState.firebaseUser = { uid: 'admin-1' };
+    authState.loading = false;
+  });
   afterEach(cleanup);
 
   // Admins bounced here (no study admin portal exists) must get an

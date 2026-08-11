@@ -185,6 +185,7 @@ export default {
   },
 
   adminInfo: {
+    goToLogin: 'Aller à la connexion',
     title: 'L’administration se trouve dans sync-sit',
     desc: 'sync-study n’a pas de panneau d’administration distinct — les vérifications, exemptions, la supervision et les familles se gèrent depuis le panneau d’administration de sync-sit.',
     backHome: 'Retour à l’accueil',

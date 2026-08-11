@@ -18,6 +18,9 @@ const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const EMAIL = process.argv[2] || 'admin@syncsit.app';
 const PASSWORD = process.argv[3] || 'admin123';
 
+// Targets the demo-test emulator namespace (matching `pnpm emulators` and both
+// apps' .env.development); override with SEED_PROJECT_ID=<id> if the emulator
+// runs under a different --project.
 const app = initializeApp({ projectId: process.env.SEED_PROJECT_ID || 'demo-test' });
 const adminAuth = getAuth(app);
 const db = getFirestore(app);

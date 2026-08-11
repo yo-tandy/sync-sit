@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, waitFor, cleanup } from '@testing-library/react';
 import { I18nextProvider } from 'react-i18next';
 import { MemoryRouter, Routes, Route } from 'react-router';
@@ -33,7 +33,6 @@ vi.mock('@/stores/authStore', () => {
   return { useAuthStore };
 });
 
-import { afterEach } from 'vitest';
 import i18n from '@/i18n';
 import { HandoffPage } from '../HandoffPage';
 

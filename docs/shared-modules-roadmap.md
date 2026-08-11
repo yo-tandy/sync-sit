@@ -140,3 +140,5 @@ A  →  B  →  C  →  D  →  E  →  F | G | H | I
 Where `F | G | H | I` are independent and can interleave with each other.
 
 **This roadmap doc is the contract.** Per-plan files under `docs/superpowers/plans/` are the per-PR detail. When a tier's first plan is drafted, the status above flips from `[ ]` → `[~]`. When merged, `[~]` → `[x]` and the plan filename is filled in.
+
+- **App-switch brand marks**: `apps/web/src/assets/sync-study-logo.png` and `apps/study-web/src/assets/sync-sit-logo.png` are byte-copies of the sibling apps' `public/logo.png` (PR #114). On the next shared-ui pass, consolidate the two brand marks there so a branding refresh has one source of truth.

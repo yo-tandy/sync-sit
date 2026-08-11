@@ -124,10 +124,15 @@ git clone https://github.com/yo-tandy/sync-sit.git
 cd sync-sit
 pnpm install
 
-# Start Firebase emulators
+# Start Firebase emulators (runs under the demo-test project — auth,
+# functions, firestore, storage; hosting is excluded because its named
+# targets only resolve for the real sync-sit project)
 pnpm emulators
 
-# Seed an admin user (emulator only)
+# Seed an admin user (emulator only). Both seed scripts and both apps'
+# .env.development target the demo-test namespace; if you previously ran the
+# emulators under another project id, reseed — old data lives in that other
+# namespace. Override with SEED_PROJECT_ID=<id> if needed.
 pnpm seed:admin
 
 # In a separate terminal, start the web dev server

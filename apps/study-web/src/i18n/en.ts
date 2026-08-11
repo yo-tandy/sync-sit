@@ -185,6 +185,7 @@ export default {
   },
 
   adminInfo: {
+    goToLogin: 'Go to login',
     title: 'Administration lives in sync-sit',
     desc: 'sync-study has no separate admin panel — verifications, exemptions, governance, and families are all managed from the sync-sit admin panel.',
     backHome: 'Back to home',

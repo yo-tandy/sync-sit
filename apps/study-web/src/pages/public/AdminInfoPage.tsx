@@ -30,7 +30,7 @@ export function AdminInfoPage() {
         {!authLoading && !signedIn && (
           <p className="mb-3 text-sm">
             <Link to="/login" className="text-red-600 hover:underline">
-              {t('handoff.goToLogin')}
+              {t('adminInfo.goToLogin')}
             </Link>
           </p>
         )}
