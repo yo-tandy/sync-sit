@@ -40,3 +40,5 @@ study-web test/lint(0)/build; web test/lint(baseline 1 error/7 warnings, add non
 - The consume transaction DELETES (not flags) — no reuse window, no stale rows; expiry cleanup is opportunistic.
 - signInWithCustomToken replaces any existing session on the target origin by design.
 - No new indexes (tokenHash equality is single-field).
+
+> **Post-merge amendment (#114):** the handoff URL carries `#code=…&lang=en|fr` — the origin app's current language, allow-listed on both ends and applied on arrival.

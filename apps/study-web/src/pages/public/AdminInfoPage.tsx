@@ -16,17 +16,18 @@ export function AdminInfoPage() {
   // The switch mints an auth-required handoff code — for a signed-out visitor
   // the button could only fail, so they get a login link instead.
   const signedIn = useAuthStore((s) => s.firebaseUser !== null);
+  const authLoading = useAuthStore((s) => s.loading);
   return (
     <div className="mx-auto max-w-md px-5 pt-10 pb-8">
       <Card>
         <h2 className="mb-2 text-lg font-bold text-gray-900">{t('adminInfo.title')}</h2>
         <p className="mb-4 text-sm text-gray-600">{t('adminInfo.desc')}</p>
-        {signedIn && (
+        {!authLoading && signedIn && (
           <div className="-mx-4 border-t border-gray-100">
             <AppSwitchMenuItem />
           </div>
         )}
-        {!signedIn && (
+        {!authLoading && !signedIn && (
           <p className="mb-3 text-sm">
             <Link to="/login" className="text-red-600 hover:underline">
               {t('handoff.goToLogin')}

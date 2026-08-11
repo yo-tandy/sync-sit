@@ -14,6 +14,8 @@
  * All passwords are "test1234".
  */
 
+// Override the target namespace with SEED_PROJECT_ID=<id> when the emulator
+// runs under a different --project than the demo-test default.
 process.env.FIRESTORE_EMULATOR_HOST = '127.0.0.1:8080';
 process.env.FIREBASE_AUTH_EMULATOR_HOST = '127.0.0.1:9099';
 

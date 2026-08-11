@@ -140,6 +140,26 @@ describe('HandoffPage (study)', () => {
     expect(h.signInWithCustomToken).toHaveBeenCalledTimes(1);
   });
 
+  it('redeems exactly ONCE across a StrictMode-style double mount', async () => {
+    window.location.hash = '#code=once';
+    h.callable.mockResolvedValue({ data: { token: 'custom-tok' } });
+    h.signInWithCustomToken.mockResolvedValue({ user: { uid: 'u1' } });
+    h.getDoc.mockResolvedValue({
+      exists: () => true,
+      data: () => ({ uid: 'u1', profiles: { tutor: { enrollmentComplete: true } } }),
+    });
+
+    // Mount, unmount immediately (mid-flight), mount again — the second mount
+    // must await the SAME one-shot, not re-redeem the one-time code.
+    const first = renderHandoff();
+    first.unmount();
+    renderHandoff();
+
+    await waitFor(() => expect(screen.getByText('tutor landing')).toBeInTheDocument());
+    const redeems = h.callable.mock.calls.filter(([n]) => n === 'redeemAppHandoffCode');
+    expect(redeems).toHaveLength(1);
+  });
+
   it('renders the friendly error screen with a login link when redemption fails', async () => {
     window.location.hash = '#code=bad';
     h.callable.mockRejectedValue(new Error('nope'));

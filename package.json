@@ -16,7 +16,7 @@
     "test:integration": "pnpm --filter @ejm/tests test",
     "seed:admin": "node apps/functions/seed-admin.cjs",
     "backfill:endorsement-counts": "node apps/study-functions/backfill-endorsement-counts.cjs",
-    "emulators": "firebase emulators:start",
+    "emulators": "firebase emulators:start --project demo-test",
     "deploy": "firebase deploy"
   },
   "engines": {

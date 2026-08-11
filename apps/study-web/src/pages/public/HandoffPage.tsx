@@ -90,12 +90,16 @@ function runHandoffOnce(params: URLSearchParams, i18nInstance: I18n): Promise<st
     }
   })();
   // Once settled, the arrival is over: clear the one-shot so a later visit
-  // (no fragment) neither re-redeems nor keeps the code in memory.
-  void attempt.finally(() => {
-    stashedParams = null;
-    attempt = null;
+  // (no fragment) neither re-redeems nor keeps the code in memory. Clear ONLY
+  // if we are still the current attempt — a fresh fragment may have started a
+  // new one-shot while this one was in flight, and its state must survive.
+  const mine = attempt;
+  const mineParams = stashedParams;
+  void mine.finally(() => {
+    if (stashedParams === mineParams) stashedParams = null;
+    if (attempt === mine) attempt = null;
   });
-  return attempt;
+  return mine;
 }
 
 export function HandoffPage() {
