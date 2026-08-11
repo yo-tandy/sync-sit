@@ -56,12 +56,20 @@ export function HandoffPage() {
         // wins — it's the fresher intent; the custom token replaces the
         // session.
         const cred = await signInWithCustomToken(auth, res.data.token);
-        // Mirror the login flow: load the user doc, prime the store, then
-        // land exactly where the login page would.
-        const snap = await getDoc(doc(db, 'users', cred.user.uid));
-        const userDoc = snap.exists() ? (snap.data() as SitUser) : null;
-        useAuthStore.setState({ firebaseUser: cred.user, userDoc, loading: false });
-        navigate(postLoginRouter(getSitRole(userDoc)), { replace: true });
+        try {
+          // Mirror the login flow: load the user doc, prime the store, then
+          // land exactly where the login page would.
+          const snap = await getDoc(doc(db, 'users', cred.user.uid));
+          const userDoc = snap.exists() ? (snap.data() as SitUser) : null;
+          useAuthStore.setState({ firebaseUser: cred.user, userDoc, loading: false });
+          navigate(postLoginRouter(getSitRole(userDoc)), { replace: true });
+        } catch {
+          // Past sign-in the user IS authenticated and the code is consumed —
+          // the "switch again" screen would strand them. Land on the default
+          // entrance instead; the app re-reads the user doc from there.
+          useAuthStore.setState({ firebaseUser: cred.user, userDoc: null, loading: false });
+          navigate(postLoginRouter(getSitRole(null)), { replace: true });
+        }
       } catch {
         setFailed(true);
       }

@@ -85,7 +85,11 @@ export const redeemAppHandoffCode = onCall(
       if (!fresh.exists) return null;
       tx.delete(ref);
       const data = fresh.data()!;
-      if (data.expiresAt.toDate().getTime() < Date.now()) return null;
+      // A malformed expiresAt must fail like any bad code — a thrown
+      // `internal` here would be a distinguishable error, breaking the
+      // one-generic-error invariant.
+      const expiresAt = data.expiresAt?.toDate?.();
+      if (!expiresAt || expiresAt.getTime() < Date.now()) return null;
       return { uid: data.uid as string };
     });
     if (!consumed) {

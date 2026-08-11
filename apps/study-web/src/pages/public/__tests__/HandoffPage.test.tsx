@@ -43,6 +43,7 @@ function renderHandoff() {
         <Routes>
           <Route path="/handoff" element={<HandoffPage />} />
           <Route path="/tutor" element={<div>tutor landing</div>} />
+          <Route path="/signup" element={<div>signup page</div>} />
           <Route path="/login" element={<div>login page</div>} />
         </Routes>
       </MemoryRouter>
@@ -116,6 +117,25 @@ describe('HandoffPage (study)', () => {
     );
     expect(screen.getByRole('link', { name: /log ?in/i })).toHaveAttribute('href', '/login');
     expect(h.signInWithCustomToken).not.toHaveBeenCalled();
+  });
+
+  it('a user-doc failure AFTER sign-in lands signed in on the default entrance, not the error screen', async () => {
+    window.location.hash = '#code=xyz';
+    h.callable.mockResolvedValue({ data: { token: 'tok' } });
+    h.signInWithCustomToken.mockResolvedValue({ user: { uid: 'u1' } });
+    // Sign-in succeeded, so the code is consumed — a transient doc-read
+    // failure must not strand a signed-in user on "switch again".
+    h.getDoc.mockRejectedValue(new Error('transient'));
+
+    renderHandoff();
+
+    await waitFor(() => expect(screen.getByText('signup page')).toBeInTheDocument());
+    expect(h.setState).toHaveBeenCalledWith({
+      firebaseUser: { uid: 'u1' },
+      userDoc: null,
+      loading: false,
+    });
+    expect(screen.queryByText(/this link has expired/i)).not.toBeInTheDocument();
   });
 
   it('a missing code renders the IDENTICAL error screen (no oracle in the UI)', async () => {

@@ -149,6 +149,8 @@ VITE_FIREBASE_MESSAGING_SENDER_ID=123456789
 VITE_FIREBASE_APP_ID=1:123456789:web:abc123
 ```
 
+The cross-app switch target is configurable (defaults to the production URLs baked into the code): `VITE_STUDY_APP_URL` in `apps/web`, `VITE_SIT_APP_URL` in `apps/study-web`. Both apps ship a committed `.env.development` pointing these at the sibling dev ports; note that `.env.*` is gitignored, so a git checkout will silently overwrite any untracked local copy of these files.
+
 ## Scripts
 
 | Command | Description |

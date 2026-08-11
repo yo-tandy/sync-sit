@@ -11,6 +11,20 @@ if [ -f "$SCRIPT_DIR/../.env.deploy" ]; then
   source "$SCRIPT_DIR/../.env.deploy"
 fi
 
+# createCustomToken (cross-app handoff) requires the runtime service account
+# to sign blobs as itself (iam.serviceAccounts.signBlob) — not included in
+# editor/firebase.admin, and the emulator doesn't enforce it, so a missing
+# binding only fails in prod. Idempotent: re-granting is a no-op.
+PROJECT_NUMBER=$(gcloud projects describe $PROJECT --format="value(projectNumber)")
+RUNTIME_SA="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
+echo "Granting Token Creator (signBlob) to $RUNTIME_SA on itself..."
+gcloud iam service-accounts add-iam-policy-binding "$RUNTIME_SA" \
+  --project=$PROJECT \
+  --member="serviceAccount:$RUNTIME_SA" \
+  --role="roles/iam.serviceAccountTokenCreator" \
+  --quiet >/dev/null 2>&1 && echo "  ✔ token creator binding" || echo "  ✗ token creator binding (failed)"
+echo ""
+
 echo "Fixing Cloud Run permissions for all functions..."
 
 SERVICES=$(gcloud run services list --region=$REGION --project=$PROJECT --format="value(name)" 2>/dev/null)
