@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { TopNav } from '@/components/ui/TopNav';
 import { Card } from '@/components/ui/Card';
 import { Spinner } from '@/components/ui/Spinner';
-import { UsersIcon, CalendarIcon, ClipboardListIcon, DownloadIcon, ShieldIcon } from '@/components/ui/Icons';
+import { UsersIcon, CalendarIcon, ClipboardListIcon, DownloadIcon, ShieldIcon, HomeIcon } from '@/components/ui/Icons';
 import { useAdminStore } from '@/stores/adminStore';
 
 export function AdminDashboard() {
@@ -21,6 +21,12 @@ export function AdminDashboard() {
       icon: <UsersIcon className="h-6 w-6 text-red-600" />,
       title: t('admin.manageUsers'),
       description: t('admin.manageUsersDesc'),
+    },
+    {
+      to: '/admin/families',
+      icon: <HomeIcon className="h-6 w-6 text-red-600" />,
+      title: t('admin.familiesPage.title'),
+      description: t('admin.familiesPage.desc'),
     },
     {
       to: '/admin/appointments',

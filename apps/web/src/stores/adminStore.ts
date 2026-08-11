@@ -42,6 +42,39 @@ export interface AdminAppointmentListItem {
   parentNames?: string;
 }
 
+/**
+ * One row of the admin `listFamilies` callable: the family doc joined
+ * server-side with parent summaries, kids, and supervision counts.
+ */
+export interface AdminFamilyParent {
+  uid: string;
+  firstName: string | null;
+  lastName: string | null;
+  email: string | null;
+  status: string | null;
+}
+
+export interface AdminFamilyRow {
+  familyId: string;
+  familyName: string;
+  address: string;
+  status: string;
+  createdAt: string | null;
+  verified: boolean;
+  parents: AdminFamilyParent[];
+  kids: { firstName: string; age: number }[];
+  kidsCount: number;
+  governedKidsCount: number;
+  preferredCount: number;
+}
+
+interface ListFamiliesPayload {
+  searchQuery?: string;
+  statusFilter?: string;
+  verifiedFilter?: boolean;
+  startAfterId?: string;
+}
+
 interface PreapprovedEmail {
   email: string;
   used: boolean;
@@ -154,6 +187,17 @@ interface AdminState {
   deleteUser: (uid: string) => Promise<void>;
   resetUserPassword: (uid: string) => Promise<void>;
 
+  // Families
+  families: AdminFamilyRow[];
+  familiesLoading: boolean;
+  familiesHasMore: boolean;
+  fetchFamilies: (params: {
+    search?: string;
+    status?: string;
+    verified?: boolean;
+    startAfterId?: string;
+  }) => Promise<void>;
+
   // Appointments
   appointments: AdminAppointmentListItem[];
   appointmentsLoading: boolean;
@@ -252,6 +296,40 @@ export const useAdminStore = create<AdminState>((set) => ({
   resetUserPassword: async (uid) => {
     const fn = httpsCallable(functions, 'resetUserPassword');
     await fn({ targetUserId: uid });
+  },
+
+  // Families
+  families: [],
+  familiesLoading: false,
+  familiesHasMore: false,
+  fetchFamilies: async (params) => {
+    // A cursor means "load more": append to the list instead of replacing it.
+    const append = Boolean(params.startAfterId);
+    if (!append) set({ familiesLoading: true });
+    try {
+      const fn = httpsCallable<
+        ListFamiliesPayload,
+        { families: AdminFamilyRow[]; hasMore: boolean }
+      >(functions, 'listFamilies');
+      // Omit empty fields entirely: the callable client serializes undefined
+      // as null, which the backend's zod .optional() rejects.
+      const payload: ListFamiliesPayload = {};
+      if (params.search) payload.searchQuery = params.search;
+      if (params.status) payload.statusFilter = params.status;
+      if (params.verified !== undefined) payload.verifiedFilter = params.verified;
+      if (params.startAfterId) payload.startAfterId = params.startAfterId;
+      const result = await fn(payload);
+      set((state) => ({
+        families: append
+          ? [...state.families, ...result.data.families]
+          : result.data.families,
+        familiesHasMore: result.data.hasMore,
+        familiesLoading: false,
+      }));
+    } catch (err) {
+      set({ familiesLoading: false });
+      throw err;
+    }
   },
 
   // Appointments
