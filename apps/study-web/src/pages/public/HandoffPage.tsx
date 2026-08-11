@@ -25,8 +25,25 @@ function hashParams(): URLSearchParams {
   return new URLSearchParams(hash.startsWith('#') ? hash.slice(1) : hash);
 }
 
+// The fragment is read ONCE per page load and stashed at module scope: the
+// component strips it from the URL immediately (so the code never survives in
+// the address bar), and React StrictMode remounts the component in dev — a
+// fresh instance re-reading the already-stripped hash would render the error
+// screen while the first instance's redeem is still in flight.
+let stashed: URLSearchParams | null = null;
+
+function takeHashParams(): URLSearchParams {
+  // A non-empty hash is a FRESH arrival: read it and strip it. An empty hash
+  // (StrictMode remount after the strip) returns the stash unchanged.
+  if (window.location.hash) {
+    stashed = hashParams();
+    window.history.replaceState(null, '', window.location.pathname + window.location.search);
+  }
+  return stashed ?? new URLSearchParams();
+}
+
 function codeFromHash(): string | null {
-  return hashParams().get('code');
+  return takeHashParams().get('code');
 }
 
 export function HandoffPage() {
@@ -42,17 +59,13 @@ export function HandoffPage() {
     if (started.current) return;
     started.current = true;
 
-    const params = hashParams();
+    const params = takeHashParams();
     const code = params.get('code');
     // The origin app passes its CURRENT language (i18n caches are per-origin):
     // apply it before any screen renders so the user keeps their language
     // across the switch, in both directions. Harmless if absent/unknown.
     const lang = params.get('lang');
     if (lang === 'en' || lang === 'fr') void i18n.changeLanguage(lang);
-    // Strip the fragment IMMEDIATELY — before any await — so the code never
-    // survives in the address bar or a history entry.
-    window.history.replaceState(null, '', window.location.pathname + window.location.search);
-
     if (!code) return; // the initial state already shows the error screen
 
     (async () => {
