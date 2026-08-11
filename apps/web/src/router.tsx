@@ -59,6 +59,7 @@ import { GovernedChildPage } from '@/pages/family/GovernedChildPage';
 // Admin pages
 import { AdminDashboard } from '@/pages/admin/DashboardPage';
 import { AdminUsersPage } from '@/pages/admin/UsersPage';
+import { AdminFamiliesPage } from '@/pages/admin/FamiliesPage';
 import { AdminAppointmentsPage } from '@/pages/admin/AppointmentsPage';
 import { AdminHolidaysPage } from '@/pages/admin/HolidaysPage';
 import { AdminAuditLogPage } from '@/pages/admin/AuditLogPage';
@@ -139,6 +140,7 @@ export const router = createBrowserRouter([
     children: [
       { path: '/admin', element: <AdminDashboard /> },
       { path: '/admin/users', element: <AdminUsersPage /> },
+      { path: '/admin/families', element: <AdminFamiliesPage /> },
       { path: '/admin/appointments', element: <AdminAppointmentsPage /> },
       { path: '/admin/holidays', element: <AdminHolidaysPage /> },
       { path: '/admin/audit-log', element: <AdminAuditLogPage /> },
