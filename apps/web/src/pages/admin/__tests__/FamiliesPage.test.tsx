@@ -8,6 +8,8 @@ const h = vi.hoisted(() => ({
   calls: [] as { name: string; payload: unknown }[],
   // Responses for successive listFamilies calls; the last one repeats.
   pages: [] as { families: Record<string, unknown>[]; hasMore: boolean }[],
+  // When true, the next listFamilies call rejects (and resets the flag).
+  failNext: false,
 }));
 
 vi.mock('@/config/firebase', () => ({ functions: {}, auth: {}, db: {}, storage: {} }));
@@ -21,6 +23,10 @@ vi.mock('firebase/functions', () => ({
   httpsCallable: (_fns: unknown, name: string) => (payload: unknown) => {
     h.calls.push({ name, payload });
     if (name === 'listFamilies') {
+      if (h.failNext) {
+        h.failNext = false;
+        return Promise.reject(new Error('internal'));
+      }
       const page = h.pages.length > 1 ? h.pages.shift()! : h.pages[0];
       return Promise.resolve({ data: { families: [...page.families], hasMore: page.hasMore } });
     }
@@ -201,5 +207,35 @@ describe('AdminFamiliesPage', () => {
     renderPage();
 
     expect(await screen.findByText(/no families found/i)).toBeInTheDocument();
+  });
+
+  it('a failed load shows an error banner, not the empty state', async () => {
+    h.failNext = true;
+    h.pages = [{ families: [], hasMore: false }];
+    renderPage();
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/could not load families/i);
+    expect(screen.queryByText(/no families found/i)).not.toBeInTheDocument();
+  });
+
+  it('double-clicking load more issues a single request (in-flight guard)', async () => {
+    h.pages = [
+      { families: [family()], hasMore: true },
+      {
+        families: [family({ familyId: 'fam-martin', familyName: 'Martin' })],
+        hasMore: false,
+      },
+    ];
+    renderPage();
+    await screen.findByText('Dupont');
+
+    const btn = screen.getByRole('button', { name: /load more/i });
+    fireEvent.click(btn);
+    fireEvent.click(btn);
+
+    await screen.findByText('Martin');
+    // One initial fetch + ONE load-more, despite the double click.
+    expect(calls()).toHaveLength(2);
+    expect(screen.getAllByText('Martin')).toHaveLength(1);
   });
 });

@@ -790,6 +790,7 @@ export default {
       hideDetails: 'Hide details',
       registered: 'Registered {{date}}',
       empty: 'No families found',
+      loadError: 'Could not load families. Please try again.',
     },
     exemptions: {
       title: 'Enrollment Exemptions',

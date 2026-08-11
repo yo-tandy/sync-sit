@@ -275,4 +275,10 @@ describe('listFamilies admin callable', () => {
       list({ statusFilter: 'blocked' }, adminToken),
     ).rejects.toMatchObject({ code: 'INVALID_ARGUMENT' });
   });
+
+  it('rejects a stale/unknown startAfterId cursor instead of restarting at page 1', async () => {
+    await expect(
+      list({ startAfterId: 'no-such-family' }, adminToken),
+    ).rejects.toMatchObject({ code: 'INVALID_ARGUMENT' });
+  });
 });

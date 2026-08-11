@@ -762,6 +762,7 @@ export default {
       hideDetails: 'Masquer les détails',
       registered: 'Inscrite le {{date}}',
       empty: 'Aucune famille trouvée',
+      loadError: 'Impossible de charger les familles. Veuillez réessayer.',
     },
     exemptions: {
       title: "Exemptions d'inscription",

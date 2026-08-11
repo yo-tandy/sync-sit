@@ -109,9 +109,12 @@ export const listFamilies = onCall(
         .collection('families')
         .doc(startAfterId)
         .get();
-      if (startAfterDoc.exists) {
-        query = query.startAfter(startAfterDoc);
+      // A stale/unknown cursor must ERROR, not silently restart at page 1 —
+      // the client appends cursor pages, so page 1 again means duplicated rows.
+      if (!startAfterDoc.exists) {
+        throw new HttpsError('invalid-argument', 'Unknown pagination cursor');
       }
+      query = query.startAfter(startAfterDoc);
     }
 
     // Fetch a larger window when any in-memory filter is active (same

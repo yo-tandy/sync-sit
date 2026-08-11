@@ -11,7 +11,14 @@ import { useAdminStore, type AdminFamilyParent, type AdminFamilyRow } from '@/st
 
 export function AdminFamiliesPage() {
   const { t, i18n } = useTranslation();
-  const { families, familiesLoading, familiesHasMore, fetchFamilies } = useAdminStore();
+  const {
+    families,
+    familiesLoading,
+    familiesLoadingMore,
+    familiesHasMore,
+    familiesError,
+    fetchFamilies,
+  } = useAdminStore();
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -113,7 +120,7 @@ export function AdminFamiliesPage() {
           <div className="flex justify-center py-8">
             <Spinner className="h-8 w-8 text-red-600" />
           </div>
-        ) : families.length === 0 ? (
+        ) : families.length === 0 && !familiesError ? (
           <p className="py-8 text-center text-sm text-gray-500">
             {t('admin.familiesPage.empty')}
           </p>
@@ -203,10 +210,17 @@ export function AdminFamiliesPage() {
           </div>
         )}
 
+        {/* Load failure: distinguishable from a genuinely empty result */}
+        {familiesError && (
+          <p className="mt-4 text-center text-sm text-red-600" role="alert">
+            {t('admin.familiesPage.loadError')}
+          </p>
+        )}
+
         {/* Paging */}
         {!familiesLoading && familiesHasMore && (
           <div className="mt-4 flex justify-center">
-            <Button variant="outline" size="sm" onClick={handleLoadMore}>
+            <Button variant="outline" size="sm" onClick={handleLoadMore} disabled={familiesLoadingMore}>
               {t('admin.loadMore')}
             </Button>
           </div>

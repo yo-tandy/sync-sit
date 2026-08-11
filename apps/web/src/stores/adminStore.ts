@@ -190,7 +190,9 @@ interface AdminState {
   // Families
   families: AdminFamilyRow[];
   familiesLoading: boolean;
+  familiesLoadingMore: boolean;
   familiesHasMore: boolean;
+  familiesError: boolean;
   fetchFamilies: (params: {
     search?: string;
     status?: string;
@@ -241,7 +243,7 @@ interface AdminState {
   forceRevokeSupervision: (childUid: string, reason: string) => Promise<void>;
 }
 
-export const useAdminStore = create<AdminState>((set) => ({
+export const useAdminStore = create<AdminState>((set, get) => ({
   // Dashboard stats
   stats: null,
   statsLoading: false,
@@ -301,11 +303,17 @@ export const useAdminStore = create<AdminState>((set) => ({
   // Families
   families: [],
   familiesLoading: false,
+  familiesLoadingMore: false,
   familiesHasMore: false,
+  familiesError: false,
   fetchFamilies: async (params) => {
     // A cursor means "load more": append to the list instead of replacing it.
     const append = Boolean(params.startAfterId);
-    if (!append) set({ familiesLoading: true });
+    // In-flight guard: a second load-more with the same cursor would append
+    // the same page twice (duplicate rows/keys).
+    if (append && get().familiesLoadingMore) return;
+    if (append) set({ familiesLoadingMore: true, familiesError: false });
+    else set({ familiesLoading: true, familiesError: false });
     try {
       const fn = httpsCallable<
         ListFamiliesPayload,
@@ -325,10 +333,12 @@ export const useAdminStore = create<AdminState>((set) => ({
           : result.data.families,
         familiesHasMore: result.data.hasMore,
         familiesLoading: false,
+        familiesLoadingMore: false,
       }));
-    } catch (err) {
-      set({ familiesLoading: false });
-      throw err;
+    } catch {
+      // Swallow after flagging: an error banner (not the empty state) renders,
+      // and no unhandled rejection escapes the page's fire-and-forget calls.
+      set({ familiesLoading: false, familiesLoadingMore: false, familiesError: true });
     }
   },
 
