@@ -14,6 +14,8 @@
  * All passwords are "test1234".
  */
 
+// Override the target namespace with SEED_PROJECT_ID=<id> when the emulator
+// runs under a different --project than the demo-test default.
 process.env.FIRESTORE_EMULATOR_HOST = '127.0.0.1:8080';
 process.env.FIREBASE_AUTH_EMULATOR_HOST = '127.0.0.1:9099';
 
@@ -21,7 +23,9 @@ const { initializeApp } = require('firebase-admin/app');
 const { getAuth } = require('firebase-admin/auth');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 
-const app = initializeApp({ projectId: 'sync-sit' });
+// demo-test matches the emulator recipe and both dev apps' .env.development —
+// one shared namespace, or seeded auth users are invisible to the dev servers.
+const app = initializeApp({ projectId: process.env.SEED_PROJECT_ID || 'demo-test' });
 const auth = getAuth(app);
 const db = getFirestore(app);
 

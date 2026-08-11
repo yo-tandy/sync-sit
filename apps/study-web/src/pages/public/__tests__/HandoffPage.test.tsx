@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, waitFor, cleanup } from '@testing-library/react';
 import { I18nextProvider } from 'react-i18next';
 import { MemoryRouter, Routes, Route } from 'react-router';
@@ -52,6 +52,10 @@ function renderHandoff() {
 }
 
 describe('HandoffPage (study)', () => {
+  afterEach(async () => {
+    await i18n.changeLanguage('en');
+  });
+
   beforeEach(() => {
     h.callable.mockReset();
     h.signInWithCustomToken.mockReset();
@@ -88,6 +92,35 @@ describe('HandoffPage (study)', () => {
     expect(h.signInWithCustomToken.mock.calls[0][1]).toBe('custom-tok');
   });
 
+  it('applies the carried lang on arrival and completes the REAL handoff in it', async () => {
+    await i18n.changeLanguage('en');
+    window.location.hash = '#code=xyz&lang=fr';
+    h.callable.mockResolvedValue({ data: { token: 'custom-tok' } });
+    h.signInWithCustomToken.mockResolvedValue({ user: { uid: 'u1' } });
+    h.getDoc.mockResolvedValue({
+      exists: () => true,
+      data: () => ({ uid: 'u1', profiles: { tutor: { enrollmentComplete: true } } }),
+    });
+    renderHandoff();
+    // The full success path runs (not a failure branch) with the language applied.
+    await waitFor(() => expect(screen.getByText('tutor landing')).toBeInTheDocument());
+    expect(i18n.language).toBe('fr');
+  });
+
+  it('ignores an unknown lang value (allowlist pin)', async () => {
+    await i18n.changeLanguage('en');
+    window.location.hash = '#code=xyz&lang=de';
+    h.callable.mockResolvedValue({ data: { token: 'custom-tok' } });
+    h.signInWithCustomToken.mockResolvedValue({ user: { uid: 'u1' } });
+    h.getDoc.mockResolvedValue({
+      exists: () => true,
+      data: () => ({ uid: 'u1', profiles: { tutor: { enrollmentComplete: true } } }),
+    });
+    renderHandoff();
+    await waitFor(() => expect(screen.getByText('tutor landing')).toBeInTheDocument());
+    expect(i18n.language).toBe('en');
+  });
+
   it('still redeems + signs in when a user is ALREADY signed in (handoff wins)', async () => {
     h.state.firebaseUser = { uid: 'previous-user' };
     h.state.userDoc = { uid: 'previous-user', profiles: { parent: { familyId: 'f' } } };
@@ -104,6 +137,26 @@ describe('HandoffPage (study)', () => {
     await waitFor(() => expect(screen.getByText('tutor landing')).toBeInTheDocument());
     expect(h.callable).toHaveBeenCalledWith('redeemAppHandoffCode', { code: 'fresh' });
     expect(h.signInWithCustomToken).toHaveBeenCalledTimes(1);
+  });
+
+  it('redeems exactly ONCE across a StrictMode-style double mount', async () => {
+    window.location.hash = '#code=once';
+    h.callable.mockResolvedValue({ data: { token: 'custom-tok' } });
+    h.signInWithCustomToken.mockResolvedValue({ user: { uid: 'u1' } });
+    h.getDoc.mockResolvedValue({
+      exists: () => true,
+      data: () => ({ uid: 'u1', profiles: { tutor: { enrollmentComplete: true } } }),
+    });
+
+    // Mount, unmount immediately (mid-flight), mount again — the second mount
+    // must await the SAME one-shot, not re-redeem the one-time code.
+    const first = renderHandoff();
+    first.unmount();
+    renderHandoff();
+
+    await waitFor(() => expect(screen.getByText('tutor landing')).toBeInTheDocument());
+    const redeems = h.callable.mock.calls.filter(([n]) => n === 'redeemAppHandoffCode');
+    expect(redeems).toHaveLength(1);
   });
 
   it('renders the friendly error screen with a login link when redemption fails', async () => {
@@ -149,8 +202,12 @@ describe('HandoffPage (study)', () => {
 
     // Missing code: no callable involved, same markup.
     window.location.hash = '';
+    h.callable.mockClear();
     const { container: missing } = renderHandoff();
     await waitFor(() => expect(screen.getByText(/this link has expired/i)).toBeInTheDocument());
     expect(missing.innerHTML).toBe(failedHtml);
+    // The one-shot settled and cleared: a fragment-less visit never calls the
+    // backend (and never replays a previously stashed code).
+    expect(h.callable).not.toHaveBeenCalled();
   });
 });

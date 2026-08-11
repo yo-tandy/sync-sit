@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { screen, fireEvent, waitFor } from '@testing-library/react';
 
 const h = vi.hoisted(() => ({ callable: vi.fn(), assign: vi.fn() }));
@@ -9,9 +9,14 @@ vi.mock('firebase/functions', () => ({
 }));
 
 import { renderWithProviders } from '@/__tests__/test-utils';
+import i18n from '@/i18n';
 import { AppSwitchMenuItem } from '../AppSwitchMenuItem';
 
 describe('AppSwitchMenuItem (study → sit)', () => {
+  afterEach(async () => {
+    await i18n.changeLanguage('en');
+  });
+
   beforeEach(() => {
     h.callable.mockReset();
     h.assign.mockReset();
@@ -33,7 +38,19 @@ describe('AppSwitchMenuItem (study → sit)', () => {
     expect(h.callable).toHaveBeenCalledWith('createAppHandoffCode', {});
     // The fragment pin: #code=… (never a query param — fragments never reach
     // servers or logs), URL-encoded, on the prod sit origin by default.
-    expect(h.assign).toHaveBeenCalledWith('https://sync-sit.web.app/handoff#code=abc%2B%2F%3D');
+    expect(h.assign).toHaveBeenCalledWith('https://sync-sit.web.app/handoff#code=abc%2B%2F%3D&lang=en');
+  });
+
+  it('carries fr when the app language is French (incl. regional variants)', async () => {
+    await i18n.changeLanguage('fr');
+    h.callable.mockResolvedValue({ data: { code: 'abc+/=' } });
+    renderWithProviders(<AppSwitchMenuItem />);
+
+    fireEvent.click(screen.getByRole('button', { name: /ouvrir sync-sit/i }));
+
+    await waitFor(() => expect(h.assign).toHaveBeenCalledTimes(1));
+    expect(h.assign).toHaveBeenCalledWith('https://sync-sit.web.app/handoff#code=abc%2B%2F%3D&lang=fr');
+    await i18n.changeLanguage('en');
   });
 
   it('is non-optimistic: disabled while the callable is in flight', async () => {

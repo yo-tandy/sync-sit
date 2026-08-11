@@ -41,6 +41,7 @@ import {
   GovernedChildPage,
   CreateKidInvitePage,
   SupervisionAgreementPage,
+  AdminInfoPage,
   SupervisionInfoPage,
   HandoffPage,
 } from '@/lazyPages';
@@ -64,6 +65,7 @@ export const router = createBrowserRouter([
       { path: '/enroll/parent', element: <StaticPage titleKey="welcome.signUpParent" /> },
       { path: '/forgot-password', element: <ForgotPasswordPage /> },
       { path: '/supervision-agreement', element: <SupervisionAgreementPage /> },
+      { path: '/admin', element: <AdminInfoPage /> },
       { path: '/supervision-info', element: <SupervisionInfoPage /> },
       // PUBLIC by design: arrival point of the cross-app switch — the one-time
       // fragment code is the capability; the page signs the user in itself.

@@ -21,6 +21,10 @@ function renderItem() {
 }
 
 describe('AppSwitchMenuItem (sit → study)', () => {
+  afterEach(async () => {
+    await i18n.changeLanguage('en');
+  });
+
   // apps/web's vitest setup does not auto-cleanup (globals: false).
   afterEach(() => cleanup());
 
@@ -46,8 +50,19 @@ describe('AppSwitchMenuItem (sit → study)', () => {
     // The fragment pin: #code=… (never a query param — fragments never reach
     // servers or logs), URL-encoded, on the prod study origin by default.
     expect(h.assign).toHaveBeenCalledWith(
-      'https://sync-study-app.web.app/handoff#code=abc%2B%2F%3D',
+      'https://sync-study-app.web.app/handoff#code=abc%2B%2F%3D&lang=en',
     );
+  });
+
+  it('carries fr when the app language is French (incl. regional variants)', async () => {
+    await i18n.changeLanguage('fr');
+    h.callable.mockResolvedValue({ data: { code: 'abc+/=' } });
+    renderItem();
+
+    fireEvent.click(screen.getByRole('button', { name: /ouvrir sync-study/i }));
+
+    await waitFor(() => expect(h.assign).toHaveBeenCalledTimes(1));
+    expect(h.assign).toHaveBeenCalledWith('https://sync-study-app.web.app/handoff#code=abc%2B%2F%3D&lang=fr');
   });
 
   it('is non-optimistic: disabled while the callable is in flight', async () => {
