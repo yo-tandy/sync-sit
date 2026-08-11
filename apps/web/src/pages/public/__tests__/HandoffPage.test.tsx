@@ -91,6 +91,35 @@ describe('HandoffPage (sit)', () => {
     expect(h.signInWithCustomToken.mock.calls[0][1]).toBe('custom-tok');
   });
 
+  it('applies the carried lang on arrival and completes the REAL handoff in it', async () => {
+    await i18n.changeLanguage('en');
+    window.location.hash = '#code=xyz&lang=fr';
+    h.callable.mockResolvedValue({ data: { token: 'custom-tok' } });
+    h.signInWithCustomToken.mockResolvedValue({ user: { uid: 'u1' } });
+    h.getDoc.mockResolvedValue({
+      exists: () => true,
+      data: () => ({ uid: 'u1', profiles: { babysitter: { enrollmentComplete: true } } }),
+    });
+    renderHandoff();
+    await waitFor(() => expect(screen.getByText('sitter landing')).toBeInTheDocument());
+    expect(i18n.language).toBe('fr');
+    await i18n.changeLanguage('en');
+  });
+
+  it('ignores an unknown lang value (allowlist pin)', async () => {
+    await i18n.changeLanguage('en');
+    window.location.hash = '#code=xyz&lang=de';
+    h.callable.mockResolvedValue({ data: { token: 'custom-tok' } });
+    h.signInWithCustomToken.mockResolvedValue({ user: { uid: 'u1' } });
+    h.getDoc.mockResolvedValue({
+      exists: () => true,
+      data: () => ({ uid: 'u1', profiles: { babysitter: { enrollmentComplete: true } } }),
+    });
+    renderHandoff();
+    await waitFor(() => expect(screen.getByText('sitter landing')).toBeInTheDocument());
+    expect(i18n.language).toBe('en');
+  });
+
   it('still redeems + signs in when a user is ALREADY signed in (handoff wins)', async () => {
     h.state.firebaseUser = { uid: 'previous-user' };
     h.state.userDoc = { uid: 'previous-user', profiles: { parent: { familyId: 'f' } } };
@@ -152,8 +181,10 @@ describe('HandoffPage (sit)', () => {
 
     // Missing code: no callable involved, same markup.
     window.location.hash = '';
+    h.callable.mockClear();
     const { container: missing } = renderHandoff();
     await waitFor(() => expect(screen.getByText(/this link has expired/i)).toBeInTheDocument());
     expect(missing.innerHTML).toBe(failedHtml);
+    expect(h.callable).not.toHaveBeenCalled();
   });
 });

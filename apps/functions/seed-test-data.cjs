@@ -21,7 +21,9 @@ const { initializeApp } = require('firebase-admin/app');
 const { getAuth } = require('firebase-admin/auth');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 
-const app = initializeApp({ projectId: 'sync-sit' });
+// demo-test matches the emulator recipe and both dev apps' .env.development —
+// one shared namespace, or seeded auth users are invisible to the dev servers.
+const app = initializeApp({ projectId: process.env.SEED_PROJECT_ID || 'demo-test' });
 const auth = getAuth(app);
 const db = getFirestore(app);
 

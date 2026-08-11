@@ -30,9 +30,11 @@ export function AppSwitchMenuItem() {
       const res = await mint({});
       // Carry the CURRENT language across origins (i18n caches are
       // per-origin localStorage): the handoff page applies it on arrival.
-      const lang = i18n.language.split('-')[0];
+      // Whitelisted at the source (mirrors the receiver's en|fr allowlist) —
+      // i18n.language originates from localStorage/navigator via the detector.
+      const lang = i18n.language?.startsWith('fr') ? 'fr' : 'en';
       window.location.assign(
-        `${STUDY_APP_URL}/handoff#code=${encodeURIComponent(res.data.code)}&lang=${lang}`,
+        `${STUDY_APP_URL}/handoff#code=${encodeURIComponent(res.data.code)}&lang=${encodeURIComponent(lang)}`,
       );
       // Stay busy: the browser is navigating away.
     } catch {

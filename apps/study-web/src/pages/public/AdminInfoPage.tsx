@@ -2,6 +2,7 @@ import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { Card } from '@ejm/shared-ui';
 import { AppSwitchMenuItem } from '@/components/ui/AppSwitchMenuItem';
+import { useAuthStore } from '@/stores/authStore';
 
 /**
  * Landing for ADMIN accounts on sync-study. There is deliberately no study
@@ -12,14 +13,26 @@ import { AppSwitchMenuItem } from '@/components/ui/AppSwitchMenuItem';
  */
 export function AdminInfoPage() {
   const { t } = useTranslation();
+  // The switch mints an auth-required handoff code — for a signed-out visitor
+  // the button could only fail, so they get a login link instead.
+  const signedIn = useAuthStore((s) => s.firebaseUser !== null);
   return (
     <div className="mx-auto max-w-md px-5 pt-10 pb-8">
       <Card>
         <h2 className="mb-2 text-lg font-bold text-gray-900">{t('adminInfo.title')}</h2>
         <p className="mb-4 text-sm text-gray-600">{t('adminInfo.desc')}</p>
-        <div className="-mx-4 border-t border-gray-100">
-          <AppSwitchMenuItem />
-        </div>
+        {signedIn && (
+          <div className="-mx-4 border-t border-gray-100">
+            <AppSwitchMenuItem />
+          </div>
+        )}
+        {!signedIn && (
+          <p className="mb-3 text-sm">
+            <Link to="/login" className="text-red-600 hover:underline">
+              {t('handoff.goToLogin')}
+            </Link>
+          </p>
+        )}
         <Link to="/" className="text-sm text-red-600 hover:underline">
           {t('adminInfo.backHome')}
         </Link>

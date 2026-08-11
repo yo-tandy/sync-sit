@@ -33,6 +33,7 @@ vi.mock('@/stores/authStore', () => {
   return { useAuthStore };
 });
 
+import { afterEach } from 'vitest';
 import i18n from '@/i18n';
 import { HandoffPage } from '../HandoffPage';
 
@@ -52,6 +53,10 @@ function renderHandoff() {
 }
 
 describe('HandoffPage (study)', () => {
+  afterEach(async () => {
+    await i18n.changeLanguage('en');
+  });
+
   beforeEach(() => {
     h.callable.mockReset();
     h.signInWithCustomToken.mockReset();
@@ -88,13 +93,33 @@ describe('HandoffPage (study)', () => {
     expect(h.signInWithCustomToken.mock.calls[0][1]).toBe('custom-tok');
   });
 
-  it('applies the lang carried in the fragment before anything renders', async () => {
+  it('applies the carried lang on arrival and completes the REAL handoff in it', async () => {
     await i18n.changeLanguage('en');
     window.location.hash = '#code=xyz&lang=fr';
     h.callable.mockResolvedValue({ data: { token: 'custom-tok' } });
+    h.signInWithCustomToken.mockResolvedValue({ user: { uid: 'u1' } });
+    h.getDoc.mockResolvedValue({
+      exists: () => true,
+      data: () => ({ uid: 'u1', profiles: { tutor: { enrollmentComplete: true } } }),
+    });
     renderHandoff();
-    await waitFor(() => expect(i18n.language).toBe('fr'));
+    // The full success path runs (not a failure branch) with the language applied.
+    await waitFor(() => expect(screen.getByText('tutor landing')).toBeInTheDocument());
+    expect(i18n.language).toBe('fr');
+  });
+
+  it('ignores an unknown lang value (allowlist pin)', async () => {
     await i18n.changeLanguage('en');
+    window.location.hash = '#code=xyz&lang=de';
+    h.callable.mockResolvedValue({ data: { token: 'custom-tok' } });
+    h.signInWithCustomToken.mockResolvedValue({ user: { uid: 'u1' } });
+    h.getDoc.mockResolvedValue({
+      exists: () => true,
+      data: () => ({ uid: 'u1', profiles: { tutor: { enrollmentComplete: true } } }),
+    });
+    renderHandoff();
+    await waitFor(() => expect(screen.getByText('tutor landing')).toBeInTheDocument());
+    expect(i18n.language).toBe('en');
   });
 
   it('still redeems + signs in when a user is ALREADY signed in (handoff wins)', async () => {
@@ -158,8 +183,12 @@ describe('HandoffPage (study)', () => {
 
     // Missing code: no callable involved, same markup.
     window.location.hash = '';
+    h.callable.mockClear();
     const { container: missing } = renderHandoff();
     await waitFor(() => expect(screen.getByText(/this link has expired/i)).toBeInTheDocument());
     expect(missing.innerHTML).toBe(failedHtml);
+    // The one-shot settled and cleared: a fragment-less visit never calls the
+    // backend (and never replays a previously stashed code).
+    expect(h.callable).not.toHaveBeenCalled();
   });
 });
