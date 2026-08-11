@@ -180,9 +180,12 @@ export const listFamilies = onCall(
 
         // One equality count per family — acceptable at admin scale (page
         // size ≤ 100, and it's an aggregate query, not a document read).
+        // ACTIVE links only: a pending claim or a revoked supervision is not
+        // a governed kid, and showing it as one would misread the GDPR state.
         const governedSnap = await db
           .collection('guardianLinks')
           .where('familyId', '==', f.id)
+          .where('status', '==', 'active')
           .count()
           .get();
 

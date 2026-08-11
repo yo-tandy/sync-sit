@@ -72,6 +72,16 @@ describe('listFamilies admin callable', () => {
       updatedAt: new Date('2026-03-01T10:00:00Z'),
     });
 
+    // A REVOKED link must not count as a governed kid (active-only pin).
+    await db.collection('guardianLinks').doc('revoked-kid-uid').set({
+      childUid: 'revoked-kid-uid',
+      familyId: seed.family1Id,
+      createdByParentUid: seed.parent1.uid,
+      status: 'revoked',
+      origin: 'claim',
+      requestedAt: new Date(),
+    });
+
     // One governed kid supervised by family 1 (guardianLinks doc id IS the child uid).
     await db.collection('guardianLinks').doc('governed-kid-uid').set({
       childUid: 'governed-kid-uid',
