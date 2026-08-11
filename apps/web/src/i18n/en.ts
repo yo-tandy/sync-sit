@@ -865,6 +865,7 @@ export default {
     noVerifications: 'No verifications found',
     unknownFamily: 'Unknown Family',
     viewDocument: 'View Document',
+    viewDocumentError: 'Could not open the document. Please try again or check the function logs.',
     approve: 'Approve',
     reject: 'Reject',
     approveTitle: 'Approve Verification',

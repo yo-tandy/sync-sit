@@ -98,3 +98,94 @@ describe('AdminVerificationsPage tutor identity review', () => {
     expect(option).toBeInTheDocument();
   });
 });
+
+describe('AdminVerificationsPage view-document error surfacing', () => {
+  beforeEach(() => {
+    i18n.changeLanguage('en');
+    storeState.pendingVerifications = [
+      {
+        id: 'v1',
+        type: 'identity',
+        status: 'pending',
+        familyName: 'Dupont',
+        fileUrl:
+          'https://firebasestorage.googleapis.com/v0/b/sync-sit.appspot.com/o/verification-documents%2Ffam1%2Fid.pdf',
+        fileName: 'id.pdf',
+        createdAt: '2026-07-01T00:00:00Z',
+      },
+    ];
+    storeState.pendingLoading = false;
+    storeState.fetchPendingVerifications = vi.fn();
+    storeState.reviewVerification = vi.fn();
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
+
+  it('surfaces an inline error and never falls back to the raw fileUrl when the callable fails', async () => {
+    const { httpsCallable } = await import('firebase/functions');
+    (httpsCallable as ReturnType<typeof vi.fn>).mockReturnValue(
+      vi.fn().mockRejectedValue(new Error('internal')),
+    );
+    const openSpy = vi.spyOn(window, 'open').mockReturnValue(null);
+
+    renderPage();
+    const { fireEvent, waitFor } = await import('@testing-library/react');
+    fireEvent.click(screen.getByText(i18n.t('verification.viewDocument')));
+
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        i18n.t('verification.viewDocumentError'),
+      ),
+    );
+    // The old masking fallback (window.open(raw fileUrl)) must be gone.
+    expect(openSpy).not.toHaveBeenCalled();
+  });
+
+  it('opens the signed URL (not the raw fileUrl) on success and shows no error', async () => {
+    const { httpsCallable } = await import('firebase/functions');
+    const fn = vi.fn().mockResolvedValue({ data: { url: 'https://signed.example/u' } });
+    (httpsCallable as ReturnType<typeof vi.fn>).mockReturnValue(fn);
+    const openSpy = vi.spyOn(window, 'open').mockReturnValue({} as Window);
+
+    renderPage();
+    const { fireEvent, waitFor } = await import('@testing-library/react');
+    fireEvent.click(screen.getByText(i18n.t('verification.viewDocument')));
+
+    await waitFor(() => expect(openSpy).toHaveBeenCalledWith('https://signed.example/u', '_blank'));
+    expect(fn).toHaveBeenCalledWith({ filePath: 'verification-documents/fam1/id.pdf' });
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('surfaces an error for an unparseable fileUrl instead of opening it raw', async () => {
+    storeState.pendingVerifications[0].fileUrl = 'https://example.com/no-object-segment';
+    const { httpsCallable } = await import('firebase/functions');
+    const fn = vi.fn();
+    (httpsCallable as ReturnType<typeof vi.fn>).mockReturnValue(fn);
+    const openSpy = vi.spyOn(window, 'open').mockReturnValue({} as Window);
+
+    renderPage();
+    const { fireEvent, waitFor } = await import('@testing-library/react');
+    fireEvent.click(screen.getByText(i18n.t('verification.viewDocument')));
+
+    await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
+    expect(fn).not.toHaveBeenCalled();
+    expect(openSpy).not.toHaveBeenCalled();
+  });
+
+  it('treats a popup-blocked open (null return) as a surfaced error', async () => {
+    const { httpsCallable } = await import('firebase/functions');
+    (httpsCallable as ReturnType<typeof vi.fn>).mockReturnValue(
+      vi.fn().mockResolvedValue({ data: { url: 'https://signed.example/u' } }),
+    );
+    vi.spyOn(window, 'open').mockReturnValue(null);
+
+    renderPage();
+    const { fireEvent, waitFor } = await import('@testing-library/react');
+    fireEvent.click(screen.getByText(i18n.t('verification.viewDocument')));
+
+    await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
+  });
+});
