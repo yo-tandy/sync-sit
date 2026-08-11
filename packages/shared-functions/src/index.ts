@@ -65,6 +65,7 @@ export { forceRevokeSupervision } from './guardian/forceRevokeSupervision.js';
 // Callables — admin
 export { getAdminDashboard } from './admin/getAdminDashboard.js';
 export { listUsers } from './admin/listUsers.js';
+export { listFamilies } from './admin/listFamilies.js';
 export { blockUser } from './admin/blockUser.js';
 export { deleteUser } from './admin/deleteUser.js';
 export { resetUserPassword } from './admin/resetUserPassword.js';

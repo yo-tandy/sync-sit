@@ -44,6 +44,7 @@ export {
   // Admin
   getAdminDashboard,
   listUsers,
+  listFamilies,
   blockUser,
   deleteUser,
   resetUserPassword,
