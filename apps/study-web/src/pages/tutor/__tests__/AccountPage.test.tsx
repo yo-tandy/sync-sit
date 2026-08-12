@@ -267,4 +267,20 @@ describe('tutor AccountPage', () => {
     renderWithProviders(<AccountPage />);
     expect(screen.queryByText(/supervised account/i)).not.toBeInTheDocument();
   });
+
+  it('rejects out-of-range padding before any write (trust boundary)', async () => {
+    const userDoc = makeUserDoc();
+    (userDoc.profiles.tutor as Record<string, unknown>).sessionLengthsMin = [45, 60];
+    (userDoc.profiles.tutor as Record<string, unknown>).locationPrefs = ['online'];
+    (userDoc.profiles.tutor as Record<string, unknown>).paddingMin = 15;
+    h.auth.userDoc = userDoc;
+    renderWithProviders(<AccountPage />);
+    const padding = await screen.findByLabelText(/padding|transit/i);
+    fireEvent.change(padding, { target: { value: '500' } });
+    fireEvent.click(screen.getByRole('button', { name: /^save preferences$/i }));
+
+    expect(await screen.findByText(/between 0 and 60/i)).toBeInTheDocument();
+    const calls = h.updateDoc.mock.calls.filter((c) => JSON.stringify(c[1] ?? {}).includes('paddingMin'));
+    expect(calls).toHaveLength(0);
+  });
 });

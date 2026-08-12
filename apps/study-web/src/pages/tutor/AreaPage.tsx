@@ -77,16 +77,27 @@ export function AreaPage() {
       setSuccess(false);
       return;
     }
+    // JS bound checks are the trust boundary here (rules only guard WHICH
+    // keys change): min/max attributes never gate a plain onClick save, and
+    // areaRadiusKm caps every family's distance-search inclusion.
+    if (areaMode === 'distance' && radiusKm !== '' && (radiusKm < 1 || radiusKm > 50)) {
+      setError(t('tutor.area.errorRadiusRange'));
+      setSuccess(false);
+      return;
+    }
+    const arrList = arrText.split(',').map((v) => v.trim()).filter(Boolean);
+    if (areaMode === 'arrondissement' && (arrList.length > 20 || arrList.some((v) => v.length > 12))) {
+      setError(t('tutor.area.errorArrondissements'));
+      setSuccess(false);
+      return;
+    }
     // Both branches write ALL five area dot-paths so a mode switch clears the
     // other mode's fields to the exact values enrollment stores for them.
     const payload =
       areaMode === 'arrondissement'
         ? {
             'profiles.tutor.areaMode': 'arrondissement',
-            'profiles.tutor.arrondissements': arrText
-              .split(',')
-              .map((s) => s.trim())
-              .filter(Boolean),
+            'profiles.tutor.arrondissements': arrList,
             'profiles.tutor.areaAddress': null,
             'profiles.tutor.areaLatLng': null,
             'profiles.tutor.areaRadiusKm': null,
@@ -204,7 +215,7 @@ export function AreaPage() {
           </>
         )}
 
-        {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
+        {error && <p className="mb-4 text-sm text-brand-600">{error}</p>}
 
         <Button onClick={handleSave} disabled={saving}>
           {saving ? t('common.saving') : t('tutor.area.save')}

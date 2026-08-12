@@ -410,7 +410,8 @@ export default {
         save: 'Enregistrer les préférences',
         saved: 'Préférences de cours enregistrées',
         errorNoLengths: 'Choisissez au moins une durée de cours',
-        errorNoLocations: 'Choisissez au moins un lieu de cours',
+        errorPaddingRange: 'La marge doit être un nombre entier entre 0 et 60 minutes.',
+      errorNoLocations: 'Choisissez au moins un lieu de cours',
       },
       areaLink: 'Modifier la zone couverte',
       areaLinkDesc: 'Là où vous travaillez — arrondissements, ou votre adresse et un rayon. Votre adresse sert à afficher votre distance aux familles dans la recherche.',
@@ -427,6 +428,8 @@ export default {
       noLocationNote: 'Aucune localisation n\'est définie sur votre profil : vous n\'apparaissez donc pas dans les résultats triés par distance. Choisissez votre adresse ci-dessous pour corriger cela.',
       save: 'Enregistrer la zone',
       saved: 'Zone enregistrée',
+      errorRadiusRange: 'Le rayon doit être compris entre 1 et 50 km.',
+      errorArrondissements: 'Indiquez au plus 20 arrondissements (codes courts, ex. 75016).',
       errorNoAddress: 'Choisissez une adresse parmi les suggestions pour définir votre localisation.',
     },
     endorsements: {

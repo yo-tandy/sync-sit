@@ -231,4 +231,26 @@ describe('tutor AreaPage', () => {
     expect(payload['profiles.tutor.areaLatLng']).toEqual({ lat: 48.8571, lng: 2.2795 });
     expect(payload['profiles.tutor.areaRadiusKm']).toBe(8); // NUMBER, not '8'
   });
+
+  it('rejects an out-of-range radius before any write (trust boundary)', async () => {
+    seed({ areaMode: 'distance', areaAddress: '5 Rue X', areaLatLng: { lat: 48.85, lng: 2.35 }, areaRadiusKm: 8 });
+    renderWithProviders(<AreaPage />);
+    const radius = await screen.findByLabelText(/max distance/i);
+    fireEvent.change(radius, { target: { value: '500' } });
+    fireEvent.click(screen.getByRole('button', { name: /save/i }));
+
+    expect(await screen.findByText(/between 1 and 50/i)).toBeInTheDocument();
+    expect(h.updateDoc).not.toHaveBeenCalled();
+  });
+
+  it('surfaces a save failure instead of a silent success', async () => {
+    seed({ areaMode: 'distance', areaAddress: '5 Rue X', areaLatLng: { lat: 48.85, lng: 2.35 }, areaRadiusKm: 8 });
+    h.updateDoc.mockRejectedValueOnce(new Error('unavailable'));
+    renderWithProviders(<AreaPage />);
+    await screen.findByLabelText(/max distance/i);
+    fireEvent.click(screen.getByRole('button', { name: /save/i }));
+
+    expect(await screen.findByText(/error|erreur|wrong/i)).toBeInTheDocument();
+    expect(screen.queryByText(/saved/i)).not.toBeInTheDocument();
+  });
 });

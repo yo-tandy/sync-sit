@@ -410,7 +410,8 @@ export default {
         save: 'Save preferences',
         saved: 'Session preferences saved',
         errorNoLengths: 'Pick at least one session length',
-        errorNoLocations: 'Pick at least one session location',
+        errorPaddingRange: 'Padding must be a whole number between 0 and 60 minutes.',
+      errorNoLocations: 'Pick at least one session location',
       },
       areaLink: 'Edit area you cover',
       areaLinkDesc: 'Where you work — arrondissements, or your address and a radius. Your address is what search uses to show families your distance.',
@@ -427,6 +428,8 @@ export default {
       noLocationNote: "No location is set on your profile, so you won't appear in distance-sorted search results. Pick your address below to fix this.",
       save: 'Save area',
       saved: 'Area saved',
+      errorRadiusRange: 'Radius must be between 1 and 50 km.',
+      errorArrondissements: 'Enter up to 20 arrondissements (short codes, e.g. 75016).',
       errorNoAddress: 'Pick an address from the suggestions so your location can be set.',
     },
     endorsements: {

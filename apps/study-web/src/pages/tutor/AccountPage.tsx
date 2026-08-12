@@ -192,6 +192,13 @@ export function AccountPage() {
       setPrefsSuccess(false);
       return;
     }
+    // JS bound check is the trust boundary (see AreaPage note): min/max
+    // attributes never gate a plain onClick save; enrollment enforces 0-60.
+    if (!Number.isInteger(paddingMin) || paddingMin < 0 || paddingMin > 60) {
+      setPrefsError(t('tutor.account.sessionPrefs.errorPaddingRange'));
+      setPrefsSuccess(false);
+      return;
+    }
     setPrefsSaving(true);
     setPrefsSuccess(false);
     setPrefsError(null);
@@ -458,7 +465,7 @@ export function AccountPage() {
           {t('tutor.account.sessionPrefs.paddingHint')}
         </p>
 
-        {prefsError && <p className="mb-4 text-sm text-red-600">{prefsError}</p>}
+        {prefsError && <p className="mb-4 text-sm text-brand-600">{prefsError}</p>}
         <Button onClick={handleSavePrefs} disabled={prefsSaving} className="mb-6">
           {prefsSaving ? t('common.saving') : t('tutor.account.sessionPrefs.save')}
         </Button>
