@@ -413,6 +413,20 @@ export default {
         errorNoLocations: 'Pick at least one session location',
       },
     },
+    area: {
+      title: 'Area you cover',
+      help: 'Families see how far away you are in search results — that distance is computed from the address you pick here. Keeping your area accurate keeps you visible and correctly ranked.',
+      byArea: 'By arrondissement',
+      byDistance: 'By distance',
+      arrondissements: 'Arrondissements',
+      arrondissementsHint: 'Separate several with commas, e.g. 75016, 75017',
+      address: 'Your address',
+      radius: 'Max distance (km)',
+      noLocationNote: "No location is set on your profile, so you won't appear in distance-sorted search results. Pick your address below to fix this.",
+      save: 'Save area',
+      saved: 'Area saved',
+      errorNoAddress: 'Pick an address from the suggestions so your location can be set.',
+    },
     endorsements: {
       title: 'Endorsements',
       empty:

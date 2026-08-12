@@ -413,6 +413,20 @@ export default {
         errorNoLocations: 'Choisissez au moins un lieu de cours',
       },
     },
+    area: {
+      title: 'Zone couverte',
+      help: 'Les familles voient votre distance dans les résultats de recherche — elle est calculée à partir de l\'adresse choisie ici. Une zone à jour vous garde visible et bien classé·e.',
+      byArea: 'Par arrondissement',
+      byDistance: 'Par distance',
+      arrondissements: 'Arrondissements',
+      arrondissementsHint: 'Séparez-en plusieurs par des virgules, ex. 75016, 75017',
+      address: 'Votre adresse',
+      radius: 'Distance max (km)',
+      noLocationNote: 'Aucune localisation n\'est définie sur votre profil : vous n\'apparaissez donc pas dans les résultats triés par distance. Choisissez votre adresse ci-dessous pour corriger cela.',
+      save: 'Enregistrer la zone',
+      saved: 'Zone enregistrée',
+      errorNoAddress: 'Choisissez une adresse parmi les suggestions pour définir votre localisation.',
+    },
     endorsements: {
       title: 'Recommandations',
       empty:

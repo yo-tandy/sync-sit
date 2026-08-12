@@ -55,6 +55,9 @@ export const TutorAccountPage = lazy(() =>
 export const SubjectsPage = lazy(() =>
   import('@/pages/tutor/SubjectsPage').then((m) => ({ default: m.SubjectsPage })),
 );
+export const TutorAreaPage = lazy(() =>
+  import('@/pages/tutor/AreaPage').then((m) => ({ default: m.AreaPage })),
+);
 export const SchedulePage = lazy(() =>
   import('@/pages/tutor/SchedulePage').then((m) => ({ default: m.SchedulePage })),
 );
