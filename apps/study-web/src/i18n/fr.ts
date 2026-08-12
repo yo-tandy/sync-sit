@@ -428,6 +428,7 @@ export default {
       noLocationNote: 'Aucune localisation n\'est définie sur votre profil — les familles voient « distance inconnue » et vous apparaissez en dernier dans les résultats triés par distance. Choisissez votre adresse ci-dessous pour corriger cela.',
       save: 'Enregistrer la zone',
       saved: 'Zone enregistrée',
+      radiusHint: 'Laissez vide pour utiliser la valeur par défaut (5 km).',
       errorRadiusRange: 'Le rayon doit être compris entre 0 et 50 km.',
       errorArrondissements: 'Indiquez au plus 20 arrondissements (codes courts, ex. 75016).',
       errorNoAddress: 'Choisissez une adresse parmi les suggestions pour définir votre localisation.',

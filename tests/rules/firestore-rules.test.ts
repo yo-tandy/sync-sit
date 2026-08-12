@@ -1751,6 +1751,26 @@ describe('users update — tutor numeric bounds (issue #123 hardening)', () => {
     );
   });
 
+  it('rejects out-of-range and NaN coordinates (owner write)', async () => {
+    const db = testEnv.authenticatedContext(uid).firestore();
+    await assertFails(
+      updateDoc(doc(db, 'users', uid), { 'profiles.tutor.areaLatLng': { lat: 91, lng: 2.35 } }),
+    );
+    await assertFails(
+      updateDoc(doc(db, 'users', uid), { 'profiles.tutor.areaLatLng': { lat: NaN, lng: 2.35 } }),
+    );
+  });
+
+  it('accepts valid coordinates and explicit null', async () => {
+    const db = testEnv.authenticatedContext(uid).firestore();
+    await assertSucceeds(
+      updateDoc(doc(db, 'users', uid), { 'profiles.tutor.areaLatLng': { lat: 48.85, lng: 2.35 } }),
+    );
+    await assertSucceeds(
+      updateDoc(doc(db, 'users', uid), { 'profiles.tutor.areaLatLng': null }),
+    );
+  });
+
   it('does not affect users without a tutor profile', async () => {
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
       await ctx.firestore().doc('users/bounds-parent-1').set({

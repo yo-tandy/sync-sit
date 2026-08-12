@@ -112,7 +112,14 @@ service cloud.firestore {
              && (tutorField(request.resource.data, 'areaRadiusKm', 0) == null
                  || (tutorField(request.resource.data, 'areaRadiusKm', 0) is number
                      && tutorField(request.resource.data, 'areaRadiusKm', 0) >= 0
-                     && tutorField(request.resource.data, 'areaRadiusKm', 0) <= 50));
+                     && tutorField(request.resource.data, 'areaRadiusKm', 0) <= 50))
+             && (tutorField(request.resource.data, 'areaLatLng', null) == null
+                 || (tutorField(request.resource.data, 'areaLatLng', null).lat is number
+                     && tutorField(request.resource.data, 'areaLatLng', null).lat >= -90
+                     && tutorField(request.resource.data, 'areaLatLng', null).lat <= 90
+                     && tutorField(request.resource.data, 'areaLatLng', null).lng is number
+                     && tutorField(request.resource.data, 'areaLatLng', null).lng >= -180
+                     && tutorField(request.resource.data, 'areaLatLng', null).lng <= 180));
     }
 
     // Helper: profiles.parent.familyId is server-controlled (enrollFamily /

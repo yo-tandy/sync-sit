@@ -243,6 +243,28 @@ describe('tutor AreaPage', () => {
     expect(h.updateDoc).not.toHaveBeenCalled();
   });
 
+  it('rejects more than 20 arrondissements before any write', async () => {
+    seed({ areaMode: 'arrondissement', arrondissements: ['75016'] });
+    renderWithProviders(<AreaPage />);
+    const input = await screen.findByLabelText(/arrondissement/i);
+    fireEvent.change(input, { target: { value: Array.from({ length: 21 }, (_, i) => `750${String(i).padStart(2, '0')}`).join(', ') } });
+    fireEvent.click(screen.getByRole('button', { name: /save/i }));
+
+    expect(await screen.findByText(/up to 20/i)).toBeInTheDocument();
+    expect(h.updateDoc).not.toHaveBeenCalled();
+  });
+
+  it('rejects an over-long arrondissement entry before any write', async () => {
+    seed({ areaMode: 'arrondissement', arrondissements: ['75016'] });
+    renderWithProviders(<AreaPage />);
+    const input = await screen.findByLabelText(/arrondissement/i);
+    fireEvent.change(input, { target: { value: 'not-an-arrondissement-code' } });
+    fireEvent.click(screen.getByRole('button', { name: /save/i }));
+
+    expect(await screen.findByText(/up to 20/i)).toBeInTheDocument();
+    expect(h.updateDoc).not.toHaveBeenCalled();
+  });
+
   it('surfaces a save failure instead of a silent success', async () => {
     seed({ areaMode: 'distance', areaAddress: '5 Rue X', areaLatLng: { lat: 48.85, lng: 2.35 }, areaRadiusKm: 8 });
     h.updateDoc.mockRejectedValueOnce(new Error('unavailable'));

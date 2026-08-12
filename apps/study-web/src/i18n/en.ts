@@ -428,6 +428,7 @@ export default {
       noLocationNote: 'No location is set on your profile — families see you as "distance unknown" and you sort last in distance-ordered results. Pick your address below to fix this.',
       save: 'Save area',
       saved: 'Area saved',
+      radiusHint: 'Leave empty to use the default (5 km).',
       errorRadiusRange: 'Radius must be between 0 and 50 km.',
       errorArrondissements: 'Enter up to 20 arrondissements (short codes, e.g. 75016).',
       errorNoAddress: 'Pick an address from the suggestions so your location can be set.',

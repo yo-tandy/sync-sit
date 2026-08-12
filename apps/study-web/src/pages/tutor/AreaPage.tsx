@@ -200,6 +200,7 @@ export function AreaPage() {
             />
             <Input
               label={t('tutor.area.radius')}
+              hint={t('tutor.area.radiusHint')}
               type="number"
               value={radiusKm}
               onChange={(e) => {
@@ -207,7 +208,7 @@ export function AreaPage() {
                 setRadiusKm(typeof v === 'number' && Number.isNaN(v) ? '' : v);
                 setSuccess(false);
               }}
-              min={1}
+              min={0}
               max={50}
             />
           </>
