@@ -146,7 +146,7 @@ export function SubjectsPage() {
         <p className="mb-5 text-sm text-gray-500">{t('tutor.subjects.intro')}</p>
 
         {rows.length === 0 && (
-          <p className="mb-5 text-sm text-gray-400">{t('tutor.subjects.empty')}</p>
+          <p className="mb-5 text-sm text-gray-500">{t('tutor.subjects.empty')}</p>
         )}
 
         <div className="space-y-3">
@@ -156,7 +156,7 @@ export function SubjectsPage() {
                 type="button"
                 onClick={() => removeRow(index)}
                 aria-label={t('tutor.subjects.remove')}
-                className="absolute right-3 top-3 text-xs font-medium text-gray-400 hover:text-brand-600"
+                className="absolute right-3 top-3 text-xs font-medium text-gray-500 hover:text-brand-600"
               >
                 {t('tutor.subjects.remove')}
               </button>

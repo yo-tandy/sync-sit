@@ -201,7 +201,7 @@ export function RequestsPage() {
                           <p className="text-xs text-gray-500">
                             {t(`tutor.subjects.names.${r.subject}`)} · {r.level}
                           </p>
-                          <p className="mt-0.5 text-xs text-gray-400">
+                          <p className="mt-0.5 text-xs text-gray-500">
                             {t('family.requests.sentOn', { date: formatDate(r.createdAt) })}
                           </p>
                         </div>

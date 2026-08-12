@@ -115,7 +115,7 @@ export function AdminAuditLogPage() {
 
   const UserTag = ({ uid, info }: { uid: string; info: UserInfo | null }) => {
     if (!uid || uid === 'system') {
-      return <span className="text-gray-400">system</span>;
+      return <span className="text-gray-500">system</span>;
     }
     return (
       <button
@@ -161,17 +161,17 @@ export function AdminAuditLogPage() {
               const details = formatDetails(log.details);
               return (
                 <div key={log.id} className="flex flex-wrap items-center gap-x-1.5 py-2 text-xs">
-                  <span className="text-gray-400">{formatTs(log.timestamp)}</span>
+                  <span className="text-gray-500">{formatTs(log.timestamp)}</span>
                   <UserTag uid={log.adminUserId} info={log.adminInfo} />
                   <span className="font-semibold text-gray-900">{log.action}</span>
                   {log.targetUserId && (
                     <>
-                      <span className="text-gray-400">→</span>
+                      <span className="text-gray-500">→</span>
                       <UserTag uid={log.targetUserId} info={log.targetInfo} />
                     </>
                   )}
                   {details && (
-                    <span className="text-gray-400">({details})</span>
+                    <span className="text-gray-500">({details})</span>
                   )}
                 </div>
               );

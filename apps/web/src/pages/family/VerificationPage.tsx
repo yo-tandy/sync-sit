@@ -369,7 +369,7 @@ export function VerificationPage() {
                       <div className="flex items-center justify-center rounded-lg bg-white p-3 border border-gray-200">
                         <span className="text-2xl font-mono font-bold tracking-widest text-brand-600">{communityCode}</span>
                       </div>
-                      <p className="mt-2 text-center text-xs text-gray-400">
+                      <p className="mt-2 text-center text-xs text-gray-500">
                         {t('verification.codeExpires', { time: new Date(communityCodeExpires).toLocaleString(i18n.language === 'fr' ? 'fr-FR' : 'en-US', { dateStyle: 'short', timeStyle: 'short' }) })}
                       </p>
                     </div>

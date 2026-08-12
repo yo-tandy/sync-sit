@@ -48,7 +48,7 @@ export function ReportProblemPage({
         </p>
 
         <Card className="mb-6 bg-gray-50">
-          <p className="mb-3 text-xs font-medium text-gray-400">
+          <p className="mb-3 text-xs font-medium text-gray-500">
             {t('report.whatIncluded')}
           </p>
           <div className="space-y-2 text-sm text-gray-700">

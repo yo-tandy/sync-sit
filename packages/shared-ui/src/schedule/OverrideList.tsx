@@ -174,7 +174,7 @@ export function OverrideList({ overrides, onAdd, onRemove }: OverrideListProps) 
   return (
     <div>
       {overrides.length === 0 && !formMode && (
-        <p className="mb-4 text-sm text-gray-400">{t('schedule.noOverrides')}</p>
+        <p className="mb-4 text-sm text-gray-500">{t('schedule.noOverrides')}</p>
       )}
 
       {overrides.map((o) => (
@@ -191,7 +191,8 @@ export function OverrideList({ overrides, onAdd, onRemove }: OverrideListProps) 
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); onRemove(o.date); }}
-            className="rounded-full p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+            aria-label={t('common.remove')}
+            className="rounded-full p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-600"
           >
             <XIcon className="h-4 w-4" />
           </button>

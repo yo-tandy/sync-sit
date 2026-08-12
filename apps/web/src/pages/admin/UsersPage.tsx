@@ -262,7 +262,7 @@ export function AdminUsersPage() {
               <Spinner className="h-5 w-5 text-brand-600" />
             </div>
           ) : preapprovedEmails.length === 0 ? (
-            <p className="py-3 text-center text-xs text-gray-400">{t('admin.noPreapprovedEmails')}</p>
+            <p className="py-3 text-center text-xs text-gray-500">{t('admin.noPreapprovedEmails')}</p>
           ) : (
             <div className="space-y-2">
               {preapprovedEmails.map((item) => (
@@ -311,14 +311,14 @@ export function AdminUsersPage() {
               <Spinner className="h-5 w-5 text-brand-600" />
             </div>
           ) : exemptions.length === 0 ? (
-            <p className="py-3 text-center text-xs text-gray-400">{t('admin.exemptions.empty')}</p>
+            <p className="py-3 text-center text-xs text-gray-500">{t('admin.exemptions.empty')}</p>
           ) : (
             <div className="space-y-2">
               {exemptions.map((item) => (
                 <div key={item.email} className="flex items-center justify-between rounded-lg bg-gray-50 px-3 py-2">
                   <div className="min-w-0">
                     <span className="text-sm text-gray-700">{item.email}</span>
-                    {item.note && <p className="truncate text-xs text-gray-400">{item.note}</p>}
+                    {item.note && <p className="truncate text-xs text-gray-500">{item.note}</p>}
                   </div>
                   <Button variant="outline" size="sm" onClick={() => handleRemoveExemption(item.email)}>
                     {t('admin.exemptions.remove')}

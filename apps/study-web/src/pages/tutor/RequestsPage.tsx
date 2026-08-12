@@ -144,7 +144,7 @@ export function RequestsPage() {
                       {r.message}
                     </p>
                   )}
-                  <p className="mt-1 text-xs text-gray-400">
+                  <p className="mt-1 text-xs text-gray-500">
                     {t('tutor.requests.sentOn', { date: formatDate(r.createdAt) })}
                   </p>
                   <div className="mt-3 flex gap-2">
@@ -185,7 +185,7 @@ export function RequestsPage() {
                       <p className="text-xs text-gray-500">
                         {t(`tutor.subjects.names.${r.subject}`)} · {r.level}
                       </p>
-                      <p className="mt-0.5 text-xs text-gray-400">
+                      <p className="mt-0.5 text-xs text-gray-500">
                         {t('tutor.requests.sentOn', { date: formatDate(r.createdAt) })}
                       </p>
                     </div>

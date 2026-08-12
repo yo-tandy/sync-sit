@@ -23,7 +23,7 @@ function ReferenceCard({ reference, babysitterName, onEdit, onDelete }: { refere
           <p className="mt-1 text-sm text-gray-700">"{reference.referenceText}"</p>
         )}
         {reference.createdAt && (
-          <p className="mt-1 text-xs text-gray-400">
+          <p className="mt-1 text-xs text-gray-500">
             {reference.createdAt.toDate?.()
               ? reference.createdAt.toDate().toLocaleDateString(i18n.language === 'fr' ? 'fr-FR' : 'en-US', { month: 'short', day: 'numeric', year: 'numeric' })
               : ''}

@@ -120,7 +120,8 @@ export function AdminHolidaysPage() {
                 </div>
                 <button
                   type="button"
-                  className="ml-2 mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                  aria-label={t('common.remove')}
+                  className="ml-2 mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-600"
                   onClick={() => handleRemovePeriod(index)}
                 >
                   <XIcon className="h-4 w-4" />

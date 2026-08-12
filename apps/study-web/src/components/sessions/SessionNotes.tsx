@@ -32,7 +32,7 @@ interface SessionNotesProps {
 function NoteBlock({ label, text }: { label: string; text: string }) {
   return (
     <div className="rounded-lg bg-gray-50 p-2">
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">{label}</p>
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">{label}</p>
       <p className="whitespace-pre-wrap text-xs text-gray-700">{text}</p>
     </div>
   );

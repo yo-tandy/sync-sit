@@ -393,7 +393,7 @@ export function BabysitterAccountPage() {
             ) : (
               <p className="text-sm font-medium">{t('enrollment.addPhoto')}</p>
             )}
-            <p className="text-xs text-gray-400">{t('enrollment.photoOptional')}</p>
+            <p className="text-xs text-gray-500">{t('enrollment.photoOptional')}</p>
             {photoError && <p className="text-xs text-brand-600">{photoError}</p>}
             {photoSaving && <p className="text-xs text-gray-500">{t('common.saving')}</p>}
           </div>

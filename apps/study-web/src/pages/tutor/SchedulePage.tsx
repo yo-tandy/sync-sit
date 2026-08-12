@@ -82,7 +82,7 @@ function HolidayPeriodEditor({
             {formatDate(period.startDate, i18n.language)} — {formatDate(period.endDate, i18n.language)}
           </p>
           {!expanded && (
-            <p className="mt-1 text-xs text-gray-400">
+            <p className="mt-1 text-xs text-gray-500">
               {hasAvailability ? t('schedule.customAvailabilitySet') : t('schedule.noAvailabilityTapToEdit')}
             </p>
           )}
@@ -294,7 +294,7 @@ export function SchedulePage() {
         {localHolidayMode === 'different' && (
           <div className="mb-4">
             {holidayPeriods.length === 0 ? (
-              <p className="text-sm text-gray-400">
+              <p className="text-sm text-gray-500">
                 {t('schedule.noVacationPeriods')}
               </p>
             ) : (

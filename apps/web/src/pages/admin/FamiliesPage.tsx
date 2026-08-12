@@ -166,7 +166,7 @@ export function AdminFamiliesPage() {
                     {t('admin.familiesPage.governedKids', { count: family.governedKidsCount })}
                   </p>
                 )}
-                <p className="mt-1 text-xs text-gray-400">
+                <p className="mt-1 text-xs text-gray-500">
                   {t('admin.familiesPage.registered', { date: formatIso(family.createdAt) })}
                 </p>
 

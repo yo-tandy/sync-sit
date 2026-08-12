@@ -362,7 +362,7 @@ export function TermsPage({ brand, supportEmail }: TermsPageProps) {
         <h2 className="mb-2 text-xl font-bold">
           {isFr ? 'Conditions Générales d\'Utilisation' : 'Terms of Service'}
         </h2>
-        <p className="mb-6 text-xs text-gray-400">
+        <p className="mb-6 text-xs text-gray-500">
           {isFr ? 'Dernière mise à jour : 2 avril 2026' : 'Last updated: April 2, 2026'}
         </p>
 

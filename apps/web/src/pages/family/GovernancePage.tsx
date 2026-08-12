@@ -195,7 +195,7 @@ export function GovernancePage() {
                       {[inv.firstName, inv.lastName].filter(Boolean).join(' ')}
                     </p>
                     <p className="text-xs text-gray-500">{inv.kidEmail}</p>
-                    <p className={`mt-0.5 text-xs ${expired ? 'text-brand-600' : 'text-gray-400'}`}>
+                    <p className={`mt-0.5 text-xs ${expired ? 'text-brand-600' : 'text-gray-500'}`}>
                       {expired
                         ? t('governance.inviteExpired', { date: formatDate(inv.expiresAt) })
                         : t('governance.inviteExpires', { date: formatDate(inv.expiresAt) })}

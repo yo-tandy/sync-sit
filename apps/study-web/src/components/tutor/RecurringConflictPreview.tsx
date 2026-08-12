@@ -34,7 +34,7 @@ interface PreviewResult {
 const STATUS_CLASS: Record<DateStatus, string> = {
   available: 'text-green-700',
   conflict: 'text-brand-600',
-  holiday: 'text-gray-400',
+  holiday: 'text-gray-500',
 };
 
 /** Paris "YYYY-MM-DD" for an instant (DST-correct via the runtime tz database). */
@@ -201,7 +201,7 @@ export function RecurringConflictPreview({ session }: { session: StudySessionDoc
 
   if (holidaysLoading || result === null) {
     return (
-      <div className="mt-2 flex items-center gap-2 text-xs text-gray-400">
+      <div className="mt-2 flex items-center gap-2 text-xs text-gray-500">
         <Spinner className="h-3 w-3" />
         {t('tutor.sessions.preview.loading')}
       </div>
@@ -240,7 +240,7 @@ export function RecurringConflictPreview({ session }: { session: StudySessionDoc
           })()}
         </ul>
       )}
-      <p className="mt-1.5 text-[11px] leading-tight text-gray-400">
+      <p className="mt-1.5 text-[11px] leading-tight text-gray-500">
         {t('tutor.sessions.preview.disclaimer')}
       </p>
     </div>

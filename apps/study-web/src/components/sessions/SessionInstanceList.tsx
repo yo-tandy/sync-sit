@@ -56,7 +56,7 @@ export function SessionInstanceList({
 
   return (
     <ul className="mt-3 space-y-2 border-t border-gray-100 pt-3">
-      {sorted.length === 0 && <li className="text-xs text-gray-400">{copy.noOccurrences}</li>}
+      {sorted.length === 0 && <li className="text-xs text-gray-500">{copy.noOccurrences}</li>}
       {sorted.map((i) => {
         const label = chip(i);
         const cancelable = i.status === 'scheduled' && i.date >= today;

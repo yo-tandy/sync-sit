@@ -361,7 +361,7 @@ export function WeeklyTimeline({ weekly, onChange, onDayHeaderClick }: WeeklyTim
               <div key={displayIdx} className="contents">
                 <div className="flex h-[3px] items-center justify-end pr-1">
                   {hourLabel && (
-                    <span className="relative -top-[1px] text-[9px] leading-none text-gray-400">
+                    <span className="relative -top-[1px] text-[9px] leading-none text-gray-500">
                       {hourLabel}
                     </span>
                   )}
@@ -440,7 +440,7 @@ export function WeeklyTimeline({ weekly, onChange, onDayHeaderClick }: WeeklyTim
             <div className="h-3 w-3 rounded-sm bg-gray-50 border border-gray-200" />
             {t('schedule.unavailable')}
           </div>
-          <p className="text-gray-400">{t('schedule.dragToAdd')}</p>
+          <p className="text-gray-500">{t('schedule.dragToAdd')}</p>
         </div>
       </div>
 
