@@ -4,7 +4,8 @@ import { useTranslation } from 'react-i18next';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
-import { getTutorProfile } from '@ejm/study-core';
+import { getTutorProfile, SESSION_LENGTHS, LOCATION_PREFS } from '@ejm/study-core';
+import type { LocationPref } from '@ejm/study-core';
 import { DEFAULT_NOTIF_PREFS } from '@ejm/shared-core';
 import type { NotifPrefs } from '@ejm/shared-core';
 import {
@@ -68,6 +69,16 @@ export function AccountPage() {
   const [policySaving, setPolicySaving] = useState(false);
   const [policySuccess, setPolicySuccess] = useState(false);
 
+  // Session preferences (issue #123) — the enrollment-only fields, now
+  // editable: lengths + padding feed the booking slot math, locations feed
+  // search filters. All three are owner-editable dot-paths.
+  const [sessionLengths, setSessionLengths] = useState<number[]>([]);
+  const [locationPrefs, setLocationPrefs] = useState<LocationPref[]>([]);
+  const [paddingMin, setPaddingMin] = useState(0);
+  const [prefsSaving, setPrefsSaving] = useState(false);
+  const [prefsSuccess, setPrefsSuccess] = useState(false);
+  const [prefsError, setPrefsError] = useState<string | null>(null);
+
   const [error, setError] = useState<string | null>(null);
 
   // Initialize from userDoc
@@ -78,6 +89,9 @@ export function AccountPage() {
     setWhatsapp(tutor?.whatsapp || '');
     setWhatsappSameAsPhone(tutor?.whatsapp ? tutor.whatsapp === tutor.contactPhone : true);
     setNoticeHours(tutor?.cancellationNoticeHours ?? 0);
+    setSessionLengths(tutor?.sessionLengthsMin ?? []);
+    setLocationPrefs(tutor?.locationPrefs ?? []);
+    setPaddingMin(tutor?.paddingMin ?? 0);
     if (userDoc.notifPrefs) {
       setPrefs(userDoc.notifPrefs);
     }
@@ -146,6 +160,55 @@ export function AccountPage() {
       setError(t('common.error'));
     } finally {
       setPolicySaving(false);
+    }
+  };
+
+  // --- Session preferences ---
+  const toggleSessionLength = (len: number) => {
+    setSessionLengths((prev) =>
+      prev.includes(len) ? prev.filter((l) => l !== len) : [...prev, len],
+    );
+    setPrefsSuccess(false);
+  };
+
+  const toggleLocationPref = (pref: LocationPref) => {
+    setLocationPrefs((prev) =>
+      prev.includes(pref) ? prev.filter((p) => p !== pref) : [...prev, pref],
+    );
+    setPrefsSuccess(false);
+  };
+
+  const handleSavePrefs = async () => {
+    if (!uid) return;
+    // Mirrors enrollment's StepPrefs validation: at least one length and one
+    // location; padding is already clamped by the input.
+    if (sessionLengths.length === 0) {
+      setPrefsError(t('tutor.account.sessionPrefs.errorNoLengths'));
+      setPrefsSuccess(false);
+      return;
+    }
+    if (locationPrefs.length === 0) {
+      setPrefsError(t('tutor.account.sessionPrefs.errorNoLocations'));
+      setPrefsSuccess(false);
+      return;
+    }
+    setPrefsSaving(true);
+    setPrefsSuccess(false);
+    setPrefsError(null);
+    try {
+      await updateDoc(doc(db, 'users', uid), {
+        'profiles.tutor.sessionLengthsMin': sessionLengths,
+        'profiles.tutor.locationPrefs': locationPrefs,
+        'profiles.tutor.paddingMin': paddingMin,
+        updatedAt: serverTimestamp(),
+      });
+      await refreshUserDoc();
+      setPrefsSuccess(true);
+      setTimeout(() => setPrefsSuccess(false), 3000);
+    } catch {
+      setPrefsError(t('common.error'));
+    } finally {
+      setPrefsSaving(false);
     }
   };
 
@@ -328,7 +391,81 @@ export function AccountPage() {
 
         <hr className="mb-6 border-gray-200" />
 
-        {/* 4. Change Password */}
+        {/* 4. Session preferences (issue #123 — previously enrollment-frozen) */}
+        <h3 className="mb-1 text-sm font-semibold text-gray-700">
+          {t('tutor.account.sessionPrefs.title')}
+        </h3>
+        <p className="mb-4 text-xs text-gray-500">{t('tutor.account.sessionPrefs.help')}</p>
+
+        {prefsSuccess && (
+          <InfoBanner className="mb-4">{t('tutor.account.sessionPrefs.saved')}</InfoBanner>
+        )}
+
+        <div className="mb-5">
+          <label className="mb-2 block text-sm font-medium text-gray-700">
+            {t('tutor.account.sessionPrefs.lengths')}
+          </label>
+          <div className="flex flex-wrap gap-2">
+            {SESSION_LENGTHS.map((len) => (
+              <button
+                key={len}
+                type="button"
+                aria-pressed={sessionLengths.includes(len)}
+                onClick={() => toggleSessionLength(len)}
+                className={`rounded-lg border-[1.5px] px-4 py-2 text-sm font-medium transition-colors ${
+                  sessionLengths.includes(len)
+                    ? 'border-red-600 bg-red-50 text-red-600'
+                    : 'border-gray-300 text-gray-700 hover:border-gray-400'
+                }`}
+              >
+                {len} min
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="mb-5">
+          <label className="mb-2 block text-sm font-medium text-gray-700">
+            {t('tutor.account.sessionPrefs.locations')}
+          </label>
+          <div className="flex flex-col gap-2">
+            {LOCATION_PREFS.map((pref) => (
+              <label key={pref} className="flex items-center gap-2 text-sm text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={locationPrefs.includes(pref)}
+                  onChange={() => toggleLocationPref(pref)}
+                  className="h-4 w-4 rounded border-gray-300"
+                />
+                {t(`tutor.account.sessionPrefs.location.${pref}`)}
+              </label>
+            ))}
+          </div>
+        </div>
+
+        <Input
+          label={t('tutor.account.sessionPrefs.padding')}
+          type="number"
+          value={paddingMin}
+          onChange={(e) => {
+            setPaddingMin(parseInt(e.target.value) || 0);
+            setPrefsSuccess(false);
+          }}
+          min={0}
+          max={60}
+        />
+        <p className="-mt-4 mb-4 text-xs text-gray-400">
+          {t('tutor.account.sessionPrefs.paddingHint')}
+        </p>
+
+        {prefsError && <p className="mb-4 text-sm text-red-600">{prefsError}</p>}
+        <Button onClick={handleSavePrefs} disabled={prefsSaving} className="mb-6">
+          {prefsSaving ? t('common.saving') : t('tutor.account.sessionPrefs.save')}
+        </Button>
+
+        <hr className="mb-6 border-gray-200" />
+
+        {/* 5. Change Password */}
         <h3 className="mb-3 text-sm font-semibold text-gray-700">{t('account.changePassword')}</h3>
         {passwordResetSent && (
           <InfoBanner className="mb-4">
@@ -347,7 +484,7 @@ export function AccountPage() {
 
         <hr className="mb-6 border-gray-200" />
 
-        {/* 5. Notification Preferences (email only — no FCM in study-web yet) */}
+        {/* 6. Notification Preferences (email only — no FCM in study-web yet) */}
         <h3 className="mb-1 text-sm font-semibold text-gray-700">{t('notifications.title')}</h3>
         <p className="mb-4 text-sm text-gray-500">{t('notifications.emailOnlyDesc')}</p>
 
@@ -373,7 +510,7 @@ export function AccountPage() {
 
         <hr className="my-6 border-gray-200" />
 
-        {/* 6. Language */}
+        {/* 7. Language */}
         <h3 className="mb-3 text-sm font-semibold text-gray-700">{t('common.language')}</h3>
         <LanguageSelector />
       </div>
