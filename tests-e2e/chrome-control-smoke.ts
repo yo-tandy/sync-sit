@@ -117,7 +117,7 @@ export function signInSnippet(email: string, password: string): string {
         error: 'timeout — pathname did not change',
         finalPath: location.pathname,
         durationMs: Math.round(performance.now() - t0),
-        visibleErrorText: (document.querySelector('[role="alert"], .text-red-500, .text-red-600, [class*="error"]')?.textContent || '').trim().slice(0, 200)
+        visibleErrorText: (document.querySelector('[role="alert"], .text-brand-500, .text-brand-600, [class*="error"]')?.textContent || '').trim().slice(0, 200)
       });
     } catch (e) {
       return JSON.stringify({ ok: false, error: String(e), pathname: location.pathname });
@@ -126,21 +126,21 @@ export function signInSnippet(email: string, password: string): string {
 }
 
 /**
- * Click the admin hamburger button. The admin TopNav uses bg-red-600
+ * Click the admin hamburger button. The admin TopNav uses bg-brand-600
  * as its branding wrapper; the hamburger is the button inside.
  * Returns `{found, label, ariaExpanded}`.
  */
 export const CLICK_HAMBURGER_SNIPPET = `(() => {
   const candidates = [
-    ...document.querySelectorAll('.bg-red-600 button'),
+    ...document.querySelectorAll('.bg-brand-600 button'),
     ...document.querySelectorAll('button[aria-label*="menu" i]'),
     ...document.querySelectorAll('button[aria-label*="hamburger" i]'),
-    ...Array.from(document.querySelectorAll('button')).filter(b => b.closest('.bg-red-600'))
+    ...Array.from(document.querySelectorAll('button')).filter(b => b.closest('.bg-brand-600'))
   ];
   const seen = new Set();
   const buttons = candidates.filter(b => { if (seen.has(b)) return false; seen.add(b); return true; });
   if (buttons.length === 0) {
-    return JSON.stringify({ found: false, reason: 'no .bg-red-600 button on page', pathname: location.pathname });
+    return JSON.stringify({ found: false, reason: 'no .bg-brand-600 button on page', pathname: location.pathname });
   }
   // Prefer the one with a 3-line / hamburger SVG or aria-label.
   const btn = buttons.find(b => /menu|hamburger/i.test(b.getAttribute('aria-label') || '')) || buttons[0];
@@ -318,7 +318,7 @@ export const SURFACE_S1: Surface = {
       expected: '{ok:true,finalPath:"/admin" or "/admin/..."}'
     },
     {
-      description: 'Click the admin hamburger button (button inside .bg-red-600).',
+      description: 'Click the admin hamburger button (button inside .bg-brand-600).',
       call: { tool: 'execute_javascript', code: CLICK_HAMBURGER_SNIPPET, note: 'click hamburger' },
       expected: '{found:true,after.scrimCountAfter ≥ before.scrimCountBefore + 1}'
     },

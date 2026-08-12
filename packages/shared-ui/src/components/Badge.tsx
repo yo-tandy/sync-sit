@@ -1,5 +1,9 @@
 import type { ReactNode } from 'react';
 
+// NOTE: variant 'red' is a legacy API name that now emits brand-* classes —
+// it renders EJM red in sit and brand blue in study. The semantic split of
+// true-danger sites onto error-* tokens is a planned follow-up (see
+// docs/shared-modules-roadmap.md).
 type BadgeVariant = 'red' | 'green' | 'amber' | 'gray' | 'blue';
 
 interface BadgeProps {

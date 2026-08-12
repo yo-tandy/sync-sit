@@ -56,3 +56,5 @@ Add one line to `docs/shared-modules-roadmap.md`: danger/destructive UI currentl
 - The rename must be complete-or-absent per occurrence: a `hover:bg-red-50` left behind in study now renders REAL red on hover — grep for any residual `red-` in the three trees at the end and justify every survivor (should be only genuine-red/error sites, which in study-web should be zero given error-* tokens exist).
 - Don't touch semantic `--color-error-*` / green/amber/blue tokens.
 - sit pixel-identity is the regression bar; study light-tint improvement is the acceptance bar.
+
+> **Post-implementation correction:** sit does NOT use Tailwind default reds — sit.css overrides them with custom EJM reds, and the shipped brand-* tokens pin the EMITTED build values (brand-600 = rgb(223,26,48) / #df1a30, not #DC2626). The drift-guard asserts the emitted values. The hex list above was the plan's incorrect assumption, kept for the record.

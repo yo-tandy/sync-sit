@@ -9,10 +9,10 @@ test.describe('S-1: admin hamburger Dialog scrim', () => {
     // Phase 5 follow-up (task #6): rewrite to getByRole('button', { name: /open menu/i })
     // when agent-2 lands aria-label="Open menu" on AppBar.tsx hamburger trigger.
     // Until then, the button has no accessible name; it's the only <button>
-    // in the bg-red-600 AppBar div, so this structural selector uniquely
+    // in the bg-brand-600 AppBar div, so this structural selector uniquely
     // matches at b1c5509. Brittle on purpose — if the AppBar structure
     // changes, the spec should fail loudly.
-    const hamburger = page.locator('.bg-red-600').getByRole('button');
+    const hamburger = page.locator('.bg-brand-600').getByRole('button');
     await expect(hamburger).toBeVisible();
     await hamburger.click();
 
