@@ -26,8 +26,8 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
           id={inputId}
           className={`h-12 w-full appearance-auto rounded-lg border-[1.5px] bg-white px-4 text-base text-gray-950 outline-none transition-colors ${
             error
-              ? 'border-red-600 focus:border-red-600'
-              : 'border-gray-300 focus:border-red-600'
+              ? 'border-brand-600 focus:border-brand-600'
+              : 'border-gray-300 focus:border-brand-600'
           } ${className}`}
           {...props}
         >
@@ -42,7 +42,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
             </option>
           ))}
         </select>
-        {error && <p className="mt-1 text-sm text-red-600">{error}</p>}
+        {error && <p className="mt-1 text-sm text-brand-600">{error}</p>}
       </div>
     );
   }

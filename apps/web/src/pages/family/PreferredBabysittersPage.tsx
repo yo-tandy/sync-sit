@@ -237,18 +237,18 @@ export function PreferredBabysittersPage() {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder={t('preferred.searchPlaceholder')}
-            className="h-12 w-full rounded-lg border-[1.5px] border-gray-300 bg-white pl-10 pr-4 text-base text-gray-950 outline-none transition-colors placeholder:text-gray-400 focus:border-red-600"
+            className="h-12 w-full rounded-lg border-[1.5px] border-gray-300 bg-white pl-10 pr-4 text-base text-gray-950 outline-none transition-colors placeholder:text-gray-400 focus:border-brand-600"
           />
         </div>
 
         {/* Preferred babysitters list (always on top) */}
         {loading ? (
           <div className="flex justify-center py-12">
-            <Spinner className="h-8 w-8 text-red-600" />
+            <Spinner className="h-8 w-8 text-brand-600" />
           </div>
         ) : filteredPreferred.length > 0 ? (
           <div className="mb-5">
-            <h3 className="mb-3 text-sm font-semibold text-red-600">❤️ {t('preferred.title')} ({filteredPreferred.length})</h3>
+            <h3 className="mb-3 text-sm font-semibold text-brand-600">❤️ {t('preferred.title')} ({filteredPreferred.length})</h3>
             <div className="space-y-2">
               {filteredPreferred.map((b) => renderCard(b, true))}
             </div>
@@ -264,7 +264,7 @@ export function PreferredBabysittersPage() {
         {/* Search results (non-preferred only, shown below preferred) */}
         {searching && (
           <div className="mt-3 flex justify-center">
-            <Spinner className="h-6 w-6 text-red-600" />
+            <Spinner className="h-6 w-6 text-brand-600" />
           </div>
         )}
         {!searching && hasSearched && filteredResults.length > 0 && (

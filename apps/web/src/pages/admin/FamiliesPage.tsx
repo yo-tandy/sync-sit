@@ -118,7 +118,7 @@ export function AdminFamiliesPage() {
         {/* Family list */}
         {familiesLoading ? (
           <div className="flex justify-center py-8">
-            <Spinner className="h-8 w-8 text-red-600" />
+            <Spinner className="h-8 w-8 text-brand-600" />
           </div>
         ) : families.length === 0 && !familiesError ? (
           <p className="py-8 text-center text-sm text-gray-500">
@@ -212,7 +212,7 @@ export function AdminFamiliesPage() {
 
         {/* Load failure: distinguishable from a genuinely empty result */}
         {familiesError && (
-          <p className="mt-4 text-center text-sm text-red-600" role="alert">
+          <p className="mt-4 text-center text-sm text-brand-600" role="alert">
             {t('admin.familiesPage.loadError')}
           </p>
         )}

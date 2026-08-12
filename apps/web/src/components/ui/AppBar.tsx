@@ -52,7 +52,7 @@ export function AppBar({ role }: { role: UserRole }) {
 
   return (
     <>
-      <div className="sticky top-0 z-40 flex h-12 items-center justify-between bg-red-600 px-4">
+      <div className="sticky top-0 z-40 flex h-12 items-center justify-between bg-brand-600 px-4">
         <Link to={homePath} className="flex h-8 w-8 items-center justify-center text-white">
           <HomeIcon className="h-5 w-5" />
         </Link>

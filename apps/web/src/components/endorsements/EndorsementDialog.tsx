@@ -194,7 +194,7 @@ export function EndorsementDialog({
                   if (e.target.checked) setRefWhatsapp(refPhone);
                   else setRefWhatsapp('');
                 }}
-                className="h-4 w-4 rounded border-gray-300 text-red-600 focus:ring-red-500"
+                className="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
               />
               {t('account.whatsappSameAsPhone')}
             </label>
@@ -234,7 +234,7 @@ export function EndorsementDialog({
             onChange={(e) => setText(e.target.value)}
             placeholder={t('references.referencePlaceholder')}
             rows={4}
-            className="mb-3 w-full rounded-lg border-[1.5px] border-gray-300 bg-white px-4 py-3 text-base text-gray-950 outline-none transition-colors placeholder:text-gray-400 focus:border-red-600"
+            className="mb-3 w-full rounded-lg border-[1.5px] border-gray-300 bg-white px-4 py-3 text-base text-gray-950 outline-none transition-colors placeholder:text-gray-400 focus:border-brand-600"
           />
           {text.length > 0 && text.trim().length < 10 && (
             <p className="mb-3 text-xs text-amber-600">{t('references.minLength')}</p>
@@ -245,7 +245,7 @@ export function EndorsementDialog({
           {errorMessage && (
             <p
               role="alert"
-              className="mb-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700"
+              className="mb-3 rounded-md bg-brand-50 px-3 py-2 text-sm text-brand-700"
             >
               {errorMessage}
             </p>

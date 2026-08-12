@@ -184,7 +184,7 @@ export function FamilySettingsPage() {
       <div>
         <TopNav title={t('menu.myFamily')} backTo="/family" />
         <div className="flex justify-center py-20">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-gray-300 border-t-red-600" />
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-gray-300 border-t-brand-600" />
         </div>
       </div>
     );
@@ -195,7 +195,7 @@ export function FamilySettingsPage() {
       <TopNav title={t('menu.myFamily')} backTo="/family" />
       <div className="px-6 pt-4 pb-8">
         {success && <InfoBanner className="mb-4">{t('familySettings.saved')}</InfoBanner>}
-        {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
+        {error && <p className="mb-4 text-sm text-brand-600">{error}</p>}
 
         {/* Family photo */}
         <input
@@ -221,7 +221,7 @@ export function FamilySettingsPage() {
           </button>
           <div>
             {photoPreview ? (
-              <button type="button" onClick={handleRemovePhoto} className="text-sm font-medium text-red-600">
+              <button type="button" onClick={handleRemovePhoto} className="text-sm font-medium text-brand-600">
                 Remove photo
               </button>
             ) : (

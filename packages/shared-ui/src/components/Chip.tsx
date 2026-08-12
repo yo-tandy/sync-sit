@@ -14,7 +14,7 @@ export function Chip({ selected = false, onClick, children, className = '' }: Ch
       onClick={onClick}
       className={`inline-flex cursor-pointer items-center gap-1 rounded-full px-3 py-1 text-xs font-medium transition-all ${
         selected
-          ? 'bg-red-100 text-red-600'
+          ? 'bg-brand-100 text-brand-600'
           : 'border border-gray-200 bg-white text-gray-500 hover:border-gray-400'
       } ${className}`}
     >

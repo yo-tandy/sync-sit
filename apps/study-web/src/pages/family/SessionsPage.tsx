@@ -617,7 +617,7 @@ export function SessionsPage() {
         )}
 
         {loadError && (
-          <p className="py-10 text-center text-sm text-red-600">
+          <p className="py-10 text-center text-sm text-brand-600">
             {t('family.sessions.loadError')}
           </p>
         )}
@@ -807,7 +807,7 @@ export function SessionsPage() {
             ))}
           </div>
         )}
-        {respondError && <p className="mb-2 text-sm text-red-600">{respondError}</p>}
+        {respondError && <p className="mb-2 text-sm text-brand-600">{respondError}</p>}
         <div className="flex gap-2">
           <Button
             className="flex-1"
@@ -828,7 +828,7 @@ export function SessionsPage() {
       <Dialog open={declineTarget !== null} onClose={() => setDeclineTarget(null)}>
         <h3 className="mb-2 text-lg font-bold">{t('family.sessions.proposalDeclineTitle')}</h3>
         <p className="mb-5 text-sm text-gray-600">{t('family.sessions.proposalDeclineDesc')}</p>
-        {respondError && <p className="mb-2 text-sm text-red-600">{respondError}</p>}
+        {respondError && <p className="mb-2 text-sm text-brand-600">{respondError}</p>}
         <div className="flex gap-2">
           <Button
             variant="outline"

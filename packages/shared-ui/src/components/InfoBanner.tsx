@@ -17,7 +17,7 @@ export function InfoBanner({
     <div
       className={`flex gap-3 rounded-lg p-3 ${
         variant === 'warning'
-          ? 'border-l-3 border-red-600 bg-red-50'
+          ? 'border-l-3 border-brand-600 bg-brand-50'
           : 'border-l-3 border-gray-300 bg-gray-50'
       } ${className}`}
     >

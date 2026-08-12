@@ -115,7 +115,7 @@ export function InvitePage() {
             <p className="mb-3 text-sm text-gray-700">
               {t('invite.linkDesc')}
             </p>
-            {error && <p className="mb-3 text-sm text-red-600">{error}</p>}
+            {error && <p className="mb-3 text-sm text-brand-600">{error}</p>}
             <Button onClick={handleGenerateLink} disabled={generating}>
               {generating ? t('invite.generating') : t('invite.generateLink')}
             </Button>
@@ -158,7 +158,7 @@ export function InvitePage() {
                 ) : (
                   <button
                     type="button"
-                    className="text-xs text-red-600 hover:underline"
+                    className="text-xs text-brand-600 hover:underline"
                     onClick={() => setRemoveTarget({ uid: member.uid, name: member.name })}
                   >
                     {t('coParent.remove')}

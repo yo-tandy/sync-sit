@@ -24,13 +24,13 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
           id={inputId}
           className={`w-full resize-none rounded-lg border-[1.5px] bg-white px-4 py-3 text-base text-gray-950 outline-none transition-colors placeholder:text-gray-400 ${
             error
-              ? 'border-red-600 focus:border-red-600'
-              : 'border-gray-300 focus:border-red-600'
+              ? 'border-brand-600 focus:border-brand-600'
+              : 'border-gray-300 focus:border-brand-600'
           } ${className}`}
           rows={3}
           {...props}
         />
-        {error && <p className="mt-1 text-sm text-red-600">{error}</p>}
+        {error && <p className="mt-1 text-sm text-brand-600">{error}</p>}
       </div>
     );
   }

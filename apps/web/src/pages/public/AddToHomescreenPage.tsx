@@ -5,7 +5,7 @@ import { TopNav } from '@/components/ui';
 function StepCard({ number, children }: { number: number; children: React.ReactNode }) {
   return (
     <div className="mb-4 flex gap-3">
-      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-red-600 text-sm font-bold text-white">{number}</div>
+      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-600 text-sm font-bold text-white">{number}</div>
       <div className="text-sm leading-relaxed text-gray-700">{children}</div>
     </div>
   );

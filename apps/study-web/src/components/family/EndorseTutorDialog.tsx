@@ -119,7 +119,7 @@ export function EndorseTutorDialog({
             options={[{ value: '', label: t('family.endorse.subjectNone') }, ...subjectOptions]}
           />
 
-          {error && <p className="mb-3 text-sm text-red-600">{error}</p>}
+          {error && <p className="mb-3 text-sm text-brand-600">{error}</p>}
 
           <div className="flex gap-2">
             <Button onClick={handleSubmit} disabled={submitting} className="flex-1">

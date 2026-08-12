@@ -173,7 +173,7 @@ export function JoinFamilyPage() {
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center">
-        <Spinner className="h-8 w-8 text-red-600" />
+        <Spinner className="h-8 w-8 text-brand-600" />
       </div>
     );
   }
@@ -183,7 +183,7 @@ export function JoinFamilyPage() {
       <div>
         <TopNav title="Join Family" backTo="/" />
         <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
-          <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-red-50 text-3xl">❌</div>
+          <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-brand-50 text-3xl">❌</div>
           <h2 className="mb-2 text-xl font-bold">Invalid invite link</h2>
           <p className="mb-6 text-sm text-gray-500">
             This invite link is invalid, expired, or has already been used.
@@ -203,7 +203,7 @@ export function JoinFamilyPage() {
           <h2 className="mb-6 text-xl font-bold">{t('enrollment.alreadyInFamily')}</h2>
           <Link
             to="/family"
-            className="inline-flex h-12 items-center justify-center rounded-xl bg-red-600 px-6 font-semibold text-white"
+            className="inline-flex h-12 items-center justify-center rounded-xl bg-brand-600 px-6 font-semibold text-white"
           >
             Go to my family
           </Link>
@@ -223,7 +223,7 @@ export function JoinFamilyPage() {
           <p className="mb-8 text-sm text-gray-500">
             You've been invited to join as a parent.
           </p>
-          {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
+          {error && <p className="mb-4 text-sm text-brand-600">{error}</p>}
           <Button onClick={handleConfirmJoin} disabled={submitting}>
             {submitting ? 'Joining...' : t('enrollment.joinFamilyConfirm', { familyName })}
           </Button>
@@ -273,8 +273,8 @@ export function JoinFamilyPage() {
       {step === 1 && (
         <div className="px-6">
           <div className="mb-8 text-center">
-            <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-red-50">
-              <MailIcon className="h-7 w-7 text-red-600" />
+            <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-brand-50">
+              <MailIcon className="h-7 w-7 text-brand-600" />
             </div>
             <h2 className="mb-2 text-xl font-bold">Check your email</h2>
             <p className="mb-8 text-sm text-gray-500">
@@ -288,9 +288,9 @@ export function JoinFamilyPage() {
             <p className="mt-4 text-sm text-gray-500">
               Didn't receive it?{' '}
               {resendCooldown > 0 ? (
-                <span className="text-red-600">Resend in {resendCooldown}s</span>
+                <span className="text-brand-600">Resend in {resendCooldown}s</span>
               ) : (
-                <button type="button" onClick={handleResend} className="font-medium text-red-600 hover:underline">
+                <button type="button" onClick={handleResend} className="font-medium text-brand-600 hover:underline">
                   Resend code
                 </button>
               )}
@@ -353,11 +353,11 @@ export function JoinFamilyPage() {
             </div>
           </div>
 
-          {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
+          {error && <p className="mb-4 text-sm text-brand-600">{error}</p>}
           {showLoginCta && (
-            <div className="mb-4 text-center text-sm text-red-600">
+            <div className="mb-4 text-center text-sm text-brand-600">
               <p>{t('enrollment.accountExistsCta')}</p>
-              <Link to="/login" className="mt-1 inline-block font-semibold text-red-600 underline">
+              <Link to="/login" className="mt-1 inline-block font-semibold text-brand-600 underline">
                 {t('auth.login')}
               </Link>
             </div>

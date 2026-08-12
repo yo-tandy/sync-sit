@@ -69,7 +69,7 @@ export function FamiliesPage() {
 
         {loading ? (
           <div className="flex justify-center py-12">
-            <Spinner className="h-8 w-8 text-red-600" />
+            <Spinner className="h-8 w-8 text-brand-600" />
           </div>
         ) : requests.length === 0 ? (
           <div className="flex flex-col items-center py-12 text-center">

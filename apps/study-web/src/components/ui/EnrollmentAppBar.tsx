@@ -45,7 +45,7 @@ export function EnrollmentAppBar() {
 
   return (
     <>
-      <div className="sticky top-0 z-40 flex h-12 items-center justify-between bg-red-600 px-4">
+      <div className="sticky top-0 z-40 flex h-12 items-center justify-between bg-brand-600 px-4">
         <div className="w-8" />
         <span className="text-sm font-semibold text-white">Sync/Study</span>
         <button

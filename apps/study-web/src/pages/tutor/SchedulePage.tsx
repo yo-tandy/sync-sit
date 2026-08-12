@@ -220,7 +220,7 @@ export function SchedulePage() {
       <div>
         <TopNav title={t('schedule.title')} backTo="/tutor" />
         <div className="flex justify-center py-20">
-          <Spinner className="h-8 w-8 text-red-600" />
+          <Spinner className="h-8 w-8 text-brand-600" />
         </div>
       </div>
     );
@@ -267,14 +267,14 @@ export function SchedulePage() {
               onClick={() => setLocalHolidayMode(opt.value)}
               className={`flex w-full items-start gap-3 rounded-lg border-[1.5px] p-3 text-left transition-colors ${
                 localHolidayMode === opt.value
-                  ? 'border-red-600 bg-red-50'
+                  ? 'border-brand-600 bg-brand-50'
                   : 'border-gray-200 hover:border-gray-300'
               }`}
             >
               <div
                 className={`mt-0.5 h-4 w-4 shrink-0 rounded-full border-2 ${
                   localHolidayMode === opt.value
-                    ? 'border-red-600 bg-red-600'
+                    ? 'border-brand-600 bg-brand-600'
                     : 'border-gray-300'
                 }`}
               >

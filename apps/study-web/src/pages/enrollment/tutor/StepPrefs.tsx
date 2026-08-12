@@ -96,7 +96,7 @@ export function StepPrefs({ onNext, loading, error }: StepPrefsProps) {
               onClick={() => toggleSessionLength(len)}
               className={`rounded-lg border-[1.5px] px-4 py-2 text-sm font-medium transition-colors ${
                 sessionLengths.includes(len)
-                  ? 'border-red-600 bg-red-50 text-red-600'
+                  ? 'border-brand-600 bg-brand-50 text-brand-600'
                   : 'border-gray-300 text-gray-700 hover:border-gray-400'
               }`}
             >
@@ -133,7 +133,7 @@ export function StepPrefs({ onNext, loading, error }: StepPrefsProps) {
           onChange={(e) => setPaddingMin(parseInt(e.target.value) || 0)}
           min={0}
           max={60}
-          className="h-12 w-full rounded-lg border-[1.5px] border-gray-300 bg-white px-4 text-base outline-none transition-colors focus:border-red-600"
+          className="h-12 w-full rounded-lg border-[1.5px] border-gray-300 bg-white px-4 text-base outline-none transition-colors focus:border-brand-600"
         />
         <p className="mt-1 text-xs text-gray-400">{t('enrollment.paddingMinHint')}</p>
       </div>
@@ -149,7 +149,7 @@ export function StepPrefs({ onNext, loading, error }: StepPrefsProps) {
           placeholder={t('enrollment.aboutMePlaceholder')}
           rows={4}
           maxLength={1000}
-          className="w-full rounded-lg border-[1.5px] border-gray-300 bg-white px-4 py-3 text-base outline-none transition-colors focus:border-red-600"
+          className="w-full rounded-lg border-[1.5px] border-gray-300 bg-white px-4 py-3 text-base outline-none transition-colors focus:border-brand-600"
         />
       </div>
 
@@ -163,7 +163,7 @@ export function StepPrefs({ onNext, loading, error }: StepPrefsProps) {
           type="email"
           value={contactEmail}
           onChange={(e) => setContactEmail(e.target.value)}
-          className="h-12 w-full rounded-lg border-[1.5px] border-gray-300 bg-white px-4 text-base outline-none transition-colors focus:border-red-600"
+          className="h-12 w-full rounded-lg border-[1.5px] border-gray-300 bg-white px-4 text-base outline-none transition-colors focus:border-brand-600"
         />
       </div>
       <div className="mb-5">
@@ -172,7 +172,7 @@ export function StepPrefs({ onNext, loading, error }: StepPrefsProps) {
           type="tel"
           value={contactPhone}
           onChange={(e) => setContactPhone(e.target.value)}
-          className="h-12 w-full rounded-lg border-[1.5px] border-gray-300 bg-white px-4 text-base outline-none transition-colors focus:border-red-600"
+          className="h-12 w-full rounded-lg border-[1.5px] border-gray-300 bg-white px-4 text-base outline-none transition-colors focus:border-brand-600"
         />
       </div>
 
@@ -211,7 +211,7 @@ export function StepPrefs({ onNext, loading, error }: StepPrefsProps) {
               value={city}
               onChange={(e) => setCity(e.target.value)}
               placeholder="e.g. 75016"
-              className="h-12 w-full rounded-lg border-[1.5px] border-gray-300 bg-white px-4 text-base outline-none transition-colors focus:border-red-600"
+              className="h-12 w-full rounded-lg border-[1.5px] border-gray-300 bg-white px-4 text-base outline-none transition-colors focus:border-brand-600"
             />
           </>
         ) : (
@@ -240,13 +240,13 @@ export function StepPrefs({ onNext, loading, error }: StepPrefsProps) {
         )}
       </div>
 
-      {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
+      {error && <p className="mb-4 text-sm text-brand-600">{error}</p>}
 
       <div className="mt-6 pb-6">
         <button
           type="submit"
           disabled={!isValid || loading}
-          className="flex h-[52px] w-full items-center justify-center rounded-xl bg-red-600 text-base font-semibold text-white transition-colors hover:bg-red-600/90 disabled:opacity-50"
+          className="flex h-[52px] w-full items-center justify-center rounded-xl bg-brand-600 text-base font-semibold text-white transition-colors hover:bg-brand-600/90 disabled:opacity-50"
         >
           {loading ? t('common.loading') : t('enrollment.tutor.stepPrefs')}
         </button>

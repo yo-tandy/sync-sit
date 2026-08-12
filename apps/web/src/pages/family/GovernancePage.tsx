@@ -138,7 +138,7 @@ export function GovernancePage() {
       <TopNav title={t('governance.title')} backTo="/family" />
 
       <div className="px-5 pt-4 pb-8">
-        {actionError && <p className="mb-4 text-sm text-red-600">{actionError}</p>}
+        {actionError && <p className="mb-4 text-sm text-brand-600">{actionError}</p>}
 
         {data === null && !loadError && (
           <div className="flex justify-center py-20">
@@ -147,7 +147,7 @@ export function GovernancePage() {
         )}
 
         {loadError && (
-          <p className="py-10 text-center text-sm text-red-600">{t('governance.loadError')}</p>
+          <p className="py-10 text-center text-sm text-brand-600">{t('governance.loadError')}</p>
         )}
 
         {data !== null && children.length === 0 && invites.length === 0 && (
@@ -195,7 +195,7 @@ export function GovernancePage() {
                       {[inv.firstName, inv.lastName].filter(Boolean).join(' ')}
                     </p>
                     <p className="text-xs text-gray-500">{inv.kidEmail}</p>
-                    <p className={`mt-0.5 text-xs ${expired ? 'text-red-600' : 'text-gray-400'}`}>
+                    <p className={`mt-0.5 text-xs ${expired ? 'text-brand-600' : 'text-gray-400'}`}>
                       {expired
                         ? t('governance.inviteExpired', { date: formatDate(inv.expiresAt) })
                         : t('governance.inviteExpires', { date: formatDate(inv.expiresAt) })}

@@ -156,7 +156,7 @@ export function StepProfile({ uid, email, onNext }: StepProfileProps) {
               onClick={() => setGender(gender === opt.value ? undefined : opt.value)}
               className={`flex-1 rounded-lg border-[1.5px] px-2 py-2 text-sm font-medium transition-colors ${
                 gender === opt.value
-                  ? 'border-red-600 bg-red-50 text-red-600'
+                  ? 'border-brand-600 bg-brand-50 text-brand-600'
                   : 'border-gray-300 text-gray-700 hover:border-gray-400'
               }`}
             >
@@ -166,7 +166,7 @@ export function StepProfile({ uid, email, onNext }: StepProfileProps) {
         </div>
       </div>
 
-      {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
+      {error && <p className="mb-4 text-sm text-brand-600">{error}</p>}
 
       <Button type="submit" disabled={!isValid || saving} className="mt-4">
         {saving ? t('common.saving') : t('common.continue')}

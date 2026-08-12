@@ -64,7 +64,7 @@ function ReasonForm({
         onChange={(e) => setReason(e.target.value)}
         placeholder={placeholder}
       />
-      {error && <p className="mb-3 text-sm text-red-600">{error}</p>}
+      {error && <p className="mb-3 text-sm text-brand-600">{error}</p>}
       <div className="flex gap-2">
         <Button
           variant="outline"

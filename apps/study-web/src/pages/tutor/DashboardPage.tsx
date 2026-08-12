@@ -161,7 +161,7 @@ export function DashboardPage() {
   if (!tutor) {
     return (
       <div className="flex justify-center py-16">
-        <Spinner className="h-8 w-8 text-red-600" />
+        <Spinner className="h-8 w-8 text-brand-600" />
       </div>
     );
   }
@@ -227,7 +227,7 @@ export function DashboardPage() {
         className="mb-4 block"
       >
         <Card interactive className="flex items-center gap-3 py-4">
-          <BellIcon className="h-6 w-6 text-red-600" />
+          <BellIcon className="h-6 w-6 text-brand-600" />
           <div className="flex-1">
             <p className="text-sm font-semibold text-gray-900">
               {t('tutor.dashboard.requestsCardTitle')}
@@ -246,7 +246,7 @@ export function DashboardPage() {
         className="mb-4 block"
       >
         <Card interactive className="flex items-center gap-3 py-4">
-          <CalendarIcon className="h-6 w-6 text-red-600" />
+          <CalendarIcon className="h-6 w-6 text-brand-600" />
           <div className="flex-1">
             <p className="text-sm font-semibold text-gray-900">
               {t('tutor.dashboard.sessionsCardTitle')}
@@ -265,7 +265,7 @@ export function DashboardPage() {
         className="mb-4 block"
       >
         <Card interactive className="flex items-center gap-3 py-4">
-          <CheckIcon className="h-6 w-6 text-red-600" />
+          <CheckIcon className="h-6 w-6 text-brand-600" />
           <div className="flex-1">
             <p className="text-sm font-semibold text-gray-900">
               {t('tutor.dashboard.endorsementsCardTitle')}
@@ -295,25 +295,25 @@ export function DashboardPage() {
       <div className="space-y-3">
         <EntryCard
           to="/tutor/subjects"
-          icon={<ClipboardListIcon className="h-6 w-6 text-red-600" />}
+          icon={<ClipboardListIcon className="h-6 w-6 text-brand-600" />}
           title={t('tutor.dashboard.subjectsCard')}
           desc={t('tutor.dashboard.subjectsCardDesc')}
         />
         <EntryCard
           to="/tutor/schedule"
-          icon={<CalendarIcon className="h-6 w-6 text-red-600" />}
+          icon={<CalendarIcon className="h-6 w-6 text-brand-600" />}
           title={t('tutor.dashboard.scheduleCard')}
           desc={t('tutor.dashboard.scheduleCardDesc')}
         />
         <EntryCard
           to="/tutor/account"
-          icon={<SettingsIcon className="h-6 w-6 text-red-600" />}
+          icon={<SettingsIcon className="h-6 w-6 text-brand-600" />}
           title={t('tutor.dashboard.accountCard')}
           desc={t('tutor.dashboard.accountCardDesc')}
         />
         <EntryCard
           to="/tutor/verification"
-          icon={<ShieldIcon className="h-6 w-6 text-red-600" />}
+          icon={<ShieldIcon className="h-6 w-6 text-brand-600" />}
           title={t('tutor.dashboard.verificationCard')}
           desc={t('tutor.dashboard.verificationCardDesc')}
         />
@@ -349,10 +349,10 @@ function VerificationBanner({
   if (identityStatus === 'rejected') {
     return (
       <Banner tone="red" title={t('tutor.dashboard.bannerRejectedTitle')}>
-        <p className="mb-3 text-xs text-red-700">{t('tutor.dashboard.bannerRejectedDesc')}</p>
+        <p className="mb-3 text-xs text-brand-700">{t('tutor.dashboard.bannerRejectedDesc')}</p>
         <Link
           to="/tutor/verification"
-          className="inline-flex rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700"
+          className="inline-flex rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700"
         >
           {t('tutor.dashboard.bannerRejectedCta')}
         </Link>
@@ -372,7 +372,7 @@ function VerificationBanner({
       <p className="mb-3 text-xs text-gray-600">{t('tutor.dashboard.bannerNotSubmittedDesc')}</p>
       <Link
         to="/tutor/verification"
-        className="inline-flex rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700"
+        className="inline-flex rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700"
       >
         {t('tutor.dashboard.bannerNotSubmittedCta')}
       </Link>
@@ -382,7 +382,7 @@ function VerificationBanner({
 
 const TONE_CLASSES: Record<string, string> = {
   amber: 'border-amber-300 bg-amber-50 text-amber-800',
-  red: 'border-red-300 bg-red-50 text-red-800',
+  red: 'border-brand-300 bg-brand-50 text-brand-800',
   green: 'border-green-300 bg-green-50 text-green-800',
   gray: 'border-gray-300 bg-gray-50 text-gray-800',
 };

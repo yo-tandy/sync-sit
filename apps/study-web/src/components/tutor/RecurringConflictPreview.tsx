@@ -33,7 +33,7 @@ interface PreviewResult {
 
 const STATUS_CLASS: Record<DateStatus, string> = {
   available: 'text-green-700',
-  conflict: 'text-red-600',
+  conflict: 'text-brand-600',
   holiday: 'text-gray-400',
 };
 

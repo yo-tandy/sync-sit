@@ -289,7 +289,7 @@ export function OverrideList({ overrides, onAdd, onRemove }: OverrideListProps) 
                 onClick={() => setEditType('custom')}
                 className={`flex-1 rounded-lg border-[1.5px] px-3 py-2 text-sm font-medium transition-colors ${
                   editType === 'custom'
-                    ? 'border-red-600 bg-red-50 text-red-600'
+                    ? 'border-brand-600 bg-brand-50 text-brand-600'
                     : 'border-gray-300 text-gray-700'
                 }`}
               >
@@ -300,7 +300,7 @@ export function OverrideList({ overrides, onAdd, onRemove }: OverrideListProps) 
                 onClick={() => setEditType('unavailable')}
                 className={`flex-1 rounded-lg border-[1.5px] px-3 py-2 text-sm font-medium transition-colors ${
                   editType === 'unavailable'
-                    ? 'border-red-600 bg-red-50 text-red-600'
+                    ? 'border-brand-600 bg-brand-50 text-brand-600'
                     : 'border-gray-300 text-gray-700'
                 }`}
               >
@@ -329,7 +329,7 @@ export function OverrideList({ overrides, onAdd, onRemove }: OverrideListProps) 
               variant="outline"
               onClick={handleEditRemove}
               disabled={saving}
-              className="!text-red-600 !border-red-200"
+              className="!text-brand-600 !border-brand-200"
             >
               {t('schedule.removeAvailability')}
             </Button>

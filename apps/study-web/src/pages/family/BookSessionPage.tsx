@@ -471,7 +471,7 @@ export function BookSessionPage() {
       <div>
         <TopNav title={t('family.book.title')} backTo="/family/search" />
         <div className="px-5 pt-4 pb-8">
-          <p className="py-6 text-center text-sm text-red-600">{t('family.book.loadError')}</p>
+          <p className="py-6 text-center text-sm text-brand-600">{t('family.book.loadError')}</p>
         </div>
       </div>
     );
@@ -610,7 +610,7 @@ export function BookSessionPage() {
         )}
 
         {!availLoading && availError && (
-          <p className="py-6 text-center text-sm text-red-600">{t('family.book.availError')}</p>
+          <p className="py-6 text-center text-sm text-brand-600">{t('family.book.availError')}</p>
         )}
 
         {!availLoading && !availError && chipsByDate.every((d) => d.chips.length === 0) && (
@@ -656,7 +656,7 @@ export function BookSessionPage() {
             )}
 
             {!weeklyLoading && weeklyError && (
-              <p className="py-6 text-center text-sm text-red-600">{t('family.book.availError')}</p>
+              <p className="py-6 text-center text-sm text-brand-600">{t('family.book.availError')}</p>
             )}
 
             {!weeklyLoading && !weeklyError && (
@@ -762,7 +762,7 @@ export function BookSessionPage() {
           </p>
         )}
 
-        {bookError && <p className="mt-4 mb-2 text-sm text-red-600">{bookError}</p>}
+        {bookError && <p className="mt-4 mb-2 text-sm text-brand-600">{bookError}</p>}
 
         <Button className="mt-4" disabled={!canBook} onClick={handleBook}>
           {submitting

@@ -127,7 +127,7 @@ export function TutorCard({ result }: { result: TutorSearchResult }) {
         type="button"
         onClick={toggleExpand}
         aria-expanded={expanded}
-        className="mt-2 text-xs font-medium text-red-600 hover:underline"
+        className="mt-2 text-xs font-medium text-brand-600 hover:underline"
       >
         {expanded ? t('family.search.card.showLess') : t('family.search.card.showMore')}
       </button>
@@ -230,7 +230,7 @@ function ContactBlock({ result }: { result: TutorSearchResult }) {
         {result.contactEmail && (
           <a
             href={`mailto:${result.contactEmail}`}
-            className="flex items-center gap-1.5 text-xs text-red-600"
+            className="flex items-center gap-1.5 text-xs text-brand-600"
           >
             <span>📧</span> {result.contactEmail}
           </a>
@@ -238,7 +238,7 @@ function ContactBlock({ result }: { result: TutorSearchResult }) {
         {result.contactPhone && (
           <a
             href={`tel:${result.contactPhone}`}
-            className="flex items-center gap-1.5 text-xs text-red-600"
+            className="flex items-center gap-1.5 text-xs text-brand-600"
           >
             <span>📞</span> {result.contactPhone}
           </a>
@@ -315,7 +315,7 @@ export function ContactRequestDialog({
         placeholder={t('family.search.contactDialog.messagePlaceholder')}
       />
 
-      {error && <p className="mb-3 text-sm text-red-600">{error}</p>}
+      {error && <p className="mb-3 text-sm text-brand-600">{error}</p>}
 
       <div className="flex gap-2">
         <Button onClick={handleSend} disabled={sending} className="flex-1">

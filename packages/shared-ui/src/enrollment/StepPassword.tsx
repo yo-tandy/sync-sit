@@ -107,15 +107,15 @@ export function StepPassword({ onSubmit, consentVersion, loading, error, collect
           type="checkbox"
           checked={consent}
           onChange={(e) => setConsent(e.target.checked)}
-          className="mt-0.5 h-4 w-4 rounded border-gray-300 text-red-600 focus:ring-red-500"
+          className="mt-0.5 h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
         />
         <span>
           {t('enrollment.consentAgree')}{' '}
-          <Link to="/terms" target="_blank" className="text-red-600 hover:underline">
+          <Link to="/terms" target="_blank" className="text-brand-600 hover:underline">
             {t('enrollment.termsOfService')}
           </Link>
           {' '}{t('enrollment.consentAnd')}{' '}
-          <Link to="/privacy" target="_blank" className="text-red-600 hover:underline">
+          <Link to="/privacy" target="_blank" className="text-brand-600 hover:underline">
             {t('enrollment.privacyPolicy')}
           </Link>
         </span>

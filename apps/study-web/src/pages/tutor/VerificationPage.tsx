@@ -73,7 +73,7 @@ export function VerificationPage() {
       <div className="px-5 pb-8">
         {loading ? (
           <div className="flex justify-center py-12">
-            <Spinner className="h-8 w-8 text-red-600" />
+            <Spinner className="h-8 w-8 text-brand-600" />
           </div>
         ) : (
           <>
@@ -111,11 +111,11 @@ export function VerificationPage() {
             {canSubmit && (
               <Card>
                 {identityStatus === 'rejected' && latestDoc?.rejectionReason && (
-                  <div className="mb-3 rounded-lg border border-red-200 bg-red-50 p-3">
-                    <p className="text-xs font-medium text-red-800">
+                  <div className="mb-3 rounded-lg border border-brand-200 bg-brand-50 p-3">
+                    <p className="text-xs font-medium text-brand-800">
                       {t('tutor.verification.rejectedReason')}
                     </p>
-                    <p className="text-xs text-red-600">{latestDoc.rejectionReason}</p>
+                    <p className="text-xs text-brand-600">{latestDoc.rejectionReason}</p>
                   </div>
                 )}
                 <h3 className="mb-1 text-sm font-semibold text-gray-900">
@@ -131,9 +131,9 @@ export function VerificationPage() {
                   type="file"
                   accept="image/*,.pdf"
                   onChange={handleFileChange}
-                  className="mb-3 block w-full text-sm text-gray-500 file:mr-4 file:rounded-lg file:border-0 file:bg-red-50 file:px-4 file:py-2 file:text-sm file:font-medium file:text-red-600 hover:file:bg-red-100"
+                  className="mb-3 block w-full text-sm text-gray-500 file:mr-4 file:rounded-lg file:border-0 file:bg-brand-50 file:px-4 file:py-2 file:text-sm file:font-medium file:text-brand-600 hover:file:bg-brand-100"
                 />
-                {fileError && <p className="mb-2 text-xs text-red-600">{fileError}</p>}
+                {fileError && <p className="mb-2 text-xs text-brand-600">{fileError}</p>}
                 <Button size="sm" onClick={handleUpload} disabled={!file || uploading}>
                   {uploading ? t('common.saving') : t('tutor.verification.upload')}
                 </Button>

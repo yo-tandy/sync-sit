@@ -139,7 +139,7 @@ function RangeEditDialog({
         <Button type="button" onClick={() => { onSave(range, start, end); onClose(); }} disabled={start === end} className="flex-1">
           {t('common.save')}
         </Button>
-        <Button type="button" variant="outline" onClick={() => { onRemove(range); onClose(); }} className="flex-1 !text-red-600 !border-red-200">
+        <Button type="button" variant="outline" onClick={() => { onRemove(range); onClose(); }} className="flex-1 !text-brand-600 !border-brand-200">
           {t('common.remove')}
         </Button>
       </div>
@@ -388,9 +388,9 @@ export function WeeklyTimeline({ weekly, onChange, onDayHeaderClick }: WeeklyTim
                         baseAvailable ? 'cursor-pointer' : 'cursor-crosshair'
                       } ${
                         inDrag
-                          ? 'bg-red-300'
+                          ? 'bg-brand-300'
                           : showAvailable
-                            ? 'bg-red-200'
+                            ? 'bg-brand-200'
                             : 'bg-gray-50'
                       }`}
                     >
@@ -400,10 +400,10 @@ export function WeeklyTimeline({ weekly, onChange, onDayHeaderClick }: WeeklyTim
                           className="pointer-events-none absolute left-0 right-0 z-10 flex flex-col items-center justify-center overflow-hidden"
                           style={{ height: rangeHeight, top: 0 }}
                         >
-                          <span className="text-[10px] font-semibold leading-tight text-red-700">
+                          <span className="text-[10px] font-semibold leading-tight text-brand-700">
                             {range.startTime}
                           </span>
-                          <span className="text-[10px] font-semibold leading-tight text-red-700">
+                          <span className="text-[10px] font-semibold leading-tight text-brand-700">
                             {range.endTime}
                           </span>
                         </div>
@@ -414,10 +414,10 @@ export function WeeklyTimeline({ weekly, onChange, onDayHeaderClick }: WeeklyTim
                           className="pointer-events-none absolute left-0 right-0 z-20 flex flex-col items-center justify-center overflow-hidden"
                           style={{ height: dragHeight, top: 0 }}
                         >
-                          <span className="text-[10px] font-bold leading-tight text-red-800">
+                          <span className="text-[10px] font-bold leading-tight text-brand-800">
                             {dragStartTime}
                           </span>
-                          <span className="text-[10px] font-bold leading-tight text-red-800">
+                          <span className="text-[10px] font-bold leading-tight text-brand-800">
                             {dragEndTime}
                           </span>
                         </div>
@@ -433,7 +433,7 @@ export function WeeklyTimeline({ weekly, onChange, onDayHeaderClick }: WeeklyTim
         {/* Legend */}
         <div className="mt-3 flex items-center gap-4 text-[10px] text-gray-500">
           <div className="flex items-center gap-1">
-            <div className="h-3 w-3 rounded-sm bg-red-200" />
+            <div className="h-3 w-3 rounded-sm bg-brand-200" />
             {t('schedule.available')}
           </div>
           <div className="flex items-center gap-1">

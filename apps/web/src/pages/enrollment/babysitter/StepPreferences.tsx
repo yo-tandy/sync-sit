@@ -160,7 +160,7 @@ export function StepPreferences({ uid, onComplete }: StepPreferencesProps) {
               if (e.target.checked) setWhatsapp(contactPhone);
               else setWhatsapp('');
             }}
-            className="h-4 w-4 rounded border-gray-300 text-red-600 focus:ring-red-500"
+            className="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
           />
           {t('account.whatsappSameAsPhone')}
         </label>
@@ -212,7 +212,7 @@ export function StepPreferences({ uid, onComplete }: StepPreferencesProps) {
         )}
       </div>
 
-      {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
+      {error && <p className="mb-4 text-sm text-brand-600">{error}</p>}
 
       <div className="mt-6 space-y-3 pb-4">
         <Button onClick={handleSave} disabled={saving}>

@@ -40,7 +40,7 @@ export function WelcomePage({ logoSrc, logoAlt, redirectPath, authLoading }: Wel
       </div>
 
       <div className="shrink-0">
-        <Link to="/login" className="mb-2.5 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-red-600 text-base font-semibold text-white transition-colors hover:bg-red-600/90">
+        <Link to="/login" className="mb-2.5 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-brand-600 text-base font-semibold text-white transition-colors hover:bg-brand-600/90">
           {t('welcome.logIn')}
         </Link>
         <Link to="/signup" className="mb-4 flex h-12 w-full items-center justify-center gap-2 rounded-xl border-[1.5px] border-gray-300 bg-white text-base font-semibold text-gray-950 transition-colors hover:border-gray-950">

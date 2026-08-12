@@ -111,7 +111,7 @@ export function EndorsementsPage() {
       <TopNav title={t('tutor.endorsements.title')} backTo="/tutor" />
 
       <div className="px-5 pt-4 pb-8">
-        {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
+        {error && <p className="mb-4 text-sm text-brand-600">{error}</p>}
 
         {endorsements === null && (
           <div className="flex justify-center py-20">

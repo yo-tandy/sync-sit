@@ -127,7 +127,7 @@ export function HandoffPage() {
         <Card>
           <h2 className="mb-2 text-lg font-bold text-gray-900">{t('handoff.errorTitle')}</h2>
           <p className="mb-4 text-sm text-gray-600">{t('handoff.errorDesc')}</p>
-          <Link to="/login" className="text-sm text-red-600 hover:underline">
+          <Link to="/login" className="text-sm text-brand-600 hover:underline">
             {t('handoff.goToLogin')}
           </Link>
         </Card>
@@ -137,7 +137,7 @@ export function HandoffPage() {
 
   return (
     <div className="flex flex-col items-center gap-3 py-20">
-      <Spinner className="h-8 w-8 text-red-600" />
+      <Spinner className="h-8 w-8 text-brand-600" />
       <p className="text-sm text-gray-600">{t('handoff.switching')}</p>
     </div>
   );

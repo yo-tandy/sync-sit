@@ -290,7 +290,7 @@ export function SearchPage() {
           )}
 
           {!loading && error === 'generic' && (
-            <p className="py-6 text-center text-sm text-red-600">{t('family.search.error')}</p>
+            <p className="py-6 text-center text-sm text-brand-600">{t('family.search.error')}</p>
           )}
 
           {!loading && !error && results !== null && results.length === 0 && (

@@ -78,7 +78,7 @@ export function SupervisionRequestCard() {
   return (
     <Card className="mb-4">
       <div className="flex items-start gap-3">
-        <ShieldIcon className="h-6 w-6 shrink-0 text-red-600" />
+        <ShieldIcon className="h-6 w-6 shrink-0 text-brand-600" />
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold text-gray-900">{t('supervision.requestTitle')}</p>
           <p className="mt-0.5 text-xs text-gray-600">
@@ -88,11 +88,11 @@ export function SupervisionRequestCard() {
           </p>
           <Link
             to="/supervision-info"
-            className="mt-1 inline-block text-xs font-semibold text-red-600 hover:underline"
+            className="mt-1 inline-block text-xs font-semibold text-brand-600 hover:underline"
           >
             {t('supervision.whatItMeans')}
           </Link>
-          {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
+          {error && <p className="mt-2 text-xs text-brand-600">{error}</p>}
           <div className="mt-3 flex gap-2">
             <Button size="sm" disabled={acting} onClick={() => respond(true)}>
               {t('supervision.accept')}

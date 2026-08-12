@@ -59,8 +59,8 @@ export function StepParentVerify({ data, onChange, onNext, onResend, error }: St
   return (
     <form onSubmit={handleSubmit} className="px-6">
       <div className="mb-8 text-center">
-        <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-red-50">
-          <MailIcon className="h-7 w-7 text-red-600" />
+        <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-brand-50">
+          <MailIcon className="h-7 w-7 text-brand-600" />
         </div>
         <h2 className="mb-2 text-xl font-bold">Check your email</h2>
         <p className="mb-8 text-sm text-gray-500">
@@ -82,12 +82,12 @@ export function StepParentVerify({ data, onChange, onNext, onResend, error }: St
         <p className="mt-4 text-sm text-gray-500">
           Didn't receive it?{' '}
           {resendCooldown > 0 ? (
-            <span className="text-red-600">Resend in {resendCooldown}s</span>
+            <span className="text-brand-600">Resend in {resendCooldown}s</span>
           ) : (
             <button
               type="button"
               onClick={() => { setResendCooldown(60); setResendCount((c) => c + 1); setCodeVerified(false); setCodeError(null); onChange({ verificationCode: '' }); onResend(); }}
-              className="font-medium text-red-600 hover:underline"
+              className="font-medium text-brand-600 hover:underline"
             >
               Resend code
             </button>

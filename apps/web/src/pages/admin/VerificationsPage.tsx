@@ -140,7 +140,7 @@ export function AdminVerificationsPage() {
         {/* List */}
         {pendingLoading ? (
           <div className="flex justify-center py-12">
-            <Spinner className="h-8 w-8 text-red-600" />
+            <Spinner className="h-8 w-8 text-brand-600" />
           </div>
         ) : pendingVerifications.length === 0 ? (
           <div className="py-12 text-center">
@@ -193,8 +193,8 @@ export function AdminVerificationsPage() {
 
                 {/* Rejection reason if already rejected */}
                 {v.status === 'rejected' && v.rejectionReason && (
-                  <div className="mb-2 rounded-lg border border-red-200 bg-red-50 p-2">
-                    <p className="text-xs text-red-600">{v.rejectionReason}</p>
+                  <div className="mb-2 rounded-lg border border-brand-200 bg-brand-50 p-2">
+                    <p className="text-xs text-brand-600">{v.rejectionReason}</p>
                   </div>
                 )}
 
@@ -229,12 +229,12 @@ export function AdminVerificationsPage() {
                         setDocError((prev) => ({ ...prev, [v.id]: true }));
                       }
                     }}
-                    className="text-xs font-medium text-red-600 hover:underline"
+                    className="text-xs font-medium text-brand-600 hover:underline"
                   >
                     {t('verification.viewDocument')}
                   </button>
                   {docError[v.id] && (
-                    <span className="text-xs text-red-600" role="alert">
+                    <span className="text-xs text-brand-600" role="alert">
                       {t('verification.viewDocumentError')}
                     </span>
                   )}
@@ -275,7 +275,7 @@ export function AdminVerificationsPage() {
         <h3 className="mb-2 text-lg font-semibold">{t('verification.rejectTitle')}</h3>
         <p className="mb-3 text-sm text-gray-600">{t('verification.rejectDesc')}</p>
         <textarea
-          className="mb-4 w-full rounded-lg border border-gray-300 p-3 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+          className="mb-4 w-full rounded-lg border border-gray-300 p-3 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
           rows={3}
           placeholder={t('verification.rejectionReasonPlaceholder')}
           value={rejectionReason}

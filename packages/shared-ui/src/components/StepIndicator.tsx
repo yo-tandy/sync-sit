@@ -13,7 +13,7 @@ export function StepIndicator({ totalSteps, currentStep }: StepIndicatorProps) {
               i < currentStep
                 ? 'w-2 bg-gray-950'
                 : i === currentStep
-                  ? 'w-6 bg-red-600'
+                  ? 'w-6 bg-brand-600'
                   : 'w-2 bg-gray-300'
             }`}
           />
