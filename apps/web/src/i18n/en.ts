@@ -106,6 +106,8 @@ export default {
 
   signup: {
     crossAppBanner: "You're signed in — pick a role to add to your existing account.",
+    roleExclusiveBabysitter: "Babysitting is for EJM students — parent accounts can't enroll as babysitters.",
+    roleExclusiveParent: "Student accounts can't also enroll as parents — your family needs its own account.",
   },
 
   // Enrollment

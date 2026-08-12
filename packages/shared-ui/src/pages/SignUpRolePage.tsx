@@ -21,9 +21,15 @@ interface SignUpRolePageProps {
    * to add to their existing account.
    */
   banner?: string;
+  /**
+   * Optional one-line explanation shown below the role cards when an option
+   * was withheld — e.g. role exclusivity (a parent account can never enroll
+   * as a tutor and vice versa, issue #116).
+   */
+  note?: string;
 }
 
-export function SignUpRolePage({ logoSrc, logoAlt, roles, banner }: SignUpRolePageProps) {
+export function SignUpRolePage({ logoSrc, logoAlt, roles, banner, note }: SignUpRolePageProps) {
   const { t } = useTranslation();
 
   return (
@@ -68,6 +74,10 @@ export function SignUpRolePage({ logoSrc, logoAlt, roles, banner }: SignUpRolePa
             </Link>
           );
         })}
+
+        {note && (
+          <p className="mb-4 text-center text-xs leading-relaxed text-gray-500">{note}</p>
+        )}
 
         <div className="text-center">
           <span className="text-sm text-gray-500">{t('welcome.alreadyHaveAccount')}{' '}</span>

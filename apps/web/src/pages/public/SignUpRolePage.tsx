@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { SignUpRolePage as SharedSignUpRolePage, UserIcon, UsersIcon, type SignUpRoleOption } from '@ejm/shared-ui';
+import { isBabysitter, isParent, isTutor } from '@ejm/shared-core';
 import { getSitRole } from '@ejm/sit-core';
 import { useAuthStore } from '@/stores/authStore';
 
@@ -16,5 +17,19 @@ export function SignUpRolePage() {
   const role = getSitRole(userDoc);
   const banner = firebaseUser && !role ? t('signup.crossAppBanner') : undefined;
 
-  return <SharedSignUpRolePage logoSrc="/logo.png" logoAlt="Sync/Sit" roles={ROLES} banner={banner} />;
+  // Provider (tutor or babysitter) and parent are mutually exclusive (issue
+  // #116) — withhold the impossible option and explain why instead of
+  // surfacing the server error.
+  const parentAccount = isParent(userDoc);
+  const providerAccount = isTutor(userDoc) || isBabysitter(userDoc);
+  const roles = ROLES.filter(
+    (r) => !(r.key === 'babysitter' && parentAccount) && !(r.key === 'parent' && providerAccount),
+  );
+  const note = parentAccount
+    ? t('signup.roleExclusiveBabysitter')
+    : providerAccount
+      ? t('signup.roleExclusiveParent')
+      : undefined;
+
+  return <SharedSignUpRolePage logoSrc="/logo.png" logoAlt="Sync/Sit" roles={roles} banner={banner} note={note} />;
 }
