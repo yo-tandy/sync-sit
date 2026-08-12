@@ -1,6 +1,7 @@
 export { Spinner } from './Spinner.js';
 export { Badge } from './Badge.js';
 export { Chip } from './Chip.js';
+export { SupervisionChip } from './SupervisionChip.js';
 export { Avatar } from './Avatar.js';
 export { Checkbox } from './Checkbox.js';
 export * from './Icons.js';

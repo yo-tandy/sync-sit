@@ -16,6 +16,7 @@ import {
   FileTextIcon,
   MailIcon,
   LogOutIcon,
+  SupervisionChip,
 } from '@ejm/shared-ui';
 import { AppSwitchMenuItem } from './AppSwitchMenuItem';
 
@@ -59,13 +60,22 @@ export function AppBar() {
           <HomeIcon className="h-5 w-5" />
         </Link>
         <span className="text-sm font-semibold text-white">Sync/Study</span>
-        <button
-          onClick={() => setMenuOpen(true)}
-          className="-m-1.5 flex h-11 w-11 items-center justify-center text-white"
-          aria-label={t('menu.openMenu')}
-        >
-          <MenuIcon className="h-5 w-5" />
-        </button>
+        <div className="flex items-center gap-2">
+          {userDoc?.governedBy && (
+            <SupervisionChip
+              label={t('supervision.chipLabel')}
+              ariaLabel={t('supervision.chipAria')}
+              to="/supervision-info"
+            />
+          )}
+          <button
+            onClick={() => setMenuOpen(true)}
+            className="-m-1.5 flex h-11 w-11 items-center justify-center text-white"
+            aria-label={t('menu.openMenu')}
+          >
+            <MenuIcon className="h-5 w-5" />
+          </button>
+        </div>
       </div>
 
       <Dialog open={menuOpen} onClose={() => setMenuOpen(false)}>

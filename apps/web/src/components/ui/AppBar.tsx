@@ -20,6 +20,7 @@ import {
   ShareIcon,
 } from './Icons';
 import { LanguageSelector } from './LanguageSelector';
+import { SupervisionChip } from './SupervisionChip';
 import { AppSwitchMenuItem } from './AppSwitchMenuItem';
 import type { UserRole } from '@ejm/sit-core';
 
@@ -57,13 +58,22 @@ export function AppBar({ role }: { role: UserRole }) {
           <HomeIcon className="h-5 w-5" />
         </Link>
         <span className="text-sm font-semibold text-white">{role === 'admin' ? 'Sync/Sit - Admin Panel' : 'Sync/Sit'}</span>
-        <button
-          onClick={() => setMenuOpen(true)}
-          aria-label={t('menu.openMenu')}
-          className="-m-1.5 flex h-11 w-11 items-center justify-center text-white"
-        >
-          <MenuIcon className="h-5 w-5" />
-        </button>
+        <div className="flex items-center gap-2">
+          {role === 'babysitter' && userDoc?.governedBy && (
+            <SupervisionChip
+              label={t('supervision.chipLabel')}
+              ariaLabel={t('supervision.chipAria')}
+              to="/supervision-info"
+            />
+          )}
+          <button
+            onClick={() => setMenuOpen(true)}
+            aria-label={t('menu.openMenu')}
+            className="-m-1.5 flex h-11 w-11 items-center justify-center text-white"
+          >
+            <MenuIcon className="h-5 w-5" />
+          </button>
+        </div>
       </div>
 
       <Dialog open={menuOpen} onClose={() => setMenuOpen(false)}>
