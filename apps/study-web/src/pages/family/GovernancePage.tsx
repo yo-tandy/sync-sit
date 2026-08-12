@@ -38,6 +38,11 @@ export function GovernancePage() {
   const { t, i18n } = useTranslation();
 
   const [data, setData] = useState<GovernedChildrenResult | null>(null);
+  // Mirror of `data` readable inside load's catch without re-creating it.
+  const dataRef = useRef<GovernedChildrenResult | null>(null);
+  useEffect(() => {
+    dataRef.current = data;
+  }, [data]);
   const [loadError, setLoadError] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   // inviteId awaiting resend/cancel, or null (disables that row's actions).
@@ -61,7 +66,9 @@ export function GovernancePage() {
       setData(res.data);
       setLoadError(false);
     } catch {
-      if (mountedRef.current) setLoadError(true);
+      // Last-known-good: a focus-refetch blip must not stamp an error banner
+      // over data that is still rendered (mirrors the sit twin).
+      if (mountedRef.current) setLoadError((prev) => prev || dataRef.current === null);
     }
   }, []);
 

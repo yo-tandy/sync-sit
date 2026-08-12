@@ -151,9 +151,11 @@ describe('family DashboardPage', () => {
     h.sessions = [{ status: 'pending' }, { status: 'confirmed', date: '2099-01-01' }];
     renderWithProviders(<DashboardPage />);
 
-    // Initial load: verified (search CTA, no banner) + real counts.
+    // Initial load: verified (search CTA, no banner) + real counts. The
+    // sessions card renders pending=1 and upcoming=1 (the '1' appears twice).
     expect(await screen.findByRole('link', { name: /find a tutor/i })).toBeInTheDocument();
     expect(await screen.findByText('2')).toBeInTheDocument();
+    expect((await screen.findAllByText('1')).length).toBeGreaterThanOrEqual(2);
 
     // Network blip: every read now fails; the user returns to the tab.
     h.getDoc.mockImplementation(() => Promise.reject(new Error('unavailable')));
@@ -165,9 +167,12 @@ describe('family DashboardPage', () => {
       vi.useRealTimers();
     });
 
-    // Still verified, counts intact — no un-verify banner, nothing zeroed.
+    // Still verified, counts intact — no un-verify banner, nothing zeroed:
+    // requests pending stays 2 AND the sessions card still shows both 1s
+    // (zeroing sessionCounts would collapse the card to its empty state).
     expect(screen.getByRole('link', { name: /find a tutor/i })).toBeInTheDocument();
     expect(screen.getByText('2')).toBeInTheDocument();
+    expect(screen.getAllByText('1').length).toBeGreaterThanOrEqual(2);
     expect(screen.queryByText(/not.*verified|verify/i)).not.toBeInTheDocument();
   });
 
