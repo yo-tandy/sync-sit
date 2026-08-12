@@ -1007,6 +1007,8 @@ export default {
     error: 'Une erreur est survenue. Veuillez réessayer.',
     indicatorTitle: 'Compte supervisé',
     indicatorDesc: 'Les parents de votre famille suivent votre activité sur cette application.',
+    chipLabel: 'Supervisé',
+    chipAria: 'Compte supervisé — voir ce que signifie la supervision',
     info: {
       title: 'Ce que signifie la supervision',
       intro:

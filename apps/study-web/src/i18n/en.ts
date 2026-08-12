@@ -1006,6 +1006,8 @@ export default {
     error: 'Something went wrong. Please try again.',
     indicatorTitle: 'Supervised account',
     indicatorDesc: 'The parents of your family follow your activity on this app.',
+    chipLabel: 'Supervised',
+    chipAria: 'Supervised account — see what supervision means',
     info: {
       title: 'What supervision means',
       intro:
