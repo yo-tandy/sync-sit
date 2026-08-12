@@ -412,6 +412,8 @@ export default {
         errorNoLengths: 'Pick at least one session length',
         errorNoLocations: 'Pick at least one session location',
       },
+      areaLink: 'Edit area you cover',
+      areaLinkDesc: 'Where you work — arrondissements, or your address and a radius. Your address is what search uses to show families your distance.',
     },
     area: {
       title: 'Area you cover',

@@ -241,6 +241,12 @@ describe('tutor AccountPage', () => {
     expect(h.updateDoc).not.toHaveBeenCalled();
   });
 
+  it('links to the area editor so it is findable from Account', () => {
+    renderWithProviders(<AccountPage />);
+    const link = screen.getByRole('link', { name: /area you cover/i });
+    expect(link).toHaveAttribute('href', '/tutor/area');
+  });
+
   // ── Supervised-account indicator (governedBy mirror) ──
 
   it('shows the supervised-account indicator when governedBy is set', () => {

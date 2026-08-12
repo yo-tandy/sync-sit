@@ -412,6 +412,8 @@ export default {
         errorNoLengths: 'Choisissez au moins une durée de cours',
         errorNoLocations: 'Choisissez au moins un lieu de cours',
       },
+      areaLink: 'Modifier la zone couverte',
+      areaLinkDesc: 'Là où vous travaillez — arrondissements, ou votre adresse et un rayon. Votre adresse sert à afficher votre distance aux familles dans la recherche.',
     },
     area: {
       title: 'Zone couverte',

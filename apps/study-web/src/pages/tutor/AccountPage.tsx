@@ -465,7 +465,19 @@ export function AccountPage() {
 
         <hr className="mb-6 border-gray-200" />
 
-        {/* 5. Change Password */}
+        {/* 5. Area (edited on its own page — heavy address/geocode UI) */}
+        <h3 className="mb-1 text-sm font-semibold text-gray-700">{t('tutor.area.title')}</h3>
+        <p className="mb-3 text-xs text-gray-500">{t('tutor.account.areaLinkDesc')}</p>
+        <Link
+          to="/tutor/area"
+          className="mb-6 inline-block text-sm font-semibold text-red-600 hover:underline"
+        >
+          {t('tutor.account.areaLink')}
+        </Link>
+
+        <hr className="my-6 border-gray-200" />
+
+        {/* 6. Change Password */}
         <h3 className="mb-3 text-sm font-semibold text-gray-700">{t('account.changePassword')}</h3>
         {passwordResetSent && (
           <InfoBanner className="mb-4">
@@ -484,7 +496,7 @@ export function AccountPage() {
 
         <hr className="mb-6 border-gray-200" />
 
-        {/* 6. Notification Preferences (email only — no FCM in study-web yet) */}
+        {/* 7. Notification Preferences (email only — no FCM in study-web yet) */}
         <h3 className="mb-1 text-sm font-semibold text-gray-700">{t('notifications.title')}</h3>
         <p className="mb-4 text-sm text-gray-500">{t('notifications.emailOnlyDesc')}</p>
 
@@ -510,7 +522,7 @@ export function AccountPage() {
 
         <hr className="my-6 border-gray-200" />
 
-        {/* 7. Language */}
+        {/* 8. Language */}
         <h3 className="mb-3 text-sm font-semibold text-gray-700">{t('common.language')}</h3>
         <LanguageSelector />
       </div>
