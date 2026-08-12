@@ -47,10 +47,10 @@ export function WelcomePage({ logoSrc, logoAlt, redirectPath, authLoading }: Wel
           {t('welcome.signUp')}
         </Link>
         <div className="flex justify-center gap-4 pb-1 pt-1">
-          <Link to="/about" className="text-xs text-gray-400 hover:text-gray-600">{t('welcome.about')}</Link>
-          <Link to="/privacy" className="text-xs text-gray-400 hover:text-gray-600">{t('welcome.privacy')}</Link>
-          <Link to="/terms" className="text-xs text-gray-400 hover:text-gray-600">{t('welcome.terms')}</Link>
-          <Link to="/report" className="text-xs text-gray-400 hover:text-gray-600">{t('welcome.help')}</Link>
+          <Link to="/about" className="text-xs text-gray-500 hover:text-gray-600">{t('welcome.about')}</Link>
+          <Link to="/privacy" className="text-xs text-gray-500 hover:text-gray-600">{t('welcome.privacy')}</Link>
+          <Link to="/terms" className="text-xs text-gray-500 hover:text-gray-600">{t('welcome.terms')}</Link>
+          <Link to="/report" className="text-xs text-gray-500 hover:text-gray-600">{t('welcome.help')}</Link>
         </div>
       </div>
     </div>

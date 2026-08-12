@@ -239,7 +239,7 @@ export function EndorsementDialog({
           {text.length > 0 && text.trim().length < 10 && (
             <p className="mb-3 text-xs text-amber-600">{t('references.minLength')}</p>
           )}
-          <p className="mb-3 text-xs text-gray-400 italic">
+          <p className="mb-3 text-xs text-gray-500 italic">
             {t('references.endorsementPrivacyNote')}
           </p>
           {errorMessage && (

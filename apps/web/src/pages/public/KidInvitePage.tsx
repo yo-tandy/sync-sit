@@ -16,7 +16,7 @@ function guardianErrorCode(err: unknown): string | null {
 
 function Req({ met, label }: { met: boolean; label: string }) {
   return (
-    <p className={`flex items-center gap-1.5 text-xs ${met ? 'text-green-600' : 'text-gray-400'}`}>
+    <p className={`flex items-center gap-1.5 text-xs ${met ? 'text-green-600' : 'text-gray-500'}`}>
       <span>{met ? '✓' : '○'}</span> {label}
     </p>
   );

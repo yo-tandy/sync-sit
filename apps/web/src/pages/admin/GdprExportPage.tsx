@@ -128,7 +128,7 @@ export function AdminGdprExportPage() {
         )}
 
         {!selectedUser && search.length < 2 && (
-          <p className="py-8 text-center text-sm text-gray-400">
+          <p className="py-8 text-center text-sm text-gray-500">
             {t('admin.typeToSearch')}
           </p>
         )}

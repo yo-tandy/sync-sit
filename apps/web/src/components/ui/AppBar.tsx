@@ -53,13 +53,14 @@ export function AppBar({ role }: { role: UserRole }) {
   return (
     <>
       <div className="sticky top-0 z-40 flex h-12 items-center justify-between bg-brand-600 px-4">
-        <Link to={homePath} className="flex h-8 w-8 items-center justify-center text-white">
+        <Link to={homePath} aria-label={t('menu.home')} className="-m-1.5 flex h-11 w-11 items-center justify-center text-white">
           <HomeIcon className="h-5 w-5" />
         </Link>
         <span className="text-sm font-semibold text-white">{role === 'admin' ? 'Sync/Sit - Admin Panel' : 'Sync/Sit'}</span>
         <button
           onClick={() => setMenuOpen(true)}
-          className="flex h-8 w-8 items-center justify-center text-white"
+          aria-label={t('menu.openMenu')}
+          className="-m-1.5 flex h-11 w-11 items-center justify-center text-white"
         >
           <MenuIcon className="h-5 w-5" />
         </button>

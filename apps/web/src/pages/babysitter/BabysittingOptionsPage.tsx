@@ -105,7 +105,7 @@ export function BabysittingOptionsPage() {
 
         {/* Languages */}
         <LanguagePicker selected={languages} onChange={setLanguages} />
-        <p className="mb-4 -mt-3 text-xs text-gray-400">{t('enrollment.languagesHint')}</p>
+        <p className="mb-4 -mt-3 text-xs text-gray-500">{t('enrollment.languagesHint')}</p>
 
         <hr className="my-5 border-gray-200" />
 
@@ -144,7 +144,7 @@ export function BabysittingOptionsPage() {
 
           {areaMode === 'arrondissement' ? (
             <div>
-              <p className="mb-2 text-xs text-gray-400">{t('enrollment.arrondissements')}</p>
+              <p className="mb-2 text-xs text-gray-500">{t('enrollment.arrondissements')}</p>
               <div className="mb-3 flex flex-wrap gap-2">
                 {ARRONDISSEMENTS.map((arr) => (
                   <Chip key={arr} selected={arrondissements.includes(arr)} onClick={() => toggleArea(arr)}>
@@ -152,7 +152,7 @@ export function BabysittingOptionsPage() {
                   </Chip>
                 ))}
               </div>
-              <p className="mb-2 text-xs text-gray-400">{t('enrollment.nearbyTowns')}</p>
+              <p className="mb-2 text-xs text-gray-500">{t('enrollment.nearbyTowns')}</p>
               <div className="flex flex-wrap gap-2">
                 {NEARBY_TOWNS.map((town) => (
                   <Chip key={town} selected={arrondissements.includes(town)} onClick={() => toggleArea(town)}>

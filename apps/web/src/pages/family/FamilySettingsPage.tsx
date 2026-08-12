@@ -227,7 +227,7 @@ export function FamilySettingsPage() {
             ) : (
               <p className="text-sm font-medium">Add family photo</p>
             )}
-            <p className="mt-0.5 text-xs text-gray-400">Optional · Max 5 MB</p>
+            <p className="mt-0.5 text-xs text-gray-500">Optional · Max 5 MB</p>
           </div>
         </div>
 
@@ -278,7 +278,8 @@ export function FamilySettingsPage() {
               <button
                 type="button"
                 onClick={() => removeKid(i)}
-                className="mt-7 rounded-full p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                aria-label={t('common.remove')}
+                className="mt-7 rounded-full p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-600"
               >
                 <XIcon className="h-4 w-4" />
               </button>

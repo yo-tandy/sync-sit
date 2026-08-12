@@ -56,7 +56,7 @@ export function SharePage() {
         </p>
 
         <Card className="mb-6 bg-gray-50">
-          <p className="mb-2 text-xs font-medium text-gray-400">{t('share.messagePreview')}</p>
+          <p className="mb-2 text-xs font-medium text-gray-500">{t('share.messagePreview')}</p>
           <p className="text-sm leading-relaxed text-gray-800">{shareText}</p>
         </Card>
 

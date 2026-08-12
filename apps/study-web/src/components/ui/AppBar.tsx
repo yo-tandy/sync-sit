@@ -55,13 +55,13 @@ export function AppBar() {
   return (
     <>
       <div className="sticky top-0 z-40 flex h-12 items-center justify-between bg-brand-600 px-4">
-        <Link to="/tutor" className="flex h-8 w-8 items-center justify-center text-white">
+        <Link to="/tutor" aria-label={t('menu.home')} className="-m-1.5 flex h-11 w-11 items-center justify-center text-white">
           <HomeIcon className="h-5 w-5" />
         </Link>
         <span className="text-sm font-semibold text-white">Sync/Study</span>
         <button
           onClick={() => setMenuOpen(true)}
-          className="flex h-8 w-8 items-center justify-center text-white"
+          className="-m-1.5 flex h-11 w-11 items-center justify-center text-white"
           aria-label={t('menu.openMenu')}
         >
           <MenuIcon className="h-5 w-5" />

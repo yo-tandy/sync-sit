@@ -372,7 +372,7 @@ export function SearchPage() {
                                     <option key={o.value} value={o.value}>{o.label}</option>
                                   ))}
                                 </select>
-                                <span className="text-xs text-gray-400">to</span>
+                                <span className="text-xs text-gray-500">to</span>
                                 <select
                                   value={slot.endTime}
                                   onChange={(e) => {

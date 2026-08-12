@@ -365,7 +365,7 @@ export function EndorsementsPage() {
         </div>
 
         {manualRefs.length === 0 ? (
-          <p className="mb-4 text-sm text-gray-400">{t('references.noReferencesYet')}</p>
+          <p className="mb-4 text-sm text-gray-500">{t('references.noReferencesYet')}</p>
         ) : (
           manualRefs.map((ref) => (
             <ReferenceCard

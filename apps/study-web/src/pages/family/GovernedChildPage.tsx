@@ -384,7 +384,7 @@ export function GovernedChildPage() {
             {detail.child.email}
           </p>
           {detail.link.confirmedAt && (
-            <p className="mt-1 text-xs text-gray-400">
+            <p className="mt-1 text-xs text-gray-500">
               {t('family.governance.child.supervisedSince', {
                 date: formatIso(detail.link.confirmedAt),
               })}

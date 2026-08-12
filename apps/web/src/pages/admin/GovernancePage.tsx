@@ -170,7 +170,7 @@ export function AdminGovernancePage() {
                     ` · ${t('admin.governance.revokedAt', { date: formatIso(row.link.revokedAt) })}`}
                 </p>
                 {row.child.identityLocked && (
-                  <p className="mt-1 text-xs text-gray-400">
+                  <p className="mt-1 text-xs text-gray-500">
                     {t('admin.governance.identityLocked')}
                   </p>
                 )}

@@ -699,7 +699,7 @@ export function BookSessionPage() {
                   label={t('family.book.trial.toggle')}
                   className="mb-1"
                 />
-                <p className="mb-4 text-[11px] leading-tight text-gray-400">
+                <p className="mb-4 text-[11px] leading-tight text-gray-500">
                   {t('family.book.trial.explainer')}
                 </p>
 
@@ -727,11 +727,11 @@ export function BookSessionPage() {
                           const skipped = schoolWeeksOnly && p.holiday;
                           return (
                             <li key={p.date} className="flex items-center justify-between text-xs">
-                              <span className={skipped ? 'text-gray-400 line-through' : 'text-gray-700'}>
+                              <span className={skipped ? 'text-gray-500 line-through' : 'text-gray-700'}>
                                 {formatDateStr(p.date)}
                               </span>
                               {skipped ? (
-                                <span className="text-gray-400">
+                                <span className="text-gray-500">
                                   {t('family.book.weekly.skippedHoliday')}
                                 </span>
                               ) : (
@@ -744,7 +744,7 @@ export function BookSessionPage() {
                         });
                       })()}
                     </ul>
-                    <p className="mt-2 text-[11px] leading-tight text-gray-400">
+                    <p className="mt-2 text-[11px] leading-tight text-gray-500">
                       {t('family.book.weekly.conflictNote')}
                     </p>
                   </div>

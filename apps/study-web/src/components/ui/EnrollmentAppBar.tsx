@@ -50,8 +50,8 @@ export function EnrollmentAppBar() {
         <span className="text-sm font-semibold text-white">Sync/Study</span>
         <button
           onClick={() => setMenuOpen(true)}
-          className="flex h-8 w-8 items-center justify-center text-white"
-          aria-label="Open menu"
+          className="-m-1.5 flex h-11 w-11 items-center justify-center text-white"
+          aria-label={t('menu.openMenu')}
         >
           <MenuIcon className="h-5 w-5" />
         </button>

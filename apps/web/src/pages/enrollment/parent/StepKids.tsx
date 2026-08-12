@@ -54,7 +54,8 @@ export function StepKids({ data, onChange, onNext, loading, error }: StepKidsPro
               <button
                 type="button"
                 onClick={() => removeKid(index)}
-                className="text-gray-400 hover:text-gray-600"
+                aria-label={t('common.remove')}
+                className="text-gray-500 hover:text-gray-600"
               >
                 <XIcon className="h-4 w-4" />
               </button>

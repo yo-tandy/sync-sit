@@ -62,7 +62,7 @@ function NoteForm({
         onChange={(e) => setText(e.target.value)}
         placeholder={placeholder}
       />
-      <p className="mb-3 text-right text-[11px] text-gray-400">
+      <p className="mb-3 text-right text-[11px] text-gray-500">
         {text.length}/{maxLength}
       </p>
       {error && <p className="mb-3 text-sm text-brand-600">{error}</p>}

@@ -82,7 +82,7 @@ export function TutorCard({ result }: { result: TutorSearchResult }) {
             </p>
           </div>
 
-          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-gray-400">
+          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-gray-500">
             {result.languages.length > 0 && <span>{result.languages.join(', ')}</span>}
             {result.locationPrefs.length > 0 && (
               <span>
@@ -165,7 +165,7 @@ export function TutorCard({ result }: { result: TutorSearchResult }) {
             <Button onClick={() => setDialogOpen(true)}>
               {t('family.search.card.requestAgain')}
             </Button>
-            <p className="mt-1 text-xs text-gray-400">{t('family.search.card.declinedHint')}</p>
+            <p className="mt-1 text-xs text-gray-500">{t('family.search.card.declinedHint')}</p>
           </>
         )}
         {status === 'accepted' && (

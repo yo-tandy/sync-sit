@@ -134,7 +134,7 @@ export function InvitePage() {
                 {generating ? '...' : t('invite.newLink')}
               </Button>
             </div>
-            <p className="mt-2 text-xs text-gray-400">
+            <p className="mt-2 text-xs text-gray-500">
               {t('invite.linkDesc')}
             </p>
           </Card>
@@ -154,7 +154,7 @@ export function InvitePage() {
               <div className="flex items-center justify-between">
                 <p className="text-sm font-medium text-gray-900">{member.name}</p>
                 {userDoc && member.uid === userDoc.uid ? (
-                  <span className="text-xs text-gray-400">{t('invite.you')}</span>
+                  <span className="text-xs text-gray-500">{t('invite.you')}</span>
                 ) : (
                   <button
                     type="button"

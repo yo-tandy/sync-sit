@@ -160,7 +160,7 @@ export function AdminVerificationsPage() {
                         <p className="text-xs text-gray-500">{v.parentName}</p>
                       </>
                     )}
-                    <p className="text-xs text-gray-400">
+                    <p className="text-xs text-gray-500">
                       {new Date(v.createdAt).toLocaleDateString(locale, { year: 'numeric', month: 'short', day: 'numeric' })}
                     </p>
                   </div>

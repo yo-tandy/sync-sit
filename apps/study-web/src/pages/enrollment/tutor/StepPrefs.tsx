@@ -135,13 +135,13 @@ export function StepPrefs({ onNext, loading, error }: StepPrefsProps) {
           max={60}
           className="h-12 w-full rounded-lg border-[1.5px] border-gray-300 bg-white px-4 text-base outline-none transition-colors focus:border-brand-600"
         />
-        <p className="mt-1 text-xs text-gray-400">{t('enrollment.paddingMinHint')}</p>
+        <p className="mt-1 text-xs text-gray-500">{t('enrollment.paddingMinHint')}</p>
       </div>
 
       {/* About me */}
       <div className="mb-5">
         <label className="mb-2 block text-sm font-medium text-gray-700">
-          {t('enrollment.aboutMe')} <span className="text-gray-400">({t('common.optional')})</span>
+          {t('enrollment.aboutMe')} <span className="text-gray-500">({t('common.optional')})</span>
         </label>
         <textarea
           value={aboutMe}

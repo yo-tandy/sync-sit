@@ -137,7 +137,8 @@ export function AddressAutocomplete({
           <button
             type="button"
             onClick={handleClear}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+            aria-label="Clear"
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-600"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
@@ -177,22 +178,22 @@ export function AddressAutocomplete({
         <div className="mt-3 rounded-lg bg-gray-50 p-3">
           <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
             <div>
-              <span className="text-xs text-gray-400">Street</span>
+              <span className="text-xs text-gray-500">Street</span>
               <p className="font-medium text-gray-950">{value.street}</p>
             </div>
             <div>
-              <span className="text-xs text-gray-400">City</span>
+              <span className="text-xs text-gray-500">City</span>
               <p className="font-medium text-gray-950">{value.city}</p>
             </div>
             <div>
-              <span className="text-xs text-gray-400">Postal code</span>
+              <span className="text-xs text-gray-500">Postal code</span>
               <p className="font-medium text-gray-950">{value.postcode}</p>
             </div>
           </div>
         </div>
       )}
 
-      <p className="mt-1 text-xs text-gray-400">
+      <p className="mt-1 text-xs text-gray-500">
         📍 Powered by adresse.data.gouv.fr
       </p>
     </div>

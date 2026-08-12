@@ -19,6 +19,7 @@ vi.mock('@/stores/authStore', () => {
 
 import i18n from '@/i18n';
 import { AppBar } from '../AppBar';
+import { EnrollmentAppBar } from '../EnrollmentAppBar';
 import type { UserRole } from '@ejm/sit-core';
 
 function openMenu(role: UserRole) {
@@ -42,4 +43,36 @@ describe('AppBar switch entry', () => {
       cleanup();
     },
   );
+});
+
+const HIT_TARGET = /\bh-11\b[\s\S]*\bw-11\b|\bw-11\b[\s\S]*\bh-11\b/;
+
+describe('AppBar hit targets (≥44px, WCAG 2.5.8)', () => {
+  it('home link and menu button are 44px targets with accessible names', () => {
+    render(
+      <I18nextProvider i18n={i18n}>
+        <MemoryRouter>
+          <AppBar role="parent" />
+        </MemoryRouter>
+      </I18nextProvider>,
+    );
+    const home = screen.getByRole('link', { name: /home/i });
+    expect(home.className).toMatch(HIT_TARGET);
+    const burger = screen.getByRole('button', { name: /open menu/i });
+    expect(burger.className).toMatch(HIT_TARGET);
+    cleanup();
+  });
+
+  it('enrollment bar menu button is a 44px target with an accessible name', () => {
+    render(
+      <I18nextProvider i18n={i18n}>
+        <MemoryRouter>
+          <EnrollmentAppBar />
+        </MemoryRouter>
+      </I18nextProvider>,
+    );
+    const burger = screen.getByRole('button', { name: /open menu/i });
+    expect(burger.className).toMatch(HIT_TARGET);
+    cleanup();
+  });
 });
