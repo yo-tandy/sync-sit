@@ -169,6 +169,9 @@ export function SessionsPage() {
         ),
       );
       if (!mountedRef.current) return;
+      // A successful (re)load clears any prior transient failure — a sticky
+      // flag would render the error next to the freshly loaded list.
+      setLoadError(false);
       const byId: Record<string, StudySessionInstanceDoc[]> = {};
       for (const { sessionId, rows: irows } of instanceLists) byId[sessionId] = irows;
       setInstancesBySeries(byId);

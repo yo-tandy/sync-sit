@@ -66,7 +66,10 @@ export function DashboardPage() {
         setIsVerified(verified);
       })
       .catch(() => {
-        if (mountedRef.current) setIsVerified(false);
+        // A FAILED read is unknown, not unverified: only flip to false when
+        // the doc genuinely says so. On a refetch blip a verified family
+        // keeps its last-known-good state (and the search CTA); on first
+        // load the gate simply stays in its loading state.
       });
   }, [familyId]);
 
@@ -86,7 +89,8 @@ export function DashboardPage() {
         setCounts({ pending, accepted });
       })
       .catch(() => {
-        if (mountedRef.current) setCounts({ pending: 0, accepted: 0 });
+        // Keep last-known-good counts: zeroing on a refetch failure is an
+        // error masquerading as an empty state.
       });
   }, [familyId]);
 

@@ -150,7 +150,13 @@ export function SessionsPage() {
   }, []);
 
   // The page's load, reusable so a returning user re-runs it (issue #117 tier a).
+  // Monotonic run id: an in-flight load for a PREVIOUS familyId (or an older
+  // run of the same one) must not apply after a newer run started — mountedRef
+  // alone is unmount-scoped, not per-run.
+  const runIdRef = useRef(0);
+
   const load = useCallback(async () => {
+    const runId = ++runIdRef.current;
     if (!familyId) return;
     try {
       const snap = await getDocs(
@@ -178,7 +184,10 @@ export function SessionsPage() {
           })),
         ),
       );
-      if (!mountedRef.current) return;
+      if (!mountedRef.current || runId !== runIdRef.current) return;
+      // A successful (re)load clears any prior transient failure — a sticky
+      // flag would render the error next to the freshly loaded list.
+      setLoadError(false);
       const byId: Record<string, StudySessionInstanceDoc[]> = {};
       for (const { sessionId, rows: irows } of instanceLists) byId[sessionId] = irows;
       setInstancesBySeries(byId);
@@ -186,7 +195,7 @@ export function SessionsPage() {
     } catch {
       // A THROW is a load failure — surface it honestly rather than
       // conflating it with the family having no sessions (the empty state).
-      if (mountedRef.current) setLoadError(true);
+      if (mountedRef.current && runId === runIdRef.current) setLoadError(true);
     }
   }, [familyId]);
 

@@ -111,7 +111,11 @@ export function RequestsPage() {
         rows.sort((a, b) => createdAtSeconds(b.createdAt) - createdAtSeconds(a.createdAt));
         setEndorsements(rows);
       },
-      () => setEndorsements([]),
+      () => {
+        // Supplementary section: on error keep whatever was last rendered
+        // rather than faking an empty list; the primary listener owns
+        // loadError. (Initial-load errors leave the section hidden.)
+      },
     );
     return unsubscribe;
   }, [familyId]);

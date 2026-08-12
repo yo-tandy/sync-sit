@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { httpsCallable } from 'firebase/functions';
+import { useRefetchOnFocus } from '@ejm/shared-ui';
 import { functions } from '@/config/firebase';
 import { Card, Button, Badge, TopNav, Spinner, Dialog } from '@/components/ui';
 import { ChevronRightIcon } from '@/components/ui/Icons';
@@ -60,6 +61,10 @@ export function GovernancePage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // Issue #117 tier (a): callable-sourced (no onSnapshot possible) — a
+  // returning user re-runs the same load. Mirrors study's GovernancePage.
+  useRefetchOnFocus(load);
 
   const formatDate = (iso: string | null): string => {
     if (!iso) return '';
