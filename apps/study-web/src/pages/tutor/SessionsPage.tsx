@@ -535,7 +535,10 @@ export function SessionsPage() {
           </div>
         )}
 
-        {loadError && (
+        {/* Last-known-good: a refetch blip must not paint an error over a
+            rendered list — the error state is only for loads with nothing
+            to show (mirrors GovernancePage's dataRef gate). */}
+        {loadError && sessions === null && (
           <p className="py-10 text-center text-sm text-brand-600">{t('tutor.sessions.loadError')}</p>
         )}
 

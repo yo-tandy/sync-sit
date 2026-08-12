@@ -352,6 +352,29 @@ describe('family SessionsPage — management', () => {
     expect(screen.queryByText(/no sessions yet/i)).not.toBeInTheDocument();
   });
 
+  it('a FAILED focus refetch does not paint an error over a rendered list', async () => {
+    h.sessions = [confirmedOneTime({ sessionId: 'sGood' })];
+    let fail = false;
+    h.getDocs.mockImplementation((q: { query?: { path: string }[]; path?: string }) => {
+      if (fail) return Promise.reject({ code: 'unavailable' });
+      const path = q?.query?.[0]?.path ?? q?.path ?? '';
+      if (path.endsWith('/instances')) return Promise.resolve({ docs: [] });
+      return Promise.resolve({ docs: h.sessions.map((s) => ({ id: s.sessionId, data: () => s })) });
+    });
+    renderWithProviders(<SessionsPage />);
+    expect(await screen.findByText(/math/i)).toBeInTheDocument();
+
+    // Blip on return-to-tab: the list must stay, the error must NOT appear.
+    fail = true;
+    await act(async () => {
+      vi.setSystemTime(new Date(Date.now() + 20_000));
+      window.dispatchEvent(new Event('focus'));
+    });
+
+    expect(screen.getByText(/math/i)).toBeInTheDocument();
+    expect(screen.queryByText(/could not load your sessions/i)).not.toBeInTheDocument();
+  });
+
   it('a successful focus refetch CLEARS a prior load error (no sticky flag)', async () => {
     h.sessions = [confirmedOneTime({ sessionId: 'sOK' })];
     let fail = true;
