@@ -116,6 +116,7 @@ export default {
     accountExistsCta: 'An account with this email already exists. Log in to add this role.',
     alreadyEnrolled: 'This account already has this role.',
     alreadyInFamily: 'You already belong to a family.',
+    roleExclusiveJoin: "Student accounts (babysitter or tutor) can't join a family as a parent — this invite needs the parent's own account.",
     joinFamilyConfirm: 'Join the {{familyName}} family',
     babysitterTitle: 'Babysitter Sign Up',
     parentTitle: 'Parent Sign Up',

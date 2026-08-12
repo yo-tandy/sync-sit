@@ -142,6 +142,31 @@ describe('joinFamily cross-app add-profile', () => {
     expect(invite.usedByUserId).toBeUndefined();
   });
 
+  it('a profile-less signed-in account CAN still join as a parent (positive add-profile pin)', async () => {
+    const db = getDb();
+    const token = 'token-join-plain-positive';
+    await seedInvite(token);
+
+    const idToken = await getIdToken(PLAIN_UID);
+    const result = await callFunction<{ familyId: string }>('joinFamily', { token }, idToken);
+    expect(result.familyId).toBe(FAMILY_ID);
+
+    // profiles.parent added, invite consumed, family membership recorded —
+    // the exclusivity guard must not over-block the legal path.
+    const after = (await db.collection('users').doc(PLAIN_UID).get()).data()!;
+    expect(after.profiles.parent.familyId).toBe(FAMILY_ID);
+    const invite = (await db.collection('inviteLinks').doc(token).get()).data()!;
+    expect(invite.used).toBe(true);
+    const family = (await db.collection('families').doc(FAMILY_ID).get()).data()!;
+    expect(family.parentIds).toContain(PLAIN_UID);
+
+    // Restore the plain fixture for the sibling tests (order-independent).
+    await db.collection('users').doc(PLAIN_UID).set({ profiles: {} }, { mergeFields: ['profiles'] });
+    await db.collection('families').doc(FAMILY_ID).update({
+      parentIds: family.parentIds.filter((id: string) => id !== PLAIN_UID),
+    });
+  });
+
   it('rejects an already-used invite (authed, legal caller)', async () => {
     const token = 'token-join-used';
     await seedInvite(token, { used: true });

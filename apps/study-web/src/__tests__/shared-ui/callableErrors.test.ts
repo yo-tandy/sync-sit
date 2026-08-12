@@ -17,6 +17,13 @@ describe('enrollmentErrorReason', () => {
   });
 });
 
+describe('enrollmentErrorReason role-exclusive', () => {
+  it('recognizes the role-exclusive reason (issue #116 guard)', () => {
+    expect(enrollmentErrorReason({ details: { reason: 'role-exclusive', profile: 'parent' } }))
+      .toBe('role-exclusive');
+  });
+});
+
 describe('ageGateErrorCode', () => {
   it('extracts age/under-15', () => {
     expect(ageGateErrorCode({ code: 'functions/failed-precondition', details: { code: 'age/under-15' } }))
