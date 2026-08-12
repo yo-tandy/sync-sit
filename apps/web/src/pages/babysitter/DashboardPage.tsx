@@ -235,7 +235,7 @@ export function BabysitterDashboard() {
       {/* ── My Availability button ── */}
       <Link to="/babysitter/schedule" className="mb-6 block">
         <Card interactive className="flex items-center gap-3 py-4">
-          <CalendarIcon className="h-6 w-6 text-red-600" />
+          <CalendarIcon className="h-6 w-6 text-brand-600" />
           <div className="flex-1">
             <p className="text-sm font-semibold text-gray-900">{t('babysitterDashboard.myAvailability')}</p>
             <p className="text-xs text-gray-500">{t('babysitterDashboard.availabilityDesc')}</p>
@@ -247,7 +247,7 @@ export function BabysitterDashboard() {
       {/* ── Appointments ── */}
       {loading ? (
         <div className="flex justify-center py-12">
-          <Spinner className="h-8 w-8 text-red-600" />
+          <Spinner className="h-8 w-8 text-brand-600" />
         </div>
       ) : hasAny ? (
         <>
@@ -292,7 +292,7 @@ export function BabysitterDashboard() {
       {showWelcome && (
         <Dialog open onClose={() => { setShowWelcome(false); dismissOnboarding('welcome'); }}>
           <div className="text-center">
-            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-red-50 text-2xl">📅</div>
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-brand-50 text-2xl">📅</div>
             <h3 className="mb-2 text-lg font-bold">{t('onboarding.welcomeTitle')}</h3>
             <p className="mb-5 text-sm text-gray-600">
               {t('onboarding.welcomeDesc')}

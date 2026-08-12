@@ -153,13 +153,13 @@ export function VerificationPage() {
     ? 'border-green-300'
     : identityStatus === 'pending' || enrollmentStatus === 'pending'
       ? 'border-amber-300'
-      : 'border-red-300';
+      : 'border-brand-300';
 
   const bgColor = isFullyVerified
     ? 'bg-green-50'
     : identityStatus === 'pending' || enrollmentStatus === 'pending'
       ? 'bg-amber-50'
-      : 'bg-red-50';
+      : 'bg-brand-50';
 
   return (
     <div>
@@ -168,7 +168,7 @@ export function VerificationPage() {
       <div className="px-5 pb-8">
         {loading ? (
           <div className="flex justify-center py-12">
-            <Spinner className="h-8 w-8 text-red-600" />
+            <Spinner className="h-8 w-8 text-brand-600" />
           </div>
         ) : (
           <>
@@ -272,9 +272,9 @@ export function VerificationPage() {
               ) : (
                 <Card>
                   {identityStatus === 'rejected' && identityDocs[0]?.rejectionReason && (
-                    <div className="mb-3 rounded-lg border border-red-200 bg-red-50 p-3">
-                      <p className="text-xs font-medium text-red-800">{t('verification.rejectedReason')}</p>
-                      <p className="text-xs text-red-600">{identityDocs[0].rejectionReason}</p>
+                    <div className="mb-3 rounded-lg border border-brand-200 bg-brand-50 p-3">
+                      <p className="text-xs font-medium text-brand-800">{t('verification.rejectedReason')}</p>
+                      <p className="text-xs text-brand-600">{identityDocs[0].rejectionReason}</p>
                     </div>
                   )}
                   <p className="mb-3 text-xs text-gray-500">{t('verification.identityDesc')}</p>
@@ -283,9 +283,9 @@ export function VerificationPage() {
                     type="file"
                     accept="image/*,.pdf"
                     onChange={(e) => setIdentityFile(e.target.files?.[0] || null)}
-                    className="mb-3 block w-full text-sm text-gray-500 file:mr-4 file:rounded-lg file:border-0 file:bg-red-50 file:px-4 file:py-2 file:text-sm file:font-medium file:text-red-600 hover:file:bg-red-100"
+                    className="mb-3 block w-full text-sm text-gray-500 file:mr-4 file:rounded-lg file:border-0 file:bg-brand-50 file:px-4 file:py-2 file:text-sm file:font-medium file:text-brand-600 hover:file:bg-brand-100"
                   />
-                  {identityError && <p className="mb-2 text-xs text-red-600">{identityError}</p>}
+                  {identityError && <p className="mb-2 text-xs text-brand-600">{identityError}</p>}
                   <Button
                     size="sm"
                     onClick={handleIdentityUpload}
@@ -315,7 +315,7 @@ export function VerificationPage() {
                             {doc.classLevel && ` - ${doc.classLevel}`}
                           </p>
                           {doc.status === 'rejected' && doc.rejectionReason && (
-                            <p className="mt-1 text-xs text-red-600">{doc.rejectionReason}</p>
+                            <p className="mt-1 text-xs text-brand-600">{doc.rejectionReason}</p>
                           )}
                         </div>
                         <Badge variant={statusBadgeVariant(doc.status)}>
@@ -336,9 +336,9 @@ export function VerificationPage() {
                   type="file"
                   accept="image/*,.pdf"
                   onChange={(e) => setEnrollmentFile(e.target.files?.[0] || null)}
-                  className="mb-3 block w-full text-sm text-gray-500 file:mr-4 file:rounded-lg file:border-0 file:bg-red-50 file:px-4 file:py-2 file:text-sm file:font-medium file:text-red-600 hover:file:bg-red-100"
+                  className="mb-3 block w-full text-sm text-gray-500 file:mr-4 file:rounded-lg file:border-0 file:bg-brand-50 file:px-4 file:py-2 file:text-sm file:font-medium file:text-brand-600 hover:file:bg-brand-100"
                 />
-                {enrollmentError && <p className="mb-2 text-xs text-red-600">{enrollmentError}</p>}
+                {enrollmentError && <p className="mb-2 text-xs text-brand-600">{enrollmentError}</p>}
                 <Button
                   size="sm"
                   onClick={handleEnrollmentUpload}
@@ -367,7 +367,7 @@ export function VerificationPage() {
                         {t('verification.shareMessage')}
                       </p>
                       <div className="flex items-center justify-center rounded-lg bg-white p-3 border border-gray-200">
-                        <span className="text-2xl font-mono font-bold tracking-widest text-red-600">{communityCode}</span>
+                        <span className="text-2xl font-mono font-bold tracking-widest text-brand-600">{communityCode}</span>
                       </div>
                       <p className="mt-2 text-center text-xs text-gray-400">
                         {t('verification.codeExpires', { time: new Date(communityCodeExpires).toLocaleString(i18n.language === 'fr' ? 'fr-FR' : 'en-US', { dateStyle: 'short', timeStyle: 'short' }) })}
@@ -457,7 +457,7 @@ export function VerificationPage() {
                       </Button>
                     </div>
                   )}
-                  {approveError && <p className="mt-2 text-xs text-red-600">{approveError}</p>}
+                  {approveError && <p className="mt-2 text-xs text-brand-600">{approveError}</p>}
                 </Card>
               )}
             </div>

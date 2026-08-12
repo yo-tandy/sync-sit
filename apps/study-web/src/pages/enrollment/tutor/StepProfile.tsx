@@ -118,7 +118,7 @@ export function StepProfile({ onNext }: StepProfileProps) {
               onClick={() => setGender(gender === opt.value ? undefined : opt.value)}
               className={`flex-1 rounded-lg border-[1.5px] px-2 py-2 text-sm font-medium transition-colors ${
                 gender === opt.value
-                  ? 'border-red-600 bg-red-50 text-red-600'
+                  ? 'border-brand-600 bg-brand-50 text-brand-600'
                   : 'border-gray-300 text-gray-700 hover:border-gray-400'
               }`}
             >

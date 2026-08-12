@@ -265,7 +265,7 @@ export function GovernedChildPage() {
         <TopNav title={t('governance.title')} backTo="/family/governance" />
         <div className="px-5 pt-4 pb-8">
           {loadError ? (
-            <p className="py-10 text-center text-sm text-red-600">
+            <p className="py-10 text-center text-sm text-brand-600">
               {t('governance.child.loadError')}
             </p>
           ) : (
@@ -424,7 +424,7 @@ export function GovernedChildPage() {
         )}
         disabled={acting}
         onClick={() => setSearchTarget({ app, searchable: !searchable })}
-        className={`flex h-6 w-10 items-center rounded-full p-0.5 transition-colors ${searchable ? 'bg-red-600' : 'bg-gray-300'}`}
+        className={`flex h-6 w-10 items-center rounded-full p-0.5 transition-colors ${searchable ? 'bg-brand-600' : 'bg-gray-300'}`}
       >
         <div
           className={`h-5 w-5 rounded-full bg-white shadow transition-transform ${searchable ? 'translate-x-4' : 'translate-x-0'}`}
@@ -458,7 +458,7 @@ export function GovernedChildPage() {
       <TopNav title={t('governance.title')} backTo="/family/governance" />
 
       <div className="px-5 pt-4 pb-8">
-        {actionError && <p className="mb-4 text-sm text-red-600">{actionError}</p>}
+        {actionError && <p className="mb-4 text-sm text-brand-600">{actionError}</p>}
 
         {/* ── Header: kid identity ── */}
         <Card className="mb-4">
@@ -768,7 +768,7 @@ export function GovernedChildPage() {
           placeholder={t('governance.child.cancelPlaceholder')}
           required
         />
-        {cancelError && <p className="mt-2 text-sm text-red-600">{cancelError}</p>}
+        {cancelError && <p className="mt-2 text-sm text-brand-600">{cancelError}</p>}
         <div className="mt-4 flex gap-2">
           <Button
             variant="outline"

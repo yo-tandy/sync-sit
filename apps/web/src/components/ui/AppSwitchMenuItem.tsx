@@ -55,7 +55,7 @@ export function AppSwitchMenuItem() {
         </span>
         <span>{t('appSwitch.toStudy')}</span>
       </div>
-      {failed && <p className="px-4 pb-2 text-xs text-red-600">{t('appSwitch.error')}</p>}
+      {failed && <p className="px-4 pb-2 text-xs text-brand-600">{t('appSwitch.error')}</p>}
     </button>
   );
 }

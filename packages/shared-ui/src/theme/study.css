@@ -1,20 +1,22 @@
 /* ═══════════════════════════════════════════
    @ejm/shared-ui — sync-study BRAND OVERRIDE
-   sync-study primary blue palette.
+   sync-study primary blue palette (hue ~221°).
 
-   NOTE: variable names remain --color-red-* so
-   components can reuse their existing bg-red-600
-   etc. classes unchanged. Token rename is a
-   separate future refactor.
+   brand-* is the canonical palette for components. 500–800 are
+   the historical sync-study blues; 50–400 form a real tonal ramp
+   (the old red-* remap collapsed 50–300 into one periwinkle).
+   red-* is deliberately NOT remapped here: any red-* usage in
+   study now renders Tailwind's real red and means red.
    ═══════════════════════════════════════════ */
 
 @theme {
-  --color-red-50:  #adc8ef;
-  --color-red-100: #adc8ef;
-  --color-red-200: #adc8ef;
-  --color-red-300: #adc8ef;
-  --color-red-500: #3179df;
-  --color-red-600: #094ad4;
-  --color-red-700: #0538a8;
-  --color-red-800: #0538a8;
+  --color-brand-50: #eef3fc;
+  --color-brand-100: #dde8f9;
+  --color-brand-200: #bbd1f3;
+  --color-brand-300: #8fb3eb;
+  --color-brand-400: #5e93e6;
+  --color-brand-500: #3179df;
+  --color-brand-600: #094ad4;
+  --color-brand-700: #0538a8;
+  --color-brand-800: #0538a8;
 }

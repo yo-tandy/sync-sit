@@ -324,9 +324,9 @@ export function FamilyDashboard() {
 
       {/* Kids management — shown prominently when no kids exist */}
       {kidsLoaded && kids.length === 0 && (
-        <Card className="mb-4 border-red-200 bg-red-50">
-          <h3 className="mb-2 text-sm font-semibold text-red-800">{t('familyDashboard.addKidsTitle')}</h3>
-          <p className="mb-4 text-xs text-red-600">{t('familyDashboard.addKidsDesc')}</p>
+        <Card className="mb-4 border-brand-200 bg-brand-50">
+          <h3 className="mb-2 text-sm font-semibold text-brand-800">{t('familyDashboard.addKidsTitle')}</h3>
+          <p className="mb-4 text-xs text-brand-600">{t('familyDashboard.addKidsDesc')}</p>
           <div className="flex gap-2">
             <div className="flex-1">
               <Input
@@ -407,7 +407,7 @@ export function FamilyDashboard() {
       {/* Appointments */}
       {aptsLoading ? (
         <div className="flex justify-center py-12">
-          <Spinner className="h-8 w-8 text-red-600" />
+          <Spinner className="h-8 w-8 text-brand-600" />
         </div>
       ) : pending.length > 0 || confirmed.length > 0 || pastRecent.length > 0 || rejectedRecent.length > 0 ? (
         <>

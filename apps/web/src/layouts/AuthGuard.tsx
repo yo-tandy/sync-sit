@@ -16,7 +16,7 @@ export function AuthGuard({ role, children }: AuthGuardProps) {
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center">
-        <Spinner className="h-8 w-8 text-red-600" />
+        <Spinner className="h-8 w-8 text-brand-600" />
       </div>
     );
   }
@@ -28,7 +28,7 @@ export function AuthGuard({ role, children }: AuthGuardProps) {
   if (!userDoc) {
     return (
       <div className="flex h-screen items-center justify-center">
-        <Spinner className="h-8 w-8 text-red-600" />
+        <Spinner className="h-8 w-8 text-brand-600" />
       </div>
     );
   }

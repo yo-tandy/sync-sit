@@ -247,9 +247,9 @@ export function BabysitterEnrollment() {
         </>
       )}
       {showLoginCta && (
-        <div className="mx-auto mb-4 max-w-md px-6 text-center text-sm text-red-600">
+        <div className="mx-auto mb-4 max-w-md px-6 text-center text-sm text-brand-600">
           <p>{t('enrollment.accountExistsCta')}</p>
-          <Link to="/login" className="mt-1 inline-block font-semibold text-red-600 underline">
+          <Link to="/login" className="mt-1 inline-block font-semibold text-brand-600 underline">
             {t('auth.login')}
           </Link>
         </div>

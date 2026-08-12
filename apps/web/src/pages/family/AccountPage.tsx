@@ -277,7 +277,7 @@ export function AccountPage() {
       <TopNav title={t('menu.myAccount')} backTo="/family" />
 
       <div className="px-5 pt-4 pb-8">
-        {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
+        {error && <p className="mb-4 text-sm text-brand-600">{error}</p>}
 
         {/* 1. Personal Info (read-only) */}
         <h3 className="mb-3 text-sm font-semibold text-gray-700">{t('account.personalInfo')}</h3>
@@ -325,14 +325,14 @@ export function AccountPage() {
           </button>
           <div>
             {photoPreview ? (
-              <button type="button" onClick={handleRemovePhoto} className="text-sm font-medium text-red-600">
+              <button type="button" onClick={handleRemovePhoto} className="text-sm font-medium text-brand-600">
                 {t('enrollment.removePhoto')}
               </button>
             ) : (
               <p className="text-sm font-medium">{t('enrollment.addPhoto')}</p>
             )}
             <p className="text-xs text-gray-400">{t('enrollment.photoOptional')}</p>
-            {photoError && <p className="text-xs text-red-600">{photoError}</p>}
+            {photoError && <p className="text-xs text-brand-600">{photoError}</p>}
             {photoSaving && <p className="text-xs text-gray-500">{t('common.saving')}</p>}
           </div>
         </div>
@@ -362,7 +362,7 @@ export function AccountPage() {
                   if (e.target.checked) setWhatsapp(phone);
                   else setWhatsapp('');
                 }}
-                className="h-4 w-4 rounded border-gray-300 text-red-600 focus:ring-red-500"
+                className="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
               />
               {t('account.whatsappSameAsPhone')}
             </label>
@@ -447,14 +447,14 @@ export function AccountPage() {
                   disabled={!pwaMode}
                   aria-disabled={!pwaMode}
                   title={!pwaMode ? t('notifications.pushRequiresInstall') : undefined}
-                  className={`flex h-6 w-10 items-center rounded-full p-0.5 transition-colors ${channel.push ? 'bg-red-600' : 'bg-gray-300'} ${!pwaMode ? 'cursor-not-allowed opacity-40' : ''}`}
+                  className={`flex h-6 w-10 items-center rounded-full p-0.5 transition-colors ${channel.push ? 'bg-brand-600' : 'bg-gray-300'} ${!pwaMode ? 'cursor-not-allowed opacity-40' : ''}`}
                 >
                   <div className={`h-5 w-5 rounded-full bg-white shadow transition-transform ${channel.push ? 'translate-x-4' : 'translate-x-0'}`} />
                 </button>
                 <button
                   type="button"
                   onClick={() => toggle(s.key, 'email')}
-                  className={`flex h-6 w-10 items-center rounded-full p-0.5 transition-colors ${channel.email ? 'bg-red-600' : 'bg-gray-300'}`}
+                  className={`flex h-6 w-10 items-center rounded-full p-0.5 transition-colors ${channel.email ? 'bg-brand-600' : 'bg-gray-300'}`}
                 >
                   <div className={`h-5 w-5 rounded-full bg-white shadow transition-transform ${channel.email ? 'translate-x-4' : 'translate-x-0'}`} />
                 </button>

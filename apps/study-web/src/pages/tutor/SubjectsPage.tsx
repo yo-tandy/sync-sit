@@ -156,7 +156,7 @@ export function SubjectsPage() {
                 type="button"
                 onClick={() => removeRow(index)}
                 aria-label={t('tutor.subjects.remove')}
-                className="absolute right-3 top-3 text-xs font-medium text-gray-400 hover:text-red-600"
+                className="absolute right-3 top-3 text-xs font-medium text-gray-400 hover:text-brand-600"
               >
                 {t('tutor.subjects.remove')}
               </button>
@@ -203,7 +203,7 @@ export function SubjectsPage() {
           {t('tutor.subjects.addRow')}
         </Button>
 
-        {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
+        {error && <p className="mt-4 text-sm text-brand-600">{error}</p>}
         {success && <p className="mt-4 text-sm text-green-600">✓ {t('tutor.subjects.saved')}</p>}
 
         <Button type="submit" disabled={saving} className="mt-4">

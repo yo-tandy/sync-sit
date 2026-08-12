@@ -122,7 +122,7 @@ export function AddressAutocomplete({
           onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
           placeholder="Start typing an address..."
           className={`h-12 w-full rounded-lg border-[1.5px] bg-white px-4 pr-10 text-base text-gray-950 outline-none transition-colors placeholder:text-gray-400 ${
-            error ? 'border-red-600' : 'border-gray-300 focus:border-red-600'
+            error ? 'border-brand-600' : 'border-gray-300 focus:border-brand-600'
           }`}
         />
         {loading && (
@@ -170,7 +170,7 @@ export function AddressAutocomplete({
         )}
       </div>
 
-      {error && <p className="mt-1 text-sm text-red-600">{error}</p>}
+      {error && <p className="mt-1 text-sm text-brand-600">{error}</p>}
 
       {/* Structured address display — only when sub-fields are populated */}
       {value && value.street && (

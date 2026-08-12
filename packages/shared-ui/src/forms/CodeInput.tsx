@@ -72,17 +72,17 @@ export function CodeInput({ length = 6, onComplete, error }: CodeInputProps) {
             onPaste={handlePaste}
             className={`h-14 w-12 rounded-lg border-[1.5px] text-center text-xl font-bold outline-none transition-colors ${
               error
-                ? 'border-red-600'
+                ? 'border-brand-600'
                 : value
                   ? 'border-gray-300'
-                  : 'border-gray-300 focus:border-red-600'
+                  : 'border-gray-300 focus:border-brand-600'
             }`}
             autoFocus={index === 0}
           />
         ))}
       </div>
       {error && (
-        <p className="mt-3 text-center text-sm text-red-600">{error}</p>
+        <p className="mt-3 text-center text-sm text-brand-600">{error}</p>
       )}
     </div>
   );

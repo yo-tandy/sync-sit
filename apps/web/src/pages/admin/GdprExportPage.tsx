@@ -62,7 +62,7 @@ export function AdminGdprExportPage() {
 
         {/* Selected user card */}
         {selectedUser && (
-          <Card className="mb-4 border-red-200 bg-red-50">
+          <Card className="mb-4 border-brand-200 bg-brand-50">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-semibold text-gray-900">
@@ -95,7 +95,7 @@ export function AdminGdprExportPage() {
           <>
             {usersLoading ? (
               <div className="flex justify-center py-8">
-                <Spinner className="h-8 w-8 text-red-600" />
+                <Spinner className="h-8 w-8 text-brand-600" />
               </div>
             ) : users.length === 0 ? (
               <p className="py-8 text-center text-sm text-gray-500">

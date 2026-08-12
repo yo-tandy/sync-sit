@@ -106,17 +106,17 @@ export function KidInvitePage() {
       <p className="mb-2 text-sm text-gray-600">{t('kidInvite.intro')}</p>
       <p className="mb-1 text-sm text-gray-600">
         {t('kidInvite.supervisedNote')}{' '}
-        <Link to="/supervision-info" className="text-red-600 hover:underline">
+        <Link to="/supervision-info" className="text-brand-600 hover:underline">
           {t('kidInvite.whatItMeans')}
         </Link>
       </p>
       <p className="mb-6 text-sm text-gray-600">
         {t('kidInvite.docsIntro')}{' '}
-        <Link to="/terms" target="_blank" className="text-red-600 hover:underline">
+        <Link to="/terms" target="_blank" className="text-brand-600 hover:underline">
           {t('enrollment.termsOfService')}
         </Link>{' '}
         {t('enrollment.consentAnd')}{' '}
-        <Link to="/privacy" target="_blank" className="text-red-600 hover:underline">
+        <Link to="/privacy" target="_blank" className="text-brand-600 hover:underline">
           {t('enrollment.privacyPolicy')}
         </Link>
         .
@@ -152,7 +152,7 @@ export function KidInvitePage() {
           </div>
         )}
 
-        {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
+        {error && <p className="mb-4 text-sm text-brand-600">{error}</p>}
 
         <Button type="submit" className="w-full" disabled={!canSubmit}>
           {submitting ? t('kidInvite.submitting') : t('kidInvite.submit')}

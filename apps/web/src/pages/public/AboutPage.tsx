@@ -41,7 +41,7 @@ export function AboutPage() {
         </h2>
         <div className="mb-6 space-y-3">
           <div className="flex items-start gap-3 rounded-lg bg-gray-50 p-3">
-            <SearchIcon className="mt-0.5 h-5 w-5 shrink-0 text-red-500" />
+            <SearchIcon className="mt-0.5 h-5 w-5 shrink-0 text-brand-500" />
             <div>
               <p className="text-sm font-semibold text-gray-900">
                 {isFr ? 'Recherche intelligente' : 'Smart Search'}
@@ -54,7 +54,7 @@ export function AboutPage() {
             </div>
           </div>
           <div className="flex items-start gap-3 rounded-lg bg-gray-50 p-3">
-            <CalendarIcon className="mt-0.5 h-5 w-5 shrink-0 text-red-500" />
+            <CalendarIcon className="mt-0.5 h-5 w-5 shrink-0 text-brand-500" />
             <div>
               <p className="text-sm font-semibold text-gray-900">
                 {isFr ? 'Gestion simple' : 'Easy Scheduling'}
@@ -67,7 +67,7 @@ export function AboutPage() {
             </div>
           </div>
           <div className="flex items-start gap-3 rounded-lg bg-gray-50 p-3">
-            <UsersIcon className="mt-0.5 h-5 w-5 shrink-0 text-red-500" />
+            <UsersIcon className="mt-0.5 h-5 w-5 shrink-0 text-brand-500" />
             <div>
               <p className="text-sm font-semibold text-gray-900">
                 {isFr ? 'Vérification communautaire' : 'Community Verification'}
@@ -83,7 +83,7 @@ export function AboutPage() {
 
         {/* Safety */}
         <h2 className="mb-3 text-lg font-bold text-gray-900">
-          <ShieldIcon className="-mt-0.5 mr-1.5 inline h-5 w-5 text-red-500" />
+          <ShieldIcon className="-mt-0.5 mr-1.5 inline h-5 w-5 text-brand-500" />
           {isFr ? 'La sécurité avant tout' : 'Safety First'}
         </h2>
         <p className="mb-2 text-sm leading-relaxed text-gray-600">
@@ -93,25 +93,25 @@ export function AboutPage() {
         </p>
         <ul className="mb-6 space-y-1.5 text-sm text-gray-600">
           <li className="flex items-start gap-2">
-            <span className="mt-1 text-red-500">•</span>
+            <span className="mt-1 text-brand-500">•</span>
             {isFr
               ? 'Les babysitters vérifient leur affiliation scolaire via leur adresse e-mail officielle'
               : 'Babysitters verify their school affiliation through their official school email'}
           </li>
           <li className="flex items-start gap-2">
-            <span className="mt-1 text-red-500">•</span>
+            <span className="mt-1 text-brand-500">•</span>
             {isFr
               ? 'Les familles sont vérifiées par documents d\'identité, certificats de scolarité ou parrainage communautaire'
               : 'Families are verified through ID documents, enrollment certificates, or community vouching'}
           </li>
           <li className="flex items-start gap-2">
-            <span className="mt-1 text-red-500">•</span>
+            <span className="mt-1 text-brand-500">•</span>
             {isFr
               ? 'Les recherches sont bloquées tant que la vérification n\'est pas complète'
               : 'Search is blocked until verification is complete'}
           </li>
           <li className="flex items-start gap-2">
-            <span className="mt-1 text-red-500">•</span>
+            <span className="mt-1 text-brand-500">•</span>
             {isFr
               ? 'Les données personnelles sont protégées conformément au RGPD et à la loi française'
               : 'Personal data is protected in compliance with GDPR and French law'}
@@ -124,23 +124,23 @@ export function AboutPage() {
         </h2>
         <div className="mb-6 space-y-2">
           <Link to="/guide/parents" className="flex items-center gap-3 rounded-lg bg-gray-50 p-3 active:bg-gray-100">
-            <UsersIcon className="h-5 w-5 shrink-0 text-red-500" />
+            <UsersIcon className="h-5 w-5 shrink-0 text-brand-500" />
             <div>
-              <p className="text-sm font-semibold text-red-600">{isFr ? 'Guide Parents' : 'Parent Guide'}</p>
+              <p className="text-sm font-semibold text-brand-600">{isFr ? 'Guide Parents' : 'Parent Guide'}</p>
               <p className="text-xs text-gray-500">{isFr ? 'Comment trouver et gérer les babysitters' : 'How to find and manage babysitters'}</p>
             </div>
           </Link>
           <Link to="/guide/babysitters" className="flex items-center gap-3 rounded-lg bg-gray-50 p-3 active:bg-gray-100">
-            <SearchIcon className="h-5 w-5 shrink-0 text-red-500" />
+            <SearchIcon className="h-5 w-5 shrink-0 text-brand-500" />
             <div>
-              <p className="text-sm font-semibold text-red-600">{isFr ? 'Guide Babysitters' : 'Babysitter Guide'}</p>
+              <p className="text-sm font-semibold text-brand-600">{isFr ? 'Guide Babysitters' : 'Babysitter Guide'}</p>
               <p className="text-xs text-gray-500">{isFr ? 'Comment recevoir et gérer les demandes' : 'How to receive and manage requests'}</p>
             </div>
           </Link>
           <Link to="/install" className="flex items-center gap-3 rounded-lg bg-gray-50 p-3 active:bg-gray-100">
-            <DownloadIcon className="h-5 w-5 shrink-0 text-red-500" />
+            <DownloadIcon className="h-5 w-5 shrink-0 text-brand-500" />
             <div>
-              <p className="text-sm font-semibold text-red-600">{isFr ? 'Installer l\'application' : 'Install the App'}</p>
+              <p className="text-sm font-semibold text-brand-600">{isFr ? 'Installer l\'application' : 'Install the App'}</p>
               <p className="text-xs text-gray-500">{isFr ? 'Ajouter Sync/Sit à votre écran d\'accueil' : 'Add Sync/Sit to your home screen'}</p>
             </div>
           </Link>
@@ -161,7 +161,7 @@ export function AboutPage() {
             {isFr ? 'Exploité par Tandy SARL, Paris' : 'Operated by Tandy SARL, Paris'}
           </p>
           <p className="mb-1 text-xs text-gray-400">
-            <a href="mailto:support@sync-sit.com" className="text-red-500 hover:underline">support@sync-sit.com</a>
+            <a href="mailto:support@sync-sit.com" className="text-brand-500 hover:underline">support@sync-sit.com</a>
           </p>
           <p className="text-xs text-gray-400">Version 1.0.0</p>
         </div>

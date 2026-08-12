@@ -65,7 +65,7 @@ function NoteForm({
       <p className="mb-3 text-right text-[11px] text-gray-400">
         {text.length}/{maxLength}
       </p>
-      {error && <p className="mb-3 text-sm text-red-600">{error}</p>}
+      {error && <p className="mb-3 text-sm text-brand-600">{error}</p>}
       <div className="flex gap-2">
         <Button
           variant="outline"

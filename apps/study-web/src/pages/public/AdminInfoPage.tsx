@@ -29,12 +29,12 @@ export function AdminInfoPage() {
         )}
         {!authLoading && !signedIn && (
           <p className="mb-3 text-sm">
-            <Link to="/login" className="text-red-600 hover:underline">
+            <Link to="/login" className="text-brand-600 hover:underline">
               {t('adminInfo.goToLogin')}
             </Link>
           </p>
         )}
-        <Link to="/" className="text-sm text-red-600 hover:underline">
+        <Link to="/" className="text-sm text-brand-600 hover:underline">
           {t('adminInfo.backHome')}
         </Link>
       </Card>

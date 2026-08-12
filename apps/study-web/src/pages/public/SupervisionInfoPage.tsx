@@ -41,7 +41,7 @@ export function SupervisionInfoPage() {
 
         <Link
           to="/supervision-agreement"
-          className="text-sm font-semibold text-red-600 hover:underline"
+          className="text-sm font-semibold text-brand-600 hover:underline"
         >
           {t('supervision.info.agreementLink')}
         </Link>

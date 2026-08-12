@@ -183,7 +183,7 @@ export function BabysittingOptionsPage() {
           )}
         </div>
 
-        {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
+        {error && <p className="mt-4 text-sm text-brand-600">{error}</p>}
         {success && <p className="mt-4 text-sm text-green-600">✓ {t('profile.saved')}</p>}
         <Button type="submit" disabled={saving} className="mt-4">
           {saving ? t('common.saving') : t('common.save')}

@@ -146,7 +146,7 @@ export function ProposeSessionPage() {
       <div>
         <TopNav title={t('tutor.sessions.propose.title')} backTo="/tutor/sessions" />
         <div className="px-5 pt-4 pb-8">
-          <p className="py-6 text-center text-sm text-red-600">
+          <p className="py-6 text-center text-sm text-brand-600">
             {t('tutor.sessions.propose.loadError')}
           </p>
         </div>
@@ -246,7 +246,7 @@ export function ProposeSessionPage() {
           </div>
         )}
 
-        {proposeError && <p className="mt-2 mb-2 text-sm text-red-600">{proposeError}</p>}
+        {proposeError && <p className="mt-2 mb-2 text-sm text-brand-600">{proposeError}</p>}
 
         <Button className="mt-2" disabled={!canPropose} onClick={handlePropose}>
           {submitting ? t('tutor.sessions.propose.sending') : t('tutor.sessions.propose.submit')}

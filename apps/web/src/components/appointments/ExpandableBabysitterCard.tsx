@@ -177,12 +177,12 @@ export function ExpandableBabysitterCard({
             <div className="mt-2 rounded-lg bg-gray-50 p-3">
               <p className="mb-1 text-xs font-medium text-gray-500">{t('familyDashboard.contactLabel')}</p>
               {info.contactEmail && (
-                <a href={`mailto:${info.contactEmail}`} className="flex items-center gap-2 py-1.5 text-xs text-red-600 active:bg-gray-100">
+                <a href={`mailto:${info.contactEmail}`} className="flex items-center gap-2 py-1.5 text-xs text-brand-600 active:bg-gray-100">
                   <span>📧</span> <span>{info.contactEmail}</span>
                 </a>
               )}
               {info.contactPhone && (
-                <a href={`tel:${info.contactPhone}`} className="flex items-center gap-2 py-1.5 text-xs text-red-600 active:bg-gray-100">
+                <a href={`tel:${info.contactPhone}`} className="flex items-center gap-2 py-1.5 text-xs text-brand-600 active:bg-gray-100">
                   <span>📞</span> <span>{info.contactPhone}</span>
                 </a>
               )}
@@ -209,12 +209,12 @@ export function ExpandableBabysitterCard({
                       <div className="ml-4 mt-1 mb-2 space-y-1">
                         {ref.text && <p className="text-xs text-gray-600 italic">"{ref.text}"</p>}
                         {ref.refEmail && (
-                          <a href={`mailto:${ref.refEmail}`} onClick={(e) => e.stopPropagation()} className="flex items-center gap-1.5 text-xs text-red-600">
+                          <a href={`mailto:${ref.refEmail}`} onClick={(e) => e.stopPropagation()} className="flex items-center gap-1.5 text-xs text-brand-600">
                             <span>📧</span> {ref.refEmail}
                           </a>
                         )}
                         {ref.refPhone && (
-                          <a href={`tel:${ref.refPhone}`} onClick={(e) => e.stopPropagation()} className="flex items-center gap-1.5 text-xs text-red-600">
+                          <a href={`tel:${ref.refPhone}`} onClick={(e) => e.stopPropagation()} className="flex items-center gap-1.5 text-xs text-brand-600">
                             <span>📞</span> {ref.refPhone}
                           </a>
                         )}
@@ -250,7 +250,7 @@ export function ExpandableBabysitterCard({
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={(e) => e.stopPropagation()}
-                  className="text-xs font-medium text-red-600 active:text-red-800"
+                  className="text-xs font-medium text-brand-600 active:text-brand-800"
                 >
                   {t('request.addToCalendar')}
                 </a>

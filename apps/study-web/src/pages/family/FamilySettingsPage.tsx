@@ -197,7 +197,7 @@ export function FamilySettingsPage() {
       <div>
         <TopNav title={t('family.settingsTitle')} backTo="/family" />
         <div className="flex justify-center py-20">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-gray-300 border-t-red-600" />
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-gray-300 border-t-brand-600" />
         </div>
       </div>
     );
@@ -208,7 +208,7 @@ export function FamilySettingsPage() {
       <TopNav title={t('family.settingsTitle')} backTo="/family" />
       <div className="px-6 pt-4 pb-8">
         {success && <InfoBanner className="mb-4">{t('family.settings.saved')}</InfoBanner>}
-        {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
+        {error && <p className="mb-4 text-sm text-brand-600">{error}</p>}
 
         <p className="mb-5 text-xs text-gray-500">{t('family.settings.sharedHint')}</p>
 

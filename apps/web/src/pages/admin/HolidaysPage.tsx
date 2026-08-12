@@ -75,7 +75,7 @@ export function AdminHolidaysPage() {
       <div>
         <TopNav title={t('admin.holidays')} backTo="/admin" />
         <div className="flex justify-center py-8">
-          <Spinner className="h-8 w-8 text-red-600" />
+          <Spinner className="h-8 w-8 text-brand-600" />
         </div>
       </div>
     );

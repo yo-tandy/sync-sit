@@ -15,7 +15,7 @@ export function LanguageSelector({ className = '' }: { className?: string }) {
         onClick={() => handleChange('en')}
         className={`rounded-lg border-[1.5px] px-3 py-1.5 text-sm font-medium transition-colors ${
           i18n.language === 'en'
-            ? 'border-red-600 bg-red-50 text-red-600'
+            ? 'border-brand-600 bg-brand-50 text-brand-600'
             : 'border-gray-300 text-gray-700 hover:border-gray-400'
         }`}
       >
@@ -26,7 +26,7 @@ export function LanguageSelector({ className = '' }: { className?: string }) {
         onClick={() => handleChange('fr')}
         className={`rounded-lg border-[1.5px] px-3 py-1.5 text-sm font-medium transition-colors ${
           i18n.language?.startsWith('fr')
-            ? 'border-red-600 bg-red-50 text-red-600'
+            ? 'border-brand-600 bg-brand-50 text-brand-600'
             : 'border-gray-300 text-gray-700 hover:border-gray-400'
         }`}
       >

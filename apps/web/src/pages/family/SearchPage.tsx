@@ -341,7 +341,7 @@ export function SearchPage() {
                     {recurringSlots.map((slot, i) => {
                       const dayLabels: Record<string, string> = { mon: t('days.mon'), tue: t('days.tue'), wed: t('days.wed'), thu: t('days.thu'), fri: t('days.fri'), sat: t('days.sat'), sun: t('days.sun') };
                       return (
-                        <div key={slot.day} className={`rounded-lg border-[1.5px] p-3 transition-colors ${slot.enabled ? 'border-red-200 bg-red-50/50' : 'border-gray-200'}`}>
+                        <div key={slot.day} className={`rounded-lg border-[1.5px] p-3 transition-colors ${slot.enabled ? 'border-brand-200 bg-brand-50/50' : 'border-gray-200'}`}>
                           <div className="flex items-center gap-3">
                             <button
                               type="button"
@@ -351,7 +351,7 @@ export function SearchPage() {
                                 setRecurringSlots(updated);
                               }}
                               className={`flex h-6 w-6 shrink-0 items-center justify-center rounded border-[1.5px] text-xs ${
-                                slot.enabled ? 'border-red-600 bg-red-600 text-white' : 'border-gray-300'
+                                slot.enabled ? 'border-brand-600 bg-brand-600 text-white' : 'border-gray-300'
                               }`}
                             >
                               {slot.enabled && '✓'}
@@ -402,7 +402,7 @@ export function SearchPage() {
                       type="button"
                       onClick={() => setSchoolWeeksOnly(true)}
                       className={`flex-1 rounded-lg border-[1.5px] px-3 py-2 text-sm font-medium transition-colors ${
-                        schoolWeeksOnly ? 'border-red-600 bg-red-50 text-red-600' : 'border-gray-300 text-gray-700'
+                        schoolWeeksOnly ? 'border-brand-600 bg-brand-50 text-brand-600' : 'border-gray-300 text-gray-700'
                       }`}
                     >
                       {t('search.schoolWeeksOnly')}
@@ -411,7 +411,7 @@ export function SearchPage() {
                       type="button"
                       onClick={() => setSchoolWeeksOnly(false)}
                       className={`flex-1 rounded-lg border-[1.5px] px-3 py-2 text-sm font-medium transition-colors ${
-                        !schoolWeeksOnly ? 'border-red-600 bg-red-50 text-red-600' : 'border-gray-300 text-gray-700'
+                        !schoolWeeksOnly ? 'border-brand-600 bg-brand-50 text-brand-600' : 'border-gray-300 text-gray-700'
                       }`}
                     >
                       {t('search.includingHolidays')}
@@ -486,7 +486,7 @@ export function SearchPage() {
               </Chip>
             </div>
 
-            {searchError && <p className="mb-4 text-sm text-red-600">{searchError}</p>}
+            {searchError && <p className="mb-4 text-sm text-brand-600">{searchError}</p>}
 
             <Button
               onClick={handleSearch}
@@ -591,12 +591,12 @@ export function SearchPage() {
                                   <div className="ml-4 mt-1 mb-2 space-y-1">
                                     {ref.text && <p className="text-xs text-gray-600 italic">"{ref.text}"</p>}
                                     {ref.refEmail && (
-                                      <a href={`mailto:${ref.refEmail}`} onClick={(e) => e.stopPropagation()} className="flex items-center gap-1.5 text-xs text-red-600">
+                                      <a href={`mailto:${ref.refEmail}`} onClick={(e) => e.stopPropagation()} className="flex items-center gap-1.5 text-xs text-brand-600">
                                         <span>📧</span> {ref.refEmail}
                                       </a>
                                     )}
                                     {ref.refPhone && (
-                                      <a href={`tel:${ref.refPhone}`} onClick={(e) => e.stopPropagation()} className="flex items-center gap-1.5 text-xs text-red-600">
+                                      <a href={`tel:${ref.refPhone}`} onClick={(e) => e.stopPropagation()} className="flex items-center gap-1.5 text-xs text-brand-600">
                                         <span>📞</span> {ref.refPhone}
                                       </a>
                                     )}
@@ -631,7 +631,7 @@ export function SearchPage() {
                 <>
                   {preferred.length > 0 && (
                     <>
-                      <h3 className="mb-2 mt-2 text-sm font-semibold text-red-600">❤️ {t('search.preferredSection')} ({preferred.length})</h3>
+                      <h3 className="mb-2 mt-2 text-sm font-semibold text-brand-600">❤️ {t('search.preferredSection')} ({preferred.length})</h3>
                       {preferred.map(renderCard)}
                     </>
                   )}
@@ -674,7 +674,7 @@ export function SearchPage() {
             min={0}
           />
 
-          {searchError && <p className="mb-3 text-sm text-red-600">{searchError}</p>}
+          {searchError && <p className="mb-3 text-sm text-brand-600">{searchError}</p>}
 
           <div className="flex gap-2">
             <Button onClick={handleSendRequest} disabled={sending} className="flex-1">

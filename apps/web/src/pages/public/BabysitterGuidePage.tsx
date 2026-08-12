@@ -5,7 +5,7 @@ function Step({ number, title, children }: { number: number; title: string; chil
   return (
     <div className="mb-6">
       <div className="mb-2 flex items-center gap-3">
-        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-red-600 text-sm font-bold text-white">{number}</div>
+        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-600 text-sm font-bold text-white">{number}</div>
         <h3 className="text-base font-semibold text-gray-900">{title}</h3>
       </div>
       <div className="ml-10 text-sm leading-relaxed text-gray-600">{children}</div>
@@ -27,8 +27,8 @@ export function BabysitterGuidePage() {
           <p className="text-center text-sm text-gray-500">{fr ? 'Guide pour les babysitters' : 'A guide for babysitters'}</p>
         </div>
 
-        <div className="mb-6 rounded-xl bg-red-50 p-4">
-          <p className="text-sm font-medium text-red-800">
+        <div className="mb-6 rounded-xl bg-brand-50 p-4">
+          <p className="text-sm font-medium text-brand-800">
             {fr
               ? 'Sync/Sit vous connecte avec des familles EJM qui recherchent un babysitter. Voici comment commencer et recevoir des demandes.'
               : 'Sync/Sit connects you with EJM families looking for a babysitter. Here\'s how to get started and receive requests.'}

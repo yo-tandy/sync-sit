@@ -19,8 +19,8 @@
 @theme {
   /* Semantic feedback colors (shared) — always the same hue regardless
      of which app's brand palette is active. Components use these for
-     error/warning/info/success states; brand-primary still maps via
-     --color-red-* (sit) or --color-red-* remapped to blue (study). */
+     error/warning/info/success states; the brand palette itself is
+     --color-brand-* (red ramp in sit.css, blue ramp in study.css). */
   --color-green-600: #16A34A;
   --color-green-100: #DCFCE7;
   --color-amber-600: #D97706;

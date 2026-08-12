@@ -109,14 +109,14 @@ export function LanguagePicker({ selected, onChange, label = 'Languages spoken *
             onChange={(e) => setCustomValue(e.target.value)}
             onKeyDown={handleCustomKeyDown}
             placeholder="Enter language..."
-            className="h-10 flex-1 rounded-lg border-[1.5px] border-gray-300 bg-white px-3 text-sm outline-none focus:border-red-600"
+            className="h-10 flex-1 rounded-lg border-[1.5px] border-gray-300 bg-white px-3 text-sm outline-none focus:border-brand-600"
             autoFocus
           />
           <button
             type="button"
             onClick={addCustomLanguage}
             disabled={!customValue.trim()}
-            className="h-10 rounded-lg bg-red-600 px-4 text-sm font-medium text-white disabled:opacity-50"
+            className="h-10 rounded-lg bg-brand-600 px-4 text-sm font-medium text-white disabled:opacity-50"
           >
             Add
           </button>

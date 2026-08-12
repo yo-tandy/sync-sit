@@ -514,7 +514,7 @@ export function SessionsPage() {
       <TopNav title={t('tutor.sessionsTitle')} backTo="/tutor" />
 
       <div className="px-5 pt-4 pb-8">
-        {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
+        {error && <p className="mb-4 text-sm text-brand-600">{error}</p>}
 
         {sessions === null && !loadError && (
           <div className="flex justify-center py-20">
@@ -523,7 +523,7 @@ export function SessionsPage() {
         )}
 
         {loadError && (
-          <p className="py-10 text-center text-sm text-red-600">{t('tutor.sessions.loadError')}</p>
+          <p className="py-10 text-center text-sm text-brand-600">{t('tutor.sessions.loadError')}</p>
         )}
 
         {sessions !== null &&

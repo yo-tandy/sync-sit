@@ -58,12 +58,12 @@ function ReferenceCard({
           </Badge>
         </div>
         {reference.refEmail && (
-          <a href={`mailto:${reference.refEmail}`} onClick={(e) => e.stopPropagation()} className="mt-1 flex items-center gap-2 py-0.5 text-xs text-red-600 active:bg-gray-100">
+          <a href={`mailto:${reference.refEmail}`} onClick={(e) => e.stopPropagation()} className="mt-1 flex items-center gap-2 py-0.5 text-xs text-brand-600 active:bg-gray-100">
             <span>📧</span> {reference.refEmail}
           </a>
         )}
         {reference.refPhone && (
-          <a href={`tel:${reference.refPhone}`} onClick={(e) => e.stopPropagation()} className="mt-0.5 flex items-center gap-2 py-0.5 text-xs text-red-600 active:bg-gray-100">
+          <a href={`tel:${reference.refPhone}`} onClick={(e) => e.stopPropagation()} className="mt-0.5 flex items-center gap-2 py-0.5 text-xs text-brand-600 active:bg-gray-100">
             <span>📞</span> {reference.refPhone}
           </a>
         )}
@@ -342,7 +342,7 @@ export function EndorsementsPage() {
       <div>
         <TopNav title={t('references.title')} backTo="/babysitter" />
         <div className="flex justify-center py-20">
-          <Spinner className="h-8 w-8 text-red-600" />
+          <Spinner className="h-8 w-8 text-brand-600" />
         </div>
       </div>
     );
@@ -358,7 +358,7 @@ export function EndorsementsPage() {
           <h3 className="text-sm font-semibold text-gray-700">{t('references.myReferences')}</h3>
           <button
             onClick={openAdd}
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-red-600 text-white"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-600 text-white"
           >
             <PlusIcon className="h-4 w-4" />
           </button>

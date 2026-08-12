@@ -138,7 +138,7 @@ export function RequestDetailPage() {
       <div>
         <TopNav title={t('request.title')} backTo="/babysitter" />
         <div className="flex justify-center py-20">
-          <Spinner className="h-8 w-8 text-red-600" />
+          <Spinner className="h-8 w-8 text-brand-600" />
         </div>
       </div>
     );
@@ -195,10 +195,10 @@ export function RequestDetailPage() {
         </div>
 
         {apt.status === 'cancelled' && apt.statusReason === 'cancelled_by_family' && (
-          <Card className="mb-4 border-red-300 bg-red-50">
-            <p className="text-sm font-semibold text-red-800">{t('request.cancelledByFamilyBanner')}</p>
+          <Card className="mb-4 border-brand-300 bg-brand-50">
+            <p className="text-sm font-semibold text-brand-800">{t('request.cancelledByFamilyBanner')}</p>
             {apt.cancellationReason && (
-              <p className="mt-1 text-xs text-red-600">{apt.cancellationReason}</p>
+              <p className="mt-1 text-xs text-brand-600">{apt.cancellationReason}</p>
             )}
           </Card>
         )}
@@ -247,7 +247,7 @@ export function RequestDetailPage() {
               href={buildCalendarUrl(apt.date, apt.startTime, apt.endTime, familyName, apt.address)}
               target="_blank"
               rel="noopener noreferrer"
-              className="mt-2 inline-flex items-center gap-1.5 text-sm font-medium text-red-600 active:text-red-800"
+              className="mt-2 inline-flex items-center gap-1.5 text-sm font-medium text-brand-600 active:text-brand-800"
             >
               <span>📅</span> {t('request.addToCalendar')}
             </a>
@@ -325,11 +325,11 @@ export function RequestDetailPage() {
             {parentContacts.map((p, i) => (
               <div key={i} className="mb-3 last:mb-0">
                 <p className="mb-1 text-sm font-medium text-gray-900">{p.firstName} {p.lastName}</p>
-                <a href={`mailto:${p.email}`} className="flex items-center gap-2 py-1.5 text-xs text-red-600 active:bg-gray-100">
+                <a href={`mailto:${p.email}`} className="flex items-center gap-2 py-1.5 text-xs text-brand-600 active:bg-gray-100">
                   <span>📧</span> <span>{p.email}</span>
                 </a>
                 {p.phone && (
-                  <a href={`tel:${p.phone}`} className="flex items-center gap-2 py-1.5 text-xs text-red-600 active:bg-gray-100">
+                  <a href={`tel:${p.phone}`} className="flex items-center gap-2 py-1.5 text-xs text-brand-600 active:bg-gray-100">
                     <span>📞</span> <span>{p.phone}</span>
                   </a>
                 )}
@@ -369,7 +369,7 @@ export function RequestDetailPage() {
                 type="checkbox"
                 checked={blockSchedule}
                 onChange={(e) => setBlockSchedule(e.target.checked)}
-                className="h-4 w-4 rounded border-gray-300 text-red-600"
+                className="h-4 w-4 rounded border-gray-300 text-brand-600"
               />
               {t('request.blockSchedule')}
             </label>
@@ -425,7 +425,7 @@ export function RequestDetailPage() {
                 href={buildCalendarUrl(apt.date, apt.startTime, apt.endTime, familyName, apt.address)}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="mb-3 inline-flex items-center gap-1.5 text-sm font-medium text-red-600 active:text-red-800"
+                className="mb-3 inline-flex items-center gap-1.5 text-sm font-medium text-brand-600 active:text-brand-800"
               >
                 <span>📅</span> {t('request.addToCalendar')}
               </a>

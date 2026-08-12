@@ -165,7 +165,7 @@ export function RequestsPage() {
       <TopNav title={t('family.requests.title')} backTo="/family" />
 
       <div className="px-5 pt-4 pb-8">
-        {cancelError && <p className="mb-4 text-sm text-red-600">{cancelError}</p>}
+        {cancelError && <p className="mb-4 text-sm text-brand-600">{cancelError}</p>}
 
         {/* Spinner only while a real fetch is in flight — with no familyId there
             is nothing to load, so fall through to the empty state. */}
@@ -229,7 +229,7 @@ export function RequestsPage() {
                             to={`/family/search?subject=${encodeURIComponent(
                               r.subject,
                             )}&level=${encodeURIComponent(r.level)}`}
-                            className="text-xs font-semibold text-red-600 hover:underline"
+                            className="text-xs font-semibold text-brand-600 hover:underline"
                           >
                             {t('family.requests.viewContact')}
                           </Link>

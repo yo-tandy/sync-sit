@@ -73,15 +73,15 @@ export function StepFamilyInfo({ data, onChange, onNext, loading, error }: StepF
           label={
             <span>
               {t('enrollment.consentAgree')}{' '}
-              <Link to="/terms" target="_blank" className="font-medium text-red-600 underline">{t('enrollment.termsOfService')}</Link>
+              <Link to="/terms" target="_blank" className="font-medium text-brand-600 underline">{t('enrollment.termsOfService')}</Link>
               {' '}{t('enrollment.consentAnd')}{' '}
-              <Link to="/privacy" target="_blank" className="font-medium text-red-600 underline">{t('enrollment.privacyPolicy')}</Link>
+              <Link to="/privacy" target="_blank" className="font-medium text-brand-600 underline">{t('enrollment.privacyPolicy')}</Link>
             </span>
           }
         />
       </div>
 
-      {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
+      {error && <p className="mb-4 text-sm text-brand-600">{error}</p>}
 
       <Button type="submit" disabled={loading || !isValid} className="mb-8 mt-2">
         {loading ? t('enrollment.creatingAccount') : t('enrollment.completeSignUp')}

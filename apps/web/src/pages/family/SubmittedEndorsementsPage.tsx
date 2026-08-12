@@ -142,7 +142,7 @@ export function SubmittedEndorsementsPage() {
       <div>
         <TopNav title={t('submittedReferences.title')} backTo="/family" />
         <div className="flex justify-center py-20">
-          <Spinner className="h-8 w-8 text-red-600" />
+          <Spinner className="h-8 w-8 text-brand-600" />
         </div>
       </div>
     );
@@ -156,7 +156,7 @@ export function SubmittedEndorsementsPage() {
           <p className="flex-1 text-sm text-gray-500">{t('submittedReferences.desc')}</p>
           <button
             onClick={() => setShowAddDialog(true)}
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-600 text-white"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-600 text-white"
           >
             <PlusIcon className="h-4 w-4" />
           </button>
@@ -224,12 +224,12 @@ export function SubmittedEndorsementsPage() {
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder={t('preferred.searchPlaceholder')}
               autoFocus
-              className="h-11 w-full rounded-lg border-[1.5px] border-gray-300 bg-white pl-9 pr-4 text-sm text-gray-950 outline-none transition-colors placeholder:text-gray-400 focus:border-red-600"
+              className="h-11 w-full rounded-lg border-[1.5px] border-gray-300 bg-white pl-9 pr-4 text-sm text-gray-950 outline-none transition-colors placeholder:text-gray-400 focus:border-brand-600"
             />
           </div>
           {searching && (
             <div className="flex justify-center py-4">
-              <Spinner className="h-5 w-5 text-red-600" />
+              <Spinner className="h-5 w-5 text-brand-600" />
             </div>
           )}
           {!searching && searchResults.length > 0 && (

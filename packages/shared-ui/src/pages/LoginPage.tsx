@@ -54,7 +54,7 @@ export function LoginPage({ logoSrc, logoAlt, onLogin, postLoginRouter, loading,
               value={email}
               onChange={(e) => { setEmail(e.target.value); clearError(); }}
               placeholder="your@email.com"
-              className="h-12 w-full rounded-lg border-[1.5px] border-gray-300 bg-white px-4 text-base text-gray-950 outline-none transition-colors placeholder:text-gray-400 focus:border-red-600"
+              className="h-12 w-full rounded-lg border-[1.5px] border-gray-300 bg-white px-4 text-base text-gray-950 outline-none transition-colors placeholder:text-gray-400 focus:border-brand-600"
               required
             />
           </div>
@@ -66,21 +66,21 @@ export function LoginPage({ logoSrc, logoAlt, onLogin, postLoginRouter, loading,
               value={password}
               onChange={(e) => { setPassword(e.target.value); clearError(); }}
               placeholder="Enter your password"
-              className="h-12 w-full rounded-lg border-[1.5px] border-gray-300 bg-white px-4 text-base text-gray-950 outline-none transition-colors placeholder:text-gray-400 focus:border-red-600"
+              className="h-12 w-full rounded-lg border-[1.5px] border-gray-300 bg-white px-4 text-base text-gray-950 outline-none transition-colors placeholder:text-gray-400 focus:border-brand-600"
               required
             />
           </div>
 
-          {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
+          {error && <p className="mb-4 text-sm text-brand-600">{error}</p>}
 
           <div className="mb-6 text-right">
-            <Link to="/forgot-password" className="text-sm font-medium text-red-600 hover:underline">{t('auth.forgotPassword')}</Link>
+            <Link to="/forgot-password" className="text-sm font-medium text-brand-600 hover:underline">{t('auth.forgotPassword')}</Link>
           </div>
 
           <button
             type="submit"
             disabled={loading}
-            className="flex h-[52px] w-full items-center justify-center rounded-xl bg-red-600 text-base font-semibold text-white transition-colors hover:bg-red-600/90 disabled:opacity-50"
+            className="flex h-[52px] w-full items-center justify-center rounded-xl bg-brand-600 text-base font-semibold text-white transition-colors hover:bg-brand-600/90 disabled:opacity-50"
           >
             {loading ? t('auth.signingIn') : t('auth.login')}
           </button>
@@ -88,7 +88,7 @@ export function LoginPage({ logoSrc, logoAlt, onLogin, postLoginRouter, loading,
 
         <div className="mt-6 text-center">
           <span className="text-sm text-gray-500">{t('auth.noAccount')}{' '}</span>
-          <Link to="/signup" className="text-sm font-semibold text-red-600 hover:underline">{t('auth.signUp')}</Link>
+          <Link to="/signup" className="text-sm font-semibold text-brand-600 hover:underline">{t('auth.signUp')}</Link>
         </div>
       </div>
     </div>

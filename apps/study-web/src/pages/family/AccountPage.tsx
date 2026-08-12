@@ -144,7 +144,7 @@ export function AccountPage() {
       <TopNav title={t('account.title')} backTo="/family" />
 
       <div className="px-5 pt-4 pb-8">
-        {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
+        {error && <p className="mb-4 text-sm text-brand-600">{error}</p>}
 
         {/* 1. Personal Info (read-only) */}
         <h3 className="mb-3 text-sm font-semibold text-gray-700">{t('account.personalInfo')}</h3>
@@ -192,7 +192,7 @@ export function AccountPage() {
                   if (e.target.checked) setWhatsapp(phone);
                   else setWhatsapp('');
                 }}
-                className="h-4 w-4 rounded border-gray-300 text-red-600 focus:ring-red-500"
+                className="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
               />
               {t('account.whatsappSameAsPhone')}
             </label>
@@ -247,7 +247,7 @@ export function AccountPage() {
                 type="button"
                 aria-label={t(s.labelKey)}
                 onClick={() => toggleEmail(s.key)}
-                className={`flex h-6 w-10 items-center rounded-full p-0.5 transition-colors ${channel.email ? 'bg-red-600' : 'bg-gray-300'}`}
+                className={`flex h-6 w-10 items-center rounded-full p-0.5 transition-colors ${channel.email ? 'bg-brand-600' : 'bg-gray-300'}`}
               >
                 <div className={`h-5 w-5 rounded-full bg-white shadow transition-transform ${channel.email ? 'translate-x-4' : 'translate-x-0'}`} />
               </button>

@@ -112,7 +112,7 @@ export function AdminGovernancePage() {
       <TopNav title={t('admin.governance.title')} backTo="/admin" />
 
       <div className="px-5 pt-4 pb-8">
-        {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
+        {error && <p className="mb-4 text-sm text-brand-600">{error}</p>}
 
         {/* ── 1. Supervised accounts (the GDPR view) ── */}
         <h2 className="mb-1 text-sm font-semibold text-gray-700">
@@ -205,7 +205,7 @@ export function AdminGovernancePage() {
               type="checkbox"
               checked={onlyUnreviewed}
               onChange={toggleUnreviewed}
-              className="h-4 w-4 rounded border-gray-300 text-red-600 focus:ring-red-500"
+              className="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
             />
             {t('admin.governance.onlyUnreviewed')}
           </label>
@@ -274,7 +274,7 @@ export function AdminGovernancePage() {
           })}
         </p>
         {revokeTarget && isMinor(revokeTarget) && (
-          <p className="mb-3 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+          <p className="mb-3 rounded-lg border border-brand-200 bg-brand-50 p-3 text-xs text-brand-700">
             {t('admin.governance.forceRevokeMinorWarning')}
           </p>
         )}

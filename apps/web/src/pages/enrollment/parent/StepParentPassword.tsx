@@ -47,7 +47,7 @@ export function StepParentPassword({ data, onChange, onNext, error }: StepParent
         required
       />
 
-      {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
+      {error && <p className="mb-4 text-sm text-brand-600">{error}</p>}
 
       <Button type="submit" disabled={data.password.length < 8 || data.password !== passwordConfirm}>
         {t('common.continue')}

@@ -197,7 +197,7 @@ export function DayEditor({ day, slots: initialSlots, open, onClose, onSave }: D
               <button
                 type="button"
                 onClick={() => handleRemoveRange(r)}
-                className="text-sm text-red-600 hover:text-red-700"
+                className="text-sm text-brand-600 hover:text-brand-700"
               >
                 {t('common.remove')}
               </button>

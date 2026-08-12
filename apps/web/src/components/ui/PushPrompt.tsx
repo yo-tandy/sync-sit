@@ -50,10 +50,10 @@ export function PushPrompt() {
 
   return (
     <div className="fixed bottom-4 left-4 right-4 z-50 mx-auto max-w-sm">
-      <Card className="border-red-200 bg-white shadow-lg">
+      <Card className="border-brand-200 bg-white shadow-lg">
         <div className="flex items-start gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-50">
-            <BellIcon className="h-5 w-5 text-red-600" />
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-50">
+            <BellIcon className="h-5 w-5 text-brand-600" />
           </div>
           <div className="flex-1">
             <p className="mb-1 text-sm font-semibold text-gray-900">{t('notifications.pushPromptTitle')}</p>

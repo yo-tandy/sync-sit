@@ -96,11 +96,11 @@ export function CreateKidInvitePage() {
         type="checkbox"
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}
-        className="mt-0.5 h-4 w-4 rounded border-gray-300 text-red-600 focus:ring-red-500"
+        className="mt-0.5 h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
       />
       <span>
         {t('family.governance.invite.consentAgree')}{' '}
-        <Link to={docTo} target="_blank" className="text-red-600 hover:underline">
+        <Link to={docTo} target="_blank" className="text-brand-600 hover:underline">
           {docLabel}
         </Link>{' '}
         {t('family.governance.invite.consentVersion', { version })}
@@ -149,7 +149,7 @@ export function CreateKidInvitePage() {
           </div>
         )}
         {error === 'generic' && (
-          <p className="mb-4 text-sm text-red-600">{t('family.governance.actionError')}</p>
+          <p className="mb-4 text-sm text-brand-600">{t('family.governance.actionError')}</p>
         )}
 
         <form onSubmit={handleSubmit}>

@@ -77,10 +77,10 @@ export function ReportProblemPage({
           </div>
 
           {errorCount > 0 && (
-            <div className="mt-3 max-h-40 overflow-y-auto rounded border border-red-200 bg-red-50 p-2">
+            <div className="mt-3 max-h-40 overflow-y-auto rounded border border-brand-200 bg-brand-50 p-2">
               {recentErrors.map((err, i) => (
-                <div key={i} className="mb-1 text-xs text-red-700">
-                  <span className="text-red-400">{new Date(err.timestamp).toLocaleTimeString()}</span>{' '}
+                <div key={i} className="mb-1 text-xs text-brand-700">
+                  <span className="text-brand-400">{new Date(err.timestamp).toLocaleTimeString()}</span>{' '}
                   {err.message.slice(0, 150)}
                 </div>
               ))}

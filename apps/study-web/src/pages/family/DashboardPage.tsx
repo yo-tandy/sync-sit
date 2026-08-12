@@ -130,7 +130,7 @@ export function DashboardPage() {
       {isVerified === true && (
         <Link to="/family/search" className="mb-4 block">
           <Card interactive className="flex items-center gap-3 py-4">
-            <SearchIcon className="h-6 w-6 text-red-600" />
+            <SearchIcon className="h-6 w-6 text-brand-600" />
             <div className="flex-1">
               <p className="text-sm font-semibold text-gray-900">
                 {t('family.dashboard.searchCardTitle')}
@@ -216,19 +216,19 @@ export function DashboardPage() {
       <div className="space-y-3">
         <EntryCard
           to="/family/governance"
-          icon={<ShieldIcon className="h-6 w-6 text-red-600" />}
+          icon={<ShieldIcon className="h-6 w-6 text-brand-600" />}
           title={t('family.governance.navTitle')}
           desc={t('family.governance.navDesc')}
         />
         <EntryCard
           to="/family/settings"
-          icon={<SettingsIcon className="h-6 w-6 text-red-600" />}
+          icon={<SettingsIcon className="h-6 w-6 text-brand-600" />}
           title={t('family.dashboard.settingsCard')}
           desc={t('family.dashboard.settingsCardDesc')}
         />
         <EntryCard
           to="/family/account"
-          icon={<UserIcon className="h-6 w-6 text-red-600" />}
+          icon={<UserIcon className="h-6 w-6 text-brand-600" />}
           title={t('family.dashboard.accountCard')}
           desc={t('family.dashboard.accountCardDesc')}
         />

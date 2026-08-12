@@ -52,8 +52,8 @@ export function StepVerify({ ejemEmail, onVerify, onResend, error }: StepVerifyP
 
   return (
     <div className="px-6 text-center">
-      <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-red-50">
-        <MailIcon className="h-7 w-7 text-red-600" />
+      <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-brand-50">
+        <MailIcon className="h-7 w-7 text-brand-600" />
       </div>
       <h2 className="mb-2 text-xl font-bold">{t('auth.checkEmail')}</h2>
       <p className="mb-8 text-sm text-gray-500">
@@ -77,9 +77,9 @@ export function StepVerify({ ejemEmail, onVerify, onResend, error }: StepVerifyP
       <p className="mt-4 text-sm text-gray-500">
         {t('auth.didntReceive')}{' '}
         {resendCooldown > 0 ? (
-          <span className="text-red-600">{t('auth.resendIn', { seconds: resendCooldown })}</span>
+          <span className="text-brand-600">{t('auth.resendIn', { seconds: resendCooldown })}</span>
         ) : (
-          <button type="button" onClick={handleResend} className="font-medium text-red-600 hover:underline">
+          <button type="button" onClick={handleResend} className="font-medium text-brand-600 hover:underline">
             {t('auth.resendCode')}
           </button>
         )}

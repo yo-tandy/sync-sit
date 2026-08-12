@@ -259,7 +259,7 @@ export function AdminUsersPage() {
           </div>
           {preapprovedLoading ? (
             <div className="flex justify-center py-4">
-              <Spinner className="h-5 w-5 text-red-600" />
+              <Spinner className="h-5 w-5 text-brand-600" />
             </div>
           ) : preapprovedEmails.length === 0 ? (
             <p className="py-3 text-center text-xs text-gray-400">{t('admin.noPreapprovedEmails')}</p>
@@ -308,7 +308,7 @@ export function AdminUsersPage() {
           </div>
           {exemptionsLoading ? (
             <div className="flex justify-center py-4">
-              <Spinner className="h-5 w-5 text-red-600" />
+              <Spinner className="h-5 w-5 text-brand-600" />
             </div>
           ) : exemptions.length === 0 ? (
             <p className="py-3 text-center text-xs text-gray-400">{t('admin.exemptions.empty')}</p>
@@ -351,7 +351,7 @@ export function AdminUsersPage() {
         {/* User list */}
         {usersLoading ? (
           <div className="flex justify-center py-8">
-            <Spinner className="h-8 w-8 text-red-600" />
+            <Spinner className="h-8 w-8 text-brand-600" />
           </div>
         ) : users.length === 0 ? (
           <p className="py-8 text-center text-sm text-gray-500">{t('admin.noUsersFound')}</p>

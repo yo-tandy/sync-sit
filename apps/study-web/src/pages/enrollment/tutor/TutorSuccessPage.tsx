@@ -17,7 +17,7 @@ export function TutorSuccessPage() {
       </p>
       <Link
         to="/"
-        className="flex h-12 w-full max-w-xs items-center justify-center rounded-xl bg-red-600 text-base font-semibold text-white transition-colors hover:bg-red-600/90"
+        className="flex h-12 w-full max-w-xs items-center justify-center rounded-xl bg-brand-600 text-base font-semibold text-white transition-colors hover:bg-brand-600/90"
       >
         {t('enrollment.tutor.goHome')}
       </Link>
