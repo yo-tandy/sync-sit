@@ -264,6 +264,7 @@ export default {
         'The family will be notified and won\'t be able to send you another request for 7 days.',
       confirmDeclineCta: 'Yes, decline',
       actionError: 'Couldn\'t update the request. Please try again.',
+      loadError: 'Could not load your requests. Please refresh and try again.',
       sentOn: 'Sent {{date}}',
       status: {
         pending: 'Pending',
@@ -648,6 +649,7 @@ export default {
       confirmCancelCta: 'Yes, cancel request',
       keepRequest: 'Keep request',
       actionError: 'Couldn\'t cancel the request. Please try again.',
+      loadError: 'Could not load your requests. Please refresh and try again.',
       book: 'Book a session',
       endorse: 'Endorse {{name}}',
       endorsed: 'Endorsed',

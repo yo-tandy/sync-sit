@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
-import { collection, query, where, orderBy, getDocs } from 'firebase/firestore';
+import { collection, query, where, orderBy, onSnapshot } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
@@ -57,6 +57,9 @@ export function RequestsPage() {
   const defaultRefName = `${userDoc?.firstName ?? ''} ${userDoc?.lastName ?? ''}`.trim();
 
   const [requests, setRequests] = useState<StudyContactRequestDoc[] | null>(null);
+  // The requests subscription errored (e.g. PERMISSION_DENIED) — surfaced
+  // honestly, never conflated with the empty state.
+  const [loadError, setLoadError] = useState(false);
   const [endorsements, setEndorsements] = useState<TutorEndorsementDoc[]>([]);
   // The accepted request whose endorse dialog is open, or null.
   const [endorsing, setEndorsing] = useState<StudyContactRequestDoc | null>(null);
@@ -69,53 +72,48 @@ export function RequestsPage() {
   // matching accepted row shows a disabled "Endorsed" state (persisted nothing).
   const [endorsedTutors, setEndorsedTutors] = useState<Set<string>>(new Set());
 
+  // Live subscription (issue #117 tier b): the same provable query as before,
+  // but every snapshot re-renders the list — a family with an open tab sees a
+  // tutor's acceptance without reloading. First snapshot resolves the loading
+  // state; the error callback surfaces a load failure.
   useEffect(() => {
     if (!familyId) return;
-    let cancelled = false;
-    getDocs(
+    const unsubscribe = onSnapshot(
       query(
         collection(db, 'studyContactRequests'),
         where('familyId', '==', familyId),
         orderBy('createdAt', 'desc'),
       ),
-    )
-      .then((snap) => {
-        if (cancelled) return;
+      (snap) => {
+        setLoadError(false);
         setRequests(snap.docs.map((d) => d.data() as StudyContactRequestDoc));
-      })
-      .catch(() => {
-        if (!cancelled) setRequests([]);
-      });
-    return () => {
-      cancelled = true;
-    };
+      },
+      () => setLoadError(true),
+    );
+    return unsubscribe;
   }, [familyId]);
 
   // This family's submitted endorsements for the "Your endorsements" section.
   // Equality-only (submittedByFamilyId + appSource) — no composite needed — so we
-  // sort newest-first client-side.
+  // sort newest-first client-side. Live too, so a moderation status change shows
+  // up. A subscription error leaves the (supplementary) section hidden, exactly
+  // like the old fetch's empty fallback.
   useEffect(() => {
     if (!familyId) return;
-    let cancelled = false;
-    getDocs(
+    const unsubscribe = onSnapshot(
       query(
         collection(db, 'references'),
         where('submittedByFamilyId', '==', familyId),
         where('appSource', '==', 'study'),
       ),
-    )
-      .then((snap) => {
-        if (cancelled) return;
+      (snap) => {
         const rows = snap.docs.map((d) => d.data() as TutorEndorsementDoc);
         rows.sort((a, b) => createdAtSeconds(b.createdAt) - createdAtSeconds(a.createdAt));
         setEndorsements(rows);
-      })
-      .catch(() => {
-        if (!cancelled) setEndorsements([]);
-      });
-    return () => {
-      cancelled = true;
-    };
+      },
+      () => setEndorsements([]),
+    );
+    return unsubscribe;
   }, [familyId]);
 
   const markEndorsed = (tutorUserId: string) =>
@@ -167,15 +165,21 @@ export function RequestsPage() {
       <div className="px-5 pt-4 pb-8">
         {cancelError && <p className="mb-4 text-sm text-brand-600">{cancelError}</p>}
 
+        {loadError && (
+          <p className="py-10 text-center text-sm text-red-600">
+            {t('family.requests.loadError')}
+          </p>
+        )}
+
         {/* Spinner only while a real fetch is in flight — with no familyId there
             is nothing to load, so fall through to the empty state. */}
-        {familyId != null && requests === null && (
+        {!loadError && familyId != null && requests === null && (
           <div className="flex justify-center py-20">
             <Spinner />
           </div>
         )}
 
-        {(!familyId || (requests !== null && requests.length === 0)) && (
+        {!loadError && (!familyId || (requests !== null && requests.length === 0)) && (
           <Card>
             <p className="py-4 text-center text-sm text-gray-500">{t('family.requests.empty')}</p>
           </Card>

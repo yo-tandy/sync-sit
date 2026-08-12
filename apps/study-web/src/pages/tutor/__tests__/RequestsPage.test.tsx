@@ -1,15 +1,24 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { screen, fireEvent, waitFor } from '@testing-library/react';
+import { screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { renderWithProviders } from '@/__tests__/test-utils';
 
-// Hoisted, test-controllable state. The tutor RequestsPage reads
-// studyContactRequests where tutorUserId==me (sorted client-side, see the
-// component note) and responds via the respondToTutorContactRequest callable.
+// Hoisted, test-controllable state. The tutor RequestsPage subscribes to
+// studyContactRequests where tutorUserId==me via onSnapshot (sorted
+// client-side, see the component note) and responds via the
+// respondToTutorContactRequest callable. The mock captures each listener so
+// tests can push follow-up snapshots (the live-update pin of issue #117).
+type Snapshot = { docs: { id: string; data: () => Record<string, unknown> }[] };
 const h = vi.hoisted(() => ({
   auth: { firebaseUser: { uid: 't1' } as { uid: string } | null },
   requests: [] as Record<string, unknown>[],
   where: vi.fn((field: string, op: string, val: unknown) => ({ where: [field, op, val] })),
-  getDocs: vi.fn(),
+  onSnapshot: vi.fn(),
+  unsubscribe: vi.fn(),
+  listeners: [] as {
+    query: { query: { path: string }[] };
+    next: (snap: { docs: { id: string; data: () => Record<string, unknown> }[] }) => void;
+    error: (err: unknown) => void;
+  }[],
   callable: vi.fn(),
 }));
 
@@ -19,7 +28,7 @@ vi.mock('firebase/firestore', () => ({
   collection: (_db: unknown, ...path: string[]) => ({ path: path.join('/') }),
   query: (...args: unknown[]) => ({ query: args }),
   where: (...args: [string, string, unknown]) => h.where(...args),
-  getDocs: (...args: unknown[]) => h.getDocs(...args),
+  onSnapshot: (...args: unknown[]) => h.onSnapshot(...args),
 }));
 
 vi.mock('firebase/functions', () => ({
@@ -64,13 +73,25 @@ function reqDoc(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function snapOf(rows: Record<string, unknown>[]): Snapshot {
+  return { docs: rows.map((r) => ({ id: r.requestId as string, data: () => r })) };
+}
+
 function reset() {
   h.auth.firebaseUser = { uid: 't1' };
   h.requests = [];
   h.where.mockClear();
-  h.getDocs.mockReset();
-  h.getDocs.mockImplementation(() =>
-    Promise.resolve({ docs: h.requests.map((r) => ({ id: r.requestId, data: () => r })) }),
+  h.listeners = [];
+  h.unsubscribe.mockClear();
+  h.onSnapshot.mockReset();
+  // Capture the listener, deliver the initial snapshot synchronously, and hand
+  // back the unsubscribe spy (asserted on unmount).
+  h.onSnapshot.mockImplementation(
+    (query: unknown, next: (snap: Snapshot) => void, error: (err: unknown) => void) => {
+      h.listeners.push({ query: query as { query: { path: string }[] }, next, error });
+      next(snapOf(h.requests));
+      return h.unsubscribe;
+    },
   );
   h.callable.mockReset();
   h.callable.mockResolvedValue({ data: { success: true } });
@@ -79,14 +100,68 @@ function reset() {
 describe('tutor RequestsPage', () => {
   beforeEach(() => reset());
 
-  it('queries studyContactRequests for the signed-in tutor', async () => {
+  it('subscribes to studyContactRequests for the signed-in tutor', async () => {
     h.requests = [reqDoc()];
     renderWithProviders(<RequestsPage />);
     await screen.findByText(/Cohen/);
 
+    // The provability pin: the onSnapshot query carries the SAME equality
+    // constraint the getDocs read did.
     expect(h.where).toHaveBeenCalledWith('tutorUserId', '==', 't1');
-    const collectionArg = h.getDocs.mock.calls[0][0].query[0];
+    const collectionArg = h.onSnapshot.mock.calls[0][0].query[0];
     expect(collectionArg.path).toBe('studyContactRequests');
+  });
+
+  it('renders a newly arrived request from a follow-up snapshot without any refetch (live update)', async () => {
+    h.requests = [reqDoc({ requestId: 'r1', familyName: 'Cohen' })];
+    renderWithProviders(<RequestsPage />);
+    await screen.findByText(/Cohen/);
+
+    // A new request lands in Firestore while the tab is open — the listener
+    // pushes it and the page renders it in place: no new subscription, no
+    // getDocs, no navigation.
+    act(() =>
+      h.listeners[0].next(
+        snapOf([
+          reqDoc({ requestId: 'r1', familyName: 'Cohen' }),
+          reqDoc({ requestId: 'r2', familyName: 'Levi', createdAt: ts(1_700_000_100) }),
+        ]),
+      ),
+    );
+
+    expect(await screen.findByText(/Levi/)).toBeInTheDocument();
+    expect(screen.getByText(/Cohen/)).toBeInTheDocument();
+    expect(h.onSnapshot).toHaveBeenCalledTimes(1);
+  });
+
+  it('unsubscribes the listener on unmount', async () => {
+    h.requests = [reqDoc()];
+    const { unmount } = renderWithProviders(<RequestsPage />);
+    await screen.findByText(/Cohen/);
+
+    unmount();
+    expect(h.unsubscribe).toHaveBeenCalledTimes(1);
+  });
+
+  it('surfaces a load error when the subscription errors — not an empty list', async () => {
+    h.requests = [];
+    // Deliver an error instead of a first snapshot (e.g. PERMISSION_DENIED).
+    h.onSnapshot.mockImplementation(
+      (query: unknown, _next: (snap: Snapshot) => void, error: (err: unknown) => void) => {
+        h.listeners.push({
+          query: query as { query: { path: string }[] },
+          next: _next,
+          error,
+        });
+        error(new Error('permission-denied'));
+        return h.unsubscribe;
+      },
+    );
+    renderWithProviders(<RequestsPage />);
+
+    expect(await screen.findByText(/could not load your requests/i)).toBeInTheDocument();
+    // The failure must NOT masquerade as "no requests yet".
+    expect(screen.queryByText(/no requests yet/i)).not.toBeInTheDocument();
   });
 
   it('renders a pending request with family, parent, subject/level and message', async () => {

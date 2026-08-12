@@ -1,10 +1,14 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { screen, fireEvent, waitFor } from '@testing-library/react';
+import { screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { renderWithProviders } from '@/__tests__/test-utils';
 
-// Hoisted, test-controllable state. RequestsPage reads studyContactRequests
-// where familyId==mine orderBy createdAt desc (composite index exists) and
-// groups the rows by status.
+// Hoisted, test-controllable state. RequestsPage subscribes via onSnapshot to
+// studyContactRequests where familyId==mine orderBy createdAt desc (composite
+// index exists) and groups the rows by status, plus this family's submitted
+// endorsements in `references`. The mock captures each listener (keyed by
+// collection path) so tests can push follow-up snapshots (the live-update pin
+// of issue #117).
+type Snapshot = { docs: { id: string; data: () => Record<string, unknown> }[] };
 const h = vi.hoisted(() => ({
   auth: { userDoc: null as unknown },
   requests: [] as Record<string, unknown>[],
@@ -12,7 +16,16 @@ const h = vi.hoisted(() => ({
   refs: [] as Record<string, unknown>[],
   where: vi.fn((field: string, op: string, val: unknown) => ({ where: [field, op, val] })),
   orderBy: vi.fn((field: string, dir: string) => ({ orderBy: [field, dir] })),
-  getDocs: vi.fn(),
+  onSnapshot: vi.fn(),
+  unsubscribe: vi.fn(),
+  listeners: {} as Record<
+    string,
+    {
+      query: { query: { path: string }[] };
+      next: (snap: { docs: { id: string; data: () => Record<string, unknown> }[] }) => void;
+      error: (err: unknown) => void;
+    }
+  >,
   callable: vi.fn(),
 }));
 
@@ -23,7 +36,7 @@ vi.mock('firebase/firestore', () => ({
   query: (...args: unknown[]) => ({ query: args }),
   where: (...args: [string, string, unknown]) => h.where(...args),
   orderBy: (...args: [string, string]) => h.orderBy(...args),
-  getDocs: (...args: unknown[]) => h.getDocs(...args),
+  onSnapshot: (...args: unknown[]) => h.onSnapshot(...args),
 }));
 
 vi.mock('firebase/functions', () => ({
@@ -70,6 +83,12 @@ function refDoc(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function snapOf(rows: Record<string, unknown>[]): Snapshot {
+  return {
+    docs: rows.map((r) => ({ id: (r.referenceId ?? r.requestId) as string, data: () => r })),
+  };
+}
+
 function reset() {
   h.auth.userDoc = {
     uid: 'p1',
@@ -81,16 +100,22 @@ function reset() {
   h.refs = [];
   h.where.mockClear();
   h.orderBy.mockClear();
-  h.getDocs.mockReset();
+  h.listeners = {};
+  h.unsubscribe.mockClear();
+  h.onSnapshot.mockReset();
   // Route by collection path: studyContactRequests => requests, references =>
-  // this family's submitted endorsements.
-  h.getDocs.mockImplementation((q: { query: { path: string }[] }) => {
-    const path = q?.query?.[0]?.path;
-    const rows = path === 'references' ? h.refs : h.requests;
-    return Promise.resolve({
-      docs: rows.map((r) => ({ id: r.referenceId ?? r.requestId, data: () => r })),
-    });
-  });
+  // this family's submitted endorsements. Captures the listener per path,
+  // delivers the initial snapshot synchronously, and hands back the shared
+  // unsubscribe spy (asserted on unmount).
+  h.onSnapshot.mockImplementation(
+    (query: unknown, next: (snap: Snapshot) => void, error: (err: unknown) => void) => {
+      const q = query as { query: { path: string }[] };
+      const path = q?.query?.[0]?.path;
+      h.listeners[path] = { query: q, next, error };
+      next(snapOf(path === 'references' ? h.refs : h.requests));
+      return h.unsubscribe;
+    },
+  );
   h.callable.mockReset();
   h.callable.mockResolvedValue({ data: { referenceId: 'e1' } });
 }
@@ -98,15 +123,66 @@ function reset() {
 describe('family RequestsPage', () => {
   beforeEach(() => reset());
 
-  it('queries studyContactRequests for the family, newest first', async () => {
+  it('subscribes to studyContactRequests for the family, newest first', async () => {
     h.requests = [reqDoc()];
     renderWithProviders(<RequestsPage />);
     await screen.findByText(/Alex Roy/);
 
+    // The provability pin: the onSnapshot query carries the SAME equality
+    // constraint + orderBy the getDocs read did.
     expect(h.where).toHaveBeenCalledWith('familyId', '==', 'fam1');
     expect(h.orderBy).toHaveBeenCalledWith('createdAt', 'desc');
-    const collectionArg = h.getDocs.mock.calls[0][0].query[0];
+    const collectionArg = h.onSnapshot.mock.calls[0][0].query[0];
     expect(collectionArg.path).toBe('studyContactRequests');
+  });
+
+  it('renders a request status change from a follow-up snapshot without any refetch (live update)', async () => {
+    h.requests = [reqDoc({ requestId: 'r1', tutorName: 'Alex Roy', status: 'pending' })];
+    renderWithProviders(<RequestsPage />);
+    await screen.findByText(/Alex Roy/);
+    expect(screen.queryByRole('link', { name: /view contact details/i })).not.toBeInTheDocument();
+
+    // The tutor accepts while the family's tab is open — the listener pushes
+    // the new status and the accepted affordances appear in place: no new
+    // subscription, no navigation.
+    const subscriptionsBefore = h.onSnapshot.mock.calls.length;
+    act(() =>
+      h.listeners['studyContactRequests'].next(
+        snapOf([reqDoc({ requestId: 'r1', tutorName: 'Alex Roy', status: 'accepted' })]),
+      ),
+    );
+
+    expect(await screen.findByRole('link', { name: /view contact details/i })).toBeInTheDocument();
+    expect(h.onSnapshot.mock.calls.length).toBe(subscriptionsBefore);
+  });
+
+  it('unsubscribes both listeners (requests + endorsements) on unmount', async () => {
+    h.requests = [reqDoc()];
+    const { unmount } = renderWithProviders(<RequestsPage />);
+    await screen.findByText(/Alex Roy/);
+
+    unmount();
+    expect(h.unsubscribe).toHaveBeenCalledTimes(2);
+  });
+
+  it('surfaces a load error when the requests subscription errors — not an empty list', async () => {
+    h.onSnapshot.mockImplementation(
+      (query: unknown, next: (snap: Snapshot) => void, error: (err: unknown) => void) => {
+        const q = query as { query: { path: string }[] };
+        const path = q?.query?.[0]?.path;
+        h.listeners[path] = { query: q, next, error };
+        // The requests listener errors (e.g. PERMISSION_DENIED); the
+        // endorsements one delivers normally.
+        if (path === 'studyContactRequests') error(new Error('permission-denied'));
+        else next(snapOf(h.refs));
+        return h.unsubscribe;
+      },
+    );
+    renderWithProviders(<RequestsPage />);
+
+    expect(await screen.findByText(/could not load your requests/i)).toBeInTheDocument();
+    // The failure must NOT masquerade as "no requests yet".
+    expect(screen.queryByText(/no requests yet/i)).not.toBeInTheDocument();
   });
 
   it('groups requests by status (pending / accepted / declined)', async () => {
@@ -155,7 +231,7 @@ describe('family RequestsPage', () => {
     h.auth.userDoc = { uid: 'p1', profiles: { parent: { enrollmentComplete: true } } };
     renderWithProviders(<RequestsPage />);
     expect(await screen.findByText(/no requests yet/i)).toBeInTheDocument();
-    expect(h.getDocs).not.toHaveBeenCalled();
+    expect(h.onSnapshot).not.toHaveBeenCalled();
   });
 
   it('formats a plain Date createdAt (emulator rows) instead of blanking it', async () => {
@@ -256,14 +332,14 @@ describe('family RequestsPage', () => {
 
   // ── "Your endorsements" section ──
 
-  it('queries references for this family\'s study endorsements (equality-only)', async () => {
+  it('subscribes to references for this family\'s study endorsements (equality-only)', async () => {
     h.refs = [refDoc()];
     renderWithProviders(<RequestsPage />);
     await screen.findByText(/Alex was patient/);
 
     expect(h.where).toHaveBeenCalledWith('submittedByFamilyId', '==', 'fam1');
     expect(h.where).toHaveBeenCalledWith('appSource', '==', 'study');
-    const refsCall = h.getDocs.mock.calls.find(
+    const refsCall = h.onSnapshot.mock.calls.find(
       (c) => (c[0] as { query: { path: string }[] }).query[0].path === 'references',
     );
     expect(refsCall).toBeTruthy();
