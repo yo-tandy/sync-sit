@@ -6,6 +6,7 @@ import { strongPasswordSchema } from '@ejm/sit-core';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
 import {
   addProfileToUser,
+  assertCanAddProfile,
   ensureScheduleDoc,
 } from '@ejm/shared-functions/enrollment/addProfileToUser.js';
 
@@ -69,6 +70,10 @@ export const enrollBabysitter = onCall(
     if (isAddProfile) {
       const uid = request.auth!.uid;
       const ejemEmailLower = data.ejemEmail.toLowerCase();
+      // Preflight before the schedule write: a caller the profile merge would
+      // reject (role-exclusive, profile-exists, blocked) must leave no orphan
+      // schedules/{uid} doc behind. addProfileToUser re-checks in-transaction.
+      await assertCanAddProfile(uid, 'babysitter');
       // Idempotent, so it runs before the profile merge: if anything below
       // fails, no permanent state was created; once the merge commits, a
       // failed code-doc cleanup is harmless (retry hits profile-exists).

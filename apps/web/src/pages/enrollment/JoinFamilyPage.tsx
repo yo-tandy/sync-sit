@@ -76,6 +76,13 @@ export function JoinFamilyPage() {
       setShowLoginCta(false);
       return true;
     }
+    if (reason === 'role-exclusive') {
+      // A signed-in provider (babysitter/tutor) followed a family invite —
+      // provider and parent roles are mutually exclusive (issue #116).
+      setError(t('enrollment.roleExclusiveJoin'));
+      setShowLoginCta(false);
+      return true;
+    }
     return false;
   };
 

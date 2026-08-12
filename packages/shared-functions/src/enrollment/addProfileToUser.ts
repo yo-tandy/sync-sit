@@ -34,6 +34,36 @@ function assertAddable(snap: DocumentSnapshot, profileKey: ProfileKey): void {
       { reason: 'profile-exists', profile: profileKey },
     );
   }
+  // Providing (tutoring, babysitting) is for EJM students; parents are the
+  // adults who hire them — provider and parent roles are mutually exclusive
+  // in BOTH directions (issue #116). This chokepoint covers every add-profile
+  // path (enrollTutor, enrollBabysitter, enrollFamily, joinFamily).
+  // Deliberate reversal of the cross-app-enrollment combos; student↔student
+  // (tutor+babysitter) remains allowed.
+  if (profileKey === 'tutor' && data.profiles?.parent !== undefined) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Tutoring is for EJM students — a parent account cannot enroll as a tutor.',
+      { reason: 'role-exclusive', profile: 'tutor' },
+    );
+  }
+  if (profileKey === 'babysitter' && data.profiles?.parent !== undefined) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Babysitting is for EJM students — a parent account cannot enroll as a babysitter.',
+      { reason: 'role-exclusive', profile: 'babysitter' },
+    );
+  }
+  if (
+    profileKey === 'parent' &&
+    (data.profiles?.tutor !== undefined || data.profiles?.babysitter !== undefined)
+  ) {
+    throw new HttpsError(
+      'failed-precondition',
+      'A student provider account (tutor or babysitter) cannot also hold a parent role.',
+      { reason: 'role-exclusive', profile: 'parent' },
+    );
+  }
 }
 
 /**

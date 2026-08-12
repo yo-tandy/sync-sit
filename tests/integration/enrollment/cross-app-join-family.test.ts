@@ -3,6 +3,10 @@ import { clearAll, callFunction, getDb, getIdToken, getAdminAuth } from '../../s
 
 const TUTOR_UID = 'standalone-tutor-3';
 const TUTOR_EMAIL = 'tutoronly3@test.com';
+const SITTER_UID = 'standalone-sitter-3';
+const SITTER_EMAIL = 'sitteronly3@test.com';
+const PLAIN_UID = 'standalone-plain-3';
+const PLAIN_EMAIL = 'plainonly3@test.com';
 const FAMILY_ID = 'fam-join-1';
 const EXISTING_PARENT = 'some-other-parent';
 
@@ -26,7 +30,7 @@ describe('joinFamily cross-app add-profile', () => {
   beforeAll(async () => {
     await clearAll();
     const db = getDb();
-    // getIdToken exchanges a custom token; ensure an Auth-emulator user exists.
+    // getIdToken exchanges a custom token; ensure Auth-emulator users exist.
     await getAdminAuth().createUser({ uid: TUTOR_UID, email: TUTOR_EMAIL });
     await db.collection('users').doc(TUTOR_UID).set({
       uid: TUTOR_UID,
@@ -39,6 +43,34 @@ describe('joinFamily cross-app add-profile', () => {
         tutor: { enrollmentComplete: true, ejemEmail: TUTOR_EMAIL, searchable: true },
       },
       consentVersion: '1.0',
+    });
+
+    // Babysitters are providers too, so babysitter→parent is equally
+    // role-exclusive — SITTER_UID pins the rejection.
+    await getAdminAuth().createUser({ uid: SITTER_UID, email: SITTER_EMAIL });
+    await db.collection('users').doc(SITTER_UID).set({
+      uid: SITTER_UID,
+      email: SITTER_EMAIL,
+      firstName: 'Sam',
+      lastName: 'Sitter',
+      status: 'active',
+      language: 'en',
+      profiles: {
+        babysitter: { enrollmentComplete: true, ejemEmail: SITTER_EMAIL, searchable: false },
+      },
+    });
+
+    // A profile-less active account stays legal for joinFamily's add-profile
+    // path, so aux tests can reject for exactly one reason (the used invite).
+    await getAdminAuth().createUser({ uid: PLAIN_UID, email: PLAIN_EMAIL });
+    await db.collection('users').doc(PLAIN_UID).set({
+      uid: PLAIN_UID,
+      email: PLAIN_EMAIL,
+      firstName: 'Pat',
+      lastName: 'Plain',
+      status: 'active',
+      language: 'en',
+      profiles: {},
     });
 
     await db.collection('families').doc(FAMILY_ID).set({
@@ -57,45 +89,97 @@ describe('joinFamily cross-app add-profile', () => {
     await clearAll();
   });
 
-  it('adds profiles.parent to an authed tutor via token only; tutor profile and base fields intact', async () => {
-    const token = 'token-join-success';
+  it('rejects a tutor joining via invite (role-exclusive, issue #116); invite left unused', async () => {
+    const token = 'token-join-tutor-rejected';
     await seedInvite(token);
-
-    const idToken = await getIdToken(TUTOR_UID);
-    const result = await callFunction<{ success: boolean; uid: string; familyId: string }>(
-      'joinFamily',
-      // firstName is deliberately supplied to prove the existing doc's value
-      // wins over a fillBaseFields candidate (not just that it isn't erased).
-      { token, firstName: 'Override' },
-      idToken,
-    );
-    expect(result.success).toBe(true);
-    expect(result.uid).toBe(TUTOR_UID);
-    expect(result.familyId).toBe(FAMILY_ID);
-
-    const db = getDb();
-    const after = (await db.collection('users').doc(TUTOR_UID).get()).data()!;
-    expect(after.profiles.parent).toEqual({ enrollmentComplete: true, familyId: FAMILY_ID });
-    expect(after.profiles.tutor.searchable).toBe(true);
-    expect(after.firstName).toBe('Tia'); // existing wins
-
-    const family = (await db.collection('families').doc(FAMILY_ID).get()).data()!;
-    expect(family.parentIds).toContain(TUTOR_UID);
-    expect(family.parentIds).toContain(EXISTING_PARENT);
-
-    const invite = (await db.collection('inviteLinks').doc(token).get()).data()!;
-    expect(invite.used).toBe(true);
-    expect(invite.usedByUserId).toBe(TUTOR_UID);
-  });
-
-  it('rejects an already-used invite (authed)', async () => {
-    const token = 'token-join-used';
-    await seedInvite(token, { used: true });
 
     const idToken = await getIdToken(TUTOR_UID);
     await expect(
       callFunction('joinFamily', { token }, idToken),
+    ).rejects.toMatchObject({
+      code: 'FAILED_PRECONDITION',
+      details: { reason: 'role-exclusive', profile: 'parent' },
+    });
+
+    const db = getDb();
+    // The user doc gained no parent profile; the tutor profile is untouched.
+    const after = (await db.collection('users').doc(TUTOR_UID).get()).data()!;
+    expect(after.profiles.parent).toBeUndefined();
+    expect(after.profiles.tutor.searchable).toBe(true);
+
+    // Family membership untouched.
+    const family = (await db.collection('families').doc(FAMILY_ID).get()).data()!;
+    expect(family.parentIds).toEqual([EXISTING_PARENT]);
+
+    // The invite is left unused — still redeemable by a legitimate parent.
+    const invite = (await db.collection('inviteLinks').doc(token).get()).data()!;
+    expect(invite.used).toBe(false);
+    expect(invite.usedByUserId).toBeUndefined();
+  });
+
+  it('rejects a babysitter joining via invite (role-exclusive, issue #116); invite left unused', async () => {
+    const token = 'token-join-sitter-rejected';
+    await seedInvite(token);
+
+    const idToken = await getIdToken(SITTER_UID);
+    await expect(
+      callFunction('joinFamily', { token }, idToken),
+    ).rejects.toMatchObject({
+      code: 'FAILED_PRECONDITION',
+      details: { reason: 'role-exclusive', profile: 'parent' },
+    });
+
+    const db = getDb();
+    const after = (await db.collection('users').doc(SITTER_UID).get()).data()!;
+    expect(after.profiles.parent).toBeUndefined();
+    expect(after.profiles.babysitter.enrollmentComplete).toBe(true);
+
+    const family = (await db.collection('families').doc(FAMILY_ID).get()).data()!;
+    expect(family.parentIds).toEqual([EXISTING_PARENT]);
+
+    const invite = (await db.collection('inviteLinks').doc(token).get()).data()!;
+    expect(invite.used).toBe(false);
+    expect(invite.usedByUserId).toBeUndefined();
+  });
+
+  it('a profile-less signed-in account CAN still join as a parent (positive add-profile pin)', async () => {
+    const db = getDb();
+    const token = 'token-join-plain-positive';
+    await seedInvite(token);
+
+    const idToken = await getIdToken(PLAIN_UID);
+    const result = await callFunction<{ familyId: string }>('joinFamily', { token }, idToken);
+    expect(result.familyId).toBe(FAMILY_ID);
+
+    // profiles.parent added, invite consumed, family membership recorded —
+    // the exclusivity guard must not over-block the legal path.
+    const after = (await db.collection('users').doc(PLAIN_UID).get()).data()!;
+    expect(after.profiles.parent.familyId).toBe(FAMILY_ID);
+    const invite = (await db.collection('inviteLinks').doc(token).get()).data()!;
+    expect(invite.used).toBe(true);
+    const family = (await db.collection('families').doc(FAMILY_ID).get()).data()!;
+    expect(family.parentIds).toContain(PLAIN_UID);
+
+    // Restore the plain fixture for the sibling tests (order-independent).
+    await db.collection('users').doc(PLAIN_UID).set({ profiles: {} }, { mergeFields: ['profiles'] });
+    await db.collection('families').doc(FAMILY_ID).update({
+      parentIds: family.parentIds.filter((id: string) => id !== PLAIN_UID),
+    });
+  });
+
+  it('rejects an already-used invite (authed, legal caller)', async () => {
+    const token = 'token-join-used';
+    await seedInvite(token, { used: true });
+
+    const idToken = await getIdToken(PLAIN_UID);
+    await expect(
+      callFunction('joinFamily', { token }, idToken),
     ).rejects.toMatchObject({ code: 'FAILED_PRECONDITION' });
+
+    // The profile-less caller is otherwise legal, so the used invite is the
+    // only rejection cause — and no parent profile was added.
+    const after = (await getDb().collection('users').doc(PLAIN_UID).get()).data()!;
+    expect(after.profiles.parent).toBeUndefined();
   });
 
   it('rejects an authed caller who already has a parent profile; invite left unused', async () => {

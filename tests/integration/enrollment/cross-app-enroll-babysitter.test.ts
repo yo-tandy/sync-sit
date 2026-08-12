@@ -4,6 +4,7 @@ import { clearAll, callFunction, getDb, getIdToken, getAdminAuth } from '../../s
 const EJEM_EMAIL = 'crossapp.sitter@ejm-test.org';
 const CODE = '123456';
 const TUTOR_UID = 'standalone-tutor-1';
+const PARENT_UID = 'standalone-parent-1';
 
 async function seedCode(email: string) {
   await getDb().collection('verificationCodes').doc(email.toLowerCase()).set({
@@ -45,6 +46,19 @@ describe('enrollBabysitter cross-app add-profile', () => {
       holidayMode: 'same',
       updatedAt: new Date(),
     });
+
+    await getAdminAuth().createUser({ uid: PARENT_UID, email: 'parentonly1@test.com' });
+    await db.collection('users').doc(PARENT_UID).set({
+      uid: PARENT_UID,
+      email: 'parentonly1@test.com',
+      firstName: 'Paula',
+      lastName: 'Parent',
+      status: 'active',
+      language: 'en',
+      profiles: {
+        parent: { enrollmentComplete: true, familyId: 'f-parentonly' },
+      },
+    });
   });
 
   afterAll(async () => {
@@ -76,6 +90,33 @@ describe('enrollBabysitter cross-app add-profile', () => {
 
     const sched = (await getDb().collection('schedules').doc(TUTOR_UID).get()).data()!;
     expect(sched.weekly.mon[40]).toBe(true);
+  });
+
+  it('rejects a parent adding a babysitter profile (role-exclusive, issue #116); no trace left', async () => {
+    const db = getDb();
+    const before = (await db.collection('users').doc(PARENT_UID).get()).data()!;
+
+    const token = await getIdToken(PARENT_UID);
+    await expect(
+      callFunction(
+        'enrollBabysitter',
+        { ejemEmail: EJEM_EMAIL, verificationCode: CODE, consentVersion: '1.0' },
+        token,
+      ),
+    ).rejects.toMatchObject({
+      code: 'FAILED_PRECONDITION',
+      details: { reason: 'role-exclusive', profile: 'babysitter' },
+    });
+
+    // The user doc gained no babysitter profile; the parent profile is
+    // untouched.
+    const after = (await db.collection('users').doc(PARENT_UID).get()).data()!;
+    expect(after.profiles.babysitter).toBeUndefined();
+    expect(after.profiles.parent).toEqual(before.profiles.parent);
+    // No orphan schedules/{uid} grid: the preflight runs before the schedule
+    // write, and parents never carry one.
+    const schedule = await db.collection('schedules').doc(PARENT_UID).get();
+    expect(schedule.exists).toBe(false);
   });
 
   it('rejects a second babysitter profile (profile-exists) — self-sufficient seeding', async () => {

@@ -61,4 +61,51 @@ describe('SignUpRolePage (study)', () => {
     renderWithProviders(<SignUpRolePage />);
     expect(screen.queryByText(BANNER)).toBeNull();
   });
+
+  // Role exclusivity (issue #116): parent and tutor can never combine, so the
+  // impossible option is hidden with a one-line explanation.
+  it('hides the tutor option with an explanation for a signed-in parent', () => {
+    authState.firebaseUser = { uid: 'p1' };
+    authState.userDoc = { profiles: { parent: { enrollmentComplete: true, familyId: 'f1' } } };
+    renderWithProviders(<SignUpRolePage />);
+
+    const hrefs = screen.getAllByRole('link').map((a) => a.getAttribute('href'));
+    expect(hrefs).not.toContain('/enroll/tutor');
+    expect(hrefs).toContain('/enroll/parent');
+    expect(screen.getByText(i18n.t('signup.roleExclusiveTutor'))).toBeInTheDocument();
+  });
+
+  it('hides the parent option with an explanation for a signed-in tutor', () => {
+    authState.firebaseUser = { uid: 't1' };
+    authState.userDoc = { profiles: { tutor: { enrollmentComplete: true } } };
+    renderWithProviders(<SignUpRolePage />);
+
+    const hrefs = screen.getAllByRole('link').map((a) => a.getAttribute('href'));
+    expect(hrefs).not.toContain('/enroll/parent');
+    expect(hrefs).toContain('/enroll/tutor');
+    expect(screen.getByText(i18n.t('signup.roleExclusiveParent'))).toBeInTheDocument();
+  });
+
+  it('hides the parent option for a signed-in sit BABYSITTER too (providers are provider-wide)', () => {
+    authState.firebaseUser = { uid: 'b1' };
+    authState.userDoc = { profiles: { babysitter: { enrollmentComplete: true } } };
+    renderWithProviders(<SignUpRolePage />);
+
+    const hrefs = screen.getAllByRole('link').map((a) => a.getAttribute('href'));
+    expect(hrefs).not.toContain('/enroll/parent');
+    expect(hrefs).toContain('/enroll/tutor');
+    expect(screen.getByText(i18n.t('signup.roleExclusiveParent'))).toBeInTheDocument();
+  });
+
+  it('offers both options and no exclusivity note to a signed-in user with no profiles', () => {
+    authState.firebaseUser = { uid: 'n1' };
+    authState.userDoc = { profiles: {} };
+    renderWithProviders(<SignUpRolePage />);
+
+    const hrefs = screen.getAllByRole('link').map((a) => a.getAttribute('href'));
+    expect(hrefs).toContain('/enroll/tutor');
+    expect(hrefs).toContain('/enroll/parent');
+    expect(screen.queryByText(i18n.t('signup.roleExclusiveTutor'))).toBeNull();
+    expect(screen.queryByText(i18n.t('signup.roleExclusiveParent'))).toBeNull();
+  });
 });

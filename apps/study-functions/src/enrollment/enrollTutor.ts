@@ -7,6 +7,7 @@ import { writeUserActivity } from '@ejm/shared-functions/admin/writeAuditLog.js'
 import { getCorsOrigin } from '@ejm/shared-functions/config/cors.js';
 import {
   addProfileToUser,
+  assertCanAddProfile,
   ensureScheduleDoc,
 } from '@ejm/shared-functions/enrollment/addProfileToUser.js';
 import { tutorEnrollmentSchema } from '../validation/tutor.js';
@@ -168,6 +169,10 @@ export const enrollTutor = onCall(
     // profile. Base fields and consent on the existing doc are preserved.
     if (isAddProfile) {
       const uid = request.auth!.uid;
+      // Preflight before the schedule write: a caller the profile merge would
+      // reject (role-exclusive, profile-exists, blocked) must leave no orphan
+      // schedules/{uid} doc behind. addProfileToUser re-checks in-transaction.
+      await assertCanAddProfile(uid, 'tutor');
       // Idempotent, so it runs before the profile merge: if anything below
       // fails, no permanent state was created; once the merge commits, a
       // failed code-doc cleanup is harmless (retry hits profile-exists).

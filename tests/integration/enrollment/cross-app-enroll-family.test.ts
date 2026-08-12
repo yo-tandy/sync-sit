@@ -4,6 +4,8 @@ import { clearAll, callFunction, getDb, getIdToken, getAdminAuth } from '../../s
 const CODE = '123456';
 const TUTOR_UID = 'standalone-tutor-2';
 const TUTOR_EMAIL = 'tutoronly2@test.com';
+const SITTER_UID = 'standalone-sitter-2';
+const SITTER_EMAIL = 'sitteronly2@test.com';
 
 async function seedCode(email: string) {
   await getDb().collection('verificationCodes').doc(email.toLowerCase()).set({
@@ -44,36 +46,66 @@ describe('enrollFamily cross-app add-profile', () => {
       },
       consentVersion: '1.0',
     });
+
+    await getAdminAuth().createUser({ uid: SITTER_UID, email: SITTER_EMAIL });
+    await db.collection('users').doc(SITTER_UID).set({
+      uid: SITTER_UID,
+      email: SITTER_EMAIL,
+      firstName: 'Sam',
+      lastName: 'Sitter',
+      status: 'active',
+      language: 'en',
+      profiles: {
+        babysitter: { enrollmentComplete: true, ejemEmail: SITTER_EMAIL, searchable: true },
+      },
+    });
   });
 
   afterAll(async () => {
     await clearAll();
   });
 
-  it('adds profiles.parent + family to an authed tutor; tutor profile and base fields intact', async () => {
-    const token = await getIdToken(TUTOR_UID);
-    const result = await callFunction<{ success: boolean; uid: string; familyId: string }>(
-      'enrollFamily',
-      familyPayload(),
-      token,
-    );
-    expect(result.success).toBe(true);
-    expect(result.uid).toBe(TUTOR_UID);
-    expect(result.familyId).toBeTruthy();
-
+  it('rejects a tutor creating a family (role-exclusive, issue #116); no orphan family doc', async () => {
     const db = getDb();
-    const familyDoc = await db.collection('families').doc(result.familyId).get();
-    expect(familyDoc.exists).toBe(true);
-    expect(familyDoc.data()!.familyName).toBe('CrossApp');
-    expect(familyDoc.data()!.parentIds).toEqual([TUTOR_UID]);
+    const countBefore = (await db.collection('families').get()).size;
 
-    const kids = await db.collection('families').doc(result.familyId).collection('kids').get();
-    expect(kids.size).toBe(1);
+    const token = await getIdToken(TUTOR_UID);
+    await expect(
+      callFunction('enrollFamily', familyPayload(), token),
+    ).rejects.toMatchObject({
+      code: 'FAILED_PRECONDITION',
+      details: { reason: 'role-exclusive', profile: 'parent' },
+    });
 
+    // The preflight runs before the family doc is created — a rejected tutor
+    // must leave no orphan family behind.
+    const countAfter = (await db.collection('families').get()).size;
+    expect(countAfter).toBe(countBefore);
+
+    // The user doc gained no parent profile; the tutor profile is untouched.
     const after = (await db.collection('users').doc(TUTOR_UID).get()).data()!;
-    expect(after.profiles.parent).toEqual({ enrollmentComplete: true, familyId: result.familyId });
+    expect(after.profiles.parent).toBeUndefined();
     expect(after.profiles.tutor.searchable).toBe(true);
-    expect(after.firstName).toBe('Tia'); // existing wins over 'Ignored'
+  });
+
+  it('rejects a babysitter creating a family (role-exclusive, issue #116); no orphan family doc', async () => {
+    const db = getDb();
+    const countBefore = (await db.collection('families').get()).size;
+
+    const token = await getIdToken(SITTER_UID);
+    await expect(
+      callFunction('enrollFamily', familyPayload(), token),
+    ).rejects.toMatchObject({
+      code: 'FAILED_PRECONDITION',
+      details: { reason: 'role-exclusive', profile: 'parent' },
+    });
+
+    const countAfter = (await db.collection('families').get()).size;
+    expect(countAfter).toBe(countBefore);
+
+    const after = (await db.collection('users').doc(SITTER_UID).get()).data()!;
+    expect(after.profiles.parent).toBeUndefined();
+    expect(after.profiles.babysitter.searchable).toBe(true);
   });
 
   it('profile-exists leaves no orphan family (preflight runs before family creation)', async () => {

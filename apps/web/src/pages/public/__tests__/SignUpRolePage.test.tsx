@@ -51,4 +51,41 @@ describe('sit SignUpRolePage wrapper banner', () => {
     render(<SignUpRolePage />);
     expect(captured.banner).toBeUndefined();
   });
+
+  // Role exclusivity (issue #116): provider (tutor or babysitter) and parent
+  // can never combine, so the impossible option is hidden with a one-line
+  // explanation.
+  it('hides the family/parent option with a note for a signed-in tutor', () => {
+    authState.firebaseUser = { uid: 't1' };
+    authState.userDoc = { profiles: { tutor: { enrollmentComplete: true } } };
+    render(<SignUpRolePage />);
+    const keys = (captured.roles as Array<{ key: string }>).map((r) => r.key);
+    expect(keys).toEqual(['babysitter']);
+    expect(captured.note).toBe(i18n.t('signup.roleExclusiveParent'));
+  });
+
+  it('hides the family/parent option with a note for a signed-in babysitter', () => {
+    authState.firebaseUser = { uid: 'b1' };
+    authState.userDoc = { profiles: { babysitter: { enrollmentComplete: true } } };
+    render(<SignUpRolePage />);
+    const keys = (captured.roles as Array<{ key: string }>).map((r) => r.key);
+    expect(keys).toEqual(['babysitter']);
+    expect(captured.note).toBe(i18n.t('signup.roleExclusiveParent'));
+  });
+
+  it('hides the babysitter option with a note for a signed-in parent', () => {
+    authState.firebaseUser = { uid: 'p1' };
+    authState.userDoc = { profiles: { parent: { enrollmentComplete: true, familyId: 'f1' } } };
+    render(<SignUpRolePage />);
+    const keys = (captured.roles as Array<{ key: string }>).map((r) => r.key);
+    expect(keys).toEqual(['parent']);
+    expect(captured.note).toBe(i18n.t('signup.roleExclusiveBabysitter'));
+  });
+
+  it('offers both options and no note to an unauthenticated visitor', () => {
+    render(<SignUpRolePage />);
+    const keys = (captured.roles as Array<{ key: string }>).map((r) => r.key);
+    expect(keys).toEqual(['babysitter', 'parent']);
+    expect(captured.note).toBeUndefined();
+  });
 });

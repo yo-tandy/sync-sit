@@ -4,12 +4,14 @@
  * Works on the Firebase client SDK's FunctionsError, which exposes the
  * HttpsError third argument as `details`. Returns null for anything else.
  */
-export type EnrollmentErrorReason = 'account-exists' | 'profile-exists';
+export type EnrollmentErrorReason = 'account-exists' | 'profile-exists' | 'role-exclusive';
 
 export function enrollmentErrorReason(err: unknown): EnrollmentErrorReason | null {
   const details = (err as { details?: { reason?: unknown } } | null)?.details;
   const reason = details?.reason;
-  return reason === 'account-exists' || reason === 'profile-exists' ? reason : null;
+  return reason === 'account-exists' || reason === 'profile-exists' || reason === 'role-exclusive'
+    ? reason
+    : null;
 }
 
 /**

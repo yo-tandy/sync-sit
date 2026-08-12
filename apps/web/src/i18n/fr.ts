@@ -103,6 +103,8 @@ export default {
 
   signup: {
     crossAppBanner: 'Vous êtes connecté — choisissez un rôle à ajouter à votre compte existant.',
+    roleExclusiveBabysitter: "Le babysitting est réservé aux élèves de l'EJM — un compte parent ne peut pas s'inscrire comme babysitter.",
+    roleExclusiveParent: "Un compte élève ne peut pas aussi s'inscrire comme parent — votre famille doit avoir son propre compte.",
   },
 
   enrollment: {
@@ -110,6 +112,7 @@ export default {
     accountExistsCta: 'Un compte existe déjà avec cet e-mail. Connectez-vous pour ajouter ce rôle.',
     alreadyEnrolled: 'Ce compte possède déjà ce rôle.',
     alreadyInFamily: 'Vous appartenez déjà à une famille.',
+    roleExclusiveJoin: "Un compte élève (babysitter ou tuteur) ne peut pas rejoindre une famille comme parent — cette invitation doit être utilisée avec le compte du parent.",
     joinFamilyConfirm: 'Rejoindre la famille {{familyName}}',
     babysitterTitle: 'Inscription Babysitter',
     parentTitle: 'Inscription Parent',
