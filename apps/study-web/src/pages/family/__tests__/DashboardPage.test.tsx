@@ -148,6 +148,7 @@ describe('family DashboardPage', () => {
   it('a refetch blip keeps last-known-good: verified banner and counts survive failed reads', async () => {
     h.familyData = { familyName: 'Cohen', verification: { isFullyVerified: true } };
     h.requests = [{ status: 'pending' }, { status: 'pending' }, { status: 'accepted' }];
+    h.sessions = [{ status: 'pending' }, { status: 'confirmed', date: '2099-01-01' }];
     renderWithProviders(<DashboardPage />);
 
     // Initial load: verified (search CTA, no banner) + real counts.

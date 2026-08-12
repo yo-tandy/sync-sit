@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { doc, getDoc, collection, getDocs, addDoc, onSnapshot, query, where } from 'firebase/firestore';
@@ -278,14 +278,20 @@ export function FamilyDashboard() {
     });
   }, [pending, confirmed, pastRecent, rejectedRecent]);
 
+  // Run-scoped: mount + familyId change + focus refetch can overlap.
+  const loadRunRef = useRef(0);
+
   const loadFamily = useCallback(async () => {
     if (!familyId) return;
+    const runId = ++loadRunRef.current;
     try {
       const familySnap = await getDoc(doc(db, 'families', familyId));
+      if (runId !== loadRunRef.current) return;
       if (familySnap.exists()) {
         setFamilyName(familySnap.data().familyName || '');
       }
       const kidsSnap = await getDocs(collection(db, 'families', familyId, 'kids'));
+      if (runId !== loadRunRef.current) return;
       setKids(kidsSnap.docs.map((d) => ({ kidId: d.id, firstName: d.data().firstName, age: d.data().age })));
       setKidsLoaded(true);
     } catch {

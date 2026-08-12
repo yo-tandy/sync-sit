@@ -111,7 +111,7 @@ export function DashboardPage() {
         setSessionCounts({ pending, upcoming });
       })
       .catch(() => {
-        if (mountedRef.current) setSessionCounts({ pending: 0, upcoming: 0 });
+        // Keep last-known-good counts (see requests counts above).
       });
   }, [familyId]);
 
