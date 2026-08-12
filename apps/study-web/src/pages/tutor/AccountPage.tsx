@@ -414,7 +414,7 @@ export function AccountPage() {
                 onClick={() => toggleSessionLength(len)}
                 className={`rounded-lg border-[1.5px] px-4 py-2 text-sm font-medium transition-colors ${
                   sessionLengths.includes(len)
-                    ? 'border-red-600 bg-red-50 text-red-600'
+                    ? 'border-brand-600 bg-brand-50 text-brand-600'
                     : 'border-gray-300 text-gray-700 hover:border-gray-400'
                 }`}
               >
@@ -470,7 +470,7 @@ export function AccountPage() {
         <p className="mb-3 text-xs text-gray-500">{t('tutor.account.areaLinkDesc')}</p>
         <Link
           to="/tutor/area"
-          className="mb-6 inline-block text-sm font-semibold text-red-600 hover:underline"
+          className="mb-6 inline-block text-sm font-semibold text-brand-600 hover:underline"
         >
           {t('tutor.account.areaLink')}
         </Link>
