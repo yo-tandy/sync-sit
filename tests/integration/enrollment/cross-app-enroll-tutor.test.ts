@@ -51,9 +51,43 @@ describe('enrollTutor cross-app add-profile', () => {
     await seedCode(EJEM_EMAIL);
   });
 
-  it('adds profiles.tutor to an authed sit parent; parent profile and base fields intact', async () => {
+  it('rejects a sit parent adding a tutor profile (role-exclusive, issue #116); no trace left', async () => {
+    const db = getDb();
     const token = await getIdToken(seed.parent1.uid);
-    const before = (await getDb().collection('users').doc(seed.parent1.uid).get()).data()!;
+    const before = (await db.collection('users').doc(seed.parent1.uid).get()).data()!;
+
+    await expect(
+      callFunction(
+        'enrollTutor',
+        {
+          ejemEmail: EJEM_EMAIL,
+          verificationCode: CODE,
+          consentVersion: '1.0',
+          enrollment: tutorEnrollment(),
+        },
+        token,
+      ),
+    ).rejects.toMatchObject({
+      code: 'FAILED_PRECONDITION',
+      details: { reason: 'role-exclusive', profile: 'tutor' },
+    });
+
+    // The user doc gained no tutor profile; the parent profile is untouched.
+    const after = (await db.collection('users').doc(seed.parent1.uid).get()).data()!;
+    expect(after.profiles.tutor).toBeUndefined();
+    expect(after.profiles.parent).toEqual(before.profiles.parent);
+    // No orphan schedules/{uid} grid: the preflight runs before the schedule
+    // write, and parents never carry one.
+    const schedule = await db.collection('schedules').doc(seed.parent1.uid).get();
+    expect(schedule.exists).toBe(false);
+  });
+
+  it('adds profiles.tutor to an authed sit babysitter (student↔student survives); no clobbering', async () => {
+    const db = getDb();
+    const token = await getIdToken(seed.babysitter1.uid);
+    const before = (await db.collection('users').doc(seed.babysitter1.uid).get()).data()!;
+    // babysitter1 has a seeded schedule grid with marked slots.
+    const slotsBefore = (await db.collection('schedules').doc(seed.babysitter1.uid).get()).data()!;
 
     const result = await callFunction<{ uid: string }>(
       'enrollTutor',
@@ -65,9 +99,9 @@ describe('enrollTutor cross-app add-profile', () => {
       },
       token,
     );
-    expect(result.uid).toBe(seed.parent1.uid);
+    expect(result.uid).toBe(seed.babysitter1.uid);
 
-    const after = (await getDb().collection('users').doc(seed.parent1.uid).get()).data()!;
+    const after = (await db.collection('users').doc(seed.babysitter1.uid).get()).data()!;
     // New tutor profile with the verified EJM email inside it
     expect(after.profiles.tutor.ejemEmail).toBe(EJEM_EMAIL.toLowerCase());
     expect(after.profiles.tutor.enrollmentComplete).toBe(false);
@@ -75,44 +109,25 @@ describe('enrollTutor cross-app add-profile', () => {
     expect(after.profiles.tutor.verification).toEqual({ identityStatus: 'not_submitted' });
     expect(after.profiles.tutor.subjects).toHaveLength(1);
     // Existing profile untouched
-    expect(after.profiles.parent).toEqual(before.profiles.parent);
+    expect(after.profiles.babysitter).toEqual(before.profiles.babysitter);
     // Existing base fields win over conflicting wizard values
     expect(after.firstName).toBe(before.firstName);
     expect(after.email).toBe(before.email);
     // Consent not overwritten
     expect(after.consentVersion).toBe(before.consentVersion);
+    // Existing schedule grid not clobbered by ensureScheduleDoc
+    const slotsAfter = (await db.collection('schedules').doc(seed.babysitter1.uid).get()).data()!;
+    expect(slotsAfter.weekly).toEqual(slotsBefore.weekly);
     // Code consumed
-    const codeDoc = await getDb()
+    const codeDoc = await db
       .collection('verificationCodes')
       .doc(EJEM_EMAIL.toLowerCase())
       .get();
     expect(codeDoc.exists).toBe(false);
   });
 
-  it('does not clobber an existing schedules grid', async () => {
-    // parent1 got a tutor profile in the previous test; use babysitter1 who
-    // has a seeded schedule with a marked slot.
-    const db = getDb();
-    const slotBefore = (await db.collection('schedules').doc(seed.babysitter1.uid).get()).data();
-
-    const token = await getIdToken(seed.babysitter1.uid);
-    await callFunction(
-      'enrollTutor',
-      {
-        ejemEmail: EJEM_EMAIL,
-        verificationCode: CODE,
-        consentVersion: '1.0',
-        enrollment: tutorEnrollment(),
-      },
-      token,
-    );
-
-    const slotAfter = (await db.collection('schedules').doc(seed.babysitter1.uid).get()).data();
-    expect(slotAfter!.weekly).toEqual(slotBefore!.weekly);
-  });
-
   it('rejects when the caller already has a tutor profile (profile-exists)', async () => {
-    const token = await getIdToken(seed.parent1.uid); // gained tutor profile above
+    const token = await getIdToken(seed.tutor1.uid); // seeded with a tutor profile
     await expect(
       callFunction(
         'enrollTutor',
@@ -150,12 +165,14 @@ describe('enrollTutor cross-app add-profile', () => {
     const db = getDb();
     const uid = 'blocked-user-1';
     // getIdToken exchanges a custom token; ensure an Auth-emulator user exists.
+    // A babysitter profile keeps the caller otherwise legal, so blocked status
+    // is the only possible rejection cause.
     await getAdminAuth().createUser({ uid, email: 'blocked@test.com' });
     await db.collection('users').doc(uid).set({
       uid,
       email: 'blocked@test.com',
       status: 'blocked',
-      profiles: { parent: { enrollmentComplete: true, familyId: 'f-x' } },
+      profiles: { babysitter: { enrollmentComplete: true, searchable: false } },
     });
     const token = await getIdToken(uid);
     await expect(
@@ -173,7 +190,9 @@ describe('enrollTutor cross-app add-profile', () => {
   });
 
   it('add-profile mode still enforces the verification code', async () => {
-    const token = await getIdToken(seed.parent2.uid);
+    // babysitter2 has no tutor profile — a legal caller, so only the wrong
+    // code can reject.
+    const token = await getIdToken(seed.babysitter2.uid);
     await expect(
       callFunction(
         'enrollTutor',
