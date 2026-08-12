@@ -77,10 +77,10 @@ export function AreaPage() {
       setSuccess(false);
       return;
     }
-    // JS bound checks are the trust boundary here (rules only guard WHICH
-    // keys change): min/max attributes never gate a plain onClick save, and
-    // areaRadiusKm caps every family's distance-search inclusion.
-    if (areaMode === 'distance' && radiusKm !== '' && (radiusKm < 1 || radiusKm > 50)) {
+    // UX validation mirroring enrollment's ranges; the real bound lives in
+    // firestore.rules (tutorNumericBoundsValid), since min/max attributes
+    // never gate a plain onClick save and SDK writes bypass the UI entirely.
+    if (areaMode === 'distance' && radiusKm !== '' && (radiusKm < 0 || radiusKm > 50)) {
       setError(t('tutor.area.errorRadiusRange'));
       setSuccess(false);
       return;
@@ -170,10 +170,8 @@ export function AreaPage() {
                 setSuccess(false);
               }}
               placeholder="e.g. 75016"
+              hint={t('tutor.area.arrondissementsHint')}
             />
-            <p className="-mt-4 mb-4 text-xs text-gray-400">
-              {t('tutor.area.arrondissementsHint')}
-            </p>
           </>
         ) : (
           <>

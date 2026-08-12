@@ -268,7 +268,17 @@ describe('tutor AccountPage', () => {
     expect(screen.queryByText(/supervised account/i)).not.toBeInTheDocument();
   });
 
-  it('rejects out-of-range padding before any write (trust boundary)', async () => {
+  it('surfaces a session-prefs save failure instead of a silent success', async () => {
+    seedSessionPrefs();
+    h.updateDoc.mockRejectedValueOnce(new Error('unavailable'));
+    renderWithProviders(<AccountPage />);
+    fireEvent.click(await screen.findByRole('button', { name: /^save preferences$/i }));
+
+    expect(await screen.findByText(/error|wrong/i)).toBeInTheDocument();
+    expect(screen.queryByText(/preferences saved/i)).not.toBeInTheDocument();
+  });
+
+  it('rejects out-of-range padding before any write (UX guard; rules carry the bound)', async () => {
     const userDoc = makeUserDoc();
     (userDoc.profiles.tutor as Record<string, unknown>).sessionLengthsMin = [45, 60];
     (userDoc.profiles.tutor as Record<string, unknown>).locationPrefs = ['online'];

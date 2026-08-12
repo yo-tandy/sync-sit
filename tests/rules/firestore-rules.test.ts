@@ -1704,3 +1704,63 @@ describe('appHandoffCodes', () => {
     await assertFails(deleteDoc(doc(authed.firestore(), ...CODE)));
   });
 });
+
+describe('users update — tutor numeric bounds (issue #123 hardening)', () => {
+  const uid = 'bounds-tutor-1';
+  const base = {
+    uid,
+    email: 'bounds@ejm-test.org',
+    status: 'active',
+    profiles: {
+      tutor: {
+        enrollmentComplete: true,
+        ejemEmail: 'bounds@ejm-test.org',
+        paddingMin: 15,
+        areaRadiusKm: 5,
+      },
+    },
+  };
+
+  beforeEach(async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.firestore().doc(`users/${uid}`).set(base);
+    });
+  });
+
+  it('rejects an out-of-range paddingMin (owner write)', async () => {
+    const db = testEnv.authenticatedContext(uid).firestore();
+    await assertFails(
+      updateDoc(doc(db, 'users', uid), { 'profiles.tutor.paddingMin': 500 }),
+    );
+  });
+
+  it('rejects an out-of-range areaRadiusKm (owner write)', async () => {
+    const db = testEnv.authenticatedContext(uid).firestore();
+    await assertFails(
+      updateDoc(doc(db, 'users', uid), { 'profiles.tutor.areaRadiusKm': 100000 }),
+    );
+  });
+
+  it('accepts in-range values and explicit null radius', async () => {
+    const db = testEnv.authenticatedContext(uid).firestore();
+    await assertSucceeds(
+      updateDoc(doc(db, 'users', uid), {
+        'profiles.tutor.paddingMin': 60,
+        'profiles.tutor.areaRadiusKm': null,
+      }),
+    );
+  });
+
+  it('does not affect users without a tutor profile', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.firestore().doc('users/bounds-parent-1').set({
+        uid: 'bounds-parent-1', email: 'p@test.com', status: 'active',
+        profiles: { parent: { enrollmentComplete: true, familyId: 'famB' } },
+      });
+    });
+    const db = testEnv.authenticatedContext('bounds-parent-1').firestore();
+    await assertSucceeds(
+      updateDoc(doc(db, 'users', 'bounds-parent-1'), { firstName: 'New' }),
+    );
+  });
+});

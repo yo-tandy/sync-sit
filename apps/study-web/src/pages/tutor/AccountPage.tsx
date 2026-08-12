@@ -192,8 +192,8 @@ export function AccountPage() {
       setPrefsSuccess(false);
       return;
     }
-    // JS bound check is the trust boundary (see AreaPage note): min/max
-    // attributes never gate a plain onClick save; enrollment enforces 0-60.
+    // UX validation mirroring enrollment's 0-60; the real bound lives in
+    // firestore.rules (tutorNumericBoundsValid).
     if (!Number.isInteger(paddingMin) || paddingMin < 0 || paddingMin > 60) {
       setPrefsError(t('tutor.account.sessionPrefs.errorPaddingRange'));
       setPrefsSuccess(false);
@@ -460,10 +460,8 @@ export function AccountPage() {
           }}
           min={0}
           max={60}
+          hint={t('tutor.account.sessionPrefs.paddingHint')}
         />
-        <p className="-mt-4 mb-4 text-xs text-gray-400">
-          {t('tutor.account.sessionPrefs.paddingHint')}
-        </p>
 
         {prefsError && <p className="mb-4 text-sm text-brand-600">{prefsError}</p>}
         <Button onClick={handleSavePrefs} disabled={prefsSaving} className="mb-6">

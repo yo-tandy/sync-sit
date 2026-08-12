@@ -131,7 +131,7 @@ describe('tutor AreaPage', () => {
     expect(screen.getByTestId('address-value').textContent).toBe('16 rue de Passy, 75016 Paris');
     expect((screen.getByLabelText(/max distance/i) as HTMLInputElement).value).toBe('5');
     // A doc WITH coordinates shows no missing-location warning.
-    expect(screen.queryByText(/won't appear in distance-sorted search/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/distance unknown/i)).not.toBeInTheDocument();
   });
 
   // ── The acceptance case: legacy pre-fix enrollee, distance mode, NO coords ──
@@ -140,11 +140,11 @@ describe('tutor AreaPage', () => {
     renderWithProviders(<AreaPage />);
 
     // Honest state: the tutor learns WHY they're invisible in distance sort.
-    expect(screen.getByText(/won't appear in distance-sorted search/i)).toBeInTheDocument();
+    expect(screen.getByText(/distance unknown/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /pick-address/i }));
     // Note clears once coordinates exist.
-    expect(screen.queryByText(/won't appear in distance-sorted search/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/distance unknown/i)).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /^save/i }));
     await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
@@ -232,14 +232,14 @@ describe('tutor AreaPage', () => {
     expect(payload['profiles.tutor.areaRadiusKm']).toBe(8); // NUMBER, not '8'
   });
 
-  it('rejects an out-of-range radius before any write (trust boundary)', async () => {
+  it('rejects an out-of-range radius before any write (UX guard; rules carry the bound)', async () => {
     seed({ areaMode: 'distance', areaAddress: '5 Rue X', areaLatLng: { lat: 48.85, lng: 2.35 }, areaRadiusKm: 8 });
     renderWithProviders(<AreaPage />);
     const radius = await screen.findByLabelText(/max distance/i);
     fireEvent.change(radius, { target: { value: '500' } });
     fireEvent.click(screen.getByRole('button', { name: /save/i }));
 
-    expect(await screen.findByText(/between 1 and 50/i)).toBeInTheDocument();
+    expect(await screen.findByText(/between 0 and 50/i)).toBeInTheDocument();
     expect(h.updateDoc).not.toHaveBeenCalled();
   });
 
