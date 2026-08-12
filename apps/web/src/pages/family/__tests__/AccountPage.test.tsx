@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
+import { ToastProvider } from '@ejm/shared-ui';
 
 // Hoisted, test-controllable state. The account page reads identity/contact
 // off the parent view and writes contact fields to users/{uid} via updateDoc.
@@ -48,9 +49,11 @@ import { AccountPage } from '../AccountPage';
 
 function renderPage() {
   return render(
-    <MemoryRouter>
-      <AccountPage />
-    </MemoryRouter>,
+    <ToastProvider>
+      <MemoryRouter>
+        <AccountPage />
+      </MemoryRouter>
+    </ToastProvider>,
   );
 }
 

@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
+import { ToastProvider } from '@ejm/shared-ui';
 
 // Supervised-account indicator: renders iff the user doc carries the
 // server-owned governedBy mirror, and links the transparency page.
@@ -53,9 +54,11 @@ function userDoc(overrides: Record<string, unknown> = {}) {
 
 function renderPage() {
   return render(
-    <MemoryRouter>
-      <BabysitterAccountPage />
-    </MemoryRouter>,
+    <ToastProvider>
+      <MemoryRouter>
+        <BabysitterAccountPage />
+      </MemoryRouter>
+    </ToastProvider>,
   );
 }
 

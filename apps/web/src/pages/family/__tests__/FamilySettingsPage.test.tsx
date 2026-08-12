@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
+import { ToastProvider } from '@ejm/shared-ui';
 
 // Hoisted, test-controllable Firestore state. The settings page loads
 // families/{id} + its kids subcollection, then writes family fields via
@@ -45,9 +46,11 @@ import { FamilySettingsPage } from '../FamilySettingsPage';
 
 function renderPage() {
   return render(
-    <MemoryRouter>
-      <FamilySettingsPage />
-    </MemoryRouter>,
+    <ToastProvider>
+      <MemoryRouter>
+        <FamilySettingsPage />
+      </MemoryRouter>
+    </ToastProvider>,
   );
 }
 

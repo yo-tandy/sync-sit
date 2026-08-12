@@ -757,6 +757,7 @@ export default {
     preapprovedDesc: 'Ajoutez des emails pour les comptes babysitter de test. Partagez le lien d\'inscription avec ?invite=true',
     addEmail: 'Ajouter un email',
     emailAdded: 'Email ajouté',
+    emailRemoved: 'Email supprimé',
     preapprovedPending: 'En attente',
     preapprovedUsed: 'Utilisé',
     noPreapprovedEmails: 'Aucun email pré-approuvé',
@@ -789,6 +790,8 @@ export default {
       note: 'Note (facultatif)',
       remove: "Retirer l'exemption",
       empty: 'Aucune exemption',
+      added: 'Exemption ajoutée',
+      removed: 'Exemption retirée',
     },
     governance: {
       menuTitle: 'Supervision',

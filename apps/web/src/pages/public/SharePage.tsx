@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { TopNav, Button, Card, InfoBanner } from '@/components/ui';
+import { TopNav, Button, Card, useToast } from '@/components/ui';
 import { ShareIcon, MailIcon } from '@/components/ui/Icons';
 
 export function SharePage() {
   const { t, i18n } = useTranslation();
+  const toast = useToast();
   const [copied, setCopied] = useState(false);
   const isFr = i18n.language?.startsWith('fr');
 
@@ -41,6 +42,7 @@ export function SharePage() {
     }
     setCopied(true);
     setTimeout(() => setCopied(false), 3000);
+    toast(t('share.copied'));
   };
 
   const handleEmail = () => {
@@ -60,7 +62,6 @@ export function SharePage() {
           <p className="text-sm leading-relaxed text-gray-800">{shareText}</p>
         </Card>
 
-        {copied && <InfoBanner className="mb-4">{t('share.copied')}</InfoBanner>}
 
         <div className="flex flex-col gap-3">
           {canNativeShare && (

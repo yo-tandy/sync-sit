@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { RouterProvider } from 'react-router';
+import { ToastProvider } from '@ejm/shared-ui';
 import { router } from './router';
 import { PushPrompt } from '@/components/ui/PushPrompt';
 import { setupForegroundMessages } from '@/lib/pushNotifications';
@@ -17,7 +18,7 @@ export default function App() {
   }, []);
 
   return (
-    <>
+    <ToastProvider>
       <RouterProvider router={router} />
       <PushPrompt />
       {toast && (
@@ -28,6 +29,6 @@ export default function App() {
           </div>
         </div>
       )}
-    </>
+    </ToastProvider>
   );
 }

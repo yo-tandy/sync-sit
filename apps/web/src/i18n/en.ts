@@ -785,6 +785,7 @@ export default {
     preapprovedDesc: 'Add emails for test babysitter accounts. Share the enrollment link with ?invite=true',
     addEmail: 'Add Email',
     emailAdded: 'Email added',
+    emailRemoved: 'Email removed',
     preapprovedPending: 'Pending',
     preapprovedUsed: 'Used',
     noPreapprovedEmails: 'No pre-approved emails',
@@ -817,6 +818,8 @@ export default {
       note: 'Note (optional)',
       remove: 'Remove Exemption',
       empty: 'No exemptions',
+      added: 'Exemption added',
+      removed: 'Exemption removed',
     },
     governance: {
       menuTitle: 'Supervision',

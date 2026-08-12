@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Spinner } from '@/components/ui/Spinner';
 import { PlusIcon, XIcon } from '@/components/ui/Icons';
+import { useToast } from '@/components/ui';
 import { useHolidays } from '@/hooks/useHolidays';
 import { useAdminStore } from '@/stores/adminStore';
 
@@ -18,6 +19,7 @@ interface EditablePeriod {
 
 export function AdminHolidaysPage() {
   const { t } = useTranslation();
+  const toast = useToast();
   const { periods: existingPeriods, loading, schoolYear: currentSchoolYear } = useHolidays();
   const { updateHolidays } = useAdminStore();
 
@@ -56,6 +58,7 @@ export function AdminHolidaysPage() {
     setSaving(true);
     try {
       await updateHolidays(schoolYear, 'A', periods);
+      toast(t('admin.holidaysSaved'));
     } finally {
       setSaving(false);
     }

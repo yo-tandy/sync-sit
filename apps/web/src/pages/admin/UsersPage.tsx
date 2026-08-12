@@ -9,10 +9,12 @@ import { Select } from '@/components/ui/Select';
 import { Spinner } from '@/components/ui/Spinner';
 import { Dialog } from '@/components/ui/Dialog';
 import { DownloadIcon } from '@/components/ui/Icons';
+import { useToast } from '@/components/ui';
 import { useAdminStore } from '@/stores/adminStore';
 
 export function AdminUsersPage() {
   const { t } = useTranslation();
+  const toast = useToast();
   const {
     users,
     usersLoading,
@@ -73,6 +75,7 @@ export function AdminUsersPage() {
       await addPreapprovedEmail(newPreapprovedEmail);
       setNewPreapprovedEmail('');
       await fetchPreapprovedEmails();
+      toast(t('admin.emailAdded'));
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to add email';
       alert(message);
@@ -83,6 +86,7 @@ export function AdminUsersPage() {
     try {
       await removePreapprovedEmail(email);
       await fetchPreapprovedEmails();
+      toast(t('admin.emailRemoved'));
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to remove email';
       alert(message);
@@ -96,6 +100,7 @@ export function AdminUsersPage() {
       setNewExemptionEmail('');
       setNewExemptionNote('');
       await fetchExemptions();
+      toast(t('admin.exemptions.added'));
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to add exemption';
       alert(message);
@@ -106,6 +111,7 @@ export function AdminUsersPage() {
     try {
       await removeExemption(email);
       await fetchExemptions();
+      toast(t('admin.exemptions.removed'));
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to remove exemption';
       alert(message);

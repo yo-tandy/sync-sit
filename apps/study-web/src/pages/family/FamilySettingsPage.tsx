@@ -19,12 +19,12 @@ import {
   Input,
   Textarea,
   TopNav,
-  InfoBanner,
   Card,
   AddressAutocomplete,
   type AddressResult,
   XIcon,
   PlusIcon,
+  useToast,
 } from '@ejm/shared-ui';
 
 // Copy-adapted from apps/web/src/pages/family/FamilySettingsPage.tsx, reduced
@@ -59,8 +59,8 @@ export function FamilySettingsPage() {
   const [kids, setKids] = useState<KidForm[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const toast = useToast();
 
   // Track kid docs the user removed (by their persisted kidId) so handleSave can
   // delete exactly those — no re-read of the collection, which avoids a TOCTOU
@@ -131,7 +131,6 @@ export function FamilySettingsPage() {
     if (!familyId) return;
     setSaving(true);
     setError(null);
-    setSuccess(false);
 
     try {
       // Update the shared family doc (only the fields this portal owns).
@@ -178,12 +177,7 @@ export function FamilySettingsPage() {
         }
       }
 
-      if (isMountedRef.current) {
-        setSuccess(true);
-        setTimeout(() => {
-          if (isMountedRef.current) setSuccess(false);
-        }, 3000);
-      }
+      toast(t('family.settings.saved'));
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : t('family.settings.saveFailed');
       if (isMountedRef.current) setError(message);
@@ -207,7 +201,6 @@ export function FamilySettingsPage() {
     <div>
       <TopNav title={t('family.settingsTitle')} backTo="/family" />
       <div className="px-6 pt-4 pb-8">
-        {success && <InfoBanner className="mb-4">{t('family.settings.saved')}</InfoBanner>}
         {error && <p className="mb-4 text-sm text-brand-600">{error}</p>}
 
         <p className="mb-5 text-xs text-gray-500">{t('family.settings.sharedHint')}</p>

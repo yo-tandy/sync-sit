@@ -4,6 +4,7 @@ import { I18nextProvider } from 'react-i18next';
 import { createMemoryRouter, RouterProvider } from 'react-router';
 import { DAYS_OF_WEEK, createEmptySlots } from '@ejm/shared-core';
 import type { DayOfWeek } from '@ejm/shared-core';
+import { ToastProvider } from '@ejm/shared-ui';
 import { i18n } from '@/__tests__/test-utils';
 
 // Smoke test only. The schedule leaf components (WeeklyTimeline/DayEditor/
@@ -32,7 +33,9 @@ function renderSchedule() {
   );
   return render(
     <I18nextProvider i18n={i18n}>
-      <RouterProvider router={router} />
+      <ToastProvider>
+        <RouterProvider router={router} />
+      </ToastProvider>
     </I18nextProvider>,
   );
 }

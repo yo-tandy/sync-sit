@@ -133,6 +133,7 @@ describe('tutor SubjectsPage', () => {
       ),
     );
     await waitFor(() => expect(h.auth.refreshUserDoc).toHaveBeenCalled());
-    expect(await screen.findByText(/saved/i)).toBeInTheDocument();
+    // Save confirmation is the shared toast idiom (role=status), not an inline banner.
+    expect(await screen.findByRole('status')).toHaveTextContent(/saved/i);
   });
 });

@@ -9,7 +9,7 @@ import {
   getTutorProfile,
   type SubjectOffering,
 } from '@ejm/study-core';
-import { Button, Select, Input, Chip, Card, TopNav } from '@ejm/shared-ui';
+import { Button, Select, Input, Chip, Card, TopNav, useToast } from '@ejm/shared-ui';
 
 /**
  * Subjects & rates editor. Each row is one SubjectOffering
@@ -39,9 +39,9 @@ export function SubjectsPage() {
   const tutor = getTutorProfile(userDoc);
   const uid = firebaseUser?.uid;
 
+  const toast = useToast();
   const [rows, setRows] = useState<Row[]>([]);
   const [saving, setSaving] = useState(false);
-  const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Initialise from the stored offerings (mirrors BabysittingOptionsPage).
@@ -51,19 +51,13 @@ export function SubjectsPage() {
   }, [tutor]);
 
   const addRow = () => {
-    setRows((prev) => [...prev, { subject: '', levels: [], rate: '' }]);
-    setSuccess(false);
-  };
+    setRows((prev) => [...prev, { subject: '', levels: [], rate: '' }]);  };
 
   const removeRow = (index: number) => {
-    setRows((prev) => prev.filter((_, i) => i !== index));
-    setSuccess(false);
-  };
+    setRows((prev) => prev.filter((_, i) => i !== index));  };
 
   const setSubject = (index: number, subject: string) => {
-    setRows((prev) => prev.map((r, i) => (i === index ? { ...r, subject } : r)));
-    setSuccess(false);
-  };
+    setRows((prev) => prev.map((r, i) => (i === index ? { ...r, subject } : r)));  };
 
   const toggleLevel = (index: number, level: string) => {
     setRows((prev) =>
@@ -77,17 +71,13 @@ export function SubjectsPage() {
             }
           : r,
       ),
-    );
-    setSuccess(false);
-  };
+    );  };
 
   const setRate = (index: number, value: string) => {
     const rate = value === '' ? '' : parseFloat(value);
     setRows((prev) =>
       prev.map((r, i) => (i === index ? { ...r, rate: Number.isNaN(rate as number) ? '' : rate } : r)),
-    );
-    setSuccess(false);
-  };
+    );  };
 
   const validate = (): string | null => {
     if (rows.some((r) => !r.subject)) return t('tutor.subjects.errorNoSubject');
@@ -105,7 +95,6 @@ export function SubjectsPage() {
     const validationError = validate();
     if (validationError) {
       setError(validationError);
-      setSuccess(false);
       return;
     }
 
@@ -117,15 +106,13 @@ export function SubjectsPage() {
 
     setSaving(true);
     setError(null);
-    setSuccess(false);
     try {
       await updateDoc(doc(db, 'users', uid), {
         'profiles.tutor.subjects': offerings,
         updatedAt: serverTimestamp(),
       });
       await refreshUserDoc();
-      setSuccess(true);
-      setTimeout(() => setSuccess(false), 3000);
+      toast(t('tutor.subjects.saved'));
     } catch {
       setError(t('tutor.subjects.saveError'));
     } finally {
@@ -204,7 +191,6 @@ export function SubjectsPage() {
         </Button>
 
         {error && <p className="mt-4 text-sm text-brand-600">{error}</p>}
-        {success && <p className="mt-4 text-sm text-green-600">✓ {t('tutor.subjects.saved')}</p>}
 
         <Button type="submit" disabled={saving} className="mt-4">
           {saving ? t('common.saving') : t('common.save')}

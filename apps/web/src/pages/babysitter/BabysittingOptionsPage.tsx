@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
-import { Button, Input, Textarea, Chip, TopNav } from '@/components/ui';
+import { Button, Input, Textarea, Chip, TopNav, useToast } from '@/components/ui';
 import { LanguagePicker } from '@/components/forms/LanguagePicker';
 import { AddressAutocomplete, type AddressResult } from '@/components/forms/AddressAutocomplete';
 import { ARRONDISSEMENTS, NEARBY_TOWNS } from '@ejm/sit-core';
@@ -30,8 +30,8 @@ export function BabysittingOptionsPage() {
 
   // UI state
   const [saving, setSaving] = useState(false);
-  const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const toast = useToast();
 
   // Initialize from userDoc
   useEffect(() => {
@@ -70,7 +70,6 @@ export function BabysittingOptionsPage() {
 
     setSaving(true);
     setError(null);
-    setSuccess(false);
 
     try {
       await updateDoc(doc(db, 'users', uid), {
@@ -87,8 +86,7 @@ export function BabysittingOptionsPage() {
         updatedAt: serverTimestamp(),
       });
       await refreshUserDoc();
-      setSuccess(true);
-      setTimeout(() => setSuccess(false), 3000);
+      toast(t('profile.saved'));
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to save';
       setError(message);
@@ -184,7 +182,6 @@ export function BabysittingOptionsPage() {
         </div>
 
         {error && <p className="mt-4 text-sm text-brand-600">{error}</p>}
-        {success && <p className="mt-4 text-sm text-green-600">✓ {t('profile.saved')}</p>}
         <Button type="submit" disabled={saving} className="mt-4">
           {saving ? t('common.saving') : t('common.save')}
         </Button>
