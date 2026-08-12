@@ -10,7 +10,12 @@ const h = vi.hoisted(() => ({
   exemptions: [] as { email: string; note: string | null; createdByUid: string; createdAt: string | null }[],
 }));
 
-vi.mock('@/config/firebase', () => ({ functions: {} }));
+vi.mock('@/config/firebase', () => ({ functions: {}, auth: {}, db: {} }));
+// The ui barrel (ToastProvider path) pulls the auth store, whose module scope
+// subscribes onAuthStateChanged — neutralize it like sibling tests do.
+vi.mock('@/stores/authStore', () => ({
+  useAuthStore: () => ({ userDoc: null, firebaseUser: null }),
+}));
 vi.mock('firebase/functions', () => ({
   httpsCallable: (_fns: unknown, name: string) => (payload: unknown) => {
     h.calls.push({ name, payload });
