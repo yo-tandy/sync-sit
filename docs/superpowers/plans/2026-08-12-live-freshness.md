@@ -57,3 +57,5 @@ Commit: `feat(web,study-web): refetch hot lists on window focus`
 - onSnapshot error → loadError, never an empty list masquerading as success (that's the exact bug class the provability work fixed).
 - The hook must not double-fire when focus AND visibilitychange arrive together (same throttle window covers it — pin in the unit test).
 - No new indexes: same queries, new transport.
+
+> **Post-implementation notes:** sit's babysitter RequestsPage needed no conversion — its reads were already live via `apps/web/src/hooks/useAppointments` (the F3 evidence grep covered only `pages/`). Measured integration baseline at this branch point: 807/82 (the 810/811 guesses assumed unmerged sibling branches).

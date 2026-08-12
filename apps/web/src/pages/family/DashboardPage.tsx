@@ -279,7 +279,8 @@ export function FamilyDashboard() {
   }, [pending, confirmed, pastRecent, rejectedRecent]);
 
   const loadFamily = useCallback(async () => {
-    if (familyId) {
+    if (!familyId) return;
+    try {
       const familySnap = await getDoc(doc(db, 'families', familyId));
       if (familySnap.exists()) {
         setFamilyName(familySnap.data().familyName || '');
@@ -287,6 +288,9 @@ export function FamilyDashboard() {
       const kidsSnap = await getDocs(collection(db, 'families', familyId, 'kids'));
       setKids(kidsSnap.docs.map((d) => ({ kidId: d.id, firstName: d.data().firstName, age: d.data().age })));
       setKidsLoaded(true);
+    } catch {
+      // Focus refetch may fire on a network blip — keep last-known-good name
+      // and kids rather than rejecting out of the hook's void call.
     }
   }, [familyId]);
 

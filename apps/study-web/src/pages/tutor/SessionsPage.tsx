@@ -140,7 +140,13 @@ export function SessionsPage() {
   // The page's load, reusable so a successful confirm can re-run it (a confirm
   // materialises server state — recurring instances especially — that a local
   // status flip alone can't show).
+  // Monotonic run id — mirrors the family twin: an older in-flight load (or
+  // one for a previous uid) must not apply over a newer run now that focus is
+  // a third trigger.
+  const runIdRef = useRef(0);
+
   const load = useCallback(async () => {
+    const runId = ++runIdRef.current;
     if (!uid) return;
     try {
       const snap = await getDocs(
@@ -179,7 +185,7 @@ export function SessionsPage() {
     } catch {
       // A THROW is a load failure — surface it, don't conflate it with the
       // tutor having no sessions (the empty state).
-      if (mountedRef.current) setLoadError(true);
+      if (mountedRef.current && runId === runIdRef.current) setLoadError(true);
     }
   }, [uid]);
 
