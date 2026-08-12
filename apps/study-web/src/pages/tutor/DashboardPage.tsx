@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import {
@@ -28,6 +28,7 @@ import {
   ClipboardListIcon,
   SettingsIcon,
   ShieldIcon,
+  useRefetchOnFocus,
 } from '@ejm/shared-ui';
 
 /**
@@ -84,63 +85,82 @@ export function DashboardPage() {
     };
   }, [uid]);
 
+  // A mounted guard shared by the initial count loads and every
+  // focus-triggered refetch, so a late-resolving fetch never writes state
+  // after unmount.
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
   // Pending contact-request count for the inbox card. Queried by tutorUserId
   // only (single-field index) and counted client-side — see RequestsPage for
   // the index rationale.
-  useEffect(() => {
+  const loadRequestCount = useCallback(() => {
     if (!uid) return;
-    let cancelled = false;
     getDocs(query(collection(db, 'studyContactRequests'), where('tutorUserId', '==', uid)))
       .then((snap) => {
-        if (cancelled) return;
+        if (!mountedRef.current) return;
         setPendingRequests(snap.docs.filter((d) => d.data()?.status === 'pending').length);
       })
       .catch(() => {
         /* leave count at 0 */
       });
-    return () => {
-      cancelled = true;
-    };
   }, [uid]);
 
   // Pending-session count for the sessions card. Queried by tutorUserId only
   // (single-field index) and counted client-side — see SessionsPage for the
   // index rationale.
-  useEffect(() => {
+  const loadSessionCount = useCallback(() => {
     if (!uid) return;
-    let cancelled = false;
     getDocs(query(collection(db, 'study-sessions'), where('tutorUserId', '==', uid)))
       .then((snap) => {
-        if (cancelled) return;
+        if (!mountedRef.current) return;
         setPendingSessions(snap.docs.filter((d) => d.data()?.status === 'pending').length);
       })
       .catch(() => {
         /* leave count at 0 */
       });
-    return () => {
-      cancelled = true;
-    };
   }, [uid]);
 
   // Pending-endorsement count for the endorsements card. Endorsements live in
   // the shared `references` collection keyed by tutorUserId; count status
   // 'private' (awaiting the tutor) client-side. (Sit references are keyed by
   // babysitterUserId, so this query never sees them.)
-  useEffect(() => {
+  const loadEndorsementCount = useCallback(() => {
     if (!uid) return;
-    let cancelled = false;
     getDocs(query(collection(db, 'references'), where('tutorUserId', '==', uid)))
       .then((snap) => {
-        if (cancelled) return;
+        if (!mountedRef.current) return;
         setPendingEndorsements(snap.docs.filter((d) => d.data()?.status === 'private').length);
       })
       .catch(() => {
         /* leave count at 0 */
       });
-    return () => {
-      cancelled = true;
-    };
   }, [uid]);
+
+  useEffect(() => {
+    loadRequestCount();
+  }, [loadRequestCount]);
+
+  useEffect(() => {
+    loadSessionCount();
+  }, [loadSessionCount]);
+
+  useEffect(() => {
+    loadEndorsementCount();
+  }, [loadEndorsementCount]);
+
+  // Issue #117 tier (a): a returning user re-runs the same count loads, so an
+  // open tab shows fresh inbox/session/endorsement badges.
+  useRefetchOnFocus(() => {
+    loadRequestCount();
+    loadSessionCount();
+    loadEndorsementCount();
+  });
 
   const handleToggleSearchable = async () => {
     if (!uid) return;

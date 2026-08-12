@@ -265,6 +265,7 @@ export default {
         'La famille sera notifiée et ne pourra pas vous envoyer une autre demande pendant 7 jours.',
       confirmDeclineCta: 'Oui, refuser',
       actionError: 'Impossible de mettre à jour la demande. Veuillez réessayer.',
+      loadError: 'Impossible de charger vos demandes. Veuillez actualiser et réessayer.',
       sentOn: 'Envoyée le {{date}}',
       status: {
         pending: 'En attente',
@@ -649,6 +650,7 @@ export default {
       confirmCancelCta: 'Oui, annuler la demande',
       keepRequest: 'Conserver la demande',
       actionError: 'Impossible d\'annuler la demande. Veuillez réessayer.',
+      loadError: 'Impossible de charger vos demandes. Veuillez actualiser et réessayer.',
       book: 'Réserver un cours',
       endorse: 'Recommander {{name}}',
       endorsed: 'Recommandé',

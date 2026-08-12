@@ -6,7 +6,7 @@ import { httpsCallable } from 'firebase/functions';
 import type { RecurringSlot } from '@ejm/shared-core';
 import { db, functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
-import { Card, Button, Badge, TopNav, Spinner, Dialog } from '@ejm/shared-ui';
+import { Card, Button, Badge, TopNav, Spinner, Dialog, useRefetchOnFocus } from '@ejm/shared-ui';
 import { RecurringConflictPreview } from '@/components/tutor/RecurringConflictPreview';
 import { ReasonModal } from '@/components/sessions/ReasonModal';
 import { SessionInstanceList } from '@/components/sessions/SessionInstanceList';
@@ -140,7 +140,13 @@ export function SessionsPage() {
   // The page's load, reusable so a successful confirm can re-run it (a confirm
   // materialises server state — recurring instances especially — that a local
   // status flip alone can't show).
+  // Monotonic run id — mirrors the family twin: an older in-flight load (or
+  // one for a previous uid) must not apply over a newer run now that focus is
+  // a third trigger.
+  const runIdRef = useRef(0);
+
   const load = useCallback(async () => {
+    const runId = ++runIdRef.current;
     if (!uid) return;
     try {
       const snap = await getDocs(
@@ -168,7 +174,10 @@ export function SessionsPage() {
           })),
         ),
       );
-      if (!mountedRef.current) return;
+      if (!mountedRef.current || runId !== runIdRef.current) return;
+      // A successful (re)load clears any prior transient failure — a sticky
+      // flag would render the error next to the freshly loaded list.
+      setLoadError(false);
       const byId: Record<string, StudySessionInstanceDoc[]> = {};
       for (const { sessionId, rows: irows } of instanceLists) byId[sessionId] = irows;
       setInstancesBySeries(byId);
@@ -176,13 +185,17 @@ export function SessionsPage() {
     } catch {
       // A THROW is a load failure — surface it, don't conflate it with the
       // tutor having no sessions (the empty state).
-      if (mountedRef.current) setLoadError(true);
+      if (mountedRef.current && runId === runIdRef.current) setLoadError(true);
     }
   }, [uid]);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  // Issue #117 tier (a): a returning user re-runs the same load, so an open tab
+  // doesn't show a stale inbox.
+  useRefetchOnFocus(load);
 
   // Format a "YYYY-MM-DD" date. Parsed field-by-field (not `new Date(str)`, which
   // reads as UTC midnight and can slip a day in negative offsets).
@@ -522,7 +535,10 @@ export function SessionsPage() {
           </div>
         )}
 
-        {loadError && (
+        {/* Last-known-good: a refetch blip must not paint an error over a
+            rendered list — the error state is only for loads with nothing
+            to show (mirrors GovernancePage's dataRef gate). */}
+        {loadError && sessions === null && (
           <p className="py-10 text-center text-sm text-brand-600">{t('tutor.sessions.loadError')}</p>
         )}
 

@@ -3,7 +3,16 @@ import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '@/config/firebase';
-import { Card, Button, Badge, TopNav, Spinner, Dialog, ChevronRightIcon } from '@ejm/shared-ui';
+import {
+  Card,
+  Button,
+  Badge,
+  TopNav,
+  Spinner,
+  Dialog,
+  ChevronRightIcon,
+  useRefetchOnFocus,
+} from '@ejm/shared-ui';
 import type {
   GovernedChildrenResult,
   GovernedChildSummary,
@@ -29,6 +38,11 @@ export function GovernancePage() {
   const { t, i18n } = useTranslation();
 
   const [data, setData] = useState<GovernedChildrenResult | null>(null);
+  // Mirror of `data` readable inside load's catch without re-creating it.
+  const dataRef = useRef<GovernedChildrenResult | null>(null);
+  useEffect(() => {
+    dataRef.current = data;
+  }, [data]);
   const [loadError, setLoadError] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   // inviteId awaiting resend/cancel, or null (disables that row's actions).
@@ -52,13 +66,19 @@ export function GovernancePage() {
       setData(res.data);
       setLoadError(false);
     } catch {
-      if (mountedRef.current) setLoadError(true);
+      // Last-known-good: a focus-refetch blip must not stamp an error banner
+      // over data that is still rendered (mirrors the sit twin).
+      if (mountedRef.current) setLoadError((prev) => prev || dataRef.current === null);
     }
   }, []);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  // Issue #117 tier (a): governance state is callable-sourced (no onSnapshot
+  // possible), so refetch when the user returns to the tab.
+  useRefetchOnFocus(load);
 
   const formatDate = (iso: string | null): string => {
     if (!iso) return '';

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { screen, fireEvent, waitFor } from '@testing-library/react';
+import { screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { renderWithProviders } from '@/__tests__/test-utils';
 
 // Hoisted, test-controllable state. The family SessionsPage reads study-sessions
@@ -350,6 +350,53 @@ describe('family SessionsPage — management', () => {
     expect(await screen.findByText(/could not load your sessions/i)).toBeInTheDocument();
     // The denial must NOT masquerade as "no sessions".
     expect(screen.queryByText(/no sessions yet/i)).not.toBeInTheDocument();
+  });
+
+  it('a FAILED focus refetch does not paint an error over a rendered list', async () => {
+    h.sessions = [confirmedOneTime({ sessionId: 'sGood' })];
+    let fail = false;
+    h.getDocs.mockImplementation((q: { query?: { path: string }[]; path?: string }) => {
+      if (fail) return Promise.reject({ code: 'unavailable' });
+      const path = q?.query?.[0]?.path ?? q?.path ?? '';
+      if (path.endsWith('/instances')) return Promise.resolve({ docs: [] });
+      return Promise.resolve({ docs: h.sessions.map((s) => ({ id: s.sessionId, data: () => s })) });
+    });
+    renderWithProviders(<SessionsPage />);
+    expect(await screen.findByText(/math/i)).toBeInTheDocument();
+
+    // Blip on return-to-tab: the list must stay, the error must NOT appear.
+    fail = true;
+    await act(async () => {
+      vi.setSystemTime(new Date(Date.now() + 20_000));
+      window.dispatchEvent(new Event('focus'));
+    });
+
+    expect(screen.getByText(/math/i)).toBeInTheDocument();
+    expect(screen.queryByText(/could not load your sessions/i)).not.toBeInTheDocument();
+  });
+
+  it('a successful focus refetch CLEARS a prior load error (no sticky flag)', async () => {
+    h.sessions = [confirmedOneTime({ sessionId: 'sOK' })];
+    let fail = true;
+    h.getDocs.mockImplementation((q: { query?: { path: string }[]; path?: string }) => {
+      if (fail) return Promise.reject({ code: 'unavailable' });
+      const path = q?.query?.[0]?.path ?? q?.path ?? '';
+      if (path.endsWith('/instances')) return Promise.resolve({ docs: [] });
+      return Promise.resolve({ docs: h.sessions.map((s) => ({ id: s.sessionId, data: () => s })) });
+    });
+    renderWithProviders(<SessionsPage />);
+    expect(await screen.findByText(/could not load your sessions/i)).toBeInTheDocument();
+
+    // Network recovers; the user returns to the tab (past the throttle window).
+    fail = false;
+    await act(async () => {
+      vi.setSystemTime(new Date(Date.now() + 20_000));
+      window.dispatchEvent(new Event('focus'));
+    });
+
+    await waitFor(() =>
+      expect(screen.queryByText(/could not load your sessions/i)).not.toBeInTheDocument(),
+    );
   });
 
   // ── Cancellation policy (V2 feature 7) ──

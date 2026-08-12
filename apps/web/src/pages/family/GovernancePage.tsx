@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { httpsCallable } from 'firebase/functions';
+import { useRefetchOnFocus } from '@ejm/shared-ui';
 import { functions } from '@/config/firebase';
 import { Card, Button, Badge, TopNav, Spinner, Dialog } from '@/components/ui';
 import { ChevronRightIcon } from '@/components/ui/Icons';
@@ -30,6 +31,11 @@ export function GovernancePage() {
   const { t, i18n } = useTranslation();
 
   const [data, setData] = useState<GovernedChildrenResult | null>(null);
+  // Mirror of `data` readable inside load's catch without re-creating it.
+  const dataRef = useRef<GovernedChildrenResult | null>(null);
+  useEffect(() => {
+    dataRef.current = data;
+  }, [data]);
   const [loadError, setLoadError] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   // inviteId awaiting resend/cancel, or null (disables that row's actions).
@@ -53,13 +59,20 @@ export function GovernancePage() {
       setData(res.data);
       setLoadError(false);
     } catch {
-      if (mountedRef.current) setLoadError(true);
+      // Last-known-good: a focus-refetch blip must not stamp an error banner
+      // over data that is still rendered. Only a load with nothing to show
+      // surfaces the error state.
+      if (mountedRef.current) setLoadError((prev) => prev || dataRef.current === null);
     }
   }, []);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  // Issue #117 tier (a): callable-sourced (no onSnapshot possible) — a
+  // returning user re-runs the same load. Mirrors study's GovernancePage.
+  useRefetchOnFocus(load);
 
   const formatDate = (iso: string | null): string => {
     if (!iso) return '';

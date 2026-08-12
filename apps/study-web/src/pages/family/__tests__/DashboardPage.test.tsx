@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { screen } from '@testing-library/react';
+import { screen, act } from '@testing-library/react';
 import { renderWithProviders } from '@/__tests__/test-utils';
 
 // Hoisted, test-controllable state. The family dashboard reads the auth store
@@ -143,6 +143,37 @@ describe('family DashboardPage', () => {
     // 1 pending, 2 upcoming (confirmed).
     expect(await screen.findByText('1')).toBeInTheDocument();
     expect(screen.getByText('2')).toBeInTheDocument();
+  });
+
+  it('a refetch blip keeps last-known-good: verified banner and counts survive failed reads', async () => {
+    h.familyData = { familyName: 'Cohen', verification: { isFullyVerified: true } };
+    h.requests = [{ status: 'pending' }, { status: 'pending' }, { status: 'accepted' }];
+    h.sessions = [{ status: 'pending' }, { status: 'confirmed', date: '2099-01-01' }];
+    renderWithProviders(<DashboardPage />);
+
+    // Initial load: verified (search CTA, no banner) + real counts. The
+    // sessions card renders pending=1 and upcoming=1 (the '1' appears twice).
+    expect(await screen.findByRole('link', { name: /find a tutor/i })).toBeInTheDocument();
+    expect(await screen.findByText('2')).toBeInTheDocument();
+    expect((await screen.findAllByText('1')).length).toBeGreaterThanOrEqual(2);
+
+    // Network blip: every read now fails; the user returns to the tab.
+    h.getDoc.mockImplementation(() => Promise.reject(new Error('unavailable')));
+    h.getDocs.mockImplementation(() => Promise.reject(new Error('unavailable')));
+    await act(async () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date(Date.now() + 20_000));
+      window.dispatchEvent(new Event('focus'));
+      vi.useRealTimers();
+    });
+
+    // Still verified, counts intact — no un-verify banner, nothing zeroed:
+    // requests pending stays 2 AND the sessions card still shows both 1s
+    // (zeroing sessionCounts would collapse the card to its empty state).
+    expect(screen.getByRole('link', { name: /find a tutor/i })).toBeInTheDocument();
+    expect(screen.getByText('2')).toBeInTheDocument();
+    expect(screen.getAllByText('1').length).toBeGreaterThanOrEqual(2);
+    expect(screen.queryByText(/not.*verified|verify/i)).not.toBeInTheDocument();
   });
 
   it('renders a governance entry card linking to /family/governance', () => {

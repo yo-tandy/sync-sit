@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
@@ -37,6 +37,9 @@ export function RequestsPage() {
   const uid = firebaseUser?.uid ?? null;
 
   const [requests, setRequests] = useState<StudyContactRequestDoc[] | null>(null);
+  // The subscription errored (e.g. PERMISSION_DENIED) — surfaced honestly, never
+  // conflated with the empty state.
+  const [loadError, setLoadError] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [declineTarget, setDeclineTarget] = useState<StudyContactRequestDoc | null>(null);
   // requestId currently awaiting the callable, or null. A row is "in flight"
@@ -44,22 +47,23 @@ export function RequestsPage() {
   // changed (see respond).
   const [actingId, setActingId] = useState<string | null>(null);
 
+  // Live subscription (issue #117 tier b): the same provable equality query as
+  // before, but every snapshot re-renders the inbox — a tutor with an open tab
+  // sees a new request without reloading. First snapshot resolves the loading
+  // state; the error callback surfaces a load failure.
   useEffect(() => {
     if (!uid) return;
-    let cancelled = false;
-    getDocs(query(collection(db, 'studyContactRequests'), where('tutorUserId', '==', uid)))
-      .then((snap) => {
-        if (cancelled) return;
+    const unsubscribe = onSnapshot(
+      query(collection(db, 'studyContactRequests'), where('tutorUserId', '==', uid)),
+      (snap) => {
         const rows = snap.docs.map((d) => d.data() as StudyContactRequestDoc);
         rows.sort((a, b) => (b.createdAt?.seconds ?? 0) - (a.createdAt?.seconds ?? 0));
+        setLoadError(false);
         setRequests(rows);
-      })
-      .catch(() => {
-        if (!cancelled) setRequests([]);
-      });
-    return () => {
-      cancelled = true;
-    };
+      },
+      () => setLoadError(true),
+    );
+    return unsubscribe;
   }, [uid]);
 
   const formatDate = (ts: StudyContactRequestDoc['createdAt']): string => {
@@ -113,13 +117,17 @@ export function RequestsPage() {
       <div className="px-5 pt-4 pb-8">
         {error && <p className="mb-4 text-sm text-brand-600">{error}</p>}
 
-        {requests === null && (
+        {loadError && (
+          <p className="py-10 text-center text-sm text-red-600">{t('tutor.requests.loadError')}</p>
+        )}
+
+        {!loadError && requests === null && (
           <div className="flex justify-center py-20">
             <Spinner />
           </div>
         )}
 
-        {requests !== null && requests.length === 0 && (
+        {!loadError && requests !== null && requests.length === 0 && (
           <Card>
             <p className="py-4 text-center text-sm text-gray-500">{t('tutor.requests.empty')}</p>
           </Card>

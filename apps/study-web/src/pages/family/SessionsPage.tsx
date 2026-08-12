@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
@@ -7,7 +7,16 @@ import { db, functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { getParentProfile } from '@ejm/shared-core';
 import type { TutorEndorsementDoc } from '@ejm/study-core';
-import { Card, Button, Badge, TopNav, Spinner, Dialog, Checkbox } from '@ejm/shared-ui';
+import {
+  Card,
+  Button,
+  Badge,
+  TopNav,
+  Spinner,
+  Dialog,
+  Checkbox,
+  useRefetchOnFocus,
+} from '@ejm/shared-ui';
 import { ReasonModal } from '@/components/sessions/ReasonModal';
 import { SessionInstanceList } from '@/components/sessions/SessionInstanceList';
 import { SessionNotes } from '@/components/sessions/SessionNotes';
@@ -129,52 +138,74 @@ export function SessionsPage() {
   const [respondingId, setRespondingId] = useState<string | null>(null);
   const [respondError, setRespondError] = useState<string | null>(null);
 
+  // A mounted guard shared by the initial load and every focus-triggered
+  // refetch, so a late-resolving fetch never writes state after unmount
+  // (mirrors the tutor SessionsPage).
+  const mountedRef = useRef(true);
   useEffect(() => {
-    if (!familyId) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const snap = await getDocs(
-          query(collection(db, 'study-sessions'), where('familyId', '==', familyId)),
-        );
-        if (cancelled) return;
-        const rows = snap.docs.map((d) => d.data() as StudySessionDoc);
-        rows.sort((a, b) => (b.createdAt?.seconds ?? 0) - (a.createdAt?.seconds ?? 0));
-
-        // Load instance subcollections for confirmed recurring series via the
-        // nested path. The read MUST be filtered on the instance's denormalized
-        // familyId: the security rule proves access per-doc from
-        // resource.data.familyId, and an unconstrained list is unprovable →
-        // PERMISSION_DENIED. Single-field equality (no composite needed).
-        const series = rows.filter((r) => r.status === 'confirmed' && r.type === 'recurring');
-        const instanceLists = await Promise.all(
-          series.map((s) =>
-            getDocs(
-              query(
-                collection(db, 'study-sessions', s.sessionId, 'instances'),
-                where('familyId', '==', familyId),
-              ),
-            ).then((isnap) => ({
-              sessionId: s.sessionId,
-              rows: isnap.docs.map((d) => d.data() as StudySessionInstanceDoc),
-            })),
-          ),
-        );
-        if (cancelled) return;
-        const byId: Record<string, StudySessionInstanceDoc[]> = {};
-        for (const { sessionId, rows: irows } of instanceLists) byId[sessionId] = irows;
-        setInstancesBySeries(byId);
-        setSessions(rows);
-      } catch {
-        // A THROW is a load failure — surface it honestly rather than
-        // conflating it with the family having no sessions (the empty state).
-        if (!cancelled) setLoadError(true);
-      }
-    })();
+    mountedRef.current = true;
     return () => {
-      cancelled = true;
+      mountedRef.current = false;
     };
+  }, []);
+
+  // The page's load, reusable so a returning user re-runs it (issue #117 tier a).
+  // Monotonic run id: an in-flight load for a PREVIOUS familyId (or an older
+  // run of the same one) must not apply after a newer run started — mountedRef
+  // alone is unmount-scoped, not per-run.
+  const runIdRef = useRef(0);
+
+  const load = useCallback(async () => {
+    const runId = ++runIdRef.current;
+    if (!familyId) return;
+    try {
+      const snap = await getDocs(
+        query(collection(db, 'study-sessions'), where('familyId', '==', familyId)),
+      );
+      const rows = snap.docs.map((d) => d.data() as StudySessionDoc);
+      rows.sort((a, b) => (b.createdAt?.seconds ?? 0) - (a.createdAt?.seconds ?? 0));
+
+      // Load instance subcollections for confirmed recurring series via the
+      // nested path. The read MUST be filtered on the instance's denormalized
+      // familyId: the security rule proves access per-doc from
+      // resource.data.familyId, and an unconstrained list is unprovable →
+      // PERMISSION_DENIED. Single-field equality (no composite needed).
+      const series = rows.filter((r) => r.status === 'confirmed' && r.type === 'recurring');
+      const instanceLists = await Promise.all(
+        series.map((s) =>
+          getDocs(
+            query(
+              collection(db, 'study-sessions', s.sessionId, 'instances'),
+              where('familyId', '==', familyId),
+            ),
+          ).then((isnap) => ({
+            sessionId: s.sessionId,
+            rows: isnap.docs.map((d) => d.data() as StudySessionInstanceDoc),
+          })),
+        ),
+      );
+      if (!mountedRef.current || runId !== runIdRef.current) return;
+      // A successful (re)load clears any prior transient failure — a sticky
+      // flag would render the error next to the freshly loaded list.
+      setLoadError(false);
+      const byId: Record<string, StudySessionInstanceDoc[]> = {};
+      for (const { sessionId, rows: irows } of instanceLists) byId[sessionId] = irows;
+      setInstancesBySeries(byId);
+      setSessions(rows);
+    } catch {
+      // A THROW is a load failure — surface it honestly rather than
+      // conflating it with the family having no sessions (the empty state).
+      if (mountedRef.current && runId === runIdRef.current) setLoadError(true);
+    }
   }, [familyId]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  // Issue #117 tier (a): a returning user re-runs the same load, so an open tab
+  // doesn't show a stale sessions list.
+  useRefetchOnFocus(load);
 
   // This family's submitted endorsements, to gate the post-completion prompt.
   // Equality-only (submittedByFamilyId + appSource) — no composite needed — and
@@ -616,7 +647,10 @@ export function SessionsPage() {
           </div>
         )}
 
-        {loadError && (
+        {/* Last-known-good: a refetch blip must not paint an error over a
+            rendered list — the error state is only for loads with nothing
+            to show (mirrors GovernancePage's dataRef gate). */}
+        {loadError && sessions === null && (
           <p className="py-10 text-center text-sm text-brand-600">
             {t('family.sessions.loadError')}
           </p>
