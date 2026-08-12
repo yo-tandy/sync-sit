@@ -3,7 +3,16 @@ import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '@/config/firebase';
-import { Card, Button, Badge, TopNav, Spinner, Dialog, ChevronRightIcon } from '@ejm/shared-ui';
+import {
+  Card,
+  Button,
+  Badge,
+  TopNav,
+  Spinner,
+  Dialog,
+  ChevronRightIcon,
+  useRefetchOnFocus,
+} from '@ejm/shared-ui';
 import type {
   GovernedChildrenResult,
   GovernedChildSummary,
@@ -59,6 +68,10 @@ export function GovernancePage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // Issue #117 tier (a): governance state is callable-sourced (no onSnapshot
+  // possible), so refetch when the user returns to the tab.
+  useRefetchOnFocus(load);
 
   const formatDate = (iso: string | null): string => {
     if (!iso) return '';

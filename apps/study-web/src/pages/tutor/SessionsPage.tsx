@@ -6,7 +6,7 @@ import { httpsCallable } from 'firebase/functions';
 import type { RecurringSlot } from '@ejm/shared-core';
 import { db, functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
-import { Card, Button, Badge, TopNav, Spinner, Dialog } from '@ejm/shared-ui';
+import { Card, Button, Badge, TopNav, Spinner, Dialog, useRefetchOnFocus } from '@ejm/shared-ui';
 import { RecurringConflictPreview } from '@/components/tutor/RecurringConflictPreview';
 import { ReasonModal } from '@/components/sessions/ReasonModal';
 import { SessionInstanceList } from '@/components/sessions/SessionInstanceList';
@@ -183,6 +183,10 @@ export function SessionsPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // Issue #117 tier (a): a returning user re-runs the same load, so an open tab
+  // doesn't show a stale inbox.
+  useRefetchOnFocus(load);
 
   // Format a "YYYY-MM-DD" date. Parsed field-by-field (not `new Date(str)`, which
   // reads as UTC midnight and can slip a day in negative offsets).

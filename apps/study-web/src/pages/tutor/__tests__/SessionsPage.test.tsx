@@ -839,3 +839,40 @@ describe('tutor SessionsPage — proposals & entry', () => {
     expect(screen.getAllByRole('button', { name: /propose a session/i })).toHaveLength(1);
   });
 });
+
+// ── Issue #117 tier (a): refetch on window focus ──
+// Representative wiring pin for study-web: the page passes its load function to
+// useRefetchOnFocus, so a returning user re-runs the SAME provable query. The
+// hook's throttle/listener behavior is unit-tested in shared-ui.
+describe('tutor SessionsPage — refetch on focus', () => {
+  beforeEach(() => {
+    reset();
+    // Fake only Date: the throttle window is measured with Date.now(), while
+    // waitFor/getDocs promises need real timers.
+    vi.useFakeTimers({ toFake: ['Date'] });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('re-runs the sessions load with IDENTICAL query args when the window regains focus', async () => {
+    h.sessions = [oneTime()];
+    renderWithProviders(<SessionsPage />);
+    await screen.findByText('Cohen');
+
+    const sessionCalls = () =>
+      h.getDocs.mock.calls.filter(
+        (c) => (c[0] as { query?: { path: string }[] })?.query?.[0]?.path === 'study-sessions',
+      );
+    expect(sessionCalls()).toHaveLength(1);
+
+    // The user comes back to the tab after the throttle interval.
+    vi.setSystemTime(new Date(Date.now() + 20_000));
+    fireEvent.focus(window);
+
+    await waitFor(() => expect(sessionCalls()).toHaveLength(2));
+    // Byte-identical query construction — the provability pin holds on refetch.
+    expect(sessionCalls()[1][0]).toEqual(sessionCalls()[0][0]);
+  });
+});

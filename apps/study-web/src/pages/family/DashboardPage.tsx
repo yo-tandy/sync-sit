@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
@@ -12,6 +12,7 @@ import {
   ShieldIcon,
   UserIcon,
   ChevronRightIcon,
+  useRefetchOnFocus,
 } from '@ejm/shared-ui';
 
 /**
@@ -41,34 +42,40 @@ export function DashboardPage() {
     null,
   );
 
+  // A mounted guard shared by the initial loads and every focus-triggered
+  // refetch, so a late-resolving fetch never writes state after unmount.
+  const mountedRef = useRef(true);
   useEffect(() => {
-    // A parent always has a familyId; if it is somehow absent we leave the gate
-    // in its loading state (neither banner nor CTA) rather than assuming a state.
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  // The verification gate read. A parent always has a familyId; if it is
+  // somehow absent we leave the gate in its loading state (neither banner nor
+  // CTA) rather than assuming a state.
+  const loadVerification = useCallback(() => {
     if (!familyId) return;
-    let cancelled = false;
     getDoc(doc(db, 'families', familyId))
       .then((snap) => {
-        if (cancelled) return;
+        if (!mountedRef.current) return;
         const verified = snap.exists()
           ? snap.data()?.verification?.isFullyVerified === true
           : false;
         setIsVerified(verified);
       })
       .catch(() => {
-        if (!cancelled) setIsVerified(false);
+        if (mountedRef.current) setIsVerified(false);
       });
-    return () => {
-      cancelled = true;
-    };
   }, [familyId]);
 
   // Live request counts for the summary card.
-  useEffect(() => {
+  const loadRequestCounts = useCallback(() => {
     if (!familyId) return;
-    let cancelled = false;
     getDocs(query(collection(db, 'studyContactRequests'), where('familyId', '==', familyId)))
       .then((snap) => {
-        if (cancelled) return;
+        if (!mountedRef.current) return;
         let pending = 0;
         let accepted = 0;
         snap.docs.forEach((d) => {
@@ -79,21 +86,17 @@ export function DashboardPage() {
         setCounts({ pending, accepted });
       })
       .catch(() => {
-        if (!cancelled) setCounts({ pending: 0, accepted: 0 });
+        if (mountedRef.current) setCounts({ pending: 0, accepted: 0 });
       });
-    return () => {
-      cancelled = true;
-    };
   }, [familyId]);
 
   // Live session counts for the sessions summary card (equality-only query,
   // counted client-side — mirrors the requests card).
-  useEffect(() => {
+  const loadSessionCounts = useCallback(() => {
     if (!familyId) return;
-    let cancelled = false;
     getDocs(query(collection(db, 'study-sessions'), where('familyId', '==', familyId)))
       .then((snap) => {
-        if (cancelled) return;
+        if (!mountedRef.current) return;
         let pending = 0;
         let upcoming = 0;
         snap.docs.forEach((d) => {
@@ -104,12 +107,29 @@ export function DashboardPage() {
         setSessionCounts({ pending, upcoming });
       })
       .catch(() => {
-        if (!cancelled) setSessionCounts({ pending: 0, upcoming: 0 });
+        if (mountedRef.current) setSessionCounts({ pending: 0, upcoming: 0 });
       });
-    return () => {
-      cancelled = true;
-    };
   }, [familyId]);
+
+  useEffect(() => {
+    loadVerification();
+  }, [loadVerification]);
+
+  useEffect(() => {
+    loadRequestCounts();
+  }, [loadRequestCounts]);
+
+  useEffect(() => {
+    loadSessionCounts();
+  }, [loadSessionCounts]);
+
+  // Issue #117 tier (a): a returning user re-runs the same loads, so an open
+  // tab shows fresh verification state and summary counts.
+  useRefetchOnFocus(() => {
+    loadVerification();
+    loadRequestCounts();
+    loadSessionCounts();
+  });
 
   return (
     <div className="px-5 pt-4 pb-8">

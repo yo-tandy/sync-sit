@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { doc, getDoc, collection, getDocs, addDoc, onSnapshot, query, where } from 'firebase/firestore';
@@ -11,6 +11,7 @@ import { Button, Badge, Card, Spinner, Input, Dialog, Textarea, InstallAppBanner
 import { CalendarIcon, PlusIcon, SearchIcon } from '@/components/ui/Icons';
 import type { AppointmentDoc, BabysitterSummary, RecurringSlot, User } from '@ejm/sit-core';
 import { getBabysitterProfile, getParentProfile } from '@ejm/sit-core';
+import { useRefetchOnFocus } from '@ejm/shared-ui';
 import { formatBabysitterName, capitalize, formatFamilyTitle } from '@/lib/formatName';
 import { debouncedTogglePreferred } from '@/lib/debouncedPreferred';
 import { EndorsementDialog } from '@/components/endorsements/EndorsementDialog';
@@ -277,26 +278,37 @@ export function FamilyDashboard() {
     });
   }, [pending, confirmed, pastRecent, rejectedRecent]);
 
-  useEffect(() => {
-    async function loadFamily() {
-      if (familyId) {
-        const familySnap = await getDoc(doc(db, 'families', familyId));
-        if (familySnap.exists()) {
-          setFamilyName(familySnap.data().familyName || '');
-        }
-        const kidsSnap = await getDocs(collection(db, 'families', familyId, 'kids'));
-        setKids(kidsSnap.docs.map((d) => ({ kidId: d.id, firstName: d.data().firstName, age: d.data().age })));
-        setKidsLoaded(true);
+  const loadFamily = useCallback(async () => {
+    if (familyId) {
+      const familySnap = await getDoc(doc(db, 'families', familyId));
+      if (familySnap.exists()) {
+        setFamilyName(familySnap.data().familyName || '');
       }
+      const kidsSnap = await getDocs(collection(db, 'families', familyId, 'kids'));
+      setKids(kidsSnap.docs.map((d) => ({ kidId: d.id, firstName: d.data().firstName, age: d.data().age })));
+      setKidsLoaded(true);
     }
-    loadFamily();
   }, [familyId]);
+
+  useEffect(() => {
+    loadFamily();
+  }, [loadFamily]);
 
   useEffect(() => {
     if (getParentProfile(userDoc)) {
       fetchVerificationStatus();
     }
   }, []);
+
+  // Issue #117 tier (a): appointments/references/preferred are already live via
+  // onSnapshot; re-run the remaining fetch-on-mount reads (family doc + kids,
+  // verification status) when the user returns to the tab.
+  useRefetchOnFocus(() => {
+    loadFamily();
+    if (getParentProfile(userDoc)) {
+      fetchVerificationStatus();
+    }
+  });
 
   return (
     <div className="px-5 pt-4 pb-8">
