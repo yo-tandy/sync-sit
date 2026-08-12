@@ -236,6 +236,8 @@ export default {
   },
 
   menu: {
+    openMenu: 'Ouvrir le menu',
+    home: 'Accueil',
     editProfile: 'Modifier le profil',
     babysittingOptions: 'Options de babysitting',
     references: 'Recommandations',

@@ -32,3 +32,19 @@ describe('app bar switch entries', () => {
     expect(screen.getByRole('button', { name: /open sync-sit/i })).toBeInTheDocument();
   });
 });
+
+const HIT_TARGET = /\bh-11\b[\s\S]*\bw-11\b|\bw-11\b[\s\S]*\bh-11\b/;
+
+describe('app bar hit targets (≥44px, WCAG 2.5.8)', () => {
+  it('tutor bar: home link and menu button are 44px targets with accessible names', () => {
+    renderWithProviders(<AppBar />);
+    expect(screen.getByRole('link', { name: /home/i }).className).toMatch(HIT_TARGET);
+    expect(screen.getByRole('button', { name: /open menu/i }).className).toMatch(HIT_TARGET);
+  });
+
+  it('family bar: home link and menu button are 44px targets with accessible names', () => {
+    renderWithProviders(<FamilyAppBar />);
+    expect(screen.getByRole('link', { name: /home/i }).className).toMatch(HIT_TARGET);
+    expect(screen.getByRole('button', { name: /open menu/i }).className).toMatch(HIT_TARGET);
+  });
+});

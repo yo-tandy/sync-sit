@@ -176,6 +176,7 @@ export default {
   menu: {
     about: 'About',
     openMenu: 'Open menu',
+    home: 'Home',
     reportProblem: 'Report a Problem',
     privacyPolicy: 'Privacy Policy',
     terms: 'Terms & Conditions',

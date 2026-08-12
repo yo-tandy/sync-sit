@@ -247,6 +247,8 @@ export default {
 
   // Menu
   menu: {
+    openMenu: 'Open menu',
+    home: 'Home',
     editProfile: 'Edit Profile',
     babysittingOptions: 'Babysitting Options',
     references: 'Endorsements',

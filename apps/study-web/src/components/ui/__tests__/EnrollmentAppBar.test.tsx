@@ -22,4 +22,11 @@ describe('EnrollmentAppBar (study)', () => {
 
     expect(screen.queryByText(/sign out/i)).toBeNull();
   });
+
+  it('menu button is a 44px hit target (WCAG 2.5.8)', () => {
+    renderWithProviders(<EnrollmentAppBar />);
+    const burger = screen.getByRole('button', { name: /open menu/i });
+    expect(burger.className).toMatch(/\bh-11\b/);
+    expect(burger.className).toMatch(/\bw-11\b/);
+  });
 });
