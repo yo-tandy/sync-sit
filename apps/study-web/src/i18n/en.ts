@@ -256,6 +256,7 @@ export default {
     requests: {
       title: 'Contact requests',
       empty: 'No requests yet — families who want to work with you will show up here.',
+      emptyAction: 'Review your subjects',
       pendingTitle: 'Awaiting your response',
       historyTitle: 'History',
       accept: 'Accept',
@@ -571,6 +572,7 @@ export default {
       submit: 'Search tutors',
       searching: 'Searching…',
       empty: 'No tutors found — try adjusting your subject, level or filters.',
+      emptyAction: 'Clear filters',
       error: 'Something went wrong. Please try again.',
       verifyCta: 'Go to dashboard',
       rate: '{{rate}} €/h',
@@ -668,6 +670,7 @@ export default {
     requests: {
       title: 'Your requests',
       empty: 'No requests yet — once you contact a tutor, your requests show up here.',
+      emptyAction: 'Find a tutor',
       section: {
         pending: 'Pending',
         accepted: 'Accepted',
@@ -704,6 +707,7 @@ export default {
     sessions: {
       title: 'Your sessions',
       empty: 'No sessions yet — once you book a tutor, your sessions show up here.',
+      emptyAction: 'Find a tutor',
       loadError: 'Could not load your sessions. Please refresh and try again.',
       pendingTitle: 'Awaiting confirmation',
       upcomingTitle: 'Upcoming',

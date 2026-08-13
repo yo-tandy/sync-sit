@@ -256,6 +256,7 @@ export default {
     requests: {
       title: 'Demandes de contact',
       empty: 'Aucune demande pour le moment — les familles qui souhaitent travailler avec vous apparaîtront ici.',
+      emptyAction: 'Vérifier vos matières',
       pendingTitle: 'En attente de votre réponse',
       historyTitle: 'Historique',
       accept: 'Accepter',
@@ -571,6 +572,7 @@ export default {
       submit: 'Rechercher des professeurs',
       searching: 'Recherche…',
       empty: 'Aucun professeur trouvé — essayez d\'ajuster la matière, le niveau ou les filtres.',
+      emptyAction: 'Effacer les filtres',
       error: 'Une erreur est survenue. Veuillez réessayer.',
       verifyCta: 'Aller au tableau de bord',
       rate: '{{rate}} €/h',
@@ -668,6 +670,7 @@ export default {
     requests: {
       title: 'Vos demandes',
       empty: 'Aucune demande pour le moment — dès que vous contactez un professeur, vos demandes apparaissent ici.',
+      emptyAction: 'Trouver un professeur',
       section: {
         pending: 'En attente',
         accepted: 'Acceptées',
@@ -704,6 +707,7 @@ export default {
     sessions: {
       title: 'Vos cours',
       empty: 'Aucun cours pour le moment — dès que vous réservez un professeur, vos cours apparaissent ici.',
+      emptyAction: 'Trouver un professeur',
       loadError: 'Impossible de charger vos cours. Veuillez actualiser et réessayer.',
       pendingTitle: 'En attente de confirmation',
       upcomingTitle: 'À venir',

@@ -188,9 +188,23 @@ describe('GovernancePage', () => {
     renderWithProviders(<GovernancePage />);
 
     expect(await screen.findByText(/no supervised kids yet/i)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /add a child/i })).toHaveAttribute(
-      'href',
-      '/family/governance/new',
-    );
+    // Exactly ONE way in on the empty screen: the empty state's action
+    // (issue #125). The add-a-child card is suppressed here so the user
+    // never sees two stacked CTAs to the same route.
+    const links = screen.getAllByRole('link', { name: /add a child/i });
+    expect(links).toHaveLength(1);
+    expect(links[0]).toHaveAttribute('href', '/family/governance/new');
+    expect(links[0]).toHaveAccessibleName('Add a child');
+  });
+
+  it('shows the add-a-child card (not the empty state) once a kid is listed', async () => {
+    h.children = [kid()];
+    renderWithProviders(<GovernancePage />);
+
+    await screen.findByText(/Noa Weiss/);
+    // The card's accessible name includes its description line.
+    const card = screen.getByRole('link', { name: /add a child/i });
+    expect(card).toHaveAttribute('href', '/family/governance/new');
+    expect(screen.queryByText(/no supervised kids yet/i)).not.toBeInTheDocument();
   });
 });

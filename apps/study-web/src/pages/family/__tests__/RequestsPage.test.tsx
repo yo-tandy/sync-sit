@@ -225,6 +225,9 @@ describe('family RequestsPage', () => {
     h.requests = [];
     renderWithProviders(<RequestsPage />);
     expect(await screen.findByText(/no requests yet/i)).toBeInTheDocument();
+    // The empty state carries the next step (issue #125): a link into search.
+    const action = screen.getByRole('link', { name: 'Find a tutor' });
+    expect(action).toHaveAttribute('href', '/family/search');
   });
 
   it('resolves to the empty state (no permanent spinner) when there is no familyId', async () => {

@@ -161,6 +161,9 @@ describe('family SessionsPage', () => {
     h.sessions = [];
     renderWithProviders(<SessionsPage />);
     expect(await screen.findByText(/no sessions/i)).toBeInTheDocument();
+    // The empty state carries the next step (issue #125): a link into search.
+    const action = screen.getByRole('link', { name: 'Find a tutor' });
+    expect(action).toHaveAttribute('href', '/family/search');
   });
 
   it('cancel a pending request → cancelSession({sessionId, reason}) trimmed', async () => {
