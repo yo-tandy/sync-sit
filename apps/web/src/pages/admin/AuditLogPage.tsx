@@ -4,30 +4,13 @@ import { TopNav } from '@/components/ui/TopNav';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Spinner } from '@/components/ui/Spinner';
-import { Dialog } from '@/components/ui/Dialog';
-import { useAdminStore, type WireTimestamp } from '@/stores/adminStore';
-
-interface UserInfo {
-  email: string;
-  name: string;
-  role: string;
-}
-
-function rolePrefix(role: string) {
-  switch (role) {
-    case 'admin': return 'A';
-    case 'babysitter': return 'B';
-    case 'parent': return 'P';
-    default: return '?';
-  }
-}
-
-function shortId(uid: string, info: UserInfo | null) {
-  if (!uid) return '';
-  if (uid === 'system') return 'system';
-  const prefix = info ? rolePrefix(info.role) : '?';
-  return `${prefix}:${uid.slice(0, 6)}`;
-}
+import { DataTable, type DataTableColumn } from '@/components/ui/DataTable';
+import {
+  useAdminStore,
+  wireTimestampToMillis,
+  type AdminAuditLogEntry,
+  type WireTimestamp,
+} from '@/stores/adminStore';
 
 export function AdminAuditLogPage() {
   const { t, i18n } = useTranslation();
@@ -35,7 +18,6 @@ export function AdminAuditLogPage() {
 
   const [actionFilter, setActionFilter] = useState('all');
   const [search, setSearch] = useState('');
-  const [selectedUser, setSelectedUser] = useState<{ uid: string; info: UserInfo | null } | null>(null);
 
   useEffect(() => {
     fetchAuditLogs({
@@ -82,28 +64,14 @@ export function AdminAuditLogPage() {
   ];
 
   const formatTs = (ts: WireTimestamp | null | undefined) => {
-    if (!ts) return '—';
-    try {
-      let d: Date;
-      if (typeof ts === 'string') {
-        d = new Date(ts);
-      } else if ('_seconds' in ts && ts._seconds != null) {
-        d = new Date(ts._seconds * 1000);
-      } else if ('seconds' in ts && ts.seconds != null) {
-        d = new Date(ts.seconds * 1000);
-      } else {
-        return '—';
-      }
-      if (isNaN(d.getTime())) return '—';
-      return d.toLocaleString(i18n.language === 'fr' ? 'fr-FR' : 'en-US', {
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-      });
-    } catch {
-      return '—';
-    }
+    const ms = wireTimestampToMillis(ts);
+    if (ms === null) return '—';
+    return new Date(ms).toLocaleString(i18n.language === 'fr' ? 'fr-FR' : 'en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
   };
 
   const formatDetails = (details: Record<string, unknown> | null | undefined) => {
@@ -113,23 +81,45 @@ export function AdminAuditLogPage() {
     return entries.map(([k, v]) => `${k}=${v}`).join(', ');
   };
 
-  const UserTag = ({ uid, info }: { uid: string; info: UserInfo | null }) => {
-    if (!uid || uid === 'system') {
-      return <span className="text-gray-500">system</span>;
-    }
-    return (
-      <button
-        type="button"
-        className="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-gray-600 hover:bg-gray-200"
-        onClick={(e) => {
-          e.stopPropagation();
-          setSelectedUser({ uid, info });
-        }}
-      >
-        {shortId(uid, info)}
-      </button>
-    );
-  };
+  const columns: DataTableColumn<AdminAuditLogEntry>[] = [
+    {
+      key: 'timestamp',
+      header: t('admin.table.timestamp'),
+      sortValue: (l) => wireTimestampToMillis(l.timestamp),
+      render: (l) => <span className="text-xs text-gray-500">{formatTs(l.timestamp)}</span>,
+    },
+    {
+      key: 'admin',
+      header: t('admin.table.admin'),
+      render: (l) => (
+        <div>
+          <p className="text-xs text-gray-700">{l.adminInfo?.name || l.adminUserId}</p>
+          {l.adminInfo?.email && <p className="text-xs text-gray-500">{l.adminInfo.email}</p>}
+        </div>
+      ),
+    },
+    {
+      key: 'action',
+      header: t('admin.table.action'),
+      sortValue: (l) => l.action,
+      render: (l) => <span className="text-xs font-semibold text-gray-900">{l.action}</span>,
+    },
+    {
+      key: 'target',
+      header: t('admin.table.target'),
+      render: (l) => (
+        <span className="text-xs text-gray-700">{l.targetInfo?.name || l.targetUserId || '—'}</span>
+      ),
+    },
+    {
+      key: 'details',
+      header: t('admin.table.details'),
+      render: (l) => {
+        const details = formatDetails(l.details);
+        return details ? <span className="text-xs text-gray-500">{details}</span> : null;
+      },
+    },
+  ];
 
   return (
     <div>
@@ -151,67 +141,16 @@ export function AdminAuditLogPage() {
           <div className="flex justify-center py-8">
             <Spinner className="h-8 w-8 text-brand-600" />
           </div>
-        ) : filteredLogs.length === 0 ? (
-          <p className="py-8 text-center text-sm text-gray-500">
-            {t('admin.noAuditLogs')}
-          </p>
         ) : (
-          <div className="divide-y divide-gray-100">
-            {filteredLogs.map((log) => {
-              const details = formatDetails(log.details);
-              return (
-                <div key={log.id} className="flex flex-wrap items-center gap-x-1.5 py-2 text-xs">
-                  <span className="text-gray-500">{formatTs(log.timestamp)}</span>
-                  <UserTag uid={log.adminUserId} info={log.adminInfo} />
-                  <span className="font-semibold text-gray-900">{log.action}</span>
-                  {log.targetUserId && (
-                    <>
-                      <span className="text-gray-500">→</span>
-                      <UserTag uid={log.targetUserId} info={log.targetInfo} />
-                    </>
-                  )}
-                  {details && (
-                    <span className="text-gray-500">({details})</span>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+          <DataTable
+            columns={columns}
+            rows={filteredLogs}
+            rowKey={(l) => l.id}
+            emptyLabel={t('admin.noAuditLogs')}
+            initialSort={{ key: 'timestamp', dir: 'desc' }}
+          />
         )}
       </div>
-
-      {/* User info dialog */}
-      <Dialog open={!!selectedUser} onClose={() => setSelectedUser(null)}>
-        {selectedUser && (
-          <div>
-            <h3 className="mb-3 text-lg font-semibold">{t('admin.userDetails')}</h3>
-            <div className="space-y-2 text-sm">
-              <p>
-                <span className="font-medium text-gray-500">ID: </span>
-                <span className="font-mono text-gray-700">{selectedUser.uid}</span>
-              </p>
-              {selectedUser.info ? (
-                <>
-                  <p>
-                    <span className="font-medium text-gray-500">{t('admin.fullName')}: </span>
-                    <span className="text-gray-900">{selectedUser.info.name || '—'}</span>
-                  </p>
-                  <p>
-                    <span className="font-medium text-gray-500">Email: </span>
-                    <span className="text-gray-900">{selectedUser.info.email || '—'}</span>
-                  </p>
-                  <p>
-                    <span className="font-medium text-gray-500">Role: </span>
-                    <span className="text-gray-900">{selectedUser.info.role || '—'}</span>
-                  </p>
-                </>
-              ) : (
-                <p className="text-gray-500">{t('admin.userNotFound')}</p>
-              )}
-            </div>
-          </div>
-        )}
-      </Dialog>
     </div>
   );
 }

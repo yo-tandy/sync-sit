@@ -8,7 +8,7 @@ import type {
   HolidayPeriod,
 } from '@ejm/sit-core';
 
-interface AdminUserListItem {
+export interface AdminUserListItem {
   uid: string;
   firstName: string;
   lastName: string;
@@ -103,6 +103,22 @@ export type WireTimestamp =
   | string
   | { _seconds: number; _nanoseconds?: number }
   | { seconds: number; nanoseconds?: number };
+
+/**
+ * Epoch millis from any wire-serialized timestamp shape (incl. the
+ * client-SDK `FirestoreTimestamp`, which matches the `seconds` arm), or
+ * null when absent/unparseable.
+ */
+export function wireTimestampToMillis(ts: WireTimestamp | null | undefined): number | null {
+  if (!ts) return null;
+  if (typeof ts === 'string') {
+    const ms = new Date(ts).getTime();
+    return isNaN(ms) ? null : ms;
+  }
+  if ('_seconds' in ts && ts._seconds != null) return ts._seconds * 1000;
+  if ('seconds' in ts && ts.seconds != null) return ts.seconds * 1000;
+  return null;
+}
 
 /**
  * Admin-side audit log entry, as returned by the `listAuditLogs` callable.

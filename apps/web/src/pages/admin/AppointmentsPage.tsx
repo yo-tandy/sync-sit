@@ -1,13 +1,13 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { TopNav } from '@/components/ui/TopNav';
-import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Spinner } from '@/components/ui/Spinner';
 import { Dialog } from '@/components/ui/Dialog';
+import { DataTable, type DataTableColumn } from '@/components/ui/DataTable';
 import { TrashIcon } from '@/components/ui/Icons';
 import { useAdminStore, type AdminAppointmentListItem } from '@/stores/adminStore';
 
@@ -70,15 +70,61 @@ export function AdminAppointmentsPage() {
     { value: 'cancelled', label: t('admin.statusCancelled') },
   ];
 
-  const formatAppointmentDate = (appt: AdminAppointmentListItem) => {
-    if (appt.date) {
-      const parts = [appt.date];
-      if (appt.startTime) parts.push(appt.startTime);
-      if (appt.endTime) parts.push('–', appt.endTime);
-      return parts.join(' ');
-    }
-    return appt.type === 'recurring' ? t('admin.recurring') : '—';
-  };
+  const columns: DataTableColumn<AdminAppointmentListItem>[] = [
+    {
+      key: 'date',
+      header: t('admin.table.date'),
+      sortValue: (a) => a.date ?? null,
+      render: (a) => a.date ?? (a.type === 'recurring' ? t('admin.recurring') : '—'),
+    },
+    {
+      key: 'time',
+      header: t('admin.table.time'),
+      render: (a) => (a.startTime ? `${a.startTime}–${a.endTime ?? ''}` : '—'),
+    },
+    {
+      key: 'babysitter',
+      header: t('admin.table.babysitter'),
+      sortValue: (a) => a.babysitterName?.toLowerCase() ?? null,
+      render: (a) => a.babysitterName ?? '—',
+    },
+    {
+      key: 'family',
+      header: t('admin.table.family'),
+      sortValue: (a) => (a.familyName ?? a.parentNames)?.toLowerCase() ?? null,
+      render: (a) => a.familyName ?? a.parentNames ?? '—',
+    },
+    {
+      key: 'type',
+      header: t('admin.table.type'),
+      sortValue: (a) => a.type ?? null,
+      render: (a) => a.type ?? '—',
+    },
+    {
+      key: 'status',
+      header: t('admin.table.status'),
+      sortValue: (a) => a.status,
+      render: (a) => <Badge variant={statusBadgeVariant(a.status)}>{a.status}</Badge>,
+    },
+    {
+      key: 'rate',
+      header: t('admin.table.rate'),
+      className: 'text-right',
+      sortValue: (a) => a.offeredRate ?? null,
+      render: (a) => (a.offeredRate != null ? `${a.offeredRate}€/h` : '—'),
+    },
+    {
+      key: 'actions',
+      header: t('admin.table.actions'),
+      className: 'text-right',
+      render: (a) => (
+        <Button variant="outline" size="sm" className="w-auto" onClick={() => setDeleteTarget(a.id)}>
+          <TrashIcon className="h-4 w-4" />
+          {t('admin.delete')}
+        </Button>
+      ),
+    },
+  ];
 
   return (
     <div>
@@ -100,49 +146,14 @@ export function AdminAppointmentsPage() {
           <div className="flex justify-center py-8">
             <Spinner className="h-8 w-8 text-brand-600" />
           </div>
-        ) : filteredAppointments.length === 0 ? (
-          <p className="py-8 text-center text-sm text-gray-500">
-            {t('admin.noAppointmentsFound')}
-          </p>
         ) : (
-          <div className="space-y-3">
-            {filteredAppointments.map((appt) => (
-              <Card key={appt.id}>
-                <div className="flex items-start justify-between">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold text-gray-900">
-                      {appt.babysitterName}
-                    </p>
-                    <p className="text-xs text-gray-500">
-                      {t('admin.family')}: {appt.familyName}
-                    </p>
-                    <p className="mt-1 text-xs text-gray-500">
-                      {formatAppointmentDate(appt)}
-                    </p>
-                    {appt.offeredRate != null && (
-                      <p className="mt-0.5 text-xs text-gray-500">
-                        {appt.offeredRate}€/h
-                      </p>
-                    )}
-                  </div>
-                  <Badge variant={statusBadgeVariant(appt.status)}>
-                    {appt.status}
-                  </Badge>
-                </div>
-                <div className="mt-3 flex justify-end">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-auto"
-                    onClick={() => setDeleteTarget(appt.id)}
-                  >
-                    <TrashIcon className="h-4 w-4" />
-                    {t('admin.delete')}
-                  </Button>
-                </div>
-              </Card>
-            ))}
-          </div>
+          <DataTable
+            columns={columns}
+            rows={filteredAppointments}
+            rowKey={(a) => a.id}
+            emptyLabel={t('admin.noAppointmentsFound')}
+            initialSort={{ key: 'date', dir: 'desc' }}
+          />
         )}
       </div>
 

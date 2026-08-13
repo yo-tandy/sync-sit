@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { TopNav } from '@/components/ui/TopNav';
 import { Card } from '@/components/ui/Card';
 import { Spinner } from '@/components/ui/Spinner';
-import { UsersIcon, CalendarIcon, ClipboardListIcon, DownloadIcon, ShieldIcon, HomeIcon } from '@/components/ui/Icons';
+import { UsersIcon, UserPlusIcon, CalendarIcon, ClipboardListIcon, DownloadIcon, ShieldIcon, HomeIcon } from '@/components/ui/Icons';
 import { useAdminStore } from '@/stores/adminStore';
 
 export function AdminDashboard() {
@@ -15,48 +15,75 @@ export function AdminDashboard() {
     fetchStats();
   }, [fetchStats]);
 
-  const navCards = [
+  const navGroups = [
     {
-      to: '/admin/users',
-      icon: <UsersIcon className="h-6 w-6 text-brand-600" />,
-      title: t('admin.manageUsers'),
-      description: t('admin.manageUsersDesc'),
+      title: t('admin.nav.people'),
+      cards: [
+        {
+          to: '/admin/users',
+          icon: <UsersIcon className="h-6 w-6 text-brand-600" />,
+          title: t('admin.manageUsers'),
+          description: t('admin.manageUsersDesc'),
+        },
+        {
+          to: '/admin/families',
+          icon: <HomeIcon className="h-6 w-6 text-brand-600" />,
+          title: t('admin.familiesPage.title'),
+          description: t('admin.familiesPage.desc'),
+        },
+      ],
     },
     {
-      to: '/admin/families',
-      icon: <HomeIcon className="h-6 w-6 text-brand-600" />,
-      title: t('admin.familiesPage.title'),
-      description: t('admin.familiesPage.desc'),
+      title: t('admin.nav.trustSafety'),
+      cards: [
+        {
+          to: '/admin/verifications',
+          icon: <ShieldIcon className="h-6 w-6 text-brand-600" />,
+          title: t('admin.verifications'),
+          description: t('admin.verificationsDesc'),
+        },
+        {
+          to: '/admin/enrollment-access',
+          icon: <UserPlusIcon className="h-6 w-6 text-brand-600" />,
+          title: t('admin.enrollmentAccess.title'),
+          description: t('admin.enrollmentAccess.desc'),
+        },
+        {
+          to: '/admin/governance',
+          icon: <ShieldIcon className="h-6 w-6 text-brand-600" />,
+          title: t('admin.governance.title'),
+          description: t('admin.governance.navDesc'),
+        },
+      ],
     },
     {
-      to: '/admin/appointments',
-      icon: <CalendarIcon className="h-6 w-6 text-brand-600" />,
-      title: t('admin.manageAppointments'),
-      description: t('admin.manageAppointmentsDesc'),
-    },
-    {
-      to: '/admin/holidays',
-      icon: <CalendarIcon className="h-6 w-6 text-brand-600" />,
-      title: t('admin.holidays'),
-      description: t('admin.holidaysDesc'),
-    },
-    {
-      to: '/admin/verifications',
-      icon: <ShieldIcon className="h-6 w-6 text-brand-600" />,
-      title: t('admin.verifications'),
-      description: t('admin.verificationsDesc'),
-    },
-    {
-      to: '/admin/audit-log',
-      icon: <ClipboardListIcon className="h-6 w-6 text-brand-600" />,
-      title: t('admin.auditLog'),
-      description: t('admin.auditLogDesc'),
-    },
-    {
-      to: '/admin/gdpr-export',
-      icon: <DownloadIcon className="h-6 w-6 text-brand-600" />,
-      title: t('admin.gdprExport'),
-      description: t('admin.gdprExportDesc'),
+      title: t('admin.nav.operations'),
+      cards: [
+        {
+          to: '/admin/appointments',
+          icon: <CalendarIcon className="h-6 w-6 text-brand-600" />,
+          title: t('admin.manageAppointments'),
+          description: t('admin.manageAppointmentsDesc'),
+        },
+        {
+          to: '/admin/holidays',
+          icon: <CalendarIcon className="h-6 w-6 text-brand-600" />,
+          title: t('admin.holidays'),
+          description: t('admin.holidaysDesc'),
+        },
+        {
+          to: '/admin/audit-log',
+          icon: <ClipboardListIcon className="h-6 w-6 text-brand-600" />,
+          title: t('admin.auditLog'),
+          description: t('admin.auditLogDesc'),
+        },
+        {
+          to: '/admin/gdpr-export',
+          icon: <DownloadIcon className="h-6 w-6 text-brand-600" />,
+          title: t('admin.gdprExport'),
+          description: t('admin.gdprExportDesc'),
+        },
+      ],
     },
   ];
 
@@ -93,24 +120,29 @@ export function AdminDashboard() {
           </div>
         )}
 
-        {/* Navigation cards */}
-        <div className="space-y-3">
-          {navCards.map((card) => (
-            <Link key={card.to} to={card.to} className="block">
-              <Card interactive>
-                <div className="flex items-center gap-4">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-50">
-                    {card.icon}
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-gray-900">{card.title}</p>
-                    <p className="mt-0.5 text-xs text-gray-500">{card.description}</p>
-                  </div>
-                </div>
-              </Card>
-            </Link>
-          ))}
-        </div>
+        {/* Navigation cards, grouped */}
+        {navGroups.map((group) => (
+          <section key={group.title}>
+            <h2 className="mb-2 mt-6 text-xs font-semibold uppercase tracking-wide text-gray-500">{group.title}</h2>
+            <div className="space-y-3">
+              {group.cards.map((card) => (
+                <Link key={card.to} to={card.to} className="block">
+                  <Card interactive>
+                    <div className="flex items-center gap-4">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-50">
+                        {card.icon}
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-gray-900">{card.title}</p>
+                        <p className="mt-0.5 text-xs text-gray-500">{card.description}</p>
+                      </div>
+                    </div>
+                  </Card>
+                </Link>
+              ))}
+            </div>
+          </section>
+        ))}
       </div>
     </div>
   );

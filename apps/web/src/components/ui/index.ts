@@ -3,7 +3,7 @@
 //
 // Names NOT in this barrel — consumers import them directly:
 //   DateTag, PhotoLightbox → @/components/ui/DateTag, @/components/ui/PhotoLightbox
-//   Icons (all 23)         → @/components/ui/Icons
+//   Icons (all 25)         → @/components/ui/Icons
 //   AppBar, EnrollmentAppBar, PushPrompt → not in shared-ui yet (deferred,
 //     see docs/superpowers/plans/2026-05-18-shared-ui-extraction.md Q1)
 export {

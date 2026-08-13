@@ -1,22 +1,18 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { TopNav } from '@/components/ui/TopNav';
-import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Spinner } from '@/components/ui/Spinner';
 import { Dialog } from '@/components/ui/Dialog';
+import { DataTable, type DataTableColumn } from '@/components/ui/DataTable';
 import { DownloadIcon } from '@/components/ui/Icons';
-// Direct import: the ui barrel transitively pulls the auth store's
-// module-scope onAuthStateChanged — admin pages don't need that.
-import { useToast } from '@ejm/shared-ui';
-import { useAdminStore } from '@/stores/adminStore';
+import { useAdminStore, wireTimestampToMillis, type AdminUserListItem } from '@/stores/adminStore';
 
 export function AdminUsersPage() {
-  const { t } = useTranslation();
-  const toast = useToast();
+  const { t, i18n } = useTranslation();
   const {
     users,
     usersLoading,
@@ -26,24 +22,11 @@ export function AdminUsersPage() {
     deleteUser,
     resetUserPassword,
     exportUserData,
-    preapprovedEmails,
-    preapprovedLoading,
-    fetchPreapprovedEmails,
-    addPreapprovedEmail,
-    removePreapprovedEmail,
-    exemptions,
-    exemptionsLoading,
-    fetchExemptions,
-    addExemption,
-    removeExemption,
   } = useAdminStore();
 
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [newPreapprovedEmail, setNewPreapprovedEmail] = useState('');
-  const [newExemptionEmail, setNewExemptionEmail] = useState('');
-  const [newExemptionNote, setNewExemptionNote] = useState('');
 
   // Confirmation dialog state
   const [confirmDialog, setConfirmDialog] = useState<{
@@ -60,65 +43,6 @@ export function AdminUsersPage() {
       status: statusFilter !== 'all' ? statusFilter : undefined,
     });
   }, [fetchUsers, search, roleFilter, statusFilter]);
-
-  // Load pre-approved emails on mount
-  useEffect(() => {
-    fetchPreapprovedEmails();
-  }, [fetchPreapprovedEmails]);
-
-  // Load enrollment exemptions on mount
-  useEffect(() => {
-    fetchExemptions();
-  }, [fetchExemptions]);
-
-  const handleAddPreapproved = async () => {
-    if (!newPreapprovedEmail) return;
-    try {
-      await addPreapprovedEmail(newPreapprovedEmail);
-      setNewPreapprovedEmail('');
-      await fetchPreapprovedEmails();
-      toast(t('admin.emailAdded'));
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to add email';
-      alert(message);
-    }
-  };
-
-  const handleRemovePreapproved = async (email: string) => {
-    try {
-      await removePreapprovedEmail(email);
-      await fetchPreapprovedEmails();
-      toast(t('admin.emailRemoved'));
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to remove email';
-      alert(message);
-    }
-  };
-
-  const handleAddExemption = async () => {
-    if (!newExemptionEmail) return;
-    try {
-      await addExemption(newExemptionEmail, newExemptionNote || undefined);
-      setNewExemptionEmail('');
-      setNewExemptionNote('');
-      await fetchExemptions();
-      toast(t('admin.exemptions.added'));
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to add exemption';
-      alert(message);
-    }
-  };
-
-  const handleRemoveExemption = async (email: string) => {
-    try {
-      await removeExemption(email);
-      await fetchExemptions();
-      toast(t('admin.exemptions.removed'));
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to remove exemption';
-      alert(message);
-    }
-  };
 
   // Debounced search
   useEffect(() => {
@@ -244,99 +168,96 @@ export function AdminUsersPage() {
     { value: 'deleted', label: t('admin.statusDeleted') },
   ];
 
+  const formatCreated = (user: AdminUserListItem) => {
+    const ms = wireTimestampToMillis(user.createdAt);
+    if (ms === null) return '—';
+    return new Date(ms).toLocaleDateString(i18n.language === 'fr' ? 'fr-FR' : 'en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+  };
+
+  const columns: DataTableColumn<AdminUserListItem>[] = [
+    {
+      key: 'name',
+      header: t('admin.table.name'),
+      sortValue: (u) => `${u.lastName} ${u.firstName}`.toLowerCase(),
+      render: (u) => (
+        <div>
+          <p className="font-semibold text-gray-900">
+            {u.firstName} {u.lastName}
+          </p>
+          <p className="text-xs text-gray-500">{u.email}</p>
+        </div>
+      ),
+    },
+    {
+      key: 'role',
+      header: t('admin.table.role'),
+      sortValue: (u) => u.role,
+      render: (u) => <Badge variant={roleBadgeVariant(u.role)}>{u.role}</Badge>,
+    },
+    {
+      key: 'status',
+      header: t('admin.table.status'),
+      sortValue: (u) => (u.role === 'babysitter' ? (u.searchable ? 'active' : 'inactive') : u.status),
+      render: (u) =>
+        u.role === 'babysitter' ? (
+          <Badge variant={u.searchable ? 'green' : 'gray'}>
+            {u.searchable ? t('admin.active') : t('admin.inactive')}
+          </Badge>
+        ) : (
+          // In a table, an empty cell under a header reads as missing data
+          // (unlike a card, where no badge meant "normal") — show the
+          // unremarkable state as muted text instead.
+          u.status !== 'active' ? (
+            <Badge variant={statusBadgeVariant(u.status)}>{u.status}</Badge>
+          ) : (
+            <span className="text-gray-500">{u.status}</span>
+          )
+        ),
+    },
+    {
+      key: 'created',
+      header: t('admin.table.created'),
+      sortValue: (u) => wireTimestampToMillis(u.createdAt),
+      render: formatCreated,
+    },
+    {
+      key: 'actions',
+      header: t('admin.table.actions'),
+      className: 'text-right',
+      render: (u) => (
+        <div className="flex justify-end gap-1.5">
+          <Button variant="outline" size="sm" onClick={() => handleBlock(u.uid, u.status)}>
+            {u.status === 'blocked' ? t('admin.unblock') : t('admin.block')}
+          </Button>
+          {u.role === 'babysitter' && (
+            <Button variant="outline" size="sm" onClick={() => handleDeactivate(u.uid, u.searchable === true)}>
+              {u.searchable ? t('admin.deactivate') : t('admin.activate')}
+            </Button>
+          )}
+          <Button variant="outline" size="sm" onClick={() => handleDelete(u.uid)}>
+            {t('admin.delete')}
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => handleResetPassword(u.uid)}>
+            {t('admin.resetPwd')}
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => handleExport(u.uid)}>
+            <DownloadIcon className="h-4 w-4" />
+            {t('admin.exportData')}
+          </Button>
+        </div>
+      ),
+    },
+  ];
+
   return (
     <div>
       <TopNav title={t('admin.manageUsers')} backTo="/admin" />
 
       <div className="px-5 pb-8">
-        {/* Pre-approved Emails */}
-        <Card className="mb-6">
-          <h3 className="mb-1 text-sm font-semibold text-gray-900">{t('admin.preapprovedEmails')}</h3>
-          <p className="mb-4 text-xs text-gray-500">{t('admin.preapprovedDesc')}</p>
-          <div className="mb-3 flex gap-2">
-            <Input
-              placeholder={t('common.email')}
-              type="email"
-              value={newPreapprovedEmail}
-              onChange={(e) => setNewPreapprovedEmail(e.target.value)}
-              className="flex-1"
-            />
-            <Button variant="primary" size="sm" onClick={handleAddPreapproved} disabled={!newPreapprovedEmail}>
-              {t('admin.addEmail')}
-            </Button>
-          </div>
-          {preapprovedLoading ? (
-            <div className="flex justify-center py-4">
-              <Spinner className="h-5 w-5 text-brand-600" />
-            </div>
-          ) : preapprovedEmails.length === 0 ? (
-            <p className="py-3 text-center text-xs text-gray-500">{t('admin.noPreapprovedEmails')}</p>
-          ) : (
-            <div className="space-y-2">
-              {preapprovedEmails.map((item) => (
-                <div key={item.email} className="flex items-center justify-between rounded-lg bg-gray-50 px-3 py-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-gray-700">{item.email}</span>
-                    <Badge variant={item.used ? 'gray' : 'green'}>
-                      {item.used ? t('admin.preapprovedUsed') : t('admin.preapprovedPending')}
-                    </Badge>
-                  </div>
-                  {!item.used && (
-                    <Button variant="outline" size="sm" onClick={() => handleRemovePreapproved(item.email)}>
-                      {t('common.remove')}
-                    </Button>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </Card>
-
-        {/* Enrollment exemptions */}
-        <Card className="mb-6">
-          <h3 className="mb-1 text-sm font-semibold text-gray-900">{t('admin.exemptions.title')}</h3>
-          <p className="mb-4 text-xs text-gray-500">{t('admin.exemptions.desc')}</p>
-          <div className="mb-3 flex gap-2">
-            <Input
-              placeholder={t('admin.exemptions.email')}
-              type="email"
-              value={newExemptionEmail}
-              onChange={(e) => setNewExemptionEmail(e.target.value)}
-              className="flex-1"
-            />
-            <Input
-              placeholder={t('admin.exemptions.note')}
-              value={newExemptionNote}
-              onChange={(e) => setNewExemptionNote(e.target.value)}
-              className="flex-1"
-            />
-            <Button variant="primary" size="sm" onClick={handleAddExemption} disabled={!newExemptionEmail}>
-              {t('admin.exemptions.add')}
-            </Button>
-          </div>
-          {exemptionsLoading ? (
-            <div className="flex justify-center py-4">
-              <Spinner className="h-5 w-5 text-brand-600" />
-            </div>
-          ) : exemptions.length === 0 ? (
-            <p className="py-3 text-center text-xs text-gray-500">{t('admin.exemptions.empty')}</p>
-          ) : (
-            <div className="space-y-2">
-              {exemptions.map((item) => (
-                <div key={item.email} className="flex items-center justify-between rounded-lg bg-gray-50 px-3 py-2">
-                  <div className="min-w-0">
-                    <span className="text-sm text-gray-700">{item.email}</span>
-                    {item.note && <p className="truncate text-xs text-gray-500">{item.note}</p>}
-                  </div>
-                  <Button variant="outline" size="sm" onClick={() => handleRemoveExemption(item.email)}>
-                    {t('admin.exemptions.remove')}
-                  </Button>
-                </div>
-              ))}
-            </div>
-          )}
-        </Card>
-
         {/* Filters */}
         <Input
           placeholder={t('admin.searchUsers')}
@@ -361,58 +282,14 @@ export function AdminUsersPage() {
           <div className="flex justify-center py-8">
             <Spinner className="h-8 w-8 text-brand-600" />
           </div>
-        ) : users.length === 0 ? (
-          <p className="py-8 text-center text-sm text-gray-500">{t('admin.noUsersFound')}</p>
         ) : (
-          <div className="space-y-3">
-            {users.map((user) => (
-              <Card key={user.uid}>
-                <div className="mb-2 flex items-start justify-between">
-                  <div>
-                    <p className="text-sm font-semibold text-gray-900">
-                      {user.firstName} {user.lastName}
-                    </p>
-                    <p className="text-xs text-gray-500">{user.email}</p>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <Badge variant={roleBadgeVariant(user.role)}>{user.role}</Badge>
-                    {user.role === 'babysitter' ? (
-                      <Badge variant={user.searchable ? 'green' : 'gray'}>
-                        {user.searchable ? t('admin.active') : t('admin.inactive')}
-                      </Badge>
-                    ) : (
-                      user.status !== 'active' && (
-                        <Badge variant={statusBadgeVariant(user.status)}>{user.status}</Badge>
-                      )
-                    )}
-                  </div>
-                </div>
-
-                <div className="mt-3 grid grid-cols-5 gap-2">
-                  <Button variant="outline" size="sm" onClick={() => handleBlock(user.uid, user.status)}>
-                    {user.status === 'blocked' ? t('admin.unblock') : t('admin.block')}
-                  </Button>
-                  {user.role === 'babysitter' ? (
-                    <Button variant="outline" size="sm" onClick={() => handleDeactivate(user.uid, user.searchable === true)}>
-                      {user.searchable ? t('admin.deactivate') : t('admin.activate')}
-                    </Button>
-                  ) : (
-                    <div />
-                  )}
-                  <Button variant="outline" size="sm" onClick={() => handleDelete(user.uid)}>
-                    {t('admin.delete')}
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => handleResetPassword(user.uid)}>
-                    {t('admin.resetPwd')}
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => handleExport(user.uid)}>
-                    <DownloadIcon className="h-4 w-4" />
-                    {t('admin.exportData')}
-                  </Button>
-                </div>
-              </Card>
-            ))}
-          </div>
+          <DataTable
+            columns={columns}
+            rows={users}
+            rowKey={(u) => u.uid}
+            emptyLabel={t('admin.noUsersFound')}
+            initialSort={{ key: 'name', dir: 'asc' }}
+          />
         )}
       </div>
 

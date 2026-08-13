@@ -20,8 +20,6 @@ vi.mock('firebase/functions', () => ({
   httpsCallable: (_fns: unknown, name: string) => (payload: unknown) => {
     h.calls.push({ name, payload });
     switch (name) {
-      case 'listUsers':
-        return Promise.resolve({ data: { users: [] } });
       case 'listPreapprovedEmails':
         return Promise.resolve({ data: { emails: [] } });
       case 'listEnrollmentExemptions':
@@ -34,14 +32,14 @@ vi.mock('firebase/functions', () => ({
 
 import i18n from '@/i18n';
 import { ToastProvider } from '@ejm/shared-ui';
-import { AdminUsersPage } from '../UsersPage';
+import { AdminEnrollmentAccessPage } from '../EnrollmentAccessPage';
 
 function renderPage() {
   return render(
     <I18nextProvider i18n={i18n}>
       <ToastProvider>
         <MemoryRouter>
-          <AdminUsersPage />
+          <AdminEnrollmentAccessPage />
         </MemoryRouter>
       </ToastProvider>
     </I18nextProvider>,
@@ -62,7 +60,7 @@ afterEach(() => {
   cleanup();
 });
 
-describe('AdminUsersPage — enrollment exemptions panel', () => {
+describe('AdminEnrollmentAccessPage — enrollment exemptions panel', () => {
   it('lists exemptions from listEnrollmentExemptions on mount (email + note shown)', async () => {
     h.exemptions = [
       { email: 'redoublant29@ejm.org', note: 'repeated a year', createdByUid: 'admin1', createdAt: null },
