@@ -110,14 +110,24 @@ export function SearchPage() {
   }, [familyId]);
 
   const runSearch = useCallback(
-    async (s: string, l: string) => {
+    // `overrides` exists for callers that change filter state and re-run in
+    // the same tick (clear-filters): runSearch closes over the filter state,
+    // so without it they would search with the STALE values.
+    async (
+      s: string,
+      l: string,
+      overrides?: { locationPref: string; maxRate: number | ''; maxDistanceKm: number | '' },
+    ) => {
       if (!isValidSubject(s) || !isValidLevel(l)) return;
       setLoading(true);
       setError(null);
+      const effLocationPref = overrides ? overrides.locationPref : locationPref;
+      const effMaxRate = overrides ? overrides.maxRate : maxRate;
+      const effMaxDistanceKm = overrides ? overrides.maxDistanceKm : maxDistanceKm;
       const filters: { locationPref?: string; maxRate?: number; maxDistanceKm?: number } = {};
-      if (locationPref) filters.locationPref = locationPref;
-      if (maxRate !== '') filters.maxRate = Number(maxRate);
-      if (maxDistanceKm !== '') filters.maxDistanceKm = Number(maxDistanceKm);
+      if (effLocationPref) filters.locationPref = effLocationPref;
+      if (effMaxRate !== '') filters.maxRate = Number(effMaxRate);
+      if (effMaxDistanceKm !== '') filters.maxDistanceKm = Number(effMaxDistanceKm);
       const payload = {
         subject: s,
         level: l,
@@ -161,14 +171,19 @@ export function SearchPage() {
     runSearch(subject, level);
   };
 
+  // Whether the empty state has anything to offer: with no optional filters
+  // set, "Clear filters" would be a visible no-op, so the CTA is withheld and
+  // EmptyState degrades to icon + message.
+  const hasOptionalFilters = locationPref !== '' || maxRate !== '' || maxDistanceKm !== '';
+
   // Clears the OPTIONAL filters only — subject/level are the mandatory search
-  // inputs and the address is the search origin, so both stay put. The user
-  // re-runs the search themselves (the results they see still match the
-  // filters they see until they do).
+  // inputs and the address is the search origin, so both stay put — and
+  // re-runs the search with the cleared values so the results visibly react.
   const clearFilters = () => {
     setLocationPref('');
     setMaxRate('');
     setMaxDistanceKm('');
+    runSearch(subject, level, { locationPref: '', maxRate: '', maxDistanceKm: '' });
   };
 
   const subjectOptions = SUBJECTS.map((s) => ({
@@ -307,12 +322,16 @@ export function SearchPage() {
 
           {!loading && !error && results !== null && results.length === 0 && (
             <Card>
-              <EmptyState
-                icon={<SearchIcon className="h-6 w-6" />}
-                message={t('family.search.empty')}
-                actionLabel={t('family.search.emptyAction')}
-                onAction={clearFilters}
-              />
+              {hasOptionalFilters ? (
+                <EmptyState
+                  icon={<SearchIcon className="h-6 w-6" />}
+                  message={t('family.search.empty')}
+                  actionLabel={t('family.search.emptyAction')}
+                  onAction={clearFilters}
+                />
+              ) : (
+                <EmptyState icon={<SearchIcon className="h-6 w-6" />} message={t('family.search.empty')} />
+              )}
             </Card>
           )}
 

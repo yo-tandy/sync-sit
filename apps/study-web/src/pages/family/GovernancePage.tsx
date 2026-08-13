@@ -255,8 +255,10 @@ export function GovernancePage() {
           </div>
         )}
 
-        {/* ── Add a child (single always-present CTA once loaded) ── */}
-        {data !== null && (
+        {/* ── Add a child (the single add-kid CTA once anything is listed;
+            on the empty screen the EmptyState above carries it instead, so
+            the user never sees two stacked CTAs to the same route) ── */}
+        {data !== null && (children.length > 0 || invites.length > 0) && (
           <Link to="/family/governance/new" className="block">
             <Card interactive className="flex items-center gap-3 py-4">
               <div className="flex-1">

@@ -8,22 +8,25 @@ import { Link } from 'react-router';
  * conditions as the old copy-only <p>, never for loading or error states.
  *
  * The action is optional on purpose: some empties have no sensible next step
- * for this user (then it degrades to icon + line). Pass either `actionTo`
- * (navigation) or `onAction` (in-page, e.g. clear filters) — not both.
+ * for this user (then it degrades to icon + line). `actionTo` (navigation)
+ * and `onAction` (in-page, e.g. clear filters) are mutually exclusive by
+ * type — the union below makes both-at-once and label-without-action
+ * unrepresentable rather than documentation-enforced.
  */
-interface EmptyStateProps {
+type EmptyStateProps = {
   icon: ReactNode;
   message: string;
-  actionLabel?: string;
-  actionTo?: string;
-  onAction?: () => void;
-}
+} & (
+  | { actionLabel: string; actionTo: string; onAction?: never }
+  | { actionLabel: string; onAction: () => void; actionTo?: never }
+  | { actionLabel?: never; actionTo?: never; onAction?: never }
+);
 
 // Mirrors Button's primary variant at size="sm" (minus w-full) so the CTA
 // reads like every other primary button; Button renders only <button> and
 // exports no class helper, so the classes are restated here.
 const actionClasses =
-  'inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-brand-600 px-4 text-sm font-semibold text-white transition-all hover:bg-brand-600/90';
+  'inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-lg bg-brand-600 px-4 text-sm font-semibold text-white transition-all hover:bg-brand-600/90';
 
 export function EmptyState({ icon, message, actionLabel, actionTo, onAction }: EmptyStateProps) {
   return (
