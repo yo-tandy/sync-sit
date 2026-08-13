@@ -572,6 +572,7 @@ export default {
       submit: 'Search tutors',
       searching: 'Searching…',
       empty: 'No tutors found — try adjusting your subject, level or filters.',
+      emptyAction: 'Clear filters',
       error: 'Something went wrong. Please try again.',
       verifyCta: 'Go to dashboard',
       rate: '{{rate}} €/h',

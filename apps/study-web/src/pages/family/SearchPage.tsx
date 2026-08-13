@@ -21,6 +21,8 @@ import {
   TopNav,
   Spinner,
   AddressAutocomplete,
+  EmptyState,
+  SearchIcon,
   type AddressResult,
 } from '@ejm/shared-ui';
 import { TutorCard } from '@/components/family/TutorCard';
@@ -159,6 +161,16 @@ export function SearchPage() {
     runSearch(subject, level);
   };
 
+  // Clears the OPTIONAL filters only — subject/level are the mandatory search
+  // inputs and the address is the search origin, so both stay put. The user
+  // re-runs the search themselves (the results they see still match the
+  // filters they see until they do).
+  const clearFilters = () => {
+    setLocationPref('');
+    setMaxRate('');
+    setMaxDistanceKm('');
+  };
+
   const subjectOptions = SUBJECTS.map((s) => ({
     value: s,
     label: t(`tutor.subjects.names.${s}`),
@@ -295,9 +307,12 @@ export function SearchPage() {
 
           {!loading && !error && results !== null && results.length === 0 && (
             <Card>
-              <p className="py-4 text-center text-sm text-gray-500">
-                {t('family.search.empty')}
-              </p>
+              <EmptyState
+                icon={<SearchIcon className="h-6 w-6" />}
+                message={t('family.search.empty')}
+                actionLabel={t('family.search.emptyAction')}
+                onAction={clearFilters}
+              />
             </Card>
           )}
 

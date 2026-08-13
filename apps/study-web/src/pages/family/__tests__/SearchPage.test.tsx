@@ -159,6 +159,20 @@ describe('family SearchPage', () => {
     expect(await screen.findByText(/no tutors found/i)).toBeInTheDocument();
   });
 
+  it('empty results offer a clear-filters action that resets only the optional filters', async () => {
+    h.callable.mockResolvedValue({ data: { results: [] } });
+    renderWithProviders(<SearchPage />, '/family/search?subject=math&level=6e');
+    await screen.findByText(/no tutors found/i);
+
+    fireEvent.change(screen.getByLabelText(/max rate/i), { target: { value: '30' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
+
+    // Optional filter cleared; the mandatory subject/level inputs stay put.
+    expect(screen.getByLabelText(/max rate/i)).toHaveValue(null);
+    expect(screen.getByLabelText(/subject/i)).toHaveValue('math');
+    expect(screen.getByLabelText(/level/i)).toHaveValue('6e');
+  });
+
   it('renders a result row with name, rate and endorsement count', async () => {
     h.callable.mockResolvedValue({ data: { results: [tutorResult()] } });
     renderWithProviders(<SearchPage />, '/family/search?subject=math&level=6e');

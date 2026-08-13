@@ -572,6 +572,7 @@ export default {
       submit: 'Rechercher des professeurs',
       searching: 'Recherche…',
       empty: 'Aucun professeur trouvé — essayez d\'ajuster la matière, le niveau ou les filtres.',
+      emptyAction: 'Effacer les filtres',
       error: 'Une erreur est survenue. Veuillez réessayer.',
       verifyCta: 'Aller au tableau de bord',
       rate: '{{rate}} €/h',
