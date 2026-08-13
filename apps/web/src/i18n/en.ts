@@ -832,6 +832,7 @@ export default {
       status: 'Status',
       created: 'Created',
       actions: 'Actions',
+      kids: 'Kids',
     },
     enrollmentAccess: {
       title: 'Enrollment access',

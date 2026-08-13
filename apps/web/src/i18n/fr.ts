@@ -804,6 +804,7 @@ export default {
       status: 'Statut',
       created: 'Créé le',
       actions: 'Actions',
+      kids: 'Enfants',
     },
     enrollmentAccess: {
       title: "Accès à l'inscription",

@@ -202,6 +202,30 @@ describe('AdminFamiliesPage', () => {
     expect(screen.queryByRole('button', { name: /load more/i })).not.toBeInTheDocument();
   });
 
+  it('clicking the name header flips the sort order', async () => {
+    h.pages = [
+      {
+        families: [
+          family(),
+          family({ familyId: 'fam-abel', familyName: 'Abel' }),
+        ],
+        hasMore: false,
+      },
+    ];
+    renderPage();
+    await screen.findByText('Dupont');
+
+    const rowNames = () => {
+      const [, ...body] = screen.getAllByRole('row');
+      return body.map((tr) => tr.querySelector('td p')?.textContent);
+    };
+    // initialSort: name ascending.
+    expect(rowNames()).toEqual(['Abel', 'Dupont']);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Name' }));
+    expect(rowNames()).toEqual(['Dupont', 'Abel']);
+  });
+
   it('shows an empty state when no families match', async () => {
     h.pages = [{ families: [], hasMore: false }];
     renderPage();
