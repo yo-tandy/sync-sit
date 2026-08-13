@@ -793,9 +793,19 @@ export default {
       added: 'Exemption ajoutée',
       removed: 'Exemption retirée',
     },
+    nav: {
+      people: 'Personnes',
+      trustSafety: 'Confiance et sécurité',
+      operations: 'Opérations',
+    },
+    enrollmentAccess: {
+      title: "Accès à l'inscription",
+      desc: "E-mails pré-approuvés et exemptions d'inscription",
+    },
     governance: {
       menuTitle: 'Supervision',
       title: 'Supervision et gouvernance',
+      navDesc: 'Comptes supervisés et alertes de gouvernance',
       accountsTitle: 'Comptes supervisés',
       accountsDesc:
         'Tous les liens de supervision, quel que soit leur statut — les liens révoqués restent des preuves de consentement auditables (RGPD).',

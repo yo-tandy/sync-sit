@@ -821,9 +821,19 @@ export default {
       added: 'Exemption added',
       removed: 'Exemption removed',
     },
+    nav: {
+      people: 'People',
+      trustSafety: 'Trust & safety',
+      operations: 'Operations',
+    },
+    enrollmentAccess: {
+      title: 'Enrollment access',
+      desc: 'Pre-approved emails and enrollment exemptions',
+    },
     governance: {
       menuTitle: 'Supervision',
       title: 'Supervision & Governance',
+      navDesc: 'Supervised accounts and governance alerts',
       accountsTitle: 'Supervised accounts',
       accountsDesc:
         'Every guardian link, any status — revoked links remain auditable consent records (GDPR).',
