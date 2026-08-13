@@ -798,6 +798,13 @@ export default {
       trustSafety: 'Confiance et sécurité',
       operations: 'Opérations',
     },
+    table: {
+      name: 'Nom',
+      role: 'Rôle',
+      status: 'Statut',
+      created: 'Créé le',
+      actions: 'Actions',
+    },
     enrollmentAccess: {
       title: "Accès à l'inscription",
       desc: "E-mails pré-approuvés et exemptions d'inscription",

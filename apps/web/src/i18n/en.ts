@@ -826,6 +826,13 @@ export default {
       trustSafety: 'Trust & safety',
       operations: 'Operations',
     },
+    table: {
+      name: 'Name',
+      role: 'Role',
+      status: 'Status',
+      created: 'Created',
+      actions: 'Actions',
+    },
     enrollmentAccess: {
       title: 'Enrollment access',
       desc: 'Pre-approved emails and enrollment exemptions',

@@ -1,18 +1,18 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { TopNav } from '@/components/ui/TopNav';
-import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Spinner } from '@/components/ui/Spinner';
 import { Dialog } from '@/components/ui/Dialog';
+import { DataTable, type DataTableColumn } from '@/components/ui/DataTable';
 import { DownloadIcon } from '@/components/ui/Icons';
-import { useAdminStore } from '@/stores/adminStore';
+import { useAdminStore, wireTimestampToMillis, type AdminUserListItem } from '@/stores/adminStore';
 
 export function AdminUsersPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const {
     users,
     usersLoading,
@@ -168,6 +168,84 @@ export function AdminUsersPage() {
     { value: 'deleted', label: t('admin.statusDeleted') },
   ];
 
+  const formatCreated = (user: AdminUserListItem) => {
+    const ms = wireTimestampToMillis(user.createdAt);
+    if (ms === null) return '—';
+    return new Date(ms).toLocaleDateString(i18n.language === 'fr' ? 'fr-FR' : 'en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+  };
+
+  const columns: DataTableColumn<AdminUserListItem>[] = [
+    {
+      key: 'name',
+      header: t('admin.table.name'),
+      sortValue: (u) => `${u.lastName} ${u.firstName}`.toLowerCase(),
+      render: (u) => (
+        <div>
+          <p className="font-semibold text-gray-900">
+            {u.firstName} {u.lastName}
+          </p>
+          <p className="text-xs text-gray-500">{u.email}</p>
+        </div>
+      ),
+    },
+    {
+      key: 'role',
+      header: t('admin.table.role'),
+      sortValue: (u) => u.role,
+      render: (u) => <Badge variant={roleBadgeVariant(u.role)}>{u.role}</Badge>,
+    },
+    {
+      key: 'status',
+      header: t('admin.table.status'),
+      sortValue: (u) => (u.role === 'babysitter' ? (u.searchable ? 'active' : 'inactive') : u.status),
+      render: (u) =>
+        u.role === 'babysitter' ? (
+          <Badge variant={u.searchable ? 'green' : 'gray'}>
+            {u.searchable ? t('admin.active') : t('admin.inactive')}
+          </Badge>
+        ) : (
+          u.status !== 'active' && <Badge variant={statusBadgeVariant(u.status)}>{u.status}</Badge>
+        ),
+    },
+    {
+      key: 'created',
+      header: t('admin.table.created'),
+      sortValue: (u) => wireTimestampToMillis(u.createdAt),
+      render: formatCreated,
+    },
+    {
+      key: 'actions',
+      header: t('admin.table.actions'),
+      className: 'text-right',
+      render: (u) => (
+        <div className="flex justify-end gap-1.5">
+          <Button variant="outline" size="sm" onClick={() => handleBlock(u.uid, u.status)}>
+            {u.status === 'blocked' ? t('admin.unblock') : t('admin.block')}
+          </Button>
+          {u.role === 'babysitter' && (
+            <Button variant="outline" size="sm" onClick={() => handleDeactivate(u.uid, u.searchable === true)}>
+              {u.searchable ? t('admin.deactivate') : t('admin.activate')}
+            </Button>
+          )}
+          <Button variant="outline" size="sm" onClick={() => handleDelete(u.uid)}>
+            {t('admin.delete')}
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => handleResetPassword(u.uid)}>
+            {t('admin.resetPwd')}
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => handleExport(u.uid)}>
+            <DownloadIcon className="h-4 w-4" />
+            {t('admin.exportData')}
+          </Button>
+        </div>
+      ),
+    },
+  ];
+
   return (
     <div>
       <TopNav title={t('admin.manageUsers')} backTo="/admin" />
@@ -197,58 +275,14 @@ export function AdminUsersPage() {
           <div className="flex justify-center py-8">
             <Spinner className="h-8 w-8 text-brand-600" />
           </div>
-        ) : users.length === 0 ? (
-          <p className="py-8 text-center text-sm text-gray-500">{t('admin.noUsersFound')}</p>
         ) : (
-          <div className="space-y-3">
-            {users.map((user) => (
-              <Card key={user.uid}>
-                <div className="mb-2 flex items-start justify-between">
-                  <div>
-                    <p className="text-sm font-semibold text-gray-900">
-                      {user.firstName} {user.lastName}
-                    </p>
-                    <p className="text-xs text-gray-500">{user.email}</p>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <Badge variant={roleBadgeVariant(user.role)}>{user.role}</Badge>
-                    {user.role === 'babysitter' ? (
-                      <Badge variant={user.searchable ? 'green' : 'gray'}>
-                        {user.searchable ? t('admin.active') : t('admin.inactive')}
-                      </Badge>
-                    ) : (
-                      user.status !== 'active' && (
-                        <Badge variant={statusBadgeVariant(user.status)}>{user.status}</Badge>
-                      )
-                    )}
-                  </div>
-                </div>
-
-                <div className="mt-3 grid grid-cols-5 gap-2">
-                  <Button variant="outline" size="sm" onClick={() => handleBlock(user.uid, user.status)}>
-                    {user.status === 'blocked' ? t('admin.unblock') : t('admin.block')}
-                  </Button>
-                  {user.role === 'babysitter' ? (
-                    <Button variant="outline" size="sm" onClick={() => handleDeactivate(user.uid, user.searchable === true)}>
-                      {user.searchable ? t('admin.deactivate') : t('admin.activate')}
-                    </Button>
-                  ) : (
-                    <div />
-                  )}
-                  <Button variant="outline" size="sm" onClick={() => handleDelete(user.uid)}>
-                    {t('admin.delete')}
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => handleResetPassword(user.uid)}>
-                    {t('admin.resetPwd')}
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => handleExport(user.uid)}>
-                    <DownloadIcon className="h-4 w-4" />
-                    {t('admin.exportData')}
-                  </Button>
-                </div>
-              </Card>
-            ))}
-          </div>
+          <DataTable
+            columns={columns}
+            rows={users}
+            rowKey={(u) => u.uid}
+            emptyLabel={t('admin.noUsersFound')}
+            initialSort={{ key: 'name', dir: 'asc' }}
+          />
         )}
       </div>
 
