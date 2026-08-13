@@ -350,7 +350,7 @@ export function DashboardPage() {
               <p className="text-base font-bold text-gray-900">{hero.title}</p>
               <p className="text-sm text-gray-600">{hero.desc}</p>
             </div>
-            <ChevronRightIcon className="h-5 w-5 shrink-0 text-gray-400" />
+            <ChevronRightIcon className="h-5 w-5 shrink-0 text-gray-500" />
           </Card>
         </Link>
       )}
