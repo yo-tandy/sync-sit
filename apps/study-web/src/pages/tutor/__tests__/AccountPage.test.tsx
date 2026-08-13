@@ -156,6 +156,97 @@ describe('tutor AccountPage', () => {
     );
   });
 
+  // ── Session preferences (issue #123 — un-freeze enrollment-only fields) ──
+
+  function seedSessionPrefs() {
+    const userDoc = makeUserDoc();
+    Object.assign(userDoc.profiles.tutor as Record<string, unknown>, {
+      sessionLengthsMin: [45, 60],
+      locationPrefs: ['online', 'family_home'],
+      paddingMin: 15,
+    });
+    h.auth.userDoc = userDoc;
+  }
+
+  it('seeds the session-preferences section from the stored profile', () => {
+    seedSessionPrefs();
+    renderWithProviders(<AccountPage />);
+
+    expect(screen.getByRole('button', { name: '45 min', pressed: true })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '60 min', pressed: true })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '30 min', pressed: false })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '75 min', pressed: false })).toBeInTheDocument();
+
+    expect(screen.getByLabelText('Online')).toBeChecked();
+    expect(screen.getByLabelText("At the family's home")).toBeChecked();
+    expect(screen.getByLabelText('At your home')).not.toBeChecked();
+    expect(screen.getByLabelText('Library / public space')).not.toBeChecked();
+
+    expect((screen.getByLabelText(/transit padding/i) as HTMLInputElement).value).toBe('15');
+  });
+
+  it('renders the section without crashing when the fields are absent (legacy doc)', () => {
+    renderWithProviders(<AccountPage />);
+    expect(screen.getByRole('button', { name: '45 min', pressed: false })).toBeInTheDocument();
+    expect(screen.getByLabelText('Online')).not.toBeChecked();
+    expect((screen.getByLabelText(/transit padding/i) as HTMLInputElement).value).toBe('0');
+  });
+
+  it('saves exactly the three dot-paths (+updatedAt) with the edited values', async () => {
+    seedSessionPrefs();
+    renderWithProviders(<AccountPage />);
+
+    fireEvent.click(screen.getByRole('button', { name: '75 min' }));
+    fireEvent.click(screen.getByLabelText('At your home'));
+    fireEvent.change(screen.getByLabelText(/transit padding/i), { target: { value: '30' } });
+    fireEvent.click(screen.getByRole('button', { name: /save preferences/i }));
+
+    await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
+    const call = h.updateDoc.mock.calls[0] as unknown[];
+    expect(call[0]).toEqual(expect.objectContaining({ path: 'users/t1' }));
+    const payload = call[1] as Record<string, unknown>;
+    // Pin the FULL key set: dot-paths only — never a wholesale profiles.tutor
+    // rewrite (would clobber server-owned siblings like approvedFamilies).
+    expect(Object.keys(payload).sort()).toEqual([
+      'profiles.tutor.locationPrefs',
+      'profiles.tutor.paddingMin',
+      'profiles.tutor.sessionLengthsMin',
+      'updatedAt',
+    ]);
+    expect(payload['profiles.tutor.sessionLengthsMin']).toEqual([45, 60, 75]);
+    expect(payload['profiles.tutor.locationPrefs']).toEqual(['online', 'family_home', 'tutor_home']);
+    expect(payload['profiles.tutor.paddingMin']).toBe(30); // NUMBER, not '30'
+    await waitFor(() => expect(h.auth.refreshUserDoc).toHaveBeenCalled());
+  });
+
+  it('blocks save when no session length is selected', async () => {
+    seedSessionPrefs();
+    renderWithProviders(<AccountPage />);
+    fireEvent.click(screen.getByRole('button', { name: '45 min' }));
+    fireEvent.click(screen.getByRole('button', { name: '60 min' }));
+    fireEvent.click(screen.getByRole('button', { name: /save preferences/i }));
+
+    expect(await screen.findByText(/at least one session length/i)).toBeInTheDocument();
+    expect(h.updateDoc).not.toHaveBeenCalled();
+  });
+
+  it('blocks save when no location is selected', async () => {
+    seedSessionPrefs();
+    renderWithProviders(<AccountPage />);
+    fireEvent.click(screen.getByLabelText('Online'));
+    fireEvent.click(screen.getByLabelText("At the family's home"));
+    fireEvent.click(screen.getByRole('button', { name: /save preferences/i }));
+
+    expect(await screen.findByText(/at least one session location/i)).toBeInTheDocument();
+    expect(h.updateDoc).not.toHaveBeenCalled();
+  });
+
+  it('links to the area editor so it is findable from Account', () => {
+    renderWithProviders(<AccountPage />);
+    const link = screen.getByRole('link', { name: /area you cover/i });
+    expect(link).toHaveAttribute('href', '/tutor/area');
+  });
+
   // ── Supervised-account indicator (governedBy mirror) ──
 
   it('shows the supervised-account indicator when governedBy is set', () => {
@@ -175,5 +266,31 @@ describe('tutor AccountPage', () => {
   it('shows no supervised-account indicator without governedBy', () => {
     renderWithProviders(<AccountPage />);
     expect(screen.queryByText(/supervised account/i)).not.toBeInTheDocument();
+  });
+
+  it('surfaces a session-prefs save failure instead of a silent success', async () => {
+    seedSessionPrefs();
+    h.updateDoc.mockRejectedValueOnce(new Error('unavailable'));
+    renderWithProviders(<AccountPage />);
+    fireEvent.click(await screen.findByRole('button', { name: /^save preferences$/i }));
+
+    expect(await screen.findByText(/error|wrong/i)).toBeInTheDocument();
+    expect(screen.queryByText(/preferences saved/i)).not.toBeInTheDocument();
+  });
+
+  it('rejects out-of-range padding before any write (UX guard; rules carry the bound)', async () => {
+    const userDoc = makeUserDoc();
+    (userDoc.profiles.tutor as Record<string, unknown>).sessionLengthsMin = [45, 60];
+    (userDoc.profiles.tutor as Record<string, unknown>).locationPrefs = ['online'];
+    (userDoc.profiles.tutor as Record<string, unknown>).paddingMin = 15;
+    h.auth.userDoc = userDoc;
+    renderWithProviders(<AccountPage />);
+    const padding = await screen.findByLabelText(/padding|transit/i);
+    fireEvent.change(padding, { target: { value: '500' } });
+    fireEvent.click(screen.getByRole('button', { name: /^save preferences$/i }));
+
+    expect(await screen.findByText(/between 0 and 60/i)).toBeInTheDocument();
+    const calls = h.updateDoc.mock.calls.filter((c) => JSON.stringify(c[1] ?? {}).includes('paddingMin'));
+    expect(calls).toHaveLength(0);
   });
 });

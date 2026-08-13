@@ -101,6 +101,27 @@ service cloud.firestore {
                == tutorField(resource.data, 'endorsementCount', 0);
     }
 
+    // Helper: the owner-editable tutor numerics must stay in enrollment's
+    // validated ranges (paddingMin int 0-60; areaRadiusKm null or 0-50) —
+    // client-side guards are UX only; THIS is the trust boundary. Post-state
+    // check with in-range defaults, so docs without a tutor profile pass.
+    function tutorNumericBoundsValid() {
+      return tutorField(request.resource.data, 'paddingMin', 0) is int
+             && tutorField(request.resource.data, 'paddingMin', 0) >= 0
+             && tutorField(request.resource.data, 'paddingMin', 0) <= 60
+             && (tutorField(request.resource.data, 'areaRadiusKm', 0) == null
+                 || (tutorField(request.resource.data, 'areaRadiusKm', 0) is number
+                     && tutorField(request.resource.data, 'areaRadiusKm', 0) >= 0
+                     && tutorField(request.resource.data, 'areaRadiusKm', 0) <= 50))
+             && (tutorField(request.resource.data, 'areaLatLng', null) == null
+                 || (tutorField(request.resource.data, 'areaLatLng', null).lat is number
+                     && tutorField(request.resource.data, 'areaLatLng', null).lat >= -90
+                     && tutorField(request.resource.data, 'areaLatLng', null).lat <= 90
+                     && tutorField(request.resource.data, 'areaLatLng', null).lng is number
+                     && tutorField(request.resource.data, 'areaLatLng', null).lng >= -180
+                     && tutorField(request.resource.data, 'areaLatLng', null).lng <= 180));
+    }
+
     // Helper: profiles.parent.familyId is server-controlled (enrollFamily /
     // joinFamily). A client must not move themselves between families.
     function parentFamilyIdUnchanged() {
@@ -159,7 +180,8 @@ service cloud.firestore {
                     && babysitterIdentityUnchanged()
                     && tutorIdentityUnchanged()
                     && parentFamilyIdUnchanged()
-                    && identityUnlockedOrUnchanged();
+                    && identityUnlockedOrUnchanged()
+                    && tutorNumericBoundsValid();
     }
 
     // Families: readable + editable by family members + admin

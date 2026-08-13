@@ -325,6 +325,81 @@ describe('users collection — Plan D owner-update guards', () => {
     );
   });
 
+  // Tutor self-service editing (issue #123): the four enrollment-frozen fields
+  // are owner-editable. Seeds mirror enrollTutor's stored shape (absent-mode
+  // fields explicit null, arrondissements []) with the server-owned siblings
+  // present, and the payloads are the EXACT dot-path writes the Account
+  // session-preferences section and the Area editor issue — proving the rules
+  // accept them without touching approvedFamilies/endorsementCount.
+  function seedLegacyDistanceTutor(id: string) {
+    return seed(id, {
+      status: 'active', email: 't@ejm.org',
+      profiles: {
+        tutor: {
+          ejemEmail: 't@ejm.org',
+          enrollmentComplete: true,
+          searchable: true,
+          subjects: ['math'],
+          sessionLengthsMin: [45, 60],
+          locationPrefs: ['online'],
+          paddingMin: 15,
+          // Legacy pre-fix enrollee: distance mode but NO coordinates.
+          areaMode: 'distance',
+          arrondissements: [],
+          areaAddress: null,
+          areaLatLng: null,
+          areaRadiusKm: null,
+          approvedFamilies: ['famA'],
+          endorsementCount: 3,
+          verification: { identityStatus: 'approved' },
+        },
+      },
+    });
+  }
+
+  it('tutor may save the session-preferences payload (lengths/locations/padding dot-paths)', async () => {
+    await seedLegacyDistanceTutor('tu10');
+    const authed = testEnv.authenticatedContext('tu10');
+    await assertSucceeds(
+      updateDoc(doc(authed.firestore(), 'users', 'tu10'), {
+        'profiles.tutor.sessionLengthsMin': [60, 75],
+        'profiles.tutor.locationPrefs': ['online', 'tutor_home'],
+        'profiles.tutor.paddingMin': 30,
+        updatedAt: new Date(),
+      })
+    );
+  });
+
+  it('legacy no-coordinates tutor may self-service their areaLatLng (distance-mode save)', async () => {
+    await seedLegacyDistanceTutor('tu11');
+    const authed = testEnv.authenticatedContext('tu11');
+    await assertSucceeds(
+      updateDoc(doc(authed.firestore(), 'users', 'tu11'), {
+        'profiles.tutor.areaMode': 'distance',
+        'profiles.tutor.arrondissements': [],
+        'profiles.tutor.areaAddress': '16 rue de Passy, 75016 Paris',
+        'profiles.tutor.areaLatLng': { lat: 48.8571, lng: 2.2795 },
+        'profiles.tutor.areaRadiusKm': 5,
+        updatedAt: new Date(),
+      })
+    );
+  });
+
+  it('tutor may switch area mode, nulling the distance fields like enrollment stores them', async () => {
+    await seedLegacyDistanceTutor('tu12');
+    const authed = testEnv.authenticatedContext('tu12');
+    await assertSucceeds(
+      updateDoc(doc(authed.firestore(), 'users', 'tu12'), {
+        'profiles.tutor.areaMode': 'arrondissement',
+        'profiles.tutor.arrondissements': ['75016', '75017'],
+        'profiles.tutor.areaAddress': null,
+        'profiles.tutor.areaLatLng': null,
+        'profiles.tutor.areaRadiusKm': null,
+        updatedAt: new Date(),
+      })
+    );
+  });
+
   // The tutor guard must default safely for users WITHOUT a tutor profile,
   // otherwise a parent-only user's ordinary profile edit would break.
   it('parent-only user may still edit their own profile (tutor guard defaults safely)', async () => {
@@ -1627,5 +1702,85 @@ describe('appHandoffCodes', () => {
     const authed = testEnv.authenticatedContext('adminH');
     await assertFails(updateDoc(doc(authed.firestore(), ...CODE), { expiresAt: new Date(Date.now() + 3600_000) }));
     await assertFails(deleteDoc(doc(authed.firestore(), ...CODE)));
+  });
+});
+
+describe('users update — tutor numeric bounds (issue #123 hardening)', () => {
+  const uid = 'bounds-tutor-1';
+  const base = {
+    uid,
+    email: 'bounds@ejm-test.org',
+    status: 'active',
+    profiles: {
+      tutor: {
+        enrollmentComplete: true,
+        ejemEmail: 'bounds@ejm-test.org',
+        paddingMin: 15,
+        areaRadiusKm: 5,
+      },
+    },
+  };
+
+  beforeEach(async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.firestore().doc(`users/${uid}`).set(base);
+    });
+  });
+
+  it('rejects an out-of-range paddingMin (owner write)', async () => {
+    const db = testEnv.authenticatedContext(uid).firestore();
+    await assertFails(
+      updateDoc(doc(db, 'users', uid), { 'profiles.tutor.paddingMin': 500 }),
+    );
+  });
+
+  it('rejects an out-of-range areaRadiusKm (owner write)', async () => {
+    const db = testEnv.authenticatedContext(uid).firestore();
+    await assertFails(
+      updateDoc(doc(db, 'users', uid), { 'profiles.tutor.areaRadiusKm': 100000 }),
+    );
+  });
+
+  it('accepts in-range values and explicit null radius', async () => {
+    const db = testEnv.authenticatedContext(uid).firestore();
+    await assertSucceeds(
+      updateDoc(doc(db, 'users', uid), {
+        'profiles.tutor.paddingMin': 60,
+        'profiles.tutor.areaRadiusKm': null,
+      }),
+    );
+  });
+
+  it('rejects out-of-range and NaN coordinates (owner write)', async () => {
+    const db = testEnv.authenticatedContext(uid).firestore();
+    await assertFails(
+      updateDoc(doc(db, 'users', uid), { 'profiles.tutor.areaLatLng': { lat: 91, lng: 2.35 } }),
+    );
+    await assertFails(
+      updateDoc(doc(db, 'users', uid), { 'profiles.tutor.areaLatLng': { lat: NaN, lng: 2.35 } }),
+    );
+  });
+
+  it('accepts valid coordinates and explicit null', async () => {
+    const db = testEnv.authenticatedContext(uid).firestore();
+    await assertSucceeds(
+      updateDoc(doc(db, 'users', uid), { 'profiles.tutor.areaLatLng': { lat: 48.85, lng: 2.35 } }),
+    );
+    await assertSucceeds(
+      updateDoc(doc(db, 'users', uid), { 'profiles.tutor.areaLatLng': null }),
+    );
+  });
+
+  it('does not affect users without a tutor profile', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.firestore().doc('users/bounds-parent-1').set({
+        uid: 'bounds-parent-1', email: 'p@test.com', status: 'active',
+        profiles: { parent: { enrollmentComplete: true, familyId: 'famB' } },
+      });
+    });
+    const db = testEnv.authenticatedContext('bounds-parent-1').firestore();
+    await assertSucceeds(
+      updateDoc(doc(db, 'users', 'bounds-parent-1'), { firstName: 'New' }),
+    );
   });
 });

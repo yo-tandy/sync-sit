@@ -37,6 +37,20 @@ export function AddressAutocomplete({
 }: AddressAutocompleteProps) {
   const [query, setQuery] = useState(value?.fullAddress || '');
   const [suggestions, setSuggestions] = useState<GouvFeature[]>([]);
+  // Sync a LATER-arriving value into the text field (pages that load the
+  // stored address after mount — e.g. the tutor Area editor — otherwise
+  // render an empty input over a saved address). Only a new non-empty
+  // fullAddress syncs in; value→null (the user editing) never wipes typing.
+  const lastValueRef = useRef(value?.fullAddress || '');
+  useEffect(() => {
+    const next = value?.fullAddress || '';
+    if (next && next !== lastValueRef.current) {
+      lastValueRef.current = next;
+      setQuery(next);
+    } else if (!next) {
+      lastValueRef.current = '';
+    }
+  }, [value]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [loading, setLoading] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
