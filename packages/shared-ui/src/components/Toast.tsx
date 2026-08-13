@@ -69,7 +69,11 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       {children}
       {/* Both live regions stay MOUNTED and empty — screen readers only
           announce content CHANGES inside an existing live region; a region
-          inserted together with its content is often not announced at all. */}
+          inserted together with its content is often not announced at all.
+          The message span is keyed per toast: a REPEAT of the identical
+          message would otherwise be a no-op DOM write (React skips it) and
+          never re-announce; remounting the span inserts a fresh node, which
+          live regions treat as an addition. */}
       <div
         role="status"
         className={
@@ -78,7 +82,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             : 'sr-only'
         }
       >
-        {current && current.tone !== 'error' ? current.message : ''}
+        {current && current.tone !== 'error' && <span key={current.key}>{current.message}</span>}
       </div>
       <div
         role="alert"
@@ -88,7 +92,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             : 'sr-only'
         }
       >
-        {current && current.tone === 'error' ? current.message : ''}
+        {current && current.tone === 'error' && <span key={current.key}>{current.message}</span>}
       </div>
     </ToastContext.Provider>
   );

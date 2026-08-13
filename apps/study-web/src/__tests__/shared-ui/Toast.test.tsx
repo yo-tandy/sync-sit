@@ -83,6 +83,22 @@ describe('Toast (shared-ui)', () => {
     expect(screen.getByRole('status')).toBeEmptyDOMElement();
   });
 
+  it('repeating an identical message remounts the message node so it re-announces', () => {
+    // React skips the DOM write when the new text equals the old one, and a
+    // live region only announces DOM changes — so "Saved" twice in a row
+    // would be silent the second time. The per-toast key forces a fresh node
+    // (an addition, which live regions announce).
+    renderDemo();
+    fireEvent.click(screen.getByRole('button', { name: 'save' }));
+    const firstNode = screen.getByRole('status').firstChild;
+    expect(firstNode).toHaveTextContent('Saved');
+
+    fireEvent.click(screen.getByRole('button', { name: 'save' }));
+    const secondNode = screen.getByRole('status').firstChild;
+    expect(secondNode).toHaveTextContent('Saved');
+    expect(secondNode).not.toBe(firstNode);
+  });
+
   it('error tone renders role=alert instead of role=status', () => {
     renderDemo();
     fireEvent.click(screen.getByRole('button', { name: 'fail' }));
