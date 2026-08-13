@@ -107,12 +107,11 @@ describe('family DashboardPage', () => {
     ];
     renderWithProviders(<DashboardPage />);
 
-    const link = await screen.findByRole('link', { name: /requests/i });
+    const link = await screen.findByRole('link', { name: /view your requests/i });
     expect(link).toHaveAttribute('href', '/family/requests');
     expect(h.where).toHaveBeenCalledWith('familyId', '==', 'fam1');
-    // 2 pending, 1 accepted.
-    expect(await screen.findByText('2')).toBeInTheDocument();
-    expect(screen.getByText('1')).toBeInTheDocument();
+    // 2 pending, 1 accepted — inline on the compact tile.
+    expect(await screen.findByText('2 pending · 1 accepted')).toBeInTheDocument();
   });
 
   it('shows the empty requests message when the family has none', async () => {
@@ -140,9 +139,8 @@ describe('family DashboardPage', () => {
     const link = await screen.findByRole('link', { name: /your sessions/i });
     expect(link).toHaveAttribute('href', '/family/sessions');
     expect(h.where).toHaveBeenCalledWith('familyId', '==', 'fam1');
-    // 1 pending, 2 upcoming (confirmed).
-    expect(await screen.findByText('1')).toBeInTheDocument();
-    expect(screen.getByText('2')).toBeInTheDocument();
+    // 1 pending, 2 upcoming (confirmed) — inline on the compact tile.
+    expect(await screen.findByText('1 pending · 2 upcoming')).toBeInTheDocument();
   });
 
   it('a refetch blip keeps last-known-good: verified banner and counts survive failed reads', async () => {
@@ -151,11 +149,11 @@ describe('family DashboardPage', () => {
     h.sessions = [{ status: 'pending' }, { status: 'confirmed', date: '2099-01-01' }];
     renderWithProviders(<DashboardPage />);
 
-    // Initial load: verified (search CTA, no banner) + real counts. The
-    // sessions card renders pending=1 and upcoming=1 (the '1' appears twice).
+    // Initial load: verified (search stays reachable — as the tile, since the
+    // 2099 session claims the hero) + real counts inline on the tiles.
     expect(await screen.findByRole('link', { name: /find a tutor/i })).toBeInTheDocument();
-    expect(await screen.findByText('2')).toBeInTheDocument();
-    expect((await screen.findAllByText('1')).length).toBeGreaterThanOrEqual(2);
+    expect(await screen.findByText('2 pending · 1 accepted')).toBeInTheDocument();
+    expect(await screen.findByText('1 pending · 1 upcoming')).toBeInTheDocument();
 
     // Network blip: every read now fails; the user returns to the tab.
     h.getDoc.mockImplementation(() => Promise.reject(new Error('unavailable')));
@@ -168,11 +166,11 @@ describe('family DashboardPage', () => {
     });
 
     // Still verified, counts intact — no un-verify banner, nothing zeroed:
-    // requests pending stays 2 AND the sessions card still shows both 1s
-    // (zeroing sessionCounts would collapse the card to its empty state).
+    // both tiles keep their last-known-good count lines (zeroing sessionData
+    // would collapse the sessions tile to its empty line).
     expect(screen.getByRole('link', { name: /find a tutor/i })).toBeInTheDocument();
-    expect(screen.getByText('2')).toBeInTheDocument();
-    expect(screen.getAllByText('1').length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText('2 pending · 1 accepted')).toBeInTheDocument();
+    expect(screen.getByText('1 pending · 1 upcoming')).toBeInTheDocument();
     expect(screen.queryByText(/not.*verified|verify/i)).not.toBeInTheDocument();
   });
 
@@ -195,5 +193,88 @@ describe('family DashboardPage', () => {
       'href',
       '/family/account',
     );
+  });
+
+  // ── Hero priority (issue #120): first match wins ──
+
+  it('hero: a confirmed future session wins and links to /family/sessions', async () => {
+    h.familyData = { familyName: 'Cohen', verification: { isFullyVerified: true } };
+    h.requests = [{ requestId: 'r1', familyId: 'fam1', status: 'accepted' }];
+    h.sessions = [
+      {
+        sessionId: 's1',
+        familyId: 'fam1',
+        status: 'confirmed',
+        type: 'one_time',
+        date: '2099-01-02',
+        startTime: '18:00',
+        tutorName: 'Sarah',
+      },
+      {
+        sessionId: 's2',
+        familyId: 'fam1',
+        status: 'confirmed',
+        type: 'one_time',
+        date: '2099-01-01',
+        startTime: '17:00',
+        tutorName: 'Leo',
+      },
+    ];
+    renderWithProviders(<DashboardPage />);
+
+    const hero = await screen.findByRole('link', { name: /next session/i });
+    expect(hero).toHaveAttribute('href', '/family/sessions');
+    // The soonest session's details, not the later one's.
+    expect(screen.getByText(/17:00/)).toBeInTheDocument();
+    expect(screen.getByText(/Leo/)).toBeInTheDocument();
+    // The accepted-request hero lost the priority race.
+    expect(screen.queryByText(/accepted your request/i)).not.toBeInTheDocument();
+  });
+
+  it('hero: no session but an accepted request → accepted hero to /family/requests', async () => {
+    h.familyData = { familyName: 'Cohen', verification: { isFullyVerified: true } };
+    h.requests = [
+      { requestId: 'r1', familyId: 'fam1', status: 'accepted' },
+      { requestId: 'r2', familyId: 'fam1', status: 'pending' },
+    ];
+    renderWithProviders(<DashboardPage />);
+
+    const hero = await screen.findByRole('link', { name: /accepted your request/i });
+    expect(hero).toHaveAttribute('href', '/family/requests');
+    // Accepted beats pending: no pending-hero title anywhere.
+    expect(screen.queryByText(/you have 1 pending request/i)).not.toBeInTheDocument();
+  });
+
+  it('hero: only pending requests → pending hero to /family/requests', async () => {
+    h.familyData = { familyName: 'Cohen', verification: { isFullyVerified: true } };
+    h.requests = [
+      { requestId: 'r1', familyId: 'fam1', status: 'pending' },
+      { requestId: 'r2', familyId: 'fam1', status: 'pending' },
+    ];
+    renderWithProviders(<DashboardPage />);
+
+    const hero = await screen.findByRole('link', { name: /you have 2 pending requests/i });
+    expect(hero).toHaveAttribute('href', '/family/requests');
+  });
+
+  it('hero: all zero + verified → the search CTA is the hero, not duplicated as a tile', async () => {
+    h.familyData = { familyName: 'Cohen', verification: { isFullyVerified: true } };
+    renderWithProviders(<DashboardPage />);
+
+    const searchLinks = await screen.findAllByRole('link', { name: /find a tutor/i });
+    expect(searchLinks).toHaveLength(1);
+    expect(searchLinks[0]).toHaveAttribute('href', '/family/search');
+  });
+
+  it('hero: unverified with nothing actionable → no hero, the banner leads', async () => {
+    h.familyData = { familyName: 'Cohen', verification: { isFullyVerified: false } };
+    renderWithProviders(<DashboardPage />);
+
+    expect(await screen.findByText(/verify your family/i)).toBeInTheDocument();
+    expect(
+      screen.queryByRole('link', {
+        name: /find a tutor|next session|pending request|accepted/i,
+      }),
+    ).not.toBeInTheDocument();
   });
 });

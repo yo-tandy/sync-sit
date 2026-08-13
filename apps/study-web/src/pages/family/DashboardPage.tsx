@@ -7,6 +7,8 @@ import { useAuthStore } from '@/stores/authStore';
 import { getParentProfile } from '@ejm/shared-core';
 import {
   Card,
+  BellIcon,
+  CalendarIcon,
   SearchIcon,
   SettingsIcon,
   ShieldIcon,
@@ -14,6 +16,42 @@ import {
   ChevronRightIcon,
   useRefetchOnFocus,
 } from '@ejm/shared-ui';
+
+/** The soonest confirmed one_time session, extracted alongside the counts.
+ * A recurring series' concrete dates live in its `instances` subcollection,
+ * which this page must not query — so the hero only surfaces one_time dates. */
+type NextSession = { id: string; date: string; startTime: string; tutorName?: string };
+
+/** Paris "YYYY-MM-DD" today (en-CA renders ISO order; tz-correct via runtime). */
+function parisToday(): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Paris',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
+}
+
+/** Whole-day difference between two "YYYY-MM-DD" strings, parsed field-by-field
+ * (never `new Date(str)`, which reads as UTC midnight and can slip a day). */
+function dayDiff(from: string, to: string): number {
+  const [fy, fm, fd] = from.split('-').map(Number);
+  const [ty, tm, td] = to.split('-').map(Number);
+  return Math.round(
+    (new Date(ty, tm - 1, td).getTime() - new Date(fy, fm - 1, fd).getTime()) / 86_400_000,
+  );
+}
+
+/** Format a "YYYY-MM-DD" date field-by-field (see dayDiff on parsing). */
+function formatDateStr(s: string, lang: string): string {
+  const [y, m, d] = s.split('-').map(Number);
+  if (!y || !m || !d) return '';
+  return new Date(y, m - 1, d).toLocaleDateString(lang === 'fr' ? 'fr-FR' : 'en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
+}
 
 /**
  * Family dashboard for the Sync/Study portal.
@@ -25,11 +63,14 @@ import {
  * it is true, keeps tutor search locked and surfaces an explanatory banner. A
  * missing `verification` field is treated as not-verified.
  *
- * The requests summary shows live pending/accepted counts from
- * `studyContactRequests` (where familyId==mine) and links to /family/requests.
+ * Status-first layout (issue #120): a single state-driven hero slot under the
+ * verification banner answers "what matters now" (next confirmed session, then
+ * accepted requests, then pending requests, then the search CTA), and every
+ * other destination is a compact half-weight tile. All hero data derives from
+ * the SAME two snapshots that feed the tile counts — no extra queries.
  */
 export function DashboardPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { userDoc } = useAuthStore();
   const familyId = getParentProfile(userDoc)?.familyId ?? null;
 
@@ -37,10 +78,13 @@ export function DashboardPage() {
   const [isVerified, setIsVerified] = useState<boolean | null>(null);
   // Live pending/accepted request counts (null while loading).
   const [counts, setCounts] = useState<{ pending: number; accepted: number } | null>(null);
-  // Live pending/upcoming session counts (null while loading).
-  const [sessionCounts, setSessionCounts] = useState<{ pending: number; upcoming: number } | null>(
-    null,
-  );
+  // Live pending/upcoming session counts plus the soonest confirmed one_time
+  // session (null while loading; one setState per snapshot).
+  const [sessionData, setSessionData] = useState<{
+    pending: number;
+    upcoming: number;
+    nextSession: NextSession | null;
+  } | null>(null);
 
   // A mounted guard shared by the initial loads and every focus-triggered
   // refetch, so a late-resolving fetch never writes state after unmount.
@@ -73,7 +117,7 @@ export function DashboardPage() {
       });
   }, [familyId]);
 
-  // Live request counts for the summary card.
+  // Live request counts for the requests tile and the accepted/pending heroes.
   const loadRequestCounts = useCallback(() => {
     if (!familyId) return;
     getDocs(query(collection(db, 'studyContactRequests'), where('familyId', '==', familyId)))
@@ -94,21 +138,38 @@ export function DashboardPage() {
       });
   }, [familyId]);
 
-  // Live session counts for the sessions summary card (equality-only query,
-  // counted client-side — mirrors the requests card).
-  const loadSessionCounts = useCallback(() => {
+  // Live session counts for the sessions tile (equality-only query, counted
+  // client-side — mirrors the requests tile) PLUS the next confirmed session
+  // for the hero, extracted from the same snapshot.
+  const loadSessionData = useCallback(() => {
     if (!familyId) return;
     getDocs(query(collection(db, 'study-sessions'), where('familyId', '==', familyId)))
       .then((snap) => {
         if (!mountedRef.current) return;
+        const today = parisToday();
         let pending = 0;
         let upcoming = 0;
+        let nextSession: NextSession | null = null;
         snap.docs.forEach((d) => {
-          const status = d.data()?.status;
+          const data = d.data();
+          const status = data?.status;
           if (status === 'pending') pending += 1;
-          else if (status === 'confirmed') upcoming += 1;
+          else if (status === 'confirmed') {
+            upcoming += 1;
+            const date = typeof data?.date === 'string' ? data.date : null;
+            const startTime = typeof data?.startTime === 'string' ? data.startTime : '';
+            if (data?.type !== 'recurring' && date && date >= today) {
+              if (
+                !nextSession ||
+                date < nextSession.date ||
+                (date === nextSession.date && startTime < nextSession.startTime)
+              ) {
+                nextSession = { id: d.id, date, startTime, tutorName: data?.tutorName };
+              }
+            }
+          }
         });
-        setSessionCounts({ pending, upcoming });
+        setSessionData({ pending, upcoming, nextSession });
       })
       .catch(() => {
         // Keep last-known-good counts (see requests counts above).
@@ -124,23 +185,82 @@ export function DashboardPage() {
   }, [loadRequestCounts]);
 
   useEffect(() => {
-    loadSessionCounts();
-  }, [loadSessionCounts]);
+    loadSessionData();
+  }, [loadSessionData]);
 
   // Issue #117 tier (a): a returning user re-runs the same loads, so an open
   // tab shows fresh verification state and summary counts.
   useRefetchOnFocus(() => {
     loadVerification();
     loadRequestCounts();
-    loadSessionCounts();
+    loadSessionData();
   });
+
+  // ── Hero (first match wins, all from already-loaded state). Nothing renders
+  // while either snapshot is still null — same anti-flash discipline as the
+  // tile counts; the unverified state is owned by the banner, not the hero. ──
+  let hero: { to: string; title: string; desc: string; icon: React.ReactNode } | null = null;
+  if (counts !== null && sessionData !== null) {
+    if (sessionData.nextSession) {
+      const next = sessionData.nextSession;
+      const diff = dayDiff(parisToday(), next.date);
+      const rel =
+        diff <= 0
+          ? t('family.dashboard.hero.today')
+          : diff === 1
+            ? t('family.dashboard.hero.tomorrow')
+            : t('family.dashboard.hero.inDays', { count: diff });
+      hero = {
+        to: '/family/sessions',
+        title: t('family.dashboard.hero.nextSession'),
+        desc: [rel, formatDateStr(next.date, i18n.language), next.startTime, next.tutorName]
+          .filter(Boolean)
+          .join(' · '),
+        icon: <CalendarIcon className="h-6 w-6 text-brand-600" />,
+      };
+    } else if (counts.accepted > 0) {
+      hero = {
+        to: '/family/requests',
+        title: t('family.dashboard.hero.accepted', { count: counts.accepted }),
+        desc: t('family.dashboard.hero.acceptedDesc'),
+        icon: <BellIcon className="h-6 w-6 text-brand-600" />,
+      };
+    } else if (counts.pending > 0) {
+      hero = {
+        to: '/family/requests',
+        title: t('family.dashboard.hero.pending', { count: counts.pending }),
+        desc: t('family.dashboard.hero.pendingDesc'),
+        icon: <BellIcon className="h-6 w-6 text-brand-600" />,
+      };
+    } else if (isVerified === true) {
+      hero = {
+        to: '/family/search',
+        title: t('family.dashboard.searchCardTitle'),
+        desc: t('family.dashboard.searchCardDesc'),
+        icon: <SearchIcon className="h-6 w-6 text-brand-600" />,
+      };
+    }
+  }
+
+  // Tile count lines (null while loading — no empty-state flash).
+  const requestsSub =
+    counts === null
+      ? undefined
+      : counts.pending + counts.accepted > 0
+        ? `${t('family.dashboard.tiles.requestsPending', { count: counts.pending })} · ${t('family.dashboard.tiles.requestsAccepted', { count: counts.accepted })}`
+        : t('family.dashboard.tiles.requestsEmpty');
+  const sessionsSub =
+    sessionData === null
+      ? undefined
+      : sessionData.pending + sessionData.upcoming > 0
+        ? `${t('family.dashboard.tiles.sessionsPending', { count: sessionData.pending })} · ${t('family.dashboard.tiles.sessionsUpcoming', { count: sessionData.upcoming })}`
+        : t('family.dashboard.tiles.sessionsEmpty');
 
   return (
     <div className="px-5 pt-4 pb-8">
-      <h1 className="mb-1 text-lg font-bold text-gray-900">
-        {t('family.dashboard.hello')} {userDoc?.firstName || ''} 👋
+      <h1 className="mb-5 text-lg font-bold text-gray-900">
+        {t('family.dashboard.hello')} {userDoc?.firstName || ''}
       </h1>
-      <p className="mb-5 text-sm text-gray-500">{t('family.dashboard.greeting')}</p>
 
       {/* ── Verification gate (read from the shared families doc) ── */}
       {isVerified === false && (
@@ -150,137 +270,83 @@ export function DashboardPage() {
         </div>
       )}
 
-      {/* ── Find-a-tutor CTA (verified families only — search is gated) ── */}
-      {isVerified === true && (
-        <Link to="/family/search" className="mb-4 block">
-          <Card interactive className="flex items-center gap-3 py-4">
-            <SearchIcon className="h-6 w-6 text-brand-600" />
-            <div className="flex-1">
-              <p className="text-sm font-semibold text-gray-900">
-                {t('family.dashboard.searchCardTitle')}
-              </p>
-              <p className="text-xs text-gray-500">{t('family.dashboard.searchCardDesc')}</p>
+      {/* ── Hero: the single "what matters now" slot ── */}
+      {hero && (
+        <Link to={hero.to} aria-label={hero.title} className="mb-4 block">
+          <Card interactive className="flex items-center gap-3 border-brand-200 bg-brand-50 py-4">
+            {hero.icon}
+            <div className="min-w-0 flex-1">
+              <p className="text-base font-bold text-gray-900">{hero.title}</p>
+              <p className="text-sm text-gray-600">{hero.desc}</p>
             </div>
-            <ChevronRightIcon className="h-5 w-5 text-gray-400" />
+            <ChevronRightIcon className="h-5 w-5 shrink-0 text-gray-400" />
           </Card>
         </Link>
       )}
 
-      {/* ── Requests summary (live counts → /family/requests) ── */}
-      <div className="mb-6">
-        <h2 className="mb-2 text-sm font-semibold text-gray-700">
-          {t('family.dashboard.requestsTitle')}
-        </h2>
-        <Link
+      {/* ── Everything else: compact half-weight tiles ── */}
+      <div className="grid grid-cols-2 gap-3">
+        {isVerified === true && hero?.to !== '/family/search' && (
+          <DashTile
+            to="/family/search"
+            icon={<SearchIcon className="h-6 w-6 text-brand-600" />}
+            title={t('family.dashboard.searchCardTitle')}
+          />
+        )}
+        <DashTile
           to="/family/requests"
-          aria-label={t('family.dashboard.viewRequests')}
-          className="block"
-        >
-          <Card interactive>
-            {counts === null ? (
-              // Counts still loading — render the card without a body rather than
-              // flashing the empty message before data resolves.
-              <div className="py-4" />
-            ) : counts.pending + counts.accepted > 0 ? (
-              <div className="flex items-center gap-6 py-2">
-                <div>
-                  <p className="text-2xl font-bold text-gray-900">{counts.pending}</p>
-                  <p className="text-xs text-gray-500">{t('family.dashboard.requestsPending')}</p>
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-gray-900">{counts.accepted}</p>
-                  <p className="text-xs text-gray-500">{t('family.dashboard.requestsAccepted')}</p>
-                </div>
-                <ChevronRightIcon className="ml-auto h-5 w-5 text-gray-400" />
-              </div>
-            ) : (
-              <p className="py-4 text-center text-sm text-gray-500">
-                {t('family.dashboard.noRequests')}
-              </p>
-            )}
-          </Card>
-        </Link>
-      </div>
-
-      {/* ── Sessions summary (live counts → /family/sessions) ── */}
-      <div className="mb-6">
-        <h2 className="mb-2 text-sm font-semibold text-gray-700">
-          {t('family.dashboard.sessionsTitle')}
-        </h2>
-        <Link
+          ariaLabel={t('family.dashboard.viewRequests')}
+          icon={<BellIcon className="h-6 w-6 text-brand-600" />}
+          title={t('family.dashboard.requestsTitle')}
+          sub={requestsSub}
+        />
+        <DashTile
           to="/family/sessions"
-          aria-label={t('family.dashboard.sessionsTitle')}
-          className="block"
-        >
-          <Card interactive>
-            {sessionCounts === null ? (
-              <div className="py-4" />
-            ) : sessionCounts.pending + sessionCounts.upcoming > 0 ? (
-              <div className="flex items-center gap-6 py-2">
-                <div>
-                  <p className="text-2xl font-bold text-gray-900">{sessionCounts.pending}</p>
-                  <p className="text-xs text-gray-500">{t('family.dashboard.sessionsPending')}</p>
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-gray-900">{sessionCounts.upcoming}</p>
-                  <p className="text-xs text-gray-500">{t('family.dashboard.sessionsUpcoming')}</p>
-                </div>
-                <ChevronRightIcon className="ml-auto h-5 w-5 text-gray-400" />
-              </div>
-            ) : (
-              <p className="py-4 text-center text-sm text-gray-500">
-                {t('family.dashboard.noSessions')}
-              </p>
-            )}
-          </Card>
-        </Link>
-      </div>
-
-      {/* ── Entry cards ── */}
-      <div className="space-y-3">
-        <EntryCard
+          icon={<CalendarIcon className="h-6 w-6 text-brand-600" />}
+          title={t('family.dashboard.sessionsTitle')}
+          sub={sessionsSub}
+        />
+        <DashTile
           to="/family/governance"
           icon={<ShieldIcon className="h-6 w-6 text-brand-600" />}
           title={t('family.governance.navTitle')}
-          desc={t('family.governance.navDesc')}
         />
-        <EntryCard
+        <DashTile
           to="/family/settings"
           icon={<SettingsIcon className="h-6 w-6 text-brand-600" />}
           title={t('family.dashboard.settingsCard')}
-          desc={t('family.dashboard.settingsCardDesc')}
         />
-        <EntryCard
+        <DashTile
           to="/family/account"
           icon={<UserIcon className="h-6 w-6 text-brand-600" />}
           title={t('family.dashboard.accountCard')}
-          desc={t('family.dashboard.accountCardDesc')}
         />
       </div>
     </div>
   );
 }
 
-function EntryCard({
+function DashTile({
   to,
   icon,
   title,
-  desc,
+  sub,
+  ariaLabel,
 }: {
   to: string;
   icon: React.ReactNode;
   title: string;
-  desc: string;
+  sub?: string;
+  ariaLabel?: string;
 }) {
   return (
-    <Link to={to} className="block">
-      <Card interactive className="flex items-center gap-3 py-4">
+    <Link to={to} aria-label={ariaLabel ?? title} className="block h-full">
+      <Card interactive className="flex h-full flex-col gap-2 py-4">
         {icon}
-        <div className="flex-1">
+        <div>
           <p className="text-sm font-semibold text-gray-900">{title}</p>
-          <p className="text-xs text-gray-500">{desc}</p>
+          {sub && <p className="mt-0.5 text-xs text-gray-500">{sub}</p>}
         </div>
-        <ChevronRightIcon className="h-5 w-5 text-gray-400" />
       </Card>
     </Link>
   );
