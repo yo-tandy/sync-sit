@@ -839,6 +839,11 @@ export default {
       family: 'Family',
       type: 'Type',
       rate: 'Rate',
+      timestamp: 'Timestamp',
+      admin: 'Admin',
+      action: 'Action',
+      target: 'Target',
+      details: 'Details',
     },
     enrollmentAccess: {
       title: 'Enrollment access',

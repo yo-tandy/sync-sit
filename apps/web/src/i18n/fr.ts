@@ -811,6 +811,11 @@ export default {
       family: 'Famille',
       type: 'Type',
       rate: 'Tarif',
+      timestamp: 'Horodatage',
+      admin: 'Admin',
+      action: 'Action',
+      target: 'Cible',
+      details: 'Détails',
     },
     enrollmentAccess: {
       title: "Accès à l'inscription",
