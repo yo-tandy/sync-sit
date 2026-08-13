@@ -51,13 +51,16 @@ export function SubjectsPage() {
   }, [tutor]);
 
   const addRow = () => {
-    setRows((prev) => [...prev, { subject: '', levels: [], rate: '' }]);  };
+    setRows((prev) => [...prev, { subject: '', levels: [], rate: '' }]);
+  };
 
   const removeRow = (index: number) => {
-    setRows((prev) => prev.filter((_, i) => i !== index));  };
+    setRows((prev) => prev.filter((_, i) => i !== index));
+  };
 
   const setSubject = (index: number, subject: string) => {
-    setRows((prev) => prev.map((r, i) => (i === index ? { ...r, subject } : r)));  };
+    setRows((prev) => prev.map((r, i) => (i === index ? { ...r, subject } : r)));
+  };
 
   const toggleLevel = (index: number, level: string) => {
     setRows((prev) =>
@@ -71,13 +74,15 @@ export function SubjectsPage() {
             }
           : r,
       ),
-    );  };
+    );
+  };
 
   const setRate = (index: number, value: string) => {
     const rate = value === '' ? '' : parseFloat(value);
     setRows((prev) =>
       prev.map((r, i) => (i === index ? { ...r, rate: Number.isNaN(rate as number) ? '' : rate } : r)),
-    );  };
+    );
+  };
 
   const validate = (): string | null => {
     if (rows.some((r) => !r.subject)) return t('tutor.subjects.errorNoSubject');

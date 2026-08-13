@@ -7,7 +7,9 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Spinner } from '@/components/ui/Spinner';
 import { PlusIcon, XIcon } from '@/components/ui/Icons';
-import { useToast } from '@/components/ui';
+// Direct import: the ui barrel transitively pulls the auth store's
+// module-scope onAuthStateChanged — admin pages don't need that.
+import { useToast } from '@ejm/shared-ui';
 import { useHolidays } from '@/hooks/useHolidays';
 import { useAdminStore } from '@/stores/adminStore';
 

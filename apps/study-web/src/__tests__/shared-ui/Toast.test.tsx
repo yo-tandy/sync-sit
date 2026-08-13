@@ -32,6 +32,15 @@ afterEach(() => {
 });
 
 describe('Toast (shared-ui)', () => {
+  it('mounts both live regions empty before any toast fires', () => {
+    // Screen readers only announce content changes inside an ALREADY-mounted
+    // live region — a region inserted together with its message is often
+    // silent. Both regions must exist (empty) from provider mount.
+    renderDemo();
+    expect(screen.getByRole('status')).toBeEmptyDOMElement();
+    expect(screen.getByRole('alert')).toBeEmptyDOMElement();
+  });
+
   it('renders a success toast with role=status', () => {
     renderDemo();
     fireEvent.click(screen.getByRole('button', { name: 'save' }));
@@ -49,7 +58,7 @@ describe('Toast (shared-ui)', () => {
     act(() => {
       vi.advanceTimersByTime(100);
     });
-    expect(screen.queryByRole('status')).toBeNull();
+    expect(screen.getByRole('status')).toBeEmptyDOMElement();
   });
 
   it('a new toast replaces the current one and resets the dismiss timer', () => {
@@ -71,13 +80,13 @@ describe('Toast (shared-ui)', () => {
     act(() => {
       vi.advanceTimersByTime(100);
     });
-    expect(screen.queryByRole('status')).toBeNull();
+    expect(screen.getByRole('status')).toBeEmptyDOMElement();
   });
 
   it('error tone renders role=alert instead of role=status', () => {
     renderDemo();
     fireEvent.click(screen.getByRole('button', { name: 'fail' }));
-    expect(screen.queryByRole('status')).toBeNull();
+    expect(screen.getByRole('status')).toBeEmptyDOMElement();
     expect(screen.getByRole('alert')).toHaveTextContent('Could not save');
   });
 

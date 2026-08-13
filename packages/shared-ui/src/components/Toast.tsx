@@ -67,17 +67,29 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={toast}>
       {children}
-      {current && (
-        <div
-          key={current.key}
-          role={current.tone === 'error' ? 'alert' : 'status'}
-          className={`pointer-events-none fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-full px-5 py-2.5 text-sm font-medium text-white shadow-lg ${
-            current.tone === 'error' ? 'bg-error-600' : 'bg-brand-600'
-          }`}
-        >
-          {current.message}
-        </div>
-      )}
+      {/* Both live regions stay MOUNTED and empty — screen readers only
+          announce content CHANGES inside an existing live region; a region
+          inserted together with its content is often not announced at all. */}
+      <div
+        role="status"
+        className={
+          current && current.tone !== 'error'
+            ? 'pointer-events-none fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-full bg-brand-600 px-5 py-2.5 text-sm font-medium text-white shadow-lg'
+            : 'sr-only'
+        }
+      >
+        {current && current.tone !== 'error' ? current.message : ''}
+      </div>
+      <div
+        role="alert"
+        className={
+          current && current.tone === 'error'
+            ? 'pointer-events-none fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-full bg-error-600 px-5 py-2.5 text-sm font-medium text-white shadow-lg'
+            : 'sr-only'
+        }
+      >
+        {current && current.tone === 'error' ? current.message : ''}
+      </div>
     </ToastContext.Provider>
   );
 }
