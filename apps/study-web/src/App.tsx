@@ -1,6 +1,11 @@
 import { RouterProvider } from 'react-router';
+import { ToastProvider } from '@ejm/shared-ui';
 import { router } from './router';
 
 export default function App() {
-  return <RouterProvider router={router} />;
+  return (
+    <ToastProvider>
+      <RouterProvider router={router} />
+    </ToastProvider>
+  );
 }

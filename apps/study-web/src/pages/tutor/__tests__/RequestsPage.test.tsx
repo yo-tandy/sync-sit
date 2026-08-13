@@ -204,6 +204,8 @@ describe('tutor RequestsPage', () => {
         action: 'decline',
       }),
     );
+    // Declined confirmation toast after resolve.
+    expect(await screen.findByRole('status')).toHaveTextContent(/declined/i);
   });
 
   it('applies the accepted status ONLY after the callable resolves (non-optimistic)', async () => {
@@ -222,6 +224,8 @@ describe('tutor RequestsPage', () => {
     await waitFor(() =>
       expect(screen.queryByRole('button', { name: /accept/i })).not.toBeInTheDocument(),
     );
+    // Confirmation toast fires only after the callable resolved (shared idiom).
+    expect(screen.getByRole('status')).toHaveTextContent(/accepted/i);
   });
 
   it('keeps the row pending + re-enabled and shows an error when the callable rejects', async () => {

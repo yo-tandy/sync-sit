@@ -314,6 +314,8 @@ describe('family RequestsPage', () => {
       expect(screen.queryByRole('button', { name: /cancel request/i })).not.toBeInTheDocument(),
     );
     expect(screen.getByText(/Alex Roy/)).toBeInTheDocument();
+    // Confirmation toast fires only after the callable resolved (shared idiom).
+    expect(screen.getByRole('status')).toHaveTextContent(/cancelled/i);
   });
 
   it('does not call the callable if the family keeps the request (dismisses the dialog)', async () => {

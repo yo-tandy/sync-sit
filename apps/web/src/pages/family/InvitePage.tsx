@@ -4,7 +4,7 @@ import { doc, getDoc } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
-import { Button, Card, TopNav, InfoBanner, Spinner, Dialog } from '@/components/ui';
+import { Button, Card, TopNav, Spinner, Dialog, useToast } from '@/components/ui';
 import { getParentView } from '@ejm/sit-core';
 
 interface MemberInfo {
@@ -14,6 +14,7 @@ interface MemberInfo {
 
 export function InvitePage() {
   const { t } = useTranslation();
+  const toast = useToast();
   const { userDoc } = useAuthStore();
   const parent = getParentView(userDoc);
   const familyId = parent?.familyId;
@@ -83,6 +84,7 @@ export function InvitePage() {
     }
     setCopied(true);
     setTimeout(() => setCopied(false), 3000);
+    toast(t('invite.linkCopied'));
   };
 
   const handleRemove = async () => {
@@ -140,7 +142,6 @@ export function InvitePage() {
           </Card>
         )}
 
-        {copied && <InfoBanner className="mb-4">{t('invite.linkCopied')}</InfoBanner>}
 
         {/* Current members */}
         <h3 className="mb-3 text-sm font-semibold text-gray-700">{t('invite.familyMembers')}</h3>

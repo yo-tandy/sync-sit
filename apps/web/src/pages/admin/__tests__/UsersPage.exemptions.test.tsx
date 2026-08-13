@@ -10,7 +10,12 @@ const h = vi.hoisted(() => ({
   exemptions: [] as { email: string; note: string | null; createdByUid: string; createdAt: string | null }[],
 }));
 
-vi.mock('@/config/firebase', () => ({ functions: {} }));
+vi.mock('@/config/firebase', () => ({ functions: {}, auth: {}, db: {} }));
+// The ui barrel (ToastProvider path) pulls the auth store, whose module scope
+// subscribes onAuthStateChanged — neutralize it like sibling tests do.
+vi.mock('@/stores/authStore', () => ({
+  useAuthStore: () => ({ userDoc: null, firebaseUser: null }),
+}));
 vi.mock('firebase/functions', () => ({
   httpsCallable: (_fns: unknown, name: string) => (payload: unknown) => {
     h.calls.push({ name, payload });
@@ -28,14 +33,17 @@ vi.mock('firebase/functions', () => ({
 }));
 
 import i18n from '@/i18n';
+import { ToastProvider } from '@ejm/shared-ui';
 import { AdminUsersPage } from '../UsersPage';
 
 function renderPage() {
   return render(
     <I18nextProvider i18n={i18n}>
-      <MemoryRouter>
-        <AdminUsersPage />
-      </MemoryRouter>
+      <ToastProvider>
+        <MemoryRouter>
+          <AdminUsersPage />
+        </MemoryRouter>
+      </ToastProvider>
     </I18nextProvider>,
   );
 }
@@ -98,6 +106,8 @@ describe('AdminUsersPage — enrollment exemptions panel', () => {
     // Inputs cleared after a successful add.
     expect(screen.getByPlaceholderText(i18n.t('admin.exemptions.email'))).toHaveValue('');
     expect(screen.getByPlaceholderText(i18n.t('admin.exemptions.note'))).toHaveValue('');
+    // Confirmation toast (shared idiom) after the refetch resolved.
+    expect(await screen.findByRole('status')).toHaveTextContent(i18n.t('admin.exemptions.added'));
   });
 
   it('omits the note key entirely when the note is empty', async () => {
@@ -131,5 +141,7 @@ describe('AdminUsersPage — enrollment exemptions panel', () => {
       email: 'redoublant29@ejm.org',
     });
     expect(exemptionCalls('listEnrollmentExemptions')).toHaveLength(2);
+    // Confirmation toast (shared idiom) after the refetch resolved.
+    expect(await screen.findByRole('status')).toHaveTextContent(i18n.t('admin.exemptions.removed'));
   });
 });

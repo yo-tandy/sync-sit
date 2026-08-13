@@ -7,6 +7,9 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Spinner } from '@/components/ui/Spinner';
 import { PlusIcon, XIcon } from '@/components/ui/Icons';
+// Direct import: the ui barrel transitively pulls the auth store's
+// module-scope onAuthStateChanged — admin pages don't need that.
+import { useToast } from '@ejm/shared-ui';
 import { useHolidays } from '@/hooks/useHolidays';
 import { useAdminStore } from '@/stores/adminStore';
 
@@ -18,6 +21,7 @@ interface EditablePeriod {
 
 export function AdminHolidaysPage() {
   const { t } = useTranslation();
+  const toast = useToast();
   const { periods: existingPeriods, loading, schoolYear: currentSchoolYear } = useHolidays();
   const { updateHolidays } = useAdminStore();
 
@@ -56,6 +60,7 @@ export function AdminHolidaysPage() {
     setSaving(true);
     try {
       await updateHolidays(schoolYear, 'A', periods);
+      toast(t('admin.holidaysSaved'));
     } finally {
       setSaving(false);
     }

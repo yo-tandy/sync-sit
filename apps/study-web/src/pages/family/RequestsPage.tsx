@@ -11,7 +11,7 @@ import type {
   StudyContactRequestStatus,
   TutorEndorsementDoc,
 } from '@ejm/study-core';
-import { Card, Button, Badge, TopNav, Spinner, Dialog } from '@ejm/shared-ui';
+import { Card, Button, Badge, TopNav, Spinner, Dialog, useToast } from '@ejm/shared-ui';
 import { EndorseTutorDialog } from '@/components/family/EndorseTutorDialog';
 
 /**
@@ -52,6 +52,7 @@ function createdAtSeconds(ts: TutorEndorsementDoc['createdAt']): number {
 
 export function RequestsPage() {
   const { t, i18n } = useTranslation();
+  const toast = useToast();
   const { userDoc } = useAuthStore();
   const familyId = getParentProfile(userDoc)?.familyId ?? null;
   const defaultRefName = `${userDoc?.firstName ?? ''} ${userDoc?.lastName ?? ''}`.trim();
@@ -137,6 +138,7 @@ export function RequestsPage() {
           r.requestId === req.requestId ? { ...r, status: 'cancelled' } : r,
         ),
       );
+      toast(t('family.requests.status.cancelled'));
     } catch {
       setCancelError(t('family.requests.actionError'));
     } finally {

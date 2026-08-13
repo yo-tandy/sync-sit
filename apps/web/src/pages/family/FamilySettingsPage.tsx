@@ -13,7 +13,7 @@ import {
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
-import { Button, Input, Textarea, TopNav, InfoBanner, Card } from '@/components/ui';
+import { Button, Input, Textarea, TopNav, Card, useToast } from '@/components/ui';
 import { AddressAutocomplete, type AddressResult } from '@/components/forms/AddressAutocomplete';
 import { XIcon, PlusIcon } from '@/components/ui/Icons';
 import type { FamilyDoc, KidDoc } from '@ejm/sit-core';
@@ -40,8 +40,8 @@ export function FamilySettingsPage() {
   const [kids, setKids] = useState<KidForm[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const toast = useToast();
 
   // Photo
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -109,7 +109,6 @@ export function FamilySettingsPage() {
     if (!familyId) return;
     setSaving(true);
     setError(null);
-    setSuccess(false);
 
     try {
       // Upload photo if changed
@@ -169,8 +168,7 @@ export function FamilySettingsPage() {
         }
       }
 
-      setSuccess(true);
-      setTimeout(() => setSuccess(false), 3000);
+      toast(t('familySettings.saved'));
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to save';
       setError(message);
@@ -194,7 +192,6 @@ export function FamilySettingsPage() {
     <div>
       <TopNav title={t('menu.myFamily')} backTo="/family" />
       <div className="px-6 pt-4 pb-8">
-        {success && <InfoBanner className="mb-4">{t('familySettings.saved')}</InfoBanner>}
         {error && <p className="mb-4 text-sm text-brand-600">{error}</p>}
 
         {/* Family photo */}

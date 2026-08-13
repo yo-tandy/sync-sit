@@ -6,7 +6,7 @@ import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import type { StudyContactRequestDoc, StudyContactRequestStatus } from '@ejm/study-core';
-import { Card, Button, Badge, TopNav, Spinner, Dialog } from '@ejm/shared-ui';
+import { Card, Button, Badge, TopNav, Spinner, Dialog, useToast } from '@ejm/shared-ui';
 
 /**
  * Tutor inbox for incoming family contact requests. Reads
@@ -33,6 +33,7 @@ const STATUS_VARIANT: Record<StudyContactRequestStatus, 'amber' | 'green' | 'gra
 export function RequestsPage() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
+  const toast = useToast();
   const { firebaseUser } = useAuthStore();
   const uid = firebaseUser?.uid ?? null;
 
@@ -100,6 +101,7 @@ export function RequestsPage() {
       setRequests((rs) =>
         (rs ?? []).map((r) => (r.requestId === req.requestId ? { ...r, status: next } : r)),
       );
+      toast(t(`tutor.requests.status.${next}`));
     } catch {
       setError(t('tutor.requests.actionError'));
     } finally {

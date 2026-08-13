@@ -13,8 +13,8 @@ import {
   TopNav,
   Textarea,
   Spinner,
-  InfoBanner,
   ChevronRightIcon,
+  useToast,
 } from '@ejm/shared-ui';
 import { DAYS_OF_WEEK, createEmptySlots } from '@ejm/shared-core';
 import type { DayOfWeek, HolidayMode, HolidayPeriod } from '@ejm/shared-core';
@@ -137,7 +137,7 @@ export function SchedulePage() {
   const [localHolidayNotes, setLocalHolidayNotes] = useState(holidayNotes || '');
   const [editingDay, setEditingDay] = useState<DayOfWeek | null>(null);
   const [saving, setSaving] = useState(false);
-  const [success, setSuccess] = useState(false);
+  const toast = useToast();
   const [initialized, setInitialized] = useState(false);
   const [dirty, setDirty] = useState(false);
   const savedSnapshot = useRef<string>('');
@@ -208,8 +208,7 @@ export function SchedulePage() {
         holidayNotes: localHolidayNotes,
       });
       setDirty(false);
-      setSuccess(true);
-      setTimeout(() => setSuccess(false), 3000);
+      toast(t('schedule.scheduleSaved'));
     } finally {
       setSaving(false);
     }
@@ -231,7 +230,6 @@ export function SchedulePage() {
       <TopNav title={t('schedule.title')} backTo="/tutor" />
 
       <div className="px-5 pt-4 pb-8">
-        {success && <InfoBanner className="mb-4">{t('schedule.scheduleSaved')}</InfoBanner>}
 
         {/* ─── Section 1: Regular Availability ─── */}
         <h3 className="mb-3 text-base font-bold text-gray-900">{t('schedule.regularAvailability')}</h3>

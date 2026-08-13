@@ -17,6 +17,7 @@ import {
   LanguageSelector,
   PhoneInput,
   Select,
+  useToast,
 } from '@ejm/shared-ui';
 
 // Copy-adapted from apps/web/src/pages/babysitter/AccountPage.tsx, DELIBERATELY
@@ -55,7 +56,7 @@ export function AccountPage() {
   const [whatsapp, setWhatsapp] = useState('');
   const [whatsappSameAsPhone, setWhatsappSameAsPhone] = useState(true);
   const [contactSaving, setContactSaving] = useState(false);
-  const [contactSuccess, setContactSuccess] = useState(false);
+  const toast = useToast();
 
   // Password reset
   const [passwordResetSent, setPasswordResetSent] = useState(false);
@@ -67,7 +68,6 @@ export function AccountPage() {
   // Cancellation policy (V2 feature 7) — a preset notice window in hours.
   const [noticeHours, setNoticeHours] = useState(0);
   const [policySaving, setPolicySaving] = useState(false);
-  const [policySuccess, setPolicySuccess] = useState(false);
 
   // Session preferences (issue #123) — the enrollment-only fields, now
   // editable: lengths + padding feed the booking slot math, locations feed
@@ -119,7 +119,6 @@ export function AccountPage() {
     e.preventDefault();
     if (!uid) return;
     setContactSaving(true);
-    setContactSuccess(false);
     setError(null);
     try {
       await updateDoc(doc(db, 'users', uid), {
@@ -129,8 +128,7 @@ export function AccountPage() {
         updatedAt: serverTimestamp(),
       });
       await refreshUserDoc();
-      setContactSuccess(true);
-      setTimeout(() => setContactSuccess(false), 3000);
+      toast(t('account.contactSaved'));
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : t('account.contactSaveFailed');
       setError(message);
@@ -146,7 +144,6 @@ export function AccountPage() {
   const handleSavePolicy = async () => {
     if (!uid) return;
     setPolicySaving(true);
-    setPolicySuccess(false);
     setError(null);
     try {
       await updateDoc(doc(db, 'users', uid), {
@@ -154,8 +151,7 @@ export function AccountPage() {
         updatedAt: serverTimestamp(),
       });
       await refreshUserDoc();
-      setPolicySuccess(true);
-      setTimeout(() => setPolicySuccess(false), 3000);
+      toast(t('tutor.account.cancellationPolicy.saved'));
     } catch {
       setError(t('common.error'));
     } finally {
@@ -322,7 +318,6 @@ export function AccountPage() {
         <h3 className="mb-3 text-sm font-semibold text-gray-700">{t('account.contactInfo')}</h3>
         <p className="mb-4 text-xs text-gray-500">{t('account.contactDesc')}</p>
 
-        {contactSuccess && <InfoBanner className="mb-4">{t('account.contactSaved')}</InfoBanner>}
         <form onSubmit={handleContactSave} className="mb-6">
           <Input
             label={t('common.email')}
@@ -375,16 +370,10 @@ export function AccountPage() {
         </h3>
         <p className="mb-4 text-xs text-gray-500">{t('tutor.account.cancellationPolicy.help')}</p>
 
-        {policySuccess && (
-          <InfoBanner className="mb-4">{t('tutor.account.cancellationPolicy.saved')}</InfoBanner>
-        )}
         <Select
           aria-label={t('tutor.account.cancellationPolicy.title')}
           value={String(noticeHours)}
-          onChange={(e) => {
-            setNoticeHours(Number(e.target.value));
-            setPolicySuccess(false);
-          }}
+          onChange={(e) => setNoticeHours(Number(e.target.value))}
           options={[
             { value: '0', label: t('tutor.account.cancellationPolicy.none') },
             { value: '24', label: t('tutor.account.cancellationPolicy.hours24') },

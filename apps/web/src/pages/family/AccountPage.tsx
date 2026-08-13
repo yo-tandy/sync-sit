@@ -6,7 +6,7 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { isRunningAsPWA } from '@ejm/sit-core';
 import { db, storage } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
-import { TopNav, Button, Card, InfoBanner, LanguageSelector } from '@/components/ui';
+import { TopNav, Button, Card, InfoBanner, LanguageSelector, useToast } from '@/components/ui';
 import { BellIcon } from '@/components/ui/Icons';
 import { isPushSupported, getPushPermissionStatus, requestPushPermission } from '@/lib/pushNotifications';
 import { PhoneInput } from '@/components/forms/PhoneInput';
@@ -95,7 +95,7 @@ export function AccountPage() {
   const [whatsapp, setWhatsapp] = useState('');
   const [whatsappSameAsPhone, setWhatsappSameAsPhone] = useState(true);
   const [contactSaving, setContactSaving] = useState(false);
-  const [contactSuccess, setContactSuccess] = useState(false);
+  const toast = useToast();
 
   // Password reset state
   const [passwordResetSent, setPasswordResetSent] = useState(false);
@@ -205,7 +205,6 @@ export function AccountPage() {
     e.preventDefault();
     if (!uid) return;
     setContactSaving(true);
-    setContactSuccess(false);
     setError(null);
     try {
       // The login email is DELIBERATELY not written here. It is Firebase Auth's
@@ -218,8 +217,7 @@ export function AccountPage() {
         updatedAt: serverTimestamp(),
       });
       await refreshUserDoc();
-      setContactSuccess(true);
-      setTimeout(() => setContactSuccess(false), 3000);
+      toast(t('account.contactSaved'));
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : t('account.contactSaveFailed');
       setError(message);
@@ -341,7 +339,6 @@ export function AccountPage() {
 
         {/* 3. Contact Info */}
         <h3 className="mb-3 text-sm font-semibold text-gray-700">{t('account.contactInfo')}</h3>
-        {contactSuccess && <InfoBanner className="mb-4">{t('account.contactSaved')}</InfoBanner>}
         <form onSubmit={handleContactSave} className="mb-6">
           <PhoneInput
             label={t('account.phone')}

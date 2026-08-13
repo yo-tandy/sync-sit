@@ -6,7 +6,7 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { isRunningAsPWA } from '@ejm/sit-core';
 import { db, storage } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
-import { TopNav, Button, Input, Card, InfoBanner, LanguageSelector } from '@/components/ui';
+import { TopNav, Button, Input, Card, InfoBanner, LanguageSelector, useToast } from '@/components/ui';
 import { BellIcon } from '@/components/ui/Icons';
 import { isPushSupported, getPushPermissionStatus, requestPushPermission } from '@/lib/pushNotifications';
 import { PhoneInput } from '@/components/forms/PhoneInput';
@@ -106,7 +106,7 @@ export function BabysitterAccountPage() {
   const [whatsapp, setWhatsapp] = useState('');
   const [whatsappSameAsPhone, setWhatsappSameAsPhone] = useState(true);
   const [contactSaving, setContactSaving] = useState(false);
-  const [contactSuccess, setContactSuccess] = useState(false);
+  const toast = useToast();
 
   // Password reset
   const [passwordResetSent, setPasswordResetSent] = useState(false);
@@ -231,7 +231,6 @@ export function BabysitterAccountPage() {
     e.preventDefault();
     if (!uid) return;
     setContactSaving(true);
-    setContactSuccess(false);
     setError(null);
     try {
       await updateDoc(doc(db, 'users', uid), {
@@ -242,8 +241,7 @@ export function BabysitterAccountPage() {
         updatedAt: serverTimestamp(),
       });
       await refreshUserDoc();
-      setContactSuccess(true);
-      setTimeout(() => setContactSuccess(false), 3000);
+      toast(t('account.contactSaved'));
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : t('account.contactSaveFailed');
       setError(message);
@@ -415,7 +413,6 @@ export function BabysitterAccountPage() {
           <span>{t('account.contactSharingConsent')}</span>
         </label>
 
-        {contactSuccess && <InfoBanner className="mb-4">{t('account.contactSaved')}</InfoBanner>}
         <form onSubmit={handleContactSave} className="mb-6">
           <fieldset disabled={!contactSharingConsent} className={!contactSharingConsent ? 'opacity-50' : ''}>
           <Input
