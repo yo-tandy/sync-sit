@@ -704,6 +704,7 @@ export default {
     sessions: {
       title: 'Vos cours',
       empty: 'Aucun cours pour le moment — dès que vous réservez un professeur, vos cours apparaissent ici.',
+      emptyAction: 'Trouver un professeur',
       loadError: 'Impossible de charger vos cours. Veuillez actualiser et réessayer.',
       pendingTitle: 'En attente de confirmation',
       upcomingTitle: 'À venir',

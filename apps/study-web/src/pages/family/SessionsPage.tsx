@@ -16,6 +16,8 @@ import {
   Dialog,
   Checkbox,
   useRefetchOnFocus,
+  EmptyState,
+  CalendarIcon,
 } from '@ejm/shared-ui';
 import { ReasonModal } from '@/components/sessions/ReasonModal';
 import { SessionInstanceList } from '@/components/sessions/SessionInstanceList';
@@ -661,9 +663,12 @@ export function SessionsPage() {
           upcomingEntries.length === 0 &&
           history.length === 0 && (
             <Card>
-              <p className="py-4 text-center text-sm text-gray-500">
-                {t('family.sessions.empty')}
-              </p>
+              <EmptyState
+                icon={<CalendarIcon className="h-6 w-6" />}
+                message={t('family.sessions.empty')}
+                actionLabel={t('family.sessions.emptyAction')}
+                actionTo="/family/search"
+              />
             </Card>
           )}
 

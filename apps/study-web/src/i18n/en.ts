@@ -704,6 +704,7 @@ export default {
     sessions: {
       title: 'Your sessions',
       empty: 'No sessions yet — once you book a tutor, your sessions show up here.',
+      emptyAction: 'Find a tutor',
       loadError: 'Could not load your sessions. Please refresh and try again.',
       pendingTitle: 'Awaiting confirmation',
       upcomingTitle: 'Upcoming',
