@@ -182,7 +182,11 @@ export function DashboardPage() {
                 date < nextSession.date ||
                 (date === nextSession.date && startTime < nextSession.startTime)
               ) {
-                nextSession = { date, startTime, tutorName: data?.tutorName };
+                nextSession = {
+                  date,
+                  startTime,
+                  tutorName: typeof data?.tutorName === 'string' ? data.tutorName : undefined,
+                };
               }
             }
           }
@@ -214,9 +218,13 @@ export function DashboardPage() {
     loadSessionData();
   });
 
-  // ── Hero (first match wins, all from already-loaded state). Nothing renders
-  // while either snapshot is still null — same anti-flash discipline as the
-  // tile counts; the unverified state is owned by the banner, not the hero. ──
+  // ── Hero (first match wins). The data-driven states need both snapshots;
+  // the search fallback deliberately does NOT — a failed requests read must
+  // never make tutor search unreachable (the app bar has no /family/search
+  // link; this page is the only way in). A null count can't be > 0, so
+  // hoisting the fallback leaves the priority order unchanged; when the
+  // snapshots resolve with activity, the swap happens in the same slot.
+  // The unverified state is owned by the banner, not the hero. ──
   let hero: { to: string; title: string; desc: string; icon: React.ReactNode } | null = null;
   if (counts !== null && sessionData !== null) {
     if (sessionData.nextSession) {
@@ -250,14 +258,15 @@ export function DashboardPage() {
         desc: t('family.dashboard.hero.pendingDesc'),
         icon: <BellIcon className="h-6 w-6 text-brand-600" />,
       };
-    } else if (isVerified === true) {
-      hero = {
-        to: '/family/search',
-        title: t('family.dashboard.searchCardTitle'),
-        desc: t('family.dashboard.searchCardDesc'),
-        icon: <SearchIcon className="h-6 w-6 text-brand-600" />,
-      };
     }
+  }
+  if (!hero && isVerified === true) {
+    hero = {
+      to: '/family/search',
+      title: t('family.dashboard.searchCardTitle'),
+      desc: t('family.dashboard.searchCardDesc'),
+      icon: <SearchIcon className="h-6 w-6 text-brand-600" />,
+    };
   }
 
   // Tile count lines (null while loading — no empty-state flash).
@@ -306,20 +315,16 @@ export function DashboardPage() {
 
       {/* ── Everything else: compact half-weight tiles ── */}
       <div className="grid grid-cols-2 gap-3">
-        {/* Gated on the SAME loading condition as the hero: while the
-            snapshots are null the hero is null too, and rendering the tile
-            then would make the primary CTA visibly jump from grid to hero
-            once data resolves. */}
-        {counts !== null &&
-          sessionData !== null &&
-          isVerified === true &&
-          hero?.to !== '/family/search' && (
-            <DashTile
-              to="/family/search"
-              icon={<SearchIcon className="h-6 w-6 text-brand-600" />}
-              title={t('family.dashboard.searchCardTitle')}
-            />
-          )}
+        {/* While loading, the hero IS the search fallback (see above), so
+            this tile stays hidden then and only appears once a data-driven
+            state claims the hero — search always has exactly one entry. */}
+        {isVerified === true && hero?.to !== '/family/search' && (
+          <DashTile
+            to="/family/search"
+            icon={<SearchIcon className="h-6 w-6 text-brand-600" />}
+            title={t('family.dashboard.searchCardTitle')}
+          />
+        )}
         <DashTile
           to="/family/requests"
           ariaLabel={t('family.dashboard.viewRequests')}

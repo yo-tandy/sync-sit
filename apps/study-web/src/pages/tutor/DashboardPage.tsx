@@ -110,7 +110,9 @@ export function DashboardPage() {
   const [hasSlots, setHasSlots] = useState(false);
   const [scheduleLoaded, setScheduleLoaded] = useState(false);
   const [toggling, setToggling] = useState(false);
-  const [pendingRequests, setPendingRequests] = useState(0);
+  // Null while loading — the hero must not claim "no requests" (and let a
+  // lower priority render, then swap) while the snapshot is still in flight.
+  const [pendingRequests, setPendingRequests] = useState<number | null>(null);
   // Pending-session count plus the next confirmed session for the hero (one
   // setState per snapshot). `active` counts every non-terminal session
   // (pending + confirmed, recurring included) so the tile's empty line is
@@ -168,7 +170,9 @@ export function DashboardPage() {
         setPendingRequests(snap.docs.filter((d) => d.data()?.status === 'pending').length);
       })
       .catch(() => {
-        /* leave count at 0 */
+        // A failed read is UNKNOWN, not zero: on first load pendingRequests
+        // stays null (no hero rather than a wrong lower-priority one); on a
+        // refetch blip the last-known-good count survives.
       });
   }, [uid]);
 
@@ -203,7 +207,11 @@ export function DashboardPage() {
                 date < next.date ||
                 (date === next.date && startTime < next.startTime)
               ) {
-                next = { date, startTime, familyName: data?.familyName };
+                next = {
+                  date,
+                  startTime,
+                  familyName: typeof data?.familyName === 'string' ? data.familyName : undefined,
+                };
               }
             }
           }
@@ -280,23 +288,26 @@ export function DashboardPage() {
   // ── Hero (first match wins; issue #120). Requests lead because a waiting
   // family is blocked on the tutor's answer; then sessions to confirm; then
   // the next confirmed session. Zero-state has no hero — the verification
-  // banner / activation card already lead. ──
+  // banner / activation card already lead. The whole ladder waits for BOTH
+  // snapshots (family-page discipline): the two queries resolve
+  // independently, and ranking on a still-null count would let a lower
+  // priority claim the hero and visibly swap when requests resolve. ──
   let hero: { to: string; title: string; desc: string; icon: React.ReactNode } | null = null;
-  if (pendingRequests > 0) {
+  if (pendingRequests !== null && sessionData !== null && pendingRequests > 0) {
     hero = {
       to: '/tutor/requests',
       title: t('tutor.dashboard.hero.pendingRequests', { count: pendingRequests }),
       desc: t('tutor.dashboard.hero.pendingRequestsDesc'),
       icon: <BellIcon className="h-6 w-6 text-brand-600" />,
     };
-  } else if (sessionData !== null && sessionData.pending > 0) {
+  } else if (pendingRequests !== null && sessionData !== null && sessionData.pending > 0) {
     hero = {
       to: '/tutor/sessions',
       title: t('tutor.dashboard.hero.pendingSessions', { count: sessionData.pending }),
       desc: t('tutor.dashboard.hero.pendingSessionsDesc'),
       icon: <CalendarIcon className="h-6 w-6 text-brand-600" />,
     };
-  } else if (sessionData?.next) {
+  } else if (pendingRequests !== null && sessionData?.next) {
     const next = sessionData.next;
     const diff = dayDiff(parisToday(), next.date);
     const rel =
@@ -387,7 +398,11 @@ export function DashboardPage() {
           to="/tutor/requests"
           icon={<BellIcon className="h-6 w-6 text-brand-600" />}
           title={t('tutor.dashboard.requestsCardTitle')}
-          badge={pendingRequests > 0 ? <Badge variant="red">{pendingRequests}</Badge> : undefined}
+          badge={
+            pendingRequests !== null && pendingRequests > 0 ? (
+              <Badge variant="red">{pendingRequests}</Badge>
+            ) : undefined
+          }
         />
         <DashTile
           to="/tutor/sessions"

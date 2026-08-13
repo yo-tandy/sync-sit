@@ -219,6 +219,26 @@ describe('tutor DashboardPage', () => {
     expect(screen.getByRole('link', { name: /account/i })).toHaveAttribute('href', '/tutor/account');
   });
 
+  it('no hero renders while the requests snapshot is still in flight', async () => {
+    // The two queries resolve independently; ranking on a still-null request
+    // count would let the sessions hero paint and then visibly swap to the
+    // requests hero. The ladder must wait for BOTH snapshots.
+    h.auth.userDoc = tutor({ enrollmentComplete: true, verification: { identityStatus: 'approved' } });
+    h.sessions = [{ sessionId: 's1', tutorUserId: 't1', status: 'pending' }];
+    const defaultImpl = h.getDocs.getMockImplementation()!;
+    h.getDocs.mockImplementation((q: { query?: { path: string }[] }) => {
+      const path = q?.query?.[0]?.path ?? '';
+      if (path === 'studyContactRequests') return new Promise(() => {});
+      return defaultImpl(q);
+    });
+    renderWithProviders(<DashboardPage />);
+
+    // Settle on the sessions tile's badge (its snapshot resolved)...
+    expect(await screen.findByText('1')).toBeInTheDocument();
+    // ...but no hero: the pending-sessions title must not paint early.
+    expect(screen.queryByText(/awaiting confirmation/i)).not.toBeInTheDocument();
+  });
+
   it('a recurring-only tutor sees NO "no sessions yet" on the sessions tile', async () => {
     // `next` excludes recurring series on purpose (instances live in a
     // subcollection this page must not query) — but the tile's empty line is

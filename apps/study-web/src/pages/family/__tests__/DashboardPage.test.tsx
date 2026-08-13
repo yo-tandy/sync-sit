@@ -294,12 +294,21 @@ describe('family DashboardPage', () => {
   });
 
   it('hero: says Today (not a day count) for a session later today', async () => {
-    h.familyData = { familyName: 'Cohen', verification: { isFullyVerified: true } };
-    h.sessions = [
-      session({ sessionId: 's1', date: parisDatePlus(0), startTime: '23:59', tutorName: 'Leo' }),
-    ];
-    renderWithProviders(<DashboardPage />);
-    expect(await screen.findByText(/today/i)).toBeInTheDocument();
+    // Frozen clock: a wall-clock fixture ("today at 23:59") has a genuine
+    // one-minute-a-day flake window at 23:59 Paris. 11:00Z in March is 12:00
+    // Paris (UTC+1), so 18:00 the same day is unconditionally in the future.
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(new Date('2027-03-05T11:00:00Z'));
+    try {
+      h.familyData = { familyName: 'Cohen', verification: { isFullyVerified: true } };
+      h.sessions = [
+        session({ sessionId: 's1', date: '2027-03-05', startTime: '18:00', tutorName: 'Leo' }),
+      ];
+      renderWithProviders(<DashboardPage />);
+      expect(await screen.findByText(/today/i)).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('hero: says Tomorrow (not a day count) for a session tomorrow', async () => {
@@ -342,6 +351,23 @@ describe('family DashboardPage', () => {
     const searchLinks = await screen.findAllByRole('link', { name: /find a tutor/i });
     expect(searchLinks).toHaveLength(1);
     expect(screen.queryByText(/next session/i)).not.toBeInTheDocument();
+  });
+
+  it('a failed requests read never makes search unreachable for a verified family', async () => {
+    // The app bar has no /family/search item — this page is the only way in.
+    // A failed read is unknown, not zero: counts stays null forever, so the
+    // search fallback must not sit behind the snapshot guard.
+    h.familyData = { familyName: 'Cohen', verification: { isFullyVerified: true } };
+    h.getDocs.mockImplementation((q: { query?: { path: string }[] }) => {
+      const path = q?.query?.[0]?.path ?? '';
+      if (path === 'studyContactRequests') return Promise.reject(new Error('offline'));
+      return Promise.resolve({ docs: [] });
+    });
+    renderWithProviders(<DashboardPage />);
+
+    const searchLinks = await screen.findAllByRole('link', { name: /find a tutor/i });
+    expect(searchLinks).toHaveLength(1);
+    expect(searchLinks[0]).toHaveAttribute('href', '/family/search');
   });
 
   it('hero: unverified with nothing actionable → no hero, the banner leads', async () => {
