@@ -668,6 +668,7 @@ export default {
     requests: {
       title: 'Vos demandes',
       empty: 'Aucune demande pour le moment — dès que vous contactez un professeur, vos demandes apparaissent ici.',
+      emptyAction: 'Trouver un professeur',
       section: {
         pending: 'En attente',
         accepted: 'Acceptées',

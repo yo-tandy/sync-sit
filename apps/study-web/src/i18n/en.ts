@@ -668,6 +668,7 @@ export default {
     requests: {
       title: 'Your requests',
       empty: 'No requests yet — once you contact a tutor, your requests show up here.',
+      emptyAction: 'Find a tutor',
       section: {
         pending: 'Pending',
         accepted: 'Accepted',

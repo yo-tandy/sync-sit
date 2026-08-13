@@ -11,7 +11,17 @@ import type {
   StudyContactRequestStatus,
   TutorEndorsementDoc,
 } from '@ejm/study-core';
-import { Card, Button, Badge, TopNav, Spinner, Dialog, useToast } from '@ejm/shared-ui';
+import {
+  Card,
+  Button,
+  Badge,
+  TopNav,
+  Spinner,
+  Dialog,
+  useToast,
+  EmptyState,
+  MailIcon,
+} from '@ejm/shared-ui';
 import { EndorseTutorDialog } from '@/components/family/EndorseTutorDialog';
 
 /**
@@ -187,7 +197,12 @@ export function RequestsPage() {
 
         {!loadError && (!familyId || (requests !== null && requests.length === 0)) && (
           <Card>
-            <p className="py-4 text-center text-sm text-gray-500">{t('family.requests.empty')}</p>
+            <EmptyState
+              icon={<MailIcon className="h-6 w-6" />}
+              message={t('family.requests.empty')}
+              actionLabel={t('family.requests.emptyAction')}
+              actionTo="/family/search"
+            />
           </Card>
         )}
 
