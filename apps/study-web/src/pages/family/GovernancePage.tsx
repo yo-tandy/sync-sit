@@ -11,6 +11,8 @@ import {
   Spinner,
   Dialog,
   ChevronRightIcon,
+  ShieldIcon,
+  EmptyState,
   useRefetchOnFocus,
 } from '@ejm/shared-ui';
 import type {
@@ -175,7 +177,12 @@ export function GovernancePage() {
 
         {data !== null && children.length === 0 && invites.length === 0 && (
           <Card className="mb-4">
-            <p className="py-4 text-center text-sm text-gray-500">{t('family.governance.empty')}</p>
+            <EmptyState
+              icon={<ShieldIcon className="h-6 w-6" />}
+              message={t('family.governance.empty')}
+              actionLabel={t('family.governance.addChild')}
+              actionTo="/family/governance/new"
+            />
           </Card>
         )}
 

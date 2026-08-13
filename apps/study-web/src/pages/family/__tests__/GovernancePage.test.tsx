@@ -188,9 +188,14 @@ describe('GovernancePage', () => {
     renderWithProviders(<GovernancePage />);
 
     expect(await screen.findByText(/no supervised kids yet/i)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /add a child/i })).toHaveAttribute(
-      'href',
-      '/family/governance/new',
-    );
+    // Two ways in, same destination: the empty state's action (issue #125,
+    // exact name) and the always-present add-a-child card (its accessible
+    // name includes the description line).
+    const links = screen.getAllByRole('link', { name: /add a child/i });
+    expect(links).toHaveLength(2);
+    for (const link of links) {
+      expect(link).toHaveAttribute('href', '/family/governance/new');
+    }
+    expect(screen.getByRole('link', { name: 'Add a child' })).toBeInTheDocument();
   });
 });
