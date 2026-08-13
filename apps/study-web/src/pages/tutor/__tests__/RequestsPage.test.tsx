@@ -143,6 +143,16 @@ describe('tutor RequestsPage', () => {
     expect(h.unsubscribe).toHaveBeenCalledTimes(1);
   });
 
+  it('empty inbox shows the empty state with a link to review subjects', async () => {
+    h.requests = [];
+    renderWithProviders(<RequestsPage />);
+    expect(await screen.findByText(/no requests yet/i)).toBeInTheDocument();
+    // The tutor cannot create requests — the next step is discoverability
+    // (issue #125): keep subjects current so families find you.
+    const action = screen.getByRole('link', { name: 'Review your subjects' });
+    expect(action).toHaveAttribute('href', '/tutor/subjects');
+  });
+
   it('surfaces a load error when the subscription errors — not an empty list', async () => {
     h.requests = [];
     // Deliver an error instead of a first snapshot (e.g. PERMISSION_DENIED).

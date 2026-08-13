@@ -256,6 +256,7 @@ export default {
     requests: {
       title: 'Demandes de contact',
       empty: 'Aucune demande pour le moment — les familles qui souhaitent travailler avec vous apparaîtront ici.',
+      emptyAction: 'Vérifier vos matières',
       pendingTitle: 'En attente de votre réponse',
       historyTitle: 'Historique',
       accept: 'Accepter',

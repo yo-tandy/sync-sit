@@ -256,6 +256,7 @@ export default {
     requests: {
       title: 'Contact requests',
       empty: 'No requests yet — families who want to work with you will show up here.',
+      emptyAction: 'Review your subjects',
       pendingTitle: 'Awaiting your response',
       historyTitle: 'History',
       accept: 'Accept',

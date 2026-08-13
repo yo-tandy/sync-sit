@@ -6,7 +6,17 @@ import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import type { StudyContactRequestDoc, StudyContactRequestStatus } from '@ejm/study-core';
-import { Card, Button, Badge, TopNav, Spinner, Dialog, useToast } from '@ejm/shared-ui';
+import {
+  Card,
+  Button,
+  Badge,
+  TopNav,
+  Spinner,
+  Dialog,
+  useToast,
+  EmptyState,
+  UsersIcon,
+} from '@ejm/shared-ui';
 
 /**
  * Tutor inbox for incoming family contact requests. Reads
@@ -131,7 +141,12 @@ export function RequestsPage() {
 
         {!loadError && requests !== null && requests.length === 0 && (
           <Card>
-            <p className="py-4 text-center text-sm text-gray-500">{t('tutor.requests.empty')}</p>
+            <EmptyState
+              icon={<UsersIcon className="h-6 w-6" />}
+              message={t('tutor.requests.empty')}
+              actionLabel={t('tutor.requests.emptyAction')}
+              actionTo="/tutor/subjects"
+            />
           </Card>
         )}
 
