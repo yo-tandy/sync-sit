@@ -805,6 +805,12 @@ export default {
       created: 'Créé le',
       actions: 'Actions',
       kids: 'Enfants',
+      date: 'Date',
+      time: 'Heure',
+      babysitter: 'Babysitter',
+      family: 'Famille',
+      type: 'Type',
+      rate: 'Tarif',
     },
     enrollmentAccess: {
       title: "Accès à l'inscription",

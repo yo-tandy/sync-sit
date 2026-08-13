@@ -833,6 +833,12 @@ export default {
       created: 'Created',
       actions: 'Actions',
       kids: 'Kids',
+      date: 'Date',
+      time: 'Time',
+      babysitter: 'Babysitter',
+      family: 'Family',
+      type: 'Type',
+      rate: 'Rate',
     },
     enrollmentAccess: {
       title: 'Enrollment access',
