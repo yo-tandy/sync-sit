@@ -80,7 +80,10 @@ export function AreaPage() {
     // UX validation mirroring enrollment's ranges; the real bound lives in
     // firestore.rules (tutorNumericBoundsValid), since min/max attributes
     // never gate a plain onClick save and SDK writes bypass the UI entirely.
-    if (areaMode === 'distance' && radiusKm !== '' && (radiusKm < 0 || radiusKm > 50)) {
+    // 0 would exclude the tutor from every distance search (searchTutors caps
+    // at min(radius, family filter)); empty already means the 5 km default —
+    // so the editor requires 1-50. Rules keep 0-50 for legacy enrollment docs.
+    if (areaMode === 'distance' && radiusKm !== '' && (radiusKm < 1 || radiusKm > 50)) {
       setError(t('tutor.area.errorRadiusRange'));
       setSuccess(false);
       return;
@@ -161,6 +164,11 @@ export function AreaPage() {
 
         {areaMode === 'arrondissement' ? (
           <>
+            {areaLatLng && (
+              <p className="mb-4 rounded-lg bg-amber-100 p-3 text-sm text-amber-600">
+                {t('tutor.area.modeSwitchNote')}
+              </p>
+            )}
             <Input
               label={t('tutor.area.arrondissements')}
               type="text"
@@ -208,7 +216,7 @@ export function AreaPage() {
                 setRadiusKm(typeof v === 'number' && Number.isNaN(v) ? '' : v);
                 setSuccess(false);
               }}
-              min={0}
+              min={1}
               max={50}
             />
           </>

@@ -239,7 +239,7 @@ describe('tutor AreaPage', () => {
     fireEvent.change(radius, { target: { value: '500' } });
     fireEvent.click(screen.getByRole('button', { name: /save/i }));
 
-    expect(await screen.findByText(/between 0 and 50/i)).toBeInTheDocument();
+    expect(await screen.findByText(/between 1 and 50/i)).toBeInTheDocument();
     expect(h.updateDoc).not.toHaveBeenCalled();
   });
 
