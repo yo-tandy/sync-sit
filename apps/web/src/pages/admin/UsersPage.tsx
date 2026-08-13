@@ -208,7 +208,14 @@ export function AdminUsersPage() {
             {u.searchable ? t('admin.active') : t('admin.inactive')}
           </Badge>
         ) : (
-          u.status !== 'active' && <Badge variant={statusBadgeVariant(u.status)}>{u.status}</Badge>
+          // In a table, an empty cell under a header reads as missing data
+          // (unlike a card, where no badge meant "normal") — show the
+          // unremarkable state as muted text instead.
+          u.status !== 'active' ? (
+            <Badge variant={statusBadgeVariant(u.status)}>{u.status}</Badge>
+          ) : (
+            <span className="text-gray-500">{u.status}</span>
+          )
         ),
     },
     {

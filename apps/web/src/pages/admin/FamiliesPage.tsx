@@ -164,7 +164,14 @@ export function AdminFamiliesPage() {
       key: 'status',
       header: t('admin.table.status'),
       sortValue: (f) => f.status,
-      render: (f) => f.status !== 'active' && <Badge variant="gray">{f.status}</Badge>,
+      // Empty table cells read as missing data — muted text for the
+      // unremarkable majority state (cards could omit the badge; tables can't).
+      render: (f) =>
+        f.status !== 'active' ? (
+          <Badge variant="gray">{f.status}</Badge>
+        ) : (
+          <span className="text-gray-500">{f.status}</span>
+        ),
     },
     {
       key: 'created',
