@@ -207,13 +207,53 @@ describe('tutor DashboardPage', () => {
 
   // ── Sessions empty state + entry cards ──
 
-  it('renders the upcoming-sessions empty state and entry cards', () => {
+  it('renders the upcoming-sessions empty state and entry cards', async () => {
     h.auth.userDoc = tutor({ enrollmentComplete: true, verification: { identityStatus: 'approved' }, subjects: [] });
     renderWithProviders(<DashboardPage />);
-    expect(screen.getByText(/no sessions yet/i)).toBeInTheDocument();
+    // findBy, not getBy: the empty line renders only AFTER the sessions
+    // snapshot resolves — a synchronous match would be pinning the
+    // empty-state flash this page deliberately avoids.
+    expect(await screen.findByText(/no sessions yet/i)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /subjects/i })).toHaveAttribute('href', '/tutor/subjects');
     expect(screen.getByRole('link', { name: /availability|schedule/i })).toHaveAttribute('href', '/tutor/schedule');
     expect(screen.getByRole('link', { name: /account/i })).toHaveAttribute('href', '/tutor/account');
+  });
+
+  it('no hero renders while the requests snapshot is still in flight', async () => {
+    // The two queries resolve independently; ranking on a still-null request
+    // count would let the sessions hero paint and then visibly swap to the
+    // requests hero. The ladder must wait for BOTH snapshots.
+    h.auth.userDoc = tutor({ enrollmentComplete: true, verification: { identityStatus: 'approved' } });
+    h.sessions = [{ sessionId: 's1', tutorUserId: 't1', status: 'pending' }];
+    const defaultImpl = h.getDocs.getMockImplementation()!;
+    h.getDocs.mockImplementation((q: { query?: { path: string }[] }) => {
+      const path = q?.query?.[0]?.path ?? '';
+      if (path === 'studyContactRequests') return new Promise(() => {});
+      return defaultImpl(q);
+    });
+    renderWithProviders(<DashboardPage />);
+
+    // Settle on the sessions tile's badge (its snapshot resolved)...
+    expect(await screen.findByText('1')).toBeInTheDocument();
+    // ...but no hero: the pending-sessions title must not paint early.
+    expect(screen.queryByText(/awaiting confirmation/i)).not.toBeInTheDocument();
+  });
+
+  it('a recurring-only tutor sees NO "no sessions yet" on the sessions tile', async () => {
+    // `next` excludes recurring series on purpose (instances live in a
+    // subcollection this page must not query) — but the tile's empty line is
+    // keyed on ALL non-terminal sessions, so an active series is not "none".
+    h.auth.userDoc = tutor({ enrollmentComplete: true, verification: { identityStatus: 'approved' }, subjects: [] });
+    h.sessions = [
+      { sessionId: 's1', tutorUserId: 't1', status: 'confirmed', type: 'recurring', date: '2099-01-01' },
+    ];
+    renderWithProviders(<DashboardPage />);
+
+    // Settle on something that renders after the snapshots resolve.
+    await screen.findByRole('link', { name: /^contact requests$/i });
+    expect(screen.queryByText(/no sessions yet/i)).not.toBeInTheDocument();
+    // And the series still does not claim the hero.
+    expect(screen.queryByText(/next session/i)).not.toBeInTheDocument();
   });
 
   // ── Pending-requests card ──
@@ -227,7 +267,8 @@ describe('tutor DashboardPage', () => {
     ];
     renderWithProviders(<DashboardPage />);
 
-    const link = await screen.findByRole('link', { name: /requests/i });
+    // Anchored: the pending-requests HERO's label also contains "requests".
+    const link = await screen.findByRole('link', { name: /^contact requests$/i });
     expect(link).toHaveAttribute('href', '/tutor/requests');
     expect(h.where).toHaveBeenCalledWith('tutorUserId', '==', 't1');
     expect(await screen.findByText('2')).toBeInTheDocument();
@@ -291,5 +332,84 @@ describe('tutor DashboardPage', () => {
     renderWithProviders(<DashboardPage />);
     await waitFor(() => expect(h.getDoc).toHaveBeenCalled());
     expect(screen.queryByText(/supervise your account/i)).not.toBeInTheDocument();
+  });
+
+  // ── Hero priority (issue #120): first match wins ──
+
+  it('hero: pending requests beat pending sessions and the next session', async () => {
+    h.auth.userDoc = tutor({ enrollmentComplete: true, verification: { identityStatus: 'approved' } });
+    h.requests = [{ requestId: 'r1', tutorUserId: 't1', status: 'pending' }];
+    h.sessions = [
+      { sessionId: 's1', tutorUserId: 't1', status: 'pending' },
+      {
+        sessionId: 's2',
+        tutorUserId: 't1',
+        status: 'confirmed',
+        type: 'one_time',
+        date: '2099-01-01',
+        startTime: '17:00',
+        familyName: 'Cohen',
+      },
+    ];
+    renderWithProviders(<DashboardPage />);
+
+    const hero = await screen.findByRole('link', {
+      name: /1 family request waiting for your answer/i,
+    });
+    expect(hero).toHaveAttribute('href', '/tutor/requests');
+    expect(screen.queryByText(/awaiting confirmation/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/next session/i)).not.toBeInTheDocument();
+  });
+
+  it('hero: pending sessions beat the next confirmed session', async () => {
+    h.auth.userDoc = tutor({ enrollmentComplete: true, verification: { identityStatus: 'approved' } });
+    h.sessions = [
+      { sessionId: 's1', tutorUserId: 't1', status: 'pending' },
+      {
+        sessionId: 's2',
+        tutorUserId: 't1',
+        status: 'confirmed',
+        type: 'one_time',
+        date: '2099-01-01',
+        startTime: '17:00',
+        familyName: 'Cohen',
+      },
+    ];
+    renderWithProviders(<DashboardPage />);
+
+    const hero = await screen.findByRole('link', { name: /1 session awaiting confirmation/i });
+    expect(hero).toHaveAttribute('href', '/tutor/sessions');
+    expect(screen.queryByText(/next session/i)).not.toBeInTheDocument();
+  });
+
+  it('hero: a confirmed future session alone → next-session hero to /tutor/sessions', async () => {
+    h.auth.userDoc = tutor({ enrollmentComplete: true, verification: { identityStatus: 'approved' } });
+    h.sessions = [
+      {
+        sessionId: 's1',
+        tutorUserId: 't1',
+        status: 'confirmed',
+        type: 'one_time',
+        date: '2099-01-01',
+        startTime: '17:00',
+        familyName: 'Cohen',
+      },
+    ];
+    renderWithProviders(<DashboardPage />);
+
+    const hero = await screen.findByRole('link', { name: /next session/i });
+    expect(hero).toHaveAttribute('href', '/tutor/sessions');
+    expect(screen.getByText(/17:00/)).toBeInTheDocument();
+    expect(screen.getByText(/Cohen/)).toBeInTheDocument();
+  });
+
+  it('hero: zero state renders no hero', async () => {
+    h.auth.userDoc = tutor({ enrollmentComplete: true, verification: { identityStatus: 'approved' } });
+    renderWithProviders(<DashboardPage />);
+
+    await waitFor(() => expect(h.getDocs).toHaveBeenCalled());
+    expect(
+      screen.queryByText(/waiting for your answer|awaiting confirmation|next session/i),
+    ).not.toBeInTheDocument();
   });
 });

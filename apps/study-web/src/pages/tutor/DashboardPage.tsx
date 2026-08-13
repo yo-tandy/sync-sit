@@ -31,6 +31,58 @@ import {
   useRefetchOnFocus,
 } from '@ejm/shared-ui';
 
+/** The tutor's soonest confirmed one_time session, extracted alongside the
+ * pending count. A recurring series' concrete dates live in its `instances`
+ * subcollection, which this page must not query — one_time dates only. */
+type NextSession = { date: string; startTime: string; familyName?: string };
+
+/** Paris wall-clock "YYYY-MM-DDTHH:MM" — same idiom as SessionsPage, so the
+ * hero's "has this session already started" test matches the sessions hub. */
+function parisNowStamp(): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Paris',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(new Date());
+  const g = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
+  return `${g('year')}-${g('month')}-${g('day')}T${g('hour')}:${g('minute')}`;
+}
+
+/** Paris "YYYY-MM-DD" today (en-CA renders ISO order; tz-correct via runtime). */
+function parisToday(): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Paris',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
+}
+
+/** Whole-day difference between two "YYYY-MM-DD" strings, parsed field-by-field
+ * (never `new Date(str)`, which reads as UTC midnight and can slip a day). */
+function dayDiff(from: string, to: string): number {
+  const [fy, fm, fd] = from.split('-').map(Number);
+  const [ty, tm, td] = to.split('-').map(Number);
+  return Math.round(
+    (new Date(ty, tm - 1, td).getTime() - new Date(fy, fm - 1, fd).getTime()) / 86_400_000,
+  );
+}
+
+/** Format a "YYYY-MM-DD" date field-by-field (see dayDiff on parsing). */
+function formatDateStr(s: string, lang: string): string {
+  const [y, m, d] = s.split('-').map(Number);
+  if (!y || !m || !d) return '';
+  return new Date(y, m - 1, d).toLocaleDateString(lang === 'fr' ? 'fr-FR' : 'en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
 /**
  * Tutor dashboard — the consumer of PR #77's state contract. The banner is
  * keyed on `verification.identityStatus`; liveness/search is keyed on the
@@ -43,7 +95,7 @@ import {
  * reason — rather than fetching the document here.
  */
 export function DashboardPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { userDoc, firebaseUser, refreshUserDoc } = useAuthStore();
   const tutor = getTutorProfile(userDoc);
   const uid = firebaseUser?.uid;
@@ -58,8 +110,19 @@ export function DashboardPage() {
   const [hasSlots, setHasSlots] = useState(false);
   const [scheduleLoaded, setScheduleLoaded] = useState(false);
   const [toggling, setToggling] = useState(false);
-  const [pendingRequests, setPendingRequests] = useState(0);
-  const [pendingSessions, setPendingSessions] = useState(0);
+  // Null while loading — the hero must not claim "no requests" (and let a
+  // lower priority render, then swap) while the snapshot is still in flight.
+  const [pendingRequests, setPendingRequests] = useState<number | null>(null);
+  // Pending-session count plus the next confirmed session for the hero (one
+  // setState per snapshot). `active` counts every non-terminal session
+  // (pending + confirmed, recurring included) so the tile's empty line is
+  // honest for recurring-only tutors, whom `next` deliberately excludes.
+  // Null while loading — the empty line must not flash before data arrives.
+  const [sessionData, setSessionData] = useState<{
+    pending: number;
+    active: number;
+    next: NextSession | null;
+  } | null>(null);
   const [pendingEndorsements, setPendingEndorsements] = useState(0);
 
   useEffect(() => {
@@ -107,22 +170,56 @@ export function DashboardPage() {
         setPendingRequests(snap.docs.filter((d) => d.data()?.status === 'pending').length);
       })
       .catch(() => {
-        /* leave count at 0 */
+        // A failed read is UNKNOWN, not zero: on first load pendingRequests
+        // stays null (no hero rather than a wrong lower-priority one); on a
+        // refetch blip the last-known-good count survives.
       });
   }, [uid]);
 
-  // Pending-session count for the sessions card. Queried by tutorUserId only
-  // (single-field index) and counted client-side — see SessionsPage for the
-  // index rationale.
-  const loadSessionCount = useCallback(() => {
+  // Pending-session count for the sessions tile PLUS the tutor's next confirmed
+  // session for the hero, extracted from the same snapshot. Queried by
+  // tutorUserId only (single-field index) and counted client-side — see
+  // SessionsPage for the index rationale.
+  const loadSessionData = useCallback(() => {
     if (!uid) return;
     getDocs(query(collection(db, 'study-sessions'), where('tutorUserId', '==', uid)))
       .then((snap) => {
         if (!mountedRef.current) return;
-        setPendingSessions(snap.docs.filter((d) => d.data()?.status === 'pending').length);
+        // Time-granular cutoff (see family dashboard): a session that ended
+        // earlier today must not claim the hero as "today" all evening.
+        const now = parisNowStamp();
+        let pending = 0;
+        let active = 0;
+        let next: NextSession | null = null;
+        snap.docs.forEach((d) => {
+          const data = d.data();
+          const status = data?.status;
+          if (status === 'pending') {
+            pending += 1;
+            active += 1;
+          } else if (status === 'confirmed') {
+            active += 1;
+            const date = typeof data?.date === 'string' ? data.date : null;
+            const startTime = typeof data?.startTime === 'string' ? data.startTime : '';
+            if (data?.type !== 'recurring' && date && `${date}T${startTime}` > now) {
+              if (
+                !next ||
+                date < next.date ||
+                (date === next.date && startTime < next.startTime)
+              ) {
+                next = {
+                  date,
+                  startTime,
+                  familyName: typeof data?.familyName === 'string' ? data.familyName : undefined,
+                };
+              }
+            }
+          }
+        });
+        setSessionData({ pending, active, next });
       })
       .catch(() => {
-        /* leave count at 0 */
+        /* keep last-known-good state */
       });
   }, [uid]);
 
@@ -147,8 +244,8 @@ export function DashboardPage() {
   }, [loadRequestCount]);
 
   useEffect(() => {
-    loadSessionCount();
-  }, [loadSessionCount]);
+    loadSessionData();
+  }, [loadSessionData]);
 
   useEffect(() => {
     loadEndorsementCount();
@@ -158,7 +255,7 @@ export function DashboardPage() {
   // open tab shows fresh inbox/session/endorsement badges.
   useRefetchOnFocus(() => {
     loadRequestCount();
-    loadSessionCount();
+    loadSessionData();
     loadEndorsementCount();
   });
 
@@ -187,6 +284,47 @@ export function DashboardPage() {
   }
 
   const canActivate = hasSubjects && hasSlots;
+
+  // ── Hero (first match wins; issue #120). Requests lead because a waiting
+  // family is blocked on the tutor's answer; then sessions to confirm; then
+  // the next confirmed session. Zero-state has no hero — the verification
+  // banner / activation card already lead. The whole ladder waits for BOTH
+  // snapshots (family-page discipline): the two queries resolve
+  // independently, and ranking on a still-null count would let a lower
+  // priority claim the hero and visibly swap when requests resolve. ──
+  let hero: { to: string; title: string; desc: string; icon: React.ReactNode } | null = null;
+  if (pendingRequests !== null && sessionData !== null && pendingRequests > 0) {
+    hero = {
+      to: '/tutor/requests',
+      title: t('tutor.dashboard.hero.pendingRequests', { count: pendingRequests }),
+      desc: t('tutor.dashboard.hero.pendingRequestsDesc'),
+      icon: <BellIcon className="h-6 w-6 text-brand-600" />,
+    };
+  } else if (pendingRequests !== null && sessionData !== null && sessionData.pending > 0) {
+    hero = {
+      to: '/tutor/sessions',
+      title: t('tutor.dashboard.hero.pendingSessions', { count: sessionData.pending }),
+      desc: t('tutor.dashboard.hero.pendingSessionsDesc'),
+      icon: <CalendarIcon className="h-6 w-6 text-brand-600" />,
+    };
+  } else if (pendingRequests !== null && sessionData?.next) {
+    const next = sessionData.next;
+    const diff = dayDiff(parisToday(), next.date);
+    const rel =
+      diff <= 0
+        ? t('tutor.dashboard.hero.today')
+        : diff === 1
+          ? t('tutor.dashboard.hero.tomorrow')
+          : t('tutor.dashboard.hero.inDays', { count: diff });
+    hero = {
+      to: '/tutor/sessions',
+      title: t('tutor.dashboard.hero.nextSession'),
+      desc: [rel, formatDateStr(next.date, i18n.language), next.startTime, next.familyName]
+        .filter(Boolean)
+        .join(' · '),
+      icon: <CalendarIcon className="h-6 w-6 text-brand-600" />,
+    };
+  }
 
   return (
     <div className="px-5 pt-4 pb-8">
@@ -240,102 +378,77 @@ export function DashboardPage() {
         </Card>
       )}
 
-      {/* ── Contact requests inbox card ── */}
-      <Link
-        to="/tutor/requests"
-        aria-label={t('tutor.dashboard.requestsCardTitle')}
-        className="mb-4 block"
-      >
-        <Card interactive className="flex items-center gap-3 py-4">
-          <BellIcon className="h-6 w-6 text-brand-600" />
-          <div className="flex-1">
-            <p className="text-sm font-semibold text-gray-900">
-              {t('tutor.dashboard.requestsCardTitle')}
-            </p>
-            <p className="text-xs text-gray-500">{t('tutor.dashboard.requestsCardDesc')}</p>
-          </div>
-          {pendingRequests > 0 && <Badge variant="red">{pendingRequests}</Badge>}
-          <ChevronRightIcon className="h-5 w-5 text-gray-400" />
-        </Card>
-      </Link>
+      {/* ── Hero: the single "what matters now" slot ── */}
+      {hero && (
+        <Link to={hero.to} aria-label={`${hero.title} — ${hero.desc}`} className="mb-4 block">
+          <Card interactive className="flex items-center gap-3 border-brand-200 bg-brand-50 py-4">
+            {hero.icon}
+            <div className="min-w-0 flex-1">
+              <p className="text-base font-bold text-gray-900">{hero.title}</p>
+              <p className="text-sm text-gray-600">{hero.desc}</p>
+            </div>
+            <ChevronRightIcon className="h-5 w-5 shrink-0 text-gray-500" />
+          </Card>
+        </Link>
+      )}
 
-      {/* ── Session requests card ── */}
-      <Link
-        to="/tutor/sessions"
-        aria-label={t('tutor.dashboard.sessionsCardTitle')}
-        className="mb-4 block"
-      >
-        <Card interactive className="flex items-center gap-3 py-4">
-          <CalendarIcon className="h-6 w-6 text-brand-600" />
-          <div className="flex-1">
-            <p className="text-sm font-semibold text-gray-900">
-              {t('tutor.dashboard.sessionsCardTitle')}
-            </p>
-            <p className="text-xs text-gray-500">{t('tutor.dashboard.sessionsCardDesc')}</p>
-          </div>
-          {pendingSessions > 0 && <Badge variant="red">{pendingSessions}</Badge>}
-          <ChevronRightIcon className="h-5 w-5 text-gray-400" />
-        </Card>
-      </Link>
-
-      {/* ── Endorsements card ── */}
-      <Link
-        to="/tutor/endorsements"
-        aria-label={t('tutor.dashboard.endorsementsCardTitle')}
-        className="mb-4 block"
-      >
-        <Card interactive className="flex items-center gap-3 py-4">
-          <CheckIcon className="h-6 w-6 text-brand-600" />
-          <div className="flex-1">
-            <p className="text-sm font-semibold text-gray-900">
-              {t('tutor.dashboard.endorsementsCardTitle')}
-            </p>
-            <p className="text-xs text-gray-500">
-              {t('tutor.dashboard.endorsementsCardDesc')}
-            </p>
-          </div>
-          {pendingEndorsements > 0 && <Badge variant="red">{pendingEndorsements}</Badge>}
-          <ChevronRightIcon className="h-5 w-5 text-gray-400" />
-        </Card>
-      </Link>
-
-      {/* ── Upcoming sessions (empty state — booking not built yet) ── */}
-      <div className="mb-6">
-        <h2 className="mb-2 text-sm font-semibold text-gray-700">
-          {t('tutor.dashboard.sessionsTitle')}
-        </h2>
-        <Card>
-          <p className="py-4 text-center text-sm text-gray-500">
-            {t('tutor.dashboard.noSessions')}
-          </p>
-        </Card>
-      </div>
-
-      {/* ── Entry cards ── */}
-      <div className="space-y-3">
-        <EntryCard
+      {/* ── Everything else: compact half-weight tiles ── */}
+      <div className="grid grid-cols-2 gap-3">
+        <DashTile
+          to="/tutor/requests"
+          icon={<BellIcon className="h-6 w-6 text-brand-600" />}
+          title={t('tutor.dashboard.requestsCardTitle')}
+          badge={
+            pendingRequests !== null && pendingRequests > 0 ? (
+              <Badge variant="red">{pendingRequests}</Badge>
+            ) : undefined
+          }
+        />
+        <DashTile
+          to="/tutor/sessions"
+          icon={<CalendarIcon className="h-6 w-6 text-brand-600" />}
+          title={t('tutor.dashboard.sessionsCardTitle')}
+          badge={
+            sessionData !== null && sessionData.pending > 0 ? (
+              <Badge variant="red">{sessionData.pending}</Badge>
+            ) : undefined
+          }
+          sub={
+            // Honest empty line: keyed on ALL non-terminal sessions, not on
+            // `next` (which excludes recurring series on purpose); undefined
+            // while loading so the line never flashes before data arrives.
+            sessionData !== null && sessionData.active === 0
+              ? t('tutor.dashboard.tiles.sessionsEmpty')
+              : undefined
+          }
+        />
+        <DashTile
+          to="/tutor/endorsements"
+          icon={<CheckIcon className="h-6 w-6 text-brand-600" />}
+          title={t('tutor.dashboard.endorsementsCardTitle')}
+          badge={
+            pendingEndorsements > 0 ? <Badge variant="red">{pendingEndorsements}</Badge> : undefined
+          }
+        />
+        <DashTile
           to="/tutor/subjects"
           icon={<ClipboardListIcon className="h-6 w-6 text-brand-600" />}
           title={t('tutor.dashboard.subjectsCard')}
-          desc={t('tutor.dashboard.subjectsCardDesc')}
         />
-        <EntryCard
+        <DashTile
           to="/tutor/schedule"
           icon={<CalendarIcon className="h-6 w-6 text-brand-600" />}
           title={t('tutor.dashboard.scheduleCard')}
-          desc={t('tutor.dashboard.scheduleCardDesc')}
         />
-        <EntryCard
+        <DashTile
           to="/tutor/account"
           icon={<SettingsIcon className="h-6 w-6 text-brand-600" />}
           title={t('tutor.dashboard.accountCard')}
-          desc={t('tutor.dashboard.accountCardDesc')}
         />
-        <EntryCard
+        <DashTile
           to="/tutor/verification"
           icon={<ShieldIcon className="h-6 w-6 text-brand-600" />}
           title={t('tutor.dashboard.verificationCard')}
-          desc={t('tutor.dashboard.verificationCardDesc')}
         />
       </div>
     </div>
@@ -424,26 +537,34 @@ function Banner({
   );
 }
 
-function EntryCard({
+function DashTile({
   to,
   icon,
   title,
-  desc,
+  sub,
+  badge,
+  ariaLabel,
 }: {
   to: string;
   icon: React.ReactNode;
   title: string;
-  desc: string;
+  sub?: string;
+  badge?: React.ReactNode;
+  ariaLabel?: string;
 }) {
+  // aria-label REPLACES the content for screen readers — carry the sub line.
+  const label = [ariaLabel ?? title, sub].filter(Boolean).join(' — ');
   return (
-    <Link to={to} className="block">
-      <Card interactive className="flex items-center gap-3 py-4">
-        {icon}
-        <div className="flex-1">
-          <p className="text-sm font-semibold text-gray-900">{title}</p>
-          <p className="text-xs text-gray-500">{desc}</p>
+    <Link to={to} aria-label={label} className="block h-full">
+      <Card interactive className="flex h-full flex-col gap-2 py-4">
+        <div className="flex items-start justify-between">
+          {icon}
+          {badge}
         </div>
-        <ChevronRightIcon className="h-5 w-5 text-gray-400" />
+        <div>
+          <p className="text-sm font-semibold text-gray-900">{title}</p>
+          {sub && <p className="mt-0.5 text-xs text-gray-500">{sub}</p>}
+        </div>
       </Card>
     </Link>
   );
