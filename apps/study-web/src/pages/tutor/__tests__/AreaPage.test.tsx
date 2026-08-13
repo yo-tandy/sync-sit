@@ -243,6 +243,44 @@ describe('tutor AreaPage', () => {
     expect(h.updateDoc).not.toHaveBeenCalled();
   });
 
+  it('rejects radius 0 — it would exclude the tutor from every distance search', async () => {
+    // searchTutors caps at min(tutor radius, family filter), so 0 matches
+    // nothing; empty already means the 5 km default. The editor floors at 1.
+    seed({ areaMode: 'distance', areaAddress: '5 Rue X', areaLatLng: { lat: 48.85, lng: 2.35 }, areaRadiusKm: 8 });
+    renderWithProviders(<AreaPage />);
+    const radius = await screen.findByLabelText(/max distance/i);
+    fireEvent.change(radius, { target: { value: '0' } });
+    fireEvent.click(screen.getByRole('button', { name: /save/i }));
+
+    expect(await screen.findByText(/between 1 and 50/i)).toBeInTheDocument();
+    expect(h.updateDoc).not.toHaveBeenCalled();
+  });
+
+  // ── Mode-switch warning pins ──
+  it('warns before an arrondissement-mode save discards a stored geocode', () => {
+    seed({
+      areaMode: 'distance',
+      arrondissements: [],
+      areaAddress: '16 rue de Passy, 75016 Paris',
+      areaLatLng: { lat: 48.8571, lng: 2.2795 },
+      areaRadiusKm: 5,
+    });
+    renderWithProviders(<AreaPage />);
+
+    // Still in distance mode: no warning.
+    expect(screen.queryByText(/removes your stored address location/i)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /by arrondissement/i }));
+    expect(screen.getByText(/removes your stored address location/i)).toBeInTheDocument();
+  });
+
+  it('shows no mode-switch warning when there is no stored geocode to lose', () => {
+    seed({ areaMode: 'arrondissement', arrondissements: ['75016'], areaAddress: null, areaLatLng: null, areaRadiusKm: null });
+    renderWithProviders(<AreaPage />);
+
+    expect(screen.getByRole('button', { name: /by arrondissement/i, pressed: true })).toBeInTheDocument();
+    expect(screen.queryByText(/removes your stored address location/i)).not.toBeInTheDocument();
+  });
+
   it('rejects more than 20 arrondissements before any write', async () => {
     seed({ areaMode: 'arrondissement', arrondissements: ['75016'] });
     renderWithProviders(<AreaPage />);
