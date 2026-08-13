@@ -20,7 +20,7 @@ import {
 /** The soonest confirmed one_time session, extracted alongside the counts.
  * A recurring series' concrete dates live in its `instances` subcollection,
  * which this page must not query — so the hero only surfaces one_time dates. */
-type NextSession = { id: string; date: string; startTime: string; tutorName?: string };
+type NextSession = { date: string; startTime: string; tutorName?: string };
 
 /** Paris "YYYY-MM-DD" today (en-CA renders ISO order; tz-correct via runtime). */
 function parisToday(): string {
@@ -30,6 +30,22 @@ function parisToday(): string {
     month: '2-digit',
     day: '2-digit',
   }).format(new Date());
+}
+
+/** Paris wall-clock "YYYY-MM-DDTHH:MM" — same idiom as SessionsPage, so the
+ * hero's "has this session already started" test matches the sessions hub. */
+function parisNowStamp(): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Paris',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(new Date());
+  const g = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
+  return `${g('year')}-${g('month')}-${g('day')}T${g('hour')}:${g('minute')}`;
 }
 
 /** Whole-day difference between two "YYYY-MM-DD" strings, parsed field-by-field
@@ -146,7 +162,9 @@ export function DashboardPage() {
     getDocs(query(collection(db, 'study-sessions'), where('familyId', '==', familyId)))
       .then((snap) => {
         if (!mountedRef.current) return;
-        const today = parisToday();
+        // Time-granular cutoff: a session that finished earlier TODAY must
+        // not claim the hero as "Next session · Today" all evening.
+        const now = parisNowStamp();
         let pending = 0;
         let upcoming = 0;
         let nextSession: NextSession | null = null;
@@ -158,13 +176,13 @@ export function DashboardPage() {
             upcoming += 1;
             const date = typeof data?.date === 'string' ? data.date : null;
             const startTime = typeof data?.startTime === 'string' ? data.startTime : '';
-            if (data?.type !== 'recurring' && date && date >= today) {
+            if (data?.type !== 'recurring' && date && `${date}T${startTime}` > now) {
               if (
                 !nextSession ||
                 date < nextSession.date ||
                 (date === nextSession.date && startTime < nextSession.startTime)
               ) {
-                nextSession = { id: d.id, date, startTime, tutorName: data?.tutorName };
+                nextSession = { date, startTime, tutorName: data?.tutorName };
               }
             }
           }
@@ -270,9 +288,11 @@ export function DashboardPage() {
         </div>
       )}
 
-      {/* ── Hero: the single "what matters now" slot ── */}
+      {/* ── Hero: the single "what matters now" slot. The aria-label carries
+          the desc too — the label REPLACES the content for screen readers,
+          and the desc holds the actual date/time/name payload. ── */}
       {hero && (
-        <Link to={hero.to} aria-label={hero.title} className="mb-4 block">
+        <Link to={hero.to} aria-label={`${hero.title} — ${hero.desc}`} className="mb-4 block">
           <Card interactive className="flex items-center gap-3 border-brand-200 bg-brand-50 py-4">
             {hero.icon}
             <div className="min-w-0 flex-1">
@@ -286,13 +306,20 @@ export function DashboardPage() {
 
       {/* ── Everything else: compact half-weight tiles ── */}
       <div className="grid grid-cols-2 gap-3">
-        {isVerified === true && hero?.to !== '/family/search' && (
-          <DashTile
-            to="/family/search"
-            icon={<SearchIcon className="h-6 w-6 text-brand-600" />}
-            title={t('family.dashboard.searchCardTitle')}
-          />
-        )}
+        {/* Gated on the SAME loading condition as the hero: while the
+            snapshots are null the hero is null too, and rendering the tile
+            then would make the primary CTA visibly jump from grid to hero
+            once data resolves. */}
+        {counts !== null &&
+          sessionData !== null &&
+          isVerified === true &&
+          hero?.to !== '/family/search' && (
+            <DashTile
+              to="/family/search"
+              icon={<SearchIcon className="h-6 w-6 text-brand-600" />}
+              title={t('family.dashboard.searchCardTitle')}
+            />
+          )}
         <DashTile
           to="/family/requests"
           ariaLabel={t('family.dashboard.viewRequests')}
@@ -339,8 +366,12 @@ function DashTile({
   sub?: string;
   ariaLabel?: string;
 }) {
+  // aria-label REPLACES the content for screen readers, so it must carry the
+  // count line too — otherwise "2 pending · 1 accepted" is sighted-only,
+  // defeating the point of moving the counts inline.
+  const label = [ariaLabel ?? title, sub].filter(Boolean).join(' — ');
   return (
-    <Link to={to} aria-label={ariaLabel ?? title} className="block h-full">
+    <Link to={to} aria-label={label} className="block h-full">
       <Card interactive className="flex h-full flex-col gap-2 py-4">
         {icon}
         <div>

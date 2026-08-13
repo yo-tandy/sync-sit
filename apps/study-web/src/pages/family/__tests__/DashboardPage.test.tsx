@@ -38,6 +38,33 @@ vi.mock('@/stores/authStore', () => ({
 
 import { DashboardPage } from '../DashboardPage';
 
+/** Paris "YYYY-MM-DD" for today + N days — the same wall-clock the component
+ * reads, so the Today/Tomorrow pins hold in any test-runner timezone. */
+function parisDatePlus(days: number): string {
+  const todayStr = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Paris',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
+  const [y, m, d] = todayStr.split('-').map(Number);
+  const shifted = new Date(y, m - 1, d + days);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${shifted.getFullYear()}-${pad(shifted.getMonth() + 1)}-${pad(shifted.getDate())}`;
+}
+
+/** A confirmed one_time session doc unless overridden. */
+function session(overrides: Record<string, unknown> = {}) {
+  return {
+    familyId: 'fam1',
+    status: 'confirmed',
+    type: 'one_time',
+    date: '2099-01-01',
+    startTime: '17:00',
+    ...overrides,
+  };
+}
+
 function parent(overrides: Record<string, unknown> = {}) {
   return {
     uid: 'p1',
@@ -264,6 +291,57 @@ describe('family DashboardPage', () => {
     const searchLinks = await screen.findAllByRole('link', { name: /find a tutor/i });
     expect(searchLinks).toHaveLength(1);
     expect(searchLinks[0]).toHaveAttribute('href', '/family/search');
+  });
+
+  it('hero: says Today (not a day count) for a session later today', async () => {
+    h.familyData = { familyName: 'Cohen', verification: { isFullyVerified: true } };
+    h.sessions = [
+      session({ sessionId: 's1', date: parisDatePlus(0), startTime: '23:59', tutorName: 'Leo' }),
+    ];
+    renderWithProviders(<DashboardPage />);
+    expect(await screen.findByText(/today/i)).toBeInTheDocument();
+  });
+
+  it('hero: says Tomorrow (not a day count) for a session tomorrow', async () => {
+    h.familyData = { familyName: 'Cohen', verification: { isFullyVerified: true } };
+    h.sessions = [
+      session({ sessionId: 's2', date: parisDatePlus(1), startTime: '09:00', tutorName: 'Leo' }),
+    ];
+    renderWithProviders(<DashboardPage />);
+    expect(await screen.findByText(/tomorrow/i)).toBeInTheDocument();
+  });
+
+  it('hero: a recurring series never claims the hero but still counts as upcoming', async () => {
+    // The headline design call of this page: recurring dates live in the
+    // instances subcollection this page must not query, so the hero skips
+    // recurring docs and falls through to the next priority.
+    h.familyData = { familyName: 'Cohen', verification: { isFullyVerified: true } };
+    h.requests = [{ requestId: 'r1', familyId: 'fam1', status: 'accepted' }];
+    h.sessions = [
+      session({ sessionId: 's1', type: 'recurring', date: '2099-01-01', tutorName: 'Sarah' }),
+    ];
+    renderWithProviders(<DashboardPage />);
+
+    const hero = await screen.findByRole('link', { name: /accepted your request/i });
+    expect(hero).toHaveAttribute('href', '/family/requests');
+    expect(screen.queryByText(/next session/i)).not.toBeInTheDocument();
+    // ...while the sessions tile still counts the series as upcoming.
+    expect(screen.getByText(/1 upcoming/i)).toBeInTheDocument();
+  });
+
+  it('hero: a confirmed session that already started today does not claim the hero', async () => {
+    h.familyData = { familyName: 'Cohen', verification: { isFullyVerified: true } };
+    h.sessions = [
+      // 00:00 today: `${date}T00:00 > now` is false from midnight onward.
+      session({ sessionId: 's1', date: parisDatePlus(0), startTime: '00:00', tutorName: 'Leo' }),
+      session({ sessionId: 's2', date: '2001-01-01', startTime: '10:00', tutorName: 'Mia' }),
+    ];
+    renderWithProviders(<DashboardPage />);
+
+    // Falls through to the search hero — nothing upcoming to announce.
+    const searchLinks = await screen.findAllByRole('link', { name: /find a tutor/i });
+    expect(searchLinks).toHaveLength(1);
+    expect(screen.queryByText(/next session/i)).not.toBeInTheDocument();
   });
 
   it('hero: unverified with nothing actionable → no hero, the banner leads', async () => {

@@ -207,13 +207,33 @@ describe('tutor DashboardPage', () => {
 
   // ── Sessions empty state + entry cards ──
 
-  it('renders the upcoming-sessions empty state and entry cards', () => {
+  it('renders the upcoming-sessions empty state and entry cards', async () => {
     h.auth.userDoc = tutor({ enrollmentComplete: true, verification: { identityStatus: 'approved' }, subjects: [] });
     renderWithProviders(<DashboardPage />);
-    expect(screen.getByText(/no sessions yet/i)).toBeInTheDocument();
+    // findBy, not getBy: the empty line renders only AFTER the sessions
+    // snapshot resolves — a synchronous match would be pinning the
+    // empty-state flash this page deliberately avoids.
+    expect(await screen.findByText(/no sessions yet/i)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /subjects/i })).toHaveAttribute('href', '/tutor/subjects');
     expect(screen.getByRole('link', { name: /availability|schedule/i })).toHaveAttribute('href', '/tutor/schedule');
     expect(screen.getByRole('link', { name: /account/i })).toHaveAttribute('href', '/tutor/account');
+  });
+
+  it('a recurring-only tutor sees NO "no sessions yet" on the sessions tile', async () => {
+    // `next` excludes recurring series on purpose (instances live in a
+    // subcollection this page must not query) — but the tile's empty line is
+    // keyed on ALL non-terminal sessions, so an active series is not "none".
+    h.auth.userDoc = tutor({ enrollmentComplete: true, verification: { identityStatus: 'approved' }, subjects: [] });
+    h.sessions = [
+      { sessionId: 's1', tutorUserId: 't1', status: 'confirmed', type: 'recurring', date: '2099-01-01' },
+    ];
+    renderWithProviders(<DashboardPage />);
+
+    // Settle on something that renders after the snapshots resolve.
+    await screen.findByRole('link', { name: /^contact requests$/i });
+    expect(screen.queryByText(/no sessions yet/i)).not.toBeInTheDocument();
+    // And the series still does not claim the hero.
+    expect(screen.queryByText(/next session/i)).not.toBeInTheDocument();
   });
 
   // ── Pending-requests card ──

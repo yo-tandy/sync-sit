@@ -34,7 +34,23 @@ import {
 /** The tutor's soonest confirmed one_time session, extracted alongside the
  * pending count. A recurring series' concrete dates live in its `instances`
  * subcollection, which this page must not query — one_time dates only. */
-type NextSession = { id: string; date: string; startTime: string; familyName?: string };
+type NextSession = { date: string; startTime: string; familyName?: string };
+
+/** Paris wall-clock "YYYY-MM-DDTHH:MM" — same idiom as SessionsPage, so the
+ * hero's "has this session already started" test matches the sessions hub. */
+function parisNowStamp(): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Paris',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(new Date());
+  const g = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
+  return `${g('year')}-${g('month')}-${g('day')}T${g('hour')}:${g('minute')}`;
+}
 
 /** Paris "YYYY-MM-DD" today (en-CA renders ISO order; tz-correct via runtime). */
 function parisToday(): string {
@@ -96,11 +112,15 @@ export function DashboardPage() {
   const [toggling, setToggling] = useState(false);
   const [pendingRequests, setPendingRequests] = useState(0);
   // Pending-session count plus the next confirmed session for the hero (one
-  // setState per snapshot).
-  const [sessionData, setSessionData] = useState<{ pending: number; next: NextSession | null }>({
-    pending: 0,
-    next: null,
-  });
+  // setState per snapshot). `active` counts every non-terminal session
+  // (pending + confirmed, recurring included) so the tile's empty line is
+  // honest for recurring-only tutors, whom `next` deliberately excludes.
+  // Null while loading — the empty line must not flash before data arrives.
+  const [sessionData, setSessionData] = useState<{
+    pending: number;
+    active: number;
+    next: NextSession | null;
+  } | null>(null);
   const [pendingEndorsements, setPendingEndorsements] = useState(0);
 
   useEffect(() => {
@@ -161,28 +181,34 @@ export function DashboardPage() {
     getDocs(query(collection(db, 'study-sessions'), where('tutorUserId', '==', uid)))
       .then((snap) => {
         if (!mountedRef.current) return;
-        const today = parisToday();
+        // Time-granular cutoff (see family dashboard): a session that ended
+        // earlier today must not claim the hero as "today" all evening.
+        const now = parisNowStamp();
         let pending = 0;
+        let active = 0;
         let next: NextSession | null = null;
         snap.docs.forEach((d) => {
           const data = d.data();
           const status = data?.status;
-          if (status === 'pending') pending += 1;
-          else if (status === 'confirmed') {
+          if (status === 'pending') {
+            pending += 1;
+            active += 1;
+          } else if (status === 'confirmed') {
+            active += 1;
             const date = typeof data?.date === 'string' ? data.date : null;
             const startTime = typeof data?.startTime === 'string' ? data.startTime : '';
-            if (data?.type !== 'recurring' && date && date >= today) {
+            if (data?.type !== 'recurring' && date && `${date}T${startTime}` > now) {
               if (
                 !next ||
                 date < next.date ||
                 (date === next.date && startTime < next.startTime)
               ) {
-                next = { id: d.id, date, startTime, familyName: data?.familyName };
+                next = { date, startTime, familyName: data?.familyName };
               }
             }
           }
         });
-        setSessionData({ pending, next });
+        setSessionData({ pending, active, next });
       })
       .catch(() => {
         /* keep last-known-good state */
@@ -263,14 +289,14 @@ export function DashboardPage() {
       desc: t('tutor.dashboard.hero.pendingRequestsDesc'),
       icon: <BellIcon className="h-6 w-6 text-brand-600" />,
     };
-  } else if (sessionData.pending > 0) {
+  } else if (sessionData !== null && sessionData.pending > 0) {
     hero = {
       to: '/tutor/sessions',
       title: t('tutor.dashboard.hero.pendingSessions', { count: sessionData.pending }),
       desc: t('tutor.dashboard.hero.pendingSessionsDesc'),
       icon: <CalendarIcon className="h-6 w-6 text-brand-600" />,
     };
-  } else if (sessionData.next) {
+  } else if (sessionData?.next) {
     const next = sessionData.next;
     const diff = dayDiff(parisToday(), next.date);
     const rel =
@@ -343,7 +369,7 @@ export function DashboardPage() {
 
       {/* ── Hero: the single "what matters now" slot ── */}
       {hero && (
-        <Link to={hero.to} aria-label={hero.title} className="mb-4 block">
+        <Link to={hero.to} aria-label={`${hero.title} — ${hero.desc}`} className="mb-4 block">
           <Card interactive className="flex items-center gap-3 border-brand-200 bg-brand-50 py-4">
             {hero.icon}
             <div className="min-w-0 flex-1">
@@ -368,10 +394,15 @@ export function DashboardPage() {
           icon={<CalendarIcon className="h-6 w-6 text-brand-600" />}
           title={t('tutor.dashboard.sessionsCardTitle')}
           badge={
-            sessionData.pending > 0 ? <Badge variant="red">{sessionData.pending}</Badge> : undefined
+            sessionData !== null && sessionData.pending > 0 ? (
+              <Badge variant="red">{sessionData.pending}</Badge>
+            ) : undefined
           }
           sub={
-            sessionData.pending === 0 && !sessionData.next
+            // Honest empty line: keyed on ALL non-terminal sessions, not on
+            // `next` (which excludes recurring series on purpose); undefined
+            // while loading so the line never flashes before data arrives.
+            sessionData !== null && sessionData.active === 0
               ? t('tutor.dashboard.tiles.sessionsEmpty')
               : undefined
           }
@@ -506,8 +537,10 @@ function DashTile({
   badge?: React.ReactNode;
   ariaLabel?: string;
 }) {
+  // aria-label REPLACES the content for screen readers — carry the sub line.
+  const label = [ariaLabel ?? title, sub].filter(Boolean).join(' — ');
   return (
-    <Link to={to} aria-label={ariaLabel ?? title} className="block h-full">
+    <Link to={to} aria-label={label} className="block h-full">
       <Card interactive className="flex h-full flex-col gap-2 py-4">
         <div className="flex items-start justify-between">
           {icon}
