@@ -172,6 +172,24 @@ service cloud.firestore {
                  .hasAny(['firstName', 'lastName', 'dateOfBirth']);
     }
 
+    // Helper: root identity (firstName/lastName/dateOfBirth) is SET-ONCE for
+    // client writes — once a field holds a value, an owner write may neither
+    // change nor remove it (issue #144: cross-app enrollment must never mutate
+    // identity set by the other app). Absent -> set stays allowed (a babysitter
+    // stub completes its identity step). Corrections go through admin/callables
+    // (Admin SDK bypasses rules). Applies to ALL accounts, not just
+    // identityLocked ones — see identityUnlockedOrUnchanged above.
+    function rootIdentitySetOnce() {
+      return !request.resource.data.diff(resource.data).affectedKeys()
+                 .hasAny(['firstName', 'lastName', 'dateOfBirth'])
+             || ((!('firstName' in resource.data)
+                  || request.resource.data.get('firstName', null) == resource.data.firstName)
+                 && (!('lastName' in resource.data)
+                  || request.resource.data.get('lastName', null) == resource.data.lastName)
+                 && (!('dateOfBirth' in resource.data)
+                  || request.resource.data.get('dateOfBirth', null) == resource.data.dateOfBirth));
+    }
+
     // Users: read own profile; parents can read active babysitters (for search results)
     match /users/{userId} {
       allow read: if isOwner(userId)
@@ -209,6 +227,7 @@ service cloud.firestore {
                     && tutorIdentityUnchanged()
                     && parentFamilyIdUnchanged()
                     && identityUnlockedOrUnchanged()
+                    && rootIdentitySetOnce()
                     && tutorNumericBoundsValid()
                     && photoUrlValid();
     }
