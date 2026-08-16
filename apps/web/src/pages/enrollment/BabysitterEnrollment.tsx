@@ -123,9 +123,16 @@ export function BabysitterEnrollment() {
       if (isAddProfile) {
         // Already signed in: skip the new-account sign-in and the auth-store
         // wait. Just refresh the user doc so the new babysitter profile is
-        // visible, then continue to the immutable-profile step.
+        // visible, then route like the resume effect: a cross-app user already
+        // carries root identity (firstName/lastName/dateOfBirth) — never
+        // re-present the identity step, which would try to overwrite it
+        // (issue #144; the rules now deny that write outright).
         await refreshUserDoc();
-        setStep(3);
+        if (useAuthStore.getState().userDoc?.firstName) {
+          setStep(4);
+        } else {
+          setStep(3);
+        }
         return;
       }
 
