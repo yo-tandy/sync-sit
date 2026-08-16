@@ -977,7 +977,6 @@ export default {
       stepVerify: 'Check your email',
       stepPassword: 'Create your password',
       stepProfile: 'Your profile',
-      stepPrefs: 'Your preferences',
       success: 'Welcome to Sync/Study!',
       successSubtitle: 'Your application has been submitted. You\'ll be notified once your profile is approved.',
       goHome: 'Go to home',

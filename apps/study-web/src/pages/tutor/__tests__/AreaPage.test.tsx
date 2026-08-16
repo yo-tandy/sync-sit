@@ -3,7 +3,7 @@ import { screen, fireEvent, waitFor } from '@testing-library/react';
 import { renderWithProviders } from '@/__tests__/test-utils';
 import type { AddressResult } from '@ejm/shared-ui';
 
-// Stub AddressAutocomplete like StepPrefs.test.tsx does: "pick-address" fires
+// Stub AddressAutocomplete: "pick-address" fires
 // onChange with a fixed geocoded result; "type-without-picking" fires
 // onChange(null), which is exactly what the real component does when the user
 // edits the text without selecting a suggestion (see AddressAutocomplete's

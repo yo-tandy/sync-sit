@@ -977,7 +977,6 @@ export default {
       stepVerify: 'Vérifiez votre email',
       stepPassword: 'Créez votre mot de passe',
       stepProfile: 'Votre profil',
-      stepPrefs: 'Vos préférences',
       success: 'Bienvenue sur Sync/Study !',
       successSubtitle: 'Votre candidature a été soumise. Vous serez notifié une fois votre profil approuvé.',
       goHome: "Retour à l'accueil",

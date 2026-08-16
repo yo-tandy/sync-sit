@@ -75,6 +75,10 @@ export function AccountPage() {
   const [sessionLengths, setSessionLengths] = useState<number[]>([]);
   const [locationPrefs, setLocationPrefs] = useState<LocationPref[]>([]);
   const [paddingMin, setPaddingMin] = useState(0);
+  // About-me bio: enrollment stopped collecting it (issue #143), so this is
+  // now the only editor. Owner-writable dot-path; the schema bounds it at
+  // 1000 chars.
+  const [aboutMe, setAboutMe] = useState('');
   const [prefsSaving, setPrefsSaving] = useState(false);
   const [prefsSuccess, setPrefsSuccess] = useState(false);
   const [prefsError, setPrefsError] = useState<string | null>(null);
@@ -92,6 +96,7 @@ export function AccountPage() {
     setSessionLengths(tutor?.sessionLengthsMin ?? []);
     setLocationPrefs(tutor?.locationPrefs ?? []);
     setPaddingMin(tutor?.paddingMin ?? 0);
+    setAboutMe(tutor?.aboutMe ?? '');
     if (userDoc.notifPrefs) {
       setPrefs(userDoc.notifPrefs);
     }
@@ -176,8 +181,8 @@ export function AccountPage() {
 
   const handleSavePrefs = async () => {
     if (!uid) return;
-    // Mirrors enrollment's StepPrefs validation: at least one length and one
-    // location; padding is already clamped by the input.
+    // At least one length and one location (the schema's floor when the
+    // fields are present); padding is already clamped by the input.
     if (sessionLengths.length === 0) {
       setPrefsError(t('tutor.account.sessionPrefs.errorNoLengths'));
       setPrefsSuccess(false);
@@ -203,6 +208,7 @@ export function AccountPage() {
         'profiles.tutor.sessionLengthsMin': sessionLengths,
         'profiles.tutor.locationPrefs': locationPrefs,
         'profiles.tutor.paddingMin': paddingMin,
+        'profiles.tutor.aboutMe': aboutMe.trim() || null,
         updatedAt: serverTimestamp(),
       });
       await refreshUserDoc();
@@ -451,6 +457,24 @@ export function AccountPage() {
           max={60}
           hint={t('tutor.account.sessionPrefs.paddingHint')}
         />
+
+        <div className="mb-5">
+          <label htmlFor="tutor-about-me" className="mb-2 block text-sm font-medium text-gray-700">
+            {t('enrollment.aboutMe')} <span className="text-gray-500">({t('common.optional')})</span>
+          </label>
+          <textarea
+            id="tutor-about-me"
+            value={aboutMe}
+            onChange={(e) => {
+              setAboutMe(e.target.value);
+              setPrefsSuccess(false);
+            }}
+            placeholder={t('enrollment.aboutMePlaceholder')}
+            rows={4}
+            maxLength={1000}
+            className="w-full rounded-lg border-[1.5px] border-gray-300 bg-white px-4 py-3 text-base outline-none transition-colors focus:border-brand-600"
+          />
+        </div>
 
         {prefsError && <p className="mb-4 text-sm text-brand-600">{prefsError}</p>}
         <Button onClick={handleSavePrefs} disabled={prefsSaving} className="mb-6">

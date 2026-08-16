@@ -192,13 +192,14 @@ describe('tutor AccountPage', () => {
     expect((screen.getByLabelText(/transit padding/i) as HTMLInputElement).value).toBe('0');
   });
 
-  it('saves exactly the three dot-paths (+updatedAt) with the edited values', async () => {
+  it('saves exactly the four dot-paths (+updatedAt) with the edited values', async () => {
     seedSessionPrefs();
     renderWithProviders(<AccountPage />);
 
     fireEvent.click(screen.getByRole('button', { name: '75 min' }));
     fireEvent.click(screen.getByLabelText('At your home'));
-    fireEvent.change(screen.getByLabelText(/transit padding/i), { target: { value: '30' } });
+    fireEvent.change(screen.getByLabelText(/padding/i), { target: { value: '30' } });
+    fireEvent.change(screen.getByLabelText(/about me/i), { target: { value: 'I teach maths.' } });
     fireEvent.click(screen.getByRole('button', { name: /save preferences/i }));
 
     await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
@@ -208,6 +209,7 @@ describe('tutor AccountPage', () => {
     // Pin the FULL key set: dot-paths only — never a wholesale profiles.tutor
     // rewrite (would clobber server-owned siblings like approvedFamilies).
     expect(Object.keys(payload).sort()).toEqual([
+      'profiles.tutor.aboutMe',
       'profiles.tutor.locationPrefs',
       'profiles.tutor.paddingMin',
       'profiles.tutor.sessionLengthsMin',
@@ -216,7 +218,19 @@ describe('tutor AccountPage', () => {
     expect(payload['profiles.tutor.sessionLengthsMin']).toEqual([45, 60, 75]);
     expect(payload['profiles.tutor.locationPrefs']).toEqual(['online', 'family_home', 'tutor_home']);
     expect(payload['profiles.tutor.paddingMin']).toBe(30); // NUMBER, not '30'
+    expect(payload['profiles.tutor.aboutMe']).toBe('I teach maths.');
     await waitFor(() => expect(h.auth.refreshUserDoc).toHaveBeenCalled());
+  });
+
+  it('saves an emptied about-me as null (not an empty string)', async () => {
+    seedSessionPrefs();
+    renderWithProviders(<AccountPage />);
+    fireEvent.change(screen.getByLabelText(/about me/i), { target: { value: '   ' } });
+    fireEvent.click(screen.getByRole('button', { name: /save preferences/i }));
+
+    await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
+    const payload = h.updateDoc.mock.calls[0][1] as Record<string, unknown>;
+    expect(payload['profiles.tutor.aboutMe']).toBeNull();
   });
 
   it('blocks save when no session length is selected', async () => {
