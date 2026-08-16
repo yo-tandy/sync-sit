@@ -152,6 +152,12 @@ export const enrollTutor = onCall(
     // check above guarantees at least one exists.
     const gateDob = toDobDate(existingIdentity.dateOfBirth)
       ?? new Date(enrollment.dateOfBirth!);
+    // A malformed stored DOB would make gateDob an Invalid Date, and
+    // checkEnrollmentAge quietly returns 'ok' for a NaN age — never let a
+    // security gate no-op silently.
+    if (Number.isNaN(gateDob.getTime())) {
+      throw new HttpsError('invalid-argument', 'Date of birth is invalid');
+    }
     const emailCheck = validateEjmEmail(data.ejemEmail);
     if (!isGoverned && emailCheck.valid && emailCheck.graduationYear !== undefined) {
       const verdict = checkEnrollmentAge({

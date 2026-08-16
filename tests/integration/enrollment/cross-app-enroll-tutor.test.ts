@@ -189,6 +189,115 @@ describe('enrollTutor cross-app add-profile', () => {
     ).rejects.toMatchObject({ code: 'PERMISSION_DENIED' });
   });
 
+  // ── Issue #144: the wizard omits identity for cross-app enrollees ──
+
+  it('add-profile succeeds with NO identity in the payload; stored identity untouched', async () => {
+    const db = getDb();
+    const token = await getIdToken(seed.babysitter3.uid);
+    const before = (await db.collection('users').doc(seed.babysitter3.uid).get()).data()!;
+
+    const payload = tutorEnrollment() as Record<string, unknown>;
+    delete payload.firstName;
+    delete payload.lastName;
+    delete payload.dateOfBirth;
+
+    const result = await callFunction<{ uid: string }>(
+      'enrollTutor',
+      { ejemEmail: EJEM_EMAIL, verificationCode: CODE, consentVersion: '1.0', enrollment: payload },
+      token,
+    );
+    expect(result.uid).toBe(seed.babysitter3.uid);
+
+    const after = (await db.collection('users').doc(seed.babysitter3.uid).get()).data()!;
+    expect(after.firstName).toBe(before.firstName);
+    expect(after.lastName).toBe(before.lastName);
+    expect(after.dateOfBirth).toEqual(before.dateOfBirth);
+    expect(after.profiles.tutor.ejemEmail).toBe(EJEM_EMAIL.toLowerCase());
+  });
+
+  it('rejects when identity is on file NOWHERE (no payload, no doc)', async () => {
+    // A bare authed account with no identity anywhere must be told to
+    // supply it — the presence check covers payload OR existing doc.
+    const auth = getAdminAuth();
+    const bare = await auth.createUser({
+      email: 'bare.identity144@ejm-test.org',
+      password: 'test1234',
+    });
+    await getDb().collection('users').doc(bare.uid).set({
+      uid: bare.uid,
+      email: 'bare.identity144@ejm-test.org',
+      status: 'active',
+      profiles: {},
+    });
+    const token = await getIdToken(bare.uid);
+
+    const payload = tutorEnrollment() as Record<string, unknown>;
+    delete payload.firstName;
+    delete payload.lastName;
+    delete payload.dateOfBirth;
+
+    await expect(
+      callFunction(
+        'enrollTutor',
+        { ejemEmail: EJEM_EMAIL, verificationCode: CODE, consentVersion: '1.0', enrollment: payload },
+        token,
+      ),
+    ).rejects.toMatchObject({ code: 'INVALID_ARGUMENT' });
+  });
+
+  it('the age gate runs against the STORED DoB, not the payload', async () => {
+    // Underage stored DoB (14) + payload omitting identity: the gate must
+    // read the trusted doc value and reject, even though the payload has
+    // nothing to gate on. Email carries the matching graduation cohort so
+    // the gate actually runs (no grad year -> gate skipped by design).
+    const schoolYearEnd = new Date().getMonth() >= 8
+      ? new Date().getFullYear() + 1
+      : new Date().getFullYear();
+    // Expected-age-15 cohort (a 14yo's own cohort year is outside the valid
+    // email window) — same shape as tutor-age-gate test (a), but with the
+    // underage DoB stored on the DOC, not in the payload.
+    const grad14 = String((schoolYearEnd + (18 - 15)) % 100).padStart(2, '0');
+    const d = new Date();
+    let y = d.getFullYear();
+    let m = d.getMonth() - 5;
+    if (m < 0) { m += 12; y -= 1; }
+    const storedDob14 = `${y - 14}-${String(m + 1).padStart(2, '0')}-15`;
+    const gateEmail = `storedgate.g${grad14}@ejm.org`;
+    await seedCode(gateEmail);
+
+    const auth = getAdminAuth();
+    const young = await auth.createUser({
+      email: 'young.identity144@ejm-test.org',
+      password: 'test1234',
+    });
+    await getDb().collection('users').doc(young.uid).set({
+      uid: young.uid,
+      email: 'young.identity144@ejm-test.org',
+      firstName: 'Too',
+      lastName: 'Young',
+      dateOfBirth: storedDob14,
+      status: 'active',
+      profiles: {},
+    });
+    const token = await getIdToken(young.uid);
+
+    const payload = tutorEnrollment() as Record<string, unknown>;
+    delete payload.firstName;
+    delete payload.lastName;
+    delete payload.dateOfBirth;
+
+    await expect(
+      callFunction(
+        'enrollTutor',
+        { ejemEmail: gateEmail, verificationCode: CODE, consentVersion: '1.0', enrollment: payload },
+        token,
+      ),
+    ).rejects.toMatchObject({
+      code: 'FAILED_PRECONDITION',
+      details: { code: 'age/under-15' },
+    });
+  });
+
   it('add-profile mode still enforces the verification code', async () => {
     // babysitter2 has no tutor profile — a legal caller, so only the wrong
     // code can reject.

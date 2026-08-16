@@ -78,3 +78,15 @@ Wire `&& rootIdentitySetOnce()` into the users update rule chain next to `identi
 - Branch base is PR #145's branch (study wizard was just rebuilt there); the PR for this work opens AFTER #145 merges, rebased onto main.
 - The "login without special user input" half of the issue is already handled by the #111 handoff (auth carries over); this plan closes the enrollment half.
 - Do NOT try to migrate the DoB string/Timestamp divergence in stored docs — out of scope; display code handles both.
+
+---
+
+## Post-implementation addendum (routing correction)
+
+Task 2 as written above prescribed routing the post-create add-profile arm to
+step 4 when identity exists. That was WRONG — it skipped StepProfile entirely
+and lost profiles.babysitter.classLevel/gender for cross-app enrollees. The
+shipped design routes on the PROFILE-SCOPED marker instead: `!babysitter.classLevel`
+→ step 3 (which renders identity as a read-only summary, so nothing is
+re-asked), else step 4. The plan is kept as history; the code and its pins are
+the authority.

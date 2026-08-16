@@ -153,6 +153,28 @@ describe('BabysitterEnrollment add-profile routing (issue #144)', () => {
     expect(h.calls.some((c) => c.name === 'enrollBabysitter')).toBe(true);
   });
 
+  it('RESUME with identity on file but NO classLevel goes to StepProfile (discriminating pin)', async () => {
+    // This fixture separates the predicates: the old routing
+    // (!userDoc.firstName) would send this user to preferences and lose
+    // classLevel forever; the shipped routing (!babysitter.classLevel)
+    // sends them through StepProfile. It exercises the RESUME effect, not
+    // the post-create transition (which is unconditional).
+    h.auth = {
+      firebaseUser: { uid: 't4' },
+      userDoc: {
+        firstName: 'Iris',
+        lastName: 'Martin',
+        dateOfBirth: '2008-01-15',
+        profiles: { tutor: {}, babysitter: { enrollmentComplete: false } },
+      },
+      loading: false,
+    };
+    renderFlow();
+
+    expect(await screen.findByText('profile-next')).toBeInTheDocument();
+    expect(screen.queryByText('preferences-complete')).toBeNull();
+  });
+
   it('resume with classLevel already collected goes straight to preferences', async () => {
     h.auth = {
       firebaseUser: { uid: 't3' },
