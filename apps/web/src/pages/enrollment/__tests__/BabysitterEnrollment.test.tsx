@@ -122,12 +122,15 @@ beforeEach(() => {
   i18n.changeLanguage('en');
 });
 
-// Issue #144: the post-create transition must route on EXISTING identity like
-// the resume effect does — a cross-app user (study tutor adding a babysitter
-// profile) already carries firstName/lastName/dateOfBirth and must never see
-// the identity step again.
+// Issue #144: a cross-app user (study tutor adding a babysitter profile)
+// already carries firstName/lastName/dateOfBirth. They still pass through
+// StepProfile — it owes classLevel/gender — but the step renders their
+// identity as a read-only summary instead of inputs (pinned in
+// StepProfile.test.tsx); nothing is re-asked and the set-once rules deny
+// any identity rewrite. Routing distinguishes on the PROFILE-scoped
+// classLevel marker, not root identity.
 describe('BabysitterEnrollment add-profile routing (issue #144)', () => {
-  it('add-profile with existing identity lands on preferences; StepProfile never mounts', async () => {
+  it('add-profile with existing identity still passes StepProfile (classLevel is owed)', async () => {
     h.auth = {
       firebaseUser: { uid: 't1' },
       userDoc: { firstName: 'Iris', lastName: 'Martin', dateOfBirth: '2008-01-15', profiles: { tutor: {} } },
@@ -144,10 +147,25 @@ describe('BabysitterEnrollment add-profile routing (issue #144)', () => {
 
     await driveThroughAccountStep();
 
-    expect(await screen.findByText('preferences-complete')).toBeInTheDocument();
-    expect(screen.queryByText('profile-next')).toBeNull();
+    expect(await screen.findByText('profile-next')).toBeInTheDocument();
+    expect(screen.queryByText('preferences-complete')).toBeNull();
     expect(h.refreshUserDoc).toHaveBeenCalled();
     expect(h.calls.some((c) => c.name === 'enrollBabysitter')).toBe(true);
+  });
+
+  it('resume with classLevel already collected goes straight to preferences', async () => {
+    h.auth = {
+      firebaseUser: { uid: 't3' },
+      userDoc: {
+        firstName: 'Iris',
+        profiles: { babysitter: { enrollmentComplete: false, classLevel: 'Terminale' } },
+      },
+      loading: false,
+    };
+    renderFlow();
+
+    expect(await screen.findByText('preferences-complete')).toBeInTheDocument();
+    expect(screen.queryByText('profile-next')).toBeNull();
   });
 
   it('add-profile WITHOUT identity still gets the identity step', async () => {

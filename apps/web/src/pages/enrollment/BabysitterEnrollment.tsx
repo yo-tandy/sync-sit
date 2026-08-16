@@ -37,19 +37,21 @@ export function BabysitterEnrollment() {
 
   // Detect if user is already authenticated with incomplete enrollment (resume flow).
   // Guard on step === 0 so this only acts as a mount/login resume aid: once the
-  // user is mid-flow it must never jump steps. Critically, in add-profile mode
-  // handleCreateAccount → refreshUserDoc() adds profiles.babysitter
-  // {enrollmentComplete:false} to userDoc, and add-profile users already carry a
-  // top-level firstName from their other profile — without this guard the effect
-  // would re-fire on that userDoc change and setStep(4), skipping StepProfile
-  // (the immutable classLevel/dateOfBirth/gender step and its 15–19 age gate).
+  // user is mid-flow it must never jump steps — handleCreateAccount and
+  // handleProfileComplete both refresh userDoc mid-flow, and without the guard
+  // each refresh would re-fire this effect and re-route.
   useEffect(() => {
     if (step !== 0 || authLoading) return;
     const babysitter = getBabysitterProfile(userDoc);
     if (firebaseUser && babysitter) {
       if (babysitter.enrollmentComplete === false) {
-        if (!userDoc?.firstName) {
-          setStep(3); // Need immutable fields
+        // Route on the PROFILE-scoped step marker, not root identity:
+        // classLevel is collected by StepProfile, and a cross-app enrollee
+        // (identity on file, no babysitter classLevel yet) still needs that
+        // step — it renders the identity summary instead of identity inputs
+        // (issue #144), so nothing is re-asked.
+        if (!babysitter.classLevel) {
+          setStep(3); // Need classLevel/gender (+ identity when absent)
         } else {
           setStep(4); // Need mutable fields
         }
@@ -123,16 +125,13 @@ export function BabysitterEnrollment() {
       if (isAddProfile) {
         // Already signed in: skip the new-account sign-in and the auth-store
         // wait. Just refresh the user doc so the new babysitter profile is
-        // visible, then route like the resume effect: a cross-app user already
-        // carries root identity (firstName/lastName/dateOfBirth) — never
-        // re-present the identity step, which would try to overwrite it
-        // (issue #144; the rules now deny that write outright).
+        // visible, then continue through StepProfile: cross-app enrollees
+        // still owe classLevel/gender, and the step shows their on-file
+        // identity as a read-only summary instead of inputs (issue #144), so
+        // nothing is re-asked and nothing can overwrite it (the set-once
+        // rules deny that write outright).
         await refreshUserDoc();
-        if (useAuthStore.getState().userDoc?.firstName) {
-          setStep(4);
-        } else {
-          setStep(3);
-        }
+        setStep(3);
         return;
       }
 
