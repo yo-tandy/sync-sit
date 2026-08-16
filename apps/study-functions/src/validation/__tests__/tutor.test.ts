@@ -34,8 +34,18 @@ describe('tutorEnrollmentSchema', () => {
     expect(tutorEnrollmentSchema.safeParse({ ...validEnrollment, subjects: [subj] }).success).toBe(false);
   });
 
-  it('rejects a missing required immutable field', () => {
-    const { firstName: _omit, ...rest } = validEnrollment;
+  it('accepts a payload with the identity fields absent (issue #144: cross-app add-profile omits them; presence is a callable-level check)', () => {
+    const { firstName: _f, lastName: _l, dateOfBirth: _d, ...rest } = validEnrollment;
+    expect(tutorEnrollmentSchema.safeParse(rest).success).toBe(true);
+  });
+
+  it('still rejects EMPTY identity strings when sent', () => {
+    expect(tutorEnrollmentSchema.safeParse({ ...validEnrollment, firstName: '' }).success).toBe(false);
+    expect(tutorEnrollmentSchema.safeParse({ ...validEnrollment, dateOfBirth: '' }).success).toBe(false);
+  });
+
+  it('rejects a missing classLevel (still required)', () => {
+    const { classLevel: _omit, ...rest } = validEnrollment;
     expect(tutorEnrollmentSchema.safeParse(rest).success).toBe(false);
   });
 
@@ -80,8 +90,9 @@ describe('tutorEnrollmentSchema', () => {
 });
 
 describe('tutorImmutableProfileSchema', () => {
-  it('requires firstName/lastName/dateOfBirth/classLevel', () => {
+  it('requires classLevel; identity fields are optional (issue #144)', () => {
     expect(tutorImmutableProfileSchema.safeParse({}).success).toBe(false);
+    expect(tutorImmutableProfileSchema.safeParse({ classLevel: '1ère' }).success).toBe(true);
     expect(
       tutorImmutableProfileSchema.safeParse({
         firstName: 'A', lastName: 'B', dateOfBirth: '2008-01-01', classLevel: '1ère',

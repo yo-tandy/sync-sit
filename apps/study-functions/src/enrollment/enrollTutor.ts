@@ -21,6 +21,18 @@ interface EnrollTutorData {
   enrollment: TutorEnrollmentInput;
 }
 
+/**
+ * Normalize a stored users-doc dateOfBirth: a Firestore Timestamp on
+ * study-created accounts, a "YYYY-MM-DD" string on sit-created ones.
+ */
+function toDobDate(dob: unknown): Date | null {
+  if (typeof dob === 'string' && dob) return new Date(dob);
+  if (dob && typeof (dob as { toDate?: unknown }).toDate === 'function') {
+    return (dob as { toDate: () => Date }).toDate();
+  }
+  return null;
+}
+
 export const enrollTutor = onCall(
   { region: 'europe-west1', cors: getCorsOrigin() },
   async (request) => {
@@ -112,14 +124,37 @@ export const enrollTutor = onCall(
     // always has an account); the new-account path keeps the full gate, and a
     // revoked link (mirror deleted) restores it.
     let isGoverned = false;
+    let existingIdentity: Record<string, unknown> = {};
     if (isAddProfile) {
       const callerSnap = await db.collection('users').doc(request.auth!.uid).get();
-      isGoverned = !!callerSnap.data()?.governedBy;
+      const callerData = callerSnap.data() ?? {};
+      isGoverned = !!callerData.governedBy;
+      existingIdentity = callerData;
     }
+
+    // Identity coherence (issue #144): root identity is set-once. A new
+    // account must supply all three fields; an add-profile caller may omit any
+    // field the existing doc already holds (cross-app enrollment never
+    // re-collects identity), but the merged result must be complete.
+    const hasFirstName = !!enrollment.firstName || !!existingIdentity.firstName;
+    const hasLastName = !!enrollment.lastName || !!existingIdentity.lastName;
+    const hasDateOfBirth = !!enrollment.dateOfBirth || !!existingIdentity.dateOfBirth;
+    if (!hasFirstName || !hasLastName || !hasDateOfBirth) {
+      throw new HttpsError(
+        'invalid-argument',
+        'First name, last name and date of birth are required',
+      );
+    }
+
+    // The age gate runs against the doc's DOB when one is on file (the
+    // set-once, trusted value) and the payload DOB otherwise — the presence
+    // check above guarantees at least one exists.
+    const gateDob = toDobDate(existingIdentity.dateOfBirth)
+      ?? new Date(enrollment.dateOfBirth!);
     const emailCheck = validateEjmEmail(data.ejemEmail);
     if (!isGoverned && emailCheck.valid && emailCheck.graduationYear !== undefined) {
       const verdict = checkEnrollmentAge({
-        dateOfBirth: new Date(enrollment.dateOfBirth),
+        dateOfBirth: gateDob,
         graduationYear: emailCheck.graduationYear,
       });
       if (verdict === 'under_15') {
@@ -141,8 +176,12 @@ export const enrollTutor = onCall(
       }
     }
 
-    // Parse dateOfBirth string ("YYYY-MM-DD") into a Firestore Timestamp
-    const dobTimestamp = Timestamp.fromDate(new Date(enrollment.dateOfBirth));
+    // Parse dateOfBirth string ("YYYY-MM-DD") into a Firestore Timestamp.
+    // Absent on the add-profile path when the doc already holds a DOB —
+    // fillBaseFields skips undefined values, so the stored one is kept.
+    const dobTimestamp = enrollment.dateOfBirth
+      ? Timestamp.fromDate(new Date(enrollment.dateOfBirth))
+      : undefined;
 
     const tutorProfile = {
       enrollmentComplete: false, // false until admin verification completes
@@ -218,12 +257,14 @@ export const enrollTutor = onCall(
     }
 
     // 6a. Write the users/{uid} document — Plan D shape (profiles.tutor)
+    // On the new-account path existingIdentity is empty, so the presence check
+    // above guarantees the payload carries all three identity fields.
     await db.collection('users').doc(uid).set({
       uid,
       email: ejemEmailLower,
-      firstName: enrollment.firstName,
-      lastName: enrollment.lastName,
-      dateOfBirth: dobTimestamp,
+      firstName: enrollment.firstName!,
+      lastName: enrollment.lastName!,
+      dateOfBirth: dobTimestamp!,
       status: 'active',
       notifPrefs: {
         newRequest: { push: true, email: true },

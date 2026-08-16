@@ -32,10 +32,12 @@ interface EnrollTutorInput {
   consentVersion: string;
   // Pref fields (sessionLengthsMin/locationPrefs/paddingMin/area*) are
   // intentionally ABSENT: the server defaults them (withPrefDefaults).
+  // Identity fields are absent for a cross-app add-profile caller whose doc
+  // already carries them (issue #144) — the server keeps the stored values.
   enrollment: {
-    firstName: string;
-    lastName: string;
-    dateOfBirth: string;
+    firstName?: string;
+    lastName?: string;
+    dateOfBirth?: string;
     classLevel: string;
     gender?: string;
     subjects: SubjectOffering[];
@@ -49,6 +51,18 @@ export function TutorEnrollment() {
   const navigate = useNavigate();
   const { firebaseUser, userDoc, loading: authLoading, refreshUserDoc } = useAuthStore();
   const isAddProfile = !!firebaseUser;
+
+  // Root identity is set-once (issue #144): a cross-app enrollee (e.g. an
+  // existing sit babysitter) already carries firstName/lastName/dateOfBirth —
+  // the profile step shows them read-only and the payload omits them.
+  const identityOnFile =
+    isAddProfile && userDoc?.firstName && userDoc?.lastName && userDoc?.dateOfBirth
+      ? {
+          firstName: userDoc.firstName,
+          lastName: userDoc.lastName,
+          dateOfBirth: userDoc.dateOfBirth as unknown,
+        }
+      : null;
 
   const [step, setStep] = useState(0);
   const [ejemEmail, setEjemEmail] = useState('');
@@ -199,7 +213,9 @@ export function TutorEnrollment() {
           // Swallowed by design — see above.
         }
       }
-      navigate('/enroll/tutor/success', { state: { firstName: profileData.firstName } });
+      navigate('/enroll/tutor/success', {
+        state: { firstName: profileData.firstName ?? identityOnFile?.firstName },
+      });
 
     } catch (err: unknown) {
       if (!applyEnrollmentError(err)) {
@@ -257,7 +273,14 @@ export function TutorEnrollment() {
           />
         );
       case 3:
-        return <StepProfile onNext={handleProfileNext} initial={profile} serverError={error} />;
+        return (
+          <StepProfile
+            onNext={handleProfileNext}
+            initial={profile}
+            serverError={error}
+            identityOnFile={identityOnFile}
+          />
+        );
       case 4:
         return (
           <StepSubjects
