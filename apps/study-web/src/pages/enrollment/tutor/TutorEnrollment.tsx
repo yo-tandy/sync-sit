@@ -4,15 +4,19 @@ import { useTranslation } from 'react-i18next';
 import { httpsCallable } from 'firebase/functions';
 import { TopNav, StepIndicator, StepEmail, StepVerify, StepPassword, enrollmentErrorReason, ageGateErrorCode } from '@ejm/shared-ui';
 import { getTutorProfile } from '@ejm/study-core';
+import type { SubjectOffering } from '@ejm/study-core';
 import { functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { EnrollmentAppBar } from '@/components/ui/EnrollmentAppBar';
+import { StepSubjects } from './StepSubjects';
 import { StepProfile } from './StepProfile';
-import { StepPrefs } from './StepPrefs';
 import type { ProfileData } from './StepProfile';
-import type { PrefsData } from './StepPrefs';
 
-// Steps: 0=Email, 1=Verify, 2=Password+consent, 3=Profile, 4=Prefs.
+// Steps: 0=Email, 1=Verify, 2=Password+consent, 3=Subjects, 4=Profile+contact.
+// Subjects come first after auth (issue #143) — they are the primary
+// information families search by. The old prefs step is gone: session
+// lengths/locations/padding/area get server defaults at enrollment and stay
+// editable at /tutor/account and /tutor/area.
 // The visible step indicator only covers the 3 pre-account-creation
 // steps (matching sync-sit's babysitter flow). After step 2 we drop
 // the indicator entirely.
@@ -23,24 +27,17 @@ interface EnrollTutorInput {
   verificationCode: string;
   password?: string;
   consentVersion: string;
+  // Pref fields (sessionLengthsMin/locationPrefs/paddingMin/area*) are
+  // intentionally ABSENT: the server defaults them (withPrefDefaults).
   enrollment: {
     firstName: string;
     lastName: string;
     dateOfBirth: string;
     classLevel: string;
     gender?: string;
-    subjects: never[];
-    sessionLengthsMin: number[];
-    locationPrefs: string[];
-    paddingMin: number;
-    aboutMe?: string;
+    subjects: SubjectOffering[];
     contactEmail?: string;
     contactPhone?: string;
-    areaMode: 'arrondissement' | 'distance';
-    arrondissements?: string[];
-    areaAddress?: string;
-    areaLatLng?: { lat: number; lng: number };
-    areaRadiusKm?: number;
   };
 }
 
@@ -54,7 +51,7 @@ export function TutorEnrollment() {
   const [ejemEmail, setEjemEmail] = useState('');
   const [verificationCode, setVerificationCode] = useState('');
   const [password, setPassword] = useState('');
-  const [profileData, setProfileData] = useState<ProfileData | null>(null);
+  const [subjects, setSubjects] = useState<SubjectOffering[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // When true, render the account-exists CTA (message + login link) instead of
@@ -125,13 +122,13 @@ export function TutorEnrollment() {
     setStep(3);
   };
 
-  const handleProfileNext = (data: ProfileData) => {
-    setProfileData(data);
+  const handleSubjectsNext = (data: SubjectOffering[]) => {
+    setSubjects(data);
+    setError(null);
     setStep(4);
   };
 
-  const handlePrefsNext = async (prefsData: PrefsData) => {
-    if (!profileData) return;
+  const handleProfileNext = async (profileData: ProfileData) => {
     setLoading(true);
     setError(null);
     setShowLoginCta(false);
@@ -141,24 +138,16 @@ export function TutorEnrollment() {
       // which breaks server-side Zod .optional() validation. Strip undefined
       // keys via JSON round-trip so the schema sees the field as absent
       // (which .optional() handles) rather than as null (which it rejects).
+      // The dropped pref fields are NOT sent at all — the server defaults them.
       const enrollmentRaw = {
         firstName: profileData.firstName,
         lastName: profileData.lastName,
         dateOfBirth: profileData.dateOfBirth,
         classLevel: profileData.classLevel,
         gender: profileData.gender,
-        subjects: [] as never[],
-        sessionLengthsMin: prefsData.sessionLengthsMin,
-        locationPrefs: prefsData.locationPrefs,
-        paddingMin: prefsData.paddingMin,
-        aboutMe: prefsData.aboutMe,
-        contactEmail: prefsData.contactEmail,
-        contactPhone: prefsData.contactPhone,
-        areaMode: prefsData.areaMode,
-        arrondissements: prefsData.arrondissements,
-        areaAddress: prefsData.areaAddress,
-        areaLatLng: prefsData.areaLatLng,
-        areaRadiusKm: prefsData.areaRadiusKm,
+        subjects,
+        contactEmail: profileData.contactEmail,
+        contactPhone: profileData.contactPhone,
       };
       const enrollment = JSON.parse(JSON.stringify(enrollmentRaw)) as typeof enrollmentRaw;
       await enrollTutorFn({
@@ -230,11 +219,11 @@ export function TutorEnrollment() {
           />
         );
       case 3:
-        return <StepProfile onNext={handleProfileNext} />;
+        return <StepSubjects onNext={handleSubjectsNext} />;
       case 4:
         return (
-          <StepPrefs
-            onNext={handlePrefsNext}
+          <StepProfile
+            onNext={handleProfileNext}
             loading={loading}
             error={error}
           />

@@ -84,19 +84,19 @@ vi.mock('@ejm/shared-ui', () => ({
 vi.mock('@/components/ui/EnrollmentAppBar', () => ({
   EnrollmentAppBar: () => <div>enrollment-app-bar</div>,
 }));
-vi.mock('../StepProfile', () => ({
-  StepProfile: ({ onNext }: { onNext: (d: unknown) => void }) => (
-    <button onClick={() => onNext({ firstName: 'Flow', lastName: 'Tutor', dateOfBirth: '2008-07-07', classLevel: 'Terminale', gender: 'other' })}>
-      profile-next
+vi.mock('../StepSubjects', () => ({
+  StepSubjects: ({ onNext }: { onNext: (d: unknown) => void }) => (
+    <button onClick={() => onNext([{ subject: 'math', levels: ['Terminale'], rate: 25 }])}>
+      subjects-next
     </button>
   ),
 }));
-vi.mock('../StepPrefs', () => ({
-  StepPrefs: ({ onNext, error }: { onNext: (d: unknown) => void; error: string | null }) => (
+vi.mock('../StepProfile', () => ({
+  StepProfile: ({ onNext, error }: { onNext: (d: unknown) => void; error?: string | null }) => (
     <div>
       {error && <p>{error}</p>}
-      <button onClick={() => onNext({ sessionLengthsMin: [60], locationPrefs: ['online'], paddingMin: 0, contactEmail: 'flow@ejm.org', areaMode: 'distance', areaAddress: '16 rue de Passy, 75016 Paris', areaLatLng: { lat: 48.8571, lng: 2.2795 } })}>
-        prefs-next
+      <button onClick={() => onNext({ firstName: 'Flow', lastName: 'Tutor', dateOfBirth: '2008-07-07', classLevel: 'Terminale', gender: 'other', contactEmail: 'flow@ejm.org' })}>
+        profile-next
       </button>
     </div>
   ),
@@ -150,13 +150,15 @@ describe('TutorEnrollment orchestrator', () => {
     expect(screen.getByTestId('step-password')).toHaveAttribute('data-collect', 'true');
 
     // Step 2 -> 3 crosses into the post-auth phase: app bar replaces TopNav.
+    // Subjects render FIRST after auth (issue #143), before the profile step.
     fireEvent.click(screen.getByText('password-submit'));
-    expect(await screen.findByText('profile-next')).toBeInTheDocument();
+    expect(await screen.findByText('subjects-next')).toBeInTheDocument();
+    expect(screen.queryByText('profile-next')).toBeNull();
     expect(screen.getByText('enrollment-app-bar')).toBeInTheDocument();
     expect(screen.queryByText(/step-\d/)).toBeNull();
 
-    fireEvent.click(screen.getByText('profile-next'));
-    fireEvent.click(await screen.findByText('prefs-next'));
+    fireEvent.click(screen.getByText('subjects-next'));
+    fireEvent.click(await screen.findByText('profile-next'));
 
     // enrollTutor called with the composed payload; success navigation fired.
     const enroll = await vi.waitFor(() => {
@@ -169,11 +171,14 @@ describe('TutorEnrollment orchestrator', () => {
     expect(payload.password).toBe('Pw123456!');
     expect(payload.enrollment).toMatchObject({
       firstName: 'Flow', classLevel: 'Terminale',
-      sessionLengthsMin: [60], locationPrefs: ['online'], contactEmail: 'flow@ejm.org',
-      // Area coordinates from the address pick flow through to the callable.
-      areaMode: 'distance', areaAddress: '16 rue de Passy, 75016 Paris',
-      areaLatLng: { lat: 48.8571, lng: 2.2795 },
+      subjects: [{ subject: 'math', levels: ['Terminale'], rate: 25 }],
+      contactEmail: 'flow@ejm.org',
     });
+    // The dropped pref fields must be ABSENT from the payload (not sent as
+    // empty values) — the server defaults are the single source of truth.
+    for (const key of ['sessionLengthsMin', 'locationPrefs', 'paddingMin', 'areaMode', 'arrondissements', 'areaAddress', 'areaLatLng', 'areaRadiusKm', 'aboutMe']) {
+      expect(payload.enrollment).not.toHaveProperty(key);
+    }
     expect(h.navigate).toHaveBeenCalledWith('/enroll/tutor/success', { state: { firstName: 'Flow' } });
   });
 
@@ -194,8 +199,8 @@ describe('TutorEnrollment orchestrator', () => {
     expect(passwordStep).toHaveAttribute('data-collect', 'false');
 
     fireEvent.click(passwordStep);
+    fireEvent.click(await screen.findByText('subjects-next'));
     fireEvent.click(await screen.findByText('profile-next'));
-    fireEvent.click(await screen.findByText('prefs-next'));
 
     const enroll = await vi.waitFor(() => {
       const c = h.calls.find((x) => x.name === 'enrollTutor');
@@ -224,8 +229,8 @@ describe('TutorEnrollment orchestrator', () => {
     fireEvent.click(screen.getByText('email-submit'));
     fireEvent.click(await screen.findByText('verify-submit'));
     fireEvent.click(await screen.findByText('password-submit'));
+    fireEvent.click(await screen.findByText('subjects-next'));
     fireEvent.click(await screen.findByText('profile-next'));
-    fireEvent.click(await screen.findByText('prefs-next'));
     await vi.waitFor(() => expect(h.calls.some((c) => c.name === 'enrollTutor')).toBe(true));
   }
 

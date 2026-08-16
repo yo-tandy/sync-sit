@@ -8,10 +8,14 @@ export interface ProfileData {
   dateOfBirth: string;
   classLevel: string;
   gender?: string;
+  contactEmail?: string;
+  contactPhone?: string;
 }
 
 interface StepProfileProps {
   onNext: (data: ProfileData) => void;
+  loading?: boolean;
+  error?: string | null;
 }
 
 const CLASS_LEVELS_TUTOR = [
@@ -40,23 +44,37 @@ function getAge(dateOfBirth: string): number | null {
   return age;
 }
 
-export function StepProfile({ onNext }: StepProfileProps) {
+export function StepProfile({ onNext, loading = false, error = null }: StepProfileProps) {
   const { t } = useTranslation();
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [dateOfBirth, setDateOfBirth] = useState('');
   const [classLevel, setClassLevel] = useState('');
   const [gender, setGender] = useState<string | undefined>(undefined);
+  // Contact moved here from the removed prefs step (issue #143): families see
+  // it on the tutor card after accepting a request, so the callable requires
+  // at least one field.
+  const [contactEmail, setContactEmail] = useState('');
+  const [contactPhone, setContactPhone] = useState('');
 
   const age = getAge(dateOfBirth);
   const ageValid = age !== null && age >= 15 && age < 19;
   const showAgeError = dateOfBirth && !ageValid;
-  const isValid = firstName && lastName && dateOfBirth && ageValid && classLevel;
+  const hasContact = contactEmail.trim() || contactPhone.trim();
+  const isValid = firstName && lastName && dateOfBirth && ageValid && classLevel && hasContact;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!isValid) return;
-    onNext({ firstName, lastName, dateOfBirth, classLevel, gender });
+    onNext({
+      firstName,
+      lastName,
+      dateOfBirth,
+      classLevel,
+      gender,
+      contactEmail: contactEmail.trim() || undefined,
+      contactPhone: contactPhone.trim() || undefined,
+    });
   };
 
   return (
@@ -128,8 +146,28 @@ export function StepProfile({ onNext }: StepProfileProps) {
         </div>
       </div>
 
-      <Button type="submit" disabled={!isValid}>
-        {t('common.continue')}
+      <hr className="my-5 border-gray-200" />
+
+      {/* Contact */}
+      <p className="mb-1 text-sm font-semibold text-gray-700">{t('enrollment.contactSection')}</p>
+      <p className="mb-3 text-xs text-gray-500">{t('enrollment.contactHint')}</p>
+      <Input
+        label={t('enrollment.contactEmail')}
+        type="email"
+        value={contactEmail}
+        onChange={(e) => setContactEmail(e.target.value)}
+      />
+      <Input
+        label={t('enrollment.contactPhone')}
+        type="tel"
+        value={contactPhone}
+        onChange={(e) => setContactPhone(e.target.value)}
+      />
+
+      {error && <p className="mb-4 text-sm text-brand-600">{error}</p>}
+
+      <Button type="submit" disabled={!isValid || loading}>
+        {loading ? t('common.loading') : t('enrollment.completeSignup')}
       </Button>
     </form>
   );
