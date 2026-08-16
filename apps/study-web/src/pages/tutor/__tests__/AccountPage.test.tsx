@@ -182,14 +182,14 @@ describe('tutor AccountPage', () => {
     expect(screen.getByLabelText('At your home')).not.toBeChecked();
     expect(screen.getByLabelText('Library / public space')).not.toBeChecked();
 
-    expect((screen.getByLabelText(/transit padding/i) as HTMLInputElement).value).toBe('15');
+    expect((screen.getByLabelText(/appointment padding/i) as HTMLInputElement).value).toBe('15');
   });
 
   it('renders the section without crashing when the fields are absent (legacy doc)', () => {
     renderWithProviders(<AccountPage />);
     expect(screen.getByRole('button', { name: '45 min', pressed: false })).toBeInTheDocument();
     expect(screen.getByLabelText('Online')).not.toBeChecked();
-    expect((screen.getByLabelText(/transit padding/i) as HTMLInputElement).value).toBe('0');
+    expect((screen.getByLabelText(/appointment padding/i) as HTMLInputElement).value).toBe('0');
   });
 
   it('saves exactly the four dot-paths (+updatedAt) with the edited values', async () => {
@@ -299,7 +299,7 @@ describe('tutor AccountPage', () => {
     (userDoc.profiles.tutor as Record<string, unknown>).paddingMin = 15;
     h.auth.userDoc = userDoc;
     renderWithProviders(<AccountPage />);
-    const padding = await screen.findByLabelText(/padding|transit/i);
+    const padding = await screen.findByLabelText(/padding/i);
     fireEvent.change(padding, { target: { value: '500' } });
     fireEvent.click(screen.getByRole('button', { name: /^save preferences$/i }));
 
