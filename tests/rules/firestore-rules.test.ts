@@ -1751,6 +1751,23 @@ describe('users update — tutor numeric bounds (issue #123 hardening)', () => {
     );
   });
 
+  it('rejects an over-long aboutMe (owner write) — the account page is the only writer', async () => {
+    const db = testEnv.authenticatedContext(uid).firestore();
+    await assertFails(
+      updateDoc(doc(db, 'users', uid), { 'profiles.tutor.aboutMe': 'x'.repeat(1001) }),
+    );
+  });
+
+  it('accepts a bounded aboutMe and explicit null', async () => {
+    const db = testEnv.authenticatedContext(uid).firestore();
+    await assertSucceeds(
+      updateDoc(doc(db, 'users', uid), { 'profiles.tutor.aboutMe': 'x'.repeat(1000) }),
+    );
+    await assertSucceeds(
+      updateDoc(doc(db, 'users', uid), { 'profiles.tutor.aboutMe': null }),
+    );
+  });
+
   it('rejects out-of-range and NaN coordinates (owner write)', async () => {
     const db = testEnv.authenticatedContext(uid).firestore();
     await assertFails(

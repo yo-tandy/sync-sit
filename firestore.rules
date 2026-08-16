@@ -119,7 +119,13 @@ service cloud.firestore {
                      && tutorField(request.resource.data, 'areaLatLng', null).lat <= 90
                      && tutorField(request.resource.data, 'areaLatLng', null).lng is number
                      && tutorField(request.resource.data, 'areaLatLng', null).lng >= -180
-                     && tutorField(request.resource.data, 'areaLatLng', null).lng <= 180));
+                     && tutorField(request.resource.data, 'areaLatLng', null).lng <= 180))
+             // aboutMe: the account page is the only writer since enrollment
+             // stopped collecting it — its 1000-char bound must live HERE,
+             // not in the textarea's maxLength (rules are the trust boundary).
+             && (tutorField(request.resource.data, 'aboutMe', null) == null
+                 || (tutorField(request.resource.data, 'aboutMe', null) is string
+                     && tutorField(request.resource.data, 'aboutMe', null).size() <= 1000));
     }
 
     // Helper: profiles.parent.familyId is server-controlled (enrollFamily /

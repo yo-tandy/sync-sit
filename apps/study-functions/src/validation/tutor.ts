@@ -13,7 +13,7 @@ const subjectOfferingSchema = z.object({
   levels: z
     .array(z.enum(CLASS_LEVELS))
     .min(1, 'At least one class level is required per subject'),
-  rate: z.number().min(0, 'Rate must be a non-negative number'),
+  rate: z.number().positive('Rate must be a positive number'),
 });
 
 // ── Tutor enrollment schemas ──
@@ -35,11 +35,13 @@ export const tutorImmutableProfileSchema = z.object({
 });
 
 /**
- * Subjects the tutor offers. Empty array is valid — subjects are deferred to
- * the profile-edit flow after enrollment completes.
+ * Subjects the tutor offers. At least one is REQUIRED at enrollment since
+ * issue #143 made subjects the first collected step — a tutor with zero
+ * subjects is invisible to search, and the floor belongs here, not only in
+ * the wizard's client-side gate.
  */
 export const tutorSubjectsSchema = z.object({
-  subjects: z.array(subjectOfferingSchema),
+  subjects: z.array(subjectOfferingSchema).min(1, 'At least one subject is required'),
 });
 
 /**

@@ -12,7 +12,7 @@ const validEnrollment = {
   dateOfBirth: '2008-07-07',
   classLevel: 'Terminale',
   gender: 'other' as const,
-  subjects: [],
+  subjects: [{ subject: 'math', levels: ['6e'], rate: 25 }],
   sessionLengthsMin: [60],
   locationPrefs: ['online'],
   paddingMin: 0,
@@ -25,8 +25,13 @@ describe('tutorEnrollmentSchema', () => {
     expect(tutorEnrollmentSchema.safeParse(validEnrollment).success).toBe(true);
   });
 
-  it('accepts an empty subjects array (deferred to profile edit)', () => {
-    expect(tutorEnrollmentSchema.safeParse({ ...validEnrollment, subjects: [] }).success).toBe(true);
+  it('rejects an empty subjects array — enrollment must produce a searchable tutor', () => {
+    expect(tutorEnrollmentSchema.safeParse({ ...validEnrollment, subjects: [] }).success).toBe(false);
+  });
+
+  it('rejects a zero rate (must be positive, matching the wizard gate)', () => {
+    const subj = { subject: 'math', levels: ['6e'], rate: 0 };
+    expect(tutorEnrollmentSchema.safeParse({ ...validEnrollment, subjects: [subj] }).success).toBe(false);
   });
 
   it('rejects a missing required immutable field', () => {

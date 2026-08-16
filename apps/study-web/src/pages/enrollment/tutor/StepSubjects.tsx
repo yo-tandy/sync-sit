@@ -115,6 +115,7 @@ export function StepSubjects({ onNext }: StepSubjectsProps) {
             </button>
 
             <Select
+              id={`subject-${index}`}
               label={t('tutor.subjects.subjectLabel')}
               value={row.subject}
               onChange={(e) => setSubject(index, e.target.value)}
@@ -140,6 +141,7 @@ export function StepSubjects({ onNext }: StepSubjectsProps) {
             </div>
 
             <Input
+              id={`subject-rate-${index}`}
               label={t('tutor.subjects.rateLabel')}
               type="number"
               value={row.rate}

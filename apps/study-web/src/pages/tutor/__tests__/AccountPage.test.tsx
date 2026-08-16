@@ -15,6 +15,7 @@ const h = vi.hoisted(() => ({
   updateDoc: vi.fn(() => Promise.resolve()),
   uploadBytes: vi.fn(() => Promise.resolve()),
   getDownloadURL: vi.fn(() => Promise.resolve('https://cdn.example/photo.png')),
+  deleteObject: vi.fn(() => Promise.resolve()),
 }));
 
 vi.mock('@/config/firebase', () => ({ db: {}, storage: {} }));
@@ -28,6 +29,7 @@ vi.mock('firebase/firestore', () => ({
 vi.mock('firebase/storage', () => ({
   ref: (_storage: unknown, path: string) => ({ path }),
   uploadBytes: (...args: unknown[]) => h.uploadBytes(...args),
+  deleteObject: (...args: unknown[]) => h.deleteObject(...args),
   getDownloadURL: (...args: unknown[]) => h.getDownloadURL(...args),
 }));
 
@@ -71,6 +73,7 @@ function reset() {
   h.updateDoc.mockClear();
   h.uploadBytes.mockClear();
   h.getDownloadURL.mockClear();
+  h.deleteObject.mockClear();
 }
 
 describe('tutor AccountPage', () => {
@@ -169,6 +172,54 @@ describe('tutor AccountPage', () => {
       ),
     );
     expect(h.uploadBytes).not.toHaveBeenCalled();
+  });
+
+  it('remove also deletes the storage object recovered from the download URL', async () => {
+    const userDoc = makeUserDoc() as Record<string, unknown>;
+    userDoc.photoUrl =
+      'https://firebasestorage.example/v0/b/x/o/profile-photos%2Ft1.jpg?alt=media&token=abc';
+    h.auth.userDoc = userDoc;
+    renderWithProviders(<AccountPage />);
+
+    fireEvent.click(screen.getByRole('button', { name: /remove photo/i }));
+    await waitFor(() =>
+      expect(h.deleteObject).toHaveBeenCalledWith(
+        expect.objectContaining({ path: 'profile-photos/t1.jpg' }),
+      ),
+    );
+  });
+
+  it('a failed removal shows an inline error and keeps showing the photo', async () => {
+    const userDoc = makeUserDoc() as Record<string, unknown>;
+    userDoc.photoUrl = 'https://cdn.example/old.png';
+    h.auth.userDoc = userDoc;
+    h.updateDoc.mockRejectedValueOnce(new Error('offline'));
+    renderWithProviders(<AccountPage />);
+
+    fireEvent.click(screen.getByRole('button', { name: /remove photo/i }));
+    // Honest failure: the error names the consequence and the photo (still
+    // live on the public card) is still rendered — not silently "removed".
+    expect(await screen.findByText(/could not remove the photo/i)).toBeInTheDocument();
+    expect(screen.getByRole('img')).toBeInTheDocument();
+    expect(h.deleteObject).not.toHaveBeenCalled();
+  });
+
+  it('a failed upload shows the inline photo error and reverts the preview', async () => {
+    const userDoc = makeUserDoc() as Record<string, unknown>;
+    userDoc.photoUrl = 'https://cdn.example/old.png';
+    h.auth.userDoc = userDoc;
+    h.uploadBytes.mockRejectedValueOnce(new Error('storage down'));
+    renderWithProviders(<AccountPage />);
+
+    const file = new File(['x'], 'new.png', { type: 'image/png' });
+    fireEvent.change(screen.getByTestId('photo-input'), { target: { files: [file] } });
+
+    expect(await screen.findByText(/failed to upload photo/i)).toBeInTheDocument();
+    // The preview falls back to the STORED photo — the picked image did not save.
+    await waitFor(() =>
+      expect(screen.getByRole('img')).toHaveAttribute('src', 'https://cdn.example/old.png'),
+    );
+    expect(h.updateDoc).not.toHaveBeenCalled();
   });
 
   // ── Cancellation policy (V2 feature 7) ──

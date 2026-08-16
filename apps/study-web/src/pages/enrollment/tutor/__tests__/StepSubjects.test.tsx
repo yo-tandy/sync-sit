@@ -68,6 +68,16 @@ describe('StepSubjects (tutor enrollment)', () => {
     expect(onNext).not.toHaveBeenCalled();
   });
 
+  it('rows get unique control ids so labels focus their own row', () => {
+    const onNext = vi.fn();
+    renderWithProviders(<StepSubjects onNext={onNext} />);
+    fireEvent.click(screen.getByRole('button', { name: /Add a subject/i }));
+    const selects = screen.getAllByLabelText(/subject/i);
+    const ids = selects.map((el) => el.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(ids[0]).not.toBe('');
+  });
+
   it('rejects duplicate subjects across rows', () => {
     const onNext = vi.fn();
     renderWithProviders(<StepSubjects onNext={onNext} />);

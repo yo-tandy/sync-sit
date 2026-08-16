@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { db, storage } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { getTutorProfile, SESSION_LENGTHS, LOCATION_PREFS } from '@ejm/study-core';
@@ -58,6 +58,7 @@ export function AccountPage() {
   // top-level users/{uid}.photoUrl (the field searchTutors projects into
   // search results; one photo per account across roles).
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const previewTokenRef = useRef(0);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoError, setPhotoError] = useState<string | null>(null);
@@ -89,8 +90,8 @@ export function AccountPage() {
   const [locationPrefs, setLocationPrefs] = useState<LocationPref[]>([]);
   const [paddingMin, setPaddingMin] = useState(0);
   // About-me bio: enrollment stopped collecting it (issue #143), so this is
-  // now the only editor. Owner-writable dot-path; the schema bounds it at
-  // 1000 chars.
+  // now the only editor. Owner-writable dot-path; firestore.rules bounds it
+  // at 1000 chars post-state (the textarea maxLength is UX only).
   const [aboutMe, setAboutMe] = useState('');
   const [prefsSaving, setPrefsSaving] = useState(false);
   const [prefsSuccess, setPrefsSuccess] = useState(false);
@@ -147,8 +148,14 @@ export function AccountPage() {
       return;
     }
     setPhotoFile(file);
+    // Token-guard the async reader: if the upload fails (or another pick
+    // happens) before onload fires, a stale data-URI must not overwrite the
+    // reverted/newer preview.
+    const token = ++previewTokenRef.current;
     const reader = new FileReader();
-    reader.onload = (e) => setPhotoPreview(e.target?.result as string);
+    reader.onload = (e) => {
+      if (previewTokenRef.current === token) setPhotoPreview(e.target?.result as string);
+    };
     reader.readAsDataURL(file);
   };
 
@@ -158,28 +165,47 @@ export function AccountPage() {
     e.target.value = '';
   };
 
+  // The stored download URL embeds the object path as `profile-photos%2F{uid}.{ext}` —
+  // recover it so remove/replace can delete the object. Photos of 15-18-year-old
+  // tutors must not survive as readable orphans after "remove".
+  const storedPhotoPath = (): string | null => {
+    const url = userDoc?.photoUrl;
+    if (typeof url !== 'string') return null;
+    const m = url.match(/profile-photos%2F([^?]+)/);
+    return m ? `profile-photos/${decodeURIComponent(m[1])}` : null;
+  };
+
   const handleRemovePhoto = async () => {
     if (!uid) return;
-    setPhotoPreview(null);
-    setPhotoFile(null);
     setPhotoError(null);
     try {
+      // Write first, clear the preview after — a failed removal must not
+      // LOOK removed while the photo is still on the public search card.
       await updateDoc(doc(db, 'users', uid), {
         photoUrl: null,
         updatedAt: serverTimestamp(),
       });
+      const oldPath = storedPhotoPath();
+      if (oldPath) {
+        // Best-effort: the doc field is the source of truth; a failed object
+        // delete leaves an orphan we retry on the next remove/replace.
+        await deleteObject(ref(storage, oldPath)).catch(() => {});
+      }
       await refreshUserDoc();
+      setPhotoPreview(null);
+      setPhotoFile(null);
     } catch {
-      // silent
+      setPhotoError(t('account.photoRemoveFailed'));
     }
   };
 
   const handlePhotoSave = async () => {
     if (!uid || !photoFile) return;
     setPhotoSaving(true);
-    setError(null);
+    setPhotoError(null);
     try {
       const ext = photoFile.name.split('.').pop() || 'jpg';
+      const oldPath = storedPhotoPath();
       const path = `profile-photos/${uid}.${ext}`;
       const storageRef = ref(storage, path);
       await uploadBytes(storageRef, photoFile);
@@ -188,11 +214,20 @@ export function AccountPage() {
         photoUrl,
         updatedAt: serverTimestamp(),
       });
+      // Replacing with a different extension orphans the old object — delete it.
+      if (oldPath && oldPath !== path) {
+        await deleteObject(ref(storage, oldPath)).catch(() => {});
+      }
       await refreshUserDoc();
       setPhotoFile(null);
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : t('account.photoUploadFailed');
-      setError(message);
+    } catch {
+      // Inline error where the user is looking, and an honest preview: the
+      // picked image did NOT save, so fall back to what is actually stored.
+      // Bump the token so a still-pending reader can't repaint the failure.
+      previewTokenRef.current++;
+      setPhotoError(t('account.photoUploadFailed'));
+      setPhotoPreview(typeof userDoc?.photoUrl === 'string' ? userDoc.photoUrl : null);
+      setPhotoFile(null);
     } finally {
       setPhotoSaving(false);
     }
@@ -433,12 +468,12 @@ export function AccountPage() {
           <div>
             {photoPreview ? (
               <button type="button" onClick={handleRemovePhoto} className="text-sm font-medium text-brand-600">
-                {t('enrollment.removePhoto')}
+                {t('account.removePhoto')}
               </button>
             ) : (
-              <p className="text-sm font-medium">{t('enrollment.addPhoto')}</p>
+              <p className="text-sm font-medium">{t('account.addPhoto')}</p>
             )}
-            <p className="text-xs text-gray-500">{t('enrollment.photoOptional')}</p>
+            <p className="text-xs text-gray-500">{t('account.photoOptional')}</p>
             {photoError && <p className="text-xs text-brand-600">{photoError}</p>}
             {photoSaving && <p className="text-xs text-gray-500">{t('common.saving')}</p>}
           </div>
