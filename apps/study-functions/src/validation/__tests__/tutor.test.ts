@@ -3,6 +3,7 @@ import {
   tutorEnrollmentSchema,
   tutorImmutableProfileSchema,
   tutorSessionPrefsSchema,
+  withPrefDefaults,
 } from '../tutor.js';
 
 const validEnrollment = {
@@ -39,20 +40,31 @@ describe('tutorEnrollmentSchema', () => {
     ).toBe(false);
   });
 
-  it('rejects an empty session-lengths array', () => {
+  it('rejects an explicit empty session-lengths array', () => {
     expect(
       tutorEnrollmentSchema.safeParse({ ...validEnrollment, sessionLengthsMin: [] }).success,
     ).toBe(false);
   });
 
-  it('rejects an empty location-prefs array', () => {
+  it('rejects an explicit empty location-prefs array', () => {
     expect(
       tutorEnrollmentSchema.safeParse({ ...validEnrollment, locationPrefs: [] }).success,
     ).toBe(false);
   });
 
-  it('rejects an out-of-range transit padding', () => {
+  it('rejects an out-of-range appointment padding', () => {
     expect(tutorEnrollmentSchema.safeParse({ ...validEnrollment, paddingMin: 90 }).success).toBe(false);
+  });
+
+  it('accepts a payload with no pref fields at all (wizard no longer sends them)', () => {
+    const {
+      sessionLengthsMin: _sl,
+      locationPrefs: _lp,
+      paddingMin: _pm,
+      areaMode: _am,
+      ...noPrefs
+    } = validEnrollment;
+    expect(tutorEnrollmentSchema.safeParse(noPrefs).success).toBe(true);
   });
 
   it('rejects an unknown location preference', () => {
@@ -90,5 +102,53 @@ describe('tutorSessionPrefsSchema', () => {
         }).success,
       ).toBe(true);
     }
+  });
+});
+
+describe('withPrefDefaults', () => {
+  const parse = (payload: unknown) => {
+    const result = tutorEnrollmentSchema.safeParse(payload);
+    if (!result.success) throw new Error('fixture must parse');
+    return result.data;
+  };
+
+  it('defaults every absent pref field to the server defaults', () => {
+    const {
+      sessionLengthsMin: _sl,
+      locationPrefs: _lp,
+      paddingMin: _pm,
+      areaMode: _am,
+      ...noPrefs
+    } = validEnrollment;
+    const defaulted = withPrefDefaults(parse(noPrefs));
+    expect(defaulted.sessionLengthsMin).toEqual([60]);
+    expect(defaulted.locationPrefs).toEqual(['family_home', 'tutor_home', 'online', 'library']);
+    expect(defaulted.paddingMin).toBe(30);
+    expect(defaulted.areaMode).toBe('arrondissement');
+    expect(defaulted.arrondissements).toEqual([]);
+  });
+
+  it('never overrides pref fields that were sent', () => {
+    const defaulted = withPrefDefaults(
+      parse({
+        ...validEnrollment,
+        sessionLengthsMin: [45, 75],
+        locationPrefs: ['library'],
+        paddingMin: 0,
+        areaMode: 'distance',
+        arrondissements: ['75005'],
+      }),
+    );
+    expect(defaulted.sessionLengthsMin).toEqual([45, 75]);
+    expect(defaulted.locationPrefs).toEqual(['library']);
+    expect(defaulted.paddingMin).toBe(0);
+    expect(defaulted.areaMode).toBe('distance');
+    expect(defaulted.arrondissements).toEqual(['75005']);
+  });
+
+  it('preserves non-pref fields untouched', () => {
+    const defaulted = withPrefDefaults(parse(validEnrollment));
+    expect(defaulted.firstName).toBe('Flow');
+    expect(defaulted.contactEmail).toBe('flow@ejm.org');
   });
 });
