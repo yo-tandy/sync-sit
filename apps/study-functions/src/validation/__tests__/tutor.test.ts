@@ -170,3 +170,27 @@ describe('withPrefDefaults', () => {
     expect(defaulted.contactEmail).toBe('flow@ejm.org');
   });
 });
+
+import { toDobDate } from '../../enrollment/enrollTutor.js';
+
+describe('toDobDate — the stored-DOB normalizer the age gate depends on', () => {
+  it('parses the sit-created string format', () => {
+    const d = toDobDate('2008-05-01');
+    expect(d).toBeInstanceOf(Date);
+    expect(d!.getFullYear()).toBe(2008);
+  });
+
+  it('unwraps a Firestore Timestamp-like object', () => {
+    const ts = { toDate: () => new Date(2009, 2, 15) };
+    const d = toDobDate(ts);
+    expect(d).toBeInstanceOf(Date);
+    expect(d!.getFullYear()).toBe(2009);
+  });
+
+  it('returns null for empty string, null, undefined and junk', () => {
+    expect(toDobDate('')).toBeNull();
+    expect(toDobDate(null)).toBeNull();
+    expect(toDobDate(undefined)).toBeNull();
+    expect(toDobDate(42)).toBeNull();
+  });
+});

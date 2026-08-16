@@ -114,35 +114,45 @@ export function StepProfile({ uid, email, onNext }: StepProfileProps) {
       <h2 className="mt-4 mb-2 text-xl font-bold">{t('enrollment.welcomeTitle1')}<br />{t('enrollment.welcomeTitle2')}</h2>
       <p className="mb-6 text-sm text-gray-500">{t('enrollment.welcomeSubtitle')}</p>
 
-      {identityOnFile ? (
+      {/* Render decisions are PER FIELD, matching the payload and isValid
+          logic exactly — an all-or-nothing render would dead-end a doc with
+          partial identity (name on file, DoB missing: empty required name
+          inputs that the payload never sends). identityOnFile summarises
+          only when everything is on file. */}
+      {identityOnFile && (
         <p className="mb-5 rounded-lg bg-gray-50 px-4 py-3 text-sm text-gray-700">
           {t('enrollment.identityOnFile', {
             name: `${userDoc?.firstName} ${userDoc?.lastName}`,
           })}
         </p>
-      ) : (
+      )}
+      {!(hasFirstName && hasLastName) && (
         <div className="flex gap-3">
-          <div className="flex-1">
-            <Input
-              label={t('enrollment.firstName')}
-              value={firstName}
-              onChange={(e) => setFirstName(e.target.value)}
-              required
-            />
-          </div>
-          <div className="flex-1">
-            <Input
-              label={t('enrollment.lastName')}
-              value={lastName}
-              onChange={(e) => setLastName(e.target.value)}
-              required
-            />
-          </div>
+          {!hasFirstName && (
+            <div className="flex-1">
+              <Input
+                label={t('enrollment.firstName')}
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+                required
+              />
+            </div>
+          )}
+          {!hasLastName && (
+            <div className="flex-1">
+              <Input
+                label={t('enrollment.lastName')}
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+                required
+              />
+            </div>
+          )}
         </div>
       )}
 
       <div className="grid grid-cols-2 gap-3">
-        {!identityOnFile && (
+        {!hasDateOfBirth && (
           <div className="min-w-0">
             <Input
               label={t('enrollment.dateOfBirth')}

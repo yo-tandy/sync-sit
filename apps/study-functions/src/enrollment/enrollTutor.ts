@@ -24,8 +24,9 @@ interface EnrollTutorData {
 /**
  * Normalize a stored users-doc dateOfBirth: a Firestore Timestamp on
  * study-created accounts, a "YYYY-MM-DD" string on sit-created ones.
+ * Exported for unit tests — it decides which DOB the age gate runs against.
  */
-function toDobDate(dob: unknown): Date | null {
+export function toDobDate(dob: unknown): Date | null {
   if (typeof dob === 'string' && dob) return new Date(dob);
   if (dob && typeof (dob as { toDate?: unknown }).toDate === 'function') {
     return (dob as { toDate: () => Date }).toDate();

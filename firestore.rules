@@ -176,9 +176,12 @@ service cloud.firestore {
     // client writes — once a field holds a value, an owner write may neither
     // change nor remove it (issue #144: cross-app enrollment must never mutate
     // identity set by the other app). Absent -> set stays allowed (a babysitter
-    // stub completes its identity step). Corrections go through admin/callables
-    // (Admin SDK bypasses rules). Applies to ALL accounts, not just
+    // stub completes its identity step). Applies to ALL accounts, not just
     // identityLocked ones — see identityUnlockedOrUnchanged above.
+    // CORRECTIONS: governed kids go through correctChildIdentity; for
+    // self-managed accounts NO correction path currently exists short of
+    // direct Admin-SDK/console intervention — a deliberate gap (typo-fix
+    // callable is a tracked follow-up), not an accident.
     function rootIdentitySetOnce() {
       return !request.resource.data.diff(resource.data).affectedKeys()
                  .hasAny(['firstName', 'lastName', 'dateOfBirth'])

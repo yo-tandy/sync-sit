@@ -183,6 +183,32 @@ describe('StepProfile with identity on file (issue #144, set-once identity)', ()
     expect(payload).toHaveProperty('profiles.babysitter.gender');
   });
 
+  it('PARTIAL identity renders only the missing inputs and writes only those fields', async () => {
+    // Name on file, DoB missing: the render must match the per-field payload
+    // logic — an all-or-nothing render would show empty required name inputs
+    // whose values the payload never sends (a dead-end form).
+    authState.userDoc = { firstName: 'Iris', lastName: 'Martin', profiles: { tutor: {} } };
+    const { onNext } = renderStep();
+
+    expect(screen.queryByLabelText(i18n.t('enrollment.firstName'))).toBeNull();
+    expect(screen.queryByLabelText(i18n.t('enrollment.lastName'))).toBeNull();
+    expect(screen.getByLabelText(i18n.t('enrollment.dateOfBirth'))).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText(i18n.t('enrollment.dateOfBirth')), {
+      target: { value: '2010-01-15' },
+    });
+    fireEvent.change(screen.getByLabelText(i18n.t('enrollment.classLabel')), {
+      target: { value: '2nde' },
+    });
+    fireEvent.click(continueButton());
+
+    await vi.waitFor(() => expect(onNext).toHaveBeenCalled());
+    const payload = (h.updateDoc.mock.calls[0] as unknown[])[1] as Record<string, unknown>;
+    expect(Object.keys(payload)).not.toContain('firstName');
+    expect(Object.keys(payload)).not.toContain('lastName');
+    expect(payload.dateOfBirth).toBe('2010-01-15');
+  });
+
   it('a doc WITHOUT identity keeps the full input form and writes all fields', async () => {
     authState.userDoc = { profiles: { babysitter: {} } };
     const { onNext } = renderStep();
