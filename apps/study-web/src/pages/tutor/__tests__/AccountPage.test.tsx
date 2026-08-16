@@ -13,6 +13,8 @@ const h = vi.hoisted(() => ({
     resetPassword: vi.fn(() => Promise.resolve()),
   },
   updateDoc: vi.fn(() => Promise.resolve()),
+  uploadBytes: vi.fn(() => Promise.resolve()),
+  getDownloadURL: vi.fn(() => Promise.resolve('https://cdn.example/photo.png')),
 }));
 
 vi.mock('@/config/firebase', () => ({ db: {}, storage: {} }));
@@ -21,6 +23,12 @@ vi.mock('firebase/firestore', () => ({
   doc: (_db: unknown, ...path: string[]) => ({ path: path.join('/') }),
   updateDoc: (...args: unknown[]) => h.updateDoc(...args),
   serverTimestamp: () => 'ts',
+}));
+
+vi.mock('firebase/storage', () => ({
+  ref: (_storage: unknown, path: string) => ({ path }),
+  uploadBytes: (...args: unknown[]) => h.uploadBytes(...args),
+  getDownloadURL: (...args: unknown[]) => h.getDownloadURL(...args),
 }));
 
 vi.mock('@/stores/authStore', () => ({
@@ -61,6 +69,8 @@ function reset() {
   h.auth.refreshUserDoc.mockClear();
   h.auth.resetPassword.mockClear();
   h.updateDoc.mockClear();
+  h.uploadBytes.mockClear();
+  h.getDownloadURL.mockClear();
 }
 
 describe('tutor AccountPage', () => {
@@ -103,6 +113,62 @@ describe('tutor AccountPage', () => {
     await waitFor(() =>
       expect(h.auth.resetPassword).toHaveBeenCalledWith('login@ejm.org'),
     );
+  });
+
+  // ── Profile photo (issue #143 — same mechanism as sit) ──
+
+  it('uploads a picked photo to profile-photos/{uid} and saves the top-level photoUrl', async () => {
+    renderWithProviders(<AccountPage />);
+    const input = screen.getByTestId('photo-input');
+    const file = new File(['x'], 'me.png', { type: 'image/png' });
+    fireEvent.change(input, { target: { files: [file] } });
+
+    await waitFor(() => expect(h.uploadBytes).toHaveBeenCalled());
+    // Storage path is uid-keyed — the owner-write gate in storage.rules.
+    expect((h.uploadBytes.mock.calls[0][0] as { path: string }).path).toBe('profile-photos/t1.png');
+    await waitFor(() =>
+      expect(h.updateDoc).toHaveBeenCalledWith(
+        expect.objectContaining({ path: 'users/t1' }),
+        // TOP-LEVEL photoUrl (like sit): the field searchTutors projects.
+        expect.objectContaining({ photoUrl: 'https://cdn.example/photo.png', updatedAt: 'ts' }),
+      ),
+    );
+    await waitFor(() => expect(h.auth.refreshUserDoc).toHaveBeenCalled());
+  });
+
+  it('rejects a non-image file without uploading', async () => {
+    renderWithProviders(<AccountPage />);
+    const file = new File(['x'], 'notes.pdf', { type: 'application/pdf' });
+    fireEvent.change(screen.getByTestId('photo-input'), { target: { files: [file] } });
+
+    expect(await screen.findByText(/select an image/i)).toBeInTheDocument();
+    expect(h.uploadBytes).not.toHaveBeenCalled();
+    expect(h.updateDoc).not.toHaveBeenCalled();
+  });
+
+  it('rejects an oversized file without uploading', async () => {
+    renderWithProviders(<AccountPage />);
+    const big = new File([new ArrayBuffer(5 * 1024 * 1024 + 1)], 'big.jpg', { type: 'image/jpeg' });
+    fireEvent.change(screen.getByTestId('photo-input'), { target: { files: [big] } });
+
+    expect(await screen.findByText(/under 5 MB/i)).toBeInTheDocument();
+    expect(h.uploadBytes).not.toHaveBeenCalled();
+  });
+
+  it('removes the photo by nulling the top-level photoUrl', async () => {
+    const userDoc = makeUserDoc() as Record<string, unknown>;
+    userDoc.photoUrl = 'https://cdn.example/old.png';
+    h.auth.userDoc = userDoc;
+    renderWithProviders(<AccountPage />);
+
+    fireEvent.click(screen.getByRole('button', { name: /remove photo/i }));
+    await waitFor(() =>
+      expect(h.updateDoc).toHaveBeenCalledWith(
+        expect.objectContaining({ path: 'users/t1' }),
+        expect.objectContaining({ photoUrl: null, updatedAt: 'ts' }),
+      ),
+    );
+    expect(h.uploadBytes).not.toHaveBeenCalled();
   });
 
   // ── Cancellation policy (V2 feature 7) ──

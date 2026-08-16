@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '@/config/firebase';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { db, storage } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { getTutorProfile, SESSION_LENGTHS, LOCATION_PREFS } from '@ejm/study-core';
 import type { LocationPref } from '@ejm/study-core';
@@ -22,7 +23,6 @@ import {
 
 // Copy-adapted from apps/web/src/pages/babysitter/AccountPage.tsx, DELIBERATELY
 // stripped down for the tutor portal:
-//   - NO profile photo section: study-web has no photo storage/plumbing yet.
 //   - NO push-notification plumbing (PushStatusCard, PWA toggles): study-web
 //     has no FCM wiring, so notification prefs are EMAIL-ONLY here. Push
 //     channels on the notifPrefs doc are preserved untouched but not editable.
@@ -37,6 +37,10 @@ import {
 // notifPrefs writes to the top-level field. enrollmentComplete/verification/
 // ejemEmail are server-owned and never written here.
 
+// Photo constraints — identical to the sit babysitter AccountPage.
+const MAX_FILE_SIZE = 5 * 1024 * 1024;
+const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
+
 // Email-only notification scenarios relevant to tutors.
 const SCENARIOS: { key: keyof NotifPrefs; labelKey: string; descKey: string }[] = [
   { key: 'newRequest', labelKey: 'notifications.newRequest', descKey: 'notifications.newRequestDesc' },
@@ -49,6 +53,15 @@ export function AccountPage() {
   const { userDoc, firebaseUser, refreshUserDoc, resetPassword } = useAuthStore();
   const tutor = getTutorProfile(userDoc);
   const uid = firebaseUser?.uid;
+
+  // Photo state — mirrors the sit babysitter photo section: auto-save on pick,
+  // top-level users/{uid}.photoUrl (the field searchTutors projects into
+  // search results; one photo per account across roles).
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const [photoSaving, setPhotoSaving] = useState(false);
 
   // Contact state (editable)
   const [contactEmail, setContactEmail] = useState('');
@@ -97,6 +110,9 @@ export function AccountPage() {
     setLocationPrefs(tutor?.locationPrefs ?? []);
     setPaddingMin(tutor?.paddingMin ?? 0);
     setAboutMe(tutor?.aboutMe ?? '');
+    if (userDoc.photoUrl) {
+      setPhotoPreview(userDoc.photoUrl);
+    }
     if (userDoc.notifPrefs) {
       setPrefs(userDoc.notifPrefs);
     }
@@ -118,6 +134,75 @@ export function AccountPage() {
     }
     return '';
   })();
+
+  // --- Photo handlers (auto-save, mirroring sit's babysitter AccountPage) ---
+  const handlePhotoSelect = (file: File) => {
+    setPhotoError(null);
+    if (!ACCEPTED_TYPES.includes(file.type)) {
+      setPhotoError(t('account.photoInvalidType'));
+      return;
+    }
+    if (file.size > MAX_FILE_SIZE) {
+      setPhotoError(t('account.photoTooLarge'));
+      return;
+    }
+    setPhotoFile(file);
+    const reader = new FileReader();
+    reader.onload = (e) => setPhotoPreview(e.target?.result as string);
+    reader.readAsDataURL(file);
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) handlePhotoSelect(file);
+    e.target.value = '';
+  };
+
+  const handleRemovePhoto = async () => {
+    if (!uid) return;
+    setPhotoPreview(null);
+    setPhotoFile(null);
+    setPhotoError(null);
+    try {
+      await updateDoc(doc(db, 'users', uid), {
+        photoUrl: null,
+        updatedAt: serverTimestamp(),
+      });
+      await refreshUserDoc();
+    } catch {
+      // silent
+    }
+  };
+
+  const handlePhotoSave = async () => {
+    if (!uid || !photoFile) return;
+    setPhotoSaving(true);
+    setError(null);
+    try {
+      const ext = photoFile.name.split('.').pop() || 'jpg';
+      const path = `profile-photos/${uid}.${ext}`;
+      const storageRef = ref(storage, path);
+      await uploadBytes(storageRef, photoFile);
+      const photoUrl = await getDownloadURL(storageRef);
+      await updateDoc(doc(db, 'users', uid), {
+        photoUrl,
+        updatedAt: serverTimestamp(),
+      });
+      await refreshUserDoc();
+      setPhotoFile(null);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : t('account.photoUploadFailed');
+      setError(message);
+    } finally {
+      setPhotoSaving(false);
+    }
+  };
+
+  // Auto-save photo after selection
+  useEffect(() => {
+    if (photoFile) handlePhotoSave();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [photoFile]);
 
   // --- Contact handlers ---
   const handleContactSave = async (e: React.FormEvent) => {
@@ -317,6 +402,47 @@ export function AccountPage() {
             </div>
           </div>
         </Card>
+
+        <hr className="mb-6 border-gray-200" />
+
+        {/* 1-bis. Profile Photo (issue #143 — same mechanism as sit) */}
+        <h3 className="mb-3 text-sm font-semibold text-gray-700">{t('account.profilePhoto')}</h3>
+        <input
+          ref={fileInputRef}
+          type="file"
+          className="hidden"
+          onChange={handleFileChange}
+          data-testid="photo-input"
+        />
+        <div className="mb-6 flex items-center gap-4">
+          <button
+            type="button"
+            aria-label={t('account.profilePhoto')}
+            onClick={() => fileInputRef.current?.click()}
+            className="relative flex h-[72px] w-[72px] shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-dashed border-gray-300 bg-gray-50 transition-colors hover:border-gray-400"
+          >
+            {photoPreview ? (
+              <img src={photoPreview} alt={t('account.profilePhoto')} className="h-full w-full object-cover" />
+            ) : (
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="1.5" aria-hidden="true">
+                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+                <circle cx="12" cy="13" r="4" />
+              </svg>
+            )}
+          </button>
+          <div>
+            {photoPreview ? (
+              <button type="button" onClick={handleRemovePhoto} className="text-sm font-medium text-brand-600">
+                {t('enrollment.removePhoto')}
+              </button>
+            ) : (
+              <p className="text-sm font-medium">{t('enrollment.addPhoto')}</p>
+            )}
+            <p className="text-xs text-gray-500">{t('enrollment.photoOptional')}</p>
+            {photoError && <p className="text-xs text-brand-600">{photoError}</p>}
+            {photoSaving && <p className="text-xs text-gray-500">{t('common.saving')}</p>}
+          </div>
+        </div>
 
         <hr className="mb-6 border-gray-200" />
 
