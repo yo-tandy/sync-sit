@@ -61,7 +61,21 @@ export function CrossAppWelcomePage() {
   };
 
   if (phase === 'subjects') {
-    return <StepSubjects onNext={handleSubjectsNext} loading={submitting} error={error} />;
+    return (
+      <>
+        <StepSubjects onNext={handleSubjectsNext} loading={submitting} error={error} />
+        {error && (
+          // Escape hatch: whatever the server rejected (a stale/incomplete
+          // sit profile the routing gate missed), the classic wizard can
+          // collect it — never strand the user on this one-tap path.
+          <p className="px-6 pb-6 text-sm">
+            <Link to="/enroll/tutor" className="font-medium text-brand-600">
+              {t('welcomeCross.fallbackWizard')}
+            </Link>
+          </p>
+        )}
+      </>
+    );
   }
 
   return (

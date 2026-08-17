@@ -76,7 +76,18 @@ export function CrossAppWelcomePage() {
           </Link>
           .
         </p>
-        {error && <p className="mb-4 text-sm text-brand-600">{error}</p>}
+        {error && (
+          <>
+            <p className="mb-2 text-sm text-brand-600">{error}</p>
+            {/* Escape hatch: the classic wizard collects whatever the
+                one-tap path could not derive. */}
+            <p className="mb-4 text-sm">
+              <Link to="/enroll/babysitter" className="font-medium text-brand-600">
+                {t('welcomeCross.fallbackWizard')}
+              </Link>
+            </p>
+          </>
+        )}
         <Button onClick={handleContinue} disabled={submitting}>
           {submitting ? t('common.loading') : t('common.continue')}
         </Button>

@@ -51,6 +51,7 @@ function renderGuard(
         <Route path="/login" element={<div>login-page</div>} />
         <Route path="/signup" element={<div>signup-page</div>} />
         <Route path="/welcome-study" element={<div>welcome-study-page</div>} />
+        <Route path="/enroll/tutor" element={<div>enroll-tutor-page</div>} />
         <Route path="/admin" element={<div>admin-page</div>} />
       </Routes>
     </MemoryRouter>,
@@ -168,13 +169,27 @@ describe('study-web AuthGuard', () => {
   it('routes a foreign sit babysitter (no study role) to /welcome-study — never the role question (issue #144)', () => {
     h.auth = {
       firebaseUser: { uid: 'b1' },
-      userDoc: { uid: 'b1', profiles: { babysitter: {} } },
+      userDoc: {
+        uid: 'b1', firstName: 'Noa', lastName: 'Weiss', dateOfBirth: '2008-03-15',
+        profiles: { babysitter: { classLevel: '2nde', contactPhone: '+33 6' } },
+      },
       loading: false,
     };
     renderGuard();
     expect(screen.getByText('welcome-study-page')).toBeInTheDocument();
     expect(screen.queryByText('signup-page')).toBeNull();
     expect(screen.queryByText('tutor-portal')).toBeNull();
+  });
+
+  it('routes an INCOMPLETE foreign babysitter to the classic wizard instead (no dead-end)', () => {
+    h.auth = {
+      firebaseUser: { uid: 'b2' },
+      userDoc: { uid: 'b2', profiles: { babysitter: {} } },
+      loading: false,
+    };
+    renderGuard();
+    expect(screen.getByText('enroll-tutor-page')).toBeInTheDocument();
+    expect(screen.queryByText('welcome-study-page')).toBeNull();
   });
 
   it('routes a signed-in account with NO profiles at all to /signup', () => {

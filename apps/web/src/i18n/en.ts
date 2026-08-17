@@ -111,6 +111,7 @@ export default {
   },
 
   welcomeCross: {
+    fallbackWizard: 'Use the full sign-up instead',
     greeting: 'Welcome, {{name}}!',
     body: 'As an EJM student you can babysit for EJM families — your Sync/Study login works here as-is. We just need your availability to get you started.',
     consentPrefix: 'By continuing, you accept the',

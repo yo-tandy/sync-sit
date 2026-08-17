@@ -182,6 +182,7 @@ export default {
   },
 
   welcomeCross: {
+    fallbackWizard: 'Use the full sign-up instead',
     greeting: 'Welcome, {{name}}!',
     body: 'As an EJM student you can tutor EJM families — your Sync/Sit login works here as-is. We just need the subjects you offer to get you started.',
     consentPrefix: 'By continuing, you accept the',
