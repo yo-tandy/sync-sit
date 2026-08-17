@@ -5,7 +5,7 @@ import { writeUserActivity } from '@ejm/shared-functions/admin/writeAuditLog.js'
 // haversineDistance lives in @ejm/shared-core (sit-core merely re-exports it);
 // study-functions already depends on @ejm/shared-core, so we import it there
 // directly rather than pulling in sit-core just for the geo helper.
-import { haversineDistance, getParentProfile } from '@ejm/shared-core';
+import { haversineDistance, getParentProfile, postcodeToArrondissement } from '@ejm/shared-core';
 import type { User } from '@ejm/shared-core';
 import type { StudyUser, TutorProfile, SubjectOffering, TutorSearchResult } from '@ejm/study-core';
 import { searchTutorsSchema } from '../validation/search.js';
@@ -114,16 +114,24 @@ export const searchTutors = onCall(
         if (matchedPrefs.length === 0) continue;
         const hasTutorSideLeg = matchedPrefs.some((p) => p === 'online' || p === 'tutor_home');
         if (!hasTutorSideLeg) {
-          // Family-side only. Distance-mode tutors need coordinates (the
-          // haversine radius gate below then decides reachability, keeping
-          // the approved-family bypass); arrondissement-mode tutors must
-          // list the family's resolved area label. Empty coverage — no
-          // coords, no arrondissements, or no resolvable areaLabel — means
-          // the tutor cannot be shown to serve this family's location.
+          // Family-side only. Distance-mode tutors need BOTH sides'
+          // coordinates — the haversine radius gate below then decides
+          // reachability (keeping the approved-family bypass); without
+          // params.latLng that gate is skipped, so requiring it here keeps
+          // the two modes symmetric (fail closed, like arr-mode with no
+          // areaLabel). Arrondissement-mode tutors must list the family's
+          // resolved area label; stored values are normalized through
+          // postcodeToArrondissement because the free-text era taught tutors
+          // postcodes ('75016'), and those docs must keep matching '16e'.
+          // Empty coverage on either mode means the tutor cannot be shown
+          // to serve this family's location.
           const covers =
             tutor.areaMode === 'distance'
-              ? !!tutor.areaLatLng
-              : !!params.areaLabel && (tutor.arrondissements ?? []).includes(params.areaLabel);
+              ? !!tutor.areaLatLng && !!params.latLng
+              : !!params.areaLabel &&
+                (tutor.arrondissements ?? []).some(
+                  (a) => a === params.areaLabel || postcodeToArrondissement(a) === params.areaLabel,
+                );
           if (!covers) continue;
         }
       }

@@ -405,6 +405,52 @@ describe('searchTutors', () => {
     });
   });
 
+  it("matches a legacy postcode-vocabulary tutor (['75016']) against areaLabel '16e'", async () => {
+    // Free-text-era docs store postcodes; the callable normalizes the tutor
+    // side through postcodeToArrondissement so shipped coverage keeps working.
+    await withTempTutor(
+      'temp-tutor-legacy-postcode',
+      { areaMode: 'arrondissement', arrondissements: ['75016'], areaLatLng: null, areaRadiusKm: null, locationPrefs: ['family_home'] },
+      async () => {
+        const covered = await callFunction<{ results: TutorResult[] }>(
+          'searchTutors',
+          { subject: 'math', level: '6e', areaLabel: '16e', filters: { locationPrefs: ['family_home'] } },
+          parentToken
+        );
+        expect(covered.results.map((r) => r.uid)).toContain('temp-tutor-legacy-postcode');
+
+        // Still excluded for an area the stored postcode does NOT map to.
+        const uncovered = await callFunction<{ results: TutorResult[] }>(
+          'searchTutors',
+          { subject: 'math', level: '6e', areaLabel: '5e', filters: { locationPrefs: ['family_home'] } },
+          parentToken
+        );
+        expect(uncovered.results.map((r) => r.uid)).not.toContain('temp-tutor-legacy-postcode');
+      }
+    );
+  });
+
+  it('excludes distance-mode tutors from a family_home query with NO latLng (mode symmetry)', async () => {
+    // tutor2 is distance-mode WITH coordinates and accepts family_home; a
+    // family that provides no coordinates cannot be reached-checked, so the
+    // tutor fails closed — exactly like an arr-mode tutor with no areaLabel.
+    const noCoords = await callFunction<{ results: TutorResult[] }>(
+      'searchTutors',
+      { subject: 'math', level: '6e', filters: { locationPrefs: ['family_home'] } },
+      parentToken
+    );
+    expect(noCoords.results.map((r) => r.uid)).not.toContain(seed.tutor2.uid);
+
+    // Same query WITH coordinates returns tutor2 (in radius) — the exclusion
+    // above is the missing-latLng gate, not something else.
+    const withCoords = await callFunction<{ results: TutorResult[] }>(
+      'searchTutors',
+      { subject: 'math', level: '6e', latLng: PARIS_CENTER, filters: { locationPrefs: ['family_home'] } },
+      parentToken
+    );
+    expect(withCoords.results.map((r) => r.uid)).toContain(seed.tutor2.uid);
+  });
+
   it('ignores coverage for an online-only query', async () => {
     // Same empty-reach shape but the tutor also works online; an online query
     // needs no area at all.
