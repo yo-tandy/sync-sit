@@ -1934,7 +1934,7 @@ describe('users update — root identity set-once (issue #144)', () => {
     await seed('setonce8', withIdentity);
     const db = testEnv.authenticatedContext('setonce8').firestore();
     await assertSucceeds(updateDoc(doc(db, 'users', 'setonce8'), {
-      photoUrl: 'https://x.com/p.png',
+      photoUrl: 'https://firebasestorage.googleapis.com/v0/b/x/o/p.png',
       'profiles.babysitter.hourlyRate': 18,
     }));
   });
