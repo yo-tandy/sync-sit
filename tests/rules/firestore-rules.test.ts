@@ -433,6 +433,65 @@ describe('families collection', () => {
     const authed = testEnv.authenticatedContext('outsider');
     await assertFails(getDoc(doc(authed.firestore(), 'families', 'fam1')));
   });
+
+  // ── Owner-editable field set (issue #167 widened it by postcode/city) ──
+
+  it('allows a family member to update the profile fields INCLUDING postcode and city', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'families', 'fam1'), {
+        familyId: 'fam1', parentIds: ['parent1'], address: 'old', latLng: null,
+      });
+    });
+
+    const authed = testEnv.authenticatedContext('parent1');
+    await assertSucceeds(
+      updateDoc(doc(authed.firestore(), 'families', 'fam1'), {
+        address: '10 Rue de Rivoli, 75001 Paris',
+        latLng: { lat: 48.8606, lng: 2.3376 },
+        postcode: '75001',
+        city: 'Paris',
+      }),
+    );
+    // Clearing them (address wiped without a geocoder pick) is also allowed.
+    await assertSucceeds(
+      updateDoc(doc(authed.firestore(), 'families', 'fam1'), {
+        address: 'typed by hand', latLng: null, postcode: null, city: null,
+      }),
+    );
+  });
+
+  it('still denies a family member touching a NON-listed key (field guard intact)', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'families', 'fam1'), {
+        familyId: 'fam1', parentIds: ['parent1'],
+        verification: { isFullyVerified: false },
+      });
+    });
+
+    const authed = testEnv.authenticatedContext('parent1');
+    await assertFails(
+      updateDoc(doc(authed.firestore(), 'families', 'fam1'), {
+        postcode: '75001',
+        verification: { isFullyVerified: true },
+      }),
+    );
+    await assertFails(
+      updateDoc(doc(authed.firestore(), 'families', 'fam1'), { parentIds: ['parent1', 'mallory'] }),
+    );
+  });
+
+  it('denies a NON-member from updating postcode/city (membership gate intact)', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'families', 'fam1'), {
+        familyId: 'fam1', parentIds: ['parent1'],
+      });
+    });
+
+    const authed = testEnv.authenticatedContext('outsider');
+    await assertFails(
+      updateDoc(doc(authed.firestore(), 'families', 'fam1'), { postcode: '75001', city: 'Paris' }),
+    );
+  });
 });
 
 describe('inviteLinks collection', () => {

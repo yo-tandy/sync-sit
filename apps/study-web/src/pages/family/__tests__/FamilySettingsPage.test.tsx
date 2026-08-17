@@ -35,6 +35,43 @@ vi.mock('@/stores/authStore', () => ({
   useAuthStore: () => h.auth,
 }));
 
+// Stub AddressAutocomplete: an input mirroring the value (keeps the
+// display-value assertions), a deterministic geocoded pick, and a
+// type-without-picking action that fires onChange(null) exactly like the real
+// component does on manual edits — the stale-postcode-clearing pin rides on it.
+import type { AddressResult } from '@ejm/shared-ui';
+const PICKED: AddressResult = {
+  fullAddress: '16 rue de Passy, 75016 Paris',
+  street: '16 rue de Passy',
+  city: 'Paris',
+  postcode: '75016',
+  lat: 48.8571,
+  lng: 2.2795,
+};
+vi.mock('@ejm/shared-ui', async (importActual) => {
+  const actual = await importActual<typeof import('@ejm/shared-ui')>();
+  return {
+    ...actual,
+    AddressAutocomplete: ({
+      value,
+      onChange,
+    }: {
+      value: AddressResult | null;
+      onChange: (a: AddressResult | null) => void;
+    }) => (
+      <div>
+        <input aria-label="address" readOnly value={value?.fullAddress ?? ''} />
+        <button type="button" onClick={() => onChange(PICKED)}>
+          pick-address
+        </button>
+        <button type="button" onClick={() => onChange(null)}>
+          type-without-picking
+        </button>
+      </div>
+    ),
+  };
+});
+
 import { FamilySettingsPage } from '../FamilySettingsPage';
 
 function reset() {
@@ -75,6 +112,48 @@ describe('family FamilySettingsPage', () => {
       expect(h.updateDoc).toHaveBeenCalledWith(
         expect.objectContaining({ path: 'families/fam1' }),
         expect.objectContaining({ familyName: 'Levy', updatedAt: 'ts' }),
+      ),
+    );
+  });
+
+  // ── Postcode/city persistence (issue #167) ──
+
+  it('saves postcode and city from an autocomplete pick alongside address/latLng', async () => {
+    renderWithProviders(<FamilySettingsPage />);
+    await screen.findByLabelText(/family name/i);
+    fireEvent.click(screen.getByRole('button', { name: /pick-address/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
+
+    await waitFor(() =>
+      expect(h.updateDoc).toHaveBeenCalledWith(
+        expect.objectContaining({ path: 'families/fam1' }),
+        expect.objectContaining({
+          address: '16 rue de Passy, 75016 Paris',
+          latLng: { lat: 48.8571, lng: 2.2795 },
+          postcode: '75016',
+          city: 'Paris',
+        }),
+      ),
+    );
+  });
+
+  it('clears stored postcode/city when the address is edited without a pick (no stale geocode)', async () => {
+    h.familyData = {
+      familyName: 'Cohen',
+      address: '1 Rue de Paris',
+      latLng: { lat: 48, lng: 2 },
+      postcode: '75001',
+      city: 'Paris',
+    };
+    renderWithProviders(<FamilySettingsPage />);
+    await screen.findByLabelText(/family name/i);
+    fireEvent.click(screen.getByRole('button', { name: /type-without-picking/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
+
+    await waitFor(() =>
+      expect(h.updateDoc).toHaveBeenCalledWith(
+        expect.objectContaining({ path: 'families/fam1' }),
+        expect.objectContaining({ postcode: null, city: null, latLng: null }),
       ),
     );
   });

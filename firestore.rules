@@ -256,7 +256,7 @@ service cloud.firestore {
       // Admin SDK (which bypasses these rules).
       allow update: if isFamilyMember(familyId)
                     && request.resource.data.diff(resource.data).affectedKeys()
-                        .hasOnly(['familyName', 'address', 'latLng', 'pets', 'note', 'photoUrl', 'updatedAt']);
+                        .hasOnly(['familyName', 'address', 'latLng', 'postcode', 'city', 'pets', 'note', 'photoUrl', 'updatedAt']);
 
       match /kids/{kidId} {
         allow read: if isFamilyMember(familyId) || isAdmin();
