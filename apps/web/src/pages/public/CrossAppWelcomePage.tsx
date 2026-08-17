@@ -8,6 +8,7 @@ import { enrollmentErrorReason } from '@ejm/shared-ui';
 import { functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { postLoginRouter } from '@/lib/postLoginRouter';
+import { STUDY_APP_URL } from '@/lib/appSwitch';
 import { Button, Card, Spinner } from '@/components/ui';
 
 // Same consent version the classic wizard passes to StepPassword.
@@ -60,6 +61,11 @@ export function CrossAppWelcomePage() {
 
   return (
     <div className="px-5 pt-8 pb-8">
+      {/* App branding: the user just crossed apps — say WHERE they landed. */}
+      <div className="mb-6 flex flex-col items-center gap-2">
+        <img src="/logo.png" alt="Sync/Sit" className="h-14 w-14 rounded-2xl" />
+        <p className="text-lg font-bold text-gray-900">Sync/Sit</p>
+      </div>
       <Card>
         <h2 className="mb-2 text-lg font-bold text-gray-900">
           {t('welcomeCross.greeting', { name: userDoc?.firstName })}
@@ -91,6 +97,15 @@ export function CrossAppWelcomePage() {
         <Button onClick={handleContinue} disabled={submitting}>
           {submitting ? t('common.loading') : t('common.continue')}
         </Button>
+        {/* Continuing accepts the terms — so there must be a way NOT to.
+            The only sensible retreat for a role-less arrival is the app
+            they came from. */}
+        <a
+          href={STUDY_APP_URL}
+          className="mt-3 block text-center text-sm font-medium text-gray-500 hover:text-gray-700"
+        >
+          {t('welcomeCross.backToOrigin')}
+        </a>
       </Card>
     </div>
   );

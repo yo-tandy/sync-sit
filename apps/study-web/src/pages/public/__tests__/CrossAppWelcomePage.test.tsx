@@ -89,6 +89,13 @@ beforeEach(() => {
 });
 
 describe('CrossAppWelcomePage (study)', () => {
+  it('shows the app branding and a back-to-origin cancel (terms are opt-out-able)', () => {
+    renderPage();
+    expect(screen.getByAltText('Sync/Study')).toBeInTheDocument();
+    const back = screen.getByRole('link', { name: /back to sync\/sit/i });
+    expect(back).toHaveAttribute('href', expect.stringContaining('http'));
+  });
+
   it('greets by first name with the cross-app offer and a consent line; subjects hidden until Continue', () => {
     renderPage();
     expect(screen.getByText(i18n.t('welcomeCross.greeting', { name: 'Sacha' }))).toBeInTheDocument();

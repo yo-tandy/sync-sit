@@ -108,6 +108,7 @@ export default {
   },
 
   welcomeCross: {
+    backToOrigin: 'Retour à Sync/Study',
     fallbackWizard: 'Utiliser l\'inscription complète à la place',
     greeting: 'Bienvenue, {{name}} !',
     body: "En tant qu'élève de l'EJM, vous pouvez faire du babysitting pour les familles de l'EJM — votre identifiant Sync/Study fonctionne ici tel quel. Il ne nous manque que vos disponibilités pour commencer.",
