@@ -442,7 +442,8 @@ export default {
       byArea: 'By arrondissement',
       byDistance: 'By distance',
       arrondissements: 'Arrondissements',
-      arrondissementsHint: 'Separate several with commas, e.g. 75016, 75017',
+      nearbyTowns: 'Nearby towns',
+      legacyAreas: 'Other saved areas',
       address: 'Your address',
       radius: 'Max distance (km)',
       noLocationNote: 'No location is set on your profile — families see you as "distance unknown" and you sort last in distance-ordered results. Pick your address below to fix this.',
@@ -451,8 +452,9 @@ export default {
       radiusHint: 'Leave empty to use the default (5 km).',
       modeSwitchNote: 'Saving in arrondissement mode removes your stored address location — families will see "distance unknown" and you will sort last in distance-ordered results.',
       errorRadiusRange: 'Radius must be between 1 and 50 km (leave empty for the 5 km default).',
-      errorArrondissements: 'Enter up to 20 arrondissements (short codes, e.g. 75016).',
       errorNoAddress: 'Pick an address from the suggestions so your location can be set.',
+      errorAreaRequired:
+        'Your session locations include sessions at the family\'s side (their home or a library), so families need to know where you can go — pick at least one area, or set your address and a distance.',
     },
     endorsements: {
       title: 'Endorsements',

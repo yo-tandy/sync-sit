@@ -109,12 +109,101 @@ describe('tutor AreaPage', () => {
     h.updateDoc.mockClear();
   });
 
-  it('seeds arrondissement mode from the stored profile', () => {
-    seed({ areaMode: 'arrondissement', arrondissements: ['75016'], areaAddress: null, areaLatLng: null, areaRadiusKm: null });
+  it('seeds arrondissement mode from the stored profile with the stored areas checked', () => {
+    seed({ areaMode: 'arrondissement', arrondissements: ['16e', 'Vincennes'], areaAddress: null, areaLatLng: null, areaRadiusKm: null });
     renderWithProviders(<AreaPage />);
 
     expect(screen.getByRole('button', { name: /by arrondissement/i, pressed: true })).toBeInTheDocument();
-    expect((screen.getByLabelText(/arrondissement/i) as HTMLInputElement).value).toBe('75016');
+    // Chip prefixes its label with a check mark when selected.
+    expect(screen.getByRole('button', { name: '✓ 16e' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '✓ Vincennes' })).toBeInTheDocument();
+    // Unselected entries render without the mark.
+    expect(screen.getByRole('button', { name: '15e' })).toBeInTheDocument();
+  });
+
+  it('renders the full sit-style grid: all 20 arrondissements and every nearby town', () => {
+    seed({ areaMode: 'arrondissement', arrondissements: [], areaAddress: null, areaLatLng: null, areaRadiusKm: null });
+    renderWithProviders(<AreaPage />);
+
+    for (const arr of ['1er', '2e', '10e', '20e']) {
+      expect(screen.getByRole('button', { name: arr })).toBeInTheDocument();
+    }
+    for (const town of ['Boulogne-Billancourt', 'Suresnes', 'Saint-Mandé']) {
+      expect(screen.getByRole('button', { name: town })).toBeInTheDocument();
+    }
+    // Exactly 20 + 25 area chips exist (no legacy group when the doc is clean).
+    expect(screen.queryByText(/other saved areas/i)).not.toBeInTheDocument();
+  });
+
+  // ── Migration tolerance: free-text-era values (e.g. '75016') ──
+  it('renders unknown stored values as checked extra chips and keeps them across a save', async () => {
+    seed({ areaMode: 'arrondissement', arrondissements: ['75016', '16e'], areaAddress: null, areaLatLng: null, areaRadiusKm: null });
+    renderWithProviders(<AreaPage />);
+
+    expect(screen.getByText(/other saved areas/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '✓ 75016' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /^save/i }));
+    await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
+    const payload = savedPayload();
+    // The legacy value is NOT silently dropped by the grid rewrite.
+    expect(payload['profiles.tutor.arrondissements']).toEqual(['75016', '16e']);
+  });
+
+  it('lets the tutor explicitly uncheck a legacy value, which removes it from the save', async () => {
+    seed({ areaMode: 'arrondissement', arrondissements: ['75016', '16e'], areaAddress: null, areaLatLng: null, areaRadiusKm: null });
+    renderWithProviders(<AreaPage />);
+
+    fireEvent.click(screen.getByRole('button', { name: '✓ 75016' }));
+    // Still visible (derived from the stored doc), just unchecked.
+    expect(screen.getByRole('button', { name: '75016' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /^save/i }));
+    await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
+    expect(savedPayload()['profiles.tutor.arrondissements']).toEqual(['16e']);
+  });
+
+  // ── Requirement gate (issue #167): in-person-at-family prefs need an area ──
+  it('blocks an empty-area save for a family_home tutor with the requirement error', async () => {
+    seed({ areaMode: 'arrondissement', arrondissements: [], areaAddress: null, areaLatLng: null, areaRadiusKm: null, locationPrefs: ['online', 'family_home'] });
+    renderWithProviders(<AreaPage />);
+
+    fireEvent.click(screen.getByRole('button', { name: /^save/i }));
+
+    expect(await screen.findByText(/pick at least one area/i)).toBeInTheDocument();
+    expect(h.updateDoc).not.toHaveBeenCalled();
+  });
+
+  it('blocks a library tutor in distance mode with no address, with the requirement error', async () => {
+    seed({ areaMode: 'distance', arrondissements: [], areaAddress: null, areaLatLng: null, areaRadiusKm: null, locationPrefs: ['library'] });
+    renderWithProviders(<AreaPage />);
+
+    fireEvent.click(screen.getByRole('button', { name: /^save/i }));
+
+    expect(await screen.findByText(/pick at least one area/i)).toBeInTheDocument();
+    expect(h.updateDoc).not.toHaveBeenCalled();
+  });
+
+  it('lets an online-only tutor save an empty area', async () => {
+    seed({ areaMode: 'arrondissement', arrondissements: [], areaAddress: null, areaLatLng: null, areaRadiusKm: null, locationPrefs: ['online', 'tutor_home'] });
+    renderWithProviders(<AreaPage />);
+
+    fireEvent.click(screen.getByRole('button', { name: /^save/i }));
+
+    await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
+    expect(savedPayload()['profiles.tutor.arrondissements']).toEqual([]);
+    expect(screen.queryByText(/pick at least one area/i)).not.toBeInTheDocument();
+  });
+
+  it('unblocks the family_home tutor once an area is checked', async () => {
+    seed({ areaMode: 'arrondissement', arrondissements: [], areaAddress: null, areaLatLng: null, areaRadiusKm: null, locationPrefs: ['family_home'] });
+    renderWithProviders(<AreaPage />);
+
+    fireEvent.click(screen.getByRole('button', { name: '5e' }));
+    fireEvent.click(screen.getByRole('button', { name: /^save/i }));
+
+    await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
+    expect(savedPayload()['profiles.tutor.arrondissements']).toEqual(['5e']);
   });
 
   it('seeds distance mode with the stored address and radius', () => {
@@ -200,14 +289,15 @@ describe('tutor AreaPage', () => {
     renderWithProviders(<AreaPage />);
 
     fireEvent.click(screen.getByRole('button', { name: /by arrondissement/i }));
-    fireEvent.change(screen.getByLabelText(/arrondissement/i), { target: { value: '75017, 75016' } });
+    fireEvent.click(screen.getByRole('button', { name: '17e' }));
+    fireEvent.click(screen.getByRole('button', { name: '16e' }));
     fireEvent.click(screen.getByRole('button', { name: /^save/i }));
 
     await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
     const payload = savedPayload();
     expect(Object.keys(payload).sort()).toEqual(AREA_KEYS);
     expect(payload['profiles.tutor.areaMode']).toBe('arrondissement');
-    expect(payload['profiles.tutor.arrondissements']).toEqual(['75017', '75016']);
+    expect(payload['profiles.tutor.arrondissements']).toEqual(['17e', '16e']);
     expect(payload['profiles.tutor.areaAddress']).toBeNull();
     expect(payload['profiles.tutor.areaLatLng']).toBeNull();
     expect(payload['profiles.tutor.areaRadiusKm']).toBeNull();
@@ -279,28 +369,6 @@ describe('tutor AreaPage', () => {
 
     expect(screen.getByRole('button', { name: /by arrondissement/i, pressed: true })).toBeInTheDocument();
     expect(screen.queryByText(/removes your stored address location/i)).not.toBeInTheDocument();
-  });
-
-  it('rejects more than 20 arrondissements before any write', async () => {
-    seed({ areaMode: 'arrondissement', arrondissements: ['75016'] });
-    renderWithProviders(<AreaPage />);
-    const input = await screen.findByLabelText(/arrondissement/i);
-    fireEvent.change(input, { target: { value: Array.from({ length: 21 }, (_, i) => `750${String(i).padStart(2, '0')}`).join(', ') } });
-    fireEvent.click(screen.getByRole('button', { name: /save/i }));
-
-    expect(await screen.findByText(/up to 20/i)).toBeInTheDocument();
-    expect(h.updateDoc).not.toHaveBeenCalled();
-  });
-
-  it('rejects an over-long arrondissement entry before any write', async () => {
-    seed({ areaMode: 'arrondissement', arrondissements: ['75016'] });
-    renderWithProviders(<AreaPage />);
-    const input = await screen.findByLabelText(/arrondissement/i);
-    fireEvent.change(input, { target: { value: 'not-an-arrondissement-code' } });
-    fireEvent.click(screen.getByRole('button', { name: /save/i }));
-
-    expect(await screen.findByText(/up to 20/i)).toBeInTheDocument();
-    expect(h.updateDoc).not.toHaveBeenCalled();
   });
 
   it('surfaces a save failure instead of a silent success', async () => {

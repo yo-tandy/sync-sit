@@ -442,7 +442,8 @@ export default {
       byArea: 'Par arrondissement',
       byDistance: 'Par distance',
       arrondissements: 'Arrondissements',
-      arrondissementsHint: 'Séparez-en plusieurs par des virgules, ex. 75016, 75017',
+      nearbyTowns: 'Communes voisines',
+      legacyAreas: 'Autres zones enregistrées',
       address: 'Votre adresse',
       radius: 'Distance max (km)',
       noLocationNote: 'Aucune localisation n\'est définie sur votre profil — les familles voient « distance inconnue » et vous apparaissez en dernier dans les résultats triés par distance. Choisissez votre adresse ci-dessous pour corriger cela.',
@@ -451,8 +452,9 @@ export default {
       radiusHint: 'Laissez vide pour utiliser la valeur par défaut (5 km).',
       modeSwitchNote: 'Enregistrer en mode arrondissement supprime la localisation de votre adresse — les familles verront « distance inconnue » et vous apparaîtrez en dernier dans les résultats triés par distance.',
       errorRadiusRange: 'Le rayon doit être compris entre 1 et 50 km (laissez vide pour la valeur par défaut de 5 km).',
-      errorArrondissements: 'Indiquez au plus 20 arrondissements (codes courts, ex. 75016).',
       errorNoAddress: 'Choisissez une adresse parmi les suggestions pour définir votre localisation.',
+      errorAreaRequired:
+        'Vos lieux de session incluent des sessions chez la famille (à son domicile ou en bibliothèque) : les familles doivent savoir où vous pouvez vous déplacer — choisissez au moins une zone, ou définissez votre adresse et une distance.',
     },
     endorsements: {
       title: 'Recommandations',
