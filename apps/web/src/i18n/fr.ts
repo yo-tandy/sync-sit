@@ -23,6 +23,7 @@ export default {
     yes: 'Oui',
     no: 'Non',
     or: 'ou',
+    error: 'Une erreur est survenue. Veuillez réessayer.',
     optional: 'Facultatif',
     required: 'Obligatoire',
     email: 'Email',

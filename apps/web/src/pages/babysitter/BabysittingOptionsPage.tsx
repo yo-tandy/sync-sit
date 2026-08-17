@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
-import { Button, Input, Textarea, Chip, TopNav, useToast } from '@/components/ui';
+import { Button, Input, Chip, TopNav, useToast } from '@/components/ui';
 import { LanguagePicker } from '@/components/forms/LanguagePicker';
 import { AddressAutocomplete, type AddressResult } from '@/components/forms/AddressAutocomplete';
 import { ARRONDISSEMENTS, NEARBY_TOWNS } from '@ejm/sit-core';
@@ -21,7 +21,6 @@ export function BabysittingOptionsPage() {
   const [kidAgeMax, setKidAgeMax] = useState<number | ''>('');
   const [maxKids, setMaxKids] = useState<number | ''>('');
   const [hourlyRate, setHourlyRate] = useState<number | ''>('');
-  const [aboutMe, setAboutMe] = useState('');
   const [areaMode, setAreaMode] = useState<'arrondissement' | 'distance'>('arrondissement');
   const [arrondissements, setArrondissements] = useState<string[]>([]);
   const [areaAddress, setAreaAddress] = useState('');
@@ -40,7 +39,6 @@ export function BabysittingOptionsPage() {
     if (babysitter.kidAgeRange) { setKidAgeMin(babysitter.kidAgeRange.min); setKidAgeMax(babysitter.kidAgeRange.max); }
     if (babysitter.maxKids) setMaxKids(babysitter.maxKids);
     if (babysitter.hourlyRate) setHourlyRate(babysitter.hourlyRate);
-    setAboutMe(babysitter.aboutMe || '');
     setAreaMode(babysitter.areaMode || 'arrondissement');
     setArrondissements(babysitter.arrondissements || []);
     setAreaAddress(babysitter.areaAddress || '');
@@ -73,7 +71,6 @@ export function BabysittingOptionsPage() {
 
     try {
       await updateDoc(doc(db, 'users', uid), {
-        'profiles.babysitter.aboutMe': aboutMe || null,
         'profiles.babysitter.languages': languages,
         'profiles.babysitter.kidAgeRange': { min: kidAgeMin !== '' ? kidAgeMin : null, max: kidAgeMax !== '' ? kidAgeMax : null },
         'profiles.babysitter.maxKids': maxKids || null,
@@ -122,8 +119,6 @@ export function BabysittingOptionsPage() {
 
         {/* Rate — separate line with hint */}
         <Input label={t('enrollment.rateLabel')} type="number" value={hourlyRate} onChange={(e) => setHourlyRate(e.target.value === '' ? '' : parseFloat(e.target.value))} min={0} placeholder="e.g. 15" hint={t('enrollment.rateTooltip')} />
-
-        <Textarea label={t('enrollment.aboutMe')} value={aboutMe} onChange={(e) => setAboutMe(e.target.value)} placeholder={t('enrollment.aboutMePlaceholder')} />
 
         <hr className="my-5 border-gray-200" />
 
