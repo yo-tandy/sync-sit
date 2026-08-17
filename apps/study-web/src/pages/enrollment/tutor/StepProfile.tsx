@@ -65,8 +65,12 @@ export function StepProfile({ onNext, initial = null }: StepProfileProps) {
   // here so the rejection can't strand the user on the subjects step.
   const emailFormatOk =
     !contactEmail.trim() || /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(contactEmail.trim());
-  const hasContact = (contactEmail.trim() && emailFormatOk) || contactPhone.trim();
-  const isValid = firstName && lastName && dateOfBirth && ageValid && classLevel && hasContact;
+  const hasContact = contactEmail.trim() || contactPhone.trim();
+  // emailFormatOk gates UNCONDITIONALLY (true when the email is empty): with
+  // a phone also present, a malformed email must still block — otherwise it
+  // rides into the payload and the server rejects on the subjects step.
+  const isValid =
+    firstName && lastName && dateOfBirth && ageValid && classLevel && hasContact && emailFormatOk;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -161,7 +165,7 @@ export function StepProfile({ onNext, initial = null }: StepProfileProps) {
         type="email"
         value={contactEmail}
         onChange={(e) => setContactEmail(e.target.value)}
-              error={contactEmail.trim() && !emailFormatOk ? t('enrollment.contactEmailInvalid') : undefined}
+        error={contactEmail.trim() && !emailFormatOk ? t('enrollment.contactEmailInvalid') : undefined}
       />
       <Input
         label={t('enrollment.contactPhone')}

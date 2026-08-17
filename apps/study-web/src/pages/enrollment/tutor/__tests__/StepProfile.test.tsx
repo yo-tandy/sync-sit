@@ -89,6 +89,21 @@ describe('StepProfile (tutor)', () => {
     expect(values).toEqual(['Terminale', '1ère', '2nde', '3ème']);
   });
 
+  it('a malformed email blocks submit even when a valid phone is present', () => {
+    const onNext = vi.fn();
+    renderWithProviders(<StepProfile onNext={onNext} />);
+    fillBasics();
+    fireEvent.change(screen.getByLabelText(/Date of birth/i), { target: { value: validDob } });
+    fireEvent.change(screen.getByLabelText(/Contact email/i), { target: { value: 'tom@ejm' } });
+    fireEvent.change(screen.getByLabelText(/Contact phone/i), { target: { value: '+33 612345678' } });
+
+    // The phone alone satisfies has-a-contact, but the malformed email
+    // would ride into the payload and be rejected server-side on the
+    // SUBJECTS step — the email format gates unconditionally.
+    expect(screen.getByText(/full email address/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Continue/i })).toBeDisabled();
+  });
+
   it("blocks a TLD-less contact email the server would reject ('tom@ejm')", () => {
     const onNext = vi.fn();
     renderWithProviders(<StepProfile onNext={onNext} />);
