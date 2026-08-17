@@ -5,7 +5,6 @@ import type {
   ParentProfile,
   User,
   AreaMode,
-  TutorVerificationStatus,
 } from '@ejm/shared-core';
 import type { SubjectOffering, LocationPref } from './subject.js';
 
@@ -75,9 +74,6 @@ export interface TutorProfile extends ProfileBase {
    * whose familyId appears here.
    */
   approvedFamilies?: string[];
-
-  /** Identity-verification state; server-owned (see verification callables). */
-  verification?: TutorVerificationStatus;
 
   // Revalidation
   lastRevalidatedAt?: FirestoreTimestamp;

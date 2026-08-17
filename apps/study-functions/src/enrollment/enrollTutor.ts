@@ -226,7 +226,11 @@ export const enrollTutor = onCall(
       : undefined;
 
     const tutorProfile = {
-      enrollmentComplete: false, // false until admin verification completes
+      // Tutors share the babysitter trust model (owner decision 2026-08-17):
+      // the EJM-email verification-code gate is the only identity check, so
+      // enrollment is complete at creation. Search eligibility is then owned
+      // by the tutor's own searchable toggle (subjects + schedule gated).
+      enrollmentComplete: true,
       ejemEmail: ejemEmailLower,
       classLevel: enrollment.classLevel,
       gender: enrollment.gender ?? null,
@@ -245,7 +249,6 @@ export const enrollTutor = onCall(
       areaRadiusKm: enrollment.areaRadiusKm ?? null,
       languages: [],
       searchable: false,
-      verification: { identityStatus: 'not_submitted' as const },
     };
 
     // 5a. Add-profile path — an authenticated existing user gains a tutor
