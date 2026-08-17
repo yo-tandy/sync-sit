@@ -348,3 +348,170 @@ describe('enrollTutor cross-app add-profile', () => {
     ).rejects.toMatchObject({ code: 'INVALID_ARGUMENT' });
   });
 });
+
+// ── Frictionless cross-app switch (issue #144, owner clarification): no code,
+// no email, no identity, no prefs in the payload — only subjects. The EJM
+// identity derives from the caller's verified babysitter profile; shared
+// profile fields are copied server-side; prefs get the server defaults. ──
+
+describe('enrollTutor crossApp mode', () => {
+  const RICH_SITTER_UID = 'crossapp-rich-sitter';
+  const SUBJECTS = [{ subject: 'math', levels: ['CP'], rate: 22 }];
+
+  async function seedSitter(uid: string, email: string, overrides: Record<string, unknown> = {}) {
+    await getAdminAuth().createUser({ uid, email });
+    await getDb().collection('users').doc(uid).set({
+      uid,
+      email,
+      firstName: 'Sacha',
+      lastName: 'Sitter',
+      dateOfBirth: '2008-04-01',
+      status: 'active',
+      profiles: {
+        babysitter: {
+          enrollmentComplete: true,
+          ejemEmail: email,
+          searchable: true,
+          classLevel: '2nde',
+          gender: 'other',
+          contactEmail: 'sacha@contact.com',
+          contactPhone: '+33600000002',
+        },
+      },
+      ...overrides,
+    });
+  }
+
+  beforeAll(async () => {
+    await clearAll();
+    // Non-grad-year email: the age gate stands down by design (legacy shape),
+    // isolating these pins from cohort math. The stored-DoB gate keeps its own
+    // dedicated pin below.
+    await seedSitter(RICH_SITTER_UID, 'richsitter@test.com');
+  });
+
+  afterAll(async () => {
+    await clearAll();
+  });
+
+  it('succeeds with ONLY subjects: derives ejemEmail, copies shared fields, applies pref defaults', async () => {
+    const db = getDb();
+    const codeBefore = await db.collection('verificationCodes').doc('richsitter@test.com').get();
+    expect(codeBefore.exists).toBe(false);
+
+    const token = await getIdToken(RICH_SITTER_UID);
+    const result = await callFunction<{ uid: string }>(
+      'enrollTutor',
+      { crossApp: true, consentVersion: '1.0', subjects: SUBJECTS },
+      token,
+    );
+    expect(result.uid).toBe(RICH_SITTER_UID);
+
+    const after = (await db.collection('users').doc(RICH_SITTER_UID).get()).data()!;
+    const tutor = after.profiles.tutor;
+    expect(tutor.ejemEmail).toBe('richsitter@test.com');
+    expect(tutor.enrollmentComplete).toBe(false);
+    expect(tutor.searchable).toBe(false);
+    expect(tutor.verification).toEqual({ identityStatus: 'not_submitted' });
+    expect(tutor.subjects).toEqual(SUBJECTS);
+    // Copied from the babysitter profile:
+    expect(tutor.classLevel).toBe('2nde');
+    expect(tutor.gender).toBe('other');
+    expect(tutor.contactEmail).toBe('sacha@contact.com');
+    expect(tutor.contactPhone).toBe('+33600000002');
+    // Server pref defaults (issue #143):
+    expect(tutor.sessionLengthsMin).toEqual([60]);
+    expect(tutor.paddingMin).toBe(30);
+    expect(tutor.areaMode).toBe('arrondissement');
+    // Babysitter profile and root identity untouched.
+    expect(after.profiles.babysitter.searchable).toBe(true);
+    expect(after.firstName).toBe('Sacha');
+  });
+
+  it('records crossApp provenance in the audit trail', async () => {
+    const audit = await getDb()
+      .collection('auditLogs')
+      .where('adminUserId', '==', RICH_SITTER_UID)
+      .where('action', '==', 'tutor.profile_added')
+      .get();
+    expect(audit.docs.some((d) => d.data().details?.crossApp === true)).toBe(true);
+  });
+
+  it('rejects a caller with NO provider profile (no verified EJM identity)', async () => {
+    const uid = 'crossapp-bare-tutor';
+    await getAdminAuth().createUser({ uid, email: 'baretutor@test.com' });
+    await getDb().collection('users').doc(uid).set({
+      uid, email: 'baretutor@test.com', status: 'active', profiles: {},
+    });
+    const token = await getIdToken(uid);
+    await expect(
+      callFunction('enrollTutor', { crossApp: true, consentVersion: '1.0', subjects: SUBJECTS }, token),
+    ).rejects.toMatchObject({ code: 'FAILED_PRECONDITION' });
+  });
+
+  it('enforces the subjects floor (empty array rejected)', async () => {
+    const uid = 'crossapp-nosubjects';
+    await seedSitter(uid, 'nosubjects@test.com');
+    const token = await getIdToken(uid);
+    await expect(
+      callFunction('enrollTutor', { crossApp: true, consentVersion: '1.0', subjects: [] }, token),
+    ).rejects.toMatchObject({ code: 'INVALID_ARGUMENT' });
+  });
+
+  it('still requires a contact field: a contactless babysitter profile is rejected', async () => {
+    // Edge stated in the report: a babysitter who never finished sit
+    // enrollment has no contact to copy — the tutor contact invariant holds.
+    const uid = 'crossapp-nocontact';
+    await getAdminAuth().createUser({ uid, email: 'nocontact@test.com' });
+    await getDb().collection('users').doc(uid).set({
+      uid,
+      email: 'nocontact@test.com',
+      firstName: 'No', lastName: 'Contact', dateOfBirth: '2008-04-01',
+      status: 'active',
+      profiles: {
+        babysitter: { enrollmentComplete: false, ejemEmail: 'nocontact@test.com', searchable: false, classLevel: '2nde' },
+      },
+    });
+    const token = await getIdToken(uid);
+    await expect(
+      callFunction('enrollTutor', { crossApp: true, consentVersion: '1.0', subjects: SUBJECTS }, token),
+    ).rejects.toMatchObject({ code: 'INVALID_ARGUMENT' });
+  });
+
+  it('the stored-DoB age gate still runs in crossApp mode (under-15 rejected)', async () => {
+    // Derived EJM email carries a graduation year; the stored DoB is 14 —
+    // the gate must reject even though the payload carries no DoB at all.
+    const schoolYearEnd = new Date().getMonth() >= 8
+      ? new Date().getFullYear() + 1
+      : new Date().getFullYear();
+    const grad14 = String((schoolYearEnd + (18 - 15)) % 100).padStart(2, '0');
+    const d = new Date();
+    let y = d.getFullYear();
+    let m = d.getMonth() - 5;
+    if (m < 0) { m += 12; y -= 1; }
+    const storedDob14 = `${y - 14}-${String(m + 1).padStart(2, '0')}-15`;
+    const gateEmail = `crossgate.g${grad14}@ejm.org`;
+
+    const uid = 'crossapp-young';
+    await getAdminAuth().createUser({ uid, email: 'crossyoung@test.com' });
+    await getDb().collection('users').doc(uid).set({
+      uid,
+      email: 'crossyoung@test.com',
+      firstName: 'Too', lastName: 'Young', dateOfBirth: storedDob14,
+      status: 'active',
+      profiles: {
+        babysitter: {
+          enrollmentComplete: true, ejemEmail: gateEmail, searchable: true,
+          classLevel: '2nde', contactEmail: 'young@contact.com',
+        },
+      },
+    });
+    const token = await getIdToken(uid);
+    await expect(
+      callFunction('enrollTutor', { crossApp: true, consentVersion: '1.0', subjects: SUBJECTS }, token),
+    ).rejects.toMatchObject({
+      code: 'FAILED_PRECONDITION',
+      details: { code: 'age/under-15' },
+    });
+  });
+});

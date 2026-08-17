@@ -159,3 +159,141 @@ describe('enrollBabysitter cross-app add-profile', () => {
     });
   });
 });
+
+// ── Frictionless cross-app switch (issue #144, owner clarification): no code,
+// no email in the payload — the EJM identity derives from the caller's
+// verified tutor profile, and shared profile fields are copied server-side. ──
+
+describe('enrollBabysitter crossApp mode', () => {
+  const RICH_TUTOR_UID = 'crossapp-rich-tutor';
+  const CROSS_PARENT_UID = 'crossapp-parent-1';
+
+  // Self-sufficient: the previous describe's afterAll cleared everything.
+  beforeAll(async () => {
+    const db = getDb();
+    await getAdminAuth().createUser({ uid: CROSS_PARENT_UID, email: 'crossparent@test.com' });
+    await db.collection('users').doc(CROSS_PARENT_UID).set({
+      uid: CROSS_PARENT_UID,
+      email: 'crossparent@test.com',
+      firstName: 'Paula',
+      lastName: 'Parent',
+      status: 'active',
+      profiles: { parent: { enrollmentComplete: true, familyId: 'f-crossparent' } },
+    });
+    await getAdminAuth().createUser({ uid: RICH_TUTOR_UID, email: 'richtutor@test.com' });
+    await db.collection('users').doc(RICH_TUTOR_UID).set({
+      uid: RICH_TUTOR_UID,
+      email: 'richtutor@test.com',
+      firstName: 'Rica',
+      lastName: 'Tutor',
+      dateOfBirth: '2008-05-01',
+      status: 'active',
+      language: 'fr',
+      profiles: {
+        tutor: {
+          enrollmentComplete: true,
+          ejemEmail: 'Rica.Tutor@EJM-Test.org', // mixed case: derivation must lowercase
+          searchable: true,
+          classLevel: '1ère',
+          gender: 'female',
+          contactEmail: 'rica@contact.com',
+          contactPhone: '+33600000001',
+          whatsapp: '+33600000001',
+        },
+      },
+      consentVersion: '1.0',
+    });
+  });
+
+  afterAll(async () => {
+    await clearAll();
+  });
+
+  it('succeeds with NO code doc and no ejemEmail in the payload; derives + copies from the tutor profile', async () => {
+    const db = getDb();
+    // Nothing seeded in verificationCodes for the derived email — the whole
+    // point: mailbox ownership is not re-proven.
+    const codeBefore = await db.collection('verificationCodes').doc('rica.tutor@ejm-test.org').get();
+    expect(codeBefore.exists).toBe(false);
+
+    const token = await getIdToken(RICH_TUTOR_UID);
+    const result = await callFunction<{ success: boolean; uid: string }>(
+      'enrollBabysitter',
+      { crossApp: true, consentVersion: '1.0' },
+      token,
+    );
+    expect(result.uid).toBe(RICH_TUTOR_UID);
+
+    const after = (await db.collection('users').doc(RICH_TUTOR_UID).get()).data()!;
+    expect(after.profiles.babysitter).toEqual({
+      enrollmentComplete: false,
+      ejemEmail: 'rica.tutor@ejm-test.org',
+      searchable: false,
+      classLevel: '1ère',
+      gender: 'female',
+      contactEmail: 'rica@contact.com',
+      contactPhone: '+33600000001',
+      whatsapp: '+33600000001',
+    });
+    // Existing tutor profile and base fields untouched.
+    expect(after.profiles.tutor.searchable).toBe(true);
+    expect(after.firstName).toBe('Rica');
+    expect(after.language).toBe('fr');
+  });
+
+  it('records crossApp provenance in the audit trail', async () => {
+    const audit = await getDb()
+      .collection('auditLogs')
+      .where('adminUserId', '==', RICH_TUTOR_UID)
+      .where('action', '==', 'babysitter_profile_added')
+      .get();
+    expect(audit.docs.some((d) => d.data().details?.crossApp === true)).toBe(true);
+  });
+
+  it('rejects a caller with NO provider profile (no verified EJM identity)', async () => {
+    const uid = 'crossapp-bare-1';
+    await getAdminAuth().createUser({ uid, email: 'bare1@test.com' });
+    await getDb().collection('users').doc(uid).set({
+      uid, email: 'bare1@test.com', status: 'active', profiles: {},
+    });
+    const token = await getIdToken(uid);
+    await expect(
+      callFunction('enrollBabysitter', { crossApp: true, consentVersion: '1.0' }, token),
+    ).rejects.toMatchObject({ code: 'FAILED_PRECONDITION' });
+  });
+
+  it('rejects a parent in crossApp mode (no tutor profile to derive from)', async () => {
+    const token = await getIdToken(CROSS_PARENT_UID);
+    await expect(
+      callFunction('enrollBabysitter', { crossApp: true, consentVersion: '1.0' }, token),
+    ).rejects.toMatchObject({ code: 'FAILED_PRECONDITION' });
+    const after = (await getDb().collection('users').doc(CROSS_PARENT_UID).get()).data()!;
+    expect(after.profiles.babysitter).toBeUndefined();
+  });
+
+  it('rejects crossApp when the caller already has a babysitter profile (profile-exists)', async () => {
+    // RICH_TUTOR_UID gained a babysitter profile in the success test above.
+    const token = await getIdToken(RICH_TUTOR_UID);
+    await expect(
+      callFunction('enrollBabysitter', { crossApp: true, consentVersion: '1.0' }, token),
+    ).rejects.toMatchObject({
+      code: 'ALREADY_EXISTS',
+      details: { reason: 'profile-exists', profile: 'babysitter' },
+    });
+  });
+
+  it('rejects crossApp without consent', async () => {
+    const token = await getIdToken(RICH_TUTOR_UID);
+    await expect(
+      callFunction('enrollBabysitter', { crossApp: true }, token),
+    ).rejects.toMatchObject({ code: 'INVALID_ARGUMENT' });
+  });
+
+  it('unauthenticated crossApp is NOT a bypass: it falls through to the code-verified path', async () => {
+    // crossApp only applies to signed-in callers; anonymous requests keep the
+    // full email + code requirements.
+    await expect(
+      callFunction('enrollBabysitter', { crossApp: true, consentVersion: '1.0', password: 'Str0ngPass1' }),
+    ).rejects.toMatchObject({ code: 'INVALID_ARGUMENT' });
+  });
+});

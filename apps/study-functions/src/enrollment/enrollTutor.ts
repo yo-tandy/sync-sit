@@ -15,11 +15,30 @@ import { tutorEnrollmentSchema, withPrefDefaults } from '../validation/tutor.js'
 import type { TutorEnrollmentInput } from '../validation/tutor.js';
 
 interface EnrollTutorData {
-  ejemEmail: string;
-  verificationCode: string;
+  ejemEmail?: string;
+  verificationCode?: string;
   password?: string;
   consentVersion: string;
-  enrollment: TutorEnrollmentInput;
+  enrollment?: TutorEnrollmentInput;
+  // Cross-app switch (issue #144, owner clarification): a signed-in sit
+  // babysitter adds a tutor profile without re-proving mailbox ownership —
+  // the EJM identity was verified at first enrollment and lives on the doc.
+  // Only `subjects` (tutor-specific) is collected; classLevel/gender/contact
+  // are copied server-side from the babysitter profile.
+  crossApp?: boolean;
+  subjects?: unknown;
+}
+
+/** Copy the profile-scoped fields both provider profile types share — only
+ *  those actually present on the source profile. */
+function copySharedProfileFields(source: Record<string, unknown>): Record<string, unknown> {
+  const copied: Record<string, unknown> = {};
+  for (const key of ['classLevel', 'gender', 'contactEmail', 'contactPhone', 'whatsapp']) {
+    if (source[key] !== undefined && source[key] !== null && source[key] !== '') {
+      copied[key] = source[key];
+    }
+  }
+  return copied;
 }
 
 
@@ -28,6 +47,7 @@ export const enrollTutor = onCall(
   async (request) => {
     const data = request.data as EnrollTutorData;
     const isAddProfile = !!request.auth;
+    const isCrossApp = isAddProfile && data.crossApp === true;
 
     // 1. Validate password (only for the new-account path)
     if (!isAddProfile) {
@@ -45,39 +65,72 @@ export const enrollTutor = onCall(
       throw new HttpsError('invalid-argument', 'Consent is required');
     }
 
-    // 3. Verify the code
-    const codeDoc = await db
-      .collection('verificationCodes')
-      .doc(data.ejemEmail.toLowerCase())
-      .get();
-
-    if (!codeDoc.exists) {
-      throw new HttpsError('not-found', 'No verification code found. Please request a new one.');
+    // The caller doc feeds three later checks (crossApp email derivation,
+    // governance bypass, identity presence) — fetch it once, up front.
+    let callerData: Record<string, unknown> = {};
+    if (isAddProfile) {
+      const callerSnap = await db.collection('users').doc(request.auth!.uid).get();
+      callerData = callerSnap.data() ?? {};
     }
 
-    const codeData = codeDoc.data()!;
+    // 3. Establish the verified EJM identity.
+    // Cross-app: derive it from the caller's OTHER provider profile — a
+    // signed-in babysitter re-proving mailbox ownership is redundant by design
+    // (owner call on issue #144); the audit trail records crossApp: true. The
+    // wizard sends only `subjects`; classLevel/gender/contact are copied from
+    // the babysitter profile and validated through the same schema.
+    // Classic: verify the emailed code as before.
+    let ejemEmailLower: string;
+    let codeDoc: FirebaseFirestore.DocumentSnapshot | null = null;
+    let enrollmentInput: unknown;
+    if (isCrossApp) {
+      const profiles = (callerData.profiles ?? {}) as Record<string, unknown>;
+      const babysitterProfile = (profiles.babysitter ?? null) as Record<string, unknown> | null;
+      if (!babysitterProfile || typeof babysitterProfile.ejemEmail !== 'string' || !babysitterProfile.ejemEmail) {
+        throw new HttpsError('failed-precondition', 'No verified EJM identity on this account');
+      }
+      ejemEmailLower = babysitterProfile.ejemEmail.toLowerCase();
+      enrollmentInput = {
+        subjects: data.subjects,
+        ...copySharedProfileFields(babysitterProfile),
+      };
+    } else {
+      if (!data.ejemEmail) {
+        throw new HttpsError('invalid-argument', 'EJM email is required');
+      }
+      ejemEmailLower = data.ejemEmail.toLowerCase();
+      enrollmentInput = data.enrollment;
+      codeDoc = await db.collection('verificationCodes').doc(ejemEmailLower).get();
 
-    if (codeData.expiresAt.toDate() < new Date()) {
-      throw new HttpsError(
-        'deadline-exceeded',
-        'Verification code has expired. Please request a new one.',
-      );
+      if (!codeDoc.exists) {
+        throw new HttpsError('not-found', 'No verification code found. Please request a new one.');
+      }
+
+      const codeData = codeDoc.data()!;
+
+      if (codeData.expiresAt.toDate() < new Date()) {
+        throw new HttpsError(
+          'deadline-exceeded',
+          'Verification code has expired. Please request a new one.',
+        );
+      }
+
+      if ((codeData.attempts || 0) >= 5) {
+        throw new HttpsError(
+          'resource-exhausted',
+          'Too many failed attempts. Please request a new verification code.',
+        );
+      }
+
+      if (codeData.code !== data.verificationCode) {
+        await codeDoc.ref.update({ attempts: FieldValue.increment(1) });
+        throw new HttpsError('invalid-argument', 'Invalid verification code');
+      }
     }
 
-    if ((codeData.attempts || 0) >= 5) {
-      throw new HttpsError(
-        'resource-exhausted',
-        'Too many failed attempts. Please request a new verification code.',
-      );
-    }
-
-    if (codeData.code !== data.verificationCode) {
-      await codeDoc.ref.update({ attempts: FieldValue.increment(1) });
-      throw new HttpsError('invalid-argument', 'Invalid verification code');
-    }
-
-    // 4. Validate enrollment payload
-    const enrollmentResult = tutorEnrollmentSchema.safeParse(data.enrollment);
+    // 4. Validate enrollment payload (crossApp: the synthesized input — the
+    // subjects floor and every copied-field bound apply identically)
+    const enrollmentResult = tutorEnrollmentSchema.safeParse(enrollmentInput);
     if (!enrollmentResult.success) {
       const firstIssue = enrollmentResult.error.issues[0];
       throw new HttpsError(
@@ -96,7 +149,6 @@ export const enrollTutor = onCall(
 
     // 5. Build the tutor profile (shared by both the add-profile and the
     // new-account paths).
-    const ejemEmailLower = data.ejemEmail.toLowerCase();
     const now = new Date();
 
     // 5-bis. Self-enrollment age gate (governance PR 1): dual-signal check of
@@ -113,14 +165,8 @@ export const enrollTutor = onCall(
     // stands down. Only the add-profile path can be governed (a governed kid
     // always has an account); the new-account path keeps the full gate, and a
     // revoked link (mirror deleted) restores it.
-    let isGoverned = false;
-    let existingIdentity: Record<string, unknown> = {};
-    if (isAddProfile) {
-      const callerSnap = await db.collection('users').doc(request.auth!.uid).get();
-      const callerData = callerSnap.data() ?? {};
-      isGoverned = !!callerData.governedBy;
-      existingIdentity = callerData;
-    }
+    const isGoverned = !!callerData.governedBy;
+    const existingIdentity: Record<string, unknown> = callerData;
 
     // Identity coherence (issue #144): root identity is set-once. A new
     // account must supply all three fields; an add-profile caller may omit any
@@ -147,7 +193,7 @@ export const enrollTutor = onCall(
     if (Number.isNaN(gateDob.getTime())) {
       throw new HttpsError('invalid-argument', 'Date of birth is invalid');
     }
-    const emailCheck = validateEjmEmail(data.ejemEmail);
+    const emailCheck = validateEjmEmail(ejemEmailLower);
     if (!isGoverned && emailCheck.valid && emailCheck.graduationYear !== undefined) {
       const verdict = checkEnrollmentAge({
         dateOfBirth: gateDob,
@@ -228,9 +274,10 @@ export const enrollTutor = onCall(
           ejemEmail: ejemEmailLower,
           consentVersion: data.consentVersion,
           subjects: enrollment.subjects.map((s) => s.subject),
+          ...(isCrossApp ? { crossApp: true } : {}),
         },
       });
-      await codeDoc.ref.delete();
+      if (codeDoc) await codeDoc.ref.delete();
       return { uid };
     }
 
@@ -288,8 +335,9 @@ export const enrollTutor = onCall(
       subjects: enrollment.subjects.map((s) => s.subject),
     });
 
-    // 6d. Delete the consumed verification code
-    await codeDoc.ref.delete();
+    // 6d. Delete the consumed verification code (always present on the
+    // new-account path)
+    if (codeDoc) await codeDoc.ref.delete();
 
     return { uid };
   },
