@@ -943,7 +943,6 @@ export default {
     allTypes: 'All types',
     typeIdentity: 'Identity',
     typeEnrollment: 'Enrollment',
-    typeTutorIdentity: 'Tutor ID',
     noVerifications: 'No verifications found',
     unknownFamily: 'Unknown Family',
     viewDocument: 'View Document',

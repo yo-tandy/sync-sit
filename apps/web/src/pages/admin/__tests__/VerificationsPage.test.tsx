@@ -34,7 +34,7 @@ function renderPage() {
   );
 }
 
-describe('AdminVerificationsPage tutor identity review', () => {
+describe('AdminVerificationsPage family verification review', () => {
   beforeEach(() => {
     i18n.changeLanguage('en');
     storeState.pendingVerifications = [];
@@ -45,29 +45,6 @@ describe('AdminVerificationsPage tutor identity review', () => {
 
   afterEach(() => {
     cleanup();
-  });
-
-  it('renders a tutor identity doc with tutorName + Tutor ID badge and no family fields', () => {
-    storeState.pendingVerifications = [
-      {
-        id: 't1',
-        type: 'tutor_identity',
-        status: 'pending',
-        tutorName: 'Alice Tutor',
-        fileUrl: 'https://storage.googleapis.com/b/o/verification-documents%2Fx.pdf?alt=media',
-        fileName: 'x.pdf',
-        createdAt: '2026-07-01T00:00:00Z',
-      },
-    ];
-    renderPage();
-
-    expect(screen.getByText('Alice Tutor')).toBeInTheDocument();
-    // Tutor ID type badge (a <span>) is present, distinct from the filter <option>.
-    const tutorIdMatches = screen.getAllByText(i18n.t('verification.typeTutorIdentity'));
-    expect(tutorIdMatches.some((el) => el.tagName === 'SPAN')).toBe(true);
-    // Family-only pieces are absent for a tutor doc.
-    expect(screen.queryByText(i18n.t('verification.unknownFamily'))).not.toBeInTheDocument();
-    expect(screen.queryByText(i18n.t('verification.registeredFamily'))).not.toBeInTheDocument();
   });
 
   it('renders a family enrollment doc with family fields (regression)', () => {
@@ -92,10 +69,15 @@ describe('AdminVerificationsPage tutor identity review', () => {
     expect(screen.getByText(i18n.t('verification.registeredFamily'))).toBeInTheDocument();
   });
 
-  it('offers a tutor identity option in the type filter', () => {
+  it('offers only the family types in the type filter (tutor identity retired)', () => {
     renderPage();
-    const option = screen.getByRole('option', { name: i18n.t('verification.typeTutorIdentity') });
-    expect(option).toBeInTheDocument();
+    expect(
+      screen.getByRole('option', { name: i18n.t('verification.typeIdentity') }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('option', { name: i18n.t('verification.typeEnrollment') }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /tutor/i })).not.toBeInTheDocument();
   });
 });
 
