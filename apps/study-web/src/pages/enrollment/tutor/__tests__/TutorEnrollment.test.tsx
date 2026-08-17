@@ -298,11 +298,11 @@ describe('TutorEnrollment orchestrator', () => {
     fireEvent.click(screen.getByText('email-submit'));
     fireEvent.click(await screen.findByText('verify-submit'));
     fireEvent.click(await screen.findByTestId('step-password'));
-    fireEvent.click(await screen.findByText('subjects-next'));
 
-    // StepProfile received the on-file identity.
+    // StepProfile (now first) received the on-file identity.
     expect(await screen.findByText('identity-on-file:Iris')).toBeInTheDocument();
     fireEvent.click(screen.getByText('profile-next'));
+    fireEvent.click(await screen.findByText('subjects-next'));
 
     const enroll = await vi.waitFor(() => {
       const c = h.calls.find((x) => x.name === 'enrollTutor');
