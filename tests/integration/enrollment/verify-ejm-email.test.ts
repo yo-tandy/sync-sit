@@ -273,6 +273,53 @@ describe('verifyEjmEmail cross-app and silent existing-account cases', () => {
     expect(notice.exists).toBe(true);
   });
 
+  it('a whitespace-padded EXISTING address still takes the silent path, keyed on the trimmed id (round 6)', async () => {
+    // Round-6 blocking fix: without trimming, "victim28@ejm.org " missed the
+    // exact-match users query and routed an existing account down the FRESH
+    // branch (real code emailed, no account-exists notice, per-variant
+    // cooldown slots).
+    const { getAdminAuth } = await import('../../setup/emulator.js');
+    const email = 'trim.victim28@ejm.org';
+    const padded = `${email} `;
+    const { uid } = await getAdminAuth().createUser({ email });
+    await getDb().collection('users').doc(uid).set({ uid, email, status: 'active' });
+
+    const result = await callFunction('verifyEjmEmail', { email: padded });
+    expect(result).toEqual(FRESH_RESPONSE);
+
+    // Decoy under the TRIMMED id, nothing under the padded id.
+    const trimmedDoc = await getDb().collection('verificationCodes').doc(email).get();
+    expect(trimmedDoc.exists).toBe(true);
+    expect(trimmedDoc.data()!.decoy).toBe(true);
+    const paddedDoc = await getDb().collection('verificationCodes').doc(padded).get();
+    expect(paddedDoc.exists).toBe(false);
+
+    // The account-exists machinery fired for the trimmed address.
+    const notice = await getDb().collection('accountExistsNotices').doc(email).get();
+    expect(notice.exists).toBe(true);
+  });
+
+  it('a whitespace-padded FRESH address writes its code under the trimmed id and shares one cooldown slot (round 6)', async () => {
+    const email = 'trimfresh28@ejm.org';
+    const result = await callFunction('verifyEjmEmail', { email: `${email} ` });
+    expect(result).toEqual(FRESH_RESPONSE);
+
+    const trimmedDoc = await getDb().collection('verificationCodes').doc(email).get();
+    expect(trimmedDoc.exists).toBe(true);
+    expect(trimmedDoc.data()!.decoy).toBeUndefined();
+    const code = trimmedDoc.data()!.code;
+    expect(
+      (await getDb().collection('verificationCodes').doc(`${email} `).get()).exists,
+    ).toBe(false);
+
+    // A differently-padded repeat hits the SAME cooldown slot: success body,
+    // doc untouched (padding can no longer multiply rate-limit slots).
+    const repeat = await callFunction('verifyEjmEmail', { email: `  ${email}` });
+    expect(repeat).toEqual(FRESH_RESPONSE);
+    const after = await getDb().collection('verificationCodes').doc(email).get();
+    expect(after.data()!.code).toBe(code);
+  });
+
   it('verifyParentEmail repeats within the 60s cooldown return the fresh body without rewriting (fresh and silent paths)', async () => {
     const db = getDb();
     // Fresh path: brand-new email.

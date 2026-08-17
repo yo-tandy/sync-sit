@@ -30,12 +30,20 @@ const NOTICE_WINDOW_MS = 24 * 60 * 60 * 1000;
  * marker (clients cannot reach it: firestore.rules has no match for the
  * collection, so the default-deny catch-all applies).
  *
- * Known residual timing channel (deliberate, do NOT claim it is closed): in
- * the 60s-24h repeat window the fresh path performs an outbound email send
- * while this path skips it (notice already sent within 24h), so wall-clock
- * can differ. (Every branch below refreshes createdAt, so the 60s cooldown
- * itself fires symmetrically on both paths — the divergence is the send,
- * plus small per-request read-count differences.) Full symmetry would mean 24h-throttling legitimate resends or
+ * Known residual channel (deliberate, do NOT claim it is closed): in the
+ * 60s-24h repeat window the fresh path performs an outbound email send while
+ * this path skips it (notice already sent within 24h). Two manifestations:
+ * (a) wall-clock timing — the send costs hundreds of milliseconds; and
+ * (b) under a mail-transport failure, an error-vs-success split — the fresh
+ * path rethrows the send failure (INTERNAL to the caller) while this path,
+ * having nothing to send, succeeds. The error split needs an outage AND a
+ * second probe inside the window (a first probe on an existing address also
+ * sends and fails symmetrically). Closing it would mean swallowing send
+ * failures on both paths, losing the failure propagation the send-then-mark
+ * ordering below deliberately preserves — accepted instead. (Every branch
+ * below refreshes createdAt, so the 60s cooldown itself fires symmetrically
+ * on both paths — the divergence is the send, plus small per-request
+ * read-count differences.) Full symmetry would mean 24h-throttling legitimate resends or
  * fire-and-forget sends that lose failure propagation — both worse. A third
  * option, padding both branches to a fixed floor duration, was considered
  * and rejected: the floor only closes the channel if it exceeds the p99

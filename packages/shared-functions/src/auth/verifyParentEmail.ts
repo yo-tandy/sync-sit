@@ -73,7 +73,7 @@ export const verifyParentEmail = onCall(
 
     await sendVerificationEmail(normalizedEmail, code);
 
-    await writeUserActivity('system', 'verification_email_sent', { email });
+    await writeUserActivity('system', 'verification_email_sent', { email: normalizedEmail });
 
     return { success: true, message: 'Verification code sent' };
   }

@@ -120,10 +120,16 @@ describe('runCleanupOldData', () => {
     const db = getDb();
     const now = new Date();
 
-    await db.collection('accountExistsNotices').doc('stale@ejm.org').set({
-      email: 'stale@ejm.org',
-      lastSentAt: new Date(now.getTime() - 25 * 60 * 60 * 1000),
-    });
+    // Three stale markers exercise the round-6 drain loop (trivially — one
+    // pass — since seeding 501+ docs would blow up integration runtime; the
+    // loop's boundary condition `size < 500 -> break` is the same code path
+    // either way).
+    for (const name of ['stale1', 'stale2', 'stale3']) {
+      await db.collection('accountExistsNotices').doc(`${name}@ejm.org`).set({
+        email: `${name}@ejm.org`,
+        lastSentAt: new Date(now.getTime() - 25 * 60 * 60 * 1000),
+      });
+    }
     await db.collection('accountExistsNotices').doc('fresh@ejm.org').set({
       email: 'fresh@ejm.org',
       lastSentAt: new Date(now.getTime() - 23 * 60 * 60 * 1000),
@@ -131,7 +137,7 @@ describe('runCleanupOldData', () => {
 
     const stats = await runCleanupOldData(db, now);
 
-    expect(stats.accountExistsNoticesDeleted).toBe(1);
+    expect(stats.accountExistsNoticesDeleted).toBe(3);
 
     const remaining = await db.collection('accountExistsNotices').get();
     expect(remaining.size).toBe(1);

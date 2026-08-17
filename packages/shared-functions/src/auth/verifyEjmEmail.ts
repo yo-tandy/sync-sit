@@ -23,14 +23,21 @@ export const verifyEjmEmail = onCall(
       throw new HttpsError('invalid-argument', 'Email is required');
     }
 
+    // Normalize ONCE and use everywhere (mirrors verifyParentEmail). The
+    // silent path's central guarantee is the exact-match users query below:
+    // an untrimmed "victim28@ejm.org " would miss it and route an existing
+    // account down the fresh branch (real code emailed, no account-exists
+    // notice, per-variant cooldown slots).
+    const normalizedEmail = email.trim().toLowerCase();
+
     // Check if email is pre-approved (for test/invite accounts)
-    const preapprovedDoc = await db.collection('preapprovedEmails').doc(email.toLowerCase()).get();
+    const preapprovedDoc = await db.collection('preapprovedEmails').doc(normalizedEmail).get();
     const isPreapproved = preapprovedDoc.exists && preapprovedDoc.data()?.used === false;
 
     // Skip EJM domain validation if pre-approved
     let graduationYear: number | null = null;
     if (!isPreapproved) {
-      const validation = validateEjmEmail(email);
+      const validation = validateEjmEmail(normalizedEmail);
       if (!validation.valid) {
         throw new HttpsError('invalid-argument', validation.error!);
       }
@@ -45,7 +52,7 @@ export const verifyEjmEmail = onCall(
     // enrollment write paths); the own-email bypass below relies on it.
     const existingUsers = await db
       .collection('users')
-      .where('email', '==', email.toLowerCase())
+      .where('email', '==', normalizedEmail)
       .limit(1)
       .get();
 
@@ -66,12 +73,12 @@ export const verifyEjmEmail = onCall(
       // owner gets an account-exists email (rate-limited) instead of a code.
       // Per-address send cooldown first — the fresh branch below runs the
       // identical check at the identical point (query -> cooldown -> work).
-      if (await isInSendCooldown(email.toLowerCase())) {
+      if (await isInSendCooldown(normalizedEmail)) {
         return { success: true, message: 'Verification code sent' };
       }
-      return handleExistingAccountSignup(email.toLowerCase(), app, {
+      return handleExistingAccountSignup(normalizedEmail, app, {
         code: crypto.randomInt(100000, 999999).toString(),
-        email: email.toLowerCase(),
+        email: normalizedEmail,
         graduationYear,
         expiresAt: new Date(Date.now() + 10 * 60 * 1000),
         attempts: 0,
@@ -82,7 +89,7 @@ export const verifyEjmEmail = onCall(
     // Per-address send cooldown for the FRESH path (mirrors the silent
     // branch above: query -> cooldown -> work). The authed own-email bypass
     // skips it — see isOwnEmailBypass.
-    if (!isOwnEmailBypass && (await isInSendCooldown(email.toLowerCase()))) {
+    if (!isOwnEmailBypass && (await isInSendCooldown(normalizedEmail))) {
       return { success: true, message: 'Verification code sent' };
     }
 
@@ -91,18 +98,18 @@ export const verifyEjmEmail = onCall(
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
     // Store verification code
-    await db.collection('verificationCodes').doc(email.toLowerCase()).set({
+    await db.collection('verificationCodes').doc(normalizedEmail).set({
       code,
-      email: email.toLowerCase(),
+      email: normalizedEmail,
       graduationYear,
       expiresAt,
       attempts: 0,
       createdAt: new Date(),
     });
 
-    await sendVerificationEmail(email.toLowerCase(), code);
+    await sendVerificationEmail(normalizedEmail, code);
 
-    await writeUserActivity('system', 'verification_email_sent', { email });
+    await writeUserActivity('system', 'verification_email_sent', { email: normalizedEmail });
 
     return { success: true, message: 'Verification code sent' };
   }

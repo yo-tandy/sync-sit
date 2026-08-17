@@ -488,6 +488,14 @@ describe('accountExistsNotices collection', () => {
 
     const authed = testEnv.authenticatedContext('anyuser');
     await assertFails(getDoc(doc(authed.firestore(), 'accountExistsNotices', 'test@ejm.org')));
+    // Write denial is the security-relevant half: a client that could stamp
+    // a fresh lastSentAt would suppress the owner's account-exists warning
+    // for 24h while probing freely.
+    await assertFails(
+      setDoc(doc(authed.firestore(), 'accountExistsNotices', 'test@ejm.org'), {
+        lastSentAt: new Date(),
+      }),
+    );
   });
 });
 

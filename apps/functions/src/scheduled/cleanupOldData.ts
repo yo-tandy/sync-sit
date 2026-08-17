@@ -115,22 +115,31 @@ export async function runCleanupOldData(
   // 5. Delete account-exists notice markers older than their 24h guard
   // window (issue #148): past that they only retain the addresses of
   // targeted accounts, so their lifetime should match their semantics.
+  // Unlike the other blocks, this one LOOPS until a pass returns fewer than
+  // the batch limit: an enumeration spray writes one marker per targeted
+  // address, and a single 500-doc pass per day would let the backlog (and
+  // the retained address list) grow unboundedly. The iteration ceiling
+  // (40 passes = 20k docs/run) is a runaway backstop, far above any
+  // legitimate volume.
   const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-  const staleNotices = await firestoreDb
-    .collection('accountExistsNotices')
-    .where('lastSentAt', '<', twentyFourHoursAgo)
-    .limit(500)
-    .get();
+  for (let pass = 0; pass < 40; pass++) {
+    const staleNotices = await firestoreDb
+      .collection('accountExistsNotices')
+      .where('lastSentAt', '<', twentyFourHoursAgo)
+      .limit(500)
+      .get();
 
-  if (!staleNotices.empty) {
-    const batch = firestoreDb.batch();
-    for (const doc of staleNotices.docs) {
-      batch.delete(doc.ref);
+    if (!staleNotices.empty) {
+      const batch = firestoreDb.batch();
+      for (const doc of staleNotices.docs) {
+        batch.delete(doc.ref);
+      }
+      await batch.commit();
+      stats.accountExistsNoticesDeleted += staleNotices.size;
+      stats.totalDeleted += staleNotices.size;
+      console.log(`Deleted ${staleNotices.size} stale account-exists notice markers`);
     }
-    await batch.commit();
-    stats.accountExistsNoticesDeleted = staleNotices.size;
-    stats.totalDeleted += staleNotices.size;
-    console.log(`Deleted ${staleNotices.size} stale account-exists notice markers`);
+    if (staleNotices.size < 500) break;
   }
 
   // 6. Delete old cancelled/rejected appointments
