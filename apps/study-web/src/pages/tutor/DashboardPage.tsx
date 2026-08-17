@@ -27,7 +27,6 @@ import {
   ChevronRightIcon,
   ClipboardListIcon,
   SettingsIcon,
-  ShieldIcon,
   useRefetchOnFocus,
 } from '@ejm/shared-ui';
 
@@ -84,15 +83,13 @@ function formatDateStr(s: string, lang: string): string {
 }
 
 /**
- * Tutor dashboard — the consumer of PR #77's state contract. The banner is
- * keyed on `verification.identityStatus`; liveness/search is keyed on the
- * profile's `enrollmentComplete`. They are INDEPENDENT (see the plan's state
- * table) — never derive one from the other. A missing `verification` field
- * (pre-#77 tutors) is treated as `not_submitted`.
- *
- * Rejection reasons live on the verification DOCUMENT (not the profile), so the
- * rejected banner links to /tutor/verification — which already surfaces the
- * reason — rather than fetching the document here.
+ * Tutor dashboard. PR #77's verification state contract is SUPERSEDED (owner
+ * decision 2026-08-17): tutor identity verification was dropped, so there is
+ * no verification banner and no /tutor/verification page. `enrollmentComplete`
+ * is written true at creation for every current tutor; it is still read here
+ * (rather than assumed) so legacy dev/test docs enrolled under the old gated
+ * model stay inert instead of half-activating. The activation gate is now
+ * subjects + availability only.
  */
 export function DashboardPage() {
   const { t, i18n } = useTranslation();
@@ -100,7 +97,6 @@ export function DashboardPage() {
   const tutor = getTutorProfile(userDoc);
   const uid = firebaseUser?.uid;
 
-  const identityStatus = tutor?.verification?.identityStatus ?? 'not_submitted';
   const enrollmentComplete = tutor?.enrollmentComplete ?? false;
   const isSearchable = tutor?.searchable ?? false;
   const hasSubjects = (tutor?.subjects?.length ?? 0) > 0;
@@ -287,8 +283,8 @@ export function DashboardPage() {
 
   // ── Hero (first match wins; issue #120). Requests lead because a waiting
   // family is blocked on the tutor's answer; then sessions to confirm; then
-  // the next confirmed session. Zero-state has no hero — the verification
-  // banner / activation card already lead. The whole ladder waits for BOTH
+  // the next confirmed session. Zero-state has no hero — the activation
+  // card already leads. The whole ladder waits for BOTH
   // snapshots (family-page discipline): the two queries resolve
   // independently, and ranking on a still-null count would let a lower
   // priority claim the hero and visibly swap when requests resolve. ──
@@ -334,15 +330,9 @@ export function DashboardPage() {
       {/* ── Ask-to-supervise prompt (pending claim on guardianLinks/{uid}) ── */}
       <SupervisionRequestCard />
 
-      {/* ── Verification-state banner (keyed on identityStatus + liveness) ── */}
-      <VerificationBanner
-        identityStatus={identityStatus}
-        enrollmentComplete={enrollmentComplete}
-        t={t}
-      />
-
-      {/* ── Activation (approved + enrolled only) ── */}
-      {identityStatus === 'approved' && enrollmentComplete && (
+      {/* ── Activation (subjects + availability gate; enrollmentComplete is
+          true from creation — the check only fences off legacy docs) ── */}
+      {enrollmentComplete && (
         <Card className="mb-4">
           <p className="mb-1 text-sm font-semibold text-gray-900">
             {t('tutor.dashboard.searchTitle')}
@@ -445,94 +435,7 @@ export function DashboardPage() {
           icon={<SettingsIcon className="h-6 w-6 text-brand-600" />}
           title={t('tutor.dashboard.accountCard')}
         />
-        <DashTile
-          to="/tutor/verification"
-          icon={<ShieldIcon className="h-6 w-6 text-brand-600" />}
-          title={t('tutor.dashboard.verificationCard')}
-        />
       </div>
-    </div>
-  );
-}
-
-function VerificationBanner({
-  identityStatus,
-  enrollmentComplete,
-  t,
-}: {
-  identityStatus: string;
-  enrollmentComplete: boolean;
-  t: (key: string) => string;
-}) {
-  // pending has two treatments split by liveness (state-contract rows 2 & 5).
-  if (identityStatus === 'pending' && enrollmentComplete) {
-    return (
-      <Banner tone="amber" title={t('tutor.dashboard.bannerPendingLiveTitle')}>
-        <p className="text-xs text-amber-700">{t('tutor.dashboard.bannerPendingLiveDesc')}</p>
-      </Banner>
-    );
-  }
-  if (identityStatus === 'pending') {
-    return (
-      <Banner tone="amber" title={t('tutor.dashboard.bannerPendingTitle')}>
-        <p className="text-xs text-amber-700">{t('tutor.dashboard.bannerPendingDesc')}</p>
-      </Banner>
-    );
-  }
-  if (identityStatus === 'rejected') {
-    return (
-      <Banner tone="red" title={t('tutor.dashboard.bannerRejectedTitle')}>
-        <p className="mb-3 text-xs text-brand-700">{t('tutor.dashboard.bannerRejectedDesc')}</p>
-        <Link
-          to="/tutor/verification"
-          className="inline-flex rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700"
-        >
-          {t('tutor.dashboard.bannerRejectedCta')}
-        </Link>
-      </Banner>
-    );
-  }
-  if (identityStatus === 'approved' && enrollmentComplete) {
-    return (
-      <Banner tone="green" title={t('tutor.dashboard.bannerApprovedTitle')}>
-        <p className="text-xs text-green-700">{t('tutor.dashboard.bannerApprovedDesc')}</p>
-      </Banner>
-    );
-  }
-  // not_submitted (incl. absent verification / pre-#77 tutors)
-  return (
-    <Banner tone="gray" title={t('tutor.dashboard.bannerNotSubmittedTitle')}>
-      <p className="mb-3 text-xs text-gray-600">{t('tutor.dashboard.bannerNotSubmittedDesc')}</p>
-      <Link
-        to="/tutor/verification"
-        className="inline-flex rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700"
-      >
-        {t('tutor.dashboard.bannerNotSubmittedCta')}
-      </Link>
-    </Banner>
-  );
-}
-
-const TONE_CLASSES: Record<string, string> = {
-  amber: 'border-amber-300 bg-amber-50 text-amber-800',
-  red: 'border-brand-300 bg-brand-50 text-brand-800',
-  green: 'border-green-300 bg-green-50 text-green-800',
-  gray: 'border-gray-300 bg-gray-50 text-gray-800',
-};
-
-function Banner({
-  tone,
-  title,
-  children,
-}: {
-  tone: 'amber' | 'red' | 'green' | 'gray';
-  title: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className={`mb-4 rounded-xl border p-4 ${TONE_CLASSES[tone]}`}>
-      <p className="mb-1 text-sm font-semibold">{title}</p>
-      {children}
     </div>
   );
 }

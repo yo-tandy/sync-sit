@@ -44,8 +44,11 @@ vi.mock('@/stores/authStore', () => ({
 
 import { DashboardPage } from '../DashboardPage';
 
+// Current-model default: enrollTutor writes enrollmentComplete: true at
+// creation (owner decision 2026-08-17, no identity verification). Legacy docs
+// override it to false explicitly.
 function tutor(overrides: Record<string, unknown> = {}) {
-  return { uid: 't1', profiles: { tutor: { enrollmentComplete: false, subjects: [], ...overrides } } };
+  return { uid: 't1', profiles: { tutor: { enrollmentComplete: true, subjects: [], ...overrides } } };
 }
 
 function reset() {
@@ -77,60 +80,35 @@ function reset() {
 describe('tutor DashboardPage', () => {
   beforeEach(() => reset());
 
-  // ── State-contract rows (one render assertion each) ──
+  // ── No verification surface (feature dropped, owner decision 2026-08-17) ──
 
-  it('not_submitted (verification absent): shows the upload-your-ID banner', () => {
-    h.auth.userDoc = tutor(); // no verification field => not_submitted
+  it('renders no verification banner, tile, or link anywhere', async () => {
+    h.auth.userDoc = tutor();
     renderWithProviders(<DashboardPage />);
-    expect(screen.getByText(/upload your id/i)).toBeInTheDocument();
+    await waitFor(() => expect(h.getDocs).toHaveBeenCalled());
+    expect(screen.queryByText(/verif/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/upload your id/i)).not.toBeInTheDocument();
+    expect(document.querySelector('a[href="/tutor/verification"]')).toBeNull();
   });
 
-  it('pending / not live: shows the under-review banner', () => {
-    h.auth.userDoc = tutor({ enrollmentComplete: false, verification: { identityStatus: 'pending' } });
-    renderWithProviders(<DashboardPage />);
-    // Body copy unique to this row — /under review/ alone would also match the
-    // pending/live row's "New document under review" banner.
-    expect(screen.getByText(/your id is being reviewed/i)).toBeInTheDocument();
-    expect(screen.queryByText(/new document under review/i)).not.toBeInTheDocument();
-  });
-
-  it('approved / live: shows the verified banner', () => {
+  it('legacy doc (enrollmentComplete=false): no activation card renders', async () => {
+    h.scheduleData = { weekly: { tue: [true] } };
     h.auth.userDoc = tutor({
-      enrollmentComplete: true,
-      verification: { identityStatus: 'approved' },
+      enrollmentComplete: false,
       subjects: [{ subject: 'math', levels: ['6e'], rate: 20 }],
       searchable: false,
     });
     renderWithProviders(<DashboardPage />);
-    expect(screen.getByText(/you're verified|you are verified/i)).toBeInTheDocument();
+    await waitFor(() => expect(h.getDocs).toHaveBeenCalled());
+    expect(screen.queryByText(/search visibility/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /show me in search/i })).not.toBeInTheDocument();
   });
 
-  it('rejected: shows a rejection banner with a resubmit CTA to verification', () => {
-    h.auth.userDoc = tutor({ enrollmentComplete: false, verification: { identityStatus: 'rejected' } });
-    renderWithProviders(<DashboardPage />);
-    expect(screen.getByText(/verification unsuccessful/i)).toBeInTheDocument();
-    const cta = screen.getByRole('link', { name: /resubmit|review/i });
-    expect(cta).toHaveAttribute('href', '/tutor/verification');
-  });
+  // ── Activation toggle gating (subjects + availability only) ──
 
-  it('pending / live: shows the "new document under review, still live" banner', () => {
-    h.auth.userDoc = tutor({
-      enrollmentComplete: true,
-      verification: { identityStatus: 'pending' },
-      subjects: [{ subject: 'math', levels: ['6e'], rate: 20 }],
-    });
-    renderWithProviders(<DashboardPage />);
-    expect(screen.getByText(/new document under review/i)).toBeInTheDocument();
-    expect(screen.getByText(/still|stay|listed|live/i)).toBeInTheDocument();
-  });
-
-  // ── Activation toggle gating ──
-
-  it('approved but no subjects: toggle disabled with explanatory text', async () => {
+  it('no subjects: toggle disabled with explanatory text', async () => {
     h.scheduleData = { weekly: { tue: [true] } };
     h.auth.userDoc = tutor({
-      enrollmentComplete: true,
-      verification: { identityStatus: 'approved' },
       subjects: [],
       searchable: false,
     });
@@ -140,11 +118,9 @@ describe('tutor DashboardPage', () => {
     expect(screen.getByText(/add at least one subject/i)).toBeInTheDocument();
   });
 
-  it('approved with subjects + schedule slots: toggle enabled, writes searchable=true', async () => {
+  it('subjects + schedule slots: toggle enabled, writes searchable=true', async () => {
     h.scheduleData = { weekly: { tue: [true] } };
     h.auth.userDoc = tutor({
-      enrollmentComplete: true,
-      verification: { identityStatus: 'approved' },
       subjects: [{ subject: 'math', levels: ['6e'], rate: 20 }],
       searchable: false,
     });
@@ -163,11 +139,9 @@ describe('tutor DashboardPage', () => {
     await waitFor(() => expect(h.auth.refreshUserDoc).toHaveBeenCalled());
   });
 
-  it('approved but no schedule slots: toggle disabled with availability text', async () => {
+  it('no schedule slots: toggle disabled with availability text', async () => {
     h.scheduleData = null; // no schedule doc => no slots
     h.auth.userDoc = tutor({
-      enrollmentComplete: true,
-      verification: { identityStatus: 'approved' },
       subjects: [{ subject: 'math', levels: ['6e'], rate: 20 }],
       searchable: false,
     });
@@ -179,11 +153,9 @@ describe('tutor DashboardPage', () => {
 
   // ── Current searchable-state rendering ──
 
-  it('approved + searchable: renders the live state', async () => {
+  it('searchable: renders the live state', async () => {
     h.scheduleData = { weekly: { tue: [true] } };
     h.auth.userDoc = tutor({
-      enrollmentComplete: true,
-      verification: { identityStatus: 'approved' },
       subjects: [{ subject: 'math', levels: ['6e'], rate: 20 }],
       searchable: true,
     });
@@ -193,11 +165,9 @@ describe('tutor DashboardPage', () => {
     expect(screen.getByRole('button', { name: /hide me from search/i })).toBeInTheDocument();
   });
 
-  it('approved + not searchable: renders the hidden state', async () => {
+  it('not searchable: renders the hidden state', async () => {
     h.scheduleData = { weekly: { tue: [true] } };
     h.auth.userDoc = tutor({
-      enrollmentComplete: true,
-      verification: { identityStatus: 'approved' },
       subjects: [{ subject: 'math', levels: ['6e'], rate: 20 }],
       searchable: false,
     });
@@ -208,7 +178,7 @@ describe('tutor DashboardPage', () => {
   // ── Sessions empty state + entry cards ──
 
   it('renders the upcoming-sessions empty state and entry cards', async () => {
-    h.auth.userDoc = tutor({ enrollmentComplete: true, verification: { identityStatus: 'approved' }, subjects: [] });
+    h.auth.userDoc = tutor({ enrollmentComplete: true, subjects: [] });
     renderWithProviders(<DashboardPage />);
     // findBy, not getBy: the empty line renders only AFTER the sessions
     // snapshot resolves — a synchronous match would be pinning the
@@ -223,7 +193,7 @@ describe('tutor DashboardPage', () => {
     // The two queries resolve independently; ranking on a still-null request
     // count would let the sessions hero paint and then visibly swap to the
     // requests hero. The ladder must wait for BOTH snapshots.
-    h.auth.userDoc = tutor({ enrollmentComplete: true, verification: { identityStatus: 'approved' } });
+    h.auth.userDoc = tutor({ enrollmentComplete: true });
     h.sessions = [{ sessionId: 's1', tutorUserId: 't1', status: 'pending' }];
     const defaultImpl = h.getDocs.getMockImplementation()!;
     h.getDocs.mockImplementation((q: { query?: { path: string }[] }) => {
@@ -243,7 +213,7 @@ describe('tutor DashboardPage', () => {
     // `next` excludes recurring series on purpose (instances live in a
     // subcollection this page must not query) — but the tile's empty line is
     // keyed on ALL non-terminal sessions, so an active series is not "none".
-    h.auth.userDoc = tutor({ enrollmentComplete: true, verification: { identityStatus: 'approved' }, subjects: [] });
+    h.auth.userDoc = tutor({ enrollmentComplete: true, subjects: [] });
     h.sessions = [
       { sessionId: 's1', tutorUserId: 't1', status: 'confirmed', type: 'recurring', date: '2099-01-01' },
     ];
@@ -259,7 +229,7 @@ describe('tutor DashboardPage', () => {
   // ── Pending-requests card ──
 
   it('renders a pending-requests card with the count, linking to /tutor/requests', async () => {
-    h.auth.userDoc = tutor({ enrollmentComplete: true, verification: { identityStatus: 'approved' } });
+    h.auth.userDoc = tutor({ enrollmentComplete: true });
     h.requests = [
       { requestId: 'r1', tutorUserId: 't1', status: 'pending' },
       { requestId: 'r2', tutorUserId: 't1', status: 'pending' },
@@ -277,7 +247,7 @@ describe('tutor DashboardPage', () => {
   // ── Pending-sessions card ──
 
   it('renders a pending-sessions card with the count, linking to /tutor/sessions', async () => {
-    h.auth.userDoc = tutor({ enrollmentComplete: true, verification: { identityStatus: 'approved' } });
+    h.auth.userDoc = tutor({ enrollmentComplete: true });
     h.sessions = [
       { sessionId: 's1', tutorUserId: 't1', status: 'pending' },
       { sessionId: 's2', tutorUserId: 't1', status: 'pending' },
@@ -294,7 +264,7 @@ describe('tutor DashboardPage', () => {
   // ── Pending-endorsements card ──
 
   it('renders a pending-endorsements card counting private refs, linking to /tutor/endorsements', async () => {
-    h.auth.userDoc = tutor({ enrollmentComplete: true, verification: { identityStatus: 'approved' } });
+    h.auth.userDoc = tutor({ enrollmentComplete: true });
     h.refs = [
       { referenceId: 'e1', tutorUserId: 't1', status: 'private' },
       { referenceId: 'e2', tutorUserId: 't1', status: 'private' },
@@ -337,7 +307,7 @@ describe('tutor DashboardPage', () => {
   // ── Hero priority (issue #120): first match wins ──
 
   it('hero: pending requests beat pending sessions and the next session', async () => {
-    h.auth.userDoc = tutor({ enrollmentComplete: true, verification: { identityStatus: 'approved' } });
+    h.auth.userDoc = tutor({ enrollmentComplete: true });
     h.requests = [{ requestId: 'r1', tutorUserId: 't1', status: 'pending' }];
     h.sessions = [
       { sessionId: 's1', tutorUserId: 't1', status: 'pending' },
@@ -362,7 +332,7 @@ describe('tutor DashboardPage', () => {
   });
 
   it('hero: pending sessions beat the next confirmed session', async () => {
-    h.auth.userDoc = tutor({ enrollmentComplete: true, verification: { identityStatus: 'approved' } });
+    h.auth.userDoc = tutor({ enrollmentComplete: true });
     h.sessions = [
       { sessionId: 's1', tutorUserId: 't1', status: 'pending' },
       {
@@ -383,7 +353,7 @@ describe('tutor DashboardPage', () => {
   });
 
   it('hero: a confirmed future session alone → next-session hero to /tutor/sessions', async () => {
-    h.auth.userDoc = tutor({ enrollmentComplete: true, verification: { identityStatus: 'approved' } });
+    h.auth.userDoc = tutor({ enrollmentComplete: true });
     h.sessions = [
       {
         sessionId: 's1',
@@ -404,7 +374,7 @@ describe('tutor DashboardPage', () => {
   });
 
   it('hero: zero state renders no hero', async () => {
-    h.auth.userDoc = tutor({ enrollmentComplete: true, verification: { identityStatus: 'approved' } });
+    h.auth.userDoc = tutor({ enrollmentComplete: true });
     renderWithProviders(<DashboardPage />);
 
     await waitFor(() => expect(h.getDocs).toHaveBeenCalled());
