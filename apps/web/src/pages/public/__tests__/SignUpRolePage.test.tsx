@@ -33,6 +33,8 @@ function renderWithRouter() {
       <Routes>
         <Route path="/signup" element={<SignUpRolePage />} />
         <Route path="/welcome-sit" element={<div>welcome-sit landing</div>} />
+        <Route path="/babysitter" element={<div>babysitter-portal</div>} />
+        <Route path="/family" element={<div>family-portal</div>} />
       </Routes>
     </MemoryRouter>,
   );
@@ -43,6 +45,13 @@ describe('sit SignUpRolePage wrapper banner', () => {
     captured = {};
     authState.firebaseUser = null;
     authState.userDoc = null;
+  });
+
+  it('a signed-in babysitter on /signup goes straight to their portal (no dead option loop)', () => {
+    authState.firebaseUser = { uid: 'b1' };
+    authState.userDoc = { profiles: { babysitter: { enrollmentComplete: true } } };
+    renderWithRouter();
+    expect(screen.getByText('babysitter-portal')).toBeInTheDocument();
   });
 
   it('shows the cross-app banner for a signed-in user with no role (and no tutor profile)', () => {
@@ -59,16 +68,9 @@ describe('sit SignUpRolePage wrapper banner', () => {
     expect(captured.banner).toBeUndefined();
   });
 
-  it('shows no banner for a signed-in user who already has a sit role', () => {
-    authState.firebaseUser = { uid: 'u2' };
-    authState.userDoc = { profiles: { babysitter: { enrollmentComplete: true } } };
-    render(<SignUpRolePage />);
-    expect(captured.banner).toBeUndefined();
-  });
-
-  // Role exclusivity (issue #116): provider (tutor or babysitter) and parent
-  // can never combine, so the impossible option is hidden with a one-line
-  // explanation.
+  // Role'd users never see this page anymore (dead-option-loop fix): the old
+  // banner/exclusivity render pins became redirect pins; the withholding
+  // logic stays in the component as defense in depth.
   it('a signed-in tutor never sees the role question: redirected to /welcome-sit (issue #144)', () => {
     authState.firebaseUser = { uid: 't1' };
     authState.userDoc = { profiles: { tutor: { enrollmentComplete: true } } };
@@ -78,22 +80,11 @@ describe('sit SignUpRolePage wrapper banner', () => {
     expect(captured.roles).toBeUndefined();
   });
 
-  it('hides the family/parent option with a note for a signed-in babysitter', () => {
-    authState.firebaseUser = { uid: 'b1' };
-    authState.userDoc = { profiles: { babysitter: { enrollmentComplete: true } } };
-    render(<SignUpRolePage />);
-    const keys = (captured.roles as Array<{ key: string }>).map((r) => r.key);
-    expect(keys).toEqual(['babysitter']);
-    expect(captured.note).toBe(i18n.t('signup.roleExclusiveParent'));
-  });
-
-  it('hides the babysitter option with a note for a signed-in parent', () => {
+  it('a signed-in parent on /signup goes straight to the family portal', () => {
     authState.firebaseUser = { uid: 'p1' };
     authState.userDoc = { profiles: { parent: { enrollmentComplete: true, familyId: 'f1' } } };
-    render(<SignUpRolePage />);
-    const keys = (captured.roles as Array<{ key: string }>).map((r) => r.key);
-    expect(keys).toEqual(['parent']);
-    expect(captured.note).toBe(i18n.t('signup.roleExclusiveBabysitter'));
+    renderWithRouter();
+    expect(screen.getByText('family-portal')).toBeInTheDocument();
   });
 
   it('offers both options and no note to an unauthenticated visitor', () => {

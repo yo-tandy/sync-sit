@@ -14,8 +14,20 @@ vi.mock('@/stores/authStore', () => {
   return { useAuthStore };
 });
 
+import { Routes, Route } from 'react-router';
 import { renderWithProviders, i18n } from '@/__tests__/test-utils';
 import { SignUpRolePage } from '../SignUpRolePage';
+
+// For redirect pins: Navigate needs a route table to land on.
+function renderWithPortals() {
+  return renderWithProviders(
+    <Routes>
+      <Route path="/" element={<SignUpRolePage />} />
+      <Route path="/tutor" element={<div>tutor-portal</div>} />
+      <Route path="/family" element={<div>family-portal</div>} />
+    </Routes>,
+  );
+}
 
 const BANNER = /pick a role to add to your existing account/i;
 
@@ -29,6 +41,14 @@ beforeEach(() => {
 });
 
 describe('SignUpRolePage (study)', () => {
+  it('a signed-in tutor on /signup goes straight to their portal (no dead option loop)', () => {
+    authState.firebaseUser = { uid: 't1' };
+    authState.userDoc = { profiles: { tutor: { enrollmentComplete: true } } };
+    renderWithPortals();
+    expect(screen.getByText('tutor-portal')).toBeInTheDocument();
+    expect(screen.queryByText(/sign up as/i)).toBeNull();
+  });
+
   it('offers Tutor and Parent (not Babysitter) with the right enroll links', () => {
     renderWithProviders(<SignUpRolePage />);
 
@@ -58,35 +78,15 @@ describe('SignUpRolePage (study)', () => {
     expect(screen.queryByText(BANNER)).toBeNull();
   });
 
-  it('shows no banner for a signed-in user who already has a study role', () => {
-    authState.firebaseUser = { uid: 'u2' };
-    authState.userDoc = { profiles: { tutor: { enrollmentComplete: true } } };
-    renderWithProviders(<SignUpRolePage />);
-    expect(screen.queryByText(BANNER)).toBeNull();
-  });
-
-  // Role exclusivity (issue #116): parent and tutor can never combine, so the
-  // impossible option is hidden with a one-line explanation.
-  it('hides the tutor option with an explanation for a signed-in parent', () => {
+  // Role'd users never see this page anymore (the dead-option loop fix), so
+  // the old signed-in banner/exclusivity render pins became redirect pins.
+  // The exclusivity withholding stays in the component as defense in depth.
+  it('a signed-in parent on /signup goes straight to the family portal', () => {
     authState.firebaseUser = { uid: 'p1' };
     authState.userDoc = { profiles: { parent: { enrollmentComplete: true, familyId: 'f1' } } };
-    renderWithProviders(<SignUpRolePage />);
-
-    const hrefs = screen.getAllByRole('link').map((a) => a.getAttribute('href'));
-    expect(hrefs).not.toContain('/enroll/tutor');
-    expect(hrefs).toContain('/enroll/parent');
-    expect(screen.getByText(i18n.t('signup.roleExclusiveTutor'))).toBeInTheDocument();
-  });
-
-  it('hides the parent option with an explanation for a signed-in tutor', () => {
-    authState.firebaseUser = { uid: 't1' };
-    authState.userDoc = { profiles: { tutor: { enrollmentComplete: true } } };
-    renderWithProviders(<SignUpRolePage />);
-
-    const hrefs = screen.getAllByRole('link').map((a) => a.getAttribute('href'));
-    expect(hrefs).not.toContain('/enroll/parent');
-    expect(hrefs).toContain('/enroll/tutor');
-    expect(screen.getByText(i18n.t('signup.roleExclusiveParent'))).toBeInTheDocument();
+    renderWithPortals();
+    expect(screen.getByText('family-portal')).toBeInTheDocument();
+    expect(screen.queryByText(BANNER)).toBeNull();
   });
 
   it('a signed-in sit babysitter never sees the role question: redirected to /welcome-study (issue #144)', () => {
