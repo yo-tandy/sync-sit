@@ -154,17 +154,25 @@ export function AccountPage() {
 
   const handleRemovePhoto = async () => {
     if (!uid) return;
-    setPhotoPreview(null);
-    setPhotoFile(null);
     setPhotoError(null);
     try {
+      // Write first, clear after; delete the storage object — one photo per
+      // account across roles, and a removed photo must not stay readable at
+      // a guessable path (parity with the babysitter/tutor pages).
       await updateDoc(doc(db, 'users', uid), {
         photoUrl: null,
         updatedAt: serverTimestamp(),
       });
-      await refreshUserDoc();
+      const oldUrl = userDoc?.photoUrl;
+      const oldMatch = typeof oldUrl === 'string' ? oldUrl.match(/profile-photos%2F([^?]+)/) : null;
+      if (oldMatch) {
+        await deleteObject(ref(storage, `profile-photos/${decodeURIComponent(oldMatch[1])}`)).catch(() => {});
+      }
+      setPhotoPreview(null);
+      setPhotoFile(null);
+      await refreshUserDoc().catch(() => {});
     } catch {
-      // silent
+      setPhotoError(t('account.photoRemoveFailed'));
     }
   };
 
