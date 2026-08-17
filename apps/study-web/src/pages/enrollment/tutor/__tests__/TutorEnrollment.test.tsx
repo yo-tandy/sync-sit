@@ -9,6 +9,7 @@ const h = vi.hoisted(() => ({
   // keep their original (unauthenticated) behavior.
   auth: { firebaseUser: null as unknown, userDoc: null as unknown, loading: false },
   refreshUserDoc: () => Promise.resolve(),
+  signIn: vi.fn(() => Promise.resolve()),
   // Controllable error reason so tests can drive the account-exists /
   // profile-exists CTAs. Default null = plain-error behavior.
   errorReason: null as 'account-exists' | 'profile-exists' | null,
@@ -17,7 +18,7 @@ const h = vi.hoisted(() => ({
   ageCode: null as 'age/under-15' | 'age/mismatch' | null,
 }));
 
-vi.mock('@/config/firebase', () => ({ functions: {} }));
+vi.mock('@/config/firebase', () => ({ functions: {}, auth: {} }));
 vi.mock('firebase/functions', () => ({
   httpsCallable: (_fns: unknown, name: string) => (payload: unknown) => {
     h.calls.push({ name, payload });
@@ -33,18 +34,29 @@ vi.mock('firebase/functions', () => ({
     return Promise.resolve({ data: { uid: 'u1' } });
   },
 }));
+vi.mock('firebase/auth', () => ({
+  signInWithEmailAndPassword: (...args: unknown[]) => h.signIn(...args),
+}));
 vi.mock('react-router', async (orig) => ({
   ...(await orig<typeof import('react-router')>()),
   useNavigate: () => h.navigate,
 }));
-vi.mock('@/stores/authStore', () => ({
-  useAuthStore: () => ({
+vi.mock('@/stores/authStore', () => {
+  const useAuthStore = (() => ({
     firebaseUser: h.auth.firebaseUser,
     userDoc: h.auth.userDoc,
     loading: h.auth.loading,
     refreshUserDoc: h.refreshUserDoc,
-  }),
-}));
+  })) as unknown as {
+    (): unknown;
+    getState: () => unknown;
+    subscribe: (fn: (s: unknown) => void) => () => void;
+  };
+  // Statics used by the post-signup auto-login wait.
+  useAuthStore.getState = () => ({ loading: false, userDoc: h.auth.userDoc ?? { uid: 'new' } });
+  useAuthStore.subscribe = () => () => {};
+  return { useAuthStore };
+});
 vi.mock('@ejm/study-core', () => ({
   getTutorProfile: (userDoc: { profiles?: { tutor?: unknown } } | null) =>
     userDoc?.profiles?.tutor ?? null,
@@ -65,8 +77,15 @@ vi.mock('@ejm/shared-ui', () => ({
   },
   TopNav: ({ title }: { title: string }) => <div>{title}</div>,
   StepIndicator: ({ currentStep }: { currentStep: number }) => <div>step-{currentStep}</div>,
-  StepEmail: ({ onSubmit }: { onSubmit: () => void }) => (
-    <button onClick={onSubmit}>email-submit</button>
+  StepEmail: ({ onChange, onSubmit }: { onChange: (e: string) => void; onSubmit: () => void }) => (
+    <button
+      onClick={() => {
+        onChange('flow.tutor28@ejm.org');
+        onSubmit();
+      }}
+    >
+      email-submit
+    </button>
   ),
   StepVerify: ({ onVerify }: { onVerify: (c: string) => void }) => (
     <button onClick={() => onVerify('123456')}>verify-submit</button>
@@ -125,6 +144,7 @@ beforeEach(() => {
   h.navigate = vi.fn();
   h.auth = { firebaseUser: null, userDoc: null, loading: false };
   h.refreshUserDoc = vi.fn().mockResolvedValue(undefined);
+  h.signIn.mockClear();
   h.errorReason = null;
   h.ageCode = null;
 });
@@ -182,7 +202,12 @@ describe('TutorEnrollment orchestrator', () => {
     for (const key of ['sessionLengthsMin', 'locationPrefs', 'paddingMin', 'areaMode', 'arrondissements', 'areaAddress', 'areaLatLng', 'areaRadiusKm', 'aboutMe']) {
       expect(payload.enrollment).not.toHaveProperty(key);
     }
-    expect(h.navigate).toHaveBeenCalledWith('/enroll/tutor/success', { state: { firstName: 'Flow' } });
+    await vi.waitFor(() =>
+      expect(h.navigate).toHaveBeenCalledWith('/enroll/tutor/success', { state: { firstName: 'Flow' } }),
+    );
+    // New-account path signs the tutor in — the success CTA must land in
+    // the portal, not bounce to login.
+    expect(h.signIn).toHaveBeenCalledWith(expect.anything(), 'flow.tutor28@ejm.org', 'Pw123456!');
   });
 
   it('authed without a tutor profile: consent-only StepPassword, enrollTutor omits password, refreshes doc', async () => {
@@ -212,6 +237,8 @@ describe('TutorEnrollment orchestrator', () => {
     });
     const payload = enroll.payload as Record<string, unknown>;
     expect(payload).not.toHaveProperty('password');
+    // Already signed in — no re-authentication.
+    expect(h.signIn).not.toHaveBeenCalled();
     // refreshUserDoc must be awaited before the success navigation.
     await vi.waitFor(() =>
       expect(h.navigate).toHaveBeenCalledWith('/enroll/tutor/success', { state: { firstName: 'Flow' } }),

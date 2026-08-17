@@ -5,7 +5,8 @@ import { httpsCallable } from 'firebase/functions';
 import { TopNav, StepIndicator, StepEmail, StepVerify, StepPassword, enrollmentErrorReason, ageGateErrorCode } from '@ejm/shared-ui';
 import { getTutorProfile } from '@ejm/study-core';
 import type { SubjectOffering } from '@ejm/study-core';
-import { functions } from '@/config/firebase';
+import { signInWithEmailAndPassword } from 'firebase/auth';
+import { auth, functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { EnrollmentAppBar } from '@/components/ui/EnrollmentAppBar';
 import { StepSubjects } from './StepSubjects';
@@ -162,7 +163,21 @@ export function TutorEnrollment() {
         consentVersion: '2025-12-01',
         enrollment,
       });
-      if (isAddProfile) await refreshUserDoc();
+      if (isAddProfile) {
+        await refreshUserDoc();
+      } else {
+        // The account was created server-side (adminAuth) — sign the new
+        // tutor in NOW so the success page's CTA lands in their portal
+        // instead of bouncing to login (mirrors sit's babysitter flow).
+        await signInWithEmailAndPassword(auth, ejemEmail, password);
+        await new Promise<void>((resolve) => {
+          const unsub = useAuthStore.subscribe((state) => {
+            if (!state.loading && state.userDoc) { unsub(); resolve(); }
+          });
+          const current = useAuthStore.getState();
+          if (!current.loading && current.userDoc) { unsub(); resolve(); }
+        });
+      }
       navigate('/enroll/tutor/success', { state: { firstName: profileData.firstName } });
 
     } catch (err: unknown) {
