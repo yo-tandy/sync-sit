@@ -64,6 +64,21 @@ function reset() {
 describe('TutorCard', () => {
   beforeEach(() => reset());
 
+  // ── Photo (issue #143) ──
+  it('renders the tutor photo when photoUrl is present', () => {
+    renderWithProviders(<TutorCard result={tutor({ photoUrl: 'https://cdn.example/t1.png' })} />);
+    const img = screen.getByRole('img', { name: 'AR' });
+    expect(img).toHaveAttribute('src', 'https://cdn.example/t1.png');
+    // The initials block is replaced by the image.
+    expect(screen.queryByText('AR')).not.toBeInTheDocument();
+  });
+
+  it('falls back to initials when photoUrl is absent', () => {
+    renderWithProviders(<TutorCard result={tutor()} />);
+    expect(screen.getByText('AR')).toBeInTheDocument();
+    expect(screen.queryByRole('img')).not.toBeInTheDocument();
+  });
+
   // ── CTA states ──
   it('requestStatus=none → shows "Request contact" and no contact block', () => {
     renderWithProviders(<TutorCard result={tutor({ requestStatus: 'none' })} />);

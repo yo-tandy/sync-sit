@@ -1625,7 +1625,7 @@ describe('guardian collections', () => {
       await seedUser('kidU8', kidBase({ identityLocked: true }));
       const authed = testEnv.authenticatedContext('kidU8');
       await assertSucceeds(updateDoc(doc(authed.firestore(), 'users', 'kidU8'), {
-        photoUrl: 'https://x.com/p.png',
+        photoUrl: 'https://firebasestorage.googleapis.com/v0/b/x/o/p.png',
         'profiles.babysitter.searchable': true,
       }));
     });
@@ -1748,6 +1748,59 @@ describe('users update — tutor numeric bounds (issue #123 hardening)', () => {
         'profiles.tutor.paddingMin': 60,
         'profiles.tutor.areaRadiusKm': null,
       }),
+    );
+  });
+
+  it('rejects an over-long aboutMe (owner write) — the account page is the only writer', async () => {
+    const db = testEnv.authenticatedContext(uid).firestore();
+    await assertFails(
+      updateDoc(doc(db, 'users', uid), { 'profiles.tutor.aboutMe': 'x'.repeat(1001) }),
+    );
+  });
+
+  it('photoUrl: owner may set a bounded URL on OUR storage hosts, or null', async () => {
+    const db = testEnv.authenticatedContext(uid).firestore();
+    await assertSucceeds(
+      updateDoc(doc(db, 'users', uid), {
+        photoUrl: 'https://firebasestorage.googleapis.com/v0/b/x/o/p.jpg',
+      }),
+    );
+    await assertSucceeds(updateDoc(doc(db, 'users', uid), { photoUrl: null }));
+    // Emulator download URLs are plain-http localhost — allowed.
+    await assertSucceeds(
+      updateDoc(doc(db, 'users', uid), { photoUrl: 'http://127.0.0.1:9199/v0/b/x/o/p.jpg' }),
+    );
+    // Third-party hosts are NOT: a public search card must not become a
+    // beacon logging every family that views it.
+    await assertFails(
+      updateDoc(doc(db, 'users', uid), { photoUrl: 'https://evil.example/pixel.png' }),
+    );
+    await assertFails(
+      updateDoc(doc(db, 'users', uid), { photoUrl: 'data:image/svg+xml;base64,AAAA' }),
+    );
+    await assertFails(updateDoc(doc(db, 'users', uid), { photoUrl: 12345 }));
+  });
+
+  it('an UNCHANGED odd legacy photoUrl never locks the owner out of other edits', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.firestore().doc(`users/legacy-photo-1`).set({
+        uid: 'legacy-photo-1', status: 'active', photoUrl: 'gopher://weird',
+        profiles: { tutor: { enrollmentComplete: true, ejemEmail: 'l@ejm-test.org', paddingMin: 10 } },
+      });
+    });
+    const db = testEnv.authenticatedContext('legacy-photo-1').firestore();
+    await assertSucceeds(
+      updateDoc(doc(db, 'users', 'legacy-photo-1'), { 'profiles.tutor.paddingMin': 20 }),
+    );
+  });
+
+  it('accepts a bounded aboutMe and explicit null', async () => {
+    const db = testEnv.authenticatedContext(uid).firestore();
+    await assertSucceeds(
+      updateDoc(doc(db, 'users', uid), { 'profiles.tutor.aboutMe': 'x'.repeat(1000) }),
+    );
+    await assertSucceeds(
+      updateDoc(doc(db, 'users', uid), { 'profiles.tutor.aboutMe': null }),
     );
   });
 

@@ -9,6 +9,7 @@ const h = vi.hoisted(() => ({
   // keep their original (unauthenticated) behavior.
   auth: { firebaseUser: null as unknown, userDoc: null as unknown, loading: false },
   refreshUserDoc: () => Promise.resolve(),
+  signIn: vi.fn(() => Promise.resolve()),
   // Controllable error reason so tests can drive the account-exists /
   // profile-exists CTAs. Default null = plain-error behavior.
   errorReason: null as 'account-exists' | 'profile-exists' | null,
@@ -17,7 +18,7 @@ const h = vi.hoisted(() => ({
   ageCode: null as 'age/under-15' | 'age/mismatch' | null,
 }));
 
-vi.mock('@/config/firebase', () => ({ functions: {} }));
+vi.mock('@/config/firebase', () => ({ functions: {}, auth: {} }));
 vi.mock('firebase/functions', () => ({
   httpsCallable: (_fns: unknown, name: string) => (payload: unknown) => {
     h.calls.push({ name, payload });
@@ -33,18 +34,29 @@ vi.mock('firebase/functions', () => ({
     return Promise.resolve({ data: { uid: 'u1' } });
   },
 }));
+vi.mock('firebase/auth', () => ({
+  signInWithEmailAndPassword: (...args: unknown[]) => h.signIn(...args),
+}));
 vi.mock('react-router', async (orig) => ({
   ...(await orig<typeof import('react-router')>()),
   useNavigate: () => h.navigate,
 }));
-vi.mock('@/stores/authStore', () => ({
-  useAuthStore: () => ({
+vi.mock('@/stores/authStore', () => {
+  const useAuthStore = (() => ({
     firebaseUser: h.auth.firebaseUser,
     userDoc: h.auth.userDoc,
     loading: h.auth.loading,
     refreshUserDoc: h.refreshUserDoc,
-  }),
-}));
+  })) as unknown as {
+    (): unknown;
+    getState: () => unknown;
+    subscribe: (fn: (s: unknown) => void) => () => void;
+  };
+  // Statics used by the post-signup auto-login wait.
+  useAuthStore.getState = () => ({ loading: false, firebaseUser: { uid: 'new' }, userDoc: h.auth.userDoc });
+  useAuthStore.subscribe = () => () => {};
+  return { useAuthStore };
+});
 vi.mock('@ejm/study-core', () => ({
   getTutorProfile: (userDoc: { profiles?: { tutor?: unknown } } | null) =>
     userDoc?.profiles?.tutor ?? null,
@@ -65,8 +77,15 @@ vi.mock('@ejm/shared-ui', () => ({
   },
   TopNav: ({ title }: { title: string }) => <div>{title}</div>,
   StepIndicator: ({ currentStep }: { currentStep: number }) => <div>step-{currentStep}</div>,
-  StepEmail: ({ onSubmit }: { onSubmit: () => void }) => (
-    <button onClick={onSubmit}>email-submit</button>
+  StepEmail: ({ onChange, onSubmit }: { onChange: (e: string) => void; onSubmit: () => void }) => (
+    <button
+      onClick={() => {
+        onChange('flow.tutor28@ejm.org');
+        onSubmit();
+      }}
+    >
+      email-submit
+    </button>
   ),
   StepVerify: ({ onVerify }: { onVerify: (c: string) => void }) => (
     <button onClick={() => onVerify('123456')}>verify-submit</button>
@@ -84,19 +103,21 @@ vi.mock('@ejm/shared-ui', () => ({
 vi.mock('@/components/ui/EnrollmentAppBar', () => ({
   EnrollmentAppBar: () => <div>enrollment-app-bar</div>,
 }));
-vi.mock('../StepProfile', () => ({
-  StepProfile: ({ onNext }: { onNext: (d: unknown) => void }) => (
-    <button onClick={() => onNext({ firstName: 'Flow', lastName: 'Tutor', dateOfBirth: '2008-07-07', classLevel: 'Terminale', gender: 'other' })}>
-      profile-next
-    </button>
-  ),
-}));
-vi.mock('../StepPrefs', () => ({
-  StepPrefs: ({ onNext, error }: { onNext: (d: unknown) => void; error: string | null }) => (
+vi.mock('../StepSubjects', () => ({
+  StepSubjects: ({ onNext, error }: { onNext: (d: unknown) => void; error?: string | null }) => (
     <div>
       {error && <p>{error}</p>}
-      <button onClick={() => onNext({ sessionLengthsMin: [60], locationPrefs: ['online'], paddingMin: 0, contactEmail: 'flow@ejm.org', areaMode: 'distance', areaAddress: '16 rue de Passy, 75016 Paris', areaLatLng: { lat: 48.8571, lng: 2.2795 } })}>
-        prefs-next
+      <button onClick={() => onNext([{ subject: 'math', levels: ['Terminale'], rate: 25 }])}>
+        subjects-next
+      </button>
+    </div>
+  ),
+}));
+vi.mock('../StepProfile', () => ({
+  StepProfile: ({ onNext }: { onNext: (d: unknown) => void }) => (
+    <div>
+      <button onClick={() => onNext({ firstName: 'Flow', lastName: 'Tutor', dateOfBirth: '2008-07-07', classLevel: 'Terminale', gender: 'other', contactEmail: 'flow@ejm.org' })}>
+        profile-next
       </button>
     </div>
   ),
@@ -123,6 +144,7 @@ beforeEach(() => {
   h.navigate = vi.fn();
   h.auth = { firebaseUser: null, userDoc: null, loading: false };
   h.refreshUserDoc = vi.fn().mockResolvedValue(undefined);
+  h.signIn.mockClear();
   h.errorReason = null;
   h.ageCode = null;
 });
@@ -150,13 +172,16 @@ describe('TutorEnrollment orchestrator', () => {
     expect(screen.getByTestId('step-password')).toHaveAttribute('data-collect', 'true');
 
     // Step 2 -> 3 crosses into the post-auth phase: app bar replaces TopNav.
+    // Base information about the tutor comes FIRST (issue #143 as clarified);
+    // subjects/levels/rate follow it, and the dropped prefs never appear.
     fireEvent.click(screen.getByText('password-submit'));
     expect(await screen.findByText('profile-next')).toBeInTheDocument();
+    expect(screen.queryByText('subjects-next')).toBeNull();
     expect(screen.getByText('enrollment-app-bar')).toBeInTheDocument();
     expect(screen.queryByText(/step-\d/)).toBeNull();
 
     fireEvent.click(screen.getByText('profile-next'));
-    fireEvent.click(await screen.findByText('prefs-next'));
+    fireEvent.click(await screen.findByText('subjects-next'));
 
     // enrollTutor called with the composed payload; success navigation fired.
     const enroll = await vi.waitFor(() => {
@@ -169,12 +194,38 @@ describe('TutorEnrollment orchestrator', () => {
     expect(payload.password).toBe('Pw123456!');
     expect(payload.enrollment).toMatchObject({
       firstName: 'Flow', classLevel: 'Terminale',
-      sessionLengthsMin: [60], locationPrefs: ['online'], contactEmail: 'flow@ejm.org',
-      // Area coordinates from the address pick flow through to the callable.
-      areaMode: 'distance', areaAddress: '16 rue de Passy, 75016 Paris',
-      areaLatLng: { lat: 48.8571, lng: 2.2795 },
+      subjects: [{ subject: 'math', levels: ['Terminale'], rate: 25 }],
+      contactEmail: 'flow@ejm.org',
     });
-    expect(h.navigate).toHaveBeenCalledWith('/enroll/tutor/success', { state: { firstName: 'Flow' } });
+    // The dropped pref fields must be ABSENT from the payload (not sent as
+    // empty values) — the server defaults are the single source of truth.
+    for (const key of ['sessionLengthsMin', 'locationPrefs', 'paddingMin', 'areaMode', 'arrondissements', 'areaAddress', 'areaLatLng', 'areaRadiusKm', 'aboutMe']) {
+      expect(payload.enrollment).not.toHaveProperty(key);
+    }
+    await vi.waitFor(() =>
+      expect(h.navigate).toHaveBeenCalledWith('/enroll/tutor/success', { state: { firstName: 'Flow' } }),
+    );
+    // New-account path signs the tutor in — the success CTA must land in
+    // the portal, not bounce to login.
+    expect(h.signIn).toHaveBeenCalledWith(expect.anything(), 'flow.tutor28@ejm.org', 'Pw123456!');
+  });
+
+  it('a sign-in failure after successful enrollment still reaches the success page', async () => {
+    // Enrollment fully succeeded (account/doc/schedule written, code doc
+    // consumed) — an auth hiccup must not read as an enrollment error or
+    // strand the user mid-wizard.
+    h.signIn.mockRejectedValueOnce(new Error('auth/network-request-failed'));
+    renderFlow();
+    fireEvent.click(screen.getByText('email-submit'));
+    fireEvent.click(await screen.findByText('verify-submit'));
+    fireEvent.click(await screen.findByText('password-submit'));
+    fireEvent.click(await screen.findByText('profile-next'));
+    fireEvent.click(await screen.findByText('subjects-next'));
+
+    await vi.waitFor(() =>
+      expect(h.navigate).toHaveBeenCalledWith('/enroll/tutor/success', { state: { firstName: 'Flow' } }),
+    );
+    expect(screen.queryByText(/network-request-failed/)).toBeNull();
   });
 
   it('authed without a tutor profile: consent-only StepPassword, enrollTutor omits password, refreshes doc', async () => {
@@ -195,7 +246,7 @@ describe('TutorEnrollment orchestrator', () => {
 
     fireEvent.click(passwordStep);
     fireEvent.click(await screen.findByText('profile-next'));
-    fireEvent.click(await screen.findByText('prefs-next'));
+    fireEvent.click(await screen.findByText('subjects-next'));
 
     const enroll = await vi.waitFor(() => {
       const c = h.calls.find((x) => x.name === 'enrollTutor');
@@ -204,6 +255,8 @@ describe('TutorEnrollment orchestrator', () => {
     });
     const payload = enroll.payload as Record<string, unknown>;
     expect(payload).not.toHaveProperty('password');
+    // Already signed in — no re-authentication.
+    expect(h.signIn).not.toHaveBeenCalled();
     // refreshUserDoc must be awaited before the success navigation.
     await vi.waitFor(() =>
       expect(h.navigate).toHaveBeenCalledWith('/enroll/tutor/success', { state: { firstName: 'Flow' } }),
@@ -225,7 +278,7 @@ describe('TutorEnrollment orchestrator', () => {
     fireEvent.click(await screen.findByText('verify-submit'));
     fireEvent.click(await screen.findByText('password-submit'));
     fireEvent.click(await screen.findByText('profile-next'));
-    fireEvent.click(await screen.findByText('prefs-next'));
+    fireEvent.click(await screen.findByText('subjects-next'));
     await vi.waitFor(() => expect(h.calls.some((c) => c.name === 'enrollTutor')).toBe(true));
   }
 

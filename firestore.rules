@@ -119,7 +119,35 @@ service cloud.firestore {
                      && tutorField(request.resource.data, 'areaLatLng', null).lat <= 90
                      && tutorField(request.resource.data, 'areaLatLng', null).lng is number
                      && tutorField(request.resource.data, 'areaLatLng', null).lng >= -180
-                     && tutorField(request.resource.data, 'areaLatLng', null).lng <= 180));
+                     && tutorField(request.resource.data, 'areaLatLng', null).lng <= 180))
+             // aboutMe: the account page is the only writer since enrollment
+             // stopped collecting it — its 1000-char bound must live HERE,
+             // not in the textarea's maxLength (rules are the trust boundary).
+             && (tutorField(request.resource.data, 'aboutMe', null) == null
+                 || (tutorField(request.resource.data, 'aboutMe', null) is string
+                     && tutorField(request.resource.data, 'aboutMe', null).size() <= 1000));
+    }
+
+    // Helper: top-level photoUrl is owner-writable (the photo auto-save) but
+    // must stay a bounded https URL — the client type/size checks are UX
+    // only; without this a direct write could store a non-string, a data:
+    // URI, or an arbitrary payload that search results then project.
+    function photoUrlValid() {
+      // UNCHANGED values always pass: legacy docs with an odd photoUrl must
+      // not be locked out of every self-service edit by a stricter rule.
+      // NEW values must be null or a bounded URL on our storage hosts —
+      // scheme AND host constrained, so an owner cannot point their public
+      // search card at a third-party beacon (or data:/javascript:).
+      return !request.resource.data.diff(resource.data).affectedKeys()
+                 .hasAny(['photoUrl'])
+             || request.resource.data.photoUrl == null
+             || (request.resource.data.photoUrl is string
+                 && request.resource.data.photoUrl.size() <= 2048
+                 && (request.resource.data.photoUrl
+                       .matches('https://firebasestorage[.]googleapis[.]com/.*')
+                     // The storage EMULATOR serves plain-http localhost URLs.
+                     || request.resource.data.photoUrl
+                          .matches('http://(localhost|127[.]0[.]0[.]1)[:/].*')));
     }
 
     // Helper: profiles.parent.familyId is server-controlled (enrollFamily /
@@ -181,7 +209,8 @@ service cloud.firestore {
                     && tutorIdentityUnchanged()
                     && parentFamilyIdUnchanged()
                     && identityUnlockedOrUnchanged()
-                    && tutorNumericBoundsValid();
+                    && tutorNumericBoundsValid()
+                    && photoUrlValid();
     }
 
     // Families: readable + editable by family members + admin

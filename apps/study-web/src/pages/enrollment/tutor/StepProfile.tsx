@@ -8,10 +8,17 @@ export interface ProfileData {
   dateOfBirth: string;
   classLevel: string;
   gender?: string;
+  contactEmail?: string;
+  contactPhone?: string;
 }
 
 interface StepProfileProps {
   onNext: (data: ProfileData) => void;
+  /** Previously-entered values, restored on back-navigation. */
+  initial?: ProfileData | null;
+  /** A submit-time server rejection carried back from the subjects step —
+   * the field it names usually lives HERE. */
+  serverError?: string | null;
 }
 
 const CLASS_LEVELS_TUTOR = [
@@ -40,23 +47,46 @@ function getAge(dateOfBirth: string): number | null {
   return age;
 }
 
-export function StepProfile({ onNext }: StepProfileProps) {
+export function StepProfile({ onNext, initial = null, serverError = null }: StepProfileProps) {
   const { t } = useTranslation();
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
-  const [dateOfBirth, setDateOfBirth] = useState('');
-  const [classLevel, setClassLevel] = useState('');
-  const [gender, setGender] = useState<string | undefined>(undefined);
+  const [firstName, setFirstName] = useState(initial?.firstName ?? '');
+  const [lastName, setLastName] = useState(initial?.lastName ?? '');
+  const [dateOfBirth, setDateOfBirth] = useState(initial?.dateOfBirth ?? '');
+  const [classLevel, setClassLevel] = useState(initial?.classLevel ?? '');
+  const [gender, setGender] = useState<string | undefined>(initial?.gender);
+  // Contact moved here from the removed prefs step (issue #143): families see
+  // it on the tutor card after accepting a request, so the callable requires
+  // at least one field.
+  const [contactEmail, setContactEmail] = useState(initial?.contactEmail ?? '');
+  const [contactPhone, setContactPhone] = useState(initial?.contactPhone ?? '');
 
   const age = getAge(dateOfBirth);
   const ageValid = age !== null && age >= 15 && age < 19;
   const showAgeError = dateOfBirth && !ageValid;
-  const isValid = firstName && lastName && dateOfBirth && ageValid && classLevel;
+  // Mirror the server's zod .email() strictness: the native input accepts
+  // 'x@y', which the callable rejects AFTER this step is gone — validate
+  // here so the rejection can't strand the user on the subjects step.
+  const emailFormatOk =
+    !contactEmail.trim() || /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(contactEmail.trim());
+  const hasContact = contactEmail.trim() || contactPhone.trim();
+  // emailFormatOk gates UNCONDITIONALLY (true when the email is empty): with
+  // a phone also present, a malformed email must still block — otherwise it
+  // rides into the payload and the server rejects on the subjects step.
+  const isValid =
+    firstName && lastName && dateOfBirth && ageValid && classLevel && hasContact && emailFormatOk;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!isValid) return;
-    onNext({ firstName, lastName, dateOfBirth, classLevel, gender });
+    onNext({
+      firstName,
+      lastName,
+      dateOfBirth,
+      classLevel,
+      gender,
+      contactEmail: contactEmail.trim() || undefined,
+      contactPhone: contactPhone.trim() || undefined,
+    });
   };
 
   return (
@@ -127,6 +157,27 @@ export function StepProfile({ onNext }: StepProfileProps) {
           ))}
         </div>
       </div>
+
+      <hr className="my-5 border-gray-200" />
+
+      {/* Contact */}
+      <p className="mb-1 text-sm font-semibold text-gray-700">{t('enrollment.contactSection')}</p>
+      <p className="mb-3 text-xs text-gray-500">{t('enrollment.contactHint')}</p>
+      <Input
+        label={t('enrollment.contactEmail')}
+        type="email"
+        value={contactEmail}
+        onChange={(e) => setContactEmail(e.target.value)}
+        error={contactEmail.trim() && !emailFormatOk ? t('enrollment.contactEmailInvalid') : undefined}
+      />
+      <Input
+        label={t('enrollment.contactPhone')}
+        type="tel"
+        value={contactPhone}
+        onChange={(e) => setContactPhone(e.target.value)}
+      />
+
+      {serverError && <p className="mb-4 text-sm text-brand-600">{serverError}</p>}
 
       <Button type="submit" disabled={!isValid}>
         {t('common.continue')}

@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '@/config/firebase';
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import { db, storage } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { getTutorProfile, SESSION_LENGTHS, LOCATION_PREFS } from '@ejm/study-core';
 import type { LocationPref } from '@ejm/study-core';
@@ -22,7 +23,6 @@ import {
 
 // Copy-adapted from apps/web/src/pages/babysitter/AccountPage.tsx, DELIBERATELY
 // stripped down for the tutor portal:
-//   - NO profile photo section: study-web has no photo storage/plumbing yet.
 //   - NO push-notification plumbing (PushStatusCard, PWA toggles): study-web
 //     has no FCM wiring, so notification prefs are EMAIL-ONLY here. Push
 //     channels on the notifPrefs doc are preserved untouched but not editable.
@@ -37,6 +37,10 @@ import {
 // notifPrefs writes to the top-level field. enrollmentComplete/verification/
 // ejemEmail are server-owned and never written here.
 
+// Photo constraints — identical to the sit babysitter AccountPage.
+const MAX_FILE_SIZE = 5 * 1024 * 1024;
+const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
+
 // Email-only notification scenarios relevant to tutors.
 const SCENARIOS: { key: keyof NotifPrefs; labelKey: string; descKey: string }[] = [
   { key: 'newRequest', labelKey: 'notifications.newRequest', descKey: 'notifications.newRequestDesc' },
@@ -49,6 +53,16 @@ export function AccountPage() {
   const { userDoc, firebaseUser, refreshUserDoc, resetPassword } = useAuthStore();
   const tutor = getTutorProfile(userDoc);
   const uid = firebaseUser?.uid;
+
+  // Photo state — mirrors the sit babysitter photo section: auto-save on pick,
+  // top-level users/{uid}.photoUrl (the field searchTutors projects into
+  // search results; one photo per account across roles).
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const previewTokenRef = useRef(0);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const [photoSaving, setPhotoSaving] = useState(false);
 
   // Contact state (editable)
   const [contactEmail, setContactEmail] = useState('');
@@ -75,15 +89,25 @@ export function AccountPage() {
   const [sessionLengths, setSessionLengths] = useState<number[]>([]);
   const [locationPrefs, setLocationPrefs] = useState<LocationPref[]>([]);
   const [paddingMin, setPaddingMin] = useState(0);
+  // About-me bio: enrollment stopped collecting it (issue #143), so this is
+  // now the only editor. Owner-writable dot-path; firestore.rules bounds it
+  // at 1000 chars post-state (the textarea maxLength is UX only).
+  const [aboutMe, setAboutMe] = useState('');
   const [prefsSaving, setPrefsSaving] = useState(false);
   const [prefsSuccess, setPrefsSuccess] = useState(false);
   const [prefsError, setPrefsError] = useState<string | null>(null);
 
   const [error, setError] = useState<string | null>(null);
 
-  // Initialize from userDoc
+  // Initialize the FORM fields from userDoc exactly once per mount: the
+  // photo auto-save calls refreshUserDoc(), and re-seeding on every refresh
+  // silently discarded unsaved edits elsewhere on the page (typed bio,
+  // toggled lengths). The photo preview stays outside the guard — it must
+  // track the stored value the auto-save just wrote.
+  const seededRef = useRef(false);
   useEffect(() => {
-    if (!userDoc) return;
+    if (!userDoc || seededRef.current) return;
+    seededRef.current = true;
     setContactEmail(tutor?.contactEmail || userDoc.email || '');
     setPhone(tutor?.contactPhone || '');
     setWhatsapp(tutor?.whatsapp || '');
@@ -92,10 +116,17 @@ export function AccountPage() {
     setSessionLengths(tutor?.sessionLengthsMin ?? []);
     setLocationPrefs(tutor?.locationPrefs ?? []);
     setPaddingMin(tutor?.paddingMin ?? 0);
+    setAboutMe(tutor?.aboutMe ?? '');
     if (userDoc.notifPrefs) {
       setPrefs(userDoc.notifPrefs);
     }
   }, [userDoc, tutor]);
+
+  // Photo preview tracks the stored value on every userDoc change (the
+  // auto-save path refreshes the doc after writing photoUrl).
+  useEffect(() => {
+    if (userDoc?.photoUrl) setPhotoPreview(userDoc.photoUrl);
+  }, [userDoc]);
 
   // Format DOB for display (User.dateOfBirth is a Firestore Timestamp, but may
   // be a plain string on older records — handle both).
@@ -113,6 +144,114 @@ export function AccountPage() {
     }
     return '';
   })();
+
+  // --- Photo handlers (auto-save, mirroring sit's babysitter AccountPage) ---
+  const handlePhotoSelect = (file: File) => {
+    setPhotoError(null);
+    if (!ACCEPTED_TYPES.includes(file.type)) {
+      setPhotoError(t('account.photoInvalidType'));
+      return;
+    }
+    if (file.size > MAX_FILE_SIZE) {
+      setPhotoError(t('account.photoTooLarge'));
+      return;
+    }
+    setPhotoFile(file);
+    // Token-guard the async reader: if the upload fails (or another pick
+    // happens) before onload fires, a stale data-URI must not overwrite the
+    // reverted/newer preview.
+    const token = ++previewTokenRef.current;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      if (previewTokenRef.current === token) setPhotoPreview(e.target?.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) handlePhotoSelect(file);
+    e.target.value = '';
+  };
+
+  // The stored download URL embeds the object path as `profile-photos%2F{uid}.{ext}` —
+  // recover it so remove/replace can delete the object. Photos of 15-18-year-old
+  // tutors must not survive as readable orphans after "remove".
+  const storedPhotoPath = (): string | null => {
+    const url = userDoc?.photoUrl;
+    if (typeof url !== 'string') return null;
+    const m = url.match(/profile-photos%2F([^?]+)/);
+    return m ? `profile-photos/${decodeURIComponent(m[1])}` : null;
+  };
+
+  const handleRemovePhoto = async () => {
+    if (!uid) return;
+    setPhotoError(null);
+    try {
+      // Write first, clear the preview after — a failed removal must not
+      // LOOK removed while the photo is still on the public search card.
+      await updateDoc(doc(db, 'users', uid), {
+        photoUrl: null,
+        updatedAt: serverTimestamp(),
+      });
+      const oldPath = storedPhotoPath();
+      if (oldPath) {
+        // Best-effort: the doc field is the source of truth; a failed object
+        // delete leaves an orphan we retry on the next remove/replace.
+        await deleteObject(ref(storage, oldPath)).catch(() => {});
+      }
+      // The write succeeded — the photo IS removed. A refresh blip must not
+      // claim otherwise, so it is best-effort outside the error semantics.
+      setPhotoPreview(null);
+      setPhotoFile(null);
+      await refreshUserDoc().catch(() => {});
+    } catch {
+      setPhotoError(t('account.photoRemoveFailed'));
+    }
+  };
+
+  const handlePhotoSave = async () => {
+    if (!uid || !photoFile) return;
+    setPhotoSaving(true);
+    setPhotoError(null);
+    try {
+      // split('.').pop() returns the whole name for extensionless files (the
+      // || never fires), and case must not fork storage paths (IMG.JPG vs
+      // img.jpg). Mirrored in sit's babysitter AccountPage.
+      const ext = (photoFile.name.includes('.') ? photoFile.name.split('.').pop()! : 'jpg').toLowerCase();
+      const oldPath = storedPhotoPath();
+      const path = `profile-photos/${uid}.${ext}`;
+      const storageRef = ref(storage, path);
+      await uploadBytes(storageRef, photoFile);
+      const photoUrl = await getDownloadURL(storageRef);
+      await updateDoc(doc(db, 'users', uid), {
+        photoUrl,
+        updatedAt: serverTimestamp(),
+      });
+      // Replacing with a different extension orphans the old object — delete it.
+      if (oldPath && oldPath !== path) {
+        await deleteObject(ref(storage, oldPath)).catch(() => {});
+      }
+      setPhotoFile(null);
+      await refreshUserDoc().catch(() => {});
+    } catch {
+      // Inline error where the user is looking, and an honest preview: the
+      // picked image did NOT save, so fall back to what is actually stored.
+      // Bump the token so a still-pending reader can't repaint the failure.
+      previewTokenRef.current++;
+      setPhotoError(t('account.photoUploadFailed'));
+      setPhotoPreview(typeof userDoc?.photoUrl === 'string' ? userDoc.photoUrl : null);
+      setPhotoFile(null);
+    } finally {
+      setPhotoSaving(false);
+    }
+  };
+
+  // Auto-save photo after selection
+  useEffect(() => {
+    if (photoFile) handlePhotoSave();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [photoFile]);
 
   // --- Contact handlers ---
   const handleContactSave = async (e: React.FormEvent) => {
@@ -176,8 +315,8 @@ export function AccountPage() {
 
   const handleSavePrefs = async () => {
     if (!uid) return;
-    // Mirrors enrollment's StepPrefs validation: at least one length and one
-    // location; padding is already clamped by the input.
+    // At least one length and one location (the schema's floor when the
+    // fields are present); padding is already clamped by the input.
     if (sessionLengths.length === 0) {
       setPrefsError(t('tutor.account.sessionPrefs.errorNoLengths'));
       setPrefsSuccess(false);
@@ -203,6 +342,7 @@ export function AccountPage() {
         'profiles.tutor.sessionLengthsMin': sessionLengths,
         'profiles.tutor.locationPrefs': locationPrefs,
         'profiles.tutor.paddingMin': paddingMin,
+        'profiles.tutor.aboutMe': aboutMe.trim() || null,
         updatedAt: serverTimestamp(),
       });
       await refreshUserDoc();
@@ -311,6 +451,47 @@ export function AccountPage() {
             </div>
           </div>
         </Card>
+
+        <hr className="mb-6 border-gray-200" />
+
+        {/* 1-bis. Profile Photo (issue #143 — same mechanism as sit) */}
+        <h3 className="mb-3 text-sm font-semibold text-gray-700">{t('account.profilePhoto')}</h3>
+        <input
+          ref={fileInputRef}
+          type="file"
+          className="hidden"
+          onChange={handleFileChange}
+          data-testid="photo-input"
+        />
+        <div className="mb-6 flex items-center gap-4">
+          <button
+            type="button"
+            aria-label={t('account.profilePhoto')}
+            onClick={() => fileInputRef.current?.click()}
+            className="relative flex h-[72px] w-[72px] shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-dashed border-gray-300 bg-gray-50 transition-colors hover:border-gray-400"
+          >
+            {photoPreview ? (
+              <img src={photoPreview} alt={t('account.profilePhoto')} className="h-full w-full object-cover" />
+            ) : (
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="1.5" aria-hidden="true">
+                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+                <circle cx="12" cy="13" r="4" />
+              </svg>
+            )}
+          </button>
+          <div>
+            {photoPreview ? (
+              <button type="button" onClick={handleRemovePhoto} className="text-sm font-medium text-brand-600">
+                {t('account.removePhoto')}
+              </button>
+            ) : (
+              <p className="text-sm font-medium">{t('account.addPhoto')}</p>
+            )}
+            <p className="text-xs text-gray-500">{t('account.photoOptional')}</p>
+            {photoError && <p className="text-xs text-brand-600">{photoError}</p>}
+            {photoSaving && <p className="text-xs text-gray-500">{t('common.saving')}</p>}
+          </div>
+        </div>
 
         <hr className="mb-6 border-gray-200" />
 
@@ -451,6 +632,24 @@ export function AccountPage() {
           max={60}
           hint={t('tutor.account.sessionPrefs.paddingHint')}
         />
+
+        <div className="mb-5">
+          <label htmlFor="tutor-about-me" className="mb-2 block text-sm font-medium text-gray-700">
+            {t('enrollment.aboutMe')} <span className="text-gray-500">({t('common.optional')})</span>
+          </label>
+          <textarea
+            id="tutor-about-me"
+            value={aboutMe}
+            onChange={(e) => {
+              setAboutMe(e.target.value);
+              setPrefsSuccess(false);
+            }}
+            placeholder={t('enrollment.aboutMePlaceholder')}
+            rows={4}
+            maxLength={1000}
+            className="w-full rounded-lg border-[1.5px] border-gray-300 bg-white px-4 py-3 text-base outline-none transition-colors focus:border-brand-600"
+          />
+        </div>
 
         {prefsError && <p className="mb-4 text-sm text-brand-600">{prefsError}</p>}
         <Button onClick={handleSavePrefs} disabled={prefsSaving} className="mb-6">

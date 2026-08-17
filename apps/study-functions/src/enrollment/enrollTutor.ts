@@ -10,7 +10,7 @@ import {
   assertCanAddProfile,
   ensureScheduleDoc,
 } from '@ejm/shared-functions/enrollment/addProfileToUser.js';
-import { tutorEnrollmentSchema } from '../validation/tutor.js';
+import { tutorEnrollmentSchema, withPrefDefaults } from '../validation/tutor.js';
 import type { TutorEnrollmentInput } from '../validation/tutor.js';
 
 interface EnrollTutorData {
@@ -83,7 +83,9 @@ export const enrollTutor = onCall(
         firstIssue?.message || 'Invalid enrollment data',
       );
     }
-    const enrollment = enrollmentResult.data;
+    // Pref fields the wizard no longer collects arrive absent; default them
+    // once here so both the add-profile and new-account writes agree.
+    const enrollment = withPrefDefaults(enrollmentResult.data);
 
     // Require at least one contact field
     if (!enrollment.contactEmail && !enrollment.contactPhone && !enrollment.whatsapp) {

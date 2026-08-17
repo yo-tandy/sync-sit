@@ -523,6 +523,7 @@ export default {
     photoTooLarge: 'La photo doit faire moins de 5 Mo',
     photoInvalidType: 'Veuillez sélectionner une image',
     photoUploadFailed: 'Échec du téléchargement de la photo',
+    photoRemoveFailed: 'La photo n\'a pas pu être supprimée — elle reste visible pour les familles. Réessayez.',
     ejemEmail: 'Email EJM',
     dateOfBirth: 'Date de naissance',
     classLevel: 'Classe',
