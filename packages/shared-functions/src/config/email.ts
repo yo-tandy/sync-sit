@@ -125,6 +125,7 @@ export function buildAccountExistsEmail(app: AccountExistsApp): { subject: strin
         <p style="margin: 24px 0; text-align: center;">
           <a href="${loginUrl}" style="color: #DC2626; font-weight: bold;">${loginUrl}</a>
         </p>
+        <p>If you were following an invite link, open it again after logging in.</p>
         <p style="color: #6B7280; font-size: 14px;">Your account works on both Sync/Sit and Sync/Study — the same email and password sign you in to either app.</p>
         <p style="color: #6B7280; font-size: 14px;">If this wasn't you, you can safely ignore this email or contact us at <a href="mailto:${SUPPORT_EMAIL}" style="color: #DC2626;">${SUPPORT_EMAIL}</a>.</p>
         <hr style="border: none; border-top: 1px solid #E5E7EB; margin: 24px 0;" />

@@ -5,6 +5,7 @@ import { getCorsOrigin } from '../config/cors.js';
 import { sendVerificationEmail } from '../config/email.js';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
 import { handleExistingAccountSignup } from './accountExistsNotice.js';
+import { isInSendCooldown } from './sendCooldown.js';
 
 /**
  * Send a 6-digit verification code to any email address (for parent enrollment).
@@ -24,6 +25,14 @@ export const verifyParentEmail = onCall(
 
     const normalizedEmail = email.trim().toLowerCase();
 
+    // Per-address send cooldown, BEFORE the account-existence branch so both
+    // the fresh and silent paths short-circuit identically on quick repeats
+    // (timing symmetry + resend abuse limit). The success body is the same
+    // one both paths return.
+    if (await isInSendCooldown(normalizedEmail)) {
+      return { success: true, message: 'Verification code sent' };
+    }
+
     // Check if account already exists
     const existingUsers = await db
       .collection('users')
@@ -34,11 +43,18 @@ export const verifyParentEmail = onCall(
     if (!existingUsers.empty) {
       // Silent existing-account path (issue #148): do NOT throw — an error
       // here is an account-enumeration oracle. The response is identical to
-      // the fresh path, no code doc is written, and the mailbox owner gets an
-      // account-exists email (rate-limited) instead of a code. Unlike
-      // verifyEjmEmail there is no authed own-email bypass: parent signup is
-      // always unauthenticated at this step.
-      return handleExistingAccountSignup(normalizedEmail, app);
+      // the fresh path, a DECOY code doc byte-shaped like the fresh write
+      // below keeps every downstream error identical too, and the mailbox
+      // owner gets an account-exists email (rate-limited) instead of a code.
+      // Unlike verifyEjmEmail there is no authed own-email bypass: parent
+      // signup is always unauthenticated at this step.
+      return handleExistingAccountSignup(normalizedEmail, app, {
+        code: crypto.randomInt(100000, 999999).toString(),
+        email: normalizedEmail,
+        expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+        attempts: 0,
+        createdAt: new Date(),
+      });
     }
 
     // Generate cryptographically secure 6-digit code

@@ -39,11 +39,12 @@ describe('buildAccountExistsEmail', () => {
     expect(html).not.toContain('https://sync-sit.web.app/login');
   });
 
-  it('cross-app credentials line and support contact are present for both apps', () => {
+  it('cross-app credentials line, invite-link hint, and support contact are present for both apps', () => {
     for (const app of ['sit', 'study'] as const) {
       const { html } = buildAccountExistsEmail(app);
       expect(html).toContain('works on both Sync/Sit and Sync/Study');
       expect(html).toContain('the same email and password sign you in to either app');
+      expect(html).toContain('If you were following an invite link, open it again after logging in.');
       expect(html).toContain('support@sync-sit.com');
     }
   });

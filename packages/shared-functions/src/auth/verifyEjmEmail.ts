@@ -6,6 +6,7 @@ import { validateEjmEmail } from '@ejm/sit-core';
 import { sendVerificationEmail } from '../config/email.js';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
 import { handleExistingAccountSignup } from './accountExistsNotice.js';
+import { isInSendCooldown } from './sendCooldown.js';
 
 /**
  * Send a 6-digit verification code to an EJM email address.
@@ -36,6 +37,14 @@ export const verifyEjmEmail = onCall(
       graduationYear = validation.graduationYear ?? null;
     }
 
+    // Per-address send cooldown, BEFORE the account-existence branch so both
+    // the fresh and silent paths short-circuit identically on quick repeats
+    // (timing symmetry + resend abuse limit). The success body is the same
+    // one both paths return.
+    if (await isInSendCooldown(email.toLowerCase())) {
+      return { success: true, message: 'Verification code sent' };
+    }
+
     // Check if the email already belongs to an account. An authenticated
     // caller may verify their OWN account email (cross-app add-profile:
     // e.g. a babysitter whose account email is their EJM email enrolling
@@ -51,9 +60,17 @@ export const verifyEjmEmail = onCall(
     if (!existingUsers.empty && existingUsers.docs[0].id !== request.auth?.uid) {
       // Silent existing-account path (issue #148): do NOT throw — an error
       // here is an account-enumeration oracle. The response is identical to
-      // the fresh path, no code doc is written, and the mailbox owner gets an
-      // account-exists email (rate-limited) instead of a code.
-      return handleExistingAccountSignup(email.toLowerCase(), app);
+      // the fresh path, a DECOY code doc byte-shaped like the fresh write
+      // below keeps every downstream error identical too, and the mailbox
+      // owner gets an account-exists email (rate-limited) instead of a code.
+      return handleExistingAccountSignup(email.toLowerCase(), app, {
+        code: crypto.randomInt(100000, 999999).toString(),
+        email: email.toLowerCase(),
+        graduationYear,
+        expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+        attempts: 0,
+        createdAt: new Date(),
+      });
     }
 
     // Generate cryptographically secure 6-digit code
