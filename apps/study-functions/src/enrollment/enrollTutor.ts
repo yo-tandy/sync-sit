@@ -10,6 +10,7 @@ import {
   assertCanAddProfile,
   ensureScheduleDoc,
 } from '@ejm/shared-functions/enrollment/addProfileToUser.js';
+import { toDobDate } from './dob.js';
 import { tutorEnrollmentSchema, withPrefDefaults } from '../validation/tutor.js';
 import type { TutorEnrollmentInput } from '../validation/tutor.js';
 
@@ -21,18 +22,6 @@ interface EnrollTutorData {
   enrollment: TutorEnrollmentInput;
 }
 
-/**
- * Normalize a stored users-doc dateOfBirth: a Firestore Timestamp on
- * study-created accounts, a "YYYY-MM-DD" string on sit-created ones.
- * Exported for unit tests — it decides which DOB the age gate runs against.
- */
-export function toDobDate(dob: unknown): Date | null {
-  if (typeof dob === 'string' && dob) return new Date(dob);
-  if (dob && typeof (dob as { toDate?: unknown }).toDate === 'function') {
-    return (dob as { toDate: () => Date }).toDate();
-  }
-  return null;
-}
 
 export const enrollTutor = onCall(
   { region: 'europe-west1', cors: getCorsOrigin() },

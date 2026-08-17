@@ -53,16 +53,16 @@ export function TutorEnrollment() {
   const isAddProfile = !!firebaseUser;
 
   // Root identity is set-once (issue #144): a cross-app enrollee (e.g. an
-  // existing sit babysitter) already carries firstName/lastName/dateOfBirth —
-  // the profile step shows them read-only and the payload omits them.
-  const identityOnFile =
-    isAddProfile && userDoc?.firstName && userDoc?.lastName && userDoc?.dateOfBirth
-      ? {
-          firstName: userDoc.firstName,
-          lastName: userDoc.lastName,
-          dateOfBirth: userDoc.dateOfBirth as unknown,
-        }
-      : null;
+  // existing sit babysitter) already carries identity fields. PER-FIELD, like
+  // sit's StepProfile: each on-file field is shown read-only and omitted from
+  // the payload; a partial doc still collects only its missing fields.
+  const identityOnFile = isAddProfile
+    ? {
+        firstName: userDoc?.firstName || undefined,
+        lastName: userDoc?.lastName || undefined,
+        dateOfBirth: userDoc?.dateOfBirth || undefined,
+      }
+    : null;
 
   const [step, setStep] = useState(0);
   const [ejemEmail, setEjemEmail] = useState('');

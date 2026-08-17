@@ -215,6 +215,38 @@ describe('enrollTutor cross-app add-profile', () => {
     expect(after.profiles.tutor.ejemEmail).toBe(EJEM_EMAIL.toLowerCase());
   });
 
+  it("fillBaseFields repairs an EMPTY ('') identity field from the payload", async () => {
+    // The fill condition widened from strictly-undefined to empty
+    // (undefined/null/'') — pin it end to end: a doc holding firstName ''
+    // plus a payload carrying the value gets repaired; populated fields win.
+    const auth = getAdminAuth();
+    const empty = await auth.createUser({
+      email: 'empty.identity144@ejm-test.org',
+      password: 'test1234',
+    });
+    await getDb().collection('users').doc(empty.uid).set({
+      uid: empty.uid,
+      email: 'empty.identity144@ejm-test.org',
+      firstName: '',
+      lastName: 'Kept',
+      dateOfBirth: '2007-03-15',
+      status: 'active',
+      profiles: {},
+    });
+    const token = await getIdToken(empty.uid);
+
+    const payload = tutorEnrollment({ lastName: 'Ignored' }) as Record<string, unknown>;
+    await callFunction(
+      'enrollTutor',
+      { ejemEmail: EJEM_EMAIL, verificationCode: CODE, consentVersion: '1.0', enrollment: payload },
+      token,
+    );
+
+    const after = (await getDb().collection('users').doc(empty.uid).get()).data()!;
+    expect(after.firstName).toBe('Wizard');
+    expect(after.lastName).toBe('Kept');
+  });
+
   it('rejects when identity is on file NOWHERE (no payload, no doc)', async () => {
     // A bare authed account with no identity anywhere must be told to
     // supply it — the presence check covers payload OR existing doc.

@@ -122,11 +122,11 @@ vi.mock('../StepProfile', () => ({
     identityOnFile?: { firstName: string } | null;
   }) => (
     <div>
-      {identityOnFile && <p>identity-on-file:{identityOnFile.firstName}</p>}
+      {identityOnFile?.firstName && <p>identity-on-file:{identityOnFile.firstName}</p>}
       <button
         onClick={() =>
           onNext({
-            ...(identityOnFile
+            ...(identityOnFile?.firstName
               ? {}
               : { firstName: 'Flow', lastName: 'Tutor', dateOfBirth: '2008-07-07' }),
             classLevel: 'Terminale',

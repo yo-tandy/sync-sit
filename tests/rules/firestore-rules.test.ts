@@ -1875,6 +1875,20 @@ describe('users update — root identity set-once (issue #144)', () => {
     }));
   });
 
+  it("owner CAN fill an EMPTY ('' or null) identity field — empty is fillable, populated is frozen", async () => {
+    await seed('setonceE1', { ...stubNoIdentity, firstName: '', lastName: null });
+    const db = testEnv.authenticatedContext('setonceE1').firestore();
+    await assertSucceeds(updateDoc(doc(db, 'users', 'setonceE1'), {
+      firstName: 'Iris', lastName: 'Martin', dateOfBirth: '2007-03-14',
+    }));
+  });
+
+  it('owner CANNOT clear a populated identity field to empty', async () => {
+    await seed('setonceE2', withIdentity);
+    const db = testEnv.authenticatedContext('setonceE2').firestore();
+    await assertFails(updateDoc(doc(db, 'users', 'setonceE2'), { firstName: '' }));
+  });
+
   it('owner CANNOT change firstName once set', async () => {
     await seed('setonce2', withIdentity);
     const db = testEnv.authenticatedContext('setonce2').firestore();

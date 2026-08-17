@@ -5,6 +5,7 @@ import {
   tutorSessionPrefsSchema,
   withPrefDefaults,
 } from '../tutor.js';
+import { toDobDate } from '../../enrollment/dob.js';
 
 const validEnrollment = {
   firstName: 'Flow',
@@ -171,7 +172,7 @@ describe('withPrefDefaults', () => {
   });
 });
 
-import { toDobDate } from '../../enrollment/enrollTutor.js';
+
 
 describe('toDobDate — the stored-DOB normalizer the age gate depends on', () => {
   it('parses the sit-created string format', () => {
