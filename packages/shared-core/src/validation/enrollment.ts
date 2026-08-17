@@ -32,6 +32,12 @@ export const familyEnrollmentSchema = z.object({
   lastName: z.string().optional(), // if different from family name
   firstName: z.string().min(1, 'First name is required'),
   address: z.string().min(1, 'Address is required'),
+  // Geocoder components of the picked address (issue #167): persisted on the
+  // family doc so tutor coverage-area matching can resolve the family's
+  // arrondissement/town without a re-pick in search. Optional — legacy
+  // clients and hand-typed addresses send neither.
+  postcode: z.string().max(20).optional(),
+  city: z.string().max(100).optional(),
   pets: z.string().optional(),
   note: z.string().optional(),
   kids: z.array(kidSchema).optional(),

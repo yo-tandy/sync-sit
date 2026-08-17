@@ -319,6 +319,32 @@ describe('family SearchPage', () => {
     expect(payload).toMatchObject({ latLng: { lat: 48.8049, lng: 2.1204 } });
   });
 
+  it('resolves areaLabel from a family doc that carries postcode/city (post-#167 docs)', async () => {
+    h.familyData = {
+      familyName: 'Cohen',
+      address: '1 Rue de Paris',
+      latLng: { lat: 48, lng: 2 },
+      postcode: '75116',
+      city: 'Paris',
+    };
+    renderWithProviders(<SearchPage />);
+    await waitFor(() => expect(h.getDoc).toHaveBeenCalled());
+
+    fireEvent.change(screen.getByLabelText(/subject/i), { target: { value: 'math' } });
+    fireEvent.change(screen.getByLabelText(/level/i), { target: { value: '6e' } });
+    fireEvent.click(screen.getByRole('button', { name: /search tutors/i }));
+
+    await waitFor(() =>
+      expect(h.callable).toHaveBeenCalledWith(
+        'searchTutors',
+        expect.objectContaining({ areaLabel: '16e' }),
+      ),
+    );
+    // And no hint once the doc-resolved label exists.
+    fireEvent.click(screen.getByRole('button', { name: 'At your home' }));
+    expect(screen.queryByText(/pick a paris or nearby-town address/i)).not.toBeInTheDocument();
+  });
+
   it('hints that home/library filtering needs a Paris/nearby address until one resolves', async () => {
     renderWithProviders(<SearchPage />);
     await waitFor(() => expect(h.getDoc).toHaveBeenCalled());

@@ -36,6 +36,8 @@ describe('enrollFamily', () => {
         firstName: 'Jane',
         address: '10 Rue de Rivoli, 75001 Paris',
         latLng: { lat: 48.8606, lng: 2.3376 },
+        postcode: '75001',
+        city: 'Paris',
         kids: [{ firstName: 'Alice', age: 5, languages: ['English'] }],
       }
     );
@@ -54,5 +56,33 @@ describe('enrollFamily', () => {
     const familyDoc = await db.collection('families').doc(result.familyId).get();
     expect(familyDoc.data()!.familyName).toBe('TestFamily');
     expect(familyDoc.data()!.parentIds).toContain(result.uid);
+    // Geocoder components persisted (issue #167): search resolves the
+    // family's coverage-area label from these without an address re-pick.
+    expect(familyDoc.data()!.postcode).toBe('75001');
+    expect(familyDoc.data()!.city).toBe('Paris');
+  });
+
+  it('stores null postcode/city when the client sends none (legacy payload shape)', async () => {
+    const email2 = 'newparent2@test.com';
+    await callFunction('verifyParentEmail', { email: email2 });
+    const db = getDb();
+    const codeDoc = await db.collection('verificationCodes').doc(email2).get();
+    const code2 = codeDoc.data()!.code;
+
+    const result = await callFunction<{ success: boolean; familyId: string }>('enrollFamily', {
+      email: email2,
+      verificationCode: code2,
+      password: 'Test1234',
+      familyName: 'LegacyFamily',
+      firstName: 'Joan',
+      address: '5 Rue Sans Geocode, Paris',
+      latLng: { lat: 48.86, lng: 2.33 },
+      kids: [],
+    });
+
+    expect(result.success).toBe(true);
+    const familyDoc = await db.collection('families').doc(result.familyId).get();
+    expect(familyDoc.data()!.postcode).toBeNull();
+    expect(familyDoc.data()!.city).toBeNull();
   });
 });

@@ -152,6 +152,12 @@ export function ParentEnrollment() {
         latLng: formData.address
           ? { lat: formData.address.lat, lng: formData.address.lng }
           : { lat: 48.8566, lng: 2.3522 },
+        // Geocoder components ride along (issue #167) so the family doc can
+        // resolve a tutor coverage-area label without a re-pick in search.
+        // Omitted (not null) when absent — the enrollment schema takes
+        // optional strings.
+        ...(formData.address?.postcode ? { postcode: formData.address.postcode } : {}),
+        ...(formData.address?.city ? { city: formData.address.city } : {}),
       };
 
       if (isAddProfile) {

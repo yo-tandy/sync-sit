@@ -20,6 +20,8 @@ interface EnrollFamilyData {
   firstName: string;
   address: string;
   latLng: { lat: number; lng: number };
+  postcode?: string;
+  city?: string;
   pets?: string;
   note?: string;
   kids: KidInput[];
@@ -120,6 +122,10 @@ export const enrollFamily = onCall(
       familyName: data.familyName,
       address: data.address,
       latLng: data.latLng,
+      // Coverage-area matching inputs (issue #167) — null when the client
+      // sent none (legacy clients, hand-typed addresses).
+      postcode: data.postcode || null,
+      city: data.city || null,
       photoUrl: null,
       pets: data.pets || null,
       note: data.note || null,
