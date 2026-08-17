@@ -5,6 +5,7 @@ import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firesto
 import { db } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { getParentProfile } from '@ejm/shared-core';
+import { CrossAppWelcomeCard } from '@/components/family/CrossAppWelcomeCard';
 import {
   Card,
   BellIcon,
@@ -288,6 +289,9 @@ export function DashboardPage() {
       <h1 className="mb-5 text-lg font-bold text-gray-900">
         {t('family.dashboard.hello')} {userDoc?.firstName || ''}
       </h1>
+
+      {/* One-time cross-app welcome (issue #144) */}
+      <CrossAppWelcomeCard />
 
       {/* ── Verification gate (read from the shared families doc) ── */}
       {isVerified === false && (

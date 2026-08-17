@@ -111,6 +111,8 @@ export default {
     greeting: 'Bienvenue, {{name}} !',
     body: "En tant qu'élève de l'EJM, vous pouvez faire du babysitting pour les familles de l'EJM — votre identifiant Sync/Study fonctionne ici tel quel. Il ne nous manque que vos disponibilités pour commencer.",
     consentPrefix: 'En continuant, vous acceptez les',
+    parentCard: 'Bienvenue sur Sync/Sit — votre compte famille Sync/Study fonctionne ici tel quel.',
+    dismiss: 'Fermer',
   },
 
   enrollment: {

@@ -185,6 +185,8 @@ export default {
     greeting: 'Welcome, {{name}}!',
     body: 'As an EJM student you can tutor EJM families — your Sync/Sit login works here as-is. We just need the subjects you offer to get you started.',
     consentPrefix: 'By continuing, you accept the',
+    parentCard: 'Welcome to Sync/Study — your Sync/Sit family account works here as-is.',
+    dismiss: 'Dismiss',
   },
 
   menu: {

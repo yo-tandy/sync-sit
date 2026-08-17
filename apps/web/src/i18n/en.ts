@@ -114,6 +114,8 @@ export default {
     greeting: 'Welcome, {{name}}!',
     body: 'As an EJM student you can babysit for EJM families — your Sync/Study login works here as-is. We just need your availability to get you started.',
     consentPrefix: 'By continuing, you accept the',
+    parentCard: 'Welcome to Sync/Sit — your Sync/Study family account works here as-is.',
+    dismiss: 'Dismiss',
   },
 
   // Enrollment

@@ -185,6 +185,8 @@ export default {
     greeting: 'Bienvenue, {{name}} !',
     body: "En tant qu'élève de l'EJM, vous pouvez donner des cours aux familles de l'EJM — votre identifiant Sync/Sit fonctionne ici tel quel. Il ne nous manque que les matières que vous proposez pour commencer.",
     consentPrefix: 'En continuant, vous acceptez les',
+    parentCard: 'Bienvenue sur Sync/Study — votre compte famille Sync/Sit fonctionne ici tel quel.',
+    dismiss: 'Fermer',
   },
 
   menu: {
