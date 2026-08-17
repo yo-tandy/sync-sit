@@ -183,5 +183,34 @@ describe('reviewVerification', () => {
         ),
       ).rejects.toMatchObject({ code: 'NOT_FOUND' });
     });
+
+    it('refuses a legacy familyId-less doc BEFORE mutating it (retired tutor_identity shape)', async () => {
+      // Shape left behind by the retired tutor flow: no familyId. Written
+      // directly (not via seedVerification) because the helper requires one.
+      const db = getDb();
+      const ref = db.collection('verifications').doc();
+      await ref.set({
+        verificationId: ref.id,
+        uploadedByUserId: seed.parent1.uid,
+        type: 'tutor_identity',
+        status: 'pending',
+        fileUrl: `verification-documents/${seed.parent1.uid}/id.pdf`,
+        fileName: 'id.pdf',
+        createdAt: new Date(),
+      });
+
+      await expect(
+        callFunction(
+          'reviewVerification',
+          { verificationId: ref.id, decision: 'approved' },
+          adminToken,
+        ),
+      ).rejects.toMatchObject({ code: 'FAILED_PRECONDITION' });
+
+      // The guard must fire before any write: the doc is untouched.
+      const after = await ref.get();
+      expect(after.data()!.status).toBe('pending');
+      expect(after.data()!.reviewedByAdminId).toBeUndefined();
+    });
   });
 });

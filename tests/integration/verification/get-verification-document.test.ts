@@ -82,4 +82,46 @@ describe('getVerificationDocument (authz)', () => {
       ),
     ).rejects.toMatchObject({ code: 'PERMISSION_DENIED' });
   });
+
+  // Authorization POSITIVES, re-homed from the deleted tutor-verification-access
+  // suite. In offline emulator mode the Storage stage cannot succeed (signed
+  // URLs need GCP credentials), so "authz passed" is proven by the call failing
+  // AFTER the authz gate — any code except PERMISSION_DENIED / UNAUTHENTICATED.
+  it('lets a legacy uploader read under their own uid (owner branch kept for retired tutor uploads)', async () => {
+    const tutorToken = await getIdToken(seed.tutor1.uid);
+    await expect(
+      callFunction(
+        'getVerificationDocument',
+        { filePath: `verification-documents/${seed.tutor1.uid}/id.pdf` },
+        tutorToken,
+      ),
+    ).rejects.toMatchObject({
+      code: expect.not.stringMatching(/PERMISSION_DENIED|UNAUTHENTICATED/),
+    });
+  });
+
+  it('lets an admin past the authz gate for any document', async () => {
+    const adminToken = await getIdToken(seed.admin.uid);
+    await expect(
+      callFunction(
+        'getVerificationDocument',
+        { filePath: `verification-documents/${seed.family1Id}/id.pdf` },
+        adminToken,
+      ),
+    ).rejects.toMatchObject({
+      code: expect.not.stringMatching(/PERMISSION_DENIED|UNAUTHENTICATED/),
+    });
+  });
+
+  it('lets a family member past the authz gate for their own family docs', async () => {
+    await expect(
+      callFunction(
+        'getVerificationDocument',
+        { filePath: `verification-documents/${seed.family1Id}/id.pdf` },
+        ownFamilyParentToken,
+      ),
+    ).rejects.toMatchObject({
+      code: expect.not.stringMatching(/PERMISSION_DENIED|UNAUTHENTICATED/),
+    });
+  });
 });

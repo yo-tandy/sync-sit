@@ -229,7 +229,8 @@ export const enrollTutor = onCall(
       // Tutors share the babysitter trust model (owner decision 2026-08-17):
       // the EJM-email verification-code gate is the only identity check, so
       // enrollment is complete at creation. Search eligibility is then owned
-      // by the tutor's own searchable toggle (subjects + schedule gated).
+      // by the tutor's own searchable toggle; the dashboard only offers the
+      // toggle once subjects and availability exist (UX gate, not a rule).
       enrollmentComplete: true,
       ejemEmail: ejemEmailLower,
       classLevel: enrollment.classLevel,

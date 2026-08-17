@@ -39,6 +39,17 @@ export const reviewVerification = onCall(
     const verificationData = verificationDoc.data()!;
     const familyId = verificationData.familyId;
 
+    // Legacy docs from the retired tutor_identity flow have no familyId.
+    // Refuse them BEFORE any mutation: without this, the doc would be
+    // approved/rejected and the family recompute below would then throw on
+    // an undefined familyId, leaving a mutated doc with no audit entry.
+    if (!familyId) {
+      throw new HttpsError(
+        'failed-precondition',
+        'This verification is not linked to a family and cannot be reviewed',
+      );
+    }
+
     // Update verification doc
     const now = new Date();
     await verificationRef.update({
