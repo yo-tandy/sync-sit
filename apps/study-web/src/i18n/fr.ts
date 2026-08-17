@@ -156,6 +156,10 @@ export default {
     saving: 'Enregistrement...',
     signingIn: 'Connexion...',
     tooManyAttempts: 'Trop de tentatives. Veuillez demander un nouveau code.',
+    errorInvalidCredentials: 'Adresse e-mail ou mot de passe incorrect.',
+    errorTooManyAttempts: 'Trop de tentatives. Veuillez réessayer plus tard.',
+    errorLoginFailed: 'Une erreur est survenue. Veuillez réessayer.',
+    errorResetFailed: "Impossible d'envoyer l'e-mail de réinitialisation. Veuillez réessayer.",
   },
 
   welcome: {

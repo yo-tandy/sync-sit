@@ -9,6 +9,7 @@ import {
 import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '@/config/firebase';
 import { removePushToken } from '@/lib/pushNotifications';
+import { loginErrorKey } from '@ejm/shared-core';
 import type { SitUser } from '@ejm/sit-core';
 
 interface AuthState {
@@ -41,8 +42,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const userDoc = snap.exists() ? (snap.data() as SitUser) : null;
       set({ firebaseUser: cred.user, userDoc, loading: false });
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Login failed';
-      set({ error: message, loading: false });
+      // i18n key, not a raw message: raw firebase errors reveal whether an
+      // account exists for the attempted email (issue #147).
+      set({ error: loginErrorKey(err), loading: false });
       throw err;
     }
   },
@@ -60,8 +62,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({ error: null });
       await sendPasswordResetEmail(auth, email);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to send reset email';
-      set({ error: message });
+      set({ error: 'auth.errorResetFailed' });
       throw err;
     }
   },

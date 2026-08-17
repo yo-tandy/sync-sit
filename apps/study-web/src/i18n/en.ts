@@ -156,6 +156,10 @@ export default {
     saving: 'Saving...',
     signingIn: 'Signing in...',
     tooManyAttempts: 'Too many failed attempts. Please request a new code.',
+    errorInvalidCredentials: 'Incorrect email or password.',
+    errorTooManyAttempts: 'Too many attempts. Please try again later.',
+    errorLoginFailed: 'Something went wrong. Please try again.',
+    errorResetFailed: 'Could not send the reset email. Please try again.',
   },
 
   welcome: {
