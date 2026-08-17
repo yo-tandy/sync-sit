@@ -261,102 +261,13 @@ describe('tutor AccountPage', () => {
     expect(h.updateDoc).not.toHaveBeenCalled();
   });
 
-  // ── Cancellation policy (V2 feature 7) ──
-  it('seeds the cancellation-policy selector from the stored value', () => {
-    const userDoc = makeUserDoc();
-    (userDoc.profiles.tutor as Record<string, unknown>).cancellationNoticeHours = 48;
-    h.auth.userDoc = userDoc;
+  // ── About me (issue #143; standalone save since issue #169 split the
+  // session-prefs section off to SchedulePage) ──
+
+  it('saves exactly the about-me dot-path (+updatedAt) with the edited value', async () => {
     renderWithProviders(<AccountPage />);
-    const select = screen.getByLabelText(/cancellation policy/i) as HTMLSelectElement;
-    expect(select.value).toBe('48');
-  });
-
-  it('defaults the selector to 0 (no policy) when the field is absent', () => {
-    renderWithProviders(<AccountPage />);
-    const select = screen.getByLabelText(/cancellation policy/i) as HTMLSelectElement;
-    expect(select.value).toBe('0');
-  });
-
-  it('saves the selected policy to the numeric dot-path and refreshes', async () => {
-    renderWithProviders(<AccountPage />);
-    fireEvent.change(screen.getByLabelText(/cancellation policy/i), { target: { value: '48' } });
-    fireEvent.click(screen.getByRole('button', { name: /save policy/i }));
-
-    await waitFor(() =>
-      expect(h.updateDoc).toHaveBeenCalledWith(
-        expect.objectContaining({ path: 'users/t1' }),
-        expect.objectContaining({
-          'profiles.tutor.cancellationNoticeHours': 48,
-          updatedAt: 'ts',
-        }),
-      ),
-    );
-    // The value is the NUMBER 48, never the string '48'.
-    const call = h.updateDoc.mock.calls.find(
-      (c) => (c[1] as Record<string, unknown>)['profiles.tutor.cancellationNoticeHours'] !== undefined,
-    );
-    expect(call?.[1]['profiles.tutor.cancellationNoticeHours']).toBe(48);
-    await waitFor(() => expect(h.auth.refreshUserDoc).toHaveBeenCalled());
-  });
-
-  it('saves the 1-week (168) preset as its numeric value', async () => {
-    renderWithProviders(<AccountPage />);
-    fireEvent.change(screen.getByLabelText(/cancellation policy/i), { target: { value: '168' } });
-    fireEvent.click(screen.getByRole('button', { name: /save policy/i }));
-
-    await waitFor(() =>
-      expect(h.updateDoc).toHaveBeenCalledWith(
-        expect.objectContaining({ path: 'users/t1' }),
-        expect.objectContaining({ 'profiles.tutor.cancellationNoticeHours': 168 }),
-      ),
-    );
-  });
-
-  // ── Session preferences (issue #123 — un-freeze enrollment-only fields) ──
-
-  function seedSessionPrefs() {
-    const userDoc = makeUserDoc();
-    Object.assign(userDoc.profiles.tutor as Record<string, unknown>, {
-      sessionLengthsMin: [45, 60],
-      locationPrefs: ['online', 'family_home'],
-      paddingMin: 15,
-    });
-    h.auth.userDoc = userDoc;
-  }
-
-  it('seeds the session-preferences section from the stored profile', () => {
-    seedSessionPrefs();
-    renderWithProviders(<AccountPage />);
-
-    expect(screen.getByRole('button', { name: '45 min', pressed: true })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '60 min', pressed: true })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '30 min', pressed: false })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '75 min', pressed: false })).toBeInTheDocument();
-
-    expect(screen.getByLabelText('Online')).toBeChecked();
-    expect(screen.getByLabelText("At the family's home")).toBeChecked();
-    expect(screen.getByLabelText('At your home')).not.toBeChecked();
-    expect(screen.getByLabelText('Library / public space')).not.toBeChecked();
-
-    expect((screen.getByLabelText(/appointment padding/i) as HTMLInputElement).value).toBe('15');
-  });
-
-  it('renders the section without crashing when the fields are absent (legacy doc)', () => {
-    renderWithProviders(<AccountPage />);
-    expect(screen.getByRole('button', { name: '45 min', pressed: false })).toBeInTheDocument();
-    expect(screen.getByLabelText('Online')).not.toBeChecked();
-    expect((screen.getByLabelText(/appointment padding/i) as HTMLInputElement).value).toBe('0');
-  });
-
-  it('saves exactly the four dot-paths (+updatedAt) with the edited values', async () => {
-    seedSessionPrefs();
-    renderWithProviders(<AccountPage />);
-
-    fireEvent.click(screen.getByRole('button', { name: '75 min' }));
-    fireEvent.click(screen.getByLabelText('At your home'));
-    fireEvent.change(screen.getByLabelText(/padding/i), { target: { value: '30' } });
     fireEvent.change(screen.getByLabelText(/about me/i), { target: { value: 'I teach maths.' } });
-    fireEvent.click(screen.getByRole('button', { name: /save preferences/i }));
+    fireEvent.click(screen.getByRole('button', { name: /save about me/i }));
 
     await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
     const call = h.updateDoc.mock.calls[0] as unknown[];
@@ -364,51 +275,37 @@ describe('tutor AccountPage', () => {
     const payload = call[1] as Record<string, unknown>;
     // Pin the FULL key set: dot-paths only — never a wholesale profiles.tutor
     // rewrite (would clobber server-owned siblings like approvedFamilies).
-    expect(Object.keys(payload).sort()).toEqual([
-      'profiles.tutor.aboutMe',
-      'profiles.tutor.locationPrefs',
-      'profiles.tutor.paddingMin',
-      'profiles.tutor.sessionLengthsMin',
-      'updatedAt',
-    ]);
-    expect(payload['profiles.tutor.sessionLengthsMin']).toEqual([45, 60, 75]);
-    expect(payload['profiles.tutor.locationPrefs']).toEqual(['online', 'family_home', 'tutor_home']);
-    expect(payload['profiles.tutor.paddingMin']).toBe(30); // NUMBER, not '30'
+    expect(Object.keys(payload).sort()).toEqual(['profiles.tutor.aboutMe', 'updatedAt']);
     expect(payload['profiles.tutor.aboutMe']).toBe('I teach maths.');
     await waitFor(() => expect(h.auth.refreshUserDoc).toHaveBeenCalled());
   });
 
   it('saves an emptied about-me as null (not an empty string)', async () => {
-    seedSessionPrefs();
     renderWithProviders(<AccountPage />);
     fireEvent.change(screen.getByLabelText(/about me/i), { target: { value: '   ' } });
-    fireEvent.click(screen.getByRole('button', { name: /save preferences/i }));
+    fireEvent.click(screen.getByRole('button', { name: /save about me/i }));
 
     await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
     const payload = h.updateDoc.mock.calls[0][1] as Record<string, unknown>;
     expect(payload['profiles.tutor.aboutMe']).toBeNull();
   });
 
-  it('blocks save when no session length is selected', async () => {
-    seedSessionPrefs();
+  it('surfaces an about-me save failure instead of a silent success', async () => {
+    h.updateDoc.mockRejectedValueOnce(new Error('unavailable'));
     renderWithProviders(<AccountPage />);
-    fireEvent.click(screen.getByRole('button', { name: '45 min' }));
-    fireEvent.click(screen.getByRole('button', { name: '60 min' }));
-    fireEvent.click(screen.getByRole('button', { name: /save preferences/i }));
+    fireEvent.click(screen.getByRole('button', { name: /save about me/i }));
 
-    expect(await screen.findByText(/at least one session length/i)).toBeInTheDocument();
-    expect(h.updateDoc).not.toHaveBeenCalled();
+    expect(await screen.findByText(/error|wrong/i)).toBeInTheDocument();
   });
 
-  it('blocks save when no location is selected', async () => {
-    seedSessionPrefs();
-    renderWithProviders(<AccountPage />);
-    fireEvent.click(screen.getByLabelText('Online'));
-    fireEvent.click(screen.getByLabelText("At the family's home"));
-    fireEvent.click(screen.getByRole('button', { name: /save preferences/i }));
+  // ── Moved sections (issue #169) — pin that they are GONE from Account ──
 
-    expect(await screen.findByText(/at least one session location/i)).toBeInTheDocument();
-    expect(h.updateDoc).not.toHaveBeenCalled();
+  it('no longer renders the cancellation-policy or session-preferences sections', () => {
+    renderWithProviders(<AccountPage />);
+    expect(screen.queryByText(/cancellation policy/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/session preferences/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /45 min/ })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/appointment padding/i)).not.toBeInTheDocument();
   });
 
   it('links to the area editor so it is findable from Account', () => {
@@ -438,29 +335,4 @@ describe('tutor AccountPage', () => {
     expect(screen.queryByText(/supervised account/i)).not.toBeInTheDocument();
   });
 
-  it('surfaces a session-prefs save failure instead of a silent success', async () => {
-    seedSessionPrefs();
-    h.updateDoc.mockRejectedValueOnce(new Error('unavailable'));
-    renderWithProviders(<AccountPage />);
-    fireEvent.click(await screen.findByRole('button', { name: /^save preferences$/i }));
-
-    expect(await screen.findByText(/error|wrong/i)).toBeInTheDocument();
-    expect(screen.queryByText(/preferences saved/i)).not.toBeInTheDocument();
-  });
-
-  it('rejects out-of-range padding before any write (UX guard; rules carry the bound)', async () => {
-    const userDoc = makeUserDoc();
-    (userDoc.profiles.tutor as Record<string, unknown>).sessionLengthsMin = [45, 60];
-    (userDoc.profiles.tutor as Record<string, unknown>).locationPrefs = ['online'];
-    (userDoc.profiles.tutor as Record<string, unknown>).paddingMin = 15;
-    h.auth.userDoc = userDoc;
-    renderWithProviders(<AccountPage />);
-    const padding = await screen.findByLabelText(/padding/i);
-    fireEvent.change(padding, { target: { value: '500' } });
-    fireEvent.click(screen.getByRole('button', { name: /^save preferences$/i }));
-
-    expect(await screen.findByText(/between 0 and 60/i)).toBeInTheDocument();
-    const calls = h.updateDoc.mock.calls.filter((c) => JSON.stringify(c[1] ?? {}).includes('paddingMin'));
-    expect(calls).toHaveLength(0);
-  });
 });

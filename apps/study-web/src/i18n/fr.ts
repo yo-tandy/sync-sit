@@ -397,6 +397,9 @@ export default {
       },
     },
     account: {
+      // cancellationPolicy + sessionPrefs render from SchedulePage since issue
+      // #169 — the tutor.account.* namespace is historical, kept to avoid
+      // translation churn.
       cancellationPolicy: {
         title: 'Politique d\'annulation',
         help: 'Définissez le préavis que les familles doivent respecter pour annuler un cours confirmé. Une annulation plus tardive reste possible, mais elle est signalée comme annulation tardive. Seules les nouvelles réservations utilisent la politique définie ici.',
@@ -425,6 +428,10 @@ export default {
         errorNoLengths: 'Choisissez au moins une durée de cours',
         errorPaddingRange: 'La marge doit être un nombre entier entre 0 et 60 minutes.',
         errorNoLocations: 'Choisissez au moins un lieu de cours',
+      },
+      aboutMe: {
+        save: 'Enregistrer la présentation',
+        saved: 'Présentation enregistrée',
       },
       areaLink: 'Modifier la zone couverte',
       areaLinkDesc: 'Là où vous travaillez — arrondissements, ou votre adresse et un rayon. Votre adresse sert à afficher votre distance aux familles dans la recherche.',

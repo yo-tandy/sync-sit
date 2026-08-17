@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { I18nextProvider } from 'react-i18next';
 import { createMemoryRouter, RouterProvider } from 'react-router';
 import { DAYS_OF_WEEK, createEmptySlots } from '@ejm/shared-core';
@@ -7,16 +7,35 @@ import type { DayOfWeek } from '@ejm/shared-core';
 import { ToastProvider } from '@ejm/shared-ui';
 import { i18n } from '@/__tests__/test-utils';
 
-// Smoke test only. The schedule leaf components (WeeklyTimeline/DayEditor/
-// OverrideList) have their own coverage in sync-sit's e2e suite; here we just
-// prove the page wires the copied hooks and renders past the loading gate.
+// The schedule editor itself is smoke-tested only: the leaf components
+// (WeeklyTimeline/DayEditor/OverrideList) have their own coverage in sync-sit's
+// e2e suite; here we just prove the page wires the copied hooks and renders
+// past the loading gate.
+//
+// The session-preferences and cancellation-policy sections moved here from
+// AccountPage (issue #169) — their tests moved with them. Both save via
+// owner-editable updateDoc dot-paths, independent of the schedule save flow.
 const h = vi.hoisted(() => ({
   schedule: {} as Record<string, unknown>,
   holidays: {} as Record<string, unknown>,
+  auth: {
+    firebaseUser: { uid: 't1' } as { uid: string } | null,
+    userDoc: null as unknown,
+    refreshUserDoc: vi.fn(() => Promise.resolve()),
+  },
+  updateDoc: vi.fn(() => Promise.resolve()),
 }));
 
 vi.mock('@/hooks/useSchedule', () => ({ useSchedule: () => h.schedule }));
 vi.mock('@/hooks/useHolidays', () => ({ useHolidays: () => h.holidays }));
+vi.mock('@/config/firebase', () => ({ db: {} }));
+vi.mock('@/stores/authStore', () => ({ useAuthStore: () => h.auth }));
+
+vi.mock('firebase/firestore', () => ({
+  doc: (_db: unknown, ...path: string[]) => ({ path: path.join('/') }),
+  updateDoc: (...args: unknown[]) => h.updateDoc(...args),
+  serverTimestamp: () => 'ts',
+}));
 
 import { SchedulePage } from '../SchedulePage';
 
@@ -24,6 +43,19 @@ function emptyWeekly() {
   return Object.fromEntries(
     DAYS_OF_WEEK.map((d) => [d, createEmptySlots()]),
   ) as Record<DayOfWeek, boolean[]>;
+}
+
+function makeUserDoc() {
+  return {
+    uid: 't1',
+    email: 'login@ejm.org',
+    profiles: {
+      tutor: {
+        enrollmentComplete: true,
+        ejemEmail: 'alice.martin24@ejm.org',
+      },
+    },
+  };
 }
 
 function renderSchedule() {
@@ -54,6 +86,10 @@ beforeEach(() => {
     removeOverride: vi.fn(() => Promise.resolve()),
   };
   h.holidays = { periods: [], loading: false };
+  h.auth.firebaseUser = { uid: 't1' };
+  h.auth.userDoc = makeUserDoc();
+  h.auth.refreshUserDoc.mockClear();
+  h.updateDoc.mockClear();
 });
 
 describe('tutor SchedulePage', () => {
@@ -67,5 +103,195 @@ describe('tutor SchedulePage', () => {
     h.schedule.loading = true;
     renderSchedule();
     expect(screen.queryByText('Regular Availability')).not.toBeInTheDocument();
+  });
+
+  it('renders the moved session-prefs and cancellation-policy sections (issue #169)', () => {
+    renderSchedule();
+    expect(screen.getByText('Session preferences')).toBeInTheDocument();
+    expect(screen.getByText('Cancellation policy')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /save preferences/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /save policy/i })).toBeInTheDocument();
+  });
+
+  // ── Cancellation policy (V2 feature 7 — moved from AccountPage) ──
+
+  it('seeds the cancellation-policy selector from the stored value', () => {
+    const userDoc = makeUserDoc();
+    (userDoc.profiles.tutor as Record<string, unknown>).cancellationNoticeHours = 48;
+    h.auth.userDoc = userDoc;
+    renderSchedule();
+    const select = screen.getByLabelText(/cancellation policy/i) as HTMLSelectElement;
+    expect(select.value).toBe('48');
+  });
+
+  it('defaults the selector to 0 (no policy) when the field is absent', () => {
+    renderSchedule();
+    const select = screen.getByLabelText(/cancellation policy/i) as HTMLSelectElement;
+    expect(select.value).toBe('0');
+  });
+
+  it('saves the selected policy to the numeric dot-path and refreshes', async () => {
+    renderSchedule();
+    fireEvent.change(screen.getByLabelText(/cancellation policy/i), { target: { value: '48' } });
+    fireEvent.click(screen.getByRole('button', { name: /save policy/i }));
+
+    await waitFor(() =>
+      expect(h.updateDoc).toHaveBeenCalledWith(
+        expect.objectContaining({ path: 'users/t1' }),
+        expect.objectContaining({
+          'profiles.tutor.cancellationNoticeHours': 48,
+          updatedAt: 'ts',
+        }),
+      ),
+    );
+    // The value is the NUMBER 48, never the string '48'.
+    const call = h.updateDoc.mock.calls.find(
+      (c) => (c[1] as Record<string, unknown>)['profiles.tutor.cancellationNoticeHours'] !== undefined,
+    );
+    expect(call?.[1]['profiles.tutor.cancellationNoticeHours']).toBe(48);
+    await waitFor(() => expect(h.auth.refreshUserDoc).toHaveBeenCalled());
+  });
+
+  it('saves the 1-week (168) preset as its numeric value', async () => {
+    renderSchedule();
+    fireEvent.change(screen.getByLabelText(/cancellation policy/i), { target: { value: '168' } });
+    fireEvent.click(screen.getByRole('button', { name: /save policy/i }));
+
+    await waitFor(() =>
+      expect(h.updateDoc).toHaveBeenCalledWith(
+        expect.objectContaining({ path: 'users/t1' }),
+        expect.objectContaining({ 'profiles.tutor.cancellationNoticeHours': 168 }),
+      ),
+    );
+  });
+
+  it('surfaces a policy save failure instead of a silent success', async () => {
+    h.updateDoc.mockRejectedValueOnce(new Error('unavailable'));
+    renderSchedule();
+    fireEvent.click(screen.getByRole('button', { name: /save policy/i }));
+
+    expect(await screen.findByText(/error|wrong/i)).toBeInTheDocument();
+  });
+
+  // ── Session preferences (issue #123 — moved from AccountPage) ──
+
+  function seedSessionPrefs() {
+    const userDoc = makeUserDoc();
+    Object.assign(userDoc.profiles.tutor as Record<string, unknown>, {
+      sessionLengthsMin: [45, 60],
+      locationPrefs: ['online', 'family_home'],
+      paddingMin: 15,
+    });
+    h.auth.userDoc = userDoc;
+  }
+
+  it('seeds the session-preferences section from the stored profile', () => {
+    seedSessionPrefs();
+    renderSchedule();
+
+    expect(screen.getByRole('button', { name: '45 min', pressed: true })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '60 min', pressed: true })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '30 min', pressed: false })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '75 min', pressed: false })).toBeInTheDocument();
+
+    expect(screen.getByLabelText('Online')).toBeChecked();
+    expect(screen.getByLabelText("At the family's home")).toBeChecked();
+    expect(screen.getByLabelText('At your home')).not.toBeChecked();
+    expect(screen.getByLabelText('Library / public space')).not.toBeChecked();
+
+    expect((screen.getByLabelText(/appointment padding/i) as HTMLInputElement).value).toBe('15');
+  });
+
+  it('renders the section without crashing when the fields are absent (legacy doc)', () => {
+    renderSchedule();
+    expect(screen.getByRole('button', { name: '45 min', pressed: false })).toBeInTheDocument();
+    expect(screen.getByLabelText('Online')).not.toBeChecked();
+    expect((screen.getByLabelText(/appointment padding/i) as HTMLInputElement).value).toBe('0');
+  });
+
+  it('saves exactly the three dot-paths (+updatedAt) with the edited values', async () => {
+    seedSessionPrefs();
+    renderSchedule();
+
+    fireEvent.click(screen.getByRole('button', { name: '75 min' }));
+    fireEvent.click(screen.getByLabelText('At your home'));
+    fireEvent.change(screen.getByLabelText(/padding/i), { target: { value: '30' } });
+    fireEvent.click(screen.getByRole('button', { name: /save preferences/i }));
+
+    await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
+    const call = h.updateDoc.mock.calls[0] as unknown[];
+    expect(call[0]).toEqual(expect.objectContaining({ path: 'users/t1' }));
+    const payload = call[1] as Record<string, unknown>;
+    // Pin the FULL key set: dot-paths only — never a wholesale profiles.tutor
+    // rewrite (would clobber server-owned siblings like approvedFamilies).
+    // aboutMe stayed on AccountPage (issue #169 split it out of this save).
+    expect(Object.keys(payload).sort()).toEqual([
+      'profiles.tutor.locationPrefs',
+      'profiles.tutor.paddingMin',
+      'profiles.tutor.sessionLengthsMin',
+      'updatedAt',
+    ]);
+    expect(payload['profiles.tutor.sessionLengthsMin']).toEqual([45, 60, 75]);
+    expect(payload['profiles.tutor.locationPrefs']).toEqual(['online', 'family_home', 'tutor_home']);
+    expect(payload['profiles.tutor.paddingMin']).toBe(30); // NUMBER, not '30'
+    await waitFor(() => expect(h.auth.refreshUserDoc).toHaveBeenCalled());
+  });
+
+  it('blocks save when no session length is selected', async () => {
+    seedSessionPrefs();
+    renderSchedule();
+    fireEvent.click(screen.getByRole('button', { name: '45 min' }));
+    fireEvent.click(screen.getByRole('button', { name: '60 min' }));
+    fireEvent.click(screen.getByRole('button', { name: /save preferences/i }));
+
+    expect(await screen.findByText(/at least one session length/i)).toBeInTheDocument();
+    expect(h.updateDoc).not.toHaveBeenCalled();
+  });
+
+  it('blocks save when no location is selected', async () => {
+    seedSessionPrefs();
+    renderSchedule();
+    fireEvent.click(screen.getByLabelText('Online'));
+    fireEvent.click(screen.getByLabelText("At the family's home"));
+    fireEvent.click(screen.getByRole('button', { name: /save preferences/i }));
+
+    expect(await screen.findByText(/at least one session location/i)).toBeInTheDocument();
+    expect(h.updateDoc).not.toHaveBeenCalled();
+  });
+
+  it('surfaces a session-prefs save failure instead of a silent success', async () => {
+    seedSessionPrefs();
+    h.updateDoc.mockRejectedValueOnce(new Error('unavailable'));
+    renderSchedule();
+    fireEvent.click(await screen.findByRole('button', { name: /^save preferences$/i }));
+
+    expect(await screen.findByText(/error|wrong/i)).toBeInTheDocument();
+    expect(screen.queryByText(/preferences saved/i)).not.toBeInTheDocument();
+  });
+
+  it('rejects out-of-range padding before any write (UX guard; rules carry the bound)', async () => {
+    const userDoc = makeUserDoc();
+    (userDoc.profiles.tutor as Record<string, unknown>).sessionLengthsMin = [45, 60];
+    (userDoc.profiles.tutor as Record<string, unknown>).locationPrefs = ['online'];
+    (userDoc.profiles.tutor as Record<string, unknown>).paddingMin = 15;
+    h.auth.userDoc = userDoc;
+    renderSchedule();
+    const padding = await screen.findByLabelText(/padding/i);
+    fireEvent.change(padding, { target: { value: '500' } });
+    fireEvent.click(screen.getByRole('button', { name: /^save preferences$/i }));
+
+    expect(await screen.findByText(/between 0 and 60/i)).toBeInTheDocument();
+    const calls = h.updateDoc.mock.calls.filter((c) => JSON.stringify(c[1] ?? {}).includes('paddingMin'));
+    expect(calls).toHaveLength(0);
+  });
+
+  it('prefs saves never touch the schedule save flow (separate save actions)', async () => {
+    seedSessionPrefs();
+    renderSchedule();
+    fireEvent.click(screen.getByRole('button', { name: /save preferences/i }));
+
+    await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
+    expect(h.schedule.saveWeekly).not.toHaveBeenCalled();
+    expect(h.schedule.setHolidayMode).not.toHaveBeenCalled();
   });
 });

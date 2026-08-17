@@ -1,8 +1,13 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useBlocker } from 'react-router';
 import { useTranslation } from 'react-i18next';
+import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from '@/config/firebase';
+import { useAuthStore } from '@/stores/authStore';
 import { useSchedule } from '@/hooks/useSchedule';
 import { useHolidays } from '@/hooks/useHolidays';
+import { getTutorProfile, SESSION_LENGTHS, LOCATION_PREFS } from '@ejm/study-core';
+import type { LocationPref } from '@ejm/study-core';
 import {
   WeeklyTimeline,
   DayEditor,
@@ -12,6 +17,9 @@ import {
   Dialog,
   TopNav,
   Textarea,
+  Input,
+  Select,
+  InfoBanner,
   Spinner,
   ChevronRightIcon,
   useToast,
@@ -24,6 +32,13 @@ import type { DayOfWeek, HolidayMode, HolidayPeriod } from '@ejm/shared-core';
 // hooks from @/hooks, types/constants from @ejm/shared-core) and backTo="/tutor".
 // The schedule leaf components (WeeklyTimeline/DayEditor/OverrideList) carry
 // their own e2e coverage in sync-sit, so they are not re-tested here.
+//
+// Issue #169: the session-preferences and cancellation-policy sections moved
+// here from AccountPage (booking-shaped settings belong next to availability).
+// They keep their OWN save buttons and updateDoc dot-path writes — they are
+// deliberately NOT folded into the schedule's save/dirty-tracking flow, and
+// their i18n keys stay under tutor.account.* (namespace is historical; kept to
+// avoid translation churn).
 //
 // ACCEPTED RISK (see useSchedule): schedules/{uid} is keyed on uid alone, so a
 // dual-profile user (babysitter + tutor) edits ONE shared availability grid
@@ -141,6 +156,117 @@ export function SchedulePage() {
   const [initialized, setInitialized] = useState(false);
   const [dirty, setDirty] = useState(false);
   const savedSnapshot = useRef<string>('');
+
+  // --- Moved from AccountPage (issue #169) ---
+  const { userDoc, firebaseUser, refreshUserDoc } = useAuthStore();
+  const tutor = getTutorProfile(userDoc);
+  const uid = firebaseUser?.uid;
+
+  // Cancellation policy (V2 feature 7) — a preset notice window in hours.
+  const [noticeHours, setNoticeHours] = useState(0);
+  const [policySaving, setPolicySaving] = useState(false);
+  const [policyError, setPolicyError] = useState<string | null>(null);
+
+  // Session preferences (issue #123) — lengths + padding feed the booking
+  // slot math, locations feed search filters. All three are owner-editable
+  // dot-paths.
+  const [sessionLengths, setSessionLengths] = useState<number[]>([]);
+  const [locationPrefs, setLocationPrefs] = useState<LocationPref[]>([]);
+  const [paddingMin, setPaddingMin] = useState(0);
+  const [prefsSaving, setPrefsSaving] = useState(false);
+  const [prefsSuccess, setPrefsSuccess] = useState(false);
+  const [prefsError, setPrefsError] = useState<string | null>(null);
+
+  // Seed the moved form fields from userDoc exactly once per mount (same
+  // guard as AccountPage): the saves call refreshUserDoc(), and re-seeding on
+  // every refresh would silently discard unsaved edits in the other section.
+  const seededRef = useRef(false);
+  useEffect(() => {
+    if (!userDoc || seededRef.current) return;
+    seededRef.current = true;
+    setNoticeHours(tutor?.cancellationNoticeHours ?? 0);
+    setSessionLengths(tutor?.sessionLengthsMin ?? []);
+    setLocationPrefs(tutor?.locationPrefs ?? []);
+    setPaddingMin(tutor?.paddingMin ?? 0);
+  }, [userDoc, tutor]);
+
+  // --- Cancellation policy ---
+  // Writes only the preset dot-path (like SubjectsPage.handleSave), refreshes the
+  // user doc, then shows a transient success. The value is snapshotted onto future
+  // bookings server-side; editing it never retro-flags existing sessions.
+  const handleSavePolicy = async () => {
+    if (!uid) return;
+    setPolicySaving(true);
+    setPolicyError(null);
+    try {
+      await updateDoc(doc(db, 'users', uid), {
+        'profiles.tutor.cancellationNoticeHours': noticeHours,
+        updatedAt: serverTimestamp(),
+      });
+      await refreshUserDoc();
+      toast(t('tutor.account.cancellationPolicy.saved'));
+    } catch {
+      setPolicyError(t('common.error'));
+    } finally {
+      setPolicySaving(false);
+    }
+  };
+
+  // --- Session preferences ---
+  const toggleSessionLength = (len: number) => {
+    setSessionLengths((prev) =>
+      prev.includes(len) ? prev.filter((l) => l !== len) : [...prev, len],
+    );
+    setPrefsSuccess(false);
+  };
+
+  const toggleLocationPref = (pref: LocationPref) => {
+    setLocationPrefs((prev) =>
+      prev.includes(pref) ? prev.filter((p) => p !== pref) : [...prev, pref],
+    );
+    setPrefsSuccess(false);
+  };
+
+  const handleSavePrefs = async () => {
+    if (!uid) return;
+    // At least one length and one location (the schema's floor when the
+    // fields are present); padding is already clamped by the input.
+    if (sessionLengths.length === 0) {
+      setPrefsError(t('tutor.account.sessionPrefs.errorNoLengths'));
+      setPrefsSuccess(false);
+      return;
+    }
+    if (locationPrefs.length === 0) {
+      setPrefsError(t('tutor.account.sessionPrefs.errorNoLocations'));
+      setPrefsSuccess(false);
+      return;
+    }
+    // UX validation mirroring enrollment's 0-60; the real bound lives in
+    // firestore.rules (tutorNumericBoundsValid).
+    if (!Number.isInteger(paddingMin) || paddingMin < 0 || paddingMin > 60) {
+      setPrefsError(t('tutor.account.sessionPrefs.errorPaddingRange'));
+      setPrefsSuccess(false);
+      return;
+    }
+    setPrefsSaving(true);
+    setPrefsSuccess(false);
+    setPrefsError(null);
+    try {
+      await updateDoc(doc(db, 'users', uid), {
+        'profiles.tutor.sessionLengthsMin': sessionLengths,
+        'profiles.tutor.locationPrefs': locationPrefs,
+        'profiles.tutor.paddingMin': paddingMin,
+        updatedAt: serverTimestamp(),
+      });
+      await refreshUserDoc();
+      setPrefsSuccess(true);
+      setTimeout(() => setPrefsSuccess(false), 3000);
+    } catch {
+      setPrefsError(t('common.error'));
+    } finally {
+      setPrefsSaving(false);
+    }
+  };
 
   // Sync from hook when data loads
   if (!loading && !initialized) {
@@ -333,6 +459,102 @@ export function SchedulePage() {
         </p>
 
         <OverrideList overrides={overrides} onAdd={addOverride} onRemove={removeOverride} />
+
+        <hr className="my-6 border-gray-200" />
+
+        {/* ─── Section 3: Session preferences (moved from Account, issue #169) ─── */}
+        <h3 className="mb-1 text-base font-bold text-gray-900">
+          {t('tutor.account.sessionPrefs.title')}
+        </h3>
+        <p className="mb-4 text-xs text-gray-500">{t('tutor.account.sessionPrefs.help')}</p>
+
+        {prefsSuccess && (
+          <InfoBanner className="mb-4">{t('tutor.account.sessionPrefs.saved')}</InfoBanner>
+        )}
+
+        <div className="mb-5">
+          <label className="mb-2 block text-sm font-medium text-gray-700">
+            {t('tutor.account.sessionPrefs.lengths')}
+          </label>
+          <div className="flex flex-wrap gap-2">
+            {SESSION_LENGTHS.map((len) => (
+              <button
+                key={len}
+                type="button"
+                aria-pressed={sessionLengths.includes(len)}
+                onClick={() => toggleSessionLength(len)}
+                className={`rounded-lg border-[1.5px] px-4 py-2 text-sm font-medium transition-colors ${
+                  sessionLengths.includes(len)
+                    ? 'border-brand-600 bg-brand-50 text-brand-600'
+                    : 'border-gray-300 text-gray-700 hover:border-gray-400'
+                }`}
+              >
+                {len} min
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="mb-5">
+          <label className="mb-2 block text-sm font-medium text-gray-700">
+            {t('tutor.account.sessionPrefs.locations')}
+          </label>
+          <div className="flex flex-col gap-2">
+            {LOCATION_PREFS.map((pref) => (
+              <label key={pref} className="flex items-center gap-2 text-sm text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={locationPrefs.includes(pref)}
+                  onChange={() => toggleLocationPref(pref)}
+                  className="h-4 w-4 rounded border-gray-300"
+                />
+                {t(`tutor.account.sessionPrefs.location.${pref}`)}
+              </label>
+            ))}
+          </div>
+        </div>
+
+        <Input
+          label={t('tutor.account.sessionPrefs.padding')}
+          type="number"
+          value={paddingMin}
+          onChange={(e) => {
+            setPaddingMin(parseInt(e.target.value) || 0);
+            setPrefsSuccess(false);
+          }}
+          min={0}
+          max={60}
+          hint={t('tutor.account.sessionPrefs.paddingHint')}
+        />
+
+        {prefsError && <p className="mb-4 text-sm text-brand-600">{prefsError}</p>}
+        <Button type="button" onClick={handleSavePrefs} disabled={prefsSaving} className="mb-6">
+          {prefsSaving ? t('common.saving') : t('tutor.account.sessionPrefs.save')}
+        </Button>
+
+        <hr className="my-6 border-gray-200" />
+
+        {/* ─── Section 4: Cancellation policy (moved from Account, issue #169) ─── */}
+        <h3 className="mb-1 text-base font-bold text-gray-900">
+          {t('tutor.account.cancellationPolicy.title')}
+        </h3>
+        <p className="mb-4 text-xs text-gray-500">{t('tutor.account.cancellationPolicy.help')}</p>
+
+        <Select
+          aria-label={t('tutor.account.cancellationPolicy.title')}
+          value={String(noticeHours)}
+          onChange={(e) => setNoticeHours(Number(e.target.value))}
+          options={[
+            { value: '0', label: t('tutor.account.cancellationPolicy.none') },
+            { value: '24', label: t('tutor.account.cancellationPolicy.hours24') },
+            { value: '48', label: t('tutor.account.cancellationPolicy.hours48') },
+            { value: '168', label: t('tutor.account.cancellationPolicy.week1') },
+          ]}
+        />
+        {policyError && <p className="mb-4 text-sm text-brand-600">{policyError}</p>}
+        <Button type="button" onClick={handleSavePolicy} disabled={policySaving} className="mb-6">
+          {policySaving ? t('common.saving') : t('tutor.account.cancellationPolicy.save')}
+        </Button>
       </div>
 
       {/* Unsaved changes dialog */}
