@@ -38,7 +38,7 @@ describe('verifyEjmEmail', () => {
     ).rejects.toThrow();
   });
 
-  it('rejects duplicate email with existing account', async () => {
+  it('duplicate email with existing account: silent success, no code doc, notice marker written (issue #148)', async () => {
     // Create a user first
     const { getAdminAuth } = await import('../../setup/emulator.js');
     const auth = getAdminAuth();
@@ -49,8 +49,20 @@ describe('verifyEjmEmail', () => {
       uid, email: 'existing28@ejm.org', role: 'babysitter', status: 'active',
     });
 
-    await expect(
-      callFunction('verifyEjmEmail', { email: 'existing28@ejm.org' })
-    ).rejects.toThrow();
+    // The response must be indistinguishable from the fresh path.
+    const result = await callFunction<{ success: boolean; message: string }>(
+      'verifyEjmEmail',
+      { email: 'existing28@ejm.org' }
+    );
+    expect(result).toEqual({ success: true, message: 'Verification code sent' });
+
+    // But no verification code can ever exist for it...
+    const codeDoc = await db.collection('verificationCodes').doc('existing28@ejm.org').get();
+    expect(codeDoc.exists).toBe(false);
+
+    // ...and the mailbox owner got the account-exists notice instead.
+    const notice = await db.collection('accountExistsNotices').doc('existing28@ejm.org').get();
+    expect(notice.exists).toBe(true);
+    expect(notice.data()!.lastSentAt).toBeTruthy();
   });
 });
