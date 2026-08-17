@@ -127,7 +127,9 @@ describe('withPrefDefaults', () => {
     } = validEnrollment;
     const defaulted = withPrefDefaults(parse(noPrefs));
     expect(defaulted.sessionLengthsMin).toEqual([60]);
-    expect(defaulted.locationPrefs).toEqual(['family_home', 'tutor_home', 'online', 'library']);
+    // Online-only: a 15-18-year-old is never opted into in-person-at-a-home
+    // options by a default.
+    expect(defaulted.locationPrefs).toEqual(['online']);
     expect(defaulted.paddingMin).toBe(30);
     expect(defaulted.areaMode).toBe('arrondissement');
     expect(defaulted.arrondissements).toEqual([]);

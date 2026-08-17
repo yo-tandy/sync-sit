@@ -133,13 +133,21 @@ service cloud.firestore {
     // only; without this a direct write could store a non-string, a data:
     // URI, or an arbitrary payload that search results then project.
     function photoUrlValid() {
-      return !('photoUrl' in request.resource.data)
+      // UNCHANGED values always pass: legacy docs with an odd photoUrl must
+      // not be locked out of every self-service edit by a stricter rule.
+      // NEW values must be null or a bounded URL on our storage hosts —
+      // scheme AND host constrained, so an owner cannot point their public
+      // search card at a third-party beacon (or data:/javascript:).
+      return !request.resource.data.diff(resource.data).affectedKeys()
+                 .hasAny(['photoUrl'])
              || request.resource.data.photoUrl == null
              || (request.resource.data.photoUrl is string
                  && request.resource.data.photoUrl.size() <= 2048
-                 // http allowed for the storage EMULATOR's download URLs;
-                 // the scheme allowlist exists to block data:/javascript:.
-                 && request.resource.data.photoUrl.matches('https?://.*'));
+                 && (request.resource.data.photoUrl
+                       .matches('https://firebasestorage[.]googleapis[.]com/.*')
+                     // The storage EMULATOR serves plain-http localhost URLs.
+                     || request.resource.data.photoUrl
+                          .matches('http://(localhost|127[.]0[.]0[.]1)[:/].*')));
     }
 
     // Helper: profiles.parent.familyId is server-controlled (enrollFamily /

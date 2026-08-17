@@ -128,8 +128,8 @@ export type TutorEnrollmentWithDefaults = TutorEnrollmentInput & {
  * Server defaults for the pref fields the signup wizard no longer collects
  * (issue #143). Defaults are applied only when the field is absent from the
  * payload — existing tutors' stored prefs are never rewritten. [60] is the
- * single most common session length; all location prefs give the widest
- * discoverability; 30 min is the default appointment padding; arrondissement
+ * single most common session length; online-only is the minor-safe location
+ * default; 30 min is the default appointment padding; arrondissement
  * mode with no arrondissements is the honest "area not set yet" state (the
  * tutor sets it at /tutor/area).
  */
@@ -137,7 +137,10 @@ export function withPrefDefaults(enrollment: TutorEnrollmentInput): TutorEnrollm
   return {
     ...enrollment,
     sessionLengthsMin: enrollment.sessionLengthsMin ?? [60],
-    locationPrefs: enrollment.locationPrefs ?? [...LOCATION_PREFS],
+    // ONLINE-ONLY default: the enrollee is a 15-18-year-old and the other
+    // prefs are in-person-at-a-home options — they opt IN from the account
+    // page, never get opted in by a default (reviewer flag on #145).
+    locationPrefs: enrollment.locationPrefs ?? ['online'],
     paddingMin: enrollment.paddingMin ?? 30,
     areaMode: enrollment.areaMode ?? 'arrondissement',
     arrondissements: enrollment.arrondissements ?? [],

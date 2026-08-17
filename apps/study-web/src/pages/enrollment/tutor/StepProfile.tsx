@@ -16,6 +16,9 @@ interface StepProfileProps {
   onNext: (data: ProfileData) => void;
   /** Previously-entered values, restored on back-navigation. */
   initial?: ProfileData | null;
+  /** A submit-time server rejection carried back from the subjects step —
+   * the field it names usually lives HERE. */
+  serverError?: string | null;
 }
 
 const CLASS_LEVELS_TUTOR = [
@@ -44,7 +47,7 @@ function getAge(dateOfBirth: string): number | null {
   return age;
 }
 
-export function StepProfile({ onNext, initial = null }: StepProfileProps) {
+export function StepProfile({ onNext, initial = null, serverError = null }: StepProfileProps) {
   const { t } = useTranslation();
   const [firstName, setFirstName] = useState(initial?.firstName ?? '');
   const [lastName, setLastName] = useState(initial?.lastName ?? '');
@@ -173,6 +176,8 @@ export function StepProfile({ onNext, initial = null }: StepProfileProps) {
         value={contactPhone}
         onChange={(e) => setContactPhone(e.target.value)}
       />
+
+      {serverError && <p className="mb-4 text-sm text-brand-600">{serverError}</p>}
 
       <Button type="submit" disabled={!isValid}>
         {t('common.continue')}

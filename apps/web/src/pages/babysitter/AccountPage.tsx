@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { isRunningAsPWA } from '@ejm/sit-core';
 import { db, storage } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
@@ -180,19 +180,34 @@ export function BabysitterAccountPage() {
     e.target.value = '';
   };
 
+  // The stored download URL embeds the object path as
+  // `profile-photos%2F{uid}.{ext}` — recover it so remove/replace can delete
+  // the object. Photos of teenage babysitters must not survive as readable
+  // orphans (mirrors the study tutor AccountPage).
+  const storedPhotoPath = (): string | null => {
+    const url = userDoc?.photoUrl;
+    if (typeof url !== 'string') return null;
+    const m = url.match(/profile-photos%2F([^?]+)/);
+    return m ? `profile-photos/${decodeURIComponent(m[1])}` : null;
+  };
+
   const handleRemovePhoto = async () => {
     if (!uid) return;
-    setPhotoPreview(null);
-    setPhotoFile(null);
     setPhotoError(null);
     try {
       await updateDoc(doc(db, 'users', uid), {
         photoUrl: null,
         updatedAt: serverTimestamp(),
       });
-      await refreshUserDoc();
+      const oldPath = storedPhotoPath();
+      if (oldPath) {
+        await deleteObject(ref(storage, oldPath)).catch(() => {});
+      }
+      setPhotoPreview(null);
+      setPhotoFile(null);
+      await refreshUserDoc().catch(() => {});
     } catch {
-      // silent
+      // silent (pre-existing UX; the doc write is the source of truth)
     }
   };
 
@@ -202,6 +217,7 @@ export function BabysitterAccountPage() {
     setError(null);
     try {
       const ext = (photoFile.name.includes('.') ? photoFile.name.split('.').pop()! : 'jpg').toLowerCase();
+      const oldPath = storedPhotoPath();
       const path = `profile-photos/${uid}.${ext}`;
       const storageRef = ref(storage, path);
       await uploadBytes(storageRef, photoFile);
@@ -210,6 +226,11 @@ export function BabysitterAccountPage() {
         photoUrl,
         updatedAt: serverTimestamp(),
       });
+      // Replacing under a different path (e.g. legacy .JPG -> .jpg after the
+      // lowercase normalization) orphans the old readable object — delete it.
+      if (oldPath && oldPath !== path) {
+        await deleteObject(ref(storage, oldPath)).catch(() => {});
+      }
       await refreshUserDoc();
       setPhotoFile(null);
     } catch (err: unknown) {

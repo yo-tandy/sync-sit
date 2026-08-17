@@ -257,7 +257,7 @@ export function TutorEnrollment() {
           />
         );
       case 3:
-        return <StepProfile onNext={handleProfileNext} initial={profile} />;
+        return <StepProfile onNext={handleProfileNext} initial={profile} serverError={error} />;
       case 4:
         return (
           <StepSubjects
@@ -267,7 +267,8 @@ export function TutorEnrollment() {
             initialRows={subjectsDraft}
             onBack={(rows) => {
               setSubjectsDraft(rows);
-              setError(null);
+              // Keep the server error: the field it names is on the step the
+              // user is going back TO — clearing it left them guessing.
               setStep(3);
             }}
           />
