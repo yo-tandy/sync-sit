@@ -35,7 +35,8 @@ describe('runCleanupOldData', () => {
   beforeEach(async () => {
     const db = getDb();
     const collections = [
-      'notifications', 'auditLogs', 'inviteLinks', 'verificationCodes', 'appointments',
+      'notifications', 'auditLogs', 'inviteLinks', 'verificationCodes',
+      'accountExistsNotices', 'appointments',
     ];
     await Promise.all(
       collections.map(async (col) => {
@@ -113,6 +114,28 @@ describe('runCleanupOldData', () => {
     const remaining = await db.collection('verificationCodes').get();
     expect(remaining.size).toBe(1);
     expect(remaining.docs[0].id).toBe(validRef.id);
+  });
+
+  it('deletes account-exists notice markers older than 24h and keeps in-window ones (issue #148)', async () => {
+    const db = getDb();
+    const now = new Date();
+
+    await db.collection('accountExistsNotices').doc('stale@ejm.org').set({
+      email: 'stale@ejm.org',
+      lastSentAt: new Date(now.getTime() - 25 * 60 * 60 * 1000),
+    });
+    await db.collection('accountExistsNotices').doc('fresh@ejm.org').set({
+      email: 'fresh@ejm.org',
+      lastSentAt: new Date(now.getTime() - 23 * 60 * 60 * 1000),
+    });
+
+    const stats = await runCleanupOldData(db, now);
+
+    expect(stats.accountExistsNoticesDeleted).toBe(1);
+
+    const remaining = await db.collection('accountExistsNotices').get();
+    expect(remaining.size).toBe(1);
+    expect(remaining.docs[0].id).toBe('fresh@ejm.org');
   });
 
   it('deletes old cancelled appointments (createdAt>30d, date>7d ago) but keeps recent ones', async () => {

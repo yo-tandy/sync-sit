@@ -10,6 +10,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const h = vi.hoisted(() => ({
   writes: [] as { collection: string; id: string; data: Record<string, unknown> }[],
   noticeData: undefined as Record<string, unknown> | undefined,
+  codeData: undefined as Record<string, unknown> | undefined,
   sendCalls: [] as { to: string; app: string }[],
   sendError: null as Error | null,
   auditCalls: [] as { userId: string; action: string }[],
@@ -19,10 +20,15 @@ vi.mock('../../config/firebase.js', () => ({
   db: {
     collection: (collection: string) => ({
       doc: (id: string) => ({
-        get: async () => ({
-          exists: collection === 'accountExistsNotices' && h.noticeData !== undefined,
-          data: () => (collection === 'accountExistsNotices' ? h.noticeData : undefined),
-        }),
+        get: async () => {
+          const data =
+            collection === 'accountExistsNotices'
+              ? h.noticeData
+              : collection === 'verificationCodes'
+                ? h.codeData
+                : undefined;
+          return { exists: data !== undefined, data: () => data };
+        },
         set: async (data: Record<string, unknown>) => {
           h.writes.push({ collection, id, data });
         },
@@ -61,6 +67,7 @@ const DECOY = {
 beforeEach(() => {
   h.writes.length = 0;
   h.noticeData = undefined;
+  h.codeData = undefined;
   h.sendCalls.length = 0;
   h.sendError = null;
   h.auditCalls.length = 0;
@@ -82,6 +89,21 @@ describe('handleExistingAccountSignup', () => {
     await handleExistingAccountSignup('owner@ejm.org', 'sit', DECOY);
     const codeWrite = h.writes.find((w) => w.collection === 'verificationCodes');
     expect(codeWrite).toEqual({ collection: 'verificationCodes', id: 'owner@ejm.org', data: DECOY });
+  });
+
+  it('does NOT clobber an unexpired existing code doc (round-3 guard), but replaces an expired one', async () => {
+    // Unexpired (e.g. the authed own-email bypass's REAL code): skipped.
+    h.codeData = { code: '654321', expiresAt: new Date(Date.now() + 5 * 60 * 1000) };
+    await handleExistingAccountSignup('owner@ejm.org', 'sit', DECOY);
+    expect(h.writes.some((w) => w.collection === 'verificationCodes')).toBe(false);
+    // The rest of the silent path still ran.
+    expect(h.sendCalls).toHaveLength(1);
+
+    // Expired: replaced, matching the fresh path's rewrite behavior.
+    h.writes.length = 0;
+    h.codeData = { code: '654321', expiresAt: new Date(Date.now() - 1000) };
+    await handleExistingAccountSignup('other@ejm.org', 'sit', DECOY);
+    expect(h.writes.some((w) => w.collection === 'verificationCodes')).toBe(true);
   });
 
   it('skips the send inside the 24h window but still writes the decoy and returns the fresh body', async () => {

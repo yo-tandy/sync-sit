@@ -16,7 +16,7 @@
 **Design:**
 1. **Backend** — in both callables, when the email belongs to a DIFFERENT existing account:
    - Do NOT throw. Return the exact same `{ success: true, message: 'Verification code sent' }` as the fresh path (indistinguishable response).
-   - Do NOT write a verificationCodes doc (no valid code can ever be entered; the verify step fails naturally with its existing invalid-code error).
+   - ~~Do NOT write a verificationCodes doc (no valid code can ever be entered; the verify step fails naturally with its existing invalid-code error).~~ SUPERSEDED (round 2): the missing doc made verifyCode/enroll return not-found instead of invalid-code — itself the oracle. A decoy code doc is written instead; see the Round 2/3 section below.
    - Send a new `sendAccountExistsEmail(to, { app, hasProfilesOn })` from email.ts instead of the code email:
      - `app: 'sit' | 'study'` — NEW optional request param from the client (untrusted; only selects email copy + login URL; default 'sit' for verifyEjmEmail callers that don't send it, and match each wizard).
      - Copy: "Someone just tried to create a <Sync/Sit|Sync/Study> account with this email address, but you already have an account. If this was you, simply log in: <login URL>. Your account works on both Sync/Sit and Sync/Study — the same email and password sign you in to either app. If this wasn't you, you can safely ignore this email or contact us at support@sync-sit.com."
@@ -27,8 +27,14 @@
 3. **Anti-enumeration coherence**: with #147 merged, neither login, signup, nor (already) kid-invite reveals account existence.
 
 **Tests:**
-- Integration (emulator): unauth verifyEjmEmail on an existing user's email → resolves success:true AND no verificationCodes doc AND accountExistsNotices/{email} written; second call within window → still success, no duplicate marker update (or lastSentAt unchanged); authed own-email → code doc written (bypass pin, exists — keep passing); verifyParentEmail same treatment; fresh email → code doc written (existing pins).
+- Integration (emulator): unauth verifyEjmEmail on an existing user's email → resolves success:true AND ~~no verificationCodes doc~~ a fresh-shaped DECOY verificationCodes doc (round 2 — see below) AND accountExistsNotices/{email} written; second call within window → still success, no duplicate marker update (or lastSentAt unchanged); authed own-email → code doc written (bypass pin, exists — keep passing); verifyParentEmail same treatment; fresh email → code doc written (existing pins).
 - Unit: email.ts copy selection (app→URL/name, cross-app credentials line always present); client wizards: no CTA rendering, error branch removed (update existing tests that pin showLoginCta if any).
 - Grep sweeps: `accountExistsCta` → 0; `showLoginCta` → 0; `reason: 'account-exists'` → 0 (or only in kept authed-bypass comment).
 
 **Constraints:** same repo law as always (no emoji, en+fr, lint baselines, full integration via emulators:exec + dev-stack restart, no push from implementer, firestore.rules untouched — verify default-deny covers accountExistsNotices).
+
+**Round 2/3 revisions (PR #154 review):**
+1. **Decoy code doc** — the original "write no verificationCodes doc" bullet was reversed: with no doc, verifyCode and all four enroll callables returned `not-found` ("No verification code found...") for existing accounts vs `invalid-argument` ("Invalid verification code") for fresh ones — the enumeration oracle simply moved one step downstream. The silent path now writes a DECOY verificationCodes doc byte-shaped like its caller's fresh write (unguessable crypto code; verifyEjmEmail's shape includes graduationYear, verifyParentEmail's does not), so every downstream step errors identically to a fresh wrong code, including the attempts limit. Accepted residual: a guessed decoy (~5 in 900k before the attempts limit) reaches the enroll createUser backstop.
+2. **60s send cooldown** — both callables short-circuit (identical success body, no write/send) when the verificationCodes doc is younger than 60s, checked BEFORE the account-existence branch so sub-60s repeats do identical work on both paths. Residual timing channel in the 60s-24h window (fresh path sends, silent path skips) is documented, not claimed closed; fixed-floor padding was considered and rejected (the floor must exceed p99 send latency, ~1s on every legitimate signup step).
+3. **No-clobber guard (round 3)** — the decoy set() is skipped when an UNEXPIRED code doc already exists, so an unauthenticated caller can no longer destroy the real in-flight code written by the authed own-email bypass (cross-app add-profile denial-of-flow). Clients can't read the collection, so skipping is unobservable.
+4. Also from review: send-then-mark ordering for the notice email; accountExistsNotices swept by cleanupOldData after its 24h window; account-exists email carries an invite-link hint line.

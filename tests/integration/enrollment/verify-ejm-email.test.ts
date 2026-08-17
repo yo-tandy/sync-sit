@@ -43,6 +43,7 @@ describe('verifyEjmEmail cross-app and silent existing-account cases', () => {
       seed.tutor1.email, // 24h mail-bomb guard
       seed.tutor2.email, // forged app param
       seed.tutor3.email, // verifyCode oracle parity
+      seed.babysitter4.email, // no-clobber guard
     ]) {
       await db.collection('preapprovedEmails').doc(email.toLowerCase()).set({ used: false });
     }
@@ -66,6 +67,43 @@ describe('verifyEjmEmail cross-app and silent existing-account cases', () => {
       .doc(seed.babysitter1.email.toLowerCase())
       .get();
     expect(codeDoc.exists).toBe(true);
+
+    // Bypass purity: the own-email flow is a legitimate resend, not a signup
+    // probe — it must not trip the account-exists machinery.
+    const notice = await getDb()
+      .collection('accountExistsNotices')
+      .doc(seed.babysitter1.email.toLowerCase())
+      .get();
+    expect(notice.exists).toBe(false);
+  });
+
+  it('an unauthenticated probe cannot destroy a live bypass code (no-clobber guard, round 3)', async () => {
+    const email = seed.babysitter4.email.toLowerCase();
+    // 1. The authed own-email bypass writes a REAL code.
+    const token = await getIdToken(seed.babysitter4.uid);
+    await callFunction('verifyEjmEmail', { email: seed.babysitter4.email }, token);
+    const codeRef = getDb().collection('verificationCodes').doc(email);
+    const realCode = (await codeRef.get()).data()!.code as string;
+
+    // 2. Backdate createdAt past the 60s cooldown (admin SDK) — otherwise the
+    // probe short-circuits there and never reaches the silent path at all.
+    await codeRef.update({ createdAt: new Date(Date.now() - 120 * 1000) });
+
+    // 3. Unauthenticated probe on the same address: fresh body...
+    const probe = await callFunction('verifyEjmEmail', { email: seed.babysitter4.email });
+    expect(probe).toEqual(FRESH_RESPONSE);
+
+    // ...the REAL code survives and still verifies (the victim's flow works)...
+    expect((await codeRef.get()).data()!.code).toBe(realCode);
+    const verified = await callFunction<{ valid: boolean }>('verifyCode', {
+      email,
+      code: realCode,
+    });
+    expect(verified.valid).toBe(true);
+
+    // ...and the silent path itself still fired (notice marker written).
+    const notice = await getDb().collection('accountExistsNotices').doc(email).get();
+    expect(notice.exists).toBe(true);
   });
 
   it("authenticated request for someone else's account email: silent success, fresh-shaped decoy doc, notice written", async () => {
@@ -181,6 +219,29 @@ describe('verifyEjmEmail cross-app and silent existing-account cases', () => {
 
     const notice = await getDb().collection('accountExistsNotices').doc(email).get();
     expect(notice.exists).toBe(true);
+  });
+
+  it('verifyParentEmail repeats within the 60s cooldown return the fresh body without rewriting (fresh and silent paths)', async () => {
+    const db = getDb();
+    // Fresh path: brand-new email.
+    const freshEmail = 'cooldownparent@test.com';
+    await callFunction('verifyParentEmail', { email: freshEmail });
+    const freshBefore = (await db.collection('verificationCodes').doc(freshEmail).get()).data()!;
+    const freshRepeat = await callFunction('verifyParentEmail', { email: freshEmail });
+    expect(freshRepeat).toEqual(FRESH_RESPONSE);
+    const freshAfter = (await db.collection('verificationCodes').doc(freshEmail).get()).data()!;
+    expect(freshAfter.code).toBe(freshBefore.code);
+    expect(freshAfter.createdAt.toMillis()).toBe(freshBefore.createdAt.toMillis());
+
+    // Silent path: existing parent account (decoy doc).
+    const silentEmail = seed.parent3.email.toLowerCase();
+    await callFunction('verifyParentEmail', { email: seed.parent3.email });
+    const silentBefore = (await db.collection('verificationCodes').doc(silentEmail).get()).data()!;
+    const silentRepeat = await callFunction('verifyParentEmail', { email: seed.parent3.email });
+    expect(silentRepeat).toEqual(FRESH_RESPONSE);
+    const silentAfter = (await db.collection('verificationCodes').doc(silentEmail).get()).data()!;
+    expect(silentAfter.code).toBe(silentBefore.code);
+    expect(silentAfter.createdAt.toMillis()).toBe(silentBefore.createdAt.toMillis());
   });
 });
 
