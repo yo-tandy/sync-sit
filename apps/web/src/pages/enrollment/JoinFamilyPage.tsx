@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router';
-import { useTranslation } from 'react-i18next';
+import { useTranslation, Trans } from 'react-i18next';
 import { httpsCallable } from 'firebase/functions';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { getParentProfile } from '@ejm/sit-core';
@@ -292,6 +292,17 @@ export function JoinFamilyPage() {
                   Resend code
                 </button>
               )}
+            </p>
+            {/* Always rendered, on BOTH the fresh and silent existing-account
+                paths (issue #148) — a static, non-distinguishing exit for
+                users whose account already exists and never get a code. */}
+            <p className="mt-2 text-sm text-gray-500">
+              <Trans
+                i18nKey="enrollment.verifyNoCodeHint"
+                components={{
+                  loginLink: <Link to="/login" className="font-medium text-brand-600 hover:underline" />,
+                }}
+              />
             </p>
           </div>
 

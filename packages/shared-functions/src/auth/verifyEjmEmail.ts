@@ -37,14 +37,6 @@ export const verifyEjmEmail = onCall(
       graduationYear = validation.graduationYear ?? null;
     }
 
-    // Per-address send cooldown, BEFORE the account-existence branch so both
-    // the fresh and silent paths short-circuit identically on quick repeats
-    // (timing symmetry + resend abuse limit). The success body is the same
-    // one both paths return.
-    if (await isInSendCooldown(email.toLowerCase())) {
-      return { success: true, message: 'Verification code sent' };
-    }
-
     // Check if the email already belongs to an account. An authenticated
     // caller may verify their OWN account email (cross-app add-profile:
     // e.g. a babysitter whose account email is their EJM email enrolling
@@ -57,12 +49,26 @@ export const verifyEjmEmail = onCall(
       .limit(1)
       .get();
 
-    if (!existingUsers.empty && existingUsers.docs[0].id !== request.auth?.uid) {
+    // Whether the caller is the authenticated owner of this email (cross-app
+    // add-profile). The bypass is EXEMPT from the send cooldown below: an
+    // unauthenticated prober refreshes the doc's createdAt on every probe
+    // (deliberately, for fresh/silent symmetry), so gating the bypass on it
+    // would let that prober starve the owner's own "send code" indefinitely.
+    // The bypass is authenticated and for the caller's own email —
+    // distinguishable by design, not an oracle.
+    const isOwnEmailBypass = !existingUsers.empty && existingUsers.docs[0].id === request.auth?.uid;
+
+    if (!existingUsers.empty && !isOwnEmailBypass) {
       // Silent existing-account path (issue #148): do NOT throw — an error
       // here is an account-enumeration oracle. The response is identical to
       // the fresh path, a DECOY code doc byte-shaped like the fresh write
       // below keeps every downstream error identical too, and the mailbox
       // owner gets an account-exists email (rate-limited) instead of a code.
+      // Per-address send cooldown first — the fresh branch below runs the
+      // identical check at the identical point (query -> cooldown -> work).
+      if (await isInSendCooldown(email.toLowerCase())) {
+        return { success: true, message: 'Verification code sent' };
+      }
       return handleExistingAccountSignup(email.toLowerCase(), app, {
         code: crypto.randomInt(100000, 999999).toString(),
         email: email.toLowerCase(),
@@ -71,6 +77,13 @@ export const verifyEjmEmail = onCall(
         attempts: 0,
         createdAt: new Date(),
       });
+    }
+
+    // Per-address send cooldown for the FRESH path (mirrors the silent
+    // branch above: query -> cooldown -> work). The authed own-email bypass
+    // skips it — see isOwnEmailBypass.
+    if (!isOwnEmailBypass && (await isInSendCooldown(email.toLowerCase()))) {
+      return { success: true, message: 'Verification code sent' };
     }
 
     // Generate cryptographically secure 6-digit code

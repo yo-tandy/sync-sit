@@ -25,20 +25,21 @@ export const verifyParentEmail = onCall(
 
     const normalizedEmail = email.trim().toLowerCase();
 
-    // Per-address send cooldown, BEFORE the account-existence branch so both
-    // the fresh and silent paths short-circuit identically on quick repeats
-    // (timing symmetry + resend abuse limit). The success body is the same
-    // one both paths return.
-    if (await isInSendCooldown(normalizedEmail)) {
-      return { success: true, message: 'Verification code sent' };
-    }
-
     // Check if account already exists
     const existingUsers = await db
       .collection('users')
       .where('email', '==', normalizedEmail)
       .limit(1)
       .get();
+
+    // Per-address send cooldown, AFTER the existence query — a structural
+    // mirror of verifyEjmEmail (query -> cooldown -> branch work) for
+    // code-shape parity. There is no authed own-email bypass here (parent
+    // signup is always unauthenticated at this step), so the cooldown applies
+    // to both branches and this reordering changes no behavior.
+    if (await isInSendCooldown(normalizedEmail)) {
+      return { success: true, message: 'Verification code sent' };
+    }
 
     if (!existingUsers.empty) {
       // Silent existing-account path (issue #148): do NOT throw — an error

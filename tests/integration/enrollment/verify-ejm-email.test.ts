@@ -140,13 +140,55 @@ describe('verifyEjmEmail cross-app and silent existing-account cases', () => {
   });
 
   it('the account-exists email is audit-logged', async () => {
+    // Self-sufficient: own seeded user + own triggering call (no coupling to
+    // the other tests' side effects).
+    const { getAdminAuth } = await import('../../setup/emulator.js');
+    const email = 'audit.target28@ejm.org';
+    const { uid } = await getAdminAuth().createUser({ email });
+    await getDb().collection('users').doc(uid).set({ uid, email, status: 'active' });
+
+    await callFunction('verifyEjmEmail', { email });
+
     const entries = await getDb()
       .collection('auditLogs')
       .where('action', '==', 'account_exists_email_sent')
       .get();
-    expect(entries.size).toBeGreaterThanOrEqual(1);
     const details = entries.docs.map((d) => d.data().details?.email);
-    expect(details).toContain(seed.babysitter2.email.toLowerCase());
+    expect(details).toContain(email);
+  });
+
+  it('the authed own-email bypass issues a real code immediately after an unauthenticated probe (cooldown exempt)', async () => {
+    // Reviewer repro (round 4): an attacker polling a known address keeps the
+    // doc's createdAt permanently fresh; the victim's own "send code" for the
+    // cross-app add-profile flow must NOT be starved by that cooldown.
+    const { getAdminAuth } = await import('../../setup/emulator.js');
+    const email = 'probe.victim28@ejm.org';
+    const { uid } = await getAdminAuth().createUser({ email });
+    await getDb().collection('users').doc(uid).set({ uid, email, status: 'active' });
+
+    // 1. Unauthenticated probe: silent path writes a fresh decoy (createdAt now).
+    const probe = await callFunction('verifyEjmEmail', { email });
+    expect(probe).toEqual(FRESH_RESPONSE);
+    const decoy = (await getDb().collection('verificationCodes').doc(email).get()).data()!;
+    expect(decoy.decoy).toBe(true);
+
+    // 2. WITHIN the 60s window, the victim (authed, own email) clicks send:
+    // a REAL code must be issued — the bypass skips the cooldown.
+    const token = await getIdToken(uid);
+    const result = await callFunction('verifyEjmEmail', { email }, token);
+    expect(result).toEqual(FRESH_RESPONSE);
+
+    const doc = (await getDb().collection('verificationCodes').doc(email).get()).data()!;
+    expect(doc.decoy).toBeUndefined();
+    expect(doc.code).toMatch(/^\d{6}$/);
+    expect(doc.code).not.toBe(decoy.code);
+
+    // 3. And that real code verifies — the victim completes their flow.
+    const verified = await callFunction<{ valid: boolean }>('verifyCode', {
+      email,
+      code: doc.code,
+    });
+    expect(verified.valid).toBe(true);
   });
 
   it('a second request after the cooldown but within 24h still succeeds without resending (mail-bomb guard)', async () => {

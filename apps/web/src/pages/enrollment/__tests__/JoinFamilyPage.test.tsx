@@ -110,6 +110,12 @@ describe('JoinFamilyPage verify payloads (issue #148)', () => {
     // Step 1 shows the 60s resend cooldown; run it down to reach the resend
     // link (the second call site).
     expect(screen.getByText('code-input')).toBeInTheDocument();
+
+    // Round 5 (issue #148): the static "already have an account" exit hint is
+    // always rendered under the code entry — identical on fresh and silent
+    // paths, so it distinguishes nothing.
+    expect(screen.getByText(/If you already have an account/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'log in' })).toHaveAttribute('href', '/login');
     act(() => {
       vi.advanceTimersByTime(61_000);
     });
