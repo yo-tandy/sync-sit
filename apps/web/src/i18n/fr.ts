@@ -107,6 +107,12 @@ export default {
     roleExclusiveParent: "Un compte élève ne peut pas aussi s'inscrire comme parent — votre famille doit avoir son propre compte.",
   },
 
+  welcomeCross: {
+    greeting: 'Bienvenue, {{name}} !',
+    body: "En tant qu'élève de l'EJM, vous pouvez faire du babysitting pour les familles de l'EJM — votre identifiant Sync/Study fonctionne ici tel quel. Il ne nous manque que vos disponibilités pour commencer.",
+    consentPrefix: 'En continuant, vous acceptez les',
+  },
+
   enrollment: {
     confirmConsentTitle: 'Presque terminé',
     accountExistsCta: 'Un compte existe déjà avec cet e-mail. Connectez-vous pour ajouter ce rôle.',
