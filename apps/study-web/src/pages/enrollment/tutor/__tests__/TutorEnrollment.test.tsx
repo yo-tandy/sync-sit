@@ -53,7 +53,7 @@ vi.mock('@/stores/authStore', () => {
     subscribe: (fn: (s: unknown) => void) => () => void;
   };
   // Statics used by the post-signup auto-login wait.
-  useAuthStore.getState = () => ({ loading: false, userDoc: h.auth.userDoc ?? { uid: 'new' } });
+  useAuthStore.getState = () => ({ loading: false, firebaseUser: { uid: 'new' }, userDoc: h.auth.userDoc });
   useAuthStore.subscribe = () => () => {};
   return { useAuthStore };
 });
@@ -208,6 +208,24 @@ describe('TutorEnrollment orchestrator', () => {
     // New-account path signs the tutor in — the success CTA must land in
     // the portal, not bounce to login.
     expect(h.signIn).toHaveBeenCalledWith(expect.anything(), 'flow.tutor28@ejm.org', 'Pw123456!');
+  });
+
+  it('a sign-in failure after successful enrollment still reaches the success page', async () => {
+    // Enrollment fully succeeded (account/doc/schedule written, code doc
+    // consumed) — an auth hiccup must not read as an enrollment error or
+    // strand the user mid-wizard.
+    h.signIn.mockRejectedValueOnce(new Error('auth/network-request-failed'));
+    renderFlow();
+    fireEvent.click(screen.getByText('email-submit'));
+    fireEvent.click(await screen.findByText('verify-submit'));
+    fireEvent.click(await screen.findByText('password-submit'));
+    fireEvent.click(await screen.findByText('profile-next'));
+    fireEvent.click(await screen.findByText('subjects-next'));
+
+    await vi.waitFor(() =>
+      expect(h.navigate).toHaveBeenCalledWith('/enroll/tutor/success', { state: { firstName: 'Flow' } }),
+    );
+    expect(screen.queryByText(/network-request-failed/)).toBeNull();
   });
 
   it('authed without a tutor profile: consent-only StepPassword, enrollTutor omits password, refreshes doc', async () => {

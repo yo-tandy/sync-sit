@@ -169,14 +169,31 @@ export function TutorEnrollment() {
         // The account was created server-side (adminAuth) — sign the new
         // tutor in NOW so the success page's CTA lands in their portal
         // instead of bouncing to login (mirrors sit's babysitter flow).
-        await signInWithEmailAndPassword(auth, ejemEmail, password);
-        await new Promise<void>((resolve) => {
-          const unsub = useAuthStore.subscribe((state) => {
-            if (!state.loading && state.userDoc) { unsub(); resolve(); }
+        // BEST-EFFORT: enrollment has already fully succeeded (account,
+        // user doc, schedule all written; the verification code consumed),
+        // so a sign-in/doc-read hiccup must NEVER read as an enrollment
+        // failure or block the success page — worst case the CTA asks the
+        // tutor to log in with the credentials they just chose.
+        try {
+          await signInWithEmailAndPassword(auth, ejemEmail, password);
+          await new Promise<void>((resolve) => {
+            // Resolve on auth settling (firebaseUser + !loading) — userDoc
+            // can legitimately stay null when the doc read blips, and the
+            // timeout backstops a store that never settles.
+            const timer = setTimeout(() => { unsub(); resolve(); }, 5000);
+            const check = (state: { loading: boolean; firebaseUser: unknown }) => {
+              if (!state.loading && state.firebaseUser) {
+                clearTimeout(timer);
+                unsub();
+                resolve();
+              }
+            };
+            const unsub = useAuthStore.subscribe(check);
+            check(useAuthStore.getState());
           });
-          const current = useAuthStore.getState();
-          if (!current.loading && current.userDoc) { unsub(); resolve(); }
-        });
+        } catch {
+          // Swallowed by design — see above.
+        }
       }
       navigate('/enroll/tutor/success', { state: { firstName: profileData.firstName } });
 

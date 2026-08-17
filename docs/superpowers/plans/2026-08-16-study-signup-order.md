@@ -88,3 +88,17 @@ Read `apps/web/src/pages/babysitter/AccountPage.tsx` photo section (~lines 130-2
 - Existing tutors are untouched: defaults apply only at enrollment; stored prefs are never rewritten.
 - The wizard's dropped fields must disappear from the PAYLOAD, not be sent as empty values — the server defaults are the single source of the defaults.
 - If the enrollment flow has an e2e spec (grep `tests-e2e/` for study/tutor enrollment), update it to the new step order.
+
+---
+
+## Post-implementation addendum (owner clarifications)
+
+1. **Step order corrected**: the issue meant "demote the prefs", not
+   "subjects before the tutor's base information". Shipped order: Email ->
+   Verify -> Password -> Profile(+contact) -> Subjects (Subjects submits).
+2. **Post-enrollment sign-in added**: the new-account path signs the tutor
+   in (best-effort, timeout-backstopped) before the success page — the
+   account is created server-side and the wizard previously navigated
+   unauthenticated, bouncing the success CTA to login.
+The plan text above is kept as history; the code and its pins are the
+authority.
