@@ -428,6 +428,9 @@ export default {
         errorNoLengths: 'Choisissez au moins une durée de cours',
         errorPaddingRange: 'La marge doit être un nombre entier entre 0 et 60 minutes.',
         errorNoLocations: 'Choisissez au moins un lieu de cours',
+        coverageWarning:
+          'Les familles ne peuvent pas vous trouver pour des cours en personne tant que vous n\'avez pas défini la zone que vous couvrez.',
+        coverageWarningCta: 'Définir la zone couverte',
       },
       aboutMe: {
         save: 'Enregistrer la présentation',

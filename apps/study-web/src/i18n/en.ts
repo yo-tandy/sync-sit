@@ -428,6 +428,9 @@ export default {
         errorNoLengths: 'Pick at least one session length',
         errorPaddingRange: 'Padding must be a whole number between 0 and 60 minutes.',
         errorNoLocations: 'Pick at least one session location',
+        coverageWarning:
+          "Families can't find you for in-person sessions until you set the area you cover.",
+        coverageWarningCta: 'Set the area you cover',
       },
       aboutMe: {
         save: 'Save about me',

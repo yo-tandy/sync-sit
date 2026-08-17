@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { useBlocker } from 'react-router';
+import { Link, useBlocker } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/config/firebase';
@@ -226,6 +226,19 @@ export function SchedulePage() {
     );
     setPrefsSuccess(false);
   };
+
+  // Coverage-requirement visibility (issue #167): the hard gate lives in
+  // searchTutors (an in-person tutor without coverage is excluded), and the
+  // area page blocks empty-area saves — but THIS page owns locationPrefs, so
+  // a tutor can tick an in-person location here and never learn they are
+  // invisible. Derived from the SAVED doc (not draft state) so the warning is
+  // persistent: it shows on load for already-misconfigured docs and clears
+  // only once the area page has real coverage. Warn + deep-link, never block.
+  const inPersonNoCoverage =
+    (tutor?.locationPrefs ?? []).some((p) => p !== 'online' && p !== 'tutor_home') &&
+    (tutor?.areaMode === 'distance'
+      ? !tutor?.areaLatLng
+      : (tutor?.arrondissements ?? []).length === 0);
 
   const handleSavePrefs = async () => {
     if (!uid) return;
@@ -512,6 +525,16 @@ export function SchedulePage() {
               </label>
             ))}
           </div>
+          {inPersonNoCoverage && (
+            <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3">
+              <p className="mb-1 text-sm text-amber-900">
+                {t('tutor.account.sessionPrefs.coverageWarning')}
+              </p>
+              <Link to="/tutor/area" className="text-sm font-semibold text-amber-900 underline">
+                {t('tutor.account.sessionPrefs.coverageWarningCta')}
+              </Link>
+            </div>
+          )}
         </div>
 
         <Input
