@@ -586,6 +586,8 @@ export default {
       maxRateLabel: 'Max rate (€/h)',
       maxDistanceLabel: 'Max distance (km)',
       addressLabel: 'Search from address',
+      areaHint:
+        'Home and library filters match tutors\' coverage areas against your address — pick a Paris or nearby-town address below so tutors covering your area can be found.',
       submit: 'Search tutors',
       searching: 'Searching…',
       empty: 'No tutors found — try adjusting your subject, level or filters.',

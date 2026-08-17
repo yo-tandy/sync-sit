@@ -586,6 +586,8 @@ export default {
       maxRateLabel: 'Tarif max (€/h)',
       maxDistanceLabel: 'Distance max (km)',
       addressLabel: 'Rechercher depuis l\'adresse',
+      areaHint:
+        'Les filtres domicile et bibliothèque comparent les zones couvertes par les professeurs à votre adresse — choisissez ci-dessous une adresse à Paris ou en commune voisine pour trouver les professeurs qui couvrent votre zone.',
       submit: 'Rechercher des professeurs',
       searching: 'Recherche…',
       empty: 'Aucun professeur trouvé — essayez d\'ajuster la matière, le niveau ou les filtres.',

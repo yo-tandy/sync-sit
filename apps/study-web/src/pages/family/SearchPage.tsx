@@ -5,7 +5,7 @@ import { doc, getDoc } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
-import { getParentProfile } from '@ejm/shared-core';
+import { getParentProfile, resolveAreaLabel } from '@ejm/shared-core';
 import {
   SUBJECTS,
   CLASS_LEVELS,
@@ -34,7 +34,10 @@ import { TutorCard } from '@/components/family/TutorCard';
  *
  * The caller's saved address/latLng is loaded once from the shared `families/{id}`
  * doc (mirroring the family dashboard/settings idiom) and passed as `latLng` so
- * the backend can compute distance. `?subject=&level=` deep-links (used by the
+ * the backend can compute distance. An AddressAutocomplete pick additionally
+ * resolves the postcode/city to a coverage-area label (issue #167) that the
+ * backend intersects with arrondissement-mode tutors' areas when the search
+ * asks for home/library sessions. `?subject=&level=` deep-links (used by the
  * family requests page) prefill the form and auto-run the search once the family
  * doc has resolved.
  *
@@ -66,8 +69,10 @@ export function SearchPage() {
     return isValidLevel(q) ? q : '';
   });
 
-  // Optional filters. locationPref is single-select (the callable takes one).
-  const [locationPref, setLocationPref] = useState('');
+  // Optional filters. locationPrefs is multi-select (issue #167): the set of
+  // session-location types the family wants; the callable intersects it with
+  // each tutor's prefs.
+  const [locationPrefs, setLocationPrefs] = useState<string[]>([]);
   const [maxRate, setMaxRate] = useState<number | ''>('');
   const [maxDistanceKm, setMaxDistanceKm] = useState<number | ''>('');
 
@@ -76,6 +81,11 @@ export function SearchPage() {
   // and clearing the field drops latLng (and any maxDistanceKm filter) entirely.
   const [address, setAddress] = useState('');
   const [latLng, setLatLng] = useState<{ lat: number; lng: number } | undefined>();
+  // Coverage-area label ('16e', 'Vincennes', …) resolved from the address's
+  // postcode/city. Only an AddressAutocomplete pick carries postcode/city —
+  // the family doc stores just the display string + latLng — so a doc-seeded
+  // address starts with NO label until the family re-picks one here.
+  const [areaLabel, setAreaLabel] = useState<string | null>(null);
   const [familyLoaded, setFamilyLoaded] = useState(false);
 
   const [results, setResults] = useState<TutorSearchResult[] | null>(null);
@@ -96,6 +106,17 @@ export function SearchPage() {
         if (snap.exists()) {
           setAddress(snap.data()?.address ?? '');
           setLatLng(snap.data()?.latLng ?? undefined);
+          // KNOWN GAP: today the family doc persists only the display address
+          // + latLng (enrollment discards the geocoder's postcode/city), so
+          // this resolves to null for doc-seeded addresses and the label only
+          // exists after an explicit autocomplete pick. Tolerant read so any
+          // future postcode/city backfill lights this up without a change here.
+          setAreaLabel(
+            resolveAreaLabel({
+              postcode: snap.data()?.postcode ?? undefined,
+              city: snap.data()?.city ?? undefined,
+            }),
+          );
         }
       })
       .catch(() => {
@@ -116,22 +137,23 @@ export function SearchPage() {
     async (
       s: string,
       l: string,
-      overrides?: { locationPref: string; maxRate: number | ''; maxDistanceKm: number | '' },
+      overrides?: { locationPrefs: string[]; maxRate: number | ''; maxDistanceKm: number | '' },
     ) => {
       if (!isValidSubject(s) || !isValidLevel(l)) return;
       setLoading(true);
       setError(null);
-      const effLocationPref = overrides ? overrides.locationPref : locationPref;
+      const effLocationPrefs = overrides ? overrides.locationPrefs : locationPrefs;
       const effMaxRate = overrides ? overrides.maxRate : maxRate;
       const effMaxDistanceKm = overrides ? overrides.maxDistanceKm : maxDistanceKm;
-      const filters: { locationPref?: string; maxRate?: number; maxDistanceKm?: number } = {};
-      if (effLocationPref) filters.locationPref = effLocationPref;
+      const filters: { locationPrefs?: string[]; maxRate?: number; maxDistanceKm?: number } = {};
+      if (effLocationPrefs.length > 0) filters.locationPrefs = effLocationPrefs;
       if (effMaxRate !== '') filters.maxRate = Number(effMaxRate);
       if (effMaxDistanceKm !== '') filters.maxDistanceKm = Number(effMaxDistanceKm);
       const payload = {
         subject: s,
         level: l,
         ...(latLng ? { latLng } : {}),
+        ...(areaLabel ? { areaLabel } : {}),
         ...(Object.keys(filters).length ? { filters } : {}),
       };
       try {
@@ -149,7 +171,7 @@ export function SearchPage() {
         setLoading(false);
       }
     },
-    [locationPref, maxRate, maxDistanceKm, latLng],
+    [locationPrefs, maxRate, maxDistanceKm, latLng, areaLabel],
   );
 
   // Auto-search on mount for valid deep-links, once the family doc resolves so
@@ -174,16 +196,16 @@ export function SearchPage() {
   // Whether the empty state has anything to offer: with no optional filters
   // set, "Clear filters" would be a visible no-op, so the CTA is withheld and
   // EmptyState degrades to icon + message.
-  const hasOptionalFilters = locationPref !== '' || maxRate !== '' || maxDistanceKm !== '';
+  const hasOptionalFilters = locationPrefs.length > 0 || maxRate !== '' || maxDistanceKm !== '';
 
   // Clears the OPTIONAL filters only — subject/level are the mandatory search
   // inputs and the address is the search origin, so both stay put — and
   // re-runs the search with the cleared values so the results visibly react.
   const clearFilters = () => {
-    setLocationPref('');
+    setLocationPrefs([]);
     setMaxRate('');
     setMaxDistanceKm('');
-    runSearch(subject, level, { locationPref: '', maxRate: '', maxDistanceKm: '' });
+    runSearch(subject, level, { locationPrefs: [], maxRate: '', maxDistanceKm: '' });
   };
 
   const subjectOptions = SUBJECTS.map((s) => ({
@@ -228,13 +250,25 @@ export function SearchPage() {
               {LOCATION_PREFS.map((pref) => (
                 <Chip
                   key={pref}
-                  selected={locationPref === pref}
-                  onClick={() => setLocationPref((prev) => (prev === pref ? '' : pref))}
+                  selected={locationPrefs.includes(pref)}
+                  onClick={() =>
+                    setLocationPrefs((prev) =>
+                      prev.includes(pref) ? prev.filter((p) => p !== pref) : [...prev, pref],
+                    )
+                  }
                 >
                   {t(`family.search.location.${pref}`)}
                 </Chip>
               ))}
             </div>
+            {/* Home/library filtering matches tutors' coverage areas against
+                the family's resolved area label; without one (address not
+                picked, or outside Paris/nearby towns) only distance-based
+                tutors can match — say so instead of silently thinning results. */}
+            {(locationPrefs.includes('family_home') || locationPrefs.includes('library')) &&
+              !areaLabel && (
+                <p className="mt-2 text-xs text-amber-600">{t('family.search.areaHint')}</p>
+              )}
           </div>
 
           <div className="flex gap-3">
@@ -286,6 +320,9 @@ export function SearchPage() {
             onChange={(addr: AddressResult | null) => {
               setAddress(addr?.fullAddress || '');
               setLatLng(addr ? { lat: addr.lat, lng: addr.lng } : undefined);
+              setAreaLabel(
+                addr ? resolveAreaLabel({ postcode: addr.postcode, city: addr.city }) : null,
+              );
             }}
           />
 
