@@ -2,6 +2,7 @@ import { Navigate } from 'react-router';
 import { useAuthStore } from '@/stores/authStore';
 import { Spinner } from '@/components/ui';
 import { getSitRole, getBabysitterProfile } from '@ejm/sit-core';
+import { isTutor } from '@ejm/shared-core';
 
 type SitRole = 'babysitter' | 'parent' | 'admin';
 
@@ -40,6 +41,9 @@ export function AuthGuard({ role, children }: AuthGuardProps) {
     if (sitRole === 'babysitter') return <Navigate to="/babysitter" replace />;
     if (sitRole === 'parent') return <Navigate to="/family" replace />;
     if (sitRole === 'admin') return <Navigate to="/admin" replace />;
+    // A study tutor with no sit role skips the role question (issue #144):
+    // the welcome page enrolls them in one tap.
+    if (isTutor(userDoc)) return <Navigate to="/welcome-sit" replace />;
     // Signed-in user with no sit role (foreign-profile-only) — send to /signup
     // to add a sit role rather than dead-ending at '/'.
     return <Navigate to="/signup" replace />;

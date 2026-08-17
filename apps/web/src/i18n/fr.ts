@@ -107,9 +107,20 @@ export default {
     roleExclusiveParent: "Un compte élève ne peut pas aussi s'inscrire comme parent — votre famille doit avoir son propre compte.",
   },
 
+  welcomeCross: {
+    backToOrigin: 'Retour à Sync/Study',
+    fallbackWizard: 'Utiliser l\'inscription complète à la place',
+    greeting: 'Bienvenue, {{name}} !',
+    body: "En tant qu'élève de l'EJM, vous pouvez faire du babysitting pour les familles de l'EJM — votre identifiant Sync/Study fonctionne ici tel quel. Il ne nous manque que vos disponibilités pour commencer.",
+    consentPrefix: 'En continuant, vous acceptez les',
+    parentCard: 'Bienvenue sur Sync/Sit — votre compte famille Sync/Study fonctionne ici tel quel.',
+    dismiss: 'Fermer',
+  },
+
   enrollment: {
     confirmConsentTitle: 'Presque terminé',
     accountExistsCta: 'Un compte existe déjà avec cet e-mail. Connectez-vous pour ajouter ce rôle.',
+    identityOnFile: 'Inscription au nom de {{name}} — votre identité est déjà enregistrée depuis votre autre profil Sync.',
     alreadyEnrolled: 'Ce compte possède déjà ce rôle.',
     alreadyInFamily: 'Vous appartenez déjà à une famille.',
     roleExclusiveJoin: "Un compte élève (babysitter ou tuteur) ne peut pas rejoindre une famille comme parent — cette invitation doit être utilisée avec le compte du parent.",

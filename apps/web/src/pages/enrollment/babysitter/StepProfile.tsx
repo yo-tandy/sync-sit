@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { validateEjmEmail, checkEnrollmentAge } from '@ejm/shared-core';
 import { db } from '@/config/firebase';
+import { useAuthStore } from '@/stores/authStore';
 import { Button, Input, Select } from '@/components/ui';
 
 interface StepProfileProps {
@@ -56,6 +57,7 @@ const GENDER_OPTIONS = [
 
 export function StepProfile({ uid, email, onNext }: StepProfileProps) {
   const { t } = useTranslation();
+  const userDoc = useAuthStore((s) => s.userDoc);
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [dateOfBirth, setDateOfBirth] = useState('');
@@ -64,11 +66,25 @@ export function StepProfile({ uid, email, onNext }: StepProfileProps) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Root identity is set-once (issue #144): a cross-app user (e.g. an existing
+  // study tutor) already carries firstName/lastName/dateOfBirth, and the rules
+  // deny any client write that would change them. Only ABSENT fields may be
+  // collected and written here. When all three are on file the wizard normally
+  // routes past this step; a direct URL/remount shows a read-only line instead
+  // of dead inputs.
+  const hasFirstName = !!userDoc?.firstName;
+  const hasLastName = !!userDoc?.lastName;
+  const hasDateOfBirth = !!userDoc?.dateOfBirth;
+  const identityOnFile = hasFirstName && hasLastName && hasDateOfBirth;
+
   const age = getAge(dateOfBirth);
   const ageErrorKey = ageGateErrorKey(dateOfBirth, age, email);
   const ageValid = age !== null && ageErrorKey === null;
 
-  const isValid = firstName && lastName && dateOfBirth && ageValid && classLevel;
+  const isValid = (hasFirstName || firstName)
+    && (hasLastName || lastName)
+    && (hasDateOfBirth || (dateOfBirth && ageValid))
+    && classLevel;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -77,9 +93,9 @@ export function StepProfile({ uid, email, onNext }: StepProfileProps) {
     setError(null);
     try {
       await updateDoc(doc(db, 'users', uid), {
-        firstName,
-        lastName,
-        dateOfBirth,
+        ...(hasFirstName ? {} : { firstName }),
+        ...(hasLastName ? {} : { lastName }),
+        ...(hasDateOfBirth ? {} : { dateOfBirth }),
         'profiles.babysitter.classLevel': classLevel,
         'profiles.babysitter.gender': gender || null,
         updatedAt: serverTimestamp(),
@@ -98,36 +114,56 @@ export function StepProfile({ uid, email, onNext }: StepProfileProps) {
       <h2 className="mt-4 mb-2 text-xl font-bold">{t('enrollment.welcomeTitle1')}<br />{t('enrollment.welcomeTitle2')}</h2>
       <p className="mb-6 text-sm text-gray-500">{t('enrollment.welcomeSubtitle')}</p>
 
-      <div className="flex gap-3">
-        <div className="flex-1">
-          <Input
-            label={t('enrollment.firstName')}
-            value={firstName}
-            onChange={(e) => setFirstName(e.target.value)}
-            required
-          />
+      {/* Render decisions are PER FIELD, matching the payload and isValid
+          logic exactly — an all-or-nothing render would dead-end a doc with
+          partial identity (name on file, DoB missing: empty required name
+          inputs that the payload never sends). identityOnFile summarises
+          only when everything is on file. */}
+      {identityOnFile && (
+        <p className="mb-5 rounded-lg bg-gray-50 px-4 py-3 text-sm text-gray-700">
+          {t('enrollment.identityOnFile', {
+            name: `${userDoc?.firstName} ${userDoc?.lastName}`,
+          })}
+        </p>
+      )}
+      {!(hasFirstName && hasLastName) && (
+        <div className="flex gap-3">
+          {!hasFirstName && (
+            <div className="flex-1">
+              <Input
+                label={t('enrollment.firstName')}
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+                required
+              />
+            </div>
+          )}
+          {!hasLastName && (
+            <div className="flex-1">
+              <Input
+                label={t('enrollment.lastName')}
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+                required
+              />
+            </div>
+          )}
         </div>
-        <div className="flex-1">
-          <Input
-            label={t('enrollment.lastName')}
-            value={lastName}
-            onChange={(e) => setLastName(e.target.value)}
-            required
-          />
-        </div>
-      </div>
+      )}
 
       <div className="grid grid-cols-2 gap-3">
-        <div className="min-w-0">
-          <Input
-            label={t('enrollment.dateOfBirth')}
-            type="date"
-            value={dateOfBirth}
-            onChange={(e) => setDateOfBirth(e.target.value)}
-            error={ageErrorKey ? t(ageErrorKey) : undefined}
-            required
-          />
-        </div>
+        {!hasDateOfBirth && (
+          <div className="min-w-0">
+            <Input
+              label={t('enrollment.dateOfBirth')}
+              type="date"
+              value={dateOfBirth}
+              onChange={(e) => setDateOfBirth(e.target.value)}
+              error={ageErrorKey ? t(ageErrorKey) : undefined}
+              required
+            />
+          </div>
+        )}
         <div className="min-w-0">
           <Select
             label={t('enrollment.classLabel')}

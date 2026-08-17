@@ -110,10 +110,21 @@ export default {
     roleExclusiveParent: "Student accounts can't also enroll as parents — your family needs its own account.",
   },
 
+  welcomeCross: {
+    backToOrigin: 'Back to Sync/Study',
+    fallbackWizard: 'Use the full sign-up instead',
+    greeting: 'Welcome, {{name}}!',
+    body: 'As an EJM student you can babysit for EJM families — your Sync/Study login works here as-is. We just need your availability to get you started.',
+    consentPrefix: 'By continuing, you accept the',
+    parentCard: 'Welcome to Sync/Sit — your Sync/Study family account works here as-is.',
+    dismiss: 'Dismiss',
+  },
+
   // Enrollment
   enrollment: {
     confirmConsentTitle: 'Almost there',
     accountExistsCta: 'An account with this email already exists. Log in to add this role.',
+    identityOnFile: 'Enrolling as {{name}} — your identity is already on file from your other Sync profile.',
     alreadyEnrolled: 'This account already has this role.',
     alreadyInFamily: 'You already belong to a family.',
     roleExclusiveJoin: "Student accounts (babysitter or tutor) can't join a family as a parent — this invite needs the parent's own account.",

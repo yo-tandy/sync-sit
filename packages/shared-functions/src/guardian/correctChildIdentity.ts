@@ -73,9 +73,13 @@ export const correctChildIdentity = onCall(
       throw new HttpsError('not-found', 'User not found');
     }
     if (child.identityLocked !== true) {
+      // Since issue #144 root identity is set-once for EVERY account, so
+      // "manages its own identity" would be false — self-managed accounts
+      // simply have no self-service correction path; admins intervene
+      // directly when a real correction is needed.
       throw new HttpsError(
         'failed-precondition',
-        'This account manages its own identity.',
+        'Identity corrections for this account require an administrator.',
         { code: 'guardian/not-identity-locked' },
       );
     }

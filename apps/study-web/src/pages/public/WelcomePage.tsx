@@ -1,8 +1,24 @@
+import { useAuthStore } from '@/stores/authStore';
+import { getStudyRole } from '@ejm/study-core';
 import { WelcomePage as SharedWelcomePage } from '@ejm/shared-ui';
+import { postLoginRouter } from '@/utils/postLoginRouter';
 
-// Sync-study does not auto-redirect logged-in users from welcome yet —
-// no per-role dashboards exist. Leaving redirectPath unset until Plan D
-// + tutor dashboard land.
+/**
+ * Public landing. A signed-in user has no business here — send them where
+ * they belong: role'd users to their portal, cross-app arrivals into the
+ * welcome/enroll routing, profile-less accounts to role selection. All of
+ * that is postLoginRouter's single source of truth.
+ */
 export function WelcomePage() {
-  return <SharedWelcomePage logoSrc="/logo.png" logoAlt="Sync/Study" />;
+  const { firebaseUser, userDoc, loading } = useAuthStore();
+  const redirectPath =
+    firebaseUser && userDoc ? postLoginRouter(getStudyRole(userDoc), userDoc) : null;
+  return (
+    <SharedWelcomePage
+      logoSrc="/logo.png"
+      logoAlt="Sync/Study"
+      authLoading={loading}
+      redirectPath={redirectPath}
+    />
+  );
 }

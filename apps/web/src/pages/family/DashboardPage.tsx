@@ -15,6 +15,7 @@ import { useRefetchOnFocus } from '@ejm/shared-ui';
 import { formatBabysitterName, capitalize, formatFamilyTitle } from '@/lib/formatName';
 import { debouncedTogglePreferred } from '@/lib/debouncedPreferred';
 import { EndorsementDialog } from '@/components/endorsements/EndorsementDialog';
+import { CrossAppWelcomeCard } from '@/components/family/CrossAppWelcomeCard';
 import { ExpandableBabysitterCard } from '@/components/appointments/ExpandableBabysitterCard';
 import type { ReferenceDoc } from '@ejm/sit-core';
 
@@ -327,6 +328,9 @@ export function FamilyDashboard() {
         <h2 className="text-lg font-bold">{t('babysitterDashboard.hello')} {capitalize(userDoc?.firstName) || 'there'} 👋</h2>
         <p className="text-xs text-gray-500">{formatFamilyTitle(familyName)} {t('familyDashboard.family')}</p>
       </div>
+
+      {/* One-time cross-app welcome (issue #144) */}
+      <CrossAppWelcomeCard />
 
       {/* Install-as-PWA banner (only when running in a regular browser tab) */}
       <InstallAppBanner />

@@ -5,6 +5,7 @@ import {
   tutorSessionPrefsSchema,
   withPrefDefaults,
 } from '../tutor.js';
+import { toDobDate } from '../../enrollment/dob.js';
 
 const validEnrollment = {
   firstName: 'Flow',
@@ -34,8 +35,18 @@ describe('tutorEnrollmentSchema', () => {
     expect(tutorEnrollmentSchema.safeParse({ ...validEnrollment, subjects: [subj] }).success).toBe(false);
   });
 
-  it('rejects a missing required immutable field', () => {
-    const { firstName: _omit, ...rest } = validEnrollment;
+  it('accepts a payload with the identity fields absent (issue #144: cross-app add-profile omits them; presence is a callable-level check)', () => {
+    const { firstName: _f, lastName: _l, dateOfBirth: _d, ...rest } = validEnrollment;
+    expect(tutorEnrollmentSchema.safeParse(rest).success).toBe(true);
+  });
+
+  it('still rejects EMPTY identity strings when sent', () => {
+    expect(tutorEnrollmentSchema.safeParse({ ...validEnrollment, firstName: '' }).success).toBe(false);
+    expect(tutorEnrollmentSchema.safeParse({ ...validEnrollment, dateOfBirth: '' }).success).toBe(false);
+  });
+
+  it('rejects a missing classLevel (still required)', () => {
+    const { classLevel: _omit, ...rest } = validEnrollment;
     expect(tutorEnrollmentSchema.safeParse(rest).success).toBe(false);
   });
 
@@ -80,8 +91,9 @@ describe('tutorEnrollmentSchema', () => {
 });
 
 describe('tutorImmutableProfileSchema', () => {
-  it('requires firstName/lastName/dateOfBirth/classLevel', () => {
+  it('requires classLevel; identity fields are optional (issue #144)', () => {
     expect(tutorImmutableProfileSchema.safeParse({}).success).toBe(false);
+    expect(tutorImmutableProfileSchema.safeParse({ classLevel: '1ère' }).success).toBe(true);
     expect(
       tutorImmutableProfileSchema.safeParse({
         firstName: 'A', lastName: 'B', dateOfBirth: '2008-01-01', classLevel: '1ère',
@@ -157,5 +169,29 @@ describe('withPrefDefaults', () => {
     const defaulted = withPrefDefaults(parse(validEnrollment));
     expect(defaulted.firstName).toBe('Flow');
     expect(defaulted.contactEmail).toBe('flow@ejm.org');
+  });
+});
+
+
+
+describe('toDobDate — the stored-DOB normalizer the age gate depends on', () => {
+  it('parses the sit-created string format', () => {
+    const d = toDobDate('2008-05-01');
+    expect(d).toBeInstanceOf(Date);
+    expect(d!.getFullYear()).toBe(2008);
+  });
+
+  it('unwraps a Firestore Timestamp-like object', () => {
+    const ts = { toDate: () => new Date(2009, 2, 15) };
+    const d = toDobDate(ts);
+    expect(d).toBeInstanceOf(Date);
+    expect(d!.getFullYear()).toBe(2009);
+  });
+
+  it('returns null for empty string, null, undefined and junk', () => {
+    expect(toDobDate('')).toBeNull();
+    expect(toDobDate(null)).toBeNull();
+    expect(toDobDate(undefined)).toBeNull();
+    expect(toDobDate(42)).toBeNull();
   });
 });

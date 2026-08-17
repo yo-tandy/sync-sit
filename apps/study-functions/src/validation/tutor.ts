@@ -23,11 +23,17 @@ const subjectOfferingSchema = z.object({
  * Mirrors the babysitter immutable-profile pattern: firstName, lastName,
  * dateOfBirth, classLevel (tutor's own graduation level), gender.
  * These fields cannot change after enrollment completes.
+ *
+ * The identity trio is OPTIONAL at the schema level (issue #144): a cross-app
+ * add-profile caller already carries root identity on their user doc and the
+ * wizard no longer re-collects it. Presence is enforced at the callable level:
+ * new accounts must supply all three; add-profile callers may omit any field
+ * the existing doc holds.
  */
 export const tutorImmutableProfileSchema = z.object({
-  firstName: z.string().min(1, 'First name is required'),
-  lastName: z.string().min(1, 'Last name is required'),
-  dateOfBirth: z.string().min(1, 'Date of birth is required'), // "YYYY-MM-DD" string from client
+  firstName: z.string().min(1, 'First name is required').optional(),
+  lastName: z.string().min(1, 'Last name is required').optional(),
+  dateOfBirth: z.string().min(1, 'Date of birth is required').optional(), // "YYYY-MM-DD" string from client
   classLevel: z.string().min(1, 'Class level is required'), // tutor's own EJM class level
   gender: z
     .enum(['male', 'female', 'other', 'prefer_not_to_say'])

@@ -172,6 +172,35 @@ service cloud.firestore {
                  .hasAny(['firstName', 'lastName', 'dateOfBirth']);
     }
 
+    // Helper: root identity (firstName/lastName/dateOfBirth) is SET-ONCE for
+    // client writes — once a field holds a value, an owner write may neither
+    // change nor remove it (issue #144: cross-app enrollment must never mutate
+    // identity set by the other app). Absent -> set stays allowed (a babysitter
+    // stub completes its identity step). Applies to ALL accounts, not just
+    // identityLocked ones — see identityUnlockedOrUnchanged above.
+    // CORRECTIONS: governed kids go through correctChildIdentity; for
+    // self-managed accounts NO correction path currently exists short of
+    // direct Admin-SDK/console intervention — a deliberate gap (typo-fix
+    // callable is a tracked follow-up), not an accident.
+    // "Empty" (absent, null, '') is fillable; a POPULATED value is frozen.
+    // One definition shared with fillBaseFields and the wizards' truthiness
+    // checks — three layers, one semantics. Clearing a populated value
+    // (set -> '' / null / deleted) counts as a change and is denied.
+    function identityFieldSettable(key) {
+      return !(key in resource.data)
+             || resource.data[key] == null
+             || resource.data[key] == ''
+             || request.resource.data.get(key, null) == resource.data[key];
+    }
+
+    function rootIdentitySetOnce() {
+      return !request.resource.data.diff(resource.data).affectedKeys()
+                 .hasAny(['firstName', 'lastName', 'dateOfBirth'])
+             || (identityFieldSettable('firstName')
+                 && identityFieldSettable('lastName')
+                 && identityFieldSettable('dateOfBirth'));
+    }
+
     // Users: read own profile; parents can read active babysitters (for search results)
     match /users/{userId} {
       allow read: if isOwner(userId)
@@ -209,6 +238,7 @@ service cloud.firestore {
                     && tutorIdentityUnchanged()
                     && parentFamilyIdUnchanged()
                     && identityUnlockedOrUnchanged()
+                    && rootIdentitySetOnce()
                     && tutorNumericBoundsValid()
                     && photoUrlValid();
     }

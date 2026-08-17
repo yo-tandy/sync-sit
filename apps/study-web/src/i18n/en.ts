@@ -181,6 +181,16 @@ export default {
     roleExclusiveParent: "Student accounts can't also enroll as parents — your family needs its own account.",
   },
 
+  welcomeCross: {
+    backToOrigin: 'Back to Sync/Sit',
+    fallbackWizard: 'Use the full sign-up instead',
+    greeting: 'Welcome, {{name}}!',
+    body: 'As an EJM student you can tutor EJM families — your Sync/Sit login works here as-is. We just need the subjects you offer to get you started.',
+    consentPrefix: 'By continuing, you accept the',
+    parentCard: 'Welcome to Sync/Study — your Sync/Sit family account works here as-is.',
+    dismiss: 'Dismiss',
+  },
+
   menu: {
     about: 'About',
     openMenu: 'Open menu',
@@ -970,6 +980,7 @@ export default {
   enrollment: {
     confirmConsentTitle: 'Almost there',
     accountExistsCta: 'An account with this email already exists. Log in to add this role.',
+    identityOnFile: 'Enrolling as {{name}} — your identity is already on file from your other Sync profile.',
     alreadyEnrolled: 'This account already has this role.',
     age: {
       under15: 'You need to be at least 15 to enroll on your own. Your parents can create an account and enroll you from theirs.',
