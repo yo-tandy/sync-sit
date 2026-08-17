@@ -113,6 +113,9 @@ export const CreateKidInvitePage = lazy(() =>
 export const HandoffPage = lazy(() =>
   import('@/pages/public/HandoffPage').then((m) => ({ default: m.HandoffPage })),
 );
+export const CrossAppWelcomePage = lazy(() =>
+  import('@/pages/public/CrossAppWelcomePage').then((m) => ({ default: m.CrossAppWelcomePage })),
+);
 export const SupervisionAgreementPage = lazy(() =>
   import('@/pages/public/SupervisionAgreementPage').then((m) => ({
     default: m.SupervisionAgreementPage,

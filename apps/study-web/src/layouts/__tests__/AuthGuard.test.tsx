@@ -50,6 +50,7 @@ function renderGuard(
         />
         <Route path="/login" element={<div>login-page</div>} />
         <Route path="/signup" element={<div>signup-page</div>} />
+        <Route path="/welcome-study" element={<div>welcome-study-page</div>} />
         <Route path="/admin" element={<div>admin-page</div>} />
       </Routes>
     </MemoryRouter>,
@@ -164,15 +165,26 @@ describe('study-web AuthGuard', () => {
     expect(screen.queryByText('family-portal')).toBeNull();
   });
 
-  it('routes a foreign sit-only account (no study role) away to /signup', () => {
+  it('routes a foreign sit babysitter (no study role) to /welcome-study — never the role question (issue #144)', () => {
     h.auth = {
       firebaseUser: { uid: 'b1' },
       userDoc: { uid: 'b1', profiles: { babysitter: {} } },
       loading: false,
     };
     renderGuard();
-    expect(screen.getByText('signup-page')).toBeInTheDocument();
+    expect(screen.getByText('welcome-study-page')).toBeInTheDocument();
+    expect(screen.queryByText('signup-page')).toBeNull();
     expect(screen.queryByText('tutor-portal')).toBeNull();
+  });
+
+  it('routes a signed-in account with NO profiles at all to /signup', () => {
+    h.auth = {
+      firebaseUser: { uid: 'n1' },
+      userDoc: { uid: 'n1', profiles: {} },
+      loading: false,
+    };
+    renderGuard();
+    expect(screen.getByText('signup-page')).toBeInTheDocument();
   });
 
   it('routes an admin to /admin (mirrors LoginPage.postLoginRouter)', () => {

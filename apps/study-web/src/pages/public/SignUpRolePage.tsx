@@ -1,3 +1,4 @@
+import { Navigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { SignUpRolePage as SharedSignUpRolePage, UserIcon, UsersIcon, type SignUpRoleOption } from '@ejm/shared-ui';
 import { isBabysitter, isParent, isTutor } from '@ejm/shared-core';
@@ -15,6 +16,12 @@ export function SignUpRolePage() {
   // Signed-in user with no study role (arrived here from cross-app routing) —
   // show a banner explaining they're adding a role to an existing account.
   const role = getStudyRole(userDoc);
+  // A sit babysitter never sees the role question here either (direct URL):
+  // tutoring is the only study offer for them — the welcome page handles it
+  // with subjects alone (issue #144).
+  if (firebaseUser && !role && isBabysitter(userDoc)) {
+    return <Navigate to="/welcome-study" replace />;
+  }
   const banner = firebaseUser && !role ? t('signup.crossAppBanner') : undefined;
 
   // Provider (tutor OR babysitter) and parent are mutually exclusive (issue

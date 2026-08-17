@@ -43,9 +43,12 @@ describe('SignUpRolePage (study)', () => {
     expect(screen.queryByText(/Babysitter/i)).toBeNull();
   });
 
-  it('shows the cross-app banner for a signed-in foreign-profile-only user', () => {
+  it('shows the cross-app banner for a signed-in user with no role (and no babysitter profile)', () => {
+    // A sit babysitter never reaches this page anymore (issue #144, see
+    // below); the banner case that remains is a signed-in account with no
+    // profiles.
     authState.firebaseUser = { uid: 'u1' };
-    authState.userDoc = { profiles: { babysitter: { enrollmentComplete: true } } };
+    authState.userDoc = { profiles: {} };
     renderWithProviders(<SignUpRolePage />);
     expect(screen.getByText(BANNER)).toBeInTheDocument();
   });
@@ -86,15 +89,14 @@ describe('SignUpRolePage (study)', () => {
     expect(screen.getByText(i18n.t('signup.roleExclusiveParent'))).toBeInTheDocument();
   });
 
-  it('hides the parent option for a signed-in sit BABYSITTER too (providers are provider-wide)', () => {
+  it('a signed-in sit babysitter never sees the role question: redirected to /welcome-study (issue #144)', () => {
     authState.firebaseUser = { uid: 'b1' };
     authState.userDoc = { profiles: { babysitter: { enrollmentComplete: true } } };
     renderWithProviders(<SignUpRolePage />);
 
-    const hrefs = screen.getAllByRole('link').map((a) => a.getAttribute('href'));
-    expect(hrefs).not.toContain('/enroll/parent');
-    expect(hrefs).toContain('/enroll/tutor');
-    expect(screen.getByText(i18n.t('signup.roleExclusiveParent'))).toBeInTheDocument();
+    // The role page never rendered — the wrapper redirected before it.
+    expect(screen.queryByText(BANNER)).toBeNull();
+    expect(screen.queryAllByRole('link')).toHaveLength(0);
   });
 
   it('offers both options and no exclusivity note to a signed-in user with no profiles', () => {

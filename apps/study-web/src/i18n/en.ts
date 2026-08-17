@@ -181,6 +181,12 @@ export default {
     roleExclusiveParent: "Student accounts can't also enroll as parents — your family needs its own account.",
   },
 
+  welcomeCross: {
+    greeting: 'Welcome, {{name}}!',
+    body: 'As an EJM student you can tutor EJM families — your Sync/Sit login works here as-is. We just need the subjects you offer to get you started.',
+    consentPrefix: 'By continuing, you accept the',
+  },
+
   menu: {
     about: 'About',
     openMenu: 'Open menu',

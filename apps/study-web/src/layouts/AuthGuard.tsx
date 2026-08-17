@@ -1,6 +1,7 @@
 import { Navigate } from 'react-router';
 import { useAuthStore } from '@/stores/authStore';
 import { getStudyRole } from '@ejm/study-core';
+import { isBabysitter } from '@ejm/shared-core';
 
 type StudyRole = 'tutor' | 'parent' | 'admin';
 
@@ -40,6 +41,9 @@ export function AuthGuard({ role, children }: AuthGuardProps) {
     if (studyRole === 'admin') return <Navigate to="/admin" replace />;
     if (studyRole === 'tutor') return <Navigate to="/tutor" replace />;
     if (studyRole === 'parent') return <Navigate to="/family" replace />;
+    // A sit babysitter with no study role skips the role question (issue
+    // #144): the welcome page enrolls them with subjects alone.
+    if (isBabysitter(userDoc)) return <Navigate to="/welcome-study" replace />;
     return <Navigate to="/signup" replace />;
   }
 

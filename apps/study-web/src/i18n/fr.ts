@@ -181,6 +181,12 @@ export default {
     roleExclusiveParent: "Un compte élève ne peut pas aussi s'inscrire comme parent — votre famille doit avoir son propre compte.",
   },
 
+  welcomeCross: {
+    greeting: 'Bienvenue, {{name}} !',
+    body: "En tant qu'élève de l'EJM, vous pouvez donner des cours aux familles de l'EJM — votre identifiant Sync/Sit fonctionne ici tel quel. Il ne nous manque que les matières que vous proposez pour commencer.",
+    consentPrefix: 'En continuant, vous acceptez les',
+  },
+
   menu: {
     about: 'À propos',
     openMenu: 'Ouvrir le menu',

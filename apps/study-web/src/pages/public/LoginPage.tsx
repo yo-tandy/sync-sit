@@ -16,7 +16,7 @@ export function LoginPage() {
       logoSrc="/logo.png"
       logoAlt="Sync/Study"
       onLogin={handleLogin}
-      postLoginRouter={postLoginRouter}
+      postLoginRouter={(role) => postLoginRouter(role, useAuthStore.getState().userDoc)}
       loading={loading}
       error={error}
       clearError={clearError}
