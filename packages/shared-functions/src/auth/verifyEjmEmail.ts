@@ -5,6 +5,7 @@ import { getCorsOrigin } from '../config/cors.js';
 import { validateEjmEmail } from '@ejm/sit-core';
 import { sendVerificationEmail } from '../config/email.js';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
+import { handleExistingAccountSignup } from './accountExistsNotice.js';
 
 /**
  * Send a 6-digit verification code to an EJM email address.
@@ -13,7 +14,9 @@ import { writeUserActivity } from '../admin/writeAuditLog.js';
 export const verifyEjmEmail = onCall(
   { region: 'europe-west1', cors: getCorsOrigin() },
   async (request) => {
-    const { email } = request.data as { email: string };
+    // `app` is an untrusted display-only hint (which app's copy the
+    // account-exists email uses) — normalized inside the silent path.
+    const { email, app } = request.data as { email: string; app?: unknown };
 
     if (!email) {
       throw new HttpsError('invalid-argument', 'Email is required');
@@ -46,9 +49,11 @@ export const verifyEjmEmail = onCall(
       .get();
 
     if (!existingUsers.empty && existingUsers.docs[0].id !== request.auth?.uid) {
-      throw new HttpsError('already-exists', 'An account with this email already exists', {
-        reason: 'account-exists',
-      });
+      // Silent existing-account path (issue #148): do NOT throw — an error
+      // here is an account-enumeration oracle. The response is identical to
+      // the fresh path, no code doc is written, and the mailbox owner gets an
+      // account-exists email (rate-limited) instead of a code.
+      return handleExistingAccountSignup(email.toLowerCase(), app);
     }
 
     // Generate cryptographically secure 6-digit code

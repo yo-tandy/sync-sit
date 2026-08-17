@@ -149,9 +149,10 @@ export const enrollBabysitter = onCall(
     } catch (err: unknown) {
       const fbErr = err as { code?: string };
       if (fbErr.code === 'auth/email-already-exists') {
-        throw new HttpsError('already-exists', 'An account with this email already exists', {
-          reason: 'account-exists',
-        });
+        // Race backstop only: reaching here requires a valid emailed code, so
+        // this is not an enumeration oracle (the caller owns the mailbox). No
+        // machine-readable reason — clients surface the message as-is.
+        throw new HttpsError('already-exists', 'An account with this email already exists');
       }
       throw new HttpsError('internal', 'Failed to create account');
     }
