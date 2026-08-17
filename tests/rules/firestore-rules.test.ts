@@ -1758,6 +1758,25 @@ describe('users update — tutor numeric bounds (issue #123 hardening)', () => {
     );
   });
 
+  it('photoUrl: owner may set a bounded https URL or null, nothing else', async () => {
+    const db = testEnv.authenticatedContext(uid).firestore();
+    await assertSucceeds(
+      updateDoc(doc(db, 'users', uid), { photoUrl: 'https://firebasestorage.example/x.jpg' }),
+    );
+    await assertSucceeds(updateDoc(doc(db, 'users', uid), { photoUrl: null }));
+    // Emulator download URLs are plain http — allowed.
+    await assertSucceeds(
+      updateDoc(doc(db, 'users', uid), { photoUrl: 'http://127.0.0.1:9199/v0/b/x/o/p.jpg' }),
+    );
+    await assertFails(
+      updateDoc(doc(db, 'users', uid), { photoUrl: 'data:image/svg+xml;base64,AAAA' }),
+    );
+    await assertFails(updateDoc(doc(db, 'users', uid), { photoUrl: 12345 }));
+    await assertFails(
+      updateDoc(doc(db, 'users', uid), { photoUrl: 'https://' + 'x'.repeat(2050) }),
+    );
+  });
+
   it('accepts a bounded aboutMe and explicit null', async () => {
     const db = testEnv.authenticatedContext(uid).firestore();
     await assertSucceeds(

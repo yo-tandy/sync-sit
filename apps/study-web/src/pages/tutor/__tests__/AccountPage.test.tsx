@@ -174,6 +174,45 @@ describe('tutor AccountPage', () => {
     expect(h.uploadBytes).not.toHaveBeenCalled();
   });
 
+  it('a photo save does NOT clobber unsaved edits elsewhere on the page', async () => {
+    // refreshUserDoc replaces userDoc; re-seeding every field from it wiped
+    // in-progress edits (typed bio reverts when picking a photo). The form
+    // seeds once per mount; only the photo preview tracks refreshes.
+    h.auth.refreshUserDoc.mockImplementation(() => {
+      h.auth.userDoc = { ...(h.auth.userDoc as Record<string, unknown>), photoUrl: 'https://cdn.example/photo.png' };
+      return Promise.resolve();
+    });
+    renderWithProviders(<AccountPage />);
+
+    const bio = screen.getByLabelText(/about me/i);
+    fireEvent.change(bio, { target: { value: 'draft bio not yet saved' } });
+
+    const file = new File(['x'], 'me.png', { type: 'image/png' });
+    fireEvent.change(screen.getByTestId('photo-input'), { target: { files: [file] } });
+    await waitFor(() => expect(h.auth.refreshUserDoc).toHaveBeenCalled());
+
+    expect(screen.getByLabelText(/about me/i)).toHaveValue('draft bio not yet saved');
+  });
+
+  it('a refresh blip AFTER a successful removal stays silent (the photo IS removed)', async () => {
+    const userDoc = makeUserDoc() as Record<string, unknown>;
+    userDoc.photoUrl = 'https://cdn.example/old.png';
+    h.auth.userDoc = userDoc;
+    h.auth.refreshUserDoc.mockRejectedValueOnce(new Error('offline'));
+    renderWithProviders(<AccountPage />);
+
+    fireEvent.click(screen.getByRole('button', { name: /remove photo/i }));
+    await waitFor(() =>
+      expect(h.updateDoc).toHaveBeenCalledWith(
+        expect.objectContaining({ path: 'users/t1' }),
+        expect.objectContaining({ photoUrl: null }),
+      ),
+    );
+    // No backwards error, and the stale thumbnail is gone.
+    expect(screen.queryByText(/could not remove the photo/i)).toBeNull();
+    await waitFor(() => expect(screen.queryByRole('img')).toBeNull());
+  });
+
   it('remove also deletes the storage object recovered from the download URL', async () => {
     const userDoc = makeUserDoc() as Record<string, unknown>;
     userDoc.photoUrl =

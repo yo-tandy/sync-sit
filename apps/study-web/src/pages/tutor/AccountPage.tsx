@@ -99,9 +99,15 @@ export function AccountPage() {
 
   const [error, setError] = useState<string | null>(null);
 
-  // Initialize from userDoc
+  // Initialize the FORM fields from userDoc exactly once per mount: the
+  // photo auto-save calls refreshUserDoc(), and re-seeding on every refresh
+  // silently discarded unsaved edits elsewhere on the page (typed bio,
+  // toggled lengths). The photo preview stays outside the guard — it must
+  // track the stored value the auto-save just wrote.
+  const seededRef = useRef(false);
   useEffect(() => {
-    if (!userDoc) return;
+    if (!userDoc || seededRef.current) return;
+    seededRef.current = true;
     setContactEmail(tutor?.contactEmail || userDoc.email || '');
     setPhone(tutor?.contactPhone || '');
     setWhatsapp(tutor?.whatsapp || '');
@@ -111,13 +117,16 @@ export function AccountPage() {
     setLocationPrefs(tutor?.locationPrefs ?? []);
     setPaddingMin(tutor?.paddingMin ?? 0);
     setAboutMe(tutor?.aboutMe ?? '');
-    if (userDoc.photoUrl) {
-      setPhotoPreview(userDoc.photoUrl);
-    }
     if (userDoc.notifPrefs) {
       setPrefs(userDoc.notifPrefs);
     }
   }, [userDoc, tutor]);
+
+  // Photo preview tracks the stored value on every userDoc change (the
+  // auto-save path refreshes the doc after writing photoUrl).
+  useEffect(() => {
+    if (userDoc?.photoUrl) setPhotoPreview(userDoc.photoUrl);
+  }, [userDoc]);
 
   // Format DOB for display (User.dateOfBirth is a Firestore Timestamp, but may
   // be a plain string on older records — handle both).
@@ -191,9 +200,11 @@ export function AccountPage() {
         // delete leaves an orphan we retry on the next remove/replace.
         await deleteObject(ref(storage, oldPath)).catch(() => {});
       }
-      await refreshUserDoc();
+      // The write succeeded — the photo IS removed. A refresh blip must not
+      // claim otherwise, so it is best-effort outside the error semantics.
       setPhotoPreview(null);
       setPhotoFile(null);
+      await refreshUserDoc().catch(() => {});
     } catch {
       setPhotoError(t('account.photoRemoveFailed'));
     }
@@ -204,7 +215,10 @@ export function AccountPage() {
     setPhotoSaving(true);
     setPhotoError(null);
     try {
-      const ext = photoFile.name.split('.').pop() || 'jpg';
+      // split('.').pop() returns the whole name for extensionless files (the
+      // || never fires), and case must not fork storage paths (IMG.JPG vs
+      // img.jpg). Mirrored in sit's babysitter AccountPage.
+      const ext = (photoFile.name.includes('.') ? photoFile.name.split('.').pop()! : 'jpg').toLowerCase();
       const oldPath = storedPhotoPath();
       const path = `profile-photos/${uid}.${ext}`;
       const storageRef = ref(storage, path);
@@ -218,8 +232,8 @@ export function AccountPage() {
       if (oldPath && oldPath !== path) {
         await deleteObject(ref(storage, oldPath)).catch(() => {});
       }
-      await refreshUserDoc();
       setPhotoFile(null);
+      await refreshUserDoc().catch(() => {});
     } catch {
       // Inline error where the user is looking, and an honest preview: the
       // picked image did NOT save, so fall back to what is actually stored.

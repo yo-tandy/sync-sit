@@ -201,7 +201,7 @@ export function BabysitterAccountPage() {
     setPhotoSaving(true);
     setError(null);
     try {
-      const ext = photoFile.name.split('.').pop() || 'jpg';
+      const ext = (photoFile.name.includes('.') ? photoFile.name.split('.').pop()! : 'jpg').toLowerCase();
       const path = `profile-photos/${uid}.${ext}`;
       const storageRef = ref(storage, path);
       await uploadBytes(storageRef, photoFile);

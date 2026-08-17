@@ -128,6 +128,20 @@ service cloud.firestore {
                      && tutorField(request.resource.data, 'aboutMe', null).size() <= 1000));
     }
 
+    // Helper: top-level photoUrl is owner-writable (the photo auto-save) but
+    // must stay a bounded https URL — the client type/size checks are UX
+    // only; without this a direct write could store a non-string, a data:
+    // URI, or an arbitrary payload that search results then project.
+    function photoUrlValid() {
+      return !('photoUrl' in request.resource.data)
+             || request.resource.data.photoUrl == null
+             || (request.resource.data.photoUrl is string
+                 && request.resource.data.photoUrl.size() <= 2048
+                 // http allowed for the storage EMULATOR's download URLs;
+                 // the scheme allowlist exists to block data:/javascript:.
+                 && request.resource.data.photoUrl.matches('https?://.*'));
+    }
+
     // Helper: profiles.parent.familyId is server-controlled (enrollFamily /
     // joinFamily). A client must not move themselves between families.
     function parentFamilyIdUnchanged() {
@@ -187,7 +201,8 @@ service cloud.firestore {
                     && tutorIdentityUnchanged()
                     && parentFamilyIdUnchanged()
                     && identityUnlockedOrUnchanged()
-                    && tutorNumericBoundsValid();
+                    && tutorNumericBoundsValid()
+                    && photoUrlValid();
     }
 
     // Families: readable + editable by family members + admin
