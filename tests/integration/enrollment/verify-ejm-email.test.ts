@@ -87,14 +87,24 @@ describe('verifyEjmEmail cross-app and silent existing-account cases', () => {
 
     // 2. Backdate createdAt past the 60s cooldown (admin SDK) — otherwise the
     // probe short-circuits there and never reaches the silent path at all.
-    await codeRef.update({ createdAt: new Date(Date.now() - 120 * 1000) });
+    // Seed attempts=3 to pin the anti-brute-force property below.
+    await codeRef.update({ createdAt: new Date(Date.now() - 120 * 1000), attempts: 3 });
+    const expiresBefore = (await codeRef.get()).data()!.expiresAt.toMillis();
 
     // 3. Unauthenticated probe on the same address: fresh body...
     const probe = await callFunction('verifyEjmEmail', { email: seed.babysitter4.email });
     expect(probe).toEqual(FRESH_RESPONSE);
 
-    // ...the REAL code survives and still verifies (the victim's flow works)...
-    expect((await codeRef.get()).data()!.code).toBe(realCode);
+    // ...the REAL code survives with attempts and expiry FROZEN (round 4:
+    // resetting attempts would grant a prober 5 fresh guesses per cooldown
+    // cycle at the victim's live code; refreshing expiresAt would keep it
+    // alive indefinitely)...
+    const afterProbe = (await codeRef.get()).data()!;
+    expect(afterProbe.code).toBe(realCode);
+    expect(afterProbe.attempts).toBe(3);
+    expect(afterProbe.expiresAt.toMillis()).toBe(expiresBefore);
+
+    // ...and it still verifies (the victim's flow works)...
     const verified = await callFunction<{ valid: boolean }>('verifyCode', {
       email,
       code: realCode,
@@ -295,6 +305,45 @@ describe('post-silent-success oracle parity (issue #148 round 2)', () => {
       message: 'Too many failed attempts. Please request a new verification code.',
     });
     expect(silentExhausted).toEqual(freshExhausted);
+
+    // Cross-request boundary (round 4): re-request past the 60s cooldown —
+    // the rewrite must reset attempts identically on both paths, or the
+    // frozen state becomes a deterministic oracle (RESOURCE_EXHAUSTED vs
+    // INVALID_ARGUMENT on the very next probe).
+    const db = getDb();
+    const backdateCreatedAt = (email: string) =>
+      db
+        .collection('verificationCodes')
+        .doc(email.toLowerCase())
+        .update({ createdAt: new Date(Date.now() - 120 * 1000) });
+    await backdateCreatedAt(freshEmail);
+    await backdateCreatedAt(silentEmail);
+    await callFunction('verifyEjmEmail', { email: freshEmail });
+    await callFunction('verifyEjmEmail', { email: silentEmail });
+
+    const freshAfterRerequest = await captureError(() =>
+      callFunction('verifyCode', { email: freshEmail, code: WRONG_CODE }),
+    );
+    const silentAfterRerequest = await captureError(() =>
+      callFunction('verifyCode', { email: silentEmail, code: WRONG_CODE }),
+    );
+    expect(freshAfterRerequest).toEqual({
+      code: 'INVALID_ARGUMENT',
+      message: 'Invalid verification code',
+    });
+    expect(silentAfterRerequest).toEqual(freshAfterRerequest);
+
+    // expiresAt variant: the re-request refreshed expiry on BOTH paths, so a
+    // probe after the ORIGINAL 10-minute window cannot split into
+    // INVALID_ARGUMENT vs DEADLINE_EXCEEDED. Pinned via the rewritten docs'
+    // expiry timestamps (both pushed well past the original window).
+    const freshDoc = (await db.collection('verificationCodes').doc(freshEmail).get()).data()!;
+    const silentDoc = (
+      await db.collection('verificationCodes').doc(silentEmail.toLowerCase()).get()
+    ).data()!;
+    const fiveMinFromNow = Date.now() + 5 * 60 * 1000;
+    expect(freshDoc.expiresAt.toMillis()).toBeGreaterThan(fiveMinFromNow);
+    expect(silentDoc.expiresAt.toMillis()).toBeGreaterThan(fiveMinFromNow);
   });
 
   it('joinFamily (no verifyCode hop) with a wrong code errors identically after silent-verify and fresh-verify', async () => {

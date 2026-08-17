@@ -475,6 +475,22 @@ describe('verificationCodes collection', () => {
   });
 });
 
+describe('accountExistsNotices collection', () => {
+  // The silent existing-account design (issue #148) depends on this
+  // collection being server-only via the default-deny catch-all — the marker
+  // and the decoy tag are unobservable only while this holds.
+  it('denies all client access', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'accountExistsNotices', 'test@ejm.org'), {
+        lastSentAt: new Date(),
+      });
+    });
+
+    const authed = testEnv.authenticatedContext('anyuser');
+    await assertFails(getDoc(doc(authed.firestore(), 'accountExistsNotices', 'test@ejm.org')));
+  });
+});
+
 describe('notifications collection', () => {
   it('allows user to read own notifications', async () => {
     await testEnv.withSecurityRulesDisabled(async (ctx) => {

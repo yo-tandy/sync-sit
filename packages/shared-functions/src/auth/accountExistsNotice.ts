@@ -10,9 +10,10 @@ const NOTICE_WINDOW_MS = 24 * 60 * 60 * 1000;
  * Silent existing-account path (issue #148): when a signup verification
  * request hits an email that already belongs to an account, the caller must
  * not be able to tell — the response is byte-identical to the fresh path, and
- * a DECOY verificationCodes/{email} doc is written, byte-shaped like the
- * caller's fresh path would write (unguessable crypto code, same fields) —
- * unless an unexpired code doc already exists (no-clobber guard below).
+ * a DECOY verificationCodes/{email} doc is written, shaped like the caller's
+ * fresh path would write (unguessable crypto code, same consumer-read fields,
+ * plus a server-only `decoy` tag) — unless a REAL unexpired code from the
+ * authed own-email bypass is in flight (see the branch comment below).
  * The decoy makes every downstream step — verifyCode and all four enroll
  * callables — take the exact same error branches as a fresh email with a
  * wrong code (invalid-argument "Invalid verification code", the same
@@ -32,7 +33,9 @@ const NOTICE_WINDOW_MS = 24 * 60 * 60 * 1000;
  * Known residual timing channel (deliberate, do NOT claim it is closed): in
  * the 60s-24h repeat window the fresh path performs an outbound email send
  * while this path skips it (notice already sent within 24h), so wall-clock
- * can differ. Full symmetry would mean 24h-throttling legitimate resends or
+ * can differ. (Every branch below refreshes createdAt, so the 60s cooldown
+ * itself fires symmetrically on both paths — the divergence is the send,
+ * plus small per-request read-count differences.) Full symmetry would mean 24h-throttling legitimate resends or
  * fire-and-forget sends that lose failure propagation — both worse. A third
  * option, padding both branches to a fixed floor duration, was considered
  * and rejected: the floor only closes the channel if it exceeds the p99
@@ -52,25 +55,45 @@ export async function handleExistingAccountSignup(
   app: unknown,
   decoyCodeDoc: Record<string, unknown>,
 ): Promise<{ success: true; message: string }> {
-  // No-clobber guard (round 3): never overwrite an UNEXPIRED code doc. The
-  // authed own-email bypass writes a REAL code for the cross-app add-profile
-  // flow; without this guard an unauthenticated repeat (past the 60s
-  // cooldown) would replace it with a decoy and deny that flow indefinitely.
-  // Skipping the write reopens nothing observable — clients cannot read the
-  // collection and the response body is unchanged; it only adds one skipped
-  // set() to the documented 60s-24h timing window. Expired docs are still
-  // replaced so the decoy freshness matches the fresh path's rewrite.
+  // Decoy vs real handling (round 4). Decoys carry a server-only
+  // `decoy: true` tag (unobservable: the collection is client-unreadable and
+  // every consumer — verifyCode + the four enroll callables — reads only the
+  // named code/attempts/expiresAt fields, copying nothing onward).
+  //
+  // - Existing DECOY: clobber unconditionally. A repeat request past the
+  //   cooldown must reset attempts and refresh expiresAt/createdAt exactly
+  //   like the fresh path's rewrite, or the frozen state becomes a
+  //   deterministic oracle (RESOURCE_EXHAUSTED / DEADLINE_EXCEEDED splits).
+  // - Existing REAL unexpired code (no tag — includes pre-deploy legacy
+  //   docs; only reachable while the authed own-email bypass has a code in
+  //   flight): refresh createdAt ONLY, so the 60s cooldown still fires
+  //   symmetrically on both paths. code, attempts and expiresAt stay frozen
+  //   DELIBERATELY: resetting attempts would hand an unauthenticated prober
+  //   five fresh guesses per cooldown cycle at the victim's live code, and
+  //   refreshing expiresAt would keep that code alive indefinitely.
+  //   Honest residual: during such a live bypass window (at most the code's
+  //   10-minute life) the attempts/expiry divergence IS observable to a
+  //   prober — accepted because the window is short, requires the victim to
+  //   be mid-enrollment, reveals only what the bypass state already implies,
+  //   and the alternative weakens the victim's actual code.
+  // - Existing REAL but expired: clobber with a fresh decoy, matching the
+  //   fresh path's rewrite of stale docs.
   const codeRef = db.collection('verificationCodes').doc(email);
   const existingCode = await codeRef.get();
-  const existingExpiresAt = existingCode.data()?.expiresAt;
+  const existingData = existingCode.data();
+  const existingExpiresAt = existingData?.expiresAt;
   const existingExpiresMs =
     existingExpiresAt instanceof Timestamp
       ? existingExpiresAt.toMillis()
       : existingExpiresAt instanceof Date
         ? existingExpiresAt.getTime()
         : 0;
-  if (existingExpiresMs <= Date.now()) {
-    await codeRef.set(decoyCodeDoc);
+  const isLiveRealCode =
+    existingCode.exists && existingData?.decoy !== true && existingExpiresMs > Date.now();
+  if (isLiveRealCode) {
+    await codeRef.update({ createdAt: new Date() });
+  } else {
+    await codeRef.set({ ...decoyCodeDoc, decoy: true });
   }
 
   const noticeRef = db.collection('accountExistsNotices').doc(email);
