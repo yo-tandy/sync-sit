@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react';
+import { Trans } from 'react-i18next';
+import { Link } from 'react-router';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '@/config/firebase';
 import {} from '@/components/ui';
@@ -92,6 +94,18 @@ export function StepParentVerify({ data, onChange, onNext, onResend, error }: St
               Resend code
             </button>
           )}
+        </p>
+
+        {/* Always rendered, on BOTH the fresh and silent existing-account
+            paths (issue #148) — a static, non-distinguishing exit for users
+            whose account already exists and who therefore never get a code. */}
+        <p className="mt-2 text-sm text-gray-500">
+          <Trans
+            i18nKey="enrollment.verifyNoCodeHint"
+            components={{
+              loginLink: <Link to="/login" className="font-medium text-brand-600 hover:underline" />,
+            }}
+          />
         </p>
       </div>
 

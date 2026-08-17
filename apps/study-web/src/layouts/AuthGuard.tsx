@@ -28,12 +28,11 @@ export function AuthGuard({ role, children }: AuthGuardProps) {
   const studyRole = getStudyRole(userDoc);
 
   // DELIBERATE DIVERGENCE from sync-sit's babysitter guard: we do NOT eject
-  // tutors with incomplete enrollment or an unapproved/pending/rejected
-  // identity. getStudyRole returns 'tutor' whenever a tutor profile exists at
-  // all, so an unapproved tutor (enrollmentComplete === false, any
-  // identityStatus, or verification absent on pre-#77 tutors) passes this check
-  // and reaches the portal. Surfacing and gating on verification state is the
-  // dashboard's job (PR #77 state contract), never the guard's.
+  // tutors with incomplete enrollment. getStudyRole returns 'tutor' whenever a
+  // tutor profile exists at all, so even a legacy doc from the retired
+  // identity-verification model (enrollmentComplete === false) passes this
+  // check and reaches the portal. Gating search activation is the dashboard's
+  // job, never the guard's.
   if (studyRole !== role) {
     // Role-mismatch fallback mirrors LoginPage.postLoginRouter so the guard and
     // the post-login router agree: admins to /admin, tutors to /tutor, study

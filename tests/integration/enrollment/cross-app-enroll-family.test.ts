@@ -133,7 +133,7 @@ describe('enrollFamily cross-app add-profile', () => {
     expect(countAfter).toBe(countBefore);
   });
 
-  it('unauthenticated with an existing auth email gets account-exists details', async () => {
+  it('unauthenticated with an existing auth email is rejected already-exists (race backstop)', async () => {
     await seedCode(TUTOR_EMAIL);
     await expect(
       callFunction('enrollFamily', {
@@ -147,8 +147,9 @@ describe('enrollFamily cross-app add-profile', () => {
         kids: [],
       }),
     ).rejects.toMatchObject({
+      // Race-backstop throw: no machine-readable reason since the silent
+      // existing-account flow (issue #148) removed the client branch.
       code: 'ALREADY_EXISTS',
-      details: { reason: 'account-exists' },
     });
   });
 });

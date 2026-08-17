@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router';
+import { useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { httpsCallable } from 'firebase/functions';
 import { signInWithEmailAndPassword } from 'firebase/auth';
@@ -69,9 +69,6 @@ export function ParentEnrollment() {
   const [formData, setFormData] = useState<ParentFormData>(INITIAL_DATA);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // When true, render the account-exists CTA (message + login link) instead of
-  // the plain error string. Other failures keep using `error`.
-  const [showLoginCta, setShowLoginCta] = useState(false);
   const navigate = useNavigate();
   const { firebaseUser, userDoc, loading: authLoading, refreshUserDoc } = useAuthStore();
 
@@ -102,17 +99,13 @@ export function ParentEnrollment() {
   };
 
   // Maps a callable error to the right UI state; returns true if it produced a
-  // specialised message (account-exists CTA or already-in-family notice).
+  // specialised message (already-in-family notice). There is NO account-exists
+  // branch: signup with an existing email is silent (issue #148) — the backend
+  // responds like a fresh signup and emails the owner.
   const applyEnrollmentError = (err: unknown): boolean => {
     const reason = enrollmentErrorReason(err);
-    if (reason === 'account-exists') {
-      setError(null);
-      setShowLoginCta(true);
-      return true;
-    }
     if (reason === 'profile-exists') {
       setError(t('enrollment.alreadyInFamily'));
-      setShowLoginCta(false);
       return true;
     }
     return false;
@@ -121,10 +114,10 @@ export function ParentEnrollment() {
   const handleSendCode = async () => {
     setLoading(true);
     setError(null);
-    setShowLoginCta(false);
     try {
       const verifyEmail = httpsCallable(functions, 'verifyParentEmail');
-      await verifyEmail({ email: formData.email });
+      // `app` only selects the copy of the silent account-exists email.
+      await verifyEmail({ email: formData.email, app: 'sit' });
       setStep(1);
     } catch (err: unknown) {
       if (!applyEnrollmentError(err)) {
@@ -150,7 +143,6 @@ export function ParentEnrollment() {
   const handleComplete = async () => {
     setLoading(true);
     setError(null);
-    setShowLoginCta(false);
     try {
       const enrollFamily = httpsCallable(functions, 'enrollFamily');
       const basePayload = {
@@ -253,14 +245,6 @@ export function ParentEnrollment() {
         onBack={step > 0 ? () => setStep(step - 1) : undefined}
       />
       <StepIndicator totalSteps={4} currentStep={step} />
-      {showLoginCta && (
-        <div className="mx-auto mb-4 max-w-md px-6 text-center text-sm text-brand-600">
-          <p>{t('enrollment.accountExistsCta')}</p>
-          <Link to="/login" className="mt-1 inline-block font-semibold text-brand-600 underline">
-            {t('auth.login')}
-          </Link>
-        </div>
-      )}
       {steps[step]}
     </div>
   );

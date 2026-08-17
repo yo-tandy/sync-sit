@@ -38,6 +38,26 @@ describe('listPendingVerifications', () => {
   });
 
   describe('happy paths', () => {
+    it('degrades a legacy familyId-less doc to Unknown instead of crashing', async () => {
+      const db = getDb();
+      const ref = db.collection('verifications').doc();
+      await ref.set({
+        verificationId: ref.id,
+        uploadedByUserId: seed.parent1.uid,
+        type: 'tutor_identity',
+        status: 'pending',
+        fileUrl: `verification-documents/${seed.parent1.uid}/id.pdf`,
+        fileName: 'id.pdf',
+        createdAt: new Date(),
+      });
+
+      const result = await callFunction<ListResponse>('listPendingVerifications', {}, adminToken);
+
+      const legacy = result.verifications.find((v) => v.id === ref.id);
+      expect(legacy).toBeDefined();
+      expect(legacy!.familyName).toBe('Unknown');
+    });
+
     it('admin lists all verifications enriched with family/parent info', async () => {
       await seedVerification({
         familyId: seed.family1Id,

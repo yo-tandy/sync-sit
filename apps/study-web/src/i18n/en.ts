@@ -228,28 +228,11 @@ export default {
     accountTitle: 'My Account',
     subjectsTitle: 'Subjects & Rates',
     scheduleTitle: 'Schedule',
-    verificationTitle: 'Identity Verification',
     requestsTitle: 'Requests',
     sessionsTitle: 'Sessions',
     endorsementsTitle: 'Endorsements',
     dashboard: {
       greeting: 'Manage your tutor profile and availability.',
-      bannerNotSubmittedTitle: 'Verify your identity',
-      bannerNotSubmittedDesc:
-        'Upload a photo of your ID so families can find you in search. It only takes a minute.',
-      bannerNotSubmittedCta: 'Upload your ID',
-      bannerPendingTitle: 'Under review',
-      bannerPendingDesc:
-        'Your ID is being reviewed. This usually takes a day or two — we\'ll let you know once it\'s done.',
-      bannerRejectedTitle: 'Verification unsuccessful',
-      bannerRejectedDesc:
-        'Your document was not accepted. Open verification to see the reason and upload a new one.',
-      bannerRejectedCta: 'Review and resubmit',
-      bannerApprovedTitle: 'You\'re verified',
-      bannerApprovedDesc: 'Your identity is verified. You can be listed in search.',
-      bannerPendingLiveTitle: 'New document under review',
-      bannerPendingLiveDesc:
-        'Your new ID is being reviewed. You stay listed in search in the meantime.',
       searchTitle: 'Search visibility',
       searchableLive: 'Live — families can find you in search.',
       searchableHidden: 'Hidden — you are not shown in search.',
@@ -277,7 +260,6 @@ export default {
       subjectsCard: 'Subjects & rates',
       scheduleCard: 'Availability',
       accountCard: 'Account',
-      verificationCard: 'Identity verification',
       requestsCardTitle: 'Contact requests',
       sessionsCardTitle: 'Sessions',
       endorsementsCardTitle: 'Endorsements',
@@ -481,25 +463,6 @@ export default {
       actionError: 'Couldn\'t update the endorsement. Please try again.',
       submittedOn: 'Submitted {{date}}',
       anonymous: 'A family',
-    },
-    verification: {
-      whyRequired:
-        'To keep families safe, we verify every tutor before they appear in search. Upload a photo of your ID and our team will review it.',
-      statusLabel: 'Verification status',
-      status_not_submitted: 'Not submitted',
-      status_pending: 'Pending',
-      status_approved: 'Approved',
-      status_rejected: 'Rejected',
-      pendingReview: 'Your document is under review. This usually takes a day or two.',
-      approvedMessage: 'Your identity is verified. You can now be listed in search.',
-      rejectedReason: 'Reason for rejection',
-      uploadCta: 'Upload your ID',
-      resubmitCta: 'Upload your ID again',
-      identityDesc: 'A photo or scan of an official ID (image or PDF, max 10 MB).',
-      upload: 'Upload document',
-      fileTooLarge: 'File is too large. Maximum size is 10 MB.',
-      invalidFileType: 'Unsupported file type. Please upload an image or PDF.',
-      uploadError: 'Upload failed. Please try again.',
     },
     subjects: {
       intro: 'List the subjects you teach, the class levels you cover, and your hourly rate for each.',
@@ -983,9 +946,9 @@ export default {
 
   enrollment: {
     confirmConsentTitle: 'Almost there',
-    accountExistsCta: 'An account with this email already exists. Log in to add this role.',
     identityOnFile: 'Enrolling as {{name}} — your identity is already on file from your other Sync profile.',
     alreadyEnrolled: 'This account already has this role.',
+    verifyNoCodeHint: "Didn't get a code? If you already have an account, <loginLink>log in</loginLink> instead.",
     age: {
       under15: 'You need to be at least 15 to enroll on your own. Your parents can create an account and enroll you from theirs.',
       mismatch: "Your date of birth doesn't match your school year. Please contact the EJM administrator.",
@@ -1001,7 +964,7 @@ export default {
       stepPassword: 'Create your password',
       stepProfile: 'Your profile',
       success: 'Welcome to Sync/Study!',
-      successSubtitle: 'Your application has been submitted. You\'ll be notified once your profile is approved.',
+      successSubtitle: 'Your account is ready. Add your subjects and availability, then turn on search visibility so families can find you.',
       goHome: 'Go to home',
     },
     verifySchool: 'Verify your school',

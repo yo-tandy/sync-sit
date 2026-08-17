@@ -88,7 +88,7 @@ describe('study-web AuthGuard', () => {
     expect(screen.getByText('tutor-portal')).toBeInTheDocument();
   });
 
-  it('lets an UNAPPROVED tutor in — enrollmentComplete false, no verification (pre-#77)', () => {
+  it('lets a legacy incomplete tutor in — enrollmentComplete false', () => {
     h.auth = {
       firebaseUser: { uid: 't2' },
       userDoc: { uid: 't2', profiles: { tutor: { enrollmentComplete: false } } },
@@ -98,29 +98,13 @@ describe('study-web AuthGuard', () => {
     expect(screen.getByText('tutor-portal')).toBeInTheDocument();
   });
 
-  it('lets a tutor with a PENDING identity submission in', () => {
+  it('lets a legacy tutor doc with a retired verification field in', () => {
+    // Docs written under the dropped identity-verification model may still
+    // carry a verification map — the guard must ignore it entirely.
     h.auth = {
       firebaseUser: { uid: 't3' },
       userDoc: {
         uid: 't3',
-        profiles: {
-          tutor: {
-            enrollmentComplete: false,
-            verification: { identityStatus: 'pending' },
-          },
-        },
-      },
-      loading: false,
-    };
-    renderGuard();
-    expect(screen.getByText('tutor-portal')).toBeInTheDocument();
-  });
-
-  it('lets a tutor with a REJECTED identity submission in', () => {
-    h.auth = {
-      firebaseUser: { uid: 't4' },
-      userDoc: {
-        uid: 't4',
         profiles: {
           tutor: {
             enrollmentComplete: false,

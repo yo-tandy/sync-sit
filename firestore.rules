@@ -75,11 +75,14 @@ service cloud.firestore {
     // Helper: server-owned identity/state fields inside profiles.tutor that the
     // client must never mutate directly. The tutor state machine is server-owned:
     // - ejemEmail: EJM identity, set by enrollTutor only.
-    // - enrollmentComplete: flipped false->true ONLY by reviewVerification on
-    //   admin approval. (Contrast profiles.babysitter.enrollmentComplete, which
-    //   is intentionally client-writable and left untouched here.)
-    // - verification: identity-verification state, driven exclusively by the
-    //   submitVerification / reviewVerification callables.
+    // - enrollmentComplete: set true by enrollTutor at creation (identity
+    //   verification was dropped, issue #149); still pinned server-owned so a
+    //   client can't flip a legacy incomplete doc into search visibility.
+    //   (Contrast profiles.babysitter.enrollmentComplete, which is
+    //   intentionally client-writable and left untouched here.)
+    // - verification: retired identity-verification state map. New profiles
+    //   no longer carry it; the pin stays so legacy docs can't be forged or
+    //   cleared by the client.
     // - approvedFamilies: consent audit trail. respondToTutorContactRequest is
     //   the ONLY writer (on accept); allowing direct client writes would bypass
     //   the contact-request flow and its GDPR-required record of which families

@@ -1,17 +1,18 @@
 /**
  * Extracts the machine-readable enrollment error reason set by the backend
- * (HttpsError details: { reason: 'account-exists' | 'profile-exists', ... }).
+ * (HttpsError details: { reason: 'profile-exists' | 'role-exclusive', ... }).
  * Works on the Firebase client SDK's FunctionsError, which exposes the
  * HttpsError third argument as `details`. Returns null for anything else.
+ * There is deliberately NO account-exists reason: signup with an existing
+ * email is silent (issue #148) — the backend responds like a fresh signup and
+ * only the mailbox owner is told, by email.
  */
-export type EnrollmentErrorReason = 'account-exists' | 'profile-exists' | 'role-exclusive';
+export type EnrollmentErrorReason = 'profile-exists' | 'role-exclusive';
 
 export function enrollmentErrorReason(err: unknown): EnrollmentErrorReason | null {
   const details = (err as { details?: { reason?: unknown } } | null)?.details;
   const reason = details?.reason;
-  return reason === 'account-exists' || reason === 'profile-exists' || reason === 'role-exclusive'
-    ? reason
-    : null;
+  return reason === 'profile-exists' || reason === 'role-exclusive' ? reason : null;
 }
 
 /**

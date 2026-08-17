@@ -2,9 +2,9 @@ import { describe, it, expect } from 'vitest';
 import { enrollmentErrorReason, ageGateErrorCode } from '@ejm/shared-ui';
 
 describe('enrollmentErrorReason', () => {
-  it('extracts account-exists', () => {
+  it("no longer recognizes account-exists (issue #148: silent existing-account flow)", () => {
     expect(enrollmentErrorReason({ code: 'functions/already-exists', details: { reason: 'account-exists' } }))
-      .toBe('account-exists');
+      .toBeNull();
   });
   it('extracts profile-exists', () => {
     expect(enrollmentErrorReason({ details: { reason: 'profile-exists', profile: 'tutor' } }))
@@ -36,6 +36,6 @@ describe('ageGateErrorCode', () => {
     expect(ageGateErrorCode(new Error('boom'))).toBeNull();
     expect(ageGateErrorCode(null)).toBeNull();
     expect(ageGateErrorCode({ details: { code: 'other' } })).toBeNull();
-    expect(ageGateErrorCode({ details: { reason: 'account-exists' } })).toBeNull();
+    expect(ageGateErrorCode({ details: { reason: 'profile-exists' } })).toBeNull();
   });
 });

@@ -38,7 +38,28 @@ describe('verifyEjmEmail', () => {
     ).rejects.toThrow();
   });
 
-  it('rejects duplicate email with existing account', async () => {
+  it('a repeat request within the 60s cooldown returns success without rewriting the code doc', async () => {
+    // Self-sufficient: own email, two immediate calls.
+    const db = getDb();
+    const first = await callFunction<{ success: boolean; message: string }>(
+      'verifyEjmEmail',
+      { email: 'student29@ejm.org' }
+    );
+    expect(first.success).toBe(true);
+    const before = (await db.collection('verificationCodes').doc('student29@ejm.org').get()).data()!;
+
+    const second = await callFunction<{ success: boolean; message: string }>(
+      'verifyEjmEmail',
+      { email: 'student29@ejm.org' }
+    );
+    expect(second).toEqual({ success: true, message: 'Verification code sent' });
+
+    const after = (await db.collection('verificationCodes').doc('student29@ejm.org').get()).data()!;
+    expect(after.code).toBe(before.code);
+    expect(after.createdAt.toMillis()).toBe(before.createdAt.toMillis());
+  });
+
+  it('duplicate email with existing account: silent success, DECOY code doc, notice marker written (issue #148)', async () => {
     // Create a user first
     const { getAdminAuth } = await import('../../setup/emulator.js');
     const auth = getAdminAuth();
@@ -49,8 +70,26 @@ describe('verifyEjmEmail', () => {
       uid, email: 'existing28@ejm.org', role: 'babysitter', status: 'active',
     });
 
-    await expect(
-      callFunction('verifyEjmEmail', { email: 'existing28@ejm.org' })
-    ).rejects.toThrow();
+    // The response must be indistinguishable from the fresh path.
+    const result = await callFunction<{ success: boolean; message: string }>(
+      'verifyEjmEmail',
+      { email: 'existing28@ejm.org' }
+    );
+    expect(result).toEqual({ success: true, message: 'Verification code sent' });
+
+    // A decoy code doc exists, byte-shaped like the fresh write (so the code
+    // step and the enroll callables error identically to a fresh wrong code)
+    // but with an unguessable code the caller never receives...
+    const codeDoc = await db.collection('verificationCodes').doc('existing28@ejm.org').get();
+    expect(codeDoc.exists).toBe(true);
+    const data = codeDoc.data()!;
+    expect(data.code).toMatch(/^\d{6}$/);
+    expect(data.graduationYear).toBe(28);
+    expect(data.attempts).toBe(0);
+
+    // ...and the mailbox owner got the account-exists notice instead.
+    const notice = await db.collection('accountExistsNotices').doc('existing28@ejm.org').get();
+    expect(notice.exists).toBe(true);
+    expect(notice.data()!.lastSentAt).toBeTruthy();
   });
 });

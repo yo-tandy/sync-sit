@@ -1,12 +1,11 @@
 import type { FirestoreTimestamp } from './common.js';
 
 export type VerificationStatus = 'not_submitted' | 'pending' | 'approved' | 'rejected';
-export type VerificationType = 'identity' | 'ejm_enrollment' | 'tutor_identity';
+export type VerificationType = 'identity' | 'ejm_enrollment';
 
 export interface VerificationDoc {
   verificationId: string;
-  /** Absent on tutor_identity docs — tutor docs are keyed by uploadedByUserId. */
-  familyId?: string;
+  familyId: string;
   uploadedByUserId: string;
   type: VerificationType;
   status: VerificationStatus;
@@ -34,9 +33,4 @@ export interface FamilyVerificationStatus {
   isFullyVerified: boolean;
   isEjmFamily: boolean;
   communityApprovedBy?: string; // uid of the parent who vouched
-}
-
-/** Verification state stored on users/{uid}.profiles.tutor.verification */
-export interface TutorVerificationStatus {
-  identityStatus: VerificationStatus;
 }

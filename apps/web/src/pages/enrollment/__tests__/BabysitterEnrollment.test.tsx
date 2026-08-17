@@ -217,3 +217,18 @@ describe('BabysitterEnrollment add-profile routing (issue #144)', () => {
     expect(screen.queryByText('preferences-complete')).toBeNull();
   });
 });
+
+// Issue #148: the verify call must carry the sit app hint — it selects the
+// copy of the silent account-exists email (mirrors the study-side pin in
+// TutorEnrollment.test.tsx).
+describe('BabysitterEnrollment verify payload (issue #148)', () => {
+  it("verifyEjmEmail is called with the sit app hint", async () => {
+    renderFlow();
+    fireEvent.click(screen.getByText('email-submit'));
+    await vi.waitFor(() => {
+      const call = h.calls.find((c) => c.name === 'verifyEjmEmail');
+      expect(call).toBeTruthy();
+      expect(call!.payload).toMatchObject({ app: 'sit' });
+    });
+  });
+});

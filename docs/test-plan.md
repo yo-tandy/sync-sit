@@ -50,7 +50,7 @@
 | AUTH-015 | Contact info — at least one required | P0 | On preferences screen | Leave both email and phone blank | Error: "Provide at least one contact method" |
 | AUTH-016 | Area — arrondissement selection | P1 | On preferences screen | Select 3 arrondissements | Saved correctly |
 | AUTH-017 | Area — distance from address | P1 | On preferences screen | Enter address + 3km radius | Address geocoded, radius saved |
-| AUTH-018 | Duplicate EJM email | P0 | Account exists for `name28@ejm.org` | Try to enroll with same email | Error: "Account already exists" |
+| AUTH-018 | Duplicate EJM email | P0 | Account exists for `name28@ejm.org` | Try to enroll with same email | On screen: indistinguishable from a fresh signup (proceeds to code entry; any code fails as invalid). Mailbox: "you already have an account" email with login link, not a code |
 | AUTH-019 | Complete enrollment — all required fields | P0 | All steps completed | Submit final step | Account created, redirected to dashboard |
 
 ### 1.2 Parent + Family Enrollment

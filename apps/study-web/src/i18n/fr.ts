@@ -228,28 +228,11 @@ export default {
     accountTitle: 'Mon compte',
     subjectsTitle: 'Matières et tarifs',
     scheduleTitle: 'Disponibilités',
-    verificationTitle: "Vérification d'identité",
     requestsTitle: 'Demandes',
     sessionsTitle: 'Séances',
     endorsementsTitle: 'Recommandations',
     dashboard: {
       greeting: 'Gérez votre profil de tuteur et vos disponibilités.',
-      bannerNotSubmittedTitle: 'Vérifiez votre identité',
-      bannerNotSubmittedDesc:
-        "Téléversez une photo de votre pièce d'identité pour que les familles puissent vous trouver dans la recherche. Cela ne prend qu'une minute.",
-      bannerNotSubmittedCta: "Téléversez votre pièce d'identité",
-      bannerPendingTitle: "En cours d'examen",
-      bannerPendingDesc:
-        "Votre pièce d'identité est en cours d'examen. Cela prend généralement un jour ou deux — nous vous préviendrons une fois terminé.",
-      bannerRejectedTitle: 'Vérification échouée',
-      bannerRejectedDesc:
-        "Votre document n'a pas été accepté. Ouvrez la vérification pour voir le motif et en téléverser un nouveau.",
-      bannerRejectedCta: 'Consulter et resoumettre',
-      bannerApprovedTitle: 'Vous êtes vérifié',
-      bannerApprovedDesc: 'Votre identité est vérifiée. Vous pouvez apparaître dans la recherche.',
-      bannerPendingLiveTitle: "Nouveau document en cours d'examen",
-      bannerPendingLiveDesc:
-        "Votre nouvelle pièce d'identité est en cours d'examen. Vous restez visible dans la recherche entre-temps.",
       searchTitle: 'Visibilité dans la recherche',
       searchableLive: 'En ligne — les familles peuvent vous trouver dans la recherche.',
       searchableHidden: "Masqué — vous n'apparaissez pas dans la recherche.",
@@ -277,7 +260,6 @@ export default {
       subjectsCard: 'Matières et tarifs',
       scheduleCard: 'Disponibilités',
       accountCard: 'Compte',
-      verificationCard: "Vérification d'identité",
       requestsCardTitle: 'Demandes de contact',
       sessionsCardTitle: 'Séances',
       endorsementsCardTitle: 'Recommandations',
@@ -481,25 +463,6 @@ export default {
       actionError: 'Impossible de mettre à jour la recommandation. Veuillez réessayer.',
       submittedOn: 'Soumise le {{date}}',
       anonymous: 'Une famille',
-    },
-    verification: {
-      whyRequired:
-        "Pour protéger les familles, nous vérifions chaque tuteur avant qu'il apparaisse dans la recherche. Téléversez une photo de votre pièce d'identité et notre équipe l'examinera.",
-      statusLabel: 'Statut de vérification',
-      status_not_submitted: 'Non soumis',
-      status_pending: 'En attente',
-      status_approved: 'Approuvé',
-      status_rejected: 'Refusé',
-      pendingReview: "Votre document est en cours d'examen. Cela prend généralement un jour ou deux.",
-      approvedMessage: 'Votre identité est vérifiée. Vous pouvez désormais apparaître dans la recherche.',
-      rejectedReason: 'Motif du refus',
-      uploadCta: "Téléversez votre pièce d'identité",
-      resubmitCta: "Téléversez à nouveau votre pièce d'identité",
-      identityDesc: "Une photo ou un scan d'une pièce d'identité officielle (image ou PDF, max 10 Mo).",
-      upload: 'Téléverser le document',
-      fileTooLarge: 'Fichier trop volumineux. La taille maximale est de 10 Mo.',
-      invalidFileType: "Type de fichier non pris en charge. Veuillez téléverser une image ou un PDF.",
-      uploadError: 'Échec du téléversement. Veuillez réessayer.',
     },
     subjects: {
       intro: 'Indiquez les matières que vous enseignez, les niveaux que vous couvrez et votre tarif horaire pour chacune.',
@@ -983,9 +946,9 @@ export default {
 
   enrollment: {
     confirmConsentTitle: 'Presque terminé',
-    accountExistsCta: 'Un compte existe déjà avec cet e-mail. Connectez-vous pour ajouter ce rôle.',
     identityOnFile: 'Inscription au nom de {{name}} — votre identité est déjà enregistrée depuis votre autre profil Sync.',
     alreadyEnrolled: 'Ce compte possède déjà ce rôle.',
+    verifyNoCodeHint: "Vous n'avez pas reçu de code ? Si vous avez déjà un compte, <loginLink>connectez-vous</loginLink> plutôt.",
     age: {
       under15: "Vous devez avoir au moins 15 ans pour vous inscrire seul(e). Vos parents peuvent créer un compte et vous inscrire depuis le leur.",
       mismatch: "Votre date de naissance ne correspond pas à votre année scolaire. Veuillez contacter l'administrateur de l'EJM.",
@@ -1001,7 +964,7 @@ export default {
       stepPassword: 'Créez votre mot de passe',
       stepProfile: 'Votre profil',
       success: 'Bienvenue sur Sync/Study !',
-      successSubtitle: 'Votre candidature a été soumise. Vous serez notifié une fois votre profil approuvé.',
+      successSubtitle: 'Votre compte est prêt. Ajoutez vos matières et vos disponibilités, puis activez la visibilité dans la recherche pour que les familles puissent vous trouver.',
       goHome: "Retour à l'accueil",
     },
     verifySchool: 'Vérifiez votre école',

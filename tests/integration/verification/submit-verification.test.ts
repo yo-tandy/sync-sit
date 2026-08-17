@@ -8,6 +8,7 @@ describe('submitVerification', () => {
   let parent3Token: string;
   let babysitterToken: string;
   let adminToken: string;
+  let tutorToken: string;
 
   beforeAll(async () => {
     await clearAll();
@@ -16,6 +17,7 @@ describe('submitVerification', () => {
     parent3Token = await getIdToken(seed.parent3.uid); // unverified family (family-martin)
     babysitterToken = await getIdToken(seed.babysitter1.uid);
     adminToken = await getIdToken(seed.admin.uid);
+    tutorToken = await getIdToken(seed.tutor1.uid);
   });
 
   afterAll(async () => {
@@ -186,6 +188,35 @@ describe('submitVerification', () => {
           parent1Token,
         ),
       ).rejects.toMatchObject({ code: 'INVALID_ARGUMENT' });
+    });
+  });
+
+  // Tutor identity verification was retired (owner decision 2026-08-17):
+  // the type is rejected outright for every caller, and in particular it can
+  // never fall through into the family flow and mint a bogus family doc.
+  describe('retired tutor_identity type', () => {
+    const payload = {
+      type: 'tutor_identity',
+      fileUrl: 'verification-documents/x/doc.pdf',
+      fileName: 'doc.pdf',
+    };
+
+    it('rejects tutor_identity from a tutor with invalid-argument', async () => {
+      await expect(
+        callFunction('submitVerification', payload, tutorToken),
+      ).rejects.toMatchObject({ code: 'INVALID_ARGUMENT' });
+    });
+
+    it('rejects tutor_identity from a parent with invalid-argument and writes nothing', async () => {
+      await expect(
+        callFunction('submitVerification', payload, parent1Token),
+      ).rejects.toMatchObject({ code: 'INVALID_ARGUMENT' });
+
+      const leftovers = await getDb()
+        .collection('verifications')
+        .where('type', '==', 'tutor_identity')
+        .get();
+      expect(leftovers.empty).toBe(true);
     });
   });
 });

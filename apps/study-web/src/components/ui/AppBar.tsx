@@ -91,7 +91,6 @@ export function AppBar() {
           <MenuItem icon={<UserIcon className="h-5 w-5" />} label={t('tutor.accountTitle')} to="/tutor/account" onNavigate={() => setMenuOpen(false)} />
           <MenuItem icon={<ClipboardListIcon className="h-5 w-5" />} label={t('tutor.subjectsTitle')} to="/tutor/subjects" onNavigate={() => setMenuOpen(false)} />
           <MenuItem icon={<CalendarIcon className="h-5 w-5" />} label={t('tutor.scheduleTitle')} to="/tutor/schedule" onNavigate={() => setMenuOpen(false)} />
-          <MenuItem icon={<ShieldIcon className="h-5 w-5" />} label={t('tutor.verificationTitle')} to="/tutor/verification" onNavigate={() => setMenuOpen(false)} />
 
           <div className="border-t border-gray-100" />
 
