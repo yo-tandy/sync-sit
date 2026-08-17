@@ -26,6 +26,13 @@ export const searchTutors = onCall(
     }
     const params = parsed.data;
 
+    // Requested session-location TYPES, normalized to the array form: the
+    // multi-select `locationPrefs` wins; the legacy single `locationPref` is
+    // folded in for older clients. Empty → no location filtering.
+    const requestedPrefs =
+      params.filters?.locationPrefs ??
+      (params.filters?.locationPref ? [params.filters.locationPref] : []);
+
     // ── Caller gate: must be a parent whose family is fully verified ──
     const callerDoc = await db.collection('users').doc(request.auth.uid).get();
     const callerParent = getParentProfile(callerDoc.data() as User | undefined);
@@ -95,9 +102,30 @@ export const searchTutors = onCall(
       );
       if (!offering) continue;
 
-      // Filter: session location preference.
-      if (params.filters?.locationPref && !tutor.locationPrefs?.includes(params.filters.locationPref)) {
-        continue;
+      // Filter: session location types (issue #167). A tutor matches when
+      // their prefs intersect the requested set. When the ONLY overlap is at
+      // the family's side ('family_home'/'library'), the tutor's coverage
+      // must actually reach the family — THIS is the trust boundary for
+      // "in-person tutors must have a coverage area"; the area page's save
+      // gate is UX only. A tutor also reachable via 'online'/'tutor_home'
+      // overlap needs no coverage check for those legs.
+      if (requestedPrefs.length > 0) {
+        const matchedPrefs = requestedPrefs.filter((p) => tutor.locationPrefs?.includes(p));
+        if (matchedPrefs.length === 0) continue;
+        const hasTutorSideLeg = matchedPrefs.some((p) => p === 'online' || p === 'tutor_home');
+        if (!hasTutorSideLeg) {
+          // Family-side only. Distance-mode tutors need coordinates (the
+          // haversine radius gate below then decides reachability, keeping
+          // the approved-family bypass); arrondissement-mode tutors must
+          // list the family's resolved area label. Empty coverage — no
+          // coords, no arrondissements, or no resolvable areaLabel — means
+          // the tutor cannot be shown to serve this family's location.
+          const covers =
+            tutor.areaMode === 'distance'
+              ? !!tutor.areaLatLng
+              : !!params.areaLabel && (tutor.arrondissements ?? []).includes(params.areaLabel);
+          if (!covers) continue;
+        }
       }
 
       // Filter: max rate (against the MATCHED subject's rate).
@@ -125,9 +153,10 @@ export const searchTutors = onCall(
         if (!contactApproved && distance > cap) continue;
         distance = Math.round(distance * 10) / 10;
       } else if (tutor.areaMode === 'arrondissement') {
-        // For now, include all arrondissement-based tutors — we still surface a
-        // distance for sorting when both points are known.
-        // TODO: reverse-geocode the search address to match arrondissements.
+        // Arrondissement coverage is enforced by the location-type filter
+        // above (label intersection) — location-untyped queries deliberately
+        // include all arrondissement tutors. Here we only surface a distance
+        // for sorting when both points happen to be known.
         if (tutor.areaLatLng && params.latLng) {
           distance = Math.round(haversineDistance(tutor.areaLatLng, params.latLng) * 10) / 10;
         }

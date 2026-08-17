@@ -11,6 +11,8 @@ function tutorDoc(overrides: {
   status: string;
   searchable: boolean;
   enrollmentComplete: boolean;
+  /** Merged over the default tutor profile — coverage/prefs variations. */
+  profile?: Record<string, unknown>;
 }): Record<string, unknown> {
   return {
     uid: overrides.uid,
@@ -33,6 +35,7 @@ function tutorDoc(overrides: {
         areaMode: 'distance',
         areaLatLng: { lat: 48.8566, lng: 2.3522 },
         areaRadiusKm: 5,
+        ...(overrides.profile ?? {}),
       },
     },
     notifPrefs: {
@@ -323,6 +326,179 @@ describe('searchTutors', () => {
     } finally {
       await getDb().collection('users').doc(uid).delete();
     }
+  });
+
+  // ── Coverage-area filtering (issue #167) ──
+  // Requirement 1's trust boundary: a location-typed query must never return
+  // a tutor whose coverage cannot serve it. `areaLabel` is the family
+  // address resolved client-side to the arrondissement/town vocabulary.
+
+  async function withTempTutor(
+    uid: string,
+    profile: Record<string, unknown>,
+    fn: () => Promise<void>,
+  ) {
+    await getDb().collection('users').doc(uid).set(
+      tutorDoc({ uid, status: 'active', searchable: true, enrollmentComplete: true, profile })
+    );
+    try {
+      await fn();
+    } finally {
+      await getDb().collection('users').doc(uid).delete();
+    }
+  }
+
+  const ARR_16E_FAMILY_HOME = {
+    areaMode: 'arrondissement',
+    arrondissements: ['16e', 'Vincennes'],
+    areaLatLng: null,
+    areaRadiusKm: null,
+    locationPrefs: ['family_home'],
+  };
+
+  it('returns an arrondissement tutor for a family_home query in a covered area', async () => {
+    await withTempTutor('temp-tutor-arr-covered', ARR_16E_FAMILY_HOME, async () => {
+      const result = await callFunction<{ results: TutorResult[] }>(
+        'searchTutors',
+        { subject: 'math', level: '6e', areaLabel: '16e', filters: { locationPrefs: ['family_home'] } },
+        parentToken
+      );
+      expect(result.results.map((r) => r.uid)).toContain('temp-tutor-arr-covered');
+    });
+  });
+
+  it('excludes the arrondissement tutor for an UNCOVERED area label', async () => {
+    await withTempTutor('temp-tutor-arr-uncovered', ARR_16E_FAMILY_HOME, async () => {
+      const result = await callFunction<{ results: TutorResult[] }>(
+        'searchTutors',
+        { subject: 'math', level: '6e', areaLabel: '5e', filters: { locationPrefs: ['family_home'] } },
+        parentToken
+      );
+      expect(result.results.map((r) => r.uid)).not.toContain('temp-tutor-arr-uncovered');
+    });
+  });
+
+  it('excludes the arrondissement tutor when no areaLabel could be resolved', async () => {
+    await withTempTutor('temp-tutor-arr-nolabel', ARR_16E_FAMILY_HOME, async () => {
+      const result = await callFunction<{ results: TutorResult[] }>(
+        'searchTutors',
+        { subject: 'math', level: '6e', filters: { locationPrefs: ['family_home'] } },
+        parentToken
+      );
+      expect(result.results.map((r) => r.uid)).not.toContain('temp-tutor-arr-nolabel');
+    });
+  });
+
+  it('treats an over-long areaLabel as absent (degrades, never invalid-argument)', async () => {
+    await withTempTutor('temp-tutor-arr-longlabel', ARR_16E_FAMILY_HOME, async () => {
+      const result = await callFunction<{ results: TutorResult[] }>(
+        'searchTutors',
+        {
+          subject: 'math',
+          level: '6e',
+          areaLabel: 'x'.repeat(31),
+          filters: { locationPrefs: ['family_home'] },
+        },
+        parentToken
+      );
+      expect(result.results.map((r) => r.uid)).not.toContain('temp-tutor-arr-longlabel');
+    });
+  });
+
+  it('ignores coverage for an online-only query', async () => {
+    // Same empty-reach shape but the tutor also works online; an online query
+    // needs no area at all.
+    await withTempTutor(
+      'temp-tutor-online-nocover',
+      { areaMode: 'arrondissement', arrondissements: [], areaLatLng: null, areaRadiusKm: null, locationPrefs: ['online', 'family_home'] },
+      async () => {
+        const result = await callFunction<{ results: TutorResult[] }>(
+          'searchTutors',
+          { subject: 'math', level: '6e', filters: { locationPrefs: ['online'] } },
+          parentToken
+        );
+        expect(result.results.map((r) => r.uid)).toContain('temp-tutor-online-nocover');
+      }
+    );
+  });
+
+  it('mixed query (online + family_home): an uncovered tutor rides in on the online leg only', async () => {
+    const profile = {
+      areaMode: 'arrondissement',
+      arrondissements: [],
+      areaLatLng: null,
+      areaRadiusKm: null,
+      locationPrefs: ['online', 'family_home'],
+    };
+    await withTempTutor('temp-tutor-mixed', profile, async () => {
+      const mixed = await callFunction<{ results: TutorResult[] }>(
+        'searchTutors',
+        { subject: 'math', level: '6e', areaLabel: '16e', filters: { locationPrefs: ['online', 'family_home'] } },
+        parentToken
+      );
+      expect(mixed.results.map((r) => r.uid)).toContain('temp-tutor-mixed');
+
+      const familyOnly = await callFunction<{ results: TutorResult[] }>(
+        'searchTutors',
+        { subject: 'math', level: '6e', areaLabel: '16e', filters: { locationPrefs: ['family_home'] } },
+        parentToken
+      );
+      expect(familyOnly.results.map((r) => r.uid)).not.toContain('temp-tutor-mixed');
+    });
+  });
+
+  it('never returns an EMPTY-coverage family_home tutor for family_home queries (requirement teeth)', async () => {
+    // Arrondissement mode with nothing selected — the fresh-enrollee default.
+    await withTempTutor(
+      'temp-tutor-empty-arr',
+      { areaMode: 'arrondissement', arrondissements: [], areaLatLng: null, areaRadiusKm: null, locationPrefs: ['family_home'] },
+      async () => {
+        const result = await callFunction<{ results: TutorResult[] }>(
+          'searchTutors',
+          { subject: 'math', level: '6e', areaLabel: '16e', filters: { locationPrefs: ['family_home'] } },
+          parentToken
+        );
+        expect(result.results.map((r) => r.uid)).not.toContain('temp-tutor-empty-arr');
+      }
+    );
+    // Distance mode without coordinates — legacy no-geocode enrollee.
+    await withTempTutor(
+      'temp-tutor-empty-dist',
+      { areaMode: 'distance', arrondissements: [], areaLatLng: null, areaRadiusKm: null, locationPrefs: ['family_home'] },
+      async () => {
+        const result = await callFunction<{ results: TutorResult[] }>(
+          'searchTutors',
+          { subject: 'math', level: '6e', latLng: PARIS_CENTER, filters: { locationPrefs: ['family_home'] } },
+          parentToken
+        );
+        expect(result.results.map((r) => r.uid)).not.toContain('temp-tutor-empty-dist');
+      }
+    );
+  });
+
+  it('legacy single locationPref still works — both the include and the coverage gate', async () => {
+    // Positive: tutor2 accepts online; the single form still matches.
+    const online = await callFunction<{ results: TutorResult[] }>(
+      'searchTutors',
+      { subject: 'math', level: '6e', latLng: PARIS_CENTER, filters: { locationPref: 'online' } },
+      parentToken
+    );
+    expect(online.results.map((r) => r.uid)).toContain(seed.tutor2.uid);
+
+    // The single form is normalized into the same coverage gate: an
+    // empty-coverage family_home tutor stays hidden.
+    await withTempTutor(
+      'temp-tutor-legacy-single',
+      { areaMode: 'arrondissement', arrondissements: [], areaLatLng: null, areaRadiusKm: null, locationPrefs: ['family_home'] },
+      async () => {
+        const result = await callFunction<{ results: TutorResult[] }>(
+          'searchTutors',
+          { subject: 'math', level: '6e', areaLabel: '16e', filters: { locationPref: 'family_home' } },
+          parentToken
+        );
+        expect(result.results.map((r) => r.uid)).not.toContain('temp-tutor-legacy-single');
+      }
+    );
   });
 
   it('rejects out-of-range latLng with invalid-argument', async () => {

@@ -13,7 +13,12 @@ const latLngSchema = z.object({
 });
 
 const searchFiltersSchema = z.object({
+  // Legacy single-select form — kept for back-compat with older clients;
+  // searchTutors normalizes it into the array form internally.
   locationPref: z.enum(LOCATION_PREFS).optional(),
+  // Multi-select form (issue #167): the set of session-location TYPES the
+  // family wants; a tutor matches when their prefs intersect it.
+  locationPrefs: z.array(z.enum(LOCATION_PREFS)).max(LOCATION_PREFS.length).optional(),
   maxRate: z.number().positive('maxRate must be a positive number').optional(),
   maxDistanceKm: z.number().positive('maxDistanceKm must be a positive number').optional(),
 });
@@ -31,6 +36,13 @@ export const searchTutorsSchema = z.object({
     errorMap: () => ({ message: 'Level must be one of the supported class levels' }),
   }),
   latLng: latLngSchema.optional(),
+  // Coverage-area label the client resolves from the family's search address
+  // (postcode/city via @ejm/shared-core resolveAreaLabel) — an arrondissement
+  // ('16e') or nearby-town name. Untrusted, display-agnostic filter input:
+  // anything that is not a string of at most 30 chars is treated as ABSENT
+  // (catch), never rejected — a malformed label must degrade to "no area
+  // resolved", not break the whole search.
+  areaLabel: z.string().max(30).optional().catch(undefined),
   filters: searchFiltersSchema.optional(),
 });
 
