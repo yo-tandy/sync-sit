@@ -7,11 +7,15 @@ interface StepSubjectsProps {
   onNext: (subjects: SubjectOffering[]) => void;
   loading?: boolean;
   error?: string | null;
+  /** Draft rows carried across a back-navigation (state preservation). */
+  initialRows?: Row[];
+  /** Back to the profile step, handing the current draft up. */
+  onBack?: (rows: Row[]) => void;
 }
 
 // Local row shape mirrors SubjectsPage: rate is editable, so it may be blank
 // mid-edit.
-interface Row {
+export interface Row {
   subject: string;
   levels: string[];
   rate: number | '';
@@ -24,10 +28,12 @@ interface Row {
  * plus at least one row: enrolling with zero subjects would produce a tutor
  * invisible to search.
  */
-export function StepSubjects({ onNext, loading = false, error: submitError = null }: StepSubjectsProps) {
+export function StepSubjects({ onNext, loading = false, error: submitError = null, initialRows, onBack }: StepSubjectsProps) {
   const { t } = useTranslation();
   // Start with one empty row — the step exists to collect at least one.
-  const [rows, setRows] = useState<Row[]>([{ subject: '', levels: [], rate: '' }]);
+  const [rows, setRows] = useState<Row[]>(
+    initialRows && initialRows.length > 0 ? initialRows : [{ subject: '', levels: [], rate: '' }],
+  );
   const [error, setError] = useState<string | null>(null);
 
   const addRow = () => {
@@ -81,6 +87,7 @@ export function StepSubjects({ onNext, loading = false, error: submitError = nul
       setError(validationError);
       return;
     }
+    setError(null);
     onNext(
       rows.map((r) => ({
         subject: r.subject,
@@ -163,6 +170,20 @@ export function StepSubjects({ onNext, loading = false, error: submitError = nul
       {error && <p className="mt-4 text-sm text-brand-600">{error}</p>}
 
       {submitError && <p className="mt-4 text-sm text-brand-600">{submitError}</p>}
+
+      {/* A server-side rejection (e.g. a contact email zod refuses) renders
+          here, but the field lives on the PROFILE step — without this, that
+          error is an unrecoverable dead-end (steps >= 3 have no app-bar
+          back). The draft rows ride along and come back intact. */}
+      {onBack && (
+        <button
+          type="button"
+          onClick={() => onBack(rows)}
+          className="mt-4 block text-sm font-medium text-brand-600"
+        >
+          {t('common.back')}
+        </button>
+      )}
 
       <Button type="submit" disabled={rows.length === 0 || loading} className="mt-4">
         {loading ? t('common.loading') : t('enrollment.completeSignup')}

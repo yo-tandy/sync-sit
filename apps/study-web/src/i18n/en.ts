@@ -1014,6 +1014,7 @@ export default {
     subjectsEmpty: 'Add at least one subject to continue.',
     contactSection: 'Contact details',
     contactHint: 'Provide at least one way for families to reach you. You can change these later.',
+    contactEmailInvalid: 'Enter a full email address (e.g. name@example.com).',
     completeSignup: 'Complete sign-up',
     aboutMe: 'About me',
     aboutMePlaceholder: 'Tell families a bit about yourself, your teaching style, experience...',

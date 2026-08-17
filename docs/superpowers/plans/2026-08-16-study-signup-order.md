@@ -1,5 +1,7 @@
 # Study Signup Reorder + Padding Semantics + Tutor Photo (issue #143) Implementation Plan
 
+> **SUPERSEDED on step order:** the shipped flow is Profile BEFORE Subjects (see the addendum at the bottom — issue #143 as clarified by the owner). Task 2's prescribed order and its pin are historical.
+
 > **For agentic workers:** Work in THIS worktree (`.claude/worktrees/signup-order`, branch `feature/study-signup-order`). Steps use checkbox (`- [ ]`) syntax.
 
 **Goal:** Three changes from issue #143: (1) the tutor signup collects subjects/levels/rate FIRST after auth, and drops the session-prefs step entirely (server defaults; editable later in the portal); (2) padding is "appointment padding" (not transit), default 30; (3) tutors get profile-photo support like sit babysitters.

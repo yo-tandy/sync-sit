@@ -10,12 +10,14 @@ import { auth, functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { EnrollmentAppBar } from '@/components/ui/EnrollmentAppBar';
 import { StepSubjects } from './StepSubjects';
+import type { Row as SubjectRow } from './StepSubjects';
 import { StepProfile } from './StepProfile';
 import type { ProfileData } from './StepProfile';
 
 // Steps: 0=Email, 1=Verify, 2=Password+consent, 3=Profile+contact, 4=Subjects.
-// Subjects come first after auth (issue #143) — they are the primary
-// information families search by. The old prefs step is gone: session
+// The profile step comes first: the issue asked to demote session
+// length/location/padding — NOT the tutor's base information (issue #143 as
+// clarified). Subjects is the submitting step. The old prefs step is gone:
 // lengths/locations/padding/area get server defaults at enrollment and stay
 // editable at /tutor/account and /tutor/area.
 // The visible step indicator only covers the 3 pre-account-creation
@@ -53,6 +55,8 @@ export function TutorEnrollment() {
   const [verificationCode, setVerificationCode] = useState('');
   const [password, setPassword] = useState('');
   const [profile, setProfile] = useState<ProfileData | null>(null);
+  // Draft subject rows preserved across a back-navigation from step 4.
+  const [subjectsDraft, setSubjectsDraft] = useState<SubjectRow[] | undefined>(undefined);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // When true, render the account-exists CTA (message + login link) instead of
@@ -253,9 +257,21 @@ export function TutorEnrollment() {
           />
         );
       case 3:
-        return <StepProfile onNext={handleProfileNext} />;
+        return <StepProfile onNext={handleProfileNext} initial={profile} />;
       case 4:
-        return <StepSubjects onNext={handleSubjectsNext} loading={loading} error={error} />;
+        return (
+          <StepSubjects
+            onNext={handleSubjectsNext}
+            loading={loading}
+            error={error}
+            initialRows={subjectsDraft}
+            onBack={(rows) => {
+              setSubjectsDraft(rows);
+              setError(null);
+              setStep(3);
+            }}
+          />
+        );
       default:
         return null;
     }

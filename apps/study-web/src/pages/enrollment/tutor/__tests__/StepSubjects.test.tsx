@@ -89,6 +89,38 @@ describe('StepSubjects (tutor enrollment)', () => {
     expect(screen.getByText('boom')).toBeInTheDocument();
   });
 
+  it('back hands the draft rows up and initialRows restores them', () => {
+    const onNext = vi.fn();
+    const onBack = vi.fn();
+    renderWithProviders(<StepSubjects onNext={onNext} onBack={onBack} />);
+    fillRow(0, 'math', 'Terminale', '25');
+    fireEvent.click(screen.getByRole('button', { name: /Back/i }));
+
+    expect(onBack).toHaveBeenCalledTimes(1);
+    const draft = onBack.mock.calls[0][0];
+    expect(draft).toEqual([{ subject: 'math', levels: ['Terminale'], rate: 25 }]);
+
+    // Remount with the draft — the row comes back intact.
+    renderWithProviders(<StepSubjects onNext={vi.fn()} initialRows={draft} />);
+    const rowEls = screen.getAllByTestId('subject-row');
+    expect(within(rowEls[rowEls.length - 1]).getByRole('spinbutton')).toHaveValue(25);
+  });
+
+  it('a stale validation error clears on a subsequently valid submit', () => {
+    const onNext = vi.fn();
+    renderWithProviders(<StepSubjects onNext={onNext} />);
+    // Subject + rate but NO level: first submit must error.
+    fireEvent.change(within(row()).getByRole('combobox'), { target: { value: 'math' } });
+    fireEvent.change(within(row()).getByRole('spinbutton'), { target: { value: '25' } });
+    fireEvent.click(screen.getByRole('button', { name: /Complete sign-up/i }));
+    expect(screen.getByText(i18n.t('tutor.subjects.errorNoLevels'))).toBeInTheDocument();
+
+    fireEvent.click(within(row()).getByText('Terminale'));
+    fireEvent.click(screen.getByRole('button', { name: /Complete sign-up/i }));
+    expect(onNext).toHaveBeenCalled();
+    expect(screen.queryByText(i18n.t('tutor.subjects.errorNoLevels'))).toBeNull();
+  });
+
   it('rejects duplicate subjects across rows', () => {
     const onNext = vi.fn();
     renderWithProviders(<StepSubjects onNext={onNext} />);

@@ -1014,6 +1014,7 @@ export default {
     subjectsEmpty: 'Ajoutez au moins une matière pour continuer.',
     contactSection: 'Coordonnées',
     contactHint: 'Indiquez au moins un moyen pour les familles de vous joindre. Vous pourrez les modifier plus tard.',
+    contactEmailInvalid: 'Saisissez une adresse e-mail complète (ex. nom@exemple.com).',
     completeSignup: "Terminer l'inscription",
     aboutMe: 'À propos de moi',
     aboutMePlaceholder: 'Présentez-vous aux familles, votre style d\'enseignement, votre expérience...',

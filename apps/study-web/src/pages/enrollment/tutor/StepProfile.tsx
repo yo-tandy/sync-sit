@@ -14,6 +14,8 @@ export interface ProfileData {
 
 interface StepProfileProps {
   onNext: (data: ProfileData) => void;
+  /** Previously-entered values, restored on back-navigation. */
+  initial?: ProfileData | null;
 }
 
 const CLASS_LEVELS_TUTOR = [
@@ -42,23 +44,28 @@ function getAge(dateOfBirth: string): number | null {
   return age;
 }
 
-export function StepProfile({ onNext }: StepProfileProps) {
+export function StepProfile({ onNext, initial = null }: StepProfileProps) {
   const { t } = useTranslation();
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
-  const [dateOfBirth, setDateOfBirth] = useState('');
-  const [classLevel, setClassLevel] = useState('');
-  const [gender, setGender] = useState<string | undefined>(undefined);
+  const [firstName, setFirstName] = useState(initial?.firstName ?? '');
+  const [lastName, setLastName] = useState(initial?.lastName ?? '');
+  const [dateOfBirth, setDateOfBirth] = useState(initial?.dateOfBirth ?? '');
+  const [classLevel, setClassLevel] = useState(initial?.classLevel ?? '');
+  const [gender, setGender] = useState<string | undefined>(initial?.gender);
   // Contact moved here from the removed prefs step (issue #143): families see
   // it on the tutor card after accepting a request, so the callable requires
   // at least one field.
-  const [contactEmail, setContactEmail] = useState('');
-  const [contactPhone, setContactPhone] = useState('');
+  const [contactEmail, setContactEmail] = useState(initial?.contactEmail ?? '');
+  const [contactPhone, setContactPhone] = useState(initial?.contactPhone ?? '');
 
   const age = getAge(dateOfBirth);
   const ageValid = age !== null && age >= 15 && age < 19;
   const showAgeError = dateOfBirth && !ageValid;
-  const hasContact = contactEmail.trim() || contactPhone.trim();
+  // Mirror the server's zod .email() strictness: the native input accepts
+  // 'x@y', which the callable rejects AFTER this step is gone — validate
+  // here so the rejection can't strand the user on the subjects step.
+  const emailFormatOk =
+    !contactEmail.trim() || /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(contactEmail.trim());
+  const hasContact = (contactEmail.trim() && emailFormatOk) || contactPhone.trim();
   const isValid = firstName && lastName && dateOfBirth && ageValid && classLevel && hasContact;
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -154,6 +161,7 @@ export function StepProfile({ onNext }: StepProfileProps) {
         type="email"
         value={contactEmail}
         onChange={(e) => setContactEmail(e.target.value)}
+              error={contactEmail.trim() && !emailFormatOk ? t('enrollment.contactEmailInvalid') : undefined}
       />
       <Input
         label={t('enrollment.contactPhone')}

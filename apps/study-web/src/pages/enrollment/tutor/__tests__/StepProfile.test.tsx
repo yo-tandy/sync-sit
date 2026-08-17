@@ -89,4 +89,31 @@ describe('StepProfile (tutor)', () => {
     expect(values).toEqual(['Terminale', '1ère', '2nde', '3ème']);
   });
 
+  it("blocks a TLD-less contact email the server would reject ('tom@ejm')", () => {
+    const onNext = vi.fn();
+    renderWithProviders(<StepProfile onNext={onNext} />);
+    fillBasics();
+    fireEvent.change(screen.getByLabelText(/Date of birth/i), { target: { value: validDob } });
+    fireEvent.change(screen.getByLabelText(/Contact email/i), { target: { value: 'tom@ejm' } });
+
+    // The browser's native email check accepts 'x@y'; zod's .email() on the
+    // server does not — and the rejection would land on the subjects step.
+    expect(screen.getByText(/full email address/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Continue/i })).toBeDisabled();
+  });
+
+  it('restores previously-entered values via initial (back-navigation)', () => {
+    const onNext = vi.fn();
+    renderWithProviders(
+      <StepProfile
+        onNext={onNext}
+        initial={{
+          firstName: 'Flow', lastName: 'Tutor', dateOfBirth: '2010-01-15',
+          classLevel: 'Terminale', gender: 'other', contactEmail: 'flow@ejm.org',
+        }}
+      />,
+    );
+    expect(screen.getByLabelText(/First name/i)).toHaveValue('Flow');
+    expect(screen.getByLabelText(/Contact email/i)).toHaveValue('flow@ejm.org');
+  });
 });
