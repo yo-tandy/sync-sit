@@ -4,6 +4,8 @@ import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { sendVerificationEmail } from '../config/email.js';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
+import { handleExistingAccountSignup } from './accountExistsNotice.js';
+import { isInSendCooldown } from './sendCooldown.js';
 
 /**
  * Send a 6-digit verification code to any email address (for parent enrollment).
@@ -12,7 +14,9 @@ import { writeUserActivity } from '../admin/writeAuditLog.js';
 export const verifyParentEmail = onCall(
   { region: 'europe-west1', cors: getCorsOrigin() },
   async (request) => {
-    const { email } = request.data as { email: string };
+    // `app` is an untrusted display-only hint (which app's copy the
+    // account-exists email uses) — normalized inside the silent path.
+    const { email, app } = request.data as { email: string; app?: unknown };
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!email || !emailRegex.test(email.trim())) {
@@ -28,9 +32,29 @@ export const verifyParentEmail = onCall(
       .limit(1)
       .get();
 
+    // Per-address send cooldown, AFTER the existence query — a structural
+    // mirror of verifyEjmEmail (query -> cooldown -> branch work) for
+    // code-shape parity. There is no authed own-email bypass here (parent
+    // signup is always unauthenticated at this step), so the cooldown applies
+    // to both branches and this reordering changes no behavior.
+    if (await isInSendCooldown(normalizedEmail)) {
+      return { success: true, message: 'Verification code sent' };
+    }
+
     if (!existingUsers.empty) {
-      throw new HttpsError('already-exists', 'An account with this email already exists', {
-        reason: 'account-exists',
+      // Silent existing-account path (issue #148): do NOT throw — an error
+      // here is an account-enumeration oracle. The response is identical to
+      // the fresh path, a DECOY code doc byte-shaped like the fresh write
+      // below keeps every downstream error identical too, and the mailbox
+      // owner gets an account-exists email (rate-limited) instead of a code.
+      // Unlike verifyEjmEmail there is no authed own-email bypass: parent
+      // signup is always unauthenticated at this step.
+      return handleExistingAccountSignup(normalizedEmail, app, {
+        code: crypto.randomInt(100000, 999999).toString(),
+        email: normalizedEmail,
+        expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+        attempts: 0,
+        createdAt: new Date(),
       });
     }
 
@@ -49,7 +73,7 @@ export const verifyParentEmail = onCall(
 
     await sendVerificationEmail(normalizedEmail, code);
 
-    await writeUserActivity('system', 'verification_email_sent', { email });
+    await writeUserActivity('system', 'verification_email_sent', { email: normalizedEmail });
 
     return { success: true, message: 'Verification code sent' };
   }

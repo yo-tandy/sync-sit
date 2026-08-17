@@ -123,9 +123,9 @@ export default {
   // Enrollment
   enrollment: {
     confirmConsentTitle: 'Almost there',
-    accountExistsCta: 'An account with this email already exists. Log in to add this role.',
     identityOnFile: 'Enrolling as {{name}} — your identity is already on file from your other Sync profile.',
     alreadyEnrolled: 'This account already has this role.',
+    verifyNoCodeHint: "Didn't get a code? If you already have an account, <loginLink>log in</loginLink> instead.",
     alreadyInFamily: 'You already belong to a family.',
     roleExclusiveJoin: "Student accounts (babysitter or tutor) can't join a family as a parent — this invite needs the parent's own account.",
     joinFamilyConfirm: 'Join the {{familyName}} family',

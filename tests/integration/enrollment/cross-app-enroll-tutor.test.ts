@@ -146,7 +146,7 @@ describe('enrollTutor cross-app add-profile', () => {
     });
   });
 
-  it('unauthenticated with an existing auth email gets account-exists and no second auth user', async () => {
+  it('unauthenticated with an existing auth email is rejected already-exists and no second auth user (race backstop)', async () => {
     await seedCode(seed.parent2.email);
     await expect(
       callFunction('enrollTutor', {
@@ -157,8 +157,9 @@ describe('enrollTutor cross-app add-profile', () => {
         enrollment: tutorEnrollment(),
       }),
     ).rejects.toMatchObject({
+      // Race-backstop throw: no machine-readable reason since the silent
+      // existing-account flow (issue #148) removed the client branch.
       code: 'ALREADY_EXISTS',
-      details: { reason: 'account-exists' },
     });
   });
 

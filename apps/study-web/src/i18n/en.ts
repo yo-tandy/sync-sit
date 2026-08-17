@@ -942,9 +942,9 @@ export default {
 
   enrollment: {
     confirmConsentTitle: 'Almost there',
-    accountExistsCta: 'An account with this email already exists. Log in to add this role.',
     identityOnFile: 'Enrolling as {{name}} — your identity is already on file from your other Sync profile.',
     alreadyEnrolled: 'This account already has this role.',
+    verifyNoCodeHint: "Didn't get a code? If you already have an account, <loginLink>log in</loginLink> instead.",
     age: {
       under15: 'You need to be at least 15 to enroll on your own. Your parents can create an account and enroll you from theirs.',
       mismatch: "Your date of birth doesn't match your school year. Please contact the EJM administrator.",

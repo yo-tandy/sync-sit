@@ -119,9 +119,9 @@ export default {
 
   enrollment: {
     confirmConsentTitle: 'Presque terminé',
-    accountExistsCta: 'Un compte existe déjà avec cet e-mail. Connectez-vous pour ajouter ce rôle.',
     identityOnFile: 'Inscription au nom de {{name}} — votre identité est déjà enregistrée depuis votre autre profil Sync.',
     alreadyEnrolled: 'Ce compte possède déjà ce rôle.',
+    verifyNoCodeHint: "Vous n'avez pas reçu de code ? Si vous avez déjà un compte, <loginLink>connectez-vous</loginLink> plutôt.",
     alreadyInFamily: 'Vous appartenez déjà à une famille.',
     roleExclusiveJoin: "Un compte élève (babysitter ou tuteur) ne peut pas rejoindre une famille comme parent — cette invitation doit être utilisée avec le compte du parent.",
     joinFamilyConfirm: 'Rejoindre la famille {{familyName}}',

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router';
-import { useTranslation } from 'react-i18next';
+import { useTranslation, Trans } from 'react-i18next';
 import { httpsCallable } from 'firebase/functions';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { getParentProfile } from '@ejm/sit-core';
@@ -32,9 +32,6 @@ export function JoinFamilyPage() {
   const [lastName, setLastName] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // When true, render the account-exists CTA (message + login link) instead of
-  // the plain error string. Other failures keep using `error`.
-  const [showLoginCta, setShowLoginCta] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
   const [resendCount, setResendCount] = useState(0);
 
@@ -63,24 +60,19 @@ export function JoinFamilyPage() {
   }, [resendCooldown]);
 
   // Maps a callable error to the right UI state; returns true if it produced a
-  // specialised message (account-exists CTA or already-in-family notice).
+  // specialised message (already-in-family or role-exclusive notice). There is
+  // NO account-exists branch: signup with an existing email is silent (issue
+  // #148) — the backend responds like a fresh signup and emails the owner.
   const applyEnrollmentError = (err: unknown): boolean => {
     const reason = enrollmentErrorReason(err);
-    if (reason === 'account-exists') {
-      setError(null);
-      setShowLoginCta(true);
-      return true;
-    }
     if (reason === 'profile-exists') {
       setError(t('enrollment.alreadyInFamily'));
-      setShowLoginCta(false);
       return true;
     }
     if (reason === 'role-exclusive') {
       // A signed-in provider (babysitter/tutor) followed a family invite —
       // provider and parent roles are mutually exclusive (issue #116).
       setError(t('enrollment.roleExclusiveJoin'));
-      setShowLoginCta(false);
       return true;
     }
     return false;
@@ -93,7 +85,6 @@ export function JoinFamilyPage() {
     if (!token) return;
     setSubmitting(true);
     setError(null);
-    setShowLoginCta(false);
     try {
       const joinFamilyFn = httpsCallable(functions, 'joinFamily');
       await joinFamilyFn({ token });
@@ -112,7 +103,8 @@ export function JoinFamilyPage() {
     setError(null);
     try {
       const verifyEmail = httpsCallable(functions, 'verifyParentEmail');
-      await verifyEmail({ email });
+      // `app` only selects the copy of the silent account-exists email.
+      await verifyEmail({ email, app: 'sit' });
       setResendCooldown(60);
       setStep(1);
     } catch (err: unknown) {
@@ -130,7 +122,7 @@ export function JoinFamilyPage() {
     setVerificationCode('');
     try {
       const verifyEmail = httpsCallable(functions, 'verifyParentEmail');
-      await verifyEmail({ email });
+      await verifyEmail({ email, app: 'sit' });
     } catch {
       // silent
     }
@@ -140,7 +132,6 @@ export function JoinFamilyPage() {
     if (!token) return;
     setSubmitting(true);
     setError(null);
-    setShowLoginCta(false);
     try {
       const joinFamilyFn = httpsCallable(functions, 'joinFamily');
       await joinFamilyFn({
@@ -302,6 +293,17 @@ export function JoinFamilyPage() {
                 </button>
               )}
             </p>
+            {/* Always rendered, on BOTH the fresh and silent existing-account
+                paths (issue #148) — a static, non-distinguishing exit for
+                users whose account already exists and never get a code. */}
+            <p className="mt-2 text-sm text-gray-500">
+              <Trans
+                i18nKey="enrollment.verifyNoCodeHint"
+                components={{
+                  loginLink: <Link to="/login" className="font-medium text-brand-600 hover:underline" />,
+                }}
+              />
+            </p>
           </div>
 
           {codeVerified && (
@@ -361,14 +363,6 @@ export function JoinFamilyPage() {
           </div>
 
           {error && <p className="mb-4 text-sm text-brand-600">{error}</p>}
-          {showLoginCta && (
-            <div className="mb-4 text-center text-sm text-brand-600">
-              <p>{t('enrollment.accountExistsCta')}</p>
-              <Link to="/login" className="mt-1 inline-block font-semibold text-brand-600 underline">
-                {t('auth.login')}
-              </Link>
-            </div>
-          )}
 
           <Button
             onClick={handleComplete}
