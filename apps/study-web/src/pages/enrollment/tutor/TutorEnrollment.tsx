@@ -12,7 +12,7 @@ import { StepSubjects } from './StepSubjects';
 import { StepProfile } from './StepProfile';
 import type { ProfileData } from './StepProfile';
 
-// Steps: 0=Email, 1=Verify, 2=Password+consent, 3=Subjects, 4=Profile+contact.
+// Steps: 0=Email, 1=Verify, 2=Password+consent, 3=Profile+contact, 4=Subjects.
 // Subjects come first after auth (issue #143) — they are the primary
 // information families search by. The old prefs step is gone: session
 // lengths/locations/padding/area get server defaults at enrollment and stay
@@ -51,7 +51,7 @@ export function TutorEnrollment() {
   const [ejemEmail, setEjemEmail] = useState('');
   const [verificationCode, setVerificationCode] = useState('');
   const [password, setPassword] = useState('');
-  const [subjects, setSubjects] = useState<SubjectOffering[]>([]);
+  const [profile, setProfile] = useState<ProfileData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // When true, render the account-exists CTA (message + login link) instead of
@@ -122,13 +122,15 @@ export function TutorEnrollment() {
     setStep(3);
   };
 
-  const handleSubjectsNext = (data: SubjectOffering[]) => {
-    setSubjects(data);
+  const handleProfileNext = (profileData: ProfileData) => {
+    setProfile(profileData);
     setError(null);
     setStep(4);
   };
 
-  const handleProfileNext = async (profileData: ProfileData) => {
+  const handleSubjectsNext = async (data: SubjectOffering[]) => {
+    if (!profile) return;
+    const profileData = profile;
     setLoading(true);
     setError(null);
     setShowLoginCta(false);
@@ -145,7 +147,7 @@ export function TutorEnrollment() {
         dateOfBirth: profileData.dateOfBirth,
         classLevel: profileData.classLevel,
         gender: profileData.gender,
-        subjects,
+        subjects: data,
         contactEmail: profileData.contactEmail,
         contactPhone: profileData.contactPhone,
       };
@@ -219,15 +221,9 @@ export function TutorEnrollment() {
           />
         );
       case 3:
-        return <StepSubjects onNext={handleSubjectsNext} />;
+        return <StepProfile onNext={handleProfileNext} />;
       case 4:
-        return (
-          <StepProfile
-            onNext={handleProfileNext}
-            loading={loading}
-            error={error}
-          />
-        );
+        return <StepSubjects onNext={handleSubjectsNext} loading={loading} error={error} />;
       default:
         return null;
     }

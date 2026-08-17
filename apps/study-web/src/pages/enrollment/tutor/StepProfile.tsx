@@ -14,8 +14,6 @@ export interface ProfileData {
 
 interface StepProfileProps {
   onNext: (data: ProfileData) => void;
-  loading?: boolean;
-  error?: string | null;
 }
 
 const CLASS_LEVELS_TUTOR = [
@@ -44,7 +42,7 @@ function getAge(dateOfBirth: string): number | null {
   return age;
 }
 
-export function StepProfile({ onNext, loading = false, error = null }: StepProfileProps) {
+export function StepProfile({ onNext }: StepProfileProps) {
   const { t } = useTranslation();
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -164,10 +162,8 @@ export function StepProfile({ onNext, loading = false, error = null }: StepProfi
         onChange={(e) => setContactPhone(e.target.value)}
       />
 
-      {error && <p className="mb-4 text-sm text-brand-600">{error}</p>}
-
-      <Button type="submit" disabled={!isValid || loading}>
-        {loading ? t('common.loading') : t('enrollment.completeSignup')}
+      <Button type="submit" disabled={!isValid}>
+        {t('common.continue')}
       </Button>
     </form>
   );

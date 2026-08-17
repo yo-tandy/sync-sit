@@ -19,7 +19,7 @@ function fillBasics() {
 }
 
 function submitBtn(): HTMLElement {
-  return screen.getByRole('button', { name: /Complete sign-up/i });
+  return screen.getByRole('button', { name: /Continue/i });
 }
 
 describe('StepProfile (tutor)', () => {
@@ -89,16 +89,4 @@ describe('StepProfile (tutor)', () => {
     expect(values).toEqual(['Terminale', '1ère', '2nde', '3ème']);
   });
 
-  it('disables submit and shows the loading label while submitting', () => {
-    renderWithProviders(<StepProfile onNext={vi.fn()} loading error={null} />);
-    fillBasics();
-    fireEvent.change(screen.getByLabelText(/Date of birth/i), { target: { value: validDob } });
-    fireEvent.change(screen.getByLabelText(/Contact email/i), { target: { value: 't@ejm.org' } });
-    expect(screen.getByRole('button', { name: i18n.t('common.loading') })).toBeDisabled();
-  });
-
-  it('renders the submission error passed from the orchestrator', () => {
-    renderWithProviders(<StepProfile onNext={vi.fn()} error="boom" />);
-    expect(screen.getByText('boom')).toBeInTheDocument();
-  });
 });

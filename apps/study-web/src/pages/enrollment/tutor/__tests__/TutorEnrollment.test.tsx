@@ -85,16 +85,18 @@ vi.mock('@/components/ui/EnrollmentAppBar', () => ({
   EnrollmentAppBar: () => <div>enrollment-app-bar</div>,
 }));
 vi.mock('../StepSubjects', () => ({
-  StepSubjects: ({ onNext }: { onNext: (d: unknown) => void }) => (
-    <button onClick={() => onNext([{ subject: 'math', levels: ['Terminale'], rate: 25 }])}>
-      subjects-next
-    </button>
+  StepSubjects: ({ onNext, error }: { onNext: (d: unknown) => void; error?: string | null }) => (
+    <div>
+      {error && <p>{error}</p>}
+      <button onClick={() => onNext([{ subject: 'math', levels: ['Terminale'], rate: 25 }])}>
+        subjects-next
+      </button>
+    </div>
   ),
 }));
 vi.mock('../StepProfile', () => ({
-  StepProfile: ({ onNext, error }: { onNext: (d: unknown) => void; error?: string | null }) => (
+  StepProfile: ({ onNext }: { onNext: (d: unknown) => void }) => (
     <div>
-      {error && <p>{error}</p>}
       <button onClick={() => onNext({ firstName: 'Flow', lastName: 'Tutor', dateOfBirth: '2008-07-07', classLevel: 'Terminale', gender: 'other', contactEmail: 'flow@ejm.org' })}>
         profile-next
       </button>
@@ -150,15 +152,16 @@ describe('TutorEnrollment orchestrator', () => {
     expect(screen.getByTestId('step-password')).toHaveAttribute('data-collect', 'true');
 
     // Step 2 -> 3 crosses into the post-auth phase: app bar replaces TopNav.
-    // Subjects render FIRST after auth (issue #143), before the profile step.
+    // Base information about the tutor comes FIRST (issue #143 as clarified);
+    // subjects/levels/rate follow it, and the dropped prefs never appear.
     fireEvent.click(screen.getByText('password-submit'));
-    expect(await screen.findByText('subjects-next')).toBeInTheDocument();
-    expect(screen.queryByText('profile-next')).toBeNull();
+    expect(await screen.findByText('profile-next')).toBeInTheDocument();
+    expect(screen.queryByText('subjects-next')).toBeNull();
     expect(screen.getByText('enrollment-app-bar')).toBeInTheDocument();
     expect(screen.queryByText(/step-\d/)).toBeNull();
 
-    fireEvent.click(screen.getByText('subjects-next'));
-    fireEvent.click(await screen.findByText('profile-next'));
+    fireEvent.click(screen.getByText('profile-next'));
+    fireEvent.click(await screen.findByText('subjects-next'));
 
     // enrollTutor called with the composed payload; success navigation fired.
     const enroll = await vi.waitFor(() => {
@@ -199,8 +202,8 @@ describe('TutorEnrollment orchestrator', () => {
     expect(passwordStep).toHaveAttribute('data-collect', 'false');
 
     fireEvent.click(passwordStep);
-    fireEvent.click(await screen.findByText('subjects-next'));
     fireEvent.click(await screen.findByText('profile-next'));
+    fireEvent.click(await screen.findByText('subjects-next'));
 
     const enroll = await vi.waitFor(() => {
       const c = h.calls.find((x) => x.name === 'enrollTutor');
@@ -229,8 +232,8 @@ describe('TutorEnrollment orchestrator', () => {
     fireEvent.click(screen.getByText('email-submit'));
     fireEvent.click(await screen.findByText('verify-submit'));
     fireEvent.click(await screen.findByText('password-submit'));
-    fireEvent.click(await screen.findByText('subjects-next'));
     fireEvent.click(await screen.findByText('profile-next'));
+    fireEvent.click(await screen.findByText('subjects-next'));
     await vi.waitFor(() => expect(h.calls.some((c) => c.name === 'enrollTutor')).toBe(true));
   }
 

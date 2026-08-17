@@ -5,6 +5,8 @@ import { Button, Select, Input, Chip, Card } from '@ejm/shared-ui';
 
 interface StepSubjectsProps {
   onNext: (subjects: SubjectOffering[]) => void;
+  loading?: boolean;
+  error?: string | null;
 }
 
 // Local row shape mirrors SubjectsPage: rate is editable, so it may be blank
@@ -22,7 +24,7 @@ interface Row {
  * plus at least one row: enrolling with zero subjects would produce a tutor
  * invisible to search.
  */
-export function StepSubjects({ onNext }: StepSubjectsProps) {
+export function StepSubjects({ onNext, loading = false, error: submitError = null }: StepSubjectsProps) {
   const { t } = useTranslation();
   // Start with one empty row — the step exists to collect at least one.
   const [rows, setRows] = useState<Row[]>([{ subject: '', levels: [], rate: '' }]);
@@ -160,8 +162,10 @@ export function StepSubjects({ onNext }: StepSubjectsProps) {
 
       {error && <p className="mt-4 text-sm text-brand-600">{error}</p>}
 
-      <Button type="submit" disabled={rows.length === 0} className="mt-4">
-        {t('common.continue')}
+      {submitError && <p className="mt-4 text-sm text-brand-600">{submitError}</p>}
+
+      <Button type="submit" disabled={rows.length === 0 || loading} className="mt-4">
+        {loading ? t('common.loading') : t('enrollment.completeSignup')}
       </Button>
     </form>
   );

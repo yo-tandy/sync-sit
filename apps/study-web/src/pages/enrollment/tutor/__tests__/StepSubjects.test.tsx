@@ -27,7 +27,7 @@ describe('StepSubjects (tutor enrollment)', () => {
     renderWithProviders(<StepSubjects onNext={onNext} />);
     expect(screen.getAllByTestId('subject-row')).toHaveLength(1);
 
-    fireEvent.click(screen.getByRole('button', { name: /Continue/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Complete sign-up/i }));
     expect(screen.getByText(i18n.t('tutor.subjects.errorNoSubject'))).toBeInTheDocument();
     expect(onNext).not.toHaveBeenCalled();
   });
@@ -39,14 +39,14 @@ describe('StepSubjects (tutor enrollment)', () => {
 
     expect(screen.queryAllByTestId('subject-row')).toHaveLength(0);
     expect(screen.getByText(i18n.t('enrollment.subjectsEmpty'))).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Continue/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /Complete sign-up/i })).toBeDisabled();
   });
 
   it('submits the offerings payload when the row is valid', () => {
     const onNext = vi.fn();
     renderWithProviders(<StepSubjects onNext={onNext} />);
     fillRow(0, 'math', 'Terminale', '25');
-    fireEvent.click(screen.getByRole('button', { name: /Continue/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Complete sign-up/i }));
 
     expect(onNext).toHaveBeenCalledTimes(1);
     expect(onNext).toHaveBeenCalledWith([{ subject: 'math', levels: ['Terminale'], rate: 25 }]);
@@ -58,12 +58,12 @@ describe('StepSubjects (tutor enrollment)', () => {
     const r = row();
     fireEvent.change(within(r).getByRole('combobox'), { target: { value: 'math' } });
     fireEvent.change(within(r).getByRole('spinbutton'), { target: { value: '25' } });
-    fireEvent.click(screen.getByRole('button', { name: /Continue/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Complete sign-up/i }));
     expect(screen.getByText(i18n.t('tutor.subjects.errorNoLevels'))).toBeInTheDocument();
 
     fireEvent.click(within(r).getByText('Terminale'));
     fireEvent.change(within(r).getByLabelText(/Rate/i), { target: { value: '0' } });
-    fireEvent.click(screen.getByRole('button', { name: /Continue/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Complete sign-up/i }));
     expect(screen.getByText(i18n.t('tutor.subjects.errorRate'))).toBeInTheDocument();
     expect(onNext).not.toHaveBeenCalled();
   });
@@ -78,13 +78,24 @@ describe('StepSubjects (tutor enrollment)', () => {
     expect(ids[0]).not.toBe('');
   });
 
+  it('disables submit and shows the loading label while submitting', () => {
+    renderWithProviders(<StepSubjects onNext={vi.fn()} loading error={null} />);
+    fillRow(0, 'math', 'Terminale', '25');
+    expect(screen.getByRole('button', { name: i18n.t('common.loading') })).toBeDisabled();
+  });
+
+  it('renders the submission error passed from the orchestrator', () => {
+    renderWithProviders(<StepSubjects onNext={vi.fn()} error="boom" />);
+    expect(screen.getByText('boom')).toBeInTheDocument();
+  });
+
   it('rejects duplicate subjects across rows', () => {
     const onNext = vi.fn();
     renderWithProviders(<StepSubjects onNext={onNext} />);
     fillRow(0, 'math', 'Terminale', '25');
     fireEvent.click(screen.getByRole('button', { name: /Add a subject/i }));
     fillRow(1, 'math', '1ere', '30');
-    fireEvent.click(screen.getByRole('button', { name: /Continue/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Complete sign-up/i }));
 
     expect(screen.getByText(i18n.t('tutor.subjects.errorDuplicate'))).toBeInTheDocument();
     expect(onNext).not.toHaveBeenCalled();
