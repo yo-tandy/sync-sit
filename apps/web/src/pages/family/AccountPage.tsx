@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { isRunningAsPWA } from '@ejm/sit-core';
 import { db, storage } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
@@ -173,7 +173,15 @@ export function AccountPage() {
     setPhotoSaving(true);
     setError(null);
     try {
-      const ext = photoFile.name.split('.').pop() || 'jpg';
+      // Photos are one-per-account across roles: this writes the SAME
+      // profile-photos/{uid} object as the babysitter/tutor pages, so it
+      // must share their normalization and orphan-deletion (a dual-role
+      // user uploading IMG.JPG here would otherwise recreate the retention
+      // gap those pages closed).
+      const ext = (photoFile.name.includes('.') ? photoFile.name.split('.').pop()! : 'jpg').toLowerCase();
+      const oldUrl = userDoc?.photoUrl;
+      const oldMatch = typeof oldUrl === 'string' ? oldUrl.match(/profile-photos%2F([^?]+)/) : null;
+      const oldPath = oldMatch ? `profile-photos/${decodeURIComponent(oldMatch[1])}` : null;
       const path = `profile-photos/${uid}.${ext}`;
       const storageRef = ref(storage, path);
       await uploadBytes(storageRef, photoFile);
@@ -182,6 +190,9 @@ export function AccountPage() {
         photoUrl,
         updatedAt: serverTimestamp(),
       });
+      if (oldPath && oldPath !== path) {
+        await deleteObject(ref(storage, oldPath)).catch(() => {});
+      }
       await refreshUserDoc();
       setPhotoFile(null);
     } catch (err: unknown) {

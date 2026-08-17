@@ -207,7 +207,10 @@ export function BabysitterAccountPage() {
       setPhotoFile(null);
       await refreshUserDoc().catch(() => {});
     } catch {
-      // silent (pre-existing UX; the doc write is the source of truth)
+      // Honest failure (parity with study): the photo is still live on the
+      // public search results — a silent no-op left the user believing it
+      // was removed.
+      setPhotoError(t('account.photoRemoveFailed'));
     }
   };
 

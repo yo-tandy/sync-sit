@@ -546,6 +546,7 @@ export default {
     photoTooLarge: 'Photo must be under 5 MB',
     photoInvalidType: 'Please select an image file',
     photoUploadFailed: 'Failed to upload photo',
+    photoRemoveFailed: 'Could not remove the photo — it is still visible to families. Try again.',
     ejemEmail: 'EJM Email',
     dateOfBirth: 'Date of Birth',
     classLevel: 'Class',
