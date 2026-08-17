@@ -131,32 +131,57 @@ describe('tutor AreaPage', () => {
     for (const town of ['Boulogne-Billancourt', 'Suresnes', 'Saint-Mandé']) {
       expect(screen.getByRole('button', { name: town })).toBeInTheDocument();
     }
-    // Exactly 20 + 25 area chips exist (no legacy group when the doc is clean).
+    // A clean doc renders no legacy "Other saved areas" group at all.
     expect(screen.queryByText(/other saved areas/i)).not.toBeInTheDocument();
   });
 
-  // ── Migration tolerance: free-text-era values (e.g. '75016') ──
-  it('renders unknown stored values as checked extra chips and keeps them across a save', async () => {
+  // ── Migration: free-text-era postcodes canonicalize onto their chips ──
+  it("seeds a legacy postcode ('75016') onto the canonical 16e chip and saves canonical values", async () => {
+    seed({ areaMode: 'arrondissement', arrondissements: ['75016'], areaAddress: null, areaLatLng: null, areaRadiusKm: null });
+    renderWithProviders(<AreaPage />);
+
+    // The canonical chip is checked; no legacy group — the postcode mapped.
+    expect(screen.getByRole('button', { name: '✓ 16e' })).toBeInTheDocument();
+    expect(screen.queryByText(/other saved areas/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /75016/ })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /^save/i }));
+    await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
+    // The save migrates the doc to the canonical vocabulary.
+    expect(savedPayload()['profiles.tutor.arrondissements']).toEqual(['16e']);
+  });
+
+  it('dedupes a doc holding both the postcode and its canonical label', async () => {
     seed({ areaMode: 'arrondissement', arrondissements: ['75016', '16e'], areaAddress: null, areaLatLng: null, areaRadiusKm: null });
     renderWithProviders(<AreaPage />);
 
+    expect(screen.getByRole('button', { name: '✓ 16e' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /^save/i }));
+    await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
+    expect(savedPayload()['profiles.tutor.arrondissements']).toEqual(['16e']);
+  });
+
+  it('renders UNMAPPABLE stored values as checked extra chips and keeps them across a save', async () => {
+    seed({ areaMode: 'arrondissement', arrondissements: ['Clamart', '16e'], areaAddress: null, areaLatLng: null, areaRadiusKm: null });
+    renderWithProviders(<AreaPage />);
+
     expect(screen.getByText(/other saved areas/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '✓ 75016' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '✓ Clamart' })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /^save/i }));
     await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
     const payload = savedPayload();
-    // The legacy value is NOT silently dropped by the grid rewrite.
-    expect(payload['profiles.tutor.arrondissements']).toEqual(['75016', '16e']);
+    // The unmappable value is NOT silently dropped by the grid rewrite.
+    expect(payload['profiles.tutor.arrondissements']).toEqual(['Clamart', '16e']);
   });
 
-  it('lets the tutor explicitly uncheck a legacy value, which removes it from the save', async () => {
-    seed({ areaMode: 'arrondissement', arrondissements: ['75016', '16e'], areaAddress: null, areaLatLng: null, areaRadiusKm: null });
+  it('lets the tutor explicitly uncheck an unmappable legacy value, removing it from the save', async () => {
+    seed({ areaMode: 'arrondissement', arrondissements: ['Clamart', '16e'], areaAddress: null, areaLatLng: null, areaRadiusKm: null });
     renderWithProviders(<AreaPage />);
 
-    fireEvent.click(screen.getByRole('button', { name: '✓ 75016' }));
+    fireEvent.click(screen.getByRole('button', { name: '✓ Clamart' }));
     // Still visible (derived from the stored doc), just unchecked.
-    expect(screen.getByRole('button', { name: '75016' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Clamart' })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /^save/i }));
     await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());

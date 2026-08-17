@@ -4,7 +4,12 @@ import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { getTutorProfile } from '@ejm/study-core';
-import { ARRONDISSEMENTS, NEARBY_TOWNS, ALL_AREAS } from '@ejm/shared-core';
+import {
+  ARRONDISSEMENTS,
+  NEARBY_TOWNS,
+  ALL_AREAS,
+  postcodeToArrondissement,
+} from '@ejm/shared-core';
 import type { AreaMode } from '@ejm/shared-core';
 import {
   TopNav,
@@ -53,7 +58,13 @@ export function AreaPage() {
   useEffect(() => {
     if (!tutor) return;
     setAreaMode(tutor.areaMode ?? 'arrondissement');
-    setSelectedAreas(tutor.arrondissements ?? []);
+    // Seed through the canonicalizer: the free-text era taught tutors
+    // postcodes ('75016'), so mappable values check their canonical chip
+    // ('16e') and the next save migrates the doc to the canonical
+    // vocabulary. Set-dedup because '75016' and '16e' may coexist.
+    setSelectedAreas([
+      ...new Set((tutor.arrondissements ?? []).map((a) => postcodeToArrondissement(a) ?? a)),
+    ]);
     setAreaAddress(tutor.areaAddress ?? '');
     setAreaLatLng(tutor.areaLatLng ?? null);
     setRadiusKm(tutor.areaRadiusKm ?? '');
@@ -74,14 +85,19 @@ export function AreaPage() {
   };
 
   // Migration tolerance: free-text-era docs may hold values outside the
-  // constant lists (e.g. '75016' instead of '16e'). Render them as extra
-  // toggleable entries — seeded checked — so a save never silently drops
-  // them; unchecking one before saving is an explicit removal. Derived from
-  // the STORED doc (not the live selection) so an unchecked legacy chip stays
-  // visible and can be re-checked.
-  const legacyAreas = (tutor?.arrondissements ?? []).filter(
-    (a) => !(ALL_AREAS as readonly string[]).includes(a),
-  );
+  // constant lists. Paris postcodes canonicalize onto their arrondissement
+  // chip at seed time (above); what remains here are values that map to
+  // NOTHING in the vocabulary — rendered as extra toggleable entries, seeded
+  // checked, so a save never silently drops them; unchecking one before
+  // saving is an explicit removal. Derived from the STORED doc (not the live
+  // selection) so an unchecked legacy chip stays visible and re-checkable.
+  const legacyAreas = [
+    ...new Set(
+      (tutor?.arrondissements ?? [])
+        .map((a) => postcodeToArrondissement(a) ?? a)
+        .filter((a) => !(ALL_AREAS as readonly string[]).includes(a)),
+    ),
+  ];
 
   // Requirement (issue #167): a tutor offering sessions that happen at the
   // family's location ('family_home'/'library' — anything not 'online' or
