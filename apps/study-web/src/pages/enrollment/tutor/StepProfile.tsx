@@ -3,13 +3,24 @@ import { useTranslation } from 'react-i18next';
 import { Button, Input, Select } from '@ejm/shared-ui';
 
 export interface ProfileData {
-  firstName: string;
-  lastName: string;
-  dateOfBirth: string;
+  // Identity is absent when it is already on file (issue #144) — the server
+  // keeps the stored, set-once values.
+  firstName?: string;
+  lastName?: string;
+  dateOfBirth?: string;
   classLevel: string;
   gender?: string;
   contactEmail?: string;
   contactPhone?: string;
+}
+
+/** Root identity already carried by the signed-in user's doc (cross-app).
+ * PER-FIELD: any subset may be on file; only missing fields are collected. */
+export interface IdentityOnFile {
+  firstName?: string;
+  lastName?: string;
+  /** Firestore Timestamp on study-created accounts, "YYYY-MM-DD" string on sit-created ones. */
+  dateOfBirth?: unknown;
 }
 
 interface StepProfileProps {
@@ -19,6 +30,7 @@ interface StepProfileProps {
   /** A submit-time server rejection carried back from the subjects step —
    * the field it names usually lives HERE. */
   serverError?: string | null;
+  identityOnFile?: IdentityOnFile | null;
 }
 
 const CLASS_LEVELS_TUTOR = [
@@ -35,6 +47,23 @@ const GENDER_OPTIONS = [
   { value: 'prefer_not_to_say', labelKey: 'enrollment.genderPreferNot' },
 ] as const;
 
+/**
+ * Display form of an on-file DOB: sit-created accounts store a "YYYY-MM-DD"
+ * string, study-created ones a Firestore Timestamp (mirrors AccountPage).
+ */
+function formatDob(dob: unknown): string {
+  if (typeof dob === 'string') return dob;
+  if (
+    typeof dob === 'object' &&
+    dob !== null &&
+    'toDate' in dob &&
+    typeof (dob as { toDate: unknown }).toDate === 'function'
+  ) {
+    return (dob as { toDate: () => Date }).toDate().toLocaleDateString();
+  }
+  return '';
+}
+
 function getAge(dateOfBirth: string): number | null {
   if (!dateOfBirth) return null;
   const today = new Date();
@@ -47,7 +76,7 @@ function getAge(dateOfBirth: string): number | null {
   return age;
 }
 
-export function StepProfile({ onNext, initial = null, serverError = null }: StepProfileProps) {
+export function StepProfile({ onNext, initial = null, serverError = null, identityOnFile = null }: StepProfileProps) {
   const { t } = useTranslation();
   const [firstName, setFirstName] = useState(initial?.firstName ?? '');
   const [lastName, setLastName] = useState(initial?.lastName ?? '');
@@ -60,7 +89,17 @@ export function StepProfile({ onNext, initial = null, serverError = null }: Step
   const [contactEmail, setContactEmail] = useState(initial?.contactEmail ?? '');
   const [contactPhone, setContactPhone] = useState(initial?.contactPhone ?? '');
 
+  // PER-FIELD on-file flags (matching sit's StepProfile): a partial doc
+  // collects only its missing fields instead of dead-ending or re-asking.
+  const hasFirstName = !!identityOnFile?.firstName;
+  const hasLastName = !!identityOnFile?.lastName;
+  const hasDateOfBirth = !!identityOnFile?.dateOfBirth;
+  const allOnFile = hasFirstName && hasLastName && hasDateOfBirth;
+
   const age = getAge(dateOfBirth);
+  // The client age gate only applies when a DOB is being ENTERED. With the
+  // DOB on file the account already passed sit's identical 15-19 gate, and
+  // the server re-runs its gate against the stored DOB anyway.
   const ageValid = age !== null && age >= 15 && age < 19;
   const showAgeError = dateOfBirth && !ageValid;
   // Mirror the server's zod .email() strictness: the native input accepts
@@ -69,19 +108,23 @@ export function StepProfile({ onNext, initial = null, serverError = null }: Step
   const emailFormatOk =
     !contactEmail.trim() || /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(contactEmail.trim());
   const hasContact = contactEmail.trim() || contactPhone.trim();
+  const identityValid = (hasFirstName || firstName)
+    && (hasLastName || lastName)
+    && (hasDateOfBirth || (dateOfBirth && ageValid));
   // emailFormatOk gates UNCONDITIONALLY (true when the email is empty): with
   // a phone also present, a malformed email must still block — otherwise it
   // rides into the payload and the server rejects on the subjects step.
-  const isValid =
-    firstName && lastName && dateOfBirth && ageValid && classLevel && hasContact && emailFormatOk;
+  const isValid = identityValid && classLevel && hasContact && emailFormatOk;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!isValid) return;
     onNext({
-      firstName,
-      lastName,
-      dateOfBirth,
+      // Omit each identity field that is on file (issue #144): the server
+      // keeps the stored, set-once values.
+      ...(hasFirstName ? {} : { firstName }),
+      ...(hasLastName ? {} : { lastName }),
+      ...(hasDateOfBirth ? {} : { dateOfBirth }),
       classLevel,
       gender,
       contactEmail: contactEmail.trim() || undefined,
@@ -96,36 +139,59 @@ export function StepProfile({ onNext, initial = null, serverError = null }: Step
       </h2>
       <p className="mb-6 text-sm text-gray-500">{t('enrollment.welcomeSubtitle')}</p>
 
-      <div className="flex gap-3">
-        <div className="flex-1">
-          <Input
-            label={t('enrollment.firstName')}
-            value={firstName}
-            onChange={(e) => setFirstName(e.target.value)}
-            required
-          />
+      {/* PER-FIELD rendering (matches payload/isValid): the full summary only
+          when everything is on file; otherwise inputs for exactly the
+          missing fields. */}
+      {allOnFile && (
+        <div className="mb-5 rounded-lg bg-gray-50 px-4 py-3 text-sm text-gray-700">
+          <p>
+            {t('enrollment.identityOnFile', {
+              name: `${identityOnFile!.firstName} ${identityOnFile!.lastName}`,
+            })}
+          </p>
+          <p className="mt-1 text-xs text-gray-500">
+            {t('enrollment.dateOfBirth')}: {formatDob(identityOnFile!.dateOfBirth)}
+          </p>
         </div>
-        <div className="flex-1">
-          <Input
-            label={t('enrollment.lastName')}
-            value={lastName}
-            onChange={(e) => setLastName(e.target.value)}
-            required
-          />
+      )}
+      {!(hasFirstName && hasLastName) && (
+        <div className="flex gap-3">
+          {!hasFirstName && (
+            <div className="flex-1">
+              <Input
+                label={t('enrollment.firstName')}
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+                required
+              />
+            </div>
+          )}
+          {!hasLastName && (
+            <div className="flex-1">
+              <Input
+                label={t('enrollment.lastName')}
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+                required
+              />
+            </div>
+          )}
         </div>
-      </div>
+      )}
 
       <div className="grid grid-cols-2 gap-3">
-        <div className="min-w-0">
-          <Input
-            label={t('enrollment.dateOfBirth')}
-            type="date"
-            value={dateOfBirth}
-            onChange={(e) => setDateOfBirth(e.target.value)}
-            error={showAgeError ? t('enrollment.ageError') : undefined}
-            required
-          />
-        </div>
+        {!hasDateOfBirth && (
+          <div className="min-w-0">
+            <Input
+              label={t('enrollment.dateOfBirth')}
+              type="date"
+              value={dateOfBirth}
+              onChange={(e) => setDateOfBirth(e.target.value)}
+              error={showAgeError ? t('enrollment.ageError') : undefined}
+              required
+            />
+          </div>
+        )}
         <div className="min-w-0">
           <Select
             label={t('enrollment.classLabel')}

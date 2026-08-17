@@ -77,7 +77,7 @@ function runHandoffOnce(params: URLSearchParams, i18nInstance: I18n): Promise<st
         const snap = await getDoc(doc(db, 'users', cred.user.uid));
         const userDoc = snap.exists() ? (snap.data() as SitUser) : null;
         useAuthStore.setState({ firebaseUser: cred.user, userDoc, loading: false });
-        return postLoginRouter(getSitRole(userDoc));
+        return postLoginRouter(getSitRole(userDoc), userDoc);
       } catch {
         // Past sign-in the user IS authenticated and the code is consumed —
         // the "switch again" screen would strand them. Land on the default

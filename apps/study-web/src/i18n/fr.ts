@@ -185,6 +185,16 @@ export default {
     roleExclusiveParent: "Un compte élève ne peut pas aussi s'inscrire comme parent — votre famille doit avoir son propre compte.",
   },
 
+  welcomeCross: {
+    backToOrigin: 'Retour à Sync/Sit',
+    fallbackWizard: 'Utiliser l\'inscription complète à la place',
+    greeting: 'Bienvenue, {{name}} !',
+    body: "En tant qu'élève de l'EJM, vous pouvez donner des cours aux familles de l'EJM — votre identifiant Sync/Sit fonctionne ici tel quel. Il ne nous manque que les matières que vous proposez pour commencer.",
+    consentPrefix: 'En continuant, vous acceptez les',
+    parentCard: 'Bienvenue sur Sync/Study — votre compte famille Sync/Sit fonctionne ici tel quel.',
+    dismiss: 'Fermer',
+  },
+
   menu: {
     about: 'À propos',
     openMenu: 'Ouvrir le menu',
@@ -974,6 +984,7 @@ export default {
   enrollment: {
     confirmConsentTitle: 'Presque terminé',
     accountExistsCta: 'Un compte existe déjà avec cet e-mail. Connectez-vous pour ajouter ce rôle.',
+    identityOnFile: 'Inscription au nom de {{name}} — votre identité est déjà enregistrée depuis votre autre profil Sync.',
     alreadyEnrolled: 'Ce compte possède déjà ce rôle.',
     age: {
       under15: "Vous devez avoir au moins 15 ans pour vous inscrire seul(e). Vos parents peuvent créer un compte et vous inscrire depuis le leur.",

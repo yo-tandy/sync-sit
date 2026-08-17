@@ -114,9 +114,27 @@ vi.mock('../StepSubjects', () => ({
   ),
 }));
 vi.mock('../StepProfile', () => ({
-  StepProfile: ({ onNext }: { onNext: (d: unknown) => void }) => (
+  // Mirrors the real component's issue-#144 contract: when identityOnFile is
+  // set, the identity fields are omitted from the payload. Profile is a plain
+  // continue step (Subjects submits), so no loading/error props here.
+  StepProfile: ({ onNext, identityOnFile }: {
+    onNext: (d: unknown) => void;
+    identityOnFile?: { firstName: string } | null;
+  }) => (
     <div>
-      <button onClick={() => onNext({ firstName: 'Flow', lastName: 'Tutor', dateOfBirth: '2008-07-07', classLevel: 'Terminale', gender: 'other', contactEmail: 'flow@ejm.org' })}>
+      {identityOnFile?.firstName && <p>identity-on-file:{identityOnFile.firstName}</p>}
+      <button
+        onClick={() =>
+          onNext({
+            ...(identityOnFile?.firstName
+              ? {}
+              : { firstName: 'Flow', lastName: 'Tutor', dateOfBirth: '2008-07-07' }),
+            classLevel: 'Terminale',
+            gender: 'other',
+            contactEmail: 'flow@ejm.org',
+          })
+        }
+      >
         profile-next
       </button>
     </div>
@@ -264,6 +282,43 @@ describe('TutorEnrollment orchestrator', () => {
     expect(h.refreshUserDoc).toHaveBeenCalled();
     // The now-present tutor profile must not divert the success navigation home.
     expect(h.navigate).not.toHaveBeenCalledWith('/', { replace: true });
+  });
+
+  it('add-profile with identity on file: summary shown, payload omits identity, success uses the doc name (issue #144)', async () => {
+    h.auth = {
+      firebaseUser: { uid: 'x1' },
+      userDoc: {
+        firstName: 'Iris', lastName: 'Martin', dateOfBirth: '2008-01-15',
+        profiles: { babysitter: {} },
+      },
+      loading: false,
+    };
+    renderFlow();
+
+    fireEvent.click(screen.getByText('email-submit'));
+    fireEvent.click(await screen.findByText('verify-submit'));
+    fireEvent.click(await screen.findByTestId('step-password'));
+
+    // StepProfile (now first) received the on-file identity.
+    expect(await screen.findByText('identity-on-file:Iris')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('profile-next'));
+    fireEvent.click(await screen.findByText('subjects-next'));
+
+    const enroll = await vi.waitFor(() => {
+      const c = h.calls.find((x) => x.name === 'enrollTutor');
+      expect(c).toBeTruthy();
+      return c!;
+    });
+    const payload = enroll.payload as { enrollment: Record<string, unknown> };
+    // The identity keys are ABSENT (not sent as null/empty) — the server
+    // keeps the stored, set-once values.
+    for (const key of ['firstName', 'lastName', 'dateOfBirth']) {
+      expect(payload.enrollment).not.toHaveProperty(key);
+    }
+    expect(payload.enrollment).toMatchObject({ classLevel: 'Terminale' });
+    await vi.waitFor(() =>
+      expect(h.navigate).toHaveBeenCalledWith('/enroll/tutor/success', { state: { firstName: 'Iris' } }),
+    );
   });
 
   it('authed WITH a tutor profile: redirects home instead of enrolling', () => {

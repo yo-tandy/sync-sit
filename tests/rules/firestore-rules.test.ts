@@ -1630,16 +1630,19 @@ describe('guardian collections', () => {
       }));
     });
 
-    it('an UNLOCKED owner can still change their own name (regression guard)', async () => {
+    // Issue #144 flipped these two pins: root identity is now SET-ONCE for
+    // every account, not just identityLocked ones. Name corrections go through
+    // correctChildIdentity / admin (Admin SDK bypasses rules).
+    it('an UNLOCKED owner can no longer change a set firstName (set-once)', async () => {
       await seedUser('kidU9', kidBase());
       const authed = testEnv.authenticatedContext('kidU9');
-      await assertSucceeds(updateDoc(doc(authed.firestore(), 'users', 'kidU9'), { firstName: 'NewName' }));
+      await assertFails(updateDoc(doc(authed.firestore(), 'users', 'kidU9'), { firstName: 'NewName' }));
     });
 
-    it('a governed owner without identityLocked can also change their name (claim path)', async () => {
+    it('a governed owner without identityLocked cannot change a set firstName either', async () => {
       await seedUser('kidU10', kidBase({ governedBy: { familyId: 'famG', linkedAt: new Date() } }));
       const authed = testEnv.authenticatedContext('kidU10');
-      await assertSucceeds(updateDoc(doc(authed.firestore(), 'users', 'kidU10'), { firstName: 'NewName' }));
+      await assertFails(updateDoc(doc(authed.firestore(), 'users', 'kidU10'), { firstName: 'NewName' }));
     });
   });
 });
@@ -1835,5 +1838,104 @@ describe('users update — tutor numeric bounds (issue #123 hardening)', () => {
     await assertSucceeds(
       updateDoc(doc(db, 'users', 'bounds-parent-1'), { firstName: 'New' }),
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Root identity set-once (issue #144): once firstName/lastName/dateOfBirth
+// hold a value, an owner write may neither change nor remove them — for ALL
+// accounts, not just identityLocked ones. Absent -> set stays allowed (cross-
+// app stubs complete their identity step once). Corrections are admin/callable
+// territory (Admin SDK bypasses rules).
+// ---------------------------------------------------------------------------
+
+describe('users update — root identity set-once (issue #144)', () => {
+  async function seed(id: string, data: Record<string, unknown>) {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.firestore().doc(`users/${id}`).set({ uid: id, ...data });
+    });
+  }
+
+  const withIdentity = {
+    status: 'active', email: 'id@ejm.org',
+    firstName: 'Iris', lastName: 'Martin', dateOfBirth: '2007-03-14',
+    profiles: { babysitter: { ejemEmail: 'id@ejm.org', enrollmentComplete: true } },
+  };
+
+  const stubNoIdentity = {
+    status: 'active', email: 'stub@ejm.org',
+    profiles: { babysitter: { ejemEmail: 'stub@ejm.org', enrollmentComplete: true, classLevel: '2nde' } },
+  };
+
+  it('owner CAN set all three identity fields when absent (stub completion)', async () => {
+    await seed('setonce1', stubNoIdentity);
+    const db = testEnv.authenticatedContext('setonce1').firestore();
+    await assertSucceeds(updateDoc(doc(db, 'users', 'setonce1'), {
+      firstName: 'Iris', lastName: 'Martin', dateOfBirth: '2007-03-14',
+    }));
+  });
+
+  it("owner CAN fill an EMPTY ('' or null) identity field — empty is fillable, populated is frozen", async () => {
+    await seed('setonceE1', { ...stubNoIdentity, firstName: '', lastName: null });
+    const db = testEnv.authenticatedContext('setonceE1').firestore();
+    await assertSucceeds(updateDoc(doc(db, 'users', 'setonceE1'), {
+      firstName: 'Iris', lastName: 'Martin', dateOfBirth: '2007-03-14',
+    }));
+  });
+
+  it('owner CANNOT clear a populated identity field to empty', async () => {
+    await seed('setonceE2', withIdentity);
+    const db = testEnv.authenticatedContext('setonceE2').firestore();
+    await assertFails(updateDoc(doc(db, 'users', 'setonceE2'), { firstName: '' }));
+  });
+
+  it('owner CANNOT change firstName once set', async () => {
+    await seed('setonce2', withIdentity);
+    const db = testEnv.authenticatedContext('setonce2').firestore();
+    await assertFails(updateDoc(doc(db, 'users', 'setonce2'), { firstName: 'Eve' }));
+  });
+
+  it('owner CANNOT change lastName once set', async () => {
+    await seed('setonce3', withIdentity);
+    const db = testEnv.authenticatedContext('setonce3').firestore();
+    await assertFails(updateDoc(doc(db, 'users', 'setonce3'), { lastName: 'Dupont' }));
+  });
+
+  it('owner CANNOT change dateOfBirth once set', async () => {
+    await seed('setonce4', withIdentity);
+    const db = testEnv.authenticatedContext('setonce4').firestore();
+    await assertFails(updateDoc(doc(db, 'users', 'setonce4'), { dateOfBirth: '2010-01-01' }));
+  });
+
+  it('owner CANNOT delete a set identity field', async () => {
+    await seed('setonce5', withIdentity);
+    const db = testEnv.authenticatedContext('setonce5').firestore();
+    await assertFails(updateDoc(doc(db, 'users', 'setonce5'), { firstName: deleteField() }));
+  });
+
+  it('rewriting the SAME identity values passes (idempotent write)', async () => {
+    await seed('setonce6', withIdentity);
+    const db = testEnv.authenticatedContext('setonce6').firestore();
+    await assertSucceeds(updateDoc(doc(db, 'users', 'setonce6'), {
+      firstName: 'Iris', lastName: 'Martin', dateOfBirth: '2007-03-14',
+    }));
+  });
+
+  it('partial identity: the missing fields can still be set, set one stays frozen', async () => {
+    await seed('setonce7', { ...stubNoIdentity, firstName: 'Iris' });
+    const db = testEnv.authenticatedContext('setonce7').firestore();
+    await assertSucceeds(updateDoc(doc(db, 'users', 'setonce7'), {
+      lastName: 'Martin', dateOfBirth: '2007-03-14',
+    }));
+    await assertFails(updateDoc(doc(db, 'users', 'setonce7'), { firstName: 'Eve' }));
+  });
+
+  it('unrelated updates still pass on a doc with identity set', async () => {
+    await seed('setonce8', withIdentity);
+    const db = testEnv.authenticatedContext('setonce8').firestore();
+    await assertSucceeds(updateDoc(doc(db, 'users', 'setonce8'), {
+      photoUrl: 'https://firebasestorage.googleapis.com/v0/b/x/o/p.png',
+      'profiles.babysitter.hourlyRate': 18,
+    }));
   });
 });

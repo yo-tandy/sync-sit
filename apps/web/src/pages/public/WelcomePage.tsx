@@ -1,20 +1,24 @@
 import { useAuthStore } from '@/stores/authStore';
-import { getSitRole, getBabysitterProfile } from '@ejm/sit-core';
+import { getSitRole } from '@ejm/sit-core';
 import { WelcomePage as SharedWelcomePage } from '@ejm/shared-ui';
+import { postLoginRouter } from '@/lib/postLoginRouter';
 
-function computeRedirect(userDoc: ReturnType<typeof useAuthStore.getState>['userDoc']): string | null {
-  if (!userDoc) return null;
-  const role = getSitRole(userDoc);
-  if (role === 'babysitter') {
-    return getBabysitterProfile(userDoc)?.enrollmentComplete === false ? '/enroll/babysitter' : '/babysitter';
-  }
-  if (role === 'parent') return '/family';
-  if (role === 'admin') return '/admin';
-  return null;
-}
-
+/**
+ * Public landing. A signed-in user has no business here — postLoginRouter is
+ * the single source of truth: portals for role'd users (AuthGuard finishes
+ * the incomplete-enrollment redirect), /welcome-sit for cross-app tutors,
+ * /signup for profile-less accounts.
+ */
 export function WelcomePage() {
   const { firebaseUser, userDoc, loading } = useAuthStore();
-  const redirectPath = firebaseUser && userDoc ? computeRedirect(userDoc) : null;
-  return <SharedWelcomePage logoSrc="/logo.png" logoAlt="Sync/Sit" authLoading={loading} redirectPath={redirectPath} />;
+  const redirectPath =
+    firebaseUser && userDoc ? postLoginRouter(getSitRole(userDoc), userDoc) : null;
+  return (
+    <SharedWelcomePage
+      logoSrc="/logo.png"
+      logoAlt="Sync/Sit"
+      authLoading={loading}
+      redirectPath={redirectPath}
+    />
+  );
 }

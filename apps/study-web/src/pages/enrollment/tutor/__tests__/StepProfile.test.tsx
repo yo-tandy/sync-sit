@@ -132,3 +132,54 @@ describe('StepProfile (tutor)', () => {
     expect(screen.getByLabelText(/Contact email/i)).toHaveValue('flow@ejm.org');
   });
 });
+
+// Issue #144: a cross-app enrollee's root identity is already on file — the
+// step shows it read-only and the payload omits it (the server keeps the
+// stored, set-once values).
+describe('StepProfile (tutor) with identity on file', () => {
+  const onFile = { firstName: 'Iris', lastName: 'Martin', dateOfBirth: '2008-01-15' };
+
+  it('shows the read-only summary (name + DOB) instead of the identity inputs', () => {
+    renderWithProviders(<StepProfile onNext={vi.fn()} identityOnFile={onFile} />);
+
+    expect(
+      screen.getByText(i18n.t('enrollment.identityOnFile', { name: 'Iris Martin' })),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/2008-01-15/)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/First name/i)).toBeNull();
+    expect(screen.queryByLabelText(/Last name/i)).toBeNull();
+    expect(screen.queryByLabelText(/Date of birth/i)).toBeNull();
+    // classLevel and contact are still collected.
+    expect(screen.getByLabelText(/Class/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Contact email/i)).toBeInTheDocument();
+  });
+
+  it('formats a Timestamp-shaped DOB via toDate()', () => {
+    const tsDob = { toDate: () => new Date('2008-01-15T00:00:00Z') };
+    renderWithProviders(
+      <StepProfile onNext={vi.fn()} identityOnFile={{ ...onFile, dateOfBirth: tsDob }} />,
+    );
+    expect(
+      screen.getByText(new RegExp(new Date('2008-01-15T00:00:00Z').toLocaleDateString())),
+    ).toBeInTheDocument();
+  });
+
+  it('enables submit on classLevel + contact alone and omits identity from the payload', () => {
+    const onNext = vi.fn();
+    renderWithProviders(<StepProfile onNext={onNext} identityOnFile={onFile} />);
+
+    expect(submitBtn()).toBeDisabled();
+    fireEvent.change(screen.getByLabelText(/Class/i), { target: { value: '2nde' } });
+    fireEvent.change(screen.getByLabelText(/Contact email/i), { target: { value: 't@ejm.org' } });
+    expect(submitBtn()).toBeEnabled();
+    fireEvent.click(submitBtn());
+
+    expect(onNext).toHaveBeenCalledTimes(1);
+    const payload = onNext.mock.calls[0][0] as Record<string, unknown>;
+    expect(Object.keys(payload)).not.toContain('firstName');
+    expect(Object.keys(payload)).not.toContain('lastName');
+    expect(Object.keys(payload)).not.toContain('dateOfBirth');
+    expect(payload.classLevel).toBe('2nde');
+    expect(payload.contactEmail).toBe('t@ejm.org');
+  });
+});

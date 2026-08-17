@@ -45,6 +45,7 @@ import {
   AdminInfoPage,
   SupervisionInfoPage,
   HandoffPage,
+  CrossAppWelcomePage,
 } from '@/lazyPages';
 
 const SUPPORT_EMAIL = 'support@sync-study.com';
@@ -71,6 +72,7 @@ export const router = createBrowserRouter([
       // PUBLIC by design: arrival point of the cross-app switch — the one-time
       // fragment code is the capability; the page signs the user in itself.
       { path: '/handoff', element: <HandoffPage /> },
+      { path: '/welcome-study', element: <CrossAppWelcomePage /> },
       { path: '*', element: <Navigate to="/" replace /> },
     ],
   },

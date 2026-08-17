@@ -10,9 +10,11 @@ export interface AddProfileParams {
   profileKey: ProfileKey;
   profileData: Record<string, unknown>;
   /**
-   * Written only when the field is absent on the existing doc. Keys must be
-   * top-level field names; dotted paths are not supported (the absence check
-   * reads plain object keys while update() would treat dots as field paths).
+   * Written only when the field is EMPTY on the existing doc — absent, null,
+   * or '' (an empty base field is repairable; a populated one always wins,
+   * matching the set-once identity rule). Keys must be top-level field
+   * names; dotted paths are not supported (the emptiness check reads plain
+   * object keys while update() would treat dots as field paths).
    */
   fillBaseFields?: Record<string, unknown>;
   auditAction: string;
@@ -93,7 +95,12 @@ export async function addProfileToUser(params: AddProfileParams): Promise<void> 
       updatedAt: new Date(),
     };
     for (const [field, value] of Object.entries(params.fillBaseFields ?? {})) {
-      if (data[field] === undefined && value !== undefined) {
+      // Empty (absent/null/'') is fillable; populated always wins. Strict
+      // undefined-only here disagreed with enrollTutor's truthiness presence
+      // check: a doc holding firstName '' demanded the payload value and
+      // then silently never wrote it.
+      const existing = data[field];
+      if ((existing === undefined || existing === null || existing === '') && value !== undefined) {
         update[field] = value;
       }
     }

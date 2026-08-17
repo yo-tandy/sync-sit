@@ -11,22 +11,41 @@ import {
 } from '@ejm/shared-functions/enrollment/addProfileToUser.js';
 
 interface EnrollBabysitterData {
-  ejemEmail: string;
-  verificationCode: string;
+  ejemEmail?: string;
+  verificationCode?: string;
   password?: string;
   consentVersion: string;
+  // Cross-app switch (issue #144, owner clarification): a signed-in study
+  // tutor adds a babysitter profile without re-proving mailbox ownership —
+  // the EJM identity was verified at first enrollment and lives on the doc.
+  crossApp?: boolean;
+}
+
+/** Copy the profile-scoped fields both provider profile types share — only
+ *  those actually present on the source profile. */
+function copySharedProfileFields(source: Record<string, unknown>): Record<string, unknown> {
+  const copied: Record<string, unknown> = {};
+  for (const key of ['classLevel', 'gender', 'contactEmail', 'contactPhone', 'whatsapp']) {
+    if (source[key] !== undefined && source[key] !== null && source[key] !== '') {
+      copied[key] = source[key];
+    }
+  }
+  return copied;
 }
 
 /**
  * Create a minimal babysitter account after email verification.
  * Only requires: email, verification code, password, and consent.
  * Profile fields are filled in subsequent client-side steps.
+ * Cross-app mode (authed callers only): no code — the EJM email is derived
+ * from the caller's verified tutor profile.
  */
 export const enrollBabysitter = onCall(
   { region: 'europe-west1', cors: getCorsOrigin() },
   async (request) => {
     const data = request.data as EnrollBabysitterData;
     const isAddProfile = !!request.auth;
+    const isCrossApp = isAddProfile && data.crossApp === true;
 
     // 0. Validate password (only for the new-account path)
     if (!isAddProfile) {
@@ -40,36 +59,53 @@ export const enrollBabysitter = onCall(
       throw new HttpsError('invalid-argument', 'Consent is required');
     }
 
-    // 1. Verify the code
-    const codeDoc = await db
-      .collection('verificationCodes')
-      .doc(data.ejemEmail.toLowerCase())
-      .get();
+    // 1. Establish the verified EJM identity.
+    // Cross-app: derive it from the caller's OTHER provider profile — a
+    // signed-in tutor re-proving mailbox ownership is redundant by design
+    // (owner call on issue #144); the audit trail records crossApp: true.
+    // Classic: verify the emailed code as before.
+    let ejemEmailLower: string;
+    let codeDoc: FirebaseFirestore.DocumentSnapshot | null = null;
+    let copiedProfileFields: Record<string, unknown> = {};
+    if (isCrossApp) {
+      const callerSnap = await db.collection('users').doc(request.auth!.uid).get();
+      const tutorProfile = (callerSnap.data()?.profiles?.tutor ?? null) as Record<string, unknown> | null;
+      if (!tutorProfile || typeof tutorProfile.ejemEmail !== 'string' || !tutorProfile.ejemEmail) {
+        throw new HttpsError('failed-precondition', 'No verified EJM identity on this account');
+      }
+      ejemEmailLower = tutorProfile.ejemEmail.toLowerCase();
+      copiedProfileFields = copySharedProfileFields(tutorProfile);
+    } else {
+      if (!data.ejemEmail) {
+        throw new HttpsError('invalid-argument', 'EJM email is required');
+      }
+      ejemEmailLower = data.ejemEmail.toLowerCase();
+      codeDoc = await db.collection('verificationCodes').doc(ejemEmailLower).get();
 
-    if (!codeDoc.exists) {
-      throw new HttpsError('not-found', 'No verification code found. Please request a new one.');
-    }
+      if (!codeDoc.exists) {
+        throw new HttpsError('not-found', 'No verification code found. Please request a new one.');
+      }
 
-    const codeData = codeDoc.data()!;
+      const codeData = codeDoc.data()!;
 
-    if (codeData.expiresAt.toDate() < new Date()) {
-      throw new HttpsError('deadline-exceeded', 'Verification code has expired. Please request a new one.');
-    }
+      if (codeData.expiresAt.toDate() < new Date()) {
+        throw new HttpsError('deadline-exceeded', 'Verification code has expired. Please request a new one.');
+      }
 
-    if ((codeData.attempts || 0) >= 5) {
-      throw new HttpsError('resource-exhausted', 'Too many failed attempts. Please request a new verification code.');
-    }
+      if ((codeData.attempts || 0) >= 5) {
+        throw new HttpsError('resource-exhausted', 'Too many failed attempts. Please request a new verification code.');
+      }
 
-    if (codeData.code !== data.verificationCode) {
-      await codeDoc.ref.update({ attempts: FieldValue.increment(1) });
-      throw new HttpsError('invalid-argument', 'Invalid verification code');
+      if (codeData.code !== data.verificationCode) {
+        await codeDoc.ref.update({ attempts: FieldValue.increment(1) });
+        throw new HttpsError('invalid-argument', 'Invalid verification code');
+      }
     }
 
     // 1a. Add-profile path — an authenticated existing user gains a babysitter
     // profile. Base fields and consent on the existing doc are preserved.
     if (isAddProfile) {
       const uid = request.auth!.uid;
-      const ejemEmailLower = data.ejemEmail.toLowerCase();
       // Preflight before the schedule write: a caller the profile merge would
       // reject (role-exclusive, profile-exists, blocked) must leave no orphan
       // schedules/{uid} doc behind. addProfileToUser re-checks in-transaction.
@@ -85,12 +121,20 @@ export const enrollBabysitter = onCall(
           enrollmentComplete: false,
           ejemEmail: ejemEmailLower,
           searchable: false,
+          // Cross-app: seed the fields the tutor profile already answered
+          // (classLevel/gender/contact) so the wizard only asks for what is
+          // sit-specific (availability).
+          ...copiedProfileFields,
         },
         fillBaseFields: { language: 'en' },
         auditAction: 'babysitter_profile_added',
-        auditDetails: { ejemEmail: ejemEmailLower, consentVersion: data.consentVersion },
+        auditDetails: {
+          ejemEmail: ejemEmailLower,
+          consentVersion: data.consentVersion,
+          ...(isCrossApp ? { crossApp: true } : {}),
+        },
       });
-      await codeDoc.ref.delete();
+      if (codeDoc) await codeDoc.ref.delete();
       return { success: true, uid };
     }
 
@@ -98,7 +142,7 @@ export const enrollBabysitter = onCall(
     let uid: string;
     try {
       const userRecord = await adminAuth.createUser({
-        email: data.ejemEmail.toLowerCase(),
+        email: ejemEmailLower,
         password: data.password,
       });
       uid = userRecord.uid;
@@ -116,12 +160,12 @@ export const enrollBabysitter = onCall(
     const now = new Date();
     await db.collection('users').doc(uid).set({
       uid,
-      email: data.ejemEmail.toLowerCase(),
+      email: ejemEmailLower,
       status: 'active',
       profiles: {
         babysitter: {
           enrollmentComplete: false,
-          ejemEmail: data.ejemEmail.toLowerCase(),
+          ejemEmail: ejemEmailLower,
           searchable: false,
         },
       },
@@ -142,10 +186,10 @@ export const enrollBabysitter = onCall(
     // 4. Create empty schedule
     await ensureScheduleDoc(uid);
 
-    // 5. Clean up verification code
-    await codeDoc.ref.delete();
+    // 5. Clean up verification code (always present on the new-account path)
+    if (codeDoc) await codeDoc.ref.delete();
 
-    await writeUserActivity(uid, 'babysitter_enrolled', { email: data.ejemEmail });
+    await writeUserActivity(uid, 'babysitter_enrolled', { email: ejemEmailLower });
 
     return { success: true, uid };
   }

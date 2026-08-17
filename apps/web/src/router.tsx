@@ -28,6 +28,7 @@ import { BabysitterGuidePage } from '@/pages/public/BabysitterGuidePage';
 import { AddToHomescreenPage } from '@/pages/public/AddToHomescreenPage';
 import { KidInvitePage } from '@/pages/public/KidInvitePage';
 import { HandoffPage } from '@/pages/public/HandoffPage';
+import { CrossAppWelcomePage } from '@/pages/public/CrossAppWelcomePage';
 import { SupervisionInfoPage } from '@/pages/public/SupervisionInfoPage';
 import { SupervisionAgreementPage } from '@/pages/public/SupervisionAgreementPage';
 
@@ -93,6 +94,7 @@ export const router = createBrowserRouter([
       // PUBLIC by design: arrival point of the cross-app switch — the one-time
       // fragment code is the capability; the page signs the user in itself.
       { path: '/handoff', element: <HandoffPage /> },
+      { path: '/welcome-sit', element: <CrossAppWelcomePage /> },
       { path: '/supervision-info', element: <SupervisionInfoPage /> },
       { path: '/supervision-agreement', element: <SupervisionAgreementPage /> },
     ],
