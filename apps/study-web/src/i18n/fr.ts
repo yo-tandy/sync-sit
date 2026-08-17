@@ -423,7 +423,7 @@ export default {
           library: 'Bibliothèque / lieu public',
         },
         padding: 'Marge entre rendez-vous (minutes)',
-        paddingHint: 'Marge avant et après vos cours',
+        paddingHint: 'Appliquée autour des cours en présentiel (trajet et installation)',
         save: 'Enregistrer les préférences',
         saved: 'Préférences de cours enregistrées',
         errorNoLengths: 'Choisissez au moins une durée de cours',

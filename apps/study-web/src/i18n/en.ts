@@ -423,7 +423,7 @@ export default {
           library: 'Library / public space',
         },
         padding: 'Appointment padding (minutes)',
-        paddingHint: 'Buffer before and after your sessions',
+        paddingHint: 'Applied around in-person sessions (travel and setup time)',
         save: 'Save preferences',
         saved: 'Session preferences saved',
         errorNoLengths: 'Pick at least one session length',
