@@ -123,7 +123,6 @@ export default {
   // Enrollment
   enrollment: {
     confirmConsentTitle: 'Almost there',
-    accountExistsCta: 'An account with this email already exists. Log in to add this role.',
     identityOnFile: 'Enrolling as {{name}} — your identity is already on file from your other Sync profile.',
     alreadyEnrolled: 'This account already has this role.',
     alreadyInFamily: 'You already belong to a family.',

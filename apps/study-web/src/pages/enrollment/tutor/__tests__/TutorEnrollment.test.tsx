@@ -10,9 +10,14 @@ const h = vi.hoisted(() => ({
   auth: { firebaseUser: null as unknown, userDoc: null as unknown, loading: false },
   refreshUserDoc: () => Promise.resolve(),
   signIn: vi.fn(() => Promise.resolve()),
-  // Controllable error reason so tests can drive the account-exists /
-  // profile-exists CTAs. Default null = plain-error behavior.
-  errorReason: null as 'account-exists' | 'profile-exists' | null,
+  // Controllable error reason so tests can drive the profile-exists notice.
+  // Default null = plain-error behavior. There is no account-exists reason
+  // anymore (issue #148: silent existing-account flow).
+  errorReason: null as 'profile-exists' | null,
+  // Controllable raw rejection (no machine-readable reason) so tests can
+  // drive the plain-error fallback, e.g. the enroll-step already-exists
+  // race backstop.
+  rawError: null as { message: string } | null,
   // Controllable age-gate code so tests can drive the under-15 / mismatch
   // rejection branches. Default null = no age-gate rejection.
   ageCode: null as 'age/under-15' | 'age/mismatch' | null,
@@ -25,6 +30,11 @@ vi.mock('firebase/functions', () => ({
     // Model a backend rejection carrying the details.reason the SDK surfaces.
     if (name === 'enrollTutor' && h.errorReason) {
       return Promise.reject({ details: { reason: h.errorReason } });
+    }
+    // Model a reason-less rejection (e.g. the createUser race backstop):
+    // the SDK surfaces an Error whose message is the HttpsError message.
+    if (name === 'enrollTutor' && h.rawError) {
+      return Promise.reject(new Error(h.rawError.message));
     }
     // Model the age-gate rejection: HttpsError('failed-precondition', msg,
     // { code }) reaches the client as FunctionsError with details.code.
@@ -68,7 +78,7 @@ vi.mock('@ejm/shared-ui', () => ({
   // Mirrors the real helper: read details.reason off the rejected value.
   enrollmentErrorReason: (err: { details?: { reason?: unknown } } | null) => {
     const reason = err?.details?.reason;
-    return reason === 'account-exists' || reason === 'profile-exists' ? reason : null;
+    return reason === 'profile-exists' || reason === 'role-exclusive' ? reason : null;
   },
   // Mirrors the real helper: read details.code off the rejected value.
   ageGateErrorCode: (err: { details?: { code?: unknown } } | null) => {
@@ -164,6 +174,7 @@ beforeEach(() => {
   h.refreshUserDoc = vi.fn().mockResolvedValue(undefined);
   h.signIn.mockClear();
   h.errorReason = null;
+  h.rawError = null;
   h.ageCode = null;
 });
 
@@ -337,14 +348,29 @@ describe('TutorEnrollment orchestrator', () => {
     await vi.waitFor(() => expect(h.calls.some((c) => c.name === 'enrollTutor')).toBe(true));
   }
 
-  it("enrollTutor 'account-exists' rejection renders the login CTA + a /login link", async () => {
-    h.errorReason = 'account-exists';
+  it('verifyEjmEmail is called with the study app hint (silent account-exists copy)', async () => {
+    renderFlow();
+    fireEvent.click(screen.getByText('email-submit'));
+    await vi.waitFor(() => {
+      const call = h.calls.find((c) => c.name === 'verifyEjmEmail');
+      expect(call).toBeTruthy();
+      // The stub StepEmail fires onChange+onSubmit in the same tick, so the
+      // email state is still the initial '' in this render — the pin here is
+      // the app hint, not the email value.
+      expect(call!.payload).toMatchObject({ app: 'study' });
+    });
+  });
+
+  it('a reason-less enrollTutor rejection (race backstop) shows the plain message, never a login CTA', async () => {
+    // Issue #148: the account-exists CTA is gone — an existing account no
+    // longer produces any special client branch. The only remaining
+    // already-exists surface is the createUser race backstop, which arrives
+    // reason-less and renders as a plain error string.
+    h.rawError = { message: 'An account with this email already exists' };
     await driveToEnrollTutor();
 
-    const cta = i18n.t('enrollment.accountExistsCta');
-    expect(await screen.findByText(cta)).toBeInTheDocument();
-    const link = screen.getByRole('link', { name: i18n.t('auth.login') });
-    expect(link).toHaveAttribute('href', '/login');
+    expect(await screen.findByText('An account with this email already exists')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: i18n.t('auth.login') })).toBeNull();
     // No success navigation on failure.
     expect(h.navigate).not.toHaveBeenCalledWith('/enroll/tutor/success', expect.anything());
   });

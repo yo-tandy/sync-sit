@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { httpsCallable } from 'firebase/functions';
 import { signInWithEmailAndPassword } from 'firebase/auth';
@@ -31,9 +31,6 @@ export function BabysitterEnrollment() {
   const [verificationCode, setVerificationCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // When true, render the account-exists CTA (message + login link) instead of
-  // the plain error string. Other failures keep using `error`.
-  const [showLoginCta, setShowLoginCta] = useState(false);
 
   // Detect if user is already authenticated with incomplete enrollment (resume flow).
   // Guard on step === 0 so this only acts as a mount/login resume aid: once the
@@ -65,19 +62,13 @@ export function BabysitterEnrollment() {
   const isInvite = searchParams.get('invite') === 'true';
 
   // Maps a callable error to the right UI state; returns true if it produced a
-  // specialised message (account-exists CTA or already-enrolled notice).
+  // specialised message (already-enrolled notice). There is NO account-exists
+  // branch: signup with an existing email is silent (issue #148) — the backend
+  // responds like a fresh signup and emails the owner.
   const applyEnrollmentError = (err: unknown): boolean => {
     const reason = enrollmentErrorReason(err);
-    if (reason === 'account-exists') {
-      // The CTA block below renders the message + login link; keep `error` clear
-      // so the step component doesn't duplicate the text.
-      setError(null);
-      setShowLoginCta(true);
-      return true;
-    }
     if (reason === 'profile-exists') {
       setError(t('enrollment.alreadyEnrolled'));
-      setShowLoginCta(false);
       return true;
     }
     return false;
@@ -86,10 +77,10 @@ export function BabysitterEnrollment() {
   const handleSendCode = async () => {
     setLoading(true);
     setError(null);
-    setShowLoginCta(false);
     try {
       const verifyEjmEmail = httpsCallable(functions, 'verifyEjmEmail');
-      await verifyEjmEmail({ email: ejemEmail });
+      // `app` only selects the copy of the silent account-exists email.
+      await verifyEjmEmail({ email: ejemEmail, app: 'sit' });
       setStep(1);
     } catch (err: unknown) {
       if (!applyEnrollmentError(err)) {
@@ -109,7 +100,6 @@ export function BabysitterEnrollment() {
   const handleCreateAccount = async (password: string, consentVersion: string) => {
     setLoading(true);
     setError(null);
-    setShowLoginCta(false);
     try {
       const enrollFn = httpsCallable(functions, 'enrollBabysitter');
       await enrollFn({
@@ -194,7 +184,7 @@ export function BabysitterEnrollment() {
             }}
             onResend={async () => {
               const verifyEjmEmail = httpsCallable(functions, 'verifyEjmEmail');
-              await verifyEjmEmail({ email: ejemEmail });
+              await verifyEjmEmail({ email: ejemEmail, app: 'sit' });
             }}
             error={error}
           />
@@ -251,14 +241,6 @@ export function BabysitterEnrollment() {
           />
           <StepIndicator totalSteps={3} currentStep={step} />
         </>
-      )}
-      {showLoginCta && (
-        <div className="mx-auto mb-4 max-w-md px-6 text-center text-sm text-brand-600">
-          <p>{t('enrollment.accountExistsCta')}</p>
-          <Link to="/login" className="mt-1 inline-block font-semibold text-brand-600 underline">
-            {t('auth.login')}
-          </Link>
-        </div>
       )}
       {renderStep()}
     </div>

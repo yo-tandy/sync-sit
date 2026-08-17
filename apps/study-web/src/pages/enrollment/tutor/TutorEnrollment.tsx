@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router';
+import { useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { httpsCallable } from 'firebase/functions';
 import { TopNav, StepIndicator, StepEmail, StepVerify, StepPassword, enrollmentErrorReason, ageGateErrorCode } from '@ejm/shared-ui';
@@ -73,9 +73,6 @@ export function TutorEnrollment() {
   const [subjectsDraft, setSubjectsDraft] = useState<SubjectRow[] | undefined>(undefined);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // When true, render the account-exists CTA (message + login link) instead of
-  // the plain error string. Other failures keep using `error`.
-  const [showLoginCta, setShowLoginCta] = useState(false);
 
   // Already-enrolled tutors have nothing to add here — send them home. Guard on
   // step === 0 so this only fires before the flow starts: after an add-profile
@@ -88,25 +85,18 @@ export function TutorEnrollment() {
   }, [step, authLoading, firebaseUser, userDoc, navigate]);
 
   // Maps a callable error to the right UI state; returns true if it produced a
-  // specialised message (account-exists CTA or already-enrolled notice).
+  // specialised message (already-enrolled notice or age gate). There is NO
+  // account-exists branch: signup with an existing email is silent (issue
+  // #148) — the backend responds like a fresh signup and emails the owner.
   const applyEnrollmentError = (err: unknown): boolean => {
     const reason = enrollmentErrorReason(err);
-    if (reason === 'account-exists') {
-      // The CTA block below renders the message + login link; keep `error` clear
-      // so the step component doesn't duplicate the text.
-      setError(null);
-      setShowLoginCta(true);
-      return true;
-    }
     if (reason === 'profile-exists') {
       setError(t('enrollment.alreadyEnrolled'));
-      setShowLoginCta(false);
       return true;
     }
     const ageCode = ageGateErrorCode(err);
     if (ageCode) {
       setError(t(ageCode === 'age/under-15' ? 'enrollment.age.under15' : 'enrollment.age.mismatch'));
-      setShowLoginCta(false);
       return true;
     }
     return false;
@@ -115,10 +105,10 @@ export function TutorEnrollment() {
   const handleSendCode = async () => {
     setLoading(true);
     setError(null);
-    setShowLoginCta(false);
     try {
       const verifyEjmEmail = httpsCallable(functions, 'verifyEjmEmail');
-      await verifyEjmEmail({ email: ejemEmail });
+      // `app` only selects the copy of the silent account-exists email.
+      await verifyEjmEmail({ email: ejemEmail, app: 'study' });
       setStep(1);
     } catch (err: unknown) {
       if (!applyEnrollmentError(err)) {
@@ -152,7 +142,6 @@ export function TutorEnrollment() {
     const profileData = profile;
     setLoading(true);
     setError(null);
-    setShowLoginCta(false);
     try {
       const enrollTutorFn = httpsCallable<EnrollTutorInput, { uid: string }>(functions, 'enrollTutor');
       // Firebase v2 callable client serializes undefined as null on the wire,
@@ -255,7 +244,7 @@ export function TutorEnrollment() {
             }}
             onResend={async () => {
               const verifyEjmEmail = httpsCallable(functions, 'verifyEjmEmail');
-              await verifyEjmEmail({ email: ejemEmail });
+              await verifyEjmEmail({ email: ejemEmail, app: 'study' });
             }}
             error={error}
           />
@@ -321,14 +310,6 @@ export function TutorEnrollment() {
           />
           <StepIndicator totalSteps={AUTH_STEPS} currentStep={step} />
         </>
-      )}
-      {showLoginCta && (
-        <div className="mx-auto mb-4 max-w-md px-6 text-center text-sm text-brand-600">
-          <p>{t('enrollment.accountExistsCta')}</p>
-          <Link to="/login" className="mt-1 inline-block font-semibold text-brand-600 underline">
-            {t('auth.login')}
-          </Link>
-        </div>
       )}
       {renderStep()}
     </div>
