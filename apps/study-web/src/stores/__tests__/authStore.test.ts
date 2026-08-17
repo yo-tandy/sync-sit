@@ -44,11 +44,21 @@ describe('study authStore', () => {
     expect(useAuthStore.getState().error).toBeNull();
   });
 
-  it('login sets error and rethrows on failure', async () => {
+  it('login sets a generic i18n error key and rethrows on failure (issue #147)', async () => {
     mSignIn.mockRejectedValue(new Error('bad creds'));
     await expect(useAuthStore.getState().login('t@ejm.org', 'wrong')).rejects.toThrow('bad creds');
-    expect(useAuthStore.getState().error).toBe('bad creds');
+    // Never the raw message: it can reveal whether the account exists.
+    expect(useAuthStore.getState().error).toBe('auth.errorLoginFailed');
     expect(useAuthStore.getState().loading).toBe(false);
+  });
+
+  it('login collapses credential failures into the invalid-credentials key (issue #147)', async () => {
+    const err = Object.assign(new Error('Firebase: Error (auth/user-not-found).'), {
+      code: 'auth/user-not-found',
+    });
+    mSignIn.mockRejectedValue(err);
+    await expect(useAuthStore.getState().login('t@ejm.org', 'wrong')).rejects.toThrow();
+    expect(useAuthStore.getState().error).toBe('auth.errorInvalidCredentials');
   });
 
   it('logout signs out and clears the user', async () => {
@@ -64,10 +74,10 @@ describe('study authStore', () => {
     expect(mReset).toHaveBeenCalledWith({}, 't@ejm.org');
   });
 
-  it('resetPassword sets error and rethrows on failure', async () => {
+  it('resetPassword sets a generic i18n error key and rethrows on failure', async () => {
     mReset.mockRejectedValueOnce(new Error('no user'));
     await expect(useAuthStore.getState().resetPassword('x@ejm.org')).rejects.toThrow('no user');
-    expect(useAuthStore.getState().error).toBe('no user');
+    expect(useAuthStore.getState().error).toBe('auth.errorResetFailed');
   });
 
   it('clearError resets the error', () => {

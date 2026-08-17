@@ -58,7 +58,7 @@ export function ForgotPasswordPage({ onSubmit, error, clearError }: ForgotPasswo
             value={email}
             onChange={(e) => { setEmail(e.target.value); clearError(); }}
             placeholder="your@email.com"
-            error={error ?? undefined}
+            error={error ? t(error) : undefined}
             required
           />
           <Button type="submit">{t('auth.forgotPasswordSubmit')}</Button>

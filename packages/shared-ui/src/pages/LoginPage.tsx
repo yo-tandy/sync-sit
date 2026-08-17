@@ -71,7 +71,9 @@ export function LoginPage({ logoSrc, logoAlt, onLogin, postLoginRouter, loading,
             />
           </div>
 
-          {error && <p className="mb-4 text-sm text-brand-600">{error}</p>}
+          {/* error is an i18n key set by the app's auth store; t() falls back
+              to the raw string for callers that still pass plain messages. */}
+          {error && <p className="mb-4 text-sm text-brand-600">{t(error)}</p>}
 
           <div className="mb-6 text-right">
             <Link to="/forgot-password" className="text-sm font-medium text-brand-600 hover:underline">{t('auth.forgotPassword')}</Link>

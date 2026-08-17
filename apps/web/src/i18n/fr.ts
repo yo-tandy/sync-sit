@@ -74,6 +74,10 @@ export default {
     signingIn: 'Connexion...',
     invalidCode: 'Code de v\u00e9rification invalide',
     tooManyAttempts: 'Trop de tentatives. Veuillez demander un nouveau code.',
+    errorInvalidCredentials: 'Adresse e-mail ou mot de passe incorrect.',
+    errorTooManyAttempts: 'Trop de tentatives. Veuillez r\u00e9essayer plus tard.',
+    errorLoginFailed: 'Une erreur est survenue. Veuillez r\u00e9essayer.',
+    errorResetFailed: "Impossible d'envoyer l'e-mail de r\u00e9initialisation. Veuillez r\u00e9essayer.",
   },
 
   welcome: {
