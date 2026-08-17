@@ -104,9 +104,10 @@ describe('enrollTutor cross-app add-profile', () => {
     const after = (await db.collection('users').doc(seed.babysitter1.uid).get()).data()!;
     // New tutor profile with the verified EJM email inside it
     expect(after.profiles.tutor.ejemEmail).toBe(EJEM_EMAIL.toLowerCase());
-    expect(after.profiles.tutor.enrollmentComplete).toBe(false);
+    // Complete at creation (owner decision 2026-08-17), no verification state.
+    expect(after.profiles.tutor.enrollmentComplete).toBe(true);
     expect(after.profiles.tutor.searchable).toBe(false);
-    expect(after.profiles.tutor.verification).toEqual({ identityStatus: 'not_submitted' });
+    expect(after.profiles.tutor.verification).toBeUndefined();
     expect(after.profiles.tutor.subjects).toHaveLength(1);
     // Existing profile untouched
     expect(after.profiles.babysitter).toEqual(before.profiles.babysitter);
@@ -410,9 +411,10 @@ describe('enrollTutor crossApp mode', () => {
     const after = (await db.collection('users').doc(RICH_SITTER_UID).get()).data()!;
     const tutor = after.profiles.tutor;
     expect(tutor.ejemEmail).toBe('richsitter@test.com');
-    expect(tutor.enrollmentComplete).toBe(false);
+    // Complete at creation (owner decision 2026-08-17), no verification state.
+    expect(tutor.enrollmentComplete).toBe(true);
     expect(tutor.searchable).toBe(false);
-    expect(tutor.verification).toEqual({ identityStatus: 'not_submitted' });
+    expect(tutor.verification).toBeUndefined();
     expect(tutor.subjects).toEqual(SUBJECTS);
     // Copied from the babysitter profile:
     expect(tutor.classLevel).toBe('2nde');

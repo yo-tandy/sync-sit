@@ -39,8 +39,10 @@ export const searchTutors = onCall(
     }
 
     // ── Candidate tutors: three equality filters (no composite index needed) ──
-    // enrollmentComplete === true is THE approval gate; searchable === true is
-    // the tutor's own visibility switch.
+    // enrollmentComplete is true from creation for every current tutor (owner
+    // decision 2026-08-17: no admin identity approval); the filter stays to
+    // exclude legacy dev/test docs enrolled under the old gated model.
+    // searchable === true is the tutor's own visibility switch.
     const usersSnap = await db.collection('users')
       .where('status', '==', 'active')
       .where('profiles.tutor.enrollmentComplete', '==', true)

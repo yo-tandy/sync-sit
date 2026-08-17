@@ -120,7 +120,7 @@ describe('searchTutors', () => {
     }
   });
 
-  it('returns tutor2 ONLY (approval gate: excludes tutor1 enrollmentComplete=false, tutor3 searchable=false)', async () => {
+  it('returns tutor2 ONLY (excludes legacy tutor1 enrollmentComplete=false, tutor3 searchable=false)', async () => {
     const result = await callFunction<{ results: TutorResult[] }>(
       'searchTutors',
       { subject: 'math', level: '6e', latLng: PARIS_CENTER },

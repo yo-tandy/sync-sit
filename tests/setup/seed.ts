@@ -222,7 +222,11 @@ export async function seedTestData(): Promise<SeedData> {
     createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
   });
 
-  // Tutor 1: Noa — enrolled, not yet verified (unsearchable, not_submitted)
+  // Tutor 1: Noa — LEGACY-shaped doc from the retired identity-verification
+  // model (enrollmentComplete: false + verification state). Kept deliberately:
+  // pins that legacy incomplete docs stay invisible to searchTutors. Current
+  // enrollments always get enrollmentComplete: true and no verification field
+  // (owner decision 2026-08-17).
   const tutor1Uid = await createUser('noa.katz@ejm.org', 'Noa Katz');
   await db.collection('users').doc(tutor1Uid).set({
     uid: tutor1Uid, email: 'noa.katz@ejm.org', status: 'active',
@@ -249,14 +253,13 @@ export async function seedTestData(): Promise<SeedData> {
     },
   });
 
-  // Tutor 2: Yael — VERIFIED and searchable (the happy-path search result)
+  // Tutor 2: Yael — enrolled and searchable (the happy-path search result)
   const tutor2Uid = await createUser('yael.cohen@ejm.org', 'Yael Cohen');
   await db.collection('users').doc(tutor2Uid).set({
     uid: tutor2Uid, email: 'yael.cohen@ejm.org', status: 'active',
     firstName: 'Yael', lastName: 'Cohen', dateOfBirth: new Date('2004-08-19'),
     profiles: { tutor: {
       enrollmentComplete: true, ejemEmail: 'yael.cohen@ejm.org', searchable: true,
-      verification: { identityStatus: 'approved' },
       classLevel: 'L3', gender: 'female', languages: ['French', 'English'],
       subjects: [
         { subject: 'math', levels: ['6e', '5e', '4e'], rate: 25 },
@@ -279,14 +282,13 @@ export async function seedTestData(): Promise<SeedData> {
     },
   });
 
-  // Tutor 3: Daniel — VERIFIED but NOT searchable (approval-gate negative)
+  // Tutor 3: Daniel — enrolled but NOT searchable (searchable-gate negative)
   const tutor3Uid = await createUser('daniel.levy@ejm.org', 'Daniel Levy');
   await db.collection('users').doc(tutor3Uid).set({
     uid: tutor3Uid, email: 'daniel.levy@ejm.org', status: 'active',
     firstName: 'Daniel', lastName: 'Levy', dateOfBirth: new Date('2003-11-05'),
     profiles: { tutor: {
       enrollmentComplete: true, ejemEmail: 'daniel.levy@ejm.org', searchable: false,
-      verification: { identityStatus: 'approved' },
       classLevel: 'M1', gender: 'male', languages: ['French', 'English'],
       // Offerings deliberately IDENTICAL to tutor2's so tutor3 is a clean
       // negative for the searchable gate — any search that matches tutor2

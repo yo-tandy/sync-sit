@@ -57,10 +57,12 @@ describe('enrollTutor (unauthenticated create path)', () => {
     expect(user.consentVersion).toBe('1.0');
 
     const tutor = user.profiles.tutor;
-    expect(tutor.enrollmentComplete).toBe(false);
+    // Owner decision 2026-08-17: tutors share the babysitter trust model —
+    // enrollment is complete at creation, no identity-verification state.
+    expect(tutor.enrollmentComplete).toBe(true);
     expect(tutor.ejemEmail).toBe(EMAIL);
     expect(tutor.searchable).toBe(false);
-    expect(tutor.verification).toEqual({ identityStatus: 'not_submitted' });
+    expect(tutor.verification).toBeUndefined();
     expect(tutor.classLevel).toBe('CP');
     expect(tutor.subjects).toEqual([{ subject: 'math', levels: ['CP'], rate: 20 }]);
     expect(tutor.sessionLengthsMin).toEqual([60]);
