@@ -17,6 +17,7 @@ import {
   MailIcon,
   LogOutIcon,
   ShareIcon,
+  UsersIcon,
   SupervisionChip,
 } from '@ejm/shared-ui';
 import { AppSwitchMenuItem } from './AppSwitchMenuItem';
@@ -87,6 +88,8 @@ export function AppBar() {
           </div>
 
           <MenuItem icon={<BellIcon className="h-5 w-5" />} label={t('tutor.requestsTitle')} to="/tutor/requests" onNavigate={() => setMenuOpen(false)} />
+          {/* "My families" mirrors sync-sit's babysitter menu entry (UsersIcon → /babysitter/families). */}
+          <MenuItem icon={<UsersIcon className="h-5 w-5" />} label={t('tutor.familiesTitle')} to="/tutor/families" onNavigate={() => setMenuOpen(false)} />
           <MenuItem icon={<CalendarIcon className="h-5 w-5" />} label={t('tutor.sessionsTitle')} to="/tutor/sessions" onNavigate={() => setMenuOpen(false)} />
           <MenuItem icon={<CheckIcon className="h-5 w-5" />} label={t('tutor.endorsementsTitle')} to="/tutor/endorsements" onNavigate={() => setMenuOpen(false)} />
           <MenuItem icon={<UserIcon className="h-5 w-5" />} label={t('tutor.accountTitle')} to="/tutor/account" onNavigate={() => setMenuOpen(false)} />
