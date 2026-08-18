@@ -222,6 +222,16 @@ export default {
     goToLogin: 'Aller à la connexion',
   },
 
+  share: {
+    title: 'Partager Sync/Study',
+    desc: 'Aidez à faire grandir notre communauté ! Partagez Sync/Study avec les familles et tuteurs EJM.',
+    messagePreview: 'Aperçu du message',
+    copyMessage: 'Copier dans le presse-papiers',
+    shareByEmail: 'Partager par email',
+    shareNow: 'Partager',
+    copied: 'Copié !',
+  },
+
   tutor: {
     dashboardTitle: 'Tableau de bord',
     accountTitle: 'Mon compte',

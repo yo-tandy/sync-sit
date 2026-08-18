@@ -15,6 +15,7 @@ import {
   BellIcon,
   CalendarIcon,
   LogOutIcon,
+  ShareIcon,
 } from '@ejm/shared-ui';
 import { AppSwitchMenuItem } from './AppSwitchMenuItem';
 
@@ -93,6 +94,7 @@ export function FamilyAppBar() {
 
           <div className="border-t border-gray-100" />
 
+          <MenuItem icon={<ShareIcon className="h-5 w-5" />} label={t('share.title')} to="/share" onNavigate={() => setMenuOpen(false)} />
           <AppSwitchMenuItem />
 
           <div className="px-4 py-3">
