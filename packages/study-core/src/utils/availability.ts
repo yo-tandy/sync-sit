@@ -99,6 +99,16 @@ export interface ConfirmedBlock {
 export interface DayOverride {
   type: 'unavailable' | 'custom';
   slots?: boolean[];
+  /**
+   * Authorship marker. 'manual' = the tutor deliberately overrode this date in
+   * the schedule editor (useSchedule.addOverride). System claim docs written by
+   * confirming sessions/appointments (buildMergedOverride) carry
+   * 'study_session' / 'appointment' plus a sessionBlocks ledger instead — and a
+   * claim merged INTO a manual doc keeps 'manual'. The boolean availability
+   * math ignores this; per-slot location tag resolution (issue #166) uses it to
+   * keep weekly tags applying on claim-ledger dates.
+   */
+  reason?: string;
 }
 
 /** Current Paris wall-clock position, expressed calendar-relative. */

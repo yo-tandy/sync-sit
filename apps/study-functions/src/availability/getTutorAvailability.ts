@@ -118,6 +118,9 @@ export const getTutorAvailability = onCall(
       overrideByDate.set(doc.id, {
         type: data.type as DayOverride['type'],
         slots: data.slots as boolean[] | undefined,
+        // Authorship marker — location tag resolution distinguishes a
+        // tutor-authored 'manual' override from a session-claim doc.
+        reason: data.reason as string | undefined,
       });
     }
 

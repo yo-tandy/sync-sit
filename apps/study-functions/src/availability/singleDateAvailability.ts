@@ -63,6 +63,9 @@ export async function computeSingleDateAvailability(
     ? {
         type: overrideData.type as DayOverride['type'],
         slots: overrideData.slots as boolean[] | undefined,
+        // Authorship marker — location tag resolution distinguishes a
+        // tutor-authored 'manual' override from a session-claim doc.
+        reason: overrideData.reason as string | undefined,
       }
     : undefined;
 

@@ -95,20 +95,32 @@ export function computeDateAvailability(
 /**
  * Per-slot location tags applicable to a date (issue #166). The tags are
  * indexed against the WEEKLY grid, so they apply only when that grid is the
- * date's base — i.e. no holiday-schedule substitution and no custom-override
- * slots (base precedence: holidayGrid ?? override.slots ?? weekly). On any
- * other date (owner decision: overrides/holiday tags are a follow-up) every
- * cell resolves to "profile defaults" — all-null cells. An 'unavailable'
- * override also returns all-null: nothing is bookable, so tags are moot.
+ * date's base — i.e. no holiday-schedule substitution and no TUTOR-AUTHORED
+ * custom-override slots. On such dates (owner decision: overrides/holiday tags
+ * are a follow-up) every cell resolves to "profile defaults" — all-null cells.
+ * An 'unavailable' override also returns all-null: nothing is bookable, so
+ * tags are moot.
+ *
+ * Tutor-authored is detected by the POSITIVE marker `reason === 'manual'`
+ * (what useSchedule.addOverride writes). The override subcollection is also
+ * written by the session/appointment claim ledger (buildMergedOverride:
+ * reason 'study_session'/'appointment' + sessionBlocks), whose docs only AND
+ * weekly slots to false — the weekly grid is still the date's base, so the
+ * tags keep applying there (the claimed cells are already unbookable in the
+ * boolean grid). A claim merged into a manual doc keeps reason 'manual' and
+ * correctly stays tags-off. Absence of the marker is treated as a system doc,
+ * failing toward KEEPING the tags — the safer direction for any legacy
+ * ambiguity, since profile-defaults fallback would silently widen the offer.
  */
 export function resolveDateLocationCells(
   date: string,
   inputs: DateAvailabilityInputs,
 ): SlotLocationCells {
   const dow = dayOfWeek(date);
+  const tutorAuthored = inputs.override?.reason === 'manual';
   const weeklyBaseApplies =
     inputs.override?.type !== 'unavailable' &&
-    !(inputs.override?.type === 'custom' && inputs.override.slots) &&
+    !(tutorAuthored && inputs.override?.type === 'custom' && inputs.override.slots) &&
     holidayGridForDate(date, inputs, dow) === undefined;
   if (!weeklyBaseApplies) {
     return new Array(SLOTS_PER_DAY).fill(null) as SlotLocationCells;

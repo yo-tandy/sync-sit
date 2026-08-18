@@ -254,9 +254,14 @@ export const bookSession = onCall(
         tutor.locationPrefs ?? [],
       );
       if (!effectiveLocations.includes(location)) {
+        // details.reason lets the client tell "this location is not offered
+        // at this time" apart from a generic slot-taken invalid-argument —
+        // the recurring weekly-cells check can diverge from the client's
+        // per-occurrence heuristic, so the message must name the real cause.
         throw new HttpsError(
           'invalid-argument',
           'Tutor does not offer this location for this time slot',
+          { reason: 'location_not_offered' },
         );
       }
 
@@ -374,9 +379,12 @@ export const bookSession = onCall(
         tutor.locationPrefs ?? [],
       );
       if (!effectiveLocations.includes(location)) {
+        // Same distinguishable details as the recurring path: the client maps
+        // this to a location-specific message instead of "slot taken".
         throw new HttpsError(
           'invalid-argument',
           'Tutor does not offer this location for this time slot',
+          { reason: 'location_not_offered' },
         );
       }
       const endTime = slotIndexToTime(endIdx);
