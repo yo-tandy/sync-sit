@@ -948,6 +948,7 @@ export default {
     confirmConsentTitle: 'Presque terminé',
     identityOnFile: 'Inscription au nom de {{name}} — votre identité est déjà enregistrée depuis votre autre profil Sync.',
     alreadyEnrolled: 'Ce compte possède déjà ce rôle.',
+    sendCapReached: "Trop de demandes d'e-mails de vérification. Veuillez patienter jusqu'à une heure avant de réessayer.",
     verifyNoCodeHint: "Vous n'avez pas reçu de code ? Si vous avez déjà un compte, <loginLink>connectez-vous</loginLink> plutôt.",
     age: {
       under15: "Vous devez avoir au moins 15 ans pour vous inscrire seul(e). Vos parents peuvent créer un compte et vous inscrire depuis le leur.",

@@ -117,9 +117,12 @@ export const verifyEjmEmail = onCall(
     // authenticated and self-directed, so an explicit error is safe (nothing
     // to enumerate) and better UX than silent mail loss.
     if (isOwnEmailBypass && request.auth && !(await registerBypassSend(request.auth.uid))) {
+      // details.reason is the machine-readable marker the clients map to
+      // translated copy (same convention as enrollmentErrorReason).
       throw new HttpsError(
         'failed-precondition',
-        'Too many verification emails requested for this account. Please wait up to an hour and try again.'
+        'Too many verification emails requested for this account. Please wait up to an hour and try again.',
+        { reason: 'send-cap' }
       );
     }
 

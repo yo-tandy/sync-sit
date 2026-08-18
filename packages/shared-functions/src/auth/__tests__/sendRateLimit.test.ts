@@ -42,7 +42,7 @@ describe('nextSendCounter', () => {
     expect(next).toBeNull();
   });
 
-  it('a count that overshot the cap (accepted get/set race) still reads as capped', () => {
+  it('a count that somehow overshot the cap (manual write, legacy data) still reads as capped', () => {
     const start = NOW - 60 * 60 * 1000;
     const next = nextSendCounter(
       { count: DAILY_SEND_CAP + 2, windowStart: Timestamp.fromMillis(start) },

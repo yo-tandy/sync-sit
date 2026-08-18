@@ -186,16 +186,19 @@ describe('authed own-email bypass allowance (issue #155, #154 residual)', () => 
     // Allowance already spent (seeded per-uid counter — see technique note).
     await seedCounter(uid, 'bypass', 6, 10 * 60 * 1000);
 
-    let caught: { code?: string; message?: string } | undefined;
+    let caught: { code?: string; message?: string; details?: unknown } | undefined;
     try {
       await callFunction('verifyEjmEmail', { email }, token);
     } catch (e) {
-      caught = e as { code?: string; message?: string };
+      caught = e as { code?: string; message?: string; details?: unknown };
     }
     expect(caught?.code).toBe('FAILED_PRECONDITION');
     expect(caught?.message).toBe(
       'Too many verification emails requested for this account. Please wait up to an hour and try again.'
     );
+    // PR #180 round 2: the machine-readable marker the clients map to
+    // translated copy rides the error's details.
+    expect(caught?.details).toEqual({ reason: 'send-cap' });
 
     // The capped bypass wrote nothing: no code doc, no counter bump.
     expect((await getDb().collection('verificationCodes').doc(email).get()).exists).toBe(false);

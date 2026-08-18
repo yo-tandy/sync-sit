@@ -80,11 +80,15 @@ export function nextSendCounter(
 }
 
 /**
- * Read-decide-write against one counter doc. Plain get/set (no transaction):
- * two concurrent requests may each read count 9 and both send — the same
- * accepted race as the accountExistsNotices marker (#148), an overshoot of
- * at most the concurrency burst, and nextSendCounter still reads any
- * overshot count as capped afterwards.
+ * Read-decide-write against one counter doc, inside a single-doc
+ * runTransaction so the cap is EXACT (PR #180 review): with a plain get/set,
+ * N concurrent requests would all read the same count and all pass, making
+ * the real bound "cap bursts" with attacker-chosen burst width. The
+ * transaction serializes contenders on the one doc — contention is scoped
+ * per-address (legitimate traffic to one address is already serialized by
+ * the 60s cooldown), and the capped branch still writes nothing, so the
+ * transaction is invisible to the caller and the anti-oracle property is
+ * untouched.
  *
  * @returns true when the send may proceed (counter bumped), false when the
  *   cap is spent (nothing written — see the fixed-window note above).
@@ -96,13 +100,15 @@ async function registerSend(
   windowMs: number,
 ): Promise<boolean> {
   const ref = db.collection(SEND_COUNTERS_COLLECTION).doc(docId);
-  const snap = await ref.get();
-  const next = nextSendCounter(snap.data(), Date.now(), cap, windowMs);
-  if (next === null) {
-    return false;
-  }
-  await ref.set({ key: docId, kind, count: next.count, windowStart: next.windowStart });
-  return true;
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const next = nextSendCounter(snap.data(), Date.now(), cap, windowMs);
+    if (next === null) {
+      return false;
+    }
+    tx.set(ref, { key: docId, kind, count: next.count, windowStart: next.windowStart });
+    return true;
+  });
 }
 
 /** Per-address daily budget (verifyEjmEmail + verifyParentEmail combined). */

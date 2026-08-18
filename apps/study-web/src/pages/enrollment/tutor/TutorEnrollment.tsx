@@ -94,6 +94,11 @@ export function TutorEnrollment() {
       setError(t('enrollment.alreadyEnrolled'));
       return true;
     }
+    if (reason === 'send-cap') {
+      // Authed own-email bypass allowance (issue #155) — add-profile flow.
+      setError(t('enrollment.sendCapReached'));
+      return true;
+    }
     const ageCode = ageGateErrorCode(err);
     if (ageCode) {
       setError(t(ageCode === 'age/under-15' ? 'enrollment.age.under15' : 'enrollment.age.mismatch'));
