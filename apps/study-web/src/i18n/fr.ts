@@ -188,6 +188,7 @@ export default {
   welcomeCross: {
     backToOrigin: 'Retour à Sync/Sit',
     fallbackWizard: 'Utiliser l\'inscription complète à la place',
+    genericError: 'Une erreur est survenue et votre inscription n\'a pas pu être finalisée. Veuillez réessayer.',
     greeting: 'Bienvenue, {{name}} !',
     body: "En tant qu'élève de l'EJM, vous pouvez donner des cours aux familles de l'EJM — votre identifiant Sync/Sit fonctionne ici tel quel. Il ne nous manque que les matières que vous proposez pour commencer.",
     consentPrefix: 'En continuant, vous acceptez les',

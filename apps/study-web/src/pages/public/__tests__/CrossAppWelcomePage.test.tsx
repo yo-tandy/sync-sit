@@ -11,14 +11,15 @@ const h = vi.hoisted(() => ({
     loading: false,
   },
   refreshUserDoc: () => Promise.resolve(),
-  errorReason: null as string | null,
+  // When set, enrollTutor rejects with this value (FunctionsError-shaped).
+  error: null as unknown,
 }));
 
 vi.mock('@/config/firebase', () => ({ functions: {}, db: {}, auth: {} }));
 vi.mock('firebase/functions', () => ({
   httpsCallable: (_fns: unknown, name: string) => (payload: unknown) => {
     h.calls.push({ name, payload });
-    if (h.errorReason) return Promise.reject({ details: { reason: h.errorReason } });
+    if (h.error) return Promise.reject(h.error);
     return Promise.resolve({ data: { uid: 'u1' } });
   },
 }));
@@ -84,7 +85,7 @@ beforeEach(() => {
   h.navigate = vi.fn();
   h.auth = { firebaseUser: { uid: 'b1' }, userDoc: babysitterDoc, loading: false };
   h.refreshUserDoc = vi.fn().mockResolvedValue(undefined);
-  h.errorReason = null;
+  h.error = null;
   i18n.changeLanguage('en');
 });
 
@@ -127,12 +128,54 @@ describe('CrossAppWelcomePage (study)', () => {
   });
 
   it('profile-exists rejection routes to the tutor portal instead of erroring', async () => {
-    h.errorReason = 'profile-exists';
+    h.error = { details: { reason: 'profile-exists', profile: 'tutor' } };
     renderPage();
     fireEvent.click(screen.getByRole('button', { name: i18n.t('common.continue') }));
     fireEvent.click(screen.getByText('subjects-next'));
 
     await vi.waitFor(() => expect(h.navigate).toHaveBeenCalledWith('/tutor'));
+  });
+
+  // Error translation pins (issue #159): mapping is by details code/reason,
+  // never by message strings, and raw server text must never render.
+  it('the age-gate rejection (under-15 stored DoB) renders the translated copy, not the raw message', async () => {
+    h.error = {
+      code: 'functions/failed-precondition',
+      message: 'raw-server-age-gate-text',
+      details: { code: 'age/under-15' },
+    };
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('common.continue') }));
+    fireEvent.click(screen.getByText('subjects-next'));
+
+    expect(await screen.findByText(i18n.t('enrollment.age.under15'))).toBeInTheDocument();
+    expect(screen.queryByText('raw-server-age-gate-text')).toBeNull();
+  });
+
+  it('a role-exclusive rejection renders the translated exclusivity copy', async () => {
+    h.error = {
+      code: 'functions/failed-precondition',
+      message: 'raw-server-role-exclusive-text',
+      details: { reason: 'role-exclusive', profile: 'tutor' },
+    };
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('common.continue') }));
+    fireEvent.click(screen.getByText('subjects-next'));
+
+    expect(await screen.findByText(i18n.t('signup.roleExclusiveTutor'))).toBeInTheDocument();
+    expect(screen.queryByText('raw-server-role-exclusive-text')).toBeNull();
+  });
+
+  it('an unknown error renders the translated generic message and keeps the fallback-wizard link', async () => {
+    h.error = { code: 'functions/internal', message: 'raw-server-internal-text' };
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('common.continue') }));
+    fireEvent.click(screen.getByText('subjects-next'));
+
+    expect(await screen.findByText(i18n.t('welcomeCross.genericError'))).toBeInTheDocument();
+    expect(screen.queryByText('raw-server-internal-text')).toBeNull();
+    const fallback = screen.getByRole('link', { name: i18n.t('welcomeCross.fallbackWizard') });
+    expect(fallback).toHaveAttribute('href', '/enroll/tutor');
   });
 
   it('signed-out visitors are sent to /login', () => {
