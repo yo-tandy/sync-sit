@@ -216,6 +216,14 @@ export async function sendAdminNotification(subject: string, body: string): Prom
  */
 export type NotificationApp = 'sit' | 'study';
 
+/**
+ * The ONE canonical study host. Matches the prod fallback of
+ * apps/web/src/lib/appSwitch.ts STUDY_APP_URL and PUSH_BRANDING in push.ts —
+ * sync-study.com is not live (issue #156). Every study email CTA must build on
+ * this constant so the next domain move is a single edit.
+ */
+export const STUDY_APP_URL = 'https://sync-study-app.web.app';
+
 // Per-app notification branding (issue #168 Phase 0). Same literal-copy-set
 // pattern as ACCOUNT_EXISTS_COPY above. The FROM address stays
 // noreply@sync-sit.com for BOTH apps until #156 resolves study domain setup —
@@ -236,11 +244,27 @@ const NOTIFICATION_BRANDING: Record<
   study: {
     appName: 'Sync/Study',
     color: '#2563EB',
-    appUrl: 'https://sync-study-app.web.app',
+    appUrl: STUDY_APP_URL,
     from: 'Sync/Study <noreply@sync-sit.com>',
     fromFallback: 'Sync/Study <onboarding@resend.dev>',
   },
 };
+
+/**
+ * Escape a user-controlled string for interpolation into notification email
+ * HTML (text-node and attribute contexts). Introduced at the
+ * endorsement-response emails (issue #168 Phase 0); the wider study-functions
+ * email surface interpolates profile strings unescaped by long-standing
+ * convention — migrating those call sites is a tracked follow-up.
+ */
+export function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
 
 /**
  * Builds the branded wrapper around a notification email body. Exported for
@@ -263,27 +287,32 @@ export function buildNotificationEmailHtml(body: string, app: NotificationApp = 
 /**
  * Send a notification email to a user, branded for the given app.
  * Fails silently — notifications should not block user actions.
+ * Returns whether the email was actually handed to the transport (mirrors
+ * sendPushNotification), so callers can record an honest emailSent audit
+ * field: false on a skipped recipient, missing Resend config, a rejected
+ * send, or a thrown transport error. The emulator [DEV] log IS that
+ * environment's successful delivery, so it returns true.
  */
 export async function sendNotificationEmail(
   to: string,
   subject: string,
   body: string,
   app: NotificationApp = 'sit'
-): Promise<void> {
+): Promise<boolean> {
   if (!to || !to.includes('@')) {
     console.warn(`[SKIP-EMAIL] Invalid recipient: ${to}`);
-    return;
+    return false;
   }
 
   if (process.env.FUNCTIONS_EMULATOR === 'true') {
     console.log(`[DEV] Notification to ${to} (app: ${app}): ${subject}`);
-    return;
+    return true;
   }
 
   const resend = getResend();
   if (!resend) {
     console.log(`[NO-RESEND] Notification to ${to} (app: ${app}): ${subject}`);
-    return;
+    return false;
   }
 
   const { from, fromFallback } = NOTIFICATION_BRANDING[app];
@@ -296,9 +325,12 @@ export async function sendNotificationEmail(
       const fallbackResult = await resend.emails.send({ from: fromFallback, to, subject, html: emailHtml });
       if (fallbackResult.error) {
         console.error(`[EMAIL] Fallback also failed: ${fallbackResult.error.message}`);
+        return false;
       }
     }
+    return true;
   } catch (err) {
     console.error('Failed to send notification email:', err);
+    return false;
   }
 }

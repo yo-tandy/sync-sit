@@ -3,7 +3,7 @@ import { db } from '@ejm/shared-functions/config/firebase.js';
 import { getCorsOrigin } from '@ejm/shared-functions/config/cors.js';
 import { writeUserActivity } from '@ejm/shared-functions/admin/writeAuditLog.js';
 import { notifyAllParents } from '@ejm/shared-functions/config/notifyParents.js';
-import { sendNotificationEmail } from '@ejm/shared-functions/config/email.js';
+import { sendNotificationEmail, STUDY_APP_URL } from '@ejm/shared-functions/config/email.js';
 import { sendPushNotification } from '@ejm/shared-functions/config/push.js';
 import {
   isActiveGuardianOf,
@@ -606,7 +606,7 @@ export const respondToSession = onCall(
         emailBody: `
           <p>The time you requested with <strong>${tutorName}</strong> is no longer available.</p>
           <p>You can request another time.</p>
-          <p style="margin-top: 16px;"><a href="https://sync-study.com/family" style="background: #2563EB; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View in app</a></p>
+          <p style="margin-top: 16px;"><a href="${STUDY_APP_URL}/family" style="background: #2563EB; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View in app</a></p>
         `,
         data: { sessionId: ad.sessionId },
       });
@@ -626,12 +626,14 @@ export const respondToSession = onCall(
       const body = isConfirm
         ? `${familyName} accepted your session proposal.`
         : `${familyName} declined your session proposal.`;
+      // Record the actual send outcomes, not assumptions.
+      let emailSent = false;
       if (prefs?.email !== false && tutorEmail) {
-        await sendNotificationEmail(
+        emailSent = await sendNotificationEmail(
           tutorEmail,
           title,
           `<p><strong>${familyName}</strong> ${isConfirm ? 'accepted' : 'declined'} your session proposal.</p>
-           <p style="margin-top: 16px;"><a href="https://sync-study.com/tutor/sessions" style="background: #2563EB; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View in app</a></p>`,
+           <p style="margin-top: 16px;"><a href="${STUDY_APP_URL}/tutor/sessions" style="background: #2563EB; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View in app</a></p>`,
           'study',
         );
       }
@@ -648,7 +650,7 @@ export const respondToSession = onCall(
         data: { sessionId },
         read: false,
         channels: ['email', 'push'],
-        emailSent: prefs?.email !== false,
+        emailSent,
         pushSent,
         createdAt: now,
       });
@@ -670,7 +672,7 @@ export const respondToSession = onCall(
           <p><strong>${tutorName}</strong> confirmed your recurring tutoring sessions.</p>
           <p><strong>${count}</strong> session${count === 1 ? '' : 's'} scheduled, starting <strong>${first}</strong>.</p>
           ${skippedNote}
-          <p style="margin-top: 16px;"><a href="https://sync-study.com/family" style="background: #2563EB; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View in app</a></p>
+          <p style="margin-top: 16px;"><a href="${STUDY_APP_URL}/family" style="background: #2563EB; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View in app</a></p>
         `,
         data: { sessionId },
       });
@@ -685,7 +687,7 @@ export const respondToSession = onCall(
         emailSubject: `Session confirmed — ${tutorName}`,
         emailBody: `
           <p><strong>${tutorName}</strong> confirmed your tutoring session.</p>
-          <p style="margin-top: 16px;"><a href="https://sync-study.com/family" style="background: #2563EB; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View in app</a></p>
+          <p style="margin-top: 16px;"><a href="${STUDY_APP_URL}/family" style="background: #2563EB; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View in app</a></p>
         `,
         data: { sessionId },
       });
@@ -701,7 +703,7 @@ export const respondToSession = onCall(
         emailBody: `
           <p><strong>${tutorName}</strong> declined your tutoring session request.</p>
           <p>You can request another time or another tutor.</p>
-          <p style="margin-top: 16px;"><a href="https://sync-study.com/family" style="background: #2563EB; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View in app</a></p>
+          <p style="margin-top: 16px;"><a href="${STUDY_APP_URL}/family" style="background: #2563EB; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View in app</a></p>
         `,
         data: { sessionId },
       });

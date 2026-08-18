@@ -1,11 +1,12 @@
 import { db, messaging } from './firebase.js';
+import { STUDY_APP_URL } from './email.js';
 import type { NotificationApp } from './email.js';
 
 // Per-app push branding (issue #168 Phase 0). study-web ships only logo.png
 // as a public image asset — its favicon.png does not exist (SPA fallback).
 const PUSH_BRANDING: Record<NotificationApp, { icon: string; link: string }> = {
   sit: { icon: 'https://sync-sit.com/favicon.png', link: 'https://sync-sit.com' },
-  study: { icon: 'https://sync-study-app.web.app/logo.png', link: 'https://sync-study-app.web.app' },
+  study: { icon: `${STUDY_APP_URL}/logo.png`, link: STUDY_APP_URL },
 };
 
 /**

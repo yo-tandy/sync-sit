@@ -141,8 +141,10 @@ export const sendContactRequest = onCall(
       <p style="margin-top: 16px;"><a href="https://sync-sit.com/babysitter" style="background: #DC2626; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View Request</a></p>
     `;
 
+    // Record the actual send outcomes, not assumptions.
+    let emailSent = false;
     if (babysitterData.notifPrefs?.newRequest?.email !== false && babysitterData.email) {
-      await sendNotificationEmail(
+      emailSent = await sendNotificationEmail(
         babysitterData.email,
         `New babysitting request from ${familyData.familyName}`,
         emailBody
@@ -150,8 +152,9 @@ export const sendContactRequest = onCall(
     }
 
     // Send push notification
+    let pushSent = false;
     if (babysitterData.notifPrefs?.newRequest?.push !== false) {
-      await sendPushNotification(
+      pushSent = await sendPushNotification(
         data.babysitterUserId,
         'New babysitting request',
         `${familyData.familyName} has sent you a babysitting request.`,
@@ -167,8 +170,8 @@ export const sendContactRequest = onCall(
       data: { appointmentId: appointmentRef.id },
       read: false,
       channels: ['email', 'push'],
-      emailSent: babysitterData.notifPrefs?.newRequest?.email !== false,
-      pushSent: false,
+      emailSent,
+      pushSent,
       createdAt: now,
     });
 

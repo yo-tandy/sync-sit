@@ -115,16 +115,35 @@ export function AccountPage() {
   // `notifPrefs` write would clobber the push.* values the sit app may have
   // written after this page mounted (push channels are not editable here, so
   // our in-memory `prefs.push` can be stale).
+  // EXCEPTION: when the scenario's push channel is missing from the stored
+  // doc — the key is absent (older users predating a scenario, e.g.
+  // references) or half-populated ({email} with no push, which pre-fix
+  // toggles created) — a single-channel dot-path would leave the map
+  // incomplete: sit's UI renders the missing push as off while the server
+  // (missing push = on) still sends. Write the full map once instead, with
+  // the missing push defaulted to the server's default-on gate (stored?.push
+  // is defensive — a present push takes the dot-path branch); the next
+  // toggle self-heals half-populated docs, no backfill needed. "Stored"
+  // means the in-memory userDoc as of the last refresh — a concurrent
+  // sit-side write between refresh and save could still be clobbered, but
+  // nothing else writes these keys today.
   const savePrefs = useCallback(
     async (scenario: keyof NotifPrefs, email: boolean) => {
       if (!uid) return;
+      const stored = userDoc?.notifPrefs?.[scenario];
+      // Read push BEFORE the `'push' in stored` check: in the else branch
+      // tsc -b narrows `stored` to never (the declared map type always
+      // carries push), so the optional access fails the CI build.
+      const prevPush = stored?.push ?? true;
       await updateDoc(doc(db, 'users', uid), {
-        [`notifPrefs.${scenario}.email`]: email,
+        ...(stored && 'push' in stored
+          ? { [`notifPrefs.${scenario}.email`]: email }
+          : { [`notifPrefs.${scenario}`]: { push: prevPush, email } }),
         updatedAt: serverTimestamp(),
       });
       await refreshUserDoc();
     },
-    [uid, refreshUserDoc],
+    [uid, userDoc, refreshUserDoc],
   );
 
   const toggleEmail = async (scenario: keyof NotifPrefs) => {

@@ -4,7 +4,7 @@ import { db } from '@ejm/shared-functions/config/firebase.js';
 import { getCorsOrigin } from '@ejm/shared-functions/config/cors.js';
 import { writeUserActivity } from '@ejm/shared-functions/admin/writeAuditLog.js';
 import { notifyAllParents } from '@ejm/shared-functions/config/notifyParents.js';
-import { sendNotificationEmail } from '@ejm/shared-functions/config/email.js';
+import { sendNotificationEmail, STUDY_APP_URL } from '@ejm/shared-functions/config/email.js';
 import { sendPushNotification } from '@ejm/shared-functions/config/push.js';
 import {
   isActiveGuardianOf,
@@ -196,15 +196,17 @@ export const cancelSessionInstance = onCall(
       const title = 'Session cancelled';
       const body = `${familyName} cancelled the session on ${whenInfo}. Reason: ${reason}${lateSuffix}`;
 
+      // Record the actual send outcomes, not assumptions.
+      let emailSent = false;
       if (cancelPrefs?.email !== false && tutorEmail) {
-        await sendNotificationEmail(
+        emailSent = await sendNotificationEmail(
           tutorEmail,
           `Session cancelled by ${familyName}`,
           `<p><strong>${familyName}</strong> cancelled the session on <strong>${whenInfo}</strong>.</p>
            <p>Your other sessions in this series are unaffected.</p>
            <p><strong>Reason:</strong> ${reason}</p>
            ${latePolicyNote}
-           <p style="margin-top: 16px;"><a href="https://sync-study.com/tutor" style="background: #2563EB; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View in app</a></p>`,
+           <p style="margin-top: 16px;"><a href="${STUDY_APP_URL}/tutor" style="background: #2563EB; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View in app</a></p>`,
           'study',
         );
       }
@@ -226,7 +228,7 @@ export const cancelSessionInstance = onCall(
         data: { sessionId, instanceId },
         read: false,
         channels: ['email', 'push'],
-        emailSent: cancelPrefs?.email !== false,
+        emailSent,
         pushSent,
         createdAt: now,
       });
@@ -245,7 +247,7 @@ export const cancelSessionInstance = onCall(
            <p>Your other sessions in this series are unaffected.</p>
            <p><strong>Reason:</strong> ${reason}</p>
            ${latePolicyNote}
-           <p style="margin-top: 16px;"><a href="https://sync-study.com/family" style="background: #2563EB; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View in app</a></p>`,
+           <p style="margin-top: 16px;"><a href="${STUDY_APP_URL}/family" style="background: #2563EB; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View in app</a></p>`,
         data: { sessionId, instanceId },
       });
     }

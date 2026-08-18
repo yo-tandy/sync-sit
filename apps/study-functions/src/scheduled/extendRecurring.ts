@@ -2,6 +2,7 @@ import { onSchedule } from 'firebase-functions/v2/scheduler';
 import type { Firestore } from 'firebase-admin/firestore';
 import { db } from '@ejm/shared-functions/config/firebase.js';
 import { notifyAllParents } from '@ejm/shared-functions/config/notifyParents.js';
+import { STUDY_APP_URL } from '@ejm/shared-functions/config/email.js';
 import {
   parisDateString,
   parisWallClockPosition,
@@ -262,7 +263,7 @@ async function extendOne(
       emailBody: `
         <p>One or more upcoming sessions in your recurring series could not be scheduled because the time is no longer available: <strong>${dates}</strong>.</p>
         <p>Your other sessions are unaffected.</p>
-        <p style="margin-top: 16px;"><a href="https://sync-study.com/family" style="background: #2563EB; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View in app</a></p>
+        <p style="margin-top: 16px;"><a href="${STUDY_APP_URL}/family" style="background: #2563EB; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View in app</a></p>
       `,
       data: { sessionId: sessionRef.id },
     });

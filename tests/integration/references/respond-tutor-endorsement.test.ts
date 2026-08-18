@@ -51,7 +51,7 @@ describe('respondToTutorEndorsement', () => {
   });
 
   // Seed a private tutor endorsement directly (keyed by tutorUserId + appSource).
-  async function seedPrivateEndorsement(tutorUserId: string): Promise<string> {
+  async function seedPrivateEndorsement(tutorUserId: string, familyId?: string): Promise<string> {
     const db = getDb();
     const ref = db.collection('references').doc();
     await ref.set({
@@ -61,7 +61,7 @@ describe('respondToTutorEndorsement', () => {
       status: 'private',
       tutorUserId,
       submittedByUserId: seed.parent1.uid,
-      submittedByFamilyId: seed.family1Id,
+      submittedByFamilyId: familyId ?? seed.family1Id,
       submittedByName: 'Marie Dupont',
       refName: 'Marie Dupont',
       referenceText: 'Great tutor, highly recommended.',
@@ -152,6 +152,26 @@ describe('respondToTutorEndorsement', () => {
       .where('recipientUserId', '==', seed.parent2.uid).get();
     const p2doc = p2.docs.find((d) => d.data().type === 'tutor_endorsement_published');
     expect(p2doc!.data().emailSent).toBe(true);
+  });
+
+  // Degenerate-data pin: a missing family makes notifyAllParents no-op (empty
+  // parentIds), so this exercises the missing-family path of the post-commit
+  // notify — NOT the catch (nothing here throws). The swallow itself is
+  // unit-pinned in apps/study-functions/src/endorsements/__tests__/
+  // endorsementNotifications.test.ts with notifyAllParents mocked to reject.
+  it('accept still succeeds when the submitting family no longer exists', async () => {
+    const referenceId = await seedPrivateEndorsement(seed.tutor2.uid, 'ghost-family-gone');
+    const res = await callFunction<{ ok: boolean }>(
+      'respondToTutorEndorsement',
+      { referenceId, action: 'accept' },
+      tutor2Token
+    );
+    expect(res.ok).toBe(true);
+    const db = getDb();
+    const doc = (await db.collection('references').doc(referenceId).get()).data()!;
+    expect(doc.status).toBe('approved');
+    const tutorDoc = (await db.collection('users').doc(seed.tutor2.uid).get()).data()!;
+    expect(tutorDoc.profiles.tutor.endorsementCount).toBe(1);
   });
 
   it('rejects a response from a tutor who is not the endorsed one (permission-denied)', async () => {

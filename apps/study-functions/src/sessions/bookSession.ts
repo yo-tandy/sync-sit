@@ -2,7 +2,7 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { db } from '@ejm/shared-functions/config/firebase.js';
 import { getCorsOrigin } from '@ejm/shared-functions/config/cors.js';
 import { writeUserActivity } from '@ejm/shared-functions/admin/writeAuditLog.js';
-import { sendNotificationEmail } from '@ejm/shared-functions/config/email.js';
+import { sendNotificationEmail, STUDY_APP_URL } from '@ejm/shared-functions/config/email.js';
 import { sendPushNotification } from '@ejm/shared-functions/config/push.js';
 import { parisWallTimeToUtc } from '@ejm/shared-functions/scheduled/parisTime.js';
 import {
@@ -393,11 +393,13 @@ export const bookSession = onCall(
       <p><strong>When:</strong> ${whenLine}</p>
       ${isTrialRequest ? `<p>The family would like the <strong>first session as a trial</strong>.</p>` : ''}
       ${message ? `<p><strong>Message:</strong> ${message}</p>` : ''}
-      <p style="margin-top: 16px;"><a href="https://sync-study.com/tutor/sessions" style="background: #2563EB; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View Request</a></p>
+      <p style="margin-top: 16px;"><a href="${STUDY_APP_URL}/tutor/sessions" style="background: #2563EB; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View Request</a></p>
     `;
 
+    // Record the actual send outcomes, not assumptions.
+    let emailSent = false;
     if (notifPrefs?.email !== false && tutorUser.email) {
-      await sendNotificationEmail(
+      emailSent = await sendNotificationEmail(
         tutorUser.email,
         `New session request from ${familyName || 'a family'}`,
         emailBody,
@@ -419,7 +421,7 @@ export const bookSession = onCall(
       data: { sessionId: sessionRef.id },
       read: false,
       channels: ['email', 'push'],
-      emailSent: notifPrefs?.email !== false,
+      emailSent,
       pushSent,
       createdAt: now,
     });
