@@ -1,56 +1,27 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
-import {
-  doc,
-  getDoc,
-  updateDoc,
-  serverTimestamp,
-  collection,
-  query,
-  where,
-  getDocs,
-} from 'firebase/firestore';
+import { doc, getDoc, updateDoc, serverTimestamp, collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { getTutorProfile } from '@ejm/study-core';
+import type { StudyContactRequestDoc } from '@ejm/study-core';
+import type { RecurringSlot } from '@ejm/shared-core';
 import { DAYS_OF_WEEK } from '@ejm/shared-core';
 import { SupervisionRequestCard } from '@/components/tutor/SupervisionRequestCard';
 import { InstallAppBanner } from '@/components/ui/InstallAppBanner';
+import type { StudySessionDoc } from '@/types/studySession';
 import {
   Card,
   Button,
+  Dialog,
   Spinner,
   Badge,
-  BellIcon,
   CalendarIcon,
-  CheckIcon,
   ChevronRightIcon,
-  ClipboardListIcon,
-  SettingsIcon,
+  UsersIcon,
   useRefetchOnFocus,
 } from '@ejm/shared-ui';
-
-/** The tutor's soonest confirmed one_time session, extracted alongside the
- * pending count. A recurring series' concrete dates live in its `instances`
- * subcollection, which this page must not query — one_time dates only. */
-type NextSession = { date: string; startTime: string; familyName?: string };
-
-/** Paris wall-clock "YYYY-MM-DDTHH:MM" — same idiom as SessionsPage, so the
- * hero's "has this session already started" test matches the sessions hub. */
-function parisNowStamp(): string {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Europe/Paris',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hourCycle: 'h23',
-  }).formatToParts(new Date());
-  const g = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
-  return `${g('year')}-${g('month')}-${g('day')}T${g('hour')}:${g('minute')}`;
-}
 
 /** Paris "YYYY-MM-DD" today (en-CA renders ISO order; tz-correct via runtime). */
 function parisToday(): string {
@@ -62,18 +33,10 @@ function parisToday(): string {
   }).format(new Date());
 }
 
-/** Whole-day difference between two "YYYY-MM-DD" strings, parsed field-by-field
- * (never `new Date(str)`, which reads as UTC midnight and can slip a day). */
-function dayDiff(from: string, to: string): number {
-  const [fy, fm, fd] = from.split('-').map(Number);
-  const [ty, tm, td] = to.split('-').map(Number);
-  return Math.round(
-    (new Date(ty, tm - 1, td).getTime() - new Date(fy, fm - 1, fd).getTime()) / 86_400_000,
-  );
-}
-
-/** Format a "YYYY-MM-DD" date field-by-field (see dayDiff on parsing). */
-function formatDateStr(s: string, lang: string): string {
+/** Format a "YYYY-MM-DD" date field-by-field (never `new Date(str)`, which
+ * reads as UTC midnight and can slip a day in negative offsets). */
+function formatDateStr(s: string | undefined, lang: string): string {
+  if (!s) return '';
   const [y, m, d] = s.split('-').map(Number);
   if (!y || !m || !d) return '';
   return new Date(y, m - 1, d).toLocaleDateString(lang === 'fr' ? 'fr-FR' : 'en-US', {
@@ -83,14 +46,85 @@ function formatDateStr(s: string, lang: string): string {
   });
 }
 
+/** 3-letter weekday code → the full-name i18n key under `days.*`. */
+const DAY_FULL: Record<RecurringSlot['day'], string> = {
+  mon: 'monday',
+  tue: 'tuesday',
+  wed: 'wednesday',
+  thu: 'thursday',
+  fri: 'friday',
+  sat: 'saturday',
+  sun: 'sunday',
+};
+
+// ── Collapsible dashboard section (sit's babysitter-dashboard Section) ──
+function Section({
+  title,
+  count,
+  total,
+  variant,
+  children,
+}: {
+  title: string;
+  count: number;
+  /** Rendered rows; gates the section. Defaults to `count` — pass it when the
+   * badge counts a SUBSET of the rows (New Requests excludes the tutor's own
+   * proposals from the to-do count but still shows them, PR #194 review). */
+  total?: number;
+  variant: 'pending' | 'confirmed';
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(true);
+  if ((total ?? count) === 0) return null;
+
+  return (
+    <div className="mb-4">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="mb-2 flex w-full items-center justify-between"
+      >
+        <div className="flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-gray-700">{title}</h3>
+          {count > 0 && (
+            <Badge variant={variant === 'pending' ? 'amber' : 'green'}>{count}</Badge>
+          )}
+        </div>
+        <ChevronRightIcon
+          className={`h-4 w-4 text-gray-400 transition-transform ${open ? 'rotate-90' : ''}`}
+        />
+      </button>
+      {open && <div className="space-y-3">{children}</div>}
+    </div>
+  );
+}
+
 /**
- * Tutor dashboard. PR #77's verification state contract is SUPERSEDED (owner
- * decision 2026-08-17): tutor identity verification was dropped, so there is
- * no verification banner and no /tutor/verification page. `enrollmentComplete`
+ * Tutor dashboard, structured to match sync-sit's babysitter dashboard (issue
+ * #165): install-app suggestion, an availability box linking the schedule, a
+ * New Requests section, and a Confirmed sessions section. Endorsements,
+ * subjects & rates and account moved to the hamburger menu (see AppBar).
+ *
+ * PR #77's verification state contract is SUPERSEDED (owner decision
+ * 2026-08-17): tutor identity verification was dropped, so there is no
+ * verification banner and no /tutor/verification page. `enrollmentComplete`
  * is written true at creation for every current tutor; it is still read here
  * (rather than assumed) so legacy dev/test docs enrolled under the old gated
- * model stay inert instead of half-activating. The activation gate is now
+ * model stay inert instead of half-activating. The activation gate is
  * subjects + availability only.
+ *
+ * "New requests" covers BOTH things awaiting an answer in the study world:
+ * pending family contact requests (studyContactRequests — sit has no
+ * equivalent step) and pending session bookings (study-sessions). Cards link
+ * into /tutor/requests and /tutor/sessions, where the accept/decline actions
+ * live — mirroring sit, whose dashboard cards also navigate to the request
+ * detail rather than acting inline.
+ *
+ * INDEX NOTE: both collections are queried by tutorUserId alone (single-field,
+ * always indexed) and filtered/sorted client-side — see RequestsPage and
+ * SessionsPage for the composite-index rationale. A recurring series' concrete
+ * dates live in its `instances` subcollection, which this page must not query —
+ * series render their weekly slot line instead of a next date.
  */
 export function DashboardPage() {
   const { t, i18n } = useTranslation();
@@ -102,25 +136,26 @@ export function DashboardPage() {
   const isSearchable = tutor?.searchable ?? false;
   const hasSubjects = (tutor?.subjects?.length ?? 0) > 0;
 
-  // Availability gate: read the schedules doc directly (the useSchedule hook is
-  // copied in a later task). A tutor is "available" once any weekly slot is on.
+  // Availability gate: read the schedules doc directly. A tutor is "available"
+  // once any weekly slot is on.
   const [hasSlots, setHasSlots] = useState(false);
   const [scheduleLoaded, setScheduleLoaded] = useState(false);
   const [toggling, setToggling] = useState(false);
-  // Null while loading — the hero must not claim "no requests" (and let a
-  // lower priority render, then swap) while the snapshot is still in flight.
-  const [pendingRequests, setPendingRequests] = useState<number | null>(null);
-  // Pending-session count plus the next confirmed session for the hero (one
-  // setState per snapshot). `active` counts every non-terminal session
-  // (pending + confirmed, recurring included) so the tile's empty line is
-  // honest for recurring-only tutors, whom `next` deliberately excludes.
-  // Null while loading — the empty line must not flash before data arrives.
-  const [sessionData, setSessionData] = useState<{
-    pending: number;
-    active: number;
-    next: NextSession | null;
-  } | null>(null);
-  const [pendingEndorsements, setPendingEndorsements] = useState(0);
+  const [toggleDialog, setToggleDialog] = useState(false);
+  // Null while loading — the sections and the empty state must not paint (and
+  // then visibly swap) while a snapshot is still in flight.
+  const [requests, setRequests] = useState<StudyContactRequestDoc[] | null>(null);
+  const [sessions, setSessions] = useState<StudySessionDoc[] | null>(null);
+  // A failed FIRST read must not strand the page on the spinner: with no
+  // error branch the only recovery is a blur/refocus (throttled 15s). One
+  // flag PER load — a shared flag cleared on any success lets the load that
+  // worked erase the other one's failure, recreating the eternal spinner
+  // this exists to remove (PR #194 review). Only rendered while `loading`,
+  // so a refetch blip over rendered sections stays invisible (SessionsPage's
+  // loadError pattern).
+  const [requestsError, setRequestsError] = useState(false);
+  const [sessionsError, setSessionsError] = useState(false);
+  const loadError = requestsError || sessionsError;
 
   useEffect(() => {
     if (!uid) return;
@@ -145,9 +180,8 @@ export function DashboardPage() {
     };
   }, [uid]);
 
-  // A mounted guard shared by the initial count loads and every
-  // focus-triggered refetch, so a late-resolving fetch never writes state
-  // after unmount.
+  // A mounted guard shared by the initial loads and every focus-triggered
+  // refetch, so a late-resolving fetch never writes state after unmount.
   const mountedRef = useRef(true);
   useEffect(() => {
     mountedRef.current = true;
@@ -156,104 +190,53 @@ export function DashboardPage() {
     };
   }, []);
 
-  // Pending contact-request count for the inbox card. Queried by tutorUserId
-  // only (single-field index) and counted client-side — see RequestsPage for
-  // the index rationale.
-  const loadRequestCount = useCallback(() => {
+  const loadRequests = useCallback(() => {
     if (!uid) return;
     getDocs(query(collection(db, 'studyContactRequests'), where('tutorUserId', '==', uid)))
       .then((snap) => {
         if (!mountedRef.current) return;
-        setPendingRequests(snap.docs.filter((d) => d.data()?.status === 'pending').length);
+        const rows = snap.docs.map((d) => d.data() as StudyContactRequestDoc);
+        rows.sort((a, b) => (b.createdAt?.seconds ?? 0) - (a.createdAt?.seconds ?? 0));
+        setRequests(rows);
+        setRequestsError(false);
       })
       .catch(() => {
-        // A failed read is UNKNOWN, not zero: on first load pendingRequests
-        // stays null (no hero rather than a wrong lower-priority one); on a
-        // refetch blip the last-known-good count survives.
+        // A failed read is UNKNOWN, not zero: on first load `requests` stays
+        // null (loading rather than a wrong empty state); on a refetch blip
+        // the last-known-good rows survive.
+        if (mountedRef.current) setRequestsError(true);
       });
   }, [uid]);
 
-  // Pending-session count for the sessions tile PLUS the tutor's next confirmed
-  // session for the hero, extracted from the same snapshot. Queried by
-  // tutorUserId only (single-field index) and counted client-side — see
-  // SessionsPage for the index rationale.
-  const loadSessionData = useCallback(() => {
+  const loadSessions = useCallback(() => {
     if (!uid) return;
     getDocs(query(collection(db, 'study-sessions'), where('tutorUserId', '==', uid)))
       .then((snap) => {
         if (!mountedRef.current) return;
-        // Time-granular cutoff (see family dashboard): a session that ended
-        // earlier today must not claim the hero as "today" all evening.
-        const now = parisNowStamp();
-        let pending = 0;
-        let active = 0;
-        let next: NextSession | null = null;
-        snap.docs.forEach((d) => {
-          const data = d.data();
-          const status = data?.status;
-          if (status === 'pending') {
-            pending += 1;
-            active += 1;
-          } else if (status === 'confirmed') {
-            active += 1;
-            const date = typeof data?.date === 'string' ? data.date : null;
-            const startTime = typeof data?.startTime === 'string' ? data.startTime : '';
-            if (data?.type !== 'recurring' && date && `${date}T${startTime}` > now) {
-              if (
-                !next ||
-                date < next.date ||
-                (date === next.date && startTime < next.startTime)
-              ) {
-                next = {
-                  date,
-                  startTime,
-                  familyName: typeof data?.familyName === 'string' ? data.familyName : undefined,
-                };
-              }
-            }
-          }
-        });
-        setSessionData({ pending, active, next });
+        const rows = snap.docs.map((d) => d.data() as StudySessionDoc);
+        rows.sort((a, b) => (b.createdAt?.seconds ?? 0) - (a.createdAt?.seconds ?? 0));
+        setSessions(rows);
+        setSessionsError(false);
       })
       .catch(() => {
         /* keep last-known-good state */
-      });
-  }, [uid]);
-
-  // Pending-endorsement count for the endorsements card. Endorsements live in
-  // the shared `references` collection keyed by tutorUserId; count status
-  // 'private' (awaiting the tutor) client-side. (Sit references are keyed by
-  // babysitterUserId, so this query never sees them.)
-  const loadEndorsementCount = useCallback(() => {
-    if (!uid) return;
-    getDocs(query(collection(db, 'references'), where('tutorUserId', '==', uid)))
-      .then((snap) => {
-        if (!mountedRef.current) return;
-        setPendingEndorsements(snap.docs.filter((d) => d.data()?.status === 'private').length);
-      })
-      .catch(() => {
-        /* leave count at 0 */
+        if (mountedRef.current) setSessionsError(true);
       });
   }, [uid]);
 
   useEffect(() => {
-    loadRequestCount();
-  }, [loadRequestCount]);
+    loadRequests();
+  }, [loadRequests]);
 
   useEffect(() => {
-    loadSessionData();
-  }, [loadSessionData]);
+    loadSessions();
+  }, [loadSessions]);
 
-  useEffect(() => {
-    loadEndorsementCount();
-  }, [loadEndorsementCount]);
-
-  // Issue #117 tier (a): a returning user re-runs the same count loads, so an
-  // open tab shows fresh inbox/session/endorsement badges.
+  // Issue #117 tier (a): a returning user re-runs the same loads, so an open
+  // tab shows fresh sections.
   useRefetchOnFocus(() => {
-    loadRequestCount();
-    loadSessionData();
-    loadEndorsementCount();
+    loadRequests();
+    loadSessions();
   });
 
   const handleToggleSearchable = async () => {
@@ -267,6 +250,7 @@ export function DashboardPage() {
         updatedAt: serverTimestamp(),
       });
       await refreshUserDoc();
+      setToggleDialog(false);
     } finally {
       setToggling(false);
     }
@@ -282,51 +266,80 @@ export function DashboardPage() {
 
   const canActivate = hasSubjects && hasSlots;
 
-  // ── Hero (first match wins; issue #120). Requests lead because a waiting
-  // family is blocked on the tutor's answer; then sessions to confirm; then
-  // the next confirmed session. Zero-state has no hero — the activation
-  // card already leads. The whole ladder waits for BOTH
-  // snapshots (family-page discipline): the two queries resolve
-  // independently, and ranking on a still-null count would let a lower
-  // priority claim the hero and visibly swap when requests resolve. ──
-  let hero: { to: string; title: string; desc: string; icon: React.ReactNode } | null = null;
-  if (pendingRequests !== null && sessionData !== null && pendingRequests > 0) {
-    hero = {
-      to: '/tutor/requests',
-      title: t('tutor.dashboard.hero.pendingRequests', { count: pendingRequests }),
-      desc: t('tutor.dashboard.hero.pendingRequestsDesc'),
-      icon: <BellIcon className="h-6 w-6 text-brand-600" />,
-    };
-  } else if (pendingRequests !== null && sessionData !== null && sessionData.pending > 0) {
-    hero = {
-      to: '/tutor/sessions',
-      title: t('tutor.dashboard.hero.pendingSessions', { count: sessionData.pending }),
-      desc: t('tutor.dashboard.hero.pendingSessionsDesc'),
-      icon: <CalendarIcon className="h-6 w-6 text-brand-600" />,
-    };
-  } else if (pendingRequests !== null && sessionData?.next) {
-    const next = sessionData.next;
-    const diff = dayDiff(parisToday(), next.date);
-    const rel =
-      diff <= 0
-        ? t('tutor.dashboard.hero.today')
-        : diff === 1
-          ? t('tutor.dashboard.hero.tomorrow')
-          : t('tutor.dashboard.hero.inDays', { count: diff });
-    hero = {
-      to: '/tutor/sessions',
-      title: t('tutor.dashboard.hero.nextSession'),
-      desc: [rel, formatDateStr(next.date, i18n.language), next.startTime, next.familyName]
-        .filter(Boolean)
-        .join(' · '),
-      icon: <CalendarIcon className="h-6 w-6 text-brand-600" />,
-    };
-  }
+  const slotLine = (slot: RecurringSlot): string =>
+    t('tutor.sessions.recurringSlot', {
+      day: t(`days.${DAY_FULL[slot.day]}`),
+      start: slot.startTime,
+      end: slot.endTime,
+    });
+
+  const loading = requests === null || sessions === null;
+  const today = parisToday();
+  const pendingRequests = (requests ?? []).filter((r) => r.status === 'pending');
+  // Same date floor as Confirmed below: nothing server-side expires a pending
+  // one_time booking, so without it a request the tutor never answered would
+  // sit in New Requests forever with a past date (PR #194 review).
+  const pendingSessions = (sessions ?? []).filter(
+    (s) =>
+      s.status === 'pending' &&
+      (s.type === 'recurring' || !s.date || s.date >= today),
+  );
+
+  // Upcoming confirmed work, interleaved by date (SessionsPage's ordering):
+  // one_time sessions from today on, plus confirmed recurring series (their
+  // concrete dates live in the instances subcollection this page must not
+  // query, so they sort last and show their weekly slot line).
+  const confirmedUpcoming = (sessions ?? [])
+    .filter(
+      (s) =>
+        s.status === 'confirmed' &&
+        (s.type === 'recurring' || (!!s.date && s.date >= today)),
+    )
+    .map((s) => ({ s, sortDate: s.type === 'one_time' ? (s.date as string) : '9999-12-31' }))
+    .sort((a, b) => (a.sortDate < b.sortDate ? -1 : a.sortDate > b.sortDate ? 1 : 0))
+    .map((e) => e.s);
+
+  // The amber badge is a to-do count, so tutor-authored proposals (which
+  // await the FAMILY's answer) don't count — they still render in the
+  // section, marked "awaiting the family" (PR #194 review).
+  const newCount =
+    pendingRequests.length +
+    pendingSessions.filter((s) => s.proposedBy !== 'provider').length;
+  const newTotal = pendingRequests.length + pendingSessions.length;
+  const hasAny = newTotal > 0 || confirmedUpcoming.length > 0;
 
   return (
     <div className="px-5 pt-4 pb-8">
-      <h1 className="mb-1 text-lg font-bold text-gray-900">{t('tutor.dashboardTitle')}</h1>
-      <p className="mb-5 text-sm text-gray-500">{t('tutor.dashboard.greeting')}</p>
+      {/* ── Header: title left, search-visibility pill top right — the same
+          treatment as sit's babysitter dashboard (owner request, PR #194).
+          The pill opens a confirm dialog; while the activation gate (subjects
+          + slots) is unmet it renders dimmed and inert, with the amber hint
+          card below carrying the explanation. ── */}
+      <div className="mb-5 flex items-center justify-between">
+        <div>
+          <h1 className="mb-1 text-lg font-bold text-gray-900">{t('tutor.dashboardTitle')}</h1>
+          <p className="text-sm text-gray-500">{t('tutor.dashboard.greeting')}</p>
+        </div>
+        {enrollmentComplete && (
+          <button
+            type="button"
+            onClick={() => {
+              if (!isSearchable && !canActivate) return;
+              setToggleDialog(true);
+            }}
+            className={`flex shrink-0 items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
+              isSearchable
+                ? 'bg-green-100 text-green-700'
+                : canActivate
+                  ? 'bg-gray-100 text-gray-500'
+                  : 'bg-gray-100 text-gray-400 opacity-50'
+            }`}
+          >
+            <div className={`h-2 w-2 rounded-full ${isSearchable ? 'bg-green-500' : 'bg-gray-400'}`} />
+            {isSearchable ? t('tutor.dashboard.active') : t('tutor.dashboard.inactive')}
+          </button>
+        )}
+      </div>
 
       {/* ── Ask-to-supervise prompt (pending claim on guardianLinks/{uid}) ── */}
       <SupervisionRequestCard />
@@ -334,145 +347,163 @@ export function DashboardPage() {
       {/* Install-to-home-screen nudge (browser-tab mode only, issue #162) */}
       <InstallAppBanner />
 
-      {/* ── Activation (subjects + availability gate; enrollmentComplete is
-          true from creation — the check only fences off legacy docs) ── */}
-      {enrollmentComplete && (
-        <Card className="mb-4">
-          <p className="mb-1 text-sm font-semibold text-gray-900">
-            {t('tutor.dashboard.searchTitle')}
+      {/* ── Activation gate hint (subjects + availability; enrollmentComplete
+          is true from creation — the check only fences off legacy docs) ── */}
+      {enrollmentComplete && !isSearchable && !canActivate && scheduleLoaded && (
+        <Card className="mb-4 border-amber-300 bg-amber-50">
+          <p className="text-xs text-amber-700">
+            {!hasSubjects
+              ? t('tutor.dashboard.gateNoSubjects')
+              : t('tutor.dashboard.gateNoSlots')}
           </p>
-          <p
-            className={`mb-3 text-sm ${isSearchable ? 'text-green-700' : 'text-gray-500'}`}
-          >
-            {isSearchable
-              ? t('tutor.dashboard.searchableLive')
-              : t('tutor.dashboard.searchableHidden')}
-          </p>
+        </Card>
+      )}
 
-          {!isSearchable && !canActivate && scheduleLoaded && (
-            <p className="mb-3 text-xs text-amber-700">
-              {!hasSubjects
-                ? t('tutor.dashboard.gateNoSubjects')
-                : t('tutor.dashboard.gateNoSlots')}
+      {/* ── My availability box (sit's babysitter-dashboard treatment) ── */}
+      <Link to="/tutor/schedule" className="mb-6 block">
+        <Card interactive className="flex items-center gap-3 py-4">
+          <CalendarIcon className="h-6 w-6 text-brand-600" />
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-gray-900">
+              {t('tutor.dashboard.myAvailability')}
             </p>
-          )}
+            <p className="text-xs text-gray-500">{t('tutor.dashboard.availabilityDesc')}</p>
+          </div>
+          <ChevronRightIcon className="h-5 w-5 text-gray-400" />
+        </Card>
+      </Link>
 
-          <Button
-            size="sm"
-            variant={isSearchable ? 'outline' : 'primary'}
-            onClick={handleToggleSearchable}
-            disabled={toggling || (!isSearchable && !canActivate)}
+      {/* ── Requests & sessions ── */}
+      {loading && loadError ? (
+        <p className="py-10 text-center text-sm text-brand-600">
+          {t('tutor.dashboard.loadError')}
+        </p>
+      ) : loading ? (
+        <div className="flex justify-center py-12">
+          <Spinner className="h-8 w-8 text-brand-600" />
+        </div>
+      ) : hasAny ? (
+        <>
+          <Section
+            title={t('tutor.dashboard.newRequests')}
+            count={newCount}
+            total={newTotal}
+            variant="pending"
           >
+            {pendingRequests.map((r) => (
+              <Link key={r.requestId} to="/tutor/requests" className="block">
+                <Card interactive>
+                  <div className="flex items-center gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-gray-900">{r.familyName}</p>
+                      <p className="text-xs text-gray-500">{r.parentName}</p>
+                      <p className="mt-1 text-xs text-gray-500">
+                        {t(`tutor.subjects.names.${r.subject}`)} · {r.level}
+                      </p>
+                    </div>
+                    <ChevronRightIcon className="h-5 w-5 shrink-0 text-gray-400" />
+                  </div>
+                </Card>
+              </Link>
+            ))}
+            {pendingSessions.map((s) => (
+              <Link key={s.sessionId} to="/tutor/sessions" className="block">
+                <Card interactive>
+                  <div className="flex items-center gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-gray-900">{s.familyName}</p>
+                      <p className="text-xs text-gray-500">
+                        {t(`tutor.subjects.names.${s.subject}`)} · {s.level}
+                      </p>
+                      <p className="mt-1 text-xs text-gray-700">
+                        {s.type === 'one_time'
+                          ? `${formatDateStr(s.date, i18n.language)} · ${s.startTime}${s.endTime ? `–${s.endTime}` : ''}`
+                          : s.recurringSlots?.[0]
+                            ? slotLine(s.recurringSlots[0])
+                            : ''}
+                      </p>
+                      {s.proposedBy === 'provider' && (
+                        <p className="mt-1 text-xs text-amber-700">
+                          {t('tutor.sessions.awaitingFamily')}
+                        </p>
+                      )}
+                    </div>
+                    <ChevronRightIcon className="h-5 w-5 shrink-0 text-gray-400" />
+                  </div>
+                </Card>
+              </Link>
+            ))}
+          </Section>
+
+          <Section
+            title={t('tutor.dashboard.confirmed')}
+            count={confirmedUpcoming.length}
+            variant="confirmed"
+          >
+            {confirmedUpcoming.map((s) => (
+              <Link key={s.sessionId} to="/tutor/sessions" className="block">
+                <Card interactive>
+                  <div className="flex items-center gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-gray-900">{s.familyName}</p>
+                      <p className="text-xs text-gray-500">
+                        {t(`tutor.subjects.names.${s.subject}`)} · {s.level}
+                      </p>
+                      <p className="mt-1 text-xs text-gray-700">
+                        {s.type === 'one_time'
+                          ? `${formatDateStr(s.date, i18n.language)} · ${s.startTime}${s.endTime ? `–${s.endTime}` : ''}`
+                          : s.recurringSlots?.[0]
+                            ? slotLine(s.recurringSlots[0])
+                            : ''}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        {t(`tutor.sessions.location.${s.location}`)}
+                      </p>
+                    </div>
+                    <ChevronRightIcon className="h-5 w-5 shrink-0 text-gray-400" />
+                  </div>
+                </Card>
+              </Link>
+            ))}
+          </Section>
+        </>
+      ) : (
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gray-100">
+            <UsersIcon className="h-7 w-7 text-gray-400" />
+          </div>
+          <h3 className="mb-2 text-lg font-semibold">{t('tutor.dashboard.noRequests')}</h3>
+          <p className="max-w-[240px] text-sm text-gray-500">
+            {t('tutor.dashboard.noRequestsDesc')}
+          </p>
+        </div>
+      )}
+
+      {/* ── Search-visibility confirm dialog (sit's babysitter pattern) ── */}
+      <Dialog open={toggleDialog} onClose={() => setToggleDialog(false)}>
+        <h3 className="mb-2 text-lg font-bold">
+          {isSearchable
+            ? t('tutor.dashboard.deactivateTitle')
+            : t('tutor.dashboard.activateTitle')}
+        </h3>
+        <p className="mb-5 text-sm text-gray-600">
+          {isSearchable
+            ? t('tutor.dashboard.deactivateDesc')
+            : t('tutor.dashboard.activateDesc')}
+        </p>
+        <div className="flex gap-2">
+          <Button onClick={handleToggleSearchable} disabled={toggling} className="flex-1">
             {toggling
               ? t('tutor.dashboard.updating')
               : isSearchable
                 ? t('tutor.dashboard.deactivate')
                 : t('tutor.dashboard.activate')}
           </Button>
-        </Card>
-      )}
-
-      {/* ── Hero: the single "what matters now" slot ── */}
-      {hero && (
-        <Link to={hero.to} aria-label={`${hero.title} — ${hero.desc}`} className="mb-4 block">
-          <Card interactive className="flex items-center gap-3 border-brand-200 bg-brand-50 py-4">
-            {hero.icon}
-            <div className="min-w-0 flex-1">
-              <p className="text-base font-bold text-gray-900">{hero.title}</p>
-              <p className="text-sm text-gray-600">{hero.desc}</p>
-            </div>
-            <ChevronRightIcon className="h-5 w-5 shrink-0 text-gray-500" />
-          </Card>
-        </Link>
-      )}
-
-      {/* ── Everything else: compact half-weight tiles ── */}
-      <div className="grid grid-cols-2 gap-3">
-        <DashTile
-          to="/tutor/requests"
-          icon={<BellIcon className="h-6 w-6 text-brand-600" />}
-          title={t('tutor.dashboard.requestsCardTitle')}
-          badge={
-            pendingRequests !== null && pendingRequests > 0 ? (
-              <Badge variant="red">{pendingRequests}</Badge>
-            ) : undefined
-          }
-        />
-        <DashTile
-          to="/tutor/sessions"
-          icon={<CalendarIcon className="h-6 w-6 text-brand-600" />}
-          title={t('tutor.dashboard.sessionsCardTitle')}
-          badge={
-            sessionData !== null && sessionData.pending > 0 ? (
-              <Badge variant="red">{sessionData.pending}</Badge>
-            ) : undefined
-          }
-          sub={
-            // Honest empty line: keyed on ALL non-terminal sessions, not on
-            // `next` (which excludes recurring series on purpose); undefined
-            // while loading so the line never flashes before data arrives.
-            sessionData !== null && sessionData.active === 0
-              ? t('tutor.dashboard.tiles.sessionsEmpty')
-              : undefined
-          }
-        />
-        <DashTile
-          to="/tutor/endorsements"
-          icon={<CheckIcon className="h-6 w-6 text-brand-600" />}
-          title={t('tutor.dashboard.endorsementsCardTitle')}
-          badge={
-            pendingEndorsements > 0 ? <Badge variant="red">{pendingEndorsements}</Badge> : undefined
-          }
-        />
-        <DashTile
-          to="/tutor/subjects"
-          icon={<ClipboardListIcon className="h-6 w-6 text-brand-600" />}
-          title={t('tutor.dashboard.subjectsCard')}
-        />
-        <DashTile
-          to="/tutor/schedule"
-          icon={<CalendarIcon className="h-6 w-6 text-brand-600" />}
-          title={t('tutor.dashboard.scheduleCard')}
-        />
-        <DashTile
-          to="/tutor/account"
-          icon={<SettingsIcon className="h-6 w-6 text-brand-600" />}
-          title={t('tutor.dashboard.accountCard')}
-        />
-      </div>
+          <Button variant="ghost" onClick={() => setToggleDialog(false)} className="flex-1">
+            {t('common.cancel')}
+          </Button>
+        </div>
+      </Dialog>
     </div>
-  );
-}
-
-function DashTile({
-  to,
-  icon,
-  title,
-  sub,
-  badge,
-  ariaLabel,
-}: {
-  to: string;
-  icon: React.ReactNode;
-  title: string;
-  sub?: string;
-  badge?: React.ReactNode;
-  ariaLabel?: string;
-}) {
-  // aria-label REPLACES the content for screen readers — carry the sub line.
-  const label = [ariaLabel ?? title, sub].filter(Boolean).join(' — ');
-  return (
-    <Link to={to} aria-label={label} className="block h-full">
-      <Card interactive className="flex h-full flex-col gap-2 py-4">
-        <div className="flex items-start justify-between">
-          {icon}
-          {badge}
-        </div>
-        <div>
-          <p className="text-sm font-semibold text-gray-900">{title}</p>
-          {sub && <p className="mt-0.5 text-xs text-gray-500">{sub}</p>}
-        </div>
-      </Card>
-    </Link>
   );
 }
