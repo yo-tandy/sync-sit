@@ -24,7 +24,7 @@ import {
   ChevronRightIcon,
   useToast,
 } from '@ejm/shared-ui';
-import { DAYS_OF_WEEK, createEmptySlots } from '@ejm/shared-core';
+import { DAYS_OF_WEEK, createEmptySlots, ALL_AREAS, postcodeToArrondissement } from '@ejm/shared-core';
 import type { DayOfWeek, HolidayMode, HolidayPeriod } from '@ejm/shared-core';
 
 // Copy-adapted from apps/web/src/pages/babysitter/SchedulePage.tsx. The only
@@ -234,11 +234,17 @@ export function SchedulePage() {
   // invisible. Derived from the SAVED doc (not draft state) so the warning is
   // persistent: it shows on load for already-misconfigured docs and clears
   // only once the area page has real coverage. Warn + deep-link, never block.
+  // "Has coverage" means MATCHABLE coverage: at least one stored area that
+  // resolves into the shared vocabulary (postcode-normalized, matching what
+  // searchTutors can actually intersect). A doc holding only unmappable
+  // free-text-era values can never match a family address, so it still warns.
   const inPersonNoCoverage =
     (tutor?.locationPrefs ?? []).some((p) => p !== 'online' && p !== 'tutor_home') &&
     (tutor?.areaMode === 'distance'
       ? !tutor?.areaLatLng
-      : (tutor?.arrondissements ?? []).length === 0);
+      : !(tutor?.arrondissements ?? []).some((a) =>
+          (ALL_AREAS as readonly string[]).includes(postcodeToArrondissement(a) ?? a),
+        ));
 
   const handleSavePrefs = async () => {
     if (!uid) return;

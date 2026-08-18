@@ -209,6 +209,25 @@ describe('tutor AreaPage', () => {
     expect(h.updateDoc).not.toHaveBeenCalled();
   });
 
+  it('blocks a family_home tutor whose ONLY selection is an unmappable legacy value', async () => {
+    // 'Clamart' is outside the vocabulary: it renders as a checked legacy
+    // chip and survives saves, but no family address can ever resolve to it,
+    // so it must not satisfy the coverage requirement.
+    seed({ areaMode: 'arrondissement', arrondissements: ['Clamart'], areaAddress: null, areaLatLng: null, areaRadiusKm: null, locationPrefs: ['family_home'] });
+    renderWithProviders(<AreaPage />);
+
+    fireEvent.click(screen.getByRole('button', { name: /^save/i }));
+
+    expect(await screen.findByText(/pick at least one area/i)).toBeInTheDocument();
+    expect(h.updateDoc).not.toHaveBeenCalled();
+
+    // Adding one matchable area unblocks; the legacy chip is still preserved.
+    fireEvent.click(screen.getByRole('button', { name: '5e' }));
+    fireEvent.click(screen.getByRole('button', { name: /^save/i }));
+    await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
+    expect(savedPayload()['profiles.tutor.arrondissements']).toEqual(['Clamart', '5e']);
+  });
+
   it('lets an online-only tutor save an empty area', async () => {
     seed({ areaMode: 'arrondissement', arrondissements: [], areaAddress: null, areaLatLng: null, areaRadiusKm: null, locationPrefs: ['online', 'tutor_home'] });
     renderWithProviders(<AreaPage />);

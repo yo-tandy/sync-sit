@@ -119,9 +119,17 @@ export function AreaPage() {
     // Requirement gate first: it explains WHY an area is needed. This is UX
     // only — the trust boundary is searchTutors, which excludes tutors whose
     // coverage cannot serve a location-typed query.
+    // "Has an area" means a MATCHABLE one: at least one selection inside the
+    // shared vocabulary (selections are postcode-normalized at seed, so this
+    // is a plain membership test). Unmappable legacy chips are preserved on
+    // save but can never match a family address in search, so they do not
+    // satisfy the requirement.
+    const hasMatchableArea = selectedAreas.some((a) =>
+      (ALL_AREAS as readonly string[]).includes(a),
+    );
     if (
       requiresArea &&
-      ((areaMode === 'arrondissement' && selectedAreas.length === 0) ||
+      ((areaMode === 'arrondissement' && !hasMatchableArea) ||
         (areaMode === 'distance' && !areaLatLng))
     ) {
       setError(t('tutor.area.errorAreaRequired'));

@@ -319,6 +319,23 @@ describe('tutor SchedulePage', () => {
     expect(screen.getByText(/can't find you for in-person sessions/i)).toBeInTheDocument();
   });
 
+  it('warns when the stored areas are all unmappable legacy values (no MATCHABLE coverage)', () => {
+    // 'Clamart' never matches a family address, so the tutor is invisible to
+    // family_home searches despite a non-empty list — the warning must show.
+    seedPrefsWithArea({ areaMode: 'arrondissement', arrondissements: ['Clamart'] }, ['family_home']);
+    renderSchedule();
+
+    expect(screen.getByText(/can't find you for in-person sessions/i)).toBeInTheDocument();
+  });
+
+  it('shows no warning for a legacy postcode doc (matchable after normalization)', () => {
+    // '75016' normalizes to '16e', which searchTutors matches — covered.
+    seedPrefsWithArea({ areaMode: 'arrondissement', arrondissements: ['75016'] }, ['family_home']);
+    renderSchedule();
+
+    expect(screen.queryByText(/can't find you for in-person sessions/i)).not.toBeInTheDocument();
+  });
+
   it('shows no coverage warning for an online/tutor-home-only tutor', () => {
     seedPrefsWithArea({ areaMode: 'arrondissement', arrondissements: [] }, ['online', 'tutor_home']);
     renderSchedule();
