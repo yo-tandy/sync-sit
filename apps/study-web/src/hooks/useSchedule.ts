@@ -4,6 +4,7 @@ import {
   collection,
   onSnapshot,
   setDoc,
+  updateDoc,
   deleteDoc,
   serverTimestamp,
 } from 'firebase/firestore';
@@ -74,7 +75,10 @@ export function useSchedule() {
   }, [uid]);
 
   const saveWeekly = useCallback(
-    async (weekly: Record<DayOfWeek, boolean[]>) => {
+    async (
+      weekly: Record<DayOfWeek, boolean[]>,
+      weeklyLocations?: ScheduleDoc['weeklyLocations'],
+    ) => {
       if (!uid) return;
       const scheduleRef = doc(db, 'schedules', uid);
       await setDoc(
@@ -87,6 +91,12 @@ export function useSchedule() {
         },
         { merge: true }
       );
+      if (weeklyLocations !== undefined) {
+        // Separate update() write: setDoc merge would DEEP-MERGE the nested
+        // day maps and resurrect stale per-cell keys; update() replaces the
+        // whole weeklyLocations field. The doc exists after the setDoc above.
+        await updateDoc(scheduleRef, { weeklyLocations });
+      }
     },
     [uid, schedule?.holidayMode]
   );
@@ -144,6 +154,7 @@ export function useSchedule() {
 
   return {
     weekly,
+    weeklyLocations: schedule?.weeklyLocations, // raw; sanitize at the consumer
     holidayMode: schedule?.holidayMode || ('same' as HolidayMode),
     holidayWeekly: schedule?.holidayWeekly, // deprecated
     holidaySchedules: schedule?.holidaySchedules,

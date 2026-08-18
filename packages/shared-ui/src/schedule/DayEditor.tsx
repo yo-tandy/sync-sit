@@ -4,12 +4,36 @@ import { Dialog, Button, Select } from '../components/index.js';
 import { createEmptySlots, setSlotRange, slotIndexToTime, timeToSlotIndex } from '@ejm/shared-core';
 import type { DayOfWeek } from '@ejm/shared-core';
 
+/**
+ * Optional per-range location tags (study issue #166). When absent the editor
+ * renders and behaves exactly as before — sync-sit passes nothing here. All
+ * labels come from the caller so this shared component needs no app-specific
+ * i18n keys. Keys of `initial` are slot indices as strings ("0".."95").
+ */
+export interface DayEditorLocationTags {
+  /** Chip options for the location categories, labeled by the caller. */
+  options: { value: string; label: string }[];
+  /** Label for the "profile defaults" (no override) chip. */
+  defaultsLabel: string;
+  /** Short helper line above the ranges list. */
+  helpText?: string;
+  /** Sparse initial per-cell tags for this day: slot index -> values. */
+  initial?: Record<string, string[]>;
+}
+
+// Stable empty fallback: a fresh `?? {}` at the call site would change
+// identity on every parent render and reset in-progress edits via the sync
+// effect below.
+const EMPTY_LOCATIONS: Record<string, string[]> = {};
+
 interface DayEditorProps {
   day: DayOfWeek;
   slots: boolean[];
   open: boolean;
   onClose: () => void;
-  onSave: (day: DayOfWeek, slots: boolean[]) => void;
+  /** `locations` is passed only when `locationTags` is configured. */
+  onSave: (day: DayOfWeek, slots: boolean[], locations?: Record<string, string[]>) => void;
+  locationTags?: DayEditorLocationTags;
 }
 
 // DAY_LABELS moved inside component to use t()
@@ -90,14 +114,47 @@ function removeWrappingRange(slots: boolean[], start: string, end: string): bool
   return addWrappingRange(slots, start, end, false);
 }
 
-export function DayEditor({ day, slots: initialSlots, open, onClose, onSave }: DayEditorProps) {
+// The slot indices a display range covers, handling the past-midnight wrap
+// (e.g. 22:00 - 02:00 covers 88..95 then 0..7).
+function rangeSlotIndices(start: string, end: string): number[] {
+  const startIdx = timeToSlotIndex(start);
+  const endIdx = timeToSlotIndex(end);
+  const idxs: number[] = [];
+  if (startIdx < endIdx) {
+    for (let i = startIdx; i < endIdx; i++) idxs.push(i);
+  } else {
+    for (let i = startIdx; i < 96; i++) idxs.push(i);
+    for (let i = 0; i < endIdx; i++) idxs.push(i);
+  }
+  return idxs;
+}
+
+// A range's current tag selection: the set shared by ALL covered cells, or []
+// ("profile defaults") when cells disagree (ranges merged after separate
+// tagging) — toggling a chip then re-tags the whole range uniformly.
+function rangeTagSelection(
+  locMap: Record<string, string[]>,
+  idxs: number[],
+): string[] {
+  const first = locMap[String(idxs[0])] ?? [];
+  const key = [...first].sort().join(',');
+  for (const i of idxs) {
+    const v = locMap[String(i)] ?? [];
+    if ([...v].sort().join(',') !== key) return [];
+  }
+  return first;
+}
+
+export function DayEditor({ day, slots: initialSlots, open, onClose, onSave, locationTags }: DayEditorProps) {
   const { t } = useTranslation();
   const dayLabels: Record<DayOfWeek, string> = useMemo(() => ({
     mon: t('days.mondays'), tue: t('days.tuesdays'), wed: t('days.wednesdays'), thu: t('days.thursdays'),
     fri: t('days.fridays'), sat: t('days.saturdays'), sun: t('days.sundays'),
   }), [t]);
   const TIME_OPTIONS = useMemo(() => generateTimeOptions(t('schedule.followingDay')), [t]);
+  const initialLocations = locationTags?.initial ?? EMPTY_LOCATIONS;
   const [localSlots, setLocalSlots] = useState<boolean[]>(initialSlots);
+  const [locMap, setLocMap] = useState<Record<string, string[]>>(initialLocations);
   const [newStart, setNewStart] = useState('18:00');
   const [newEnd, setNewEnd] = useState('00:00');
 
@@ -105,6 +162,9 @@ export function DayEditor({ day, slots: initialSlots, open, onClose, onSave }: D
   useEffect(() => {
     setLocalSlots(initialSlots);
   }, [initialSlots]);
+  useEffect(() => {
+    setLocMap(initialLocations);
+  }, [initialLocations]);
 
   const ranges = useMemo(() => slotsToRanges(localSlots), [localSlots]);
 
@@ -115,9 +175,44 @@ export function DayEditor({ day, slots: initialSlots, open, onClose, onSave }: D
 
   const handleRemoveRange = (range: TimeRange) => {
     setLocalSlots(removeWrappingRange(localSlots, range.start, range.end));
+    // Tags on the removed cells go with them.
+    setLocMap((prev) => {
+      const copy = { ...prev };
+      for (const i of rangeSlotIndices(range.start, range.end)) delete copy[String(i)];
+      return copy;
+    });
   };
 
-  const handleClearAll = () => setLocalSlots(createEmptySlots());
+  const handleClearAll = () => {
+    setLocalSlots(createEmptySlots());
+    setLocMap({});
+  };
+
+  // Toggle one location chip for a whole range: every covered cell gets the
+  // range's new uniform set; an empty set means "profile defaults" (entries
+  // removed — an empty-array override is never stored).
+  const toggleRangeTag = (idxs: number[], value: string) => {
+    setLocMap((prev) => {
+      const current = rangeTagSelection(prev, idxs);
+      const next = current.includes(value)
+        ? current.filter((v) => v !== value)
+        : [...current, value];
+      const copy = { ...prev };
+      for (const i of idxs) {
+        if (next.length > 0) copy[String(i)] = next;
+        else delete copy[String(i)];
+      }
+      return copy;
+    });
+  };
+
+  const resetRangeTags = (idxs: number[]) => {
+    setLocMap((prev) => {
+      const copy = { ...prev };
+      for (const i of idxs) delete copy[String(i)];
+      return copy;
+    });
+  };
 
   const handleTypicalEvening = () => {
     const s = [...localSlots];
@@ -127,7 +222,18 @@ export function DayEditor({ day, slots: initialSlots, open, onClose, onSave }: D
   };
 
   const handleSave = () => {
-    onSave(day, localSlots);
+    if (locationTags) {
+      // Normalize: keep only non-empty tag sets on ACTIVE cells, so stale tags
+      // on cells toggled off elsewhere never persist.
+      const normalized: Record<string, string[]> = {};
+      for (const [key, values] of Object.entries(locMap)) {
+        const idx = Number(key);
+        if (localSlots[idx] && values.length > 0) normalized[key] = values;
+      }
+      onSave(day, localSlots, normalized);
+    } else {
+      onSave(day, localSlots);
+    }
     onClose();
   };
 
@@ -188,21 +294,61 @@ export function DayEditor({ day, slots: initialSlots, open, onClose, onSave }: D
       {ranges.length === 0 ? (
         <p className="mb-4 text-sm text-gray-500">{t('schedule.noAvailabilitySet')}</p>
       ) : (
-        <div className="mb-4 max-h-40 space-y-2 overflow-y-auto">
-          {ranges.map((r, i) => (
-            <div key={i} className="flex items-center justify-between rounded-lg border border-gray-200 px-3 py-2">
-              <span className="text-sm font-medium">
-                {r.start} – {r.end}
-              </span>
-              <button
-                type="button"
-                onClick={() => handleRemoveRange(r)}
-                className="text-sm text-brand-600 hover:text-brand-700"
-              >
-                {t('common.remove')}
-              </button>
-            </div>
-          ))}
+        <div className={`mb-4 space-y-2 overflow-y-auto ${locationTags ? 'max-h-60' : 'max-h-40'}`}>
+          {locationTags?.helpText && (
+            <p className="text-xs text-gray-500">{locationTags.helpText}</p>
+          )}
+          {ranges.map((r, i) => {
+            const idxs = locationTags ? rangeSlotIndices(r.start, r.end) : [];
+            const selection = locationTags ? rangeTagSelection(locMap, idxs) : [];
+            return (
+              <div key={i} className="rounded-lg border border-gray-200 px-3 py-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">
+                    {r.start} – {r.end}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveRange(r)}
+                    className="text-sm text-brand-600 hover:text-brand-700"
+                  >
+                    {t('common.remove')}
+                  </button>
+                </div>
+                {locationTags && (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    <button
+                      type="button"
+                      aria-pressed={selection.length === 0}
+                      onClick={() => resetRangeTags(idxs)}
+                      className={`rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
+                        selection.length === 0
+                          ? 'border-brand-600 bg-brand-50 text-brand-600'
+                          : 'border-gray-300 text-gray-600 hover:border-gray-400'
+                      }`}
+                    >
+                      {locationTags.defaultsLabel}
+                    </button>
+                    {locationTags.options.map((opt) => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        aria-pressed={selection.includes(opt.value)}
+                        onClick={() => toggleRangeTag(idxs, opt.value)}
+                        className={`rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
+                          selection.includes(opt.value)
+                            ? 'border-brand-600 bg-brand-50 text-brand-600'
+                            : 'border-gray-300 text-gray-600 hover:border-gray-400'
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
 

@@ -122,6 +122,12 @@ export default {
     setAvailabilityPerPeriod: 'Définissez vos disponibilités pour chaque période de vacances :',
     customAvailabilitySet: 'Disponibilités personnalisées définies',
     noAvailabilityTapToEdit: 'Aucune disponibilité — toucher pour modifier',
+    // Per-slot location tags (issue #166)
+    locationTags: {
+      defaults: 'Préférences du profil',
+      help: 'Optionnel : choisissez où les cours de chaque créneau peuvent avoir lieu. « Préférences du profil » utilise vos préférences de lieu de cours.',
+      weeklyOnlyNote: "Les lieux par créneau s'appliquent uniquement à votre planning hebdomadaire régulier, pas aux dates modifiées ni aux plannings de vacances.",
+    },
   },
 
   auth: {
