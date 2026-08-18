@@ -32,7 +32,7 @@ vi.mock('firebase/functions', () => ({
 }));
 
 // Imported after mocks are registered (vi.mock is hoisted).
-import { useAuthStore } from '../authStore';
+import { useAuthStore, markNextSignInFresh } from '../authStore';
 
 const mSignIn = vi.mocked(signInWithEmailAndPassword);
 const mSignOut = vi.mocked(signOut);
@@ -48,14 +48,15 @@ const ts = (millis: number) => ({
   toDate: () => new Date(millis),
 });
 
-const snapOf = (data: Record<string, unknown> | null) => ({
+const snapOf = (data: Record<string, unknown> | null, fromCache = false) => ({
   exists: () => data !== null,
   data: () => data,
+  metadata: { fromCache },
 });
 
 /** Attach the user-doc watcher via the captured onAuthStateChanged callback. */
 function emitAuth(user: { uid: string } | null): {
-  emitSnap: (data: Record<string, unknown> | null) => void;
+  emitSnap: (data: Record<string, unknown> | null, fromCache?: boolean) => void;
   unsub: ReturnType<typeof vi.fn>;
 } {
   const unsub = vi.fn();
@@ -66,7 +67,7 @@ function emitAuth(user: { uid: string } | null): {
   }) as never);
   h.authCb!(user);
   return {
-    emitSnap: (data) => next!(snapOf(data)),
+    emitSnap: (data, fromCache = false) => next!(snapOf(data, fromCache)),
     unsub,
   };
 }
@@ -313,6 +314,29 @@ describe('study authStore — cross-app session coherence (issue #181)', () => {
 
     expect(mSignOut).not.toHaveBeenCalled();
     expect(useAuthStore.getState().forcedSignOut).toBe(false);
+  });
+
+  it('a cached pre-bump snapshot on a FRESH sign-in neither arms nor enforces (server-snapshot arming)', async () => {
+    // The PR #184 review interleaving: same-page logout bumped the epoch to
+    // 2000, the SDK cache still holds 1000, and the watcher's snapshots land
+    // BEFORE login()'s own getDoc capture. Cached 1000 must not arm; the
+    // server 2000 that follows must arm rather than force-sign-out.
+    markNextSignInFresh();
+    const { emitSnap } = emitAuth({ uid: 'u1' });
+    emitSnap({ uid: 'u1', sessionEpoch: ts(1000) }, true);
+    await flush();
+    expect(mSignOut).not.toHaveBeenCalled();
+    expect(localStorage.getItem('sessionEpoch:u1')).toBeNull();
+
+    emitSnap({ uid: 'u1', sessionEpoch: ts(2000) });
+    await flush();
+    expect(mSignOut).not.toHaveBeenCalled();
+    expect(useAuthStore.getState().forcedSignOut).toBe(false);
+    expect(localStorage.getItem('sessionEpoch:u1')).toBe('2000');
+
+    emitSnap({ uid: 'u1', sessionEpoch: ts(3000) });
+    await flush();
+    expect(mSignOut).toHaveBeenCalled();
   });
 
   it('logout is bounded: a hanging callable still yields local sign-out within 5s', async () => {

@@ -33,10 +33,13 @@ directly in the two apps remains possible; the switcher re-aligns on use.
    - Epoch captured at sign-in into module state + per-origin localStorage
      (`sessionEpoch:<uid>`); a reload re-arms from storage so a bump made
      while the tab was closed fires immediately.
-   - Capture is FORWARD-ONLY per uid (`Math.max`): a cached first snapshot
-     can never lower what `login()` armed, in either arrival order.
+   - Capture is FORWARD-ONLY per uid (`Math.max`), making the capture itself
+     commutative; independently, fresh sign-ins arm from the watcher's first
+     SERVER snapshot and suppress enforcement until then (a cached pre-bump
+     epoch can therefore neither lower the armed value nor race `login()`'s
+     capture into a false force-sign-out — PR #184 review round).
    - Every deliberate sign-in path calls `markNextSignInFresh()` so a stale
-     stored epoch cannot kill a brand-new login — all 9 direct sign-in
+     stored epoch cannot kill a brand-new login — all 10 direct sign-in
      sites: both stores' `login()`, both HandoffPages, sit
      Babysitter/Parent enrollment, JoinFamilyPage, KidInvitePage, study
      Tutor/Parent enrollment.

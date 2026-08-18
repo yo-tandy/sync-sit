@@ -92,13 +92,20 @@ describe('signOutEverywhere', () => {
     const parent1Before = (
       await getDb().collection('users').doc(seed.parent1.uid).get()
     ).data()!.sessionEpoch as Timestamp | undefined;
-    expect((await getDb().collection('users').doc(seed.parent2.uid).get()).data()!.sessionEpoch)
-      .toBeUndefined();
+    // Same defensive read for parent2 (PR #184 review): the pin is that
+    // parent2's epoch ADVANCES while parent1's does not change — not that no
+    // earlier case ever touched parent2.
+    const parent2Before = (
+      await getDb().collection('users').doc(seed.parent2.uid).get()
+    ).data()?.sessionEpoch as Timestamp | undefined;
 
     await callFunction('signOutEverywhere', {}, parent2Token);
 
     const parent2Doc = (await getDb().collection('users').doc(seed.parent2.uid).get()).data()!;
     expect(parent2Doc.sessionEpoch).toBeInstanceOf(Timestamp);
+    expect((parent2Doc.sessionEpoch as Timestamp).toMillis()).toBeGreaterThan(
+      parent2Before?.toMillis() ?? 0,
+    );
     const parent1After = (
       await getDb().collection('users').doc(seed.parent1.uid).get()
     ).data()!.sessionEpoch as Timestamp | undefined;
