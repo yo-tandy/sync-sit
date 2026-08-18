@@ -31,6 +31,9 @@ interface EnrollFamilyData {
     requireReferences?: boolean;
     maxRate?: number;
   };
+  // Consent-document version the client presented (study sends '2025-12-01';
+  // legacy sit clients send nothing → defaults to sit's '1.0').
+  consentVersion?: string;
 }
 
 export const enrollFamily = onCall(
@@ -162,7 +165,11 @@ export const enrollFamily = onCall(
           language: 'en',
         },
         auditAction: 'family_profile_added',
-        auditDetails: { familyId },
+        // addProfileToUser deliberately never touches the root consent fields
+        // (they belong to the original enrollment) — the new app's consent
+        // acceptance is recorded here in the audit trail instead, mirroring
+        // enrollTutor's add-profile branch.
+        auditDetails: { familyId, consentVersion: data.consentVersion || '1.0' },
       });
     } else {
       await db.collection('users').doc(uid).set({
@@ -188,7 +195,10 @@ export const enrollFamily = onCall(
         createdAt: now,
         updatedAt: now,
         consentAt: now,
-        consentVersion: '1.0',
+        // The version the client actually presented ('2025-12-01' from
+        // study's wizard); '1.0' preserves the pre-#178 record for legacy
+        // sit clients that send nothing.
+        consentVersion: data.consentVersion || '1.0',
       });
 
       // 7. Clean up verification code and audit (new-account path only; the
