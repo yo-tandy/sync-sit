@@ -2,7 +2,7 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { db } from '@ejm/shared-functions/config/firebase.js';
 import { getCorsOrigin } from '@ejm/shared-functions/config/cors.js';
 import { writeUserActivity } from '@ejm/shared-functions/admin/writeAuditLog.js';
-import { sendNotificationEmail } from '@ejm/shared-functions/config/email.js';
+import { sendNotificationEmail, STUDY_APP_URL } from '@ejm/shared-functions/config/email.js';
 import { sendPushNotification } from '@ejm/shared-functions/config/push.js';
 import { getParentProfile } from '@ejm/shared-core';
 import type { User } from '@ejm/shared-core';
@@ -79,7 +79,7 @@ export const cancelContactRequest = onCall(
     const emailBody = `
       <p><strong>${result.familyName || 'A family'}</strong> withdrew their tutoring request for <strong>${result.subject} (${result.level})</strong>.</p>
       <p>No action is needed.</p>
-      <p style="margin-top: 16px;"><a href="https://sync-study.com/tutor" style="background: #2563EB; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View Requests</a></p>
+      <p style="margin-top: 16px;"><a href="${STUDY_APP_URL}/tutor" style="background: #2563EB; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View Requests</a></p>
     `;
 
     if (notifPrefs?.email !== false && tutorUser?.email) {

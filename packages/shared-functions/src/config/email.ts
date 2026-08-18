@@ -216,6 +216,14 @@ export async function sendAdminNotification(subject: string, body: string): Prom
  */
 export type NotificationApp = 'sit' | 'study';
 
+/**
+ * The ONE canonical study host. Matches the prod fallback of
+ * apps/web/src/lib/appSwitch.ts STUDY_APP_URL and PUSH_BRANDING in push.ts —
+ * sync-study.com is not live (issue #156). Every study email CTA must build on
+ * this constant so the next domain move is a single edit.
+ */
+export const STUDY_APP_URL = 'https://sync-study-app.web.app';
+
 // Per-app notification branding (issue #168 Phase 0). Same literal-copy-set
 // pattern as ACCOUNT_EXISTS_COPY above. The FROM address stays
 // noreply@sync-sit.com for BOTH apps until #156 resolves study domain setup —
@@ -236,7 +244,7 @@ const NOTIFICATION_BRANDING: Record<
   study: {
     appName: 'Sync/Study',
     color: '#2563EB',
-    appUrl: 'https://sync-study-app.web.app',
+    appUrl: STUDY_APP_URL,
     from: 'Sync/Study <noreply@sync-sit.com>',
     fromFallback: 'Sync/Study <onboarding@resend.dev>',
   },
