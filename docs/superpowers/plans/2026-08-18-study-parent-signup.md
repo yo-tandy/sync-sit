@@ -1,0 +1,19 @@
+# Issue #150: study parent signup — Implementation Plan (draft)
+
+> **For agentic workers:** Work in `.claude/worktrees/parent-signup` (branch `feature/study-parent-signup`, stacked on feature/tutor-coverage-area = PR #175 head aa30001).
+
+**Owner requirement (issue #150):** "There must be a parent sign up flow supported" — study's /enroll/parent is a StaticPage stub; the SignUpRolePage parent option dead-ends.
+
+**Context (verified / from memory):**
+- Sit parents already work in study WITHOUT enrollment (shared user/family docs; cross-app switching #146 handles authed sit parents; parent portal /family exists in study). #150 is for parents arriving at study FIRST.
+- The backend needs NOTHING new: `enrollFamily` (apps/functions deployment, shared project) creates the family + parent profile; `verifyParentEmail` handles the code + silent existing-account flow (#154). Study-web calls the same callable names.
+- Reference wizards: sit `apps/web/src/pages/enrollment/ParentEnrollment.tsx` (+ its Step components incl. StepParentVerify with the #154 exit hint) for FLOW; study `apps/study-web/src/pages/enrollment/tutor/TutorEnrollment.tsx` (+ steps) for STRUCTURE/STYLING conventions (step indicator, error surfaces, best-effort post-enroll sign-in with the timeout-backstopped store wait — reuse that pattern VERBATIM, it went through 8 review rounds).
+
+**Tasks:**
+1. **Wizard**: `apps/study-web/src/pages/enrollment/parent/ParentEnrollment.tsx` + step components mirroring sit's flow (email → verify → password → profile w/ family name, kids, phone/whatsapp, address via shared AddressAutocomplete) in study's structure/styling. MUST: pass `app: 'study'` on EVERY verifyParentEmail call (initial + resend — #154 ledger requirement); render the #154 exit hint under code entry (study key enrollment.verifyNoCodeHint exists? tutor StepVerify has it — reuse the shared component if the tutor wizard's StepVerify is parameterizable, else mirror); send postcode/city from the AddressResult in the enrollFamily payload (#175 schema); best-effort sign-in + navigate to /family on success (welcome copy consistent with #149's immediate-ready framing — no approval-wait language; note families DO have admin verification for full search access — mirror sit's post-enroll messaging about verification where it exists, check sit's success step copy).
+2. **Wiring**: router `/enroll/parent` → the wizard (replace the StaticPage stub); SignUpRolePage already links there (verify); exclusivity/defense-in-depth patterns from the tutor wizard (role'd users redirected by the wrapper — verify the study SignUpRolePage wrapper covers parents, it does per #144 work).
+3. **i18n**: study en+fr for all wizard copy (mirror sit's keys where the meaning matches; study-appropriate wording — "search for tutors" not babysitters).
+4. **Tests**: unit — wizard step progression, app:'study' payload pins (both call sites), exit-hint render, enrollFamily payload incl. postcode/city, success sign-in flow (mirror the tutor wizard's test file structure); integration — a study-side enroll-family happy path already exists? Check tests/integration/enrollment/enroll-family*.test.ts — those run against the shared callable and don't change; ADD a pin only if the study wizard sends anything the sit one doesn't (postcode/city already pinned by #175). Likely NO new integration tests needed — say so explicitly in the report if true.
+5. **Gates**: units both apps + lints exact + typecheck; FULL integration ONLY if any backend/tests/ file changed (expected: none — then state it and skip, saving the port cycle; if any tests/ or functions file IS touched, full emulators:exec run with port protocol).
+
+**Constraints:** repo law as always (no emoji, no Co-Authored-By, en+fr, grep-verify, rules untouched, no push/GitHub/deploys). The #154 requirement (app:'study') and the #149 no-approval-wait copy are review-ledger items — the checker knows them.
