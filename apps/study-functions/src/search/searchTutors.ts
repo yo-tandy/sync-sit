@@ -102,77 +102,99 @@ export const searchTutors = onCall(
       );
       if (!offering) continue;
 
-      // Filter: session location types (issue #167). A tutor matches when
-      // their prefs intersect the requested set. Family-side legs
-      // ('family_home'/'library') additionally require the tutor's coverage
-      // to actually reach the family — THIS is the trust boundary for
-      // "in-person tutors must have a coverage area"; the area page's save
-      // gate is UX only. Tutor-side legs ('online'/'tutor_home') need no
-      // coverage. The projected locationPrefs are narrowed to the legs that
-      // genuinely apply to THIS family, so a tutor carried by their online
-      // leg is never displayed as available "at your home" when their
-      // coverage cannot reach it. Location-UNTYPED queries deliberately skip
-      // all of this and project raw prefs (see the pinned rationale below).
-      let projectedPrefs = tutor.locationPrefs ?? [];
-      if (requestedPrefs.length > 0) {
-        const matchedPrefs = requestedPrefs.filter((p) => tutor.locationPrefs?.includes(p));
-        if (matchedPrefs.length === 0) continue;
-        const tutorSideLegs = matchedPrefs.filter((p) => p === 'online' || p === 'tutor_home');
-        const familySideLegs = matchedPrefs.filter((p) => p === 'family_home' || p === 'library');
-        // Coverage: distance-mode tutors need BOTH sides' coordinates — the
-        // haversine radius gate below then decides reachability (keeping the
-        // approved-family bypass); without params.latLng that gate is
-        // skipped, so requiring it here keeps the two modes symmetric (fail
-        // closed, like arr-mode with no areaLabel). Arrondissement-mode
-        // tutors must list the family's resolved area label; stored values
-        // are normalized through postcodeToArrondissement because the
-        // free-text era taught tutors postcodes ('75016'), and those docs
-        // must keep matching '16e'. Empty coverage on either mode means the
-        // tutor cannot serve this family's location.
-        const covers =
-          familySideLegs.length > 0 &&
-          (tutor.areaMode === 'distance'
-            ? !!tutor.areaLatLng && !!params.latLng
-            : !!params.areaLabel &&
-              (tutor.arrondissements ?? []).some(
-                (a) => a === params.areaLabel || postcodeToArrondissement(a) === params.areaLabel,
-              ));
-        if (tutorSideLegs.length === 0 && !covers) continue;
-        projectedPrefs = covers ? matchedPrefs : tutorSideLegs;
-      }
-
       // Filter: max rate (against the MATCHED subject's rate).
       if (params.filters?.maxRate !== undefined && offering.rate > params.filters.maxRate) {
         continue;
       }
 
       // Contact fields only for families the tutor has approved. Computed BEFORE
-      // the distance gate because an existing consent relationship overrides
+      // the geography checks because an existing consent relationship overrides
       // geography: an approved family reaching this tutor (e.g. via the
       // accepted-request deep-link, which replays the family's saved latLng) must
       // never be filtered out by the tutor's radius or the maxDistanceKm filter.
       const contactApproved = (tutor.approvedFamilies ?? []).includes(callerFamilyId);
 
-      // Distance + range gate.
+      // Distance + reachability (computed before the location-type filter so
+      // the radius result can feed the coverage decision).
       let distance: number | null = null;
+      let withinRange = false;
       if (tutor.areaMode === 'distance' && tutor.areaLatLng && params.latLng) {
-        distance = haversineDistance(tutor.areaLatLng, params.latLng);
+        const rawDistance = haversineDistance(tutor.areaLatLng, params.latLng);
         const cap = Math.min(
           tutor.areaRadiusKm ?? 5,
           params.filters?.maxDistanceKm ?? Infinity,
         );
-        // Skip the cap entirely for approved families — relationship over
-        // geography — but still compute+round the distance for display.
-        if (!contactApproved && distance > cap) continue;
-        distance = Math.round(distance * 10) / 10;
+        withinRange = rawDistance <= cap;
+        distance = Math.round(rawDistance * 10) / 10;
       } else if (tutor.areaMode === 'arrondissement') {
         // Arrondissement coverage is enforced by the location-type filter
-        // above (label intersection) — location-untyped queries deliberately
+        // below (label intersection) — location-untyped queries deliberately
         // include all arrondissement tutors. Here we only surface a distance
         // for sorting when both points happen to be known.
         if (tutor.areaLatLng && params.latLng) {
           distance = Math.round(haversineDistance(tutor.areaLatLng, params.latLng) * 10) / 10;
         }
+      }
+
+      // Coverage: does this tutor's area reach THIS family? Model: geography
+      // constrains only the family-side legs ('family_home'/'library').
+      // Arrondissement mode matches the family's resolved area label; stored
+      // values are string-guarded (the field is client-written — one junk
+      // element must degrade to "does not match", never throw and take the
+      // whole callable down) and normalized through postcodeToArrondissement
+      // because the free-text era taught tutors postcodes ('75016'), which
+      // must keep matching '16e'. Distance mode needs BOTH sides' coordinates
+      // AND the radius/maxDistanceKm cap to hold — except for approved
+      // families, where relationship deliberately overrides geography (their
+      // card keeps family-side legs even beyond the radius). Missing
+      // coordinates on either side fail closed, like arr-mode with no label.
+      const covers =
+        tutor.areaMode === 'distance'
+          ? !!tutor.areaLatLng && !!params.latLng && (withinRange || contactApproved)
+          : !!params.areaLabel &&
+            (tutor.arrondissements ?? []).some(
+              (a) =>
+                typeof a === 'string' &&
+                (a === params.areaLabel || postcodeToArrondissement(a) === params.areaLabel),
+            );
+
+      // Filter: session location types (issue #167). A tutor matches when the
+      // requested set intersects a leg they can actually serve: tutor-side
+      // legs ('online'/'tutor_home') always; family-side legs only when
+      // coverage reaches the family — THIS is the trust boundary for
+      // "in-person tutors must have a coverage area"; the area page's save
+      // gate is UX only. The projection SUBTRACTS unreachable family-side
+      // legs from the tutor's full prefs (never intersects with the request):
+      // the card and the booking form keep every leg the tutor genuinely
+      // offers this family — including unrequested ones — while a leg their
+      // coverage cannot serve is never advertised.
+      let projectedPrefs = tutor.locationPrefs ?? [];
+      if (requestedPrefs.length > 0) {
+        const matchedPrefs = requestedPrefs.filter((p) => tutor.locationPrefs?.includes(p));
+        if (matchedPrefs.length === 0) continue;
+        const servable = matchedPrefs.some(
+          (p) => p === 'online' || p === 'tutor_home' || covers,
+        );
+        if (!servable) continue;
+        if (!covers) {
+          projectedPrefs = projectedPrefs.filter((p) => p !== 'family_home' && p !== 'library');
+        }
+      } else if (
+        tutor.areaMode === 'distance' &&
+        distance !== null &&
+        !withinRange &&
+        !contactApproved
+      ) {
+        // Location-UNTYPED queries keep the pre-#167 whole-tutor radius gate:
+        // with no requested legs there is no tutor-side leg to ride in on,
+        // and dropping out-of-range distance-mode tutors is what the tutor's
+        // radius (and the family's maxDistanceKm filter) always meant here.
+        // Their projected prefs stay raw (pinned as intentional): no leg was
+        // requested, so none can be false for this family yet. For TYPED
+        // queries the radius result only feeds `covers` above — a far-away
+        // tutor rides in on a matched tutor-side leg with the family-side
+        // legs subtracted, never silently vanishing.
+        continue;
       }
 
       // Whitelist the ACTIONABLE lifecycle statuses; anything else falls back to

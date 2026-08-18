@@ -499,7 +499,7 @@ describe('searchTutors', () => {
     });
   });
 
-  it('projects family_home for a COVERED family-side match (narrowing keeps true legs)', async () => {
+  it('projects the FULL prefs for a COVERED family-side match (subtract, never intersect)', async () => {
     await withTempTutor('temp-tutor-covered-prefs', ARR_16E_FAMILY_HOME, async () => {
       const result = await callFunction<{ results: TutorResult[] }>(
         'searchTutors',
@@ -509,6 +509,44 @@ describe('searchTutors', () => {
       const row = result.results.find((r) => r.uid === 'temp-tutor-covered-prefs');
       expect(row?.locationPrefs).toEqual(['family_home']);
     });
+  });
+
+  it('a covered family_home search still returns the tutor UNREQUESTED online leg (booking needs it)', async () => {
+    // The projection subtracts UNREACHABLE legs only — filtering by
+    // family_home must not strip the online leg the booking form offers.
+    await withTempTutor(
+      'temp-tutor-full-prefs',
+      { ...ARR_16E_FAMILY_HOME, locationPrefs: ['online', 'family_home'] },
+      async () => {
+        const result = await callFunction<{ results: TutorResult[] }>(
+          'searchTutors',
+          { subject: 'math', level: '6e', areaLabel: '16e', filters: { locationPrefs: ['family_home'] } },
+          parentToken
+        );
+        const row = result.results.find((r) => r.uid === 'temp-tutor-full-prefs');
+        expect(row?.locationPrefs).toEqual(['online', 'family_home']);
+      }
+    );
+  });
+
+  it('distance-mode far-away tutor rides in on the online leg of a mixed query (family_home subtracted)', async () => {
+    // Geography constrains only family-side legs in BOTH area modes: the
+    // radius result feeds coverage, it no longer drops the whole tutor when
+    // a tutor-side leg matched. FAR is ~5.5 km from the tutor's 5 km radius.
+    await withTempTutor(
+      'temp-tutor-far-mixed',
+      { locationPrefs: ['online', 'family_home'] },
+      async () => {
+        const result = await callFunction<{ results: TutorResult[] }>(
+          'searchTutors',
+          { subject: 'math', level: '6e', latLng: FAR, filters: { locationPrefs: ['online', 'family_home'] } },
+          parentToken
+        );
+        const row = result.results.find((r) => r.uid === 'temp-tutor-far-mixed');
+        expect(row).toBeDefined();
+        expect(row?.locationPrefs).toEqual(['online']);
+      }
+    );
   });
 
   it("matches a family whose address resolves to a nearby town ('Vincennes') end to end", async () => {
