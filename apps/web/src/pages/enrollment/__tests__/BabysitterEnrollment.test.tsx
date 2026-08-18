@@ -57,6 +57,7 @@ vi.mock('@/stores/authStore', () => {
       getState: () => storeState(),
       subscribe: () => () => {},
     }),
+    markNextSignInFresh: () => {},
   };
 });
 vi.mock('@ejm/sit-core', () => ({

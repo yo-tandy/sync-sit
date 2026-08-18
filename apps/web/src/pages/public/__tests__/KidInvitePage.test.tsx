@@ -30,7 +30,7 @@ vi.mock('@/stores/authStore', () => {
   const useAuthStore = () => h.authState;
   useAuthStore.getState = () => h.authState;
   useAuthStore.subscribe = () => () => {};
-  return { useAuthStore };
+  return { useAuthStore, markNextSignInFresh: () => {} };
 });
 
 import i18n from '@/i18n';

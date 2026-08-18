@@ -39,6 +39,7 @@ export default {
     login: 'Se connecter',
     loginTitle: 'Bon retour',
     loginSubtitle: 'Connectez-vous \u00e0 votre compte',
+    signedOutEverywhere: 'Vous avez \u00e9t\u00e9 d\u00e9connect\u00e9.',
     forgotPassword: 'Mot de passe oubli\u00e9 ?',
     forgotPasswordTitle: 'R\u00e9initialiser le mot de passe',
     forgotPasswordHeading: 'Mot de passe oubli\u00e9 ?',

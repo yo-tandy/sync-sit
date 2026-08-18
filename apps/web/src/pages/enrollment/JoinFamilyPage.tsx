@@ -6,7 +6,7 @@ import { signInWithEmailAndPassword } from 'firebase/auth';
 import { getParentProfile } from '@ejm/sit-core';
 import { enrollmentErrorReason } from '@ejm/shared-ui';
 import { auth, functions } from '@/config/firebase';
-import { useAuthStore } from '@/stores/authStore';
+import { markNextSignInFresh, useAuthStore } from '@/stores/authStore';
 import { Button, Input, TopNav, StepIndicator, Spinner } from '@/components/ui';
 import { MailIcon } from '@/components/ui/Icons';
 import { CodeInput } from '@/components/forms/CodeInput';
@@ -143,6 +143,8 @@ export function JoinFamilyPage() {
         lastName,
       });
 
+      // Fresh, deliberate sign-in: capture the session epoch anew (issue #181).
+      markNextSignInFresh();
       await signInWithEmailAndPassword(auth, email, password);
 
       await new Promise<void>((resolve) => {

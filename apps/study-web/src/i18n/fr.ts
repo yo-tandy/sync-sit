@@ -122,6 +122,7 @@ export default {
     login: 'Se connecter',
     loginTitle: 'Bon retour',
     loginSubtitle: 'Connectez-vous à votre compte Sync/Study',
+    signedOutEverywhere: 'Vous avez été déconnecté.',
     forgotPassword: 'Mot de passe oublié ?',
     forgotPasswordTitle: 'Réinitialiser le mot de passe',
     forgotPasswordHeading: 'Mot de passe oublié ?',

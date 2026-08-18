@@ -6,6 +6,7 @@ import { MemoryRouter, Routes, Route } from 'react-router';
 const h = vi.hoisted(() => ({
   callable: vi.fn(),
   signInWithCustomToken: vi.fn(),
+  markNextSignInFresh: vi.fn(),
   getDoc: vi.fn(),
   setState: vi.fn(),
   state: {
@@ -30,7 +31,7 @@ vi.mock('@/stores/authStore', () => {
   const useAuthStore = () => h.state;
   useAuthStore.getState = () => h.state;
   useAuthStore.setState = h.setState;
-  return { useAuthStore };
+  return { useAuthStore, markNextSignInFresh: h.markNextSignInFresh };
 });
 
 import i18n from '@/i18n';
@@ -58,6 +59,7 @@ describe('HandoffPage (sit)', () => {
   beforeEach(() => {
     h.callable.mockReset();
     h.signInWithCustomToken.mockReset();
+    h.markNextSignInFresh.mockReset();
     h.getDoc.mockReset();
     h.setState.mockReset();
     h.state.firebaseUser = null;
@@ -89,6 +91,12 @@ describe('HandoffPage (sit)', () => {
     // The custom token from the redeem response is what signs us in.
     expect(h.signInWithCustomToken).toHaveBeenCalledTimes(1);
     expect(h.signInWithCustomToken.mock.calls[0][1]).toBe('custom-tok');
+    // Issue #181 pin: the handoff sign-in captures the session epoch — the
+    // fresh-sign-in mark must land BEFORE the custom-token sign-in.
+    expect(h.markNextSignInFresh).toHaveBeenCalledTimes(1);
+    expect(h.markNextSignInFresh.mock.invocationCallOrder[0]).toBeLessThan(
+      h.signInWithCustomToken.mock.invocationCallOrder[0],
+    );
   });
 
   it('applies the carried lang on arrival and completes the REAL handoff in it', async () => {

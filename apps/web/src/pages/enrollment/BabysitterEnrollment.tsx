@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { httpsCallable } from 'firebase/functions';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth, functions } from '@/config/firebase';
-import { useAuthStore } from '@/stores/authStore';
+import { markNextSignInFresh, useAuthStore } from '@/stores/authStore';
 import { TopNav, StepIndicator } from '@/components/ui';
 import { EnrollmentAppBar } from '@/components/ui/EnrollmentAppBar';
 import { StepEmail, StepVerify, StepPassword, enrollmentErrorReason } from '@ejm/shared-ui';
@@ -131,6 +131,8 @@ export function BabysitterEnrollment() {
       }
 
       // Sign in with the new account
+      // Fresh, deliberate sign-in: capture the session epoch anew (issue #181).
+      markNextSignInFresh();
       await signInWithEmailAndPassword(auth, ejemEmail, password);
 
       // Wait for auth store to load user doc

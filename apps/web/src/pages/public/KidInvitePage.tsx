@@ -5,7 +5,7 @@ import { httpsCallable } from 'firebase/functions';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { checkPasswordRequirements } from '@ejm/shared-core';
 import { auth, functions } from '@/config/firebase';
-import { useAuthStore } from '@/stores/authStore';
+import { markNextSignInFresh, useAuthStore } from '@/stores/authStore';
 import { Button, Card, Input } from '@/components/ui';
 
 /** Machine-readable guardian error code from an HttpsError's details, if any. */
@@ -65,6 +65,8 @@ export function KidInvitePage() {
 
       // Sign in with the new account (the enrollment flow's post-callable
       // sign-in, with the email from the callable instead of a typed one).
+      // Fresh, deliberate sign-in: capture the session epoch anew (issue #181).
+      markNextSignInFresh();
       await signInWithEmailAndPassword(auth, res.data.email, password);
 
       // Wait for auth store to load user doc

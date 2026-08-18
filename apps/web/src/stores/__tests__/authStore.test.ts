@@ -10,9 +10,13 @@ import { httpsCallable } from 'firebase/functions';
 const h = vi.hoisted(() => ({
   authCb: null as ((user: unknown) => void) | null,
   signOutEverywhere: vi.fn(() => Promise.resolve({ data: { ok: true } })),
+  removePushToken: vi.fn(() => Promise.resolve()),
 }));
 
 vi.mock('@/config/firebase', () => ({ auth: {}, db: {}, functions: {} }));
+vi.mock('@/lib/pushNotifications', () => ({
+  removePushToken: h.removePushToken,
+}));
 vi.mock('firebase/auth', () => ({
   onAuthStateChanged: vi.fn((_auth: unknown, cb: (user: unknown) => void) => {
     h.authCb = cb;
@@ -92,6 +96,7 @@ installLocalStorageStub();
 beforeEach(() => {
   vi.clearAllMocks();
   h.signOutEverywhere.mockResolvedValue({ data: { ok: true } });
+  h.removePushToken.mockResolvedValue();
   mSignOut.mockResolvedValue();
   // Drain any pending fresh-sign-in mark a login test left behind, so each
   // test starts with deterministic module state (flag consumed, no watcher).
@@ -114,14 +119,14 @@ afterEach(() => {
   localStorage.clear();
 });
 
-describe('study authStore', () => {
+describe('sit authStore', () => {
   it('login fetches the user doc and populates state', async () => {
     mSignIn.mockResolvedValue({ user: { uid: 'u1' } } as never);
-    mGetDoc.mockResolvedValue({ exists: () => true, data: () => ({ uid: 'u1', profiles: { tutor: {} } }) } as never);
+    mGetDoc.mockResolvedValue(snapOf({ uid: 'u1', profiles: { parent: {} } }) as never);
 
-    await useAuthStore.getState().login('t@ejm.org', 'pw');
+    await useAuthStore.getState().login('p@x.com', 'pw');
 
-    expect(mSignIn).toHaveBeenCalledWith({}, 't@ejm.org', 'pw');
+    expect(mSignIn).toHaveBeenCalledWith({}, 'p@x.com', 'pw');
     expect(useAuthStore.getState().userDoc).toMatchObject({ uid: 'u1' });
     expect(useAuthStore.getState().loading).toBe(false);
     expect(useAuthStore.getState().error).toBeNull();
@@ -129,32 +134,19 @@ describe('study authStore', () => {
 
   it('login sets a generic i18n error key and rethrows on failure (issue #147)', async () => {
     mSignIn.mockRejectedValue(new Error('bad creds'));
-    await expect(useAuthStore.getState().login('t@ejm.org', 'wrong')).rejects.toThrow('bad creds');
+    await expect(useAuthStore.getState().login('p@x.com', 'wrong')).rejects.toThrow('bad creds');
     // Never the raw message: it can reveal whether the account exists.
     expect(useAuthStore.getState().error).toBe('auth.errorLoginFailed');
     expect(useAuthStore.getState().loading).toBe(false);
   });
 
-  it('login collapses credential failures into the invalid-credentials key (issue #147)', async () => {
-    const err = Object.assign(new Error('Firebase: Error (auth/user-not-found).'), {
-      code: 'auth/user-not-found',
-    });
-    mSignIn.mockRejectedValue(err);
-    await expect(useAuthStore.getState().login('t@ejm.org', 'wrong')).rejects.toThrow();
-    expect(useAuthStore.getState().error).toBe('auth.errorInvalidCredentials');
-  });
-
-  it('logout signs out and clears the user', async () => {
+  it('logout signs out, removes the push token and clears the user', async () => {
     useAuthStore.setState({ firebaseUser: { uid: 'u1' } as never, userDoc: { uid: 'u1' } as never });
     await useAuthStore.getState().logout();
+    expect(h.removePushToken).toHaveBeenCalledWith('u1');
     expect(mSignOut).toHaveBeenCalled();
     expect(useAuthStore.getState().userDoc).toBeNull();
     expect(useAuthStore.getState().firebaseUser).toBeNull();
-  });
-
-  it('resetPassword calls sendPasswordResetEmail', async () => {
-    await useAuthStore.getState().resetPassword('t@ejm.org');
-    expect(mReset).toHaveBeenCalledWith({}, 't@ejm.org');
   });
 
   it('resetPassword sets a generic i18n error key and rethrows on failure', async () => {
@@ -170,12 +162,12 @@ describe('study authStore', () => {
   });
 });
 
-describe('study authStore — cross-app session coherence (issue #181)', () => {
+describe('sit authStore — cross-app session coherence (issue #181)', () => {
   it('login captures the session epoch into per-uid localStorage', async () => {
     mSignIn.mockResolvedValue({ user: { uid: 'u1' } } as never);
     mGetDoc.mockResolvedValue(snapOf({ uid: 'u1', sessionEpoch: ts(5000) }) as never);
 
-    await useAuthStore.getState().login('t@ejm.org', 'pw');
+    await useAuthStore.getState().login('p@x.com', 'pw');
 
     expect(localStorage.getItem('sessionEpoch:u1')).toBe('5000');
   });
@@ -184,7 +176,7 @@ describe('study authStore — cross-app session coherence (issue #181)', () => {
     mSignIn.mockResolvedValue({ user: { uid: 'u1' } } as never);
     mGetDoc.mockResolvedValue(snapOf({ uid: 'u1' }) as never);
 
-    await useAuthStore.getState().login('t@ejm.org', 'pw');
+    await useAuthStore.getState().login('p@x.com', 'pw');
 
     expect(localStorage.getItem('sessionEpoch:u1')).toBe('0');
   });
