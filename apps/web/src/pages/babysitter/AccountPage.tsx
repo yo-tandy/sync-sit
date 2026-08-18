@@ -324,32 +324,38 @@ export function BabysitterAccountPage() {
   };
 
   // --- Notification prefs ---
-  const savePrefs = useCallback(async (updated: NotifPrefs) => {
-    if (!uid) return;
-    try {
-      await updateDoc(doc(db, 'users', uid), {
-        notifPrefs: updated,
-        updatedAt: serverTimestamp(),
-      });
-      await refreshUserDoc();
-    } catch {
-      // silent
-    }
-  }, [uid, refreshUserDoc]);
+  // Write ONLY the toggled scenario/channel via a dot-path. A full-object
+  // `notifPrefs` write would clobber values another app (study-web) may have
+  // written after this page mounted.
+  const savePrefs = useCallback(
+    async (scenario: keyof NotifPrefs, channel: 'push' | 'email', value: boolean) => {
+      if (!uid) return;
+      try {
+        await updateDoc(doc(db, 'users', uid), {
+          [`notifPrefs.${scenario}.${channel}`]: value,
+          updatedAt: serverTimestamp(),
+        });
+        await refreshUserDoc();
+      } catch {
+        // silent
+      }
+    },
+    [uid, refreshUserDoc],
+  );
 
   const toggle = (scenario: keyof NotifPrefs, channel: 'push' | 'email') => {
     // In web-app mode, push toggles are inert — notifications won't be
     // delivered until the user installs the app to their home screen.
     if (channel === 'push' && !pwaMode) return;
-    const updated = {
+    const next = !(prefs[scenario] as NotifChannel)[channel];
+    setPrefs({
       ...prefs,
       [scenario]: {
         ...prefs[scenario],
-        [channel]: !(prefs[scenario] as NotifChannel)[channel],
+        [channel]: next,
       },
-    };
-    setPrefs(updated);
-    savePrefs(updated);
+    });
+    savePrefs(scenario, channel, next);
   };
 
   return (
@@ -600,6 +606,7 @@ export function BabysitterAccountPage() {
                   onClick={() => toggle(s.key, 'push')}
                   disabled={!pwaMode}
                   aria-disabled={!pwaMode}
+                  aria-label={`${t(s.labelKey)} — ${t('notifications.push')}`}
                   title={!pwaMode ? t('notifications.pushRequiresInstall') : undefined}
                   className={`flex h-6 w-10 items-center rounded-full p-0.5 transition-colors ${channel.push ? 'bg-brand-600' : 'bg-gray-300'} ${!pwaMode ? 'cursor-not-allowed opacity-40' : ''}`}
                 >
@@ -608,6 +615,7 @@ export function BabysitterAccountPage() {
                 <button
                   type="button"
                   onClick={() => toggle(s.key, 'email')}
+                  aria-label={`${t(s.labelKey)} — ${t('notifications.emailNotif')}`}
                   className={`flex h-6 w-10 items-center rounded-full p-0.5 transition-colors ${channel.email ? 'bg-brand-600' : 'bg-gray-300'}`}
                 >
                   <div className={`h-5 w-5 rounded-full bg-white shadow transition-transform ${channel.email ? 'translate-x-4' : 'translate-x-0'}`} />
