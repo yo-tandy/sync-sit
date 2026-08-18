@@ -499,6 +499,32 @@ describe('accountExistsNotices collection', () => {
   });
 });
 
+describe('verificationSendCounters collection', () => {
+  // The issue #155 send caps depend on this collection being server-only via
+  // the default-deny catch-all: a readable counter would be a per-address
+  // send-history oracle, and a writable one would let an abuser reset their
+  // own budget (or spend a victim's).
+  it('denies all client access', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'verificationSendCounters', 'test@ejm.org'), {
+        key: 'test@ejm.org',
+        kind: 'address',
+        count: 3,
+        windowStart: new Date(),
+      });
+    });
+
+    const authed = testEnv.authenticatedContext('anyuser');
+    await assertFails(getDoc(doc(authed.firestore(), 'verificationSendCounters', 'test@ejm.org')));
+    await assertFails(
+      setDoc(doc(authed.firestore(), 'verificationSendCounters', 'test@ejm.org'), {
+        count: 0,
+        windowStart: new Date(),
+      }),
+    );
+  });
+});
+
 describe('notifications collection', () => {
   it('allows user to read own notifications', async () => {
     await testEnv.withSecurityRulesDisabled(async (ctx) => {

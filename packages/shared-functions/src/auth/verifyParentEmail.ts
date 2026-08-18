@@ -6,6 +6,7 @@ import { sendVerificationEmail } from '../config/email.js';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
 import { handleExistingAccountSignup } from './accountExistsNotice.js';
 import { isInSendCooldown } from './sendCooldown.js';
+import { registerVerificationSend } from './sendRateLimit.js';
 
 /**
  * Send a 6-digit verification code to any email address (for parent enrollment).
@@ -38,6 +39,15 @@ export const verifyParentEmail = onCall(
     // signup is always unauthenticated at this step), so the cooldown applies
     // to both branches and this reordering changes no behavior.
     if (await isInSendCooldown(normalizedEmail)) {
+      return { success: true, message: 'Verification code sent' };
+    }
+
+    // Per-address daily send cap (issue #155), cooldown first so short
+    // repeats never consume budget. The counter doc is keyed by the
+    // normalized address, so the budget is SHARED with verifyEjmEmail.
+    // Capped requests return the byte-identical fresh body and write nothing
+    // on either branch — an error here would be a new abuse oracle.
+    if (!(await registerVerificationSend(normalizedEmail))) {
       return { success: true, message: 'Verification code sent' };
     }
 
