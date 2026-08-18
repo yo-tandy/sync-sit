@@ -13,6 +13,9 @@ const h = vi.hoisted(() => ({
     resetPassword: vi.fn(() => Promise.resolve()),
   },
   updateDoc: vi.fn(() => Promise.resolve()),
+  // Controls isRunningAsPWA per test: false = web mode (push toggles
+  // disabled), true = installed PWA (push toggles live).
+  pwaMode: false,
 }));
 
 vi.mock('@/config/firebase', () => ({ db: {}, storage: {} }));
@@ -37,7 +40,7 @@ vi.mock('@/lib/pushNotifications', () => ({
 
 vi.mock('@ejm/sit-core', async (importActual) => {
   const actual = await importActual<typeof import('@ejm/sit-core')>();
-  return { ...actual, isRunningAsPWA: () => false };
+  return { ...actual, isRunningAsPWA: () => h.pwaMode };
 });
 
 vi.mock('@/stores/authStore', () => ({
@@ -59,6 +62,7 @@ function renderPage() {
 
 function reset() {
   i18n.changeLanguage('en');
+  h.pwaMode = false;
   h.auth.userDoc = {
     uid: 'p1',
     email: 'parent@example.com',
@@ -132,16 +136,35 @@ describe('family AccountPage', () => {
     expect(keys.some((k) => k.includes('push'))).toBe(false);
   });
 
-  it('push toggles are inert outside PWA mode (no write at all)', async () => {
+  it('push toggles are DISABLED outside PWA mode (no write at all)', async () => {
     renderPage();
     await screen.findByText('parent@example.com');
-    fireEvent.click(
-      screen.getByRole('button', {
-        name: `${i18n.t('notifications.confirmation')} — ${i18n.t('notifications.push')}`,
-      }),
-    );
-    // Give any (wrong) async write a chance to land before asserting.
+    const button = screen.getByRole('button', {
+      name: `${i18n.t('notifications.confirmation')} — ${i18n.t('notifications.push')}`,
+    });
+    // The disabled attribute is what actually prevents the write in web mode:
+    // a disabled button never dispatches the click at all.
+    expect(button).toBeDisabled();
+    fireEvent.click(button);
     await new Promise((r) => setTimeout(r, 0));
     expect(h.updateDoc).not.toHaveBeenCalled();
+  });
+
+  it('in PWA mode the push toggle is enabled and writes the push dot-path', async () => {
+    // Complement of the web-mode pin: with pwaMode true the toggle() guard
+    // lets the push channel through and the write is a single-channel
+    // dot-path, proving the inertness above comes from the pwa gate.
+    h.pwaMode = true;
+    renderPage();
+    await screen.findByText('parent@example.com');
+    const button = screen.getByRole('button', {
+      name: `${i18n.t('notifications.confirmation')} — ${i18n.t('notifications.push')}`,
+    });
+    expect(button).not.toBeDisabled();
+    fireEvent.click(button);
+    await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
+    const payload = h.updateDoc.mock.calls[0][1] as Record<string, unknown>;
+    expect(Object.keys(payload).sort()).toEqual(['notifPrefs.confirmed.push', 'updatedAt']);
+    expect(payload['notifPrefs.confirmed.push']).toBe(false);
   });
 });
