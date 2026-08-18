@@ -45,6 +45,25 @@ interface AuthState {
  */
 const SESSION_EPOCH_KEY = 'sessionEpoch:';
 
+// Logout must stay snappy even on a stalled-but-not-dead connection: the
+// callable's SDK default timeout is 70s. Best-effort — bound it and move on
+// to the local sign-out (the server-side token revocation is the backstop).
+const SIGN_OUT_EVERYWHERE_TIMEOUT_MS = 5000;
+
+/**
+ * Race an operation against a deadline WITHOUT leaving the timer pending
+ * after the fast path settles (pending timers read as teardown noise in
+ * fake-timer suites; PR #184 review).
+ */
+async function raceWithTimeout(op: Promise<unknown>, ms: number): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([op, new Promise<void>((resolve) => { timer = setTimeout(resolve, ms); })]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /** Epoch of a user doc in millis; legacy docs without the field are 0. */
 function epochMillisOf(data: StudyUser | null): number {
   return data?.sessionEpoch ? data.sessionEpoch.toDate().getTime() : 0;
@@ -91,6 +110,7 @@ export function markNextSignInFresh(): void {
 
 let userDocUnsub: (() => void) | null = null;
 let watchedUid: string | null = null;
+let capturedEpochUid: string | null = null;
 let capturedEpochMs = 0;
 
 function detachUserDocListener(): void {
@@ -101,10 +121,19 @@ function detachUserDocListener(): void {
   watchedUid = null;
 }
 
-/** Capture (overwrite) the armed epoch for a fresh sign-in of `uid`. */
+/**
+ * Capture the armed epoch for a sign-in of `uid`. FORWARD-ONLY per uid:
+ * onSnapshot can serve its first snapshot from the SDK's memory cache, so a
+ * stale cached epoch must never LOWER what login() already armed (in either
+ * arrival order) — otherwise the follow-up server snapshot would read as
+ * "newer" and force-sign-out a legitimate seconds-old login. Safe to keep
+ * maxing across sessions of the SAME uid (the server epoch only ever moves
+ * forward); a DIFFERENT uid replaces outright.
+ */
 function captureEpoch(uid: string, millis: number): void {
-  capturedEpochMs = millis;
-  writeStoredEpoch(uid, millis);
+  capturedEpochMs = capturedEpochUid === uid ? Math.max(capturedEpochMs, millis) : millis;
+  capturedEpochUid = uid;
+  writeStoredEpoch(uid, capturedEpochMs);
 }
 
 /** The doc's epoch is newer than the one this session captured: sign out. */
@@ -156,11 +185,18 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     // Detach BEFORE bumping the epoch: our own signOutEverywhere must not
     // race the doc watcher into the forced-sign-out (toast) path.
     detachUserDocListener();
-    // Logout means logout EVERYWHERE (issue #181) — best-effort: offline or
-    // failing, the user still signs out locally (never trap them); the
-    // server-side token revocation is the backstop anyway.
+    // Logout means logout EVERYWHERE (issue #181) — best-effort: offline,
+    // failing or HANGING, the user still signs out locally within the bound
+    // (never trap them); the server-side token revocation is the backstop
+    // anyway. { timeout } caps the SDK's own 70s default; the race also
+    // covers transports that stall without erroring.
     try {
-      await httpsCallable(functions, 'signOutEverywhere')();
+      await raceWithTimeout(
+        httpsCallable(functions, 'signOutEverywhere', {
+          timeout: SIGN_OUT_EVERYWHERE_TIMEOUT_MS,
+        })(),
+        SIGN_OUT_EVERYWHERE_TIMEOUT_MS,
+      );
     } catch (err) {
       console.warn('signOutEverywhere failed; signing out locally only', err);
     }
@@ -217,18 +253,34 @@ onAuthStateChanged(auth, (firebaseUser) => {
   nextSignInIsFresh = false;
   watchedUid = uid;
   let firstSnapshot = true;
+  // Fresh sign-ins arm from the first SERVER snapshot, and until it arrives
+  // cached snapshots neither arm nor enforce: a fresh login is seconds old,
+  // so there is nothing to enforce in that window — and the SDK's memory
+  // cache can serve a pre-bump epoch whose follow-up server snapshot would
+  // otherwise race login()'s own capture and force-sign-out a legitimate
+  // login (PR #184 review). Restored sessions arm from storage immediately,
+  // which is authoritative from the previous session regardless of cache.
+  let awaitingServerCapture = fresh;
   userDocUnsub = onSnapshot(
     doc(db, 'users', uid),
     (snap) => {
       const userDoc = snap.exists() ? (snap.data() as StudyUser) : null;
       const docEpoch = epochMillisOf(userDoc);
+      if (awaitingServerCapture) {
+        if (snap.metadata.fromCache) {
+          useAuthStore.setState({ firebaseUser, userDoc, loading: false });
+          return;
+        }
+        awaitingServerCapture = false;
+        firstSnapshot = false;
+        captureEpoch(uid, docEpoch);
+      }
       if (firstSnapshot) {
         firstSnapshot = false;
-        // Fresh sign-in: capture the doc's epoch. Restored session (reload):
-        // re-arm from storage so a bump made while the tab was closed still
-        // fires; legacy sessions with nothing stored capture the doc's epoch.
-        const stored = fresh ? null : readStoredEpoch(uid);
-        captureEpoch(uid, stored ?? docEpoch);
+        // Restored session (reload): re-arm from storage so a bump made
+        // while the tab was closed still fires; legacy sessions with
+        // nothing stored capture the doc's epoch.
+        captureEpoch(uid, readStoredEpoch(uid) ?? docEpoch);
       }
       if (docEpoch > capturedEpochMs) {
         void forceLocalSignOut(uid);

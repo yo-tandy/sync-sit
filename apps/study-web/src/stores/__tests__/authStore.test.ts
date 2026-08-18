@@ -32,7 +32,7 @@ vi.mock('firebase/functions', () => ({
 }));
 
 // Imported after mocks are registered (vi.mock is hoisted).
-import { useAuthStore } from '../authStore';
+import { useAuthStore, markNextSignInFresh } from '../authStore';
 
 const mSignIn = vi.mocked(signInWithEmailAndPassword);
 const mSignOut = vi.mocked(signOut);
@@ -48,14 +48,15 @@ const ts = (millis: number) => ({
   toDate: () => new Date(millis),
 });
 
-const snapOf = (data: Record<string, unknown> | null) => ({
+const snapOf = (data: Record<string, unknown> | null, fromCache = false) => ({
   exists: () => data !== null,
   data: () => data,
+  metadata: { fromCache },
 });
 
 /** Attach the user-doc watcher via the captured onAuthStateChanged callback. */
 function emitAuth(user: { uid: string } | null): {
-  emitSnap: (data: Record<string, unknown> | null) => void;
+  emitSnap: (data: Record<string, unknown> | null, fromCache?: boolean) => void;
   unsub: ReturnType<typeof vi.fn>;
 } {
   const unsub = vi.fn();
@@ -66,7 +67,7 @@ function emitAuth(user: { uid: string } | null): {
   }) as never);
   h.authCb!(user);
   return {
-    emitSnap: (data) => next!(snapOf(data)),
+    emitSnap: (data, fromCache = false) => next!(snapOf(data, fromCache)),
     unsub,
   };
 }
@@ -94,8 +95,12 @@ beforeEach(() => {
   h.signOutEverywhere.mockResolvedValue({ data: { ok: true } });
   mSignOut.mockResolvedValue();
   // Drain any pending fresh-sign-in mark a login test left behind, so each
-  // test starts with deterministic module state (flag consumed, no watcher).
-  mOnSnapshot.mockImplementationOnce((() => () => {}) as never);
+  // test starts with deterministic module state (flag consumed, no watcher,
+  // per-uid armed epoch reset to the throwaway 'drain' uid at 0).
+  mOnSnapshot.mockImplementationOnce(((_ref: unknown, onNext: (snap: unknown) => void) => {
+    onNext(snapOf({ uid: 'drain' }));
+    return () => {};
+  }) as never);
   h.authCb?.({ uid: 'drain' });
   h.authCb?.(null);
   localStorage.clear();
@@ -256,7 +261,7 @@ describe('study authStore — cross-app session coherence (issue #181)', () => {
     useAuthStore.setState({ firebaseUser: { uid: 'u1' } as never, userDoc: { uid: 'u1' } as never });
     await useAuthStore.getState().logout();
 
-    expect(mHttpsCallable).toHaveBeenCalledWith({}, 'signOutEverywhere');
+    expect(mHttpsCallable).toHaveBeenCalledWith({}, 'signOutEverywhere', { timeout: 5000 });
     expect(h.signOutEverywhere).toHaveBeenCalledTimes(1);
     expect(h.signOutEverywhere.mock.invocationCallOrder[0]).toBeLessThan(
       mSignOut.mock.invocationCallOrder[0],
@@ -289,6 +294,93 @@ describe('study authStore — cross-app session coherence (issue #181)', () => {
     expect(useAuthStore.getState().forcedSignOut).toBe(false);
     // The armed epoch for the uid is cleared on deliberate logout.
     expect(localStorage.getItem('sessionEpoch:u1')).toBeNull();
+  });
+
+  it('a stale cached first snapshot cannot lower the epoch armed at login (forward-only)', async () => {
+    mSignIn.mockResolvedValue({ user: { uid: 'u1' } } as never);
+    mGetDoc.mockResolvedValue(snapOf({ uid: 'u1', sessionEpoch: ts(2000) }) as never);
+    await useAuthStore.getState().login('t@ejm.org', 'pw');
+    expect(localStorage.getItem('sessionEpoch:u1')).toBe('2000');
+
+    // The watcher attaches and its FIRST snapshot arrives from the SDK's
+    // memory cache carrying the pre-logout epoch...
+    const { emitSnap } = emitAuth({ uid: 'u1' });
+    emitSnap({ uid: 'u1', sessionEpoch: ts(1000) });
+    // ...the armed epoch must not move backward...
+    expect(localStorage.getItem('sessionEpoch:u1')).toBe('2000');
+    // ...so the follow-up server snapshot EQUAL to the armed epoch is a no-op.
+    emitSnap({ uid: 'u1', sessionEpoch: ts(2000) });
+    await flush();
+
+    expect(mSignOut).not.toHaveBeenCalled();
+    expect(useAuthStore.getState().forcedSignOut).toBe(false);
+  });
+
+  it('a cached pre-bump snapshot on a FRESH sign-in neither arms nor enforces (server-snapshot arming)', async () => {
+    // The PR #184 review interleaving: same-page logout bumped the epoch to
+    // 2000, the SDK cache still holds 1000, and the watcher's snapshots land
+    // BEFORE login()'s own getDoc capture. Cached 1000 must not arm; the
+    // server 2000 that follows must arm rather than force-sign-out.
+    markNextSignInFresh();
+    const { emitSnap } = emitAuth({ uid: 'u1' });
+    emitSnap({ uid: 'u1', sessionEpoch: ts(1000) }, true);
+    await flush();
+    expect(mSignOut).not.toHaveBeenCalled();
+    expect(localStorage.getItem('sessionEpoch:u1')).toBeNull();
+
+    emitSnap({ uid: 'u1', sessionEpoch: ts(2000) });
+    await flush();
+    expect(mSignOut).not.toHaveBeenCalled();
+    expect(useAuthStore.getState().forcedSignOut).toBe(false);
+    expect(localStorage.getItem('sessionEpoch:u1')).toBe('2000');
+
+    emitSnap({ uid: 'u1', sessionEpoch: ts(3000) });
+    await flush();
+    expect(mSignOut).toHaveBeenCalled();
+  });
+
+  it('logout is bounded: a hanging callable still yields local sign-out within 5s', async () => {
+    vi.useFakeTimers();
+    try {
+      h.signOutEverywhere.mockImplementationOnce((() => new Promise(() => {})) as never);
+      useAuthStore.setState({ firebaseUser: { uid: 'u1' } as never, userDoc: { uid: 'u1' } as never });
+
+      const done = useAuthStore.getState().logout();
+      await vi.advanceTimersByTimeAsync(5000);
+      await done;
+
+      expect(mSignOut).toHaveBeenCalledTimes(1);
+      expect(useAuthStore.getState().firebaseUser).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('a different uid REPLACES the armed epoch (no cross-user carry-over)', async () => {
+    // u1 arms a high epoch...
+    mSignIn.mockResolvedValue({ user: { uid: 'u1' } } as never);
+    mGetDoc.mockResolvedValue(snapOf({ uid: 'u1', sessionEpoch: ts(9000) }) as never);
+    await useAuthStore.getState().login('a@x.com', 'pw');
+    expect(localStorage.getItem('sessionEpoch:u1')).toBe('9000');
+
+    // ...then u2 logs in with a LOWER epoch: forward-only is per uid, so the
+    // capture REPLACES — u1's 9000 must not leak into u2's session.
+    mSignIn.mockResolvedValue({ user: { uid: 'u2' } } as never);
+    mGetDoc.mockResolvedValue(snapOf({ uid: 'u2', sessionEpoch: ts(100) }) as never);
+    await useAuthStore.getState().login('b@x.com', 'pw');
+    expect(localStorage.getItem('sessionEpoch:u2')).toBe('100');
+
+    // u2's watcher: equal epoch is a no-op...
+    const { emitSnap } = emitAuth({ uid: 'u2' });
+    emitSnap({ uid: 'u2', sessionEpoch: ts(100) });
+    await flush();
+    expect(mSignOut).not.toHaveBeenCalled();
+    // ...and a genuinely newer epoch still fires (a carried-over 9000 would
+    // have swallowed it).
+    emitSnap({ uid: 'u2', sessionEpoch: ts(200) });
+    await flush();
+    expect(mSignOut).toHaveBeenCalledTimes(1);
+    expect(useAuthStore.getState().forcedSignOut).toBe(true);
   });
 
   it('acknowledgeForcedSignOut clears the flag', () => {

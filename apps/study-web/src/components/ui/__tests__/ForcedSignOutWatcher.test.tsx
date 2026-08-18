@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/react';
+import { render, screen, cleanup, act } from '@testing-library/react';
 import { I18nextProvider } from 'react-i18next';
 import { ToastProvider } from '@ejm/shared-ui';
 
@@ -30,6 +30,7 @@ function renderWatcher() {
 
 beforeEach(async () => {
   cleanup();
+  Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
   vi.clearAllMocks();
   h.state = { forcedSignOut: false };
   await i18n.changeLanguage('en');
@@ -40,7 +41,28 @@ describe('ForcedSignOutWatcher (study)', () => {
     h.state = { forcedSignOut: true };
     renderWatcher();
 
-    expect(screen.getByText('You have been signed out.')).toBeInTheDocument();
+    expect(screen.getByText('You have been signed out on another device.')).toBeInTheDocument();
+    expect(h.navigate).toHaveBeenCalledWith('/');
+    expect(h.acknowledgeForcedSignOut).toHaveBeenCalled();
+  });
+
+  it('holds the announcement until the tab becomes visible again', () => {
+    // The receiving tab is by definition the backgrounded one — a toast
+    // fired while hidden expires unseen (issue #181 review).
+    Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true });
+    h.state = { forcedSignOut: true };
+    renderWatcher();
+
+    expect(screen.queryByText('You have been signed out on another device.')).not.toBeInTheDocument();
+    expect(h.navigate).not.toHaveBeenCalled();
+    expect(h.acknowledgeForcedSignOut).not.toHaveBeenCalled();
+
+    Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
+    act(() => {
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+
+    expect(screen.getByText('You have been signed out on another device.')).toBeInTheDocument();
     expect(h.navigate).toHaveBeenCalledWith('/');
     expect(h.acknowledgeForcedSignOut).toHaveBeenCalled();
   });
@@ -48,7 +70,7 @@ describe('ForcedSignOutWatcher (study)', () => {
   it('does nothing while the flag is unset', () => {
     renderWatcher();
 
-    expect(screen.queryByText('You have been signed out.')).not.toBeInTheDocument();
+    expect(screen.queryByText('You have been signed out on another device.')).not.toBeInTheDocument();
     expect(h.navigate).not.toHaveBeenCalled();
     expect(h.acknowledgeForcedSignOut).not.toHaveBeenCalled();
   });

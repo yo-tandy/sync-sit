@@ -19,9 +19,26 @@ export function ForcedSignOutWatcher() {
 
   useEffect(() => {
     if (!forcedSignOut) return;
-    acknowledgeForcedSignOut();
-    toast(t('auth.signedOutEverywhere'));
-    void router.navigate('/');
+    const consume = () => {
+      acknowledgeForcedSignOut();
+      toast(t('auth.signedOutEverywhere'));
+      void router.navigate('/');
+    };
+    // The tab receiving a cross-app force-sign-out is usually the
+    // BACKGROUNDED one, and the toast auto-dismisses after ~3s — fired while
+    // hidden it would expire unseen. Hold the announcement until the tab is
+    // visible again so it actually lands.
+    if (document.visibilityState === 'visible') {
+      consume();
+      return;
+    }
+    const onVisibilityChange = () => {
+      if (document.visibilityState !== 'visible') return;
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      consume();
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', onVisibilityChange);
   }, [forcedSignOut, acknowledgeForcedSignOut, toast, t]);
 
   return null;
