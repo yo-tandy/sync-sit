@@ -87,7 +87,7 @@ describe('tutor DashboardPage', () => {
     expect(document.querySelector('a[href="/tutor/verification"]')).toBeNull();
   });
 
-  it('legacy doc (enrollmentComplete=false): no activation card renders', async () => {
+  it('legacy doc (enrollmentComplete=false): no visibility pill renders', async () => {
     h.scheduleData = { weekly: { tue: [true] } };
     h.auth.userDoc = tutor({
       enrollmentComplete: false,
@@ -96,36 +96,37 @@ describe('tutor DashboardPage', () => {
     });
     renderWithProviders(<DashboardPage />);
     await waitFor(() => expect(h.getDocs).toHaveBeenCalled());
-    expect(screen.queryByText(/search visibility/i)).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /show me in search/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Inactive' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Active' })).not.toBeInTheDocument();
   });
 
-  // ── Activation toggle gating (subjects + availability only), preserved
-  // through the issue-#165 layout rework ──
+  // ── Activation gating (subjects + availability only), presented as sit's
+  // top-right Active/Inactive pill + confirm dialog (owner request, PR #194) ──
 
-  it('no subjects: toggle disabled with explanatory text', async () => {
+  it('no subjects: pill is inert (no dialog) and the amber hint explains why', async () => {
     h.scheduleData = { weekly: { tue: [true] } };
     h.auth.userDoc = tutor({
       subjects: [],
       searchable: false,
     });
     renderWithProviders(<DashboardPage />);
-    const toggle = await screen.findByRole('button', { name: /show me in search/i });
-    expect(toggle).toBeDisabled();
+    const pill = await screen.findByRole('button', { name: 'Inactive' });
+    fireEvent.click(pill);
+    expect(screen.queryByText(/activate your profile/i)).not.toBeInTheDocument();
     expect(screen.getByText(/add at least one subject/i)).toBeInTheDocument();
   });
 
-  it('subjects + schedule slots: toggle enabled, writes searchable=true', async () => {
+  it('subjects + slots: pill opens the confirm dialog; confirming writes searchable=true', async () => {
     h.scheduleData = { weekly: { tue: [true] } };
     h.auth.userDoc = tutor({
       subjects: [{ subject: 'math', levels: ['6e'], rate: 20 }],
       searchable: false,
     });
     renderWithProviders(<DashboardPage />);
-    const toggle = await screen.findByRole('button', { name: /show me in search/i });
-    await waitFor(() => expect(toggle).not.toBeDisabled());
+    fireEvent.click(await screen.findByRole('button', { name: 'Inactive' }));
+    expect(await screen.findByText(/activate your profile/i)).toBeInTheDocument();
 
-    fireEvent.click(toggle);
+    fireEvent.click(screen.getByRole('button', { name: 'Activate' }));
 
     await waitFor(() =>
       expect(h.updateDoc).toHaveBeenCalledWith(
@@ -136,40 +137,51 @@ describe('tutor DashboardPage', () => {
     await waitFor(() => expect(h.auth.refreshUserDoc).toHaveBeenCalled());
   });
 
-  it('no schedule slots: toggle disabled with availability text', async () => {
+  it('no schedule slots: pill inert with the availability hint', async () => {
     h.scheduleData = null; // no schedule doc => no slots
     h.auth.userDoc = tutor({
       subjects: [{ subject: 'math', levels: ['6e'], rate: 20 }],
       searchable: false,
     });
     renderWithProviders(<DashboardPage />);
-    const toggle = await screen.findByRole('button', { name: /show me in search/i });
-    await waitFor(() => expect(toggle).toBeDisabled());
-    expect(screen.getByText(/set your weekly availability before/i)).toBeInTheDocument();
+    const pill = await screen.findByRole('button', { name: 'Inactive' });
+    await waitFor(() =>
+      expect(screen.getByText(/set your weekly availability before/i)).toBeInTheDocument(),
+    );
+    fireEvent.click(pill);
+    expect(screen.queryByText(/activate your profile/i)).not.toBeInTheDocument();
   });
 
-  // ── Current searchable-state rendering ──
+  // ── Searchable-state rendering: the pill is the status tag ──
 
-  it('searchable: renders the live state', async () => {
+  it('searchable: renders the Active pill; deactivation goes through the dialog', async () => {
     h.scheduleData = { weekly: { tue: [true] } };
     h.auth.userDoc = tutor({
       subjects: [{ subject: 'math', levels: ['6e'], rate: 20 }],
       searchable: true,
     });
     renderWithProviders(<DashboardPage />);
-    expect(await screen.findByText(/families can find you/i)).toBeInTheDocument();
-    // Live tutors get the hide action.
-    expect(screen.getByRole('button', { name: /hide me from search/i })).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole('button', { name: 'Active' }));
+    expect(await screen.findByText(/deactivate your profile/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Deactivate' }));
+    await waitFor(() =>
+      expect(h.updateDoc).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ 'profiles.tutor.searchable': false })
+      )
+    );
   });
 
-  it('not searchable: renders the hidden state', async () => {
+  it('not searchable: renders the Inactive pill, no hint when the gate is met', async () => {
     h.scheduleData = { weekly: { tue: [true] } };
     h.auth.userDoc = tutor({
       subjects: [{ subject: 'math', levels: ['6e'], rate: 20 }],
       searchable: false,
     });
     renderWithProviders(<DashboardPage />);
-    expect(await screen.findByText(/not shown in search/i)).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Inactive' })).toBeInTheDocument();
+    await waitFor(() => expect(h.getDocs).toHaveBeenCalled());
+    expect(screen.queryByText(/add at least one subject/i)).not.toBeInTheDocument();
   });
 
   // ── Issue #165 structure: install banner ──

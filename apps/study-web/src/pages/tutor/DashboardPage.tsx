@@ -14,6 +14,7 @@ import type { StudySessionDoc } from '@/types/studySession';
 import {
   Card,
   Button,
+  Dialog,
   Spinner,
   Badge,
   CalendarIcon,
@@ -140,6 +141,7 @@ export function DashboardPage() {
   const [hasSlots, setHasSlots] = useState(false);
   const [scheduleLoaded, setScheduleLoaded] = useState(false);
   const [toggling, setToggling] = useState(false);
+  const [toggleDialog, setToggleDialog] = useState(false);
   // Null while loading — the sections and the empty state must not paint (and
   // then visibly swap) while a snapshot is still in flight.
   const [requests, setRequests] = useState<StudyContactRequestDoc[] | null>(null);
@@ -248,6 +250,7 @@ export function DashboardPage() {
         updatedAt: serverTimestamp(),
       });
       await refreshUserDoc();
+      setToggleDialog(false);
     } finally {
       setToggling(false);
     }
@@ -307,8 +310,36 @@ export function DashboardPage() {
 
   return (
     <div className="px-5 pt-4 pb-8">
-      <h1 className="mb-1 text-lg font-bold text-gray-900">{t('tutor.dashboardTitle')}</h1>
-      <p className="mb-5 text-sm text-gray-500">{t('tutor.dashboard.greeting')}</p>
+      {/* ── Header: title left, search-visibility pill top right — the same
+          treatment as sit's babysitter dashboard (owner request, PR #194).
+          The pill opens a confirm dialog; while the activation gate (subjects
+          + slots) is unmet it renders dimmed and inert, with the amber hint
+          card below carrying the explanation. ── */}
+      <div className="mb-5 flex items-center justify-between">
+        <div>
+          <h1 className="mb-1 text-lg font-bold text-gray-900">{t('tutor.dashboardTitle')}</h1>
+          <p className="text-sm text-gray-500">{t('tutor.dashboard.greeting')}</p>
+        </div>
+        {enrollmentComplete && (
+          <button
+            type="button"
+            onClick={() => {
+              if (!isSearchable && !canActivate) return;
+              setToggleDialog(true);
+            }}
+            className={`flex shrink-0 items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
+              isSearchable
+                ? 'bg-green-100 text-green-700'
+                : canActivate
+                  ? 'bg-gray-100 text-gray-500'
+                  : 'bg-gray-100 text-gray-400 opacity-50'
+            }`}
+          >
+            <div className={`h-2 w-2 rounded-full ${isSearchable ? 'bg-green-500' : 'bg-gray-400'}`} />
+            {isSearchable ? t('tutor.dashboard.active') : t('tutor.dashboard.inactive')}
+          </button>
+        )}
+      </div>
 
       {/* ── Ask-to-supervise prompt (pending claim on guardianLinks/{uid}) ── */}
       <SupervisionRequestCard />
@@ -316,41 +347,15 @@ export function DashboardPage() {
       {/* Install-to-home-screen nudge (browser-tab mode only, issue #162) */}
       <InstallAppBanner />
 
-      {/* ── Activation (subjects + availability gate; enrollmentComplete is
-          true from creation — the check only fences off legacy docs) ── */}
-      {enrollmentComplete && (
-        <Card className="mb-4">
-          <p className="mb-1 text-sm font-semibold text-gray-900">
-            {t('tutor.dashboard.searchTitle')}
+      {/* ── Activation gate hint (subjects + availability; enrollmentComplete
+          is true from creation — the check only fences off legacy docs) ── */}
+      {enrollmentComplete && !isSearchable && !canActivate && scheduleLoaded && (
+        <Card className="mb-4 border-amber-300 bg-amber-50">
+          <p className="text-xs text-amber-700">
+            {!hasSubjects
+              ? t('tutor.dashboard.gateNoSubjects')
+              : t('tutor.dashboard.gateNoSlots')}
           </p>
-          <p
-            className={`mb-3 text-sm ${isSearchable ? 'text-green-700' : 'text-gray-500'}`}
-          >
-            {isSearchable
-              ? t('tutor.dashboard.searchableLive')
-              : t('tutor.dashboard.searchableHidden')}
-          </p>
-
-          {!isSearchable && !canActivate && scheduleLoaded && (
-            <p className="mb-3 text-xs text-amber-700">
-              {!hasSubjects
-                ? t('tutor.dashboard.gateNoSubjects')
-                : t('tutor.dashboard.gateNoSlots')}
-            </p>
-          )}
-
-          <Button
-            size="sm"
-            variant={isSearchable ? 'outline' : 'primary'}
-            onClick={handleToggleSearchable}
-            disabled={toggling || (!isSearchable && !canActivate)}
-          >
-            {toggling
-              ? t('tutor.dashboard.updating')
-              : isSearchable
-                ? t('tutor.dashboard.deactivate')
-                : t('tutor.dashboard.activate')}
-          </Button>
         </Card>
       )}
 
@@ -473,6 +478,32 @@ export function DashboardPage() {
           </p>
         </div>
       )}
+
+      {/* ── Search-visibility confirm dialog (sit's babysitter pattern) ── */}
+      <Dialog open={toggleDialog} onClose={() => setToggleDialog(false)}>
+        <h3 className="mb-2 text-lg font-bold">
+          {isSearchable
+            ? t('tutor.dashboard.deactivateTitle')
+            : t('tutor.dashboard.activateTitle')}
+        </h3>
+        <p className="mb-5 text-sm text-gray-600">
+          {isSearchable
+            ? t('tutor.dashboard.deactivateDesc')
+            : t('tutor.dashboard.activateDesc')}
+        </p>
+        <div className="flex gap-2">
+          <Button onClick={handleToggleSearchable} disabled={toggling} className="flex-1">
+            {toggling
+              ? t('tutor.dashboard.updating')
+              : isSearchable
+                ? t('tutor.dashboard.deactivate')
+                : t('tutor.dashboard.activate')}
+          </Button>
+          <Button variant="ghost" onClick={() => setToggleDialog(false)} className="flex-1">
+            {t('common.cancel')}
+          </Button>
+        </div>
+      </Dialog>
     </div>
   );
 }
