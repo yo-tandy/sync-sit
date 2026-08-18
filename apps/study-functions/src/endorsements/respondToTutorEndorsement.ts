@@ -1,11 +1,12 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { FieldValue } from 'firebase-admin/firestore';
 import { db } from '@ejm/shared-functions/config/firebase.js';
-import { escapeHtml } from '@ejm/shared-functions/config/email.js';
 import { getCorsOrigin } from '@ejm/shared-functions/config/cors.js';
-import { notifyAllParents } from '@ejm/shared-functions/config/notifyParents.js';
-import { writeUserActivity } from '@ejm/shared-functions/admin/writeAuditLog.js';
 import { respondTutorEndorsementSchema } from '../validation/endorsement.js';
+import {
+  notifyEndorsementOutcome,
+  recordEndorsementResponseActivity,
+} from './endorsementNotifications.js';
 
 export const respondToTutorEndorsement = onCall(
   { region: 'europe-west1', cors: getCorsOrigin() },
@@ -68,58 +69,16 @@ export const respondToTutorEndorsement = onCall(
       return (ref.submittedByFamilyId as string | undefined) ?? null;
     });
 
-    await writeUserActivity(
-      uid,
-      action === 'accept' ? 'tutor_endorsement_accepted' : 'tutor_endorsement_dismissed',
-      { referenceId, submittedByFamilyId },
-    );
+    // ── Post-commit, best-effort work ──
+    // The transaction above has already committed; NOTHING below may fail the
+    // callable. A rejection here would leave the tutor's UI reporting an error
+    // for an action that succeeded (a retry then hits the status guard with
+    // failed-precondition). Both helpers swallow their own failures — the
+    // result always reflects the committed state.
+    await recordEndorsementResponseActivity(uid, action, referenceId, submittedByFamilyId);
 
-    // Notify the submitting family of the outcome (issue #168 Phase 0). The
-    // flow is family submits -> tutor responds; without this the family never
-    // learns whether their endorsement was published. Gated by each parent's
-    // notifPrefs.references, branded for study. A dismissal reads neutrally —
-    // it does not say the tutor rejected it.
-    // Wrapped so a notify failure can never fail the callable: the transaction
-    // above has already committed, and a rejection here would leave the tutor's
-    // UI reporting an error for an action that succeeded (a retry then hits the
-    // status guard with failed-precondition). The result must reflect the
-    // committed state.
     if (submittedByFamilyId) {
-      try {
-        const tutorSnap = await db.collection('users').doc(uid).get();
-        const tutorFirstName = (tutorSnap.data()?.firstName as string | undefined) || 'the tutor';
-        // The tutor controls firstName; escape it where it crosses into email
-        // HTML delivered to the family's inbox. Push/in-app title and body are
-        // plain-text contexts and stay unescaped.
-        const safeTutorFirstName = escapeHtml(tutorFirstName);
-        if (action === 'accept') {
-          await notifyAllParents({
-            familyId: submittedByFamilyId,
-            prefCategory: 'references',
-            app: 'study',
-            type: 'tutor_endorsement_published',
-            title: 'Endorsement published',
-            body: `Your endorsement for ${tutorFirstName} is now visible on their profile.`,
-            emailSubject: `Your endorsement for ${safeTutorFirstName} is published`,
-            emailBody: `<p>Your endorsement for <strong>${safeTutorFirstName}</strong> is now visible on their profile.</p>`,
-            data: { referenceId },
-          });
-        } else {
-          await notifyAllParents({
-            familyId: submittedByFamilyId,
-            prefCategory: 'references',
-            app: 'study',
-            type: 'tutor_endorsement_declined',
-            title: 'Endorsement update',
-            body: `Your endorsement for ${tutorFirstName} was not published.`,
-            emailSubject: 'About your endorsement',
-            emailBody: `<p>Your endorsement for <strong>${safeTutorFirstName}</strong> was not published.</p>`,
-            data: { referenceId },
-          });
-        }
-      } catch (err) {
-        console.error('respondToTutorEndorsement: family notify failed after commit:', err);
-      }
+      await notifyEndorsementOutcome(uid, action, referenceId, submittedByFamilyId);
     }
 
     return { ok: true };

@@ -154,12 +154,12 @@ describe('respondToTutorEndorsement', () => {
     expect(p2doc!.data().emailSent).toBe(true);
   });
 
-  // The notify block runs AFTER the transaction committed; it may never fail
-  // the callable (a rejection would strand the UI on an error for an action
-  // that succeeded — the retry hits the status guard). Degenerate notify data
-  // (a family that no longer exists) is the emulator-reachable probe of that
-  // post-commit path.
-  it('accept still succeeds when the submitting family no longer exists (notify failure never fails the callable)', async () => {
+  // Degenerate-data pin: a missing family makes notifyAllParents no-op (empty
+  // parentIds), so this exercises the missing-family path of the post-commit
+  // notify — NOT the catch (nothing here throws). The swallow itself is
+  // unit-pinned in apps/study-functions/src/endorsements/__tests__/
+  // endorsementNotifications.test.ts with notifyAllParents mocked to reject.
+  it('accept still succeeds when the submitting family no longer exists', async () => {
     const referenceId = await seedPrivateEndorsement(seed.tutor2.uid, 'ghost-family-gone');
     const res = await callFunction<{ ok: boolean }>(
       'respondToTutorEndorsement',
