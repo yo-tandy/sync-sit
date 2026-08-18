@@ -21,7 +21,9 @@ beforeAll(async () => {
 
   testEnv = await initializeTestEnvironment({
     projectId: 'demo-rules-test',
-    firestore: { rules, host: '127.0.0.1', port: 8080 },
+    // Lane-aware port (see docs/emulator-lanes.md) — a hardcoded 8080 here
+    // would silently reach into lane 1 from a lane-2 run.
+    firestore: { rules, host: '127.0.0.1', port: Number(process.env.TEST_FIRESTORE_PORT ?? '8080') },
   });
 });
 

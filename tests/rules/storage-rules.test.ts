@@ -21,7 +21,11 @@ beforeAll(async () => {
 
   testEnv = await initializeTestEnvironment({
     projectId: 'demo-storage-rules-test',
-    storage: { rules, host: '127.0.0.1', port: 9199 },
+    // Env-overridable so a second emulator lane (firebase.lane2.json, all
+    // ports +10000) can run the suite in parallel with the dev stack. Without
+    // this, a lane-2 run connects to the DEV stack's storage on 9199 and
+    // clearStorage() wipes it.
+    storage: { rules, host: '127.0.0.1', port: Number(process.env.TEST_STORAGE_PORT ?? '9199') },
   });
 });
 

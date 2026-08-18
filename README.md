@@ -129,6 +129,9 @@ pnpm install
 # targets only resolve for the real sync-sit project)
 pnpm emulators
 
+# Integration tests can run WITHOUT killing this dev stack via the second
+# emulator lane (`pnpm test:integration:lane2`) — see docs/emulator-lanes.md
+
 # Seed an admin user (emulator only). Both seed scripts and both apps'
 # .env.development target the demo-test namespace; if you previously ran the
 # emulators under another project id, reseed — old data lives in that other
