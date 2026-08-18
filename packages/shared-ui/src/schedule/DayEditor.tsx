@@ -15,6 +15,12 @@ export interface DayEditorLocationTags {
   options: { value: string; label: string }[];
   /** Label for the "profile defaults" (no override) chip. */
   defaultsLabel: string;
+  /**
+   * Hint shown when a range's covered cells carry DIFFERENT tag sets (ranges
+   * merged after separate tagging): no chip renders pressed and the stored
+   * cells stay untouched until the tutor actively picks a state.
+   */
+  mixedLabel?: string;
   /** Short helper line above the ranges list. */
   helpText?: string;
   /** Sparse initial per-cell tags for this day: slot index -> values. */
@@ -129,18 +135,21 @@ function rangeSlotIndices(start: string, end: string): number[] {
   return idxs;
 }
 
-// A range's current tag selection: the set shared by ALL covered cells, or []
-// ("profile defaults") when cells disagree (ranges merged after separate
-// tagging) — toggling a chip then re-tags the whole range uniformly.
+// A range's current tag selection: the set shared by ALL covered cells, or
+// 'mixed' when cells disagree (ranges merged after separate tagging). A mixed
+// range renders as a distinct third state — NO chip pressed, so "Profile
+// defaults" only ever means what it says — and its cells are left exactly as
+// stored until the tutor actively picks a chip (which re-tags the whole range
+// uniformly) or resets to defaults.
 function rangeTagSelection(
   locMap: Record<string, string[]>,
   idxs: number[],
-): string[] {
+): string[] | 'mixed' {
   const first = locMap[String(idxs[0])] ?? [];
   const key = [...first].sort().join(',');
   for (const i of idxs) {
     const v = locMap[String(i)] ?? [];
-    if ([...v].sort().join(',') !== key) return [];
+    if ([...v].sort().join(',') !== key) return 'mixed';
   }
   return first;
 }
@@ -193,7 +202,9 @@ export function DayEditor({ day, slots: initialSlots, open, onClose, onSave, loc
   // removed — an empty-array override is never stored).
   const toggleRangeTag = (idxs: number[], value: string) => {
     setLocMap((prev) => {
-      const current = rangeTagSelection(prev, idxs);
+      const selection = rangeTagSelection(prev, idxs);
+      // Picking a chip on a mixed range unifies it to just that chip.
+      const current = selection === 'mixed' ? [] : selection;
       const next = current.includes(value)
         ? current.filter((v) => v !== value)
         : [...current, value];
@@ -300,7 +311,9 @@ export function DayEditor({ day, slots: initialSlots, open, onClose, onSave, loc
           )}
           {ranges.map((r, i) => {
             const idxs = locationTags ? rangeSlotIndices(r.start, r.end) : [];
-            const selection = locationTags ? rangeTagSelection(locMap, idxs) : [];
+            const rawSelection = locationTags ? rangeTagSelection(locMap, idxs) : [];
+            const mixed = rawSelection === 'mixed';
+            const selection = mixed ? [] : rawSelection;
             return (
               <div key={i} className="rounded-lg border border-gray-200 px-3 py-2">
                 <div className="flex items-center justify-between">
@@ -319,10 +332,10 @@ export function DayEditor({ day, slots: initialSlots, open, onClose, onSave, loc
                   <div className="mt-2 flex flex-wrap gap-1.5">
                     <button
                       type="button"
-                      aria-pressed={selection.length === 0}
+                      aria-pressed={!mixed && selection.length === 0}
                       onClick={() => resetRangeTags(idxs)}
                       className={`rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
-                        selection.length === 0
+                        !mixed && selection.length === 0
                           ? 'border-brand-600 bg-brand-50 text-brand-600'
                           : 'border-gray-300 text-gray-600 hover:border-gray-400'
                       }`}
@@ -344,6 +357,11 @@ export function DayEditor({ day, slots: initialSlots, open, onClose, onSave, loc
                         {opt.label}
                       </button>
                     ))}
+                    {mixed && locationTags.mixedLabel && (
+                      <span className="basis-full text-xs text-gray-500">
+                        {locationTags.mixedLabel}
+                      </span>
+                    )}
                   </div>
                 )}
               </div>

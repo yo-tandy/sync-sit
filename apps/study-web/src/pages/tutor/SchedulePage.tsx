@@ -193,6 +193,7 @@ export function SchedulePage() {
   const [localHolidayNotes, setLocalHolidayNotes] = useState(holidayNotes || '');
   const [editingDay, setEditingDay] = useState<DayOfWeek | null>(null);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const toast = useToast();
   const [initialized, setInitialized] = useState(false);
   const [dirty, setDirty] = useState(false);
@@ -396,6 +397,7 @@ export function SchedulePage() {
 
   const handleSave = async () => {
     setSaving(true);
+    setSaveError(null);
     try {
       // Tags on cells toggled off in the timeline are pruned at save time so
       // they never persist and never resurface when a slot is re-enabled.
@@ -416,6 +418,10 @@ export function SchedulePage() {
       });
       setDirty(false);
       toast(t('schedule.scheduleSaved'));
+    } catch {
+      // A rejected write (offline, transient) must be visible: the snapshot
+      // stays dirty and the tutor is told the save did not go through.
+      setSaveError(t('common.error'));
     } finally {
       setSaving(false);
     }
@@ -463,6 +469,7 @@ export function SchedulePage() {
                 label: t(`tutor.account.sessionPrefs.location.${p}`),
               })),
               defaultsLabel: t('schedule.locationTags.defaults'),
+              mixedLabel: t('schedule.locationTags.mixed'),
               helpText: t('schedule.locationTags.help'),
               initial: localWeeklyLocations[editingDay],
             }}
@@ -544,6 +551,7 @@ export function SchedulePage() {
         <Button type="button" onClick={handleSave} disabled={saving} className="mt-4 mb-6">
           {saving ? t('common.saving') : t('schedule.saveSchedule')}
         </Button>
+        {saveError && <p className="-mt-4 mb-6 text-sm text-brand-600">{saveError}</p>}
 
         <hr className="my-6 border-gray-200" />
 

@@ -159,6 +159,70 @@ describe('SchedulePage per-slot location tags', () => {
     });
   });
 
+  it('renders a merged range with disagreeing cells as MIXED — no chip pressed, cells kept on save', async () => {
+    // Reviewer repro (PR #185): tag 16:00-18:00 online, then add 18:00-20:00;
+    // the two ranges merge into one 16:00-20:00 row whose covered cells
+    // disagree. That must NOT display as "Profile defaults" (a false state) —
+    // it renders as a third, mixed state and saving keeps the stored cells
+    // untouched.
+    h.schedule.weekly = (() => {
+      const weekly = emptyWeekly();
+      for (let i = 64; i < 72; i++) weekly.mon[i] = true; // 16:00-18:00 only
+      return weekly;
+    })();
+    renderSchedule();
+    fireEvent.click(screen.getByRole('button', { name: 'Mon' }));
+    expect(screen.getByText('16:00 – 18:00')).toBeTruthy();
+    fireEvent.click(onlineChip());
+    // Merge in 18:00-20:00 via the add-range control.
+    fireEvent.change(screen.getByLabelText('From'), { target: { value: '18:00' } });
+    fireEvent.change(screen.getByLabelText('To'), { target: { value: '20:00' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    expect(screen.getByText('16:00 – 20:00')).toBeTruthy();
+    // Mixed state: NEITHER the defaults chip nor any category chip pressed.
+    expect(defaultsChip().getAttribute('aria-pressed')).toBe('false');
+    expect(onlineChip().getAttribute('aria-pressed')).toBe('false');
+    expect(screen.getByText(/combines different location choices/i)).toBeTruthy();
+    // Saving without picking a state keeps the cells exactly as stored.
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save Schedule' }));
+    await waitFor(() => {
+      expect(h.schedule.saveWeekly).toHaveBeenCalledWith(expect.anything(), {
+        mon: Object.fromEntries(
+          Array.from({ length: 8 }, (_, k) => [String(64 + k), ['online']]),
+        ),
+      });
+    });
+  });
+
+  it('picking a chip on a mixed range unifies the whole range to it', () => {
+    // Stored tags cover only 16:00-18:00 of an active 16:00-20:00 range.
+    h.schedule.weeklyLocations = {
+      mon: Object.fromEntries(
+        Array.from({ length: 8 }, (_, k) => [String(64 + k), ['online']]),
+      ),
+    };
+    renderSchedule();
+    openMondayEditor();
+    expect(defaultsChip().getAttribute('aria-pressed')).toBe('false'); // mixed
+    fireEvent.click(onlineChip());
+    // Unified: the chip now presses for the WHOLE range (no longer mixed).
+    expect(onlineChip().getAttribute('aria-pressed')).toBe('true');
+    expect(screen.queryByText(/combines different location choices/i)).toBeNull();
+  });
+
+  it('surfaces an error and keeps dirty state when the schedule save rejects', async () => {
+    h.schedule.saveWeekly = vi.fn(() => Promise.reject(new Error('offline')));
+    renderSchedule();
+    openMondayEditor();
+    fireEvent.click(onlineChip());
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save Schedule' }));
+    expect(await screen.findByText('An error occurred')).toBeTruthy();
+    // No success toast — the save did not go through.
+    expect(screen.queryByText(/schedule saved/i)).toBeNull();
+  });
+
   it('untags a range back to defaults and saves without it', async () => {
     h.schedule.weeklyLocations = { mon: monCells(['online']) };
     renderSchedule();

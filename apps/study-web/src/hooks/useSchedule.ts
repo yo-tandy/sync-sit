@@ -4,9 +4,9 @@ import {
   collection,
   onSnapshot,
   setDoc,
-  updateDoc,
   deleteDoc,
   serverTimestamp,
+  writeBatch,
 } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
@@ -81,7 +81,16 @@ export function useSchedule() {
     ) => {
       if (!uid) return;
       const scheduleRef = doc(db, 'schedules', uid);
-      await setDoc(
+      // ONE atomic batch: the grid set-merge and the tags update commit (and
+      // fail) together, so a transient rejection can never persist the grid
+      // while silently dropping the tags. The update mutation is still needed
+      // for the tags — a set-merge would DEEP-MERGE the nested day maps and
+      // resurrect stale per-cell keys, while update() replaces the whole
+      // weeklyLocations field. Batch writes apply in order, so the update's
+      // exists-precondition is satisfied by the set before it (the doc also
+      // always exists for a tutor — created during enrollment).
+      const batch = writeBatch(db);
+      batch.set(
         scheduleRef,
         {
           userId: uid,
@@ -92,11 +101,9 @@ export function useSchedule() {
         { merge: true }
       );
       if (weeklyLocations !== undefined) {
-        // Separate update() write: setDoc merge would DEEP-MERGE the nested
-        // day maps and resurrect stale per-cell keys; update() replaces the
-        // whole weeklyLocations field. The doc exists after the setDoc above.
-        await updateDoc(scheduleRef, { weeklyLocations });
+        batch.update(scheduleRef, { weeklyLocations });
       }
+      await batch.commit();
     },
     [uid, schedule?.holidayMode]
   );

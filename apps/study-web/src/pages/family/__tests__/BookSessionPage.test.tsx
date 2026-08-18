@@ -495,6 +495,42 @@ describe('family BookSessionPage — location tags', () => {
     expect(Array.from(select.options).map((o) => o.value)).toEqual(['online', 'family_home']);
   });
 
+  it('maps a location_not_offered rejection to the noLocationForSlot message', async () => {
+    // The recurring weekly-cells check can diverge from the client's
+    // per-occurrence heuristic — the server's details.reason must surface as
+    // a location-specific message, not the generic "slot taken" one.
+    h.callable.mockImplementation((name: string) => {
+      if (name === 'getTutorAvailability') return Promise.resolve(availabilityPage());
+      if (name === 'bookSession')
+        return Promise.reject({
+          code: 'functions/invalid-argument',
+          details: { reason: 'location_not_offered' },
+        });
+      return Promise.resolve({ data: {} });
+    });
+    renderBook(fullState());
+    await armBooking();
+    fireEvent.click(screen.getByRole('button', { name: /^Book session$/i }));
+    expect(
+      await screen.findByText(/not open for any session location/i),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/just been taken/i)).toBeNull();
+  });
+
+  it('keeps the slotTaken message for an invalid-argument rejection without details', async () => {
+    h.callable.mockImplementation((name: string) => {
+      if (name === 'getTutorAvailability') return Promise.resolve(availabilityPage());
+      if (name === 'bookSession')
+        return Promise.reject({ code: 'functions/invalid-argument' });
+      return Promise.resolve({ data: {} });
+    });
+    renderBook(fullState());
+    await armBooking();
+    fireEvent.click(screen.getByRole('button', { name: /^Book session$/i }));
+    expect(await screen.findByText(/just been taken/i)).toBeInTheDocument();
+    expect(screen.queryByText(/not open for any session location/i)).toBeNull();
+  });
+
   it('shows the no-location note and disables booking on a disjoint span', async () => {
     h.callable.mockImplementation((name: string) => {
       if (name === 'getTutorAvailability')

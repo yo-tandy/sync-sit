@@ -464,14 +464,22 @@ export function BookSessionPage() {
       setSuccessOpen(true);
     } catch (err: unknown) {
       const code = (err as { code?: string })?.code ?? '';
+      const details = (err as { details?: { reason?: string } })?.details;
       if (code.includes('permission-denied')) {
         setAccessDenied(true);
       } else if (code.includes('invalid-argument')) {
-        // The slot was claimed between load and submit (or the recurring window
-        // yielded zero candidates) — refresh and ask for another time. We never
-        // quote the backend message.
+        // details.reason distinguishes "this location is not offered at this
+        // time" (per-slot tags, issue #166 — reachable when the recurring
+        // weekly-cells check diverges from the client's per-occurrence
+        // heuristic) from the slot being claimed between load and submit (or
+        // the recurring window yielding zero candidates). Either way refresh
+        // and ask for another time. We never quote the backend message.
         clearArmed();
-        setBookError(t('family.book.error.slotTaken'));
+        setBookError(
+          details?.reason === 'location_not_offered'
+            ? t('family.book.noLocationForSlot')
+            : t('family.book.error.slotTaken'),
+        );
         if (mode === 'weekly') setWeeklyDates(null);
         else loadAvailability(pageIndex);
       } else if (code.includes('already-exists')) {

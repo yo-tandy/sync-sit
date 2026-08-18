@@ -125,6 +125,7 @@ export default {
     // Per-slot location tags (issue #166)
     locationTags: {
       defaults: 'Préférences du profil',
+      mixed: "Ce créneau combine des choix de lieu différents. Choisissez une option pour l'appliquer à tout le créneau.",
       help: 'Optionnel : choisissez où les cours de chaque créneau peuvent avoir lieu. « Préférences du profil » utilise vos préférences de lieu de cours.',
       weeklyOnlyNote: "Les lieux par créneau s'appliquent uniquement à votre planning hebdomadaire régulier, pas aux dates modifiées ni aux plannings de vacances.",
     },

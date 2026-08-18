@@ -129,9 +129,18 @@ export function effectiveLocationsForSlot(
  * The session locations offerable for an armed WEEKLY slot: intersect the
  * per-occurrence effective sets across the loaded window's occurrences of
  * (day, start) whose whole range is bookable — mirroring deriveWeeklySlots'
- * occurrence filter. Approximate like the candidate heuristic itself (the
- * server validates a recurring series against its weekly cells); it can only
- * hide options, never offer one the covered occurrences exclude.
+ * occurrence filter.
+ *
+ * Approximate like the candidate heuristic itself: bookSession validates a
+ * recurring series against the WEEKLY cells ONLY (per-date overrides are not
+ * consulted server-side), while this intersection runs over per-DATE effective
+ * sets. It can never offer a location the covered occurrences exclude relative
+ * to those dates, but when every loaded occurrence falls on a tutor-authored
+ * override date (each resolving to profile defaults) — or none matches at all
+ * (the `acc ?? fallback` path) — the offer can exceed what the weekly-cells
+ * check accepts. The server then rejects with details.reason
+ * 'location_not_offered', which the page maps to the noLocationForSlot
+ * message.
  */
 export function effectiveLocationsForWeeklySlot(
   dates: { date: string; slots: boolean[]; locationRanges?: AvailabilityLocationRange[] }[],
