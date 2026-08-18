@@ -517,6 +517,28 @@ describe('family BookSessionPage — location tags', () => {
     expect(screen.queryByText(/just been taken/i)).toBeNull();
   });
 
+  it('maps a failed-precondition with location_not_offered to the noLocationForSlot message', async () => {
+    // The profile-prefs gate fires when a stored tag's location was later
+    // removed from the prefs — it stamps the same reason and must surface
+    // the location message, not the generic cannot-book one.
+    h.callable.mockImplementation((name: string) => {
+      if (name === 'getTutorAvailability') return Promise.resolve(availabilityPage());
+      if (name === 'bookSession')
+        return Promise.reject({
+          code: 'functions/failed-precondition',
+          details: { reason: 'location_not_offered' },
+        });
+      return Promise.resolve({ data: {} });
+    });
+    renderBook(fullState());
+    await armBooking();
+    fireEvent.click(screen.getByRole('button', { name: /^Book session$/i }));
+    expect(
+      await screen.findByText(/not open for any session location/i),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/could not be booked/i)).toBeNull();
+  });
+
   it('keeps the slotTaken message for an invalid-argument rejection without details', async () => {
     h.callable.mockImplementation((name: string) => {
       if (name === 'getTutorAvailability') return Promise.resolve(availabilityPage());

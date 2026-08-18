@@ -126,6 +126,7 @@ export default {
     locationTags: {
       defaults: 'Profile defaults',
       mixed: 'This range combines different location choices. Pick an option to apply it to the whole range.',
+      notOffered: 'This range is tagged with a location you no longer offer in your session preferences. It cannot be booked for that location — uncheck it or offer the location again.',
       help: 'Optional: choose where sessions in each time range can take place. "Profile defaults" uses your session location preferences.',
       weeklyOnlyNote: 'Per-range location choices apply to your regular weekly schedule only, not to date overrides or holiday schedules.',
     },

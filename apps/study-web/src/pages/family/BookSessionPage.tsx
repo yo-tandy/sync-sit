@@ -485,7 +485,14 @@ export function BookSessionPage() {
       } else if (code.includes('already-exists')) {
         setBookError(t('family.book.error.duplicate'));
       } else if (code.includes('failed-precondition')) {
-        setBookError(t('family.book.error.cannotBook'));
+        // The profile-prefs gate also stamps location_not_offered (a stored
+        // tag whose location was later removed from the prefs lands here) —
+        // show the location message rather than the generic cannot-book.
+        setBookError(
+          details?.reason === 'location_not_offered'
+            ? t('family.book.noLocationForSlot')
+            : t('family.book.error.cannotBook'),
+        );
       } else {
         setBookError(t('family.book.error.generic'));
       }

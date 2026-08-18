@@ -126,6 +126,7 @@ export default {
     locationTags: {
       defaults: 'Préférences du profil',
       mixed: "Ce créneau combine des choix de lieu différents. Choisissez une option pour l'appliquer à tout le créneau.",
+      notOffered: "Ce créneau est marqué avec un lieu que vous ne proposez plus dans vos préférences de cours. Il ne peut pas être réservé pour ce lieu — décochez-le ou proposez à nouveau ce lieu.",
       help: 'Optionnel : choisissez où les cours de chaque créneau peuvent avoir lieu. « Préférences du profil » utilise vos préférences de lieu de cours.',
       weeklyOnlyNote: "Les lieux par créneau s'appliquent uniquement à votre planning hebdomadaire régulier, pas aux dates modifiées ni aux plannings de vacances.",
     },

@@ -194,4 +194,38 @@ describe('tutor ProposeSessionPage — location tags', () => {
     // Both prefs remain; the armed set is canonicalized to LOCATION_PREFS order.
     expect(Array.from(select.options).map((o) => o.value)).toEqual(['family_home', 'online']);
   });
+
+  it('maps a location_not_offered rejection to the noLocationForSlot message', async () => {
+    // Reachable when the tutor submits before the schedule snapshot lands:
+    // the select offered the full prefs and the server rejected on the tags.
+    h.callable.mockImplementation((name: string) => {
+      if (name === 'proposeSession')
+        return Promise.reject({
+          code: 'functions/invalid-argument',
+          details: { reason: 'location_not_offered' },
+        });
+      return Promise.resolve({ data: {} });
+    });
+    renderWithProviders(<ProposeSessionPage />);
+    fireEvent.change(screen.getByLabelText(/date/i), { target: { value: FUTURE_MON } });
+    fireEvent.click(await screen.findByRole('button', { name: '16:00' }));
+    fireEvent.click(screen.getByRole('button', { name: /send proposal/i }));
+    expect(
+      await screen.findByText(/not open for any session location/i),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/isn't available\. Pick another\./)).toBeNull();
+  });
+
+  it('keeps the slotTaken message for an invalid-argument rejection without details', async () => {
+    h.callable.mockImplementation((name: string) => {
+      if (name === 'proposeSession')
+        return Promise.reject({ code: 'functions/invalid-argument' });
+      return Promise.resolve({ data: {} });
+    });
+    renderWithProviders(<ProposeSessionPage />);
+    fireEvent.change(screen.getByLabelText(/date/i), { target: { value: FUTURE_MON } });
+    fireEvent.click(await screen.findByRole('button', { name: '16:00' }));
+    fireEvent.click(screen.getByRole('button', { name: /send proposal/i }));
+    expect(await screen.findByText(/isn't available\. Pick another\./)).toBeInTheDocument();
+  });
 });

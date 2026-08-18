@@ -98,7 +98,14 @@ beforeEach(() => {
   h.auth.userDoc = {
     uid: 't1',
     email: 'login@ejm.org',
-    profiles: { tutor: { enrollmentComplete: true, ejemEmail: 'a@ejm.org' } },
+    profiles: {
+      tutor: {
+        enrollmentComplete: true,
+        ejemEmail: 'a@ejm.org',
+        // Chip options derive from the tutor's offered prefs (PR #185 r2).
+        locationPrefs: ['online', 'family_home'],
+      },
+    },
   };
   h.updateDoc.mockClear();
 });
@@ -221,6 +228,57 @@ describe('SchedulePage per-slot location tags', () => {
     expect(await screen.findByText('An error occurred')).toBeTruthy();
     // No success toast — the save did not go through.
     expect(screen.queryByText(/schedule saved/i)).toBeNull();
+  });
+
+  it('offers only chips for the tutor current location prefs', () => {
+    // Prefs are online+family_home: no chip for a location the tutor does
+    // not offer, so a tag can only narrow within the offered set.
+    renderSchedule();
+    openMondayEditor();
+    expect(onlineChip()).toBeTruthy();
+    expect(screen.getAllByRole('button', { name: "At the family's home" })[0]).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'At your home' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Library / public space' })).toBeNull();
+  });
+
+  it('keeps a stored outside-prefs tag visible and flagged, and preserves it on save', async () => {
+    // Prefs narrowed to online AFTER the range was tagged family_home: the
+    // stored tag renders as a checked-but-flagged chip with a hint (never
+    // silently dropped — #175 tolerance precedent), and saving without
+    // touching it preserves the cells.
+    (h.auth.userDoc as { profiles: { tutor: { locationPrefs: string[] } } }).profiles.tutor.locationPrefs =
+      ['online'];
+    h.schedule.weeklyLocations = { mon: monCells(['family_home']) };
+    renderSchedule();
+    openMondayEditor();
+    const flagged = screen.getAllByRole('button', { name: "At the family's home" })[0];
+    expect(flagged.getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByText(/no longer offer in your session preferences/i)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save Schedule' }));
+    await waitFor(() => {
+      expect(h.schedule.saveWeekly).toHaveBeenCalledWith(
+        expect.anything(),
+        { mon: monCells(['family_home']) },
+      );
+    });
+  });
+
+  it('unchecking a flagged outside-prefs tag removes it from the save', async () => {
+    (h.auth.userDoc as { profiles: { tutor: { locationPrefs: string[] } } }).profiles.tutor.locationPrefs =
+      ['online'];
+    h.schedule.weeklyLocations = { mon: monCells(['family_home']) };
+    renderSchedule();
+    openMondayEditor();
+    fireEvent.click(screen.getAllByRole('button', { name: "At the family's home" })[0]);
+    // Untagged back to defaults; the flagged chip and hint are gone.
+    expect(screen.queryByRole('button', { name: "At the family's home" })).toBeNull();
+    expect(screen.queryByText(/no longer offer in your session preferences/i)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save Schedule' }));
+    await waitFor(() => {
+      expect(h.schedule.saveWeekly).toHaveBeenCalledWith(expect.anything(), {});
+    });
   });
 
   it('untags a range back to defaults and saves without it', async () => {

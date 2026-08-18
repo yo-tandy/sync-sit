@@ -468,8 +468,13 @@ export function SchedulePage() {
                 value: p,
                 label: t(`tutor.account.sessionPrefs.location.${p}`),
               })),
+              // Chips narrow within what the tutor currently OFFERS (the live
+              // session-prefs state edited further down this page); a stored
+              // tag outside it renders checked-but-flagged, never dropped.
+              offeredValues: locationPrefs,
               defaultsLabel: t('schedule.locationTags.defaults'),
               mixedLabel: t('schedule.locationTags.mixed'),
+              notOfferedLabel: t('schedule.locationTags.notOffered'),
               helpText: t('schedule.locationTags.help'),
               initial: localWeeklyLocations[editingDay],
             }}

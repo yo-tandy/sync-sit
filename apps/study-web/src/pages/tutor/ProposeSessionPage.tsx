@@ -139,10 +139,17 @@ export function ProposeSessionPage() {
       setSuccessOpen(true);
     } catch (err: unknown) {
       const code = (err as { code?: string })?.code ?? '';
+      const details = (err as { details?: { reason?: string } })?.details;
       if (code.includes('invalid-argument')) {
-        // Slot taken (or otherwise unbookable) — never quote the backend message.
+        // details.reason distinguishes a per-slot location constraint
+        // (reachable when the tutor submits before the schedule snapshot
+        // lands) from a taken slot — never quote the backend message.
         setSelectedStart(null);
-        setProposeError(t('tutor.sessions.propose.error.slotTaken'));
+        setProposeError(
+          details?.reason === 'location_not_offered'
+            ? t('tutor.sessions.propose.noLocationForSlot')
+            : t('tutor.sessions.propose.error.slotTaken'),
+        );
       } else if (code.includes('already-exists')) {
         setProposeError(t('tutor.sessions.propose.error.duplicate'));
       } else if (code.includes('failed-precondition') || code.includes('permission-denied')) {

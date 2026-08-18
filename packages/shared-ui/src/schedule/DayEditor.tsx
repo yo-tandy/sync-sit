@@ -13,6 +13,14 @@ import type { DayOfWeek } from '@ejm/shared-core';
 export interface DayEditorLocationTags {
   /** Chip options for the location categories, labeled by the caller. */
   options: { value: string; label: string }[];
+  /**
+   * The values the tutor currently OFFERS (their profile locationPrefs). When
+   * set, unselected chips outside this list are hidden — tags can only narrow
+   * within what is offered — while a STORED tag outside it (prefs narrowed
+   * after tagging) stays visible as a checked-but-flagged chip so the dead
+   * state is seen rather than silently dropped. Absent = all options offered.
+   */
+  offeredValues?: string[];
   /** Label for the "profile defaults" (no override) chip. */
   defaultsLabel: string;
   /**
@@ -21,6 +29,12 @@ export interface DayEditorLocationTags {
    * cells stay untouched until the tutor actively picks a state.
    */
   mixedLabel?: string;
+  /**
+   * Hint shown when a range's selection carries a value outside
+   * `offeredValues` — the tag is kept (never silently dropped) but the range
+   * is not bookable for that location until it is unchecked or offered again.
+   */
+  notOfferedLabel?: string;
   /** Short helper line above the ranges list. */
   helpText?: string;
   /** Sparse initial per-cell tags for this day: slot index -> values. */
@@ -314,6 +328,18 @@ export function DayEditor({ day, slots: initialSlots, open, onClose, onSave, loc
             const rawSelection = locationTags ? rangeTagSelection(locMap, idxs) : [];
             const mixed = rawSelection === 'mixed';
             const selection = mixed ? [] : rawSelection;
+            const offered = locationTags?.offeredValues;
+            // Chips shown: offered values, plus any SELECTED value outside
+            // them (a stored tag whose location is no longer offered) —
+            // rendered flagged, never silently dropped.
+            const visibleOptions = locationTags
+              ? locationTags.options.filter(
+                  (opt) =>
+                    !offered || offered.includes(opt.value) || selection.includes(opt.value),
+                )
+              : [];
+            const hasNotOffered =
+              !!offered && selection.some((v) => !offered.includes(v));
             return (
               <div key={i} className="rounded-lg border border-gray-200 px-3 py-2">
                 <div className="flex items-center justify-between">
@@ -342,24 +368,36 @@ export function DayEditor({ day, slots: initialSlots, open, onClose, onSave, loc
                     >
                       {locationTags.defaultsLabel}
                     </button>
-                    {locationTags.options.map((opt) => (
-                      <button
-                        key={opt.value}
-                        type="button"
-                        aria-pressed={selection.includes(opt.value)}
-                        onClick={() => toggleRangeTag(idxs, opt.value)}
-                        className={`rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
-                          selection.includes(opt.value)
-                            ? 'border-brand-600 bg-brand-50 text-brand-600'
-                            : 'border-gray-300 text-gray-600 hover:border-gray-400'
-                        }`}
-                      >
-                        {opt.label}
-                      </button>
-                    ))}
+                    {visibleOptions.map((opt) => {
+                      const pressed = selection.includes(opt.value);
+                      const flagged =
+                        pressed && !!offered && !offered.includes(opt.value);
+                      return (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          aria-pressed={pressed}
+                          onClick={() => toggleRangeTag(idxs, opt.value)}
+                          className={`rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
+                            flagged
+                              ? 'border-amber-500 bg-amber-50 text-amber-700'
+                              : pressed
+                                ? 'border-brand-600 bg-brand-50 text-brand-600'
+                                : 'border-gray-300 text-gray-600 hover:border-gray-400'
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      );
+                    })}
                     {mixed && locationTags.mixedLabel && (
                       <span className="basis-full text-xs text-gray-500">
                         {locationTags.mixedLabel}
+                      </span>
+                    )}
+                    {hasNotOffered && locationTags.notOfferedLabel && (
+                      <span className="basis-full text-xs text-amber-700">
+                        {locationTags.notOfferedLabel}
                       </span>
                     )}
                   </div>
