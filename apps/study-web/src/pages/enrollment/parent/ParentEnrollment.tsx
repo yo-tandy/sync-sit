@@ -312,9 +312,16 @@ export function ParentEnrollment() {
         // form is filled, and the only rescue is resending from the verify
         // step (sit keeps back visible on every step for the same reason).
         // Straight to verify — the draft survives, it lives in this
-        // component. Add-profile users never held a code, so they keep the
-        // plain enrollment bar above.
-        <TopNav title={t('enrollment.parentTitle')} onBack={() => setStep(1)} />
+        // component. The error is cleared: a family-step rejection (e.g.
+        // profile-exists) must not leak under the code input. Add-profile
+        // users never held a code, so they keep the plain enrollment bar.
+        <TopNav
+          title={t('enrollment.parentTitle')}
+          onBack={() => {
+            setError(null);
+            setStep(1);
+          }}
+        />
       ) : (
         <>
           <TopNav
@@ -322,7 +329,10 @@ export function ParentEnrollment() {
             backTo={step === firstStep ? '/' : undefined}
             onBack={step > firstStep ? handleBack : undefined}
           />
-          <StepIndicator totalSteps={AUTH_STEPS} currentStep={step} />
+          {/* Add-profile enters at the consent step and can never reach the
+              credential steps below it — a 3-dot indicator would paint
+              unreachable steps, so it is hidden on that path. */}
+          {!isAddProfile && <StepIndicator totalSteps={AUTH_STEPS} currentStep={step} />}
         </>
       )}
       {renderStep()}

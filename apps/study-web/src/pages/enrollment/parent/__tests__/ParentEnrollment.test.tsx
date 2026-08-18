@@ -102,8 +102,11 @@ vi.mock('@ejm/shared-ui', () => ({
     </div>
   ),
   StepIndicator: ({ currentStep }: { currentStep: number }) => <div>step-{currentStep}</div>,
-  StepVerify: ({ onVerify, onResend }: { onVerify: (c: string) => void; onResend: () => void }) => (
+  // Renders its error prop like the real component (CodeInput surfaces it),
+  // so tests can pin that a family-step rejection doesn't leak back here.
+  StepVerify: ({ onVerify, onResend, error }: { onVerify: (c: string) => void; onResend: () => void; error?: string | null }) => (
     <div>
+      {error && <p>verify-error:{error}</p>}
       <button onClick={() => onVerify('123456')}>verify-submit</button>
       <button onClick={() => onResend()}>verify-resend</button>
     </div>
@@ -299,20 +302,28 @@ describe('ParentEnrollment orchestrator', () => {
     expect(enroll.payload).not.toHaveProperty('city');
   });
 
-  it('back from the family step returns to verify with the draft preserved (expired-code rescue)', async () => {
+  it('back from the family step returns to verify with the draft preserved and NO stale error (expired-code rescue)', async () => {
     renderFlow();
     fireEvent.click(screen.getByText('email-submit'));
     fireEvent.click(await screen.findByText('verify-submit'));
     fireEvent.click(await screen.findByText('password-submit'));
 
-    // Fill the family draft, then walk back via the TopNav arrow.
+    // Fill the draft and produce a family-step rejection first — the stale
+    // message must NOT follow the user back under the code input.
     fireEvent.click(await screen.findByText('family-fill'));
     expect(screen.getByText('family-name:Durand')).toBeInTheDocument();
+    h.errorReason = 'profile-exists';
+    fireEvent.click(screen.getByText('family-submit'));
+    expect(await screen.findByText(i18n.t('enrollment.alreadyInFamily'))).toBeInTheDocument();
+    h.errorReason = null;
+
     fireEvent.click(screen.getByText('top-back'));
 
     // Lands directly on the verify step (where the resend lives) — not on
-    // the password step.
+    // the password step — and the family-step error did not leak.
     expect(await screen.findByText('verify-submit')).toBeInTheDocument();
+    expect(screen.queryByText(/verify-error:/)).toBeNull();
+    expect(screen.queryByText(i18n.t('enrollment.alreadyInFamily'))).toBeNull();
 
     // Forward again: the draft survived the round trip because the
     // orchestrator owns it.
@@ -358,6 +369,9 @@ describe('ParentEnrollment orchestrator', () => {
     const passwordStep = await screen.findByTestId('step-password');
     expect(passwordStep).toHaveAttribute('data-collect', 'false');
     expect(screen.queryByText('email-submit')).toBeNull();
+    // No step indicator either — it would paint credential steps this path
+    // can never reach.
+    expect(screen.queryByText(/step-\d/)).toBeNull();
 
     fireEvent.click(passwordStep);
     // Add-profile family step keeps the app bar and gets NO back arrow —
