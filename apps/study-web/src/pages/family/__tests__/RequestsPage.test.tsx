@@ -13,7 +13,6 @@ const h = vi.hoisted(() => ({
   auth: { userDoc: null as unknown },
   requests: [] as Record<string, unknown>[],
   // references docs (this family's submitted endorsements).
-  refs: [] as Record<string, unknown>[],
   where: vi.fn((field: string, op: string, val: unknown) => ({ where: [field, op, val] })),
   orderBy: vi.fn((field: string, dir: string) => ({ orderBy: [field, dir] })),
   onSnapshot: vi.fn(),
@@ -82,22 +81,21 @@ function reset() {
     profiles: { parent: { enrollmentComplete: true, familyId: 'fam1' } },
   };
   h.requests = [];
-  h.refs = [];
   h.where.mockClear();
   h.orderBy.mockClear();
   h.listeners = {};
   h.unsubscribe.mockClear();
   h.onSnapshot.mockReset();
-  // Route by collection path: studyContactRequests => requests, references =>
-  // this family's submitted endorsements. Captures the listener per path,
-  // delivers the initial snapshot synchronously, and hands back the shared
-  // unsubscribe spy (asserted on unmount).
+  // Single listener (studyContactRequests) since the endorsements section
+  // moved to its own page (#191). Captures the listener, delivers the
+  // initial snapshot synchronously, and hands back the shared unsubscribe
+  // spy (asserted on unmount).
   h.onSnapshot.mockImplementation(
     (query: unknown, next: (snap: Snapshot) => void, error: (err: unknown) => void) => {
       const q = query as { query: { path: string }[] };
       const path = q?.query?.[0]?.path;
       h.listeners[path] = { query: q, next, error };
-      next(snapOf(path === 'references' ? h.refs : h.requests));
+      next(snapOf(h.requests));
       return h.unsubscribe;
     },
   );
@@ -156,10 +154,8 @@ describe('family RequestsPage', () => {
         const q = query as { query: { path: string }[] };
         const path = q?.query?.[0]?.path;
         h.listeners[path] = { query: q, next, error };
-        // The requests listener errors (e.g. PERMISSION_DENIED); the
-        // endorsements one delivers normally.
+        // The requests listener errors (e.g. PERMISSION_DENIED).
         if (path === 'studyContactRequests') error(new Error('permission-denied'));
-        else next(snapOf(h.refs));
         return h.unsubscribe;
       },
     );

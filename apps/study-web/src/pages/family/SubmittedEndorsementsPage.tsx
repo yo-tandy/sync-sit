@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
-import { collection, doc, onSnapshot, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
+import { collection, deleteField, doc, onSnapshot, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
 import { Badge, Button, Card, Dialog, Spinner, TopNav } from '@ejm/shared-ui';
 import { db } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
@@ -39,8 +39,9 @@ const createdAtSeconds = (v: TutorEndorsementDoc['createdAt']): number =>
 
 export function SubmittedEndorsementsPage() {
   const { t } = useTranslation();
-  const { userDoc } = useAuthStore();
+  const { userDoc, firebaseUser } = useAuthStore();
   const familyId = userDoc?.profiles?.parent?.familyId ?? null;
+  const uid = firebaseUser?.uid ?? null;
 
   const [rows, setRows] = useState<TutorEndorsementDoc[] | null>(null);
   const [loadError, setLoadError] = useState(false);
@@ -109,7 +110,7 @@ export function SubmittedEndorsementsPage() {
     try {
       await updateDoc(doc(db, 'references', editTarget.referenceId), {
         referenceText: editText.trim(),
-        refName: editRefName.trim() || null,
+        refName: editRefName.trim() || deleteField(),
         updatedAt: serverTimestamp(),
       });
       setEditTarget(null);
@@ -140,7 +141,11 @@ export function SubmittedEndorsementsPage() {
     }
   }, [withdrawTarget]);
 
-  const visibleRows = useMemo(() => (rows ?? []).filter((r) => r.status !== 'removed'), [rows]);
+  // Removed rows stay VISIBLE (chip only, no actions): the submit callable
+  // de-dupes per (tutor, family) with no status filter, so a withdrawn
+  // endorsement cannot be re-submitted — hiding it would leave the family
+  // with an invisible, unrecoverable state (PR #195 review).
+  const visibleRows = rows ?? [];
 
   return (
     <div>
@@ -152,13 +157,13 @@ export function SubmittedEndorsementsPage() {
           </Card>
         )}
 
-        {!loadError && rows === null && (
+        {!loadError && familyId != null && rows === null && (
           <div className="flex justify-center pt-12">
             <Spinner className="h-6 w-6 text-brand-600" />
           </div>
         )}
 
-        {!loadError && rows !== null && visibleRows.length === 0 && (
+        {!loadError && (!familyId || (rows !== null && visibleRows.length === 0)) && (
           <div className="pt-10 text-center">
             <h3 className="mb-2 text-lg font-semibold">{t('family.endorsements.empty')}</h3>
             <p className="mb-5 text-sm text-gray-500">{t('family.endorsements.emptyDesc')}</p>
@@ -183,7 +188,7 @@ export function SubmittedEndorsementsPage() {
                   {t(`family.endorsements.status.${row.status}`)}
                 </Badge>
               </div>
-              {row.status === 'private' && (
+              {row.status === 'private' && row.submittedByUserId === uid && (
                 <div className="mt-3 flex gap-2">
                   <Button size="sm" variant="outline" onClick={() => openEdit(row)}>
                     {t('family.endorsements.edit')}

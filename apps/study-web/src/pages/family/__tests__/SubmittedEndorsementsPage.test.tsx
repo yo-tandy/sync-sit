@@ -11,6 +11,7 @@ const h = vi.hoisted(() => ({
     userDoc: {
       profiles: { parent: { familyId: 'fam1', enrollmentComplete: true } },
     } as Record<string, unknown> | null,
+    firebaseUser: { uid: 'p1' } as { uid: string } | null,
   },
   endorsementDocs: [] as Record<string, unknown>[],
   requestDocs: [] as Record<string, unknown>[],
@@ -39,6 +40,7 @@ vi.mock('firebase/firestore', () => ({
   doc: (_db: unknown, ...path: string[]) => ({ path: path.join('/') }),
   updateDoc: (...args: unknown[]) => h.updateDoc(...args),
   serverTimestamp: () => 'SERVER_TS',
+  deleteField: () => 'DELETE_FIELD',
 }));
 
 vi.mock('@/stores/authStore', () => ({
@@ -74,6 +76,7 @@ beforeEach(() => {
     { requestId: 'r1', tutorUserId: 't1', familyId: 'fam1', tutorName: 'Alex Roy', status: 'accepted' },
   ];
   h.auth.userDoc = { profiles: { parent: { familyId: 'fam1', enrollmentComplete: true } } };
+  h.auth.firebaseUser = { uid: 'p1' };
 });
 
 describe('family SubmittedEndorsementsPage', () => {
@@ -150,11 +153,38 @@ describe('family SubmittedEndorsementsPage', () => {
     expect(newer.compareDocumentPosition(older) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it('hides withdrawn endorsements and shows the empty state linking the requests page', () => {
+  it('keeps withdrawn endorsements visible with the removed chip and no actions (no dead end)', () => {
+    // The submit callable de-dupes per (tutor, family) regardless of status,
+    // so a withdrawn endorsement cannot be re-submitted — it must stay
+    // visible or the family is left with an invisible, unrecoverable state.
     h.endorsementDocs = [endorsement({ status: 'removed' })];
     renderWithProviders(<SubmittedEndorsementsPage />);
+    expect(screen.getByText('Removed')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Edit' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Withdraw' })).toBeNull();
+    expect(screen.queryByText('No endorsements yet')).toBeNull();
+  });
+
+  it('shows the empty state (not a spinner) when there are no endorsements at all', () => {
+    renderWithProviders(<SubmittedEndorsementsPage />);
     expect(screen.getByText('No endorsements yet')).toBeInTheDocument();
-    const link = screen.getByRole('link', { name: 'Go to your requests' });
-    expect(link).toHaveAttribute('href', '/family/requests');
+    expect(screen.getByRole('link', { name: 'Go to your requests' })).toHaveAttribute(
+      'href',
+      '/family/requests',
+    );
+  });
+
+  it('shows the empty state, never an infinite spinner, for a parent with no familyId', () => {
+    h.auth.userDoc = { profiles: { parent: { enrollmentComplete: false } } };
+    renderWithProviders(<SubmittedEndorsementsPage />);
+    expect(screen.getByText('No endorsements yet')).toBeInTheDocument();
+  });
+
+  it('offers no actions on a co-parent\'s private endorsement (rules require the submitter)', () => {
+    h.endorsementDocs = [endorsement({ submittedByUserId: 'other-parent' })];
+    renderWithProviders(<SubmittedEndorsementsPage />);
+    expect(screen.getByText(/Wonderful with our daughter/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Edit' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Withdraw' })).toBeNull();
   });
 });
