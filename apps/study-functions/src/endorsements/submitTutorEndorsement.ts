@@ -110,8 +110,9 @@ export const submitTutorEndorsement = onCall(
         'study',
       );
     }
+    let pushSent = false;
     if (refsPrefs.push !== false) {
-      await sendPushNotification(
+      pushSent = await sendPushNotification(
         tutorUserId,
         'New endorsement received',
         `${submitterLabel} has submitted an endorsement for you.`,
@@ -128,7 +129,7 @@ export const submitTutorEndorsement = onCall(
       read: false,
       channels: ['email', 'push'],
       emailSent: refsPrefs.email !== false,
-      pushSent: false,
+      pushSent,
       createdAt: now,
     });
 

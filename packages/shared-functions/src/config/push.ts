@@ -13,6 +13,8 @@ const PUSH_BRANDING: Record<NotificationApp, { icon: string; link: string }> = {
  * Loads their fcmTokens from Firestore and sends to all tokens.
  * Handles invalid tokens by removing them.
  * Fails silently — push failures should not block user actions.
+ * Returns whether at least one token was actually delivered to, so callers
+ * can record an honest pushSent audit field.
  */
 export async function sendPushNotification(
   userId: string,
@@ -20,12 +22,12 @@ export async function sendPushNotification(
   body: string,
   data?: Record<string, string>,
   app: NotificationApp = 'sit'
-): Promise<void> {
+): Promise<boolean> {
   try {
     const userDoc = await db.collection('users').doc(userId).get();
     const tokens: string[] = userDoc.data()?.fcmTokens || [];
 
-    if (tokens.length === 0) return;
+    if (tokens.length === 0) return false;
 
     const { icon, link } = PUSH_BRANDING[app];
 
@@ -71,8 +73,11 @@ export async function sendPushNotification(
         console.log(`Removed ${invalidTokens.length} invalid FCM tokens for user ${userId}`);
       }
     }
+
+    return response.successCount > 0;
   } catch (err) {
     console.error(`Failed to send push notification to ${userId}:`, err);
     // Don't throw — push failures should not block
+    return false;
   }
 }

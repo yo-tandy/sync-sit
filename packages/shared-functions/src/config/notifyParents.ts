@@ -46,9 +46,10 @@ export async function notifyAllParents(notification: ParentNotification): Promis
       await sendNotificationEmail(parentData.email, emailSubject, emailBody, app);
     }
 
-    // Push
+    // Push — record the actual delivery outcome, not an assumption.
+    let pushSent = false;
     if (prefs?.push !== false) {
-      await sendPushNotification(parentId, title, body, { ...data, type }, app);
+      pushSent = await sendPushNotification(parentId, title, body, { ...data, type }, app);
     }
 
     // In-app notification
@@ -61,7 +62,7 @@ export async function notifyAllParents(notification: ParentNotification): Promis
       read: false,
       channels: ['email', 'push'],
       emailSent: prefs?.email !== false,
-      pushSent: false,
+      pushSent,
       createdAt: now,
     });
   }

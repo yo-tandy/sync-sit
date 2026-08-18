@@ -153,8 +153,9 @@ export const sendTutorContactRequest = onCall(
     if (notifPrefs?.email !== false && tutorUser.email) {
       await sendNotificationEmail(tutorUser.email, `New tutoring request from ${familyName || 'a family'}`, emailBody, 'study');
     }
+    let pushSent = false;
     if (notifPrefs?.push !== false) {
-      await sendPushNotification(tutorUserId, title, body, { requestId: requestRef.id, type: 'study_contact_request' }, 'study');
+      pushSent = await sendPushNotification(tutorUserId, title, body, { requestId: requestRef.id, type: 'study_contact_request' }, 'study');
     }
     await db.collection('notifications').add({
       recipientUserId: tutorUserId,
@@ -165,7 +166,7 @@ export const sendTutorContactRequest = onCall(
       read: false,
       channels: ['email', 'push'],
       emailSent: notifPrefs?.email !== false,
-      pushSent: false,
+      pushSent,
       createdAt: now,
     });
 

@@ -255,19 +255,6 @@ export const cancelSession = onCall(
       const title = isSeries ? 'Recurring sessions cancelled' : 'Session cancelled';
       const body = `${familyName} cancelled ${isSeries ? 'the recurring series' : `the session for ${whenInfo}`}. Reason: ${reason}${lateSuffix}`;
 
-      await db.collection('notifications').add({
-        recipientUserId: tutorUserId,
-        type: 'study_session_cancelled',
-        title,
-        body,
-        data: { sessionId },
-        read: false,
-        channels: ['email', 'push'],
-        emailSent: cancelPrefs?.email !== false,
-        pushSent: false,
-        createdAt: now,
-      });
-
       if (cancelPrefs?.email !== false && tutorEmail) {
         await sendNotificationEmail(
           tutorEmail,
@@ -282,12 +269,27 @@ export const cancelSession = onCall(
           'study',
         );
       }
+      // Send push before the doc write so pushSent records the real outcome.
+      let pushSent = false;
       if (cancelPrefs?.push !== false) {
-        await sendPushNotification(tutorUserId, title, body, {
+        pushSent = await sendPushNotification(tutorUserId, title, body, {
           sessionId,
           type: 'study_session_cancelled',
         }, 'study');
       }
+
+      await db.collection('notifications').add({
+        recipientUserId: tutorUserId,
+        type: 'study_session_cancelled',
+        title,
+        body,
+        data: { sessionId },
+        read: false,
+        channels: ['email', 'push'],
+        emailSent: cancelPrefs?.email !== false,
+        pushSent,
+        createdAt: now,
+      });
     } else {
       // Tutor cancelled → notify every parent in the family (cancelled prefs).
       const tutorName = (session.tutorName as string) || 'Your tutor';

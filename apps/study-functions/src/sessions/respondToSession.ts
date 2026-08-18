@@ -626,18 +626,6 @@ export const respondToSession = onCall(
       const body = isConfirm
         ? `${familyName} accepted your session proposal.`
         : `${familyName} declined your session proposal.`;
-      await db.collection('notifications').add({
-        recipientUserId: outcome.tutorUserId,
-        type: notifType,
-        title,
-        body,
-        data: { sessionId },
-        read: false,
-        channels: ['email', 'push'],
-        emailSent: prefs?.email !== false,
-        pushSent: false,
-        createdAt: now,
-      });
       if (prefs?.email !== false && tutorEmail) {
         await sendNotificationEmail(
           tutorEmail,
@@ -647,9 +635,23 @@ export const respondToSession = onCall(
           'study',
         );
       }
+      // Send push before the doc write so pushSent records the real outcome.
+      let pushSent = false;
       if (prefs?.push !== false) {
-        await sendPushNotification(outcome.tutorUserId, title, body, { sessionId, type: notifType }, 'study');
+        pushSent = await sendPushNotification(outcome.tutorUserId, title, body, { sessionId, type: notifType }, 'study');
       }
+      await db.collection('notifications').add({
+        recipientUserId: outcome.tutorUserId,
+        type: notifType,
+        title,
+        body,
+        data: { sessionId },
+        read: false,
+        channels: ['email', 'push'],
+        emailSent: prefs?.email !== false,
+        pushSent,
+        createdAt: now,
+      });
     } else if (outcome.action === 'confirm' && outcome.type === 'recurring') {
       const count = outcome.scheduledDates.length;
       const first = outcome.scheduledDates[0];

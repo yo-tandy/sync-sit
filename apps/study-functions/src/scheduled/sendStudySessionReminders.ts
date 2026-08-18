@@ -69,18 +69,6 @@ async function notifyBothSides(
     `${tutorData?.firstName || ''} ${tutorData?.lastName || ''}`.trim() ||
     'your tutor';
 
-  await firestoreDb.collection('notifications').add({
-    recipientUserId: t.tutorUserId,
-    type: 'study_session_reminder',
-    title: 'Tutoring session tomorrow',
-    body: `Reminder: your ${subject} session is on ${when}.`,
-    data,
-    read: false,
-    channels: ['email', 'push'],
-    emailSent: rp?.email !== false,
-    pushSent: false,
-    createdAt: now,
-  });
   if (rp?.email !== false && tutorEmail) {
     await sendNotificationEmail(
       tutorEmail,
@@ -90,8 +78,10 @@ async function notifyBothSides(
       'study',
     );
   }
+  // Send push before the doc write so pushSent records the real outcome.
+  let pushSent = false;
   if (rp?.push !== false) {
-    await sendPushNotification(
+    pushSent = await sendPushNotification(
       t.tutorUserId,
       'Tutoring session tomorrow',
       `Reminder: your ${subject} session is on ${when}.`,
@@ -99,6 +89,18 @@ async function notifyBothSides(
       'study',
     );
   }
+  await firestoreDb.collection('notifications').add({
+    recipientUserId: t.tutorUserId,
+    type: 'study_session_reminder',
+    title: 'Tutoring session tomorrow',
+    body: `Reminder: your ${subject} session is on ${when}.`,
+    data,
+    read: false,
+    channels: ['email', 'push'],
+    emailSent: rp?.email !== false,
+    pushSent,
+    createdAt: now,
+  });
 
   // ── Family side (all parents) ──
   await notifyAllParents({

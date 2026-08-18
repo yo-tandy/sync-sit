@@ -404,8 +404,9 @@ export const bookSession = onCall(
         'study',
       );
     }
+    let pushSent = false;
     if (notifPrefs?.push !== false) {
-      await sendPushNotification(tutorUserId, title, body, {
+      pushSent = await sendPushNotification(tutorUserId, title, body, {
         sessionId: sessionRef.id,
         type: 'study_session_request',
       }, 'study');
@@ -419,7 +420,7 @@ export const bookSession = onCall(
       read: false,
       channels: ['email', 'push'],
       emailSent: notifPrefs?.email !== false,
-      pushSent: false,
+      pushSent,
       createdAt: now,
     });
 

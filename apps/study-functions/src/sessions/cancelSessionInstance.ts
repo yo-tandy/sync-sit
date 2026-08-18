@@ -196,19 +196,6 @@ export const cancelSessionInstance = onCall(
       const title = 'Session cancelled';
       const body = `${familyName} cancelled the session on ${whenInfo}. Reason: ${reason}${lateSuffix}`;
 
-      await db.collection('notifications').add({
-        recipientUserId: tutorUserId,
-        type: 'study_session_cancelled',
-        title,
-        body,
-        data: { sessionId, instanceId },
-        read: false,
-        channels: ['email', 'push'],
-        emailSent: cancelPrefs?.email !== false,
-        pushSent: false,
-        createdAt: now,
-      });
-
       if (cancelPrefs?.email !== false && tutorEmail) {
         await sendNotificationEmail(
           tutorEmail,
@@ -221,13 +208,28 @@ export const cancelSessionInstance = onCall(
           'study',
         );
       }
+      // Send push before the doc write so pushSent records the real outcome.
+      let pushSent = false;
       if (cancelPrefs?.push !== false) {
-        await sendPushNotification(tutorUserId, title, body, {
+        pushSent = await sendPushNotification(tutorUserId, title, body, {
           sessionId,
           instanceId,
           type: 'study_session_cancelled',
         }, 'study');
       }
+
+      await db.collection('notifications').add({
+        recipientUserId: tutorUserId,
+        type: 'study_session_cancelled',
+        title,
+        body,
+        data: { sessionId, instanceId },
+        read: false,
+        channels: ['email', 'push'],
+        emailSent: cancelPrefs?.email !== false,
+        pushSent,
+        createdAt: now,
+      });
     } else {
       // Tutor cancelled → notify every parent in the family (cancelled prefs).
       const tutorName = (session.tutorName as string) || 'Your tutor';
