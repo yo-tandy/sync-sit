@@ -401,13 +401,15 @@ export const bookSession = onCall(
         tutorUser.email,
         `New session request from ${familyName || 'a family'}`,
         emailBody,
+        'study',
       );
     }
+    let pushSent = false;
     if (notifPrefs?.push !== false) {
-      await sendPushNotification(tutorUserId, title, body, {
+      pushSent = await sendPushNotification(tutorUserId, title, body, {
         sessionId: sessionRef.id,
         type: 'study_session_request',
-      });
+      }, 'study');
     }
     await db.collection('notifications').add({
       recipientUserId: tutorUserId,
@@ -418,7 +420,7 @@ export const bookSession = onCall(
       read: false,
       channels: ['email', 'push'],
       emailSent: notifPrefs?.email !== false,
-      pushSent: false,
+      pushSent,
       createdAt: now,
     });
 

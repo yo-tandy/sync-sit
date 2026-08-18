@@ -98,6 +98,7 @@ export const respondToTutorContactRequest = onCall(
       await notifyAllParents({
         familyId: result.familyId,
         prefCategory: 'confirmed',
+        app: 'study',
         type: 'study_request_accepted',
         title: 'Tutoring request accepted',
         body: `${tutorName} accepted your tutoring request.`,
@@ -113,6 +114,7 @@ export const respondToTutorContactRequest = onCall(
       await notifyAllParents({
         familyId: result.familyId,
         prefCategory: 'cancelled',
+        app: 'study',
         type: 'study_request_declined',
         title: 'Tutoring request declined',
         body: `${tutorName} declined your tutoring request.`,

@@ -254,6 +254,7 @@ async function extendOne(
     await notifyAllParents({
       familyId,
       prefCategory: 'cancelled',
+      app: 'study',
       type: 'study_session_cancelled',
       title: 'A recurring session could not be scheduled',
       body: `Some upcoming sessions could not be scheduled (${dates}).`,

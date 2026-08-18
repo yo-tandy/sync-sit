@@ -69,6 +69,26 @@ async function notifyBothSides(
     `${tutorData?.firstName || ''} ${tutorData?.lastName || ''}`.trim() ||
     'your tutor';
 
+  if (rp?.email !== false && tutorEmail) {
+    await sendNotificationEmail(
+      tutorEmail,
+      'Tutoring session tomorrow',
+      `<p>Reminder: you have a <strong>${subject}</strong> session on <strong>${when}</strong>.</p>
+       <p style="margin-top: 16px;"><a href="https://sync-study.com/tutor" style="background: #2563EB; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View in app</a></p>`,
+      'study',
+    );
+  }
+  // Send push before the doc write so pushSent records the real outcome.
+  let pushSent = false;
+  if (rp?.push !== false) {
+    pushSent = await sendPushNotification(
+      t.tutorUserId,
+      'Tutoring session tomorrow',
+      `Reminder: your ${subject} session is on ${when}.`,
+      data,
+      'study',
+    );
+  }
   await firestoreDb.collection('notifications').add({
     recipientUserId: t.tutorUserId,
     type: 'study_session_reminder',
@@ -78,30 +98,15 @@ async function notifyBothSides(
     read: false,
     channels: ['email', 'push'],
     emailSent: rp?.email !== false,
-    pushSent: false,
+    pushSent,
     createdAt: now,
   });
-  if (rp?.email !== false && tutorEmail) {
-    await sendNotificationEmail(
-      tutorEmail,
-      'Tutoring session tomorrow',
-      `<p>Reminder: you have a <strong>${subject}</strong> session on <strong>${when}</strong>.</p>
-       <p style="margin-top: 16px;"><a href="https://sync-study.com/tutor" style="background: #2563EB; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View in app</a></p>`,
-    );
-  }
-  if (rp?.push !== false) {
-    await sendPushNotification(
-      t.tutorUserId,
-      'Tutoring session tomorrow',
-      `Reminder: your ${subject} session is on ${when}.`,
-      data,
-    );
-  }
 
   // ── Family side (all parents) ──
   await notifyAllParents({
     familyId: t.familyId,
     prefCategory: 'reminders',
+    app: 'study',
     type: 'study_session_reminder',
     title: 'Tutoring session tomorrow',
     body: `Reminder: your ${subject} session with ${tutorName} is on ${when}.`,

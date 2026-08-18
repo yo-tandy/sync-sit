@@ -106,6 +106,26 @@ describe('family AccountPage', () => {
     expect(keys.some((k) => k.includes('push'))).toBe(false);
   });
 
+  it('renders exactly the family scenario list: proposals, confirmation, cancellation, reminders, endorsements', () => {
+    renderWithProviders(<AccountPage />);
+    // Tutor-initiated proposals arrive under newRequest — without this row the
+    // category was unmutable from study-web (issue #168 Phase 0).
+    const labels = ['Session proposals', 'Confirmation', 'Cancellation', 'Reminder', 'Endorsements'];
+    for (const label of labels) {
+      expect(screen.getByRole('button', { name: label })).toBeInTheDocument();
+    }
+  });
+
+  it('toggling the endorsements row writes the references email dot-path', async () => {
+    renderWithProviders(<AccountPage />);
+    // references is absent from the stored prefs → treated as email-on; the
+    // first toggle turns it off.
+    fireEvent.click(screen.getByRole('button', { name: 'Endorsements' }));
+    await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
+    const payload = h.updateDoc.mock.calls[0][1] as Record<string, unknown>;
+    expect(payload).toHaveProperty('notifPrefs.references.email', false);
+  });
+
   it('sends a password reset email to the login address', async () => {
     renderWithProviders(<AccountPage />);
     fireEvent.click(screen.getByRole('button', { name: /password reset/i }));

@@ -60,12 +60,18 @@ export default {
     emailOnlyDesc: 'Choose which email notifications you want to receive.',
     newRequest: 'New request',
     newRequestDesc: 'When a family sends you a tutoring request',
+    proposal: 'Session proposals',
+    proposalDesc: 'When your tutor proposes a session',
     confirmation: 'Confirmation',
     confirmationDesc: 'When a tutor accepts your request',
+    confirmationTutorDesc: 'When a family accepts a session or one of your proposals',
     cancellation: 'Cancellation',
     cancellationDesc: 'When a session is cancelled',
     reminder: 'Reminder',
     reminderDesc: '24 hours before a scheduled session',
+    endorsement: 'Endorsements',
+    endorsementFamilyDesc: 'Updates about endorsements you submitted',
+    endorsementTutorDesc: 'When someone submits an endorsement for you',
   },
 
   schedule: {

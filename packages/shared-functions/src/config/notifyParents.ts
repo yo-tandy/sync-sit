@@ -1,13 +1,16 @@
 import { db } from './firebase.js';
 import { sendNotificationEmail } from './email.js';
+import type { NotificationApp } from './email.js';
 import { sendPushNotification } from './push.js';
 
-type NotifPrefCategory = 'newRequest' | 'confirmed' | 'cancelled' | 'reminders';
+type NotifPrefCategory = 'newRequest' | 'confirmed' | 'cancelled' | 'reminders' | 'references';
 
 interface ParentNotification {
   familyId: string;
   /** Which notifPrefs category to check (e.g. 'cancelled', 'confirmed') */
   prefCategory: NotifPrefCategory;
+  /** Which app's branding the email/push carry (default 'sit') */
+  app?: NotificationApp;
   /** Notification type stored in the notification doc */
   type: string;
   title: string;
@@ -25,7 +28,7 @@ interface ParentNotification {
  * Respects each parent's individual notification preferences.
  */
 export async function notifyAllParents(notification: ParentNotification): Promise<void> {
-  const { familyId, prefCategory, type, title, body, emailSubject, emailBody, data } = notification;
+  const { familyId, prefCategory, type, title, body, emailSubject, emailBody, data, app = 'sit' } = notification;
 
   const familyDoc = await db.collection('families').doc(familyId).get();
   const parentIds: string[] = familyDoc.data()?.parentIds || [];
@@ -40,12 +43,13 @@ export async function notifyAllParents(notification: ParentNotification): Promis
 
     // Email
     if (prefs?.email !== false && parentData.email) {
-      await sendNotificationEmail(parentData.email, emailSubject, emailBody);
+      await sendNotificationEmail(parentData.email, emailSubject, emailBody, app);
     }
 
-    // Push
+    // Push — record the actual delivery outcome, not an assumption.
+    let pushSent = false;
     if (prefs?.push !== false) {
-      await sendPushNotification(parentId, title, body, { ...data, type });
+      pushSent = await sendPushNotification(parentId, title, body, { ...data, type }, app);
     }
 
     // In-app notification
@@ -58,7 +62,7 @@ export async function notifyAllParents(notification: ParentNotification): Promis
       read: false,
       channels: ['email', 'push'],
       emailSent: prefs?.email !== false,
-      pushSent: false,
+      pushSent,
       createdAt: now,
     });
   }

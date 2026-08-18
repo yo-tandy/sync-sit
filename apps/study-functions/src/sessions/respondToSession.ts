@@ -598,6 +598,7 @@ export const respondToSession = onCall(
       await notifyAllParents({
         familyId: ad.familyId,
         prefCategory: 'cancelled',
+        app: 'study',
         type: 'study_session_declined',
         title: 'Session no longer available',
         body: `That time with ${tutorName} is no longer available.`,
@@ -625,6 +626,20 @@ export const respondToSession = onCall(
       const body = isConfirm
         ? `${familyName} accepted your session proposal.`
         : `${familyName} declined your session proposal.`;
+      if (prefs?.email !== false && tutorEmail) {
+        await sendNotificationEmail(
+          tutorEmail,
+          title,
+          `<p><strong>${familyName}</strong> ${isConfirm ? 'accepted' : 'declined'} your session proposal.</p>
+           <p style="margin-top: 16px;"><a href="https://sync-study.com/tutor/sessions" style="background: #2563EB; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View in app</a></p>`,
+          'study',
+        );
+      }
+      // Send push before the doc write so pushSent records the real outcome.
+      let pushSent = false;
+      if (prefs?.push !== false) {
+        pushSent = await sendPushNotification(outcome.tutorUserId, title, body, { sessionId, type: notifType }, 'study');
+      }
       await db.collection('notifications').add({
         recipientUserId: outcome.tutorUserId,
         type: notifType,
@@ -634,20 +649,9 @@ export const respondToSession = onCall(
         read: false,
         channels: ['email', 'push'],
         emailSent: prefs?.email !== false,
-        pushSent: false,
+        pushSent,
         createdAt: now,
       });
-      if (prefs?.email !== false && tutorEmail) {
-        await sendNotificationEmail(
-          tutorEmail,
-          title,
-          `<p><strong>${familyName}</strong> ${isConfirm ? 'accepted' : 'declined'} your session proposal.</p>
-           <p style="margin-top: 16px;"><a href="https://sync-study.com/tutor/sessions" style="background: #2563EB; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View in app</a></p>`,
-        );
-      }
-      if (prefs?.push !== false) {
-        await sendPushNotification(outcome.tutorUserId, title, body, { sessionId, type: notifType });
-      }
     } else if (outcome.action === 'confirm' && outcome.type === 'recurring') {
       const count = outcome.scheduledDates.length;
       const first = outcome.scheduledDates[0];
@@ -657,6 +661,7 @@ export const respondToSession = onCall(
       await notifyAllParents({
         familyId: outcome.familyId,
         prefCategory: 'confirmed',
+        app: 'study',
         type: 'study_session_confirmed',
         title: 'Recurring sessions confirmed',
         body: `${tutorName} confirmed your recurring tutoring sessions.`,
@@ -673,6 +678,7 @@ export const respondToSession = onCall(
       await notifyAllParents({
         familyId: outcome.familyId,
         prefCategory: 'confirmed',
+        app: 'study',
         type: 'study_session_confirmed',
         title: 'Session confirmed',
         body: `${tutorName} confirmed your tutoring session.`,
@@ -687,6 +693,7 @@ export const respondToSession = onCall(
       await notifyAllParents({
         familyId: outcome.familyId,
         prefCategory: 'cancelled',
+        app: 'study',
         type: 'study_session_declined',
         title: 'Session declined',
         body: `${tutorName} declined your tutoring session request.`,

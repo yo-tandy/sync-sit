@@ -43,11 +43,15 @@ import {
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
 const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
 
-// Email-only notification scenarios relevant to tutors.
+// Email-only notification scenarios relevant to tutors. `confirmed` gates
+// "family accepted your session/proposal" (respondToSession) and `references`
+// gates "someone submitted an endorsement for you" (submitTutorEndorsement).
 const SCENARIOS: { key: keyof NotifPrefs; labelKey: string; descKey: string }[] = [
   { key: 'newRequest', labelKey: 'notifications.newRequest', descKey: 'notifications.newRequestDesc' },
+  { key: 'confirmed', labelKey: 'notifications.confirmation', descKey: 'notifications.confirmationTutorDesc' },
   { key: 'cancelled', labelKey: 'notifications.cancellation', descKey: 'notifications.cancellationDesc' },
   { key: 'reminders', labelKey: 'notifications.reminder', descKey: 'notifications.reminderDesc' },
+  { key: 'references', labelKey: 'notifications.endorsement', descKey: 'notifications.endorsementTutorDesc' },
 ];
 
 export function AccountPage() {
@@ -300,28 +304,35 @@ export function AccountPage() {
     }
   };
 
-  // --- Notification prefs (email channel only) ---
-  const savePrefs = useCallback(async (updated: NotifPrefs) => {
-    if (!uid) return;
-    try {
+  // --- Notification prefs (email channel only — no FCM in study-web yet) ---
+  // Write ONLY the single email channel via a dot-path. A full-object
+  // `notifPrefs` write would clobber the push.* values the sit app may have
+  // written after this page mounted (push channels are not editable here, so
+  // our in-memory `prefs.push` can be stale). Mirrors the family AccountPage.
+  const savePrefs = useCallback(
+    async (scenario: keyof NotifPrefs, email: boolean) => {
+      if (!uid) return;
       await updateDoc(doc(db, 'users', uid), {
-        notifPrefs: updated,
+        [`notifPrefs.${scenario}.email`]: email,
         updatedAt: serverTimestamp(),
       });
       await refreshUserDoc();
-    } catch {
-      // silent
-    }
-  }, [uid, refreshUserDoc]);
+    },
+    [uid, refreshUserDoc],
+  );
 
-  const toggleEmail = (scenario: keyof NotifPrefs) => {
+  const toggleEmail = async (scenario: keyof NotifPrefs) => {
+    const previous = prefs;
     const current = prefs[scenario] || { push: false, email: true };
-    const updated = {
-      ...prefs,
-      [scenario]: { ...current, email: !current.email },
-    };
-    setPrefs(updated);
-    savePrefs(updated);
+    const next = !current.email;
+    setPrefs({ ...prefs, [scenario]: { ...current, email: next } });
+    try {
+      await savePrefs(scenario, next);
+    } catch {
+      // Revert the optimistic toggle and surface the failure.
+      setPrefs(previous);
+      setError(t('account.notifSaveFailed'));
+    }
   };
 
   return (

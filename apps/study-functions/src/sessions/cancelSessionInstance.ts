@@ -196,19 +196,6 @@ export const cancelSessionInstance = onCall(
       const title = 'Session cancelled';
       const body = `${familyName} cancelled the session on ${whenInfo}. Reason: ${reason}${lateSuffix}`;
 
-      await db.collection('notifications').add({
-        recipientUserId: tutorUserId,
-        type: 'study_session_cancelled',
-        title,
-        body,
-        data: { sessionId, instanceId },
-        read: false,
-        channels: ['email', 'push'],
-        emailSent: cancelPrefs?.email !== false,
-        pushSent: false,
-        createdAt: now,
-      });
-
       if (cancelPrefs?.email !== false && tutorEmail) {
         await sendNotificationEmail(
           tutorEmail,
@@ -218,21 +205,38 @@ export const cancelSessionInstance = onCall(
            <p><strong>Reason:</strong> ${reason}</p>
            ${latePolicyNote}
            <p style="margin-top: 16px;"><a href="https://sync-study.com/tutor" style="background: #2563EB; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View in app</a></p>`,
+          'study',
         );
       }
+      // Send push before the doc write so pushSent records the real outcome.
+      let pushSent = false;
       if (cancelPrefs?.push !== false) {
-        await sendPushNotification(tutorUserId, title, body, {
+        pushSent = await sendPushNotification(tutorUserId, title, body, {
           sessionId,
           instanceId,
           type: 'study_session_cancelled',
-        });
+        }, 'study');
       }
+
+      await db.collection('notifications').add({
+        recipientUserId: tutorUserId,
+        type: 'study_session_cancelled',
+        title,
+        body,
+        data: { sessionId, instanceId },
+        read: false,
+        channels: ['email', 'push'],
+        emailSent: cancelPrefs?.email !== false,
+        pushSent,
+        createdAt: now,
+      });
     } else {
       // Tutor cancelled → notify every parent in the family (cancelled prefs).
       const tutorName = (session.tutorName as string) || 'Your tutor';
       await notifyAllParents({
         familyId,
         prefCategory: 'cancelled',
+        app: 'study',
         type: 'study_session_cancelled',
         title: 'Session cancelled',
         body: `${tutorName} cancelled the session on ${whenInfo}. Reason: ${reason}`,

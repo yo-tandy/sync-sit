@@ -97,4 +97,51 @@ describe('family AccountPage', () => {
     expect(userCall[1]).not.toHaveProperty('email');
     expect(userCall[1]).toHaveProperty('profiles.parent.phone');
   });
+
+  it('writes notif prefs as per-scenario/channel dot-paths (never the whole object)', async () => {
+    h.auth.userDoc = {
+      uid: 'p1',
+      email: 'parent@example.com',
+      notifPrefs: {
+        newRequest: { push: true, email: true },
+        confirmed: { push: true, email: true },
+        cancelled: { push: true, email: true },
+        reminders: { push: true, email: false },
+      },
+      profiles: { parent: { familyId: 'fam1', phone: '+33100000000' } },
+    };
+    renderPage();
+    await screen.findByText('parent@example.com');
+
+    // confirmed.email starts true; toggling writes only that one channel.
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: `${i18n.t('notifications.confirmation')} — ${i18n.t('notifications.emailNotif')}`,
+      }),
+    );
+
+    await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
+    const payload = h.updateDoc.mock.calls[0][1] as Record<string, unknown>;
+    expect(payload).toHaveProperty('notifPrefs.confirmed.email', false);
+    const keys = Object.keys(payload);
+    // Mutation pin: only the toggled scenario/channel dot-path + updatedAt.
+    // Never the whole notifPrefs object (would clobber values study-web owns)
+    // and never another scenario or the push channel.
+    expect(keys.sort()).toEqual(['notifPrefs.confirmed.email', 'updatedAt']);
+    expect(keys).not.toContain('notifPrefs');
+    expect(keys.some((k) => k.includes('push'))).toBe(false);
+  });
+
+  it('push toggles are inert outside PWA mode (no write at all)', async () => {
+    renderPage();
+    await screen.findByText('parent@example.com');
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: `${i18n.t('notifications.confirmation')} — ${i18n.t('notifications.push')}`,
+      }),
+    );
+    // Give any (wrong) async write a chance to land before asserting.
+    await new Promise((r) => setTimeout(r, 0));
+    expect(h.updateDoc).not.toHaveBeenCalled();
+  });
 });

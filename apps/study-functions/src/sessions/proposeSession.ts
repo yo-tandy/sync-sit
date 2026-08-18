@@ -185,6 +185,7 @@ export const proposeSession = onCall(
     await notifyAllParents({
       familyId,
       prefCategory: 'newRequest',
+      app: 'study',
       type: 'study_session_proposed',
       title: 'New session proposal',
       body: `${tutorName || 'Your tutor'} proposed a tutoring session.`,

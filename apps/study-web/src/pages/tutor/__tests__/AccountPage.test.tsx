@@ -118,6 +118,46 @@ describe('tutor AccountPage', () => {
     );
   });
 
+  it('renders exactly the tutor scenario list: new request, confirmation, cancellation, reminders, endorsements', () => {
+    renderWithProviders(<AccountPage />);
+    // confirmed gates "family accepted your session/proposal" and references
+    // gates endorsement notifications — both were unmutable from study-web
+    // before issue #168 Phase 0.
+    const labels = ['New request', 'Confirmation', 'Cancellation', 'Reminder', 'Endorsements'];
+    for (const label of labels) {
+      expect(screen.getByRole('button', { name: label })).toBeInTheDocument();
+    }
+  });
+
+  it('toggling the endorsements row writes the references email dot-path', async () => {
+    renderWithProviders(<AccountPage />);
+    // references is absent from the stored prefs → treated as email-on; the
+    // first toggle turns it off.
+    fireEvent.click(screen.getByRole('button', { name: 'Endorsements' }));
+    await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
+    const payload = h.updateDoc.mock.calls[0][1] as Record<string, unknown>;
+    expect(payload).toHaveProperty('notifPrefs.references.email', false);
+  });
+
+  it('writes notif prefs as per-scenario email dot-paths (never clobbers push)', async () => {
+    renderWithProviders(<AccountPage />);
+    // newRequest.email starts true; toggling writes only that email channel.
+    fireEvent.click(screen.getByRole('button', { name: 'New request' }));
+
+    await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
+    const call = h.updateDoc.mock.calls[0] as unknown[];
+    expect(call[0]).toEqual(expect.objectContaining({ path: 'users/t1' }));
+    const payload = call[1] as Record<string, unknown>;
+    expect(payload).toHaveProperty('notifPrefs.newRequest.email', false);
+    const keys = Object.keys(payload);
+    // Every key is either updatedAt or a `notifPrefs.<scenario>.email` dot-path
+    // — never the whole notifPrefs object (which would clobber the push.*
+    // values the sit app owns) and never a push channel.
+    expect(keys.every((k) => k === 'updatedAt' || /^notifPrefs\.[a-z]+\.email$/i.test(k))).toBe(true);
+    expect(keys.some((k) => k.includes('push'))).toBe(false);
+    expect(keys).not.toContain('notifPrefs');
+  });
+
   // ── Profile photo (issue #143 — same mechanism as sit) ──
 
   it('uploads a picked photo to profile-photos/{uid} and saves the top-level photoUrl', async () => {
