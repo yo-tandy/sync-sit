@@ -2,6 +2,8 @@ import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { AboutPageShell } from '@ejm/shared-ui';
 import { ShieldIcon, SearchIcon, UsersIcon, CalendarIcon, DownloadIcon } from '@/components/ui/Icons';
+import { STUDY_APP_URL } from '@/lib/appSwitch';
+import studyLogo from '@/assets/sync-study-logo.png';
 
 export function AboutPage() {
   const { t, i18n } = useTranslation();
@@ -145,6 +147,27 @@ export function AboutPage() {
             </div>
           </Link>
         </div>
+
+        {/* Sibling app */}
+        <h2 className="mb-3 text-lg font-bold text-gray-900">
+          {isFr ? 'Également de Sync' : 'Also from Sync'}
+        </h2>
+        {/* Plain origin link (no handoff): the about page is public, so the
+            reader may not be signed in — the sibling app handles its own auth. */}
+        <a
+          href={STUDY_APP_URL}
+          className="mb-6 flex items-center gap-3 rounded-lg bg-gray-50 p-3 active:bg-gray-100"
+        >
+          <img src={studyLogo} alt="" className="h-8 w-8 shrink-0 rounded-lg object-contain" />
+          <div>
+            <p className="text-sm font-semibold text-brand-600">Sync/Study</p>
+            <p className="text-xs text-gray-500">
+              {isFr
+                ? 'Du tutorat de confiance dans la même communauté scolaire.'
+                : 'Trusted tutoring in the same school community.'}
+            </p>
+          </div>
+        </a>
 
         {/* Disclaimer */}
         <div className="mb-6 rounded-lg border border-gray-200 bg-gray-50 p-4">

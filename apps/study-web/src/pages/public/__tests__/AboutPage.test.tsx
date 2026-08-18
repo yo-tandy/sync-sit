@@ -1,16 +1,59 @@
-import { describe, it, expect, beforeAll } from 'vitest';
-import { screen } from '@testing-library/react';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { screen, cleanup } from '@testing-library/react';
 import { renderWithProviders, i18n } from '@/__tests__/test-utils';
+import { SIT_APP_URL } from '@/utils/appSwitch';
 import { AboutPage } from '../AboutPage';
 
-beforeAll(async () => {
-  await i18n.changeLanguage('en');
-});
-
 describe('AboutPage (study)', () => {
-  it('renders the Sync/Study about heading and tutoring-oriented body', () => {
+  beforeEach(() => i18n.changeLanguage('en'));
+  afterEach(() => cleanup());
+
+  it('mirrors the sit about structure: tagline, story, features, safety, disclaimer, contact', () => {
     renderWithProviders(<AboutPage />);
-    expect(screen.getByRole('heading', { name: /About Sync\/Study/i })).toBeInTheDocument();
+
+    expect(screen.getByAltText('Sync/Study')).toBeInTheDocument();
+    expect(screen.getByText('Connecting families with trusted student tutors')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Our Story' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'What Sync/Study Offers' })).toBeInTheDocument();
+    expect(screen.getByText('Smart Search')).toBeInTheDocument();
+    expect(screen.getByText('Easy Scheduling')).toBeInTheDocument();
+    expect(screen.getByText('Community Verification')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Safety First/ })).toBeInTheDocument();
+    expect(
+      screen.getByText(/Tutors verify their school affiliation through their official school email/),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/independent initiative for families in the EJM community/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'support@sync-study.com' })).toHaveAttribute(
+      'href',
+      'mailto:support@sync-study.com',
+    );
+  });
+
+  it('speaks about tutoring, not babysitting', () => {
+    renderWithProviders(<AboutPage />);
     expect(screen.getAllByText(/tutor/i).length).toBeGreaterThan(0);
+    // The only babysitting mention is the cross-app card pointing at Sync/Sit.
+    const sitCard = screen.getByRole('link', { name: /Sync\/Sit/ });
+    for (const el of screen.getAllByText(/babysit/i)) {
+      expect(sitCard.contains(el)).toBe(true);
+    }
+  });
+
+  it('links the sibling Sync/Sit app at its canonical origin', () => {
+    renderWithProviders(<AboutPage />);
+    const link = screen.getByRole('link', { name: /Sync\/Sit/ });
+    expect(link).toHaveAttribute('href', SIT_APP_URL);
+    expect(screen.getByText('Trusted babysitting in the same school community.')).toBeInTheDocument();
+  });
+
+  it('renders in French, including the cross-app note', async () => {
+    await i18n.changeLanguage('fr');
+    renderWithProviders(<AboutPage />);
+    expect(screen.getByRole('heading', { name: 'Notre histoire' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Également de Sync' })).toBeInTheDocument();
+    expect(
+      screen.getByText('Du babysitting de confiance dans la même communauté scolaire.'),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Sync\/Sit/ })).toHaveAttribute('href', SIT_APP_URL);
   });
 });
