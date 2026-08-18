@@ -122,27 +122,49 @@ describe('tutor AccountPage', () => {
     renderWithProviders(<AccountPage />);
     // confirmed gates "family accepted your session/proposal" and references
     // gates endorsement notifications — both were unmutable from study-web
-    // before issue #168 Phase 0.
+    // before issue #168 Phase 0. Each scenario now has a push AND an email
+    // toggle (issue #168 Phase 1).
     const labels = ['New request', 'Confirmation', 'Cancellation', 'Reminder', 'Endorsements'];
     for (const label of labels) {
-      expect(screen.getByRole('button', { name: label })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: `${label} — Push` })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: `${label} — Email` })).toBeInTheDocument();
     }
   });
 
-  it('toggling the endorsements row writes the references email dot-path', async () => {
+  it('toggling a scenario ABSENT from the stored doc writes the FULL channel map', async () => {
     renderWithProviders(<AccountPage />);
     // references is absent from the stored prefs → treated as email-on; the
-    // first toggle turns it off.
-    fireEvent.click(screen.getByRole('button', { name: 'Endorsements' }));
+    // first toggle turns it off. A single-channel dot-path here would create
+    // a half-populated map ({email} with no push) that sit's UI reads as
+    // "push off" while the server still sends — so the write must carry the
+    // full map, with push matching the server's default-on gate.
+    fireEvent.click(screen.getByRole('button', { name: 'Endorsements — Email' }));
     await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
     const payload = h.updateDoc.mock.calls[0][1] as Record<string, unknown>;
-    expect(payload).toHaveProperty('notifPrefs.references.email', false);
+    expect(Object.keys(payload).sort()).toEqual(['notifPrefs.references', 'updatedAt']);
+    expect(payload['notifPrefs.references']).toEqual({ push: true, email: false });
   });
 
-  it('writes notif prefs as per-scenario email dot-paths (never clobbers push)', async () => {
+  it('toggling a HALF-POPULATED stored scenario ({email} with no push) also writes the full map', async () => {
+    // Docs the pre-fix dot-path code created on main: the key exists but the
+    // push channel is missing. The completeness check (not mere presence)
+    // must heal these on the next toggle — push defaults to the server's
+    // default-on gate.
+    const userDoc = makeUserDoc();
+    userDoc.notifPrefs = { ...userDoc.notifPrefs, confirmed: { email: true } } as never;
+    h.auth.userDoc = userDoc;
+    renderWithProviders(<AccountPage />);
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmation — Email' }));
+    await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
+    const payload = h.updateDoc.mock.calls[0][1] as Record<string, unknown>;
+    expect(Object.keys(payload).sort()).toEqual(['notifPrefs.confirmed', 'updatedAt']);
+    expect(payload['notifPrefs.confirmed']).toEqual({ push: true, email: false });
+  });
+
+  it('writes notif prefs as per-scenario dot-paths (never the whole object)', async () => {
     renderWithProviders(<AccountPage />);
     // newRequest.email starts true; toggling writes only that email channel.
-    fireEvent.click(screen.getByRole('button', { name: 'New request' }));
+    fireEvent.click(screen.getByRole('button', { name: 'New request — Email' }));
 
     await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
     const call = h.updateDoc.mock.calls[0] as unknown[];
@@ -150,12 +172,56 @@ describe('tutor AccountPage', () => {
     const payload = call[1] as Record<string, unknown>;
     expect(payload).toHaveProperty('notifPrefs.newRequest.email', false);
     const keys = Object.keys(payload);
-    // Every key is either updatedAt or a `notifPrefs.<scenario>.email` dot-path
-    // — never the whole notifPrefs object (which would clobber the push.*
-    // values the sit app owns) and never a push channel.
-    expect(keys.every((k) => k === 'updatedAt' || /^notifPrefs\.[a-z]+\.email$/i.test(k))).toBe(true);
+    // Every key is either updatedAt or the toggled scenario/channel dot-path —
+    // never the whole notifPrefs object (which would clobber channel values
+    // the sit app may have written) and never the untouched push channel.
+    expect(keys.every((k) => k === 'updatedAt' || /^notifPrefs\.[a-z]+\.(email|push)$/i.test(k))).toBe(true);
     expect(keys.some((k) => k.includes('push'))).toBe(false);
     expect(keys).not.toContain('notifPrefs');
+  });
+
+  it('push toggles are inert in web-app mode (no PWA): nothing is written', async () => {
+    // jsdom has no matchMedia/standalone flags — isRunningAsPWA() is false.
+    renderWithProviders(<AccountPage />);
+    const pushToggle = screen.getByRole('button', { name: 'New request — Push' });
+    expect(pushToggle).toBeDisabled();
+    // Renders in the OFF position even though the stored pref is on — an ON
+    // toggle above the "push needs install" notice reads as a contradiction
+    // (PR #192 review; purely visual, the write guard is the real gate).
+    expect(pushToggle.className).toContain('bg-gray-300');
+    expect(pushToggle.className).not.toContain('bg-brand-600');
+    fireEvent.click(pushToggle);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(h.updateDoc).not.toHaveBeenCalled();
+  });
+
+  it('web-app mode shows the install notice linking /install', () => {
+    renderWithProviders(<AccountPage />);
+    expect(screen.getByText(/adding the app to your home screen/i)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /how to install/i })).toHaveAttribute('href', '/install');
+  });
+
+  it('PWA mode enables push toggles and writes the push dot-path only', async () => {
+    // Simulate installed-PWA mode: display-mode standalone matches.
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: query === '(display-mode: standalone)',
+    }));
+    try {
+      renderWithProviders(<AccountPage />);
+      // The install notice is gone in PWA mode.
+      expect(screen.queryByText(/adding the app to your home screen/i)).toBeNull();
+      const pushToggle = screen.getByRole('button', { name: 'New request — Push' });
+      expect(pushToggle).not.toBeDisabled();
+      fireEvent.click(pushToggle);
+      await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
+      const payload = h.updateDoc.mock.calls[0][1] as Record<string, unknown>;
+      expect(payload).toHaveProperty('notifPrefs.newRequest.push', false);
+      const keys = Object.keys(payload);
+      expect(keys.every((k) => k === 'updatedAt' || /^notifPrefs\.[a-z]+\.push$/i.test(k))).toBe(true);
+      expect(keys.some((k) => k.includes('email'))).toBe(false);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   // ── Profile photo (issue #143 — same mechanism as sit) ──

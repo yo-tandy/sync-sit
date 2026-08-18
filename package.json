@@ -14,6 +14,7 @@
     "test": "vitest run",
     "test:unit": "pnpm --filter @ejm/shared-core --filter @ejm/sit-core --filter @ejm/study-core --filter @ejm/shared-functions --filter web --filter study-functions --filter study-web test && vitest run --project scripts",
     "test:integration": "pnpm --filter @ejm/tests test",
+    "test:integration:lane2": "TEST_FIRESTORE_PORT=18080 TEST_AUTH_PORT=19099 TEST_FUNCTIONS_PORT=15001 TEST_STORAGE_PORT=19199 firebase emulators:exec --config firebase.lane2.json --only auth,functions,firestore,storage --project demo-test 'pnpm test:integration'",
     "seed:admin": "node apps/functions/seed-admin.cjs",
     "backfill:endorsement-counts": "node apps/study-functions/backfill-endorsement-counts.cjs",
     "backfill:family-postcode": "node scripts/backfill-family-postcode.cjs",

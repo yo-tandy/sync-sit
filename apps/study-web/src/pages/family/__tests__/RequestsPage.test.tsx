@@ -13,7 +13,6 @@ const h = vi.hoisted(() => ({
   auth: { userDoc: null as unknown },
   requests: [] as Record<string, unknown>[],
   // references docs (this family's submitted endorsements).
-  refs: [] as Record<string, unknown>[],
   where: vi.fn((field: string, op: string, val: unknown) => ({ where: [field, op, val] })),
   orderBy: vi.fn((field: string, dir: string) => ({ orderBy: [field, dir] })),
   onSnapshot: vi.fn(),
@@ -68,21 +67,6 @@ function reqDoc(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function refDoc(overrides: Record<string, unknown> = {}) {
-  return {
-    referenceId: 'e1',
-    tutorUserId: 't1',
-    appSource: 'study',
-    submittedByFamilyId: 'fam1',
-    refName: 'Dana Weiss',
-    referenceText: 'Alex was patient and my daughter improved.',
-    subject: 'math',
-    status: 'private',
-    createdAt: ts('2026-07-01'),
-    ...overrides,
-  };
-}
-
 function snapOf(rows: Record<string, unknown>[]): Snapshot {
   return {
     docs: rows.map((r) => ({ id: (r.referenceId ?? r.requestId) as string, data: () => r })),
@@ -97,22 +81,21 @@ function reset() {
     profiles: { parent: { enrollmentComplete: true, familyId: 'fam1' } },
   };
   h.requests = [];
-  h.refs = [];
   h.where.mockClear();
   h.orderBy.mockClear();
   h.listeners = {};
   h.unsubscribe.mockClear();
   h.onSnapshot.mockReset();
-  // Route by collection path: studyContactRequests => requests, references =>
-  // this family's submitted endorsements. Captures the listener per path,
-  // delivers the initial snapshot synchronously, and hands back the shared
-  // unsubscribe spy (asserted on unmount).
+  // Single listener (studyContactRequests) since the endorsements section
+  // moved to its own page (#191). Captures the listener, delivers the
+  // initial snapshot synchronously, and hands back the shared unsubscribe
+  // spy (asserted on unmount).
   h.onSnapshot.mockImplementation(
     (query: unknown, next: (snap: Snapshot) => void, error: (err: unknown) => void) => {
       const q = query as { query: { path: string }[] };
       const path = q?.query?.[0]?.path;
       h.listeners[path] = { query: q, next, error };
-      next(snapOf(path === 'references' ? h.refs : h.requests));
+      next(snapOf(h.requests));
       return h.unsubscribe;
     },
   );
@@ -156,13 +139,13 @@ describe('family RequestsPage', () => {
     expect(h.onSnapshot.mock.calls.length).toBe(subscriptionsBefore);
   });
 
-  it('unsubscribes both listeners (requests + endorsements) on unmount', async () => {
+  it('unsubscribes the requests listener on unmount (endorsements moved to their own page, #191)', async () => {
     h.requests = [reqDoc()];
     const { unmount } = renderWithProviders(<RequestsPage />);
     await screen.findByText(/Alex Roy/);
 
     unmount();
-    expect(h.unsubscribe).toHaveBeenCalledTimes(2);
+    expect(h.unsubscribe).toHaveBeenCalledTimes(1);
   });
 
   it('surfaces a load error when the requests subscription errors — not an empty list', async () => {
@@ -171,10 +154,8 @@ describe('family RequestsPage', () => {
         const q = query as { query: { path: string }[] };
         const path = q?.query?.[0]?.path;
         h.listeners[path] = { query: q, next, error };
-        // The requests listener errors (e.g. PERMISSION_DENIED); the
-        // endorsements one delivers normally.
+        // The requests listener errors (e.g. PERMISSION_DENIED).
         if (path === 'studyContactRequests') error(new Error('permission-denied'));
-        else next(snapOf(h.refs));
         return h.unsubscribe;
       },
     );
@@ -337,47 +318,6 @@ describe('family RequestsPage', () => {
 
   // ── "Your endorsements" section ──
 
-  it('subscribes to references for this family\'s study endorsements (equality-only)', async () => {
-    h.refs = [refDoc()];
-    renderWithProviders(<RequestsPage />);
-    await screen.findByText(/Alex was patient/);
 
-    expect(h.where).toHaveBeenCalledWith('submittedByFamilyId', '==', 'fam1');
-    expect(h.where).toHaveBeenCalledWith('appSource', '==', 'study');
-    const refsCall = h.onSnapshot.mock.calls.find(
-      (c) => (c[0] as { query: { path: string }[] }).query[0].path === 'references',
-    );
-    expect(refsCall).toBeTruthy();
-  });
 
-  it('renders submitted endorsements with a status chip per status', async () => {
-    h.refs = [
-      refDoc({ referenceId: 'e1', referenceText: 'Pending endorsement', status: 'private' }),
-      refDoc({ referenceId: 'e2', referenceText: 'Published endorsement', status: 'approved' }),
-      refDoc({ referenceId: 'e3', referenceText: 'Removed endorsement', status: 'removed' }),
-    ];
-    renderWithProviders(<RequestsPage />);
-
-    // All three are shown to the family (unlike the tutor side, removed is visible).
-    expect(await screen.findByText(/Pending endorsement/)).toBeInTheDocument();
-    expect(screen.getByText(/Published endorsement/)).toBeInTheDocument();
-    expect(screen.getByText(/Removed endorsement/)).toBeInTheDocument();
-  });
-
-  it('client-sorts submitted endorsements newest-first (no composite index)', async () => {
-    h.refs = [
-      refDoc({ referenceId: 'old', referenceText: 'Older endorsement', createdAt: ts('2026-01-01') }),
-      refDoc({ referenceId: 'new', referenceText: 'Newer endorsement', createdAt: ts('2026-06-01') }),
-    ];
-    renderWithProviders(<RequestsPage />);
-    await screen.findByText(/Newer endorsement/);
-
-    const newer = screen.getByText(/Newer endorsement/);
-    const older = screen.getByText(/Older endorsement/);
-    // Newer appears before older in DOM order.
-    expect(newer.compareDocumentPosition(older) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    // The endorsements query does NOT use orderBy (equality-only, sorted client-side);
-    // the requests query is the only orderBy caller.
-    expect(h.orderBy).toHaveBeenCalledTimes(1);
-  });
 });

@@ -4,6 +4,7 @@ import { db } from '@ejm/shared-functions/config/firebase.js';
 import { getCorsOrigin } from '@ejm/shared-functions/config/cors.js';
 import { writeUserActivity } from '@ejm/shared-functions/admin/writeAuditLog.js';
 import { notifyAllParents } from '@ejm/shared-functions/config/notifyParents.js';
+import { STUDY_APP_URL } from '@ejm/shared-functions/config/email.js';
 import {
   isActiveGuardianOf,
   notifyChildOfGuardianAction,
@@ -106,7 +107,7 @@ export const respondToTutorContactRequest = onCall(
         emailBody: `
           <p><strong>${tutorName}</strong> accepted your tutoring request for <strong>${result.subject} (${result.level})</strong>.</p>
           ${contactBlock}
-          <p style="margin-top: 16px;"><a href="https://sync-study.com/family" style="background: #2563EB; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View in app</a></p>
+          <p style="margin-top: 16px;"><a href="${STUDY_APP_URL}/family" style="background: #2563EB; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View in app</a></p>
         `,
         data: { requestId },
       });
@@ -122,7 +123,7 @@ export const respondToTutorContactRequest = onCall(
         emailBody: `
           <p><strong>${tutorName}</strong> declined your tutoring request for <strong>${result.subject} (${result.level})</strong>.</p>
           <p>You can search for other available tutors.</p>
-          <p style="margin-top: 16px;"><a href="https://sync-study.com/family" style="background: #2563EB; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View in app</a></p>
+          <p style="margin-top: 16px;"><a href="${STUDY_APP_URL}/family" style="background: #2563EB; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View in app</a></p>
         `,
         data: { requestId },
       });

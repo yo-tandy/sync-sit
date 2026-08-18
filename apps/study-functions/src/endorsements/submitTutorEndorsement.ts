@@ -3,7 +3,7 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { db } from '@ejm/shared-functions/config/firebase.js';
 import { getCorsOrigin } from '@ejm/shared-functions/config/cors.js';
 import { writeUserActivity } from '@ejm/shared-functions/admin/writeAuditLog.js';
-import { sendNotificationEmail } from '@ejm/shared-functions/config/email.js';
+import { sendNotificationEmail, STUDY_APP_URL } from '@ejm/shared-functions/config/email.js';
 import { sendPushNotification } from '@ejm/shared-functions/config/push.js';
 import { getParentProfile } from '@ejm/shared-core';
 import type { User } from '@ejm/shared-core';
@@ -98,14 +98,16 @@ export const submitTutorEndorsement = onCall(
     const refsPrefs = tutorUser?.notifPrefs?.references || { push: true, email: true };
     const submitterLabel = submittedByName || refName.trim() || 'A family';
     const now = new Date();
+    // Record the actual send outcomes, not assumptions.
+    let emailSent = false;
     if (refsPrefs.email !== false && tutorUser?.email) {
-      await sendNotificationEmail(
+      emailSent = await sendNotificationEmail(
         tutorUser.email,
         `New endorsement from ${submitterLabel}`,
         `
           <p><strong>${submitterLabel}</strong> has submitted an endorsement for you on Sync/Study.</p>
           <p>Review it on your Endorsements page and choose whether to publish it on your profile.</p>
-          <p style="margin-top: 16px;"><a href="https://sync-study.com/tutor/endorsements" style="background: #2563EB; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View Endorsements</a></p>
+          <p style="margin-top: 16px;"><a href="${STUDY_APP_URL}/tutor/endorsements" style="background: #2563EB; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View Endorsements</a></p>
         `,
         'study',
       );
@@ -128,7 +130,7 @@ export const submitTutorEndorsement = onCall(
       data: { referenceId: refDoc.id },
       read: false,
       channels: ['email', 'push'],
-      emailSent: refsPrefs.email !== false,
+      emailSent,
       pushSent,
       createdAt: now,
     });

@@ -21,13 +21,17 @@ export interface User {
   photoUrl?: string;
   language: Language;
   notifPrefs: NotifPrefs;
+  /** Sit push registrations. The legacy flat array predates study push and
+   * stays sit's; study registrations live in the sibling `fcmTokensStudy`. */
   fcmTokens: string[];
+  fcmTokensStudy?: string[];
   createdAt: FirestoreTimestamp;
   updatedAt: FirestoreTimestamp;
   lastLoginAt?: FirestoreTimestamp;
   consentAt?: FirestoreTimestamp;
   consentVersion?: string;
   dismissedPwaInstallBanner?: boolean;
+  dismissedPwaInstallBannerStudy?: boolean;
 
   /**
    * Supervision mirror, present iff the guardianLinks/{uid} doc is ACTIVE

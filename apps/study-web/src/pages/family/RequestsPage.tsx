@@ -9,7 +9,6 @@ import { getParentProfile } from '@ejm/shared-core';
 import type {
   StudyContactRequestDoc,
   StudyContactRequestStatus,
-  TutorEndorsementDoc,
 } from '@ejm/study-core';
 import {
   Card,
@@ -44,22 +43,6 @@ const STATUS_VARIANT: Record<StudyContactRequestStatus, 'amber' | 'green' | 'gra
   cancelled: 'gray',
 };
 
-/** Endorsement status → chip variant for the "Your endorsements" section. */
-const ENDORSEMENT_VARIANT: Record<string, 'amber' | 'green' | 'gray'> = {
-  private: 'amber',
-  approved: 'green',
-  published: 'green',
-  removed: 'gray',
-};
-
-/** Epoch seconds for a createdAt that may be a Timestamp or a plain Date. */
-function createdAtSeconds(ts: TutorEndorsementDoc['createdAt']): number {
-  const raw: unknown = ts;
-  if (raw instanceof Date) return raw.getTime() / 1000;
-  const seconds = (raw as { seconds?: number })?.seconds;
-  return typeof seconds === 'number' ? seconds : 0;
-}
-
 export function RequestsPage() {
   const { t, i18n } = useTranslation();
   const toast = useToast();
@@ -71,7 +54,6 @@ export function RequestsPage() {
   // The requests subscription errored (e.g. PERMISSION_DENIED) — surfaced
   // honestly, never conflated with the empty state.
   const [loadError, setLoadError] = useState(false);
-  const [endorsements, setEndorsements] = useState<TutorEndorsementDoc[]>([]);
   // The accepted request whose endorse dialog is open, or null.
   const [endorsing, setEndorsing] = useState<StudyContactRequestDoc | null>(null);
   // The pending request whose cancel-confirmation dialog is open, or null.
@@ -100,33 +82,6 @@ export function RequestsPage() {
         setRequests(snap.docs.map((d) => d.data() as StudyContactRequestDoc));
       },
       () => setLoadError(true),
-    );
-    return unsubscribe;
-  }, [familyId]);
-
-  // This family's submitted endorsements for the "Your endorsements" section.
-  // Equality-only (submittedByFamilyId + appSource) — no composite needed — so we
-  // sort newest-first client-side. Live too, so a moderation status change shows
-  // up. A subscription error leaves the (supplementary) section hidden, exactly
-  // like the old fetch's empty fallback.
-  useEffect(() => {
-    if (!familyId) return;
-    const unsubscribe = onSnapshot(
-      query(
-        collection(db, 'references'),
-        where('submittedByFamilyId', '==', familyId),
-        where('appSource', '==', 'study'),
-      ),
-      (snap) => {
-        const rows = snap.docs.map((d) => d.data() as TutorEndorsementDoc);
-        rows.sort((a, b) => createdAtSeconds(b.createdAt) - createdAtSeconds(a.createdAt));
-        setEndorsements(rows);
-      },
-      () => {
-        // Supplementary section: on error keep whatever was last rendered
-        // rather than faking an empty list; the primary listener owns
-        // loadError. (Initial-load errors leave the section hidden.)
-      },
     );
     return unsubscribe;
   }, [familyId]);
@@ -289,31 +244,6 @@ export function RequestsPage() {
             );
           })}
 
-        {/* ── Your endorsements ── */}
-        {familyId != null && endorsements.length > 0 && (
-          <div className="mb-6">
-            <h2 className="mb-2 text-sm font-semibold text-gray-700">
-              {t('family.requests.endorsementsTitle')}
-            </h2>
-            <div className="space-y-3">
-              {endorsements.map((e) => (
-                <Card key={e.referenceId}>
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="text-sm text-gray-800">{e.referenceText}</p>
-                      {e.refName && (
-                        <p className="mt-1 text-xs text-gray-500">{e.refName}</p>
-                      )}
-                    </div>
-                    <Badge variant={ENDORSEMENT_VARIANT[e.status] ?? 'gray'}>
-                      {t(`family.requests.endorsementStatus.${e.status}`)}
-                    </Badge>
-                  </div>
-                </Card>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
 
       {endorsing && (

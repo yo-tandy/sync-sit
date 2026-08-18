@@ -34,6 +34,9 @@ export const ReportProblemPage = lazy(() =>
 export const SharePage = lazy(() =>
   import('@/pages/public/SharePage').then((m) => ({ default: m.SharePage })),
 );
+export const AddToHomescreenPage = lazy(() =>
+  import('@/pages/public/AddToHomescreenPage').then((m) => ({ default: m.AddToHomescreenPage })),
+);
 
 // Enrollment (wizard — heavy)
 export const TutorEnrollment = lazy(() =>
@@ -68,6 +71,12 @@ export const SchedulePage = lazy(() =>
 );
 export const TutorRequestsPage = lazy(() =>
   import('@/pages/tutor/RequestsPage').then((m) => ({ default: m.RequestsPage })),
+);
+export const TutorFamiliesPage = lazy(() =>
+  import('@/pages/tutor/FamiliesPage').then((m) => ({ default: m.FamiliesPage })),
+);
+export const FamilySubmittedEndorsementsPage = lazy(() =>
+  import('@/pages/family/SubmittedEndorsementsPage').then((m) => ({ default: m.SubmittedEndorsementsPage })),
 );
 export const TutorEndorsementsPage = lazy(() =>
   import('@/pages/tutor/EndorsementsPage').then((m) => ({ default: m.EndorsementsPage })),

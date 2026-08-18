@@ -33,7 +33,7 @@ vi.mock('@/stores/authStore', () => {
   };
   useAuthStore.getState = () => ({ loading: false, firebaseUser: null, userDoc: null });
   useAuthStore.subscribe = () => () => {};
-  return { useAuthStore };
+  return { useAuthStore, markNextSignInFresh: () => {} };
 });
 
 import { I18nextProvider } from 'react-i18next';

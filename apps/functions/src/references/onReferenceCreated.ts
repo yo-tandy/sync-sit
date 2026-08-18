@@ -28,14 +28,15 @@ export const notifyOnNewReference = onDocumentCreated(
     const refsPrefs = babysitter.notifPrefs?.references || { push: true, email: true };
     const submitterName = data.submittedByName || data.refName || 'A family';
 
-    // Send email
+    // Send email — record the actual send outcomes, not assumptions.
+    let emailSent = false;
     if (refsPrefs.email && babysitter.email) {
       const emailBody = `
         <p><strong>${submitterName}</strong> has submitted an endorsement for you on Sync/Sit.</p>
         <p>Go to your Endorsements page to review it and choose whether to publish it on your profile.</p>
         <p style="margin-top: 16px;"><a href="https://sync-sit.com/babysitter/endorsements" style="background: #DC2626; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View Endorsements</a></p>
       `;
-      await sendNotificationEmail(
+      emailSent = await sendNotificationEmail(
         babysitter.email,
         `New endorsement from ${submitterName}`,
         emailBody
@@ -43,8 +44,9 @@ export const notifyOnNewReference = onDocumentCreated(
     }
 
     // Send push
+    let pushSent = false;
     if (refsPrefs.push) {
-      await sendPushNotification(
+      pushSent = await sendPushNotification(
         babysitterUserId,
         'New endorsement received',
         `${submitterName} has submitted an endorsement for you.`,
@@ -61,8 +63,8 @@ export const notifyOnNewReference = onDocumentCreated(
       data: { referenceId: event.params.referenceId },
       read: false,
       channels: ['email', 'push'],
-      emailSent: refsPrefs.email,
-      pushSent: false,
+      emailSent,
+      pushSent,
       createdAt: new Date(),
     });
   }

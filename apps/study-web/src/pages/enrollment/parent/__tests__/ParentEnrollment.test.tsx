@@ -80,7 +80,7 @@ vi.mock('@/stores/authStore', () => {
   // Statics used by the post-signup auto-login wait.
   useAuthStore.getState = () => ({ loading: false, firebaseUser: { uid: 'new' }, userDoc: h.auth.userDoc });
   useAuthStore.subscribe = () => () => {};
-  return { useAuthStore };
+  return { useAuthStore, markNextSignInFresh: () => {} };
 });
 vi.mock('@ejm/shared-core', () => ({
   getParentProfile: (userDoc: { profiles?: { parent?: unknown } } | null) =>
