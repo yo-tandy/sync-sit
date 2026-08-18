@@ -143,6 +143,22 @@ describe('tutor AccountPage', () => {
     expect(payload['notifPrefs.references']).toEqual({ push: true, email: false });
   });
 
+  it('toggling a HALF-POPULATED stored scenario ({email} with no push) also writes the full map', async () => {
+    // Docs the pre-fix dot-path code created on main: the key exists but the
+    // push channel is missing. The completeness check (not mere presence)
+    // must heal these on the next toggle — push defaults to the server's
+    // default-on gate.
+    const userDoc = makeUserDoc();
+    userDoc.notifPrefs = { ...userDoc.notifPrefs, confirmed: { email: true } } as never;
+    h.auth.userDoc = userDoc;
+    renderWithProviders(<AccountPage />);
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmation' }));
+    await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
+    const payload = h.updateDoc.mock.calls[0][1] as Record<string, unknown>;
+    expect(Object.keys(payload).sort()).toEqual(['notifPrefs.confirmed', 'updatedAt']);
+    expect(payload['notifPrefs.confirmed']).toEqual({ push: true, email: false });
+  });
+
   it('writes notif prefs as per-scenario email dot-paths (never clobbers push)', async () => {
     renderWithProviders(<AccountPage />);
     // newRequest.email starts true; toggling writes only that email channel.
