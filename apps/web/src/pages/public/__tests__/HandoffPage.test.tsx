@@ -225,6 +225,12 @@ describe('HandoffPage (sit)', () => {
     ['backslash protocol-relative', '/\\evil.com'],
     ['backslash anywhere', '/family\\..\\evil'],
     ['missing leading slash', 'family/verification'],
+    // URL parsers strip tab/LF/CR before resolving, so these fold into
+    // '//evil.com' at navigation time (PR #201 review).
+    ['LF folding into protocol-relative', '/\n/evil.com'],
+    ['CR folding', '/\r/evil.com'],
+    ['tab folding', '/\t/evil.com'],
+    ['embedded space', '/family verification'],
   ])('REJECTS a hostile destination (%s) and lands on the default', async (_label, dest) => {
     window.location.hash = `#code=xyz&dest=${encodeURIComponent(dest)}`;
     h.callable.mockResolvedValue({ data: { token: 'custom-tok' } });
@@ -240,7 +246,23 @@ describe('HandoffPage (sit)', () => {
     expect(screen.queryByText('catch-all landing')).not.toBeInTheDocument();
   });
 
-  it('a hostile destination on the degraded (user-doc failure) path also lands on the default entrance', async () => {
+  it('the degraded (user-doc failure) path ignores even a VALID destination', async () => {
+    // Pinned with a valid dest: a hostile one is already nulled by
+    // safeDestination before this branch, so only the valid variant can
+    // distinguish 'catch returns the default' from 'catch honors dest'
+    // (PR #201 review).
+    window.location.hash = '#code=xyz&dest=%2Ffamily%2Fverification';
+    h.callable.mockResolvedValue({ data: { token: 'tok' } });
+    h.signInWithCustomToken.mockResolvedValue({ user: { uid: 'u1' } });
+    h.getDoc.mockRejectedValue(new Error('transient'));
+
+    renderHandoff();
+
+    await waitFor(() => expect(screen.getByText('signup page')).toBeInTheDocument());
+    expect(screen.queryByText('family verification page')).not.toBeInTheDocument();
+  });
+
+  it('a hostile destination on the degraded path also lands on the default entrance', async () => {
     window.location.hash = '#code=xyz&dest=%2F%2Fevil.com';
     h.callable.mockResolvedValue({ data: { token: 'tok' } });
     h.signInWithCustomToken.mockResolvedValue({ user: { uid: 'u1' } });

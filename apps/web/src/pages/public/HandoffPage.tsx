@@ -53,8 +53,15 @@ function hashParams(): URLSearchParams {
  */
 function safeDestination(raw: string | null): string | null {
   if (!raw || raw.length > 512) return null;
-  if (!raw.startsWith('/') || raw.startsWith('//')) return null;
-  if (raw.includes('\\')) return null;
+  // Positive shape first: a leading '/' then printable ASCII only. URL
+  // parsers STRIP tab/LF/CR before resolving, so '/\n/evil.com' (reachable
+  // via #dest=%2F%0A%2Fevil.com -- URLSearchParams decodes the escapes)
+  // would otherwise fold into '//evil.com' at navigation time, the same
+  // folding class as the backslash check below (PR #201 review). pushState
+  // would then throw on the cross-origin result and strand the arrival on
+  // the switching screen with the one-time code already consumed.
+  if (!/^\/[!-~]*$/.test(raw)) return null;
+  if (raw.startsWith('//') || raw.includes('\\')) return null;
   return raw;
 }
 

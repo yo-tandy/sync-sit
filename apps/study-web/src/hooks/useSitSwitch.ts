@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '@/config/firebase';
-import { SIT_APP_URL } from '@/utils/appSwitch';
+import { SIT_APP_URL, SIT_VERIFICATION_PATH } from '@/utils/appSwitch';
 
 /**
  * The one cross-app switch idiom (study → sit): mint a one-time handoff code,
@@ -17,7 +17,7 @@ import { SIT_APP_URL } from '@/utils/appSwitch';
  * It rides as a `dest` fragment param, so sit's handoff page re-validates it
  * against a strict relative-path shape before honoring it.
  */
-export function useSitSwitch(destination?: string) {
+export function useSitSwitch(destination?: typeof SIT_VERIFICATION_PATH) {
   const { i18n } = useTranslation();
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
