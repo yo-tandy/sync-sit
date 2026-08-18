@@ -22,9 +22,6 @@ export const LoginPage = lazy(() =>
 export const SignUpRolePage = lazy(() =>
   import('@/pages/public/SignUpRolePage').then((m) => ({ default: m.SignUpRolePage })),
 );
-export const StaticPage = lazy(() =>
-  import('@/pages/public/StaticPage').then((m) => ({ default: m.StaticPage })),
-);
 export const AboutPage = lazy(() =>
   import('@/pages/public/AboutPage').then((m) => ({ default: m.AboutPage })),
 );
@@ -42,6 +39,11 @@ export const TutorEnrollment = lazy(() =>
 export const TutorSuccessPage = lazy(() =>
   import('@/pages/enrollment/tutor/TutorSuccessPage').then((m) => ({
     default: m.TutorSuccessPage,
+  })),
+);
+export const ParentEnrollment = lazy(() =>
+  import('@/pages/enrollment/parent/ParentEnrollment').then((m) => ({
+    default: m.ParentEnrollment,
   })),
 );
 
