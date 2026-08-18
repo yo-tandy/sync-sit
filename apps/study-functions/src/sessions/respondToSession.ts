@@ -626,8 +626,10 @@ export const respondToSession = onCall(
       const body = isConfirm
         ? `${familyName} accepted your session proposal.`
         : `${familyName} declined your session proposal.`;
+      // Record the actual send outcomes, not assumptions.
+      let emailSent = false;
       if (prefs?.email !== false && tutorEmail) {
-        await sendNotificationEmail(
+        emailSent = await sendNotificationEmail(
           tutorEmail,
           title,
           `<p><strong>${familyName}</strong> ${isConfirm ? 'accepted' : 'declined'} your session proposal.</p>
@@ -648,7 +650,7 @@ export const respondToSession = onCall(
         data: { sessionId },
         read: false,
         channels: ['email', 'push'],
-        emailSent: prefs?.email !== false,
+        emailSent,
         pushSent,
         createdAt: now,
       });

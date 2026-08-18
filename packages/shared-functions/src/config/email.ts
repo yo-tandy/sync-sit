@@ -271,27 +271,32 @@ export function buildNotificationEmailHtml(body: string, app: NotificationApp = 
 /**
  * Send a notification email to a user, branded for the given app.
  * Fails silently — notifications should not block user actions.
+ * Returns whether the email was actually handed to the transport (mirrors
+ * sendPushNotification), so callers can record an honest emailSent audit
+ * field: false on a skipped recipient, missing Resend config, a rejected
+ * send, or a thrown transport error. The emulator [DEV] log IS that
+ * environment's successful delivery, so it returns true.
  */
 export async function sendNotificationEmail(
   to: string,
   subject: string,
   body: string,
   app: NotificationApp = 'sit'
-): Promise<void> {
+): Promise<boolean> {
   if (!to || !to.includes('@')) {
     console.warn(`[SKIP-EMAIL] Invalid recipient: ${to}`);
-    return;
+    return false;
   }
 
   if (process.env.FUNCTIONS_EMULATOR === 'true') {
     console.log(`[DEV] Notification to ${to} (app: ${app}): ${subject}`);
-    return;
+    return true;
   }
 
   const resend = getResend();
   if (!resend) {
     console.log(`[NO-RESEND] Notification to ${to} (app: ${app}): ${subject}`);
-    return;
+    return false;
   }
 
   const { from, fromFallback } = NOTIFICATION_BRANDING[app];
@@ -304,9 +309,12 @@ export async function sendNotificationEmail(
       const fallbackResult = await resend.emails.send({ from: fromFallback, to, subject, html: emailHtml });
       if (fallbackResult.error) {
         console.error(`[EMAIL] Fallback also failed: ${fallbackResult.error.message}`);
+        return false;
       }
     }
+    return true;
   } catch (err) {
     console.error('Failed to send notification email:', err);
+    return false;
   }
 }

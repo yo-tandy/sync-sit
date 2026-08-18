@@ -196,8 +196,10 @@ export const cancelSessionInstance = onCall(
       const title = 'Session cancelled';
       const body = `${familyName} cancelled the session on ${whenInfo}. Reason: ${reason}${lateSuffix}`;
 
+      // Record the actual send outcomes, not assumptions.
+      let emailSent = false;
       if (cancelPrefs?.email !== false && tutorEmail) {
-        await sendNotificationEmail(
+        emailSent = await sendNotificationEmail(
           tutorEmail,
           `Session cancelled by ${familyName}`,
           `<p><strong>${familyName}</strong> cancelled the session on <strong>${whenInfo}</strong>.</p>
@@ -226,7 +228,7 @@ export const cancelSessionInstance = onCall(
         data: { sessionId, instanceId },
         read: false,
         channels: ['email', 'push'],
-        emailSent: cancelPrefs?.email !== false,
+        emailSent,
         pushSent,
         createdAt: now,
       });

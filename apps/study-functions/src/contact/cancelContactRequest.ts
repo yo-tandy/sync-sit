@@ -82,8 +82,10 @@ export const cancelContactRequest = onCall(
       <p style="margin-top: 16px;"><a href="${STUDY_APP_URL}/tutor" style="background: #2563EB; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View Requests</a></p>
     `;
 
+    // Record the actual send outcomes, not assumptions.
+    let emailSent = false;
     if (notifPrefs?.email !== false && tutorUser?.email) {
-      await sendNotificationEmail(tutorUser.email, `Tutoring request withdrawn — ${result.familyName || 'a family'}`, emailBody, 'study');
+      emailSent = await sendNotificationEmail(tutorUser.email, `Tutoring request withdrawn — ${result.familyName || 'a family'}`, emailBody, 'study');
     }
     let pushSent = false;
     if (notifPrefs?.push !== false) {
@@ -97,7 +99,7 @@ export const cancelContactRequest = onCall(
       data: { requestId },
       read: false,
       channels: ['email', 'push'],
-      emailSent: notifPrefs?.email !== false,
+      emailSent,
       pushSent,
       createdAt: now,
     });

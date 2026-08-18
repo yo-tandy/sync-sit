@@ -69,8 +69,10 @@ async function notifyBothSides(
     `${tutorData?.firstName || ''} ${tutorData?.lastName || ''}`.trim() ||
     'your tutor';
 
+  // Record the actual send outcomes, not assumptions.
+  let emailSent = false;
   if (rp?.email !== false && tutorEmail) {
-    await sendNotificationEmail(
+    emailSent = await sendNotificationEmail(
       tutorEmail,
       'Tutoring session tomorrow',
       `<p>Reminder: you have a <strong>${subject}</strong> session on <strong>${when}</strong>.</p>
@@ -97,7 +99,7 @@ async function notifyBothSides(
     data,
     read: false,
     channels: ['email', 'push'],
-    emailSent: rp?.email !== false,
+    emailSent,
     pushSent,
     createdAt: now,
   });

@@ -98,8 +98,10 @@ export const submitTutorEndorsement = onCall(
     const refsPrefs = tutorUser?.notifPrefs?.references || { push: true, email: true };
     const submitterLabel = submittedByName || refName.trim() || 'A family';
     const now = new Date();
+    // Record the actual send outcomes, not assumptions.
+    let emailSent = false;
     if (refsPrefs.email !== false && tutorUser?.email) {
-      await sendNotificationEmail(
+      emailSent = await sendNotificationEmail(
         tutorUser.email,
         `New endorsement from ${submitterLabel}`,
         `
@@ -128,7 +130,7 @@ export const submitTutorEndorsement = onCall(
       data: { referenceId: refDoc.id },
       read: false,
       channels: ['email', 'push'],
-      emailSent: refsPrefs.email !== false,
+      emailSent,
       pushSent,
       createdAt: now,
     });

@@ -255,8 +255,10 @@ export const cancelSession = onCall(
       const title = isSeries ? 'Recurring sessions cancelled' : 'Session cancelled';
       const body = `${familyName} cancelled ${isSeries ? 'the recurring series' : `the session for ${whenInfo}`}. Reason: ${reason}${lateSuffix}`;
 
+      // Record the actual send outcomes, not assumptions.
+      let emailSent = false;
       if (cancelPrefs?.email !== false && tutorEmail) {
-        await sendNotificationEmail(
+        emailSent = await sendNotificationEmail(
           tutorEmail,
           `Session cancelled by ${familyName}`,
           `<p><strong>${familyName}</strong> cancelled ${
@@ -286,7 +288,7 @@ export const cancelSession = onCall(
         data: { sessionId },
         read: false,
         channels: ['email', 'push'],
-        emailSent: cancelPrefs?.email !== false,
+        emailSent,
         pushSent,
         createdAt: now,
       });

@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { buildNotificationEmailHtml } from '../email.js';
+import { describe, it, expect, afterEach, vi } from 'vitest';
+import { buildNotificationEmailHtml, sendNotificationEmail, STUDY_APP_URL } from '../email.js';
 
 // Branding pins for the shared notification email wrapper (issue #168 Phase 0).
 // Study emails must carry no Sync/Sit branding and link the study host; the
@@ -34,5 +34,32 @@ describe('buildNotificationEmailHtml', () => {
     // substring-free check already; also pin the sit host absent outside the
     // caller-supplied body.
     expect(buildNotificationEmailHtml('', 'study')).not.toContain('https://sync-sit.com');
+  });
+
+  it('the study footer links the exported STUDY_APP_URL (one host for CTA, footer, and push)', () => {
+    expect(buildNotificationEmailHtml('', 'study')).toContain(STUDY_APP_URL);
+  });
+});
+
+// Return-value pins for the emailSent audit field (issue #168 Phase 0): a
+// caller recording sendNotificationEmail's result must get false whenever
+// nothing was handed to a transport.
+describe('sendNotificationEmail return value (emailSent honesty)', () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it('returns false for an invalid recipient (skip path)', async () => {
+    await expect(sendNotificationEmail('', 'subject', '<p>b</p>', 'study')).resolves.toBe(false);
+    await expect(sendNotificationEmail('not-an-email', 'subject', '<p>b</p>')).resolves.toBe(false);
+  });
+
+  it('returns true on the emulator [DEV] path — the dev log IS that transport\'s delivery', async () => {
+    vi.stubEnv('FUNCTIONS_EMULATOR', 'true');
+    await expect(sendNotificationEmail('a@example.com', 'subject', '<p>b</p>', 'study')).resolves.toBe(true);
+  });
+
+  it('returns false when Resend is not configured (nothing was sent)', async () => {
+    vi.stubEnv('FUNCTIONS_EMULATOR', 'false');
+    vi.stubEnv('RESEND_API_KEY', '');
+    await expect(sendNotificationEmail('a@example.com', 'subject', '<p>b</p>')).resolves.toBe(false);
   });
 });
