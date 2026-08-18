@@ -471,6 +471,7 @@ export function SchedulePage() {
             })),
             offeredValues: tutor?.locationPrefs ?? [],
             defaultsLabel: t('schedule.locationTags.defaults'),
+              orLabel: t('schedule.locationTags.or'),
             mixedLabel: t('schedule.locationTags.mixed'),
             notOfferedLabel: t('schedule.locationTags.notOffered'),
             weeklyLocations: localWeeklyLocations,
@@ -505,6 +506,7 @@ export function SchedulePage() {
               // prefs renders checked-but-flagged, never dropped.
               offeredValues: tutor?.locationPrefs ?? [],
               defaultsLabel: t('schedule.locationTags.defaults'),
+              orLabel: t('schedule.locationTags.or'),
               mixedLabel: t('schedule.locationTags.mixed'),
               notOfferedLabel: t('schedule.locationTags.notOffered'),
               helpText: t('schedule.locationTags.help'),

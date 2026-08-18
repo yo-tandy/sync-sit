@@ -133,6 +133,41 @@ describe('SchedulePage per-slot location tags', () => {
     expect(onlineChip().getAttribute('aria-pressed')).toBe('false');
   });
 
+  it('renders "or" between the defaults chip and the location chips', () => {
+    // The chips are alternatives, not a multi-select row (owner request,
+    // PR #185).
+    renderSchedule();
+    openMondayEditor();
+    expect(screen.getByText('or')).toBeTruthy();
+  });
+
+  it('a single-location tutor gets no chip row on an untagged range', () => {
+    // "Profile defaults" vs the one offered chip is a distinction without a
+    // difference — the row serves no value and is hidden (owner request,
+    // PR #185).
+    (h.auth.userDoc as { profiles: { tutor: { locationPrefs: string[] } } }).profiles.tutor.locationPrefs =
+      ['online'];
+    renderSchedule();
+    openMondayEditor();
+    expect(screen.queryByRole('button', { name: 'Profile defaults' })).toBeNull();
+    expect(screen.queryByText('or')).toBeNull();
+  });
+
+  it('a single-location tutor still sees the row when the range carries a stored tag', () => {
+    // Stored state must stay visible and fixable — only the untouched case
+    // hides the row.
+    (h.auth.userDoc as { profiles: { tutor: { locationPrefs: string[] } } }).profiles.tutor.locationPrefs =
+      ['online'];
+    h.schedule.weeklyLocations = { mon: monCells(['family_home']) };
+    renderSchedule();
+    openMondayEditor();
+    expect(screen.getByRole('button', { name: 'Profile defaults' })).toBeTruthy();
+    // The out-of-prefs stored tag renders checked-and-flagged, never dropped.
+    expect(
+      screen.getAllByRole('button', { name: "At the family's home" })[0].getAttribute('aria-pressed'),
+    ).toBe('true');
+  });
+
   it('tags a range and saves the sparse per-cell payload', async () => {
     renderSchedule();
     openMondayEditor();

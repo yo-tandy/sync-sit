@@ -147,6 +147,7 @@ export default {
     // Per-slot location tags (issue #166)
     locationTags: {
       defaults: 'Préférences du profil',
+      or: 'ou',
       mixed: "Ce créneau combine des choix de lieu différents. Choisissez une option pour l'appliquer à tout le créneau.",
       notOffered: "Ce créneau est marqué avec un lieu que vous ne proposez plus dans vos préférences de cours. Il ne peut pas être réservé pour ce lieu — décochez-le ou proposez à nouveau ce lieu.",
       help: 'Optionnel : choisissez où les cours de chaque créneau peuvent avoir lieu. « Préférences du profil » utilise vos préférences de lieu de cours.',

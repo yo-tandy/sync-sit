@@ -20,6 +20,10 @@ export interface LocationTagLabels {
   offeredValues?: string[];
   /** Label for the "profile defaults" (no override) chip. */
   defaultsLabel: string;
+  /** Separator word rendered between the defaults chip and the options
+   * ("or" / "ou") — the chips are alternatives, not a multi-select row
+   * (owner request, PR #185). */
+  orLabel?: string;
   /** Hint shown when the covered cells carry DIFFERENT tag sets. */
   mixedLabel?: string;
   /** Hint shown when the selection carries a value outside offeredValues. */
@@ -75,6 +79,19 @@ export function RangeTagChips({ labels, selection, onToggle, onReset }: RangeTag
   );
   const hasNotOffered = !!offered && selected.some((v) => !offered.includes(v));
 
+  // A tutor offering a single location has no real choice: "defaults" and the
+  // one chip mean the same thing, so an untouched range hides the whole row
+  // (owner request, PR #185). Any STORED state (a tag, a mixed range, an
+  // out-of-prefs leftover) keeps the row visible so it can be seen and fixed.
+  if (
+    !!offered &&
+    offered.length <= 1 &&
+    !mixed &&
+    selected.length === 0
+  ) {
+    return null;
+  }
+
   return (
     <div className="mt-2 flex flex-wrap gap-1.5">
       <button
@@ -89,6 +106,9 @@ export function RangeTagChips({ labels, selection, onToggle, onReset }: RangeTag
       >
         {labels.defaultsLabel}
       </button>
+      {labels.orLabel && visibleOptions.length > 0 && (
+        <span className="self-center text-xs font-medium text-gray-900">{labels.orLabel}</span>
+      )}
       {visibleOptions.map((opt) => {
         const pressed = selected.includes(opt.value);
         const flagged = pressed && !!offered && !offered.includes(opt.value);
