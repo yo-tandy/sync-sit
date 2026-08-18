@@ -6,7 +6,7 @@ import { TopNav, StepIndicator, StepVerify, StepPassword, enrollmentErrorReason 
 import { getParentProfile } from '@ejm/shared-core';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth, functions } from '@/config/firebase';
-import { useAuthStore } from '@/stores/authStore';
+import { markNextSignInFresh, useAuthStore } from '@/stores/authStore';
 import { EnrollmentAppBar } from '@/components/ui/EnrollmentAppBar';
 import { StepParentEmail } from './StepParentEmail';
 import { StepFamilyInfo } from './StepFamilyInfo';
@@ -205,6 +205,8 @@ export function ParentEnrollment() {
       // /family guard asks the parent to log in with the credentials they
       // just chose.
       try {
+        // Fresh, deliberate sign-in: capture the session epoch anew (issue #181).
+        markNextSignInFresh();
         await signInWithEmailAndPassword(auth, email, password);
         await new Promise<void>((resolve) => {
           // Resolve on auth settling (firebaseUser + !loading) — userDoc

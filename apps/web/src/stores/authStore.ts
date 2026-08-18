@@ -47,6 +47,15 @@ interface AuthState {
  */
 const SESSION_EPOCH_KEY = 'sessionEpoch:';
 
+// Logout must stay snappy even on a stalled-but-not-dead connection: the
+// callable's SDK default timeout is 70s and removePushToken's updateDoc can
+// hang without erroring. Both are best-effort — bound them and move on to
+// the local sign-out (the server-side token revocation is the backstop).
+const SIGN_OUT_EVERYWHERE_TIMEOUT_MS = 5000;
+const PUSH_TOKEN_TIMEOUT_MS = 3000;
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
 /** Epoch of a user doc in millis; legacy docs without the field are 0. */
 function epochMillisOf(data: SitUser | null): number {
   return data?.sessionEpoch ? data.sessionEpoch.toDate().getTime() : 0;
@@ -93,6 +102,7 @@ export function markNextSignInFresh(): void {
 
 let userDocUnsub: (() => void) | null = null;
 let watchedUid: string | null = null;
+let capturedEpochUid: string | null = null;
 let capturedEpochMs = 0;
 
 function detachUserDocListener(): void {
@@ -103,10 +113,19 @@ function detachUserDocListener(): void {
   watchedUid = null;
 }
 
-/** Capture (overwrite) the armed epoch for a fresh sign-in of `uid`. */
+/**
+ * Capture the armed epoch for a sign-in of `uid`. FORWARD-ONLY per uid:
+ * onSnapshot can serve its first snapshot from the SDK's memory cache, so a
+ * stale cached epoch must never LOWER what login() already armed (in either
+ * arrival order) — otherwise the follow-up server snapshot would read as
+ * "newer" and force-sign-out a legitimate seconds-old login. Safe to keep
+ * maxing across sessions of the SAME uid (the server epoch only ever moves
+ * forward); a DIFFERENT uid replaces outright.
+ */
 function captureEpoch(uid: string, millis: number): void {
-  capturedEpochMs = millis;
-  writeStoredEpoch(uid, millis);
+  capturedEpochMs = capturedEpochUid === uid ? Math.max(capturedEpochMs, millis) : millis;
+  capturedEpochUid = uid;
+  writeStoredEpoch(uid, capturedEpochMs);
 }
 
 /** The doc's epoch is newer than the one this session captured: sign out. */
@@ -161,13 +180,20 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     // race the doc watcher into the forced-sign-out (toast) path.
     detachUserDocListener();
     if (uid) {
-      await removePushToken(uid).catch(() => {});
+      await Promise.race([removePushToken(uid).catch(() => {}), sleep(PUSH_TOKEN_TIMEOUT_MS)]);
     }
-    // Logout means logout EVERYWHERE (issue #181) — best-effort: offline or
-    // failing, the user still signs out locally (never trap them); the
-    // server-side token revocation is the backstop anyway.
+    // Logout means logout EVERYWHERE (issue #181) — best-effort: offline,
+    // failing or HANGING, the user still signs out locally within the bound
+    // (never trap them); the server-side token revocation is the backstop
+    // anyway. { timeout } caps the SDK's own 70s default; the race also
+    // covers transports that stall without erroring.
     try {
-      await httpsCallable(functions, 'signOutEverywhere')();
+      await Promise.race([
+        httpsCallable(functions, 'signOutEverywhere', {
+          timeout: SIGN_OUT_EVERYWHERE_TIMEOUT_MS,
+        })(),
+        sleep(SIGN_OUT_EVERYWHERE_TIMEOUT_MS),
+      ]);
     } catch (err) {
       console.warn('signOutEverywhere failed; signing out locally only', err);
     }

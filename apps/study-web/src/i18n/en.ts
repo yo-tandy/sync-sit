@@ -122,7 +122,7 @@ export default {
     login: 'Log in',
     loginTitle: 'Welcome back',
     loginSubtitle: 'Sign in to your Sync/Study account',
-    signedOutEverywhere: 'You have been signed out.',
+    signedOutEverywhere: 'You have been signed out on another device.',
     forgotPassword: 'Forgot password?',
     forgotPasswordTitle: 'Reset Password',
     forgotPasswordHeading: 'Forgot your password?',

@@ -27,12 +27,22 @@ export const signOutEverywhere = onCall(
     }
     const uid = request.auth.uid;
 
-    // set+merge, not update: resilient to a missing user doc (the auth
-    // session still gets revoked below either way).
-    await db
-      .collection('users')
-      .doc(uid)
-      .set({ sessionEpoch: FieldValue.serverTimestamp() }, { merge: true });
+    // update(), NOT set+merge: users docs are born ONLY in enrollment (rules
+    // block client creates for the same reason), and a merge here would
+    // create a ghost doc holding nothing but sessionEpoch. An auth user
+    // without a users doc has no watchers to coordinate — treat NOT_FOUND as
+    // success-no-op; the token revocation below still lands either way.
+    try {
+      await db
+        .collection('users')
+        .doc(uid)
+        .update({ sessionEpoch: FieldValue.serverTimestamp() });
+    } catch (err) {
+      const code = (err as { code?: number | string }).code;
+      if (code !== 5 && code !== 'not-found' && code !== 'NOT_FOUND') {
+        throw err;
+      }
+    }
     await adminAuth.revokeRefreshTokens(uid);
     await writeUserActivity(uid, 'signed_out_everywhere', {});
 
