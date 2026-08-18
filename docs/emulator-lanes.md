@@ -2,13 +2,13 @@
 
 The integration suite normally runs against the default emulator ports (8080/9099/5001/9199), which are also what the local dev stack (`pnpm emulators`) and the dev servers use — so a test run and the dev stack could never coexist, and every integration gate meant killing and reseeding the dev environment.
 
-`firebase.lane2.json` defines a second lane with every port shifted +10000 (Firestore 18080, Auth 19099, Functions 15001, Storage 19199, hub 14400, logging 14500, UI disabled). The test harness (`tests/setup/emulator.ts` and `tests/rules/storage-rules.test.ts`) reads the ports from `TEST_FIRESTORE_PORT` / `TEST_AUTH_PORT` / `TEST_FUNCTIONS_PORT` / `TEST_STORAGE_PORT`, so a full suite runs in lane 2 without touching the dev stack:
+`firebase.lane2.json` defines a second lane with every port shifted +10000 (Firestore 18080, Auth 19099, Functions 15001, Storage 19199, hub 14400, logging 14500, UI disabled). The test harness (`tests/setup/emulator.ts`, `tests/rules/storage-rules.test.ts`, and `tests/rules/firestore-rules.test.ts`) reads the ports from `TEST_FIRESTORE_PORT` / `TEST_AUTH_PORT` / `TEST_FUNCTIONS_PORT` / `TEST_STORAGE_PORT`, so a full suite runs in lane 2 without touching the dev stack:
 
 ```bash
-TEST_FIRESTORE_PORT=18080 TEST_AUTH_PORT=19099 TEST_FUNCTIONS_PORT=15001 TEST_STORAGE_PORT=19199 \
-  pnpm exec firebase emulators:exec --config firebase.lane2.json \
-  --only auth,functions,firestore,storage --project demo-test "pnpm test:integration"
+pnpm test:integration:lane2
 ```
+
+(the script in the root package.json carries the four env vars and `--config firebase.lane2.json`, so the ports cannot be half-set by hand)
 
 Notes:
 - Always use the workspace CLI (`pnpm exec firebase`); the global standalone binary silently breaks pnpm child processes.
