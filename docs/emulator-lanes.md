@@ -2,7 +2,7 @@
 
 The integration suite normally runs against the default emulator ports (8080/9099/5001/9199), which are also what the local dev stack (`pnpm emulators`) and the dev servers use — so a test run and the dev stack could never coexist, and every integration gate meant killing and reseeding the dev environment.
 
-`firebase.lane2.json` defines a second lane with every port shifted +10000 (Firestore 18080, Auth 19099, Functions 15001, Storage 19199, hub 14400, logging 14500, UI disabled). The test harness (`tests/setup/emulator.ts`, `tests/rules/storage-rules.test.ts`, and `tests/rules/firestore-rules.test.ts`) reads the ports from `TEST_FIRESTORE_PORT` / `TEST_AUTH_PORT` / `TEST_FUNCTIONS_PORT` / `TEST_STORAGE_PORT`, so a full suite runs in lane 2 without touching the dev stack:
+`firebase.lane2.json` defines a second lane with every port shifted +10000 (Firestore 18080, Auth 19099, Functions 15001, Storage 19199, hub 14400, logging 14500, UI disabled). The test harness (`tests/setup/emulator.ts`, `tests/rules/storage-rules.test.ts`, `tests/rules/firestore-rules.test.ts`, plus the direct `TEST_AUTH_PORT` readers `tests/integration/handoff/app-handoff.test.ts` and `tests/integration/guardian/redeem-kid-invite.test.ts`) reads the ports from `TEST_FIRESTORE_PORT` / `TEST_AUTH_PORT` / `TEST_FUNCTIONS_PORT` / `TEST_STORAGE_PORT`, so a full suite runs in lane 2 without touching the dev stack:
 
 ```bash
 pnpm test:integration:lane2
@@ -16,4 +16,5 @@ Notes:
 - `TEST_STORAGE_PORT` matters: without it the storage-rules suite connects to the DEFAULT port and `clearStorage()` wipes the dev stack's storage bucket.
 - Each lane spawns its own Java Firestore emulator (~hundreds of MB); two concurrent lanes plus the dev stack is a sensible ceiling on a laptop. For a third lane, copy the config with a different offset and pass matching env vars.
 - Lanes are fully isolated: same `demo-test` project id is fine, data never crosses lanes.
-- To run a subset of the suite, use `cd tests && pnpm exec vitest run <path>`. Do NOT use `pnpm test -- <path>`: pnpm forwards the literal `--` and vitest silently discards everything after it, running the full suite while appearing to accept your filter.
+- To run a subset of the suite against LANE 2, keep the env vars on the command: `cd tests && TEST_FIRESTORE_PORT=18080 TEST_AUTH_PORT=19099 TEST_FUNCTIONS_PORT=15001 TEST_STORAGE_PORT=19199 pnpm exec vitest run <path>` — without them the subset silently targets lane 1, where `clearStorage()` wipes the dev bucket (the exact footgun this lane exists to remove). Do NOT use `pnpm test -- <path>`: pnpm forwards the literal `--` and vitest silently discards everything after it, running the full suite while appearing to accept your filter.
+- The seed scripts (`pnpm seed:admin`, `seed-test-data.cjs`) are deliberately NOT lane-aware — they pin the default ports and seed the DEV stack. Lane 2 seeds itself per-test; there is nothing to seed there by hand.
