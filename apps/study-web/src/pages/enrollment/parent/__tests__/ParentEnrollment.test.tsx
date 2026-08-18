@@ -1,0 +1,379 @@
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { screen, fireEvent } from '@testing-library/react';
+
+// Hoisted shared state the mocks record into.
+const h = vi.hoisted(() => ({
+  calls: [] as { name: string; payload: unknown }[],
+  navigate: () => {},
+  // Controllable authStore state — default is signed out so most tests keep
+  // the fresh-signup behavior.
+  auth: { firebaseUser: null as unknown, userDoc: null as unknown, loading: false },
+  refreshUserDoc: () => Promise.resolve(),
+  signIn: vi.fn(() => Promise.resolve()),
+  // Controllable error reason so tests can drive the specialised notices.
+  // There is no account-exists reason (issue #148: silent existing-account
+  // flow) — the only reasons are profile-exists and role-exclusive.
+  errorReason: null as 'profile-exists' | 'role-exclusive' | null,
+  // Controllable raw rejection (no machine-readable reason) so tests can
+  // drive the plain-error fallback, e.g. the createUser already-exists race
+  // backstop.
+  rawError: null as { message: string } | null,
+  // The family data the stub StepFamilyInfo submits — tests override the
+  // address to pin the conditional postcode/city spread.
+  familyData: {} as Record<string, unknown>,
+}));
+
+const FULL_ADDRESS = {
+  fullAddress: '10 Rue Cler, 75007 Paris',
+  street: '10 Rue Cler',
+  city: 'Paris',
+  postcode: '75007',
+  lat: 48.857,
+  lng: 2.305,
+};
+
+function defaultFamilyData() {
+  return {
+    familyName: 'Durand',
+    lastName: '',
+    firstName: 'Claire',
+    address: { ...FULL_ADDRESS },
+    pets: 'Cat',
+    note: 'Ring twice',
+  };
+}
+
+vi.mock('@/config/firebase', () => ({ functions: {}, auth: {} }));
+vi.mock('firebase/functions', () => ({
+  httpsCallable: (_fns: unknown, name: string) => (payload: unknown) => {
+    h.calls.push({ name, payload });
+    // Model a backend rejection carrying the details.reason the SDK surfaces.
+    if (name === 'enrollFamily' && h.errorReason) {
+      return Promise.reject({ details: { reason: h.errorReason } });
+    }
+    // Model a reason-less rejection (e.g. the createUser race backstop):
+    // the SDK surfaces an Error whose message is the HttpsError message.
+    if (name === 'enrollFamily' && h.rawError) {
+      return Promise.reject(new Error(h.rawError.message));
+    }
+    return Promise.resolve({ data: { uid: 'u1', familyId: 'f1' } });
+  },
+}));
+vi.mock('firebase/auth', () => ({
+  signInWithEmailAndPassword: (...args: unknown[]) => h.signIn(...args),
+}));
+vi.mock('react-router', async (orig) => ({
+  ...(await orig<typeof import('react-router')>()),
+  useNavigate: () => h.navigate,
+}));
+vi.mock('@/stores/authStore', () => {
+  const useAuthStore = (() => ({
+    firebaseUser: h.auth.firebaseUser,
+    userDoc: h.auth.userDoc,
+    loading: h.auth.loading,
+    refreshUserDoc: h.refreshUserDoc,
+  })) as unknown as {
+    (): unknown;
+    getState: () => unknown;
+    subscribe: (fn: (s: unknown) => void) => () => void;
+  };
+  // Statics used by the post-signup auto-login wait.
+  useAuthStore.getState = () => ({ loading: false, firebaseUser: { uid: 'new' }, userDoc: h.auth.userDoc });
+  useAuthStore.subscribe = () => () => {};
+  return { useAuthStore };
+});
+vi.mock('@ejm/shared-core', () => ({
+  getParentProfile: (userDoc: { profiles?: { parent?: unknown } } | null) =>
+    userDoc?.profiles?.parent ?? null,
+}));
+
+// Lightweight stand-ins for the shared step components: each exposes a button
+// that fires its callback so we can drive the orchestrator deterministically.
+vi.mock('@ejm/shared-ui', () => ({
+  // Mirrors the real helper: read details.reason off the rejected value.
+  enrollmentErrorReason: (err: { details?: { reason?: unknown } } | null) => {
+    const reason = err?.details?.reason;
+    return reason === 'profile-exists' || reason === 'role-exclusive' ? reason : null;
+  },
+  TopNav: ({ title }: { title: string }) => <div>{title}</div>,
+  StepIndicator: ({ currentStep }: { currentStep: number }) => <div>step-{currentStep}</div>,
+  StepVerify: ({ onVerify, onResend }: { onVerify: (c: string) => void; onResend: () => void }) => (
+    <div>
+      <button onClick={() => onVerify('123456')}>verify-submit</button>
+      <button onClick={() => onResend()}>verify-resend</button>
+    </div>
+  ),
+  StepPassword: (props: { onSubmit: (pw: string, c: string) => void; collectPassword?: boolean }) => (
+    <button
+      data-testid="step-password"
+      data-collect={String(props.collectPassword)}
+      onClick={() => props.onSubmit('Pw123456!', '2025-12-01')}
+    >
+      password-submit
+    </button>
+  ),
+}));
+vi.mock('@/components/ui/EnrollmentAppBar', () => ({
+  EnrollmentAppBar: () => <div>enrollment-app-bar</div>,
+}));
+vi.mock('../StepParentEmail', () => ({
+  StepParentEmail: ({ onChange, onSubmit }: { onChange: (e: string) => void; onSubmit: () => void }) => (
+    <button
+      onClick={() => {
+        onChange('claire@example.com');
+        onSubmit();
+      }}
+    >
+      email-submit
+    </button>
+  ),
+}));
+vi.mock('../StepFamilyInfo', () => ({
+  StepFamilyInfo: ({ onNext, error }: { onNext: (d: unknown) => void; error?: string | null }) => (
+    <div>
+      {error && <p>{error}</p>}
+      <button onClick={() => onNext(h.familyData)}>family-submit</button>
+    </div>
+  ),
+}));
+
+import { I18nextProvider } from 'react-i18next';
+import { MemoryRouter } from 'react-router';
+import { render } from '@testing-library/react';
+import i18n from '@/i18n';
+import { ParentEnrollment } from '../ParentEnrollment';
+
+function renderFlow() {
+  return render(
+    <I18nextProvider i18n={i18n}>
+      <MemoryRouter>
+        <ParentEnrollment />
+      </MemoryRouter>
+    </I18nextProvider>,
+  );
+}
+
+beforeEach(() => {
+  h.calls.length = 0;
+  h.navigate = vi.fn();
+  h.auth = { firebaseUser: null, userDoc: null, loading: false };
+  h.refreshUserDoc = vi.fn().mockResolvedValue(undefined);
+  h.signIn.mockClear();
+  h.errorReason = null;
+  h.rawError = null;
+  h.familyData = defaultFamilyData();
+});
+
+describe('ParentEnrollment orchestrator', () => {
+  it('starts on the email step with the auth-phase chrome (TopNav + StepIndicator)', () => {
+    renderFlow();
+    expect(screen.getByText('email-submit')).toBeInTheDocument();
+    expect(screen.getByText('step-0')).toBeInTheDocument();
+    expect(screen.queryByText('enrollment-app-bar')).toBeNull();
+  });
+
+  it('drives through all steps and submits enrollFamily, then signs in and navigates to /family', async () => {
+    renderFlow();
+
+    fireEvent.click(screen.getByText('email-submit'));
+    expect(await screen.findByText('verify-submit')).toBeInTheDocument();
+    expect(h.calls.map((c) => c.name)).toContain('verifyParentEmail');
+
+    fireEvent.click(screen.getByText('verify-submit'));
+    expect(await screen.findByText('password-submit')).toBeInTheDocument();
+    expect(h.calls.map((c) => c.name)).toContain('verifyCode');
+
+    // Signed-out (default): password is collected.
+    expect(screen.getByTestId('step-password')).toHaveAttribute('data-collect', 'true');
+
+    // Step 2 -> 3 crosses into the post-auth phase: app bar replaces TopNav.
+    fireEvent.click(screen.getByText('password-submit'));
+    expect(await screen.findByText('family-submit')).toBeInTheDocument();
+    expect(screen.getByText('enrollment-app-bar')).toBeInTheDocument();
+    expect(screen.queryByText(/step-\d/)).toBeNull();
+
+    fireEvent.click(screen.getByText('family-submit'));
+
+    const enroll = await vi.waitFor(() => {
+      const c = h.calls.find((x) => x.name === 'enrollFamily');
+      expect(c).toBeTruthy();
+      return c!;
+    });
+    const payload = enroll.payload as Record<string, unknown>;
+    expect(payload).toMatchObject({
+      email: 'claire@example.com',
+      verificationCode: '123456',
+      password: 'Pw123456!',
+      familyName: 'Durand',
+      firstName: 'Claire',
+      address: '10 Rue Cler, 75007 Paris',
+      latLng: { lat: 48.857, lng: 2.305 },
+      // Geocoder components ride along from the AddressResult (issue #167) —
+      // coverage-area matching depends on them.
+      postcode: '75007',
+      city: 'Paris',
+      pets: 'Cat',
+      note: 'Ring twice',
+      kids: [],
+    });
+    // Empty lastName means "same as family name" — the key must be ABSENT
+    // (not sent as ''), the backend falls back to familyName.
+    expect(payload).not.toHaveProperty('lastName');
+
+    await vi.waitFor(() => expect(h.navigate).toHaveBeenCalledWith('/family'));
+    // New-account path signs the parent in — the navigation must land in
+    // the portal, not bounce to login.
+    expect(h.signIn).toHaveBeenCalledWith(expect.anything(), 'claire@example.com', 'Pw123456!');
+  });
+
+  it('verifyParentEmail carries the study app hint (silent account-exists copy, issue #154)', async () => {
+    renderFlow();
+    fireEvent.click(screen.getByText('email-submit'));
+    await vi.waitFor(() => {
+      const call = h.calls.find((c) => c.name === 'verifyParentEmail');
+      expect(call).toBeTruthy();
+      // The stub StepParentEmail fires onChange+onSubmit in the same tick, so
+      // the email state is still the initial '' in this render — the pin here
+      // is the app hint, not the email value.
+      expect(call!.payload).toMatchObject({ app: 'study' });
+    });
+  });
+
+  it('the resend path ALSO carries the study app hint (issue #154 ledger)', async () => {
+    renderFlow();
+    fireEvent.click(screen.getByText('email-submit'));
+    fireEvent.click(await screen.findByText('verify-resend'));
+
+    await vi.waitFor(() => {
+      const sends = h.calls.filter((c) => c.name === 'verifyParentEmail');
+      expect(sends.length).toBe(2);
+      for (const send of sends) {
+        expect(send.payload).toMatchObject({ app: 'study' });
+      }
+    });
+  });
+
+  it('omits postcode/city from the payload when the address lacks them', async () => {
+    h.familyData = {
+      ...defaultFamilyData(),
+      address: { ...FULL_ADDRESS, postcode: '', city: '' },
+    };
+    renderFlow();
+    fireEvent.click(screen.getByText('email-submit'));
+    fireEvent.click(await screen.findByText('verify-submit'));
+    fireEvent.click(await screen.findByText('password-submit'));
+    fireEvent.click(await screen.findByText('family-submit'));
+
+    const enroll = await vi.waitFor(() => {
+      const c = h.calls.find((x) => x.name === 'enrollFamily');
+      expect(c).toBeTruthy();
+      return c!;
+    });
+    // ABSENT, not empty strings — the schema takes optional strings and the
+    // backend nulls what is missing.
+    expect(enroll.payload).not.toHaveProperty('postcode');
+    expect(enroll.payload).not.toHaveProperty('city');
+  });
+
+  it('a sign-in failure after successful enrollment still navigates to /family', async () => {
+    // Enrollment fully succeeded (account/family/user doc written, code doc
+    // consumed) — an auth hiccup must not read as an enrollment error or
+    // strand the user mid-wizard.
+    h.signIn.mockRejectedValueOnce(new Error('auth/network-request-failed'));
+    renderFlow();
+    fireEvent.click(screen.getByText('email-submit'));
+    fireEvent.click(await screen.findByText('verify-submit'));
+    fireEvent.click(await screen.findByText('password-submit'));
+    fireEvent.click(await screen.findByText('family-submit'));
+
+    await vi.waitFor(() => expect(h.navigate).toHaveBeenCalledWith('/family'));
+    expect(screen.queryByText(/network-request-failed/)).toBeNull();
+  });
+
+  it('authed WITH a parent profile: redirects to /family instead of enrolling', () => {
+    h.auth = { firebaseUser: { uid: 'p1' }, userDoc: { profiles: { parent: {} } }, loading: false };
+    renderFlow();
+    expect(h.navigate).toHaveBeenCalledWith('/family', { replace: true });
+  });
+
+  it('authed without a parent profile: jumps to consent-only StepPassword, payload omits credentials, refreshes doc', async () => {
+    h.auth = { firebaseUser: { uid: 'x1' }, userDoc: { profiles: {} }, loading: false };
+    // Model the real store: refreshUserDoc pulls the freshly-added parent
+    // profile. The redirect effect must NOT hijack the success navigation
+    // once this lands.
+    h.refreshUserDoc = vi.fn().mockImplementation(() => {
+      h.auth.userDoc = { profiles: { parent: {} } };
+      return Promise.resolve();
+    });
+    renderFlow();
+
+    // Credential steps skipped: straight to the consent-only password step.
+    const passwordStep = await screen.findByTestId('step-password');
+    expect(passwordStep).toHaveAttribute('data-collect', 'false');
+    expect(screen.queryByText('email-submit')).toBeNull();
+
+    fireEvent.click(passwordStep);
+    fireEvent.click(await screen.findByText('family-submit'));
+
+    const enroll = await vi.waitFor(() => {
+      const c = h.calls.find((x) => x.name === 'enrollFamily');
+      expect(c).toBeTruthy();
+      return c!;
+    });
+    // Credential keys are ABSENT (not sent empty) — the backend takes the
+    // add-profile branch on the existing account.
+    for (const key of ['email', 'verificationCode', 'password']) {
+      expect(enroll.payload).not.toHaveProperty(key);
+    }
+    // Already signed in — no re-authentication.
+    expect(h.signIn).not.toHaveBeenCalled();
+    // refreshUserDoc must be awaited before the success navigation.
+    await vi.waitFor(() => expect(h.navigate).toHaveBeenCalledWith('/family'));
+    expect(h.refreshUserDoc).toHaveBeenCalled();
+    // The now-present parent profile must not divert the navigation.
+    expect(h.navigate).not.toHaveBeenCalledWith('/family', { replace: true });
+  });
+
+  async function driveToEnrollFamily() {
+    renderFlow();
+    fireEvent.click(screen.getByText('email-submit'));
+    fireEvent.click(await screen.findByText('verify-submit'));
+    fireEvent.click(await screen.findByText('password-submit'));
+    fireEvent.click(await screen.findByText('family-submit'));
+    await vi.waitFor(() => expect(h.calls.some((c) => c.name === 'enrollFamily')).toBe(true));
+  }
+
+  it("enrollFamily 'profile-exists' rejection renders alreadyInFamily and NO login link", async () => {
+    h.errorReason = 'profile-exists';
+    await driveToEnrollFamily();
+
+    const msg = i18n.t('enrollment.alreadyInFamily');
+    expect(await screen.findByText(msg)).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: i18n.t('auth.login') })).toBeNull();
+    expect(h.navigate).not.toHaveBeenCalledWith('/family');
+  });
+
+  it("enrollFamily 'role-exclusive' rejection renders the provider-account explanation", async () => {
+    // Defense-in-depth: the signup role page withholds the parent option from
+    // provider accounts (issue #116), but a direct /enroll/parent visit still
+    // gets the explanation instead of a raw server error.
+    h.errorReason = 'role-exclusive';
+    await driveToEnrollFamily();
+
+    const msg = i18n.t('signup.roleExclusiveParent');
+    expect(await screen.findByText(msg)).toBeInTheDocument();
+    expect(h.navigate).not.toHaveBeenCalledWith('/family');
+  });
+
+  it('a reason-less enrollFamily rejection (race backstop) shows the plain message', async () => {
+    // Issue #148: an existing account produces no special client branch. The
+    // only remaining already-exists surface is the createUser race backstop,
+    // which arrives reason-less and renders as a plain error string.
+    h.rawError = { message: 'An account with this email already exists' };
+    await driveToEnrollFamily();
+
+    expect(await screen.findByText('An account with this email already exists')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: i18n.t('auth.login') })).toBeNull();
+    expect(h.navigate).not.toHaveBeenCalledWith('/family');
+  });
+});

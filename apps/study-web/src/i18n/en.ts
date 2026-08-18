@@ -970,6 +970,18 @@ export default {
     alreadyInFamily: 'You already belong to a family.',
     joinFamilyConfirm: 'Join the {{familyName}} family',
     tutorTitle: 'Tutor Sign Up',
+    // Parent (family) signup wizard
+    parentTitle: 'Parent Sign Up',
+    yourAccount: 'Your account',
+    yourAccountDesc: "Enter your email address. We'll send a code to verify it.",
+    yourFamily: 'Your family',
+    yourFamilyDesc: 'Tell us about your family.',
+    familyName: 'Family name *',
+    parentLastName: 'Last name',
+    addressLabel: 'Address *',
+    pets: 'Pets',
+    petsHint: 'e.g. Cat, small dog',
+    notesForTutors: 'Notes for tutors',
     tutor: {
       title: 'Tutor enrollment',
       stepEmail: 'Verify your EJM email',
