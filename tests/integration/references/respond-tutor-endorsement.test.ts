@@ -29,13 +29,23 @@ describe('respondToTutorEndorsement', () => {
 
   beforeEach(async () => {
     const db = getDb();
-    const refs = await db.collection('references').get();
-    await Promise.all(refs.docs.map((d) => d.ref.delete()));
+    for (const coll of ['references', 'notifications']) {
+      const snap = await db.collection(coll).get();
+      await Promise.all(snap.docs.map((d) => d.ref.delete()));
+    }
     // Reset the server-owned counter — accept increments it and it would
     // otherwise accumulate across tests.
     await Promise.all(
       [seed.tutor2.uid, seed.tutor3.uid].map((uid) =>
         db.collection('users').doc(uid).update({ 'profiles.tutor.endorsementCount': 0 }),
+      ),
+    );
+    // Reset the references pref — the gating test flips it off for parent1.
+    await Promise.all(
+      [seed.parent1.uid, seed.parent2.uid].map((uid) =>
+        db.collection('users').doc(uid).update({
+          'notifPrefs.references': { push: true, email: true },
+        }),
       ),
     );
   });
@@ -88,6 +98,60 @@ describe('respondToTutorEndorsement', () => {
     expect(doc.status).toBe('removed');
     const tutorDoc = (await db.collection('users').doc(seed.tutor2.uid).get()).data()!;
     expect(tutorDoc.profiles.tutor.endorsementCount).toBe(0);
+  });
+
+  // ── Submitter-outcome notifications (issue #168 Phase 0) ──
+
+  it('accept notifies every parent of the submitting family (tutor_endorsement_published, tutor first name in body)', async () => {
+    const referenceId = await seedPrivateEndorsement(seed.tutor2.uid);
+    await callFunction('respondToTutorEndorsement', { referenceId, action: 'accept' }, tutor2Token);
+
+    const db = getDb();
+    for (const parentUid of [seed.parent1.uid, seed.parent2.uid]) {
+      const snap = await db.collection('notifications')
+        .where('recipientUserId', '==', parentUid).get();
+      const doc = snap.docs.find((d) => d.data().type === 'tutor_endorsement_published');
+      expect(doc).toBeTruthy();
+      expect(doc!.data().body).toContain('Yael'); // tutor2's first name
+      expect(doc!.data().body).toContain('now visible');
+      expect(doc!.data().emailSent).toBe(true); // references.email pref is on
+      expect(doc!.data().data.referenceId).toBe(referenceId);
+    }
+  });
+
+  it('dismiss notifies the submitter neutrally (tutor_endorsement_declined, "was not published")', async () => {
+    const referenceId = await seedPrivateEndorsement(seed.tutor2.uid);
+    await callFunction('respondToTutorEndorsement', { referenceId, action: 'dismiss' }, tutor2Token);
+
+    const db = getDb();
+    const snap = await db.collection('notifications')
+      .where('recipientUserId', '==', seed.parent1.uid).get();
+    const doc = snap.docs.find((d) => d.data().type === 'tutor_endorsement_declined');
+    expect(doc).toBeTruthy();
+    expect(doc!.data().body).toContain('was not published');
+    // Neutral copy: never says the tutor rejected/declined it.
+    expect(doc!.data().body.toLowerCase()).not.toContain('reject');
+  });
+
+  it('respects the references email pref when notifying (emailSent false when opted out)', async () => {
+    const db = getDb();
+    await db.collection('users').doc(seed.parent1.uid).update({
+      'notifPrefs.references': { push: false, email: false },
+    });
+    const referenceId = await seedPrivateEndorsement(seed.tutor2.uid);
+    await callFunction('respondToTutorEndorsement', { referenceId, action: 'accept' }, tutor2Token);
+
+    const p1 = await db.collection('notifications')
+      .where('recipientUserId', '==', seed.parent1.uid).get();
+    const p1doc = p1.docs.find((d) => d.data().type === 'tutor_endorsement_published');
+    // In-app doc still written, but the email channel respected the opt-out.
+    expect(p1doc).toBeTruthy();
+    expect(p1doc!.data().emailSent).toBe(false);
+    // parent2 kept the default and still gets the email channel.
+    const p2 = await db.collection('notifications')
+      .where('recipientUserId', '==', seed.parent2.uid).get();
+    const p2doc = p2.docs.find((d) => d.data().type === 'tutor_endorsement_published');
+    expect(p2doc!.data().emailSent).toBe(true);
   });
 
   it('rejects a response from a tutor who is not the endorsed one (permission-denied)', async () => {

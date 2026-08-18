@@ -3,7 +3,7 @@ import { sendNotificationEmail } from './email.js';
 import type { NotificationApp } from './email.js';
 import { sendPushNotification } from './push.js';
 
-type NotifPrefCategory = 'newRequest' | 'confirmed' | 'cancelled' | 'reminders';
+type NotifPrefCategory = 'newRequest' | 'confirmed' | 'cancelled' | 'reminders' | 'references';
 
 interface ParentNotification {
   familyId: string;
