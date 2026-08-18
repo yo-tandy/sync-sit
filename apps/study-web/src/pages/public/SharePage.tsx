@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { TopNav, Button, Card, useToast, ShareIcon, MailIcon } from '@ejm/shared-ui';
+import { TopNav, Button, Card, Spinner, useToast, ShareIcon, MailIcon } from '@ejm/shared-ui';
 import { getStudyRole } from '@ejm/study-core';
 import { useAuthStore } from '@/stores/authStore';
 
@@ -13,15 +13,30 @@ import { useAuthStore } from '@/stores/authStore';
  *
  * The pitch is role-aware: tutors share a "get in touch with families" text
  * (they are not looking for tutors themselves); parents — and unauthenticated
- * visitors, since the route is public — get the find-tutors text.
+ * visitors, since the route is public — get the find-tutors text. Admins
+ * deliberately take the family-pitch branch too (they are not tutoring).
+ * While auth is still resolving we show a spinner rather than the family
+ * pitch, so a signed-in tutor hard-refreshing /share never sees (or sends)
+ * the wrong text; unauthenticated visitors resolve fast and fall through.
  */
 export function SharePage() {
   const { t, i18n } = useTranslation();
-  const { userDoc } = useAuthStore();
+  const { userDoc, loading: authLoading } = useAuthStore();
   const toast = useToast();
   const [copied, setCopied] = useState(false);
   const isFr = i18n.language?.startsWith('fr');
   const isTutor = getStudyRole(userDoc) === 'tutor';
+
+  if (authLoading) {
+    return (
+      <div>
+        <TopNav title={t('share.title')} backTo="back" />
+        <div className="flex flex-col items-center gap-3 py-20">
+          <Spinner className="h-8 w-8 text-brand-600" />
+        </div>
+      </div>
+    );
+  }
 
   const shareText = isTutor
     ? isFr

@@ -1,10 +1,11 @@
 import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
 import { screen, fireEvent, waitFor } from '@testing-library/react';
 
-// The page reads useAuthStore to pick the role-aware pitch; mutable mock state
-// keeps the public (unauthenticated) render working and lets tests flip roles.
-// getStudyRole runs for real against the mocked userDoc shapes.
-const authState: { userDoc: unknown } = { userDoc: null };
+// The page reads useAuthStore to pick the role-aware pitch (and gates on
+// loading); mutable mock state keeps the public (unauthenticated) render
+// working and lets tests flip roles. getStudyRole runs for real against the
+// mocked userDoc shapes.
+const authState: { userDoc: unknown; loading: boolean } = { userDoc: null, loading: false };
 vi.mock('@/stores/authStore', () => {
   const useAuthStore = () => authState;
   useAuthStore.getState = () => authState;
@@ -34,16 +35,53 @@ function setNavigatorShare(fn: (() => Promise<void>) | undefined) {
   }
 }
 
+// Some tests replace window.location (mailto capture) or navigator.clipboard
+// wholesale; restore the originals so later tests see the real objects.
+const originalLocation = window.location;
+const originalClipboard = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
+
 beforeEach(() => {
   authState.userDoc = null;
+  authState.loading = false;
 });
 
 afterEach(() => {
   setNavigatorShare(undefined);
+  Object.defineProperty(window, 'location', {
+    value: originalLocation,
+    writable: true,
+    configurable: true,
+  });
+  if (originalClipboard) {
+    Object.defineProperty(navigator, 'clipboard', originalClipboard);
+  } else {
+    delete (navigator as unknown as Record<string, unknown>).clipboard;
+  }
 });
 
 beforeAll(async () => {
   await i18n.changeLanguage('en');
+});
+
+describe('SharePage (study) — auth loading gate', () => {
+  it('shows neither pitch nor share actions while auth resolves, then the tutor pitch', () => {
+    authState.loading = true;
+    authState.userDoc = null;
+    const { rerender } = renderWithProviders(<SharePage />);
+
+    // No pitch is previewable or sendable during the race window.
+    expect(screen.queryByText(/find trusted tutors/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/get in touch with families/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /copy to clipboard/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /share by email/i })).not.toBeInTheDocument();
+
+    // Auth resolves as a tutor: the tutor pitch appears.
+    authState.loading = false;
+    authState.userDoc = TUTOR_DOC;
+    rerender(<SharePage />);
+    expect(screen.getByText(/get in touch with families/i)).toBeInTheDocument();
+    expect(screen.queryByText(/find trusted tutors/i)).not.toBeInTheDocument();
+  });
 });
 
 describe('SharePage (study) — parent/unauthenticated pitch', () => {
@@ -102,6 +140,26 @@ describe('SharePage (study) — parent/unauthenticated pitch', () => {
     await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
     expect(writeText.mock.calls[0][0]).toContain('Sync/Study');
     expect(writeText.mock.calls[0][0]).toContain(ORIGIN);
+    await waitFor(() => expect(screen.getAllByText(/copied/i).length).toBeGreaterThan(0));
+  });
+
+  it('falls back to the execCommand textarea copy when navigator.clipboard is absent', async () => {
+    delete (navigator as unknown as Record<string, unknown>).clipboard;
+    const copiedValues: string[] = [];
+    document.execCommand = vi.fn((command: string) => {
+      if (command === 'copy') {
+        for (const ta of Array.from(document.getElementsByTagName('textarea'))) {
+          copiedValues.push(ta.value);
+        }
+      }
+      return true;
+    });
+    renderWithProviders(<SharePage />);
+
+    fireEvent.click(screen.getByRole('button', { name: /copy to clipboard/i }));
+
+    await waitFor(() => expect(document.execCommand).toHaveBeenCalledWith('copy'));
+    expect(copiedValues.some((v) => v.includes('Sync/Study') && v.includes(ORIGIN))).toBe(true);
     await waitFor(() => expect(screen.getAllByText(/copied/i).length).toBeGreaterThan(0));
   });
 
