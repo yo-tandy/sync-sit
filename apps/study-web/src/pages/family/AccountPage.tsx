@@ -131,10 +131,14 @@ export function AccountPage() {
     async (scenario: keyof NotifPrefs, email: boolean) => {
       if (!uid) return;
       const stored = userDoc?.notifPrefs?.[scenario];
+      // Read push BEFORE the `'push' in stored` check: in the else branch
+      // tsc -b narrows `stored` to never (the declared map type always
+      // carries push), so the optional access fails the CI build.
+      const prevPush = stored?.push ?? true;
       await updateDoc(doc(db, 'users', uid), {
         ...(stored && 'push' in stored
           ? { [`notifPrefs.${scenario}.email`]: email }
-          : { [`notifPrefs.${scenario}`]: { push: stored?.push ?? true, email } }),
+          : { [`notifPrefs.${scenario}`]: { push: prevPush, email } }),
         updatedAt: serverTimestamp(),
       });
       await refreshUserDoc();
