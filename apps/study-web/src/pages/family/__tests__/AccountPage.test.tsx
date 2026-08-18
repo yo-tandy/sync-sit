@@ -116,14 +116,18 @@ describe('family AccountPage', () => {
     }
   });
 
-  it('toggling the endorsements row writes the references email dot-path', async () => {
+  it('toggling a scenario ABSENT from the stored doc writes the FULL channel map', async () => {
     renderWithProviders(<AccountPage />);
     // references is absent from the stored prefs → treated as email-on; the
-    // first toggle turns it off.
+    // first toggle turns it off. A single-channel dot-path here would create
+    // a half-populated map ({email} with no push) that sit's UI reads as
+    // "push off" while the server still sends — so the write must carry the
+    // full map, with push matching the server's default-on gate.
     fireEvent.click(screen.getByRole('button', { name: 'Endorsements' }));
     await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
     const payload = h.updateDoc.mock.calls[0][1] as Record<string, unknown>;
-    expect(payload).toHaveProperty('notifPrefs.references.email', false);
+    expect(Object.keys(payload).sort()).toEqual(['notifPrefs.references', 'updatedAt']);
+    expect(payload['notifPrefs.references']).toEqual({ push: true, email: false });
   });
 
   it('sends a password reset email to the login address', async () => {

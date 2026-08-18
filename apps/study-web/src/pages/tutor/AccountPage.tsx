@@ -309,16 +309,25 @@ export function AccountPage() {
   // `notifPrefs` write would clobber the push.* values the sit app may have
   // written after this page mounted (push channels are not editable here, so
   // our in-memory `prefs.push` can be stale). Mirrors the family AccountPage.
+  // EXCEPTION: when the scenario key is absent from the STORED doc (older
+  // users predating a scenario, e.g. references), a single-channel dot-path
+  // would create a half-populated map ({email} with no push) that sit's UI
+  // renders as "push off" while the server (missing push = on) still sends.
+  // There is nothing to clobber for an absent key, so write the full map once
+  // — push: true matches the server's default-on gate.
   const savePrefs = useCallback(
     async (scenario: keyof NotifPrefs, email: boolean) => {
       if (!uid) return;
+      const stored = userDoc?.notifPrefs?.[scenario];
       await updateDoc(doc(db, 'users', uid), {
-        [`notifPrefs.${scenario}.email`]: email,
+        ...(stored
+          ? { [`notifPrefs.${scenario}.email`]: email }
+          : { [`notifPrefs.${scenario}`]: { push: true, email } }),
         updatedAt: serverTimestamp(),
       });
       await refreshUserDoc();
     },
-    [uid, refreshUserDoc],
+    [uid, userDoc, refreshUserDoc],
   );
 
   const toggleEmail = async (scenario: keyof NotifPrefs) => {
