@@ -8,7 +8,7 @@ import { doc, getDoc } from 'firebase/firestore';
 import { getStudyRole, type StudyUser } from '@ejm/study-core';
 import { Card, Spinner } from '@ejm/shared-ui';
 import { auth, db, functions } from '@/config/firebase';
-import { useAuthStore } from '@/stores/authStore';
+import { markNextSignInFresh, useAuthStore } from '@/stores/authStore';
 import { postLoginRouter } from '@/utils/postLoginRouter';
 
 /**
@@ -70,6 +70,8 @@ function runHandoffOnce(params: URLSearchParams, i18nInstance: I18n): Promise<st
       const res = await redeem({ code });
       // If someone is already signed in on this origin, the handoff still
       // wins — it's the fresher intent; the custom token replaces the session.
+      // Fresh, deliberate sign-in: capture the session epoch anew (issue #181).
+      markNextSignInFresh();
       const cred = await signInWithCustomToken(auth, res.data.token);
       try {
         // Mirror the login flow: load the user doc, prime the store, then

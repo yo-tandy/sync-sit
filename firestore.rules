@@ -245,10 +245,13 @@ service cloud.firestore {
       // - governedBy / identityLocked: supervision mirrors owned by the
       //   guardian callables (governedBy present iff the guardianLinks doc is
       //   ACTIVE; identityLocked marks parent-attested identity).
+      // - sessionEpoch: server-owned (signOutEverywhere callable) — a client
+      //   bumping it could force-sign-out its own other-origin sessions
+      //   without token revocation, or spoof the coherence signal.
       allow update: if isOwner(userId)
                     && !request.resource.data.diff(resource.data).affectedKeys()
                         .hasAny(['uid', 'email', 'status', 'createdAt', 'isAdmin',
-                                 'governedBy', 'identityLocked'])
+                                 'governedBy', 'identityLocked', 'sessionEpoch'])
                     && profileRolesUnchanged()
                     && babysitterIdentityUnchanged()
                     && tutorIdentityUnchanged()

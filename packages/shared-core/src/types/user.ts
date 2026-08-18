@@ -41,6 +41,14 @@ export interface User {
    */
   identityLocked?: true;
 
+  /**
+   * Cross-app session coherence (issue #181). Server-owned, rules-pinned —
+   * bumped ONLY by the signOutEverywhere callable. Both apps capture it at
+   * sign-in and watch the user doc; a doc epoch NEWER than the captured one
+   * force-signs the local session out. Absent on legacy docs (treated as 0).
+   */
+  sessionEpoch?: FirestoreTimestamp;
+
   profiles: {
     babysitter?: ProfileBase;
     tutor?: ProfileBase;

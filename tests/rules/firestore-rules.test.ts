@@ -211,6 +211,35 @@ describe('users collection — Plan D owner-update guards', () => {
     );
   });
 
+  // sessionEpoch is server-owned (signOutEverywhere callable, issue #181):
+  // the cross-app force-sign-out signal must not be client-forgeable.
+  it('owner may NOT write sessionEpoch (lone field)', async () => {
+    await seed('se1', { status: 'active', email: 'b@ejm.org', profiles: { babysitter: { ejemEmail: 'b@ejm.org', enrollmentComplete: true } } });
+    const authed = testEnv.authenticatedContext('se1');
+    await assertFails(
+      updateDoc(doc(authed.firestore(), 'users', 'se1'), { sessionEpoch: new Date() })
+    );
+  });
+
+  it('owner may NOT smuggle sessionEpoch into an otherwise-allowed profile update', async () => {
+    await seed('se2', { status: 'active', email: 'b@ejm.org', profiles: { babysitter: { ejemEmail: 'b@ejm.org', enrollmentComplete: true } } });
+    const authed = testEnv.authenticatedContext('se2');
+    await assertFails(
+      updateDoc(doc(authed.firestore(), 'users', 'se2'), {
+        'profiles.babysitter.hourlyRate': 20,
+        sessionEpoch: new Date(),
+      })
+    );
+  });
+
+  it('normal profile update still passes with sessionEpoch present on the doc', async () => {
+    await seed('se3', { status: 'active', email: 'b@ejm.org', sessionEpoch: new Date(), profiles: { babysitter: { ejemEmail: 'b@ejm.org', enrollmentComplete: true } } });
+    const authed = testEnv.authenticatedContext('se3');
+    await assertSucceeds(
+      updateDoc(doc(authed.firestore(), 'users', 'se3'), { 'profiles.babysitter.hourlyRate': 20 })
+    );
+  });
+
   // Tutor state machine is server-owned: enrollmentComplete is flipped only by
   // admin approval (reviewVerification), ejemEmail by enrollTutor, and the
   // verification block by the verification callables. Owners may edit the rest

@@ -19,6 +19,7 @@ export * from './admin/verifyAdmin.js';
 export { verifyEjmEmail } from './auth/verifyEjmEmail.js';
 export { verifyParentEmail } from './auth/verifyParentEmail.js';
 export { verifyCode } from './auth/verifyCode.js';
+export { signOutEverywhere } from './auth/signOutEverywhere.js';
 
 // Enrollment helpers — shared merge utilities
 export {

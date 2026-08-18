@@ -7,7 +7,7 @@ import { getTutorProfile } from '@ejm/study-core';
 import type { SubjectOffering } from '@ejm/study-core';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth, functions } from '@/config/firebase';
-import { useAuthStore } from '@/stores/authStore';
+import { markNextSignInFresh, useAuthStore } from '@/stores/authStore';
 import { EnrollmentAppBar } from '@/components/ui/EnrollmentAppBar';
 import { StepSubjects } from './StepSubjects';
 import type { Row as SubjectRow } from './StepSubjects';
@@ -187,6 +187,8 @@ export function TutorEnrollment() {
         // failure or block the success page — worst case the CTA asks the
         // tutor to log in with the credentials they just chose.
         try {
+          // Fresh, deliberate sign-in: capture the session epoch anew (issue #181).
+          markNextSignInFresh();
           await signInWithEmailAndPassword(auth, ejemEmail, password);
           await new Promise<void>((resolve) => {
             // Resolve on auth settling (firebaseUser + !loading) — userDoc

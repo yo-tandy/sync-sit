@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { httpsCallable } from 'firebase/functions';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth, functions } from '@/config/firebase';
-import { useAuthStore } from '@/stores/authStore';
+import { markNextSignInFresh, useAuthStore } from '@/stores/authStore';
 import { getParentProfile } from '@ejm/sit-core';
 import { enrollmentErrorReason } from '@ejm/shared-ui';
 import { TopNav, StepIndicator } from '@/components/ui';
@@ -175,6 +175,8 @@ export function ParentEnrollment() {
 
       await enrollFamily(basePayload);
 
+      // Fresh, deliberate sign-in: capture the session epoch anew (issue #181).
+      markNextSignInFresh();
       await signInWithEmailAndPassword(auth, formData.email, formData.password);
 
       // Wait for auth store to fully load the user doc before navigating

@@ -11,6 +11,7 @@ export {
   verifyEjmEmail,
   verifyParentEmail,
   verifyCode,
+  signOutEverywhere,
   // Enrollment (family-related)
   enrollFamily,
   generateInviteLink,
