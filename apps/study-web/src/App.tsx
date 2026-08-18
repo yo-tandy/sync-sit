@@ -10,12 +10,25 @@ export default function App() {
   const [toast, setToast] = useState<{ title: string; body: string } | null>(null);
 
   useEffect(() => {
+    // setupForegroundMessages resolves async: if the effect is cleaned up
+    // first (StrictMode double-invoke), the late-resolving listener must be
+    // detached immediately or it leaks. Same for the dismiss timer.
     let unsub: (() => void) | undefined;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
     setupForegroundMessages((title, body) => {
       setToast({ title, body });
-      setTimeout(() => setToast(null), 5000);
-    }).then((fn) => { unsub = fn; });
-    return () => { unsub?.(); };
+      clearTimeout(timer);
+      timer = setTimeout(() => setToast(null), 5000);
+    }).then((fn) => {
+      if (cancelled) fn?.();
+      else unsub = fn;
+    });
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+      unsub?.();
+    };
   }, []);
 
   return (

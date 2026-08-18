@@ -18,6 +18,14 @@ const PUSH_BRANDING: Record<NotificationApp, { icon: string; link: string }> = {
 // token stored before study push shipped came from the sit client — and study
 // registrations live in the sibling `fcmTokensStudy` field. No migration.
 //
+// TRANSITION GAP (accepted): before this split, study callables already
+// passed app='study' for branding but still read `fcmTokens` — so a user
+// with sit installed and study in a browser tab DID get study pushes,
+// mis-branded onto their sit install. Post-split their `fcmTokensStudy` is
+// empty and study pushes stop until they install the study PWA and grant
+// permission. Degradation is honest (notification doc with pushSent:false,
+// email still fires) and InstallAppBanner is the recovery path.
+//
 // KNOWN GAP (issue #168 ledger, Phase 2): the shared guardian callables
 // (createKidInvite, revokeSupervision, forceRevokeSupervision,
 // guardianSetChildSearchable, guardianAccess) never pass `app`, so they fall

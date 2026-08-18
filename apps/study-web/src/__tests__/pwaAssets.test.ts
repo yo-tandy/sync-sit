@@ -19,13 +19,13 @@ describe('PWA static assets', () => {
     // "any" — the artwork is full-bleed (wordmark to the edge), so Android's
     // adaptive-icon mask would clip it; letterboxed-but-intact beats clipped
     // (PR #192 review). A dedicated padded maskable asset is the upgrade path.
-    // Android fills the adaptive-icon mask instead of letterboxing, and
-    // PUSH_BRANDING.study.icon points at it (PR #192 review).
+    // The 1.6MB logo.png is deliberately NOT listed: Android's WebAPK
+    // installer downloads manifest icons (largest wins for the splash), and
+    // 192+512 already satisfy Chrome's requirements.
     const icons = manifest.icons as { src: string; sizes: string; purpose?: string }[];
     expect(icons.map((i) => [i.src, i.sizes])).toEqual([
       ['/icon-192.png', '192x192'],
       ['/icon-512.png', '512x512'],
-      ['/logo.png', '1024x1024'],
     ]);
     expect(icons[1].purpose).toBe('any');
   });
