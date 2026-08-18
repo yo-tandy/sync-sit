@@ -598,6 +598,7 @@ export const respondToSession = onCall(
       await notifyAllParents({
         familyId: ad.familyId,
         prefCategory: 'cancelled',
+        app: 'study',
         type: 'study_session_declined',
         title: 'Session no longer available',
         body: `That time with ${tutorName} is no longer available.`,
@@ -643,10 +644,11 @@ export const respondToSession = onCall(
           title,
           `<p><strong>${familyName}</strong> ${isConfirm ? 'accepted' : 'declined'} your session proposal.</p>
            <p style="margin-top: 16px;"><a href="https://sync-study.com/tutor/sessions" style="background: #2563EB; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View in app</a></p>`,
+          'study',
         );
       }
       if (prefs?.push !== false) {
-        await sendPushNotification(outcome.tutorUserId, title, body, { sessionId, type: notifType });
+        await sendPushNotification(outcome.tutorUserId, title, body, { sessionId, type: notifType }, 'study');
       }
     } else if (outcome.action === 'confirm' && outcome.type === 'recurring') {
       const count = outcome.scheduledDates.length;
@@ -657,6 +659,7 @@ export const respondToSession = onCall(
       await notifyAllParents({
         familyId: outcome.familyId,
         prefCategory: 'confirmed',
+        app: 'study',
         type: 'study_session_confirmed',
         title: 'Recurring sessions confirmed',
         body: `${tutorName} confirmed your recurring tutoring sessions.`,
@@ -673,6 +676,7 @@ export const respondToSession = onCall(
       await notifyAllParents({
         familyId: outcome.familyId,
         prefCategory: 'confirmed',
+        app: 'study',
         type: 'study_session_confirmed',
         title: 'Session confirmed',
         body: `${tutorName} confirmed your tutoring session.`,
@@ -687,6 +691,7 @@ export const respondToSession = onCall(
       await notifyAllParents({
         familyId: outcome.familyId,
         prefCategory: 'cancelled',
+        app: 'study',
         type: 'study_session_declined',
         title: 'Session declined',
         body: `${tutorName} declined your tutoring session request.`,

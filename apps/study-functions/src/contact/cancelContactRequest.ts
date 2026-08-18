@@ -83,10 +83,10 @@ export const cancelContactRequest = onCall(
     `;
 
     if (notifPrefs?.email !== false && tutorUser?.email) {
-      await sendNotificationEmail(tutorUser.email, `Tutoring request withdrawn — ${result.familyName || 'a family'}`, emailBody);
+      await sendNotificationEmail(tutorUser.email, `Tutoring request withdrawn — ${result.familyName || 'a family'}`, emailBody, 'study');
     }
     if (notifPrefs?.push !== false) {
-      await sendPushNotification(result.tutorUserId, title, body, { requestId, type: 'study_contact_request_cancelled' });
+      await sendPushNotification(result.tutorUserId, title, body, { requestId, type: 'study_contact_request_cancelled' }, 'study');
     }
     await db.collection('notifications').add({
       recipientUserId: result.tutorUserId,

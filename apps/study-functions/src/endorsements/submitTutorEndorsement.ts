@@ -107,6 +107,7 @@ export const submitTutorEndorsement = onCall(
           <p>Review it on your Endorsements page and choose whether to publish it on your profile.</p>
           <p style="margin-top: 16px;"><a href="https://sync-study.com/tutor/endorsements" style="background: #2563EB; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View Endorsements</a></p>
         `,
+        'study',
       );
     }
     if (refsPrefs.push !== false) {
@@ -115,6 +116,7 @@ export const submitTutorEndorsement = onCall(
         'New endorsement received',
         `${submitterLabel} has submitted an endorsement for you.`,
         { referenceId: refDoc.id, type: 'tutor_endorsement_received' },
+        'study',
       );
     }
     await db.collection('notifications').add({

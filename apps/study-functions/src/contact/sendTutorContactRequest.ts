@@ -151,10 +151,10 @@ export const sendTutorContactRequest = onCall(
     `;
 
     if (notifPrefs?.email !== false && tutorUser.email) {
-      await sendNotificationEmail(tutorUser.email, `New tutoring request from ${familyName || 'a family'}`, emailBody);
+      await sendNotificationEmail(tutorUser.email, `New tutoring request from ${familyName || 'a family'}`, emailBody, 'study');
     }
     if (notifPrefs?.push !== false) {
-      await sendPushNotification(tutorUserId, title, body, { requestId: requestRef.id, type: 'study_contact_request' });
+      await sendPushNotification(tutorUserId, title, body, { requestId: requestRef.id, type: 'study_contact_request' }, 'study');
     }
     await db.collection('notifications').add({
       recipientUserId: tutorUserId,

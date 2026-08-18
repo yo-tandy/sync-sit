@@ -210,42 +210,90 @@ export async function sendAdminNotification(subject: string, body: string): Prom
 }
 
 /**
- * Send a notification email to a user.
+ * Which app a notification belongs to. Selects between two literal branding
+ * sets (name, accent color, host link, sender display name) and NOTHING else —
+ * never interpolate an untrusted value anywhere in the email.
+ */
+export type NotificationApp = 'sit' | 'study';
+
+// Per-app notification branding (issue #168 Phase 0). Same literal-copy-set
+// pattern as ACCOUNT_EXISTS_COPY above. The FROM address stays
+// noreply@sync-sit.com for BOTH apps until #156 resolves study domain setup —
+// only the display name varies (Resend validates the domain of the from
+// address, not the RFC 5322 display name, so a different display name on the
+// same verified domain is accepted).
+const NOTIFICATION_BRANDING: Record<
+  NotificationApp,
+  { appName: string; color: string; appUrl: string; from: string; fromFallback: string }
+> = {
+  sit: {
+    appName: 'Sync/Sit',
+    color: '#DC2626',
+    appUrl: 'https://sync-sit.com',
+    from: 'Sync/Sit <noreply@sync-sit.com>',
+    fromFallback: 'Sync/Sit <onboarding@resend.dev>',
+  },
+  study: {
+    appName: 'Sync/Study',
+    color: '#2563EB',
+    appUrl: 'https://sync-study-app.web.app',
+    from: 'Sync/Study <noreply@sync-sit.com>',
+    fromFallback: 'Sync/Study <onboarding@resend.dev>',
+  },
+};
+
+/**
+ * Builds the branded wrapper around a notification email body. Exported for
+ * unit pins: study emails must carry no Sync/Sit branding and vice versa.
+ */
+export function buildNotificationEmailHtml(body: string, app: NotificationApp = 'sit'): string {
+  const { appName, color, appUrl } = NOTIFICATION_BRANDING[app];
+  return `
+    <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
+      <h2 style="color: ${color}; margin-bottom: 16px;">${appName}</h2>
+      ${body}
+      <hr style="border: none; border-top: 1px solid #E5E7EB; margin: 24px 0;" />
+      <p style="color: #9CA3AF; font-size: 12px;">
+        <a href="${appUrl}" style="color: ${color};">Open ${appName}</a>
+      </p>
+    </div>
+  `;
+}
+
+/**
+ * Send a notification email to a user, branded for the given app.
  * Fails silently — notifications should not block user actions.
  */
-export async function sendNotificationEmail(to: string, subject: string, body: string): Promise<void> {
+export async function sendNotificationEmail(
+  to: string,
+  subject: string,
+  body: string,
+  app: NotificationApp = 'sit'
+): Promise<void> {
   if (!to || !to.includes('@')) {
     console.warn(`[SKIP-EMAIL] Invalid recipient: ${to}`);
     return;
   }
 
   if (process.env.FUNCTIONS_EMULATOR === 'true') {
-    console.log(`[DEV] Notification to ${to}: ${subject}`);
+    console.log(`[DEV] Notification to ${to} (app: ${app}): ${subject}`);
     return;
   }
 
   const resend = getResend();
   if (!resend) {
-    console.log(`[NO-RESEND] Notification to ${to}: ${subject}`);
+    console.log(`[NO-RESEND] Notification to ${to} (app: ${app}): ${subject}`);
     return;
   }
 
-  const emailHtml = `
-    <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
-      <h2 style="color: #DC2626; margin-bottom: 16px;">Sync/Sit</h2>
-      ${body}
-      <hr style="border: none; border-top: 1px solid #E5E7EB; margin: 24px 0;" />
-      <p style="color: #9CA3AF; font-size: 12px;">
-        <a href="https://sync-sit.com" style="color: #DC2626;">Open Sync/Sit</a>
-      </p>
-    </div>
-  `;
+  const { from, fromFallback } = NOTIFICATION_BRANDING[app];
+  const emailHtml = buildNotificationEmailHtml(body, app);
 
   try {
-    const result = await resend.emails.send({ from: FROM_EMAIL, to, subject, html: emailHtml });
+    const result = await resend.emails.send({ from, to, subject, html: emailHtml });
     if (result.error) {
       console.warn(`[EMAIL] Primary sender failed: ${result.error.message}, trying fallback`);
-      const fallbackResult = await resend.emails.send({ from: FROM_EMAIL_FALLBACK, to, subject, html: emailHtml });
+      const fallbackResult = await resend.emails.send({ from: fromFallback, to, subject, html: emailHtml });
       if (fallbackResult.error) {
         console.error(`[EMAIL] Fallback also failed: ${fallbackResult.error.message}`);
       }

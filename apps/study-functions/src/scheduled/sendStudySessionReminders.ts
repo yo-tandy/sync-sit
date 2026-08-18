@@ -87,6 +87,7 @@ async function notifyBothSides(
       'Tutoring session tomorrow',
       `<p>Reminder: you have a <strong>${subject}</strong> session on <strong>${when}</strong>.</p>
        <p style="margin-top: 16px;"><a href="https://sync-study.com/tutor" style="background: #2563EB; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View in app</a></p>`,
+      'study',
     );
   }
   if (rp?.push !== false) {
@@ -95,6 +96,7 @@ async function notifyBothSides(
       'Tutoring session tomorrow',
       `Reminder: your ${subject} session is on ${when}.`,
       data,
+      'study',
     );
   }
 
@@ -102,6 +104,7 @@ async function notifyBothSides(
   await notifyAllParents({
     familyId: t.familyId,
     prefCategory: 'reminders',
+    app: 'study',
     type: 'study_session_reminder',
     title: 'Tutoring session tomorrow',
     body: `Reminder: your ${subject} session with ${tutorName} is on ${when}.`,
