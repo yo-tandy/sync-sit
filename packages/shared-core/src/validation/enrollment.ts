@@ -42,10 +42,13 @@ export const familyEnrollmentSchema = z.object({
   note: z.string().optional(),
   kids: z.array(kidSchema).optional(),
   // Consent-document version the enrolling client presented (issue #178:
-  // study's wizard shows '2025-12-01', sit's shows '1.0'). Optional — legacy
-  // sit clients send nothing and the server defaults to '1.0', keeping their
+  // study's wizard shows '2025-12-01', sit's shows '1.0'). ALLOWLIST, not a
+  // free string — this lands verbatim in the canonical consent record, so
+  // only versions of terms that actually shipped are acceptable. When terms
+  // are re-versioned, add the new version here. Optional — legacy sit
+  // clients send nothing and the server defaults to '1.0', keeping their
   // behavior byte-identical.
-  consentVersion: z.string().min(1).max(20).optional(),
+  consentVersion: z.enum(['1.0', '2025-12-01']).optional(),
 });
 
 // NOTE: field names (minBabysitterAge, maxRate) are babysitter-flavored but

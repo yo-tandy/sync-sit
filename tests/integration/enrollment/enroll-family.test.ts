@@ -115,4 +115,35 @@ describe('enrollFamily', () => {
     // The version the consent step actually showed — not sit's '1.0'.
     expect(userDoc.data()!.consentVersion).toBe('2025-12-01');
   });
+
+  it('rejects a consentVersion outside the shipped allowlist; nothing is written', async () => {
+    const email4 = 'newparent4@test.com';
+    await callFunction('verifyParentEmail', { email: email4 });
+    const db = getDb();
+
+    const usersBefore = (await db.collection('users').get()).size;
+    const familiesBefore = (await db.collection('families').get()).size;
+
+    await expect(
+      callFunction('enrollFamily', {
+        email: email4,
+        verificationCode: (await db.collection('verificationCodes').doc(email4).get()).data()!.code,
+        password: 'Test1234',
+        familyName: 'JunkFamily',
+        firstName: 'Mal',
+        address: '1 Rue Fictive, Paris',
+        latLng: { lat: 48.86, lng: 2.33 },
+        kids: [],
+        // Free-form strings must not land in the canonical consent record —
+        // only versions of terms that actually shipped are acceptable.
+        consentVersion: 'evil',
+      }),
+    ).rejects.toMatchObject({ code: 'INVALID_ARGUMENT' });
+
+    // Validation runs before any write: no account, no family, and the
+    // verification code is still there for a corrected retry.
+    expect((await db.collection('users').get()).size).toBe(usersBefore);
+    expect((await db.collection('families').get()).size).toBe(familiesBefore);
+    expect((await db.collection('verificationCodes').doc(email4).get()).exists).toBe(true);
+  });
 });
