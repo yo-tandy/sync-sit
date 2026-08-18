@@ -1,10 +1,12 @@
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router';
 import {
   AboutPageShell,
   ShieldIcon,
   SearchIcon,
   UsersIcon,
   CalendarIcon,
+  DownloadIcon,
 } from '@ejm/shared-ui';
 import { SIT_APP_URL } from '@/utils/appSwitch';
 import sitLogo from '@/assets/sync-sit-logo.png';
@@ -144,6 +146,18 @@ export function AboutPage() {
             </p>
           </div>
         </a>
+
+        {/* Install link — same placement as sit's AboutPage (issue #162) */}
+        <Link
+          to="/install"
+          className="mb-6 flex items-center gap-3 rounded-lg bg-gray-50 p-3 active:bg-gray-100"
+        >
+          <DownloadIcon className="h-5 w-5 shrink-0 text-brand-500" />
+          <div>
+            <p className="text-sm font-semibold text-brand-600">{t('pwaInstall.aboutLink')}</p>
+            <p className="text-xs text-gray-500">{t('pwaInstall.aboutLinkDesc')}</p>
+          </div>
+        </Link>
 
         {/* Disclaimer */}
         <div className="mb-6 rounded-lg border border-gray-200 bg-gray-50 p-4">

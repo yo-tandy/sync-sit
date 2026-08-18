@@ -57,7 +57,9 @@ export default {
 
   notifications: {
     title: 'Préférences de notification',
-    emailOnlyDesc: 'Choisissez les notifications par email que vous souhaitez recevoir.',
+    desc: 'Choisissez comment vous souhaitez être notifié(e).',
+    push: 'Push',
+    emailNotif: 'Email',
     newRequest: 'Nouvelle demande',
     newRequestDesc: 'Quand une famille vous envoie une demande de cours',
     proposal: 'Propositions de séance',
@@ -72,6 +74,26 @@ export default {
     endorsement: 'Recommandations',
     endorsementFamilyDesc: 'Suivi des recommandations que vous avez soumises',
     endorsementTutorDesc: "Quand quelqu'un soumet une recommandation pour vous",
+    pushPromptTitle: 'Activer les notifications',
+    pushPromptDesc: 'Recevez des notifications pour les demandes de séance, confirmations et rappels.',
+    enable: 'Activer',
+    notNow: 'Plus tard',
+    pushStatus: 'Notifications push',
+    pushEnabled: 'Les notifications push sont activées sur cet appareil.',
+    pushDisabled: 'Les notifications push ne sont pas activées. Activez-les pour recevoir des alertes en temps réel.',
+    pushDenied: "Les notifications push ne sont pas disponibles. Cela peut arriver en mode navigation privée, ou si les notifications sont bloquées dans les paramètres de votre navigateur. Essayez d'ouvrir l'application dans une fenêtre de navigateur normale.",
+    tryAgain: 'Réessayer',
+    pushRequiresInstall: "Les notifications push sont disponibles uniquement après avoir ajouté l'application à votre écran d'accueil.",
+    pushRequiresInstallLink: 'Comment installer',
+  },
+
+  pwaInstall: {
+    bannerTitle: "Installez l'application pour une meilleure expérience",
+    bannerDesc: "Ajoutez Sync/Study à votre écran d'accueil pour recevoir les notifications push et un accès rapide, comme une application native.",
+    bannerCta: 'Comment installer',
+    bannerDismiss: 'Ignorer',
+    aboutLink: "Installer l'application",
+    aboutLinkDesc: "Ajouter Sync/Study à votre écran d'accueil",
   },
 
   schedule: {
