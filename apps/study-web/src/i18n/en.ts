@@ -283,6 +283,7 @@ export default {
       myAvailability: 'My availability',
       availabilityDesc: 'Set your weekly availability',
       newRequests: 'New Requests',
+      loadError: 'Could not load your dashboard. Please refresh and try again.',
       confirmed: 'Confirmed',
       noRequests: 'No requests yet',
       noRequestsDesc: "When families contact you or book sessions, they'll appear here.",

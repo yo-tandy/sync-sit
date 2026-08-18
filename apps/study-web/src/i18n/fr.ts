@@ -283,6 +283,7 @@ export default {
       myAvailability: 'Mes disponibilités',
       availabilityDesc: 'Définissez vos disponibilités hebdomadaires',
       newRequests: 'Nouvelles demandes',
+      loadError: 'Impossible de charger votre tableau de bord. Veuillez actualiser et réessayer.',
       confirmed: 'Confirmées',
       noRequests: 'Aucune demande pour le moment',
       noRequestsDesc: 'Quand des familles vous contacteront ou réserveront des séances, elles apparaîtront ici.',

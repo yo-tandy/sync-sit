@@ -365,6 +365,111 @@ describe('tutor DashboardPage', () => {
 
   // ── Empty + loading states ──
 
+  it("the tutor's own proposal renders but stays out of the amber badge count", async () => {
+    // The badge is a to-do count: proposals the tutor sent await the FAMILY's
+    // answer, so with one family booking + one own proposal the badge says 1
+    // while both rows render (PR #194 review).
+    h.auth.userDoc = tutor();
+    h.sessions = [
+      {
+        sessionId: 's1',
+        tutorUserId: 't1',
+        status: 'pending',
+        proposedBy: 'provider',
+        type: 'one_time',
+        date: '2099-01-01',
+        startTime: '17:00',
+        familyName: 'Martin',
+        subject: 'math',
+        level: '6e',
+        location: 'online',
+      },
+      {
+        sessionId: 's2',
+        tutorUserId: 't1',
+        status: 'pending',
+        type: 'one_time',
+        date: '2099-01-02',
+        startTime: '10:00',
+        familyName: 'Bernard',
+        subject: 'math',
+        level: '6e',
+        location: 'online',
+      },
+    ];
+    renderWithProviders(<DashboardPage />);
+
+    expect(await screen.findByText('New Requests')).toBeInTheDocument();
+    expect(screen.getByText('Martin')).toBeInTheDocument();
+    expect(screen.getByText('Bernard')).toBeInTheDocument();
+    expect(screen.getByText('1')).toBeInTheDocument();
+    expect(screen.queryByText('2')).toBeNull();
+  });
+
+  it('a tutor whose only pending item is their own proposal still sees it (no badge)', async () => {
+    h.auth.userDoc = tutor();
+    h.sessions = [
+      {
+        sessionId: 's1',
+        tutorUserId: 't1',
+        status: 'pending',
+        proposedBy: 'provider',
+        type: 'one_time',
+        date: '2099-01-01',
+        startTime: '17:00',
+        familyName: 'Martin',
+        subject: 'math',
+        level: '6e',
+        location: 'online',
+      },
+    ];
+    renderWithProviders(<DashboardPage />);
+
+    expect(await screen.findByText('Martin')).toBeInTheDocument();
+    expect(screen.getByText(/awaiting the family/i)).toBeInTheDocument();
+    // Zero-count badge suppressed; the section itself must NOT collapse into
+    // the empty state.
+    expect(screen.queryByText('0')).toBeNull();
+    expect(screen.queryByText(/no requests yet/i)).toBeNull();
+  });
+
+  it('excludes past-dated pending one_time bookings from New Requests', async () => {
+    // Nothing server-side expires a pending booking; without the date floor a
+    // never-answered request sits in the to-do list forever (PR #194 review).
+    h.auth.userDoc = tutor();
+    h.sessions = [
+      {
+        sessionId: 's1',
+        tutorUserId: 't1',
+        status: 'pending',
+        type: 'one_time',
+        date: '2020-01-01',
+        startTime: '17:00',
+        familyName: 'Martin',
+        subject: 'math',
+        level: '6e',
+        location: 'online',
+      },
+    ];
+    renderWithProviders(<DashboardPage />);
+
+    expect(await screen.findByText(/no requests yet/i)).toBeInTheDocument();
+    expect(screen.queryByText('Martin')).toBeNull();
+  });
+
+  it('shows an error line instead of an eternal spinner when the first load fails', async () => {
+    // Both reads swallow rejections and keep state null; without an error
+    // branch `loading` never clears and the only recovery is a throttled
+    // blur/refocus (PR #194 review; SessionsPage's loadError pattern).
+    h.auth.userDoc = tutor();
+    h.getDocs.mockImplementation(() => Promise.reject(new Error('offline')));
+    renderWithProviders(<DashboardPage />);
+
+    expect(await screen.findByText(/could not load your dashboard/i)).toBeInTheDocument();
+    expect(document.querySelector('.animate-spin')).toBeNull();
+    expect(screen.queryByText(/no requests yet/i)).toBeNull();
+  });
+
   it('renders the empty state when nothing is pending or upcoming', async () => {
     h.auth.userDoc = tutor();
     renderWithProviders(<DashboardPage />);

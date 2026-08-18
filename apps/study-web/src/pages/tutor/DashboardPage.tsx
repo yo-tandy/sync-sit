@@ -60,16 +60,21 @@ const DAY_FULL: Record<RecurringSlot['day'], string> = {
 function Section({
   title,
   count,
+  total,
   variant,
   children,
 }: {
   title: string;
   count: number;
+  /** Rendered rows; gates the section. Defaults to `count` — pass it when the
+   * badge counts a SUBSET of the rows (New Requests excludes the tutor's own
+   * proposals from the to-do count but still shows them, PR #194 review). */
+  total?: number;
   variant: 'pending' | 'confirmed';
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(true);
-  if (count === 0) return null;
+  if ((total ?? count) === 0) return null;
 
   return (
     <div className="mb-4">
@@ -80,7 +85,9 @@ function Section({
       >
         <div className="flex items-center gap-2">
           <h3 className="text-sm font-semibold text-gray-700">{title}</h3>
-          <Badge variant={variant === 'pending' ? 'amber' : 'green'}>{count}</Badge>
+          {count > 0 && (
+            <Badge variant={variant === 'pending' ? 'amber' : 'green'}>{count}</Badge>
+          )}
         </div>
         <ChevronRightIcon
           className={`h-4 w-4 text-gray-400 transition-transform ${open ? 'rotate-90' : ''}`}
@@ -137,6 +144,12 @@ export function DashboardPage() {
   // then visibly swap) while a snapshot is still in flight.
   const [requests, setRequests] = useState<StudyContactRequestDoc[] | null>(null);
   const [sessions, setSessions] = useState<StudySessionDoc[] | null>(null);
+  // A failed FIRST read must not strand the page on the spinner: with no
+  // error branch the only recovery is a blur/refocus (throttled 15s). Set on
+  // either load's failure, cleared on its success; only rendered while
+  // `loading` — a refetch blip over rendered sections stays invisible
+  // (SessionsPage's loadError pattern, PR #194 review).
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
     if (!uid) return;
@@ -179,11 +192,13 @@ export function DashboardPage() {
         const rows = snap.docs.map((d) => d.data() as StudyContactRequestDoc);
         rows.sort((a, b) => (b.createdAt?.seconds ?? 0) - (a.createdAt?.seconds ?? 0));
         setRequests(rows);
+        setLoadError(false);
       })
       .catch(() => {
         // A failed read is UNKNOWN, not zero: on first load `requests` stays
         // null (loading rather than a wrong empty state); on a refetch blip
         // the last-known-good rows survive.
+        if (mountedRef.current) setLoadError(true);
       });
   }, [uid]);
 
@@ -195,9 +210,11 @@ export function DashboardPage() {
         const rows = snap.docs.map((d) => d.data() as StudySessionDoc);
         rows.sort((a, b) => (b.createdAt?.seconds ?? 0) - (a.createdAt?.seconds ?? 0));
         setSessions(rows);
+        setLoadError(false);
       })
       .catch(() => {
         /* keep last-known-good state */
+        if (mountedRef.current) setLoadError(true);
       });
   }, [uid]);
 
@@ -250,9 +267,16 @@ export function DashboardPage() {
     });
 
   const loading = requests === null || sessions === null;
-  const pendingRequests = (requests ?? []).filter((r) => r.status === 'pending');
-  const pendingSessions = (sessions ?? []).filter((s) => s.status === 'pending');
   const today = parisToday();
+  const pendingRequests = (requests ?? []).filter((r) => r.status === 'pending');
+  // Same date floor as Confirmed below: nothing server-side expires a pending
+  // one_time booking, so without it a request the tutor never answered would
+  // sit in New Requests forever with a past date (PR #194 review).
+  const pendingSessions = (sessions ?? []).filter(
+    (s) =>
+      s.status === 'pending' &&
+      (s.type === 'recurring' || !s.date || s.date >= today),
+  );
 
   // Upcoming confirmed work, interleaved by date (SessionsPage's ordering):
   // one_time sessions from today on, plus confirmed recurring series (their
@@ -268,8 +292,14 @@ export function DashboardPage() {
     .sort((a, b) => (a.sortDate < b.sortDate ? -1 : a.sortDate > b.sortDate ? 1 : 0))
     .map((e) => e.s);
 
-  const newCount = pendingRequests.length + pendingSessions.length;
-  const hasAny = newCount > 0 || confirmedUpcoming.length > 0;
+  // The amber badge is a to-do count, so tutor-authored proposals (which
+  // await the FAMILY's answer) don't count — they still render in the
+  // section, marked "awaiting the family" (PR #194 review).
+  const newCount =
+    pendingRequests.length +
+    pendingSessions.filter((s) => s.proposedBy !== 'provider').length;
+  const newTotal = pendingRequests.length + pendingSessions.length;
+  const hasAny = newTotal > 0 || confirmedUpcoming.length > 0;
 
   return (
     <div className="px-5 pt-4 pb-8">
@@ -335,13 +365,22 @@ export function DashboardPage() {
       </Link>
 
       {/* ── Requests & sessions ── */}
-      {loading ? (
+      {loading && loadError ? (
+        <p className="py-10 text-center text-sm text-brand-600">
+          {t('tutor.dashboard.loadError')}
+        </p>
+      ) : loading ? (
         <div className="flex justify-center py-12">
           <Spinner className="h-8 w-8 text-brand-600" />
         </div>
       ) : hasAny ? (
         <>
-          <Section title={t('tutor.dashboard.newRequests')} count={newCount} variant="pending">
+          <Section
+            title={t('tutor.dashboard.newRequests')}
+            count={newCount}
+            total={newTotal}
+            variant="pending"
+          >
             {pendingRequests.map((r) => (
               <Link key={r.requestId} to="/tutor/requests" className="block">
                 <Card interactive>
