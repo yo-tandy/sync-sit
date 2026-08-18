@@ -80,7 +80,8 @@ describe('SignUpRolePage (study)', () => {
 
   // Role'd users never see this page anymore (the dead-option loop fix), so
   // the old signed-in banner/exclusivity render pins became redirect pins.
-  // The exclusivity withholding stays in the component as defense in depth.
+  // The client-side exclusivity withholding was removed as unreachable
+  // (issue #159); the server guard (addProfileToUser) is the real defense.
   it('a signed-in parent on /signup goes straight to the family portal', () => {
     authState.firebaseUser = { uid: 'p1' };
     authState.userDoc = { profiles: { parent: { enrollmentComplete: true, familyId: 'f1' } } };
@@ -99,7 +100,7 @@ describe('SignUpRolePage (study)', () => {
     expect(screen.queryAllByRole('link')).toHaveLength(0);
   });
 
-  it('offers both options and no exclusivity note to a signed-in user with no profiles', () => {
+  it('offers the full unfiltered option list to a signed-in user with no profiles', () => {
     authState.firebaseUser = { uid: 'n1' };
     authState.userDoc = { profiles: {} };
     renderWithProviders(<SignUpRolePage />);
@@ -107,7 +108,5 @@ describe('SignUpRolePage (study)', () => {
     const hrefs = screen.getAllByRole('link').map((a) => a.getAttribute('href'));
     expect(hrefs).toContain('/enroll/tutor');
     expect(hrefs).toContain('/enroll/parent');
-    expect(screen.queryByText(i18n.t('signup.roleExclusiveTutor'))).toBeNull();
-    expect(screen.queryByText(i18n.t('signup.roleExclusiveParent'))).toBeNull();
   });
 });

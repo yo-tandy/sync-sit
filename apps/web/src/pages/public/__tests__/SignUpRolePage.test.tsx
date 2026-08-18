@@ -69,8 +69,9 @@ describe('sit SignUpRolePage wrapper banner', () => {
   });
 
   // Role'd users never see this page anymore (dead-option-loop fix): the old
-  // banner/exclusivity render pins became redirect pins; the withholding
-  // logic stays in the component as defense in depth.
+  // banner/exclusivity render pins became redirect pins. The client-side
+  // exclusivity withholding was removed as unreachable (issue #159); the
+  // server guard (addProfileToUser) is the real defense.
   it('a signed-in tutor never sees the role question: redirected to /welcome-sit (issue #144)', () => {
     authState.firebaseUser = { uid: 't1' };
     authState.userDoc = { profiles: { tutor: { enrollmentComplete: true } } };
@@ -87,10 +88,9 @@ describe('sit SignUpRolePage wrapper banner', () => {
     expect(screen.getByText('family-portal')).toBeInTheDocument();
   });
 
-  it('offers both options and no note to an unauthenticated visitor', () => {
+  it('offers the full unfiltered option list to an unauthenticated visitor', () => {
     render(<SignUpRolePage />);
     const keys = (captured.roles as Array<{ key: string }>).map((r) => r.key);
     expect(keys).toEqual(['babysitter', 'parent']);
-    expect(captured.note).toBeUndefined();
   });
 });

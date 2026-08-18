@@ -108,7 +108,6 @@ export default {
   signup: {
     crossAppBanner: 'Vous êtes connecté — choisissez un rôle à ajouter à votre compte existant.',
     roleExclusiveBabysitter: "Le babysitting est réservé aux élèves de l'EJM — un compte parent ne peut pas s'inscrire comme babysitter.",
-    roleExclusiveParent: "Un compte élève ne peut pas aussi s'inscrire comme parent — votre famille doit avoir son propre compte.",
   },
 
   welcomeCross: {

@@ -1,7 +1,7 @@
 import { Navigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { SignUpRolePage as SharedSignUpRolePage, UserIcon, UsersIcon, type SignUpRoleOption } from '@ejm/shared-ui';
-import { isBabysitter, isParent, isTutor } from '@ejm/shared-core';
+import { isBabysitter } from '@ejm/shared-core';
 import { canCrossAppEnrollTutor, postLoginRouter } from '@/utils/postLoginRouter';
 import { getStudyRole } from '@ejm/study-core';
 import { useAuthStore } from '@/stores/authStore';
@@ -34,20 +34,10 @@ export function SignUpRolePage() {
   }
   const banner = firebaseUser && !role ? t('signup.crossAppBanner') : undefined;
 
-  // Provider (tutor OR babysitter) and parent are mutually exclusive (issue
-  // #116) — withhold the impossible option and explain why instead of
-  // surfacing the server error. A sit babysitter on this page is a provider
-  // too: the guard rejects babysitter→parent everywhere.
-  const parentAccount = isParent(userDoc);
-  const providerAccount = isTutor(userDoc) || isBabysitter(userDoc);
-  const roles = ROLES.filter(
-    (r) => !(r.key === 'tutor' && parentAccount) && !(r.key === 'parent' && providerAccount),
-  );
-  const note = parentAccount
-    ? t('signup.roleExclusiveTutor')
-    : providerAccount
-      ? t('signup.roleExclusiveParent')
-      : undefined;
-
-  return <SharedSignUpRolePage logoSrc="/logo.png" logoAlt="Sync/Study" roles={roles} banner={banner} note={note} />;
+  // No role-exclusivity withholding here (issue #159): every account that
+  // holds a tutor, parent, or babysitter profile was redirected above, so a
+  // visitor reaching this point never has an option to withhold. The
+  // exclusivity guard lives server-side (addProfileToUser, issue #116); the
+  // cross-app welcome page translates its rejection.
+  return <SharedSignUpRolePage logoSrc="/logo.png" logoAlt="Sync/Study" roles={ROLES} banner={banner} />;
 }
