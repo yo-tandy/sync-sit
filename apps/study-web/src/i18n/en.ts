@@ -397,6 +397,9 @@ export default {
       },
     },
     account: {
+      // cancellationPolicy + sessionPrefs render from SchedulePage since issue
+      // #169 — the tutor.account.* namespace is historical, kept to avoid
+      // translation churn.
       cancellationPolicy: {
         title: 'Cancellation policy',
         help: 'Set how much notice families must give to cancel a confirmed session. Cancelling later is still allowed, but is flagged as a late cancellation. Only new bookings use the policy you set here.',
@@ -425,6 +428,10 @@ export default {
         errorNoLengths: 'Pick at least one session length',
         errorPaddingRange: 'Padding must be a whole number between 0 and 60 minutes.',
         errorNoLocations: 'Pick at least one session location',
+      },
+      aboutMe: {
+        save: 'Save about me',
+        saved: 'About me saved',
       },
       areaLink: 'Edit area you cover',
       areaLinkDesc: 'Where you work — arrondissements, or your address and a radius. Your address is what search uses to show families your distance.',
