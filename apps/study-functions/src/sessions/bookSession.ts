@@ -244,8 +244,14 @@ export const bookSession = onCall(
 
       // ── Per-slot location tags (issue #166): a recurring series validates
       // against its WEEKLY cells — the tags on slot.day over the requested
-      // range, regardless of any per-date override (owner decision: the tags
-      // constrain scheduling; override-day tags are a follow-up). Effective
+      // range, regardless of any per-date override AND regardless of holiday
+      // substitution (which the one-time path below DOES honour via
+      // resolveDateLocationCells). Deliberate asymmetry: a series is a
+      // standing weekly commitment, so it answers to the weekly tags even
+      // when individual dates fall in an override or a holiday-substituted
+      // period — a one-time booking on such a date may accept a location the
+      // series rejects (owner decision: the tags constrain scheduling;
+      // override-day tags are a follow-up). Effective
       // set = intersection of per-cell (override ?? profile prefs); legacy
       // docs (no weeklyLocations) fall back to profile prefs, which the
       // check above already passed. ──

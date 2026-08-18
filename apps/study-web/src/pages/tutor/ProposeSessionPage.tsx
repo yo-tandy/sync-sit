@@ -62,7 +62,7 @@ export function ProposeSessionPage() {
   const navState = (useLocation().state ?? null) as ProposeNavState | null;
   const { userDoc } = useAuthStore();
   const tutor = getTutorProfile(userDoc);
-  const { weekly, weeklyLocations } = useSchedule();
+  const { weekly, weeklyLocations, overrides } = useSchedule();
 
   const familyName = navState?.familyName ?? '';
   const subject = navState?.subject ?? '';
@@ -93,21 +93,33 @@ export function ProposeSessionPage() {
 
   // ── Locations offerable for the ARMED start (issue #166): the tutor's own
   // per-slot tags on that weekday constrain the select. Client hint from the
-  // WEEKLY cells (like the start chips above — override dates resolve to
-  // profile prefs server-side, so this can only hide options, never offer one
-  // proposeSession would reject on a weekly-base date). ──
+  // WEEKLY cells (like the start chips above). Mirrors the server's
+  // resolveDateLocationCells gate: a tutor-authored override on the chosen
+  // date (reason 'manual') turns the weekly tags OFF server-side, so the
+  // narrowing must be skipped here too — otherwise the select hides a
+  // location proposeSession would accept, a dead end with no way to reach the
+  // option (PR #185 review). Claim-ledger docs keep the tags, matching the
+  // server. KNOWN LIMIT: dates inside a holidayMode 'different' period also
+  // resolve to profile prefs server-side, but detecting them client-side
+  // needs the admin vacation-period calendar this page doesn't load — on
+  // those dates the select still over-narrows (hides, never wrongly offers).
   const allowedLocations = useMemo<LocationPref[]>(() => {
     const fallback = tutor?.locationPrefs ?? [];
     if (!date || !selectedStart || !sessionLength) return fallback;
+    const manualOverride = overrides.some(
+      (o) => o.date === date && o.reason === 'manual',
+    );
     const dow: DayOfWeek = dayOfWeek(date);
     const startIdx = timeToSlotIndex(selectedStart);
     return resolveEffectiveLocations(
-      sanitizeDayLocations(weeklyLocations?.[dow]),
+      // Tags off on a manually-overridden date: resolve with no day tags so
+      // the result is still canonicalized to LOCATION_PREFS order.
+      sanitizeDayLocations(manualOverride ? undefined : weeklyLocations?.[dow]),
       startIdx,
       startIdx + sessionLength / 15,
       fallback,
     );
-  }, [tutor?.locationPrefs, date, selectedStart, sessionLength, weeklyLocations]);
+  }, [tutor?.locationPrefs, date, selectedStart, sessionLength, weeklyLocations, overrides]);
 
   // No `locationPref &&` guard: an emptied selection must RE-FILL when a
   // bookable start is re-armed (PR #185 r3 review) — same fix as

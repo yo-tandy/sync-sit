@@ -179,7 +179,6 @@ export function SchedulePage() {
     overrides,
     loading,
     saveWeekly,
-    setHolidayMode,
     addOverride,
     removeOverride,
   } = useSchedule();
@@ -402,12 +401,15 @@ export function SchedulePage() {
       // Tags on cells toggled off in the timeline are pruned at save time so
       // they never persist and never resurface when a slot is re-enabled.
       const prunedLocations = pruneWeeklyLocations(localWeeklyLocations, localWeekly);
-      await saveWeekly(localWeekly, prunedLocations);
-      await setHolidayMode(
-        localHolidayMode,
-        localHolidayMode === 'different' ? localHolidaySchedules : undefined,
-        localHolidayNotes || undefined
-      );
+      // ONE atomic write: grid, tags, and holiday fields land (or fail)
+      // together — two sequential awaits could persist the first half while
+      // the error path claimed nothing was saved (PR #185 review).
+      await saveWeekly(localWeekly, prunedLocations, {
+        mode: localHolidayMode,
+        holidaySchedules:
+          localHolidayMode === 'different' ? localHolidaySchedules : undefined,
+        holidayNotes: localHolidayNotes || undefined,
+      });
       setLocalWeeklyLocations(prunedLocations);
       savedSnapshot.current = JSON.stringify({
         weekly: localWeekly,
@@ -418,9 +420,12 @@ export function SchedulePage() {
       });
       setDirty(false);
       toast(t('schedule.scheduleSaved'));
-    } catch {
+    } catch (err) {
       // A rejected write (offline, transient) must be visible: the snapshot
-      // stays dirty and the tutor is told the save did not go through.
+      // stays dirty and the tutor is told the save did not go through (true
+      // now that the write is a single batch). Log the cause so
+      // permission-denied vs offline is distinguishable in the field.
+      console.error('schedule save failed', err);
       setSaveError(t('common.error'));
     } finally {
       setSaving(false);

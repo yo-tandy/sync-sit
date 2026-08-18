@@ -147,6 +147,7 @@ describe('SchedulePage per-slot location tags', () => {
     expect(h.schedule.saveWeekly).toHaveBeenCalledWith(
       expect.anything(),
       { mon: monCells(['online']) },
+      expect.objectContaining({ mode: 'same' }),
     );
   });
 
@@ -156,7 +157,7 @@ describe('SchedulePage per-slot location tags', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Done' }));
     fireEvent.click(screen.getByRole('button', { name: 'Save Schedule' }));
     await waitFor(() => {
-      expect(h.schedule.saveWeekly).toHaveBeenCalledWith(expect.anything(), {});
+      expect(h.schedule.saveWeekly).toHaveBeenCalledWith(expect.anything(), {}, expect.objectContaining({ mode: 'same' }));
     });
   });
 
@@ -177,6 +178,7 @@ describe('SchedulePage per-slot location tags', () => {
       expect(h.schedule.saveWeekly).toHaveBeenCalledWith(
         expect.anything(),
         { mon: monCells(['online']) },
+        expect.objectContaining({ mode: 'same' }),
       );
     });
   });
@@ -213,7 +215,7 @@ describe('SchedulePage per-slot location tags', () => {
         mon: Object.fromEntries(
           Array.from({ length: 8 }, (_, k) => [String(64 + k), ['online']]),
         ),
-      });
+      }, expect.objectContaining({ mode: 'same' }));
     });
   });
 
@@ -293,6 +295,7 @@ describe('SchedulePage per-slot location tags', () => {
       expect(h.schedule.saveWeekly).toHaveBeenCalledWith(
         expect.anything(),
         { mon: monCells(['family_home']) },
+        expect.objectContaining({ mode: 'same' }),
       );
     });
   });
@@ -310,7 +313,7 @@ describe('SchedulePage per-slot location tags', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Done' }));
     fireEvent.click(screen.getByRole('button', { name: 'Save Schedule' }));
     await waitFor(() => {
-      expect(h.schedule.saveWeekly).toHaveBeenCalledWith(expect.anything(), {});
+      expect(h.schedule.saveWeekly).toHaveBeenCalledWith(expect.anything(), {}, expect.objectContaining({ mode: 'same' }));
     });
   });
 
@@ -323,7 +326,7 @@ describe('SchedulePage per-slot location tags', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Done' }));
     fireEvent.click(screen.getByRole('button', { name: 'Save Schedule' }));
     await waitFor(() => {
-      expect(h.schedule.saveWeekly).toHaveBeenCalledWith(expect.anything(), {});
+      expect(h.schedule.saveWeekly).toHaveBeenCalledWith(expect.anything(), {}, expect.objectContaining({ mode: 'same' }));
     });
   });
 });
@@ -345,6 +348,7 @@ describe('SchedulePage range-click dialog location tags', () => {
       expect(h.schedule.saveWeekly).toHaveBeenCalledWith(
         expect.anything(),
         { mon: monCells(['online']) },
+        expect.objectContaining({ mode: 'same' }),
       );
     });
   });
@@ -362,6 +366,7 @@ describe('SchedulePage range-click dialog location tags', () => {
       expect(h.schedule.saveWeekly).toHaveBeenCalledWith(
         expect.anything(),
         { mon: monCells(['online']) },
+        expect.objectContaining({ mode: 'same' }),
       );
     });
   });
@@ -385,7 +390,7 @@ describe('SchedulePage range-click dialog location tags', () => {
         mon: Object.fromEntries(
           Array.from({ length: 8 }, (_, k) => [String(64 + k), ['online']]),
         ),
-      });
+      }, expect.objectContaining({ mode: 'same' }));
     });
   });
 });

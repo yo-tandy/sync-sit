@@ -11,6 +11,7 @@ const h = vi.hoisted(() => ({
   userDoc: null as unknown,
   weekly: {} as Record<string, boolean[]>,
   weeklyLocations: undefined as Record<string, Record<string, string[]>> | undefined,
+  overrides: [] as { date: string; reason?: string }[],
   params: { familyId: 'fam1' } as Record<string, string | undefined>,
   locState: null as unknown,
   callable: vi.fn(),
@@ -28,7 +29,7 @@ vi.mock('@/stores/authStore', () => ({
 }));
 
 vi.mock('@/hooks/useSchedule', () => ({
-  useSchedule: () => ({ weekly: h.weekly, weeklyLocations: h.weeklyLocations }),
+  useSchedule: () => ({ weekly: h.weekly, weeklyLocations: h.weeklyLocations, overrides: h.overrides }),
 }));
 
 vi.mock('react-router', async (importOriginal) => {
@@ -156,6 +157,7 @@ describe('tutor ProposeSessionPage — location tags', () => {
     h.userDoc = tutorDoc({ locationPrefs: ['online', 'family_home'] });
     h.weekly = { mon: monGrid() };
     h.weeklyLocations = undefined;
+    h.overrides = [];
     h.params = { familyId: 'fam1' };
     h.locState = { familyName: 'Cohen', subject: 'math', level: '6e' };
     h.callable.mockReset();
@@ -184,6 +186,31 @@ describe('tutor ProposeSessionPage — location tags', () => {
       const call = h.callable.mock.calls.find((c) => c[0] === 'proposeSession');
       expect(call?.[1]).toMatchObject({ location: 'family_home' });
     });
+  });
+
+  it('a manual override on the chosen date skips the tag narrowing (server parity)', async () => {
+    // proposeSession resolves per-date: a tutor-authored override (reason
+    // 'manual') turns the weekly tags off, so the select must offer the full
+    // profile prefs — hiding family_home here was a dead end the server
+    // would have accepted (PR #185 review). Claim-ledger docs (reason
+    // 'study_session') keep the tags, mirroring resolveDateLocationCells.
+    h.weeklyLocations = { mon: monTags(['online']) };
+    h.overrides = [{ date: FUTURE_MON, reason: 'manual' }];
+    renderWithProviders(<ProposeSessionPage />);
+    fireEvent.change(screen.getByLabelText(/date/i), { target: { value: FUTURE_MON } });
+    fireEvent.click(await screen.findByRole('button', { name: '16:00' }));
+    const select = screen.getByLabelText(/location/i) as HTMLSelectElement;
+    expect(Array.from(select.options).map((o) => o.value)).toEqual(['family_home', 'online']);
+  });
+
+  it('a claim-ledger override on the chosen date KEEPS the tag narrowing', async () => {
+    h.weeklyLocations = { mon: monTags(['online']) };
+    h.overrides = [{ date: FUTURE_MON, reason: 'study_session' }];
+    renderWithProviders(<ProposeSessionPage />);
+    fireEvent.change(screen.getByLabelText(/date/i), { target: { value: FUTURE_MON } });
+    fireEvent.click(await screen.findByRole('button', { name: '16:00' }));
+    const select = screen.getByLabelText(/location/i) as HTMLSelectElement;
+    expect(Array.from(select.options).map((o) => o.value)).toEqual(['online']);
   });
 
   it('keeps the full profile prefs when the schedule has no tags (legacy doc)', async () => {

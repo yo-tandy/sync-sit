@@ -236,6 +236,68 @@ describe('per-slot location tags (issue #166)', () => {
     expect(res.sessionId).toBeTruthy();
   });
 
+  it('treats a holiday-substituted date as profile defaults (tags do not apply)', async () => {
+    // The widening branch of the resolveDateLocationCells gate (PR #185
+    // review): on a date inside a holidayMode 'different' period the holiday
+    // grid replaces the weekly base, so the weekly tags stop applying and
+    // the full profile prefs become bookable — a family_home booking must
+    // succeed even though the weekly Monday cells are tagged online-only,
+    // and locationRanges must advertise the profile defaults.
+    const db = getDb();
+    await setMonTags(tagCells(64, 80, ['online']));
+    const holidayGrid = new Array(96).fill(false);
+    for (let i = 64; i < 80; i++) holidayGrid[i] = true; // same 16:00-20:00 run
+    await db.collection('schedules').doc(seed.tutor2.uid).update({
+      holidayMode: 'different',
+      holidaySchedules: { TestBreak: { mon: holidayGrid } },
+    });
+    // FUTURE_MON (2027-06-07) falls in school year 2026-2027.
+    await db.collection('holidays').doc('2026-2027').set({
+      schoolYear: '2026-2027', zone: 'C',
+      periods: [{ name: 'TestBreak', startDate: FUTURE_MON, endDate: FUTURE_MON }],
+      updatedAt: new Date(), updatedByUserId: seed.admin.uid,
+    });
+    try {
+      const avail = await callFunction<AvailabilityResponse>(
+        'getTutorAvailability',
+        { tutorUserId: seed.tutor2.uid, startDate: FUTURE_MON, endDate: FUTURE_MON },
+        parent1Token,
+      );
+      const day = avail.dates.find((d) => d.date === FUTURE_MON)!;
+      expect(day.locationRanges).toEqual([
+        { startIdx: 64, endIdx: 80, locations: ['family_home', 'online'] },
+      ]);
+      const res = await callFunction<BookResponse>('bookSession', oneTimeInput(), parent1Token);
+      expect(res.sessionId).toBeTruthy();
+    } finally {
+      await db.collection('holidays').doc('2026-2027').delete();
+      await db.collection('schedules').doc(seed.tutor2.uid).update({
+        holidayMode: FieldValue.delete(),
+        holidaySchedules: FieldValue.delete(),
+      });
+    }
+  });
+
+  it('an unavailable-override date is not bookable at all (tags are moot)', async () => {
+    // The third gate branch: type 'unavailable' zeroes the boolean grid, so
+    // the rejection is the generic slot-not-available one — never
+    // location_not_offered — and nothing is advertised.
+    await setMonTags(tagCells(64, 80, ['online']));
+    await getDb()
+      .collection('schedules').doc(seed.tutor2.uid)
+      .collection('overrides').doc(FUTURE_MON)
+      .set({ date: FUTURE_MON, type: 'unavailable', reason: 'manual', createdAt: FieldValue.serverTimestamp() });
+    const avail = await callFunction<AvailabilityResponse>(
+      'getTutorAvailability',
+      { tutorUserId: seed.tutor2.uid, startDate: FUTURE_MON, endDate: FUTURE_MON },
+      parent1Token,
+    );
+    expect(avail.dates.find((d) => d.date === FUTURE_MON)!.locationRanges).toEqual([]);
+    await expect(
+      callFunction('bookSession', { ...oneTimeInput(), location: 'online' }, parent1Token),
+    ).rejects.toMatchObject({ code: 'INVALID_ARGUMENT' });
+  });
+
   // ── bookSession recurring: validates against the WEEKLY cells ──
 
   it('denies a recurring series whose location the weekly cells exclude', async () => {
