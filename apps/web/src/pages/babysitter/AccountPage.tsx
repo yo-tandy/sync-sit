@@ -6,7 +6,7 @@ import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage
 import { isRunningAsPWA } from '@ejm/sit-core';
 import { db, storage } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
-import { TopNav, Button, Input, Card, InfoBanner, LanguageSelector, useToast } from '@/components/ui';
+import { TopNav, Button, Input, Card, InfoBanner, LanguageSelector, Textarea, useToast } from '@/components/ui';
 import { BellIcon } from '@/components/ui/Icons';
 import { isPushSupported, getPushPermissionStatus, requestPushPermission } from '@/lib/pushNotifications';
 import { PhoneInput } from '@/components/forms/PhoneInput';
@@ -108,6 +108,16 @@ export function BabysitterAccountPage() {
   const [contactSaving, setContactSaving] = useState(false);
   const toast = useToast();
 
+  // About-me bio (issue #171 — moved here from the Babysitting Options page to
+  // match the study tutor AccountPage). Seeded exactly once per mount: the
+  // photo auto-save calls refreshUserDoc(), and re-seeding on every refresh
+  // would silently discard a typed-but-unsaved bio. The 1000-char maxLength is
+  // UX only — unlike study, sit's firestore.rules carries no server-side bound
+  // for babysitter aboutMe.
+  const aboutMeSeededRef = useRef(false);
+  const [aboutMe, setAboutMe] = useState('');
+  const [aboutMeSaving, setAboutMeSaving] = useState(false);
+
   // Password reset
   const [passwordResetSent, setPasswordResetSent] = useState(false);
   const [passwordResetting, setPasswordResetting] = useState(false);
@@ -133,6 +143,10 @@ export function BabysitterAccountPage() {
     setPhone(babysitter.contactPhone || '');
     setWhatsapp(babysitter.whatsapp || '');
     setWhatsappSameAsPhone(babysitter.whatsapp ? babysitter.whatsapp === babysitter.contactPhone : true);
+    if (!aboutMeSeededRef.current) {
+      aboutMeSeededRef.current = true;
+      setAboutMe(babysitter.aboutMe || '');
+    }
     if (babysitter.photoUrl) {
       setPhotoPreview(babysitter.photoUrl);
     }
@@ -271,6 +285,26 @@ export function BabysitterAccountPage() {
       setError(message);
     } finally {
       setContactSaving(false);
+    }
+  };
+
+  // --- About me ---
+  const handleAboutMeSave = async () => {
+    if (!uid) return;
+    setAboutMeSaving(true);
+    setError(null);
+    try {
+      await updateDoc(doc(db, 'users', uid), {
+        'profiles.babysitter.aboutMe': aboutMe.trim() || null,
+        updatedAt: serverTimestamp(),
+      });
+      await refreshUserDoc();
+      toast(t('profile.saved'));
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : t('common.error');
+      setError(message);
+    } finally {
+      setAboutMeSaving(false);
     }
   };
 
@@ -420,6 +454,25 @@ export function BabysitterAccountPage() {
             {photoSaving && <p className="text-xs text-gray-500">{t('common.saving')}</p>}
           </div>
         </div>
+
+        <hr className="mb-6 border-gray-200" />
+
+        {/* 2-bis. About me (issue #171 — moved from Babysitting Options; matches study) */}
+        <h3 className="mb-3 text-sm font-semibold text-gray-700">
+          {t('enrollment.aboutMe')} <span className="font-normal text-gray-500">({t('common.optional')})</span>
+        </h3>
+        <Textarea
+          id="babysitter-about-me"
+          aria-label={t('enrollment.aboutMe')}
+          value={aboutMe}
+          onChange={(e) => setAboutMe(e.target.value)}
+          placeholder={t('enrollment.aboutMePlaceholder')}
+          rows={4}
+          maxLength={1000}
+        />
+        <Button onClick={handleAboutMeSave} disabled={aboutMeSaving} className="mb-6">
+          {aboutMeSaving ? t('common.saving') : t('common.save')}
+        </Button>
 
         <hr className="mb-6 border-gray-200" />
 

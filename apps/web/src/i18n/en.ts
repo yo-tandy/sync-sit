@@ -24,6 +24,7 @@ export default {
     yes: 'Yes',
     no: 'No',
     or: 'or',
+    error: 'Something went wrong. Please try again.',
     optional: 'Optional',
     required: 'Required',
     email: 'Email',
