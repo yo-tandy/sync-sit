@@ -311,13 +311,20 @@ export function AccountPage() {
   // Write ONLY the toggled scenario/channel via a dot-path: a full-object
   // `notifPrefs` write would clobber channel values the sit app may have
   // written after this page mounted (issue #186's rule; both channels are
-  // editable here now that study has push). Mirrors the family AccountPage.
+  // editable here now that study has push). notifPrefs is SHARED across apps
+  // by design (one preference per scenario, whichever app the user toggles
+  // it in); a per-app split is a tracked #168 question, not a bug.
   // EXCEPTION (issue #186 follow-up): when the stored scenario map is
   // absent or incomplete — the key predates the scenario (e.g. references)
   // or is half-populated ({email} with no push, which pre-fix toggles
-  // created) — write the full map once, defaulting the untoggled channel
-  // from the stored value or the server's default-on gate; the next toggle
-  // self-heals, no backfill needed.
+  // created) — a single-channel dot-path would leave the map incomplete:
+  // sit's UI renders a missing push as off while the server (missing = on)
+  // still sends. Write the full map once instead, defaulting the untoggled
+  // channel from the stored value or the server's default-on gate; the next
+  // toggle self-heals, no backfill needed. "Stored" means the in-memory
+  // userDoc as of the last refresh — a concurrent sit-side write between
+  // refresh and save could still be clobbered, but nothing else writes
+  // these keys today.
   const savePrefs = useCallback(
     async (scenario: keyof NotifPrefs, channel: 'push' | 'email', value: boolean) => {
       if (!uid) return;
@@ -608,6 +615,10 @@ export function AccountPage() {
                 <p className="text-xs text-gray-500">{t(s.descKey)}</p>
               </div>
               <div className="flex items-center gap-6">
+                {/* In web-app mode the toggle renders OFF (purely visual —
+                    the write guard in toggle() is the real gate): showing an
+                    ON toggle above a "push needs install" notice reads as a
+                    contradiction (PR #192 review). */}
                 <button
                   type="button"
                   onClick={() => toggle(s.key, 'push')}
@@ -615,9 +626,9 @@ export function AccountPage() {
                   aria-disabled={!pwaMode}
                   aria-label={`${t(s.labelKey)} — ${t('notifications.push')}`}
                   title={!pwaMode ? t('notifications.pushRequiresInstall') : undefined}
-                  className={`flex h-6 w-10 items-center rounded-full p-0.5 transition-colors ${channel.push ? 'bg-brand-600' : 'bg-gray-300'} ${!pwaMode ? 'cursor-not-allowed opacity-40' : ''}`}
+                  className={`flex h-6 w-10 items-center rounded-full p-0.5 transition-colors ${pwaMode && channel.push ? 'bg-brand-600' : 'bg-gray-300'} ${!pwaMode ? 'cursor-not-allowed opacity-40' : ''}`}
                 >
-                  <div className={`h-5 w-5 rounded-full bg-white shadow transition-transform ${channel.push ? 'translate-x-4' : 'translate-x-0'}`} />
+                  <div className={`h-5 w-5 rounded-full bg-white shadow transition-transform ${pwaMode && channel.push ? 'translate-x-4' : 'translate-x-0'}`} />
                 </button>
                 <button
                   type="button"

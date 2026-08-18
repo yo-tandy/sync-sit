@@ -10,9 +10,13 @@ import { httpsCallable } from 'firebase/functions';
 const h = vi.hoisted(() => ({
   authCb: null as ((user: unknown) => void) | null,
   signOutEverywhere: vi.fn(() => Promise.resolve({ data: { ok: true } })),
+  removePushToken: vi.fn(() => Promise.resolve()),
 }));
 
 vi.mock('@/config/firebase', () => ({ auth: {}, db: {}, functions: {} }));
+vi.mock('@/lib/pushNotifications', () => ({
+  removePushToken: h.removePushToken,
+}));
 vi.mock('firebase/auth', () => ({
   onAuthStateChanged: vi.fn((_auth: unknown, cb: (user: unknown) => void) => {
     h.authCb = cb;
@@ -93,6 +97,7 @@ installLocalStorageStub();
 beforeEach(() => {
   vi.clearAllMocks();
   h.signOutEverywhere.mockResolvedValue({ data: { ok: true } });
+  h.removePushToken.mockResolvedValue();
   mSignOut.mockResolvedValue();
   // Drain any pending fresh-sign-in mark a login test left behind, so each
   // test starts with deterministic module state (flag consumed, no watcher,
@@ -149,9 +154,13 @@ describe('study authStore', () => {
     expect(useAuthStore.getState().error).toBe('auth.errorInvalidCredentials');
   });
 
-  it('logout signs out and clears the user', async () => {
+  it('logout signs out, removes the device push token and clears the user', async () => {
     useAuthStore.setState({ firebaseUser: { uid: 'u1' } as never, userDoc: { uid: 'u1' } as never });
     await useAuthStore.getState().logout();
+    // The token is unregistered from fcmTokensStudy for THIS uid — otherwise
+    // the next sign-in on a shared device re-registers the same token and
+    // this user's pushes land on the next user's screen (PR #192 review).
+    expect(h.removePushToken).toHaveBeenCalledWith('u1');
     expect(mSignOut).toHaveBeenCalled();
     expect(useAuthStore.getState().userDoc).toBeNull();
     expect(useAuthStore.getState().firebaseUser).toBeNull();
@@ -339,13 +348,16 @@ describe('study authStore — cross-app session coherence (issue #181)', () => {
     expect(mSignOut).toHaveBeenCalled();
   });
 
-  it('logout is bounded: a hanging callable still yields local sign-out within 5s', async () => {
+  it('logout is bounded: hanging removePushToken AND callable still yield local sign-out', async () => {
     vi.useFakeTimers();
     try {
+      h.removePushToken.mockImplementationOnce((() => new Promise(() => {})) as never);
       h.signOutEverywhere.mockImplementationOnce((() => new Promise(() => {})) as never);
       useAuthStore.setState({ firebaseUser: { uid: 'u1' } as never, userDoc: { uid: 'u1' } as never });
 
       const done = useAuthStore.getState().logout();
+      // 3s push-token bound + 5s callable bound (mirrors sit's pin).
+      await vi.advanceTimersByTimeAsync(3000);
       await vi.advanceTimersByTimeAsync(5000);
       await done;
 

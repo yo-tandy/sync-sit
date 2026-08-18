@@ -67,12 +67,18 @@ describe('sendPushNotification token scoping', () => {
     });
   });
 
-  it("'study' reads fcmTokensStudy — never the sit array", async () => {
+  it("'study' reads fcmTokensStudy — never the sit array — and carries the 512px icon", async () => {
     h.sendEachForMulticast.mockResolvedValue(allSuccess(1));
     const sent = await sendPushNotification('u1', 'T', 'B', undefined, 'study');
     expect(sent).toBe(true);
-    const msg = h.sendEachForMulticast.mock.calls[0][0] as { tokens: string[] };
+    const msg = h.sendEachForMulticast.mock.calls[0][0] as {
+      tokens: string[];
+      webpush: { notification: { icon: string } };
+    };
     expect(msg.tokens).toEqual(['study-token-1']);
+    // The notification icon is the downscaled manifest variant, not the
+    // 1.6MB logo.png (PR #192 review).
+    expect(msg.webpush.notification.icon).toBe('https://sync-study-app.web.app/icon-512.png');
   });
 
   it("'study' with no study tokens returns false without sending, even when sit tokens exist", async () => {

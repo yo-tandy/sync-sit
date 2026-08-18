@@ -153,6 +153,11 @@ describe('family AccountPage', () => {
     renderWithProviders(<AccountPage />);
     const pushToggle = screen.getByRole('button', { name: 'Confirmation — Push' });
     expect(pushToggle).toBeDisabled();
+    // Renders in the OFF position even though the stored pref is on — an ON
+    // toggle above the "push needs install" notice reads as a contradiction
+    // (PR #192 review; purely visual, the write guard is the real gate).
+    expect(pushToggle.className).toContain('bg-gray-300');
+    expect(pushToggle.className).not.toContain('bg-brand-600');
     fireEvent.click(pushToggle);
     await new Promise((r) => setTimeout(r, 0));
     expect(h.updateDoc).not.toHaveBeenCalled();

@@ -3,11 +3,12 @@ import { db, messaging } from './firebase.js';
 import { STUDY_APP_URL } from './email.js';
 import type { NotificationApp } from './email.js';
 
-// Per-app push branding (issue #168 Phase 0). study-web ships only logo.png
-// as a public image asset — its favicon.png does not exist (SPA fallback).
+// Per-app push branding (issue #168 Phase 0). The study icon is the 512px
+// manifest variant (apps/study-web/public/icon-512.png) — the full logo.png
+// is 1.6MB, absurd to fetch per notification render (PR #192 review).
 const PUSH_BRANDING: Record<NotificationApp, { icon: string; link: string }> = {
   sit: { icon: 'https://sync-sit.com/favicon.png', link: 'https://sync-sit.com' },
-  study: { icon: `${STUDY_APP_URL}/logo.png`, link: STUDY_APP_URL },
+  study: { icon: `${STUDY_APP_URL}/icon-512.png`, link: STUDY_APP_URL },
 };
 
 // Per-app token arrays (issue #168 Phase 1). The sit and study PWAs are
@@ -16,6 +17,16 @@ const PUSH_BRANDING: Record<NotificationApp, { icon: string; link: string }> = {
 // app (and vice versa). The legacy flat `fcmTokens` array stays sit's — every
 // token stored before study push shipped came from the sit client — and study
 // registrations live in the sibling `fcmTokensStudy` field. No migration.
+//
+// KNOWN GAP (issue #168 ledger, Phase 2): the shared guardian callables
+// (createKidInvite, revokeSupervision, forceRevokeSupervision,
+// guardianSetChildSearchable, guardianAccess) never pass `app`, so they fall
+// through to the 'sit' default and read only `fcmTokens`. A study-only
+// recipient (tokens in `fcmTokensStudy` alone) silently misses those pushes,
+// degrading to the in-app notification doc with an honest pushSent:false.
+// Threading the CALLER's app would be wrong — the push goes to the
+// child/guardian, whose app affinity the caller doesn't know; correct
+// routing needs per-recipient affinity or send-to-both (Phase 2 design).
 const PUSH_TOKEN_FIELDS: Record<NotificationApp, string> = {
   sit: 'fcmTokens',
   study: 'fcmTokensStudy',

@@ -15,8 +15,16 @@ describe('PWA static assets', () => {
     // the whole push gating chain hangs off it.
     expect(manifest.display).toBe('standalone');
     expect(manifest.start_url).toBe('/');
-    expect(manifest.icons?.length).toBeGreaterThan(0);
-    expect(manifest.icons[0].src).toBe('/logo.png');
+    // Downscaled 192/512 variants + the full logo; the 512 is maskable so
+    // Android fills the adaptive-icon mask instead of letterboxing, and
+    // PUSH_BRANDING.study.icon points at it (PR #192 review).
+    const icons = manifest.icons as { src: string; sizes: string; purpose?: string }[];
+    expect(icons.map((i) => [i.src, i.sizes])).toEqual([
+      ['/icon-192.png', '192x192'],
+      ['/icon-512.png', '512x512'],
+      ['/logo.png', '1024x1024'],
+    ]);
+    expect(icons[1].purpose).toContain('maskable');
   });
 
   it('index.html links the manifest and carries the PWA meta tags', () => {
