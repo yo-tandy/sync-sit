@@ -20,6 +20,7 @@ import {
   ShareIcon,
 } from './Icons';
 import { LanguageSelector } from './LanguageSelector';
+import { NotificationBell } from './NotificationBell';
 import { SupervisionChip } from './SupervisionChip';
 import { AppSwitchMenuItem } from './AppSwitchMenuItem';
 import type { UserRole } from '@ejm/sit-core';
@@ -66,6 +67,7 @@ export function AppBar({ role }: { role: UserRole }) {
               to="/supervision-info"
             />
           )}
+          <NotificationBell to={`${homePath}/notifications`} />
           <button
             onClick={() => setMenuOpen(true)}
             aria-label={t('menu.openMenu')}

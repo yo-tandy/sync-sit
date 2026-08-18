@@ -85,6 +85,14 @@ export default {
     tryAgain: 'Try again',
     pushRequiresInstall: 'Push notifications are only available after adding the app to your home screen.',
     pushRequiresInstallLink: 'How to install',
+    // In-app notification surface (issue #127, UX F13)
+    pageTitle: 'Notifications',
+    bellAria: 'Notifications',
+    bellAriaUnread: 'Notifications, {{count}} unread',
+    empty: 'No notifications yet.',
+    markAllRead: 'Mark all as read',
+    unread: 'unread',
+    loadError: 'Could not load notifications. Please try again later.',
   },
 
   pwaInstall: {

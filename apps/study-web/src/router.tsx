@@ -49,6 +49,7 @@ import {
   SupervisionInfoPage,
   HandoffPage,
   CrossAppWelcomePage,
+  NotificationsPage,
 } from '@/lazyPages';
 
 const SUPPORT_EMAIL = 'support@sync-study.com';
@@ -94,6 +95,7 @@ export const router = createBrowserRouter([
       { path: '/tutor/sessions', element: <TutorSessionsPage /> },
       { path: '/tutor/propose/:familyId', element: <TutorProposeSessionPage /> },
       { path: '/tutor/endorsements', element: <TutorEndorsementsPage /> },
+      { path: '/tutor/notifications', element: <NotificationsPage /> },
     ],
   },
   {
@@ -111,6 +113,7 @@ export const router = createBrowserRouter([
       // Static 'new' outranks the :childUid dynamic segment (route ranking).
       { path: '/family/governance/new', element: <CreateKidInvitePage /> },
       { path: '/family/governance/:childUid', element: <GovernedChildPage /> },
+      { path: '/family/notifications', element: <NotificationsPage /> },
     ],
   },
 ]);

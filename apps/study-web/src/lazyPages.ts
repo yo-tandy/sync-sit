@@ -141,3 +141,8 @@ export const AdminInfoPage = lazy(() =>
     default: m.AdminInfoPage,
   })),
 );
+
+// Shared across the tutor and family portals (issue #127, UX F13).
+export const NotificationsPage = lazy(() =>
+  import('@/pages/NotificationsPage').then((m) => ({ default: m.NotificationsPage })),
+);
