@@ -6,6 +6,7 @@ import { getCorsOrigin } from '../config/cors.js';
 import { verifyAdmin } from '../admin/verifyAdmin.js';
 import { writeAuditLog } from '../admin/writeAuditLog.js';
 import { notifyAllParents } from '../config/notifyParents.js';
+import { escapeHtml } from '../config/email.js';
 import { sendPushNotification } from '../config/push.js';
 import { GUARDIAN_SUCCESS } from './shared.js';
 
@@ -81,7 +82,7 @@ export const forceRevokeSupervision = onCall(
       title: 'Supervision ended',
       body: `An administrator ended supervision of ${kidName}'s account`,
       emailSubject: 'Supervision ended',
-      emailBody: `<p>An administrator ended supervision of ${kidName}'s account.</p>`,
+      emailBody: `<p>An administrator ended supervision of ${escapeHtml(kidName)}'s account.</p>`,
       data: { childUid },
     });
     const kidTitle = 'Supervision ended';

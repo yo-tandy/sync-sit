@@ -3,7 +3,7 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { getParentView, isBabysitter, type User } from '@ejm/shared-core';
 import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
-import { sendNotificationEmail } from '../config/email.js';
+import { escapeHtml, sendNotificationEmail } from '../config/email.js';
 import { sendPushNotification } from '../config/push.js';
 
 export const addPreferredBabysitter = onCall(
@@ -80,7 +80,7 @@ export const addPreferredBabysitter = onCall(
         await sendNotificationEmail(
           babysitter.email,
           `${parentName} from the ${familyName} family added you to their favorites!`,
-          `<p><strong>${parentName}</strong> from the <strong>${familyName}</strong> family added you to their favorite babysitters!</p>
+          `<p><strong>${escapeHtml(parentName)}</strong> from the <strong>${escapeHtml(familyName)}</strong> family added you to their favorite babysitters!</p>
            <p>Would you like to share your contact information with them?</p>
            <p style="margin-top: 16px;"><a href="https://sync-sit.com/babysitter/families" style="background: #DC2626; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">Respond</a></p>`
         );

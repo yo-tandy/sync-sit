@@ -4,7 +4,7 @@ import { db } from '@ejm/shared-functions/config/firebase.js';
 import { getCorsOrigin } from '@ejm/shared-functions/config/cors.js';
 import { writeUserActivity } from '@ejm/shared-functions/admin/writeAuditLog.js';
 import { notifyAllParents } from '@ejm/shared-functions/config/notifyParents.js';
-import { sendNotificationEmail, STUDY_APP_URL } from '@ejm/shared-functions/config/email.js';
+import { escapeHtml, sendNotificationEmail, STUDY_APP_URL } from '@ejm/shared-functions/config/email.js';
 import { sendPushNotification } from '@ejm/shared-functions/config/push.js';
 import {
   isActiveGuardianOf,
@@ -182,7 +182,7 @@ export const cancelSessionInstance = onCall(
     const endTime = instance.endTime as string | undefined;
     const whenInfo = `${date}${startTime ? `, ${startTime}` : ''}${endTime ? `–${endTime}` : ''}`;
     const latePolicyNote = late
-      ? `<p>This was a <strong>late cancellation</strong> under the ${noticeHours}-hour notice policy.</p>`
+      ? `<p>This was a <strong>late cancellation</strong> under the ${escapeHtml(String(noticeHours))}-hour notice policy.</p>`
       : '';
     const lateSuffix = late ? ' (late cancellation)' : '';
 
@@ -202,9 +202,9 @@ export const cancelSessionInstance = onCall(
         emailSent = await sendNotificationEmail(
           tutorEmail,
           `Session cancelled by ${familyName}`,
-          `<p><strong>${familyName}</strong> cancelled the session on <strong>${whenInfo}</strong>.</p>
+          `<p><strong>${escapeHtml(familyName)}</strong> cancelled the session on <strong>${escapeHtml(whenInfo)}</strong>.</p>
            <p>Your other sessions in this series are unaffected.</p>
-           <p><strong>Reason:</strong> ${reason}</p>
+           <p><strong>Reason:</strong> ${escapeHtml(reason)}</p>
            ${latePolicyNote}
            <p style="margin-top: 16px;"><a href="${STUDY_APP_URL}/tutor" style="background: #2563EB; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View in app</a></p>`,
           'study',
@@ -243,9 +243,9 @@ export const cancelSessionInstance = onCall(
         title: 'Session cancelled',
         body: `${tutorName} cancelled the session on ${whenInfo}. Reason: ${reason}`,
         emailSubject: `Session cancelled — ${tutorName}`,
-        emailBody: `<p><strong>${tutorName}</strong> cancelled the session on <strong>${whenInfo}</strong>.</p>
+        emailBody: `<p><strong>${escapeHtml(tutorName)}</strong> cancelled the session on <strong>${escapeHtml(whenInfo)}</strong>.</p>
            <p>Your other sessions in this series are unaffected.</p>
-           <p><strong>Reason:</strong> ${reason}</p>
+           <p><strong>Reason:</strong> ${escapeHtml(reason)}</p>
            ${latePolicyNote}
            <p style="margin-top: 16px;"><a href="${STUDY_APP_URL}/family" style="background: #2563EB; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View in app</a></p>`,
         data: { sessionId, instanceId },

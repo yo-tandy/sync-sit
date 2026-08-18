@@ -2,7 +2,7 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
-import { sendNotificationEmail } from '../config/email.js';
+import { escapeHtml, sendNotificationEmail } from '../config/email.js';
 import { sendPushNotification } from '../config/push.js';
 import { getParentProfile, type User } from '@ejm/shared-core';
 
@@ -147,8 +147,8 @@ export const resubmitAppointment = onCall(
       await sendNotificationEmail(
         babysitterData.email,
         `Request resubmitted by ${familyName}`,
-        `<p><strong>${familyName}</strong> has resubmitted a babysitting request for <strong>${dateInfo}</strong>.</p>
-         <p><strong>Note:</strong> ${data.additionalNotes.trim()}</p>
+        `<p><strong>${escapeHtml(familyName)}</strong> has resubmitted a babysitting request for <strong>${escapeHtml(dateInfo)}</strong>.</p>
+         <p><strong>Note:</strong> ${escapeHtml(data.additionalNotes.trim())}</p>
          <p style="margin-top: 16px;"><a href="https://sync-sit.com/babysitter/request/${newAppointmentRef.id}" style="background: #DC2626; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View Request</a></p>`
       );
     }

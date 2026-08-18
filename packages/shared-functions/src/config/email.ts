@@ -253,9 +253,11 @@ const NOTIFICATION_BRANDING: Record<
 /**
  * Escape a user-controlled string for interpolation into notification email
  * HTML (text-node and attribute contexts). Introduced at the
- * endorsement-response emails (issue #168 Phase 0); the wider study-functions
- * email surface interpolates profile strings unescaped by long-standing
- * convention — migrating those call sites is a tracked follow-up.
+ * endorsement-response emails (issue #168 Phase 0); issue #188 applied it
+ * across every sender in both apps. The convention: escape anything that
+ * originates from user/family/request/session docs or free-text input when it
+ * lands in email HTML; leave RFC 5322 subject lines (never HTML-decoded) and
+ * system-generated values (self-formatted dates, constant-built URLs) raw.
  */
 export function escapeHtml(value: string): string {
   return value

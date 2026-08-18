@@ -5,7 +5,7 @@ import { db, adminAuth } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { verifyAdmin } from './verifyAdmin.js';
 import { writeAuditLog } from './writeAuditLog.js';
-import { sendAdminNotification } from '../config/email.js';
+import { escapeHtml, sendAdminNotification } from '../config/email.js';
 
 interface DeleteUserInput {
   targetUserId: string;
@@ -290,8 +290,8 @@ export const deleteUser = onCall(
     await sendAdminNotification(
       `User deleted: ${email}`,
       `<p>Admin deleted a user account.</p>
-       <p><strong>Name:</strong> ${userData.firstName || ''} ${userData.lastName || ''}</p>
-       <p><strong>Email:</strong> ${email}</p>
+       <p><strong>Name:</strong> ${escapeHtml(userData.firstName || '')} ${escapeHtml(userData.lastName || '')}</p>
+       <p><strong>Email:</strong> ${escapeHtml(email)}</p>
        <p><strong>Role:</strong> ${role}</p>
        <p><strong>Cancelled appointments:</strong> ${cancelledCount}</p>
        <p><strong>Family deleted:</strong> ${isLastParent && !!familyId ? 'Yes' : 'No'}</p>`

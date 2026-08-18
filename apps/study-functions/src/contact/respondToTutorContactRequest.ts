@@ -4,7 +4,7 @@ import { db } from '@ejm/shared-functions/config/firebase.js';
 import { getCorsOrigin } from '@ejm/shared-functions/config/cors.js';
 import { writeUserActivity } from '@ejm/shared-functions/admin/writeAuditLog.js';
 import { notifyAllParents } from '@ejm/shared-functions/config/notifyParents.js';
-import { STUDY_APP_URL } from '@ejm/shared-functions/config/email.js';
+import { escapeHtml, STUDY_APP_URL } from '@ejm/shared-functions/config/email.js';
 import {
   isActiveGuardianOf,
   notifyChildOfGuardianAction,
@@ -91,9 +91,9 @@ export const respondToTutorContactRequest = onCall(
       const contactPhone = tutor?.contactPhone;
       const whatsapp = tutor?.whatsapp;
       const contactBlock = [
-        contactEmail ? `<p><strong>Email:</strong> ${contactEmail}</p>` : '',
-        contactPhone ? `<p><strong>Phone:</strong> ${contactPhone}</p>` : '',
-        whatsapp ? `<p><strong>WhatsApp:</strong> ${whatsapp}</p>` : '',
+        contactEmail ? `<p><strong>Email:</strong> ${escapeHtml(contactEmail)}</p>` : '',
+        contactPhone ? `<p><strong>Phone:</strong> ${escapeHtml(contactPhone)}</p>` : '',
+        whatsapp ? `<p><strong>WhatsApp:</strong> ${escapeHtml(whatsapp)}</p>` : '',
       ].join('');
 
       await notifyAllParents({
@@ -105,7 +105,7 @@ export const respondToTutorContactRequest = onCall(
         body: `${tutorName} accepted your tutoring request.`,
         emailSubject: `Tutoring request accepted — ${tutorName}`,
         emailBody: `
-          <p><strong>${tutorName}</strong> accepted your tutoring request for <strong>${result.subject} (${result.level})</strong>.</p>
+          <p><strong>${escapeHtml(tutorName)}</strong> accepted your tutoring request for <strong>${escapeHtml(result.subject)} (${escapeHtml(result.level)})</strong>.</p>
           ${contactBlock}
           <p style="margin-top: 16px;"><a href="${STUDY_APP_URL}/family" style="background: #2563EB; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View in app</a></p>
         `,
@@ -121,7 +121,7 @@ export const respondToTutorContactRequest = onCall(
         body: `${tutorName} declined your tutoring request.`,
         emailSubject: `Tutoring request declined — ${tutorName}`,
         emailBody: `
-          <p><strong>${tutorName}</strong> declined your tutoring request for <strong>${result.subject} (${result.level})</strong>.</p>
+          <p><strong>${escapeHtml(tutorName)}</strong> declined your tutoring request for <strong>${escapeHtml(result.subject)} (${escapeHtml(result.level)})</strong>.</p>
           <p>You can search for other available tutors.</p>
           <p style="margin-top: 16px;"><a href="${STUDY_APP_URL}/family" style="background: #2563EB; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View in app</a></p>
         `,

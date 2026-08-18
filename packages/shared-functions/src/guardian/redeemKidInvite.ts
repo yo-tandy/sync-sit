@@ -5,6 +5,7 @@ import { db, adminAuth } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
 import { notifyAllParents } from '../config/notifyParents.js';
+import { escapeHtml } from '../config/email.js';
 import { hashInviteToken } from './shared.js';
 
 interface RedeemKidInviteData {
@@ -152,7 +153,7 @@ export const redeemKidInvite = onCall(
       title: 'Invitation accepted',
       body: `${invite.firstName} accepted the invitation and created their account`,
       emailSubject: 'Your kid joined Sync/Sit',
-      emailBody: `<p>${invite.firstName} accepted your invitation and created their supervised account.</p>`,
+      emailBody: `<p>${escapeHtml(invite.firstName)} accepted your invitation and created their supervised account.</p>`,
       data: { childUid: uid },
     });
 

@@ -1,6 +1,6 @@
 import { onDocumentCreated } from 'firebase-functions/v2/firestore';
 import { db } from '../config/firebase.js';
-import { sendNotificationEmail } from '../config/email.js';
+import { escapeHtml, sendNotificationEmail } from '../config/email.js';
 import { sendPushNotification } from '../config/push.js';
 
 /**
@@ -32,7 +32,7 @@ export const notifyOnNewReference = onDocumentCreated(
     let emailSent = false;
     if (refsPrefs.email && babysitter.email) {
       const emailBody = `
-        <p><strong>${submitterName}</strong> has submitted an endorsement for you on Sync/Sit.</p>
+        <p><strong>${escapeHtml(submitterName)}</strong> has submitted an endorsement for you on Sync/Sit.</p>
         <p>Go to your Endorsements page to review it and choose whether to publish it on your profile.</p>
         <p style="margin-top: 16px;"><a href="https://sync-sit.com/babysitter/endorsements" style="background: #DC2626; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View Endorsements</a></p>
       `;

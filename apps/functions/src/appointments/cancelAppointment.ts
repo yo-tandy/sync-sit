@@ -2,7 +2,7 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
-import { sendNotificationEmail } from '../config/email.js';
+import { escapeHtml, sendNotificationEmail } from '../config/email.js';
 import { sendPushNotification } from '../config/push.js';
 import { notifyAllParents } from '../config/notifyParents.js';
 import { getParentProfile, isBabysitter, type User } from '@ejm/shared-core';
@@ -148,8 +148,8 @@ export const cancelAppointment = onCall(
         await sendNotificationEmail(
           babysitterEmail,
           `Appointment cancelled by ${familyName}`,
-          `<p><strong>${familyName}</strong> has cancelled the appointment for <strong>${dateInfo}</strong>.</p>
-           <p><strong>Reason:</strong> ${reason.trim()}</p>
+          `<p><strong>${escapeHtml(familyName)}</strong> has cancelled the appointment for <strong>${escapeHtml(dateInfo)}</strong>.</p>
+           <p><strong>Reason:</strong> ${escapeHtml(reason.trim())}</p>
            <p style="margin-top: 16px;"><a href="https://sync-sit.com/babysitter" style="background: #DC2626; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View Dashboard</a></p>`
         );
       }
@@ -173,8 +173,8 @@ export const cancelAppointment = onCall(
         title: 'Appointment cancelled',
         body: `The babysitter has cancelled the appointment for ${dateInfo}. Reason: ${reason.trim()}`,
         emailSubject: 'Babysitting appointment cancelled',
-        emailBody: `<p>The babysitter has cancelled the appointment for <strong>${dateInfo}</strong>.</p>
-           <p><strong>Reason:</strong> ${reason.trim()}</p>
+        emailBody: `<p>The babysitter has cancelled the appointment for <strong>${escapeHtml(dateInfo)}</strong>.</p>
+           <p><strong>Reason:</strong> ${escapeHtml(reason.trim())}</p>
            <p style="margin-top: 16px;"><a href="https://sync-sit.com/family/search" style="background: #DC2626; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">Search Babysitters</a></p>`,
         data: { appointmentId },
       });
