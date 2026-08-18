@@ -11,12 +11,21 @@ const h = vi.hoisted(() => ({
     loading: false,
   },
   refreshUserDoc: () => Promise.resolve(),
+  // Controllable verifyEjmEmail rejection so tests can drive the send-cap
+  // (issue #155 bypass allowance) branch. Default null = send succeeds.
+  verifyError: null as { code: string; details: { reason: string } } | null,
 }));
 
 vi.mock('@/config/firebase', () => ({ auth: {}, functions: {}, db: {} }));
 vi.mock('firebase/functions', () => ({
   httpsCallable: (_fns: unknown, name: string) => (payload: unknown) => {
     h.calls.push({ name, payload });
+    // Model the send-cap rejection (issue #155): HttpsError
+    // ('failed-precondition', msg, { reason: 'send-cap' }) surfaces as a
+    // FunctionsError with details.reason.
+    if (name === 'verifyEjmEmail' && h.verifyError) {
+      return Promise.reject(h.verifyError);
+    }
     return Promise.resolve({ data: { uid: 'u1' } });
   },
 }));
@@ -57,9 +66,18 @@ vi.mock('@ejm/sit-core', () => ({
 
 // Lightweight stand-ins for the child step components.
 vi.mock('@ejm/shared-ui', () => ({
-  enrollmentErrorReason: () => null,
-  StepEmail: ({ onSubmit }: { onSubmit: () => void }) => (
-    <button onClick={onSubmit}>email-submit</button>
+  // Mirrors the real helper: read details.reason off the rejected value.
+  enrollmentErrorReason: (err: { details?: { reason?: unknown } } | null) => {
+    const reason = err?.details?.reason;
+    return reason === 'profile-exists' || reason === 'role-exclusive' || reason === 'send-cap'
+      ? reason
+      : null;
+  },
+  StepEmail: ({ onSubmit, error }: { onSubmit: () => void; error?: string | null }) => (
+    <div>
+      {error && <p>{error}</p>}
+      <button onClick={onSubmit}>email-submit</button>
+    </div>
   ),
   StepVerify: ({ onVerify }: { onVerify: (c: string) => void }) => (
     <button onClick={() => onVerify('123456')}>verify-submit</button>
@@ -119,7 +137,24 @@ beforeEach(() => {
   h.navigate = vi.fn();
   h.auth = { firebaseUser: null, userDoc: null, loading: false };
   h.refreshUserDoc = vi.fn().mockResolvedValue(undefined);
+  h.verifyError = null;
   i18n.changeLanguage('en');
+});
+
+describe('BabysitterEnrollment send-cap surfacing (issue #155)', () => {
+  it("verifyEjmEmail 'send-cap' rejection renders the translated copy and stays on the email step", async () => {
+    h.verifyError = { code: 'functions/failed-precondition', details: { reason: 'send-cap' } };
+    renderFlow();
+    fireEvent.click(screen.getByText('email-submit'));
+
+    const msg = i18n.t('enrollment.sendCapReached');
+    expect(await screen.findByText(msg)).toBeInTheDocument();
+    // No advance to the verify step, and no raw English backend string.
+    expect(screen.queryByText('verify-submit')).toBeNull();
+    expect(
+      screen.queryByText(/Too many verification emails requested for this account/),
+    ).toBeNull();
+  });
 });
 
 // Issue #144: a cross-app user (study tutor adding a babysitter profile)

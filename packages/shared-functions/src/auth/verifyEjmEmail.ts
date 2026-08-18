@@ -7,6 +7,7 @@ import { sendVerificationEmail } from '../config/email.js';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
 import { handleExistingAccountSignup } from './accountExistsNotice.js';
 import { isInSendCooldown } from './sendCooldown.js';
+import { registerVerificationSend, registerBypassSend } from './sendRateLimit.js';
 
 /**
  * Send a 6-digit verification code to an EJM email address.
@@ -76,6 +77,13 @@ export const verifyEjmEmail = onCall(
       if (await isInSendCooldown(normalizedEmail)) {
         return { success: true, message: 'Verification code sent' };
       }
+      // Per-address daily send cap (issue #155), cooldown first so short
+      // repeats never consume budget. Capped requests stay SILENT and write
+      // nothing — not even a decoy refresh — exactly mirroring the capped
+      // fresh branch below, so the cap is not a new oracle.
+      if (!(await registerVerificationSend(normalizedEmail))) {
+        return { success: true, message: 'Verification code sent' };
+      }
       return handleExistingAccountSignup(normalizedEmail, app, {
         code: crypto.randomInt(100000, 999999).toString(),
         email: normalizedEmail,
@@ -91,6 +99,31 @@ export const verifyEjmEmail = onCall(
     // skips it — see isOwnEmailBypass.
     if (!isOwnEmailBypass && (await isInSendCooldown(normalizedEmail))) {
       return { success: true, message: 'Verification code sent' };
+    }
+
+    // Per-address daily send cap (issue #155), cooldown first — the silent
+    // branch above runs the identical pair at the identical point. Capped
+    // requests return the byte-identical fresh body and write NOTHING (no
+    // code doc, no counter bump — the window is fixed, not sliding): an
+    // error here would be a new abuse oracle. The bypass is exempt (a prober
+    // could burn the address budget to starve the owner — same vector as the
+    // cooldown exemption); it has its own per-uid allowance below.
+    if (!isOwnEmailBypass && !(await registerVerificationSend(normalizedEmail))) {
+      return { success: true, message: 'Verification code sent' };
+    }
+
+    // Authed own-email bypass allowance (issue #155, the #154 residual):
+    // without this the bypass had NO server-side send limit. This path is
+    // authenticated and self-directed, so an explicit error is safe (nothing
+    // to enumerate) and better UX than silent mail loss.
+    if (isOwnEmailBypass && request.auth && !(await registerBypassSend(request.auth.uid))) {
+      // details.reason is the machine-readable marker the clients map to
+      // translated copy (same convention as enrollmentErrorReason).
+      throw new HttpsError(
+        'failed-precondition',
+        'Too many verification emails requested for this account. Please wait up to an hour and try again.',
+        { reason: 'send-cap' }
+      );
     }
 
     // Generate cryptographically secure 6-digit code

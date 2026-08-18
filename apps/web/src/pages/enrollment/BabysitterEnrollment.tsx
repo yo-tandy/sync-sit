@@ -71,6 +71,11 @@ export function BabysitterEnrollment() {
       setError(t('enrollment.alreadyEnrolled'));
       return true;
     }
+    if (reason === 'send-cap') {
+      // Authed own-email bypass allowance (issue #155) — add-profile flow.
+      setError(t('enrollment.sendCapReached'));
+      return true;
+    }
     return false;
   };
 

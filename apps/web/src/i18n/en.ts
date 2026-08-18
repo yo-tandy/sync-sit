@@ -129,6 +129,7 @@ export default {
     confirmConsentTitle: 'Almost there',
     identityOnFile: 'Enrolling as {{name}} — your identity is already on file from your other Sync profile.',
     alreadyEnrolled: 'This account already has this role.',
+    sendCapReached: 'Too many verification emails requested. Please wait up to an hour and try again.',
     verifyNoCodeHint: "Didn't get a code? If you already have an account, <loginLink>log in</loginLink> instead.",
     alreadyInFamily: 'You already belong to a family.',
     roleExclusiveJoin: "Student accounts (babysitter or tutor) can't join a family as a parent — this invite needs the parent's own account.",

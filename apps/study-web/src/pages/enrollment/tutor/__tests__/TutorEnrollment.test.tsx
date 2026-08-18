@@ -21,6 +21,9 @@ const h = vi.hoisted(() => ({
   // Controllable age-gate code so tests can drive the under-15 / mismatch
   // rejection branches. Default null = no age-gate rejection.
   ageCode: null as 'age/under-15' | 'age/mismatch' | null,
+  // Controllable verifyEjmEmail rejection so tests can drive the send-cap
+  // (issue #155 bypass allowance) branch. Default null = send succeeds.
+  verifyError: null as { code: string; details: { reason: string } } | null,
 }));
 
 vi.mock('@/config/firebase', () => ({ functions: {}, auth: {} }));
@@ -40,6 +43,12 @@ vi.mock('firebase/functions', () => ({
     // { code }) reaches the client as FunctionsError with details.code.
     if (name === 'enrollTutor' && h.ageCode) {
       return Promise.reject({ code: 'functions/failed-precondition', details: { code: h.ageCode } });
+    }
+    // Model the send-cap rejection (issue #155): HttpsError
+    // ('failed-precondition', msg, { reason: 'send-cap' }) surfaces as a
+    // FunctionsError with details.reason.
+    if (name === 'verifyEjmEmail' && h.verifyError) {
+      return Promise.reject(h.verifyError);
     }
     return Promise.resolve({ data: { uid: 'u1' } });
   },
@@ -78,7 +87,9 @@ vi.mock('@ejm/shared-ui', () => ({
   // Mirrors the real helper: read details.reason off the rejected value.
   enrollmentErrorReason: (err: { details?: { reason?: unknown } } | null) => {
     const reason = err?.details?.reason;
-    return reason === 'profile-exists' || reason === 'role-exclusive' ? reason : null;
+    return reason === 'profile-exists' || reason === 'role-exclusive' || reason === 'send-cap'
+      ? reason
+      : null;
   },
   // Mirrors the real helper: read details.code off the rejected value.
   ageGateErrorCode: (err: { details?: { code?: unknown } } | null) => {
@@ -87,15 +98,22 @@ vi.mock('@ejm/shared-ui', () => ({
   },
   TopNav: ({ title }: { title: string }) => <div>{title}</div>,
   StepIndicator: ({ currentStep }: { currentStep: number }) => <div>step-{currentStep}</div>,
-  StepEmail: ({ onChange, onSubmit }: { onChange: (e: string) => void; onSubmit: () => void }) => (
-    <button
-      onClick={() => {
-        onChange('flow.tutor28@ejm.org');
-        onSubmit();
-      }}
-    >
-      email-submit
-    </button>
+  StepEmail: ({ onChange, onSubmit, error }: {
+    onChange: (e: string) => void;
+    onSubmit: () => void;
+    error?: string | null;
+  }) => (
+    <div>
+      {error && <p>{error}</p>}
+      <button
+        onClick={() => {
+          onChange('flow.tutor28@ejm.org');
+          onSubmit();
+        }}
+      >
+        email-submit
+      </button>
+    </div>
   ),
   StepVerify: ({ onVerify }: { onVerify: (c: string) => void }) => (
     <button onClick={() => onVerify('123456')}>verify-submit</button>
@@ -176,6 +194,7 @@ beforeEach(() => {
   h.errorReason = null;
   h.rawError = null;
   h.ageCode = null;
+  h.verifyError = null;
 });
 
 describe('TutorEnrollment orchestrator', () => {
@@ -373,6 +392,20 @@ describe('TutorEnrollment orchestrator', () => {
     expect(screen.queryByRole('link', { name: i18n.t('auth.login') })).toBeNull();
     // No success navigation on failure.
     expect(h.navigate).not.toHaveBeenCalledWith('/enroll/tutor/success', expect.anything());
+  });
+
+  it("verifyEjmEmail 'send-cap' rejection (issue #155 bypass allowance) renders the translated copy and stays on the email step", async () => {
+    h.verifyError = { code: 'functions/failed-precondition', details: { reason: 'send-cap' } };
+    renderFlow();
+    fireEvent.click(screen.getByText('email-submit'));
+
+    const msg = i18n.t('enrollment.sendCapReached');
+    expect(await screen.findByText(msg)).toBeInTheDocument();
+    // No advance to the verify step, and no raw English backend string.
+    expect(screen.queryByText('verify-submit')).toBeNull();
+    expect(
+      screen.queryByText(/Too many verification emails requested for this account/),
+    ).toBeNull();
   });
 
   it("enrollTutor 'profile-exists' rejection renders alreadyEnrolled and NO login link", async () => {

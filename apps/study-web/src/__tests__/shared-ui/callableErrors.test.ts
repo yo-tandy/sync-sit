@@ -24,6 +24,14 @@ describe('enrollmentErrorReason role-exclusive', () => {
   });
 });
 
+describe('enrollmentErrorReason send-cap', () => {
+  it('recognizes the send-cap reason (issue #155 bypass allowance)', () => {
+    expect(
+      enrollmentErrorReason({ code: 'functions/failed-precondition', details: { reason: 'send-cap' } }),
+    ).toBe('send-cap');
+  });
+});
+
 describe('ageGateErrorCode', () => {
   it('extracts age/under-15', () => {
     expect(ageGateErrorCode({ code: 'functions/failed-precondition', details: { code: 'age/under-15' } }))

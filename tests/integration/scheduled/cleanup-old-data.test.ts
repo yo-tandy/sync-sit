@@ -36,7 +36,7 @@ describe('runCleanupOldData', () => {
     const db = getDb();
     const collections = [
       'notifications', 'auditLogs', 'inviteLinks', 'verificationCodes',
-      'accountExistsNotices', 'appointments',
+      'accountExistsNotices', 'verificationSendCounters', 'appointments',
     ];
     await Promise.all(
       collections.map(async (col) => {
@@ -142,6 +142,40 @@ describe('runCleanupOldData', () => {
     const remaining = await db.collection('accountExistsNotices').get();
     expect(remaining.size).toBe(1);
     expect(remaining.docs[0].id).toBe('fresh@ejm.org');
+  });
+
+  it('deletes verification send counters with an elapsed window and keeps live ones (issue #155)', async () => {
+    const db = getDb();
+    const now = new Date();
+
+    // Both counter kinds go stale on the same 24h retention: the daily
+    // address budget is spent by then and the 1h bypass budget long before.
+    await db.collection('verificationSendCounters').doc('stale@ejm.org').set({
+      key: 'stale@ejm.org',
+      kind: 'address',
+      count: 10,
+      windowStart: new Date(now.getTime() - 25 * 60 * 60 * 1000),
+    });
+    await db.collection('verificationSendCounters').doc('stale-bypass-uid').set({
+      key: 'stale-bypass-uid',
+      kind: 'bypass',
+      count: 6,
+      windowStart: new Date(now.getTime() - 25 * 60 * 60 * 1000),
+    });
+    await db.collection('verificationSendCounters').doc('live@ejm.org').set({
+      key: 'live@ejm.org',
+      kind: 'address',
+      count: 3,
+      windowStart: new Date(now.getTime() - 23 * 60 * 60 * 1000),
+    });
+
+    const stats = await runCleanupOldData(db, now);
+
+    expect(stats.verificationSendCountersDeleted).toBe(2);
+
+    const remaining = await db.collection('verificationSendCounters').get();
+    expect(remaining.size).toBe(1);
+    expect(remaining.docs[0].id).toBe('live@ejm.org');
   });
 
   it('deletes old cancelled appointments (createdAt>30d, date>7d ago) but keeps recent ones', async () => {

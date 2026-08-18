@@ -955,6 +955,7 @@ export default {
     confirmConsentTitle: 'Almost there',
     identityOnFile: 'Enrolling as {{name}} — your identity is already on file from your other Sync profile.',
     alreadyEnrolled: 'This account already has this role.',
+    sendCapReached: 'Too many verification emails requested. Please wait up to an hour and try again.',
     verifyNoCodeHint: "Didn't get a code? If you already have an account, <loginLink>log in</loginLink> instead.",
     age: {
       under15: 'You need to be at least 15 to enroll on your own. Your parents can create an account and enroll you from theirs.',

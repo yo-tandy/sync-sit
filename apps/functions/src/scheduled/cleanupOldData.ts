@@ -9,6 +9,7 @@ export interface CleanupStats {
   inviteLinksDeleted: number;
   verificationCodesDeleted: number;
   accountExistsNoticesDeleted: number;
+  verificationSendCountersDeleted: number;
   appointmentsDeleted: number;
 }
 
@@ -22,6 +23,9 @@ export interface CleanupStats {
  * - Expired verification codes: immediate (past expiry)
  * - Account-exists notice markers: 24 hours (their whole purpose is the
  *   24h mail-bomb guard; keeping them longer retains targeted addresses)
+ * - Verification send counters: 24 hours past windowStart (the longest
+ *   window — the daily address cap — is spent by then; stale counters only
+ *   retain targeted addresses)
  * - Cancelled/rejected appointments: 30 days AND date > 7 days ago
  */
 export async function runCleanupOldData(
@@ -37,6 +41,7 @@ export async function runCleanupOldData(
     inviteLinksDeleted: 0,
     verificationCodesDeleted: 0,
     accountExistsNoticesDeleted: 0,
+    verificationSendCountersDeleted: 0,
     appointmentsDeleted: 0,
   };
 
@@ -142,7 +147,34 @@ export async function runCleanupOldData(
     if (staleNotices.size < 500) break;
   }
 
-  // 6. Delete old cancelled/rejected appointments
+  // 6. Delete verification send counters whose window fully elapsed (issue
+  // #155): both budgets (24h address cap, 1h bypass allowance) are inert
+  // once windowStart is 24h old, and past that the address counters only
+  // retain the addresses an abuser targeted. Same drain-loop rationale as
+  // the accountExistsNotices block above — a send spray writes one counter
+  // per targeted address, so a single 500-doc daily pass could never drain
+  // the backlog.
+  for (let pass = 0; pass < 40; pass++) {
+    const staleCounters = await firestoreDb
+      .collection('verificationSendCounters')
+      .where('windowStart', '<', twentyFourHoursAgo)
+      .limit(500)
+      .get();
+
+    if (!staleCounters.empty) {
+      const batch = firestoreDb.batch();
+      for (const doc of staleCounters.docs) {
+        batch.delete(doc.ref);
+      }
+      await batch.commit();
+      stats.verificationSendCountersDeleted += staleCounters.size;
+      stats.totalDeleted += staleCounters.size;
+      console.log(`Deleted ${staleCounters.size} stale verification send counters`);
+    }
+    if (staleCounters.size < 500) break;
+  }
+
+  // 7. Delete old cancelled/rejected appointments
   // Keep for 30 days OR until 7 days after booking date (whichever is longer)
   const oldAppointments = await firestoreDb
     .collection('appointments')

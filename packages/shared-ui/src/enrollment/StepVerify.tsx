@@ -3,6 +3,7 @@ import { useTranslation, Trans } from 'react-i18next';
 import { Link } from 'react-router';
 import { MailIcon } from '../components/Icons.js';
 import { CodeInput } from '../forms/CodeInput.js';
+import { enrollmentErrorReason } from '../utils/callableErrors.js';
 
 interface StepVerifyProps {
   ejemEmail: string;
@@ -44,9 +45,20 @@ export function StepVerify({ ejemEmail, onVerify, onResend, error }: StepVerifyP
     setCodeError(null);
     try {
       await onResend();
-    } catch {
-      // Resend failed — reset cooldown so user can retry immediately.
-      // Don't surface the error here; orchestrator's error prop will if it wants.
+    } catch (err: unknown) {
+      if (enrollmentErrorReason(err) === 'send-cap') {
+        // The authed own-email bypass allowance tripped (issue #155):
+        // surface it — this is the one resend failure the user can act on,
+        // and it is only ever thrown to an authenticated caller for their
+        // OWN address, so showing it distinguishes nothing (unauthenticated
+        // paths stay silent by design). Keep the 60s cooldown ticking:
+        // an immediate retry cannot succeed within the hour anyway.
+        setCodeError(t('enrollment.sendCapReached'));
+        return;
+      }
+      // Transport and other failures — reset cooldown so user can retry
+      // immediately. Don't surface the error here; orchestrator's error
+      // prop will if it wants.
       setResendCooldown(0);
     }
   };
