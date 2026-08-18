@@ -560,15 +560,16 @@ describe('searchTutors', () => {
     });
   });
 
-  it('returns a zero-coverage in-person tutor for an UNTYPED query, with raw prefs (intentional)', async () => {
-    // Location-untyped searches skip the coverage gate BY DESIGN: excluding
-    // these tutors would also hide their online capability from families who
-    // have not narrowed by location at all. The projected prefs stay raw for
-    // the same reason — no leg was requested, so none can be false for this
-    // family yet; the location-typed pins above carry the honesty guarantee.
+  it('returns a zero-coverage in-person tutor for an UNTYPED query, with the unreachable legs subtracted', async () => {
+    // Location-untyped searches skip the coverage INCLUSION gate by design:
+    // excluding these tutors would also hide their online capability from
+    // families who have not narrowed by location at all. The PROJECTION is
+    // still honest everywhere: family-side legs the coverage cannot serve
+    // are subtracted on the untyped path too, so the default search never
+    // advertises "at your home" for an unreachable tutor.
     await withTempTutor(
       'temp-tutor-untyped',
-      { areaMode: 'arrondissement', arrondissements: [], areaLatLng: null, areaRadiusKm: null, locationPrefs: ['family_home'] },
+      { areaMode: 'arrondissement', arrondissements: [], areaLatLng: null, areaRadiusKm: null, locationPrefs: ['online', 'family_home'] },
       async () => {
         const result = await callFunction<{ results: TutorResult[] }>(
           'searchTutors',
@@ -577,9 +578,77 @@ describe('searchTutors', () => {
         );
         const row = result.results.find((r) => r.uid === 'temp-tutor-untyped');
         expect(row).toBeDefined();
-        expect(row?.locationPrefs).toEqual(['family_home']);
+        expect(row?.locationPrefs).toEqual(['online']);
       }
     );
+  });
+
+  it('applies maxDistanceKm as a whole-tutor gate even when a tutor-side leg matched', async () => {
+    // The family's explicit ceiling is not tutor coverage — it applies to
+    // every leg (a family capping distance wants nearby tutors, and the UI
+    // shows the input unconditionally). FAR is ~5.5 km out.
+    await withTempTutor(
+      'temp-tutor-maxdist-typed',
+      { locationPrefs: ['tutor_home'], areaRadiusKm: 50 },
+      async () => {
+        const capped = await callFunction<{ results: TutorResult[] }>(
+          'searchTutors',
+          { subject: 'math', level: '6e', latLng: FAR, filters: { locationPrefs: ['tutor_home'], maxDistanceKm: 1 } },
+          parentToken
+        );
+        expect(capped.results.map((r) => r.uid)).not.toContain('temp-tutor-maxdist-typed');
+
+        // Without the cap the same tutor-side query includes the tutor (the
+        // tutor's own radius does not whole-drop typed queries).
+        const uncapped = await callFunction<{ results: TutorResult[] }>(
+          'searchTutors',
+          { subject: 'math', level: '6e', latLng: FAR, filters: { locationPrefs: ['tutor_home'] } },
+          parentToken
+        );
+        expect(uncapped.results.map((r) => r.uid)).toContain('temp-tutor-maxdist-typed');
+      }
+    );
+  });
+
+  it('applies maxDistanceKm on UNTYPED queries too (pre-#167 filter semantics)', async () => {
+    // areaRadiusKm 50 keeps the tutor within their OWN radius at FAR, so the
+    // exclusion below is attributable to maxDistanceKm alone.
+    await withTempTutor(
+      'temp-tutor-maxdist-untyped',
+      { areaRadiusKm: 50 },
+      async () => {
+        const result = await callFunction<{ results: TutorResult[] }>(
+          'searchTutors',
+          { subject: 'math', level: '6e', latLng: FAR, filters: { maxDistanceKm: 1 } },
+          parentToken
+        );
+        expect(result.results.map((r) => r.uid)).not.toContain('temp-tutor-maxdist-untyped');
+      }
+    );
+  });
+
+  it('approved family keeps an arr-mode tutor on a typed family_home query despite a non-matching label', async () => {
+    // Relationship over geography holds in BOTH modes: consent overrides the
+    // label match just like it overrides the distance radius.
+    const profile = {
+      areaMode: 'arrondissement',
+      arrondissements: ['5e'],
+      areaLatLng: null,
+      areaRadiusKm: null,
+      locationPrefs: ['family_home'],
+      approvedFamilies: [seed.family1Id],
+    };
+    await withTempTutor('temp-tutor-approved-label', profile, async () => {
+      const result = await callFunction<{ results: TutorResult[] }>(
+        'searchTutors',
+        { subject: 'math', level: '6e', areaLabel: '16e', filters: { locationPrefs: ['family_home'] } },
+        parentToken
+      );
+      const row = result.results.find((r) => r.uid === 'temp-tutor-approved-label');
+      expect(row).toBeDefined();
+      // And the family-side leg stays projected (covers via approval).
+      expect(row?.locationPrefs).toEqual(['family_home']);
+    });
   });
 
   it('never returns an EMPTY-coverage family_home tutor for family_home queries (requirement teeth)', async () => {
