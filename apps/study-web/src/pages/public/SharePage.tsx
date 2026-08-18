@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { TopNav, Button, Card, useToast, ShareIcon, MailIcon } from '@ejm/shared-ui';
+import { getStudyRole } from '@ejm/study-core';
+import { useAuthStore } from '@/stores/authStore';
 
 /**
  * Share Sync/Study with other EJM families and tutors. Copy-adapted from
@@ -8,16 +10,26 @@ import { TopNav, Button, Card, useToast, ShareIcon, MailIcon } from '@ejm/shared
  * mechanics (navigator.share when available, clipboard + mailto fallbacks),
  * retargeted to the study brand and tutoring copy. The shared link is
  * window.location.origin, so each deployment advertises its own host.
+ *
+ * The pitch is role-aware: tutors share a "get in touch with families" text
+ * (they are not looking for tutors themselves); parents — and unauthenticated
+ * visitors, since the route is public — get the find-tutors text.
  */
 export function SharePage() {
   const { t, i18n } = useTranslation();
+  const { userDoc } = useAuthStore();
   const toast = useToast();
   const [copied, setCopied] = useState(false);
   const isFr = i18n.language?.startsWith('fr');
+  const isTutor = getStudyRole(userDoc) === 'tutor';
 
-  const shareText = isFr
-    ? `Salut ! J'utilise Sync/Study pour trouver des tuteurs de confiance dans notre communauté scolaire. Rejoins-nous ! ${window.location.origin}`
-    : `Hey! I'm using Sync/Study to find trusted tutors in our school community. Join us! ${window.location.origin}`;
+  const shareText = isTutor
+    ? isFr
+      ? `Salut ! J'utilise Sync/Study pour entrer en contact avec des familles de notre communauté scolaire qui recherchent des tuteurs. Rejoins-nous ! ${window.location.origin}`
+      : `Hey! I'm using Sync/Study to get in touch with families from our school community who are looking for tutors. Join us! ${window.location.origin}`
+    : isFr
+      ? `Salut ! J'utilise Sync/Study pour trouver des tuteurs de confiance dans notre communauté scolaire. Rejoins-nous ! ${window.location.origin}`
+      : `Hey! I'm using Sync/Study to find trusted tutors in our school community. Join us! ${window.location.origin}`;
 
   const shareSubject = 'Sync/Study — Tutoring';
 

@@ -1,15 +1,30 @@
-import { describe, it, expect, beforeAll, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
 import { screen, fireEvent, waitFor } from '@testing-library/react';
+
+// The page reads useAuthStore to pick the role-aware pitch; mutable mock state
+// keeps the public (unauthenticated) render working and lets tests flip roles.
+// getStudyRole runs for real against the mocked userDoc shapes.
+const authState: { userDoc: unknown } = { userDoc: null };
+vi.mock('@/stores/authStore', () => {
+  const useAuthStore = () => authState;
+  useAuthStore.getState = () => authState;
+  return { useAuthStore };
+});
+
 import { renderWithProviders, i18n } from '@/__tests__/test-utils';
 import { SharePage } from '../SharePage';
 
 /**
  * Pins for the study share flow, mirrored from sync-sit's SharePage mechanics:
  * navigator.share when available (with the study payload), clipboard + mailto
- * fallbacks otherwise, and study-branded tutoring copy in both languages.
+ * fallbacks otherwise, and study-branded ROLE-AWARE copy in both languages —
+ * tutors pitch "get in touch with families", parents and unauthenticated
+ * visitors pitch "find trusted tutors".
  */
 
 const ORIGIN = window.location.origin;
+const TUTOR_DOC = { uid: 't1', profiles: { tutor: { subjects: [] } } };
+const PARENT_DOC = { uid: 'p1', profiles: { parent: { familyId: 'f1' } } };
 
 function setNavigatorShare(fn: (() => Promise<void>) | undefined) {
   if (fn) {
@@ -19,6 +34,10 @@ function setNavigatorShare(fn: (() => Promise<void>) | undefined) {
   }
 }
 
+beforeEach(() => {
+  authState.userDoc = null;
+});
+
 afterEach(() => {
   setNavigatorShare(undefined);
 });
@@ -27,13 +46,13 @@ beforeAll(async () => {
   await i18n.changeLanguage('en');
 });
 
-describe('SharePage (study)', () => {
-  it('renders the share options with the study message preview (no native share)', () => {
+describe('SharePage (study) — parent/unauthenticated pitch', () => {
+  it('renders the share options with the find-tutors preview when signed out (no native share)', () => {
     renderWithProviders(<SharePage />);
 
     expect(screen.getByText('Share Sync/Study')).toBeInTheDocument();
     expect(screen.getByText(/Help grow our community/i)).toBeInTheDocument();
-    // Message preview carries the study pitch (tutors, not babysitters) + the app origin.
+    // Message preview carries the family-side pitch (tutors, not babysitters) + the app origin.
     const preview = screen.getByText(/I'm using Sync\/Study to find trusted tutors/i);
     expect(preview.textContent).toContain(ORIGIN);
     expect(preview.textContent).not.toMatch(/babysit/i);
@@ -42,6 +61,13 @@ describe('SharePage (study)', () => {
     expect(screen.getByRole('button', { name: /share by email/i })).toBeInTheDocument();
     // …and without navigator.share there is no native share button.
     expect(screen.queryByRole('button', { name: /^share$/i })).not.toBeInTheDocument();
+  });
+
+  it('keeps the find-tutors pitch for a signed-in parent', () => {
+    authState.userDoc = PARENT_DOC;
+    renderWithProviders(<SharePage />);
+    expect(screen.getByText(/I'm using Sync\/Study to find trusted tutors/i)).toBeInTheDocument();
+    expect(screen.queryByText(/looking for tutors/i)).not.toBeInTheDocument();
   });
 
   it('shows the native share button when navigator.share exists and calls it with the study payload', async () => {
@@ -57,7 +83,9 @@ describe('SharePage (study)', () => {
       text: expect.stringContaining(ORIGIN),
       url: ORIGIN,
     });
-    expect((share.mock.calls[0][0] as { text: string }).text).toMatch(/Sync\/Study.*tutors/);
+    expect((share.mock.calls[0][0] as { text: string }).text).toMatch(
+      /Sync\/Study to find trusted tutors/,
+    );
   });
 
   it('copies the share message to the clipboard and confirms', async () => {
@@ -100,12 +128,94 @@ describe('SharePage (study)', () => {
     expect(hrefs[0]).toContain(encodeURIComponent(ORIGIN));
   });
 
-  it('uses the French tutoring pitch when the language is fr', async () => {
+  it('uses the French find-tutors pitch when the language is fr', async () => {
     await i18n.changeLanguage('fr');
     try {
       renderWithProviders(<SharePage />);
       expect(screen.getByText('Partager Sync/Study')).toBeInTheDocument();
       const preview = screen.getByText(/J'utilise Sync\/Study pour trouver des tuteurs/i);
+      expect(preview.textContent).toContain(ORIGIN);
+    } finally {
+      await i18n.changeLanguage('en');
+    }
+  });
+});
+
+describe('SharePage (study) — tutor pitch', () => {
+  beforeEach(() => {
+    authState.userDoc = TUTOR_DOC;
+  });
+
+  it('previews the get-in-touch-with-families text for a signed-in tutor', () => {
+    renderWithProviders(<SharePage />);
+    const preview = screen.getByText(
+      /get in touch with families from our school community who are looking for tutors/i,
+    );
+    expect(preview.textContent).toContain(ORIGIN);
+    expect(screen.queryByText(/find trusted tutors/i)).not.toBeInTheDocument();
+  });
+
+  it('native share payload carries the tutor text', async () => {
+    const share = vi.fn().mockResolvedValue(undefined);
+    setNavigatorShare(share);
+    renderWithProviders(<SharePage />);
+
+    fireEvent.click(screen.getByRole('button', { name: /^share$/i }));
+
+    await waitFor(() => expect(share).toHaveBeenCalledTimes(1));
+    expect(share).toHaveBeenCalledWith({
+      title: 'Sync/Study',
+      text: expect.stringMatching(/get in touch with families/),
+      url: ORIGIN,
+    });
+    expect((share.mock.calls[0][0] as { text: string }).text).toContain(ORIGIN);
+  });
+
+  it('clipboard copy carries the tutor text', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText },
+      writable: true,
+      configurable: true,
+    });
+    renderWithProviders(<SharePage />);
+
+    fireEvent.click(screen.getByRole('button', { name: /copy to clipboard/i }));
+
+    await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
+    expect(writeText.mock.calls[0][0]).toMatch(/get in touch with families/);
+    expect(writeText.mock.calls[0][0]).toContain(ORIGIN);
+  });
+
+  it('mailto body carries the tutor text', () => {
+    const hrefs: string[] = [];
+    Object.defineProperty(window, 'location', {
+      value: {
+        ...window.location,
+        origin: ORIGIN,
+        set href(v: string) {
+          hrefs.push(v);
+        },
+      },
+      writable: true,
+      configurable: true,
+    });
+    renderWithProviders(<SharePage />);
+
+    fireEvent.click(screen.getByRole('button', { name: /share by email/i }));
+
+    expect(hrefs).toHaveLength(1);
+    expect(hrefs[0]).toContain(encodeURIComponent('get in touch with families'));
+    expect(hrefs[0]).toContain(encodeURIComponent(ORIGIN));
+  });
+
+  it('uses the French get-in-touch pitch when the language is fr', async () => {
+    await i18n.changeLanguage('fr');
+    try {
+      renderWithProviders(<SharePage />);
+      const preview = screen.getByText(
+        /entrer en contact avec des familles de notre communauté scolaire qui recherchent des tuteurs/i,
+      );
       expect(preview.textContent).toContain(ORIGIN);
     } finally {
       await i18n.changeLanguage('en');
