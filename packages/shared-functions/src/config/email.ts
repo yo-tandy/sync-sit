@@ -251,6 +251,22 @@ const NOTIFICATION_BRANDING: Record<
 };
 
 /**
+ * Escape a user-controlled string for interpolation into notification email
+ * HTML (text-node and attribute contexts). Introduced at the
+ * endorsement-response emails (issue #168 Phase 0); the wider study-functions
+ * email surface interpolates profile strings unescaped by long-standing
+ * convention — migrating those call sites is a tracked follow-up.
+ */
+export function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/**
  * Builds the branded wrapper around a notification email body. Exported for
  * unit pins: study emails must carry no Sync/Sit branding and vice versa.
  */

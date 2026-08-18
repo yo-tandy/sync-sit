@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { buildNotificationEmailHtml, sendNotificationEmail, STUDY_APP_URL } from '../email.js';
+import { buildNotificationEmailHtml, sendNotificationEmail, escapeHtml, STUDY_APP_URL } from '../email.js';
 
 // Branding pins for the shared notification email wrapper (issue #168 Phase 0).
 // Study emails must carry no Sync/Sit branding and link the study host; the
@@ -38,6 +38,23 @@ describe('buildNotificationEmailHtml', () => {
 
   it('the study footer links the exported STUDY_APP_URL (one host for CTA, footer, and push)', () => {
     expect(buildNotificationEmailHtml('', 'study')).toContain(STUDY_APP_URL);
+  });
+});
+
+describe('escapeHtml', () => {
+  it('neutralizes markup in a user-controlled string', () => {
+    expect(escapeHtml('<img src=x onerror=alert(1)>')).toBe(
+      '&lt;img src=x onerror=alert(1)&gt;',
+    );
+    expect(escapeHtml('a & b "c" \'d\'')).toBe('a &amp; b &quot;c&quot; &#39;d&#39;');
+  });
+
+  it('leaves a plain name untouched', () => {
+    expect(escapeHtml('Yael Cohen')).toBe('Yael Cohen');
+  });
+
+  it('escapes the ampersand first (no double-escaping)', () => {
+    expect(escapeHtml('&lt;')).toBe('&amp;lt;');
   });
 });
 
