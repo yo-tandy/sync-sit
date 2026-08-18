@@ -60,12 +60,18 @@ export default {
     emailOnlyDesc: 'Choisissez les notifications par email que vous souhaitez recevoir.',
     newRequest: 'Nouvelle demande',
     newRequestDesc: 'Quand une famille vous envoie une demande de cours',
+    proposal: 'Propositions de séance',
+    proposalDesc: 'Quand votre professeur propose une séance',
     confirmation: 'Confirmation',
     confirmationDesc: 'Quand un professeur accepte votre demande',
+    confirmationTutorDesc: 'Quand une famille accepte une séance ou une de vos propositions',
     cancellation: 'Annulation',
     cancellationDesc: 'Quand une séance est annulée',
     reminder: 'Rappel',
     reminderDesc: '24 heures avant une séance programmée',
+    endorsement: 'Recommandations',
+    endorsementFamilyDesc: 'Suivi des recommandations que vous avez soumises',
+    endorsementTutorDesc: "Quand quelqu'un soumet une recommandation pour vous",
   },
 
   schedule: {

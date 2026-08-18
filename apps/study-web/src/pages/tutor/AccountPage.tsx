@@ -43,11 +43,15 @@ import {
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
 const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
 
-// Email-only notification scenarios relevant to tutors.
+// Email-only notification scenarios relevant to tutors. `confirmed` gates
+// "family accepted your session/proposal" (respondToSession) and `references`
+// gates "someone submitted an endorsement for you" (submitTutorEndorsement).
 const SCENARIOS: { key: keyof NotifPrefs; labelKey: string; descKey: string }[] = [
   { key: 'newRequest', labelKey: 'notifications.newRequest', descKey: 'notifications.newRequestDesc' },
+  { key: 'confirmed', labelKey: 'notifications.confirmation', descKey: 'notifications.confirmationTutorDesc' },
   { key: 'cancelled', labelKey: 'notifications.cancellation', descKey: 'notifications.cancellationDesc' },
   { key: 'reminders', labelKey: 'notifications.reminder', descKey: 'notifications.reminderDesc' },
+  { key: 'references', labelKey: 'notifications.endorsement', descKey: 'notifications.endorsementTutorDesc' },
 ];
 
 export function AccountPage() {

@@ -118,6 +118,27 @@ describe('tutor AccountPage', () => {
     );
   });
 
+  it('renders exactly the tutor scenario list: new request, confirmation, cancellation, reminders, endorsements', () => {
+    renderWithProviders(<AccountPage />);
+    // confirmed gates "family accepted your session/proposal" and references
+    // gates endorsement notifications — both were unmutable from study-web
+    // before issue #168 Phase 0.
+    const labels = ['New request', 'Confirmation', 'Cancellation', 'Reminder', 'Endorsements'];
+    for (const label of labels) {
+      expect(screen.getByRole('button', { name: label })).toBeInTheDocument();
+    }
+  });
+
+  it('toggling the endorsements row writes the references email dot-path', async () => {
+    renderWithProviders(<AccountPage />);
+    // references is absent from the stored prefs → treated as email-on; the
+    // first toggle turns it off.
+    fireEvent.click(screen.getByRole('button', { name: 'Endorsements' }));
+    await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
+    const payload = h.updateDoc.mock.calls[0][1] as Record<string, unknown>;
+    expect(payload).toHaveProperty('notifPrefs.references.email', false);
+  });
+
   it('writes notif prefs as per-scenario email dot-paths (never clobbers push)', async () => {
     renderWithProviders(<AccountPage />);
     // newRequest.email starts true; toggling writes only that email channel.

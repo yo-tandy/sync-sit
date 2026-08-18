@@ -29,12 +29,15 @@ import {
 // Firebase Auth). notifPrefs writes the top-level field. familyId /
 // enrollmentComplete are server/enrollment-owned and never written here.
 
-// Email-only notification scenarios relevant to parents (they initiate
-// requests, so there is no "new request" row).
+// Email-only notification scenarios relevant to parents. `newRequest` is the
+// category tutor-initiated session proposals arrive under (proposeSession),
+// and `references` gates updates about endorsements the family submitted.
 const SCENARIOS: { key: keyof NotifPrefs; labelKey: string; descKey: string }[] = [
+  { key: 'newRequest', labelKey: 'notifications.proposal', descKey: 'notifications.proposalDesc' },
   { key: 'confirmed', labelKey: 'notifications.confirmation', descKey: 'notifications.confirmationDesc' },
   { key: 'cancelled', labelKey: 'notifications.cancellation', descKey: 'notifications.cancellationDesc' },
   { key: 'reminders', labelKey: 'notifications.reminder', descKey: 'notifications.reminderDesc' },
+  { key: 'references', labelKey: 'notifications.endorsement', descKey: 'notifications.endorsementFamilyDesc' },
 ];
 
 export function AccountPage() {
