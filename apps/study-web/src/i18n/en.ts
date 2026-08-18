@@ -182,12 +182,12 @@ export default {
   signup: {
     crossAppBanner: "You're signed in — pick a role to add to your existing account.",
     roleExclusiveTutor: "Tutoring is for EJM students — parent accounts can't enroll as tutors.",
-    roleExclusiveParent: "Student accounts can't also enroll as parents — your family needs its own account.",
   },
 
   welcomeCross: {
     backToOrigin: 'Back to Sync/Sit',
     fallbackWizard: 'Use the full sign-up instead',
+    genericError: 'Something went wrong and your enrollment could not be completed. Please try again.',
     greeting: 'Welcome, {{name}}!',
     body: 'As an EJM student you can tutor EJM families — your Sync/Sit login works here as-is. We just need the subjects you offer to get you started.',
     consentPrefix: 'By continuing, you accept the',

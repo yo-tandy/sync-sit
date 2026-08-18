@@ -108,12 +108,12 @@ export default {
   signup: {
     crossAppBanner: 'Vous êtes connecté — choisissez un rôle à ajouter à votre compte existant.',
     roleExclusiveBabysitter: "Le babysitting est réservé aux élèves de l'EJM — un compte parent ne peut pas s'inscrire comme babysitter.",
-    roleExclusiveParent: "Un compte élève ne peut pas aussi s'inscrire comme parent — votre famille doit avoir son propre compte.",
   },
 
   welcomeCross: {
     backToOrigin: 'Retour à Sync/Study',
     fallbackWizard: 'Utiliser l\'inscription complète à la place',
+    genericError: 'Une erreur est survenue et votre inscription n\'a pas pu être finalisée. Veuillez réessayer.',
     greeting: 'Bienvenue, {{name}} !',
     body: "En tant qu'élève de l'EJM, vous pouvez faire du babysitting pour les familles de l'EJM — votre identifiant Sync/Study fonctionne ici tel quel. Il ne nous manque que vos disponibilités pour commencer.",
     consentPrefix: 'En continuant, vous acceptez les',

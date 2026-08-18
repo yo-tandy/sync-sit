@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { httpsCallable } from 'firebase/functions';
 import { isBabysitter } from '@ejm/shared-core';
 import { getStudyRole, type SubjectOffering } from '@ejm/study-core';
-import { Button, Card, Spinner, enrollmentErrorReason } from '@ejm/shared-ui';
+import { Button, Card, Spinner, enrollmentErrorReason, ageGateErrorCode } from '@ejm/shared-ui';
 import { functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { postLoginRouter } from '@/utils/postLoginRouter';
@@ -43,6 +43,19 @@ export function CrossAppWelcomePage() {
   if (role) return <Navigate to={postLoginRouter(role, userDoc)} replace />;
   if (!isBabysitter(userDoc)) return <Navigate to="/signup" replace />;
 
+  // Known crossApp rejections map to the same translated copy the classic
+  // wizard shows (issue #159), keyed on the machine-readable details — never
+  // on message strings. Anything unrecognized gets a translated generic
+  // message (raw server text must never render); the fallback-wizard link
+  // below stays as the escape hatch.
+  const translateEnrollError = (err: unknown): string => {
+    if (enrollmentErrorReason(err) === 'role-exclusive') return t('signup.roleExclusiveTutor');
+    const ageCode = ageGateErrorCode(err);
+    if (ageCode === 'age/under-15') return t('enrollment.age.under15');
+    if (ageCode === 'age/mismatch') return t('enrollment.age.mismatch');
+    return t('welcomeCross.genericError');
+  };
+
   const handleSubjectsNext = async (subjects: SubjectOffering[]) => {
     setSubmitting(true);
     setError(null);
@@ -56,7 +69,7 @@ export function CrossAppWelcomePage() {
         navigate('/tutor');
         return;
       }
-      setError(err instanceof Error ? err.message : t('common.error'));
+      setError(translateEnrollError(err));
       setSubmitting(false);
     }
   };

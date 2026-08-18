@@ -111,12 +111,12 @@ export default {
   signup: {
     crossAppBanner: "You're signed in — pick a role to add to your existing account.",
     roleExclusiveBabysitter: "Babysitting is for EJM students — parent accounts can't enroll as babysitters.",
-    roleExclusiveParent: "Student accounts can't also enroll as parents — your family needs its own account.",
   },
 
   welcomeCross: {
     backToOrigin: 'Back to Sync/Study',
     fallbackWizard: 'Use the full sign-up instead',
+    genericError: 'Something went wrong and your enrollment could not be completed. Please try again.',
     greeting: 'Welcome, {{name}}!',
     body: 'As an EJM student you can babysit for EJM families — your Sync/Study login works here as-is. We just need your availability to get you started.',
     consentPrefix: 'By continuing, you accept the',

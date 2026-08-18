@@ -182,12 +182,12 @@ export default {
   signup: {
     crossAppBanner: 'Vous êtes connecté — choisissez un rôle à ajouter à votre compte existant.',
     roleExclusiveTutor: "Le tutorat est réservé aux élèves de l'EJM — un compte parent ne peut pas s'inscrire comme tuteur.",
-    roleExclusiveParent: "Un compte élève ne peut pas aussi s'inscrire comme parent — votre famille doit avoir son propre compte.",
   },
 
   welcomeCross: {
     backToOrigin: 'Retour à Sync/Sit',
     fallbackWizard: 'Utiliser l\'inscription complète à la place',
+    genericError: 'Une erreur est survenue et votre inscription n\'a pas pu être finalisée. Veuillez réessayer.',
     greeting: 'Bienvenue, {{name}} !',
     body: "En tant qu'élève de l'EJM, vous pouvez donner des cours aux familles de l'EJM — votre identifiant Sync/Sit fonctionne ici tel quel. Il ne nous manque que les matières que vous proposez pour commencer.",
     consentPrefix: 'En continuant, vous acceptez les',

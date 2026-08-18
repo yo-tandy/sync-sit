@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { httpsCallable } from 'firebase/functions';
 import { isTutor } from '@ejm/shared-core';
 import { getSitRole } from '@ejm/sit-core';
-import { enrollmentErrorReason } from '@ejm/shared-ui';
+import { enrollmentErrorReason, ageGateErrorCode } from '@ejm/shared-ui';
 import { functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { postLoginRouter } from '@/lib/postLoginRouter';
@@ -41,6 +41,20 @@ export function CrossAppWelcomePage() {
   if (role) return <Navigate to={postLoginRouter(role, userDoc)} replace />;
   if (!isTutor(userDoc)) return <Navigate to="/signup" replace />;
 
+  // Known crossApp rejections map to the same translated copy the classic
+  // wizard shows (issue #159), keyed on the machine-readable details — never
+  // on message strings. The age branches are defensive symmetry with study:
+  // enrollBabysitter has no server age gate today, but the codes are shared.
+  // Anything unrecognized gets a translated generic message (raw server text
+  // must never render); the fallback-wizard link stays as the escape hatch.
+  const translateEnrollError = (err: unknown): string => {
+    if (enrollmentErrorReason(err) === 'role-exclusive') return t('signup.roleExclusiveBabysitter');
+    const ageCode = ageGateErrorCode(err);
+    if (ageCode === 'age/under-15') return t('enrollment.age.under15');
+    if (ageCode === 'age/mismatch') return t('enrollment.age.mismatch');
+    return t('welcomeCross.genericError');
+  };
+
   const handleContinue = async () => {
     setSubmitting(true);
     setError(null);
@@ -54,7 +68,7 @@ export function CrossAppWelcomePage() {
         navigate('/babysitter');
         return;
       }
-      setError(err instanceof Error ? err.message : t('common.error'));
+      setError(translateEnrollError(err));
       setSubmitting(false);
     }
   };
