@@ -254,9 +254,21 @@ service cloud.firestore {
       // client. Sensitive state (verification.*, parentIds, preferredBabysitters,
       // searchDefaults, status) is mutated exclusively by callables via the
       // Admin SDK (which bypasses these rules).
+      // postcode/city are the first fields in this list that get READ BACK
+      // and processed (resolveAreaLabel calls .trim() on the stored value in
+      // study search), so unlike their display-only neighbors they carry a
+      // shape check: string bounded to the familyEnrollmentSchema limits, or
+      // null (the settings clear path). Post-state via get(), so docs that
+      // do not touch them still pass.
       allow update: if isFamilyMember(familyId)
                     && request.resource.data.diff(resource.data).affectedKeys()
-                        .hasOnly(['familyName', 'address', 'latLng', 'postcode', 'city', 'pets', 'note', 'photoUrl', 'updatedAt']);
+                        .hasOnly(['familyName', 'address', 'latLng', 'postcode', 'city', 'pets', 'note', 'photoUrl', 'updatedAt'])
+                    && (request.resource.data.get('postcode', null) == null
+                        || (request.resource.data.get('postcode', null) is string
+                            && request.resource.data.get('postcode', null).size() <= 20))
+                    && (request.resource.data.get('city', null) == null
+                        || (request.resource.data.get('city', null) is string
+                            && request.resource.data.get('city', null).size() <= 100));
 
       match /kids/{kidId} {
         allow read: if isFamilyMember(familyId) || isAdmin();

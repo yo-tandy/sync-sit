@@ -460,6 +460,35 @@ describe('families collection', () => {
     );
   });
 
+  it('denies malformed postcode/city shapes (read-back fields carry bounds)', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'families', 'fam1'), {
+        familyId: 'fam1', parentIds: ['parent1'],
+      });
+    });
+
+    const authed = testEnv.authenticatedContext('parent1');
+    // Non-string postcode: resolveAreaLabel calls .trim() on this at read
+    // time, so the rule refuses to store it.
+    await assertFails(
+      updateDoc(doc(authed.firestore(), 'families', 'fam1'), { postcode: 42 }),
+    );
+    await assertFails(
+      updateDoc(doc(authed.firestore(), 'families', 'fam1'), { city: ['Paris'] }),
+    );
+    // Over the familyEnrollmentSchema bounds (20 / 100).
+    await assertFails(
+      updateDoc(doc(authed.firestore(), 'families', 'fam1'), { postcode: 'x'.repeat(21) }),
+    );
+    await assertFails(
+      updateDoc(doc(authed.firestore(), 'families', 'fam1'), { city: 'x'.repeat(101) }),
+    );
+    // In-bounds strings still pass.
+    await assertSucceeds(
+      updateDoc(doc(authed.firestore(), 'families', 'fam1'), { postcode: '75001', city: 'Paris' }),
+    );
+  });
+
   it('still denies a family member touching a NON-listed key (field guard intact)', async () => {
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
       await setDoc(doc(ctx.firestore(), 'families', 'fam1'), {
