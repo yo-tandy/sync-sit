@@ -57,7 +57,9 @@ export default {
 
   notifications: {
     title: 'Notification Preferences',
-    emailOnlyDesc: 'Choose which email notifications you want to receive.',
+    desc: 'Choose how you want to be notified.',
+    push: 'Push',
+    emailNotif: 'Email',
     newRequest: 'New request',
     newRequestDesc: 'When a family sends you a tutoring request',
     proposal: 'Session proposals',
@@ -72,6 +74,26 @@ export default {
     endorsement: 'Endorsements',
     endorsementFamilyDesc: 'Updates about endorsements you submitted',
     endorsementTutorDesc: 'When someone submits an endorsement for you',
+    pushPromptTitle: 'Enable notifications',
+    pushPromptDesc: 'Get notified about session requests, confirmations, and reminders.',
+    enable: 'Enable',
+    notNow: 'Not now',
+    pushStatus: 'Push Notifications',
+    pushEnabled: 'Push notifications are enabled on this device.',
+    pushDisabled: 'Push notifications are not enabled. Enable them to get real-time alerts.',
+    pushDenied: 'Push notifications are not available. This can happen in incognito/private mode, or if notifications are blocked in your browser settings. Try opening the app in a regular browser window.',
+    tryAgain: 'Try again',
+    pushRequiresInstall: 'Push notifications are only available after adding the app to your home screen.',
+    pushRequiresInstallLink: 'How to install',
+  },
+
+  pwaInstall: {
+    bannerTitle: 'Install the app for the best experience',
+    bannerDesc: 'Add Sync/Study to your home screen to receive push notifications and get quick access, just like a native app.',
+    bannerCta: 'How to install',
+    bannerDismiss: 'Dismiss',
+    aboutLink: 'Install the App',
+    aboutLinkDesc: 'Add Sync/Study to your home screen',
   },
 
   schedule: {

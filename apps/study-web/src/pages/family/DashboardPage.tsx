@@ -6,6 +6,7 @@ import { db } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { getParentProfile } from '@ejm/shared-core';
 import { CrossAppWelcomeCard } from '@/components/family/CrossAppWelcomeCard';
+import { InstallAppBanner } from '@/components/ui/InstallAppBanner';
 import {
   Card,
   BellIcon,
@@ -292,6 +293,9 @@ export function DashboardPage() {
 
       {/* One-time cross-app welcome (issue #144) */}
       <CrossAppWelcomeCard />
+
+      {/* Install-to-home-screen nudge (browser-tab mode only, issue #162) */}
+      <InstallAppBanner />
 
       {/* ── Verification gate (read from the shared families doc) ── */}
       {isVerified === false && (

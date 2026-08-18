@@ -16,6 +16,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { getTutorProfile } from '@ejm/study-core';
 import { DAYS_OF_WEEK } from '@ejm/shared-core';
 import { SupervisionRequestCard } from '@/components/tutor/SupervisionRequestCard';
+import { InstallAppBanner } from '@/components/ui/InstallAppBanner';
 import {
   Card,
   Button,
@@ -329,6 +330,9 @@ export function DashboardPage() {
 
       {/* ── Ask-to-supervise prompt (pending claim on guardianLinks/{uid}) ── */}
       <SupervisionRequestCard />
+
+      {/* Install-to-home-screen nudge (browser-tab mode only, issue #162) */}
+      <InstallAppBanner />
 
       {/* ── Activation (subjects + availability gate; enrollmentComplete is
           true from creation — the check only fences off legacy docs) ── */}
