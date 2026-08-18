@@ -31,6 +31,9 @@ export const ForgotPasswordPage = lazy(() =>
 export const ReportProblemPage = lazy(() =>
   import('@/pages/public/ReportProblemPage').then((m) => ({ default: m.ReportProblemPage })),
 );
+export const SharePage = lazy(() =>
+  import('@/pages/public/SharePage').then((m) => ({ default: m.SharePage })),
+);
 
 // Enrollment (wizard — heavy)
 export const TutorEnrollment = lazy(() =>
