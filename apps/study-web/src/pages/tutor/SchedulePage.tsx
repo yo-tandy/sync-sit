@@ -454,6 +454,29 @@ export function SchedulePage() {
           weekly={localWeekly}
           onChange={setLocalWeekly}
           onDayHeaderClick={(day) => setEditingDay(day)}
+          locationTags={{
+            // Same tag control as the DayEditor path (issue #166, owner
+            // report on PR #185): the range-click dialog is the natural
+            // interaction, so it must offer the chips too. Same saved-prefs
+            // vocabulary; edits land in the page's draft and persist through
+            // the same atomic Save Schedule batch.
+            options: LOCATION_PREFS.map((p) => ({
+              value: p,
+              label: t(`tutor.account.sessionPrefs.location.${p}`),
+            })),
+            offeredValues: tutor?.locationPrefs ?? [],
+            defaultsLabel: t('schedule.locationTags.defaults'),
+            mixedLabel: t('schedule.locationTags.mixed'),
+            notOfferedLabel: t('schedule.locationTags.notOffered'),
+            weeklyLocations: localWeeklyLocations,
+            onDayLocationsChange: (day, locations) =>
+              setLocalWeeklyLocations((prev) => {
+                const next = { ...prev };
+                if (Object.keys(locations).length > 0) next[day] = locations;
+                else delete next[day];
+                return next;
+              }),
+          }}
         />
 
         {editingDay && (

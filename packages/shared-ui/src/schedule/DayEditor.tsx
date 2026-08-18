@@ -3,6 +3,12 @@ import { useTranslation } from 'react-i18next';
 import { Dialog, Button, Select } from '../components/index.js';
 import { createEmptySlots, setSlotRange, slotIndexToTime, timeToSlotIndex } from '@ejm/shared-core';
 import type { DayOfWeek } from '@ejm/shared-core';
+import {
+  RangeTagChips,
+  rangeTagSelection,
+  toggleSelection,
+  type LocationTagLabels,
+} from './locationTagChips.js';
 
 /**
  * Optional per-range location tags (study issue #166). When absent the editor
@@ -10,31 +16,7 @@ import type { DayOfWeek } from '@ejm/shared-core';
  * labels come from the caller so this shared component needs no app-specific
  * i18n keys. Keys of `initial` are slot indices as strings ("0".."95").
  */
-export interface DayEditorLocationTags {
-  /** Chip options for the location categories, labeled by the caller. */
-  options: { value: string; label: string }[];
-  /**
-   * The values the tutor currently OFFERS (their profile locationPrefs). When
-   * set, unselected chips outside this list are hidden — tags can only narrow
-   * within what is offered — while a STORED tag outside it (prefs narrowed
-   * after tagging) stays visible as a checked-but-flagged chip so the dead
-   * state is seen rather than silently dropped. Absent = all options offered.
-   */
-  offeredValues?: string[];
-  /** Label for the "profile defaults" (no override) chip. */
-  defaultsLabel: string;
-  /**
-   * Hint shown when a range's covered cells carry DIFFERENT tag sets (ranges
-   * merged after separate tagging): no chip renders pressed and the stored
-   * cells stay untouched until the tutor actively picks a state.
-   */
-  mixedLabel?: string;
-  /**
-   * Hint shown when a range's selection carries a value outside
-   * `offeredValues` — the tag is kept (never silently dropped) but the range
-   * is not bookable for that location until it is unchecked or offered again.
-   */
-  notOfferedLabel?: string;
+export interface DayEditorLocationTags extends LocationTagLabels {
   /** Short helper line above the ranges list. */
   helpText?: string;
   /** Sparse initial per-cell tags for this day: slot index -> values. */
@@ -149,25 +131,6 @@ function rangeSlotIndices(start: string, end: string): number[] {
   return idxs;
 }
 
-// A range's current tag selection: the set shared by ALL covered cells, or
-// 'mixed' when cells disagree (ranges merged after separate tagging). A mixed
-// range renders as a distinct third state — NO chip pressed, so "Profile
-// defaults" only ever means what it says — and its cells are left exactly as
-// stored until the tutor actively picks a chip (which re-tags the whole range
-// uniformly) or resets to defaults.
-function rangeTagSelection(
-  locMap: Record<string, string[]>,
-  idxs: number[],
-): string[] | 'mixed' {
-  const first = locMap[String(idxs[0])] ?? [];
-  const key = [...first].sort().join(',');
-  for (const i of idxs) {
-    const v = locMap[String(i)] ?? [];
-    if ([...v].sort().join(',') !== key) return 'mixed';
-  }
-  return first;
-}
-
 export function DayEditor({ day, slots: initialSlots, open, onClose, onSave, locationTags }: DayEditorProps) {
   const { t } = useTranslation();
   const dayLabels: Record<DayOfWeek, string> = useMemo(() => ({
@@ -216,12 +179,8 @@ export function DayEditor({ day, slots: initialSlots, open, onClose, onSave, loc
   // removed — an empty-array override is never stored).
   const toggleRangeTag = (idxs: number[], value: string) => {
     setLocMap((prev) => {
-      const selection = rangeTagSelection(prev, idxs);
       // Picking a chip on a mixed range unifies it to just that chip.
-      const current = selection === 'mixed' ? [] : selection;
-      const next = current.includes(value)
-        ? current.filter((v) => v !== value)
-        : [...current, value];
+      const next = toggleSelection(rangeTagSelection(prev, idxs), value);
       const copy = { ...prev };
       for (const i of idxs) {
         if (next.length > 0) copy[String(i)] = next;
@@ -325,21 +284,6 @@ export function DayEditor({ day, slots: initialSlots, open, onClose, onSave, loc
           )}
           {ranges.map((r, i) => {
             const idxs = locationTags ? rangeSlotIndices(r.start, r.end) : [];
-            const rawSelection = locationTags ? rangeTagSelection(locMap, idxs) : [];
-            const mixed = rawSelection === 'mixed';
-            const selection = mixed ? [] : rawSelection;
-            const offered = locationTags?.offeredValues;
-            // Chips shown: offered values, plus any SELECTED value outside
-            // them (a stored tag whose location is no longer offered) —
-            // rendered flagged, never silently dropped.
-            const visibleOptions = locationTags
-              ? locationTags.options.filter(
-                  (opt) =>
-                    !offered || offered.includes(opt.value) || selection.includes(opt.value),
-                )
-              : [];
-            const hasNotOffered =
-              !!offered && selection.some((v) => !offered.includes(v));
             return (
               <div key={i} className="rounded-lg border border-gray-200 px-3 py-2">
                 <div className="flex items-center justify-between">
@@ -355,52 +299,12 @@ export function DayEditor({ day, slots: initialSlots, open, onClose, onSave, loc
                   </button>
                 </div>
                 {locationTags && (
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    <button
-                      type="button"
-                      aria-pressed={!mixed && selection.length === 0}
-                      onClick={() => resetRangeTags(idxs)}
-                      className={`rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
-                        !mixed && selection.length === 0
-                          ? 'border-brand-600 bg-brand-50 text-brand-600'
-                          : 'border-gray-300 text-gray-600 hover:border-gray-400'
-                      }`}
-                    >
-                      {locationTags.defaultsLabel}
-                    </button>
-                    {visibleOptions.map((opt) => {
-                      const pressed = selection.includes(opt.value);
-                      const flagged =
-                        pressed && !!offered && !offered.includes(opt.value);
-                      return (
-                        <button
-                          key={opt.value}
-                          type="button"
-                          aria-pressed={pressed}
-                          onClick={() => toggleRangeTag(idxs, opt.value)}
-                          className={`rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
-                            flagged
-                              ? 'border-amber-500 bg-amber-50 text-amber-700'
-                              : pressed
-                                ? 'border-brand-600 bg-brand-50 text-brand-600'
-                                : 'border-gray-300 text-gray-600 hover:border-gray-400'
-                          }`}
-                        >
-                          {opt.label}
-                        </button>
-                      );
-                    })}
-                    {mixed && locationTags.mixedLabel && (
-                      <span className="basis-full text-xs text-gray-500">
-                        {locationTags.mixedLabel}
-                      </span>
-                    )}
-                    {hasNotOffered && locationTags.notOfferedLabel && (
-                      <span className="basis-full text-xs text-amber-700">
-                        {locationTags.notOfferedLabel}
-                      </span>
-                    )}
-                  </div>
+                  <RangeTagChips
+                    labels={locationTags}
+                    selection={rangeTagSelection(locMap, idxs)}
+                    onToggle={(value) => toggleRangeTag(idxs, value)}
+                    onReset={() => resetRangeTags(idxs)}
+                  />
                 )}
               </div>
             );

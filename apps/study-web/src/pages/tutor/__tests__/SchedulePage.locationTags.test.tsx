@@ -4,7 +4,7 @@ import { I18nextProvider } from 'react-i18next';
 import { createMemoryRouter, RouterProvider } from 'react-router';
 import { DAYS_OF_WEEK, createEmptySlots } from '@ejm/shared-core';
 import type { DayOfWeek } from '@ejm/shared-core';
-import { ToastProvider, DayEditor } from '@ejm/shared-ui';
+import { ToastProvider, DayEditor, WeeklyTimeline } from '@ejm/shared-ui';
 import { i18n } from '@/__tests__/test-utils';
 
 // Per-slot location tags (issue #166) — the weekly DayEditor gains an optional
@@ -78,6 +78,21 @@ function openMondayEditor() {
 const defaultsChip = () => screen.getByRole('button', { name: 'Profile defaults' });
 const onlineChip = () =>
   screen.getAllByRole('button', { name: 'Online' })[0]; // chips live in the dialog
+
+/**
+ * Open WeeklyTimeline's range-click edit dialog by clicking a grid cell.
+ * The grid's rows are div.contents wrappers, one per display index
+ * (display index = slot index - 24 for slots 24..95); each row holds the
+ * hour label followed by the 7 day cells. A pointerdown+up with no move on
+ * an available cell opens the RangeEditDialog for that cell's range.
+ */
+function openRangeDialog(container: HTMLElement, slotIdx: number, dayIndex = 0) {
+  const grid = container.querySelector('div.relative.grid') as HTMLElement;
+  const row = grid.children[slotIdx - 24] as HTMLElement;
+  const cell = row.children[1 + dayIndex] as HTMLElement;
+  fireEvent.pointerDown(cell);
+  fireEvent.pointerUp(cell);
+}
 
 beforeEach(() => {
   h.schedule = {
@@ -310,6 +325,85 @@ describe('SchedulePage per-slot location tags', () => {
     await waitFor(() => {
       expect(h.schedule.saveWeekly).toHaveBeenCalledWith(expect.anything(), {});
     });
+  });
+});
+
+// ── Range-click edit dialog (PR #185 owner report): the tags must be
+// reachable from the NATURAL interaction — clicking a range on the weekly
+// grid — not only from the day-header DayEditor. ──
+describe('SchedulePage range-click dialog location tags', () => {
+  it('offers the chips seeded from the range cells and persists through Save Schedule', async () => {
+    h.schedule.weeklyLocations = { mon: monCells(['online']) };
+    const { container } = renderSchedule();
+    openRangeDialog(container, 64); // Monday 16:00 cell -> 16:00-20:00 range
+    expect(screen.getByText(/Edit availability/)).toBeTruthy();
+    expect(onlineChip().getAttribute('aria-pressed')).toBe('true');
+    expect(defaultsChip().getAttribute('aria-pressed')).toBe('false');
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save Schedule' }));
+    await waitFor(() => {
+      expect(h.schedule.saveWeekly).toHaveBeenCalledWith(
+        expect.anything(),
+        { mon: monCells(['online']) },
+      );
+    });
+  });
+
+  it('tags an untagged range through the dialog (defaults preselected) and persists', async () => {
+    const { container } = renderSchedule();
+    openRangeDialog(container, 64);
+    // A new/untagged range starts at profile defaults.
+    expect(defaultsChip().getAttribute('aria-pressed')).toBe('true');
+    fireEvent.click(onlineChip());
+    expect(onlineChip().getAttribute('aria-pressed')).toBe('true');
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save Schedule' }));
+    await waitFor(() => {
+      expect(h.schedule.saveWeekly).toHaveBeenCalledWith(
+        expect.anything(),
+        { mon: monCells(['online']) },
+      );
+    });
+  });
+
+  it('shows the mixed third state and an untouched save preserves the stored cells', async () => {
+    // Tags on 16:00-18:00 only, inside the 16:00-20:00 range.
+    h.schedule.weeklyLocations = {
+      mon: Object.fromEntries(
+        Array.from({ length: 8 }, (_, k) => [String(64 + k), ['online']]),
+      ),
+    };
+    const { container } = renderSchedule();
+    openRangeDialog(container, 64);
+    expect(defaultsChip().getAttribute('aria-pressed')).toBe('false');
+    expect(onlineChip().getAttribute('aria-pressed')).toBe('false');
+    expect(screen.getByText(/combines different location choices/i)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save Schedule' }));
+    await waitFor(() => {
+      expect(h.schedule.saveWeekly).toHaveBeenCalledWith(expect.anything(), {
+        mon: Object.fromEntries(
+          Array.from({ length: 8 }, (_, k) => [String(64 + k), ['online']]),
+        ),
+      });
+    });
+  });
+});
+
+describe('WeeklyTimeline without locationTags (sit parity)', () => {
+  it('range dialog renders exactly as before: no tag chips', () => {
+    const weekly = mondayWeekly();
+    const { container } = render(
+      <I18nextProvider i18n={i18n}>
+        <WeeklyTimeline weekly={weekly} onChange={() => {}} onDayHeaderClick={() => {}} />
+      </I18nextProvider>,
+    );
+    openRangeDialog(container, 64);
+    expect(screen.getByText(/Edit availability/)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Remove' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Profile defaults' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Online' })).toBeNull();
   });
 });
 
