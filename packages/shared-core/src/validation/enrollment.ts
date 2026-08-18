@@ -41,6 +41,11 @@ export const familyEnrollmentSchema = z.object({
   pets: z.string().optional(),
   note: z.string().optional(),
   kids: z.array(kidSchema).optional(),
+  // Consent-document version the enrolling client presented (issue #178:
+  // study's wizard shows '2025-12-01', sit's shows '1.0'). Optional — legacy
+  // sit clients send nothing and the server defaults to '1.0', keeping their
+  // behavior byte-identical.
+  consentVersion: z.string().min(1).max(20).optional(),
 });
 
 // NOTE: field names (minBabysitterAge, maxRate) are babysitter-flavored but
