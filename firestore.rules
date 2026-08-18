@@ -131,6 +131,19 @@ service cloud.firestore {
                      && tutorField(request.resource.data, 'aboutMe', null).size() <= 1000));
     }
 
+    // Helper: profiles.tutor.arrondissements is READ BACK and processed by
+    // searchTutors (each element flows through postcodeToArrondissement), so
+    // its stored shape is bounded: absent/list only, at most 60 entries (45
+    // vocabulary areas + legacy headroom). Rules cannot iterate a list to
+    // type-check its ELEMENTS — the callable's per-element typeof-string
+    // guard is the element-type defense; this bound stops non-list shapes
+    // and unbounded growth. Post-state with a list default, so docs without
+    // a tutor profile pass.
+    function tutorAreaShapeValid() {
+      return tutorField(request.resource.data, 'arrondissements', []) is list
+             && tutorField(request.resource.data, 'arrondissements', []).size() <= 60;
+    }
+
     // Helper: top-level photoUrl is owner-writable (the photo auto-save) but
     // must stay a bounded https URL — the client type/size checks are UX
     // only; without this a direct write could store a non-string, a data:
@@ -243,6 +256,7 @@ service cloud.firestore {
                     && identityUnlockedOrUnchanged()
                     && rootIdentitySetOnce()
                     && tutorNumericBoundsValid()
+                    && tutorAreaShapeValid()
                     && photoUrlValid();
     }
 

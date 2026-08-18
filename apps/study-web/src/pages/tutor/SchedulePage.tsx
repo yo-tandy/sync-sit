@@ -242,8 +242,10 @@ export function SchedulePage() {
     (tutor?.locationPrefs ?? []).some((p) => p !== 'online' && p !== 'tutor_home') &&
     (tutor?.areaMode === 'distance'
       ? !tutor?.areaLatLng
-      : !(tutor?.arrondissements ?? []).some((a) =>
-          (ALL_AREAS as readonly string[]).includes(postcodeToArrondissement(a) ?? a),
+      : !(tutor?.arrondissements ?? []).some(
+          (a) =>
+            typeof a === 'string' &&
+            (ALL_AREAS as readonly string[]).includes(postcodeToArrondissement(a) ?? a),
         ));
 
   const handleSavePrefs = async () => {

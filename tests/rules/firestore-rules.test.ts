@@ -400,6 +400,50 @@ describe('users collection — Plan D owner-update guards', () => {
     );
   });
 
+  // ── arrondissements shape bound (issue #167 round 4) ──
+  // The field is read back and processed by searchTutors, so its stored
+  // shape must be a bounded list. Element TYPES cannot be rules-checked
+  // (no list iteration) — the callable's typeof guard carries that half.
+
+  it('tutor may save a list of area strings (arrondissements shape bound allows lists)', async () => {
+    await seedLegacyDistanceTutor('tu13');
+    const authed = testEnv.authenticatedContext('tu13');
+    await assertSucceeds(
+      updateDoc(doc(authed.firestore(), 'users', 'tu13'), {
+        'profiles.tutor.arrondissements': ['16e', 'Vincennes', '75017'],
+        updatedAt: new Date(),
+      })
+    );
+  });
+
+  it('rejects a non-list arrondissements value', async () => {
+    await seedLegacyDistanceTutor('tu14');
+    const authed = testEnv.authenticatedContext('tu14');
+    await assertFails(
+      updateDoc(doc(authed.firestore(), 'users', 'tu14'), {
+        'profiles.tutor.arrondissements': 'all of Paris',
+        updatedAt: new Date(),
+      })
+    );
+    await assertFails(
+      updateDoc(doc(authed.firestore(), 'users', 'tu14'), {
+        'profiles.tutor.arrondissements': 42,
+        updatedAt: new Date(),
+      })
+    );
+  });
+
+  it('rejects an oversized arrondissements list (unbounded growth)', async () => {
+    await seedLegacyDistanceTutor('tu15');
+    const authed = testEnv.authenticatedContext('tu15');
+    await assertFails(
+      updateDoc(doc(authed.firestore(), 'users', 'tu15'), {
+        'profiles.tutor.arrondissements': Array.from({ length: 61 }, (_, i) => `a${i}`),
+        updatedAt: new Date(),
+      })
+    );
+  });
+
   // The tutor guard must default safely for users WITHOUT a tutor profile,
   // otherwise a parent-only user's ordinary profile edit would break.
   it('parent-only user may still edit their own profile (tutor guard defaults safely)', async () => {

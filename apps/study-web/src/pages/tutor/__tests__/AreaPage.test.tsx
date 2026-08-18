@@ -161,6 +161,19 @@ describe('tutor AreaPage', () => {
     expect(savedPayload()['profiles.tutor.arrondissements']).toEqual(['16e']);
   });
 
+  it('survives a non-string junk element in the stored areas (dropped, page still renders)', async () => {
+    // The field is client-written with only a list-shape rules bound —
+    // element types are not guaranteed. A junk element must not white-screen
+    // the tutor's own editor; it is silently dropped (and thus dropped by
+    // the next save).
+    seed({ areaMode: 'arrondissement', arrondissements: [42, '16e'], areaAddress: null, areaLatLng: null, areaRadiusKm: null });
+    renderWithProviders(<AreaPage />);
+
+    expect(screen.getByRole('button', { name: '✓ 16e' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '42' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/other saved areas/i)).not.toBeInTheDocument();
+  });
+
   it('renders UNMAPPABLE stored values as checked extra chips and keeps them across a save', async () => {
     seed({ areaMode: 'arrondissement', arrondissements: ['Clamart', '16e'], areaAddress: null, areaLatLng: null, areaRadiusKm: null });
     renderWithProviders(<AreaPage />);

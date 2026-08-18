@@ -328,6 +328,16 @@ describe('tutor SchedulePage', () => {
     expect(screen.getByText(/can't find you for in-person sessions/i)).toBeInTheDocument();
   });
 
+  it('survives a non-string junk element in the stored areas (still warns, no crash)', () => {
+    // Element types are not rules-guaranteed; a junk element must not
+    // white-screen the schedule page. It is not matchable, so the tutor
+    // still warns.
+    seedPrefsWithArea({ areaMode: 'arrondissement', arrondissements: [42] }, ['family_home']);
+    renderSchedule();
+
+    expect(screen.getByText(/can't find you for in-person sessions/i)).toBeInTheDocument();
+  });
+
   it('shows no warning for a legacy postcode doc (matchable after normalization)', () => {
     // '75016' normalizes to '16e', which searchTutors matches — covered.
     seedPrefsWithArea({ areaMode: 'arrondissement', arrondissements: ['75016'] }, ['family_home']);

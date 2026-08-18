@@ -62,8 +62,15 @@ export function AreaPage() {
     // postcodes ('75016'), so mappable values check their canonical chip
     // ('16e') and the next save migrates the doc to the canonical
     // vocabulary. Set-dedup because '75016' and '16e' may coexist.
+    // typeof-string guard first: the field is client-written, and a junk
+    // element must not crash the tutor's own editor (it is dropped here and
+    // therefore also dropped by the next save).
     setSelectedAreas([
-      ...new Set((tutor.arrondissements ?? []).map((a) => postcodeToArrondissement(a) ?? a)),
+      ...new Set(
+        (tutor.arrondissements ?? [])
+          .filter((a): a is string => typeof a === 'string')
+          .map((a) => postcodeToArrondissement(a) ?? a),
+      ),
     ]);
     setAreaAddress(tutor.areaAddress ?? '');
     setAreaLatLng(tutor.areaLatLng ?? null);
@@ -94,6 +101,7 @@ export function AreaPage() {
   const legacyAreas = [
     ...new Set(
       (tutor?.arrondissements ?? [])
+        .filter((a): a is string => typeof a === 'string')
         .map((a) => postcodeToArrondissement(a) ?? a)
         .filter((a) => !(ALL_AREAS as readonly string[]).includes(a)),
     ),
