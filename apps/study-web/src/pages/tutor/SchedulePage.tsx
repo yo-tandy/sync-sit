@@ -468,10 +468,14 @@ export function SchedulePage() {
                 value: p,
                 label: t(`tutor.account.sessionPrefs.location.${p}`),
               })),
-              // Chips narrow within what the tutor currently OFFERS (the live
-              // session-prefs state edited further down this page); a stored
-              // tag outside it renders checked-but-flagged, never dropped.
-              offeredValues: locationPrefs,
+              // Chips narrow within what the tutor currently OFFERS — the
+              // SAVED doc (same source as the coverage warning), NOT the
+              // unsaved prefs draft: the two sections have separate save
+              // buttons, and a draft-sourced vocabulary would let "Save
+              // Schedule" persist a tag for a pref that was never saved
+              // (an instant dead range). A stored tag outside the saved
+              // prefs renders checked-but-flagged, never dropped.
+              offeredValues: tutor?.locationPrefs ?? [],
               defaultsLabel: t('schedule.locationTags.defaults'),
               mixedLabel: t('schedule.locationTags.mixed'),
               notOfferedLabel: t('schedule.locationTags.notOffered'),

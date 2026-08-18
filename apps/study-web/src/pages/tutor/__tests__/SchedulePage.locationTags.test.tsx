@@ -241,6 +241,24 @@ describe('SchedulePage per-slot location tags', () => {
     expect(screen.queryByRole('button', { name: 'Library / public space' })).toBeNull();
   });
 
+  it('sources the chip vocabulary from the SAVED prefs, not the unsaved draft', () => {
+    // Tick 'Library / public space' in the session-prefs section WITHOUT
+    // saving it: the day editor must NOT grow a library chip (a tag saved
+    // for an unsaved pref would be an instant dead range). A saved pref
+    // (on the user doc) does provide the chip.
+    const first = renderSchedule();
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Library / public space' }));
+    openMondayEditor();
+    expect(screen.queryByRole('button', { name: 'Library / public space' })).toBeNull();
+    first.unmount();
+
+    (h.auth.userDoc as { profiles: { tutor: { locationPrefs: string[] } } }).profiles.tutor.locationPrefs =
+      ['online', 'family_home', 'library'];
+    renderSchedule();
+    openMondayEditor();
+    expect(screen.getAllByRole('button', { name: 'Library / public space' })[0]).toBeTruthy();
+  });
+
   it('keeps a stored outside-prefs tag visible and flagged, and preserves it on save', async () => {
     // Prefs narrowed to online AFTER the range was tagged family_home: the
     // stored tag renders as a checked-but-flagged chip with a hint (never

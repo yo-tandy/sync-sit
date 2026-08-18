@@ -393,11 +393,24 @@ export function BookSessionPage() {
 
   // An armed slot that excludes the chosen location snaps it to the first
   // allowed one (or clears it when the covered cells' overrides are disjoint).
+  // No `locationPref &&` guard: an emptied selection must RE-FILL when the
+  // family re-arms a bookable slot, or the select stays blank with Book
+  // silently disabled (PR #185 r3 review). With nothing armed this re-does
+  // the card-default effect above; with an empty allowed set it re-sets ''.
   useEffect(() => {
-    if (locationPref && !allowedLocations.includes(locationPref as LocationPref)) {
+    if (!allowedLocations.includes(locationPref as LocationPref)) {
       setLocationPref(allowedLocations[0] ?? '');
     }
   }, [allowedLocations, locationPref]);
+
+  // The armed slot narrowed the offer relative to the tutor's profile prefs:
+  // say so next to the select, so a snapped/changed selection is legible
+  // instead of surprising. (The empty case has its own note below.)
+  const slotNarrowed =
+    !!card &&
+    allowedLocations.length > 0 &&
+    allowedLocations.length < card.locationPrefs.length &&
+    (mode === 'one_time' ? !!selectedStart : !!weeklySlot);
 
   const clearArmed = () => {
     setSelectedDate(null);
@@ -486,11 +499,12 @@ export function BookSessionPage() {
         setBookError(t('family.book.error.duplicate'));
       } else if (code.includes('failed-precondition')) {
         // The profile-prefs gate also stamps location_not_offered (a stored
-        // tag whose location was later removed from the prefs lands here) —
-        // show the location message rather than the generic cannot-book.
+        // tag whose location was later removed from the prefs, or stale card
+        // data). Here the LOCATION is gone — "pick another time" would be
+        // wrong advice, so this branch gets its own copy.
         setBookError(
           details?.reason === 'location_not_offered'
-            ? t('family.book.noLocationForSlot')
+            ? t('family.book.error.locationGone')
             : t('family.book.error.cannotBook'),
         );
       } else {
@@ -628,6 +642,15 @@ export function BookSessionPage() {
         )}
         {allowedLocations.length === 0 && (
           <p className="-mt-3 mb-5 text-xs text-brand-600">{t('family.book.noLocationForSlot')}</p>
+        )}
+        {slotNarrowed && (
+          <p className="-mt-3 mb-5 text-xs text-gray-500">
+            {t('family.book.slotAllows', {
+              locations: allowedLocations
+                .map((p) => t(`family.search.location.${p}`))
+                .join(', '),
+            })}
+          </p>
         )}
 
         {/* Optional message */}

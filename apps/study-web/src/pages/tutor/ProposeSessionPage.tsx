@@ -109,11 +109,22 @@ export function ProposeSessionPage() {
     );
   }, [tutor?.locationPrefs, date, selectedStart, sessionLength, weeklyLocations]);
 
+  // No `locationPref &&` guard: an emptied selection must RE-FILL when a
+  // bookable start is re-armed (PR #185 r3 review) — same fix as
+  // BookSessionPage's snap effect.
   useEffect(() => {
-    if (locationPref && !allowedLocations.includes(locationPref as LocationPref)) {
+    if (!allowedLocations.includes(locationPref as LocationPref)) {
       setLocationPref(allowedLocations[0] ?? '');
     }
   }, [allowedLocations, locationPref]);
+
+  // The armed start narrowed the offer relative to the profile prefs — make
+  // the constraint legible next to the select.
+  const slotNarrowed =
+    !!date &&
+    !!selectedStart &&
+    allowedLocations.length > 0 &&
+    allowedLocations.length < (tutor?.locationPrefs ?? []).length;
 
   const canPropose =
     !!familyId && !!subject && !!level && !!sessionLength && !!locationPref && !!date &&
@@ -228,6 +239,15 @@ export function ProposeSessionPage() {
         {allowedLocations.length === 0 && (
           <p className="-mt-3 mb-5 text-xs text-brand-600">
             {t('tutor.sessions.propose.noLocationForSlot')}
+          </p>
+        )}
+        {slotNarrowed && (
+          <p className="-mt-3 mb-5 text-xs text-gray-500">
+            {t('tutor.sessions.propose.slotAllows', {
+              locations: allowedLocations
+                .map((p) => t(`tutor.sessions.location.${p}`))
+                .join(', '),
+            })}
           </p>
         )}
 

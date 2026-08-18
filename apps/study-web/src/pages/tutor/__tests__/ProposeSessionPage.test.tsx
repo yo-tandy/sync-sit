@@ -195,6 +195,31 @@ describe('tutor ProposeSessionPage — location tags', () => {
     expect(Array.from(select.options).map((o) => o.value)).toEqual(['family_home', 'online']);
   });
 
+  it('refills an emptied selection when a bookable start is re-armed, with the narrowing hint', async () => {
+    // Same r3 fix as BookSessionPage: a disjoint 16:00 empties the selection,
+    // then arming the online-only 17:00 must re-fill it and hint the offer.
+    h.weeklyLocations = {
+      mon: {
+        ...Object.fromEntries([64, 65].map((i) => [String(i), ['online']])),
+        ...Object.fromEntries([66, 67].map((i) => [String(i), ['family_home']])),
+        ...Object.fromEntries(
+          Array.from({ length: 12 }, (_, k) => [String(68 + k), ['online']]),
+        ),
+      },
+    };
+    renderWithProviders(<ProposeSessionPage />);
+    fireEvent.change(screen.getByLabelText(/date/i), { target: { value: FUTURE_MON } });
+    fireEvent.click(await screen.findByRole('button', { name: '16:00' })); // disjoint
+    expect(await screen.findByText(/not open for any session location/i)).toBeInTheDocument();
+    const select = screen.getByLabelText(/location/i) as HTMLSelectElement;
+    expect(select.options.length).toBe(0);
+
+    fireEvent.click(screen.getByRole('button', { name: '17:00' }));
+    await waitFor(() => expect(select.value).toBe('online')); // re-filled
+    expect(screen.getByText(/This time only allows: Online/)).toBeInTheDocument();
+    expect(screen.queryByText(/not open for any session location/i)).toBeNull();
+  });
+
   it('maps a location_not_offered rejection to the noLocationForSlot message', async () => {
     // Reachable when the tutor submits before the schedule snapshot lands:
     // the select offered the full prefs and the server rejected on the tags.
