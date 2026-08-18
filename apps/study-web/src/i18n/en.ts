@@ -245,6 +245,7 @@ export default {
     subjectsTitle: 'Subjects & Rates',
     scheduleTitle: 'Schedule',
     requestsTitle: 'Requests',
+    familiesTitle: 'My Families',
     sessionsTitle: 'Sessions',
     endorsementsTitle: 'Endorsements',
     dashboard: {
@@ -301,6 +302,14 @@ export default {
         declined: 'Declined',
         cancelled: 'Withdrawn',
       },
+    },
+    families: {
+      title: 'My Families',
+      desc: 'Families whose contact request you accepted. They can see your contact details and book sessions with you.',
+      since: 'Family since {{date}}',
+      empty: 'No families yet — when you accept a family\'s contact request, they will show up here.',
+      emptyAction: 'Review your requests',
+      loadError: 'Could not load your families. Please refresh and try again.',
     },
     sessions: {
       empty: 'No session requests yet — when a family books you, it will show up here.',

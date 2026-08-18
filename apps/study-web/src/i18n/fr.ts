@@ -245,6 +245,7 @@ export default {
     subjectsTitle: 'Matières et tarifs',
     scheduleTitle: 'Disponibilités',
     requestsTitle: 'Demandes',
+    familiesTitle: 'Mes Familles',
     sessionsTitle: 'Séances',
     endorsementsTitle: 'Recommandations',
     dashboard: {
@@ -301,6 +302,14 @@ export default {
         declined: 'Refusée',
         cancelled: 'Retirée',
       },
+    },
+    families: {
+      title: 'Mes Familles',
+      desc: 'Les familles dont vous avez accepté la demande de contact. Elles peuvent voir vos coordonnées et réserver des séances avec vous.',
+      since: 'Famille depuis le {{date}}',
+      empty: 'Pas encore de familles — lorsque vous acceptez la demande de contact d\'une famille, elle apparaîtra ici.',
+      emptyAction: 'Vérifier vos demandes',
+      loadError: 'Impossible de charger vos familles. Veuillez actualiser et réessayer.',
     },
     sessions: {
       empty: 'Aucune demande de séance pour le moment — lorsqu\'une famille vous réserve, elle apparaîtra ici.',
