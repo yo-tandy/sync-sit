@@ -142,9 +142,13 @@ export const proposeSession = onCall(
       tutor.locationPrefs ?? [],
     );
     if (!effectiveLocations.includes(location)) {
+      // Same distinguishable details as bookSession's location rejections:
+      // reachable when the tutor submits before the schedule snapshot lands
+      // (the select then offered the full profile prefs).
       throw new HttpsError(
         'invalid-argument',
         'You do not offer this location for this time slot',
+        { reason: 'location_not_offered' },
       );
     }
     const endTime = slotIndexToTime(endIdx);

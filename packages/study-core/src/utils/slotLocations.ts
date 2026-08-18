@@ -63,13 +63,24 @@ export function sanitizeDayLocations(raw: unknown): SlotLocationCells {
   return cells;
 }
 
-/** One cell's effective set: its override if any, else the profile defaults. */
+/**
+ * One cell's effective set: the INTERSECTION of its override (if any) with the
+ * profile defaults, else the defaults. Intersecting HERE keeps the advertise
+ * path (splitRangesByLocation) and the validate path (resolveEffectiveLocations)
+ * in agreement: a tag can only ever narrow the offer, and a stored tag that
+ * falls outside the tutor's current prefs (prefs narrowed after tagging)
+ * yields a genuinely-dead cell — advertised as locations: [], which the
+ * booking UI already renders as its no-location state instead of offering an
+ * option the profile-prefs gate would reject with a dead-end error.
+ */
 function cellEffective(
   cells: SlotLocationCells | null | undefined,
   idx: number,
   defaults: LocationPref[],
 ): LocationPref[] {
-  return cells?.[idx] ?? defaults;
+  const override = cells?.[idx];
+  if (!override) return defaults;
+  return defaults.filter((p) => override.includes(p));
 }
 
 /**

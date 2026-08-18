@@ -133,7 +133,13 @@ export const bookSession = onCall(
 
     // ── Location must be one the tutor accepts ──
     if (!(tutor.locationPrefs ?? []).includes(location)) {
-      throw new HttpsError('failed-precondition', 'Tutor does not offer this location');
+      // Carries the same details as the per-slot tag rejections: this gate is
+      // what fires when a stored tag's location was later removed from the
+      // profile prefs, and the family deserves the location-specific message
+      // there too, not a generic cannot-book.
+      throw new HttpsError('failed-precondition', 'Tutor does not offer this location', {
+        reason: 'location_not_offered',
+      });
     }
 
     const now = new Date();

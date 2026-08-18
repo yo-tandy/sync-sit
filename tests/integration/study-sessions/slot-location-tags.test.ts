@@ -326,6 +326,81 @@ describe('per-slot location tags (issue #166)', () => {
     ]);
   });
 
+  // ── Advertise/validate agreement (PR #185 r2 blocker): a stored tag whose
+  // location was later removed from the profile prefs must not be advertised,
+  // and booking it rejects with the location reason, not a generic error. ──
+
+  it('advertises the tag-prefs intersection after the prefs are narrowed, and rejects the removed location with the location reason', async () => {
+    // Tag within the prefs, THEN narrow the prefs to online-only.
+    await setMonTags(tagCells(64, 80, ['online', 'family_home']));
+    await getDb().collection('users').doc(seed.tutor2.uid).update({
+      'profiles.tutor.locationPrefs': ['online'],
+    });
+    try {
+      const res = await callFunction<AvailabilityResponse>(
+        'getTutorAvailability',
+        { tutorUserId: seed.tutor2.uid, startDate: FUTURE_MON, endDate: FUTURE_MON },
+        parent1Token,
+      );
+      const day = res.dates.find((d) => d.date === FUTURE_MON)!;
+      expect(day.locationRanges).toEqual([
+        { startIdx: 64, endIdx: 80, locations: ['online'] },
+      ]);
+
+      // Booking the removed location rejects with the location reason (the
+      // profile-prefs gate), not the generic cannot-book.
+      await expect(
+        callFunction('bookSession', oneTimeInput(), parent1Token),
+      ).rejects.toMatchObject({
+        code: 'FAILED_PRECONDITION',
+        details: { reason: 'location_not_offered' },
+      });
+
+      // The still-offered location books normally.
+      const ok = await callFunction<BookResponse>(
+        'bookSession',
+        { ...oneTimeInput(), location: 'online' },
+        parent1Token,
+      );
+      expect(ok.sessionId).toBeTruthy();
+    } finally {
+      await getDb().collection('users').doc(seed.tutor2.uid).update({
+        'profiles.tutor.locationPrefs': ['online', 'family_home'],
+      });
+    }
+  });
+
+  it('advertises an empty set for a range whose tag is fully outside the prefs', async () => {
+    // 17:00-18:00 tagged library-only while prefs are online+family_home: a
+    // genuinely-dead sub-range advertises locations: [] (the client renders
+    // its no-location state) instead of a location the tutor does not offer.
+    await setMonTags(tagCells(68, 72, ['library']));
+    const res = await callFunction<AvailabilityResponse>(
+      'getTutorAvailability',
+      { tutorUserId: seed.tutor2.uid, startDate: FUTURE_MON, endDate: FUTURE_MON },
+      parent1Token,
+    );
+    const day = res.dates.find((d) => d.date === FUTURE_MON)!;
+    expect(day.locationRanges).toEqual([
+      { startIdx: 64, endIdx: 68, locations: ['family_home', 'online'] },
+      { startIdx: 68, endIdx: 72, locations: [] },
+      { startIdx: 72, endIdx: 80, locations: ['family_home', 'online'] },
+    ]);
+  });
+
+  // ── proposeSession symmetry (PR #185 r2): the tag rejection carries the
+  // same distinguishable details as bookSession's. ──
+
+  it('propose denial carries the location_not_offered details', async () => {
+    await setMonTags(tagCells(64, 80, ['online']));
+    await expect(
+      callFunction('proposeSession', proposeInput(), tutor2Token),
+    ).rejects.toMatchObject({
+      code: 'INVALID_ARGUMENT',
+      details: { reason: 'location_not_offered' },
+    });
+  });
+
   // ── Recurring-series claim variant (PR #185 blocker): a confirmed series
   // spreads claim overrides across every materialized occurrence date; the
   // weekly tags must keep applying on all of them. Runs LAST in this file: the

@@ -150,11 +150,36 @@ describe('splitRangesByLocation', () => {
     const slots = allFalse();
     slots[4] = slots[5] = true;
     slots[40] = true;
+    // 'library' is valid vocabulary but outside DEFAULTS: the advertised set
+    // is the INTERSECTION with the profile prefs (PR #185 r2 review) — a
+    // dead range advertises [], matching what resolveEffectiveLocations
+    // validates, instead of offering a location the tutor does not accept.
     const cells = sanitizeDayLocations({ '40': ['library'] });
     expect(splitRangesByLocation(slots, cells, DEFAULTS)).toEqual([
       { startIdx: 4, endIdx: 6, locations: DEFAULTS },
-      { startIdx: 40, endIdx: 41, locations: ['library'] },
+      { startIdx: 40, endIdx: 41, locations: [] },
     ]);
+  });
+
+  it('advertises the intersection when a tag partially falls outside the prefs', () => {
+    const slots = allFalse();
+    slots[50] = slots[51] = true;
+    // Tagged online+library while prefs are family_home+online: advertise
+    // only what BOTH allow. Note the intersected set differs from DEFAULTS,
+    // so the run still splits from an adjacent untagged run.
+    const cells = sanitizeDayLocations({ '50': ['online', 'library'], '51': ['online', 'library'] });
+    expect(splitRangesByLocation(slots, cells, DEFAULTS)).toEqual([
+      { startIdx: 50, endIdx: 52, locations: ['online'] },
+    ]);
+  });
+
+  it('advertise and validate paths agree on an outside-prefs tag', () => {
+    const cells = sanitizeDayLocations({ '40': ['library'] });
+    const slots = allFalse();
+    slots[40] = true;
+    const advertised = splitRangesByLocation(slots, cells, DEFAULTS)[0].locations;
+    expect(advertised).toEqual(resolveEffectiveLocations(cells, 40, 41, DEFAULTS));
+    expect(advertised).toEqual([]);
   });
 
   it('ignores override entries on inactive cells', () => {
