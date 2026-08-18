@@ -226,6 +226,7 @@ export default {
   menu: {
     about: 'About',
     openMenu: 'Open menu',
+    openMenuPending: 'Open menu (items awaiting your attention)',
     home: 'Home',
     reportProblem: 'Report a Problem',
     privacyPolicy: 'Privacy Policy',
