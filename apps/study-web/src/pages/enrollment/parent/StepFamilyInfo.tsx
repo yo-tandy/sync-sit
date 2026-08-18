@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AddressAutocomplete, Button, Input, Textarea } from '@ejm/shared-ui';
 import type { AddressResult } from '@ejm/shared-ui';
@@ -7,37 +6,38 @@ import type { AddressResult } from '@ejm/shared-ui';
 // Consent is NOT collected here: study's structure puts it on the shared
 // StepPassword (step 2), which the add-profile jump also passes through in
 // consent-only mode — every path consents exactly once.
+//
+// CONTROLLED (sit's pattern): the orchestrator owns the draft, so walking
+// back to the verify step (expired-code rescue) and returning does not lose
+// what the parent already typed.
 
-export interface FamilyInfoData {
+export interface FamilyFormData {
   familyName: string;
   lastName: string;
   firstName: string;
-  address: AddressResult;
+  address: AddressResult | null;
   pets: string;
   note: string;
 }
 
 interface StepFamilyInfoProps {
-  onNext: (data: FamilyInfoData) => void;
+  data: FamilyFormData;
+  onChange: (partial: Partial<FamilyFormData>) => void;
+  onNext: () => void;
   loading: boolean;
   error: string | null;
 }
 
-export function StepFamilyInfo({ onNext, loading, error }: StepFamilyInfoProps) {
+export function StepFamilyInfo({ data, onChange, onNext, loading, error }: StepFamilyInfoProps) {
   const { t } = useTranslation();
-  const [familyName, setFamilyName] = useState('');
-  const [lastName, setLastName] = useState('');
-  const [firstName, setFirstName] = useState('');
-  const [address, setAddress] = useState<AddressResult | null>(null);
-  const [pets, setPets] = useState('');
-  const [note, setNote] = useState('');
+  const { familyName, lastName, firstName, address, pets, note } = data;
 
   const isValid = !!familyName && !!firstName && !!address;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!isValid || loading || !address) return;
-    onNext({ familyName, lastName, firstName, address, pets, note });
+    if (!isValid || loading) return;
+    onNext();
   };
 
   return (
@@ -48,20 +48,20 @@ export function StepFamilyInfo({ onNext, loading, error }: StepFamilyInfoProps) 
       <Input
         label={t('enrollment.familyName')}
         value={familyName}
-        onChange={(e) => setFamilyName(e.target.value)}
+        onChange={(e) => onChange({ familyName: e.target.value })}
         required
       />
 
       <Input
         label={t('enrollment.parentLastName')}
         value={lastName}
-        onChange={(e) => setLastName(e.target.value)}
+        onChange={(e) => onChange({ lastName: e.target.value })}
       />
 
       <Input
         label={t('enrollment.firstName')}
         value={firstName}
-        onChange={(e) => setFirstName(e.target.value)}
+        onChange={(e) => onChange({ firstName: e.target.value })}
         required
       />
 
@@ -71,20 +71,20 @@ export function StepFamilyInfo({ onNext, loading, error }: StepFamilyInfoProps) 
       <AddressAutocomplete
         label={t('enrollment.addressLabel')}
         value={address}
-        onChange={setAddress}
+        onChange={(a) => onChange({ address: a })}
       />
 
       <Input
         label={t('enrollment.pets')}
         value={pets}
-        onChange={(e) => setPets(e.target.value)}
+        onChange={(e) => onChange({ pets: e.target.value })}
         placeholder={t('enrollment.petsHint')}
       />
 
       <Textarea
         label={t('enrollment.notesForTutors')}
         value={note}
-        onChange={(e) => setNote(e.target.value)}
+        onChange={(e) => onChange({ note: e.target.value })}
       />
 
       {error && <p className="mb-4 text-sm text-error-600">{error}</p>}

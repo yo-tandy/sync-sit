@@ -10,7 +10,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { EnrollmentAppBar } from '@/components/ui/EnrollmentAppBar';
 import { StepParentEmail } from './StepParentEmail';
 import { StepFamilyInfo } from './StepFamilyInfo';
-import type { FamilyInfoData } from './StepFamilyInfo';
+import type { FamilyFormData } from './StepFamilyInfo';
 
 // Steps: 0=Email, 1=Verify, 2=Password+consent, 3=Family info (submitting).
 // Sync-sit's ParentEnrollment is the FLOW reference (same backend callables:
@@ -36,7 +36,19 @@ interface EnrollFamilyInput {
   pets?: string;
   note?: string;
   kids: { firstName: string; age: number; languages: string[] }[];
+  // Consent-document version the consent step presented (issue #178) — study
+  // sends its own '2025-12-01' so the record matches the terms actually shown.
+  consentVersion?: string;
 }
+
+const INITIAL_FAMILY: FamilyFormData = {
+  familyName: '',
+  lastName: '',
+  firstName: '',
+  address: null,
+  pets: '',
+  note: '',
+};
 
 export function ParentEnrollment() {
   const { t } = useTranslation();
@@ -52,8 +64,18 @@ export function ParentEnrollment() {
   const [email, setEmail] = useState('');
   const [verificationCode, setVerificationCode] = useState('');
   const [password, setPassword] = useState('');
+  const [consentVersion, setConsentVersion] = useState('');
+  // The family draft lives HERE (sit's controlled pattern), not in the step:
+  // the expired-code rescue walks back to the verify step and the draft must
+  // survive the round trip.
+  const [family, setFamily] = useState<FamilyFormData>(INITIAL_FAMILY);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const updateFamily = (partial: Partial<FamilyFormData>) => {
+    setFamily((prev) => ({ ...prev, ...partial }));
+    setError(null);
+  };
 
   // For a signed-in user, resolve where the flow starts. Guard on step === 0
   // so this only fires before the flow begins: after an add-profile success,
@@ -122,13 +144,18 @@ export function ParentEnrollment() {
     setStep(2);
   };
 
-  const handlePasswordNext = (pw: string) => {
+  const handlePasswordNext = (pw: string, consent: string) => {
     setPassword(pw);
+    // Record the version StepPassword actually presented — it goes into the
+    // enrollFamily payload so the persisted consent matches the shown terms.
+    setConsentVersion(consent);
     setError(null);
     setStep(3);
   };
 
-  const handleFamilyInfoNext = async (data: FamilyInfoData) => {
+  const handleFamilyInfoNext = async () => {
+    const data = family;
+    if (!data.address) return;
     setLoading(true);
     setError(null);
     try {
@@ -153,6 +180,9 @@ export function ParentEnrollment() {
         ...(data.note ? { note: data.note } : {}),
         // Children are managed after enrollment at /family/settings.
         kids: [],
+        // Both branches send it: the new-account path persists it on the
+        // user doc, the add-profile path records it in the audit trail.
+        ...(consentVersion ? { consentVersion } : {}),
       };
 
       if (isAddProfile) {
@@ -242,8 +272,8 @@ export function ParentEnrollment() {
         return (
           <StepPassword
             collectPassword={!isAddProfile}
-            onSubmit={async (pw) => {
-              handlePasswordNext(pw);
+            onSubmit={async (pw, consent) => {
+              handlePasswordNext(pw, consent);
             }}
             consentVersion="2025-12-01"
             loading={loading}
@@ -253,6 +283,8 @@ export function ParentEnrollment() {
       case 3:
         return (
           <StepFamilyInfo
+            data={family}
+            onChange={updateFamily}
             onNext={handleFamilyInfoNext}
             loading={loading}
             error={error}
@@ -272,8 +304,17 @@ export function ParentEnrollment() {
 
   return (
     <div>
-      {isPostAuthStep ? (
+      {isPostAuthStep && isAddProfile ? (
         <EnrollmentAppBar />
+      ) : isPostAuthStep ? (
+        // Fresh signups keep a back affordance on the family step: the
+        // verification code has a 10-minute TTL that can expire while the
+        // form is filled, and the only rescue is resending from the verify
+        // step (sit keeps back visible on every step for the same reason).
+        // Straight to verify — the draft survives, it lives in this
+        // component. Add-profile users never held a code, so they keep the
+        // plain enrollment bar above.
+        <TopNav title={t('enrollment.parentTitle')} onBack={() => setStep(1)} />
       ) : (
         <>
           <TopNav

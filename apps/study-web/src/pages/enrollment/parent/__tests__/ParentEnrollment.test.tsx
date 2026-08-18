@@ -95,7 +95,12 @@ vi.mock('@ejm/shared-ui', () => ({
     const reason = err?.details?.reason;
     return reason === 'profile-exists' || reason === 'role-exclusive' ? reason : null;
   },
-  TopNav: ({ title }: { title: string }) => <div>{title}</div>,
+  TopNav: ({ title, onBack }: { title: string; onBack?: () => void }) => (
+    <div>
+      {title}
+      {onBack && <button onClick={onBack}>top-back</button>}
+    </div>
+  ),
   StepIndicator: ({ currentStep }: { currentStep: number }) => <div>step-{currentStep}</div>,
   StepVerify: ({ onVerify, onResend }: { onVerify: (c: string) => void; onResend: () => void }) => (
     <div>
@@ -129,10 +134,21 @@ vi.mock('../StepParentEmail', () => ({
   ),
 }));
 vi.mock('../StepFamilyInfo', () => ({
-  StepFamilyInfo: ({ onNext, error }: { onNext: (d: unknown) => void; error?: string | null }) => (
+  // Controlled stub mirroring the real component's API: `family-fill` pushes
+  // the test's draft up through onChange (the orchestrator owns the draft),
+  // `family-submit` fires the argless onNext. The rendered familyName pins
+  // draft preservation across a back-navigation.
+  StepFamilyInfo: ({ data, onChange, onNext, error }: {
+    data: { familyName: string };
+    onChange: (partial: unknown) => void;
+    onNext: () => void;
+    error?: string | null;
+  }) => (
     <div>
       {error && <p>{error}</p>}
-      <button onClick={() => onNext(h.familyData)}>family-submit</button>
+      <span>family-name:{data.familyName}</span>
+      <button onClick={() => onChange(h.familyData)}>family-fill</button>
+      <button onClick={() => onNext()}>family-submit</button>
     </div>
   ),
 }));
@@ -186,12 +202,16 @@ describe('ParentEnrollment orchestrator', () => {
     // Signed-out (default): password is collected.
     expect(screen.getByTestId('step-password')).toHaveAttribute('data-collect', 'true');
 
-    // Step 2 -> 3 crosses into the post-auth phase: app bar replaces TopNav.
+    // Step 2 -> 3 crosses into the post-auth phase: the step indicator goes
+    // away, and a FRESH signup keeps TopNav with a back affordance (expired
+    // codes are rescued from the verify step) — not the add-profile app bar.
     fireEvent.click(screen.getByText('password-submit'));
     expect(await screen.findByText('family-submit')).toBeInTheDocument();
-    expect(screen.getByText('enrollment-app-bar')).toBeInTheDocument();
+    expect(screen.queryByText('enrollment-app-bar')).toBeNull();
+    expect(screen.getByText('top-back')).toBeInTheDocument();
     expect(screen.queryByText(/step-\d/)).toBeNull();
 
+    fireEvent.click(screen.getByText('family-fill'));
     fireEvent.click(screen.getByText('family-submit'));
 
     const enroll = await vi.waitFor(() => {
@@ -204,6 +224,9 @@ describe('ParentEnrollment orchestrator', () => {
       email: 'claire@example.com',
       verificationCode: '123456',
       password: 'Pw123456!',
+      // The consent version StepPassword presented is the one persisted
+      // (issue #178) — never sit's '1.0'.
+      consentVersion: '2025-12-01',
       familyName: 'Durand',
       firstName: 'Claire',
       address: '10 Rue Cler, 75007 Paris',
@@ -262,7 +285,8 @@ describe('ParentEnrollment orchestrator', () => {
     fireEvent.click(screen.getByText('email-submit'));
     fireEvent.click(await screen.findByText('verify-submit'));
     fireEvent.click(await screen.findByText('password-submit'));
-    fireEvent.click(await screen.findByText('family-submit'));
+    fireEvent.click(await screen.findByText('family-fill'));
+    fireEvent.click(screen.getByText('family-submit'));
 
     const enroll = await vi.waitFor(() => {
       const c = h.calls.find((x) => x.name === 'enrollFamily');
@@ -275,6 +299,28 @@ describe('ParentEnrollment orchestrator', () => {
     expect(enroll.payload).not.toHaveProperty('city');
   });
 
+  it('back from the family step returns to verify with the draft preserved (expired-code rescue)', async () => {
+    renderFlow();
+    fireEvent.click(screen.getByText('email-submit'));
+    fireEvent.click(await screen.findByText('verify-submit'));
+    fireEvent.click(await screen.findByText('password-submit'));
+
+    // Fill the family draft, then walk back via the TopNav arrow.
+    fireEvent.click(await screen.findByText('family-fill'));
+    expect(screen.getByText('family-name:Durand')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('top-back'));
+
+    // Lands directly on the verify step (where the resend lives) — not on
+    // the password step.
+    expect(await screen.findByText('verify-submit')).toBeInTheDocument();
+
+    // Forward again: the draft survived the round trip because the
+    // orchestrator owns it.
+    fireEvent.click(screen.getByText('verify-submit'));
+    fireEvent.click(await screen.findByText('password-submit'));
+    expect(await screen.findByText('family-name:Durand')).toBeInTheDocument();
+  });
+
   it('a sign-in failure after successful enrollment still navigates to /family', async () => {
     // Enrollment fully succeeded (account/family/user doc written, code doc
     // consumed) — an auth hiccup must not read as an enrollment error or
@@ -284,7 +330,8 @@ describe('ParentEnrollment orchestrator', () => {
     fireEvent.click(screen.getByText('email-submit'));
     fireEvent.click(await screen.findByText('verify-submit'));
     fireEvent.click(await screen.findByText('password-submit'));
-    fireEvent.click(await screen.findByText('family-submit'));
+    fireEvent.click(await screen.findByText('family-fill'));
+    fireEvent.click(screen.getByText('family-submit'));
 
     await vi.waitFor(() => expect(h.navigate).toHaveBeenCalledWith('/family'));
     expect(screen.queryByText(/network-request-failed/)).toBeNull();
@@ -313,7 +360,13 @@ describe('ParentEnrollment orchestrator', () => {
     expect(screen.queryByText('email-submit')).toBeNull();
 
     fireEvent.click(passwordStep);
-    fireEvent.click(await screen.findByText('family-submit'));
+    // Add-profile family step keeps the app bar and gets NO back arrow —
+    // this path never held a verification code to rescue.
+    expect(await screen.findByText('family-fill')).toBeInTheDocument();
+    expect(screen.getByText('enrollment-app-bar')).toBeInTheDocument();
+    expect(screen.queryByText('top-back')).toBeNull();
+    fireEvent.click(screen.getByText('family-fill'));
+    fireEvent.click(screen.getByText('family-submit'));
 
     const enroll = await vi.waitFor(() => {
       const c = h.calls.find((x) => x.name === 'enrollFamily');
@@ -325,6 +378,9 @@ describe('ParentEnrollment orchestrator', () => {
     for (const key of ['email', 'verificationCode', 'password']) {
       expect(enroll.payload).not.toHaveProperty(key);
     }
+    // The consent-only step's acceptance still travels: the backend records
+    // it in the audit trail (issue #178).
+    expect(enroll.payload).toMatchObject({ consentVersion: '2025-12-01' });
     // Already signed in — no re-authentication.
     expect(h.signIn).not.toHaveBeenCalled();
     // refreshUserDoc must be awaited before the success navigation.
@@ -339,7 +395,8 @@ describe('ParentEnrollment orchestrator', () => {
     fireEvent.click(screen.getByText('email-submit'));
     fireEvent.click(await screen.findByText('verify-submit'));
     fireEvent.click(await screen.findByText('password-submit'));
-    fireEvent.click(await screen.findByText('family-submit'));
+    fireEvent.click(await screen.findByText('family-fill'));
+    fireEvent.click(screen.getByText('family-submit'));
     await vi.waitFor(() => expect(h.calls.some((c) => c.name === 'enrollFamily')).toBe(true));
   }
 

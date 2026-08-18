@@ -11,7 +11,6 @@ export default {
     password: 'Password',
     error: 'An error occurred',
     optional: 'Optional',
-    comingSoon: 'Coming soon.',
     signOut: 'Sign out',
     add: 'Add',
     date: 'Date',

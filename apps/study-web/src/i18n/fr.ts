@@ -11,7 +11,6 @@ export default {
     password: 'Mot de passe',
     error: 'Une erreur est survenue',
     optional: 'Facultatif',
-    comingSoon: 'Bientôt disponible.',
     signOut: 'Se déconnecter',
     add: 'Ajouter',
     date: 'Date',

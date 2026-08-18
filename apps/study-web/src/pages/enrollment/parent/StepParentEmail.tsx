@@ -20,11 +20,10 @@ export function StepParentEmail({ email, onChange, onSubmit, loading, error }: S
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   const isValidEmail = emailRegex.test(normalized);
 
+  // No auth-failure rewrite here (unlike sit's copy of this step):
+  // verifyParentEmail is unauthenticated by design, so the only errors this
+  // step ever shows are its own messages.
   const validationError = normalized && !isValidEmail ? t('validation.validEmail') : undefined;
-  const displayError =
-    error === 'Must be logged in' || error === 'UNAUTHENTICATED'
-      ? t('enrollment.serverError')
-      : error;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -47,7 +46,7 @@ export function StepParentEmail({ email, onChange, onSubmit, loading, error }: S
         value={email}
         onChange={(e) => onChange(e.target.value)}
         placeholder="your@email.com"
-        error={validationError || displayError || undefined}
+        error={validationError || error || undefined}
         required
       />
 
