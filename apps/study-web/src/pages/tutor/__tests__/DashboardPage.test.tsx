@@ -470,6 +470,23 @@ describe('tutor DashboardPage', () => {
     expect(screen.queryByText(/no requests yet/i)).toBeNull();
   });
 
+  it('a PARTIAL failure also surfaces the error line (the success must not erase it)', async () => {
+    // One flag per load: with a shared flag cleared on any success, a
+    // requests failure followed by a sessions success left loading=true and
+    // loadError=false — the eternal spinner again (PR #194 review round 2).
+    h.auth.userDoc = tutor();
+    const defaultImpl = h.getDocs.getMockImplementation()!;
+    h.getDocs.mockImplementation((q: { query: { path: string }[] }) =>
+      q?.query?.[0]?.path === 'study-sessions'
+        ? defaultImpl(q)
+        : Promise.reject(new Error('permission-denied')),
+    );
+    renderWithProviders(<DashboardPage />);
+
+    expect(await screen.findByText(/could not load your dashboard/i)).toBeInTheDocument();
+    expect(document.querySelector('.animate-spin')).toBeNull();
+  });
+
   it('renders the empty state when nothing is pending or upcoming', async () => {
     h.auth.userDoc = tutor();
     renderWithProviders(<DashboardPage />);

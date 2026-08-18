@@ -145,11 +145,15 @@ export function DashboardPage() {
   const [requests, setRequests] = useState<StudyContactRequestDoc[] | null>(null);
   const [sessions, setSessions] = useState<StudySessionDoc[] | null>(null);
   // A failed FIRST read must not strand the page on the spinner: with no
-  // error branch the only recovery is a blur/refocus (throttled 15s). Set on
-  // either load's failure, cleared on its success; only rendered while
-  // `loading` — a refetch blip over rendered sections stays invisible
-  // (SessionsPage's loadError pattern, PR #194 review).
-  const [loadError, setLoadError] = useState(false);
+  // error branch the only recovery is a blur/refocus (throttled 15s). One
+  // flag PER load — a shared flag cleared on any success lets the load that
+  // worked erase the other one's failure, recreating the eternal spinner
+  // this exists to remove (PR #194 review). Only rendered while `loading`,
+  // so a refetch blip over rendered sections stays invisible (SessionsPage's
+  // loadError pattern).
+  const [requestsError, setRequestsError] = useState(false);
+  const [sessionsError, setSessionsError] = useState(false);
+  const loadError = requestsError || sessionsError;
 
   useEffect(() => {
     if (!uid) return;
@@ -192,13 +196,13 @@ export function DashboardPage() {
         const rows = snap.docs.map((d) => d.data() as StudyContactRequestDoc);
         rows.sort((a, b) => (b.createdAt?.seconds ?? 0) - (a.createdAt?.seconds ?? 0));
         setRequests(rows);
-        setLoadError(false);
+        setRequestsError(false);
       })
       .catch(() => {
         // A failed read is UNKNOWN, not zero: on first load `requests` stays
         // null (loading rather than a wrong empty state); on a refetch blip
         // the last-known-good rows survive.
-        if (mountedRef.current) setLoadError(true);
+        if (mountedRef.current) setRequestsError(true);
       });
   }, [uid]);
 
@@ -210,11 +214,11 @@ export function DashboardPage() {
         const rows = snap.docs.map((d) => d.data() as StudySessionDoc);
         rows.sort((a, b) => (b.createdAt?.seconds ?? 0) - (a.createdAt?.seconds ?? 0));
         setSessions(rows);
-        setLoadError(false);
+        setSessionsError(false);
       })
       .catch(() => {
         /* keep last-known-good state */
-        if (mountedRef.current) setLoadError(true);
+        if (mountedRef.current) setSessionsError(true);
       });
   }, [uid]);
 
