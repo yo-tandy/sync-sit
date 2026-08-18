@@ -12,7 +12,7 @@
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r typecheck",
     "test": "vitest run",
-    "test:unit": "pnpm --filter @ejm/sit-core --filter @ejm/study-core --filter @ejm/shared-functions --filter web --filter study-functions --filter study-web test",
+    "test:unit": "pnpm --filter @ejm/shared-core --filter @ejm/sit-core --filter @ejm/study-core --filter @ejm/shared-functions --filter web --filter study-functions --filter study-web test && vitest run --project scripts",
     "test:integration": "pnpm --filter @ejm/tests test",
     "seed:admin": "node apps/functions/seed-admin.cjs",
     "backfill:endorsement-counts": "node apps/study-functions/backfill-endorsement-counts.cjs",
