@@ -400,6 +400,50 @@ describe('users collection — Plan D owner-update guards', () => {
     );
   });
 
+  // ── arrondissements shape bound (issue #167 round 4) ──
+  // The field is read back and processed by searchTutors, so its stored
+  // shape must be a bounded list. Element TYPES cannot be rules-checked
+  // (no list iteration) — the callable's typeof guard carries that half.
+
+  it('tutor may save a list of area strings (arrondissements shape bound allows lists)', async () => {
+    await seedLegacyDistanceTutor('tu13');
+    const authed = testEnv.authenticatedContext('tu13');
+    await assertSucceeds(
+      updateDoc(doc(authed.firestore(), 'users', 'tu13'), {
+        'profiles.tutor.arrondissements': ['16e', 'Vincennes', '75017'],
+        updatedAt: new Date(),
+      })
+    );
+  });
+
+  it('rejects a non-list arrondissements value', async () => {
+    await seedLegacyDistanceTutor('tu14');
+    const authed = testEnv.authenticatedContext('tu14');
+    await assertFails(
+      updateDoc(doc(authed.firestore(), 'users', 'tu14'), {
+        'profiles.tutor.arrondissements': 'all of Paris',
+        updatedAt: new Date(),
+      })
+    );
+    await assertFails(
+      updateDoc(doc(authed.firestore(), 'users', 'tu14'), {
+        'profiles.tutor.arrondissements': 42,
+        updatedAt: new Date(),
+      })
+    );
+  });
+
+  it('rejects an oversized arrondissements list (unbounded growth)', async () => {
+    await seedLegacyDistanceTutor('tu15');
+    const authed = testEnv.authenticatedContext('tu15');
+    await assertFails(
+      updateDoc(doc(authed.firestore(), 'users', 'tu15'), {
+        'profiles.tutor.arrondissements': Array.from({ length: 61 }, (_, i) => `a${i}`),
+        updatedAt: new Date(),
+      })
+    );
+  });
+
   // The tutor guard must default safely for users WITHOUT a tutor profile,
   // otherwise a parent-only user's ordinary profile edit would break.
   it('parent-only user may still edit their own profile (tutor guard defaults safely)', async () => {
@@ -432,6 +476,94 @@ describe('families collection', () => {
 
     const authed = testEnv.authenticatedContext('outsider');
     await assertFails(getDoc(doc(authed.firestore(), 'families', 'fam1')));
+  });
+
+  // ── Owner-editable field set (issue #167 widened it by postcode/city) ──
+
+  it('allows a family member to update the profile fields INCLUDING postcode and city', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'families', 'fam1'), {
+        familyId: 'fam1', parentIds: ['parent1'], address: 'old', latLng: null,
+      });
+    });
+
+    const authed = testEnv.authenticatedContext('parent1');
+    await assertSucceeds(
+      updateDoc(doc(authed.firestore(), 'families', 'fam1'), {
+        address: '10 Rue de Rivoli, 75001 Paris',
+        latLng: { lat: 48.8606, lng: 2.3376 },
+        postcode: '75001',
+        city: 'Paris',
+      }),
+    );
+    // Clearing them (address wiped without a geocoder pick) is also allowed.
+    await assertSucceeds(
+      updateDoc(doc(authed.firestore(), 'families', 'fam1'), {
+        address: 'typed by hand', latLng: null, postcode: null, city: null,
+      }),
+    );
+  });
+
+  it('denies malformed postcode/city shapes (read-back fields carry bounds)', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'families', 'fam1'), {
+        familyId: 'fam1', parentIds: ['parent1'],
+      });
+    });
+
+    const authed = testEnv.authenticatedContext('parent1');
+    // Non-string postcode: resolveAreaLabel calls .trim() on this at read
+    // time, so the rule refuses to store it.
+    await assertFails(
+      updateDoc(doc(authed.firestore(), 'families', 'fam1'), { postcode: 42 }),
+    );
+    await assertFails(
+      updateDoc(doc(authed.firestore(), 'families', 'fam1'), { city: ['Paris'] }),
+    );
+    // Over the familyEnrollmentSchema bounds (20 / 100).
+    await assertFails(
+      updateDoc(doc(authed.firestore(), 'families', 'fam1'), { postcode: 'x'.repeat(21) }),
+    );
+    await assertFails(
+      updateDoc(doc(authed.firestore(), 'families', 'fam1'), { city: 'x'.repeat(101) }),
+    );
+    // In-bounds strings still pass.
+    await assertSucceeds(
+      updateDoc(doc(authed.firestore(), 'families', 'fam1'), { postcode: '75001', city: 'Paris' }),
+    );
+  });
+
+  it('still denies a family member touching a NON-listed key (field guard intact)', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'families', 'fam1'), {
+        familyId: 'fam1', parentIds: ['parent1'],
+        verification: { isFullyVerified: false },
+      });
+    });
+
+    const authed = testEnv.authenticatedContext('parent1');
+    await assertFails(
+      updateDoc(doc(authed.firestore(), 'families', 'fam1'), {
+        postcode: '75001',
+        verification: { isFullyVerified: true },
+      }),
+    );
+    await assertFails(
+      updateDoc(doc(authed.firestore(), 'families', 'fam1'), { parentIds: ['parent1', 'mallory'] }),
+    );
+  });
+
+  it('denies a NON-member from updating postcode/city (membership gate intact)', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'families', 'fam1'), {
+        familyId: 'fam1', parentIds: ['parent1'],
+      });
+    });
+
+    const authed = testEnv.authenticatedContext('outsider');
+    await assertFails(
+      updateDoc(doc(authed.firestore(), 'families', 'fam1'), { postcode: '75001', city: 'Paris' }),
+    );
   });
 });
 

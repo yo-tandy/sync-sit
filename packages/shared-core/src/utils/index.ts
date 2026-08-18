@@ -3,3 +3,4 @@ export * from './haversine.js';
 export * from './ejm-email.js';
 export * from './agePolicy.js';
 export * from './authErrors.js';
+export * from './parisArea.js';

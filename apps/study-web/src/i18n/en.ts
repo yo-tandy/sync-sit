@@ -11,7 +11,6 @@ export default {
     password: 'Password',
     error: 'An error occurred',
     optional: 'Optional',
-    comingSoon: 'Coming soon.',
     signOut: 'Sign out',
     add: 'Add',
     date: 'Date',
@@ -428,6 +427,9 @@ export default {
         errorNoLengths: 'Pick at least one session length',
         errorPaddingRange: 'Padding must be a whole number between 0 and 60 minutes.',
         errorNoLocations: 'Pick at least one session location',
+        coverageWarning:
+          "Families can't find you for in-person sessions until you set the area you cover.",
+        coverageWarningCta: 'Set the area you cover',
       },
       aboutMe: {
         save: 'Save about me',
@@ -442,7 +444,8 @@ export default {
       byArea: 'By arrondissement',
       byDistance: 'By distance',
       arrondissements: 'Arrondissements',
-      arrondissementsHint: 'Separate several with commas, e.g. 75016, 75017',
+      nearbyTowns: 'Nearby towns',
+      legacyAreas: 'Other saved areas',
       address: 'Your address',
       radius: 'Max distance (km)',
       noLocationNote: 'No location is set on your profile — families see you as "distance unknown" and you sort last in distance-ordered results. Pick your address below to fix this.',
@@ -451,8 +454,9 @@ export default {
       radiusHint: 'Leave empty to use the default (5 km).',
       modeSwitchNote: 'Saving in arrondissement mode removes your stored address location — families will see "distance unknown" and you will sort last in distance-ordered results.',
       errorRadiusRange: 'Radius must be between 1 and 50 km (leave empty for the 5 km default).',
-      errorArrondissements: 'Enter up to 20 arrondissements (short codes, e.g. 75016).',
       errorNoAddress: 'Pick an address from the suggestions so your location can be set.',
+      errorAreaRequired:
+        'Your session locations include sessions at the family\'s side (their home or a library), so families need to know where you can go — pick at least one area, or set your address and a distance.',
     },
     endorsements: {
       title: 'Endorsements',
@@ -584,6 +588,8 @@ export default {
       maxRateLabel: 'Max rate (€/h)',
       maxDistanceLabel: 'Max distance (km)',
       addressLabel: 'Search from address',
+      areaHint:
+        'Home and library filters match tutors\' coverage areas against your address — pick a Paris or nearby-town address below so tutors covering your area can be found.',
       submit: 'Search tutors',
       searching: 'Searching…',
       empty: 'No tutors found — try adjusting your subject, level or filters.',
@@ -964,6 +970,18 @@ export default {
     alreadyInFamily: 'You already belong to a family.',
     joinFamilyConfirm: 'Join the {{familyName}} family',
     tutorTitle: 'Tutor Sign Up',
+    // Parent (family) signup wizard
+    parentTitle: 'Parent Sign Up',
+    yourAccount: 'Your account',
+    yourAccountDesc: "Enter your email address. We'll send a code to verify it.",
+    yourFamily: 'Your family',
+    yourFamilyDesc: 'Tell us about your family.',
+    familyName: 'Family name *',
+    parentLastName: 'Last name',
+    addressLabel: 'Address *',
+    pets: 'Pets',
+    petsHint: 'e.g. Cat, small dog',
+    notesForTutors: 'Notes for tutors',
     tutor: {
       title: 'Tutor enrollment',
       stepEmail: 'Verify your EJM email',

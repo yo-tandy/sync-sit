@@ -56,6 +56,12 @@ export function FamilySettingsPage() {
   const [familyName, setFamilyName] = useState('');
   const [address, setAddress] = useState('');
   const [latLng, setLatLng] = useState<{ lat: number; lng: number } | undefined>();
+  // Geocoder components (issue #167): only an autocomplete pick carries them;
+  // a manual edit clears them alongside latLng so a stale postcode can never
+  // outlive the address it was geocoded from. Search resolves the family's
+  // coverage-area label from these.
+  const [postcode, setPostcode] = useState<string | null>(null);
+  const [city, setCity] = useState<string | null>(null);
   const [kids, setKids] = useState<KidForm[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -86,6 +92,8 @@ export function FamilySettingsPage() {
           setFamilyName(f.familyName || '');
           setAddress(f.address || '');
           setLatLng(f.latLng);
+          setPostcode(f.postcode || null);
+          setCity(f.city || null);
         }
 
         const kidsSnap = await getDocs(collection(db, 'families', familyId!, 'kids'));
@@ -138,6 +146,8 @@ export function FamilySettingsPage() {
         familyName,
         address,
         latLng: latLng || null,
+        postcode: postcode || null,
+        city: city || null,
         updatedAt: serverTimestamp(),
       });
 
@@ -222,6 +232,8 @@ export function FamilySettingsPage() {
           onChange={(addr: AddressResult | null) => {
             setAddress(addr?.fullAddress || '');
             setLatLng(addr ? { lat: addr.lat, lng: addr.lng } : undefined);
+            setPostcode(addr?.postcode || null);
+            setCity(addr?.city || null);
           }}
         />
 

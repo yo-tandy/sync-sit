@@ -11,7 +11,6 @@ export default {
     password: 'Mot de passe',
     error: 'Une erreur est survenue',
     optional: 'Facultatif',
-    comingSoon: 'Bientôt disponible.',
     signOut: 'Se déconnecter',
     add: 'Ajouter',
     date: 'Date',
@@ -428,6 +427,9 @@ export default {
         errorNoLengths: 'Choisissez au moins une durée de cours',
         errorPaddingRange: 'La marge doit être un nombre entier entre 0 et 60 minutes.',
         errorNoLocations: 'Choisissez au moins un lieu de cours',
+        coverageWarning:
+          'Les familles ne peuvent pas vous trouver pour des cours en personne tant que vous n\'avez pas défini la zone que vous couvrez.',
+        coverageWarningCta: 'Définir la zone couverte',
       },
       aboutMe: {
         save: 'Enregistrer la présentation',
@@ -442,7 +444,8 @@ export default {
       byArea: 'Par arrondissement',
       byDistance: 'Par distance',
       arrondissements: 'Arrondissements',
-      arrondissementsHint: 'Séparez-en plusieurs par des virgules, ex. 75016, 75017',
+      nearbyTowns: 'Communes voisines',
+      legacyAreas: 'Autres zones enregistrées',
       address: 'Votre adresse',
       radius: 'Distance max (km)',
       noLocationNote: 'Aucune localisation n\'est définie sur votre profil — les familles voient « distance inconnue » et vous apparaissez en dernier dans les résultats triés par distance. Choisissez votre adresse ci-dessous pour corriger cela.',
@@ -451,8 +454,9 @@ export default {
       radiusHint: 'Laissez vide pour utiliser la valeur par défaut (5 km).',
       modeSwitchNote: 'Enregistrer en mode arrondissement supprime la localisation de votre adresse — les familles verront « distance inconnue » et vous apparaîtrez en dernier dans les résultats triés par distance.',
       errorRadiusRange: 'Le rayon doit être compris entre 1 et 50 km (laissez vide pour la valeur par défaut de 5 km).',
-      errorArrondissements: 'Indiquez au plus 20 arrondissements (codes courts, ex. 75016).',
       errorNoAddress: 'Choisissez une adresse parmi les suggestions pour définir votre localisation.',
+      errorAreaRequired:
+        'Vos lieux de session incluent des sessions chez la famille (à son domicile ou en bibliothèque) : les familles doivent savoir où vous pouvez vous déplacer — choisissez au moins une zone, ou définissez votre adresse et une distance.',
     },
     endorsements: {
       title: 'Recommandations',
@@ -584,6 +588,8 @@ export default {
       maxRateLabel: 'Tarif max (€/h)',
       maxDistanceLabel: 'Distance max (km)',
       addressLabel: 'Rechercher depuis l\'adresse',
+      areaHint:
+        'Les filtres domicile et bibliothèque comparent les zones couvertes par les professeurs à votre adresse — choisissez ci-dessous une adresse à Paris ou en commune voisine pour trouver les professeurs qui couvrent votre zone.',
       submit: 'Rechercher des professeurs',
       searching: 'Recherche…',
       empty: 'Aucun professeur trouvé — essayez d\'ajuster la matière, le niveau ou les filtres.',
@@ -964,6 +970,18 @@ export default {
     alreadyInFamily: 'Vous appartenez déjà à une famille.',
     joinFamilyConfirm: 'Rejoindre la famille {{familyName}}',
     tutorTitle: 'Inscription Tuteur',
+    // Parent (family) signup wizard
+    parentTitle: 'Inscription Parent',
+    yourAccount: 'Votre compte',
+    yourAccountDesc: 'Entrez votre adresse email. Nous vous enverrons un code pour la vérifier.',
+    yourFamily: 'Votre famille',
+    yourFamilyDesc: 'Parlez-nous de votre famille.',
+    familyName: 'Nom de famille *',
+    parentLastName: 'Nom',
+    addressLabel: 'Adresse *',
+    pets: 'Animaux',
+    petsHint: 'ex. Chat, petit chien',
+    notesForTutors: 'Notes pour les tuteurs',
     tutor: {
       title: 'Inscription tuteur',
       stepEmail: 'Vérifiez votre email EJM',

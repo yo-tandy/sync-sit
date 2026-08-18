@@ -32,9 +32,23 @@ export const familyEnrollmentSchema = z.object({
   lastName: z.string().optional(), // if different from family name
   firstName: z.string().min(1, 'First name is required'),
   address: z.string().min(1, 'Address is required'),
+  // Geocoder components of the picked address (issue #167): persisted on the
+  // family doc so tutor coverage-area matching can resolve the family's
+  // arrondissement/town without a re-pick in search. Optional — legacy
+  // clients and hand-typed addresses send neither.
+  postcode: z.string().max(20).optional(),
+  city: z.string().max(100).optional(),
   pets: z.string().optional(),
   note: z.string().optional(),
   kids: z.array(kidSchema).optional(),
+  // Consent-document version the enrolling client presented (issue #178:
+  // study's wizard shows '2025-12-01', sit's shows '1.0'). ALLOWLIST, not a
+  // free string — this lands verbatim in the canonical consent record, so
+  // only versions of terms that actually shipped are acceptable. When terms
+  // are re-versioned, add the new version here. Optional — legacy sit
+  // clients send nothing and the server defaults to '1.0', keeping their
+  // behavior byte-identical.
+  consentVersion: z.enum(['1.0', '2025-12-01']).optional(),
 });
 
 // NOTE: field names (minBabysitterAge, maxRate) are babysitter-flavored but

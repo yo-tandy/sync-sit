@@ -1,6 +1,53 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { screen, fireEvent, waitFor } from '@testing-library/react';
 import { renderWithProviders } from '@/__tests__/test-utils';
+import type { AddressResult } from '@ejm/shared-ui';
+
+// Stub AddressAutocomplete: renders the value as a plain input (so the
+// doc-seeded address assertions still hold) plus deterministic pick buttons —
+// one inside the coverage vocabulary (75016 Paris → '16e'), one outside it
+// (Versailles → no label). Mirrors the AreaPage test idiom.
+const PICKED_PARIS: AddressResult = {
+  fullAddress: '10 Rue de Passy, 75016 Paris',
+  street: '10 Rue de Passy',
+  city: 'Paris',
+  postcode: '75016',
+  lat: 48.857,
+  lng: 2.2795,
+};
+const PICKED_OUTSIDE: AddressResult = {
+  fullAddress: '1 Rue de la Paroisse, 78000 Versailles',
+  street: '1 Rue de la Paroisse',
+  city: 'Versailles',
+  postcode: '78000',
+  lat: 48.8049,
+  lng: 2.1204,
+};
+vi.mock('@ejm/shared-ui', async (importActual) => {
+  const actual = await importActual<typeof import('@ejm/shared-ui')>();
+  return {
+    ...actual,
+    AddressAutocomplete: ({
+      label,
+      value,
+      onChange,
+    }: {
+      label?: string;
+      value: AddressResult | null;
+      onChange: (a: AddressResult | null) => void;
+    }) => (
+      <div>
+        <input aria-label={label ?? 'address'} readOnly value={value?.fullAddress ?? ''} />
+        <button type="button" onClick={() => onChange(PICKED_PARIS)}>
+          pick-paris-address
+        </button>
+        <button type="button" onClick={() => onChange(PICKED_OUTSIDE)}>
+          pick-outside-address
+        </button>
+      </div>
+    ),
+  };
+});
 
 // Hoisted, test-controllable state. The search page loads families/{id} for the
 // caller's saved address/latLng (getDoc), then calls the searchTutors callable
@@ -185,6 +232,137 @@ describe('family SearchPage', () => {
       expect.objectContaining({ subject: 'math', level: '6e' }),
     );
     expect(lastPayload).not.toHaveProperty('filters');
+  });
+
+  // ── Issue #167: multi-select location filter + coverage-area label ──
+
+  it('multi-selects location types and sends filters.locationPrefs as an array', async () => {
+    renderWithProviders(<SearchPage />);
+    await waitFor(() => expect(h.getDoc).toHaveBeenCalled());
+
+    fireEvent.change(screen.getByLabelText(/subject/i), { target: { value: 'math' } });
+    fireEvent.change(screen.getByLabelText(/level/i), { target: { value: '6e' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Online' }));
+    fireEvent.click(screen.getByRole('button', { name: 'At your home' }));
+    fireEvent.click(screen.getByRole('button', { name: /search tutors/i }));
+
+    await waitFor(() =>
+      expect(h.callable).toHaveBeenCalledWith(
+        'searchTutors',
+        expect.objectContaining({
+          filters: expect.objectContaining({ locationPrefs: ['online', 'family_home'] }),
+        }),
+      ),
+    );
+  });
+
+  it('toggling a selected location chip off removes it from the payload', async () => {
+    renderWithProviders(<SearchPage />);
+    await waitFor(() => expect(h.getDoc).toHaveBeenCalled());
+
+    fireEvent.change(screen.getByLabelText(/subject/i), { target: { value: 'math' } });
+    fireEvent.change(screen.getByLabelText(/level/i), { target: { value: '6e' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Online' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Library' }));
+    // Chip prefixes its label with a check mark once selected.
+    fireEvent.click(screen.getByRole('button', { name: '✓ Online' }));
+    fireEvent.click(screen.getByRole('button', { name: /search tutors/i }));
+
+    await waitFor(() =>
+      expect(h.callable).toHaveBeenCalledWith(
+        'searchTutors',
+        expect.objectContaining({
+          filters: expect.objectContaining({ locationPrefs: ['library'] }),
+        }),
+      ),
+    );
+  });
+
+  it('passes areaLabel when the picked address resolves to the coverage vocabulary', async () => {
+    renderWithProviders(<SearchPage />);
+    await waitFor(() => expect(h.getDoc).toHaveBeenCalled());
+
+    fireEvent.change(screen.getByLabelText(/subject/i), { target: { value: 'math' } });
+    fireEvent.change(screen.getByLabelText(/level/i), { target: { value: '6e' } });
+    fireEvent.click(screen.getByRole('button', { name: /pick-paris-address/i }));
+    fireEvent.click(screen.getByRole('button', { name: /search tutors/i }));
+
+    await waitFor(() =>
+      expect(h.callable).toHaveBeenCalledWith(
+        'searchTutors',
+        expect.objectContaining({
+          areaLabel: '16e',
+          latLng: { lat: 48.857, lng: 2.2795 },
+        }),
+      ),
+    );
+  });
+
+  it('omits areaLabel for a doc-seeded address (no postcode stored) and for out-of-area picks', async () => {
+    renderWithProviders(<SearchPage />);
+    await waitFor(() => expect(h.getDoc).toHaveBeenCalled());
+
+    fireEvent.change(screen.getByLabelText(/subject/i), { target: { value: 'math' } });
+    fireEvent.change(screen.getByLabelText(/level/i), { target: { value: '6e' } });
+
+    // Doc-seeded address: the family doc has no postcode/city, so no label.
+    fireEvent.click(screen.getByRole('button', { name: /search tutors/i }));
+    await waitFor(() => expect(h.callable).toHaveBeenCalledTimes(1));
+    expect(h.callable.mock.calls[0][1]).not.toHaveProperty('areaLabel');
+
+    // Out-of-vocabulary pick (Versailles): still no label, latLng updates.
+    fireEvent.click(screen.getByRole('button', { name: /pick-outside-address/i }));
+    fireEvent.click(screen.getByRole('button', { name: /search tutors/i }));
+    await waitFor(() => expect(h.callable).toHaveBeenCalledTimes(2));
+    const payload = h.callable.mock.calls[1][1] as Record<string, unknown>;
+    expect(payload).not.toHaveProperty('areaLabel');
+    expect(payload).toMatchObject({ latLng: { lat: 48.8049, lng: 2.1204 } });
+  });
+
+  it('resolves areaLabel from a family doc that carries postcode/city (post-#167 docs)', async () => {
+    h.familyData = {
+      familyName: 'Cohen',
+      address: '1 Rue de Paris',
+      latLng: { lat: 48, lng: 2 },
+      postcode: '75116',
+      city: 'Paris',
+    };
+    renderWithProviders(<SearchPage />);
+    await waitFor(() => expect(h.getDoc).toHaveBeenCalled());
+
+    fireEvent.change(screen.getByLabelText(/subject/i), { target: { value: 'math' } });
+    fireEvent.change(screen.getByLabelText(/level/i), { target: { value: '6e' } });
+    fireEvent.click(screen.getByRole('button', { name: /search tutors/i }));
+
+    await waitFor(() =>
+      expect(h.callable).toHaveBeenCalledWith(
+        'searchTutors',
+        expect.objectContaining({ areaLabel: '16e' }),
+      ),
+    );
+    // And no hint once the doc-resolved label exists.
+    fireEvent.click(screen.getByRole('button', { name: 'At your home' }));
+    expect(screen.queryByText(/pick a paris or nearby-town address/i)).not.toBeInTheDocument();
+  });
+
+  it('hints that home/library filtering needs a Paris/nearby address until one resolves', async () => {
+    renderWithProviders(<SearchPage />);
+    await waitFor(() => expect(h.getDoc).toHaveBeenCalled());
+
+    // No location filter selected: no hint.
+    expect(screen.queryByText(/pick a paris or nearby-town address/i)).not.toBeInTheDocument();
+
+    // Online-only selection: coverage is irrelevant, still no hint.
+    fireEvent.click(screen.getByRole('button', { name: 'Online' }));
+    expect(screen.queryByText(/pick a paris or nearby-town address/i)).not.toBeInTheDocument();
+
+    // family_home without a resolvable label: hint appears.
+    fireEvent.click(screen.getByRole('button', { name: 'At your home' }));
+    expect(screen.getByText(/pick a paris or nearby-town address/i)).toBeInTheDocument();
+
+    // Picking a Paris address resolves the label and clears the hint.
+    fireEvent.click(screen.getByRole('button', { name: /pick-paris-address/i }));
+    expect(screen.queryByText(/pick a paris or nearby-town address/i)).not.toBeInTheDocument();
   });
 
   it('renders a result row with name, rate and endorsement count', async () => {

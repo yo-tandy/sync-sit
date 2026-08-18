@@ -4,11 +4,18 @@ import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { getTutorProfile } from '@ejm/study-core';
+import {
+  ARRONDISSEMENTS,
+  NEARBY_TOWNS,
+  ALL_AREAS,
+  postcodeToArrondissement,
+} from '@ejm/shared-core';
 import type { AreaMode } from '@ejm/shared-core';
 import {
   TopNav,
   Button,
   Input,
+  Chip,
   InfoBanner,
   AddressAutocomplete,
   type AddressResult,
@@ -35,9 +42,9 @@ export function AreaPage() {
   const uid = firebaseUser?.uid;
 
   const [areaMode, setAreaMode] = useState<AreaMode>('arrondissement');
-  // Arrondissement mode: comma-separated free text (enrollment collects a
-  // single value; stored docs may hold several).
-  const [arrText, setArrText] = useState('');
+  // Arrondissement mode: multi-choice selection over the shared area
+  // vocabulary (sit's "area I can babysit in" style, issue #167).
+  const [selectedAreas, setSelectedAreas] = useState<string[]>([]);
   // Distance mode: address + coordinates come ONLY from an AddressAutocomplete
   // pick. Typing without picking fires onChange(null), clearing both — a save
   // can never fabricate coordinates the geocoder didn't return.
@@ -51,7 +58,20 @@ export function AreaPage() {
   useEffect(() => {
     if (!tutor) return;
     setAreaMode(tutor.areaMode ?? 'arrondissement');
-    setArrText((tutor.arrondissements ?? []).join(', '));
+    // Seed through the canonicalizer: the free-text era taught tutors
+    // postcodes ('75016'), so mappable values check their canonical chip
+    // ('16e') and the next save migrates the doc to the canonical
+    // vocabulary. Set-dedup because '75016' and '16e' may coexist.
+    // typeof-string guard first: the field is client-written, and a junk
+    // element must not crash the tutor's own editor (it is dropped here and
+    // therefore also dropped by the next save).
+    setSelectedAreas([
+      ...new Set(
+        (tutor.arrondissements ?? [])
+          .filter((a): a is string => typeof a === 'string')
+          .map((a) => postcodeToArrondissement(a) ?? a),
+      ),
+    ]);
     setAreaAddress(tutor.areaAddress ?? '');
     setAreaLatLng(tutor.areaLatLng ?? null);
     setRadiusKm(tutor.areaRadiusKm ?? '');
@@ -63,6 +83,38 @@ export function AreaPage() {
     setError(null);
   };
 
+  const toggleArea = (area: string) => {
+    setSelectedAreas((prev) =>
+      prev.includes(area) ? prev.filter((a) => a !== area) : [...prev, area],
+    );
+    setSuccess(false);
+    setError(null);
+  };
+
+  // Migration tolerance: free-text-era docs may hold values outside the
+  // constant lists. Paris postcodes canonicalize onto their arrondissement
+  // chip at seed time (above); what remains here are values that map to
+  // NOTHING in the vocabulary — rendered as extra toggleable entries, seeded
+  // checked, so a save never silently drops them; unchecking one before
+  // saving is an explicit removal. Derived from the STORED doc (not the live
+  // selection) so an unchecked legacy chip stays visible and re-checkable.
+  const legacyAreas = [
+    ...new Set(
+      (tutor?.arrondissements ?? [])
+        .filter((a): a is string => typeof a === 'string')
+        .map((a) => postcodeToArrondissement(a) ?? a)
+        .filter((a) => !(ALL_AREAS as readonly string[]).includes(a)),
+    ),
+  ];
+
+  // Requirement (issue #167): a tutor offering sessions that happen at the
+  // family's location ('family_home'/'library' — anything not 'online' or
+  // 'tutor_home') must have a usable coverage area, or search could never
+  // legitimately surface them for those session types.
+  const requiresArea = (tutor?.locationPrefs ?? []).some(
+    (p) => p !== 'online' && p !== 'tutor_home',
+  );
+
   const handleAddressChange = (addr: AddressResult | null) => {
     setAreaAddress(addr?.fullAddress ?? '');
     setAreaLatLng(addr ? { lat: addr.lat, lng: addr.lng } : null);
@@ -72,6 +124,26 @@ export function AreaPage() {
 
   const handleSave = async () => {
     if (!uid) return;
+    // Requirement gate first: it explains WHY an area is needed. This is UX
+    // only — the trust boundary is searchTutors, which excludes tutors whose
+    // coverage cannot serve a location-typed query.
+    // "Has an area" means a MATCHABLE one: at least one selection inside the
+    // shared vocabulary (selections are postcode-normalized at seed, so this
+    // is a plain membership test). Unmappable legacy chips are preserved on
+    // save but can never match a family address in search, so they do not
+    // satisfy the requirement.
+    const hasMatchableArea = selectedAreas.some((a) =>
+      (ALL_AREAS as readonly string[]).includes(a),
+    );
+    if (
+      requiresArea &&
+      ((areaMode === 'arrondissement' && !hasMatchableArea) ||
+        (areaMode === 'distance' && !areaLatLng))
+    ) {
+      setError(t('tutor.area.errorAreaRequired'));
+      setSuccess(false);
+      return;
+    }
     if (areaMode === 'distance' && !areaLatLng) {
       setError(t('tutor.area.errorNoAddress'));
       setSuccess(false);
@@ -88,19 +160,13 @@ export function AreaPage() {
       setSuccess(false);
       return;
     }
-    const arrList = arrText.split(',').map((v) => v.trim()).filter(Boolean);
-    if (areaMode === 'arrondissement' && (arrList.length > 20 || arrList.some((v) => v.length > 12))) {
-      setError(t('tutor.area.errorArrondissements'));
-      setSuccess(false);
-      return;
-    }
     // Both branches write ALL five area dot-paths so a mode switch clears the
     // other mode's fields to the exact values enrollment stores for them.
     const payload =
       areaMode === 'arrondissement'
         ? {
             'profiles.tutor.areaMode': 'arrondissement',
-            'profiles.tutor.arrondissements': arrList,
+            'profiles.tutor.arrondissements': selectedAreas,
             'profiles.tutor.areaAddress': null,
             'profiles.tutor.areaLatLng': null,
             'profiles.tutor.areaRadiusKm': null,
@@ -169,17 +235,34 @@ export function AreaPage() {
                 {t('tutor.area.modeSwitchNote')}
               </p>
             )}
-            <Input
-              label={t('tutor.area.arrondissements')}
-              type="text"
-              value={arrText}
-              onChange={(e) => {
-                setArrText(e.target.value);
-                setSuccess(false);
-              }}
-              placeholder="e.g. 75016"
-              hint={t('tutor.area.arrondissementsHint')}
-            />
+            <p className="mb-2 text-xs text-gray-500">{t('tutor.area.arrondissements')}</p>
+            <div className="mb-3 flex flex-wrap gap-2">
+              {ARRONDISSEMENTS.map((arr) => (
+                <Chip key={arr} selected={selectedAreas.includes(arr)} onClick={() => toggleArea(arr)}>
+                  {arr}
+                </Chip>
+              ))}
+            </div>
+            <p className="mb-2 text-xs text-gray-500">{t('tutor.area.nearbyTowns')}</p>
+            <div className="mb-4 flex flex-wrap gap-2">
+              {NEARBY_TOWNS.map((town) => (
+                <Chip key={town} selected={selectedAreas.includes(town)} onClick={() => toggleArea(town)}>
+                  {town}
+                </Chip>
+              ))}
+            </div>
+            {legacyAreas.length > 0 && (
+              <>
+                <p className="mb-2 text-xs text-gray-500">{t('tutor.area.legacyAreas')}</p>
+                <div className="mb-4 flex flex-wrap gap-2">
+                  {legacyAreas.map((area) => (
+                    <Chip key={area} selected={selectedAreas.includes(area)} onClick={() => toggleArea(area)}>
+                      {area}
+                    </Chip>
+                  ))}
+                </div>
+              </>
+            )}
           </>
         ) : (
           <>

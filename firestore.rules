@@ -131,6 +131,19 @@ service cloud.firestore {
                      && tutorField(request.resource.data, 'aboutMe', null).size() <= 1000));
     }
 
+    // Helper: profiles.tutor.arrondissements is READ BACK and processed by
+    // searchTutors (each element flows through postcodeToArrondissement), so
+    // its stored shape is bounded: absent/list only, at most 60 entries (45
+    // vocabulary areas + legacy headroom). Rules cannot iterate a list to
+    // type-check its ELEMENTS — the callable's per-element typeof-string
+    // guard is the element-type defense; this bound stops non-list shapes
+    // and unbounded growth. Post-state with a list default, so docs without
+    // a tutor profile pass.
+    function tutorAreaShapeValid() {
+      return tutorField(request.resource.data, 'arrondissements', []) is list
+             && tutorField(request.resource.data, 'arrondissements', []).size() <= 60;
+    }
+
     // Helper: top-level photoUrl is owner-writable (the photo auto-save) but
     // must stay a bounded https URL — the client type/size checks are UX
     // only; without this a direct write could store a non-string, a data:
@@ -243,6 +256,7 @@ service cloud.firestore {
                     && identityUnlockedOrUnchanged()
                     && rootIdentitySetOnce()
                     && tutorNumericBoundsValid()
+                    && tutorAreaShapeValid()
                     && photoUrlValid();
     }
 
@@ -254,9 +268,21 @@ service cloud.firestore {
       // client. Sensitive state (verification.*, parentIds, preferredBabysitters,
       // searchDefaults, status) is mutated exclusively by callables via the
       // Admin SDK (which bypasses these rules).
+      // postcode/city are the first fields in this list that get READ BACK
+      // and processed (resolveAreaLabel calls .trim() on the stored value in
+      // study search), so unlike their display-only neighbors they carry a
+      // shape check: string bounded to the familyEnrollmentSchema limits, or
+      // null (the settings clear path). Post-state via get(), so docs that
+      // do not touch them still pass.
       allow update: if isFamilyMember(familyId)
                     && request.resource.data.diff(resource.data).affectedKeys()
-                        .hasOnly(['familyName', 'address', 'latLng', 'pets', 'note', 'photoUrl', 'updatedAt']);
+                        .hasOnly(['familyName', 'address', 'latLng', 'postcode', 'city', 'pets', 'note', 'photoUrl', 'updatedAt'])
+                    && (request.resource.data.get('postcode', null) == null
+                        || (request.resource.data.get('postcode', null) is string
+                            && request.resource.data.get('postcode', null).size() <= 20))
+                    && (request.resource.data.get('city', null) == null
+                        || (request.resource.data.get('city', null) is string
+                            && request.resource.data.get('city', null).size() <= 100));
 
       match /kids/{kidId} {
         allow read: if isFamilyMember(familyId) || isAdmin();

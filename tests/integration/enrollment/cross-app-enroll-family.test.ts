@@ -133,6 +133,50 @@ describe('enrollFamily cross-app add-profile', () => {
     expect(countAfter).toBe(countBefore);
   });
 
+  it('add-profile success records the presented consentVersion in the audit trail (issue #178)', async () => {
+    // A signed-in user with no profiles yet — the one caller the wizard's
+    // add-profile path serves (the consent-only step 2 is their only consent
+    // surface, and addProfileToUser deliberately leaves the root consent
+    // fields alone, so the audit entry is the only record).
+    const db = getDb();
+    const uid = 'bare-user-adds-family';
+    await getAdminAuth().createUser({ uid, email: 'bareparent@test.com' });
+    await db.collection('users').doc(uid).set({
+      uid,
+      email: 'bareparent@test.com',
+      status: 'active',
+      profiles: {},
+      consentVersion: '1.0',
+    });
+
+    const token = await getIdToken(uid);
+    const result = await callFunction<{ success: boolean; familyId: string }>(
+      'enrollFamily',
+      familyPayload({ consentVersion: '2025-12-01' }),
+      token,
+    );
+    expect(result.success).toBe(true);
+
+    // Root consent fields untouched (they belong to the original enrollment).
+    const after = (await db.collection('users').doc(uid).get()).data()!;
+    expect(after.profiles.parent.familyId).toBe(result.familyId);
+    expect(after.consentVersion).toBe('1.0');
+
+    // The new app's acceptance lives in the audit entry.
+    const audit = await db
+      .collection('auditLogs')
+      .where('adminUserId', '==', uid)
+      .where('action', '==', 'family_profile_added')
+      .get();
+    expect(
+      audit.docs.some(
+        (d) =>
+          d.data().details?.consentVersion === '2025-12-01' &&
+          d.data().details?.familyId === result.familyId,
+      ),
+    ).toBe(true);
+  });
+
   it('unauthenticated with an existing auth email is rejected already-exists (race backstop)', async () => {
     await seedCode(TUTOR_EMAIL);
     await expect(

@@ -285,6 +285,97 @@ describe('tutor SchedulePage', () => {
     expect(calls).toHaveLength(0);
   });
 
+  // ── Coverage-requirement visibility (issue #167) ──
+  // Warn + deep-link, never block: the page that owns locationPrefs must tell
+  // an in-person tutor when their coverage area is empty (the search callable
+  // silently excludes them otherwise).
+
+  function seedPrefsWithArea(area: Record<string, unknown>, locationPrefs: string[]) {
+    const userDoc = makeUserDoc();
+    Object.assign(userDoc.profiles.tutor as Record<string, unknown>, {
+      sessionLengthsMin: [45, 60],
+      locationPrefs,
+      paddingMin: 15,
+      ...area,
+    });
+    h.auth.userDoc = userDoc;
+  }
+
+  it('warns with an area-page link when in-person prefs meet empty coverage', () => {
+    seedPrefsWithArea({ areaMode: 'arrondissement', arrondissements: [] }, ['online', 'family_home']);
+    renderSchedule();
+
+    expect(screen.getByText(/can't find you for in-person sessions/i)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /set the area you cover/i })).toHaveAttribute(
+      'href',
+      '/tutor/area',
+    );
+  });
+
+  it('warns for a distance-mode doc with no coordinates', () => {
+    seedPrefsWithArea({ areaMode: 'distance', areaLatLng: null }, ['library']);
+    renderSchedule();
+
+    expect(screen.getByText(/can't find you for in-person sessions/i)).toBeInTheDocument();
+  });
+
+  it('warns when the stored areas are all unmappable legacy values (no MATCHABLE coverage)', () => {
+    // 'Clamart' never matches a family address, so the tutor is invisible to
+    // family_home searches despite a non-empty list — the warning must show.
+    seedPrefsWithArea({ areaMode: 'arrondissement', arrondissements: ['Clamart'] }, ['family_home']);
+    renderSchedule();
+
+    expect(screen.getByText(/can't find you for in-person sessions/i)).toBeInTheDocument();
+  });
+
+  it('survives a non-string junk element in the stored areas (still warns, no crash)', () => {
+    // Element types are not rules-guaranteed; a junk element must not
+    // white-screen the schedule page. It is not matchable, so the tutor
+    // still warns.
+    seedPrefsWithArea({ areaMode: 'arrondissement', arrondissements: [42] }, ['family_home']);
+    renderSchedule();
+
+    expect(screen.getByText(/can't find you for in-person sessions/i)).toBeInTheDocument();
+  });
+
+  it('shows no warning for a legacy postcode doc (matchable after normalization)', () => {
+    // '75016' normalizes to '16e', which searchTutors matches — covered.
+    seedPrefsWithArea({ areaMode: 'arrondissement', arrondissements: ['75016'] }, ['family_home']);
+    renderSchedule();
+
+    expect(screen.queryByText(/can't find you for in-person sessions/i)).not.toBeInTheDocument();
+  });
+
+  it('shows no coverage warning for an online/tutor-home-only tutor', () => {
+    seedPrefsWithArea({ areaMode: 'arrondissement', arrondissements: [] }, ['online', 'tutor_home']);
+    renderSchedule();
+
+    expect(screen.queryByText(/can't find you for in-person sessions/i)).not.toBeInTheDocument();
+  });
+
+  it('shows no coverage warning once coverage exists (either mode)', () => {
+    seedPrefsWithArea({ areaMode: 'arrondissement', arrondissements: ['16e'] }, ['family_home']);
+    const { unmount } = renderSchedule();
+    expect(screen.queryByText(/can't find you for in-person sessions/i)).not.toBeInTheDocument();
+    unmount();
+
+    seedPrefsWithArea(
+      { areaMode: 'distance', areaLatLng: { lat: 48.85, lng: 2.35 } },
+      ['family_home'],
+    );
+    renderSchedule();
+    expect(screen.queryByText(/can't find you for in-person sessions/i)).not.toBeInTheDocument();
+  });
+
+  it('keeps the prefs save SUCCESSFUL while the coverage warning shows (warn, never block)', async () => {
+    seedPrefsWithArea({ areaMode: 'arrondissement', arrondissements: [] }, ['online', 'family_home']);
+    renderSchedule();
+
+    fireEvent.click(screen.getByRole('button', { name: /save preferences/i }));
+    await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
+    expect(screen.getByText(/can't find you for in-person sessions/i)).toBeInTheDocument();
+  });
+
   it('prefs saves never touch the schedule save flow (separate save actions)', async () => {
     seedSessionPrefs();
     renderSchedule();
