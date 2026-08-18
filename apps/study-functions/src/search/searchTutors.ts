@@ -103,37 +103,42 @@ export const searchTutors = onCall(
       if (!offering) continue;
 
       // Filter: session location types (issue #167). A tutor matches when
-      // their prefs intersect the requested set. When the ONLY overlap is at
-      // the family's side ('family_home'/'library'), the tutor's coverage
-      // must actually reach the family — THIS is the trust boundary for
+      // their prefs intersect the requested set. Family-side legs
+      // ('family_home'/'library') additionally require the tutor's coverage
+      // to actually reach the family — THIS is the trust boundary for
       // "in-person tutors must have a coverage area"; the area page's save
-      // gate is UX only. A tutor also reachable via 'online'/'tutor_home'
-      // overlap needs no coverage check for those legs.
+      // gate is UX only. Tutor-side legs ('online'/'tutor_home') need no
+      // coverage. The projected locationPrefs are narrowed to the legs that
+      // genuinely apply to THIS family, so a tutor carried by their online
+      // leg is never displayed as available "at your home" when their
+      // coverage cannot reach it. Location-UNTYPED queries deliberately skip
+      // all of this and project raw prefs (see the pinned rationale below).
+      let projectedPrefs = tutor.locationPrefs ?? [];
       if (requestedPrefs.length > 0) {
         const matchedPrefs = requestedPrefs.filter((p) => tutor.locationPrefs?.includes(p));
         if (matchedPrefs.length === 0) continue;
-        const hasTutorSideLeg = matchedPrefs.some((p) => p === 'online' || p === 'tutor_home');
-        if (!hasTutorSideLeg) {
-          // Family-side only. Distance-mode tutors need BOTH sides'
-          // coordinates — the haversine radius gate below then decides
-          // reachability (keeping the approved-family bypass); without
-          // params.latLng that gate is skipped, so requiring it here keeps
-          // the two modes symmetric (fail closed, like arr-mode with no
-          // areaLabel). Arrondissement-mode tutors must list the family's
-          // resolved area label; stored values are normalized through
-          // postcodeToArrondissement because the free-text era taught tutors
-          // postcodes ('75016'), and those docs must keep matching '16e'.
-          // Empty coverage on either mode means the tutor cannot be shown
-          // to serve this family's location.
-          const covers =
-            tutor.areaMode === 'distance'
-              ? !!tutor.areaLatLng && !!params.latLng
-              : !!params.areaLabel &&
-                (tutor.arrondissements ?? []).some(
-                  (a) => a === params.areaLabel || postcodeToArrondissement(a) === params.areaLabel,
-                );
-          if (!covers) continue;
-        }
+        const tutorSideLegs = matchedPrefs.filter((p) => p === 'online' || p === 'tutor_home');
+        const familySideLegs = matchedPrefs.filter((p) => p === 'family_home' || p === 'library');
+        // Coverage: distance-mode tutors need BOTH sides' coordinates — the
+        // haversine radius gate below then decides reachability (keeping the
+        // approved-family bypass); without params.latLng that gate is
+        // skipped, so requiring it here keeps the two modes symmetric (fail
+        // closed, like arr-mode with no areaLabel). Arrondissement-mode
+        // tutors must list the family's resolved area label; stored values
+        // are normalized through postcodeToArrondissement because the
+        // free-text era taught tutors postcodes ('75016'), and those docs
+        // must keep matching '16e'. Empty coverage on either mode means the
+        // tutor cannot serve this family's location.
+        const covers =
+          familySideLegs.length > 0 &&
+          (tutor.areaMode === 'distance'
+            ? !!tutor.areaLatLng && !!params.latLng
+            : !!params.areaLabel &&
+              (tutor.arrondissements ?? []).some(
+                (a) => a === params.areaLabel || postcodeToArrondissement(a) === params.areaLabel,
+              ));
+        if (tutorSideLegs.length === 0 && !covers) continue;
+        projectedPrefs = covers ? matchedPrefs : tutorSideLegs;
       }
 
       // Filter: max rate (against the MATCHED subject's rate).
@@ -195,7 +200,7 @@ export const searchTutors = onCall(
         rate: offering.rate,
         levels: offering.levels,
         sessionLengthsMin: tutor.sessionLengthsMin || [],
-        locationPrefs: tutor.locationPrefs || [],
+        locationPrefs: projectedPrefs,
         distance,
         endorsementCount: tutor.endorsementCount ?? 0,
         cancellationNoticeHours: tutor.cancellationNoticeHours ?? 0,
