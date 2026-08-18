@@ -44,8 +44,10 @@ function renderHandoff() {
         <Routes>
           <Route path="/handoff" element={<HandoffPage />} />
           <Route path="/babysitter" element={<div>sitter landing</div>} />
+          <Route path="/family/verification" element={<div>verification page</div>} />
           <Route path="/signup" element={<div>signup page</div>} />
           <Route path="/login" element={<div>login page</div>} />
+          <Route path="*" element={<div>catch-all landing</div>} />
         </Routes>
       </MemoryRouter>
     </I18nextProvider>,
@@ -194,6 +196,59 @@ describe('HandoffPage (sit)', () => {
       loading: false,
     });
     expect(screen.queryByText(/this link has expired/i)).not.toBeInTheDocument();
+  });
+
+  it('honors a valid RELATIVE deep-link destination over the role landing', async () => {
+    window.location.hash = '#code=xyz&dest=%2Ffamily%2Fverification';
+    h.callable.mockResolvedValue({ data: { token: 'custom-tok' } });
+    h.signInWithCustomToken.mockResolvedValue({ user: { uid: 'u1' } });
+    h.getDoc.mockResolvedValue({
+      exists: () => true,
+      data: () => ({ uid: 'u1', profiles: { babysitter: { enrollmentComplete: true } } }),
+    });
+
+    renderHandoff();
+
+    // The deep link wins over postLoginRouter's /babysitter landing.
+    await waitFor(() => expect(screen.getByText('verification page')).toBeInTheDocument());
+    expect(h.signInWithCustomToken).toHaveBeenCalledTimes(1);
+  });
+
+  // The destination is attacker-visible URL surface and never touches the
+  // server — this allowlist-shape check is the ONLY defense against an open
+  // redirect through the auth handoff. Every hostile shape must degrade to
+  // the default role landing, never navigate.
+  it.each([
+    ['absolute URL', 'https://evil.com'],
+    ['protocol-relative', '//evil.com'],
+    ['scheme', 'javascript:alert(1)'],
+    ['backslash protocol-relative', '/\\evil.com'],
+    ['backslash anywhere', '/family\\..\\evil'],
+    ['missing leading slash', 'family/verification'],
+  ])('REJECTS a hostile destination (%s) and lands on the default', async (_label, dest) => {
+    window.location.hash = `#code=xyz&dest=${encodeURIComponent(dest)}`;
+    h.callable.mockResolvedValue({ data: { token: 'custom-tok' } });
+    h.signInWithCustomToken.mockResolvedValue({ user: { uid: 'u1' } });
+    h.getDoc.mockResolvedValue({
+      exists: () => true,
+      data: () => ({ uid: 'u1', profiles: { babysitter: { enrollmentComplete: true } } }),
+    });
+
+    renderHandoff();
+
+    await waitFor(() => expect(screen.getByText('sitter landing')).toBeInTheDocument());
+    expect(screen.queryByText('catch-all landing')).not.toBeInTheDocument();
+  });
+
+  it('a hostile destination on the degraded (user-doc failure) path also lands on the default entrance', async () => {
+    window.location.hash = '#code=xyz&dest=%2F%2Fevil.com';
+    h.callable.mockResolvedValue({ data: { token: 'tok' } });
+    h.signInWithCustomToken.mockResolvedValue({ user: { uid: 'u1' } });
+    h.getDoc.mockRejectedValue(new Error('transient'));
+
+    renderHandoff();
+
+    await waitFor(() => expect(screen.getByText('signup page')).toBeInTheDocument());
   });
 
   it('a missing code renders the IDENTICAL error screen (no oracle in the UI)', async () => {

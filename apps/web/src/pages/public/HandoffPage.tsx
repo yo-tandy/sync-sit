@@ -34,6 +34,30 @@ function hashParams(): URLSearchParams {
   return new URLSearchParams(hash.startsWith('#') ? hash.slice(1) : hash);
 }
 
+/**
+ * Deep-link destination guard (issue #129). The origin app may pass a
+ * `dest` fragment param to land the user on a specific sit page after
+ * sign-in (e.g. /family/verification from study's verification banner).
+ *
+ * SECURITY: the destination rides ONLY in the URL fragment — it is NOT part
+ * of the minted handoff doc and nothing server-side ever sees or validates
+ * it. This allowlist-shape check is therefore doing ALL the work: the
+ * handoff URL is attacker-visible surface, and honoring an unvalidated
+ * destination right after an authenticating sign-in would be an open
+ * redirect through the auth handoff. Accept only a RELATIVE path on this
+ * origin — must start with '/', must not start with '//'
+ * (protocol-relative), no backslash anywhere (browsers fold '\' into '/',
+ * so '/\evil.com' becomes '//evil.com'), and a scheme ('javascript:',
+ * 'https:') is impossible once the leading '/' is required. Anything else
+ * is dropped and the arrival falls back to the default role landing.
+ */
+function safeDestination(raw: string | null): string | null {
+  if (!raw || raw.length > 512) return null;
+  if (!raw.startsWith('/') || raw.startsWith('//')) return null;
+  if (raw.includes('\\')) return null;
+  return raw;
+}
+
 let stashedParams: URLSearchParams | null = null;
 let attempt: Promise<string | null> | null = null;
 
@@ -61,6 +85,10 @@ function runHandoffOnce(params: URLSearchParams, i18nInstance: I18n): Promise<st
     // unknown or absent value leaves the language untouched.
     const lang = params.get('lang');
     if (lang === 'en' || lang === 'fr') void i18nInstance.changeLanguage(lang);
+    // Optional deep-link destination — validated (see safeDestination) or
+    // dropped; a hostile value degrades to the default landing, never fails
+    // the handoff.
+    const dest = safeDestination(params.get('dest'));
     if (!code) return null;
     try {
       const redeem = httpsCallable<{ code: string }, { token: string }>(
@@ -79,11 +107,16 @@ function runHandoffOnce(params: URLSearchParams, i18nInstance: I18n): Promise<st
         const snap = await getDoc(doc(db, 'users', cred.user.uid));
         const userDoc = snap.exists() ? (snap.data() as SitUser) : null;
         useAuthStore.setState({ firebaseUser: cred.user, userDoc, loading: false });
-        return postLoginRouter(getSitRole(userDoc), userDoc);
+        // A validated deep-link destination wins over the role landing; the
+        // layout guards own whether this user may actually see that page,
+        // exactly as for a typed-in URL.
+        return dest ?? postLoginRouter(getSitRole(userDoc), userDoc);
       } catch {
         // Past sign-in the user IS authenticated and the code is consumed —
         // the "switch again" screen would strand them. Land on the default
-        // entrance instead; the app re-reads the user doc from there.
+        // entrance instead (NOT the deep-link destination: with no user doc
+        // the role layouts cannot vouch for it); the app re-reads the user
+        // doc from there.
         useAuthStore.setState({ firebaseUser: cred.user, userDoc: null, loading: false });
         return postLoginRouter(getSitRole(null));
       }

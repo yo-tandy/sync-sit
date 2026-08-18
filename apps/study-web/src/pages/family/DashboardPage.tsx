@@ -7,6 +7,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { getParentProfile } from '@ejm/shared-core';
 import { CrossAppWelcomeCard } from '@/components/family/CrossAppWelcomeCard';
 import { InstallAppBanner } from '@/components/ui/InstallAppBanner';
+import { VerifyFamilyBanner } from '@/components/ui/VerifyFamilyBanner';
 import {
   Card,
   BellIcon,
@@ -298,12 +299,7 @@ export function DashboardPage() {
       <InstallAppBanner />
 
       {/* ── Verification gate (read from the shared families doc) ── */}
-      {isVerified === false && (
-        <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-800">
-          <p className="mb-1 text-sm font-semibold">{t('family.dashboard.verifyBannerTitle')}</p>
-          <p className="text-xs text-amber-700">{t('family.dashboard.verifyBannerDesc')}</p>
-        </div>
-      )}
+      {isVerified === false && <VerifyFamilyBanner />}
 
       {/* ── Hero: the single "what matters now" slot. The aria-label carries
           the desc too — the label REPLACES the content for screen readers,

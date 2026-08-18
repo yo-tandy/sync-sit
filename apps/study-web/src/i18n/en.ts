@@ -558,6 +558,7 @@ export default {
       verifyBannerTitle: 'Verify your family',
       verifyBannerDesc:
         'Your family is verified in the Sync/Sit app. Until that\'s done, searching for tutors stays locked.',
+      verifyBannerCta: 'Verify in sync-sit',
       searchCardTitle: 'Find a tutor',
       searchCardDesc: 'Browse verified EJM student tutors by subject and availability.',
       requestsTitle: 'Your requests',

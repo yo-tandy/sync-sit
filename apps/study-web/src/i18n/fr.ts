@@ -558,6 +558,7 @@ export default {
       verifyBannerTitle: 'Vérifiez votre famille',
       verifyBannerDesc:
         'Votre famille est vérifiée dans l\'application Sync/Sit. Tant que ce n\'est pas fait, la recherche de professeurs reste verrouillée.',
+      verifyBannerCta: 'Vérifier dans sync-sit',
       searchCardTitle: 'Trouver un professeur',
       searchCardDesc: 'Parcourez les étudiants professeurs EJM vérifiés par matière et disponibilité.',
       requestsTitle: 'Vos demandes',
