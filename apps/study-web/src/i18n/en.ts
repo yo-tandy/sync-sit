@@ -1133,9 +1133,6 @@ export default {
   },
   about: {
     title: 'About',
-    heading: 'About Sync/Study',
-    body1: 'Sync/Study connects EJM high school students who tutor with EJM families looking for academic support. The app helps families find trusted tutors based on subjects, availability, and location.',
-    body2: 'This is a coordination tool — it helps families and tutors connect, but does not handle payment or serve as a booking system of record.',
   },
 
   validation: {

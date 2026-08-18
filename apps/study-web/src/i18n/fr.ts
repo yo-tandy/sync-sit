@@ -1134,9 +1134,6 @@ export default {
   },
   about: {
     title: 'À propos',
-    heading: 'À propos de Sync/Study',
-    body1: 'Sync/Study met en relation les lycéens EJM qui donnent des cours particuliers avec les familles EJM cherchant un soutien scolaire. L\'application aide les familles à trouver des tuteurs de confiance selon les matières, les disponibilités et la localisation.',
-    body2: 'Il s\'agit d\'un outil de coordination — il aide les familles et les tuteurs à se mettre en relation, mais ne gère pas les paiements et ne sert pas de système de réservation de référence.',
   },
 
   validation: {
