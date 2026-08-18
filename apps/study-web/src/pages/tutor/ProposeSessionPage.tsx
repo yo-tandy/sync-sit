@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { httpsCallable } from 'firebase/functions';
@@ -6,8 +6,9 @@ import { functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { getTutorProfile } from '@ejm/study-core';
 import type { LocationPref } from '@ejm/study-core';
-import { dayOfWeek } from '@ejm/study-core';
+import { dayOfWeek, resolveEffectiveLocations, sanitizeDayLocations } from '@ejm/study-core';
 import type { DayOfWeek } from '@ejm/shared-core';
+import { timeToSlotIndex } from '@ejm/shared-core';
 import { useSchedule } from '@/hooks/useSchedule';
 import { Button, Select, Textarea, Input, Chip, Card, TopNav, Dialog } from '@ejm/shared-ui';
 import { deriveStartChips } from '@/pages/family/bookingSlots';
@@ -61,7 +62,7 @@ export function ProposeSessionPage() {
   const navState = (useLocation().state ?? null) as ProposeNavState | null;
   const { userDoc } = useAuthStore();
   const tutor = getTutorProfile(userDoc);
-  const { weekly } = useSchedule();
+  const { weekly, weeklyLocations } = useSchedule();
 
   const familyName = navState?.familyName ?? '';
   const subject = navState?.subject ?? '';
@@ -89,6 +90,30 @@ export function ProposeSessionPage() {
     if (!daySlots) return [];
     return deriveStartChips(daySlots, sessionLength);
   }, [date, sessionLength, weekly]);
+
+  // ── Locations offerable for the ARMED start (issue #166): the tutor's own
+  // per-slot tags on that weekday constrain the select. Client hint from the
+  // WEEKLY cells (like the start chips above — override dates resolve to
+  // profile prefs server-side, so this can only hide options, never offer one
+  // proposeSession would reject on a weekly-base date). ──
+  const allowedLocations = useMemo<LocationPref[]>(() => {
+    const fallback = tutor?.locationPrefs ?? [];
+    if (!date || !selectedStart || !sessionLength) return fallback;
+    const dow: DayOfWeek = dayOfWeek(date);
+    const startIdx = timeToSlotIndex(selectedStart);
+    return resolveEffectiveLocations(
+      sanitizeDayLocations(weeklyLocations?.[dow]),
+      startIdx,
+      startIdx + sessionLength / 15,
+      fallback,
+    );
+  }, [tutor?.locationPrefs, date, selectedStart, sessionLength, weeklyLocations]);
+
+  useEffect(() => {
+    if (locationPref && !allowedLocations.includes(locationPref as LocationPref)) {
+      setLocationPref(allowedLocations[0] ?? '');
+    }
+  }, [allowedLocations, locationPref]);
 
   const canPropose =
     !!familyId && !!subject && !!level && !!sessionLength && !!locationPref && !!date &&
@@ -158,7 +183,7 @@ export function ProposeSessionPage() {
     value: String(m),
     label: t('tutor.sessions.propose.lengthOption', { minutes: m }),
   }));
-  const locationOptions = locations.map((p) => ({
+  const locationOptions = allowedLocations.map((p) => ({
     value: p,
     label: t(`tutor.sessions.location.${p}`),
   }));
@@ -193,6 +218,11 @@ export function ProposeSessionPage() {
           onChange={(e) => setLocationPref(e.target.value as LocationPref)}
           options={locationOptions}
         />
+        {allowedLocations.length === 0 && (
+          <p className="-mt-3 mb-5 text-xs text-brand-600">
+            {t('tutor.sessions.propose.noLocationForSlot')}
+          </p>
+        )}
 
         <Input
           label={t('tutor.sessions.propose.dateLabel')}

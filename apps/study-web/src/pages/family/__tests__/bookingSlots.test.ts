@@ -107,3 +107,96 @@ describe('deriveWeeklySlots', () => {
     expect(slots).toEqual([{ day: 'mon', startTime: '14:00' }]);
   });
 });
+
+// ── Per-slot location tags (issue #166) ──
+
+import {
+  effectiveLocationsForSlot,
+  effectiveLocationsForWeeklySlot,
+} from '../bookingSlots';
+
+describe('effectiveLocationsForSlot', () => {
+  const PREFS = ['online', 'family_home'];
+
+  it('falls back to profile prefs when the response has no ranges (stale server)', () => {
+    expect(effectiveLocationsForSlot(undefined, 56, 60, PREFS)).toEqual(PREFS);
+  });
+
+  it('returns the single overlapping range set', () => {
+    const ranges = [{ startIdx: 56, endIdx: 60, locations: ['family_home'] }];
+    expect(effectiveLocationsForSlot(ranges, 56, 60, PREFS)).toEqual(['family_home']);
+  });
+
+  it('intersects when the armed slot spans ranges with different sets', () => {
+    const ranges = [
+      { startIdx: 56, endIdx: 58, locations: ['online', 'family_home'] },
+      { startIdx: 58, endIdx: 60, locations: ['online'] },
+    ];
+    expect(effectiveLocationsForSlot(ranges, 56, 60, PREFS)).toEqual(['online']);
+  });
+
+  it('returns an empty set when the spanned ranges are disjoint', () => {
+    const ranges = [
+      { startIdx: 56, endIdx: 58, locations: ['online'] },
+      { startIdx: 58, endIdx: 60, locations: ['family_home'] },
+    ];
+    expect(effectiveLocationsForSlot(ranges, 56, 60, PREFS)).toEqual([]);
+  });
+
+  it('ignores ranges outside the armed slot', () => {
+    const ranges = [
+      { startIdx: 40, endIdx: 44, locations: ['library'] },
+      { startIdx: 56, endIdx: 60, locations: ['online'] },
+    ];
+    expect(effectiveLocationsForSlot(ranges, 56, 60, PREFS)).toEqual(['online']);
+  });
+});
+
+describe('effectiveLocationsForWeeklySlot', () => {
+  const PREFS = ['online', 'family_home'];
+
+  it('intersects effective sets across bookable occurrences of the weekday', () => {
+    // Two Mondays 14:00-15:00 bookable; the second is online-only.
+    const dates = [
+      {
+        date: '2026-07-20',
+        slots: gridWith([56, 60]),
+        locationRanges: [{ startIdx: 56, endIdx: 60, locations: ['online', 'family_home'] }],
+      },
+      {
+        date: '2026-07-27',
+        slots: gridWith([56, 60]),
+        locationRanges: [{ startIdx: 56, endIdx: 60, locations: ['online'] }],
+      },
+    ];
+    expect(effectiveLocationsForWeeklySlot(dates, 'mon', 56, 60, PREFS)).toEqual(['online']);
+  });
+
+  it('skips non-bookable occurrences and other weekdays', () => {
+    const dates = [
+      // Tuesday — different weekday, ignored even though tagged library-only.
+      {
+        date: '2026-07-21',
+        slots: gridWith([56, 60]),
+        locationRanges: [{ startIdx: 56, endIdx: 60, locations: ['library'] }],
+      },
+      // Monday but not bookable at 14:00 — ignored.
+      {
+        date: '2026-07-20',
+        slots: gridWith([80, 84]),
+        locationRanges: [{ startIdx: 80, endIdx: 84, locations: ['library'] }],
+      },
+      // Monday bookable — the only occurrence that counts.
+      {
+        date: '2026-07-27',
+        slots: gridWith([56, 60]),
+        locationRanges: [{ startIdx: 56, endIdx: 60, locations: ['family_home'] }],
+      },
+    ];
+    expect(effectiveLocationsForWeeklySlot(dates, 'mon', 56, 60, PREFS)).toEqual(['family_home']);
+  });
+
+  it('falls back to profile prefs when no occurrence matches', () => {
+    expect(effectiveLocationsForWeeklySlot([], 'mon', 56, 60, PREFS)).toEqual(PREFS);
+  });
+});

@@ -10,6 +10,7 @@ import { renderWithProviders } from '@/__tests__/test-utils';
 const h = vi.hoisted(() => ({
   userDoc: null as unknown,
   weekly: {} as Record<string, boolean[]>,
+  weeklyLocations: undefined as Record<string, Record<string, string[]>> | undefined,
   params: { familyId: 'fam1' } as Record<string, string | undefined>,
   locState: null as unknown,
   callable: vi.fn(),
@@ -27,7 +28,7 @@ vi.mock('@/stores/authStore', () => ({
 }));
 
 vi.mock('@/hooks/useSchedule', () => ({
-  useSchedule: () => ({ weekly: h.weekly }),
+  useSchedule: () => ({ weekly: h.weekly, weeklyLocations: h.weeklyLocations }),
 }));
 
 vi.mock('react-router', async (importOriginal) => {
@@ -74,6 +75,7 @@ const FUTURE_MON = '2027-06-07';
 function reset() {
   h.userDoc = tutorDoc();
   h.weekly = { mon: monGrid() };
+  h.weeklyLocations = undefined;
   h.params = { familyId: 'fam1' };
   h.locState = { familyName: 'Cohen', subject: 'math', level: '6e' };
   h.callable.mockReset();
@@ -143,5 +145,53 @@ describe('tutor ProposeSessionPage', () => {
     h.locState = { familyName: 'Cohen' }; // no subject/level
     renderWithProviders(<ProposeSessionPage />);
     expect(screen.getByText(/could not open the proposal form/i)).toBeInTheDocument();
+  });
+});
+
+// ── Per-slot location tags (issue #166): the tutor's own weekly tags
+// constrain the location select for the armed start; without tags (legacy
+// doc) the full profile prefs apply. ──
+describe('tutor ProposeSessionPage — location tags', () => {
+  beforeEach(() => {
+    h.userDoc = tutorDoc({ locationPrefs: ['online', 'family_home'] });
+    h.weekly = { mon: monGrid() };
+    h.weeklyLocations = undefined;
+    h.params = { familyId: 'fam1' };
+    h.locState = { familyName: 'Cohen', subject: 'math', level: '6e' };
+    h.callable.mockReset();
+    h.callable.mockResolvedValue({ data: { sessionId: 'new-sess' } });
+    h.navigate.mockReset();
+  });
+
+  function monTags(locations: string[]): Record<string, string[]> {
+    const cells: Record<string, string[]> = {};
+    for (let i = 64; i < 80; i++) cells[String(i)] = locations;
+    return cells;
+  }
+
+  it('narrows the location options to the armed slot tags and proposes with it', async () => {
+    h.weeklyLocations = { mon: monTags(['family_home']) };
+    renderWithProviders(<ProposeSessionPage />);
+
+    fireEvent.change(screen.getByLabelText(/date/i), { target: { value: FUTURE_MON } });
+    fireEvent.click(await screen.findByRole('button', { name: '16:00' }));
+
+    const select = screen.getByLabelText(/location/i) as HTMLSelectElement;
+    expect(Array.from(select.options).map((o) => o.value)).toEqual(['family_home']);
+
+    fireEvent.click(screen.getByRole('button', { name: /send proposal/i }));
+    await waitFor(() => {
+      const call = h.callable.mock.calls.find((c) => c[0] === 'proposeSession');
+      expect(call?.[1]).toMatchObject({ location: 'family_home' });
+    });
+  });
+
+  it('keeps the full profile prefs when the schedule has no tags (legacy doc)', async () => {
+    renderWithProviders(<ProposeSessionPage />);
+    fireEvent.change(screen.getByLabelText(/date/i), { target: { value: FUTURE_MON } });
+    fireEvent.click(await screen.findByRole('button', { name: '16:00' }));
+    const select = screen.getByLabelText(/location/i) as HTMLSelectElement;
+    // Both prefs remain; the armed set is canonicalized to LOCATION_PREFS order.
+    expect(Array.from(select.options).map((o) => o.value)).toEqual(['family_home', 'online']);
   });
 });
