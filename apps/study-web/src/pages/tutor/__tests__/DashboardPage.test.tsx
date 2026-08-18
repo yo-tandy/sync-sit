@@ -13,12 +13,10 @@ const h = vi.hoisted(() => ({
   },
   // What getDoc(schedules/uid) resolves to. null => doc absent (no slots).
   scheduleData: null as { weekly?: Record<string, boolean[]> } | null,
-  // studyContactRequests docs for the pending-count card.
+  // studyContactRequests docs for the New Requests section.
   requests: [] as Record<string, unknown>[],
-  // study-sessions docs for the pending-sessions count card.
+  // study-sessions docs for the New Requests + Confirmed sections.
   sessions: [] as Record<string, unknown>[],
-  // references docs (endorsements) for the pending-endorsements count card.
-  refs: [] as Record<string, unknown>[],
   updateDoc: vi.fn(() => Promise.resolve()),
   getDoc: vi.fn(),
   where: vi.fn((field: string, op: string, val: unknown) => ({ where: [field, op, val] })),
@@ -58,21 +56,19 @@ function reset() {
   h.scheduleData = null;
   h.requests = [];
   h.sessions = [];
-  h.refs = [];
   h.updateDoc.mockClear();
   h.getDoc.mockImplementation(() =>
     Promise.resolve({ exists: () => h.scheduleData != null, data: () => h.scheduleData })
   );
   h.where.mockClear();
   h.getDocs.mockReset();
-  // Route by collection path: references => endorsements, study-sessions =>
-  // sessions, else => contact requests. (All count cards read by
-  // tutorUserId==me.)
+  // Route by collection path: study-sessions => sessions, else => contact
+  // requests. (Both section loads read by tutorUserId==me.)
   h.getDocs.mockImplementation((q: { query: { path: string }[] }) => {
     const path = q?.query?.[0]?.path;
-    const rows = path === 'references' ? h.refs : path === 'study-sessions' ? h.sessions : h.requests;
+    const rows = path === 'study-sessions' ? h.sessions : h.requests;
     return Promise.resolve({
-      docs: rows.map((r) => ({ id: r.referenceId ?? r.sessionId ?? r.requestId, data: () => r })),
+      docs: rows.map((r) => ({ id: r.sessionId ?? r.requestId, data: () => r })),
     });
   });
 }
@@ -104,7 +100,8 @@ describe('tutor DashboardPage', () => {
     expect(screen.queryByRole('button', { name: /show me in search/i })).not.toBeInTheDocument();
   });
 
-  // ── Activation toggle gating (subjects + availability only) ──
+  // ── Activation toggle gating (subjects + availability only), preserved
+  // through the issue-#165 layout rework ──
 
   it('no subjects: toggle disabled with explanatory text', async () => {
     h.scheduleData = { weekly: { tue: [true] } };
@@ -148,7 +145,7 @@ describe('tutor DashboardPage', () => {
     renderWithProviders(<DashboardPage />);
     const toggle = await screen.findByRole('button', { name: /show me in search/i });
     await waitFor(() => expect(toggle).toBeDisabled());
-    expect(screen.getByText(/set your weekly availability/i)).toBeInTheDocument();
+    expect(screen.getByText(/set your weekly availability before/i)).toBeInTheDocument();
   });
 
   // ── Current searchable-state rendering ──
@@ -175,26 +172,227 @@ describe('tutor DashboardPage', () => {
     expect(await screen.findByText(/not shown in search/i)).toBeInTheDocument();
   });
 
-  // ── Sessions empty state + entry cards ──
+  // ── Issue #165 structure: install banner ──
 
-  it('renders the upcoming-sessions empty state and entry cards', async () => {
-    h.auth.userDoc = tutor({ enrollmentComplete: true, subjects: [] });
+  it('renders the install-app suggestion (base InstallAppBanner)', async () => {
+    h.auth.userDoc = tutor();
     renderWithProviders(<DashboardPage />);
-    // findBy, not getBy: the empty line renders only AFTER the sessions
-    // snapshot resolves — a synchronous match would be pinning the
-    // empty-state flash this page deliberately avoids.
-    expect(await screen.findByText(/no sessions yet/i)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /subjects/i })).toHaveAttribute('href', '/tutor/subjects');
-    expect(screen.getByRole('link', { name: /availability|schedule/i })).toHaveAttribute('href', '/tutor/schedule');
-    expect(screen.getByRole('link', { name: /account/i })).toHaveAttribute('href', '/tutor/account');
+    expect(
+      await screen.findByText(/install the app for the best experience/i),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /how to install/i })).toHaveAttribute(
+      'href',
+      '/install',
+    );
   });
 
-  it('no hero renders while the requests snapshot is still in flight', async () => {
-    // The two queries resolve independently; ranking on a still-null request
-    // count would let the sessions hero paint and then visibly swap to the
-    // requests hero. The ladder must wait for BOTH snapshots.
-    h.auth.userDoc = tutor({ enrollmentComplete: true });
-    h.sessions = [{ sessionId: 's1', tutorUserId: 't1', status: 'pending' }];
+  // ── Issue #165 structure: availability box ──
+
+  it('renders the My availability box linking to /tutor/schedule', async () => {
+    h.auth.userDoc = tutor();
+    renderWithProviders(<DashboardPage />);
+    const box = await screen.findByRole('link', { name: /my availability/i });
+    expect(box).toHaveAttribute('href', '/tutor/schedule');
+  });
+
+  // ── Issue #165 structure: New Requests section ──
+
+  it('lists pending contact requests under New Requests, linking to /tutor/requests', async () => {
+    h.auth.userDoc = tutor();
+    h.requests = [
+      {
+        requestId: 'r1',
+        tutorUserId: 't1',
+        status: 'pending',
+        familyName: 'Cohen',
+        parentName: 'Dana',
+        subject: 'math',
+        level: '6e',
+      },
+      { requestId: 'r2', tutorUserId: 't1', status: 'accepted', familyName: 'Levi', parentName: 'Avi', subject: 'math', level: '6e' },
+    ];
+    renderWithProviders(<DashboardPage />);
+
+    expect(await screen.findByText('New Requests')).toBeInTheDocument();
+    const card = screen.getByText('Cohen').closest('a');
+    expect(card).toHaveAttribute('href', '/tutor/requests');
+    expect(h.where).toHaveBeenCalledWith('tutorUserId', '==', 't1');
+    // Only the pending request counts; the accepted one renders nowhere.
+    expect(screen.getByText('1')).toBeInTheDocument();
+    expect(screen.queryByText('Levi')).not.toBeInTheDocument();
+  });
+
+  it('lists pending session bookings under New Requests, linking to /tutor/sessions', async () => {
+    h.auth.userDoc = tutor();
+    h.sessions = [
+      {
+        sessionId: 's1',
+        tutorUserId: 't1',
+        status: 'pending',
+        type: 'one_time',
+        date: '2099-01-01',
+        startTime: '17:00',
+        endTime: '18:00',
+        familyName: 'Martin',
+        subject: 'math',
+        level: '6e',
+        location: 'online',
+      },
+    ];
+    renderWithProviders(<DashboardPage />);
+
+    expect(await screen.findByText('New Requests')).toBeInTheDocument();
+    const card = screen.getByText('Martin').closest('a');
+    expect(card).toHaveAttribute('href', '/tutor/sessions');
+    expect(screen.getByText(/17:00–18:00/)).toBeInTheDocument();
+  });
+
+  it("marks the tutor's own pending proposal as awaiting the family", async () => {
+    h.auth.userDoc = tutor();
+    h.sessions = [
+      {
+        sessionId: 's1',
+        tutorUserId: 't1',
+        status: 'pending',
+        proposedBy: 'provider',
+        type: 'one_time',
+        date: '2099-01-01',
+        startTime: '17:00',
+        familyName: 'Martin',
+        subject: 'math',
+        level: '6e',
+        location: 'online',
+      },
+    ];
+    renderWithProviders(<DashboardPage />);
+
+    expect(await screen.findByText(/awaiting the family/i)).toBeInTheDocument();
+  });
+
+  // ── Issue #165 structure: Confirmed section ──
+
+  it('lists upcoming confirmed sessions under Confirmed, linking to /tutor/sessions', async () => {
+    h.auth.userDoc = tutor();
+    h.sessions = [
+      {
+        sessionId: 's1',
+        tutorUserId: 't1',
+        status: 'confirmed',
+        type: 'one_time',
+        date: '2099-01-01',
+        startTime: '17:00',
+        endTime: '18:00',
+        familyName: 'Cohen',
+        subject: 'math',
+        level: '6e',
+        location: 'online',
+      },
+    ];
+    renderWithProviders(<DashboardPage />);
+
+    expect(await screen.findByText('Confirmed')).toBeInTheDocument();
+    const card = screen.getByText('Cohen').closest('a');
+    expect(card).toHaveAttribute('href', '/tutor/sessions');
+    expect(screen.getByText(/17:00–18:00/)).toBeInTheDocument();
+    expect(screen.getByText(/online/i)).toBeInTheDocument();
+    // No New Requests section without anything pending.
+    expect(screen.queryByText('New Requests')).not.toBeInTheDocument();
+  });
+
+  it('shows a confirmed recurring series with its weekly slot line (no instances query)', async () => {
+    h.auth.userDoc = tutor();
+    h.sessions = [
+      {
+        sessionId: 's1',
+        tutorUserId: 't1',
+        status: 'confirmed',
+        type: 'recurring',
+        recurringSlots: [{ day: 'tue', startTime: '17:00', endTime: '18:00' }],
+        startTime: '17:00',
+        familyName: 'Dupont',
+        subject: 'math',
+        level: '6e',
+        location: 'family_home',
+      },
+    ];
+    renderWithProviders(<DashboardPage />);
+
+    expect(await screen.findByText('Confirmed')).toBeInTheDocument();
+    expect(screen.getByText(/every tuesday 17:00–18:00/i)).toBeInTheDocument();
+    // The instances subcollection is never queried — parent docs only.
+    const paths = h.getDocs.mock.calls.map(
+      (c) => (c[0] as { query?: { path?: string }[] })?.query?.[0]?.path ?? '',
+    );
+    expect(paths.every((p) => p === 'study-sessions' || p === 'studyContactRequests')).toBe(true);
+  });
+
+  it('excludes past and terminal sessions from Confirmed', async () => {
+    h.auth.userDoc = tutor();
+    h.sessions = [
+      {
+        sessionId: 's1',
+        tutorUserId: 't1',
+        status: 'confirmed',
+        type: 'one_time',
+        date: '2000-01-01',
+        startTime: '17:00',
+        familyName: 'Old',
+        subject: 'math',
+        level: '6e',
+        location: 'online',
+      },
+      {
+        sessionId: 's2',
+        tutorUserId: 't1',
+        status: 'declined',
+        type: 'one_time',
+        date: '2099-01-01',
+        startTime: '17:00',
+        familyName: 'Nope',
+        subject: 'math',
+        level: '6e',
+        location: 'online',
+      },
+    ];
+    renderWithProviders(<DashboardPage />);
+
+    // Settle on the empty state — nothing upcoming, nothing pending.
+    expect(await screen.findByText(/no requests yet/i)).toBeInTheDocument();
+    expect(screen.queryByText('Confirmed')).not.toBeInTheDocument();
+    expect(screen.queryByText('Old')).not.toBeInTheDocument();
+    expect(screen.queryByText('Nope')).not.toBeInTheDocument();
+  });
+
+  // ── Empty + loading states ──
+
+  it('renders the empty state when nothing is pending or upcoming', async () => {
+    h.auth.userDoc = tutor();
+    renderWithProviders(<DashboardPage />);
+    expect(await screen.findByText(/no requests yet/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/when families contact you or book sessions/i),
+    ).toBeInTheDocument();
+  });
+
+  it('paints neither sections nor the empty state while a snapshot is in flight', async () => {
+    // The two queries resolve independently; rendering on a still-null
+    // requests list would paint the empty state (or a partial section) and
+    // then visibly swap. The page must wait for BOTH snapshots.
+    h.auth.userDoc = tutor();
+    h.sessions = [
+      {
+        sessionId: 's1',
+        tutorUserId: 't1',
+        status: 'pending',
+        type: 'one_time',
+        date: '2099-01-01',
+        startTime: '17:00',
+        familyName: 'Martin',
+        subject: 'math',
+        level: '6e',
+        location: 'online',
+      },
+    ];
     const defaultImpl = h.getDocs.getMockImplementation()!;
     h.getDocs.mockImplementation((q: { query?: { path: string }[] }) => {
       const path = q?.query?.[0]?.path ?? '';
@@ -203,80 +401,24 @@ describe('tutor DashboardPage', () => {
     });
     renderWithProviders(<DashboardPage />);
 
-    // Settle on the sessions tile's badge (its snapshot resolved)...
-    expect(await screen.findByText('1')).toBeInTheDocument();
-    // ...but no hero: the pending-sessions title must not paint early.
-    expect(screen.queryByText(/awaiting confirmation/i)).not.toBeInTheDocument();
+    // Settle on the availability box (renders regardless of the snapshots)...
+    await screen.findByRole('link', { name: /my availability/i });
+    // ...but neither the sections nor the empty state paint early.
+    expect(screen.queryByText('New Requests')).not.toBeInTheDocument();
+    expect(screen.queryByText(/no requests yet/i)).not.toBeInTheDocument();
   });
 
-  it('a recurring-only tutor sees NO "no sessions yet" on the sessions tile', async () => {
-    // `next` excludes recurring series on purpose (instances live in a
-    // subcollection this page must not query) — but the tile's empty line is
-    // keyed on ALL non-terminal sessions, so an active series is not "none".
-    h.auth.userDoc = tutor({ enrollmentComplete: true, subjects: [] });
-    h.sessions = [
-      { sessionId: 's1', tutorUserId: 't1', status: 'confirmed', type: 'recurring', date: '2099-01-01' },
-    ];
+  // ── Issue #165: tiles relegated to the hamburger menu do NOT render here ──
+
+  it('renders no endorsements, subjects & rates, or account tiles', async () => {
+    h.auth.userDoc = tutor();
     renderWithProviders(<DashboardPage />);
-
-    // Settle on something that renders after the snapshots resolve.
-    await screen.findByRole('link', { name: /^contact requests$/i });
-    expect(screen.queryByText(/no sessions yet/i)).not.toBeInTheDocument();
-    // And the series still does not claim the hero.
-    expect(screen.queryByText(/next session/i)).not.toBeInTheDocument();
-  });
-
-  // ── Pending-requests card ──
-
-  it('renders a pending-requests card with the count, linking to /tutor/requests', async () => {
-    h.auth.userDoc = tutor({ enrollmentComplete: true });
-    h.requests = [
-      { requestId: 'r1', tutorUserId: 't1', status: 'pending' },
-      { requestId: 'r2', tutorUserId: 't1', status: 'pending' },
-      { requestId: 'r3', tutorUserId: 't1', status: 'accepted' },
-    ];
-    renderWithProviders(<DashboardPage />);
-
-    // Anchored: the pending-requests HERO's label also contains "requests".
-    const link = await screen.findByRole('link', { name: /^contact requests$/i });
-    expect(link).toHaveAttribute('href', '/tutor/requests');
-    expect(h.where).toHaveBeenCalledWith('tutorUserId', '==', 't1');
-    expect(await screen.findByText('2')).toBeInTheDocument();
-  });
-
-  // ── Pending-sessions card ──
-
-  it('renders a pending-sessions card with the count, linking to /tutor/sessions', async () => {
-    h.auth.userDoc = tutor({ enrollmentComplete: true });
-    h.sessions = [
-      { sessionId: 's1', tutorUserId: 't1', status: 'pending' },
-      { sessionId: 's2', tutorUserId: 't1', status: 'pending' },
-      { sessionId: 's3', tutorUserId: 't1', status: 'confirmed' },
-    ];
-    renderWithProviders(<DashboardPage />);
-
-    const link = await screen.findByRole('link', { name: /^sessions$/i });
-    expect(link).toHaveAttribute('href', '/tutor/sessions');
-    // Only the two pending ones count.
-    expect(await screen.findByText('2')).toBeInTheDocument();
-  });
-
-  // ── Pending-endorsements card ──
-
-  it('renders a pending-endorsements card counting private refs, linking to /tutor/endorsements', async () => {
-    h.auth.userDoc = tutor({ enrollmentComplete: true });
-    h.refs = [
-      { referenceId: 'e1', tutorUserId: 't1', status: 'private' },
-      { referenceId: 'e2', tutorUserId: 't1', status: 'private' },
-      { referenceId: 'e3', tutorUserId: 't1', status: 'approved' },
-      { referenceId: 'e4', tutorUserId: 't1', status: 'removed' },
-    ];
-    renderWithProviders(<DashboardPage />);
-
-    const link = await screen.findByRole('link', { name: /endorsements/i });
-    expect(link).toHaveAttribute('href', '/tutor/endorsements');
-    // Only the two private ones count as pending.
-    expect(await screen.findByText('2')).toBeInTheDocument();
+    await screen.findByRole('link', { name: /my availability/i });
+    expect(document.querySelector('a[href="/tutor/endorsements"]')).toBeNull();
+    expect(document.querySelector('a[href="/tutor/subjects"]')).toBeNull();
+    expect(document.querySelector('a[href="/tutor/account"]')).toBeNull();
+    expect(screen.queryByText(/subjects & rates/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/endorsements/i)).not.toBeInTheDocument();
   });
 
   // ── Supervision request card (guardianLinks/{ownUid} pending claim) ──
@@ -302,84 +444,5 @@ describe('tutor DashboardPage', () => {
     renderWithProviders(<DashboardPage />);
     await waitFor(() => expect(h.getDoc).toHaveBeenCalled());
     expect(screen.queryByText(/supervise your account/i)).not.toBeInTheDocument();
-  });
-
-  // ── Hero priority (issue #120): first match wins ──
-
-  it('hero: pending requests beat pending sessions and the next session', async () => {
-    h.auth.userDoc = tutor({ enrollmentComplete: true });
-    h.requests = [{ requestId: 'r1', tutorUserId: 't1', status: 'pending' }];
-    h.sessions = [
-      { sessionId: 's1', tutorUserId: 't1', status: 'pending' },
-      {
-        sessionId: 's2',
-        tutorUserId: 't1',
-        status: 'confirmed',
-        type: 'one_time',
-        date: '2099-01-01',
-        startTime: '17:00',
-        familyName: 'Cohen',
-      },
-    ];
-    renderWithProviders(<DashboardPage />);
-
-    const hero = await screen.findByRole('link', {
-      name: /1 family request waiting for your answer/i,
-    });
-    expect(hero).toHaveAttribute('href', '/tutor/requests');
-    expect(screen.queryByText(/awaiting confirmation/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/next session/i)).not.toBeInTheDocument();
-  });
-
-  it('hero: pending sessions beat the next confirmed session', async () => {
-    h.auth.userDoc = tutor({ enrollmentComplete: true });
-    h.sessions = [
-      { sessionId: 's1', tutorUserId: 't1', status: 'pending' },
-      {
-        sessionId: 's2',
-        tutorUserId: 't1',
-        status: 'confirmed',
-        type: 'one_time',
-        date: '2099-01-01',
-        startTime: '17:00',
-        familyName: 'Cohen',
-      },
-    ];
-    renderWithProviders(<DashboardPage />);
-
-    const hero = await screen.findByRole('link', { name: /1 session awaiting confirmation/i });
-    expect(hero).toHaveAttribute('href', '/tutor/sessions');
-    expect(screen.queryByText(/next session/i)).not.toBeInTheDocument();
-  });
-
-  it('hero: a confirmed future session alone → next-session hero to /tutor/sessions', async () => {
-    h.auth.userDoc = tutor({ enrollmentComplete: true });
-    h.sessions = [
-      {
-        sessionId: 's1',
-        tutorUserId: 't1',
-        status: 'confirmed',
-        type: 'one_time',
-        date: '2099-01-01',
-        startTime: '17:00',
-        familyName: 'Cohen',
-      },
-    ];
-    renderWithProviders(<DashboardPage />);
-
-    const hero = await screen.findByRole('link', { name: /next session/i });
-    expect(hero).toHaveAttribute('href', '/tutor/sessions');
-    expect(screen.getByText(/17:00/)).toBeInTheDocument();
-    expect(screen.getByText(/Cohen/)).toBeInTheDocument();
-  });
-
-  it('hero: zero state renders no hero', async () => {
-    h.auth.userDoc = tutor({ enrollmentComplete: true });
-    renderWithProviders(<DashboardPage />);
-
-    await waitFor(() => expect(h.getDocs).toHaveBeenCalled());
-    expect(
-      screen.queryByText(/waiting for your answer|awaiting confirmation|next session/i),
-    ).not.toBeInTheDocument();
   });
 });
