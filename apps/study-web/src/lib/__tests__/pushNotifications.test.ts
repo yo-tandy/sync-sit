@@ -45,6 +45,7 @@ describe('study push token registration', () => {
     h.getToken.mockReset().mockResolvedValue('study-token-abc');
     h.deleteToken.mockClear();
     h.updateDoc.mockClear();
+    h.requestPermission.mockClear();
     vi.stubGlobal('Notification', {
       permission: 'default',
       requestPermission: h.requestPermission,
@@ -88,6 +89,9 @@ describe('study push token registration', () => {
 
   it('removal writes an arrayRemove on fcmTokensStudy and deletes the FCM token', async () => {
     const lib = await loadLib();
+    // The user in this test HAS opted in: permission granted, SW available.
+    vi.stubGlobal('Notification', { permission: 'granted', requestPermission: h.requestPermission });
+    vi.stubGlobal('navigator', { ...navigator, serviceWorker: {} });
     await lib.removePushToken('u1');
     expect(h.updateDoc).toHaveBeenCalledTimes(1);
     const [ref, payload] = h.updateDoc.mock.calls[0] as [
@@ -98,6 +102,21 @@ describe('study push token registration', () => {
     expect(Object.keys(payload)).toEqual(['fcmTokensStudy']);
     expect(payload.fcmTokensStudy).toEqual({ op: 'arrayRemove', value: 'study-token-abc' });
     expect(h.deleteToken).toHaveBeenCalled();
+  });
+
+  it('removal is a no-op for a user who never opted into push', async () => {
+    // removePushToken runs on EVERY logout (authStore). Without this guard,
+    // getToken would REQUEST notification permission — a native prompt at the
+    // moment of sign-out — and register the service worker the lazy
+    // initMessaging exists to defer (PR #192 review).
+    const lib = await loadLib();
+    vi.stubGlobal('Notification', { permission: 'default', requestPermission: h.requestPermission });
+    vi.stubGlobal('navigator', { ...navigator, serviceWorker: {} });
+    await lib.removePushToken('u1');
+    expect(h.initMessaging).not.toHaveBeenCalled();
+    expect(h.getToken).not.toHaveBeenCalled();
+    expect(h.requestPermission).not.toHaveBeenCalled();
+    expect(h.updateDoc).not.toHaveBeenCalled();
   });
 
   it('isPushSupported reflects the Notification + serviceWorker capabilities', async () => {

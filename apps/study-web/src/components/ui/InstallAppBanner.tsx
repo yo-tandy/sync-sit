@@ -27,7 +27,7 @@ export function InstallAppBanner() {
     isRunningAsPWA() ||
     hidden ||
     !userDoc ||
-    (userDoc as { dismissedPwaInstallBannerStudy?: boolean }).dismissedPwaInstallBannerStudy
+    userDoc.dismissedPwaInstallBannerStudy
   ) {
     return null;
   }
