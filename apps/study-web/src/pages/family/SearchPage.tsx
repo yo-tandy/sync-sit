@@ -82,9 +82,11 @@ export function SearchPage() {
   const [address, setAddress] = useState('');
   const [latLng, setLatLng] = useState<{ lat: number; lng: number } | undefined>();
   // Coverage-area label ('16e', 'Vincennes', …) resolved from the address's
-  // postcode/city. Only an AddressAutocomplete pick carries postcode/city —
-  // the family doc stores just the display string + latLng — so a doc-seeded
-  // address starts with NO label until the family re-picks one here.
+  // postcode/city. Post-#167 family docs carry postcode/city (enrollment and
+  // both settings pages persist them), so a doc-seeded address resolves on
+  // load; an AddressAutocomplete pick re-resolves from the fresh geocode.
+  // Pre-#167 docs stay label-less until the backfill script runs or the
+  // family re-picks an address.
   const [areaLabel, setAreaLabel] = useState<string | null>(null);
   const [familyLoaded, setFamilyLoaded] = useState(false);
 
@@ -106,11 +108,11 @@ export function SearchPage() {
         if (snap.exists()) {
           setAddress(snap.data()?.address ?? '');
           setLatLng(snap.data()?.latLng ?? undefined);
-          // KNOWN GAP: today the family doc persists only the display address
-          // + latLng (enrollment discards the geocoder's postcode/city), so
-          // this resolves to null for doc-seeded addresses and the label only
-          // exists after an explicit autocomplete pick. Tolerant read so any
-          // future postcode/city backfill lights this up without a change here.
+          // Resolves from the doc's persisted postcode/city (written by
+          // enrollment, both settings pages, and the one-off backfill
+          // script). Null only for pre-#167 docs the backfill has not
+          // reached — those families see the amber hint until they re-pick
+          // an address or the backfill runs.
           setAreaLabel(
             resolveAreaLabel({
               postcode: snap.data()?.postcode ?? undefined,
