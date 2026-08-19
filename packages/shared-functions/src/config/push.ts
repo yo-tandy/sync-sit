@@ -7,7 +7,10 @@ import type { NotificationApp } from './email.js';
 // manifest variant (apps/study-web/public/icon-512.png) — the full logo.png
 // is 1.6MB, absurd to fetch per notification render (PR #192 review).
 const PUSH_BRANDING: Record<NotificationApp, { icon: string; link: string }> = {
-  sit: { icon: 'https://sync-sit.com/favicon.png', link: 'https://sync-sit.com' },
+  // sit's icon is the downscaled 192px manifest variant (issue #193) — the
+  // old favicon.png is a 1.4MB fetch per notification render, same class of
+  // cost study's icon fix removed (PR #192).
+  sit: { icon: 'https://sync-sit.com/icon-192.png', link: 'https://sync-sit.com' },
   study: { icon: `${STUDY_APP_URL}/icon-512.png`, link: STUDY_APP_URL },
 };
 

@@ -76,6 +76,11 @@ export async function requestPushPermission(userId: string): Promise<string | nu
  * Remove the current FCM token from the user's doc and delete it from FCM.
  */
 export async function removePushToken(userId: string): Promise<void> {
+  // Only clean up when push was actually granted: getToken would otherwise
+  // REQUEST notification permission — a native prompt at the moment of
+  // sign-out, plus a service-worker registration the user never opted into
+  // (the exact outcome lazy initMessaging exists to avoid; PR #192 review).
+  if (!isPushSupported() || Notification.permission !== 'granted') return;
   const msg = messaging || await initMessaging();
   if (!msg) return;
 
@@ -99,7 +104,7 @@ export async function removePushToken(userId: string): Promise<void> {
  */
 export async function setupForegroundMessages(onNotification: (title: string, body: string) => void): Promise<() => void> {
   // Only init messaging if push is already granted — don't trigger the prompt
-  if (Notification.permission !== 'granted') return () => {};
+  if (!isPushSupported() || Notification.permission !== 'granted') return () => {};
 
   const msg = await initMessaging();
   if (!msg) return () => {};
