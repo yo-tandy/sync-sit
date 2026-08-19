@@ -11,6 +11,7 @@ export interface CleanupStats {
   accountExistsNoticesDeleted: number;
   verificationSendCountersDeleted: number;
   appointmentsDeleted: number;
+  publishedSearchesDeleted: number;
 }
 
 /**
@@ -27,6 +28,8 @@ export interface CleanupStats {
  *   window — the daily address cap — is spent by then; stale counters only
  *   retain targeted addresses)
  * - Cancelled/rejected appointments: 30 days AND date > 7 days ago
+ * - Published searches: immediate (past expiresAt — the server-computed
+ *   min(publish + 7d, babysitting date) lifetime; issue #207)
  */
 export async function runCleanupOldData(
   firestoreDb: Firestore,
@@ -43,6 +46,7 @@ export async function runCleanupOldData(
     accountExistsNoticesDeleted: 0,
     verificationSendCountersDeleted: 0,
     appointmentsDeleted: 0,
+    publishedSearchesDeleted: 0,
   };
 
   // 1. Delete old notifications (> 30 days)
@@ -204,6 +208,28 @@ export async function runCleanupOldData(
       stats.totalDeleted += count;
       console.log(`Deleted ${count} old cancelled/rejected appointments`);
     }
+  }
+
+  // 8. Delete expired published searches (issue #207). Client queries filter
+  // expiry only client-side (list rules can't prove an expiresAt bound), so
+  // this sweep is what bounds an expired doc's readable window to <24h.
+  // Volume is bounded by the per-family active cap — one 500-doc pass, the
+  // invite-links idiom above.
+  const expiredPublished = await firestoreDb
+    .collection('publishedSearches')
+    .where('expiresAt', '<', now)
+    .limit(500)
+    .get();
+
+  if (!expiredPublished.empty) {
+    const batch = firestoreDb.batch();
+    for (const doc of expiredPublished.docs) {
+      batch.delete(doc.ref);
+    }
+    await batch.commit();
+    stats.publishedSearchesDeleted = expiredPublished.size;
+    stats.totalDeleted += expiredPublished.size;
+    console.log(`Deleted ${expiredPublished.size} expired published searches`);
   }
 
   console.log(`Data retention cleanup complete. Total deleted: ${stats.totalDeleted}`);

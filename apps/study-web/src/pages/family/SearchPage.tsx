@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { useTranslation } from 'react-i18next';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, onSnapshot, deleteDoc } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
@@ -23,9 +23,25 @@ import {
   AddressAutocomplete,
   EmptyState,
   SearchIcon,
+  Dialog,
+  useToast,
   type AddressResult,
 } from '@ejm/shared-ui';
 import { TutorCard } from '@/components/family/TutorCard';
+
+/**
+ * The family's own active published searches (issue #207) — the subset of the
+ * shared publishedSearches doc this page renders and withdraws. Timestamps
+ * arrive as Firestore Timestamps; expiry is filtered client-side (there is no
+ * status field: active == exists && expiresAt > now).
+ */
+interface OwnPublishedSearch {
+  id: string;
+  subject: string;
+  level: string;
+  createdAt: { toMillis: () => number };
+  expiresAt: { toMillis: () => number; toDate: () => Date };
+}
 
 /**
  * Tutor search for verified families. A single-step form (subject + level +
@@ -94,6 +110,76 @@ export function SearchPage() {
   const [loading, setLoading] = useState(false);
   // 'denied' => not verified / not a parent; 'generic' => everything else.
   const [error, setError] = useState<'denied' | 'generic' | null>(null);
+
+  // ── Published searches (issue #207) ──
+  const toast = useToast();
+  const [myPublished, setMyPublished] = useState<OwnPublishedSearch[]>([]);
+  const [publishOpen, setPublishOpen] = useState(false);
+  const [publishing, setPublishing] = useState(false);
+  const [publishError, setPublishError] = useState<'cap' | 'generic' | null>(null);
+  const [withdrawTarget, setWithdrawTarget] = useState<OwnPublishedSearch | null>(null);
+  const [withdrawing, setWithdrawing] = useState(false);
+
+  // Live list of the family's own active study published searches. Two
+  // equality filters (no composite index needed); newest-first sort and the
+  // expiry filter run client-side. A failed subscription hides the section.
+  useEffect(() => {
+    if (!familyId) return;
+    const q = query(
+      collection(db, 'publishedSearches'),
+      where('familyId', '==', familyId),
+      where('app', '==', 'study'),
+    );
+    return onSnapshot(
+      q,
+      (snap) => {
+        const now = Date.now();
+        setMyPublished(
+          snap.docs
+            .map((d) => d.data() as OwnPublishedSearch)
+            .filter((d) => (d.expiresAt?.toMillis?.() ?? 0) > now)
+            .sort((a, b) => (b.createdAt?.toMillis?.() ?? 0) - (a.createdAt?.toMillis?.() ?? 0)),
+        );
+      },
+      () => setMyPublished([]),
+    );
+  }, [familyId]);
+
+  const handlePublish = async () => {
+    if (!isValidSubject(subject) || !isValidLevel(level)) return;
+    setPublishing(true);
+    setPublishError(null);
+    try {
+      const fn = httpsCallable(functions, 'publishTutorSearch');
+      await fn({
+        subject,
+        level,
+        ...(locationPrefs.length > 0 ? { locationPrefs } : {}),
+        ...(maxRate !== '' ? { maxRate: Number(maxRate) } : {}),
+      });
+      setPublishOpen(false);
+      toast(t('family.publish.published'));
+    } catch (err: unknown) {
+      const code = (err as { code?: string })?.code;
+      setPublishError(code === 'functions/resource-exhausted' ? 'cap' : 'generic');
+    } finally {
+      setPublishing(false);
+    }
+  };
+
+  const handleWithdraw = async () => {
+    if (!withdrawTarget) return;
+    setWithdrawing(true);
+    try {
+      await deleteDoc(doc(db, 'publishedSearches', withdrawTarget.id));
+      setWithdrawTarget(null);
+      toast(t('family.publish.withdrawn'));
+    } catch {
+      setWithdrawTarget(null);
+    } finally {
+      setWithdrawing(false);
+    }
+  };
 
   // Load the family doc once for the saved address/latLng.
   useEffect(() => {
@@ -222,6 +308,32 @@ export function SearchPage() {
       <TopNav title={t('family.searchTitle')} backTo="/family" />
 
       <div className="px-5 pt-4 pb-8">
+        {/* The family's own active published searches (issue #207) */}
+        {myPublished.length > 0 && (
+          <div className="mb-6">
+            <h3 className="mb-2 text-sm font-semibold text-gray-700">{t('family.publish.myPublished')}</h3>
+            {myPublished.map((p) => (
+              <Card key={p.id} className="mb-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-gray-900">
+                      {t(`tutor.subjects.names.${p.subject}`)} ({p.level})
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      {t('family.publish.expiresOn', {
+                        date: p.expiresAt.toDate().toLocaleDateString(undefined, { day: 'numeric', month: 'long' }),
+                      })}
+                    </p>
+                  </div>
+                  <Button size="sm" variant="outline" className="w-auto shrink-0" onClick={() => setWithdrawTarget(p)}>
+                    {t('family.publish.withdraw')}
+                  </Button>
+                </div>
+              </Card>
+            ))}
+          </div>
+        )}
+
         <form onSubmit={handleSubmit}>
           <Select
             label={t('family.search.subjectLabel')}
@@ -359,6 +471,19 @@ export function SearchPage() {
             <p className="py-6 text-center text-sm text-brand-600">{t('family.search.error')}</p>
           )}
 
+          {/* Publish CTA (issue #207): offered whenever a search has run —
+              the demand board reaches tutors this filtered list cannot. */}
+          {!loading && !error && results !== null && (
+            <Card className="mb-3">
+              <div className="flex items-center justify-between gap-3">
+                <p className="min-w-0 text-xs text-gray-600">{t('family.publish.ctaHint')}</p>
+                <Button size="sm" variant="outline" className="w-auto shrink-0" onClick={() => setPublishOpen(true)}>
+                  {t('family.publish.cta')}
+                </Button>
+              </div>
+            </Card>
+          )}
+
           {!loading && !error && results !== null && results.length === 0 && (
             <Card>
               {hasOptionalFilters ? (
@@ -383,6 +508,44 @@ export function SearchPage() {
           )}
         </div>
       </div>
+
+      {/* Publish Confirmation Dialog (issue #207) */}
+      {publishOpen && (
+        <Dialog open onClose={() => { setPublishOpen(false); setPublishError(null); }}>
+          <h3 className="mb-2 text-lg font-bold">{t('family.publish.confirmTitle')}</h3>
+          <p className="mb-2 text-sm text-gray-600">{t('family.publish.confirmDesc')}</p>
+          <p className="mb-2 text-sm text-gray-600">{t('family.publish.duration')}</p>
+          {publishError && (
+            <p className="mb-3 text-sm text-brand-600">
+              {publishError === 'cap' ? t('family.publish.capError') : t('family.publish.error')}
+            </p>
+          )}
+          <div className="mt-2 flex gap-2">
+            <Button onClick={handlePublish} disabled={publishing} className="flex-1">
+              {publishing ? t('family.publish.publishing') : t('family.publish.confirmCta')}
+            </Button>
+            <Button variant="ghost" onClick={() => { setPublishOpen(false); setPublishError(null); }} className="flex-1">
+              {t('common.cancel')}
+            </Button>
+          </div>
+        </Dialog>
+      )}
+
+      {/* Withdraw Published Search Dialog (issue #207) */}
+      {withdrawTarget && (
+        <Dialog open onClose={() => setWithdrawTarget(null)}>
+          <h3 className="mb-2 text-lg font-bold">{t('family.publish.withdrawTitle')}</h3>
+          <p className="mb-4 text-sm text-gray-600">{t('family.publish.withdrawDesc')}</p>
+          <div className="flex gap-2">
+            <Button onClick={handleWithdraw} disabled={withdrawing} className="flex-1">
+              {withdrawing ? t('family.publish.withdrawing') : t('family.publish.withdraw')}
+            </Button>
+            <Button variant="ghost" onClick={() => setWithdrawTarget(null)} className="flex-1">
+              {t('common.cancel')}
+            </Button>
+          </div>
+        </Dialog>
+      )}
     </div>
   );
 }

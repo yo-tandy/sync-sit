@@ -9,3 +9,4 @@ export * from './user.js';
 export * from './userAdapter.js';
 export * from './guardian.js';
 export * from './appointment.js';
+export * from './publishedSearch.js';
