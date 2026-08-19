@@ -349,7 +349,7 @@ export function SearchPage() {
               <p className="mb-3 text-xs text-amber-700">
                 {t('family.dashboard.verifyBannerDesc')}
               </p>
-              <Link to="/family" className="text-xs font-semibold text-amber-900 underline">
+              <Link to="/family/verification" className="text-xs font-semibold text-amber-900 underline">
                 {t('family.search.verifyCta')}
               </Link>
             </div>
