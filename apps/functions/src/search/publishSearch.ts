@@ -62,6 +62,12 @@ export const publishSearch = onCall(
     if (!Array.isArray(data.kidIds) || data.kidIds.length === 0 || !data.kidIds.every((k) => typeof k === 'string')) {
       throw new HttpsError('invalid-argument', 'kidIds must be a non-empty string array');
     }
+    // Dedupe + bound: duplicates would inflate numberOfKids/kidAges (and the
+    // PR3 appointment minted from them); 10 matches the other input bounds.
+    data.kidIds = [...new Set(data.kidIds)];
+    if (data.kidIds.length > 10) {
+      throw new HttpsError('invalid-argument', 'too many kids');
+    }
     if (data.offeredRate !== undefined && (typeof data.offeredRate !== 'number' || data.offeredRate < 0 || data.offeredRate > 1000)) {
       throw new HttpsError('invalid-argument', 'offeredRate out of range');
     }
@@ -72,10 +78,25 @@ export const publishSearch = onCall(
       if (!data.date || !DATE_RE.test(data.date) || !data.startTime || !TIME_RE.test(data.startTime) || !data.endTime || !TIME_RE.test(data.endTime)) {
         throw new HttpsError('invalid-argument', 'one_time searches need date, startTime and endTime');
       }
+      // Shape regexes pass '2026-13-45' and '25:99' — bound to the calendar
+      // and the clock so junk stays on the 400 path (PR #210 review).
+      const roundTrip = new Date(`${data.date}T00:00:00Z`);
+      if (Number.isNaN(roundTrip.getTime()) || roundTrip.toISOString().slice(0, 10) !== data.date) {
+        throw new HttpsError('invalid-argument', 'date is not a calendar date');
+      }
+      for (const t of [data.startTime, data.endTime]) {
+        const [hh, mm] = t!.split(':').map(Number);
+        if (hh > 23 || mm > 59) {
+          throw new HttpsError('invalid-argument', 'time out of range');
+        }
+      }
     } else {
       const slots = data.recurringSlots;
       if (!Array.isArray(slots) || slots.length === 0) {
         throw new HttpsError('invalid-argument', 'recurring searches need at least one slot');
+      }
+      if (slots.length > 21) { // 7 days x up to 3 windows — same bound family as the other inputs
+        throw new HttpsError('invalid-argument', 'too many recurring slots');
       }
       for (const s of slots) {
         if (!s || !DAY_KEYS.includes(s.day) || !TIME_RE.test(s.startTime || '') || !TIME_RE.test(s.endTime || '')) {
@@ -105,7 +126,16 @@ export const publishSearch = onCall(
     const ttlMs = PUBLISHED_SEARCH_TTL_DAYS * 24 * 60 * 60 * 1000;
     let expiresAt = new Date(now.getTime() + ttlMs);
     if (data.type === 'one_time') {
-      const sittingEnd = parisWallTimeToUtc(data.date!, data.endTime!);
+      // End times at/after midnight (the picker's 00:00-02:00 "following
+      // day" options) belong to the NEXT calendar day: an endTime that is
+      // not after startTime crosses midnight, so the sitting ends 24h later
+      // than the naive wall-time conversion says. Without this, a same-day
+      // 20:00-01:00 sitting is rejected as already past, and a future one
+      // expires the search ~24h before the sitting starts (PR #210 review).
+      let sittingEnd = parisWallTimeToUtc(data.date!, data.endTime!);
+      if (data.endTime! <= data.startTime!) {
+        sittingEnd = new Date(sittingEnd.getTime() + 24 * 60 * 60 * 1000);
+      }
       if (sittingEnd.getTime() <= now.getTime()) {
         throw new HttpsError('invalid-argument', 'The babysitting date is already past');
       }
@@ -117,18 +147,6 @@ export const publishSearch = onCall(
     // ── Cap: at most PUBLISHED_SEARCH_MAX_ACTIVE active docs per family per
     // app. Equality-only query (no composite needed beyond the familyId index);
     // expiry filtered in code — expired-but-unswept docs must not count. ──
-    const activeSnap = await db.collection('publishedSearches')
-      .where('familyId', '==', familyId)
-      .where('app', '==', 'sit')
-      .get();
-    const activeCount = activeSnap.docs.filter((d) => {
-      const exp = d.data().expiresAt;
-      const expMs = exp?.toMillis ? exp.toMillis() : exp?.toDate ? exp.toDate().getTime() : 0;
-      return expMs > now.getTime();
-    }).length;
-    if (activeCount >= PUBLISHED_SEARCH_MAX_ACTIVE) {
-      throw new HttpsError('resource-exhausted', 'Too many active published searches for this family');
-    }
 
     // ── Kid ages re-derived server-side from the family's kid docs; unknown
     // kidIds are rejected rather than silently dropped. ──
@@ -149,7 +167,7 @@ export const publishSearch = onCall(
     });
 
     const ref = db.collection('publishedSearches').doc();
-    await ref.set({
+    const docBody = {
       id: ref.id,
       app: 'sit',
       familyId,
@@ -171,6 +189,27 @@ export const publishSearch = onCall(
       additionalInfo: data.additionalInfo?.trim() || null,
       createdAt: now,
       expiresAt,
+    };
+
+    // Cap check + create in ONE transaction so two concurrent publishes
+    // cannot both pass the count (PR #210 review). The Admin SDK supports
+    // queries inside transactions; expiry is still filtered in code so
+    // expired-but-unswept docs never count against the cap.
+    await db.runTransaction(async (tx) => {
+      const activeSnap = await tx.get(
+        db.collection('publishedSearches')
+          .where('familyId', '==', familyId)
+          .where('app', '==', 'sit'),
+      );
+      const activeCount = activeSnap.docs.filter((d) => {
+        const exp = d.data().expiresAt;
+        const expMs = exp?.toMillis ? exp.toMillis() : exp?.toDate ? exp.toDate().getTime() : 0;
+        return expMs > now.getTime();
+      }).length;
+      if (activeCount >= PUBLISHED_SEARCH_MAX_ACTIVE) {
+        throw new HttpsError('resource-exhausted', 'Too many active published searches for this family');
+      }
+      tx.set(ref, docBody);
     });
 
     await writeUserActivity(uid, 'search_published', { publishedSearchId: ref.id, app: 'sit' });

@@ -213,23 +213,26 @@ export async function runCleanupOldData(
   // 8. Delete expired published searches (issue #207). Client queries filter
   // expiry only client-side (list rules can't prove an expiresAt bound), so
   // this sweep is what bounds an expired doc's readable window to <24h.
-  // Volume is bounded by the per-family active cap — one 500-doc pass, the
-  // invite-links idiom above.
-  const expiredPublished = await firestoreDb
-    .collection('publishedSearches')
-    .where('expiresAt', '<', now)
-    .limit(500)
-    .get();
-
-  if (!expiredPublished.empty) {
+  // Bounded multi-pass like blocks 5/6 — the per-family cap keeps volume
+  // low in practice, but the loop makes the bound structural (PR #210
+  // review) rather than an assumption about community size.
+  stats.publishedSearchesDeleted = 0;
+  for (let pass = 0; pass < 40; pass++) {
+    const expiredPublished = await firestoreDb
+      .collection('publishedSearches')
+      .where('expiresAt', '<', now)
+      .limit(500)
+      .get();
+    if (expiredPublished.empty) break;
     const batch = firestoreDb.batch();
     for (const doc of expiredPublished.docs) {
       batch.delete(doc.ref);
     }
     await batch.commit();
-    stats.publishedSearchesDeleted = expiredPublished.size;
+    stats.publishedSearchesDeleted += expiredPublished.size;
     stats.totalDeleted += expiredPublished.size;
     console.log(`Deleted ${expiredPublished.size} expired published searches`);
+    if (expiredPublished.size < 500) break;
   }
 
   console.log(`Data retention cleanup complete. Total deleted: ${stats.totalDeleted}`);

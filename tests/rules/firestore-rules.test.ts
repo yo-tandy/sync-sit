@@ -2182,6 +2182,10 @@ describe('publishedSearches collection', () => {
         uid: 'tutorLegacy', status: 'active', email: 'l@ejm.org',
         profiles: { tutor: { enrollmentComplete: false, ejemEmail: 'l@ejm.org' } },
       });
+      await setDoc(doc(fs, 'users', 'sitterLegacy'), {
+        uid: 'sitterLegacy', status: 'active', email: 'sl@ejm.org',
+        profiles: { babysitter: { enrollmentComplete: false, ejemEmail: 'sl@ejm.org' } },
+      });
       await setDoc(doc(fs, 'users', 'parentP'), {
         uid: 'parentP', status: 'active', email: 'p@x.com',
         profiles: { parent: { familyId: 'famP' } },
@@ -2234,6 +2238,12 @@ describe('publishedSearches collection', () => {
     await seedBoard();
     const authed = testEnv.authenticatedContext('tutorActive');
     await assertFails(getDoc(doc(authed.firestore(), 'publishedSearches', 'ps-sit')));
+  });
+
+  it('denies a legacy babysitter without enrollmentComplete (symmetric with study; PR #210 review)', async () => {
+    await seedBoard();
+    const fs = testEnv.authenticatedContext('sitterLegacy').firestore();
+    await assertFails(getDoc(doc(fs, 'publishedSearches', 'ps-sit')));
   });
 
   it('denies a legacy tutor without enrollmentComplete', async () => {

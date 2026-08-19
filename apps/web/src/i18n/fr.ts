@@ -463,6 +463,7 @@ export default {
     withdrawTitle: 'Retirer cette recherche publiée ?',
     withdrawDesc: 'Elle ne sera plus visible par les babysitters. Les demandes déjà reçues ne sont pas affectées.',
     withdrawing: 'Retrait...',
+    withdrawError: 'Impossible de retirer la recherche. Veuillez réessayer.',
     withdrawn: 'Recherche publiée retirée',
   },
 

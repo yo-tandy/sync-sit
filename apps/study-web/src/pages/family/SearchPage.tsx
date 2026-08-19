@@ -65,7 +65,7 @@ interface OwnPublishedSearch {
  * contact CTA).
  */
 export function SearchPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { userDoc } = useAuthStore();
   const familyId = getParentProfile(userDoc)?.familyId ?? null;
   const [searchParams] = useSearchParams();
@@ -175,7 +175,10 @@ export function SearchPage() {
       setWithdrawTarget(null);
       toast(t('family.publish.withdrawn'));
     } catch {
-      setWithdrawTarget(null);
+      // Keep the dialog open and say so — a swallowed rules denial or offline
+      // failure left the row visibly present but the dialog claimed success
+      // (PR #210 review).
+      toast(t('family.publish.withdrawError'));
     } finally {
       setWithdrawing(false);
     }
@@ -321,7 +324,7 @@ export function SearchPage() {
                     </p>
                     <p className="text-xs text-gray-500">
                       {t('family.publish.expiresOn', {
-                        date: p.expiresAt.toDate().toLocaleDateString(undefined, { day: 'numeric', month: 'long' }),
+                        date: p.expiresAt.toDate().toLocaleDateString(i18n.language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'long' }),
                       })}
                     </p>
                   </div>
@@ -475,12 +478,13 @@ export function SearchPage() {
               the demand board reaches tutors this filtered list cannot. */}
           {!loading && !error && results !== null && (
             <Card className="mb-3">
-              <div className="flex items-center justify-between gap-3">
-                <p className="min-w-0 text-xs text-gray-600">{t('family.publish.ctaHint')}</p>
-                <Button size="sm" variant="outline" className="w-auto shrink-0" onClick={() => setPublishOpen(true)}>
-                  {t('family.publish.cta')}
-                </Button>
-              </div>
+              {/* Stacked, not flex-row: shared-ui Button is w-full and appended
+                  width classes lose the Tailwind conflict (stylesheet order),
+                  so a row layout crushes the hint to one word per line. */}
+              <p className="mb-3 text-xs text-gray-600">{t('family.publish.ctaHint')}</p>
+              <Button size="sm" variant="outline" onClick={() => setPublishOpen(true)}>
+                {t('family.publish.cta')}
+              </Button>
             </Card>
           )}
 

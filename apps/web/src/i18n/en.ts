@@ -477,6 +477,7 @@ export default {
     withdrawTitle: 'Withdraw this published search?',
     withdrawDesc: 'It will no longer be visible to babysitters. Requests you already received are not affected.',
     withdrawing: 'Withdrawing...',
+    withdrawError: 'Could not withdraw the search. Please try again.',
     withdrawn: 'Published search withdrawn',
   },
 

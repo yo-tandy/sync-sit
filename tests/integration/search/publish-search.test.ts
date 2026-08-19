@@ -109,6 +109,34 @@ describe('publishSearch (sit)', () => {
     expect(expiresMs).toBeLessThan(Date.now() + 2 * DAY_MS);
   });
 
+  it('an overnight sitting (endTime past midnight) expires the NEXT day, not before it starts', async () => {
+    // 20:00-01:00: the picker labels 00:00-02:00 "(following day)". The naive
+    // wall-time conversion put the end at the START of the sitting date --
+    // expiring the search ~24h before the sitting (PR #210 review).
+    const res = await callFunction<{ publishedSearchId: string }>(
+      'publishSearch',
+      oneTimePayload({ date: dateFromNow(1), startTime: '20:00', endTime: '01:00' }),
+      parentToken,
+    );
+    const doc = (await getDb().collection('publishedSearches').doc(res.publishedSearchId).get()).data()!;
+    const expiresMs = doc.expiresAt.toDate().getTime();
+    // Ends the day AFTER tomorrow at 01:00 Paris -- comfortably past the
+    // sitting start (tomorrow 20:00) and under the 7-day cap.
+    expect(expiresMs).toBeGreaterThan(Date.now() + 1 * DAY_MS);
+    expect(expiresMs).toBeLessThan(Date.now() + 3 * DAY_MS);
+  });
+
+  it('a SAME-DAY overnight sitting can be published (was rejected as already past)', async () => {
+    // Published in the afternoon for tonight 20:00-01:00: the end instant is
+    // tomorrow 01:00, which is in the future regardless of the current hour.
+    const res = await callFunction<{ publishedSearchId: string }>(
+      'publishSearch',
+      oneTimePayload({ date: dateFromNow(0), startTime: '20:00', endTime: '01:00' }),
+      parentToken,
+    );
+    expect(res.publishedSearchId).toBeTruthy();
+  });
+
   it('caps far-future one_time expiry at 7 days (the other min() branch)', async () => {
     const res = await callFunction<{ publishedSearchId: string }>(
       'publishSearch',

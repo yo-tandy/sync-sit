@@ -550,13 +550,17 @@ service cloud.firestore {
       allow read: if isAuth() && (
         (resource.data.app == 'sit'
            && isBabysitterData(callerData())
+           && bsField(callerData(), 'enrollmentComplete', false) == true
            && callerData().get('status', '') == 'active')
         || (resource.data.app == 'study'
            && callerData().get('profiles', {}).get('tutor', null) != null
            && tutorField(callerData(), 'enrollmentComplete', false) == true
            && callerData().get('status', '') == 'active')
-        || isFamilyMember(resource.data.familyId)
+        // isAdmin BEFORE the family get(): a deleted family doc would error
+        // the || chain and deny the read a later disjunct should grant (the
+        // references-rule precedent; PR #210 review).
         || isAdmin()
+        || isFamilyMember(resource.data.familyId)
       );
       allow create, update: if false; // publish callables only
       allow delete: if isFamilyMember(resource.data.familyId); // withdraw

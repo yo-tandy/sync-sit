@@ -285,7 +285,10 @@ export function SearchPage() {
       setWithdrawTarget(null);
       toast(t('publish.withdrawn'));
     } catch {
-      setWithdrawTarget(null);
+      // Keep the dialog open and say so — a swallowed rules denial or offline
+      // failure left the row visibly present but the dialog claimed success
+      // (PR #210 review).
+      toast(t('publish.withdrawError'));
     } finally {
       setWithdrawing(false);
     }
@@ -759,12 +762,13 @@ export function SearchPage() {
                       set — the demand board reaches providers this filtered
                       list cannot. */}
                   <Card className="mb-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="min-w-0 text-xs text-gray-600">{t('publish.ctaHint')}</p>
-                      <Button size="sm" variant="outline" className="w-auto shrink-0" onClick={() => setPublishOpen(true)}>
-                        {t('publish.cta')}
-                      </Button>
-                    </div>
+                    {/* Stacked, not flex-row: shared-ui Button is w-full and
+                        appended width classes lose the Tailwind conflict, so a
+                        row layout crushes the hint to one word per line. */}
+                    <p className="mb-3 text-xs text-gray-600">{t('publish.ctaHint')}</p>
+                    <Button size="sm" variant="outline" onClick={() => setPublishOpen(true)}>
+                      {t('publish.cta')}
+                    </Button>
                   </Card>
                   {preferred.length > 0 && (
                     <>
