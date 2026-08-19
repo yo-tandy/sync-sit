@@ -101,7 +101,7 @@ export const forceRevokeSupervision = onCall(
       pushSent: false,
       createdAt: now,
     });
-    await sendPushNotification(childUid, kidTitle, kidBody, { type: 'supervision_revoked' });
+    await sendPushNotification(childUid, kidTitle, kidBody, { type: 'supervision_revoked' }, 'auto');
 
     await writeAuditLog({
       adminUserId: request.auth.uid,
