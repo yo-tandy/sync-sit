@@ -2,7 +2,7 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
-import { sendNotificationEmail } from '../config/email.js';
+import { escapeHtml, sendNotificationEmail } from '../config/email.js';
 import { sendPushNotification } from '../config/push.js';
 import { getParentProfile, type User } from '@ejm/shared-core';
 
@@ -132,7 +132,7 @@ export const modifyAppointment = onCall(
       await sendNotificationEmail(
         babysitterEmail,
         `Appointment modified by ${familyName}`,
-        `<p><strong>${familyName}</strong> has modified the appointment for <strong>${dateInfo}</strong>.</p>
+        `<p><strong>${escapeHtml(familyName)}</strong> has modified the appointment for <strong>${escapeHtml(dateInfo)}</strong>.</p>
          <p><strong>Changes:</strong> ${modifiedFields.join(', ')}</p>
          <p style="color: #6B7280; font-size: 14px;">Please review the changes and acknowledge them in the app.</p>
          <p style="margin-top: 16px;"><a href="https://sync-sit.com/babysitter/request/${data.appointmentId}" style="background: #DC2626; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View Changes</a></p>`

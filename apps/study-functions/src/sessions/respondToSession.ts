@@ -3,7 +3,7 @@ import { db } from '@ejm/shared-functions/config/firebase.js';
 import { getCorsOrigin } from '@ejm/shared-functions/config/cors.js';
 import { writeUserActivity } from '@ejm/shared-functions/admin/writeAuditLog.js';
 import { notifyAllParents } from '@ejm/shared-functions/config/notifyParents.js';
-import { sendNotificationEmail, STUDY_APP_URL } from '@ejm/shared-functions/config/email.js';
+import { escapeHtml, sendNotificationEmail, STUDY_APP_URL } from '@ejm/shared-functions/config/email.js';
 import { sendPushNotification } from '@ejm/shared-functions/config/push.js';
 import {
   isActiveGuardianOf,
@@ -604,7 +604,7 @@ export const respondToSession = onCall(
         body: `That time with ${tutorName} is no longer available.`,
         emailSubject: `Session time no longer available — ${tutorName}`,
         emailBody: `
-          <p>The time you requested with <strong>${tutorName}</strong> is no longer available.</p>
+          <p>The time you requested with <strong>${escapeHtml(tutorName)}</strong> is no longer available.</p>
           <p>You can request another time.</p>
           <p style="margin-top: 16px;"><a href="${STUDY_APP_URL}/family" style="background: #2563EB; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View in app</a></p>
         `,
@@ -632,7 +632,7 @@ export const respondToSession = onCall(
         emailSent = await sendNotificationEmail(
           tutorEmail,
           title,
-          `<p><strong>${familyName}</strong> ${isConfirm ? 'accepted' : 'declined'} your session proposal.</p>
+          `<p><strong>${escapeHtml(familyName)}</strong> ${isConfirm ? 'accepted' : 'declined'} your session proposal.</p>
            <p style="margin-top: 16px;"><a href="${STUDY_APP_URL}/tutor/sessions" style="background: #2563EB; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View in app</a></p>`,
           'study',
         );
@@ -669,7 +669,7 @@ export const respondToSession = onCall(
         body: `${tutorName} confirmed your recurring tutoring sessions.`,
         emailSubject: `Recurring sessions confirmed — ${tutorName}`,
         emailBody: `
-          <p><strong>${tutorName}</strong> confirmed your recurring tutoring sessions.</p>
+          <p><strong>${escapeHtml(tutorName)}</strong> confirmed your recurring tutoring sessions.</p>
           <p><strong>${count}</strong> session${count === 1 ? '' : 's'} scheduled, starting <strong>${first}</strong>.</p>
           ${skippedNote}
           <p style="margin-top: 16px;"><a href="${STUDY_APP_URL}/family" style="background: #2563EB; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View in app</a></p>
@@ -686,7 +686,7 @@ export const respondToSession = onCall(
         body: `${tutorName} confirmed your tutoring session.`,
         emailSubject: `Session confirmed — ${tutorName}`,
         emailBody: `
-          <p><strong>${tutorName}</strong> confirmed your tutoring session.</p>
+          <p><strong>${escapeHtml(tutorName)}</strong> confirmed your tutoring session.</p>
           <p style="margin-top: 16px;"><a href="${STUDY_APP_URL}/family" style="background: #2563EB; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View in app</a></p>
         `,
         data: { sessionId },
@@ -701,7 +701,7 @@ export const respondToSession = onCall(
         body: `${tutorName} declined your tutoring session request.`,
         emailSubject: `Session declined — ${tutorName}`,
         emailBody: `
-          <p><strong>${tutorName}</strong> declined your tutoring session request.</p>
+          <p><strong>${escapeHtml(tutorName)}</strong> declined your tutoring session request.</p>
           <p>You can request another time or another tutor.</p>
           <p style="margin-top: 16px;"><a href="${STUDY_APP_URL}/family" style="background: #2563EB; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View in app</a></p>
         `,

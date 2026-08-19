@@ -1,6 +1,6 @@
 import { onDocumentCreated } from 'firebase-functions/v2/firestore';
 import { db } from '../config/firebase.js';
-import { sendNotificationEmail } from '../config/email.js';
+import { escapeHtml, sendNotificationEmail } from '../config/email.js';
 import { sendPushNotification } from '../config/push.js';
 
 /**
@@ -103,9 +103,9 @@ export const mirrorNotificationToGuardians = onDocumentCreated(
         await sendNotificationEmail(
           parent!.email as string,
           title,
-          `<p>${body}</p>
+          `<p>${escapeHtml(body)}</p>
            <p style="color: #6B7280; font-size: 14px;">You receive this copy because you
-           supervise ${kidName}'s account.</p>`,
+           supervise ${escapeHtml(kidName)}'s account.</p>`,
         );
       }
       await sendPushNotification(parentUid, title, body, {

@@ -3,6 +3,7 @@ import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
 import { notifyAllParents } from '../config/notifyParents.js';
+import { escapeHtml } from '../config/email.js';
 import { buildMergedOverride } from '@ejm/shared-functions/schedule/sessionOverride.js';
 import {
   isActiveGuardianOf,
@@ -121,14 +122,14 @@ export const respondToRequest = onCall(
         : 'Recurring schedule';
 
       const contactInfo = babysitterUser.email
-        ? `<p><strong>Email:</strong> ${babysitterUser.email}</p>`
+        ? `<p><strong>Email:</strong> ${escapeHtml(babysitterUser.email)}</p>`
         : '';
       const phoneInfo = babysitterUser.phone
-        ? `<p><strong>Phone:</strong> ${babysitterUser.phone}</p>`
+        ? `<p><strong>Phone:</strong> ${escapeHtml(babysitterUser.phone)}</p>`
         : '';
 
       const acceptEmailBody = `
-        <p><strong>${babysitterName}</strong> has accepted your babysitting request for <strong>${dateDisplay}</strong>.</p>
+        <p><strong>${escapeHtml(babysitterName)}</strong> has accepted your babysitting request for <strong>${escapeHtml(dateDisplay)}</strong>.</p>
         ${contactInfo}
         ${phoneInfo}
         <p style="margin-top: 16px;"><a href="https://sync-sit.com/family" style="background: #DC2626; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View in app</a></p>
@@ -169,7 +170,7 @@ export const respondToRequest = onCall(
         : 'Recurring schedule';
 
       const declineEmailBody = `
-        <p><strong>${babysitterName}</strong> has declined your babysitting request for <strong>${declineDateDisplay}</strong>.</p>
+        <p><strong>${escapeHtml(babysitterName)}</strong> has declined your babysitting request for <strong>${escapeHtml(declineDateDisplay)}</strong>.</p>
         <p>You can search for other available babysitters or resubmit this request with updated details.</p>
         <p style="margin-top: 16px;"><a href="https://sync-sit.com/family" style="background: #DC2626; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View in app</a></p>
       `;

@@ -4,7 +4,7 @@ import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { verifyAdmin } from './verifyAdmin.js';
 import { writeAuditLog } from './writeAuditLog.js';
-import { sendNotificationEmail } from '../config/email.js';
+import { escapeHtml, sendNotificationEmail } from '../config/email.js';
 
 interface DeleteAppointmentInput {
   appointmentId: string;
@@ -85,7 +85,7 @@ export const deleteAppointment = onCall(
           await sendNotificationEmail(
             babysitterEmail,
             'Appointment cancelled by admin',
-            `<p>An administrator has cancelled your appointment for <strong>${dateInfo}</strong>.</p>
+            `<p>An administrator has cancelled your appointment for <strong>${escapeHtml(dateInfo)}</strong>.</p>
              <p>If you have questions, please contact support.</p>
              <p style="margin-top: 16px;"><a href="https://sync-sit.com/babysitter" style="background: #DC2626; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View Dashboard</a></p>`
           );
@@ -106,7 +106,7 @@ export const deleteAppointment = onCall(
             await sendNotificationEmail(
               parentEmail,
               'Appointment cancelled by admin',
-              `<p>An administrator has cancelled your appointment for <strong>${dateInfo}</strong>.</p>
+              `<p>An administrator has cancelled your appointment for <strong>${escapeHtml(dateInfo)}</strong>.</p>
                <p>If you have questions, please contact support.</p>
                <p style="margin-top: 16px;"><a href="https://sync-sit.com/family/search" style="background: #DC2626; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">Search Babysitters</a></p>`
             );

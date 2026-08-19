@@ -9,7 +9,7 @@ import {
   type User,
 } from '@ejm/shared-core';
 import { db } from '../config/firebase.js';
-import { sendNotificationEmail } from '../config/email.js';
+import { escapeHtml, sendNotificationEmail } from '../config/email.js';
 
 /**
  * The ONE success payload every createKidInvite branch returns. Anything a
@@ -109,8 +109,8 @@ export async function sendKidInviteEmail(
   await sendNotificationEmail(
     kidEmail,
     'Your parents invited you to Sync/Sit',
-    `<p>Hi ${firstName},</p>
-     <p>A parent from the ${familyName} family created a supervised Sync/Sit account
+    `<p>Hi ${escapeHtml(firstName)},</p>
+     <p>A parent from the ${escapeHtml(familyName)} family created a supervised Sync/Sit account
      for you. Click the link below to choose a password and finish enrolling:</p>
      <p><a href="${link}" style="color: #DC2626;">Accept your invitation</a></p>
      <p style="color: #6B7280; font-size: 14px;">This invitation expires in 7 days.

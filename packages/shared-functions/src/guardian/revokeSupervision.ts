@@ -5,6 +5,7 @@ import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { writeAuditLog } from '../admin/writeAuditLog.js';
 import { notifyAllParents } from '../config/notifyParents.js';
+import { escapeHtml } from '../config/email.js';
 import { sendPushNotification } from '../config/push.js';
 import { GUARDIAN_SUCCESS, resolveGuardianCaller } from './shared.js';
 
@@ -82,7 +83,7 @@ export const revokeSupervision = onCall(
       title: 'Supervision ended',
       body: `Supervision of ${kidName}'s account has ended`,
       emailSubject: 'Supervision ended',
-      emailBody: `<p>Supervision of ${kidName}'s account has ended.</p>`,
+      emailBody: `<p>Supervision of ${escapeHtml(kidName)}'s account has ended.</p>`,
       data: { childUid },
     });
     const kidTitle = 'Supervision ended';

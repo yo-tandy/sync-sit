@@ -2,7 +2,7 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { db } from '@ejm/shared-functions/config/firebase.js';
 import { getCorsOrigin } from '@ejm/shared-functions/config/cors.js';
 import { writeUserActivity } from '@ejm/shared-functions/admin/writeAuditLog.js';
-import { sendNotificationEmail, STUDY_APP_URL } from '@ejm/shared-functions/config/email.js';
+import { escapeHtml, sendNotificationEmail, STUDY_APP_URL } from '@ejm/shared-functions/config/email.js';
 import { sendPushNotification } from '@ejm/shared-functions/config/push.js';
 import { parisWallTimeToUtc } from '@ejm/shared-functions/scheduled/parisTime.js';
 import {
@@ -388,11 +388,11 @@ export const bookSession = onCall(
     const title = 'New session request';
     const body = `${familyName || 'A family'} requested a tutoring session${isTrialRequest ? ' (first session as a trial)' : ''}.`;
     const emailBody = `
-      <p>You have a new ${type === 'recurring' ? 'recurring ' : ''}session request from <strong>${familyName || 'a family'}</strong>.</p>
-      <p><strong>Subject:</strong> ${subject} (${level})</p>
-      <p><strong>When:</strong> ${whenLine}</p>
+      <p>You have a new ${type === 'recurring' ? 'recurring ' : ''}session request from <strong>${escapeHtml(familyName || 'a family')}</strong>.</p>
+      <p><strong>Subject:</strong> ${escapeHtml(subject)} (${escapeHtml(level)})</p>
+      <p><strong>When:</strong> ${escapeHtml(whenLine)}</p>
       ${isTrialRequest ? `<p>The family would like the <strong>first session as a trial</strong>.</p>` : ''}
-      ${message ? `<p><strong>Message:</strong> ${message}</p>` : ''}
+      ${message ? `<p><strong>Message:</strong> ${escapeHtml(message)}</p>` : ''}
       <p style="margin-top: 16px;"><a href="${STUDY_APP_URL}/tutor/sessions" style="background: #2563EB; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View Request</a></p>
     `;
 

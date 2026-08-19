@@ -3,6 +3,7 @@ import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
 import { notifyAllParents } from '../config/notifyParents.js';
+import { escapeHtml } from '../config/email.js';
 import { GUARDIAN_SUCCESS } from './shared.js';
 
 interface RespondData {
@@ -63,7 +64,7 @@ export const respondToSupervisionRequest = onCall(
       title: 'Supervision confirmed',
       body: `${kidName} accepted your supervision request`,
       emailSubject: 'Supervision confirmed',
-      emailBody: `<p>${kidName} accepted your supervision request. You can now follow their activity from your dashboard.</p>`,
+      emailBody: `<p>${escapeHtml(kidName)} accepted your supervision request. You can now follow their activity from your dashboard.</p>`,
       data: { childUid: uid },
     });
 

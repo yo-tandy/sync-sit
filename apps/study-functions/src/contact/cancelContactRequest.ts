@@ -2,7 +2,7 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { db } from '@ejm/shared-functions/config/firebase.js';
 import { getCorsOrigin } from '@ejm/shared-functions/config/cors.js';
 import { writeUserActivity } from '@ejm/shared-functions/admin/writeAuditLog.js';
-import { sendNotificationEmail, STUDY_APP_URL } from '@ejm/shared-functions/config/email.js';
+import { escapeHtml, sendNotificationEmail, STUDY_APP_URL } from '@ejm/shared-functions/config/email.js';
 import { sendPushNotification } from '@ejm/shared-functions/config/push.js';
 import { getParentProfile } from '@ejm/shared-core';
 import type { User } from '@ejm/shared-core';
@@ -77,7 +77,7 @@ export const cancelContactRequest = onCall(
     const title = 'Tutoring request withdrawn';
     const body = `${result.familyName || 'A family'} withdrew their tutoring request.`;
     const emailBody = `
-      <p><strong>${result.familyName || 'A family'}</strong> withdrew their tutoring request for <strong>${result.subject} (${result.level})</strong>.</p>
+      <p><strong>${escapeHtml(result.familyName || 'A family')}</strong> withdrew their tutoring request for <strong>${escapeHtml(result.subject)} (${escapeHtml(result.level)})</strong>.</p>
       <p>No action is needed.</p>
       <p style="margin-top: 16px;"><a href="${STUDY_APP_URL}/tutor" style="background: #2563EB; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View Requests</a></p>
     `;

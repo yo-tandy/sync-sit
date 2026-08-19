@@ -1,7 +1,7 @@
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import type { Firestore } from 'firebase-admin/firestore';
 import { db } from '../config/firebase.js';
-import { sendNotificationEmail } from '../config/email.js';
+import { escapeHtml, sendNotificationEmail } from '../config/email.js';
 import { sendPushNotification } from '../config/push.js';
 import { parisDateString, parisWallTimeToUtc } from './parisTime.js';
 
@@ -87,7 +87,7 @@ export async function runSendReminders(
             await sendNotificationEmail(
               babysitterEmail,
               'Babysitting appointment tomorrow',
-              `<p>Reminder: You have a babysitting appointment with <strong>${familyName}</strong> on <strong>${appointmentDate}</strong> at <strong>${apt.startTime}</strong>.</p>
+              `<p>Reminder: You have a babysitting appointment with <strong>${escapeHtml(familyName)}</strong> on <strong>${appointmentDate}</strong> at <strong>${escapeHtml(apt.startTime)}</strong>.</p>
                <p style="margin-top: 16px;"><a href="https://sync-sit.com/babysitter" style="background: #DC2626; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View Appointment</a></p>`
             );
           }
@@ -136,7 +136,7 @@ export async function runSendReminders(
               await sendNotificationEmail(
                 parentEmail,
                 'Babysitting appointment tomorrow',
-                `<p>Reminder: Your babysitting appointment is on <strong>${appointmentDate}</strong> at <strong>${apt.startTime}</strong>.</p>
+                `<p>Reminder: Your babysitting appointment is on <strong>${appointmentDate}</strong> at <strong>${escapeHtml(apt.startTime)}</strong>.</p>
                  <p style="margin-top: 16px;"><a href="https://sync-sit.com/family" style="background: #DC2626; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View Appointment</a></p>`
               );
             }

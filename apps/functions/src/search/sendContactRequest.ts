@@ -2,7 +2,7 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
-import { sendNotificationEmail } from '../config/email.js';
+import { escapeHtml, sendNotificationEmail } from '../config/email.js';
 import { sendPushNotification } from '../config/push.js';
 
 interface ContactRequestData {
@@ -127,14 +127,14 @@ export const sendContactRequest = onCall(
     const babysitterData = babysitterSnap.data()!;
 
     const dateInfo = data.date
-      ? `<p><strong>Date:</strong> ${data.date}${data.startTime ? `, ${data.startTime}` : ''}${data.endTime ? `–${data.endTime}` : ''}</p>`
+      ? `<p><strong>Date:</strong> ${escapeHtml(data.date)}${data.startTime ? `, ${escapeHtml(data.startTime)}` : ''}${data.endTime ? `–${escapeHtml(data.endTime)}` : ''}</p>`
       : '<p><strong>Schedule:</strong> Recurring</p>';
 
-    const rateInfo = data.offeredRate ? `<p><strong>Rate:</strong> ${data.offeredRate}€/h</p>` : '';
-    const messageInfo = data.message ? `<p><strong>Message:</strong> ${data.message}</p>` : '';
+    const rateInfo = data.offeredRate ? `<p><strong>Rate:</strong> ${escapeHtml(String(data.offeredRate))}€/h</p>` : '';
+    const messageInfo = data.message ? `<p><strong>Message:</strong> ${escapeHtml(data.message)}</p>` : '';
 
     const emailBody = `
-      <p>You have a new babysitting request from <strong>${familyData.familyName}</strong>.</p>
+      <p>You have a new babysitting request from <strong>${escapeHtml(familyData.familyName)}</strong>.</p>
       ${dateInfo}
       ${rateInfo}
       ${messageInfo}

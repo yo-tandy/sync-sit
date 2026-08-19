@@ -3,7 +3,7 @@ import { db } from '@ejm/shared-functions/config/firebase.js';
 import { getCorsOrigin } from '@ejm/shared-functions/config/cors.js';
 import { writeUserActivity } from '@ejm/shared-functions/admin/writeAuditLog.js';
 import { notifyAllParents } from '@ejm/shared-functions/config/notifyParents.js';
-import { STUDY_APP_URL } from '@ejm/shared-functions/config/email.js';
+import { escapeHtml, STUDY_APP_URL } from '@ejm/shared-functions/config/email.js';
 import { parisWallTimeToUtc } from '@ejm/shared-functions/scheduled/parisTime.js';
 import { timeToSlotIndex, slotIndexToTime } from '@ejm/shared-core';
 import type { StudyUser, TutorProfile, SubjectOffering } from '@ejm/study-core';
@@ -192,10 +192,10 @@ export const proposeSession = onCall(
       body: `${tutorName || 'Your tutor'} proposed a tutoring session.`,
       emailSubject: `${tutorName || 'Your tutor'} proposed a session`,
       emailBody: `
-        <p><strong>${tutorName || 'Your tutor'}</strong> proposed a tutoring session.</p>
-        <p><strong>Subject:</strong> ${subject} (${level})</p>
-        <p><strong>When:</strong> ${date} at ${startTime}–${endTime}</p>
-        ${message ? `<p><strong>Message:</strong> ${message}</p>` : ''}
+        <p><strong>${escapeHtml(tutorName || 'Your tutor')}</strong> proposed a tutoring session.</p>
+        <p><strong>Subject:</strong> ${escapeHtml(subject)} (${escapeHtml(level)})</p>
+        <p><strong>When:</strong> ${escapeHtml(date)} at ${escapeHtml(startTime)}–${endTime}</p>
+        ${message ? `<p><strong>Message:</strong> ${escapeHtml(message)}</p>` : ''}
         <p>Accept it (and choose which students attend) or decline in the app.</p>
         <p style="margin-top: 16px;"><a href="${STUDY_APP_URL}/family" style="background: #2563EB; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View proposal</a></p>
       `,

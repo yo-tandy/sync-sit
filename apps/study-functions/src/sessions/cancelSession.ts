@@ -7,7 +7,7 @@ import { db } from '@ejm/shared-functions/config/firebase.js';
 import { getCorsOrigin } from '@ejm/shared-functions/config/cors.js';
 import { writeUserActivity } from '@ejm/shared-functions/admin/writeAuditLog.js';
 import { notifyAllParents } from '@ejm/shared-functions/config/notifyParents.js';
-import { sendNotificationEmail, STUDY_APP_URL } from '@ejm/shared-functions/config/email.js';
+import { escapeHtml, sendNotificationEmail, STUDY_APP_URL } from '@ejm/shared-functions/config/email.js';
 import { sendPushNotification } from '@ejm/shared-functions/config/push.js';
 import { parisDateString } from '@ejm/shared-functions/scheduled/parisTime.js';
 import {
@@ -241,7 +241,7 @@ export const cancelSession = onCall(
     // Accountability note when the cancel fell inside the notice window (soft
     // enforcement — the cancel still succeeded).
     const latePolicyNote = outcome.late
-      ? `<p>This was a <strong>late cancellation</strong> under the ${noticeHours}-hour notice policy.</p>`
+      ? `<p>This was a <strong>late cancellation</strong> under the ${escapeHtml(String(noticeHours))}-hour notice policy.</p>`
       : '';
     const lateSuffix = outcome.late ? ' (late cancellation)' : '';
 
@@ -261,11 +261,11 @@ export const cancelSession = onCall(
         emailSent = await sendNotificationEmail(
           tutorEmail,
           `Session cancelled by ${familyName}`,
-          `<p><strong>${familyName}</strong> cancelled ${
-            isSeries ? 'your recurring tutoring series' : `the session for <strong>${whenInfo}</strong>`
+          `<p><strong>${escapeHtml(familyName)}</strong> cancelled ${
+            isSeries ? 'your recurring tutoring series' : `the session for <strong>${escapeHtml(whenInfo)}</strong>`
           }.</p>
            ${seriesNote}
-           <p><strong>Reason:</strong> ${reason}</p>
+           <p><strong>Reason:</strong> ${escapeHtml(reason)}</p>
            ${latePolicyNote}
            <p style="margin-top: 16px;"><a href="${STUDY_APP_URL}/tutor" style="background: #2563EB; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View in app</a></p>`,
           'study',
@@ -305,11 +305,11 @@ export const cancelSession = onCall(
           isSeries ? 'your recurring tutoring series' : `the session for ${whenInfo}`
         }. Reason: ${reason}${lateSuffix}`,
         emailSubject: `Session cancelled — ${tutorName}`,
-        emailBody: `<p><strong>${tutorName}</strong> cancelled ${
-          isSeries ? 'your recurring tutoring series' : `the session for <strong>${whenInfo}</strong>`
+        emailBody: `<p><strong>${escapeHtml(tutorName)}</strong> cancelled ${
+          isSeries ? 'your recurring tutoring series' : `the session for <strong>${escapeHtml(whenInfo)}</strong>`
         }.</p>
            ${seriesNote}
-           <p><strong>Reason:</strong> ${reason}</p>
+           <p><strong>Reason:</strong> ${escapeHtml(reason)}</p>
            ${latePolicyNote}
            <p style="margin-top: 16px;"><a href="${STUDY_APP_URL}/family" style="background: #2563EB; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View in app</a></p>`,
         data: { sessionId },
