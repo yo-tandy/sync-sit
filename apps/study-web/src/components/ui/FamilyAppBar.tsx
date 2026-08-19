@@ -84,6 +84,10 @@ export function FamilyAppBar() {
           <MenuItem icon={<BellIcon className="h-5 w-5" />} label={t('family.requestsTitle')} to="/family/requests" onNavigate={() => setMenuOpen(false)} />
           <MenuItem icon={<CheckIcon className="h-5 w-5" />} label={t('family.endorsements.menuTitle')} to="/family/endorsements" onNavigate={() => setMenuOpen(false)} />
           <MenuItem icon={<ShieldIcon className="h-5 w-5" />} label={t('family.governance.navTitle')} to="/family/governance" onNavigate={() => setMenuOpen(false)} />
+          {/* Verification lives in-app (issue #129). The menu entry is how a
+              VERIFIED family reaches the approve-a-friend flow — the dashboard
+              banner only shows while unverified. Mirrors sit's AppBar entry. */}
+          <MenuItem icon={<FileTextIcon className="h-5 w-5" />} label={t('family.verification.menuTitle')} to="/family/verification" onNavigate={() => setMenuOpen(false)} />
           <MenuItem icon={<UserIcon className="h-5 w-5" />} label={t('family.accountTitle')} to="/family/account" onNavigate={() => setMenuOpen(false)} />
           <MenuItem icon={<SettingsIcon className="h-5 w-5" />} label={t('family.settingsTitle')} to="/family/settings" onNavigate={() => setMenuOpen(false)} />
 

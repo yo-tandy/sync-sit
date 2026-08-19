@@ -297,11 +297,16 @@ export function DashboardPage() {
       {/* Install-to-home-screen nudge (browser-tab mode only, issue #162) */}
       <InstallAppBanner />
 
-      {/* ── Verification gate (read from the shared families doc) ── */}
+      {/* ── Verification gate (read from the shared families doc). The CTA
+          opens the in-app verification page (issue #129) — the flow is shared
+          with sit but lives in the current app. ── */}
       {isVerified === false && (
         <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-800">
           <p className="mb-1 text-sm font-semibold">{t('family.dashboard.verifyBannerTitle')}</p>
-          <p className="text-xs text-amber-700">{t('family.dashboard.verifyBannerDesc')}</p>
+          <p className="mb-3 text-xs text-amber-700">{t('family.dashboard.verifyBannerDesc')}</p>
+          <Link to="/family/verification" className="text-xs font-semibold text-amber-900 underline">
+            {t('family.dashboard.verifyBannerCta')}
+          </Link>
         </div>
       )}
 

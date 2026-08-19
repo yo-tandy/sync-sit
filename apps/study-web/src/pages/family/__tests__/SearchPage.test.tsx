@@ -192,11 +192,16 @@ describe('family SearchPage', () => {
     expect(h.callable).not.toHaveBeenCalled();
   });
 
-  it('renders the verification-required copy on permission-denied', async () => {
+  it('renders the verification-required copy on permission-denied, linking the in-app page', async () => {
     h.callable.mockRejectedValue({ code: 'functions/permission-denied' });
     renderWithProviders(<SearchPage />, '/family/search?subject=math&level=6e');
 
     expect(await screen.findByText(/verify your family/i)).toBeInTheDocument();
+    // Issue #129: the CTA opens /family/verification in THIS app.
+    expect(screen.getByRole('link', { name: /complete verification/i })).toHaveAttribute(
+      'href',
+      '/family/verification',
+    );
   });
 
   it('shows the empty state when no tutors match', async () => {
