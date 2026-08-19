@@ -2322,3 +2322,51 @@ describe('publishedSearches collection', () => {
     }));
   });
 });
+
+// The published-searches board's seen tracking (issue #207, PR2): each
+// provider stores their last board visit at
+// profiles.{babysitter,tutor}.publishedSearchesSeenAt, written by the OWNER
+// from the client on section visit. Deliberately un-pinned in the owner
+// update rule — it only drives the owner's own "New" tags/badge — so these
+// pins guard the board against a future rules change silently breaking the
+// visit write.
+describe('users publishedSearchesSeenAt owner writes (issue #207)', () => {
+  it('a babysitter can write their own profiles.babysitter.publishedSearchesSeenAt', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'users', 'seenBs'), {
+        uid: 'seenBs', status: 'active', email: 's@ejm.org',
+        profiles: { babysitter: { enrollmentComplete: true, ejemEmail: 's@ejm.org' } },
+      });
+    });
+    const authed = testEnv.authenticatedContext('seenBs');
+    await assertSucceeds(updateDoc(doc(authed.firestore(), 'users', 'seenBs'), {
+      'profiles.babysitter.publishedSearchesSeenAt': new Date(),
+    }));
+  });
+
+  it('a tutor can write their own profiles.tutor.publishedSearchesSeenAt', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'users', 'seenTut'), {
+        uid: 'seenTut', status: 'active', email: 't@ejm.org',
+        profiles: { tutor: { enrollmentComplete: true, ejemEmail: 't@ejm.org' } },
+      });
+    });
+    const authed = testEnv.authenticatedContext('seenTut');
+    await assertSucceeds(updateDoc(doc(authed.firestore(), 'users', 'seenTut'), {
+      'profiles.tutor.publishedSearchesSeenAt': new Date(),
+    }));
+  });
+
+  it('another user cannot write someone else\'s seenAt', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'users', 'seenBs2'), {
+        uid: 'seenBs2', status: 'active', email: 's2@ejm.org',
+        profiles: { babysitter: { enrollmentComplete: true, ejemEmail: 's2@ejm.org' } },
+      });
+    });
+    const other = testEnv.authenticatedContext('someoneElse');
+    await assertFails(updateDoc(doc(other.firestore(), 'users', 'seenBs2'), {
+      'profiles.babysitter.publishedSearchesSeenAt': new Date(),
+    }));
+  });
+});

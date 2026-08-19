@@ -266,6 +266,7 @@ export default {
   // Menu
   menu: {
     openMenu: 'Open menu',
+    openMenuPending: 'Open menu (new items pending)',
     home: 'Home',
     editProfile: 'Edit Profile',
     babysittingOptions: 'Babysitting Options',
@@ -289,6 +290,7 @@ export default {
     shareByEmail: 'Share by email',
     shareText: 'Check out the EJM community babysitting app! {{link}}',
     myFamilies: 'My Families',
+    publishedSearches: 'Published searches',
   },
 
   appSwitch: {
@@ -479,6 +481,20 @@ export default {
     withdrawing: 'Withdrawing...',
     withdrawError: 'Could not withdraw the search. Please try again.',
     withdrawn: 'Published search withdrawn',
+  },
+
+  publishedBoard: {
+    title: 'Published searches',
+    intro: 'Families publish searches here so babysitters can find them — including searches outside your usual availability.',
+    familyTitle: '{{name}} family',
+    newTag: 'New',
+    kids: '{{count}} kid(s), ages {{ages}}',
+    area: 'Area: {{area}}',
+    rate: 'Offered rate: {{rate}}€/h',
+    expires: 'Visible until {{date}}',
+    contactSoon: 'Contacting families arrives in the next update',
+    empty: 'No published searches right now. Check back later — new ones appear here.',
+    error: 'Could not load published searches. Please try again later.',
   },
 
   preferred: {
