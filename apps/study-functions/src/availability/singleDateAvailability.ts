@@ -1,9 +1,10 @@
 import { db } from '@ejm/shared-functions/config/firebase.js';
 import { parisWallClockPosition } from '@ejm/shared-functions/scheduled/parisTime.js';
 import { getSchoolYearsInRange, type DayOverride } from '@ejm/study-core';
-import type { LocationPref } from '@ejm/study-core';
+import type { LocationPref, SlotLocationCells } from '@ejm/study-core';
 import {
   computeDateAvailability,
+  resolveDateLocationCells,
   sessionToConfirmedBlock,
   type WeeklyGrid,
   type HolidayPeriod,
@@ -27,11 +28,22 @@ const NOTICE_HOURS = 24;
  * pre-checks against the SAME tutor schedule. Behavior is unchanged from the
  * original inline function (its book-session pre-check tests are the proof).
  */
+export interface SingleDateBookability {
+  /** The bookable slot grid (unchanged boolean composition). */
+  slots: boolean[];
+  /**
+   * Per-cell location overrides applicable to this date (issue #166): null
+   * cells = profile defaults; all-null on override/holiday-substituted dates
+   * (their tags are a follow-up) and on legacy docs.
+   */
+  locationCells: SlotLocationCells;
+}
+
 export async function computeSingleDateAvailability(
   tutorUserId: string,
   date: string,
   paddingMin: number,
-): Promise<boolean[]> {
+): Promise<SingleDateBookability> {
   const scheduleSnap = await db.collection('schedules').doc(tutorUserId).get();
   const schedule = scheduleSnap.data();
   const weekly: WeeklyGrid = (schedule?.weekly as WeeklyGrid) ?? {};
@@ -51,6 +63,9 @@ export async function computeSingleDateAvailability(
     ? {
         type: overrideData.type as DayOverride['type'],
         slots: overrideData.slots as boolean[] | undefined,
+        // Authorship marker — location tag resolution distinguishes a
+        // tutor-authored 'manual' override from a session-claim doc.
+        reason: overrideData.reason as string | undefined,
       }
     : undefined;
 
@@ -110,6 +125,7 @@ export async function computeSingleDateAvailability(
 
   const inputs: DateAvailabilityInputs = {
     weekly,
+    weeklyLocations: schedule?.weeklyLocations,
     holidayMode,
     holidaySchedules,
     holidayPeriods,
@@ -117,5 +133,13 @@ export async function computeSingleDateAvailability(
     confirmedBlocks,
     paddingMin,
   };
-  return computeDateAvailability(date, inputs, parisWallClockPosition(new Date()), NOTICE_HOURS);
+  return {
+    slots: computeDateAvailability(
+      date,
+      inputs,
+      parisWallClockPosition(new Date()),
+      NOTICE_HOURS,
+    ),
+    locationCells: resolveDateLocationCells(date, inputs),
+  };
 }

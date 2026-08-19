@@ -152,6 +152,15 @@ export default {
     setAvailabilityPerPeriod: 'Définissez vos disponibilités pour chaque période de vacances :',
     customAvailabilitySet: 'Disponibilités personnalisées définies',
     noAvailabilityTapToEdit: 'Aucune disponibilité — toucher pour modifier',
+    // Per-slot location tags (issue #166)
+    locationTags: {
+      defaults: 'Préférences du profil',
+      or: 'ou',
+      mixed: "Ce créneau combine des choix de lieu différents. Choisissez une option pour l'appliquer à tout le créneau.",
+      notOffered: "Ce créneau est marqué avec un lieu que vous ne proposez plus dans vos préférences de cours. Il ne peut pas être réservé pour ce lieu — décochez-le ou proposez à nouveau ce lieu.",
+      help: 'Optionnel : choisissez où les cours de chaque créneau peuvent avoir lieu. « Préférences du profil » utilise vos préférences de lieu de cours.',
+      weeklyOnlyNote: "Les lieux par créneau s'appliquent uniquement à votre planning hebdomadaire régulier, pas aux dates modifiées ni aux plannings de vacances.",
+    },
   },
 
   auth: {
@@ -358,6 +367,8 @@ export default {
         dateLabel: 'Date',
         pickTime: 'Choisissez une heure de début',
         chooseDateFirst: 'Choisissez une date pour voir vos disponibilités.',
+        noLocationForSlot: 'Ce créneau n\'est ouvert pour aucun lieu de cours. Choisissez un autre horaire.',
+        slotAllows: 'Ce créneau permet uniquement : {{locations}}.',
         noSlots: 'Vous n\'avez aucune disponibilité ce jour-là. Choisissez une autre date.',
         submit: 'Envoyer la proposition',
         sending: 'Envoi…',
@@ -682,6 +693,8 @@ export default {
       lengthOption: '{{minutes}} min',
       locationLabel: 'Lieu',
       familyHomeNote: 'Le professeur utilisera l\'adresse enregistrée de votre famille.',
+      noLocationForSlot: 'Ce créneau n\'est ouvert pour aucun lieu de cours. Choisissez un autre horaire.',
+      slotAllows: 'Ce créneau permet uniquement : {{locations}}.',
       messageLabel: 'Message au professeur (facultatif)',
       messagePlaceholder: 'Ce que le professeur devrait savoir avant le cours…',
       pickTime: 'Choisissez un créneau',
@@ -729,6 +742,7 @@ export default {
         slotTaken: 'Ce créneau vient d\'être pris — nous avons actualisé le calendrier. Veuillez choisir un autre horaire.',
         duplicate: 'Vous avez déjà une demande en attente pour cet horaire.',
         cannotBook: 'Ce cours n\'a pas pu être réservé. Choisissez un autre horaire ou vérifiez les détails.',
+        locationGone: 'Le professeur ne propose plus ce lieu — choisissez un autre lieu.',
         generic: 'Une erreur est survenue. Veuillez réessayer.',
       },
     },

@@ -152,6 +152,15 @@ export default {
     setAvailabilityPerPeriod: 'Set your availability for each vacation period:',
     customAvailabilitySet: 'Custom availability set',
     noAvailabilityTapToEdit: 'No availability set — tap to edit',
+    // Per-slot location tags (issue #166)
+    locationTags: {
+      defaults: 'Profile defaults',
+      or: 'or',
+      mixed: 'This range combines different location choices. Pick an option to apply it to the whole range.',
+      notOffered: 'This range is tagged with a location you no longer offer in your session preferences. It cannot be booked for that location — uncheck it or offer the location again.',
+      help: 'Optional: choose where sessions in each time range can take place. "Profile defaults" uses your session location preferences.',
+      weeklyOnlyNote: 'Per-range location choices apply to your regular weekly schedule only, not to date overrides or holiday schedules.',
+    },
   },
 
   auth: {
@@ -358,6 +367,8 @@ export default {
         dateLabel: 'Date',
         pickTime: 'Pick a start time',
         chooseDateFirst: 'Choose a date to see your available times.',
+        noLocationForSlot: 'This time is not open for any session location. Pick another time.',
+        slotAllows: 'This time only allows: {{locations}}.',
         noSlots: 'You have no availability on this day. Pick another date.',
         submit: 'Send proposal',
         sending: 'Sending…',
@@ -682,6 +693,8 @@ export default {
       lengthOption: '{{minutes}} min',
       locationLabel: 'Location',
       familyHomeNote: 'The tutor will use your saved family address.',
+      noLocationForSlot: 'This time is not open for any session location. Pick another time.',
+      slotAllows: 'This time only allows: {{locations}}.',
       messageLabel: 'Message to the tutor (optional)',
       messagePlaceholder: 'Anything the tutor should know before the session…',
       pickTime: 'Pick a time',
@@ -729,6 +742,7 @@ export default {
         slotTaken: 'That slot has just been taken — we\'ve refreshed the calendar. Please pick another time.',
         duplicate: 'You already have a pending request for this time.',
         cannotBook: 'This session could not be booked. Please pick another time or check the details.',
+        locationGone: 'The tutor no longer offers this location — pick another location.',
         generic: 'Something went wrong. Please try again.',
       },
     },

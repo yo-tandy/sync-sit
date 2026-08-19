@@ -20,6 +20,8 @@ import {
   getSchoolYearsInRange,
   expandRecurringDates,
   incrementDate,
+  resolveEffectiveLocations,
+  sanitizeDayLocations,
 } from '@ejm/study-core';
 import { parisDateString } from '@ejm/shared-functions/scheduled/parisTime.js';
 import { bookSessionInputSchema } from '../validation/session.js';
@@ -131,7 +133,13 @@ export const bookSession = onCall(
 
     // ── Location must be one the tutor accepts ──
     if (!(tutor.locationPrefs ?? []).includes(location)) {
-      throw new HttpsError('failed-precondition', 'Tutor does not offer this location');
+      // Carries the same details as the per-slot tag rejections: this gate is
+      // what fires when a stored tag's location was later removed from the
+      // profile prefs, and the family deserves the location-specific message
+      // there too, not a generic cannot-book.
+      throw new HttpsError('failed-precondition', 'Tutor does not offer this location', {
+        reason: 'location_not_offered',
+      });
     }
 
     const now = new Date();
@@ -223,7 +231,7 @@ export const bookSession = onCall(
       // date authoritatively. This mirrors the one_time best-effort pre-check.
       let anyAvailable = false;
       for (const cand of candidates) {
-        const grid = await computeSingleDateAvailability(tutorUserId, cand, paddingMinutes);
+        const { slots: grid } = await computeSingleDateAvailability(tutorUserId, cand, paddingMinutes);
         let ok = true;
         for (let i = startIdx; i < endIdx; i++) {
           if (!grid[i]) { ok = false; break; }
@@ -232,6 +240,41 @@ export const bookSession = onCall(
       }
       if (!anyAvailable) {
         throw new HttpsError('invalid-argument', 'slot not available');
+      }
+
+      // ── Per-slot location tags (issue #166): a recurring series validates
+      // against its WEEKLY cells — the tags on slot.day over the requested
+      // range, regardless of any per-date override AND regardless of holiday
+      // substitution (which the one-time path below DOES honour via
+      // resolveDateLocationCells). Deliberate asymmetry: a series is a
+      // standing weekly commitment, so it answers to the weekly tags even
+      // when individual dates fall in an override or a holiday-substituted
+      // period — a one-time booking on such a date may accept a location the
+      // series rejects (owner decision: the tags constrain scheduling;
+      // override-day tags are a follow-up). Effective
+      // set = intersection of per-cell (override ?? profile prefs); legacy
+      // docs (no weeklyLocations) fall back to profile prefs, which the
+      // check above already passed. ──
+      const scheduleSnap = await db.collection('schedules').doc(tutorUserId).get();
+      const weeklyLocations = scheduleSnap.data()?.weeklyLocations as
+        | Record<string, unknown>
+        | undefined;
+      const effectiveLocations = resolveEffectiveLocations(
+        sanitizeDayLocations(weeklyLocations?.[slot.day]),
+        startIdx,
+        endIdx,
+        tutor.locationPrefs ?? [],
+      );
+      if (!effectiveLocations.includes(location)) {
+        // details.reason lets the client tell "this location is not offered
+        // at this time" apart from a generic slot-taken invalid-argument —
+        // the recurring weekly-cells check can diverge from the client's
+        // per-occurrence heuristic, so the message must name the real cause.
+        throw new HttpsError(
+          'invalid-argument',
+          'Tutor does not offer this location for this time slot',
+          { reason: 'location_not_offered' },
+        );
       }
 
       // ── Duplicate-pending guard: same family+tutor+weekday+start already pending ──
@@ -325,11 +368,36 @@ export const bookSession = onCall(
       // ── Best-effort availability pre-check (NOT the lock — confirm is) ──
       const startIdx = timeToSlotIndex(bookingStart);
       const endIdx = startIdx + sessionLengthMinutes / SLOT_MINUTES;
-      const grid = await computeSingleDateAvailability(tutorUserId, bookingDate, paddingMinutes);
+      const { slots: grid, locationCells } = await computeSingleDateAvailability(
+        tutorUserId,
+        bookingDate,
+        paddingMinutes,
+      );
       for (let i = startIdx; i < endIdx; i++) {
         if (!grid[i]) {
           throw new HttpsError('invalid-argument', 'slot not available');
         }
+      }
+
+      // ── Per-slot location tags (issue #166): the requested location must be
+      // in the slot's EFFECTIVE set — intersection of per-cell (tag override
+      // ?? profile prefs) across the covered cells. The client constraint is
+      // UX only; this is the trust boundary. Legacy docs and override/holiday
+      // dates resolve every cell to profile prefs (checked above). ──
+      const effectiveLocations = resolveEffectiveLocations(
+        locationCells,
+        startIdx,
+        endIdx,
+        tutor.locationPrefs ?? [],
+      );
+      if (!effectiveLocations.includes(location)) {
+        // Same distinguishable details as the recurring path: the client maps
+        // this to a location-specific message instead of "slot taken".
+        throw new HttpsError(
+          'invalid-argument',
+          'Tutor does not offer this location for this time slot',
+          { reason: 'location_not_offered' },
+        );
       }
       const endTime = slotIndexToTime(endIdx);
 

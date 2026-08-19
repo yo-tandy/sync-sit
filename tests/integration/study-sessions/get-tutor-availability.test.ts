@@ -338,12 +338,14 @@ describe('getTutorAvailability', () => {
 
   // ── Privacy: response shape leaks nothing beyond boolean grids ──
 
-  it('returns exactly {dates:[{date,slots}]} — no reasons or session info', async () => {
+  it('returns exactly {dates:[{date,slots,locationRanges}]} — no reasons or session info', async () => {
     const res = await callFunction<AvailabilityResponse>(
       'getTutorAvailability', { tutorUserId: seed.tutor2.uid, startDate: MON, endDate: MON }, parent1Token,
     );
     expect(Object.keys(res)).toEqual(['dates']);
-    expect(Object.keys(res.dates[0]).sort()).toEqual(['date', 'slots']);
+    // locationRanges is the additive per-range effective-location field
+    // (issue #166); still no busy reasons or session info in the response.
+    expect(Object.keys(res.dates[0]).sort()).toEqual(['date', 'locationRanges', 'slots']);
   });
 
   // ── Absent schedule doc ──

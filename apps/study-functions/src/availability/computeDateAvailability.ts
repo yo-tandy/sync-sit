@@ -1,12 +1,14 @@
-import { timeToSlotIndex } from '@ejm/shared-core';
+import { timeToSlotIndex, SLOTS_PER_DAY } from '@ejm/shared-core';
 import type { DayOfWeek } from '@ejm/shared-core';
 import type { LocationPref } from '@ejm/study-core';
 import {
   computeDayAvailability,
   dayOfWeek,
+  sanitizeDayLocations,
   type ConfirmedBlock,
   type DayOverride,
   type ParisNow,
+  type SlotLocationCells,
 } from '@ejm/study-core';
 
 /**
@@ -34,6 +36,13 @@ export interface HolidayPeriod {
 export interface DateAvailabilityInputs {
   /** The tutor's weekly slot grid (schedule.weekly). */
   weekly: WeeklyGrid;
+  /**
+   * Raw per-slot location tags (schedule.weeklyLocations, issue #166) — a
+   * sparse per-day map keyed by slot index. Passed through UNSANITIZED;
+   * resolveDateLocationCells runs it through study-core's junk-tolerant
+   * sanitizer. Absent = legacy doc = all profile-defaults.
+   */
+  weeklyLocations?: unknown;
   /** 'different' triggers holiday-period grid substitution. */
   holidayMode?: string;
   /** Per-holiday-name weekly grids (schedule.holidaySchedules). */
@@ -48,6 +57,19 @@ export interface DateAvailabilityInputs {
   paddingMin: number;
 }
 
+/** The holiday-period substitution grid for a date, if one applies. */
+function holidayGridForDate(
+  date: string,
+  inputs: DateAvailabilityInputs,
+  dow: DayOfWeek,
+): boolean[] | undefined {
+  if (inputs.holidayMode !== 'different' || !inputs.holidayPeriods) return undefined;
+  const period = inputs.holidayPeriods.find(
+    (p) => date >= p.startDate && date <= p.endDate,
+  );
+  return period ? inputs.holidaySchedules?.[period.name]?.[dow] : undefined;
+}
+
 /** Compute a single date's bookable slot grid from pre-loaded inputs. */
 export function computeDateAvailability(
   date: string,
@@ -56,14 +78,7 @@ export function computeDateAvailability(
   noticeHours: number,
 ): boolean[] {
   const dow = dayOfWeek(date);
-
-  let holidayGrid: boolean[] | undefined;
-  if (inputs.holidayMode === 'different' && inputs.holidayPeriods) {
-    const period = inputs.holidayPeriods.find(
-      (p) => date >= p.startDate && date <= p.endDate,
-    );
-    if (period) holidayGrid = inputs.holidaySchedules?.[period.name]?.[dow];
-  }
+  const holidayGrid = holidayGridForDate(date, inputs, dow);
 
   return computeDayAvailability({
     date,
@@ -75,6 +90,46 @@ export function computeDateAvailability(
     nowParis,
     noticeHours,
   });
+}
+
+/**
+ * Per-slot location tags applicable to a date (issue #166). The tags are
+ * indexed against the WEEKLY grid, so they apply only when that grid is the
+ * date's base — i.e. no holiday-schedule substitution and no TUTOR-AUTHORED
+ * custom-override slots. On such dates (owner decision: overrides/holiday tags
+ * are a follow-up) every cell resolves to "profile defaults" — all-null cells.
+ * An 'unavailable' override also returns all-null: nothing is bookable, so
+ * tags are moot.
+ *
+ * Tutor-authored is detected by the POSITIVE marker `reason === 'manual'`
+ * (what useSchedule.addOverride writes). The override subcollection is also
+ * written by the session/appointment claim ledger (buildMergedOverride:
+ * reason 'study_session'/'appointment' + sessionBlocks), whose docs only AND
+ * weekly slots to false — the weekly grid is still the date's base, so the
+ * tags keep applying there (the claimed cells are already unbookable in the
+ * boolean grid). A claim merged into a manual doc keeps reason 'manual' and
+ * correctly stays tags-off. Absence of the marker is treated as a system doc,
+ * failing toward KEEPING the tags — the safer direction for any legacy
+ * ambiguity, since profile-defaults fallback would silently widen the offer.
+ */
+export function resolveDateLocationCells(
+  date: string,
+  inputs: DateAvailabilityInputs,
+): SlotLocationCells {
+  const dow = dayOfWeek(date);
+  const tutorAuthored = inputs.override?.reason === 'manual';
+  const weeklyBaseApplies =
+    inputs.override?.type !== 'unavailable' &&
+    !(tutorAuthored && inputs.override?.type === 'custom' && inputs.override.slots) &&
+    holidayGridForDate(date, inputs, dow) === undefined;
+  if (!weeklyBaseApplies) {
+    return new Array(SLOTS_PER_DAY).fill(null) as SlotLocationCells;
+  }
+  const raw =
+    typeof inputs.weeklyLocations === 'object' && inputs.weeklyLocations !== null
+      ? (inputs.weeklyLocations as Record<string, unknown>)[dow]
+      : undefined;
+  return sanitizeDayLocations(raw);
 }
 
 /** Project a study-session doc's fields onto a confirmed-session slot block. */
