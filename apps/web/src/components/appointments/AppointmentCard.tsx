@@ -111,6 +111,14 @@ export function AppointmentCard({
               {kidCount} {kidCount === 1 ? 'child' : 'children'}
             </p>
           )}
+          {/* This sitter answered the family's published search (issue #207
+              PR3): the family owes the answer, so say so instead of letting a
+              pending card read as "a family is waiting on me". */}
+          {apt.initiatedBy === 'babysitter' && variant === 'pending' && (
+            <p className="mt-1 text-sm font-medium text-brand-600">
+              {t('request.waitingForFamily')}
+            </p>
+          )}
         </div>
         <div className="flex shrink-0 flex-col items-end gap-1">
           <Badge variant={badgeVariants[variant]}>{badgeLabels[variant]}</Badge>

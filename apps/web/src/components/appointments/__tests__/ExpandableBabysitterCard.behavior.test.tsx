@@ -120,3 +120,89 @@ describe('ExpandableBabysitterCard cancel control', () => {
     expect(screen.queryByText('appointment.cancel')).not.toBeInTheDocument();
   });
 });
+
+/**
+ * Contact inversion (issue #207 PR3): a card for a BABYSITTER-initiated
+ * pending is the family's to answer. It must say so without being expanded,
+ * offer Accept/Decline, and drop the edit/cancel controls that only make
+ * sense on a request the family itself authored.
+ */
+const answeredAppointment = {
+  ...appointment,
+  appointmentId: 'apt-2',
+  initiatedBy: 'babysitter',
+  publishedSearchId: 'ps-1',
+} as AppointmentDoc;
+
+describe('ExpandableBabysitterCard babysitter-initiated pending', () => {
+  it('labels the request as answering a published search without expanding', () => {
+    render(
+      <ExpandableBabysitterCard
+        appointment={answeredAppointment}
+        info={info}
+        variant="pending"
+        onAccept={vi.fn()}
+        onDecline={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('familyDashboard.answeredPublishedSearch')).toBeInTheDocument();
+  });
+
+  it('offers Accept and Decline, and wires each to its handler', () => {
+    const onAccept = vi.fn();
+    const onDecline = vi.fn();
+    render(
+      <ExpandableBabysitterCard
+        appointment={answeredAppointment}
+        info={info}
+        variant="pending"
+        onAccept={onAccept}
+        onDecline={onDecline}
+      />,
+    );
+    expandCard();
+
+    fireEvent.click(screen.getByText('request.accept'));
+    expect(onAccept).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByText('request.decline'));
+    expect(onDecline).toHaveBeenCalledTimes(1);
+  });
+
+  it('drops edit and cancel for a babysitter-initiated pending', () => {
+    render(
+      <ExpandableBabysitterCard
+        appointment={answeredAppointment}
+        info={info}
+        variant="pending"
+        onCancel={vi.fn()}
+        onEdit={vi.fn()}
+        onAccept={vi.fn()}
+        onDecline={vi.fn()}
+      />,
+    );
+    expandCard();
+
+    expect(screen.queryByText('appointment.edit')).not.toBeInTheDocument();
+    expect(screen.queryByText('appointment.cancelRequest')).not.toBeInTheDocument();
+  });
+
+  it('leaves a FAMILY-initiated pending exactly as it was (regression pin)', () => {
+    render(
+      <ExpandableBabysitterCard
+        appointment={appointment}
+        info={info}
+        variant="pending"
+        onCancel={vi.fn()}
+        onEdit={vi.fn()}
+        onAccept={vi.fn()}
+        onDecline={vi.fn()}
+      />,
+    );
+    expandCard();
+
+    expect(screen.getByText('appointment.edit')).toBeInTheDocument();
+    expect(screen.getByText('appointment.cancelRequest')).toBeInTheDocument();
+    expect(screen.queryByText('request.accept')).not.toBeInTheDocument();
+    expect(screen.queryByText('familyDashboard.answeredPublishedSearch')).not.toBeInTheDocument();
+  });
+});

@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { collection, doc, limit, onSnapshot, orderBy, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
-import { db } from '@/config/firebase';
+import { httpsCallable } from 'firebase/functions';
+import { db, functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
-import { Badge, Card, TopNav } from '@/components/ui';
+import { Badge, Button, Card, Dialog, Textarea, TopNav } from '@/components/ui';
 import { SearchIcon } from '@/components/ui/Icons';
 import { getBabysitterView } from '@ejm/sit-core';
 import { isActivePublishedSearch, isNewPublishedSearch } from '@ejm/shared-core';
@@ -46,8 +47,14 @@ interface BoardSearch {
  * subscription. The write is fire-and-forget: a failure only means tags
  * reappear next visit.
  *
- * No contact CTA yet: contacting the family ships in the next update (PR3);
- * each card says so instead of rendering a dead button.
+ * Contacting (PR3): the CTA calls `contactPublishedSearch`, which mints a
+ * pending appointment with `initiatedBy: 'babysitter'` — the family answers it
+ * from their dashboard, and only their acceptance releases their address. A
+ * card whose search this sitter already has a LIVE (pending or confirmed)
+ * appointment for shows "Request sent" instead of the button; that set is read
+ * from the sitter's own appointments (the same query the dashboard uses), so it
+ * survives a reload and a second device. A declined/cancelled prior contact
+ * leaves the button available — the server agrees.
  */
 export function PublishedSearchesPage() {
   const { t, i18n } = useTranslation();
@@ -66,6 +73,13 @@ export function PublishedSearchesPage() {
   // the error state (errored distinguishes the copy).
   const [searches, setSearches] = useState<BoardSearch[] | null>(null);
   const [errored, setErrored] = useState(false);
+
+  // publishedSearchIds this sitter already has a live appointment for.
+  const [contactedIds, setContactedIds] = useState<Set<string>>(new Set());
+  const [contactTarget, setContactTarget] = useState<BoardSearch | null>(null);
+  const [contactMessage, setContactMessage] = useState('');
+  const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState(false);
 
   useEffect(() => {
     const q = query(
@@ -90,6 +104,47 @@ export function PublishedSearchesPage() {
       },
     );
   }, []);
+
+  // Which searches this sitter has already answered. Equality-only query on
+  // the sitter's own appointments (rules: babysitterUserId == uid), filtered in
+  // code so no composite index is needed; rejected/cancelled ones do not count.
+  useEffect(() => {
+    if (!uid) return;
+    return onSnapshot(
+      query(collection(db, 'appointments'), where('babysitterUserId', '==', uid)),
+      (snap) => {
+        const ids = new Set<string>();
+        snap.docs.forEach((d) => {
+          const apt = d.data() as { publishedSearchId?: string | null; status?: string };
+          if (apt.publishedSearchId && (apt.status === 'pending' || apt.status === 'confirmed')) {
+            ids.add(apt.publishedSearchId);
+          }
+        });
+        setContactedIds(ids);
+      },
+      () => { /* the CTA simply stays available; the server dedupes */ },
+    );
+  }, [uid]);
+
+  const handleContact = async () => {
+    if (!contactTarget) return;
+    setSending(true);
+    setSendError(false);
+    try {
+      const fn = httpsCallable(functions, 'contactPublishedSearch');
+      await fn({
+        publishedSearchId: contactTarget.id,
+        ...(contactMessage.trim() ? { message: contactMessage.trim() } : {}),
+      });
+      // The appointments subscription flips the card to "Request sent".
+      setContactTarget(null);
+      setContactMessage('');
+    } catch {
+      setSendError(true);
+    } finally {
+      setSending(false);
+    }
+  };
 
   // Mark the board visited — once, after the first SUCCESSFUL snapshot (an
   // errored subscription must not consume the New tags the sitter never saw).
@@ -178,12 +233,42 @@ export function PublishedSearchesPage() {
                   date: s.expiresAt.toDate().toLocaleDateString(locale, { day: 'numeric', month: 'long' }),
                 })}
               </p>
-              {/* No contact CTA yet — PR3; say so instead of a dead button. */}
-              <p className="text-xs text-gray-400">{t('publishedBoard.contactSoon')}</p>
+              {contactedIds.has(s.id) ? (
+                <Badge variant="green">{t('publishedBoard.contacted')}</Badge>
+              ) : (
+                <Button size="sm" onClick={() => { setContactTarget(s); setContactMessage(''); setSendError(false); }}>
+                  {t('publishedBoard.contact')}
+                </Button>
+              )}
             </div>
           </Card>
         ))}
       </div>
+
+      <Dialog open={!!contactTarget} onClose={() => setContactTarget(null)}>
+        <h3 className="mb-2 text-lg font-bold">
+          {t('publishedBoard.contactTitle', { name: contactTarget?.familyName ?? '' })}
+        </h3>
+        <p className="mb-4 text-sm text-gray-600">{t('publishedBoard.contactDesc')}</p>
+        <Textarea
+          label={t('publishedBoard.contactMessageLabel')}
+          value={contactMessage}
+          onChange={(e) => setContactMessage(e.target.value)}
+          placeholder={t('publishedBoard.contactMessagePlaceholder')}
+          maxLength={1000}
+        />
+        {sendError && (
+          <p className="mt-2 text-sm text-brand-600">{t('publishedBoard.contactError')}</p>
+        )}
+        <div className="mt-4 flex gap-2">
+          <Button onClick={handleContact} disabled={sending} className="flex-1">
+            {sending ? t('publishedBoard.contactSending') : t('publishedBoard.contactSend')}
+          </Button>
+          <Button variant="ghost" onClick={() => setContactTarget(null)} className="flex-1">
+            {t('request.goBack')}
+          </Button>
+        </div>
+      </Dialog>
     </div>
   );
 }

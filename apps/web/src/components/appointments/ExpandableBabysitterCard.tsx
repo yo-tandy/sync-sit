@@ -57,6 +57,8 @@ export function ExpandableBabysitterCard({
   onEdit,
   onResubmit,
   onLeaveReference,
+  onAccept,
+  onDecline,
   existingReference,
 }: {
   appointment: AppointmentDoc;
@@ -69,6 +71,9 @@ export function ExpandableBabysitterCard({
   onEdit?: () => void;
   onResubmit?: () => void;
   onLeaveReference?: () => void;
+  /** Babysitter-initiated pendings only (issue #207 PR3): the family answers. */
+  onAccept?: () => void;
+  onDecline?: () => void;
   existingReference?: ReferenceDoc;
 }) {
   const { t, i18n } = useTranslation();
@@ -77,6 +82,11 @@ export function ExpandableBabysitterCard({
   const badgeLabels = useBadgeLabels();
   const { periods: holidayPeriods } = useHolidays();
   const name = info?.name || t('familyDashboard.babysitterFallback');
+  // A babysitter who answered one of this family's published searches
+  // (issue #207 PR3). The roles are flipped: the FAMILY accepts or declines,
+  // and edit/cancel — which act on a request the family authored — do not
+  // apply. Absent initiatedBy means 'family' (every pre-PR3 doc).
+  const babysitterInitiated = appointment.initiatedBy === 'babysitter';
 
   // References for this babysitter
   const [refs, setRefs] = useState<RefInfo[]>([]);
@@ -136,6 +146,12 @@ export function ExpandableBabysitterCard({
             {/* Confirmed/past/rejected: show date + time */}
             {variant !== 'pending' && dateTimeStr && (
               <span className="text-xs text-gray-500">{dateTimeStr}</span>
+            )}
+            {/* Legible WITHOUT expanding: this request came from the sitter. */}
+            {babysitterInitiated && (
+              <span className="block text-xs font-medium text-brand-600">
+                {t('familyDashboard.answeredPublishedSearch')}
+              </span>
             )}
             <DateTag tag={getDateTag(appointment.date || '', appointment.startTime || '', holidayPeriods)} />
           </div>
@@ -246,7 +262,7 @@ export function ExpandableBabysitterCard({
               </p>
               {variant === 'confirmed' && appointment.startTime && appointment.endTime && (
                 <a
-                  href={buildCalendarUrl(appointment.date, appointment.startTime, appointment.endTime, name, appointment.address)}
+                  href={buildCalendarUrl(appointment.date, appointment.startTime, appointment.endTime, name, appointment.address ?? undefined)}
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={(e) => e.stopPropagation()}
@@ -268,14 +284,33 @@ export function ExpandableBabysitterCard({
             </button>
           )}
 
-          {(variant === 'pending' || variant === 'confirmed') && onEdit && (
+          {/* Babysitter-initiated pending: the family answers it. Accepting
+              also releases the address the sitter has not been shown yet. */}
+          {babysitterInitiated && variant === 'pending' && (onAccept || onDecline) && (
+            <div className="mt-3">
+              <p className="mb-2 text-xs text-gray-500">{t('familyDashboard.answeredPublishedSearchDesc')}</p>
+              <div className="flex gap-2">
+                {onAccept && (
+                  <Button size="sm" onClick={(e) => { e.stopPropagation(); onAccept(); }} className="flex-1">
+                    {t('request.accept')}
+                  </Button>
+                )}
+                {onDecline && (
+                  <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); onDecline(); }} className="flex-1">
+                    {t('request.decline')}
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
+          {!babysitterInitiated && (variant === 'pending' || variant === 'confirmed') && onEdit && (
             <div className="mt-3">
               <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); onEdit(); }}>
                 {t('appointment.edit')}
               </Button>
             </div>
           )}
-          {(variant === 'pending' || variant === 'confirmed') && onCancel && (
+          {!(babysitterInitiated && variant === 'pending') && (variant === 'pending' || variant === 'confirmed') && onCancel && (
             <div className="mt-3">
               <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); onCancel(); }} className="w-full">
                 {variant === 'pending' ? t('appointment.cancelRequest') : t('appointment.cancel')}

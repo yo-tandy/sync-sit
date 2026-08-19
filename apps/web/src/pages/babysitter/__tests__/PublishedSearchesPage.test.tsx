@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, waitFor, cleanup, act } from '@testing-library/react';
+import { render, screen, waitFor, cleanup, act, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 
 /**
@@ -11,8 +11,10 @@ import { MemoryRouter } from 'react-router';
  * - Expiry filtered client-side; empty board copy; error copy.
  * - The visit writes EXACTLY {'profiles.babysitter.publishedSearchesSeenAt':
  *   serverTimestamp()} on users/{uid}, once, and NOT on an errored read.
- * - No contact button anywhere — the contact-soon note instead (PR3 ships
- *   the CTA).
+ * - PR3's Contact CTA: the dialog calls contactPublishedSearch with the card's
+ *   id (and the trimmed message only when non-empty), a live appointment for a
+ *   search replaces its button with "Request sent", and a declined prior
+ *   contact does NOT (the server allows the retry).
  */
 
 const NOW = Date.now();
@@ -24,11 +26,17 @@ const h = vi.hoisted(() => ({
   auth: { userDoc: null as unknown },
   snapshotNext: null as null | ((snap: unknown) => void),
   snapshotError: null as null | ((err: unknown) => void),
+  aptNext: null as null | ((snap: unknown) => void),
   updateDoc: vi.fn(() => Promise.resolve()),
+  callable: vi.fn(() => Promise.resolve({ data: { appointmentId: 'apt-1' } })),
   unsub: vi.fn(),
 }));
 
-vi.mock('@/config/firebase', () => ({ db: {} }));
+vi.mock('@/config/firebase', () => ({ db: {}, functions: {} }));
+
+vi.mock('firebase/functions', () => ({
+  httpsCallable: (_fns: unknown, name: string) => (payload: unknown) => h.callable(name, payload),
+}));
 
 vi.mock('firebase/firestore', () => ({
   doc: (_db: unknown, ...path: string[]) => ({ path: path.join('/') }),
@@ -39,8 +47,14 @@ vi.mock('firebase/firestore', () => ({
   limit: (n: number) => ({ limit: n }),
   serverTimestamp: () => ({ __serverTimestamp: true }),
   onSnapshot: (_q: unknown, next: (snap: unknown) => void, error: (err: unknown) => void) => {
-    h.snapshotNext = next;
-    h.snapshotError = error;
+    // The page subscribes to the board first, then to the sitter's own
+    // appointments (the "already contacted" set).
+    if (h.snapshotNext === null) {
+      h.snapshotNext = next;
+      h.snapshotError = error;
+    } else {
+      h.aptNext = next;
+    }
     return h.unsub;
   },
   updateDoc: (...args: unknown[]) => h.updateDoc(...args),
@@ -96,6 +110,11 @@ function push(rows: Row[]) {
   act(() => h.snapshotNext!({ docs: rows.map((r) => ({ id: r.id as string, data: () => r })) }));
 }
 
+/** The sitter's own appointments, as the contacted-set subscription sees them. */
+function pushAppointments(rows: Row[]) {
+  act(() => h.aptNext!({ docs: rows.map((r) => ({ data: () => r })) }));
+}
+
 function renderPage() {
   return render(
     <MemoryRouter>
@@ -108,6 +127,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   h.snapshotNext = null;
   h.snapshotError = null;
+  h.aptNext = null;
   h.auth.userDoc = sitterDoc(SEEN_AT);
 });
 
@@ -183,15 +203,66 @@ describe('PublishedSearchesPage (sit board)', () => {
     expect(h.updateDoc).not.toHaveBeenCalled();
   });
 
-  it('offers no contact button — only the contact-soon note (PR3 ships the CTA)', async () => {
+  it('sends the contact through contactPublishedSearch with the card id and trimmed message', async () => {
     renderPage();
-    push([boardDoc('a', SEEN_AT + 1)]);
+    push([boardDoc('ps-1', SEEN_AT + 1)]);
+    await waitFor(() => expect(screen.getByText('Contact family')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByText('Contact family'));
+    fireEvent.change(screen.getByLabelText('Message (optional)'), {
+      target: { value: '  I am free that evening  ' },
+    });
+    fireEvent.click(screen.getByText('Send request'));
+
+    await waitFor(() => expect(h.callable).toHaveBeenCalledTimes(1));
+    expect(h.callable).toHaveBeenCalledWith('contactPublishedSearch', {
+      publishedSearchId: 'ps-1',
+      message: 'I am free that evening',
+    });
+  });
+
+  it('omits an empty message rather than sending a blank one', async () => {
+    renderPage();
+    push([boardDoc('ps-1', SEEN_AT + 1)]);
+    await waitFor(() => expect(screen.getByText('Contact family')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByText('Contact family'));
+    fireEvent.click(screen.getByText('Send request'));
+
+    await waitFor(() => expect(h.callable).toHaveBeenCalledTimes(1));
+    expect(h.callable).toHaveBeenCalledWith('contactPublishedSearch', { publishedSearchId: 'ps-1' });
+  });
+
+  it('shows the error copy and keeps the dialog open when the call fails', async () => {
+    h.callable.mockRejectedValueOnce(new Error('failed-precondition'));
+    renderPage();
+    push([boardDoc('ps-1', SEEN_AT + 1)]);
+    await waitFor(() => expect(screen.getByText('Contact family')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByText('Contact family'));
+    fireEvent.click(screen.getByText('Send request'));
+
     await waitFor(() =>
-      expect(screen.getByText('Contacting families arrives in the next update')).toBeInTheDocument(),
+      expect(screen.getByText(/Could not send your request/)).toBeInTheDocument(),
     );
-    // The only button on the page is TopNav's back control — no contact
-    // affordance exists in any card.
-    expect(screen.queryByRole('button', { name: /contact/i })).toBeNull();
-    expect(screen.getAllByRole('button')).toHaveLength(1);
+  });
+
+  it('replaces the CTA with "Request sent" for a search with a LIVE appointment only', async () => {
+    renderPage();
+    push([
+      boardDoc('ps-live', SEEN_AT + 1, { familyName: 'Live' }),
+      boardDoc('ps-declined', SEEN_AT + 1, { familyName: 'Declined' }),
+    ]);
+    await waitFor(() => expect(screen.getAllByText('Contact family')).toHaveLength(2));
+
+    pushAppointments([
+      { publishedSearchId: 'ps-live', status: 'pending' },
+      // A declined prior contact must NOT consume the CTA: the server lets
+      // the sitter try again.
+      { publishedSearchId: 'ps-declined', status: 'rejected' },
+    ]);
+
+    await waitFor(() => expect(screen.getByText('Request sent')).toBeInTheDocument());
+    expect(screen.getAllByText('Contact family')).toHaveLength(1);
   });
 });

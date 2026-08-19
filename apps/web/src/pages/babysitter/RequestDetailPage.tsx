@@ -157,6 +157,10 @@ export function RequestDetailPage() {
 
   const apt = appointment;
   const isPending = apt.status === 'pending';
+  // This request was sent BY this babysitter from the published-searches board
+  // (issue #207 PR3). The family answers it — the sitter has nothing to accept
+  // or decline, and the address stays withheld until the family says yes.
+  const ownInitiated = apt.initiatedBy === 'babysitter';
   const rawFamilyName = apt.familyName || 'Family';
   const familyName = t('familyDashboard.familyTitle', { name: rawFamilyName.toUpperCase() });
   const kids: { age: number; languages?: string[] }[] = apt.kids || [];
@@ -203,6 +207,13 @@ export function RequestDetailPage() {
           </Card>
         )}
 
+        {ownInitiated && isPending && (
+          <Card className="mb-4 border-amber-300 bg-amber-50">
+            <p className="text-sm font-semibold text-amber-800">{t('request.waitingForFamily')}</p>
+            <p className="mt-1 text-xs text-amber-600">{t('request.waitingForFamilyDesc')}</p>
+          </Card>
+        )}
+
         {apt.modified && (
           <Card className="mb-4 border-amber-300 bg-amber-50">
             <p className="mb-1 text-sm font-semibold text-amber-800">{t('appointment.modifiedBanner')}</p>
@@ -244,7 +255,7 @@ export function RequestDetailPage() {
           <DateTag tag={getDateTag(apt.date || '', apt.startTime || '', holidayPeriods)} className="mt-1" />
           {apt.status === 'confirmed' && apt.date && apt.startTime && apt.endTime && (
             <a
-              href={buildCalendarUrl(apt.date, apt.startTime, apt.endTime, familyName, apt.address)}
+              href={buildCalendarUrl(apt.date, apt.startTime, apt.endTime, familyName, apt.address ?? undefined)}
               target="_blank"
               rel="noopener noreferrer"
               className="mt-2 inline-flex items-center gap-1.5 text-sm font-medium text-brand-600 active:text-brand-800"
@@ -343,8 +354,8 @@ export function RequestDetailPage() {
           </Card>
         )}
 
-        {/* Action buttons */}
-        {isPending && (
+        {/* Action buttons — never for a request this babysitter sent. */}
+        {isPending && !ownInitiated && (
           <div className="mt-6 flex gap-3">
             <Button onClick={() => setAcceptDialog(true)} className="flex-1">
               {t('request.accept')}
@@ -422,7 +433,7 @@ export function RequestDetailPage() {
             </p>
             {success === 'accepted' && apt.date && apt.startTime && apt.endTime && (
               <a
-                href={buildCalendarUrl(apt.date, apt.startTime, apt.endTime, familyName, apt.address)}
+                href={buildCalendarUrl(apt.date, apt.startTime, apt.endTime, familyName, apt.address ?? undefined)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="mb-3 inline-flex items-center gap-1.5 text-sm font-medium text-brand-600 active:text-brand-800"
