@@ -78,6 +78,27 @@ describe('StepPreferences shared-identity contact (issue #203)', () => {
     expect((screen.getByLabelText(/^email$/i) as HTMLInputElement).value).toBe('fresh@x.com');
   });
 
+  it('a CLEARED whatsapp does not come back through the "same as phone" default', async () => {
+    // crossApp arrival after the user deleted WhatsApp in the other app:
+    // the checkbox defaults to checked, so an unguarded prefill would write
+    // whatsapp = contactPhone on save (PR #206 review).
+    h.auth.userDoc = {
+      uid: 'bs1',
+      contactPhone: '+33 600000000',
+      whatsapp: null,
+      profiles: { babysitter: { ejemEmail: 'lea@ejm.org' }, tutor: { whatsapp: '+33 600000000' } },
+    };
+    renderStep();
+    const sameAsPhone = screen.getByRole('checkbox', { name: /same as phone/i }) as HTMLInputElement;
+    expect(sameAsPhone.checked).toBe(false);
+
+    fireEvent.click(screen.getByRole('button', { name: /^save/i }));
+    await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
+    const payload = h.updateDoc.mock.calls[0][1] as Record<string, unknown>;
+    expect(payload.whatsapp).toBeNull();
+    expect(payload['profiles.babysitter.whatsapp']).toBeNull();
+  });
+
   it('seeds ONCE: typing is not reverted by the resume-prefill effect', async () => {
     h.auth.userDoc = {
       uid: 'bs1',

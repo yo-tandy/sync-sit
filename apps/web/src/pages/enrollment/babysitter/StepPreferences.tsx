@@ -60,7 +60,17 @@ export function StepPreferences({ uid, onComplete }: StepPreferencesProps) {
     const contact = getContact(userDoc);
     if (contact.contactEmail) setContactEmail(contact.contactEmail);
     if (contact.contactPhone) setContactPhone(contact.contactPhone);
-    if (contact.whatsapp) { setWhatsapp(contact.whatsapp); setWhatsappSameAsPhone(contact.whatsapp === contact.contactPhone); }
+    if (contact.whatsapp) {
+      setWhatsapp(contact.whatsapp);
+      setWhatsappSameAsPhone(contact.whatsapp === contact.contactPhone);
+    } else if ((userDoc as unknown as Record<string, unknown>).whatsapp !== undefined) {
+      // CLEARED (root key present, empty) — not merely absent. The checkbox
+      // defaults to checked, so leaving it alone here would write
+      // whatsapp = contactPhone on save and republish a channel the user
+      // deleted in the other app (PR #206 review; same guard as the two
+      // Account pages).
+      setWhatsappSameAsPhone(false);
+    }
     if (babysitter.areaMode) setAreaMode(babysitter.areaMode);
     if (babysitter.arrondissements) setArrondissements(babysitter.arrondissements);
     if (babysitter.areaAddress) setAreaAddress(babysitter.areaAddress);

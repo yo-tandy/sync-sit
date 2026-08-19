@@ -388,11 +388,16 @@ export const enrollTutor = onCall(
       lastName: enrollment.lastName!,
       dateOfBirth: dobTimestamp!,
       // Canonical root shared-identity copies (issue #203); the nested tutor
-      // profile keeps its duplicates for back-compat readers.
+      // profile keeps its duplicates for back-compat readers. Channels the
+      // user never supplied are OMITTED rather than written as null: root
+      // presence now means "the user set or cleared this", and an
+      // enrollment-written null would read as a deliberate clear, blocking
+      // the nested fallback for legacy readers and the backfill (PR #206
+      // review).
       ejemEmail: ejemEmailLower,
-      contactEmail: enrollment.contactEmail ?? null,
-      contactPhone: enrollment.contactPhone ?? null,
-      whatsapp: enrollment.whatsapp ?? null,
+      ...(enrollment.contactEmail ? { contactEmail: enrollment.contactEmail } : {}),
+      ...(enrollment.contactPhone ? { contactPhone: enrollment.contactPhone } : {}),
+      ...(enrollment.whatsapp ? { whatsapp: enrollment.whatsapp } : {}),
       status: 'active',
       notifPrefs: {
         newRequest: { push: true, email: true },

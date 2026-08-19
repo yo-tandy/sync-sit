@@ -53,12 +53,16 @@ export const lookupBabysitter = onCall(
       .get();
 
     for (const doc of snap.docs) {
-      const data = getBabysitterView(doc.data() as User);
+      // Decode once; the flattened view is for the display fields, but
+      // getEjemEmail MUST see the RAW doc — the view spreads the nested
+      // profile over the root, which would invert root-first precedence.
+      const raw = doc.data() as User;
+      const data = getBabysitterView(raw);
       if (!data) continue;
       const fullName = `${data.firstName || ''} ${data.lastName || ''}`.toLowerCase();
       const email = (data.email || '').toLowerCase();
       // Canonical root ?? nested resolution (issue #203 shared identity).
-      const ejemEmail = (getEjemEmail(doc.data() as User) || '').toLowerCase();
+      const ejemEmail = (getEjemEmail(raw) || '').toLowerCase();
 
       if (fullName.includes(q) || email === q || ejemEmail === q) {
         // Check if babysitter works in the family's area
