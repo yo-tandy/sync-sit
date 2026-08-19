@@ -123,7 +123,14 @@ describe('tutor DashboardPage', () => {
       searchable: false,
     });
     renderWithProviders(<DashboardPage />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Inactive' }));
+    const pill = await screen.findByRole('button', { name: 'Inactive' });
+    // The pill renders before the async schedule read resolves and is inert
+    // until canActivate flips; clicking too early is silently swallowed. The
+    // pre-pill test synchronized on the toggle's disabled attribute — the
+    // pill's equivalent is its dimmed (opacity-50) state clearing. Without
+    // this wait the test raced CI and flaked (#199's merge-CI run).
+    await waitFor(() => expect(pill.className).not.toContain('opacity-50'));
+    fireEvent.click(pill);
     expect(await screen.findByText(/activate your profile/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Activate' }));
