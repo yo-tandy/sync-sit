@@ -1,7 +1,7 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
-import { haversineDistance, getParentProfile, getBabysitterView } from '@ejm/sit-core';
+import { haversineDistance, getParentProfile, getBabysitterView, getEjemEmail } from '@ejm/sit-core';
 import type { User } from '@ejm/sit-core';
 
 interface LookupResult {
@@ -57,7 +57,8 @@ export const lookupBabysitter = onCall(
       if (!data) continue;
       const fullName = `${data.firstName || ''} ${data.lastName || ''}`.toLowerCase();
       const email = (data.email || '').toLowerCase();
-      const ejemEmail = (data.ejemEmail || '').toLowerCase();
+      // Canonical root ?? nested resolution (issue #203 shared identity).
+      const ejemEmail = (getEjemEmail(doc.data() as User) || '').toLowerCase();
 
       if (fullName.includes(q) || email === q || ejemEmail === q) {
         // Check if babysitter works in the family's area

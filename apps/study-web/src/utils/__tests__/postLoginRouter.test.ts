@@ -25,6 +25,17 @@ describe('postLoginRouter (study)', () => {
     expect(postLoginRouter(undefined, babysitterOnlyDoc)).toBe('/welcome-study');
   });
 
+  it('ROOT-only contact satisfies the crossApp contact prerequisite (issue #203 shared identity)', () => {
+    // Post-change sit Account edits write contact at the users/{uid} ROOT
+    // only — the predicate must resolve root ?? nested like the callable.
+    const rootContactDoc = {
+      firstName: 'Noa', lastName: 'Weiss', dateOfBirth: '2008-03-15',
+      contactPhone: '+33 6',
+      profiles: { babysitter: { enrollmentComplete: true, classLevel: '2nde' } },
+    } as unknown as StudyUser;
+    expect(postLoginRouter(undefined, rootContactDoc)).toBe('/welcome-study');
+  });
+
   it('routes an INCOMPLETE sit babysitter to the classic wizard, not the one-tap dead-end', () => {
     // enrollTutor crossApp derives classLevel + contact + identity from the
     // sit profile; sit guarantees none of them. Missing anything -> the

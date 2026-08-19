@@ -6,7 +6,7 @@ import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage
 import { db, storage } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { getTutorProfile } from '@ejm/study-core';
-import { DEFAULT_NOTIF_PREFS, isRunningAsPWA } from '@ejm/shared-core';
+import { DEFAULT_NOTIF_PREFS, isRunningAsPWA, getEjemEmail, getContact } from '@ejm/shared-core';
 import type { NotifPrefs } from '@ejm/shared-core';
 import {
   TopNav,
@@ -31,7 +31,8 @@ import { isPushSupported } from '@/lib/pushNotifications';
 // skip on that front.
 //
 // Identity fields are read-only (name/DOB/login-email/ejemEmail/classLevel);
-// contact fields (contactEmail/contactPhone/whatsapp) write to profiles.tutor.*;
+// contact fields (contactEmail/contactPhone/whatsapp) write to the canonical
+// ROOT fields (issue #203 shared identity) and read root ?? nested;
 // notifPrefs writes to the top-level field. enrollmentComplete/verification/
 // ejemEmail are server-owned and never written here.
 //
@@ -106,10 +107,13 @@ export function AccountPage() {
   useEffect(() => {
     if (!userDoc || seededRef.current) return;
     seededRef.current = true;
-    setContactEmail(tutor?.contactEmail || userDoc.email || '');
-    setPhone(tutor?.contactPhone || '');
-    setWhatsapp(tutor?.whatsapp || '');
-    setWhatsappSameAsPhone(tutor?.whatsapp ? tutor.whatsapp === tutor.contactPhone : true);
+    // Contact resolves root ?? nested (issue #203): a root-only edit made on
+    // the other app (or here) wins over the frozen nested enrollment copy.
+    const contact = getContact(userDoc);
+    setContactEmail(contact.contactEmail || userDoc.email || '');
+    setPhone(contact.contactPhone || '');
+    setWhatsapp(contact.whatsapp || '');
+    setWhatsappSameAsPhone(contact.whatsapp ? contact.whatsapp === contact.contactPhone : true);
     setAboutMe(tutor?.aboutMe ?? '');
     if (userDoc.notifPrefs) {
       setPrefs(userDoc.notifPrefs);
@@ -255,9 +259,12 @@ export function AccountPage() {
     setError(null);
     try {
       await updateDoc(doc(db, 'users', uid), {
-        'profiles.tutor.contactEmail': contactEmail || null,
-        'profiles.tutor.contactPhone': phone || null,
-        'profiles.tutor.whatsapp': whatsappSameAsPhone ? (phone || null) : (whatsapp || null),
+        // Contact is canonical at the ROOT (issue #203 shared identity):
+        // Account edits write root ONLY; readers resolve root ?? nested, so
+        // the stale nested copy stops mattering the moment this lands.
+        contactEmail: contactEmail || null,
+        contactPhone: phone || null,
+        whatsapp: whatsappSameAsPhone ? (phone || null) : (whatsapp || null),
         updatedAt: serverTimestamp(),
       });
       await refreshUserDoc();
@@ -410,10 +417,10 @@ export function AccountPage() {
             <p className="text-xs text-gray-500">{t('account.loginEmail')}</p>
             <p className="text-sm font-medium text-gray-900">{userDoc?.email || ''}</p>
           </div>
-          {tutor?.ejemEmail && tutor.ejemEmail !== userDoc?.email && (
+          {getEjemEmail(userDoc) && getEjemEmail(userDoc) !== userDoc?.email && (
             <div className="mb-3">
               <p className="text-xs text-gray-500">{t('account.ejemEmail')}</p>
-              <p className="text-sm font-medium text-gray-900">{tutor.ejemEmail}</p>
+              <p className="text-sm font-medium text-gray-900">{getEjemEmail(userDoc)}</p>
             </div>
           )}
           <div className="flex gap-3">

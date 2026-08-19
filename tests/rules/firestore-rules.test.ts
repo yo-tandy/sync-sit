@@ -173,6 +173,57 @@ describe('users collection — Plan D owner-update guards', () => {
     );
   });
 
+  // ── Root shared-identity fields (issue #203): canonical ROOT ejemEmail is
+  // client-immutable (same semantics as the nested pins); the root contact
+  // trio is owner-writable by design. ──
+
+  it('owner may NOT change the root ejemEmail once set', async () => {
+    await seed('ri1', { status: 'active', email: 'b@ejm.org', ejemEmail: 'b@ejm.org', profiles: { babysitter: { ejemEmail: 'b@ejm.org', enrollmentComplete: true } } });
+    const authed = testEnv.authenticatedContext('ri1');
+    await assertFails(
+      updateDoc(doc(authed.firestore(), 'users', 'ri1'), { ejemEmail: 'evil@x.com' })
+    );
+  });
+
+  it('owner may NOT SET a root ejemEmail on a doc without one (server-only field)', async () => {
+    await seed('ri2', { status: 'active', email: 'b@ejm.org', profiles: { babysitter: { ejemEmail: 'b@ejm.org', enrollmentComplete: true } } });
+    const authed = testEnv.authenticatedContext('ri2');
+    await assertFails(
+      updateDoc(doc(authed.firestore(), 'users', 'ri2'), { ejemEmail: 'b@ejm.org' })
+    );
+  });
+
+  it('owner may NOT smuggle a root ejemEmail change into an allowed contact update', async () => {
+    await seed('ri3', { status: 'active', email: 'b@ejm.org', ejemEmail: 'b@ejm.org', profiles: { babysitter: { ejemEmail: 'b@ejm.org', enrollmentComplete: true } } });
+    const authed = testEnv.authenticatedContext('ri3');
+    await assertFails(
+      updateDoc(doc(authed.firestore(), 'users', 'ri3'), {
+        contactEmail: 'me@x.com',
+        ejemEmail: 'evil@x.com',
+      })
+    );
+  });
+
+  it('owner MAY write the root contact trio (Account pages write root-only)', async () => {
+    await seed('ri4', { status: 'active', email: 'b@ejm.org', ejemEmail: 'b@ejm.org', profiles: { babysitter: { ejemEmail: 'b@ejm.org', enrollmentComplete: true } } });
+    const authed = testEnv.authenticatedContext('ri4');
+    await assertSucceeds(
+      updateDoc(doc(authed.firestore(), 'users', 'ri4'), {
+        contactEmail: 'me@x.com',
+        contactPhone: '+33600000001',
+        whatsapp: '+33600000001',
+      })
+    );
+  });
+
+  it('a NON-owner may not write another user root contact fields', async () => {
+    await seed('ri5', { status: 'active', email: 'b@ejm.org', ejemEmail: 'b@ejm.org', profiles: { babysitter: { ejemEmail: 'b@ejm.org', enrollmentComplete: true } } });
+    const stranger = testEnv.authenticatedContext('someone-else');
+    await assertFails(
+      updateDoc(doc(stranger.firestore(), 'users', 'ri5'), { contactEmail: 'evil@x.com' })
+    );
+  });
+
   it('babysitter may NOT change profiles.babysitter.approvedFamilies', async () => {
     await seed('bs4', { status: 'active', email: 'b@ejm.org', profiles: { babysitter: { ejemEmail: 'b@ejm.org', enrollmentComplete: true, approvedFamilies: [] } } });
     const authed = testEnv.authenticatedContext('bs4');

@@ -1,7 +1,7 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { strongPasswordSchema } from '@ejm/sit-core';
-import { validateEjmEmail, checkEnrollmentAge } from '@ejm/shared-core';
+import { validateEjmEmail, checkEnrollmentAge, getEjemEmail, getContact, type User } from '@ejm/shared-core';
 import { db, adminAuth } from '@ejm/shared-functions/config/firebase.js';
 import { writeUserActivity } from '@ejm/shared-functions/admin/writeAuditLog.js';
 import { getCorsOrigin } from '@ejm/shared-functions/config/cors.js';
@@ -86,13 +86,24 @@ export const enrollTutor = onCall(
     if (isCrossApp) {
       const profiles = (callerData.profiles ?? {}) as Record<string, unknown>;
       const babysitterProfile = (profiles.babysitter ?? null) as Record<string, unknown> | null;
-      if (!babysitterProfile || typeof babysitterProfile.ejemEmail !== 'string' || !babysitterProfile.ejemEmail) {
+      // The EJM identity is canonical at the ROOT with a nested fallback
+      // (issue #203 shared identity) — but crossApp still requires the OTHER
+      // provider profile to exist: that profile is what proves the identity
+      // was verified by a real enrollment.
+      const derivedEjemEmail = getEjemEmail(callerData as unknown as User);
+      if (!babysitterProfile || !derivedEjemEmail) {
         throw new HttpsError('failed-precondition', 'No verified EJM identity on this account');
       }
-      ejemEmailLower = babysitterProfile.ejemEmail.toLowerCase();
+      ejemEmailLower = derivedEjemEmail.toLowerCase();
+      // classLevel/gender stay profile-scoped; contact resolves root ?? nested
+      // so a babysitter who edited contact at the canonical root still hands
+      // the fresh values to their new tutor profile.
       enrollmentInput = {
         subjects: data.subjects,
         ...copySharedProfileFields(babysitterProfile),
+        ...Object.fromEntries(
+          Object.entries(getContact(callerData as unknown as User)).filter(([, v]) => v !== null),
+        ),
       };
     } else {
       if (!data.ejemEmail) {
@@ -268,10 +279,17 @@ export const enrollTutor = onCall(
         uid,
         profileKey: 'tutor',
         profileData: tutorProfile,
+        // Root shared-identity fields (issue #203): dual-write the canonical
+        // root copies alongside the nested profile. fillBaseFields writes only
+        // EMPTY root fields, so an existing canonical value always wins.
         fillBaseFields: {
           firstName: enrollment.firstName,
           lastName: enrollment.lastName,
           dateOfBirth: dobTimestamp,
+          ejemEmail: ejemEmailLower,
+          contactEmail: enrollment.contactEmail ?? undefined,
+          contactPhone: enrollment.contactPhone ?? undefined,
+          whatsapp: enrollment.whatsapp ?? undefined,
         },
         auditAction: 'tutor.profile_added',
         auditDetails: {
@@ -313,6 +331,12 @@ export const enrollTutor = onCall(
       firstName: enrollment.firstName!,
       lastName: enrollment.lastName!,
       dateOfBirth: dobTimestamp!,
+      // Canonical root shared-identity copies (issue #203); the nested tutor
+      // profile keeps its duplicates for back-compat readers.
+      ejemEmail: ejemEmailLower,
+      contactEmail: enrollment.contactEmail ?? null,
+      contactPhone: enrollment.contactPhone ?? null,
+      whatsapp: enrollment.whatsapp ?? null,
       status: 'active',
       notifPrefs: {
         newRequest: { push: true, email: true },

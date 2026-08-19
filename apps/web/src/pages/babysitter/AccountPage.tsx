@@ -11,7 +11,7 @@ import { BellIcon } from '@/components/ui/Icons';
 import { isPushSupported, getPushPermissionStatus, requestPushPermission } from '@/lib/pushNotifications';
 import { PhoneInput } from '@/components/forms/PhoneInput';
 import type { NotifPrefs } from '@ejm/sit-core';
-import { getBabysitterView } from '@ejm/sit-core';
+import { getBabysitterView, getEjemEmail, getContact } from '@ejm/sit-core';
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
 const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
@@ -135,14 +135,27 @@ export function BabysitterAccountPage() {
   // Push notifications only function when the app is installed as a PWA.
   const pwaMode = isRunningAsPWA();
 
+  // Contact + consent form fields are seeded exactly ONCE per mount (same
+  // rationale as aboutMeSeededRef below): `babysitter` is a fresh object on
+  // every render, so this effect re-runs after every keystroke — unguarded,
+  // it REVERTED typed-but-unsaved contact edits back to the stored values
+  // (pre-existing bug, surfaced by the issue #203 root-only write tests).
+  const contactSeededRef = useRef(false);
+
   // Initialize from userDoc
   useEffect(() => {
     if (!babysitter) return;
-    setContactSharingConsent(babysitter.contactSharingConsent || false);
-    setContactEmail(babysitter.contactEmail || babysitter.email || '');
-    setPhone(babysitter.contactPhone || '');
-    setWhatsapp(babysitter.whatsapp || '');
-    setWhatsappSameAsPhone(babysitter.whatsapp ? babysitter.whatsapp === babysitter.contactPhone : true);
+    if (!contactSeededRef.current) {
+      contactSeededRef.current = true;
+      setContactSharingConsent(babysitter.contactSharingConsent || false);
+      // Contact resolves root ?? nested (issue #203): a root-only edit made on
+      // the other app (or here) wins over the frozen nested enrollment copy.
+      const contact = getContact(userDoc);
+      setContactEmail(contact.contactEmail || babysitter.email || '');
+      setPhone(contact.contactPhone || '');
+      setWhatsapp(contact.whatsapp || '');
+      setWhatsappSameAsPhone(contact.whatsapp ? contact.whatsapp === contact.contactPhone : true);
+    }
     if (!aboutMeSeededRef.current) {
       aboutMeSeededRef.current = true;
       setAboutMe(babysitter.aboutMe || '');
@@ -153,7 +166,7 @@ export function BabysitterAccountPage() {
     if (babysitter.notifPrefs) {
       setPrefs(babysitter.notifPrefs);
     }
-  }, [babysitter]);
+  }, [babysitter, userDoc]);
 
   // Format DOB for display
   const dobDisplay = (() => {
@@ -273,9 +286,12 @@ export function BabysitterAccountPage() {
     try {
       await updateDoc(doc(db, 'users', uid), {
         'profiles.babysitter.contactSharingConsent': contactSharingConsent,
-        'profiles.babysitter.contactEmail': contactEmail || null,
-        'profiles.babysitter.contactPhone': phone || null,
-        'profiles.babysitter.whatsapp': whatsappSameAsPhone ? (phone || null) : (whatsapp || null),
+        // Contact is canonical at the ROOT (issue #203 shared identity):
+        // Account edits write root ONLY; readers resolve root ?? nested, so
+        // the stale nested copy stops mattering the moment this lands.
+        contactEmail: contactEmail || null,
+        contactPhone: phone || null,
+        whatsapp: whatsappSameAsPhone ? (phone || null) : (whatsapp || null),
         updatedAt: serverTimestamp(),
       });
       await refreshUserDoc();
@@ -398,10 +414,10 @@ export function BabysitterAccountPage() {
             <p className="text-xs text-gray-500">{t('account.loginEmail')}</p>
             <p className="text-sm font-medium text-gray-900">{babysitter?.email || ''}</p>
           </div>
-          {babysitter?.ejemEmail && babysitter.ejemEmail !== babysitter.email && (
+          {getEjemEmail(userDoc) && getEjemEmail(userDoc) !== babysitter?.email && (
             <div className="mb-3">
               <p className="text-xs text-gray-500">{t('account.ejemEmail')}</p>
-              <p className="text-sm font-medium text-gray-900">{babysitter.ejemEmail}</p>
+              <p className="text-sm font-medium text-gray-900">{getEjemEmail(userDoc)}</p>
             </div>
           )}
           <div className="mb-3 flex gap-3">

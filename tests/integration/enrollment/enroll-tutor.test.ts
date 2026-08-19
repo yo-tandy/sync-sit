@@ -55,6 +55,12 @@ describe('enrollTutor (unauthenticated create path)', () => {
     expect(user.firstName).toBe('Nora');
     expect(user.lastName).toBe('Newtutor');
     expect(user.consentVersion).toBe('1.0');
+    // Canonical ROOT copies (issue #203 shared identity) written alongside
+    // the nested back-compat duplicates on profiles.tutor.
+    expect(user.ejemEmail).toBe(EMAIL);
+    expect(user.contactEmail).toBe('contact@test.com');
+    expect(user.contactPhone).toBeNull();
+    expect(user.whatsapp).toBeNull();
 
     const tutor = user.profiles.tutor;
     // Owner decision 2026-08-17: tutors share the babysitter trust model —

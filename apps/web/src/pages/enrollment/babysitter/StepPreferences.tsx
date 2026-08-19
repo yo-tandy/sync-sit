@@ -8,7 +8,7 @@ import { LanguagePicker } from '@/components/forms/LanguagePicker';
 import { PhoneInput } from '@/components/forms/PhoneInput';
 import { AddressAutocomplete, type AddressResult } from '@/components/forms/AddressAutocomplete';
 import { ARRONDISSEMENTS, NEARBY_TOWNS } from '@ejm/sit-core';
-import { getBabysitterView } from '@ejm/sit-core';
+import { getBabysitterView, getContact } from '@ejm/sit-core';
 
 interface StepPreferencesProps {
   uid: string;
@@ -46,15 +46,18 @@ export function StepPreferences({ uid, onComplete }: StepPreferencesProps) {
     if (babysitter.maxKids) setMaxKids(babysitter.maxKids);
     if (babysitter.hourlyRate) setHourlyRate(babysitter.hourlyRate);
     if (babysitter.aboutMe) setAboutMe(babysitter.aboutMe);
-    if (babysitter.contactEmail) setContactEmail(babysitter.contactEmail);
-    if (babysitter.contactPhone) setContactPhone(babysitter.contactPhone);
-    if (babysitter.whatsapp) { setWhatsapp(babysitter.whatsapp); setWhatsappSameAsPhone(babysitter.whatsapp === babysitter.contactPhone); }
+    // Contact resolves root ?? nested (issue #203): a crossApp arrival seeds
+    // both copies, and the canonical root wins when they ever diverge.
+    const contact = getContact(userDoc);
+    if (contact.contactEmail) setContactEmail(contact.contactEmail);
+    if (contact.contactPhone) setContactPhone(contact.contactPhone);
+    if (contact.whatsapp) { setWhatsapp(contact.whatsapp); setWhatsappSameAsPhone(contact.whatsapp === contact.contactPhone); }
     if (babysitter.areaMode) setAreaMode(babysitter.areaMode);
     if (babysitter.arrondissements) setArrondissements(babysitter.arrondissements);
     if (babysitter.areaAddress) setAreaAddress(babysitter.areaAddress);
     if (babysitter.areaLatLng) setAreaLatLng(babysitter.areaLatLng);
     if (babysitter.areaRadiusKm) setAreaRadiusKm(babysitter.areaRadiusKm);
-  }, [babysitter]);
+  }, [babysitter, userDoc]);
 
   const toggleArea = (area: string) => {
     if (arrondissements.includes(area)) {
@@ -74,9 +77,15 @@ export function StepPreferences({ uid, onComplete }: StepPreferencesProps) {
         'profiles.babysitter.maxKids': maxKids || null,
         'profiles.babysitter.hourlyRate': hourlyRate || null,
         'profiles.babysitter.aboutMe': aboutMe || null,
+        // Contact dual-writes root + nested (issue #203): this step IS an
+        // enrollment writer, so it mints the canonical root copy like the
+        // server callables do; the nested copy stays for back-compat readers.
         'profiles.babysitter.contactEmail': contactEmail || null,
         'profiles.babysitter.contactPhone': contactPhone || null,
         'profiles.babysitter.whatsapp': whatsappSameAsPhone ? (contactPhone || null) : (whatsapp || null),
+        contactEmail: contactEmail || null,
+        contactPhone: contactPhone || null,
+        whatsapp: whatsappSameAsPhone ? (contactPhone || null) : (whatsapp || null),
         'profiles.babysitter.areaMode': areaMode,
         'profiles.babysitter.arrondissements': areaMode === 'arrondissement' ? arrondissements : [],
         'profiles.babysitter.areaAddress': areaMode === 'distance' ? areaAddress : null,

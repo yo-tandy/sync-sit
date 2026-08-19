@@ -1,4 +1,4 @@
-import { isBabysitter } from '@ejm/shared-core';
+import { isBabysitter, hasAnyContact } from '@ejm/shared-core';
 import type { StudyUser } from '@ejm/study-core';
 
 /**
@@ -8,6 +8,8 @@ import type { StudyUser } from '@ejm/study-core';
  * skippable, abandoned signups lack classLevel and identity). Users missing
  * any prerequisite go to the CLASSIC /enroll/tutor wizard, which collects
  * exactly the missing pieces (and, via identity-on-file, only those).
+ * Contact resolves through the canonical root ?? nested fallback (issue
+ * #203 shared identity), matching what the crossApp callable copies.
  */
 export function canCrossAppEnrollTutor(userDoc: StudyUser | null | undefined): boolean {
   if (!userDoc) return false;
@@ -16,8 +18,7 @@ export function canCrossAppEnrollTutor(userDoc: StudyUser | null | undefined): b
   if (!bs) return false;
   const hasIdentity = !!userDoc.firstName && !!userDoc.lastName && !!userDoc.dateOfBirth;
   const hasClassLevel = !!bs.classLevel;
-  const hasContact = !!bs.contactEmail || !!bs.contactPhone || !!bs.whatsapp;
-  return hasIdentity && hasClassLevel && hasContact;
+  return hasIdentity && hasClassLevel && hasAnyContact(userDoc);
 }
 
 /**

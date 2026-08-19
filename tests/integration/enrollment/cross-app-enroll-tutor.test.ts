@@ -429,6 +429,46 @@ describe('enrollTutor crossApp mode', () => {
     // Babysitter profile and root identity untouched.
     expect(after.profiles.babysitter.searchable).toBe(true);
     expect(after.firstName).toBe('Sacha');
+    // Canonical ROOT copies filled from the babysitter profile (issue #203
+    // shared identity): fillBaseFields lifts them because the root was empty.
+    expect(after.ejemEmail).toBe('richsitter@test.com');
+    expect(after.contactEmail).toBe('sacha@contact.com');
+    expect(after.contactPhone).toBe('+33600000002');
+  });
+
+  // ── Issue #203 shared identity: root-canonical derivation ──
+
+  it('derives from the ROOT ejemEmail when the nested babysitter copy lacks it', async () => {
+    const uid = 'crossapp-root-derive-t';
+    const db = getDb();
+    await getAdminAuth().createUser({ uid, email: 'rootderivet@test.com' });
+    await db.collection('users').doc(uid).set({
+      uid,
+      email: 'rootderivet@test.com',
+      firstName: 'Root', lastName: 'Derive', dateOfBirth: '2008-04-01',
+      status: 'active',
+      // Post-backfill shape: canonical root, nested copy already cleaned.
+      ejemEmail: 'root.derive.t@ejm-test.org',
+      contactEmail: 'roott@contact.com',
+      profiles: {
+        babysitter: { enrollmentComplete: true, searchable: false, classLevel: '2nde' },
+      },
+    });
+    const token = await getIdToken(uid);
+    const result = await callFunction<{ uid: string }>(
+      'enrollTutor',
+      { crossApp: true, consentVersion: '1.0', subjects: SUBJECTS },
+      token,
+    );
+    expect(result.uid).toBe(uid);
+    const after = (await db.collection('users').doc(uid).get()).data()!;
+    expect(after.profiles.tutor.ejemEmail).toBe('root.derive.t@ejm-test.org');
+    // Root contact resolves into the synthesized enrollment (contact floor met
+    // by the ROOT field alone).
+    expect(after.profiles.tutor.contactEmail).toBe('roott@contact.com');
+    // Root stays untouched (fillBaseFields never overwrites populated fields).
+    expect(after.ejemEmail).toBe('root.derive.t@ejm-test.org');
+    expect(after.contactEmail).toBe('roott@contact.com');
   });
 
   it('records crossApp provenance in the audit trail', async () => {

@@ -89,9 +89,10 @@ describe('tutor AccountPage', () => {
     expect(screen.getByText('login@ejm.org')).toBeInTheDocument();
   });
 
-  it('saves contact info to the nested tutor fields', async () => {
+  it('saves contact info to the ROOT fields only (issue #203 shared identity)', async () => {
     renderWithProviders(<AccountPage />);
     const emailInput = screen.getByLabelText('Email') as HTMLInputElement;
+    // Seeded from the nested copy via the root ?? nested fallback.
     expect(emailInput.value).toBe('old@example.com');
     fireEvent.change(emailInput, { target: { value: 'new@example.com' } });
     fireEvent.click(screen.getByRole('button', { name: /save contact/i }));
@@ -100,14 +101,38 @@ describe('tutor AccountPage', () => {
       expect(h.updateDoc).toHaveBeenCalledWith(
         expect.objectContaining({ path: 'users/t1' }),
         expect.objectContaining({
-          'profiles.tutor.contactEmail': 'new@example.com',
-          'profiles.tutor.contactPhone': '+33 600000000',
-          'profiles.tutor.whatsapp': '+33 600000000',
+          contactEmail: 'new@example.com',
+          contactPhone: '+33 600000000',
+          whatsapp: '+33 600000000',
           updatedAt: 'ts',
         }),
       ),
     );
+    // Root-only: no nested contact keys may ride the payload — the nested
+    // copy is a frozen back-compat duplicate, never client-written again.
+    const payload = h.updateDoc.mock.calls[0][1] as Record<string, unknown>;
+    for (const key of Object.keys(payload)) {
+      expect(key.startsWith('profiles.')).toBe(false);
+    }
     await waitFor(() => expect(h.auth.refreshUserDoc).toHaveBeenCalled());
+  });
+
+  it('seeds contact from the ROOT fields when present (root wins over nested)', () => {
+    h.auth.userDoc = {
+      ...makeUserDoc(),
+      contactEmail: 'root@example.com',
+      contactPhone: '+33 611111111',
+    };
+    renderWithProviders(<AccountPage />);
+    expect((screen.getByLabelText('Email') as HTMLInputElement).value).toBe('root@example.com');
+  });
+
+  it('renders the EJM email from the root field when the nested copy is absent', () => {
+    const doc = makeUserDoc();
+    delete (doc.profiles.tutor as Record<string, unknown>).ejemEmail;
+    h.auth.userDoc = { ...doc, ejemEmail: 'alice.martin24@ejm.org' };
+    renderWithProviders(<AccountPage />);
+    expect(screen.getByText('alice.martin24@ejm.org')).toBeInTheDocument();
   });
 
   it('sends a password reset email to the login address', async () => {

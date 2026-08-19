@@ -240,6 +240,46 @@ describe('enrollBabysitter crossApp mode', () => {
     expect(after.profiles.tutor.searchable).toBe(true);
     expect(after.firstName).toBe('Rica');
     expect(after.language).toBe('fr');
+    // Canonical ROOT copies filled from the tutor profile (issue #203 shared
+    // identity): fillBaseFields lifts them because the root was empty.
+    expect(after.ejemEmail).toBe('rica.tutor@ejm-test.org');
+    expect(after.contactEmail).toBe('rica@contact.com');
+    expect(after.contactPhone).toBe('+33600000001');
+    expect(after.whatsapp).toBe('+33600000001');
+  });
+
+  // ── Issue #203 shared identity: root-canonical derivation ──
+
+  it('derives from the ROOT ejemEmail when the nested tutor copy lacks it', async () => {
+    const uid = 'crossapp-root-derive';
+    const db = getDb();
+    await getAdminAuth().createUser({ uid, email: 'rootderive@test.com' });
+    await db.collection('users').doc(uid).set({
+      uid,
+      email: 'rootderive@test.com',
+      firstName: 'Root', lastName: 'Derive', dateOfBirth: '2008-05-01',
+      status: 'active',
+      // Post-backfill shape: canonical root, nested copy already cleaned.
+      ejemEmail: 'root.derive@ejm-test.org',
+      contactPhone: '+33600000009',
+      profiles: {
+        tutor: { enrollmentComplete: true, searchable: false, classLevel: '2nde' },
+      },
+    });
+    const token = await getIdToken(uid);
+    const result = await callFunction<{ success: boolean; uid: string }>(
+      'enrollBabysitter',
+      { crossApp: true, consentVersion: '1.0' },
+      token,
+    );
+    expect(result.uid).toBe(uid);
+    const after = (await db.collection('users').doc(uid).get()).data()!;
+    expect(after.profiles.babysitter.ejemEmail).toBe('root.derive@ejm-test.org');
+    // Root contact resolves into the copied profile fields too.
+    expect(after.profiles.babysitter.contactPhone).toBe('+33600000009');
+    // Root stays untouched (fillBaseFields never overwrites populated fields).
+    expect(after.ejemEmail).toBe('root.derive@ejm-test.org');
+    expect(after.contactPhone).toBe('+33600000009');
   });
 
   it('records crossApp provenance in the audit trail', async () => {

@@ -16,14 +16,20 @@ export function getBabysitterProfile(
  * profile. Lets consumer code that reads both user-level and babysitter-level
  * fields off one object do so with a single call.
  */
-export type BabysitterView = User & BabysitterProfile;
+// The root shared-identity quartet (ejemEmail + contact trio, issue #203) is
+// omitted from the User half: the PROFILE copy wins in the flattened view
+// (pre-change behavior). Code that wants the canonical resolution uses
+// getEjemEmail/getContact from shared-core instead of the view.
+export type BabysitterView =
+  Omit<User, 'ejemEmail' | 'contactEmail' | 'contactPhone' | 'whatsapp'> & BabysitterProfile;
 
 export function getBabysitterView(
   user: User | null | undefined,
 ): BabysitterView | null {
   const profile = getBabysitterProfile(user);
   if (!user || !profile) return null;
-  return { ...user, ...profile };
+  const { ejemEmail: _ee, contactEmail: _ce, contactPhone: _cp, whatsapp: _wa, ...base } = user;
+  return { ...base, ...profile };
 }
 
 /** The user's role within sync-sit, for routing and guards. */

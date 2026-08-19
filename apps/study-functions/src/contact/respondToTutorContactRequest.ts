@@ -10,6 +10,7 @@ import {
   notifyChildOfGuardianAction,
 } from '@ejm/shared-functions/guardian/guardianAccess.js';
 import type { StudyUser, TutorProfile } from '@ejm/study-core';
+import { getContact } from '@ejm/shared-core';
 import { respondTutorContactRequestSchema } from '../validation/contact.js';
 
 export const respondToTutorContactRequest = onCall(
@@ -87,9 +88,9 @@ export const respondToTutorContactRequest = onCall(
     const tutorName = `${tutorUser?.firstName || ''} ${tutorUser?.lastName || ''}`.trim() || 'A tutor';
 
     if (action === 'accept') {
-      const contactEmail = tutor?.contactEmail;
-      const contactPhone = tutor?.contactPhone;
-      const whatsapp = tutor?.whatsapp;
+      // Canonical root ?? nested resolution (issue #203 shared identity):
+      // the shared email must carry the tutor's freshest contact channels.
+      const { contactEmail, contactPhone, whatsapp } = getContact(tutorUser);
       const contactBlock = [
         contactEmail ? `<p><strong>Email:</strong> ${escapeHtml(contactEmail)}</p>` : '',
         contactPhone ? `<p><strong>Phone:</strong> ${escapeHtml(contactPhone)}</p>` : '',

@@ -3,6 +3,7 @@ import { db, adminAuth } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { FieldValue } from 'firebase-admin/firestore';
 import { strongPasswordSchema } from '@ejm/sit-core';
+import { getEjemEmail, getContact, type User } from '@ejm/shared-core';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
 import {
   addProfileToUser,
@@ -69,12 +70,26 @@ export const enrollBabysitter = onCall(
     let copiedProfileFields: Record<string, unknown> = {};
     if (isCrossApp) {
       const callerSnap = await db.collection('users').doc(request.auth!.uid).get();
+      const callerData = (callerSnap.data() ?? {}) as unknown as User;
       const tutorProfile = (callerSnap.data()?.profiles?.tutor ?? null) as Record<string, unknown> | null;
-      if (!tutorProfile || typeof tutorProfile.ejemEmail !== 'string' || !tutorProfile.ejemEmail) {
+      // The EJM identity is canonical at the ROOT with a nested fallback
+      // (issue #203 shared identity) — but crossApp still requires the OTHER
+      // provider profile to exist: that profile is what proves the identity
+      // was verified by a real enrollment.
+      const derivedEjemEmail = getEjemEmail(callerData);
+      if (!tutorProfile || !derivedEjemEmail) {
         throw new HttpsError('failed-precondition', 'No verified EJM identity on this account');
       }
-      ejemEmailLower = tutorProfile.ejemEmail.toLowerCase();
-      copiedProfileFields = copySharedProfileFields(tutorProfile);
+      ejemEmailLower = derivedEjemEmail.toLowerCase();
+      // classLevel/gender stay profile-scoped; contact resolves root ?? nested
+      // so a tutor who edited contact at the canonical root still hands the
+      // fresh values to their new babysitter profile.
+      copiedProfileFields = {
+        ...copySharedProfileFields(tutorProfile),
+        ...Object.fromEntries(
+          Object.entries(getContact(callerData)).filter(([, v]) => v !== null),
+        ),
+      };
     } else {
       if (!data.ejemEmail) {
         throw new HttpsError('invalid-argument', 'EJM email is required');
@@ -126,7 +141,16 @@ export const enrollBabysitter = onCall(
           // sit-specific (availability).
           ...copiedProfileFields,
         },
-        fillBaseFields: { language: 'en' },
+        // Root shared-identity fields (issue #203): dual-write the canonical
+        // root copies alongside the nested ones. fillBaseFields writes only
+        // EMPTY root fields, so an existing canonical value always wins.
+        fillBaseFields: {
+          language: 'en',
+          ejemEmail: ejemEmailLower,
+          contactEmail: copiedProfileFields.contactEmail,
+          contactPhone: copiedProfileFields.contactPhone,
+          whatsapp: copiedProfileFields.whatsapp,
+        },
         auditAction: 'babysitter_profile_added',
         auditDetails: {
           ejemEmail: ejemEmailLower,
@@ -162,6 +186,9 @@ export const enrollBabysitter = onCall(
     await db.collection('users').doc(uid).set({
       uid,
       email: ejemEmailLower,
+      // Canonical root copy (issue #203 shared identity); the nested copy
+      // below stays for back-compat readers until the later cleanup.
+      ejemEmail: ejemEmailLower,
       status: 'active',
       profiles: {
         babysitter: {

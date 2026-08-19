@@ -229,6 +229,12 @@ service cloud.firestore {
       // - Top-level identity/admin fields must never change client-side:
       //   * uid/email/status/createdAt: identity; `status` is the hard ban gate
       //     that admin's blockUser callable owns.
+      //   * ejemEmail: canonical ROOT copy of the verified EJM identity
+      //     (issue #203 shared identity) — same client-immutable semantics as
+      //     the nested profiles.*.ejemEmail pins below; enrollment callables
+      //     and the backfill (Admin SDK) are the only writers. The root
+      //     contact fields (contactEmail/contactPhone/whatsapp) are
+      //     deliberately NOT listed: owner-editable by design.
       //   * isAdmin: the admin-escalation vector.
       // - profileRolesUnchanged: the SET of role slots can't change — blocks a
       //   client granting itself a new role (e.g. injecting profiles.babysitter).
@@ -250,7 +256,7 @@ service cloud.firestore {
       //   without token revocation, or spoof the coherence signal.
       allow update: if isOwner(userId)
                     && !request.resource.data.diff(resource.data).affectedKeys()
-                        .hasAny(['uid', 'email', 'status', 'createdAt', 'isAdmin',
+                        .hasAny(['uid', 'email', 'ejemEmail', 'status', 'createdAt', 'isAdmin',
                                  'governedBy', 'identityLocked', 'sessionEpoch'])
                     && profileRolesUnchanged()
                     && babysitterIdentityUnchanged()
