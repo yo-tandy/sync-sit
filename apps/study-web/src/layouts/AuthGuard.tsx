@@ -42,9 +42,9 @@ export function AuthGuard({ role, children }: AuthGuardProps) {
     if (studyRole === 'tutor') return <Navigate to="/tutor" replace />;
     if (studyRole === 'parent') return <Navigate to="/family" replace />;
     // A sit babysitter with no study role skips the role question (issue
-    // #144): the welcome page enrolls them with subjects alone — when their
-    // sit profile carries everything crossApp derives; otherwise the classic
-    // wizard collects the missing pieces.
+    // #144): the welcome page enrolls them with subjects plus whatever their
+    // sit profile is missing (issue #203). Only a doc with no verified
+    // babysitter identity (no ejemEmail) falls back to the classic wizard.
     if (isBabysitter(userDoc)) {
       return <Navigate to={canCrossAppEnrollTutor(userDoc) ? '/welcome-study' : '/enroll/tutor'} replace />;
     }
