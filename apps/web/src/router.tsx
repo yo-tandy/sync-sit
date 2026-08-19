@@ -56,6 +56,7 @@ import { PreferredBabysittersPage } from '@/pages/family/PreferredBabysittersPag
 import { GovernancePage } from '@/pages/family/GovernancePage';
 import { CreateKidInvitePage } from '@/pages/family/CreateKidInvitePage';
 import { GovernedChildPage } from '@/pages/family/GovernedChildPage';
+import { NotificationsPage } from '@/pages/NotificationsPage';
 
 // Admin pages
 import { AdminDashboard } from '@/pages/admin/DashboardPage';
@@ -112,6 +113,7 @@ export const router = createBrowserRouter([
       { path: '/babysitter/families', element: <FamiliesPage /> },
       { path: '/babysitter/references', element: <Navigate to="/babysitter/endorsements" replace /> },
       { path: '/babysitter/request/:appointmentId', element: <RequestDetailPage /> },
+      { path: '/babysitter/notifications', element: <NotificationsPage /> },
       // Backward-compatible redirects
       { path: '/babysitter/profile', element: <Navigate to="/babysitter/options" replace /> },
       { path: '/babysitter/settings', element: <Navigate to="/babysitter/account" replace /> },
@@ -134,6 +136,7 @@ export const router = createBrowserRouter([
       { path: '/family/governance', element: <GovernancePage /> },
       { path: '/family/governance/new', element: <CreateKidInvitePage /> },
       { path: '/family/governance/:childUid', element: <GovernedChildPage /> },
+      { path: '/family/notifications', element: <NotificationsPage /> },
     ],
   },
 
@@ -151,6 +154,7 @@ export const router = createBrowserRouter([
       { path: '/admin/gdpr-export', element: <AdminGdprExportPage /> },
       { path: '/admin/verifications', element: <AdminVerificationsPage /> },
       { path: '/admin/governance', element: <AdminGovernancePage /> },
+      { path: '/admin/notifications', element: <NotificationsPage /> },
     ],
   },
 ]);

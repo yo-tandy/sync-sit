@@ -21,6 +21,7 @@ import {
   SupervisionChip,
 } from '@ejm/shared-ui';
 import { AppSwitchMenuItem } from './AppSwitchMenuItem';
+import { NotificationBell } from './NotificationBell';
 
 function MenuIcon({ className }: { className?: string }) {
   return (
@@ -70,6 +71,7 @@ export function AppBar() {
               to="/supervision-info"
             />
           )}
+          <NotificationBell to="/tutor/notifications" />
           <button
             onClick={() => setMenuOpen(true)}
             className="-m-1.5 flex h-11 w-11 items-center justify-center text-white"

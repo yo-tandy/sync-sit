@@ -85,6 +85,14 @@ export default {
     tryAgain: 'Réessayer',
     pushRequiresInstall: "Les notifications push sont disponibles uniquement après avoir ajouté l'application à votre écran d'accueil.",
     pushRequiresInstallLink: 'Comment installer',
+    // In-app notification surface (issue #127, UX F13)
+    pageTitle: 'Notifications',
+    bellAria: 'Notifications',
+    bellAriaUnread: 'Notifications, {{count}} non lue(s)',
+    empty: 'Aucune notification pour le moment.',
+    markAllRead: 'Tout marquer comme lu',
+    unread: 'non lue',
+    loadError: 'Impossible de charger les notifications. Veuillez réessayer plus tard.',
   },
 
   pwaInstall: {
