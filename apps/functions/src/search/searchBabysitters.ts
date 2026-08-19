@@ -122,7 +122,10 @@ export const searchBabysitters = onCall(
     for (const userDoc of usersSnap.docs) {
       // Flattened babysitter view (User + babysitter profile), tolerant of
       // both legacy flat docs and new profiles.babysitter docs.
-      const b = getBabysitterView(userDoc.data() as User);
+      // Decode ONCE per candidate: the Node SDK rebuilds the object from the
+      // proto on every data() call, and this loop reads it four times.
+      const raw = userDoc.data() as User;
+      const b = getBabysitterView(raw);
       if (!b) continue;
       const uid = userDoc.id;
 
@@ -205,11 +208,11 @@ export const searchBabysitters = onCall(
       // governedBy mirror, present iff its guardian link is ACTIVE) is
       // deliberately searchable at any age — supervision is its protection.
       // Read off the raw doc: the flattened view need not carry the mirror.
-      const isGoverned = !!userDoc.data().governedBy;
+      const isGoverned = !!raw.governedBy;
       if (!isGoverned && b.dateOfBirth) {
         if (babysitterAge < 15) continue;
         // Canonical root ?? nested resolution (issue #203 shared identity).
-        const babysitterEjemEmail = getEjemEmail(userDoc.data() as User) || '';
+        const babysitterEjemEmail = getEjemEmail(raw) || '';
         const emailCheck = validateEjmEmail(babysitterEjemEmail);
         if (emailCheck.valid && emailCheck.graduationYear !== undefined) {
           const verdict = checkEnrollmentAge({
@@ -238,7 +241,7 @@ export const searchBabysitters = onCall(
       // Only share contact info if babysitter has approved this family
       const approvedFamilies: string[] = b.approvedFamilies || [];
       const contactApproved = callerFamilyId ? approvedFamilies.includes(callerFamilyId) : false;
-      const contact = getContact(userDoc.data() as User);
+      const contact = getContact(raw);
 
       results.push({
         uid,

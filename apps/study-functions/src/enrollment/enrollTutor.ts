@@ -27,8 +27,10 @@ interface EnrollTutorData {
   // are copied server-side from the babysitter profile. `enrollment` may carry
   // a PARTIAL supplement for the fields the sit profile never got (issue #203:
   // contact is skippable in sit; pre-age-gate docs lack a DOB; abandoned
-  // signups lack classLevel/identity). Stored values always win over the
-  // supplement — see pickCrossAppSupplement.
+  // signups lack classLevel/identity). Stored values win over the supplement
+  // — EXCEPT the contact trio, which round 4 inverted (a channel typed in the
+  // wizard beats the stored copy, so re-entering a contact right after
+  // clearing it cannot resurrect the old value). See the merge block below.
   crossApp?: boolean;
   subjects?: unknown;
 }
@@ -106,7 +108,8 @@ export const enrollTutor = onCall(
     // (owner call on issue #144); the audit trail records crossApp: true. The
     // wizard sends `subjects` plus an optional partial supplement for fields
     // the sit profile lacks (issue #203); classLevel/gender/contact are copied
-    // from the babysitter profile OVER the supplement (stored wins) and the
+    // from the babysitter profile OVER the supplement (stored wins; contact
+    // excepted — see the merge block) and the
     // merged input is validated through the same schema.
     // Classic: verify the emailed code as before.
     let ejemEmailLower: string;

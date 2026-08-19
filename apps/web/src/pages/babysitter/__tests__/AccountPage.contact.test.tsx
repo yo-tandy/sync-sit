@@ -89,6 +89,29 @@ describe('BabysitterAccountPage contact (shared identity, issue #203)', () => {
   });
   afterEach(() => cleanup());
 
+  it('a CLEARED channel is not re-proposed on the next mount (no resurrection via defaults)', async () => {
+    // The user cleared WhatsApp and the contact email; the nested enrollment
+    // copies are frozen at the old values. Re-seeding the login email or
+    // re-checking "same as phone" would republish both on the next save
+    // (PR #206 review).
+    h.auth.userDoc = {
+      ...userDoc({ contactPhone: '+33 600000000' }),
+      contactEmail: null,
+      contactPhone: '+33 600000000',
+      whatsapp: null,
+    } as Record<string, unknown>;
+    renderPage();
+    expect((contactEmailInput() as HTMLInputElement).value).toBe('');
+    const sameAsPhone = screen.getByRole('checkbox', { name: /same as phone/i }) as HTMLInputElement;
+    expect(sameAsPhone.checked).toBe(false);
+
+    fireEvent.click(saveButton());
+    await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
+    const payload = h.updateDoc.mock.calls[0][1] as Record<string, unknown>;
+    expect(payload).toHaveProperty('contactEmail', null);
+    expect(payload).toHaveProperty('whatsapp', null);
+  });
+
   it('CLEARING a channel writes an explicit root null (the delete must take effect)', async () => {
     // Root-only writes + root-presence-authoritative resolution: an emptied
     // field must persist as null so the frozen nested enrollment copy stops

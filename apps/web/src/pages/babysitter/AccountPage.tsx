@@ -151,10 +151,20 @@ export function BabysitterAccountPage() {
       // Contact resolves root ?? nested (issue #203): a root-only edit made on
       // the other app (or here) wins over the frozen nested enrollment copy.
       const contact = getContact(userDoc);
-      setContactEmail(contact.contactEmail || babysitter.email || '');
+      // Cleared-vs-absent drives the two defaults: a channel the user
+      // DELETED must not be re-proposed as the login email, nor re-checked
+      // as "same as phone" — either would republish it at the canonical root
+      // on the next save, undoing the deletion one layer above where rounds
+      // 3/4 enforce it (PR #206 review).
+      const rootRaw = userDoc as unknown as Record<string, unknown>;
+      const emailCleared = rootRaw.contactEmail !== undefined && !contact.contactEmail;
+      const whatsappCleared = rootRaw.whatsapp !== undefined && !contact.whatsapp;
+      setContactEmail(contact.contactEmail || (emailCleared ? '' : babysitter.email || ''));
       setPhone(contact.contactPhone || '');
       setWhatsapp(contact.whatsapp || '');
-      setWhatsappSameAsPhone(contact.whatsapp ? contact.whatsapp === contact.contactPhone : true);
+      setWhatsappSameAsPhone(
+        contact.whatsapp ? contact.whatsapp === contact.contactPhone : !whatsappCleared,
+      );
     }
     if (!aboutMeSeededRef.current) {
       aboutMeSeededRef.current = true;
