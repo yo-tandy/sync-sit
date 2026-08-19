@@ -15,6 +15,10 @@
  * study, making the babysitter copy the origin of the pair. (This matches
  * the read helpers' fallback order in shared-core getEjemEmail/getContact.)
  *
+ * CONTESTED fields (both nested copies non-empty and disagreeing) are
+ * flagged in every run; under --apply the affected DOCS are skipped and the
+ * run exits 2 unless --force-contested is passed — review, then force.
+ *
  * DRY-RUN BY DEFAULT: prints what would change and writes nothing. Pass
  * --apply (or APPLY=1) to actually write; DRY_RUN=1 forces a dry-run even if
  * apply is requested.
@@ -90,6 +94,7 @@ async function main() {
     projectFlagIdx !== -1 ? argv[projectFlagIdx + 1] : process.env.GCLOUD_PROJECT || undefined;
   const apply =
     (argv.includes('--apply') || process.env.APPLY === '1') && process.env.DRY_RUN !== '1';
+  const forceContested = process.argv.includes('--force-contested');
 
   const app = initializeApp(projectId ? { projectId } : undefined);
   const db = getFirestore(app);
@@ -105,6 +110,7 @@ async function main() {
   let updated = 0;
   let unchanged = 0;
   let contestedDocs = 0;
+  let skippedContested = 0;
 
   for (const userDoc of usersSnap.docs) {
     const result = computeRootPatch(userDoc.data());
@@ -115,11 +121,22 @@ async function main() {
     for (const c of result.contested) {
       contestedDocs += 1;
       console.log(
-        `  CONTESTED users/${userDoc.id} ${c.field}: babysitter='${c.babysitter}' vs tutor='${c.tutor}' — tiebreak keeps the babysitter copy; the tutor copy may be a newer study edit. Review before --apply.`,
+        `  CONTESTED users/${userDoc.id} ${c.field}: babysitter='${c.babysitter}' vs tutor='${c.tutor}' — tiebreak keeps the babysitter copy; the tutor copy may be a newer study edit.`,
       );
     }
     if (!result.patch) { unchanged += 1; continue; }
     const fields = Object.keys(result.patch).join(', ');
+    // Structural review gate (PR #206 review): under --apply, a doc with any
+    // contested field is SKIPPED (nothing written to it) unless
+    // --force-contested is passed — the tiebreak must never silently
+    // canonicalize a possibly-newer study edit, and root ejemEmail is
+    // client-immutable once written, so the only correction is another
+    // Admin-SDK run. Uncontested docs still apply normally.
+    if (apply && result.contested.length > 0 && !forceContested) {
+      console.log(`  SKIP  users/${userDoc.id} — contested; re-run with --force-contested after review`);
+      skippedContested += 1;
+      continue;
+    }
     if (apply) {
       await userDoc.ref.update(result.patch);
       console.log(`  WRITE users/${userDoc.id} — set root ${fields}`);
@@ -129,7 +146,13 @@ async function main() {
     updated += 1;
   }
 
-  console.log(`\nDone. ${apply ? 'Wrote' : 'Would write'} ${updated} doc(s); ${unchanged} already canonical/no source; ${contestedDocs} CONTESTED field(s) flagged above.`);
+  console.log(`\nDone. ${apply ? 'Wrote' : 'Would write'} ${updated} doc(s); ${unchanged} already canonical/no source; ${contestedDocs} CONTESTED field(s) flagged; ${skippedContested} doc(s) skipped as contested.`);
+  if (apply && skippedContested > 0) {
+    console.error(
+      `\nATTENTION: ${skippedContested} contested doc(s) were NOT written. Review the CONTESTED lines, then re-run with --force-contested to apply the babysitter tiebreak to them.`,
+    );
+    process.exit(2);
+  }
 }
 
 if (require.main === module) {

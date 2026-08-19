@@ -10,12 +10,14 @@ import type { StudyUser, TutorProfile, LocationPref } from '@ejm/study-core';
 import {
   getSchoolYearsInRange,
   incrementDate,
+  splitRangesByLocation,
   type ConfirmedBlock,
   type DayOverride,
 } from '@ejm/study-core';
 import { getTutorAvailabilitySchema } from '../validation/availability.js';
 import {
   computeDateAvailability,
+  resolveDateLocationCells,
   sessionToConfirmedBlock,
   type HolidayPeriod,
 } from './computeDateAvailability.js';
@@ -42,8 +44,9 @@ type WeeklyGrid = Partial<Record<DayOfWeek, boolean[]>>;
 /**
  * getTutorAvailability — returns a tutor's bookable slot grid per date to an
  * approved family. Reads only; writes nothing but an audit entry. The output is
- * boolean grids ONLY: no session details, no reasons — availability is
- * consent-gated exactly like the tutor's contact fields.
+ * boolean grids plus schedule-derived location ranges (issue #166) ONLY: no
+ * session details, no reasons — availability is consent-gated exactly like the
+ * tutor's contact fields.
  */
 export const getTutorAvailability = onCall(
   { region: 'europe-west1', cors: getCorsOrigin() },
@@ -94,6 +97,7 @@ export const getTutorAvailability = onCall(
     const scheduleSnap = await db.collection('schedules').doc(tutorUserId).get();
     const schedule = scheduleSnap.data();
     const weekly: WeeklyGrid = (schedule?.weekly as WeeklyGrid) ?? {};
+    const weeklyLocations = schedule?.weeklyLocations; // raw; sanitized per date
     const holidayMode = schedule?.holidayMode as string | undefined;
     const holidaySchedules =
       (schedule?.holidaySchedules as Record<string, WeeklyGrid> | undefined) ??
@@ -114,6 +118,9 @@ export const getTutorAvailability = onCall(
       overrideByDate.set(doc.id, {
         type: data.type as DayOverride['type'],
         slots: data.slots as boolean[] | undefined,
+        // Authorship marker — location tag resolution distinguishes a
+        // tutor-authored 'manual' override from a session-claim doc.
+        reason: data.reason as string | undefined,
       });
     }
 
@@ -185,25 +192,36 @@ export const getTutorAvailability = onCall(
       blocksByDate.set(date, list);
     }
 
-    // ── Compute each date's grid (shared per-date composition) ──
+    // ── Compute each date's grid (shared per-date composition) plus its
+    // effective location ranges (issue #166): each contiguous bookable run is
+    // split wherever the effective set — per-slot tag override ?? profile
+    // locationPrefs — changes. Legacy docs and override/holiday-substituted
+    // dates resolve every cell to profile defaults. Additive field; the
+    // boolean grids are unchanged. ──
+    const locationDefaults = tutor.locationPrefs ?? [];
     const nowParis = parisWallClockPosition(new Date());
-    const dates = eachDateInRange(startDate, endDate).map((date) => ({
-      date,
-      slots: computeDateAvailability(
+    const dates = eachDateInRange(startDate, endDate).map((date) => {
+      const inputs = {
+        weekly,
+        weeklyLocations,
+        holidayMode,
+        holidaySchedules,
+        holidayPeriods,
+        override: overrideByDate.get(date),
+        confirmedBlocks: blocksByDate.get(date) ?? [],
+        paddingMin,
+      };
+      const slots = computeDateAvailability(date, inputs, nowParis, NOTICE_HOURS);
+      return {
         date,
-        {
-          weekly,
-          holidayMode,
-          holidaySchedules,
-          holidayPeriods,
-          override: overrideByDate.get(date),
-          confirmedBlocks: blocksByDate.get(date) ?? [],
-          paddingMin,
-        },
-        nowParis,
-        NOTICE_HOURS,
-      ),
-    }));
+        slots,
+        locationRanges: splitRangesByLocation(
+          slots,
+          resolveDateLocationCells(date, inputs),
+          locationDefaults,
+        ),
+      };
+    });
 
     await writeUserActivity(uid, 'availability_viewed', { tutorUserId });
 

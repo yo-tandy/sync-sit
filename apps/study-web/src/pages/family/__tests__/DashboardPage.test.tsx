@@ -105,8 +105,13 @@ describe('family DashboardPage', () => {
   it('shows the verification banner when the family is not fully verified', async () => {
     h.familyData = { familyName: 'Cohen', verification: { isFullyVerified: false } };
     renderWithProviders(<DashboardPage />);
-    // Banner explains verification happens in the sit app and search is locked.
+    // Banner explains search is locked and opens the IN-APP verification page
+    // (issue #129: the flow is shared with sit but lives in the current app).
     expect(await screen.findByText(/verify your family/i)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /complete verification/i })).toHaveAttribute(
+      'href',
+      '/family/verification',
+    );
     // No active search CTA while unverified.
     expect(screen.queryByRole('link', { name: /find a tutor/i })).not.toBeInTheDocument();
   });

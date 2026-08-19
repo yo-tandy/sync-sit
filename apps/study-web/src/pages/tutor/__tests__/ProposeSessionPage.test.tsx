@@ -10,6 +10,8 @@ import { renderWithProviders } from '@/__tests__/test-utils';
 const h = vi.hoisted(() => ({
   userDoc: null as unknown,
   weekly: {} as Record<string, boolean[]>,
+  weeklyLocations: undefined as Record<string, Record<string, string[]>> | undefined,
+  overrides: [] as { date: string; reason?: string }[],
   params: { familyId: 'fam1' } as Record<string, string | undefined>,
   locState: null as unknown,
   callable: vi.fn(),
@@ -27,7 +29,7 @@ vi.mock('@/stores/authStore', () => ({
 }));
 
 vi.mock('@/hooks/useSchedule', () => ({
-  useSchedule: () => ({ weekly: h.weekly }),
+  useSchedule: () => ({ weekly: h.weekly, weeklyLocations: h.weeklyLocations, overrides: h.overrides }),
 }));
 
 vi.mock('react-router', async (importOriginal) => {
@@ -74,6 +76,7 @@ const FUTURE_MON = '2027-06-07';
 function reset() {
   h.userDoc = tutorDoc();
   h.weekly = { mon: monGrid() };
+  h.weeklyLocations = undefined;
   h.params = { familyId: 'fam1' };
   h.locState = { familyName: 'Cohen', subject: 'math', level: '6e' };
   h.callable.mockReset();
@@ -143,5 +146,138 @@ describe('tutor ProposeSessionPage', () => {
     h.locState = { familyName: 'Cohen' }; // no subject/level
     renderWithProviders(<ProposeSessionPage />);
     expect(screen.getByText(/could not open the proposal form/i)).toBeInTheDocument();
+  });
+});
+
+// ── Per-slot location tags (issue #166): the tutor's own weekly tags
+// constrain the location select for the armed start; without tags (legacy
+// doc) the full profile prefs apply. ──
+describe('tutor ProposeSessionPage — location tags', () => {
+  beforeEach(() => {
+    h.userDoc = tutorDoc({ locationPrefs: ['online', 'family_home'] });
+    h.weekly = { mon: monGrid() };
+    h.weeklyLocations = undefined;
+    h.overrides = [];
+    h.params = { familyId: 'fam1' };
+    h.locState = { familyName: 'Cohen', subject: 'math', level: '6e' };
+    h.callable.mockReset();
+    h.callable.mockResolvedValue({ data: { sessionId: 'new-sess' } });
+    h.navigate.mockReset();
+  });
+
+  function monTags(locations: string[]): Record<string, string[]> {
+    const cells: Record<string, string[]> = {};
+    for (let i = 64; i < 80; i++) cells[String(i)] = locations;
+    return cells;
+  }
+
+  it('narrows the location options to the armed slot tags and proposes with it', async () => {
+    h.weeklyLocations = { mon: monTags(['family_home']) };
+    renderWithProviders(<ProposeSessionPage />);
+
+    fireEvent.change(screen.getByLabelText(/date/i), { target: { value: FUTURE_MON } });
+    fireEvent.click(await screen.findByRole('button', { name: '16:00' }));
+
+    const select = screen.getByLabelText(/location/i) as HTMLSelectElement;
+    expect(Array.from(select.options).map((o) => o.value)).toEqual(['family_home']);
+
+    fireEvent.click(screen.getByRole('button', { name: /send proposal/i }));
+    await waitFor(() => {
+      const call = h.callable.mock.calls.find((c) => c[0] === 'proposeSession');
+      expect(call?.[1]).toMatchObject({ location: 'family_home' });
+    });
+  });
+
+  it('a manual override on the chosen date skips the tag narrowing (server parity)', async () => {
+    // proposeSession resolves per-date: a tutor-authored override (reason
+    // 'manual') turns the weekly tags off, so the select must offer the full
+    // profile prefs — hiding family_home here was a dead end the server
+    // would have accepted (PR #185 review). Claim-ledger docs (reason
+    // 'study_session') keep the tags, mirroring resolveDateLocationCells.
+    h.weeklyLocations = { mon: monTags(['online']) };
+    h.overrides = [{ date: FUTURE_MON, reason: 'manual' }];
+    renderWithProviders(<ProposeSessionPage />);
+    fireEvent.change(screen.getByLabelText(/date/i), { target: { value: FUTURE_MON } });
+    fireEvent.click(await screen.findByRole('button', { name: '16:00' }));
+    const select = screen.getByLabelText(/location/i) as HTMLSelectElement;
+    expect(Array.from(select.options).map((o) => o.value)).toEqual(['family_home', 'online']);
+  });
+
+  it('a claim-ledger override on the chosen date KEEPS the tag narrowing', async () => {
+    h.weeklyLocations = { mon: monTags(['online']) };
+    h.overrides = [{ date: FUTURE_MON, reason: 'study_session' }];
+    renderWithProviders(<ProposeSessionPage />);
+    fireEvent.change(screen.getByLabelText(/date/i), { target: { value: FUTURE_MON } });
+    fireEvent.click(await screen.findByRole('button', { name: '16:00' }));
+    const select = screen.getByLabelText(/location/i) as HTMLSelectElement;
+    expect(Array.from(select.options).map((o) => o.value)).toEqual(['online']);
+  });
+
+  it('keeps the full profile prefs when the schedule has no tags (legacy doc)', async () => {
+    renderWithProviders(<ProposeSessionPage />);
+    fireEvent.change(screen.getByLabelText(/date/i), { target: { value: FUTURE_MON } });
+    fireEvent.click(await screen.findByRole('button', { name: '16:00' }));
+    const select = screen.getByLabelText(/location/i) as HTMLSelectElement;
+    // Both prefs remain; the armed set is canonicalized to LOCATION_PREFS order.
+    expect(Array.from(select.options).map((o) => o.value)).toEqual(['family_home', 'online']);
+  });
+
+  it('refills an emptied selection when a bookable start is re-armed, with the narrowing hint', async () => {
+    // Same r3 fix as BookSessionPage: a disjoint 16:00 empties the selection,
+    // then arming the online-only 17:00 must re-fill it and hint the offer.
+    h.weeklyLocations = {
+      mon: {
+        ...Object.fromEntries([64, 65].map((i) => [String(i), ['online']])),
+        ...Object.fromEntries([66, 67].map((i) => [String(i), ['family_home']])),
+        ...Object.fromEntries(
+          Array.from({ length: 12 }, (_, k) => [String(68 + k), ['online']]),
+        ),
+      },
+    };
+    renderWithProviders(<ProposeSessionPage />);
+    fireEvent.change(screen.getByLabelText(/date/i), { target: { value: FUTURE_MON } });
+    fireEvent.click(await screen.findByRole('button', { name: '16:00' })); // disjoint
+    expect(await screen.findByText(/not open for any session location/i)).toBeInTheDocument();
+    const select = screen.getByLabelText(/location/i) as HTMLSelectElement;
+    expect(select.options.length).toBe(0);
+
+    fireEvent.click(screen.getByRole('button', { name: '17:00' }));
+    await waitFor(() => expect(select.value).toBe('online')); // re-filled
+    expect(screen.getByText(/This time only allows: Online/)).toBeInTheDocument();
+    expect(screen.queryByText(/not open for any session location/i)).toBeNull();
+  });
+
+  it('maps a location_not_offered rejection to the noLocationForSlot message', async () => {
+    // Reachable when the tutor submits before the schedule snapshot lands:
+    // the select offered the full prefs and the server rejected on the tags.
+    h.callable.mockImplementation((name: string) => {
+      if (name === 'proposeSession')
+        return Promise.reject({
+          code: 'functions/invalid-argument',
+          details: { reason: 'location_not_offered' },
+        });
+      return Promise.resolve({ data: {} });
+    });
+    renderWithProviders(<ProposeSessionPage />);
+    fireEvent.change(screen.getByLabelText(/date/i), { target: { value: FUTURE_MON } });
+    fireEvent.click(await screen.findByRole('button', { name: '16:00' }));
+    fireEvent.click(screen.getByRole('button', { name: /send proposal/i }));
+    expect(
+      await screen.findByText(/not open for any session location/i),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/isn't available\. Pick another\./)).toBeNull();
+  });
+
+  it('keeps the slotTaken message for an invalid-argument rejection without details', async () => {
+    h.callable.mockImplementation((name: string) => {
+      if (name === 'proposeSession')
+        return Promise.reject({ code: 'functions/invalid-argument' });
+      return Promise.resolve({ data: {} });
+    });
+    renderWithProviders(<ProposeSessionPage />);
+    fireEvent.change(screen.getByLabelText(/date/i), { target: { value: FUTURE_MON } });
+    fireEvent.click(await screen.findByRole('button', { name: '16:00' }));
+    fireEvent.click(screen.getByRole('button', { name: /send proposal/i }));
+    expect(await screen.findByText(/isn't available\. Pick another\./)).toBeInTheDocument();
   });
 });

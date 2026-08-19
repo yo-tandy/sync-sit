@@ -3,11 +3,31 @@ import { useTranslation } from 'react-i18next';
 import { DAYS_OF_WEEK, slotIndexToTime } from '@ejm/shared-core';
 import type { DayOfWeek } from '@ejm/shared-core';
 import { Dialog, Button, Select } from '../components/index.js';
+import {
+  RangeTagChips,
+  rangeTagSelection,
+  toggleSelection,
+  type LocationTagLabels,
+} from './locationTagChips.js';
+
+/**
+ * Optional per-range location tags (study issue #166) for the range-click
+ * edit dialog — the SAME chip semantics as DayEditor's tag control (shared
+ * via locationTagChips). When absent, the timeline and its dialog render
+ * exactly as before — sync-sit passes nothing here.
+ */
+export interface WeeklyTimelineLocationTags extends LocationTagLabels {
+  /** Sparse per-day tag maps (day -> slot index -> values), the page's draft. */
+  weeklyLocations: Partial<Record<DayOfWeek, Record<string, string[]>>>;
+  /** Called with one day's full updated sparse map when a range edit saves. */
+  onDayLocationsChange: (day: DayOfWeek, locations: Record<string, string[]>) => void;
+}
 
 interface WeeklyTimelineProps {
   weekly: Record<DayOfWeek, boolean[]>;
   onChange: (weekly: Record<DayOfWeek, boolean[]>) => void;
   onDayHeaderClick: (day: DayOfWeek) => void;
+  locationTags?: WeeklyTimelineLocationTags;
 }
 
 // DAY_LABELS moved inside component to use t()
@@ -105,13 +125,24 @@ function RangeEditDialog({
   onClose,
   onSave,
   onRemove,
+  tagLabels,
+  initialTagSelection,
 }: {
   range: AvailRange;
   day: DayOfWeek;
   open: boolean;
   onClose: () => void;
-  onSave: (oldRange: AvailRange, newStart: string, newEnd: string) => void;
+  /** `tagSelection` is passed only when the tag control is configured. */
+  onSave: (
+    oldRange: AvailRange,
+    newStart: string,
+    newEnd: string,
+    tagSelection?: string[] | 'mixed',
+  ) => void;
   onRemove: (range: AvailRange) => void;
+  /** Present only when the timeline is tag-capable (study). */
+  tagLabels?: LocationTagLabels;
+  initialTagSelection?: string[] | 'mixed';
 }) {
   const { t } = useTranslation();
   const timeOptions = useMemo(() => generateTimeOptions(t('schedule.followingDay')), [t]);
@@ -121,6 +152,12 @@ function RangeEditDialog({
   }), [t]);
   const [start, setStart] = useState(range.startTime);
   const [end, setEnd] = useState(range.endTime);
+  // What the dialog displays is what the saved range gets: a uniform or
+  // explicitly-picked set applies to the whole (possibly moved/extended)
+  // range; an untouched 'mixed' state preserves the stored cells.
+  const [tagSelection, setTagSelection] = useState<string[] | 'mixed'>(
+    initialTagSelection ?? [],
+  );
 
   return (
     <Dialog open={open} onClose={onClose}>
@@ -135,8 +172,26 @@ function RangeEditDialog({
           <Select label={t('schedule.to')} value={end} onChange={(e) => setEnd(e.target.value)} options={timeOptions} />
         </div>
       </div>
+      {tagLabels && (
+        <div className="mb-4">
+          <RangeTagChips
+            labels={tagLabels}
+            selection={tagSelection}
+            onToggle={(value) => setTagSelection((prev) => toggleSelection(prev, value))}
+            onReset={() => setTagSelection([])}
+          />
+        </div>
+      )}
       <div className="flex gap-2">
-        <Button type="button" onClick={() => { onSave(range, start, end); onClose(); }} disabled={start === end} className="flex-1">
+        <Button
+          type="button"
+          onClick={() => {
+            onSave(range, start, end, tagLabels ? tagSelection : undefined);
+            onClose();
+          }}
+          disabled={start === end}
+          className="flex-1"
+        >
           {t('common.save')}
         </Button>
         <Button type="button" variant="outline" onClick={() => { onRemove(range); onClose(); }} className="flex-1 !text-brand-600 !border-brand-200">
@@ -151,7 +206,7 @@ function RangeEditDialog({
 }
 
 // ── Main Component ──
-export function WeeklyTimeline({ weekly, onChange, onDayHeaderClick }: WeeklyTimelineProps) {
+export function WeeklyTimeline({ weekly, onChange, onDayHeaderClick, locationTags }: WeeklyTimelineProps) {
   const { t } = useTranslation();
   const dayLabels: Record<DayOfWeek, string> = useMemo(() => ({
     mon: t('days.mon'), tue: t('days.tue'), wed: t('days.wed'), thu: t('days.thu'),
@@ -278,7 +333,12 @@ export function WeeklyTimeline({ weekly, onChange, onDayHeaderClick }: WeeklyTim
 
   // Handle range edit save
   const handleRangeSave = useCallback(
-    (oldRange: AvailRange, newStart: string, newEnd: string) => {
+    (
+      oldRange: AvailRange,
+      newStart: string,
+      newEnd: string,
+      tagSelection?: string[] | 'mixed',
+    ) => {
       if (!editingRange) return;
       const { day } = editingRange;
       const newSlots = [...weekly[day]];
@@ -292,19 +352,48 @@ export function WeeklyTimeline({ weekly, onChange, onDayHeaderClick }: WeeklyTim
       const sSlot = Math.floor((parseInt(newStart.split(':')[0]) * 60 + parseInt(newStart.split(':')[1])) / 15);
       const eSlot = Math.floor((parseInt(newEnd.split(':')[0]) * 60 + parseInt(newEnd.split(':')[1])) / 15);
 
+      const newCells: number[] = [];
       if (sSlot < eSlot) {
         // Normal range (e.g. 08:00–12:00)
-        for (let i = sSlot; i < eSlot && i < 96; i++) newSlots[i] = true;
+        for (let i = sSlot; i < eSlot && i < 96; i++) {
+          newSlots[i] = true;
+          newCells.push(i);
+        }
       } else if (sSlot > eSlot) {
         // Wrapping range (e.g. 22:00–02:00)
-        for (let i = sSlot; i < 96; i++) newSlots[i] = true;
-        for (let i = 0; i < eSlot; i++) newSlots[i] = true;
+        for (let i = sSlot; i < 96; i++) {
+          newSlots[i] = true;
+          newCells.push(i);
+        }
+        for (let i = 0; i < eSlot; i++) {
+          newSlots[i] = true;
+          newCells.push(i);
+        }
+      }
+
+      // ── Per-range location tags (issue #166): apply what the dialog showed.
+      // A uniform / explicitly-picked set writes to every cell of the (possibly
+      // moved) range; [] clears to profile defaults; an untouched 'mixed'
+      // preserves the stored cells, dropping only those leaving availability.
+      if (locationTags && tagSelection !== undefined) {
+        const dayMap = { ...(locationTags.weeklyLocations[day] ?? {}) };
+        const newCellSet = new Set(newCells);
+        for (let di = oldRange.startDi; di <= oldRange.endDi; di++) {
+          const cell = DISPLAY_SLOTS[di];
+          if (tagSelection !== 'mixed' || !newCellSet.has(cell)) {
+            delete dayMap[String(cell)];
+          }
+        }
+        if (tagSelection !== 'mixed' && tagSelection.length > 0) {
+          for (const cell of newCells) dayMap[String(cell)] = tagSelection;
+        }
+        locationTags.onDayLocationsChange(day, dayMap);
       }
 
       onChange({ ...weekly, [day]: newSlots });
       setEditingRange(null);
     },
-    [weekly, onChange, editingRange]
+    [weekly, onChange, editingRange, locationTags]
   );
 
   // Handle range remove
@@ -316,10 +405,18 @@ export function WeeklyTimeline({ weekly, onChange, onDayHeaderClick }: WeeklyTim
       for (let di = range.startDi; di <= range.endDi; di++) {
         newSlots[DISPLAY_SLOTS[di]] = false;
       }
+      // Tags on the removed cells go with them (same as DayEditor's remove).
+      if (locationTags) {
+        const dayMap = { ...(locationTags.weeklyLocations[day] ?? {}) };
+        for (let di = range.startDi; di <= range.endDi; di++) {
+          delete dayMap[String(DISPLAY_SLOTS[di])];
+        }
+        locationTags.onDayLocationsChange(day, dayMap);
+      }
       onChange({ ...weekly, [day]: newSlots });
       setEditingRange(null);
     },
-    [weekly, onChange, editingRange]
+    [weekly, onChange, editingRange, locationTags]
   );
 
   // Drag preview helpers
@@ -453,6 +550,18 @@ export function WeeklyTimeline({ weekly, onChange, onDayHeaderClick }: WeeklyTim
           onClose={() => setEditingRange(null)}
           onSave={handleRangeSave}
           onRemove={handleRangeRemove}
+          tagLabels={locationTags}
+          initialTagSelection={
+            locationTags
+              ? rangeTagSelection(
+                  locationTags.weeklyLocations[editingRange.day] ?? {},
+                  Array.from(
+                    { length: editingRange.range.endDi - editingRange.range.startDi + 1 },
+                    (_, k) => DISPLAY_SLOTS[editingRange.range.startDi + k],
+                  ),
+                )
+              : undefined
+          }
         />
       )}
     </div>

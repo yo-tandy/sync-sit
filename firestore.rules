@@ -216,6 +216,11 @@ service cloud.firestore {
     // families postcode/city it carries a shape check: string bounded to the
     // enrollment-schema limits, or null (the clear path). Only CHANGED fields
     // are checked, so legacy docs with odd nested values stay updatable.
+    // NOTE: deleting a field (FieldValue.delete()) is DENIED by construction
+    // — the key lands in affectedKeys but is absent from request.resource.data,
+    // so the subscript errors and the write fails. Deliberate narrowing,
+    // matching photoUrlValid's idiom: the clear path is `null`, which every
+    // writer uses; pinned below.
     function rootContactFieldValid(field, max) {
       return !request.resource.data.diff(resource.data).affectedKeys().hasAny([field])
              || request.resource.data[field] == null

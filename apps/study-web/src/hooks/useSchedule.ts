@@ -6,6 +6,7 @@ import {
   setDoc,
   deleteDoc,
   serverTimestamp,
+  writeBatch,
 } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
@@ -74,19 +75,46 @@ export function useSchedule() {
   }, [uid]);
 
   const saveWeekly = useCallback(
-    async (weekly: Record<DayOfWeek, boolean[]>) => {
+    async (
+      weekly: Record<DayOfWeek, boolean[]>,
+      weeklyLocations?: ScheduleDoc['weeklyLocations'],
+      holiday?: {
+        mode: HolidayMode;
+        holidaySchedules?: Record<string, Record<DayOfWeek, boolean[]>>;
+        holidayNotes?: string;
+      },
+    ) => {
       if (!uid) return;
       const scheduleRef = doc(db, 'schedules', uid);
-      await setDoc(
-        scheduleRef,
-        {
-          userId: uid,
-          weekly,
-          holidayMode: schedule?.holidayMode || 'same',
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true }
-      );
+      // ONE atomic batch: the grid set-merge, the tags update, and (when the
+      // caller passes it) the holiday fields commit — and fail — together.
+      // SchedulePage's save previously issued the holiday write as a second
+      // await, so a rejection there left the grid+tags persisted while the
+      // page reported "the save did not go through" (PR #185 review). The
+      // update mutation is still needed for the tags — a set-merge would
+      // DEEP-MERGE the nested day maps and resurrect stale per-cell keys,
+      // while update() replaces the whole weeklyLocations field. Batch
+      // writes apply in order, so the update's exists-precondition is
+      // satisfied by the set before it (the doc also always exists for a
+      // tutor — created during enrollment).
+      const data: Record<string, unknown> = {
+        userId: uid,
+        weekly,
+        holidayMode: holiday?.mode ?? (schedule?.holidayMode || 'same'),
+        updatedAt: serverTimestamp(),
+      };
+      if (holiday && holiday.mode === 'different' && holiday.holidaySchedules) {
+        data.holidaySchedules = holiday.holidaySchedules;
+      }
+      if (holiday && holiday.holidayNotes !== undefined) {
+        data.holidayNotes = holiday.holidayNotes;
+      }
+      const batch = writeBatch(db);
+      batch.set(scheduleRef, data, { merge: true });
+      if (weeklyLocations !== undefined) {
+        batch.update(scheduleRef, { weeklyLocations });
+      }
+      await batch.commit();
     },
     [uid, schedule?.holidayMode]
   );
@@ -144,6 +172,7 @@ export function useSchedule() {
 
   return {
     weekly,
+    weeklyLocations: schedule?.weeklyLocations, // raw; sanitize at the consumer
     holidayMode: schedule?.holidayMode || ('same' as HolidayMode),
     holidayWeekly: schedule?.holidayWeekly, // deprecated
     holidaySchedules: schedule?.holidaySchedules,

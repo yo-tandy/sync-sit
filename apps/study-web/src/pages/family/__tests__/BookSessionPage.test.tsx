@@ -449,3 +449,168 @@ describe('family BookSessionPage — weekly mode', () => {
     expect(await screen.findByText(/Mondays at 14:00|once accepted/i)).toBeInTheDocument();
   });
 });
+
+// ── Per-slot location tags (issue #166): the armed slot constrains the
+// location select from the server's effective ranges; profile prefs apply
+// when the response carries none. ──
+describe('family BookSessionPage — location tags', () => {
+  beforeEach(() => reset());
+
+  /** availabilityPage() with location ranges attached to the one date. */
+  function taggedAvailability(ranges: { startIdx: number; endIdx: number; locations: string[] }[]) {
+    const slots = new Array(96).fill(false);
+    for (let i = 56; i < 60; i++) slots[i] = true;
+    return { data: { dates: [{ date: '2026-07-22', slots, locationRanges: ranges }] } };
+  }
+
+  it('narrows the location options to the armed slot effective set and books with it', async () => {
+    h.callable.mockImplementation((name: string) => {
+      if (name === 'getTutorAvailability')
+        return Promise.resolve(
+          taggedAvailability([{ startIdx: 56, endIdx: 60, locations: ['family_home'] }]),
+        );
+      if (name === 'bookSession') return Promise.resolve({ data: { sessionId: 's1' } });
+      return Promise.resolve({ data: {} });
+    });
+    renderBook(fullState());
+    await armBooking();
+
+    const select = screen.getByLabelText('Location') as HTMLSelectElement;
+    const optionLabels = Array.from(select.options).map((o) => o.textContent);
+    expect(optionLabels).toEqual(['At your home']);
+
+    fireEvent.click(screen.getByRole('button', { name: /^Book session$/i }));
+    await waitFor(() => {
+      expect(h.callable).toHaveBeenCalledWith(
+        'bookSession',
+        expect.objectContaining({ location: 'family_home' }),
+      );
+    });
+  });
+
+  it('keeps the full profile prefs when the response has no locationRanges', async () => {
+    renderBook(fullState());
+    await armBooking();
+    const select = screen.getByLabelText('Location') as HTMLSelectElement;
+    expect(Array.from(select.options).map((o) => o.value)).toEqual(['online', 'family_home']);
+  });
+
+  it('maps a location_not_offered rejection to the noLocationForSlot message', async () => {
+    // The recurring weekly-cells check can diverge from the client's
+    // per-occurrence heuristic — the server's details.reason must surface as
+    // a location-specific message, not the generic "slot taken" one.
+    h.callable.mockImplementation((name: string) => {
+      if (name === 'getTutorAvailability') return Promise.resolve(availabilityPage());
+      if (name === 'bookSession')
+        return Promise.reject({
+          code: 'functions/invalid-argument',
+          details: { reason: 'location_not_offered' },
+        });
+      return Promise.resolve({ data: {} });
+    });
+    renderBook(fullState());
+    await armBooking();
+    fireEvent.click(screen.getByRole('button', { name: /^Book session$/i }));
+    expect(
+      await screen.findByText(/not open for any session location/i),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/just been taken/i)).toBeNull();
+  });
+
+  it('maps a failed-precondition with location_not_offered to the locationGone message', async () => {
+    // The profile-prefs gate fires when the LOCATION itself is gone (removed
+    // from the prefs) — "pick another time" would be wrong advice, so this
+    // branch has its own copy, distinct from the slot-level message.
+    h.callable.mockImplementation((name: string) => {
+      if (name === 'getTutorAvailability') return Promise.resolve(availabilityPage());
+      if (name === 'bookSession')
+        return Promise.reject({
+          code: 'functions/failed-precondition',
+          details: { reason: 'location_not_offered' },
+        });
+      return Promise.resolve({ data: {} });
+    });
+    renderBook(fullState());
+    await armBooking();
+    fireEvent.click(screen.getByRole('button', { name: /^Book session$/i }));
+    expect(
+      await screen.findByText(/no longer offers this location/i),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/not open for any session location/i)).toBeNull();
+    expect(screen.queryByText(/could not be booked/i)).toBeNull();
+  });
+
+  it('refills an emptied selection when a bookable slot is re-armed, with the narrowing hint', async () => {
+    // Reviewer repro (r3): arm a disjoint span (selection empties), then arm
+    // a perfectly bookable online-only start — the selection must re-fill
+    // (not stay blank with Book silently disabled) and the hint must name
+    // the narrowed offer.
+    const slots = new Array(96).fill(false);
+    for (let i = 56; i < 60; i++) slots[i] = true; // 14:00 (disjoint)
+    for (let i = 72; i < 76; i++) slots[i] = true; // 18:00 (online-only)
+    h.callable.mockImplementation((name: string) => {
+      if (name === 'getTutorAvailability')
+        return Promise.resolve({
+          data: {
+            dates: [{
+              date: '2026-07-22',
+              slots,
+              locationRanges: [
+                { startIdx: 56, endIdx: 58, locations: ['online'] },
+                { startIdx: 58, endIdx: 60, locations: ['family_home'] },
+                { startIdx: 72, endIdx: 76, locations: ['online'] },
+              ],
+            }],
+          },
+        });
+      return Promise.resolve({ data: {} });
+    });
+    renderBook(fullState());
+    await armBooking(); // arms 14:00 — the disjoint span
+    expect(await screen.findByText(/not open for any session location/i)).toBeInTheDocument();
+    const select = screen.getByLabelText('Location') as HTMLSelectElement;
+    expect(select.options.length).toBe(0);
+
+    fireEvent.click(screen.getByRole('button', { name: '18:00' }));
+    await waitFor(() => expect(select.value).toBe('online')); // re-filled
+    expect(screen.getByRole('button', { name: /^Book session$/i })).not.toBeDisabled();
+    expect(screen.getByText(/This time only allows: Online/)).toBeInTheDocument();
+    expect(screen.queryByText(/not open for any session location/i)).toBeNull();
+  });
+
+  it('keeps the slotTaken message for an invalid-argument rejection without details', async () => {
+    h.callable.mockImplementation((name: string) => {
+      if (name === 'getTutorAvailability') return Promise.resolve(availabilityPage());
+      if (name === 'bookSession')
+        return Promise.reject({ code: 'functions/invalid-argument' });
+      return Promise.resolve({ data: {} });
+    });
+    renderBook(fullState());
+    await armBooking();
+    fireEvent.click(screen.getByRole('button', { name: /^Book session$/i }));
+    expect(await screen.findByText(/just been taken/i)).toBeInTheDocument();
+    expect(screen.queryByText(/not open for any session location/i)).toBeNull();
+  });
+
+  it('shows the no-location note and disables booking on a disjoint span', async () => {
+    h.callable.mockImplementation((name: string) => {
+      if (name === 'getTutorAvailability')
+        return Promise.resolve(
+          taggedAvailability([
+            { startIdx: 56, endIdx: 58, locations: ['online'] },
+            { startIdx: 58, endIdx: 60, locations: ['family_home'] },
+          ]),
+        );
+      return Promise.resolve({ data: {} });
+    });
+    renderBook(fullState());
+    await armBooking();
+
+    expect(
+      await screen.findByText(/not open for any session location/i),
+    ).toBeInTheDocument();
+    const select = screen.getByLabelText('Location') as HTMLSelectElement;
+    expect(select.options.length).toBe(0);
+    expect(screen.getByRole('button', { name: /^Book session$/i })).toBeDisabled();
+  });
+});

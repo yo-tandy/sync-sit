@@ -155,7 +155,7 @@ describe('study-web AuthGuard', () => {
       firebaseUser: { uid: 'b1' },
       userDoc: {
         uid: 'b1', firstName: 'Noa', lastName: 'Weiss', dateOfBirth: '2008-03-15',
-        profiles: { babysitter: { classLevel: '2nde', contactPhone: '+33 6' } },
+        profiles: { babysitter: { ejemEmail: 'noa@ejm.org', classLevel: '2nde', contactPhone: '+33 6' } },
       },
       loading: false,
     };
@@ -165,7 +165,10 @@ describe('study-web AuthGuard', () => {
     expect(screen.queryByText('tutor-portal')).toBeNull();
   });
 
-  it('routes an INCOMPLETE foreign babysitter to the classic wizard instead (no dead-end)', () => {
+  it('routes a babysitter with NO verified EJM identity (no ejemEmail) to the classic wizard instead', () => {
+    // Issue #203: gaps like missing contact/DOB/classLevel now stay on the
+    // one-tap path (/welcome-study collects them); only a doc the crossApp
+    // callable would reject outright (no ejemEmail to derive) falls back.
     h.auth = {
       firebaseUser: { uid: 'b2' },
       userDoc: { uid: 'b2', profiles: { babysitter: {} } },
@@ -174,6 +177,18 @@ describe('study-web AuthGuard', () => {
     renderGuard();
     expect(screen.getByText('enroll-tutor-page')).toBeInTheDocument();
     expect(screen.queryByText('welcome-study-page')).toBeNull();
+  });
+
+  it('a babysitter with gaps but a verified EJM identity stays on /welcome-study (issue #203)', () => {
+    h.auth = {
+      firebaseUser: { uid: 'b3' },
+      // No contact, no DOB, no classLevel — the one-tap page collects these.
+      userDoc: { uid: 'b3', firstName: 'Noa', profiles: { babysitter: { ejemEmail: 'noa@ejm.org' } } },
+      loading: false,
+    };
+    renderGuard();
+    expect(screen.getByText('welcome-study-page')).toBeInTheDocument();
+    expect(screen.queryByText('enroll-tutor-page')).toBeNull();
   });
 
   it('routes a signed-in account with NO profiles at all to /signup', () => {

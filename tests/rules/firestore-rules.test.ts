@@ -215,6 +215,12 @@ describe('users collection — Plan D owner-update guards', () => {
     await assertSucceeds(
       updateDoc(doc(authed.firestore(), 'users', 'ri5'), { language: 'fr' })
     );
+    // FieldValue.delete() is DENIED by construction (the key lands in
+    // affectedKeys but is absent from post-state, so the subscript errors) —
+    // a deliberate narrowing matching photoUrlValid; the clear path is null.
+    await assertFails(
+      updateDoc(doc(authed.firestore(), 'users', 'ri5'), { contactPhone: deleteField() })
+    );
   });
 
   it('owner may NOT smuggle a root ejemEmail change into an allowed contact update', async () => {

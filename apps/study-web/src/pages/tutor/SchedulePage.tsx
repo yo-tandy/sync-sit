@@ -6,8 +6,9 @@ import { db } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { useSchedule } from '@/hooks/useSchedule';
 import { useHolidays } from '@/hooks/useHolidays';
-import { getTutorProfile, SESSION_LENGTHS, LOCATION_PREFS } from '@ejm/study-core';
+import { getTutorProfile, sanitizeDayLocations, SESSION_LENGTHS, LOCATION_PREFS } from '@ejm/study-core';
 import type { LocationPref } from '@ejm/study-core';
+import type { ScheduleDoc } from '@ejm/shared-core';
 import {
   WeeklyTimeline,
   DayEditor,
@@ -54,6 +55,44 @@ function getHolidayOptions(t: (key: string) => string): { value: HolidayMode; la
 
 function createDefaultWeekly(): Record<DayOfWeek, boolean[]> {
   return Object.fromEntries(DAYS_OF_WEEK.map((d) => [d, createEmptySlots()])) as Record<DayOfWeek, boolean[]>;
+}
+
+/** Per-slot location tags for the whole week (issue #166): sparse per day. */
+type WeeklyLocationsState = Partial<Record<DayOfWeek, Record<string, string[]>>>;
+
+// Normalize the raw stored map through study-core's junk-tolerant sanitizer
+// (the single read seam), back into the sparse editing shape. Days without any
+// tagged cell are omitted entirely.
+function normalizeWeeklyLocations(raw: ScheduleDoc['weeklyLocations']): WeeklyLocationsState {
+  const out: WeeklyLocationsState = {};
+  for (const day of DAYS_OF_WEEK) {
+    const cells = sanitizeDayLocations(raw?.[day]);
+    const sparse: Record<string, string[]> = {};
+    cells.forEach((values, idx) => {
+      if (values) sparse[String(idx)] = values;
+    });
+    if (Object.keys(sparse).length > 0) out[day] = sparse;
+  }
+  return out;
+}
+
+// Save-time normalization: drop tags on cells no longer active in the weekly
+// grid (a slot toggled off in the timeline sheds its tag) and empty days.
+function pruneWeeklyLocations(
+  locations: WeeklyLocationsState,
+  weekly: Record<DayOfWeek, boolean[]>,
+): WeeklyLocationsState {
+  const out: WeeklyLocationsState = {};
+  for (const day of DAYS_OF_WEEK) {
+    const sparse = locations[day];
+    if (!sparse) continue;
+    const kept: Record<string, string[]> = {};
+    for (const [key, values] of Object.entries(sparse)) {
+      if (weekly[day]?.[Number(key)] && values.length > 0) kept[key] = values;
+    }
+    if (Object.keys(kept).length > 0) out[day] = kept;
+  }
+  return out;
 }
 
 function formatDate(dateStr: string, locale: string): string {
@@ -133,13 +172,13 @@ export function SchedulePage() {
   const { t } = useTranslation();
   const {
     weekly,
+    weeklyLocations,
     holidayMode,
     holidaySchedules: savedHolidaySchedules,
     holidayNotes,
     overrides,
     loading,
     saveWeekly,
-    setHolidayMode,
     addOverride,
     removeOverride,
   } = useSchedule();
@@ -147,11 +186,13 @@ export function SchedulePage() {
   const { periods: holidayPeriods, loading: holidaysLoading } = useHolidays();
 
   const [localWeekly, setLocalWeekly] = useState(weekly);
+  const [localWeeklyLocations, setLocalWeeklyLocations] = useState<WeeklyLocationsState>({});
   const [localHolidayMode, setLocalHolidayMode] = useState<HolidayMode>(holidayMode);
   const [localHolidaySchedules, setLocalHolidaySchedules] = useState<Record<string, Record<DayOfWeek, boolean[]>>>({});
   const [localHolidayNotes, setLocalHolidayNotes] = useState(holidayNotes || '');
   const [editingDay, setEditingDay] = useState<DayOfWeek | null>(null);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const toast = useToast();
   const [initialized, setInitialized] = useState(false);
   const [dirty, setDirty] = useState(false);
@@ -291,11 +332,13 @@ export function SchedulePage() {
 
   // Sync from hook when data loads
   if (!loading && !initialized) {
+    const normalizedLocations = normalizeWeeklyLocations(weeklyLocations);
     setLocalWeekly(weekly);
+    setLocalWeeklyLocations(normalizedLocations);
     setLocalHolidayMode(holidayMode);
     setLocalHolidaySchedules(savedHolidaySchedules || {});
     setLocalHolidayNotes(holidayNotes || '');
-    savedSnapshot.current = JSON.stringify({ weekly, holidayMode, holidaySchedules: savedHolidaySchedules || {}, holidayNotes: holidayNotes || '' });
+    savedSnapshot.current = JSON.stringify({ weekly, weeklyLocations: normalizedLocations, holidayMode, holidaySchedules: savedHolidaySchedules || {}, holidayNotes: holidayNotes || '' });
     setInitialized(true);
   }
 
@@ -304,12 +347,13 @@ export function SchedulePage() {
     if (!initialized) return;
     const current = JSON.stringify({
       weekly: localWeekly,
+      weeklyLocations: localWeeklyLocations,
       holidayMode: localHolidayMode,
       holidaySchedules: localHolidaySchedules,
       holidayNotes: localHolidayNotes,
     });
     setDirty(current !== savedSnapshot.current);
-  }, [localWeekly, localHolidayMode, localHolidaySchedules, localHolidayNotes, initialized]);
+  }, [localWeekly, localWeeklyLocations, localHolidayMode, localHolidaySchedules, localHolidayNotes, initialized]);
 
   // Block navigation when there are unsaved changes
   const blocker = useBlocker(dirty);
@@ -324,9 +368,20 @@ export function SchedulePage() {
     return () => window.removeEventListener('beforeunload', handler);
   }, [dirty]);
 
-  const handleDaySave = useCallback((day: DayOfWeek, slots: boolean[]) => {
-    setLocalWeekly((prev) => ({ ...prev, [day]: slots }));
-  }, []);
+  const handleDaySave = useCallback(
+    (day: DayOfWeek, slots: boolean[], locations?: Record<string, string[]>) => {
+      setLocalWeekly((prev) => ({ ...prev, [day]: slots }));
+      if (locations !== undefined) {
+        setLocalWeeklyLocations((prev) => {
+          const next = { ...prev };
+          if (Object.keys(locations).length > 0) next[day] = locations;
+          else delete next[day];
+          return next;
+        });
+      }
+    },
+    [],
+  );
 
   const handleHolidayPeriodChange = useCallback(
     (periodName: string, schedule: Record<DayOfWeek, boolean[]>) => {
@@ -341,21 +396,37 @@ export function SchedulePage() {
 
   const handleSave = async () => {
     setSaving(true);
+    setSaveError(null);
     try {
-      await saveWeekly(localWeekly);
-      await setHolidayMode(
-        localHolidayMode,
-        localHolidayMode === 'different' ? localHolidaySchedules : undefined,
-        localHolidayNotes || undefined
-      );
+      // Tags on cells toggled off in the timeline are pruned at save time so
+      // they never persist and never resurface when a slot is re-enabled.
+      const prunedLocations = pruneWeeklyLocations(localWeeklyLocations, localWeekly);
+      // ONE atomic write: grid, tags, and holiday fields land (or fail)
+      // together — two sequential awaits could persist the first half while
+      // the error path claimed nothing was saved (PR #185 review).
+      await saveWeekly(localWeekly, prunedLocations, {
+        mode: localHolidayMode,
+        holidaySchedules:
+          localHolidayMode === 'different' ? localHolidaySchedules : undefined,
+        holidayNotes: localHolidayNotes || undefined,
+      });
+      setLocalWeeklyLocations(prunedLocations);
       savedSnapshot.current = JSON.stringify({
         weekly: localWeekly,
+        weeklyLocations: prunedLocations,
         holidayMode: localHolidayMode,
         holidaySchedules: localHolidaySchedules,
         holidayNotes: localHolidayNotes,
       });
       setDirty(false);
       toast(t('schedule.scheduleSaved'));
+    } catch (err) {
+      // A rejected write (offline, transient) must be visible: the snapshot
+      // stays dirty and the tutor is told the save did not go through (true
+      // now that the write is a single batch). Log the cause so
+      // permission-denied vs offline is distinguishable in the field.
+      console.error('schedule save failed', err);
+      setSaveError(t('common.error'));
     } finally {
       setSaving(false);
     }
@@ -388,6 +459,30 @@ export function SchedulePage() {
           weekly={localWeekly}
           onChange={setLocalWeekly}
           onDayHeaderClick={(day) => setEditingDay(day)}
+          locationTags={{
+            // Same tag control as the DayEditor path (issue #166, owner
+            // report on PR #185): the range-click dialog is the natural
+            // interaction, so it must offer the chips too. Same saved-prefs
+            // vocabulary; edits land in the page's draft and persist through
+            // the same atomic Save Schedule batch.
+            options: LOCATION_PREFS.map((p) => ({
+              value: p,
+              label: t(`tutor.account.sessionPrefs.location.${p}`),
+            })),
+            offeredValues: tutor?.locationPrefs ?? [],
+            defaultsLabel: t('schedule.locationTags.defaults'),
+              orLabel: t('schedule.locationTags.or'),
+            mixedLabel: t('schedule.locationTags.mixed'),
+            notOfferedLabel: t('schedule.locationTags.notOffered'),
+            weeklyLocations: localWeeklyLocations,
+            onDayLocationsChange: (day, locations) =>
+              setLocalWeeklyLocations((prev) => {
+                const next = { ...prev };
+                if (Object.keys(locations).length > 0) next[day] = locations;
+                else delete next[day];
+                return next;
+              }),
+          }}
         />
 
         {editingDay && (
@@ -397,6 +492,26 @@ export function SchedulePage() {
             open
             onClose={() => setEditingDay(null)}
             onSave={handleDaySave}
+            locationTags={{
+              options: LOCATION_PREFS.map((p) => ({
+                value: p,
+                label: t(`tutor.account.sessionPrefs.location.${p}`),
+              })),
+              // Chips narrow within what the tutor currently OFFERS — the
+              // SAVED doc (same source as the coverage warning), NOT the
+              // unsaved prefs draft: the two sections have separate save
+              // buttons, and a draft-sourced vocabulary would let "Save
+              // Schedule" persist a tag for a pref that was never saved
+              // (an instant dead range). A stored tag outside the saved
+              // prefs renders checked-but-flagged, never dropped.
+              offeredValues: tutor?.locationPrefs ?? [],
+              defaultsLabel: t('schedule.locationTags.defaults'),
+              orLabel: t('schedule.locationTags.or'),
+              mixedLabel: t('schedule.locationTags.mixed'),
+              notOfferedLabel: t('schedule.locationTags.notOffered'),
+              helpText: t('schedule.locationTags.help'),
+              initial: localWeeklyLocations[editingDay],
+            }}
           />
         )}
 
@@ -447,6 +562,11 @@ export function SchedulePage() {
                 <p className="mb-3 text-xs text-gray-500">
                   {t('schedule.setAvailabilityPerPeriod')}
                 </p>
+                {Object.keys(localWeeklyLocations).length > 0 && (
+                  <p className="mb-3 text-xs text-gray-500">
+                    {t('schedule.locationTags.weeklyOnlyNote')}
+                  </p>
+                )}
                 {holidayPeriods.map((period) => (
                   <HolidayPeriodEditor
                     key={period.name}
@@ -470,6 +590,7 @@ export function SchedulePage() {
         <Button type="button" onClick={handleSave} disabled={saving} className="mt-4 mb-6">
           {saving ? t('common.saving') : t('schedule.saveSchedule')}
         </Button>
+        {saveError && <p className="-mt-4 mb-6 text-sm text-brand-600">{saveError}</p>}
 
         <hr className="my-6 border-gray-200" />
 
@@ -477,6 +598,9 @@ export function SchedulePage() {
         <h3 className="mb-1 text-base font-bold text-gray-900">{t('schedule.availabilityByDate')}</h3>
         <p className="mb-4 text-xs text-gray-500">
           {t('schedule.dateOverrideDesc')}
+          {Object.keys(localWeeklyLocations).length > 0 && (
+            <> {t('schedule.locationTags.weeklyOnlyNote')}</>
+          )}
         </p>
 
         <OverrideList overrides={overrides} onAdd={addOverride} onRemove={removeOverride} />

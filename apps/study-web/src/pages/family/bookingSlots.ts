@@ -91,3 +91,77 @@ export function deriveWeeklySlots(
   );
   return out;
 }
+
+/** One effective-location range from getTutorAvailability (issue #166). */
+export interface AvailabilityLocationRange {
+  startIdx: number;
+  endIdx: number;
+  locations: string[];
+}
+
+/**
+ * The session locations offerable for an armed one-time slot: the intersection
+ * of every locationRange overlapping [startIdx, endIdx). The server already
+ * resolved each range's set (per-slot tag override ?? the tutor's profile
+ * prefs), so the ranges are the authority; `fallback` (the card's profile
+ * prefs) is used only when the response carries no ranges (stale function
+ * deploy) — UX constraint only, the callable re-validates.
+ */
+export function effectiveLocationsForSlot(
+  ranges: AvailabilityLocationRange[] | undefined,
+  startIdx: number,
+  endIdx: number,
+  fallback: string[],
+): string[] {
+  if (!Array.isArray(ranges)) return fallback;
+  const overlapping = ranges.filter(
+    (r) => Array.isArray(r?.locations) && r.startIdx < endIdx && r.endIdx > startIdx,
+  );
+  if (overlapping.length === 0) return fallback;
+  let acc = overlapping[0].locations.filter((v) => typeof v === 'string');
+  for (const r of overlapping.slice(1)) {
+    acc = acc.filter((v) => r.locations.includes(v));
+  }
+  return acc;
+}
+
+/**
+ * The session locations offerable for an armed WEEKLY slot: intersect the
+ * per-occurrence effective sets across the loaded window's occurrences of
+ * (day, start) whose whole range is bookable — mirroring deriveWeeklySlots'
+ * occurrence filter.
+ *
+ * Approximate like the candidate heuristic itself: bookSession validates a
+ * recurring series against the WEEKLY cells ONLY (per-date overrides are not
+ * consulted server-side), while this intersection runs over per-DATE effective
+ * sets. It can never offer a location the covered occurrences exclude relative
+ * to those dates, but when every loaded occurrence falls on a tutor-authored
+ * override date (each resolving to profile defaults) — or none matches at all
+ * (the `acc ?? fallback` path) — the offer can exceed what the weekly-cells
+ * check accepts. The server then rejects with details.reason
+ * 'location_not_offered', which the page maps to the noLocationForSlot
+ * message.
+ */
+export function effectiveLocationsForWeeklySlot(
+  dates: { date: string; slots: boolean[]; locationRanges?: AvailabilityLocationRange[] }[],
+  day: DayOfWeek,
+  startIdx: number,
+  endIdx: number,
+  fallback: string[],
+): string[] {
+  let acc: string[] | null = null;
+  for (const d of dates) {
+    if (dayOfWeek(d.date) !== day) continue;
+    let bookable = true;
+    for (let i = startIdx; i < endIdx; i++) {
+      if (!d.slots[i]) {
+        bookable = false;
+        break;
+      }
+    }
+    if (!bookable) continue;
+    const eff = effectiveLocationsForSlot(d.locationRanges, startIdx, endIdx, fallback);
+    acc = acc === null ? eff : acc.filter((v) => eff.includes(v));
+  }
+  return acc ?? fallback;
+}

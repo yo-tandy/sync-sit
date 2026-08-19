@@ -6,6 +6,7 @@ import { notifyAllParents } from '@ejm/shared-functions/config/notifyParents.js'
 import { escapeHtml, STUDY_APP_URL } from '@ejm/shared-functions/config/email.js';
 import { parisWallTimeToUtc } from '@ejm/shared-functions/scheduled/parisTime.js';
 import { timeToSlotIndex, slotIndexToTime } from '@ejm/shared-core';
+import { resolveEffectiveLocations } from '@ejm/study-core';
 import type { StudyUser, TutorProfile, SubjectOffering } from '@ejm/study-core';
 import { proposeSessionInputSchema } from '../validation/session.js';
 import { computeSingleDateAvailability } from '../availability/singleDateAvailability.js';
@@ -120,11 +121,36 @@ export const proposeSession = onCall(
     // tutor's OWN schedule (uid === the tutor here). ──
     const startIdx = timeToSlotIndex(startTime);
     const endIdx = startIdx + sessionLengthMinutes / SLOT_MINUTES;
-    const grid = await computeSingleDateAvailability(uid, date, paddingMinutes);
+    const { slots: grid, locationCells } = await computeSingleDateAvailability(
+      uid,
+      date,
+      paddingMinutes,
+    );
     for (let i = startIdx; i < endIdx; i++) {
       if (!grid[i]) {
         throw new HttpsError('invalid-argument', 'slot not available');
       }
+    }
+
+    // ── Per-slot location tags (issue #166): the tutor's own tags bind their
+    // proposals too — same effective-set check as bookSession, so a family
+    // never receives a proposal it could not have booked (family-home on an
+    // online-only range, etc.). ──
+    const effectiveLocations = resolveEffectiveLocations(
+      locationCells,
+      startIdx,
+      endIdx,
+      tutor.locationPrefs ?? [],
+    );
+    if (!effectiveLocations.includes(location)) {
+      // Same distinguishable details as bookSession's location rejections:
+      // reachable when the tutor submits before the schedule snapshot lands
+      // (the select then offered the full profile prefs).
+      throw new HttpsError(
+        'invalid-argument',
+        'You do not offer this location for this time slot',
+        { reason: 'location_not_offered' },
+      );
     }
     const endTime = slotIndexToTime(endIdx);
 

@@ -5,13 +5,20 @@ import { collection, getDocs } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
-import { getParentProfile } from '@ejm/shared-core';
+import { getParentProfile, timeToSlotIndex } from '@ejm/shared-core';
 import type { KidDoc, DayOfWeek } from '@ejm/shared-core';
 import type { LocationPref, TutorSearchResult } from '@ejm/study-core';
 import { expandRecurringDates } from '@ejm/study-core';
 import { useHolidays } from '@/hooks/useHolidays';
 import { Button, Input, Select, Textarea, Checkbox, Chip, Card, TopNav, Spinner, Dialog, Badge } from '@ejm/shared-ui';
-import { deriveStartChips, deriveWeeklySlots, type WeeklyCandidate } from './bookingSlots';
+import {
+  deriveStartChips,
+  deriveWeeklySlots,
+  effectiveLocationsForSlot,
+  effectiveLocationsForWeeklySlot,
+  type WeeklyCandidate,
+  type AvailabilityLocationRange,
+} from './bookingSlots';
 import { humanizeNoticeWindow } from '@/utils/cancellationPolicy';
 
 /**
@@ -71,6 +78,8 @@ interface Student {
 interface AvailabilityDate {
   date: string;
   slots: boolean[];
+  /** Effective per-range location sets (issue #166); absent on stale deploys. */
+  locationRanges?: AvailabilityLocationRange[];
 }
 
 /** Two 14-day pages = a 28-day look-ahead (the callable's hard cap). */
@@ -350,6 +359,59 @@ export function BookSessionPage() {
     }));
   }, [weeklySlot, endDate, holidayPeriods]);
 
+  // ── Locations offerable for the ARMED slot (issue #166): the server's
+  // per-range effective sets constrain the select; without an armed slot (or
+  // on a stale deploy without locationRanges) the card's profile prefs apply.
+  // UX only — bookSession re-validates server-side. ──
+  const allowedLocations = useMemo<LocationPref[]>(() => {
+    if (!card) return [];
+    const fallback = card.locationPrefs;
+    if (!sessionLength) return fallback;
+    const lengthSlots = sessionLength / 15;
+    if (mode === 'one_time' && selectedDate && selectedStart && availability) {
+      const day = availability.find((d) => d.date === selectedDate);
+      const startIdx = timeToSlotIndex(selectedStart);
+      return effectiveLocationsForSlot(
+        day?.locationRanges,
+        startIdx,
+        startIdx + lengthSlots,
+        fallback,
+      ) as LocationPref[];
+    }
+    if (mode === 'weekly' && weeklySlot && weeklyDates) {
+      const startIdx = timeToSlotIndex(weeklySlot.startTime);
+      return effectiveLocationsForWeeklySlot(
+        weeklyDates,
+        weeklySlot.day,
+        startIdx,
+        startIdx + lengthSlots,
+        fallback,
+      ) as LocationPref[];
+    }
+    return fallback;
+  }, [card, sessionLength, mode, selectedDate, selectedStart, availability, weeklySlot, weeklyDates]);
+
+  // An armed slot that excludes the chosen location snaps it to the first
+  // allowed one (or clears it when the covered cells' overrides are disjoint).
+  // No `locationPref &&` guard: an emptied selection must RE-FILL when the
+  // family re-arms a bookable slot, or the select stays blank with Book
+  // silently disabled (PR #185 r3 review). With nothing armed this re-does
+  // the card-default effect above; with an empty allowed set it re-sets ''.
+  useEffect(() => {
+    if (!allowedLocations.includes(locationPref as LocationPref)) {
+      setLocationPref(allowedLocations[0] ?? '');
+    }
+  }, [allowedLocations, locationPref]);
+
+  // The armed slot narrowed the offer relative to the tutor's profile prefs:
+  // say so next to the select, so a snapped/changed selection is legible
+  // instead of surprising. (The empty case has its own note below.)
+  const slotNarrowed =
+    !!card &&
+    allowedLocations.length > 0 &&
+    allowedLocations.length < card.locationPrefs.length &&
+    (mode === 'one_time' ? !!selectedStart : !!weeklySlot);
+
   const clearArmed = () => {
     setSelectedDate(null);
     setSelectedStart(null);
@@ -415,20 +477,36 @@ export function BookSessionPage() {
       setSuccessOpen(true);
     } catch (err: unknown) {
       const code = (err as { code?: string })?.code ?? '';
+      const details = (err as { details?: { reason?: string } })?.details;
       if (code.includes('permission-denied')) {
         setAccessDenied(true);
       } else if (code.includes('invalid-argument')) {
-        // The slot was claimed between load and submit (or the recurring window
-        // yielded zero candidates) — refresh and ask for another time. We never
-        // quote the backend message.
+        // details.reason distinguishes "this location is not offered at this
+        // time" (per-slot tags, issue #166 — reachable when the recurring
+        // weekly-cells check diverges from the client's per-occurrence
+        // heuristic) from the slot being claimed between load and submit (or
+        // the recurring window yielding zero candidates). Either way refresh
+        // and ask for another time. We never quote the backend message.
         clearArmed();
-        setBookError(t('family.book.error.slotTaken'));
+        setBookError(
+          details?.reason === 'location_not_offered'
+            ? t('family.book.noLocationForSlot')
+            : t('family.book.error.slotTaken'),
+        );
         if (mode === 'weekly') setWeeklyDates(null);
         else loadAvailability(pageIndex);
       } else if (code.includes('already-exists')) {
         setBookError(t('family.book.error.duplicate'));
       } else if (code.includes('failed-precondition')) {
-        setBookError(t('family.book.error.cannotBook'));
+        // The profile-prefs gate also stamps location_not_offered (a stored
+        // tag whose location was later removed from the prefs, or stale card
+        // data). Here the LOCATION is gone — "pick another time" would be
+        // wrong advice, so this branch gets its own copy.
+        setBookError(
+          details?.reason === 'location_not_offered'
+            ? t('family.book.error.locationGone')
+            : t('family.book.error.cannotBook'),
+        );
       } else {
         setBookError(t('family.book.error.generic'));
       }
@@ -481,7 +559,7 @@ export function BookSessionPage() {
     value: String(m),
     label: t('family.book.lengthOption', { minutes: m }),
   }));
-  const locationOptions = card.locationPrefs.map((p) => ({
+  const locationOptions = allowedLocations.map((p) => ({
     value: p,
     label: t(`family.search.location.${p}`),
   }));
@@ -561,6 +639,18 @@ export function BookSessionPage() {
         />
         {locationPref === 'family_home' && (
           <p className="-mt-3 mb-5 text-xs text-gray-500">{t('family.book.familyHomeNote')}</p>
+        )}
+        {allowedLocations.length === 0 && (
+          <p className="-mt-3 mb-5 text-xs text-brand-600">{t('family.book.noLocationForSlot')}</p>
+        )}
+        {slotNarrowed && (
+          <p className="-mt-3 mb-5 text-xs text-gray-500">
+            {t('family.book.slotAllows', {
+              locations: allowedLocations
+                .map((p) => t(`family.search.location.${p}`))
+                .join(', '),
+            })}
+          </p>
         )}
 
         {/* Optional message */}

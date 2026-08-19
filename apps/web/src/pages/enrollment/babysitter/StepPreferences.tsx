@@ -20,9 +20,12 @@ export function StepPreferences({ uid, onComplete }: StepPreferencesProps) {
   const { userDoc, refreshUserDoc } = useAuthStore();
   const babysitter = getBabysitterView(userDoc);
 
-  // One-shot contact seeding guard (PR #206 review) — see the effect below.
-
-  const contactSeededRef = useRef(false);
+  // One-shot seeding guard for the WHOLE resume-prefill effect (PR #206
+  // review): `babysitter` is a fresh derived object every render, so any
+  // unguarded setter in it re-fires per keystroke and reverts what the user
+  // types — first found on contact, identical for aboutMe/rate/maxKids/kid
+  // ages/area fields.
+  const seededRef = useRef(false);
 
   const [languages, setLanguages] = useState<string[]>([]);
   const [kidAgeMin, setKidAgeMin] = useState<number | ''>('');
@@ -45,6 +48,8 @@ export function StepPreferences({ uid, onComplete }: StepPreferencesProps) {
   // Pre-populate from existing user doc if resuming
   useEffect(() => {
     if (!babysitter) return;
+    if (seededRef.current) return;
+    seededRef.current = true;
     if (babysitter.languages?.length) setLanguages(babysitter.languages);
     if (babysitter.kidAgeRange) { setKidAgeMin(babysitter.kidAgeRange.min); setKidAgeMax(babysitter.kidAgeRange.max); }
     if (babysitter.maxKids) setMaxKids(babysitter.maxKids);
@@ -52,17 +57,10 @@ export function StepPreferences({ uid, onComplete }: StepPreferencesProps) {
     if (babysitter.aboutMe) setAboutMe(babysitter.aboutMe);
     // Contact resolves root ?? nested (issue #203): a crossApp arrival seeds
     // both copies, and the canonical root wins when they ever diverge.
-    // SEED ONCE: `babysitter` is a fresh object every render (derived from
-    // userDoc), so an unguarded set here re-fires per keystroke and reverts
-    // what the user types — same guard as AccountPage's contactSeededRef
-    // (PR #206 review).
-    if (!contactSeededRef.current) {
-      contactSeededRef.current = true;
-      const contact = getContact(userDoc);
-      if (contact.contactEmail) setContactEmail(contact.contactEmail);
-      if (contact.contactPhone) setContactPhone(contact.contactPhone);
-      if (contact.whatsapp) { setWhatsapp(contact.whatsapp); setWhatsappSameAsPhone(contact.whatsapp === contact.contactPhone); }
-    }
+    const contact = getContact(userDoc);
+    if (contact.contactEmail) setContactEmail(contact.contactEmail);
+    if (contact.contactPhone) setContactPhone(contact.contactPhone);
+    if (contact.whatsapp) { setWhatsapp(contact.whatsapp); setWhatsappSameAsPhone(contact.whatsapp === contact.contactPhone); }
     if (babysitter.areaMode) setAreaMode(babysitter.areaMode);
     if (babysitter.arrondissements) setArrondissements(babysitter.arrondissements);
     if (babysitter.areaAddress) setAreaAddress(babysitter.areaAddress);

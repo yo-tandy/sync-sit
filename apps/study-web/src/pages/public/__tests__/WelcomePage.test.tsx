@@ -73,7 +73,7 @@ describe('WelcomePage (study)', () => {
     authState.firebaseUser = { uid: 'b1' };
     authState.userDoc = {
       firstName: 'Noa', lastName: 'Weiss', dateOfBirth: '2008-03-15',
-      profiles: { babysitter: { enrollmentComplete: true, classLevel: '2nde', contactPhone: '+33 6' } },
+      profiles: { babysitter: { enrollmentComplete: true, ejemEmail: 'noa@ejm.org', classLevel: '2nde', contactPhone: '+33 6' } },
     };
     renderLanding();
     expect(screen.getByText('welcome-study-page')).toBeInTheDocument();

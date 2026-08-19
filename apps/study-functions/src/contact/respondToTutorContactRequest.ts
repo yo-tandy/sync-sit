@@ -9,7 +9,7 @@ import {
   isActiveGuardianOf,
   notifyChildOfGuardianAction,
 } from '@ejm/shared-functions/guardian/guardianAccess.js';
-import type { StudyUser, TutorProfile } from '@ejm/study-core';
+import type { StudyUser, } from '@ejm/study-core';
 import { getContact } from '@ejm/shared-core';
 import { respondTutorContactRequestSchema } from '../validation/contact.js';
 
@@ -100,7 +100,6 @@ export const respondToTutorContactRequest = onCall(
     // must see the tutor's name, never the guardian's.
     const tutorDoc = await db.collection('users').doc(tutorUserId).get();
     const tutorUser = tutorDoc.data() as StudyUser | undefined;
-    const tutor: TutorProfile | undefined = tutorUser?.profiles?.tutor;
     const tutorName = `${tutorUser?.firstName || ''} ${tutorUser?.lastName || ''}`.trim() || 'A tutor';
 
     if (action === 'accept') {

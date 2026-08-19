@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { httpsCallable } from 'firebase/functions';
@@ -6,8 +6,9 @@ import { functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { getTutorProfile } from '@ejm/study-core';
 import type { LocationPref } from '@ejm/study-core';
-import { dayOfWeek } from '@ejm/study-core';
+import { dayOfWeek, resolveEffectiveLocations, sanitizeDayLocations } from '@ejm/study-core';
 import type { DayOfWeek } from '@ejm/shared-core';
+import { timeToSlotIndex } from '@ejm/shared-core';
 import { useSchedule } from '@/hooks/useSchedule';
 import { Button, Select, Textarea, Input, Chip, Card, TopNav, Dialog } from '@ejm/shared-ui';
 import { deriveStartChips } from '@/pages/family/bookingSlots';
@@ -61,7 +62,7 @@ export function ProposeSessionPage() {
   const navState = (useLocation().state ?? null) as ProposeNavState | null;
   const { userDoc } = useAuthStore();
   const tutor = getTutorProfile(userDoc);
-  const { weekly } = useSchedule();
+  const { weekly, weeklyLocations, overrides } = useSchedule();
 
   const familyName = navState?.familyName ?? '';
   const subject = navState?.subject ?? '';
@@ -90,6 +91,53 @@ export function ProposeSessionPage() {
     return deriveStartChips(daySlots, sessionLength);
   }, [date, sessionLength, weekly]);
 
+  // ── Locations offerable for the ARMED start (issue #166): the tutor's own
+  // per-slot tags on that weekday constrain the select. Client hint from the
+  // WEEKLY cells (like the start chips above). Mirrors the server's
+  // resolveDateLocationCells gate: a tutor-authored override on the chosen
+  // date (reason 'manual') turns the weekly tags OFF server-side, so the
+  // narrowing must be skipped here too — otherwise the select hides a
+  // location proposeSession would accept, a dead end with no way to reach the
+  // option (PR #185 review). Claim-ledger docs keep the tags, matching the
+  // server. KNOWN LIMIT: dates inside a holidayMode 'different' period also
+  // resolve to profile prefs server-side, but detecting them client-side
+  // needs the admin vacation-period calendar this page doesn't load — on
+  // those dates the select still over-narrows (hides, never wrongly offers).
+  const allowedLocations = useMemo<LocationPref[]>(() => {
+    const fallback = tutor?.locationPrefs ?? [];
+    if (!date || !selectedStart || !sessionLength) return fallback;
+    const manualOverride = overrides.some(
+      (o) => o.date === date && o.reason === 'manual',
+    );
+    const dow: DayOfWeek = dayOfWeek(date);
+    const startIdx = timeToSlotIndex(selectedStart);
+    return resolveEffectiveLocations(
+      // Tags off on a manually-overridden date: resolve with no day tags so
+      // the result is still canonicalized to LOCATION_PREFS order.
+      sanitizeDayLocations(manualOverride ? undefined : weeklyLocations?.[dow]),
+      startIdx,
+      startIdx + sessionLength / 15,
+      fallback,
+    );
+  }, [tutor?.locationPrefs, date, selectedStart, sessionLength, weeklyLocations, overrides]);
+
+  // No `locationPref &&` guard: an emptied selection must RE-FILL when a
+  // bookable start is re-armed (PR #185 r3 review) — same fix as
+  // BookSessionPage's snap effect.
+  useEffect(() => {
+    if (!allowedLocations.includes(locationPref as LocationPref)) {
+      setLocationPref(allowedLocations[0] ?? '');
+    }
+  }, [allowedLocations, locationPref]);
+
+  // The armed start narrowed the offer relative to the profile prefs — make
+  // the constraint legible next to the select.
+  const slotNarrowed =
+    !!date &&
+    !!selectedStart &&
+    allowedLocations.length > 0 &&
+    allowedLocations.length < (tutor?.locationPrefs ?? []).length;
+
   const canPropose =
     !!familyId && !!subject && !!level && !!sessionLength && !!locationPref && !!date &&
     !!selectedStart && !submitting;
@@ -114,10 +162,17 @@ export function ProposeSessionPage() {
       setSuccessOpen(true);
     } catch (err: unknown) {
       const code = (err as { code?: string })?.code ?? '';
+      const details = (err as { details?: { reason?: string } })?.details;
       if (code.includes('invalid-argument')) {
-        // Slot taken (or otherwise unbookable) — never quote the backend message.
+        // details.reason distinguishes a per-slot location constraint
+        // (reachable when the tutor submits before the schedule snapshot
+        // lands) from a taken slot — never quote the backend message.
         setSelectedStart(null);
-        setProposeError(t('tutor.sessions.propose.error.slotTaken'));
+        setProposeError(
+          details?.reason === 'location_not_offered'
+            ? t('tutor.sessions.propose.noLocationForSlot')
+            : t('tutor.sessions.propose.error.slotTaken'),
+        );
       } else if (code.includes('already-exists')) {
         setProposeError(t('tutor.sessions.propose.error.duplicate'));
       } else if (code.includes('failed-precondition') || code.includes('permission-denied')) {
@@ -158,7 +213,7 @@ export function ProposeSessionPage() {
     value: String(m),
     label: t('tutor.sessions.propose.lengthOption', { minutes: m }),
   }));
-  const locationOptions = locations.map((p) => ({
+  const locationOptions = allowedLocations.map((p) => ({
     value: p,
     label: t(`tutor.sessions.location.${p}`),
   }));
@@ -193,6 +248,20 @@ export function ProposeSessionPage() {
           onChange={(e) => setLocationPref(e.target.value as LocationPref)}
           options={locationOptions}
         />
+        {allowedLocations.length === 0 && (
+          <p className="-mt-3 mb-5 text-xs text-brand-600">
+            {t('tutor.sessions.propose.noLocationForSlot')}
+          </p>
+        )}
+        {slotNarrowed && (
+          <p className="-mt-3 mb-5 text-xs text-gray-500">
+            {t('tutor.sessions.propose.slotAllows', {
+              locations: allowedLocations
+                .map((p) => t(`tutor.sessions.location.${p}`))
+                .join(', '),
+            })}
+          </p>
+        )}
 
         <Input
           label={t('tutor.sessions.propose.dateLabel')}

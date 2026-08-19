@@ -23,8 +23,12 @@ interface EnrollTutorData {
   // Cross-app switch (issue #144, owner clarification): a signed-in sit
   // babysitter adds a tutor profile without re-proving mailbox ownership —
   // the EJM identity was verified at first enrollment and lives on the doc.
-  // Only `subjects` (tutor-specific) is collected; classLevel/gender/contact
-  // are copied server-side from the babysitter profile.
+  // `subjects` (tutor-specific) is always collected; classLevel/gender/contact
+  // are copied server-side from the babysitter profile. `enrollment` may carry
+  // a PARTIAL supplement for the fields the sit profile never got (issue #203:
+  // contact is skippable in sit; pre-age-gate docs lack a DOB; abandoned
+  // signups lack classLevel/identity). Stored values always win over the
+  // supplement — see pickCrossAppSupplement.
   crossApp?: boolean;
   subjects?: unknown;
 }
@@ -39,6 +43,29 @@ function copySharedProfileFields(source: Record<string, unknown>): Record<string
     }
   }
   return copied;
+}
+
+/** Fields a crossApp caller may SUPPLY to fill the gaps its sit profile never
+ *  covered (issue #203). Root identity plus the shared profile fields — never
+ *  prefs/area/subjects, which keep their dedicated channel or server default.
+ *  The picked supplement is merged UNDER the stored profile copy (stored
+ *  wins) and then validated through tutorEnrollmentSchema like any classic
+ *  payload, so every borrowed field keeps its classic type/length bounds. */
+const CROSS_APP_SUPPLEMENT_KEYS = [
+  'firstName', 'lastName', 'dateOfBirth',
+  'classLevel', 'gender',
+  'contactEmail', 'contactPhone', 'whatsapp',
+] as const;
+
+function pickCrossAppSupplement(input: unknown): Record<string, unknown> {
+  if (typeof input !== 'object' || input === null) return {};
+  const source = input as Record<string, unknown>;
+  const picked: Record<string, unknown> = {};
+  for (const key of CROSS_APP_SUPPLEMENT_KEYS) {
+    const value = source[key];
+    if (value !== undefined && value !== null && value !== '') picked[key] = value;
+  }
+  return picked;
 }
 
 
@@ -77,8 +104,10 @@ export const enrollTutor = onCall(
     // Cross-app: derive it from the caller's OTHER provider profile — a
     // signed-in babysitter re-proving mailbox ownership is redundant by design
     // (owner call on issue #144); the audit trail records crossApp: true. The
-    // wizard sends only `subjects`; classLevel/gender/contact are copied from
-    // the babysitter profile and validated through the same schema.
+    // wizard sends `subjects` plus an optional partial supplement for fields
+    // the sit profile lacks (issue #203); classLevel/gender/contact are copied
+    // from the babysitter profile OVER the supplement (stored wins) and the
+    // merged input is validated through the same schema.
     // Classic: verify the emailed code as before.
     let ejemEmailLower: string;
     let codeDoc: FirebaseFirestore.DocumentSnapshot | null = null;
@@ -95,10 +124,15 @@ export const enrollTutor = onCall(
         throw new HttpsError('failed-precondition', 'No verified EJM identity on this account');
       }
       ejemEmailLower = derivedEjemEmail.toLowerCase();
-      // classLevel/gender stay profile-scoped; contact resolves root ?? nested
-      // so a babysitter who edited contact at the canonical root still hands
-      // the fresh values to their new tutor profile.
+      // Merge order (issue #203): supplement first, stored profile copy LAST —
+      // a populated sit-profile value always beats a conflicting client value,
+      // matching the set-once identity rule. Root identity in the supplement
+      // obeys the same rule downstream: fillBaseFields writes only fields the
+      // doc holds empty. Contact resolves root ?? nested (shared identity) so
+      // a babysitter who edited contact at the canonical root hands the fresh
+      // values to their new tutor profile.
       enrollmentInput = {
+        ...pickCrossAppSupplement(data.enrollment),
         subjects: data.subjects,
         ...copySharedProfileFields(babysitterProfile),
         ...Object.fromEntries(

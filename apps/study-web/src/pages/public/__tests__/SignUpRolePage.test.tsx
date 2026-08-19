@@ -92,7 +92,7 @@ describe('SignUpRolePage (study)', () => {
 
   it('a signed-in sit babysitter never sees the role question: redirected to /welcome-study (issue #144)', () => {
     authState.firebaseUser = { uid: 'b1' };
-    authState.userDoc = { profiles: { babysitter: { enrollmentComplete: true } } };
+    authState.userDoc = { profiles: { babysitter: { enrollmentComplete: true, ejemEmail: 'b1@ejm.org' } } };
     renderWithProviders(<SignUpRolePage />);
 
     // The role page never rendered — the wrapper redirected before it.

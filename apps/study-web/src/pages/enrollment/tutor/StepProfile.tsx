@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button, Input, Select } from '@ejm/shared-ui';
+import { CLASS_LEVELS_TUTOR, GENDER_OPTIONS, getAge } from './profileFields';
 
 export interface ProfileData {
   // Identity is absent when it is already on file (issue #144) — the server
@@ -33,19 +34,6 @@ interface StepProfileProps {
   identityOnFile?: IdentityOnFile | null;
 }
 
-const CLASS_LEVELS_TUTOR = [
-  'Terminale',
-  '1ère',
-  '2nde',
-  '3ème',
-] as const;
-
-const GENDER_OPTIONS = [
-  { value: 'female', labelKey: 'enrollment.genderFemale' },
-  { value: 'male', labelKey: 'enrollment.genderMale' },
-  { value: 'other', labelKey: 'enrollment.genderOther' },
-  { value: 'prefer_not_to_say', labelKey: 'enrollment.genderPreferNot' },
-] as const;
 
 /**
  * Display form of an on-file DOB: sit-created accounts store a "YYYY-MM-DD"
@@ -62,18 +50,6 @@ function formatDob(dob: unknown): string {
     return (dob as { toDate: () => Date }).toDate().toLocaleDateString();
   }
   return '';
-}
-
-function getAge(dateOfBirth: string): number | null {
-  if (!dateOfBirth) return null;
-  const today = new Date();
-  const dob = new Date(dateOfBirth);
-  let age = today.getFullYear() - dob.getFullYear();
-  const monthDiff = today.getMonth() - dob.getMonth();
-  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
-    age--;
-  }
-  return age;
 }
 
 export function StepProfile({ onNext, initial = null, serverError = null, identityOnFile = null }: StepProfileProps) {

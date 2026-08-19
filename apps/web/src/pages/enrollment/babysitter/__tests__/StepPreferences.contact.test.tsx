@@ -1,0 +1,100 @@
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
+import { MemoryRouter } from 'react-router';
+
+// Shared-identity pins (issue #203, PR #206 review): this step is an
+// enrollment WRITER of the canonical root contact fields — it dual-writes
+// root + nested like the server callables — and its resume-prefill effect
+// must seed ONCE (the derived babysitter view is a fresh object per render,
+// so an unguarded effect reverts every keystroke).
+const h = vi.hoisted(() => ({
+  auth: {
+    userDoc: null as Record<string, unknown> | null,
+    firebaseUser: { uid: 'bs1' },
+    refreshUserDoc: vi.fn(() => Promise.resolve()),
+  },
+  updateDoc: vi.fn(() => Promise.resolve()),
+}));
+
+vi.mock('@/config/firebase', () => ({ functions: {}, auth: {}, db: {}, storage: {} }));
+
+vi.mock('firebase/firestore', () => ({
+  doc: (_db: unknown, ...path: string[]) => ({ path: path.join('/') }),
+  updateDoc: (...args: unknown[]) => h.updateDoc(...args),
+  serverTimestamp: () => 'ts',
+}));
+
+vi.mock('@/stores/authStore', () => ({
+  useAuthStore: () => h.auth,
+}));
+
+import '@/i18n';
+import { StepPreferences } from '../StepPreferences';
+
+function renderStep() {
+  return render(
+    <MemoryRouter>
+      <StepPreferences uid="bs1" onComplete={() => {}} />
+    </MemoryRouter>,
+  );
+}
+
+describe('StepPreferences shared-identity contact (issue #203)', () => {
+  beforeEach(() => {
+    h.auth.userDoc = {
+      uid: 'bs1',
+      firstName: 'Lea',
+      lastName: 'Bernard',
+      profiles: { babysitter: { ejemEmail: 'lea@ejm.org' } },
+    };
+    h.updateDoc.mockClear();
+  });
+
+  afterEach(() => cleanup());
+
+  it('saving dual-writes contact to the ROOT and the nested copy', async () => {
+    renderStep();
+    fireEvent.change(screen.getByLabelText(/^email$/i), {
+      target: { value: 'lea@contact.com' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /^save/i }));
+
+    await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
+    const payload = h.updateDoc.mock.calls[0][1] as Record<string, unknown>;
+    expect(payload.contactEmail).toBe('lea@contact.com');
+    expect(payload['profiles.babysitter.contactEmail']).toBe('lea@contact.com');
+    // Empty channels write null at BOTH levels (the clear convention).
+    expect(payload.contactPhone).toBeNull();
+    expect(payload['profiles.babysitter.contactPhone']).toBeNull();
+  });
+
+  it('prefills contact from the canonical ROOT over a stale nested copy', () => {
+    h.auth.userDoc = {
+      uid: 'bs1',
+      contactEmail: 'fresh@x.com',
+      profiles: { babysitter: { ejemEmail: 'lea@ejm.org', contactEmail: 'stale@x.com' } },
+    };
+    renderStep();
+    expect((screen.getByLabelText(/^email$/i) as HTMLInputElement).value).toBe('fresh@x.com');
+  });
+
+  it('seeds ONCE: typing is not reverted by the resume-prefill effect', async () => {
+    h.auth.userDoc = {
+      uid: 'bs1',
+      contactEmail: 'seed@x.com',
+      profiles: { babysitter: { ejemEmail: 'lea@ejm.org', aboutMe: 'I love kids' } },
+    };
+    renderStep();
+    const email = screen.getByLabelText(/^email$/i) as HTMLInputElement;
+    expect(email.value).toBe('seed@x.com');
+    fireEvent.change(email, { target: { value: 'seed@x.commm' } });
+    // The change triggers a rerender; an unguarded effect would reset the
+    // field to the stored value (the PR #206 review failure scenario).
+    await waitFor(() => expect(email.value).toBe('seed@x.commm'));
+
+    const about = screen.getByLabelText(/about me/i) as HTMLTextAreaElement;
+    expect(about.value).toBe('I love kids');
+    fireEvent.change(about, { target: { value: 'I love kids!' } });
+    await waitFor(() => expect(about.value).toBe('I love kids!'));
+  });
+});
