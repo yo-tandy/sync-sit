@@ -282,6 +282,34 @@ describe('enrollBabysitter crossApp mode', () => {
     expect(after.contactPhone).toBe('+33600000009');
   });
 
+  it('channels the tutor never supplied are ABSENT at the root, not null', async () => {
+    // A null here would read as a deliberate clear (root presence is
+    // authoritative), blocking the nested fallback and the backfill —
+    // the same defect round 6 removed from enrollTutor (PR #206 round 7).
+    const uid = 'crossapp-sit-no-contact';
+    const db = getDb();
+    await getAdminAuth().createUser({ uid, email: 'sitnocontact@test.com' });
+    await db.collection('users').doc(uid).set({
+      uid,
+      email: 'sitnocontact@test.com',
+      firstName: 'No', lastName: 'Contact', dateOfBirth: '2008-05-01',
+      status: 'active',
+      ejemEmail: 'no.contact@ejm-test.org',
+      profiles: {
+        tutor: { enrollmentComplete: true, searchable: false, classLevel: '2nde' },
+      },
+    });
+    const token = await getIdToken(uid);
+    await callFunction('enrollBabysitter', { crossApp: true, consentVersion: '1.0' }, token);
+
+    const after = (await db.collection('users').doc(uid).get()).data()!;
+    expect(after.contactEmail).toBeUndefined();
+    expect(after.contactPhone).toBeUndefined();
+    expect(after.whatsapp).toBeUndefined();
+    // The nested profile keeps the null convention.
+    expect(after.profiles.babysitter.contactEmail).toBeNull();
+  });
+
   it('an explicitly CLEARED contact channel is not resurrected by cross-app enrollment', async () => {
     // Mirror of the tutor-side pin: a tutor who deleted their phone on the
     // study Account page (root null, nested copy frozen) must not get it

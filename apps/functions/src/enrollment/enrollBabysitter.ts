@@ -154,12 +154,18 @@ export const enrollBabysitter = onCall(
         // Root shared-identity fields (issue #203): dual-write the canonical
         // root copies alongside the nested ones. fillBaseFields writes only
         // EMPTY root fields, so an existing canonical value always wins.
+        // Channels with nothing to copy are OMITTED, never written as null:
+        // root presence means "the user set or cleared this", so a null here
+        // would read as a deliberate clear and block both the nested
+        // fallback and the backfill (same fix as enrollTutor's new-account
+        // write; PR #206 review round 7). The nested profile copy above
+        // keeps its null convention.
         fillBaseFields: {
           language: 'en',
           ejemEmail: ejemEmailLower,
-          contactEmail: copiedProfileFields.contactEmail,
-          contactPhone: copiedProfileFields.contactPhone,
-          whatsapp: copiedProfileFields.whatsapp,
+          ...(copiedProfileFields.contactEmail ? { contactEmail: copiedProfileFields.contactEmail } : {}),
+          ...(copiedProfileFields.contactPhone ? { contactPhone: copiedProfileFields.contactPhone } : {}),
+          ...(copiedProfileFields.whatsapp ? { whatsapp: copiedProfileFields.whatsapp } : {}),
         },
         auditAction: 'babysitter_profile_added',
         auditDetails: {
