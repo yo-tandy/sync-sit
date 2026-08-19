@@ -111,9 +111,13 @@ describe('tutor DashboardPage', () => {
     });
     renderWithProviders(<DashboardPage />);
     const pill = await screen.findByRole('button', { name: 'Inactive' });
+    // The amber hint waits on the async schedule read (scheduleLoaded); the
+    // pill renders before it resolves, so query the hint asynchronously —
+    // same race class as the confirm-dialog test's opacity wait (flaked on
+    // PR #206's merge CI).
+    expect(await screen.findByText(/add at least one subject/i)).toBeInTheDocument();
     fireEvent.click(pill);
     expect(screen.queryByText(/activate your profile/i)).not.toBeInTheDocument();
-    expect(screen.getByText(/add at least one subject/i)).toBeInTheDocument();
   });
 
   it('subjects + slots: pill opens the confirm dialog; confirming writes searchable=true', async () => {
