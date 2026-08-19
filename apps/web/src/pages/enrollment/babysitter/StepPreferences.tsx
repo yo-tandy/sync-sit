@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/config/firebase';
@@ -19,6 +19,10 @@ export function StepPreferences({ uid, onComplete }: StepPreferencesProps) {
   const { t } = useTranslation();
   const { userDoc, refreshUserDoc } = useAuthStore();
   const babysitter = getBabysitterView(userDoc);
+
+  // One-shot contact seeding guard (PR #206 review) — see the effect below.
+
+  const contactSeededRef = useRef(false);
 
   const [languages, setLanguages] = useState<string[]>([]);
   const [kidAgeMin, setKidAgeMin] = useState<number | ''>('');
@@ -48,10 +52,17 @@ export function StepPreferences({ uid, onComplete }: StepPreferencesProps) {
     if (babysitter.aboutMe) setAboutMe(babysitter.aboutMe);
     // Contact resolves root ?? nested (issue #203): a crossApp arrival seeds
     // both copies, and the canonical root wins when they ever diverge.
-    const contact = getContact(userDoc);
-    if (contact.contactEmail) setContactEmail(contact.contactEmail);
-    if (contact.contactPhone) setContactPhone(contact.contactPhone);
-    if (contact.whatsapp) { setWhatsapp(contact.whatsapp); setWhatsappSameAsPhone(contact.whatsapp === contact.contactPhone); }
+    // SEED ONCE: `babysitter` is a fresh object every render (derived from
+    // userDoc), so an unguarded set here re-fires per keystroke and reverts
+    // what the user types — same guard as AccountPage's contactSeededRef
+    // (PR #206 review).
+    if (!contactSeededRef.current) {
+      contactSeededRef.current = true;
+      const contact = getContact(userDoc);
+      if (contact.contactEmail) setContactEmail(contact.contactEmail);
+      if (contact.contactPhone) setContactPhone(contact.contactPhone);
+      if (contact.whatsapp) { setWhatsapp(contact.whatsapp); setWhatsappSameAsPhone(contact.whatsapp === contact.contactPhone); }
+    }
     if (babysitter.areaMode) setAreaMode(babysitter.areaMode);
     if (babysitter.arrondissements) setArrondissements(babysitter.arrondissements);
     if (babysitter.areaAddress) setAreaAddress(babysitter.areaAddress);

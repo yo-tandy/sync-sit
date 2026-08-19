@@ -193,6 +193,30 @@ describe('users collection — Plan D owner-update guards', () => {
     );
   });
 
+  it('root contact values must be bounded strings or null (shape guard, PR #206 review)', async () => {
+    await seed('ri5', { status: 'active', email: 'b@ejm.org', profiles: { babysitter: { ejemEmail: 'b@ejm.org', enrollmentComplete: true } } });
+    const authed = testEnv.authenticatedContext('ri5');
+    // Oversize string rejected (contactEmail bound 254).
+    await assertFails(
+      updateDoc(doc(authed.firestore(), 'users', 'ri5'), { contactEmail: 'x'.repeat(300) })
+    );
+    // Non-string rejected.
+    await assertFails(
+      updateDoc(doc(authed.firestore(), 'users', 'ri5'), { contactPhone: { nope: true } })
+    );
+    // Bounded string and the null clear path both pass.
+    await assertSucceeds(
+      updateDoc(doc(authed.firestore(), 'users', 'ri5'), { contactPhone: '+33 6 00 00 00 00' })
+    );
+    await assertSucceeds(
+      updateDoc(doc(authed.firestore(), 'users', 'ri5'), { contactPhone: null })
+    );
+    // An update NOT touching the trio is unaffected by the guard.
+    await assertSucceeds(
+      updateDoc(doc(authed.firestore(), 'users', 'ri5'), { language: 'fr' })
+    );
+  });
+
   it('owner may NOT smuggle a root ejemEmail change into an allowed contact update', async () => {
     await seed('ri3', { status: 'active', email: 'b@ejm.org', ejemEmail: 'b@ejm.org', profiles: { babysitter: { ejemEmail: 'b@ejm.org', enrollmentComplete: true } } });
     const authed = testEnv.authenticatedContext('ri3');

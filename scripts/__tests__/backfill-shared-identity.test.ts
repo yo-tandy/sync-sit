@@ -17,13 +17,13 @@ describe('computeRootPatch', () => {
   it('copies nested babysitter values to an empty root', () => {
     expect(computeRootPatch({
       profiles: { babysitter: { ejemEmail: 'a@ejm.org', contactPhone: '+33 6' } },
-    })).toEqual({ ejemEmail: 'a@ejm.org', contactPhone: '+33 6' });
+    })).toEqual({ patch: { ejemEmail: 'a@ejm.org', contactPhone: '+33 6' }, contested: [] });
   });
 
   it('copies from the tutor profile when the babysitter copy is absent', () => {
     expect(computeRootPatch({
       profiles: { tutor: { ejemEmail: 't@ejm.org', whatsapp: '+33 7' } },
-    })).toEqual({ ejemEmail: 't@ejm.org', whatsapp: '+33 7' });
+    })).toEqual({ patch: { ejemEmail: 't@ejm.org', whatsapp: '+33 7' }, contested: [] });
   });
 
   it('babysitter copy WINS over a disagreeing tutor copy (sit-origin tiebreak)', () => {
@@ -32,7 +32,13 @@ describe('computeRootPatch', () => {
         babysitter: { ejemEmail: 'bs@ejm.org', contactEmail: 'bs@contact.com' },
         tutor: { ejemEmail: 'tu@ejm.org', contactEmail: 'tu@contact.com' },
       },
-    })).toEqual({ ejemEmail: 'bs@ejm.org', contactEmail: 'bs@contact.com' });
+    })).toEqual({
+      patch: { ejemEmail: 'bs@ejm.org', contactEmail: 'bs@contact.com' },
+      contested: [
+        { field: 'ejemEmail', babysitter: 'bs@ejm.org', tutor: 'tu@ejm.org' },
+        { field: 'contactEmail', babysitter: 'bs@contact.com', tutor: 'tu@contact.com' },
+      ],
+    });
   });
 
   it('resolves per FIELD: babysitter email + tutor phone combine', () => {
@@ -41,7 +47,7 @@ describe('computeRootPatch', () => {
         babysitter: { contactEmail: 'bs@contact.com' },
         tutor: { contactPhone: '+33 7' },
       },
-    })).toEqual({ contactEmail: 'bs@contact.com', contactPhone: '+33 7' });
+    })).toEqual({ patch: { contactEmail: 'bs@contact.com', contactPhone: '+33 7' }, contested: [] });
   });
 
   it('NEVER touches a populated root field (idempotent)', () => {
@@ -62,7 +68,7 @@ describe('computeRootPatch', () => {
       ejemEmail: '',
       contactEmail: null,
       profiles: { babysitter: { ejemEmail: 'bs@ejm.org', contactEmail: 'bs@contact.com' } },
-    })).toEqual({ ejemEmail: 'bs@ejm.org', contactEmail: 'bs@contact.com' });
+    })).toEqual({ patch: { ejemEmail: 'bs@ejm.org', contactEmail: 'bs@contact.com' }, contested: [] });
   });
 
   it("skips nested nulls and '' — they are absence, not values", () => {
@@ -71,7 +77,7 @@ describe('computeRootPatch', () => {
         babysitter: { contactEmail: null, contactPhone: '' },
         tutor: { contactPhone: '+33 7' },
       },
-    })).toEqual({ contactPhone: '+33 7' });
+    })).toEqual({ patch: { contactPhone: '+33 7' }, contested: [] });
   });
 
   it('ignores non-string junk in nested copies', () => {

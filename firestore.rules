@@ -209,6 +209,25 @@ service cloud.firestore {
              || request.resource.data.get(key, null) == resource.data[key];
     }
 
+
+    // Root shared-contact shape (issue #203 / PR #206 review): the trio is
+    // owner-writable and gets READ BACK and processed — embedded in the
+    // acceptance email and projected into mailto:/tel: hrefs — so like the
+    // families postcode/city it carries a shape check: string bounded to the
+    // enrollment-schema limits, or null (the clear path). Only CHANGED fields
+    // are checked, so legacy docs with odd nested values stay updatable.
+    function rootContactFieldValid(field, max) {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny([field])
+             || request.resource.data[field] == null
+             || (request.resource.data[field] is string
+                 && request.resource.data[field].size() <= max);
+    }
+    function rootContactShapeValid() {
+      return rootContactFieldValid('contactEmail', 254)
+             && rootContactFieldValid('contactPhone', 40)
+             && rootContactFieldValid('whatsapp', 40);
+    }
+
     function rootIdentitySetOnce() {
       return !request.resource.data.diff(resource.data).affectedKeys()
                  .hasAny(['firstName', 'lastName', 'dateOfBirth'])
@@ -264,6 +283,7 @@ service cloud.firestore {
                     && parentFamilyIdUnchanged()
                     && identityUnlockedOrUnchanged()
                     && rootIdentitySetOnce()
+                    && rootContactShapeValid()
                     && tutorNumericBoundsValid()
                     && tutorAreaShapeValid()
                     && photoUrlValid();

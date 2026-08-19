@@ -142,3 +142,14 @@ Integration (lane 2 — written here, run by the lead):
 study-web + web full test/lint/build; shared-core, shared-functions (if
 touched), study-functions, functions tests + builds. Baselines discovered
 fresh at 7541f8a.
+
+## Deliberately left (PR #206 review)
+
+- `lookupBabysitter` now matches on the ROOT ejemEmail (via `getEjemEmail`),
+  which can diverge from `profiles.babysitter.ejemEmail` for the (likely
+  unreachable) user who verified TWO different EJM addresses across the two
+  apps: `fillBaseFields` never overwrites a populated root, so a later classic
+  babysitter enrollment with address A leaves root at the earlier tutor
+  address B. Family lookup and the searchBabysitters age-gate then key off B.
+  Accepted: one canonical identity per account is the point of this change;
+  the backfill's CONTESTED output surfaces any real-world instance.

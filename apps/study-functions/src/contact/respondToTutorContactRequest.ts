@@ -13,6 +13,22 @@ import type { StudyUser, TutorProfile } from '@ejm/study-core';
 import { getContact } from '@ejm/shared-core';
 import { respondTutorContactRequestSchema } from '../validation/contact.js';
 
+
+/**
+ * The acceptance email's contact block. Canonical root ?? nested resolution
+ * (issue #203 shared identity): the email must carry the tutor's FRESHEST
+ * contact channels — a root-only Account edit wins over the stale nested
+ * copy. Exported for the unit pin (PR #206 review); every value is escaped.
+ */
+export function buildTutorContactBlock(tutorUser: StudyUser | undefined): string {
+  const { contactEmail, contactPhone, whatsapp } = getContact(tutorUser);
+  return [
+    contactEmail ? `<p><strong>Email:</strong> ${escapeHtml(contactEmail)}</p>` : '',
+    contactPhone ? `<p><strong>Phone:</strong> ${escapeHtml(contactPhone)}</p>` : '',
+    whatsapp ? `<p><strong>WhatsApp:</strong> ${escapeHtml(whatsapp)}</p>` : '',
+  ].join('');
+}
+
 export const respondToTutorContactRequest = onCall(
   { region: 'europe-west1', cors: getCorsOrigin() },
   async (request) => {
@@ -88,14 +104,7 @@ export const respondToTutorContactRequest = onCall(
     const tutorName = `${tutorUser?.firstName || ''} ${tutorUser?.lastName || ''}`.trim() || 'A tutor';
 
     if (action === 'accept') {
-      // Canonical root ?? nested resolution (issue #203 shared identity):
-      // the shared email must carry the tutor's freshest contact channels.
-      const { contactEmail, contactPhone, whatsapp } = getContact(tutorUser);
-      const contactBlock = [
-        contactEmail ? `<p><strong>Email:</strong> ${escapeHtml(contactEmail)}</p>` : '',
-        contactPhone ? `<p><strong>Phone:</strong> ${escapeHtml(contactPhone)}</p>` : '',
-        whatsapp ? `<p><strong>WhatsApp:</strong> ${escapeHtml(whatsapp)}</p>` : '',
-      ].join('');
+      const contactBlock = buildTutorContactBlock(tutorUser);
 
       await notifyAllParents({
         familyId: result.familyId,

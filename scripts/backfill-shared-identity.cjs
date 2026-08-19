@@ -50,15 +50,26 @@ function computeRootPatch(data) {
   const babysitter = data?.profiles?.babysitter || {};
   const tutor = data?.profiles?.tutor || {};
   const patch = {};
+  // Fields where BOTH nested copies are non-empty and DISAGREE: the lift still
+  // applies the babysitter tiebreak, but the operator must see these — the
+  // tutor copy may hold a NEWER pre-release study edit that the tiebreak
+  // discards (PR #206 review). The dry run prints them as CONTESTED; review
+  // that (small) set before --apply.
+  const contested = [];
   for (const field of SHARED_FIELDS) {
     if (!isEmpty(data?.[field])) continue; // root already canonical — never touch
+    const bsVal = !isEmpty(babysitter[field]) ? babysitter[field] : undefined;
+    const tuVal = !isEmpty(tutor[field]) ? tutor[field] : undefined;
+    if (bsVal !== undefined && tuVal !== undefined && bsVal !== tuVal) {
+      contested.push({ field, babysitter: bsVal, tutor: tuVal });
+    }
     // Babysitter copy wins over tutor copy (see header tiebreak).
-    const nested = !isEmpty(babysitter[field]) ? babysitter[field]
-      : !isEmpty(tutor[field]) ? tutor[field]
-      : undefined;
+    const nested = bsVal !== undefined ? bsVal : tuVal;
     if (typeof nested === 'string' && nested !== '') patch[field] = nested;
   }
-  return Object.keys(patch).length > 0 ? patch : null;
+  return Object.keys(patch).length > 0 || contested.length > 0
+    ? { patch: Object.keys(patch).length > 0 ? patch : null, contested }
+    : null;
 }
 
 module.exports = { computeRootPatch, isEmpty, SHARED_FIELDS };
@@ -93,16 +104,24 @@ async function main() {
 
   let updated = 0;
   let unchanged = 0;
+  let contestedDocs = 0;
 
   for (const userDoc of usersSnap.docs) {
-    const patch = computeRootPatch(userDoc.data());
-    if (!patch) {
+    const result = computeRootPatch(userDoc.data());
+    if (!result || (!result.patch && result.contested.length === 0)) {
       unchanged += 1;
       continue;
     }
-    const fields = Object.keys(patch).join(', ');
+    for (const c of result.contested) {
+      contestedDocs += 1;
+      console.log(
+        `  CONTESTED users/${userDoc.id} ${c.field}: babysitter='${c.babysitter}' vs tutor='${c.tutor}' — tiebreak keeps the babysitter copy; the tutor copy may be a newer study edit. Review before --apply.`,
+      );
+    }
+    if (!result.patch) { unchanged += 1; continue; }
+    const fields = Object.keys(result.patch).join(', ');
     if (apply) {
-      await userDoc.ref.update(patch);
+      await userDoc.ref.update(result.patch);
       console.log(`  WRITE users/${userDoc.id} — set root ${fields}`);
     } else {
       console.log(`  WOULD users/${userDoc.id} — set root ${fields}`);
@@ -110,7 +129,7 @@ async function main() {
     updated += 1;
   }
 
-  console.log(`\nDone. ${apply ? 'Wrote' : 'Would write'} ${updated} doc(s); ${unchanged} already canonical/no source.`);
+  console.log(`\nDone. ${apply ? 'Wrote' : 'Would write'} ${updated} doc(s); ${unchanged} already canonical/no source; ${contestedDocs} CONTESTED field(s) flagged above.`);
 }
 
 if (require.main === module) {

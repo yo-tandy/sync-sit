@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { doc, getDoc, collection, getDocs, addDoc, onSnapshot, query, where } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
+import { getContact } from '@ejm/shared-core';
 import { db, functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { useVerificationStore } from '@/stores/verificationStore';
@@ -263,8 +264,10 @@ export function FamilyDashboard() {
               languages: bp?.languages,
               photoUrl: u.photoUrl,
               aboutMe: bp?.aboutMe,
-              contactEmail: bp?.contactEmail,
-              contactPhone: bp?.contactPhone,
+              // Root ?? nested resolution (issue #203): the sit Account page
+              // writes contact ROOT-ONLY now, so reading the nested copy
+              // would freeze this card at enrollment-time values.
+              ...(() => { const c = getContact(u); return { contactEmail: c.contactEmail ?? undefined, contactPhone: c.contactPhone ?? undefined }; })(),
               kidAgeRange: bp?.kidAgeRange,
               maxKids: bp?.maxKids,
             };
