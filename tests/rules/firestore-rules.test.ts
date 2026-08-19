@@ -2152,3 +2152,173 @@ describe('users update — root identity set-once (issue #144)', () => {
     }));
   });
 });
+
+// publishedSearches (issue #207): a family's deliberately-broadcast demand.
+// Created only by the publish callables (Admin SDK); read by the owning
+// family, any ACTIVE provider of the MATCHING app, or admin — deliberately
+// NOT gated on profiles.*.searchable (visibility to hidden providers is the
+// feature; caller status == 'active' stays the ban gate). Delete = the
+// owning family's withdraw. List provability: provider lists must carry the
+// `app` equality filter; family lists the `familyId` equality filter.
+describe('publishedSearches collection', () => {
+  async function seedBoard() {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const fs = ctx.firestore();
+      // searchable: false on BOTH providers — the widened-audience pin:
+      // hidden-from-search providers still read the demand board.
+      await setDoc(doc(fs, 'users', 'sitterActive'), {
+        uid: 'sitterActive', status: 'active', email: 's@ejm.org',
+        profiles: { babysitter: { enrollmentComplete: true, searchable: false, ejemEmail: 's@ejm.org' } },
+      });
+      await setDoc(doc(fs, 'users', 'sitterBlocked'), {
+        uid: 'sitterBlocked', status: 'blocked', email: 'b@ejm.org',
+        profiles: { babysitter: { enrollmentComplete: true, searchable: true, ejemEmail: 'b@ejm.org' } },
+      });
+      await setDoc(doc(fs, 'users', 'tutorActive'), {
+        uid: 'tutorActive', status: 'active', email: 't@ejm.org',
+        profiles: { tutor: { enrollmentComplete: true, searchable: false, ejemEmail: 't@ejm.org' } },
+      });
+      await setDoc(doc(fs, 'users', 'tutorLegacy'), {
+        uid: 'tutorLegacy', status: 'active', email: 'l@ejm.org',
+        profiles: { tutor: { enrollmentComplete: false, ejemEmail: 'l@ejm.org' } },
+      });
+      await setDoc(doc(fs, 'users', 'sitterLegacy'), {
+        uid: 'sitterLegacy', status: 'active', email: 'sl@ejm.org',
+        profiles: { babysitter: { enrollmentComplete: false, ejemEmail: 'sl@ejm.org' } },
+      });
+      await setDoc(doc(fs, 'users', 'parentP'), {
+        uid: 'parentP', status: 'active', email: 'p@x.com',
+        profiles: { parent: { familyId: 'famP' } },
+      });
+      await setDoc(doc(fs, 'users', 'parentQ'), {
+        uid: 'parentQ', status: 'active', email: 'q@x.com',
+        profiles: { parent: { familyId: 'famQ' } },
+      });
+      await setDoc(doc(fs, 'users', 'adminPS'), {
+        uid: 'adminPS', status: 'active', email: 'a@x.com', isAdmin: true, profiles: {},
+      });
+      await setDoc(doc(fs, 'families', 'famP'), { familyId: 'famP', parentIds: ['parentP'] });
+      await setDoc(doc(fs, 'families', 'famQ'), { familyId: 'famQ', parentIds: ['parentQ'] });
+      await setDoc(doc(fs, 'publishedSearches', 'ps-sit'), {
+        id: 'ps-sit', app: 'sit', familyId: 'famP', createdByUserId: 'parentP',
+        kidAges: [6], areaLabel: '16e', createdAt: new Date(), expiresAt: new Date(Date.now() + 86400000),
+      });
+      await setDoc(doc(fs, 'publishedSearches', 'ps-study'), {
+        id: 'ps-study', app: 'study', familyId: 'famP', createdByUserId: 'parentP',
+        subject: 'math', level: '6e', areaLabel: '16e', createdAt: new Date(), expiresAt: new Date(Date.now() + 86400000),
+      });
+    });
+  }
+
+  it('allows an active babysitter to read a sit doc even when hidden from search (searchable:false)', async () => {
+    await seedBoard();
+    const authed = testEnv.authenticatedContext('sitterActive');
+    await assertSucceeds(getDoc(doc(authed.firestore(), 'publishedSearches', 'ps-sit')));
+  });
+
+  it('denies a babysitter reading a STUDY doc (cross-app)', async () => {
+    await seedBoard();
+    const authed = testEnv.authenticatedContext('sitterActive');
+    await assertFails(getDoc(doc(authed.firestore(), 'publishedSearches', 'ps-study')));
+  });
+
+  it('denies a blocked babysitter (status stays the ban gate)', async () => {
+    await seedBoard();
+    const authed = testEnv.authenticatedContext('sitterBlocked');
+    await assertFails(getDoc(doc(authed.firestore(), 'publishedSearches', 'ps-sit')));
+  });
+
+  it('allows an active enrolled tutor to read a study doc (hidden from search too)', async () => {
+    await seedBoard();
+    const authed = testEnv.authenticatedContext('tutorActive');
+    await assertSucceeds(getDoc(doc(authed.firestore(), 'publishedSearches', 'ps-study')));
+  });
+
+  it('denies a tutor reading a SIT doc (cross-app)', async () => {
+    await seedBoard();
+    const authed = testEnv.authenticatedContext('tutorActive');
+    await assertFails(getDoc(doc(authed.firestore(), 'publishedSearches', 'ps-sit')));
+  });
+
+  it('denies a legacy babysitter without enrollmentComplete (symmetric with study; PR #210 review)', async () => {
+    await seedBoard();
+    const fs = testEnv.authenticatedContext('sitterLegacy').firestore();
+    await assertFails(getDoc(doc(fs, 'publishedSearches', 'ps-sit')));
+  });
+
+  it('denies a legacy tutor without enrollmentComplete', async () => {
+    await seedBoard();
+    const authed = testEnv.authenticatedContext('tutorLegacy');
+    await assertFails(getDoc(doc(authed.firestore(), 'publishedSearches', 'ps-study')));
+  });
+
+  it('allows the owning family to read its own docs in both apps', async () => {
+    await seedBoard();
+    const authed = testEnv.authenticatedContext('parentP');
+    await assertSucceeds(getDoc(doc(authed.firestore(), 'publishedSearches', 'ps-sit')));
+    await assertSucceeds(getDoc(doc(authed.firestore(), 'publishedSearches', 'ps-study')));
+  });
+
+  it('denies a non-provider parent of ANOTHER family', async () => {
+    await seedBoard();
+    const authed = testEnv.authenticatedContext('parentQ');
+    await assertFails(getDoc(doc(authed.firestore(), 'publishedSearches', 'ps-sit')));
+  });
+
+  it('denies unauthenticated reads', async () => {
+    await seedBoard();
+    const unauthed = testEnv.unauthenticatedContext();
+    await assertFails(getDoc(doc(unauthed.firestore(), 'publishedSearches', 'ps-sit')));
+  });
+
+  it('allows admin reads', async () => {
+    await seedBoard();
+    const authed = testEnv.authenticatedContext('adminPS');
+    await assertSucceeds(getDoc(doc(authed.firestore(), 'publishedSearches', 'ps-sit')));
+  });
+
+  it('allows a provider LIST only with the app equality filter (provability pin)', async () => {
+    await seedBoard();
+    const authed = testEnv.authenticatedContext('sitterActive');
+    await assertSucceeds(getDocs(query(
+      collection(authed.firestore(), 'publishedSearches'),
+      where('app', '==', 'sit'),
+      orderBy('createdAt', 'desc'),
+      limit(50),
+    )));
+    // Without the app filter the provider disjunct is unprovable — denied.
+    await assertFails(getDocs(query(collection(authed.firestore(), 'publishedSearches'), limit(50))));
+  });
+
+  it('allows the owning family to LIST via the familyId equality filter', async () => {
+    await seedBoard();
+    const authed = testEnv.authenticatedContext('parentP');
+    await assertSucceeds(getDocs(query(
+      collection(authed.firestore(), 'publishedSearches'),
+      where('familyId', '==', 'famP'),
+      orderBy('createdAt', 'desc'),
+    )));
+  });
+
+  it('allows the owning family to delete (withdraw) and nobody else', async () => {
+    await seedBoard();
+    const owner = testEnv.authenticatedContext('parentP');
+    await assertSucceeds(deleteDoc(doc(owner.firestore(), 'publishedSearches', 'ps-sit')));
+
+    const otherParent = testEnv.authenticatedContext('parentQ');
+    await assertFails(deleteDoc(doc(otherParent.firestore(), 'publishedSearches', 'ps-study')));
+    const sitter = testEnv.authenticatedContext('sitterActive');
+    await assertFails(deleteDoc(doc(sitter.firestore(), 'publishedSearches', 'ps-study')));
+  });
+
+  it('denies client create and update even by the owning parent', async () => {
+    await seedBoard();
+    const authed = testEnv.authenticatedContext('parentP');
+    await assertFails(setDoc(doc(authed.firestore(), 'publishedSearches', 'ps-new'), {
+      id: 'ps-new', app: 'sit', familyId: 'famP', createdAt: new Date(), expiresAt: new Date(),
+    }));
+    await assertFails(updateDoc(doc(authed.firestore(), 'publishedSearches', 'ps-sit'), {
+      expiresAt: new Date(Date.now() + 30 * 86400000),
+    }));
+  });
+});

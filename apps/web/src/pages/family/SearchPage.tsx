@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
-import { doc, getDoc, collection, getDocs, query, where, limit } from 'firebase/firestore';
+import { doc, getDoc, collection, getDocs, query, where, limit, onSnapshot, deleteDoc } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import {
-  Button, Card, Input, Select, Textarea, Chip, TopNav, Dialog, Avatar,
+  Button, Card, Input, Select, Textarea, Chip, TopNav, Dialog, Avatar, useToast,
 } from '@/components/ui';
 import { AddressAutocomplete, type AddressResult } from '@/components/forms/AddressAutocomplete';
 import { formatBabysitterName } from '@/lib/formatName';
@@ -38,6 +38,23 @@ function generateTimeOptions(): { value: string; label: string }[] {
 }
 const TIME_OPTIONS = generateTimeOptions();
 
+/**
+ * The family's own active published searches (issue #207) — the subset of the
+ * shared publishedSearches doc this page renders and withdraws. Timestamps
+ * arrive as Firestore Timestamps; expiry is filtered client-side (there is no
+ * status field: active == exists && expiresAt > now).
+ */
+interface OwnPublishedSearch {
+  id: string;
+  type: 'one_time' | 'recurring';
+  date: string | null;
+  startTime: string | null;
+  endTime: string | null;
+  recurringSlots: { day: string; startTime: string; endTime: string }[] | null;
+  kidAges: number[];
+  createdAt: { toMillis: () => number };
+  expiresAt: { toMillis: () => number; toDate: () => Date };
+}
 
 export function SearchPage() {
   const { t, i18n } = useTranslation();
@@ -147,6 +164,15 @@ export function SearchPage() {
   // Preferred babysitter IDs
   const [preferredIds, setPreferredIds] = useState<Set<string>>(new Set());
 
+  // ── Published searches (issue #207) ──
+  const toast = useToast();
+  const [myPublished, setMyPublished] = useState<OwnPublishedSearch[]>([]);
+  const [publishOpen, setPublishOpen] = useState(false);
+  const [publishing, setPublishing] = useState(false);
+  const [publishError, setPublishError] = useState<'cap' | 'generic' | null>(null);
+  const [withdrawTarget, setWithdrawTarget] = useState<OwnPublishedSearch | null>(null);
+  const [withdrawing, setWithdrawing] = useState(false);
+
   const togglePreferred = (babysitterUid: string) => {
     const isPref = preferredIds.has(babysitterUid);
     // Optimistic UI update
@@ -198,6 +224,75 @@ export function SearchPage() {
   const selectedKids = kids.filter((k) => k.selected);
   const today = new Date().toISOString().split('T')[0];
   const dateTag = getDateTag(date, startTime, holidayPeriods);
+
+  // Live list of the family's own active sit published searches. Two equality
+  // filters (no composite index needed); newest-first sort and the expiry
+  // filter run client-side. A failed subscription just hides the section.
+  useEffect(() => {
+    if (!parent?.familyId) return;
+    const q = query(
+      collection(db, 'publishedSearches'),
+      where('familyId', '==', parent.familyId),
+      where('app', '==', 'sit'),
+    );
+    return onSnapshot(
+      q,
+      (snap) => {
+        const now = Date.now();
+        setMyPublished(
+          snap.docs
+            .map((d) => d.data() as OwnPublishedSearch)
+            .filter((d) => (d.expiresAt?.toMillis?.() ?? 0) > now)
+            .sort((a, b) => (b.createdAt?.toMillis?.() ?? 0) - (a.createdAt?.toMillis?.() ?? 0)),
+        );
+      },
+      () => setMyPublished([]),
+    );
+  }, [parent?.familyId]);
+
+  const handlePublish = async () => {
+    setPublishing(true);
+    setPublishError(null);
+    try {
+      const enabledSlots = recurringSlots.filter((s) => s.enabled).map(({ day, startTime, endTime }) => ({ day, startTime, endTime }));
+      const publishFn = httpsCallable(functions, 'publishSearch');
+      await publishFn({
+        type: searchType,
+        date: searchType === 'one_time' ? date : undefined,
+        startTime: searchType === 'one_time' ? startTime : undefined,
+        endTime: searchType === 'one_time' ? endTime : undefined,
+        recurringSlots: searchType === 'recurring' ? enabledSlots : undefined,
+        schoolWeeksOnly: searchType === 'recurring' ? schoolWeeksOnly : undefined,
+        kidIds: selectedKids.map((k) => k.kidId),
+        offeredRate: offeredRate || undefined,
+        additionalInfo: additionalInfo.trim() || undefined,
+      });
+      setPublishOpen(false);
+      toast(t('publish.published'));
+    } catch (err: unknown) {
+      const code = (err as { code?: string })?.code;
+      setPublishError(code === 'functions/resource-exhausted' ? 'cap' : 'generic');
+    } finally {
+      setPublishing(false);
+    }
+  };
+
+  const handleWithdraw = async () => {
+    if (!withdrawTarget) return;
+    setWithdrawing(true);
+    try {
+      await deleteDoc(doc(db, 'publishedSearches', withdrawTarget.id));
+      setWithdrawTarget(null);
+      toast(t('publish.withdrawn'));
+    } catch {
+      // Keep the dialog open and say so — a swallowed rules denial or offline
+      // failure left the row visibly present but the dialog claimed success
+      // (PR #210 review).
+      toast(t('publish.withdrawError'));
+    } finally {
+      setWithdrawing(false);
+    }
+  };
 
   const handleSearch = async () => {
     setSearching(true);
@@ -308,6 +403,34 @@ export function SearchPage() {
               <p className="text-base font-semibold">{t('search.recurring')}</p>
               <p className="text-sm text-gray-500">{t('search.recurringDesc')}</p>
             </Card>
+
+            {/* The family's own active published searches (issue #207) */}
+            {myPublished.length > 0 && (
+              <div className="mt-8">
+                <h3 className="mb-2 text-sm font-semibold text-gray-700">{t('publish.myPublished')}</h3>
+                {myPublished.map((p) => (
+                  <Card key={p.id} className="mb-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-gray-900">
+                          {p.type === 'one_time' && p.date
+                            ? `${new Date(p.date + 'T00:00:00').toLocaleDateString(i18n.language === 'fr' ? 'fr-FR' : 'en-US', { weekday: 'long', day: 'numeric', month: 'long' })}, ${p.startTime}–${p.endTime}`
+                            : t('publish.recurringLabel', { count: p.recurringSlots?.length ?? 0 })}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {t('publish.expiresOn', {
+                            date: p.expiresAt.toDate().toLocaleDateString(i18n.language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'long' }),
+                          })}
+                        </p>
+                      </div>
+                      <Button size="sm" variant="outline" className="w-auto shrink-0" onClick={() => setWithdrawTarget(p)}>
+                        {t('publish.withdraw')}
+                      </Button>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            )}
           </>
         )}
 
@@ -517,9 +640,15 @@ export function SearchPage() {
                 <p className="mb-6 max-w-[260px] text-sm text-gray-500">
                   {t('search.noResultsDesc')}
                 </p>
-                <Button variant="outline" onClick={() => setStep('details')}>
-                  {t('search.editSearch')}
-                </Button>
+                <div className="flex flex-col gap-2">
+                  <Button onClick={() => setPublishOpen(true)}>
+                    {t('publish.cta')}
+                  </Button>
+                  <Button variant="outline" onClick={() => setStep('details')}>
+                    {t('search.editSearch')}
+                  </Button>
+                </div>
+                <p className="mt-3 max-w-[280px] text-xs text-gray-500">{t('publish.ctaHint')}</p>
               </div>
             ) : (() => {
               const preferred = results.filter((r) => r.isPreferred);
@@ -629,6 +758,18 @@ export function SearchPage() {
               };
               return (
                 <>
+                  {/* Publish CTA (issue #207): the option rides every result
+                      set — the demand board reaches providers this filtered
+                      list cannot. */}
+                  <Card className="mb-4">
+                    {/* Stacked, not flex-row: shared-ui Button is w-full and
+                        appended width classes lose the Tailwind conflict, so a
+                        row layout crushes the hint to one word per line. */}
+                    <p className="mb-3 text-xs text-gray-600">{t('publish.ctaHint')}</p>
+                    <Button size="sm" variant="outline" onClick={() => setPublishOpen(true)}>
+                      {t('publish.cta')}
+                    </Button>
+                  </Card>
                   {preferred.length > 0 && (
                     <>
                       <h3 className="mb-2 mt-2 text-sm font-semibold text-brand-600">❤️ {t('search.preferredSection')} ({preferred.length})</h3>
@@ -650,6 +791,51 @@ export function SearchPage() {
           </>
         )}
       </div>
+
+      {/* Publish Confirmation Dialog (issue #207) */}
+      {publishOpen && (
+        <Dialog open onClose={() => { setPublishOpen(false); setPublishError(null); }}>
+          <h3 className="mb-2 text-lg font-bold">{t('publish.confirmTitle')}</h3>
+          <p className="mb-2 text-sm text-gray-600">{t('publish.confirmDesc')}</p>
+          <p className="mb-2 text-sm text-gray-600">
+            {searchType === 'one_time'
+              ? t('publish.durationOneTime')
+              : t('publish.durationRecurring')}
+          </p>
+          {additionalInfo.trim() && (
+            <p className="mb-2 text-xs text-amber-600">{t('publish.infoVisibleWarning')}</p>
+          )}
+          {publishError && (
+            <p className="mb-3 text-sm text-brand-600">
+              {publishError === 'cap' ? t('publish.capError') : t('publish.error')}
+            </p>
+          )}
+          <div className="mt-2 flex gap-2">
+            <Button onClick={handlePublish} disabled={publishing} className="flex-1">
+              {publishing ? t('publish.publishing') : t('publish.confirmCta')}
+            </Button>
+            <Button variant="ghost" onClick={() => { setPublishOpen(false); setPublishError(null); }} className="flex-1">
+              {t('common.cancel')}
+            </Button>
+          </div>
+        </Dialog>
+      )}
+
+      {/* Withdraw Published Search Dialog (issue #207) */}
+      {withdrawTarget && (
+        <Dialog open onClose={() => setWithdrawTarget(null)}>
+          <h3 className="mb-2 text-lg font-bold">{t('publish.withdrawTitle')}</h3>
+          <p className="mb-4 text-sm text-gray-600">{t('publish.withdrawDesc')}</p>
+          <div className="flex gap-2">
+            <Button onClick={handleWithdraw} disabled={withdrawing} className="flex-1">
+              {withdrawing ? t('publish.withdrawing') : t('publish.withdraw')}
+            </Button>
+            <Button variant="ghost" onClick={() => setWithdrawTarget(null)} className="flex-1">
+              {t('common.cancel')}
+            </Button>
+          </div>
+        </Dialog>
+      )}
 
       {/* Contact Confirmation Dialog */}
       {contactTarget && !sent && (

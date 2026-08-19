@@ -68,6 +68,14 @@ vi.mock('@/config/firebase', () => ({ db: {}, functions: {} }));
 vi.mock('firebase/firestore', () => ({
   doc: (_db: unknown, ...path: string[]) => ({ path: path.join('/') }),
   getDoc: (...args: unknown[]) => h.getDoc(...args),
+  // Published-searches surface (issue #207): the page also subscribes to the
+  // family's own publishedSearches docs. Inert here — these tests exercise
+  // the search flow; the publish flow has its own suite.
+  collection: (_db: unknown, ...path: string[]) => ({ path: path.join('/') }),
+  query: (...args: unknown[]) => args,
+  where: (...args: unknown[]) => args,
+  onSnapshot: () => () => {},
+  deleteDoc: () => Promise.resolve(),
 }));
 
 vi.mock('firebase/functions', () => ({
