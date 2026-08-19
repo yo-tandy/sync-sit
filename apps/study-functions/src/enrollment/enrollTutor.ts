@@ -128,16 +128,35 @@ export const enrollTutor = onCall(
       // a populated sit-profile value always beats a conflicting client value,
       // matching the set-once identity rule. Root identity in the supplement
       // obeys the same rule downstream: fillBaseFields writes only fields the
-      // doc holds empty. Contact resolves root ?? nested (shared identity) so
-      // a babysitter who edited contact at the canonical root hands the fresh
-      // values to their new tutor profile.
+      // doc holds empty.
+      //
+      // CONTACT is layered differently (PR #206 review round 4). The
+      // canonical resolution already falls back to the nested copies when the
+      // root was never written, so it is applied over the profile copy
+      // UNFILTERED — including its nulls, which post-clear semantics make an
+      // explicit user deletion. Filtering them would let the frozen nested
+      // copy re-enter and become canonical again, undoing the deletion. A
+      // channel the user just entered in the wizard then wins over both: the
+      // stored-wins rule was written when nested was canonical, and re-typing
+      // a contact right after clearing it must not resurrect the old value.
+      const supplement = pickCrossAppSupplement(data.enrollment);
+      const suppliedContact = Object.fromEntries(
+        (['contactEmail', 'contactPhone', 'whatsapp'] as const)
+          .filter((k) => supplement[k] !== undefined)
+          .map((k) => [k, supplement[k]]),
+      );
+      // Nulls become UNDEFINED here: undefined is what the schema and
+      // fillBaseFields read as "absent", and a spread key holding undefined
+      // still overrides the copied nested value — which is the point.
+      const canonical = getContact(callerData as unknown as User);
       enrollmentInput = {
-        ...pickCrossAppSupplement(data.enrollment),
+        ...supplement,
         subjects: data.subjects,
         ...copySharedProfileFields(babysitterProfile),
-        ...Object.fromEntries(
-          Object.entries(getContact(callerData as unknown as User)).filter(([, v]) => v !== null),
-        ),
+        contactEmail: canonical.contactEmail ?? undefined,
+        contactPhone: canonical.contactPhone ?? undefined,
+        whatsapp: canonical.whatsapp ?? undefined,
+        ...suppliedContact,
       };
     } else {
       if (!data.ejemEmail) {

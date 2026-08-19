@@ -595,11 +595,47 @@ describe('enrollTutor crossApp mode', () => {
     );
 
     const tutor = (await db.collection('users').doc(uid).get()).data()!.profiles.tutor;
-    // The seeded babysitter profile carries 2nde/other/sacha@contact.com —
-    // every one of them beats the conflicting client value.
+    // classLevel/gender keep the stored-wins rule (set-once identity shape).
     expect(tutor.classLevel).toBe('2nde');
     expect(tutor.gender).toBe('other');
-    expect(tutor.contactEmail).toBe('sacha@contact.com');
+    // CONTACT does not: stored-wins was coherent when the nested copy was
+    // canonical. Post-clear semantics, a contact the user just typed in the
+    // wizard must beat the stored copy — otherwise clearing and re-entering
+    // a number resurrects the old one (PR #206 review round 4). In practice
+    // the wizard only renders these inputs when the profile has no contact.
+    expect(tutor.contactEmail).toBe('other@contact.com');
+  });
+
+  it('an explicitly CLEARED contact channel is not resurrected by cross-app enrollment', async () => {
+    const db = getDb();
+    const uid = 'crossapp-cleared-contact';
+    await seedSitter(uid, 'clearedcontact@test.com', {
+      // The user cleared their phone on the sit Account page: root null, the
+      // nested enrollment copy frozen at the old value.
+      contactEmail: 'sacha@contact.com',
+      contactPhone: null,
+    });
+    const token = await getIdToken(uid);
+
+    await callFunction(
+      'enrollTutor',
+      {
+        crossApp: true,
+        consentVersion: '1.0',
+        subjects: SUBJECTS,
+        enrollment: {},
+      },
+      token,
+    );
+
+    const after = (await db.collection('users').doc(uid).get()).data()!;
+    // Neither the new tutor profile nor the canonical root gets the deleted
+    // number back, even though profiles.babysitter still holds it.
+    expect(after.profiles.tutor.contactPhone ?? null).toBeNull();
+    expect(after.contactPhone ?? null).toBeNull();
+    expect(after.profiles.babysitter.contactPhone).toBe('+33600000002');
+    // The channel the user did NOT clear still crosses over.
+    expect(after.profiles.tutor.contactEmail).toBe('sacha@contact.com');
   });
 
   it('a missing root DOB is filled from the supplement via fillBaseFields', async () => {

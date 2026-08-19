@@ -81,14 +81,24 @@ export const enrollBabysitter = onCall(
         throw new HttpsError('failed-precondition', 'No verified EJM identity on this account');
       }
       ejemEmailLower = derivedEjemEmail.toLowerCase();
-      // classLevel/gender stay profile-scoped; contact resolves root ?? nested
-      // so a tutor who edited contact at the canonical root still hands the
-      // fresh values to their new babysitter profile.
+      // classLevel/gender stay profile-scoped; contact comes from the
+      // canonical resolution, which already falls back to the nested copies
+      // when the root was never written. Its nulls are applied UNFILTERED:
+      // post-clear semantics mean a null is an explicit user deletion, and
+      // filtering it out would let the frozen nested copy re-enter the doc
+      // and become canonical again (PR #206 review round 4).
+      // Canonical contact overrides the copied nested values, clears
+      // included: a cleared channel resolves to null and must NOT fall back
+      // to the frozen nested copy (PR #206 review round 4). null rather than
+      // undefined because these land in a Firestore profile write, and
+      // writing null into an empty root through fillBaseFields is a no-op
+      // in effect (the root of a cleared channel is already null).
+      const canonical = getContact(callerData);
       copiedProfileFields = {
         ...copySharedProfileFields(tutorProfile),
-        ...Object.fromEntries(
-          Object.entries(getContact(callerData)).filter(([, v]) => v !== null),
-        ),
+        contactEmail: canonical.contactEmail ?? null,
+        contactPhone: canonical.contactPhone ?? null,
+        whatsapp: canonical.whatsapp ?? null,
       };
     } else {
       if (!data.ejemEmail) {

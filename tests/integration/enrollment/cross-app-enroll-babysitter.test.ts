@@ -282,6 +282,38 @@ describe('enrollBabysitter crossApp mode', () => {
     expect(after.contactPhone).toBe('+33600000009');
   });
 
+  it('an explicitly CLEARED contact channel is not resurrected by cross-app enrollment', async () => {
+    // Mirror of the tutor-side pin: a tutor who deleted their phone on the
+    // study Account page (root null, nested copy frozen) must not get it
+    // written back when they add a babysitter profile (PR #206 round 4).
+    const uid = 'crossapp-sit-cleared';
+    const db = getDb();
+    await getAdminAuth().createUser({ uid, email: 'sitcleared@test.com' });
+    await db.collection('users').doc(uid).set({
+      uid,
+      email: 'sitcleared@test.com',
+      firstName: 'Cleared', lastName: 'Contact', dateOfBirth: '2008-05-01',
+      status: 'active',
+      ejemEmail: 'cleared.contact@ejm-test.org',
+      contactPhone: null,
+      contactEmail: 'kept@contact.com',
+      profiles: {
+        tutor: {
+          enrollmentComplete: true, searchable: false, classLevel: '2nde',
+          contactPhone: '+33600000009', contactEmail: 'kept@contact.com',
+        },
+      },
+    });
+    const token = await getIdToken(uid);
+    await callFunction('enrollBabysitter', { crossApp: true, consentVersion: '1.0' }, token);
+
+    const after = (await db.collection('users').doc(uid).get()).data()!;
+    expect(after.profiles.babysitter.contactPhone ?? null).toBeNull();
+    expect(after.contactPhone ?? null).toBeNull();
+    expect(after.profiles.tutor.contactPhone).toBe('+33600000009');
+    expect(after.profiles.babysitter.contactEmail).toBe('kept@contact.com');
+  });
+
   it('records crossApp provenance in the audit trail', async () => {
     const audit = await getDb()
       .collection('auditLogs')
