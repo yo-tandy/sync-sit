@@ -250,6 +250,29 @@ describe('contactPublishedSearch (sit)', () => {
     ).rejects.toMatchObject({ code: 'ALREADY_EXISTS' });
   });
 
+  it('the sitter can WITHDRAW their own pending contact and then contact again', async () => {
+    // The UI path the RequestDetailPage withdraw button calls (issue #207
+    // PR3 review): without it the duplicate guard leaves a sitter who
+    // changed their mind stuck until the family answers.
+    const id = await publish();
+    const first = await callFunction<{ appointmentId: string }>(
+      'contactPublishedSearch', { publishedSearchId: id }, sitterToken,
+    );
+    await callFunction(
+      'cancelAppointment',
+      { appointmentId: first.appointmentId, reason: 'Withdrawn by the babysitter' },
+      sitterToken,
+    );
+    const after = (await getDb().collection('appointments').doc(first.appointmentId).get()).data()!;
+    expect(after.status).toBe('cancelled');
+    // The guard counts only live contacts, so answering again is allowed.
+    const second = await callFunction<{ appointmentId: string }>(
+      'contactPublishedSearch', { publishedSearchId: id }, sitterToken,
+    );
+    expect(second.appointmentId).toBeTruthy();
+    expect(second.appointmentId).not.toBe(first.appointmentId);
+  });
+
   it('lets a DIFFERENT babysitter contact the same search', async () => {
     const id = await publish();
     await callFunction('contactPublishedSearch', { publishedSearchId: id }, sitterToken);

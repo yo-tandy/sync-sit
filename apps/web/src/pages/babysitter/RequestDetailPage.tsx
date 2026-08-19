@@ -43,6 +43,12 @@ export function RequestDetailPage() {
   const [loading, setLoading] = useState(true);
   const [acceptDialog, setAcceptDialog] = useState(false);
   const [declineDialog, setDeclineDialog] = useState(false);
+  // Withdrawing an own-initiated pending contact (issue #207 PR3): the
+  // duplicate guard means a sitter who changes their mind would otherwise be
+  // stuck until the family answers. cancelAppointment already accepts a
+  // pending appointment matched on babysitterUserId.
+  const [withdrawDialog, setWithdrawDialog] = useState(false);
+  const [withdrawing, setWithdrawing] = useState(false);
   const [blockSchedule, setBlockSchedule] = useState(true);
   const [responding, setResponding] = useState(false);
   const [success, setSuccess] = useState<'accepted' | 'declined' | null>(null);
@@ -109,6 +115,21 @@ export function RequestDetailPage() {
       alert(message);
     } finally {
       setAcknowledging(false);
+    }
+  };
+
+  const handleWithdraw = async () => {
+    if (!appointmentId) return;
+    setWithdrawing(true);
+    try {
+      const fn = httpsCallable(functions, 'cancelAppointment');
+      await fn({ appointmentId, reason: t('request.withdrawReason') });
+      setWithdrawDialog(false);
+      navigate('/babysitter/published-searches');
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Something went wrong. Please try again.');
+    } finally {
+      setWithdrawing(false);
     }
   };
 
@@ -210,7 +231,10 @@ export function RequestDetailPage() {
         {ownInitiated && isPending && (
           <Card className="mb-4 border-amber-300 bg-amber-50">
             <p className="text-sm font-semibold text-amber-800">{t('request.waitingForFamily')}</p>
-            <p className="mt-1 text-xs text-amber-600">{t('request.waitingForFamilyDesc')}</p>
+            <p className="mt-1 mb-3 text-xs text-amber-600">{t('request.waitingForFamilyDesc')}</p>
+            <Button size="sm" variant="outline" onClick={() => setWithdrawDialog(true)}>
+              {t('request.withdraw')}
+            </Button>
           </Card>
         )}
 
@@ -366,6 +390,20 @@ export function RequestDetailPage() {
           </div>
         )}
       </div>
+
+      {/* Withdraw dialog (own-initiated pending, issue #207 PR3) */}
+      <Dialog open={withdrawDialog} onClose={() => setWithdrawDialog(false)}>
+        <h3 className="mb-2 text-lg font-bold">{t('request.withdrawTitle')}</h3>
+        <p className="mb-5 text-sm text-gray-600">{t('request.withdrawDesc')}</p>
+        <div className="flex gap-2">
+          <Button onClick={handleWithdraw} disabled={withdrawing} className="flex-1">
+            {withdrawing ? t('common.loading') : t('request.withdraw')}
+          </Button>
+          <Button variant="ghost" onClick={() => setWithdrawDialog(false)} className="flex-1">
+            {t('common.cancel')}
+          </Button>
+        </div>
+      </Dialog>
 
       {/* Accept Dialog */}
       <Dialog open={acceptDialog} onClose={() => setAcceptDialog(false)}>
