@@ -56,7 +56,9 @@ export function getUserRole(
 // the nested profiles.{babysitter,tutor} copies are back-compat duplicates.
 // EVERY read goes through these helpers (root ?? babysitter ?? tutor) so the
 // order in which docs get backfilled, enrolled, or merged never matters.
-// '' and null count as absent at every level for fallback purposes.
+// For ejemEmail (server-owned, client-immutable) '' and null count as absent
+// at every level. For the CONTACT trio the root is different: see getContact
+// — an explicit null there is a user clear, not an absence.
 
 /** Loose view of the nested profile shapes (concrete types live in
  *  sit-core/study-core; shared-core only knows ProfileBase). */
@@ -90,15 +92,26 @@ export interface ContactFields {
 
 /**
  * The user's shared contact channels, resolved PER FIELD (a doc can hold a
- * post-change root contactEmail next to a pre-change nested-only phone):
- * root ?? babysitter ?? tutor, null when no level has a value.
+ * post-change root contactEmail next to a pre-change nested-only phone).
+ *
+ * Root PRESENCE is authoritative, and that distinction matters: the Account
+ * pages write the root copy ONLY, so an explicit `null` there is the user
+ * CLEARING that channel. Falling back to the frozen nested enrollment copy
+ * would keep disclosing a deleted phone number to approved families, in the
+ * acceptance email, and back into the form on the next mount (PR #206
+ * review). An ABSENT root key means "never written here" — legacy and
+ * un-backfilled docs — and still falls through to babysitter ?? tutor.
  */
 export function getContact(user: User | null | undefined): ContactFields {
-  const resolve = (field: 'contactEmail' | 'contactPhone' | 'whatsapp'): string | null =>
-    nonEmpty(user?.[field])
-    ?? nonEmpty(profileField(user, 'babysitter', field))
-    ?? nonEmpty(profileField(user, 'tutor', field))
-    ?? null;
+  const resolve = (field: 'contactEmail' | 'contactPhone' | 'whatsapp'): string | null => {
+    const rootValue = (user as Record<string, unknown> | null | undefined)?.[field];
+    if (rootValue !== undefined) return nonEmpty(rootValue) ?? null;
+    return (
+      nonEmpty(profileField(user, 'babysitter', field))
+      ?? nonEmpty(profileField(user, 'tutor', field))
+      ?? null
+    );
+  };
   return {
     contactEmail: resolve('contactEmail'),
     contactPhone: resolve('contactPhone'),

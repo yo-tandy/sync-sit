@@ -246,6 +246,7 @@ export function FamilyDashboard() {
           const snap = await getDoc(doc(db, 'users', uid));
           if (snap.exists()) {
             const u = snap.data() as User;
+            const contact = getContact(u);
             const bp = getBabysitterProfile(u);
             const dob = typeof u.dateOfBirth === 'string' ? new Date(u.dateOfBirth) : u.dateOfBirth?.toDate?.() ? u.dateOfBirth.toDate() : null;
             let age: number | undefined;
@@ -264,10 +265,11 @@ export function FamilyDashboard() {
               languages: bp?.languages,
               photoUrl: u.photoUrl,
               aboutMe: bp?.aboutMe,
-              // Root ?? nested resolution (issue #203): the sit Account page
-              // writes contact ROOT-ONLY now, so reading the nested copy
-              // would freeze this card at enrollment-time values.
-              ...(() => { const c = getContact(u); return { contactEmail: c.contactEmail ?? undefined, contactPhone: c.contactPhone ?? undefined }; })(),
+              // Root-first resolution (issue #203): the Account page writes
+              // contact ROOT-ONLY, so reading the nested copy would freeze
+              // this card at enrollment-time values.
+              contactEmail: contact.contactEmail ?? undefined,
+              contactPhone: contact.contactPhone ?? undefined,
               kidAgeRange: bp?.kidAgeRange,
               maxKids: bp?.maxKids,
             };

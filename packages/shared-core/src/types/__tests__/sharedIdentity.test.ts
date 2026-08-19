@@ -48,6 +48,24 @@ describe('getEjemEmail (root ?? babysitter ?? tutor)', () => {
 });
 
 describe('getContact (per-field root ?? babysitter ?? tutor)', () => {
+  it('an explicit root null CLEARS the channel — no fallback to a stale nested copy', () => {
+    // The blocking case from the PR #206 review: the Account pages write
+    // root-only, so falling back here kept disclosing a deleted number.
+    const user = {
+      contactEmail: null,
+      contactPhone: null,
+      profiles: {
+        babysitter: { contactEmail: 'old@x.com', contactPhone: '+33 6 00' },
+        tutor: { contactEmail: 'older@x.com', whatsapp: '+33 6 11' },
+      },
+    } as unknown as User;
+    const contact = getContact(user);
+    expect(contact.contactEmail).toBeNull();
+    expect(contact.contactPhone).toBeNull();
+    // whatsapp has NO root key at all — absence still falls through.
+    expect(contact.whatsapp).toBe('+33 6 11');
+  });
+
   it('resolves each field independently across levels', () => {
     const user = docOf({
       contactEmail: 'root@contact.com', // post-change Account edit
@@ -84,9 +102,10 @@ describe('getContact (per-field root ?? babysitter ?? tutor)', () => {
     expect(getContact(user).contactEmail).toBe('bs@contact.com');
   });
 
-  it("null and '' are absent (nested null does not shadow a tutor value)", () => {
+  it("NESTED null and '' are absent (an empty babysitter copy does not shadow the tutor value)", () => {
+    // Root key absent here — the nested levels keep their empty-as-absent
+    // semantics. (An explicit root null is a CLEAR; pinned separately.)
     const user = docOf({
-      contactEmail: null,
       profiles: {
         babysitter: { contactEmail: '' },
         tutor: { contactEmail: 'tu@contact.com' },

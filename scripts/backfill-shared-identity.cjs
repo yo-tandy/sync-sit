@@ -61,7 +61,12 @@ function computeRootPatch(data) {
   // that (small) set before --apply.
   const contested = [];
   for (const field of SHARED_FIELDS) {
-    if (!isEmpty(data?.[field])) continue; // root already canonical — never touch
+    // Only lift when the root key is ABSENT. An explicit null/'' at the root
+    // is a user CLEAR (getContact treats root presence as authoritative), so
+    // resurrecting the nested copy over it would undo a deletion of personal
+    // contact data (PR #206 review). ejemEmail is server-owned and never
+    // cleared, so absence is its only empty state anyway.
+    if (data?.[field] !== undefined) continue;
     const bsVal = !isEmpty(babysitter[field]) ? babysitter[field] : undefined;
     const tuVal = !isEmpty(tutor[field]) ? tutor[field] : undefined;
     if (bsVal !== undefined && tuVal !== undefined && bsVal !== tuVal) {

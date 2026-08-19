@@ -89,6 +89,22 @@ describe('BabysitterAccountPage contact (shared identity, issue #203)', () => {
   });
   afterEach(() => cleanup());
 
+  it('CLEARING a channel writes an explicit root null (the delete must take effect)', async () => {
+    // Root-only writes + root-presence-authoritative resolution: an emptied
+    // field must persist as null so the frozen nested enrollment copy stops
+    // being disclosed (PR #206 review).
+    h.auth.userDoc = userDoc({ contactEmail: 'old@example.com', contactPhone: '+33 600000000' });
+    renderPage();
+    fireEvent.change(contactEmailInput(), { target: { value: '' } });
+    fireEvent.click(saveButton());
+
+    await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
+    const payload = h.updateDoc.mock.calls[0][1] as Record<string, unknown>;
+    expect(payload).toHaveProperty('contactEmail', null);
+    // and no nested contact key rides along (root-only writes)
+    expect(Object.keys(payload).some((k) => /^profiles\..*\.(contactEmail|contactPhone|whatsapp)$/.test(k))).toBe(false);
+  });
+
   it('saves contact to the ROOT fields only — no nested contact keys in the payload', async () => {
     h.auth.userDoc = userDoc({ contactEmail: 'old@example.com', contactPhone: '+33 600000000' });
     renderPage();

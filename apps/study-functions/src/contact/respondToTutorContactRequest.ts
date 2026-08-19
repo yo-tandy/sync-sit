@@ -9,10 +9,9 @@ import {
   isActiveGuardianOf,
   notifyChildOfGuardianAction,
 } from '@ejm/shared-functions/guardian/guardianAccess.js';
-import type { StudyUser, } from '@ejm/study-core';
+import type { StudyUser } from '@ejm/study-core';
 import { getContact } from '@ejm/shared-core';
 import { respondTutorContactRequestSchema } from '../validation/contact.js';
-
 
 /**
  * The acceptance email's contact block. Canonical root ?? nested resolution

@@ -63,12 +63,22 @@ describe('computeRootPatch', () => {
     expect(computeRootPatch(doc)).toBeNull();
   });
 
-  it("a root '' or null IS backfillable (empty, not populated)", () => {
+  it("an explicit root null is a user CLEAR and is NEVER resurrected", () => {
+    // The Account pages write root-only, so root null means the user deleted
+    // that channel; lifting the frozen nested copy back over it would undo a
+    // deletion of personal contact data (PR #206 review).
     expect(computeRootPatch({
-      ejemEmail: '',
       contactEmail: null,
-      profiles: { babysitter: { ejemEmail: 'bs@ejm.org', contactEmail: 'bs@contact.com' } },
-    })).toEqual({ patch: { ejemEmail: 'bs@ejm.org', contactEmail: 'bs@contact.com' }, contested: [] });
+      contactPhone: '',
+      profiles: { babysitter: { contactEmail: 'bs@contact.com', contactPhone: '+33 6' } },
+    })).toBeNull();
+  });
+
+  it('lifts only the fields whose root key is ABSENT, alongside a cleared one', () => {
+    expect(computeRootPatch({
+      contactEmail: null, // cleared — untouched
+      profiles: { babysitter: { contactEmail: 'bs@contact.com', contactPhone: '+33 6' } },
+    })).toEqual({ patch: { contactPhone: '+33 6' }, contested: [] });
   });
 
   it("skips nested nulls and '' — they are absence, not values", () => {
