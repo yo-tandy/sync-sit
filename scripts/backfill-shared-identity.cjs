@@ -46,6 +46,16 @@ function isEmpty(value) {
   return value === undefined || value === null || value === '';
 }
 
+/** A nested value the read helpers would actually resolve: shared-core's
+ *  nonEmpty() takes strings only, so a non-string (junk written by some
+ *  legacy path) is INVISIBLE to getContact and must be invisible here too —
+ *  otherwise junk in one profile shadows a valid value in the other, and the
+ *  lifted root would disagree with what getContact resolved pre-backfill
+ *  (PR #206 review). */
+function nestedValue(value) {
+  return typeof value === 'string' && value !== '' ? value : undefined;
+}
+
 /**
  * Compute the root update for one users doc, or null when nothing to do.
  * Pure — unit-testable without the admin SDK.
@@ -67,21 +77,21 @@ function computeRootPatch(data) {
     // contact data (PR #206 review). ejemEmail is server-owned and never
     // cleared, so absence is its only empty state anyway.
     if (data?.[field] !== undefined) continue;
-    const bsVal = !isEmpty(babysitter[field]) ? babysitter[field] : undefined;
-    const tuVal = !isEmpty(tutor[field]) ? tutor[field] : undefined;
+    const bsVal = nestedValue(babysitter[field]);
+    const tuVal = nestedValue(tutor[field]);
     if (bsVal !== undefined && tuVal !== undefined && bsVal !== tuVal) {
       contested.push({ field, babysitter: bsVal, tutor: tuVal });
     }
     // Babysitter copy wins over tutor copy (see header tiebreak).
     const nested = bsVal !== undefined ? bsVal : tuVal;
-    if (typeof nested === 'string' && nested !== '') patch[field] = nested;
+    if (nested !== undefined) patch[field] = nested;
   }
   return Object.keys(patch).length > 0 || contested.length > 0
     ? { patch: Object.keys(patch).length > 0 ? patch : null, contested }
     : null;
 }
 
-module.exports = { computeRootPatch, isEmpty, SHARED_FIELDS };
+module.exports = { computeRootPatch, isEmpty, nestedValue, SHARED_FIELDS };
 
 async function main() {
   // firebase-admin is not installed at the repo root; resolve it through the
@@ -131,13 +141,15 @@ async function main() {
     }
     if (!result.patch) { unchanged += 1; continue; }
     const fields = Object.keys(result.patch).join(', ');
-    // Structural review gate (PR #206 review): under --apply, a doc with any
-    // contested field is SKIPPED (nothing written to it) unless
-    // --force-contested is passed — the tiebreak must never silently
-    // canonicalize a possibly-newer study edit, and root ejemEmail is
-    // client-immutable once written, so the only correction is another
-    // Admin-SDK run. Uncontested docs still apply normally.
-    if (apply && result.contested.length > 0 && !forceContested) {
+    // Structural review gate (PR #206 review): a doc with any contested
+    // field is SKIPPED unless --force-contested is passed — the tiebreak must
+    // never silently canonicalize a possibly-newer study edit, and root
+    // ejemEmail is client-immutable once written, so the only correction is
+    // another Admin-SDK run. The condition is deliberately NOT gated on
+    // `apply`: the dry run is the artifact the operator reviews, so it must
+    // predict what --apply does rather than promising a write that will be
+    // skipped. Uncontested docs still apply normally.
+    if (result.contested.length > 0 && !forceContested) {
       console.log(`  SKIP  users/${userDoc.id} — contested; re-run with --force-contested after review`);
       skippedContested += 1;
       continue;
@@ -152,6 +164,11 @@ async function main() {
   }
 
   console.log(`\nDone. ${apply ? 'Wrote' : 'Would write'} ${updated} doc(s); ${unchanged} already canonical/no source; ${contestedDocs} CONTESTED field(s) flagged; ${skippedContested} doc(s) skipped as contested.`);
+  if (skippedContested > 0 && !apply) {
+    console.log(
+      `\nNOTE: ${skippedContested} contested doc(s) would be SKIPPED by --apply. Review the CONTESTED lines above, then re-run with --apply --force-contested to include them.`,
+    );
+  }
   if (apply && skippedContested > 0) {
     console.error(
       `\nATTENTION: ${skippedContested} contested doc(s) were NOT written. Review the CONTESTED lines, then re-run with --force-contested to apply the babysitter tiebreak to them.`,

@@ -70,7 +70,6 @@ function pickCrossAppSupplement(input: unknown): Record<string, unknown> {
   return picked;
 }
 
-
 export const enrollTutor = onCall(
   { region: 'europe-west1', cors: getCorsOrigin() },
   async (request) => {

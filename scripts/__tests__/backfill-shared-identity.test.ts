@@ -90,6 +90,18 @@ describe('computeRootPatch', () => {
     })).toEqual({ patch: { contactPhone: '+33 7' }, contested: [] });
   });
 
+  it('MIXED junk: a junk babysitter value does not shadow a valid tutor value', () => {
+    // The read helpers skip non-strings at each level and fall through; the
+    // backfill must agree, or a lifted root would differ from what
+    // getContact resolves pre-backfill (PR #206 review).
+    expect(computeRootPatch({
+      profiles: {
+        babysitter: { contactPhone: { nope: true } },
+        tutor: { contactPhone: '+33 7' },
+      },
+    })).toEqual({ patch: { contactPhone: '+33 7' }, contested: [] });
+  });
+
   it('ignores non-string junk in nested copies', () => {
     expect(computeRootPatch({
       profiles: { babysitter: { ejemEmail: 42, contactPhone: { nope: true } } },
