@@ -354,7 +354,10 @@ describe('enrollTutor cross-app add-profile', () => {
 // ── Frictionless cross-app switch (issue #144, owner clarification): no code,
 // no email, no identity, no prefs in the payload — only subjects. The EJM
 // identity derives from the caller's verified babysitter profile; shared
-// profile fields are copied server-side; prefs get the server defaults. ──
+// profile fields are copied server-side; prefs get the server defaults.
+// Issue #203 adds an optional PARTIAL `enrollment` supplement for the fields
+// the sit profile never got (contact is skippable in sit; older docs lack a
+// DOB); stored profile values always win over the supplement. ──
 
 describe('enrollTutor crossApp mode', () => {
   const RICH_SITTER_UID = 'crossapp-rich-sitter';
@@ -479,6 +482,172 @@ describe('enrollTutor crossApp mode', () => {
     await expect(
       callFunction('enrollTutor', { crossApp: true, consentVersion: '1.0', subjects: SUBJECTS }, token),
     ).rejects.toMatchObject({ code: 'INVALID_ARGUMENT' });
+  });
+
+  // ── Issue #203: partial supplement fills the gaps sit never collected ──
+
+  it('a contactless babysitter succeeds with a supplied contactEmail; stored fields still copied; junk supplement keys ignored', async () => {
+    const db = getDb();
+    const uid = 'crossapp-supp-contact';
+    await getAdminAuth().createUser({ uid, email: 'suppcontact@test.com' });
+    await db.collection('users').doc(uid).set({
+      uid,
+      email: 'suppcontact@test.com',
+      firstName: 'No', lastName: 'Contact', dateOfBirth: '2008-04-01',
+      status: 'active',
+      profiles: {
+        // Contact skipped in sit (allowed there) — everything else on file.
+        babysitter: {
+          enrollmentComplete: true, ejemEmail: 'suppcontact@test.com',
+          searchable: false, classLevel: '2nde', gender: 'other',
+        },
+      },
+    });
+    const token = await getIdToken(uid);
+
+    const result = await callFunction<{ uid: string }>(
+      'enrollTutor',
+      {
+        crossApp: true,
+        consentVersion: '1.0',
+        subjects: SUBJECTS,
+        enrollment: {
+          contactEmail: 'filled@contact.com',
+          // Junk keys outside the supplement whitelist must not land: prefs
+          // keep their server defaults and server-owned flags stay server-owned.
+          sessionLengthsMin: [90],
+          searchable: true,
+        },
+      },
+      token,
+    );
+    expect(result.uid).toBe(uid);
+
+    const tutor = (await db.collection('users').doc(uid).get()).data()!.profiles.tutor;
+    expect(tutor.contactEmail).toBe('filled@contact.com');
+    // Stored profile fields copied as before.
+    expect(tutor.classLevel).toBe('2nde');
+    expect(tutor.gender).toBe('other');
+    // Whitelist held: prefs defaulted, searchable stays false.
+    expect(tutor.sessionLengthsMin).toEqual([60]);
+    expect(tutor.searchable).toBe(false);
+  });
+
+  it('stored profile values WIN over a conflicting supplement', async () => {
+    const db = getDb();
+    const uid = 'crossapp-supp-conflict';
+    await seedSitter(uid, 'suppconflict@test.com');
+    const token = await getIdToken(uid);
+
+    await callFunction(
+      'enrollTutor',
+      {
+        crossApp: true,
+        consentVersion: '1.0',
+        subjects: SUBJECTS,
+        enrollment: {
+          classLevel: 'Terminale',
+          gender: 'female',
+          contactEmail: 'other@contact.com',
+        },
+      },
+      token,
+    );
+
+    const tutor = (await db.collection('users').doc(uid).get()).data()!.profiles.tutor;
+    // The seeded babysitter profile carries 2nde/other/sacha@contact.com —
+    // every one of them beats the conflicting client value.
+    expect(tutor.classLevel).toBe('2nde');
+    expect(tutor.gender).toBe('other');
+    expect(tutor.contactEmail).toBe('sacha@contact.com');
+  });
+
+  it('a missing root DOB is filled from the supplement via fillBaseFields', async () => {
+    const db = getDb();
+    const uid = 'crossapp-supp-dob';
+    await getAdminAuth().createUser({ uid, email: 'suppdob@test.com' });
+    await db.collection('users').doc(uid).set({
+      // Pre-age-gate sit account shape: identity names but NO dateOfBirth.
+      uid,
+      email: 'suppdob@test.com',
+      firstName: 'Old', lastName: 'Account',
+      status: 'active',
+      profiles: {
+        babysitter: {
+          enrollmentComplete: true, ejemEmail: 'suppdob@test.com',
+          searchable: false, classLevel: '2nde', gender: null,
+          contactPhone: '+33600000003',
+        },
+      },
+    });
+    const token = await getIdToken(uid);
+
+    await callFunction(
+      'enrollTutor',
+      {
+        crossApp: true,
+        consentVersion: '1.0',
+        subjects: SUBJECTS,
+        enrollment: { dateOfBirth: '2008-04-01' },
+      },
+      token,
+    );
+
+    const after = (await db.collection('users').doc(uid).get()).data()!;
+    // Root DOB landed (as the same Timestamp shape enrollTutor always writes).
+    expect(after.dateOfBirth).toBeTruthy();
+    expect(after.dateOfBirth.toDate().toISOString().slice(0, 10)).toBe('2008-04-01');
+    expect(after.profiles.tutor.ejemEmail).toBe('suppdob@test.com');
+    // Identity names untouched.
+    expect(after.firstName).toBe('Old');
+  });
+
+  it('still rejects when identity is missing and the supplement does not cover it', async () => {
+    const uid = 'crossapp-supp-nodob';
+    await getAdminAuth().createUser({ uid, email: 'suppnodob@test.com' });
+    await getDb().collection('users').doc(uid).set({
+      uid,
+      email: 'suppnodob@test.com',
+      firstName: 'Old', lastName: 'Account',
+      status: 'active',
+      profiles: {
+        babysitter: {
+          enrollmentComplete: true, ejemEmail: 'suppnodob@test.com',
+          searchable: false, classLevel: '2nde', contactPhone: '+33600000003',
+        },
+      },
+    });
+    const token = await getIdToken(uid);
+    await expect(
+      callFunction('enrollTutor', { crossApp: true, consentVersion: '1.0', subjects: SUBJECTS }, token),
+    ).rejects.toMatchObject({ code: 'INVALID_ARGUMENT' });
+  });
+
+  it('rejects a babysitter profile WITHOUT an ejemEmail (nothing to derive)', async () => {
+    const uid = 'crossapp-no-ejem';
+    await getAdminAuth().createUser({ uid, email: 'noejem@test.com' });
+    await getDb().collection('users').doc(uid).set({
+      uid,
+      email: 'noejem@test.com',
+      firstName: 'No', lastName: 'Ejem', dateOfBirth: '2008-04-01',
+      status: 'active',
+      profiles: {
+        babysitter: { enrollmentComplete: true, searchable: false, classLevel: '2nde', contactPhone: '+33600000004' },
+      },
+    });
+    const token = await getIdToken(uid);
+    await expect(
+      callFunction(
+        'enrollTutor',
+        {
+          crossApp: true,
+          consentVersion: '1.0',
+          subjects: SUBJECTS,
+          enrollment: { contactEmail: 'x@contact.com' },
+        },
+        token,
+      ),
+    ).rejects.toMatchObject({ code: 'FAILED_PRECONDITION' });
   });
 
   it('the stored-DoB age gate still runs in crossApp mode (under-15 rejected)', async () => {

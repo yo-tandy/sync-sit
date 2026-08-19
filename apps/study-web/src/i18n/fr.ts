@@ -218,6 +218,8 @@ export default {
     genericError: 'Une erreur est survenue et votre inscription n\'a pas pu être finalisée. Veuillez réessayer.',
     greeting: 'Bienvenue, {{name}} !',
     body: "En tant qu'élève de l'EJM, vous pouvez donner des cours aux familles de l'EJM — votre identifiant Sync/Sit fonctionne ici tel quel. Il ne nous manque que les matières que vous proposez pour commencer.",
+    detailsTitle: 'Encore quelques informations',
+    detailsBody: "Votre profil Sync/Sit couvre déjà l'essentiel — il ne nous manque que ce qui n'y figure pas encore.",
     consentPrefix: 'En continuant, vous acceptez les',
     parentCard: 'Bienvenue sur Sync/Study — votre compte famille Sync/Sit fonctionne ici tel quel.',
     dismiss: 'Fermer',

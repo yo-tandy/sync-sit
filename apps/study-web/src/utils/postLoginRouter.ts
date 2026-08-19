@@ -1,23 +1,65 @@
 import { isBabysitter } from '@ejm/shared-core';
 import type { StudyUser } from '@ejm/study-core';
 
+function babysitterProfileOf(
+  userDoc: StudyUser | null | undefined,
+): Record<string, unknown> | undefined {
+  return (userDoc as unknown as { profiles?: { babysitter?: Record<string, unknown> } } | null)
+    ?.profiles?.babysitter;
+}
+
 /**
- * Can this sit babysitter take the one-tap crossApp path? enrollTutor's
- * crossApp mode derives classLevel + a contact field + root identity from
- * the babysitter profile — sit guarantees NONE of them (contact is
- * skippable, abandoned signups lack classLevel and identity). Users missing
- * any prerequisite go to the CLASSIC /enroll/tutor wizard, which collects
- * exactly the missing pieces (and, via identity-on-file, only those).
+ * Can this sit babysitter take the crossApp path? The only hard prerequisite
+ * is the verified EJM identity on the babysitter profile — enrollTutor's
+ * crossApp mode derives the EJM email from it and copies classLevel/gender/
+ * contact when present; whatever the sit profile lacks (contact is skippable
+ * in sit, pre-age-gate docs miss a DOB, abandoned signups miss classLevel),
+ * /welcome-study collects as a supplement (issue #203). The classic
+ * /enroll/tutor wizard — school re-verification included — is only for users
+ * with no verified babysitter identity at all.
  */
 export function canCrossAppEnrollTutor(userDoc: StudyUser | null | undefined): boolean {
-  if (!userDoc) return false;
-  const bs = (userDoc as unknown as { profiles?: { babysitter?: Record<string, unknown> } })
-    .profiles?.babysitter;
-  if (!bs) return false;
-  const hasIdentity = !!userDoc.firstName && !!userDoc.lastName && !!userDoc.dateOfBirth;
-  const hasClassLevel = !!bs.classLevel;
-  const hasContact = !!bs.contactEmail || !!bs.contactPhone || !!bs.whatsapp;
-  return hasIdentity && hasClassLevel && hasContact;
+  const bs = babysitterProfileOf(userDoc);
+  return typeof bs?.ejemEmail === 'string' && bs.ejemEmail.length > 0;
+}
+
+/** Which crossApp-derivable fields the sit doc does NOT carry — exactly the
+ * inputs /welcome-study must render alongside subjects (issue #203). */
+export interface CrossAppTutorGaps {
+  firstName: boolean;
+  lastName: boolean;
+  dateOfBirth: boolean;
+  classLevel: boolean;
+  gender: boolean;
+  /** True when none of contactEmail/contactPhone/whatsapp is set. */
+  contact: boolean;
+}
+
+export function crossAppTutorGaps(userDoc: StudyUser | null | undefined): CrossAppTutorGaps {
+  const doc = (userDoc ?? {}) as unknown as Record<string, unknown>;
+  const bs = babysitterProfileOf(userDoc) ?? {};
+  return {
+    firstName: !doc.firstName,
+    lastName: !doc.lastName,
+    dateOfBirth: !doc.dateOfBirth,
+    classLevel: !bs.classLevel,
+    // Sit's profile step saves `gender || null`: null means the question was
+    // ANSWERED with "no answer" — only a truly absent field (the step never
+    // ran) is asked again.
+    gender: bs.gender === undefined,
+    contact: !bs.contactEmail && !bs.contactPhone && !bs.whatsapp,
+  };
+}
+
+export function hasCrossAppTutorGaps(gaps: CrossAppTutorGaps): boolean {
+  return (
+    gaps.firstName ||
+    gaps.lastName ||
+    gaps.dateOfBirth ||
+    gaps.classLevel ||
+    gaps.gender ||
+    gaps.contact
+  );
 }
 
 /**
@@ -30,9 +72,10 @@ export function postLoginRouter(role: string | undefined, userDoc?: StudyUser | 
   if (role === 'admin') return '/admin';
   // A sit babysitter with no study role never sees the role question (issue
   // #144, owner call): tutoring is study's only offer for an EJM student, so
-  // the welcome page states it and enrolls with subjects alone — WHEN the
-  // sit profile carries everything crossApp derives. Otherwise the classic
-  // wizard collects the missing pieces.
+  // the welcome page states it and enrolls with subjects plus whatever the
+  // sit profile is missing (issue #203) — never re-verifying the school
+  // email. Only a doc with no verified babysitter identity falls back to the
+  // classic wizard.
   if (userDoc && isBabysitter(userDoc)) {
     return canCrossAppEnrollTutor(userDoc) ? '/welcome-study' : '/enroll/tutor';
   }
