@@ -290,7 +290,6 @@ export default {
     shareByEmail: 'Share by email',
     shareText: 'Check out the EJM community babysitting app! {{link}}',
     myFamilies: 'My Families',
-    publishedSearches: 'Published searches',
   },
 
   appSwitch: {
@@ -484,6 +483,8 @@ export default {
   },
 
   publishedBoard: {
+    previewTitle: 'Posts from families',
+    seeMore: 'See more posts',
     title: 'Published searches',
     intro: 'Families publish searches here so babysitters can find them — including searches outside your usual availability.',
     familyTitle: '{{name}} family',

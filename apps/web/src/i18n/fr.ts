@@ -279,7 +279,6 @@ export default {
     shareByEmail: 'Partager par email',
     shareText: 'D\u00e9couvrez l\u2019application de babysitting de la communaut\u00e9 EJM ! {{link}}',
     myFamilies: 'Mes Familles',
-    publishedSearches: 'Recherches publiées',
   },
 
   appSwitch: {
@@ -470,6 +469,8 @@ export default {
   },
 
   publishedBoard: {
+    previewTitle: 'Annonces des familles',
+    seeMore: 'Voir plus d\'annonces',
     title: 'Recherches publiées',
     intro: 'Les familles publient ici leurs recherches pour que les babysitters les trouvent — y compris des recherches hors de vos disponibilités habituelles.',
     familyTitle: 'Famille {{name}}',

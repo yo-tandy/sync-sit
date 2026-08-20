@@ -1,11 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
-import { collection, limit, onSnapshot, orderBy, query, where } from 'firebase/firestore';
-import { db } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
-import { getBabysitterView } from '@ejm/sit-core';
-import { isActivePublishedSearch, isNewPublishedSearch } from '@ejm/shared-core';
 import { Badge } from './Badge';
 import { Dialog } from './Dialog';
 import {
@@ -62,41 +58,6 @@ export function AppBar({ role }: { role: UserRole }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const homePath = role === 'babysitter' ? '/babysitter' : role === 'admin' ? '/admin' : '/family';
 
-  // Unseen published-searches count for the board menu badge (issue #207,
-  // the #198 idiom). Live board snapshot; the New threshold reads the LIVE
-  // profiles.babysitter.publishedSearchesSeenAt off userDoc (authStore keeps
-  // it subscribed), so visiting the board clears the badge without a remount.
-  // A failed read must never surface in the app bar: error just means no
-  // badge (pinned).
-  // Active docs' createdAt millis, resolved AT SNAPSHOT TIME (expiry needs a
-  // clock, and render must stay pure — a doc expiring mid-mount drops on the
-  // next snapshot, the same tolerance the board page itself has).
-  const [activeCreatedMs, setActiveCreatedMs] = useState<number[]>([]);
-  useEffect(() => {
-    if (role !== 'babysitter') return;
-    try {
-      return onSnapshot(
-        query(collection(db, 'publishedSearches'), where('app', '==', 'sit'), orderBy('createdAt', 'desc'), limit(50)),
-        (snap) => {
-          const now = Date.now();
-          setActiveCreatedMs(
-            snap.docs
-              .map((d) => d.data() as { createdAt?: { toMillis?: () => number }; expiresAt?: { toMillis?: () => number } })
-              .filter((d) => isActivePublishedSearch(d, now))
-              .map((d) => d.createdAt?.toMillis?.() ?? 0),
-          );
-        },
-        () => setActiveCreatedMs([]),
-      );
-    } catch {
-      /* leave the badge hidden */
-    }
-  }, [role]);
-  const seenAtMs = getBabysitterView(userDoc)?.publishedSearchesSeenAt?.toMillis?.() ?? null;
-  const newPublishedCount = role === 'babysitter'
-    ? activeCreatedMs.filter((ms) => isNewPublishedSearch({ createdAt: { toMillis: () => ms } }, seenAtMs)).length
-    : 0;
-  const menuHasBadge = newPublishedCount > 0;
 
   return (
     <>
@@ -116,15 +77,12 @@ export function AppBar({ role }: { role: UserRole }) {
           <NotificationBell to={`${homePath}/notifications`} />
           <button
             onClick={() => setMenuOpen(true)}
-            aria-label={menuHasBadge ? t('menu.openMenuPending') : t('menu.openMenu')}
+            aria-label={t('menu.openMenu')}
             className="relative -m-1.5 flex h-11 w-11 items-center justify-center text-white"
           >
             <MenuIcon className="h-5 w-5" />
             {/* Closed-menu signal that some entry inside carries a badge; the
                 aria-label swap above is the screen-reader equivalent (#198). */}
-            {menuHasBadge && (
-              <span aria-hidden="true" className="absolute right-2 top-2 h-2 w-2 rounded-full bg-amber-400" />
-            )}
           </button>
         </div>
       </div>
@@ -142,7 +100,6 @@ export function AppBar({ role }: { role: UserRole }) {
               <MenuItem icon={<SettingsIcon className="h-5 w-5" />} label={t('menu.babysittingOptions')} to="/babysitter/options" onNavigate={() => setMenuOpen(false)} />
               <MenuItem icon={<UsersIcon className="h-5 w-5" />} label={t('menu.references')} to="/babysitter/endorsements" onNavigate={() => setMenuOpen(false)} />
               <MenuItem icon={<UsersIcon className="h-5 w-5" />} label={t('menu.myFamilies')} to="/babysitter/families" onNavigate={() => setMenuOpen(false)} />
-              <MenuItem icon={<ClipboardListIcon className="h-5 w-5" />} label={t('menu.publishedSearches')} badge={newPublishedCount} to="/babysitter/published-searches" onNavigate={() => setMenuOpen(false)} />
             </>
           )}
 

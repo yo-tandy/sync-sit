@@ -287,7 +287,8 @@ export default {
     requestsTitle: 'Requests',
     familiesTitle: 'My Families',
     publishedBoard: {
-      menuTitle: 'Published searches',
+      previewTitle: 'Posts from families',
+      seeMore: 'See more posts',
       title: 'Published searches',
       intro: 'Families publish searches here so tutors can find them — including subjects or levels outside your current offering.',
       familyTitle: '{{name}} family',
