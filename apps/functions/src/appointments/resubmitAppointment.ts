@@ -61,6 +61,24 @@ export const resubmitAppointment = onCall(
     const now = new Date();
     const newKidIds = data.kidIds || original.kidIds;
 
+    // A BABYSITTER-initiated original (issue #207 PR3) carries no address:
+    // contactPublishedSearch withholds it until the family accepts, and this
+    // one was declined. The resubmission is the FAMILY asking, so their own
+    // address belongs on it — re-derive from the family doc rather than
+    // copying the withheld nulls onto a request the sitter is meant to act on.
+    let address = original.address;
+    let latLng = original.latLng;
+    let pets = original.pets;
+    let familyNote = original.familyNote;
+    if (address == null || latLng == null) {
+      const familySnap = await db.collection('families').doc(original.familyId).get();
+      const familyData = familySnap.data();
+      address = address ?? familyData?.address ?? null;
+      latLng = latLng ?? familyData?.latLng ?? null;
+      pets = pets ?? familyData?.pets ?? null;
+      familyNote = familyNote ?? familyData?.note ?? null;
+    }
+
     // Re-denormalize kids if kidIds changed
     let kids = original.kids;
     if (data.kidIds) {
@@ -102,13 +120,13 @@ export const resubmitAppointment = onCall(
       schoolWeeksOnly: original.schoolWeeksOnly || false,
       kidIds: newKidIds,
       kids,
-      address: original.address,
-      latLng: original.latLng,
+      address,
+      latLng,
       offeredRate: data.offeredRate !== undefined ? data.offeredRate : (original.offeredRate || null),
       message: original.message || null,
       additionalInfo: newAdditionalInfo,
-      pets: original.pets || null,
-      familyNote: original.familyNote || null,
+      pets: pets || null,
+      familyNote: familyNote || null,
       isResubmission: true,
       resubmittedFromAppointmentId: data.originalAppointmentId,
       createdAt: now,

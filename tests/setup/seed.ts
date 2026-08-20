@@ -360,8 +360,12 @@ export interface AppointmentSeed {
   endTime?: string;       // HH:MM
   kidIds?: string[];
   kids?: Array<{ age: number; languages: string[] }>;
-  address?: string;
-  latLng?: { lat: number; lng: number };
+  /** Explicit null seeds the WITHHELD state of a babysitter-initiated doc. */
+  address?: string | null;
+  latLng?: { lat: number; lng: number } | null;
+  /** issue #207 PR3: 'babysitter' flips the respond roles. */
+  initiatedBy?: 'family' | 'babysitter';
+  publishedSearchId?: string;
   offeredRate?: number;
   message?: string;
   additionalInfo?: string;
@@ -397,13 +401,17 @@ export async function seedAppointment(data: AppointmentSeed): Promise<string> {
     endTime: data.endTime ?? '22:00',
     kidIds: data.kidIds ?? ['kid1'],
     kids: data.kids ?? [{ age: 6, languages: ['French', 'English'] }],
-    address: data.address ?? '15 Rue de Passy, 75016 Paris',
-    latLng: data.latLng ?? { lat: 48.8566, lng: 2.2769 },
+    // `?? default` would swallow an explicit null, which is exactly the state
+    // a babysitter-initiated pending must be seeded in (address withheld).
+    address: data.address === undefined ? '15 Rue de Passy, 75016 Paris' : data.address,
+    latLng: data.latLng === undefined ? { lat: 48.8566, lng: 2.2769 } : data.latLng,
     createdAt: now,
     updatedAt: now,
   };
 
   if (data.statusReason !== undefined) doc.statusReason = data.statusReason;
+  if (data.initiatedBy !== undefined) doc.initiatedBy = data.initiatedBy;
+  if (data.publishedSearchId !== undefined) doc.publishedSearchId = data.publishedSearchId;
   if (data.offeredRate !== undefined) doc.offeredRate = data.offeredRate;
   if (data.message !== undefined) doc.message = data.message;
   if (data.additionalInfo !== undefined) doc.additionalInfo = data.additionalInfo;

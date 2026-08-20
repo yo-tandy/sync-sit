@@ -43,6 +43,12 @@ export function RequestDetailPage() {
   const [loading, setLoading] = useState(true);
   const [acceptDialog, setAcceptDialog] = useState(false);
   const [declineDialog, setDeclineDialog] = useState(false);
+  // Withdrawing an own-initiated pending contact (issue #207 PR3): the
+  // duplicate guard means a sitter who changes their mind would otherwise be
+  // stuck until the family answers. cancelAppointment already accepts a
+  // pending appointment matched on babysitterUserId.
+  const [withdrawDialog, setWithdrawDialog] = useState(false);
+  const [withdrawing, setWithdrawing] = useState(false);
   const [blockSchedule, setBlockSchedule] = useState(true);
   const [responding, setResponding] = useState(false);
   const [success, setSuccess] = useState<'accepted' | 'declined' | null>(null);
@@ -64,6 +70,10 @@ export function RequestDetailPage() {
   // Load parent contacts via cloud function (bypasses Firestore rules)
   useEffect(() => {
     if (!appointmentId || !appointment) return;
+    // Mirror the callable's gate (PR #212 review): a sitter-initiated request
+    // discloses parent contacts only once the family has CONFIRMED it. Asking
+    // earlier would just be a guaranteed permission-denied.
+    if (appointment.initiatedBy === 'babysitter' && appointment.status !== 'confirmed') return;
     const id = appointmentId;
     async function loadParents() {
       try {
@@ -76,7 +86,11 @@ export function RequestDetailPage() {
       } catch { /* function unavailable */ }
     }
     loadParents();
-  }, [appointmentId, appointment?.familyId]);
+    // status is a REAL dependency (PR #212 review): the page holds a live
+    // onSnapshot, so when the family accepts, status flips pending ->
+    // confirmed in place while familyId never changes. Without it the effect
+    // never re-runs and the contact card stays missing until a reload.
+  }, [appointmentId, appointment?.familyId, appointment?.status]);
 
   // Check if this is a returning family
   useEffect(() => {
@@ -109,6 +123,21 @@ export function RequestDetailPage() {
       alert(message);
     } finally {
       setAcknowledging(false);
+    }
+  };
+
+  const handleWithdraw = async () => {
+    if (!appointmentId) return;
+    setWithdrawing(true);
+    try {
+      const fn = httpsCallable(functions, 'cancelAppointment');
+      await fn({ appointmentId, reason: t('request.withdrawReason') });
+      setWithdrawDialog(false);
+      navigate('/babysitter/published-searches');
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Something went wrong. Please try again.');
+    } finally {
+      setWithdrawing(false);
     }
   };
 
@@ -157,6 +186,10 @@ export function RequestDetailPage() {
 
   const apt = appointment;
   const isPending = apt.status === 'pending';
+  // This request was sent BY this babysitter from the published-searches board
+  // (issue #207 PR3). The family answers it — the sitter has nothing to accept
+  // or decline, and the address stays withheld until the family says yes.
+  const ownInitiated = apt.initiatedBy === 'babysitter';
   const rawFamilyName = apt.familyName || 'Family';
   const familyName = t('familyDashboard.familyTitle', { name: rawFamilyName.toUpperCase() });
   const kids: { age: number; languages?: string[] }[] = apt.kids || [];
@@ -203,6 +236,16 @@ export function RequestDetailPage() {
           </Card>
         )}
 
+        {ownInitiated && isPending && (
+          <Card className="mb-4 border-amber-300 bg-amber-50">
+            <p className="text-sm font-semibold text-amber-800">{t('request.waitingForFamily')}</p>
+            <p className="mt-1 mb-3 text-xs text-amber-600">{t('request.waitingForFamilyDesc')}</p>
+            <Button size="sm" variant="outline" onClick={() => setWithdrawDialog(true)}>
+              {t('request.withdraw')}
+            </Button>
+          </Card>
+        )}
+
         {apt.modified && (
           <Card className="mb-4 border-amber-300 bg-amber-50">
             <p className="mb-1 text-sm font-semibold text-amber-800">{t('appointment.modifiedBanner')}</p>
@@ -244,7 +287,7 @@ export function RequestDetailPage() {
           <DateTag tag={getDateTag(apt.date || '', apt.startTime || '', holidayPeriods)} className="mt-1" />
           {apt.status === 'confirmed' && apt.date && apt.startTime && apt.endTime && (
             <a
-              href={buildCalendarUrl(apt.date, apt.startTime, apt.endTime, familyName, apt.address)}
+              href={buildCalendarUrl(apt.date, apt.startTime, apt.endTime, familyName, apt.address ?? undefined)}
               target="_blank"
               rel="noopener noreferrer"
               className="mt-2 inline-flex items-center gap-1.5 text-sm font-medium text-brand-600 active:text-brand-800"
@@ -343,8 +386,8 @@ export function RequestDetailPage() {
           </Card>
         )}
 
-        {/* Action buttons */}
-        {isPending && (
+        {/* Action buttons — never for a request this babysitter sent. */}
+        {isPending && !ownInitiated && (
           <div className="mt-6 flex gap-3">
             <Button onClick={() => setAcceptDialog(true)} className="flex-1">
               {t('request.accept')}
@@ -355,6 +398,20 @@ export function RequestDetailPage() {
           </div>
         )}
       </div>
+
+      {/* Withdraw dialog (own-initiated pending, issue #207 PR3) */}
+      <Dialog open={withdrawDialog} onClose={() => setWithdrawDialog(false)}>
+        <h3 className="mb-2 text-lg font-bold">{t('request.withdrawTitle')}</h3>
+        <p className="mb-5 text-sm text-gray-600">{t('request.withdrawDesc')}</p>
+        <div className="flex gap-2">
+          <Button onClick={handleWithdraw} disabled={withdrawing} className="flex-1">
+            {withdrawing ? t('common.loading') : t('request.withdraw')}
+          </Button>
+          <Button variant="ghost" onClick={() => setWithdrawDialog(false)} className="flex-1">
+            {t('common.cancel')}
+          </Button>
+        </div>
+      </Dialog>
 
       {/* Accept Dialog */}
       <Dialog open={acceptDialog} onClose={() => setAcceptDialog(false)}>
@@ -422,7 +479,7 @@ export function RequestDetailPage() {
             </p>
             {success === 'accepted' && apt.date && apt.startTime && apt.endTime && (
               <a
-                href={buildCalendarUrl(apt.date, apt.startTime, apt.endTime, familyName, apt.address)}
+                href={buildCalendarUrl(apt.date, apt.startTime, apt.endTime, familyName, apt.address ?? undefined)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="mb-3 inline-flex items-center gap-1.5 text-sm font-medium text-brand-600 active:text-brand-800"

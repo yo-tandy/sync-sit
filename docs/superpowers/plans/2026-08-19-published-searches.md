@@ -194,6 +194,15 @@ const isNew = (d) => !seenAtRef.current || d.createdAt.toMillis() > seenAtRef.cu
 
 ## PR 3 — contact inversion, sit
 
+> **Amended during review (PR #212):** the dedupe below blocks only LIVE
+> (pending/confirmed) prior contacts, which left a sitter free to re-mint a
+> pending immediately after a family declined — each retry emailing and
+> pushing every parent of that family. Sit now also enforces the **7-day
+> cooldown on a family decline** that T1 of PR 4 already specified for study,
+> so the two apps behave identically; a contact the SITTER withdrew is not a
+> decline and starts no cooldown.
+
+
 Branch `feature/published-searches-sit-contact`. Files:
 - Create: `apps/functions/src/search/contactPublishedSearch.ts`, `tests/integration/search/contactPublishedSearch.test.ts`
 - Modify: `apps/functions/src/appointments/respondToRequest.ts` (family branch), `apps/functions/src/index.ts`, `apps/web/src/pages/babysitter/PublishedSearchesPage.tsx` (CTA + message dialog), `apps/web/src/pages/family/DashboardPage.tsx` + `apps/web/src/components/appointments/*` (family accept/decline on `initiatedBy==='babysitter'` pendings), `apps/web/src/pages/babysitter/RequestDetailPage.tsx` + `apps/web/src/pages/babysitter/DashboardPage.tsx:254` (label own-initiated pendings "waiting for family"; hide sitter respond buttons), i18n en+fr

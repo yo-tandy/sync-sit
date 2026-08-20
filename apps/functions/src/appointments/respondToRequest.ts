@@ -3,7 +3,8 @@ import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
 import { notifyAllParents } from '../config/notifyParents.js';
-import { escapeHtml } from '../config/email.js';
+import { escapeHtml, sendNotificationEmail } from '../config/email.js';
+import { sendPushNotification } from '../config/push.js';
 import { buildMergedOverride } from '@ejm/shared-functions/schedule/sessionOverride.js';
 import {
   isActiveGuardianOf,
@@ -43,11 +44,32 @@ export const respondToRequest = onCall(
 
     const appointment = appointmentSnap.data()!;
 
-    // Verify the caller is the babysitter for this appointment, else a
-    // GUARDIAN of the babysitter — DECLINE-ONLY: a guardian protects, they
-    // never accept a commitment on the kid's behalf.
+    // ── Who may respond depends on WHO INITIATED (issue #207 PR3) ──
+    // A babysitter-initiated appointment (contactPublishedSearch: the sitter
+    // answered the family's published search) is answered by the FAMILY; the
+    // babysitter/guardian gate below does not apply to it, and the sitter
+    // cannot answer their own request. Everything else is the original
+    // family-initiated flow, untouched.
+    const familyInitiatedFlow = appointment.initiatedBy !== 'babysitter';
     let guardianActor = false;
-    if (appointment.babysitterUserId !== uid) {
+    let familyActor = false;
+    let familyData: FirebaseFirestore.DocumentData | undefined;
+
+    if (!familyInitiatedFlow) {
+      const familySnap = await db.collection('families').doc(appointment.familyId as string).get();
+      familyData = familySnap.data();
+      const parentIds: string[] = (familyData?.parentIds as string[]) || [];
+      if (!parentIds.includes(uid)) {
+        throw new HttpsError(
+          'permission-denied',
+          'Only a parent of this family can respond to this request',
+        );
+      }
+      familyActor = true;
+    } else if (appointment.babysitterUserId !== uid) {
+      // Verify the caller is the babysitter for this appointment, else a
+      // GUARDIAN of the babysitter — DECLINE-ONLY: a guardian protects, they
+      // never accept a commitment on the kid's behalf.
       if (await isActiveGuardianOf(uid, appointment.babysitterUserId as string)) {
         if (data.action !== 'decline') {
           throw new HttpsError(
@@ -69,6 +91,124 @@ export const respondToRequest = onCall(
     }
 
     const now = new Date();
+
+    // ── FAMILY RESPONDER BRANCH (issue #207 PR3) ──────────────────────────
+    // Only reachable for a babysitter-initiated appointment (the gate above
+    // proved the caller is a parent of its family). It returns early so the
+    // family-initiated flow below stays exactly as it was.
+    //
+    // ACCEPT is where the withheld family PII is disclosed: contactPublishedSearch
+    // minted the pending appointment with address/latLng/pets/familyNote/
+    // familyPhotoUrl all null, because any active babysitter can initiate. The
+    // family's yes is the consent, so the accept fills them in and the doc
+    // reaches the SAME terminal state a family-initiated accept reaches
+    // (status confirmed + confirmedAt + updatedAt).
+    //
+    // The babysitter's schedule is deliberately NOT blocked: `blockSchedule`
+    // is the babysitter's own choice about their own calendar, and no family
+    // may make it for them.
+    if (familyActor) {
+      const babysitterDoc = await db
+        .collection('users')
+        .doc(appointment.babysitterUserId as string)
+        .get();
+      const babysitterUser = babysitterDoc.data() || {};
+      const familyName = (familyData?.familyName as string) || (appointment.familyName as string) || 'The family';
+
+      const dateDisplay = appointment.date
+        ? `${appointment.date}${appointment.startTime ? ` at ${appointment.startTime}` : ''}${appointment.endTime ? `–${appointment.endTime}` : ''}`
+        : 'Recurring schedule';
+
+      const accepted = data.action === 'accept';
+
+      if (accepted) {
+        await appointmentRef.update({
+          status: 'confirmed',
+          confirmedAt: now,
+          updatedAt: now,
+          // Disclosed on consent — see the block comment above.
+          address: (familyData?.address as string) ?? null,
+          latLng: (familyData?.latLng as unknown) ?? null,
+          pets: (familyData?.pets as string) ?? null,
+          familyNote: (familyData?.note as string) ?? null,
+          familyPhotoUrl: (familyData?.photoUrl as string) ?? null,
+        });
+        // The slot is filled: take the search off the board so no further
+        // sitters answer it (PR #212 review). Sibling pendings already minted
+        // stay for the family to answer -- the family-initiated flow has the
+        // same "several requests out, family decides" shape, so declining
+        // them is their call, not ours. Withdraw is a delete, matching the
+        // family's own withdraw button; a missing doc is fine (expired or
+        // already withdrawn).
+        const searchId = appointment.publishedSearchId as string | undefined;
+        if (searchId) {
+          await db.collection('publishedSearches').doc(searchId).delete().catch(() => {});
+        }
+      } else {
+        await appointmentRef.update({
+          status: 'rejected',
+          // Distinct from 'declined_by_babysitter': the two directions must be
+          // tellable apart in history and in the UI.
+          statusReason: 'declined_by_family',
+          updatedAt: now,
+        });
+      }
+
+      // Notify the BABYSITTER — single recipient, mirroring
+      // sendContactRequest.ts:144-176 for the inverted direction.
+      const title = accepted ? 'Your request was accepted' : 'Your request was declined';
+      const body = accepted
+        ? `${familyName} accepted your request for ${dateDisplay}.`
+        : `${familyName} declined your request for ${dateDisplay}.`;
+      const emailBody = accepted
+        ? `
+        <p><strong>${escapeHtml(familyName)}</strong> accepted your request for <strong>${escapeHtml(dateDisplay)}</strong>.</p>
+        <p>The address and the family's details are now visible in the app.</p>
+        <p style="margin-top: 16px;"><a href="https://sync-sit.com/babysitter" style="background: #DC2626; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View in app</a></p>
+      `
+        : `
+        <p><strong>${escapeHtml(familyName)}</strong> declined your request for <strong>${escapeHtml(dateDisplay)}</strong>.</p>
+        <p>Other families publish searches too — have a look at the published searches board.</p>
+        <p style="margin-top: 16px;"><a href="https://sync-sit.com/babysitter" style="background: #DC2626; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View in app</a></p>
+      `;
+      const prefCategory = accepted ? 'confirmed' : 'cancelled';
+      const notifType = accepted ? 'published_search_accepted' : 'published_search_declined';
+
+      // Record the actual send outcomes, not assumptions.
+      let emailSent = false;
+      if (babysitterUser.notifPrefs?.[prefCategory]?.email !== false && babysitterUser.email) {
+        emailSent = await sendNotificationEmail(babysitterUser.email as string, title, emailBody);
+      }
+      let pushSent = false;
+      if (babysitterUser.notifPrefs?.[prefCategory]?.push !== false) {
+        pushSent = await sendPushNotification(
+          appointment.babysitterUserId as string,
+          title,
+          body,
+          { appointmentId: data.appointmentId, type: notifType },
+        );
+      }
+      await db.collection('notifications').add({
+        recipientUserId: appointment.babysitterUserId,
+        type: notifType,
+        title,
+        body,
+        data: { appointmentId: data.appointmentId },
+        read: false,
+        channels: ['email', 'push'],
+        emailSent,
+        pushSent,
+        createdAt: now,
+      });
+
+      await writeUserActivity(
+        uid,
+        accepted ? 'appointment_accepted' : 'appointment_declined',
+        { appointmentId: data.appointmentId, actorRole: 'family' },
+      );
+
+      return { success: true };
+    }
 
     if (data.action === 'accept') {
       await appointmentRef.update({
