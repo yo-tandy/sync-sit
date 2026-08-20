@@ -287,7 +287,8 @@ export default {
     requestsTitle: 'Demandes',
     familiesTitle: 'Mes Familles',
     publishedBoard: {
-      menuTitle: 'Recherches publiées',
+      previewTitle: 'Annonces des familles',
+      seeMore: 'Voir plus d\'annonces',
       title: 'Recherches publiées',
       intro: 'Les familles publient ici leurs recherches pour que les professeurs les trouvent — y compris des matières ou niveaux hors de votre offre actuelle.',
       familyTitle: 'Famille {{name}}',

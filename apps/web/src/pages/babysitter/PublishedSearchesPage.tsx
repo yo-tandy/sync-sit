@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { collection, doc, limit, onSnapshot, orderBy, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
+import { doc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
-import { Badge, Card, TopNav } from '@/components/ui';
+import { TopNav } from '@/components/ui';
 import { SearchIcon } from '@/components/ui/Icons';
 import { getBabysitterView } from '@ejm/sit-core';
-import { isActivePublishedSearch, isNewPublishedSearch } from '@ejm/shared-core';
+import { usePublishedSearches } from '@/components/published/usePublishedSearches';
+import { PublishedSearchCard } from '@/components/published/PublishedSearchCard';
 
 /**
  * The published-searches board doc as this page renders it (issue #207, sit
@@ -14,24 +15,6 @@ import { isActivePublishedSearch, isNewPublishedSearch } from '@ejm/shared-core'
  * area LABEL, schedule, kid ages, rate, additionalInfo — and nothing more
  * (no address/latLng/kid names exist on the doc).
  */
-interface BoardSearch {
-  id: string;
-  familyName: string;
-  areaLabel: string | null;
-  type: 'one_time' | 'recurring';
-  date: string | null;
-  startTime: string | null;
-  endTime: string | null;
-  recurringSlots: { day: string; startTime: string; endTime: string }[] | null;
-  schoolWeeksOnly: boolean;
-  kidAges: number[];
-  numberOfKids: number;
-  offeredRate: number | null;
-  additionalInfo: string | null;
-  createdAt: { toMillis: () => number };
-  expiresAt: { toMillis: () => number; toDate: () => Date };
-}
-
 /**
  * Published-searches board for babysitters (issue #207). Lists every ACTIVE
  * sit published search — deliberately unfiltered by the sitter's own
@@ -50,10 +33,9 @@ interface BoardSearch {
  * each card says so instead of rendering a dead button.
  */
 export function PublishedSearchesPage() {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const { userDoc } = useAuthStore();
   const uid = userDoc?.uid ?? null;
-  const locale = i18n.language?.startsWith('fr') ? 'fr-FR' : 'en-GB';
 
   // Mount-captured New threshold (null = never visited). useState's lazy
   // initializer runs exactly once, so the threshold stays stable while the
@@ -62,34 +44,8 @@ export function PublishedSearchesPage() {
     () => getBabysitterView(userDoc)?.publishedSearchesSeenAt?.toMillis?.() ?? null,
   );
 
-  // null = first snapshot pending; [] afterwards may be a real empty board or
-  // the error state (errored distinguishes the copy).
-  const [searches, setSearches] = useState<BoardSearch[] | null>(null);
-  const [errored, setErrored] = useState(false);
-
-  useEffect(() => {
-    const q = query(
-      collection(db, 'publishedSearches'),
-      where('app', '==', 'sit'),
-      orderBy('createdAt', 'desc'),
-      limit(50),
-    );
-    return onSnapshot(
-      q,
-      (snap) => {
-        const now = Date.now();
-        setSearches(
-          snap.docs
-            .map((d) => d.data() as BoardSearch)
-            .filter((d) => isActivePublishedSearch(d, now)),
-        );
-      },
-      () => {
-        setSearches([]);
-        setErrored(true);
-      },
-    );
-  }, []);
+  // Shared with the dashboard preview so "active" and "newest" cannot drift.
+  const { searches, errored } = usePublishedSearches(50);
 
   // Mark the board visited — once, after the first SUCCESSFUL snapshot (an
   // errored subscription must not consume the New tags the sitter never saw).
@@ -103,23 +59,6 @@ export function PublishedSearchesPage() {
       /* tags simply reappear next visit */
     });
   }, [uid, searches, errored]);
-
-  const dayNames: Record<string, string> = {
-    mon: t('days.mondays'), tue: t('days.tuesdays'), wed: t('days.wednesdays'), thu: t('days.thursdays'),
-    fri: t('days.fridays'), sat: t('days.saturdays'), sun: t('days.sundays'),
-  };
-
-  const formatSchedule = (s: BoardSearch): string => {
-    if (s.type === 'one_time' && s.date) {
-      const d = new Date(s.date + 'T00:00:00').toLocaleDateString(locale, {
-        weekday: 'long', day: 'numeric', month: 'long',
-      });
-      return `${d}, ${s.startTime}–${s.endTime}`;
-    }
-    return (s.recurringSlots ?? [])
-      .map((slot) => `${dayNames[slot.day] || slot.day} ${slot.startTime}–${slot.endTime}`)
-      .join(', ');
-  };
 
   return (
     <div>
@@ -144,44 +83,13 @@ export function PublishedSearchesPage() {
         )}
 
         {searches !== null && !errored && searches.map((s) => (
-          <Card key={s.id} className="mb-3">
-            <div className="flex items-start justify-between gap-2">
-              <p className="font-semibold text-gray-900">
-                {t('publishedBoard.familyTitle', { name: s.familyName })}
-              </p>
-              {isNewPublishedSearch(s, seenAtMs) && (
-                <Badge variant="amber">{t('publishedBoard.newTag')}</Badge>
-              )}
-            </div>
-
-            <p className="mt-1 text-sm text-gray-700">{formatSchedule(s)}</p>
-            {s.type === 'recurring' && s.schoolWeeksOnly && (
-              <p className="text-xs text-gray-500">{t('search.schoolWeeksOnly')}</p>
-            )}
-
-            <p className="mt-1 text-sm text-gray-500">
-              {t('publishedBoard.kids', { count: s.numberOfKids, ages: s.kidAges.join(', ') })}
-            </p>
-            {s.areaLabel && (
-              <p className="text-sm text-gray-500">{t('publishedBoard.area', { area: s.areaLabel })}</p>
-            )}
-            {s.offeredRate != null && (
-              <p className="text-sm text-gray-500">{t('publishedBoard.rate', { rate: s.offeredRate })}</p>
-            )}
-            {s.additionalInfo && (
-              <p className="mt-2 text-sm text-gray-600">{s.additionalInfo}</p>
-            )}
-
-            <div className="mt-2 flex items-center justify-between gap-2">
-              <p className="text-xs text-gray-400">
-                {t('publishedBoard.expires', {
-                  date: s.expiresAt.toDate().toLocaleDateString(locale, { day: 'numeric', month: 'long' }),
-                })}
-              </p>
-              {/* No contact CTA yet — PR3; say so instead of a dead button. */}
-              <p className="text-xs text-gray-400">{t('publishedBoard.contactSoon')}</p>
-            </div>
-          </Card>
+          <PublishedSearchCard
+            key={s.id}
+            search={s}
+            seenAtMs={seenAtMs}
+            /* No contact CTA yet — PR3; say so instead of a dead button. */
+            footer={<p className="text-xs text-gray-400">{t('publishedBoard.contactSoon')}</p>}
+          />
         ))}
       </div>
     </div>

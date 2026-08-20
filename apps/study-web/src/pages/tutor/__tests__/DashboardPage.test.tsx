@@ -34,6 +34,12 @@ vi.mock('firebase/firestore', () => ({
   getDocs: (...args: unknown[]) => h.getDocs(...args),
   updateDoc: (...args: unknown[]) => h.updateDoc(...args),
   serverTimestamp: () => 'ts',
+  orderBy: (...args: unknown[]) => ({ orderBy: args }),
+  limit: (n: number) => ({ limit: n }),
+  // The dashboard now hosts the published-searches preview, which subscribes
+  // live; an inert unsubscribe keeps these appointment-focused tests unaware
+  // of it (its own spec covers the section).
+  onSnapshot: () => () => {},
 }));
 
 vi.mock('@/stores/authStore', () => ({

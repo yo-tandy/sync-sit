@@ -1,10 +1,9 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
-import { collection, limit, onSnapshot, orderBy, query, where } from 'firebase/firestore';
+import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
-import { isActivePublishedSearch, isNewPublishedSearch } from '@ejm/shared-core';
 import {
   Badge,
   Dialog,
@@ -90,42 +89,8 @@ export function AppBar() {
     }
   }, [uid]);
 
-  // Unseen published-searches count for the board menu badge (issue #207,
-  // same idiom as the endorsement badge above). Live board snapshot; the New
-  // threshold reads the LIVE profiles.tutor.publishedSearchesSeenAt off
-  // userDoc (authStore keeps it subscribed), so visiting the board clears
-  // the badge without a remount. A failed read must never surface in the
-  // app bar: error or throw just means no badge.
-  // Active docs' createdAt millis, resolved AT SNAPSHOT TIME (expiry needs a
-  // clock, and render must stay pure — a doc expiring mid-mount drops on the
-  // next snapshot, the same tolerance the board page itself has).
-  const [activeCreatedMs, setActiveCreatedMs] = useState<number[]>([]);
-  useEffect(() => {
-    if (!uid) return;
-    try {
-      return onSnapshot(
-        query(collection(db, 'publishedSearches'), where('app', '==', 'study'), orderBy('createdAt', 'desc'), limit(50)),
-        (snap) => {
-          const now = Date.now();
-          setActiveCreatedMs(
-            snap.docs
-              .map((d) => d.data() as { createdAt?: { toMillis?: () => number }; expiresAt?: { toMillis?: () => number } })
-              .filter((d) => isActivePublishedSearch(d, now))
-              .map((d) => d.createdAt?.toMillis?.() ?? 0),
-          );
-        },
-        () => setActiveCreatedMs([]),
-      );
-    } catch {
-      /* leave the badge hidden */
-    }
-  }, [uid]);
-  const seenAtMs = userDoc?.profiles?.tutor?.publishedSearchesSeenAt?.toMillis?.() ?? null;
-  const newPublishedCount = activeCreatedMs.filter((ms) =>
-    isNewPublishedSearch({ createdAt: { toMillis: () => ms } }, seenAtMs),
-  ).length;
 
-  const menuHasBadge = pendingEndorsements > 0 || newPublishedCount > 0;
+  const menuHasBadge = pendingEndorsements > 0;
 
   return (
     <>
@@ -168,7 +133,6 @@ export function AppBar() {
           <MenuItem icon={<BellIcon className="h-5 w-5" />} label={t('tutor.requestsTitle')} to="/tutor/requests" onNavigate={() => setMenuOpen(false)} />
           {/* "My families" mirrors sync-sit's babysitter menu entry (UsersIcon → /babysitter/families). */}
           <MenuItem icon={<UsersIcon className="h-5 w-5" />} label={t('tutor.familiesTitle')} to="/tutor/families" onNavigate={() => setMenuOpen(false)} />
-          <MenuItem icon={<ClipboardListIcon className="h-5 w-5" />} label={t('tutor.publishedBoard.menuTitle')} badge={newPublishedCount} to="/tutor/published-searches" onNavigate={() => setMenuOpen(false)} />
           <MenuItem icon={<CalendarIcon className="h-5 w-5" />} label={t('tutor.sessionsTitle')} to="/tutor/sessions" onNavigate={() => setMenuOpen(false)} />
           <MenuItem icon={<CheckIcon className="h-5 w-5" />} label={t('tutor.endorsementsTitle')} badge={pendingEndorsements} to="/tutor/endorsements" onNavigate={() => setMenuOpen(false)} />
           <MenuItem icon={<UserIcon className="h-5 w-5" />} label={t('tutor.accountTitle')} to="/tutor/account" onNavigate={() => setMenuOpen(false)} />
