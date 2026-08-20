@@ -310,6 +310,19 @@ describe('family RequestsPage', () => {
     );
   });
 
+  it('an accept refused because the tutor is gone says so, instead of "please try again"', async () => {
+    // Every accept-side re-check (hidden, suspended, deleted, subject
+    // dropped) is unretryable, so the generic copy was an invitation to keep
+    // tapping a call that can never succeed (PR #213 review).
+    h.requests = [reqDoc({ requestId: 'r9', initiatedBy: 'tutor' })];
+    h.callable.mockRejectedValue({ details: { reason: 'tutor_unavailable' } });
+    renderWithProviders(<RequestsPage />);
+    await screen.findByText(/Alex Roy/);
+
+    fireEvent.click(screen.getByRole('button', { name: /^accept$/i }));
+    expect(await screen.findByText(/no longer available/i)).toBeInTheDocument();
+  });
+
   it('a FAMILY-initiated pending row is untouched by the inversion (regression pin)', async () => {
     h.requests = [reqDoc({ requestId: 'r1' })];
     renderWithProviders(<RequestsPage />);

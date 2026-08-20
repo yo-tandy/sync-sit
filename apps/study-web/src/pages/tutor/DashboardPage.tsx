@@ -304,7 +304,10 @@ export function DashboardPage() {
   // await the FAMILY's answer) don't count — they still render in the
   // section, marked "awaiting the family" (PR #194 review).
   const newCount =
-    pendingRequests.length +
+    // Same rule for contact requests as for sessions (issue #207 PR4): one
+    // this tutor SENT by answering a published search awaits the FAMILY, so
+    // it is not a to-do — it still renders below, marked.
+    pendingRequests.filter((r) => r.initiatedBy !== 'tutor').length +
     pendingSessions.filter((s) => s.proposedBy !== 'provider').length;
   const newTotal = pendingRequests.length + pendingSessions.length;
   const hasAny = newTotal > 0 || confirmedUpcoming.length > 0;
@@ -397,10 +400,17 @@ export function DashboardPage() {
                   <div className="flex items-center gap-3">
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-semibold text-gray-900">{r.familyName}</p>
-                      <p className="text-xs text-gray-500">{r.parentName}</p>
+                      {/* parentName is '' until a parent answers a request
+                          this tutor sent, so don't render an empty line. */}
+                      {r.parentName && <p className="text-xs text-gray-500">{r.parentName}</p>}
                       <p className="mt-1 text-xs text-gray-500">
                         {t(`tutor.subjects.names.${r.subject}`)} · {r.level}
                       </p>
+                      {r.initiatedBy === 'tutor' && (
+                        <p className="mt-1 text-xs text-amber-700">
+                          {t('tutor.requests.awaitingFamily')}
+                        </p>
+                      )}
                     </div>
                     <ChevronRightIcon className="h-5 w-5 shrink-0 text-gray-400" />
                   </div>

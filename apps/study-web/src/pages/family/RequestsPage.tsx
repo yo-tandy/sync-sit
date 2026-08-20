@@ -137,8 +137,17 @@ export function RequestsPage() {
         ),
       );
       toast(t(action === 'accept' ? 'family.requests.status.accepted' : 'family.requests.status.declined'));
-    } catch {
-      setCancelError(t('family.requests.actionError'));
+    } catch (err) {
+      // "Please try again" is wrong for the one failure that can actually
+      // happen here: the tutor became unreachable between sending and this
+      // tap (hidden, suspended, deleted, or no longer offering the subject).
+      // Retrying can never succeed, so say so instead (PR #213 review).
+      const reason = (err as { details?: { reason?: string } })?.details?.reason;
+      setCancelError(
+        t(reason === 'tutor_unavailable'
+          ? 'family.requests.tutorUnavailable'
+          : 'family.requests.actionError'),
+      );
     } finally {
       setRespondingId(null);
     }

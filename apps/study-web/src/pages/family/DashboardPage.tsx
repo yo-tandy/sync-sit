@@ -95,7 +95,9 @@ export function DashboardPage() {
   // null = still loading; true/false once the family doc has resolved.
   const [isVerified, setIsVerified] = useState<boolean | null>(null);
   // Live pending/accepted request counts (null while loading).
-  const [counts, setCounts] = useState<{ pending: number; accepted: number } | null>(null);
+  const [counts, setCounts] = useState<
+    { pending: number; accepted: number; incoming: number } | null
+  >(null);
   // Live pending/upcoming session counts plus the soonest confirmed one_time
   // session (null while loading; one setState per snapshot).
   const [sessionData, setSessionData] = useState<{
@@ -143,12 +145,20 @@ export function DashboardPage() {
         if (!mountedRef.current) return;
         let pending = 0;
         let accepted = 0;
+        // Pending requests a TUTOR opened by answering one of our published
+        // searches (issue #207 PR4). Counted apart because the hero's whole
+        // job is to say who has to act, and for these it is US -- the
+        // "tutors usually reply" copy is backwards on both halves.
+        let incoming = 0;
         snap.docs.forEach((d) => {
-          const status = d.data()?.status;
-          if (status === 'pending') pending += 1;
-          else if (status === 'accepted') accepted += 1;
+          const data = d.data();
+          const status = data?.status;
+          if (status === 'pending') {
+            if (data?.initiatedBy === 'tutor') incoming += 1;
+            else pending += 1;
+          } else if (status === 'accepted') accepted += 1;
         });
-        setCounts({ pending, accepted });
+        setCounts({ pending, accepted, incoming });
       })
       .catch(() => {
         // Keep last-known-good counts: zeroing on a refetch failure is an
@@ -253,6 +263,14 @@ export function DashboardPage() {
         desc: t('family.dashboard.hero.acceptedDesc'),
         icon: <BellIcon className="h-6 w-6 text-brand-600" />,
       };
+    } else if (counts.incoming > 0) {
+      // Ahead of our own pending requests: this one is waiting on US.
+      hero = {
+        to: '/family/requests',
+        title: t('family.dashboard.hero.incoming', { count: counts.incoming }),
+        desc: t('family.dashboard.hero.incomingDesc'),
+        icon: <BellIcon className="h-6 w-6 text-brand-600" />,
+      };
     } else if (counts.pending > 0) {
       hero = {
         to: '/family/requests',
@@ -275,8 +293,18 @@ export function DashboardPage() {
   const requestsSub =
     counts === null
       ? undefined
-      : counts.pending + counts.accepted > 0
-        ? `${t('family.dashboard.tiles.requestsPending', { count: counts.pending })} · ${t('family.dashboard.tiles.requestsAccepted', { count: counts.accepted })}`
+      : counts.pending + counts.accepted + counts.incoming > 0
+        ? [
+            // Ours to answer first — the tile is a summary, and this is the
+            // only one of the three that asks something of the family.
+            counts.incoming > 0
+              ? t('family.dashboard.tiles.requestsIncoming', { count: counts.incoming })
+              : null,
+            t('family.dashboard.tiles.requestsPending', { count: counts.pending }),
+            t('family.dashboard.tiles.requestsAccepted', { count: counts.accepted }),
+          ]
+            .filter(Boolean)
+            .join(' · ')
         : t('family.dashboard.tiles.requestsEmpty');
   const sessionsSub =
     sessionData === null

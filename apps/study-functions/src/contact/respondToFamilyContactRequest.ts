@@ -82,8 +82,15 @@ export const respondToFamilyContactRequest = onCall(
       if (accepted) {
         const tutorSnap = await tx.get(tutorRef);
         const tutorData = tutorSnap.data();
+        // One reason for all three unavailability branches: to the FAMILY
+        // they mean the same thing -- this tutor cannot be reached -- and
+        // "retry" is never the answer (PR #213 review).
         if (!tutorSnap.exists || tutorData?.status !== 'active') {
-          throw new HttpsError('failed-precondition', 'This tutor is no longer available');
+          throw new HttpsError(
+            'failed-precondition',
+            'This tutor is no longer available',
+            { reason: 'tutor_unavailable' },
+          );
         }
         // Re-check SEARCHABLE here, not only at send: a tutor who hides
         // between sending and being accepted (or whose guardian hides them)
@@ -92,7 +99,11 @@ export const respondToFamilyContactRequest = onCall(
         // its card is the family's only contact-reveal surface (PR #213
         // review). One field, in a snapshot already being read.
         if (tutorData?.profiles?.tutor?.searchable !== true) {
-          throw new HttpsError('failed-precondition', 'This tutor is no longer available');
+          throw new HttpsError(
+            'failed-precondition',
+            'This tutor is no longer available',
+            { reason: 'tutor_unavailable' },
+          );
         }
         // ...and that they still OFFER what the family asked for. searchTutors
         // requires searchable AND a matching subject+level, and the family's
@@ -108,7 +119,11 @@ export const respondToFamilyContactRequest = onCall(
           (o) => o.subject === data.subject && (o.levels ?? []).includes(data.level as string),
         );
         if (!stillOffers) {
-          throw new HttpsError('failed-precondition', 'This tutor no longer offers that subject');
+          throw new HttpsError(
+            'failed-precondition',
+            'This tutor no longer offers that subject',
+            { reason: 'tutor_unavailable' },
+          );
         }
       }
 
