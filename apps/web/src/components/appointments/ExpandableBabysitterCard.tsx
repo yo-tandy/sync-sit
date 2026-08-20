@@ -303,7 +303,13 @@ export function ExpandableBabysitterCard({
               </div>
             </div>
           )}
-          {!babysitterInitiated && (variant === 'pending' || variant === 'confirmed') && onEdit && (
+          {/* Edit is dropped only while a sitter-initiated request is PENDING
+              (the family did not author it, so there is nothing of theirs to
+              edit). Once accepted it is a mutual commitment like any other
+              confirmed sitting, and the family must be able to adjust times
+              through modifyAppointment — mirrors the cancel guard below
+              (PR #212 review). */}
+          {!(babysitterInitiated && variant === 'pending') && (variant === 'pending' || variant === 'confirmed') && onEdit && (
             <div className="mt-3">
               <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); onEdit(); }}>
                 {t('appointment.edit')}

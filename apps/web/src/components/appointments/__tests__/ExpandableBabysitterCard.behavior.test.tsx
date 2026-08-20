@@ -206,3 +206,65 @@ describe('ExpandableBabysitterCard babysitter-initiated pending', () => {
     expect(screen.queryByText('familyDashboard.answeredPublishedSearch')).not.toBeInTheDocument();
   });
 });
+
+describe('rejected cards: who declined decides the affordance', () => {
+  // resubmitAppointment re-derives the family address onto the resubmission,
+  // so offering Resubmit on a request the FAMILY just declined would silently
+  // disclose it to that sitter — the invariant this PR exists to establish
+  // (PR #212 review). The distinction is three sibling conditionals keyed on
+  // statusReason, so it needs pinning against a refactor.
+  const declinedByFamily = {
+    ...answeredAppointment,
+    status: 'rejected',
+    statusReason: 'declined_by_family',
+  } as AppointmentDoc;
+
+  it('a family-declined card says so and offers no Resubmit', () => {
+    render(
+      <ExpandableBabysitterCard
+        appointment={declinedByFamily}
+        info={info}
+        variant="rejected"
+        onResubmit={vi.fn()}
+      />,
+    );
+    expandCard();
+    expect(screen.getByText('appointment.declinedByYou')).toBeInTheDocument();
+    expect(screen.queryByText('appointment.resubmit')).toBeNull();
+  });
+
+  it('a sitter-declined card still offers Resubmit', () => {
+    const declinedBySitter = {
+      ...appointment,
+      status: 'rejected',
+      statusReason: 'declined_by_babysitter',
+    } as AppointmentDoc;
+    render(
+      <ExpandableBabysitterCard
+        appointment={declinedBySitter}
+        info={info}
+        variant="rejected"
+        onResubmit={vi.fn()}
+      />,
+    );
+    expandCard();
+    expect(screen.getByText('appointment.resubmit')).toBeInTheDocument();
+    expect(screen.queryByText('appointment.declinedByYou')).toBeNull();
+  });
+
+  it('a family accepting a sitter answer can still EDIT the confirmed sitting', () => {
+    // Edit is dropped only while such a request is pending; once accepted it
+    // is a mutual commitment like any other confirmed appointment.
+    render(
+      <ExpandableBabysitterCard
+        appointment={{ ...answeredAppointment, status: 'confirmed' } as AppointmentDoc}
+        info={info}
+        variant="confirmed"
+        onEdit={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+    expandCard();
+    expect(screen.getByText('appointment.edit')).toBeInTheDocument();
+  });
+});
