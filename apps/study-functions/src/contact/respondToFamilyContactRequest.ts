@@ -70,6 +70,22 @@ export const respondToFamilyContactRequest = onCall(
       }
 
       const accepted = action === 'accept';
+
+      // Every READ first -- Firestore rejects a transaction that reads after
+      // writing. Accept proves the tutor doc: this is the one accept path
+      // that writes ANOTHER user's doc, and deleteUser removes users/{uid}
+      // without touching studyContactRequests (PR #213 review). A bare update
+      // on a missing doc rejects with an opaque `internal` and leaves the row
+      // stuck pending; a deleted or deactivated tutor should read as what it
+      // is. Decline needs no such check -- it never touches the tutor doc.
+      const tutorRef = db.collection('users').doc(data.tutorUserId as string);
+      if (accepted) {
+        const tutorSnap = await tx.get(tutorRef);
+        if (!tutorSnap.exists || tutorSnap.data()?.status !== 'active') {
+          throw new HttpsError('failed-precondition', 'This tutor is no longer available');
+        }
+      }
+
       tx.update(requestRef, {
         status: accepted ? 'accepted' : 'declined',
         respondedAt: now,
@@ -80,7 +96,7 @@ export const respondToFamilyContactRequest = onCall(
       if (accepted) {
         // Same unlock the tutor-side accept writes, so every downstream
         // consumer (searchTutors, bookSession, proposeSession) is unchanged.
-        tx.update(db.collection('users').doc(data.tutorUserId as string), {
+        tx.update(tutorRef, {
           'profiles.tutor.approvedFamilies': FieldValue.arrayUnion(data.familyId),
         });
       }

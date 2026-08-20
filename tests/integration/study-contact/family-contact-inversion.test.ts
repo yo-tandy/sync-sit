@@ -57,8 +57,12 @@ describe('study contact inversion', () => {
       const snap = await db.collection(c).get();
       await Promise.all(snap.docs.map((d) => d.ref.delete()));
     }
+    // Reset the two server-owned fields the gates read, so a pin that flips
+    // one cannot leak into the next case.
     await db.collection('users').doc(seed.tutor2.uid).update({
       'profiles.tutor.approvedFamilies': [],
+      'profiles.tutor.searchable': true,
+      status: 'active',
     });
   });
 
@@ -105,11 +109,46 @@ describe('study contact inversion', () => {
     expect(notifs.docs[0].data().data.requestId).toBe(res.requestId);
   });
 
-  it('rejects a caller who is not an active enrolled tutor', async () => {
+  it('rejects a caller with no tutor profile (a parent lands on the enrollment gate)', async () => {
     const searchId = await publish();
     await expect(
       callFunction('sendFamilyContactRequest', { publishedSearchId: searchId }, parentToken),
     ).rejects.toMatchObject({ code: 'FAILED_PRECONDITION' });
+  });
+
+  it('rejects a NON-ACTIVE tutor with permission-denied (the status gate, not the profile one)', async () => {
+    const db = getDb();
+    await db.collection('users').doc(seed.tutor2.uid).update({ status: 'suspended' });
+    const searchId = await publish();
+    try {
+      await expect(
+        callFunction('sendFamilyContactRequest', { publishedSearchId: searchId }, tutorToken),
+      ).rejects.toMatchObject({ code: 'PERMISSION_DENIED' });
+    } finally {
+      await db.collection('users').doc(seed.tutor2.uid).update({ status: 'active' });
+    }
+  });
+
+  it('rejects a HIDDEN tutor: an accepted family could never reach them', async () => {
+    // searchTutors filters on profiles.tutor.searchable, and its TutorCard is
+    // the family's only contact-reveal surface -- so a hidden tutor being
+    // accepted would leave the family with two dead-end links (PR #213
+    // review). enrollTutor writes searchable: false, so this is the DEFAULT
+    // state of a new tutor.
+    const db = getDb();
+    await db.collection('users').doc(seed.tutor2.uid).update({
+      'profiles.tutor.searchable': false,
+    });
+    const searchId = await publish();
+    try {
+      await expect(
+        callFunction('sendFamilyContactRequest', { publishedSearchId: searchId }, tutorToken),
+      ).rejects.toMatchObject({ code: 'FAILED_PRECONDITION' });
+    } finally {
+      await db.collection('users').doc(seed.tutor2.uid).update({
+        'profiles.tutor.searchable': true,
+      });
+    }
   });
 
   it('rejects an expired search', async () => {
@@ -306,6 +345,95 @@ describe('study contact inversion', () => {
     ).rejects.toMatchObject({ code: 'FAILED_PRECONDITION' });
   });
 
+  it('the accepted family can actually SEE the tutor in search (the point of the yes)', async () => {
+    // The plan's T2 pin: accept must leave the family able to reach the tutor.
+    // With no searchable gate on the send side this failed silently -- the
+    // family consented and got two dead-end links (PR #213 review).
+    const requestId = await tutorContacts();
+    await callFunction('respondToFamilyContactRequest', { requestId, action: 'accept' }, parentToken);
+
+    const res = await callFunction<{ results: { uid: string; contactEmail?: string }[] }>(
+      'searchTutors',
+      { subject: 'math', level: '6e' },
+      parentToken,
+    );
+    const card = res.results.find((r) => r.uid === seed.tutor2.uid);
+    expect(card).toBeTruthy();
+    // Contact is projected only for an approved family -- this is the reveal.
+    expect(card!.contactEmail).toBeTruthy();
+  });
+
+  it('accepting a request whose tutor is gone fails legibly, not as an internal error', async () => {
+    const requestId = await tutorContacts();
+    const db = getDb();
+    const tutorSnap = await db.collection('users').doc(seed.tutor2.uid).get();
+    await db.collection('users').doc(seed.tutor2.uid).delete();
+    try {
+      await expect(
+        callFunction('respondToFamilyContactRequest', { requestId, action: 'accept' }, parentToken),
+      ).rejects.toMatchObject({ code: 'FAILED_PRECONDITION' });
+    } finally {
+      await db.collection('users').doc(seed.tutor2.uid).set(tutorSnap.data()!);
+    }
+  });
+
+  it('declining still works when the tutor is gone (that branch writes no tutor doc)', async () => {
+    const requestId = await tutorContacts();
+    const db = getDb();
+    const tutorSnap = await db.collection('users').doc(seed.tutor2.uid).get();
+    await db.collection('users').doc(seed.tutor2.uid).delete();
+    try {
+      await callFunction('respondToFamilyContactRequest', { requestId, action: 'decline' }, parentToken);
+      const doc = (await db.collection('studyContactRequests').doc(requestId).get()).data()!;
+      expect(doc.status).toBe('declined');
+    } finally {
+      await db.collection('users').doc(seed.tutor2.uid).set(tutorSnap.data()!);
+    }
+  });
+
+  // ── withdrawing: the initiator's lever, and only theirs ───────────────
+
+  it('the tutor can withdraw their own pending request, and the pair is free again', async () => {
+    // Without this the pending guard locks BOTH directions until the family
+    // answers -- and a family that simply ignores it never does (PR #213
+    // review). Published searches expire; the request does not.
+    const requestId = await tutorContacts();
+    await callFunction('cancelContactRequest', { requestId }, tutorToken);
+
+    const doc = (await getDb().collection('studyContactRequests').doc(requestId).get()).data()!;
+    expect(doc.status).toBe('cancelled');
+
+    // Withdrawing is not a decline, so neither side is in cooldown.
+    const again = await callFunction<{ requestId: string }>(
+      'sendTutorContactRequest',
+      { tutorUserId: seed.tutor2.uid, subject: 'math', level: '6e' },
+      parentToken,
+    );
+    expect(again.requestId).toBeTruthy();
+  });
+
+  it('a PARENT cannot cancel a tutor-initiated request — they must decline it', async () => {
+    // Cancelling would tell the tutor "the family withdrew their request",
+    // which they never sent, and would slip the family's real answer past the
+    // decline cooldown.
+    const requestId = await tutorContacts();
+    await expect(
+      callFunction('cancelContactRequest', { requestId }, parentToken),
+    ).rejects.toMatchObject({ code: 'PERMISSION_DENIED' });
+  });
+
+  it('a TUTOR cannot cancel a family-initiated request', async () => {
+    const requestId = await seedStudyContactRequest({
+      tutorUserId: seed.tutor2.uid,
+      familyId: seed.family1Id,
+      createdByUserId: seed.parent1.uid,
+      status: 'pending',
+    });
+    await expect(
+      callFunction('cancelContactRequest', { requestId }, tutorToken),
+    ).rejects.toMatchObject({ code: 'PERMISSION_DENIED' });
+  });
+
   // ── the tutor must not answer their own request through the OLD door ──
 
   it('respondToTutorContactRequest refuses a tutor-initiated request', async () => {
@@ -322,7 +450,12 @@ describe('study contact inversion', () => {
 
   // ── searchTutors must not read a tutor's approach as the family's ─────
 
-  it('a pending tutor-initiated request leaves the family search card fresh', async () => {
+  it("a pending tutor-initiated request reads as INCOMING, not as the family's own", async () => {
+    // Not 'pending' -- the family did not send it, and the card would claim
+    // they had. Not 'none' either: that renders a send CTA which
+    // sendTutorContactRequest rejects as already-exists, contradicting the
+    // card the family just clicked (PR #213 review). Its own status lets the
+    // card point at the page where Accept lives.
     await tutorContacts();
     const res = await callFunction<{ results: { uid: string; requestStatus?: string }[] }>(
       'searchTutors',
@@ -331,7 +464,21 @@ describe('study contact inversion', () => {
     );
     const card = res.results.find((r) => r.uid === seed.tutor2.uid);
     expect(card).toBeTruthy();
-    expect(card!.requestStatus ?? 'none').toBe('none');
+    expect(card!.requestStatus).toBe('incoming');
+  });
+
+  it('a DECLINED tutor-initiated request is not this family\'s history — the card stays fresh', async () => {
+    const requestId = await tutorContacts();
+    await callFunction('respondToFamilyContactRequest', { requestId, action: 'decline' }, parentToken);
+    const res = await callFunction<{ results: { uid: string; requestStatus?: string }[] }>(
+      'searchTutors',
+      { subject: 'math', level: '6e' },
+      parentToken,
+    );
+    const card = res.results.find((r) => r.uid === seed.tutor2.uid);
+    // The family never asked this tutor for anything, so nothing to echo --
+    // and the declinedHint copy would be wrong about who declined.
+    expect(card!.requestStatus).toBe('none');
   });
 
   it('an ACCEPTED tutor-initiated request shows as accepted on the card', async () => {

@@ -352,6 +352,7 @@ export default {
       sentOn: 'Envoyée le {{date}}',
       awaitingFamily: 'Vous avez contacté cette famille — en attente de sa réponse.',
       outgoingTitle: 'En attente de la famille',
+      withdraw: 'Retirer la demande',
       status: {
         pending: 'En attente',
         accepted: 'Acceptée',
@@ -687,6 +688,7 @@ export default {
       card: {
         request: 'Demander le contact',
         pending: 'Demande en attente',
+        incoming: 'Ils vous ont contacté — répondre',
         requestAgain: 'Redemander',
         declinedHint: 'Ce professeur a récemment refusé — une nouvelle demande peut être bloquée quelques jours.',
         showMore: 'Plus de détails',
@@ -1082,6 +1084,11 @@ export default {
         cancelOccurrenceConfirm: 'Oui, annuler cette date',
         proposedByChild: 'Proposé par {{name}} — en attente de la réponse de la famille.',
         withdrawProposal: 'Retirer la proposition',
+        contactSentByChild: '{{name}} a contacté cette famille — en attente de sa réponse.',
+        withdrawContact: 'Retirer la demande',
+        confirmWithdrawContactTitle: 'Retirer cette demande ?',
+        confirmWithdrawContactDesc:
+          'La famille sera informée du retrait. {{name}} pourra la recontacter plus tard.',
         withdrawTitle: 'Retirer cette proposition ?',
         withdrawDesc:
           'La session proposée par {{name}} sera retirée. Indiquez une brève raison — elle sera partagée avec la famille et avec {{name}}.',

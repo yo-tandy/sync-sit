@@ -123,6 +123,28 @@ export function RequestsPage() {
   // request is awaiting THIS tutor. One this tutor opened by answering a
   // published search is waiting on the family, and grouping it under
   // "Awaiting your response" would read as a to-do that has no action.
+  // Withdrawing this tutor's OWN approach (issue #207 PR4). Same
+  // non-optimistic discipline: the backend owns the transition, and until it
+  // resolves the row stays pending. Without this lever a request the family
+  // never answers would block the pair from ever contacting each other again
+  // -- the pending guard is symmetric, so it locks both directions.
+  const withdraw = async (req: StudyContactRequestDoc) => {
+    setError(null);
+    setActingId(req.requestId);
+    try {
+      const fn = httpsCallable(functions, 'cancelContactRequest');
+      await fn({ requestId: req.requestId });
+      setRequests((rs) =>
+        (rs ?? []).map((r) => (r.requestId === req.requestId ? { ...r, status: 'cancelled' } : r)),
+      );
+      toast(t('tutor.requests.status.cancelled'));
+    } catch {
+      setError(t('tutor.requests.actionError'));
+    } finally {
+      setActingId(null);
+    }
+  };
+
   const pending = (requests ?? []).filter(
     (r) => r.status === 'pending' && r.initiatedBy !== 'tutor',
   );
@@ -231,6 +253,16 @@ export function RequestsPage() {
                   <p className="mt-3 text-xs text-gray-500">
                     {t('tutor.requests.awaitingFamily')}
                   </p>
+                  <div className="mt-3">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={actingId === r.requestId}
+                      onClick={() => withdraw(r)}
+                    >
+                      {t('tutor.requests.withdraw')}
+                    </Button>
+                  </div>
                 </Card>
               ))}
             </div>

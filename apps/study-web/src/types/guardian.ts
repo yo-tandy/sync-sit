@@ -99,6 +99,12 @@ export interface GovernedStudySession {
 export interface GovernedStudyContactRequest {
   requestId: string;
   status: string;
+  /**
+   * 'tutor' when the CHILD opened this by answering a published search
+   * (issue #207 PR4) — such a request can only be withdrawn, never declined.
+   * null means the family opened it, which is every legacy row.
+   */
+  initiatedBy: 'tutor' | null;
   familyName: string | null;
   parentName: string | null;
   subject: string | null;

@@ -55,6 +55,22 @@ export const sendFamilyContactRequest = onCall(
     if (!tutor?.enrollmentComplete) {
       throw new HttpsError('failed-precondition', 'Complete your tutor enrollment first');
     }
+    // SEARCHABLE is required, even though the board itself is not gated on it
+    // (PR #213 review). The family's only contact-reveal surface is
+    // searchTutors -> TutorCard, and that query filters on
+    // profiles.tutor.searchable == true. A hidden tutor could therefore be
+    // accepted and STILL be unreachable: "View contact details" would land on
+    // a search page without them, and "Book a session" would fall back to the
+    // same query and error. Since enrollTutor writes searchable: false, that
+    // would be the DEFAULT path for a new tutor. Blocking here keeps the
+    // family's yes meaningful; the board stays browsable either way.
+    if (tutor.searchable !== true) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Turn on your profile visibility before contacting families',
+        { reason: 'not_searchable' },
+      );
+    }
 
     // ── The published search ──
     const searchRef = db.collection('publishedSearches').doc(publishedSearchId);
@@ -94,6 +110,14 @@ export const sendFamilyContactRequest = onCall(
     const familyData = familyDoc.data();
     if (!familyDoc.exists) {
       throw new HttpsError('not-found', 'This family no longer exists');
+    }
+    // Not-self, the inverted form of sendTutorContactRequest's check: an
+    // account can hold both a parent and a tutor profile, and a parent of the
+    // publishing family answering their own post would end up accepting it as
+    // a parent -- writing their own familyId into their own approvedFamilies
+    // and polluting both requests lists (PR #213 review).
+    if (((familyData?.parentIds as string[] | undefined) ?? []).includes(uid)) {
+      throw new HttpsError('invalid-argument', 'This is your own family\'s search');
     }
     // A family can lose verification between publishing and being answered,
     // and this is the match-making step -- the same reasoning the sit twin

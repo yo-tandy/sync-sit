@@ -352,6 +352,7 @@ export default {
       sentOn: 'Sent {{date}}',
       awaitingFamily: 'You contacted this family — waiting for their answer.',
       outgoingTitle: 'Waiting for the family',
+      withdraw: 'Withdraw request',
       status: {
         pending: 'Pending',
         accepted: 'Accepted',
@@ -687,6 +688,7 @@ export default {
       card: {
         request: 'Request contact',
         pending: 'Request pending',
+        incoming: 'They contacted you — respond',
         requestAgain: 'Request again',
         declinedHint: 'This tutor recently declined — a new request may be blocked for a few days.',
         showMore: 'More details',
@@ -1082,6 +1084,11 @@ export default {
         cancelOccurrenceConfirm: 'Yes, cancel this date',
         proposedByChild: 'Proposed by {{name}} — awaiting the family\'s reply.',
         withdrawProposal: 'Withdraw proposal',
+        contactSentByChild: '{{name}} contacted this family — awaiting their reply.',
+        withdrawContact: 'Withdraw request',
+        confirmWithdrawContactTitle: 'Withdraw this request?',
+        confirmWithdrawContactDesc:
+          'The family will be told the request was withdrawn. {{name}} can contact them again later.',
         withdrawTitle: 'Withdraw this proposal?',
         withdrawDesc:
           'The session {{name}} proposed will be withdrawn. Give a short reason — it is shared with the family and with {{name}}.',

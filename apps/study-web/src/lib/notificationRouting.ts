@@ -23,6 +23,9 @@ type StudyRole = 'tutor' | 'parent' | 'admin';
 const STUDY_TYPES = [
   'study_contact_request',
   'study_contact_request_cancelled',
+  // A tutor answered this family's published search (issue #207 PR4) — the
+  // family's only in-app signal for the whole feature.
+  'study_published_search_contact',
   'study_request_accepted',
   'study_request_declined',
   'study_session_request',
@@ -85,7 +88,12 @@ export function notificationRoute(
   }
 
   if (role === 'parent') {
-    if (type === 'study_request_accepted' || type === 'study_request_declined') {
+    if (
+      type === 'study_request_accepted' ||
+      type === 'study_request_declined' ||
+      // Accept/Decline for a tutor-initiated request lives on this page.
+      type === 'study_published_search_contact'
+    ) {
       return '/family/requests';
     }
     if (SESSION_TYPES.has(type)) return '/family/sessions';

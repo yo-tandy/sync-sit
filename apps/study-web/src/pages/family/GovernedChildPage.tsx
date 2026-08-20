@@ -37,7 +37,11 @@ const STATUS_VARIANT: Record<string, 'amber' | 'green' | 'gray'> = {
 };
 
 /** What the decline-confirmation dialog is targeting. */
-type DeclineTarget = { kind: 'session'; sessionId: string } | { kind: 'contact'; requestId: string };
+type DeclineTarget =
+  | { kind: 'session'; sessionId: string }
+  | { kind: 'contact'; requestId: string }
+  // A contact request the CHILD sent: withdrawn, not declined (issue #207 PR4).
+  | { kind: 'withdrawContact'; requestId: string };
 
 /**
  * What the reason-required cancellation modal is targeting: a whole
@@ -192,6 +196,8 @@ export function GovernedChildPage() {
     if (!target) return;
     if (target.kind === 'session') {
       await runControl('respondToSession', { sessionId: target.sessionId, action: 'decline' });
+    } else if (target.kind === 'withdrawContact') {
+      await runControl('cancelContactRequest', { requestId: target.requestId });
     } else {
       await runControl('respondToTutorContactRequest', {
         requestId: target.requestId,
@@ -499,16 +505,40 @@ export function GovernedChildPage() {
                       {r.message}
                     </p>
                   )}
-                  <div className="mt-3">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={acting}
-                      onClick={() => setDeclineTarget({ kind: 'contact', requestId: r.requestId })}
-                    >
-                      {t('family.governance.child.decline')}
-                    </Button>
-                  </div>
+                  {r.initiatedBy === 'tutor' ? (
+                    // The kid's OWN approach to a published search (issue #207
+                    // PR4) — the same shape as a session they proposed, and
+                    // handled the same way: declining it is refused
+                    // server-side, so the guardian may only withdraw it.
+                    <>
+                      <p className="mt-2 text-xs text-amber-700">
+                        {t('family.governance.child.contactSentByChild', { name: firstName })}
+                      </p>
+                      <div className="mt-3">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={acting}
+                          onClick={() =>
+                            setDeclineTarget({ kind: 'withdrawContact', requestId: r.requestId })
+                          }
+                        >
+                          {t('family.governance.child.withdrawContact')}
+                        </Button>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="mt-3">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={acting}
+                        onClick={() => setDeclineTarget({ kind: 'contact', requestId: r.requestId })}
+                      >
+                        {t('family.governance.child.decline')}
+                      </Button>
+                    </div>
+                  )}
                 </Card>
               ))}
             </div>
@@ -630,14 +660,20 @@ export function GovernedChildPage() {
       {/* ── Decline confirmation (decline-only — there is no accept) ── */}
       <Dialog open={declineTarget !== null} onClose={() => setDeclineTarget(null)}>
         <h3 className="mb-2 text-lg font-bold">
-          {t('family.governance.child.confirmDeclineTitle')}
+          {t(declineTarget?.kind === 'withdrawContact'
+            ? 'family.governance.child.confirmWithdrawContactTitle'
+            : 'family.governance.child.confirmDeclineTitle')}
         </h3>
         <p className="mb-5 text-sm text-gray-600">
-          {t('family.governance.child.confirmDeclineDesc', { name: firstName })}
+          {t(declineTarget?.kind === 'withdrawContact'
+            ? 'family.governance.child.confirmWithdrawContactDesc'
+            : 'family.governance.child.confirmDeclineDesc', { name: firstName })}
         </p>
         <div className="flex gap-2">
           <Button variant="outline" className="flex-1" disabled={acting} onClick={submitDecline}>
-            {t('family.governance.child.confirmDeclineCta')}
+            {t(declineTarget?.kind === 'withdrawContact'
+              ? 'family.governance.child.withdrawContact'
+              : 'family.governance.child.confirmDeclineCta')}
           </Button>
           <Button variant="ghost" className="flex-1" onClick={() => setDeclineTarget(null)}>
             {t('family.governance.child.keepRequest')}
