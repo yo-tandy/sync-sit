@@ -309,6 +309,7 @@ export default {
       contactSending: 'Envoi...',
       contactError: 'Impossible d\'envoyer votre demande. Cette recherche a peut-être expiré ou été retirée.',
       contactCooldown: 'Cette famille a refusé votre dernière demande. Vous pourrez réessayer dans une semaine.',
+      contactHidden: 'Activez d\'abord la visibilité de votre profil — les familles ne peuvent voir vos coordonnées que si votre profil est visible dans la recherche.',
       empty: 'Aucune recherche publiée pour le moment. Repassez plus tard — les nouvelles apparaissent ici.',
       error: 'Impossible de charger les recherches publiées. Veuillez réessayer plus tard.',
     },
@@ -1087,6 +1088,7 @@ export default {
         contactSentByChild: '{{name}} a contacté cette famille — en attente de sa réponse.',
         withdrawContact: 'Retirer la demande',
         confirmWithdrawContactTitle: 'Retirer cette demande ?',
+        confirmWithdrawContactCta: 'Oui, retirer',
         confirmWithdrawContactDesc:
           'La famille sera informée du retrait. {{name}} pourra la recontacter plus tard.',
         withdrawTitle: 'Retirer cette proposition ?',

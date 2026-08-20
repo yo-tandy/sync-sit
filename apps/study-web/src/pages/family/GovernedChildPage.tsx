@@ -672,7 +672,7 @@ export function GovernedChildPage() {
         <div className="flex gap-2">
           <Button variant="outline" className="flex-1" disabled={acting} onClick={submitDecline}>
             {t(declineTarget?.kind === 'withdrawContact'
-              ? 'family.governance.child.withdrawContact'
+              ? 'family.governance.child.confirmWithdrawContactCta'
               : 'family.governance.child.confirmDeclineCta')}
           </Button>
           <Button variant="ghost" className="flex-1" onClick={() => setDeclineTarget(null)}>

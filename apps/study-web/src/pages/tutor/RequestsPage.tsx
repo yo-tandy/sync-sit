@@ -119,10 +119,6 @@ export function RequestsPage() {
     }
   };
 
-  // Pending splits by WHO opened it (issue #207 PR4): only a family-initiated
-  // request is awaiting THIS tutor. One this tutor opened by answering a
-  // published search is waiting on the family, and grouping it under
-  // "Awaiting your response" would read as a to-do that has no action.
   // Withdrawing this tutor's OWN approach (issue #207 PR4). Same
   // non-optimistic discipline: the backend owns the transition, and until it
   // resolves the row stays pending. Without this lever a request the family
@@ -145,6 +141,10 @@ export function RequestsPage() {
     }
   };
 
+  // Pending splits by WHO opened it (issue #207 PR4): only a family-initiated
+  // request is awaiting THIS tutor. One this tutor opened by answering a
+  // published search is waiting on the family, and grouping it under
+  // "Awaiting your response" would read as a to-do that has no action.
   const pending = (requests ?? []).filter(
     (r) => r.status === 'pending' && r.initiatedBy !== 'tutor',
   );

@@ -365,6 +365,33 @@ describe('GovernedChildPage', () => {
     await waitFor(() => expect(detailCalls()).toHaveLength(2));
   });
 
+  it('a contact request the CHILD sent offers Withdraw, never Decline (issue #207 PR4)', async () => {
+    // respondToTutorContactRequest refuses a tutor-initiated request, so a
+    // Decline here could only ever fail — the same treatment the page already
+    // gives a session the kid proposed (PR #213 review).
+    h.detail = detail({
+      study: {
+        sessions: [],
+        contactRequests: [contactRequest({ initiatedBy: 'tutor', publishedSearchId: 'ps1' })],
+      },
+    });
+    renderPage();
+
+    expect(await screen.findByText(/contacted this family/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^decline$/i })).not.toBeInTheDocument();
+
+    fireEvent.click(await screen.findByRole('button', { name: /withdraw request/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /yes, withdraw/i }));
+
+    await waitFor(() =>
+      expect(h.callable).toHaveBeenCalledWith('cancelContactRequest', { requestId: 'r1' }),
+    );
+    expect(h.callable).not.toHaveBeenCalledWith(
+      'respondToTutorContactRequest',
+      expect.anything(),
+    );
+  });
+
   it('shows the supervision-not-active screen when the backend denies access', async () => {
     h.callable.mockImplementation(() =>
       Promise.reject({

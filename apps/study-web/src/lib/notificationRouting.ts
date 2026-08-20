@@ -77,7 +77,15 @@ export function notificationRoute(
   role: StudyRole | null | undefined,
 ): string | null {
   if (role === 'tutor') {
-    if (type === 'study_contact_request' || type === 'study_contact_request_cancelled') {
+    if (
+      type === 'study_contact_request' ||
+      type === 'study_contact_request_cancelled' ||
+      // Since the inversion (issue #207 PR4) a TUTOR receives these too, when
+      // the family answers a request the tutor sent — the payoff of the whole
+      // feature, so it must land somewhere.
+      type === 'study_request_accepted' ||
+      type === 'study_request_declined'
+    ) {
       return '/tutor/requests';
     }
     if (SESSION_TYPES.has(type)) return '/tutor/sessions';

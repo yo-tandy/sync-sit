@@ -81,7 +81,17 @@ export const respondToFamilyContactRequest = onCall(
       const tutorRef = db.collection('users').doc(data.tutorUserId as string);
       if (accepted) {
         const tutorSnap = await tx.get(tutorRef);
-        if (!tutorSnap.exists || tutorSnap.data()?.status !== 'active') {
+        const tutorData = tutorSnap.data();
+        if (!tutorSnap.exists || tutorData?.status !== 'active') {
+          throw new HttpsError('failed-precondition', 'This tutor is no longer available');
+        }
+        // Re-check SEARCHABLE here, not only at send: a tutor who hides
+        // between sending and being accepted (or whose guardian hides them)
+        // would otherwise leave the family with the dead-end links the
+        // send-side gate exists to prevent -- searchTutors filters on it, and
+        // its card is the family's only contact-reveal surface (PR #213
+        // review). One field, in a snapshot already being read.
+        if (tutorData?.profiles?.tutor?.searchable !== true) {
           throw new HttpsError('failed-precondition', 'This tutor is no longer available');
         }
       }

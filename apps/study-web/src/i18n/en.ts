@@ -309,6 +309,7 @@ export default {
       contactSending: 'Sending...',
       contactError: 'Could not send your request. This search may have expired or been withdrawn.',
       contactCooldown: 'This family declined your last request. You can try again in a week.',
+      contactHidden: 'Turn on your profile visibility first — families can only see your details if your profile is visible in search.',
       empty: 'No published searches right now. Check back later — new ones appear here.',
       error: 'Could not load published searches. Please try again later.',
     },
@@ -1087,6 +1088,7 @@ export default {
         contactSentByChild: '{{name}} contacted this family — awaiting their reply.',
         withdrawContact: 'Withdraw request',
         confirmWithdrawContactTitle: 'Withdraw this request?',
+        confirmWithdrawContactCta: 'Yes, withdraw',
         confirmWithdrawContactDesc:
           'The family will be told the request was withdrawn. {{name}} can contact them again later.',
         withdrawTitle: 'Withdraw this proposal?',

@@ -55,7 +55,7 @@ export function PublishedSearchesPage() {
   const [contactMessage, setContactMessage] = useState('');
   const [sending, setSending] = useState(false);
   // false = no error; 'generic' | 'cooldown' picks the copy.
-  const [sendError, setSendError] = useState<false | 'generic' | 'cooldown'>(false);
+  const [sendError, setSendError] = useState<false | 'generic' | 'cooldown' | 'hidden'>(false);
 
   // Which searches this tutor has already answered. Equality-only query on
   // the tutor's own requests (rules: tutorUserId == uid), filtered in code so
@@ -92,10 +92,18 @@ export function PublishedSearchesPage() {
       setContactTarget(null);
       setContactMessage('');
     } catch (err) {
-      // The server marks the one failure a tutor can act on — the family
-      // declined recently — so it does not read as "the search disappeared".
+      // The server marks the failures a tutor can ACT on, so neither reads as
+      // "the search disappeared": a recent decline by this family, and a
+      // profile that is still hidden (the default after enrollment — the
+      // board is deliberately unfiltered, so this is the common first tap).
       const reason = (err as { details?: { reason?: string } })?.details?.reason;
-      setSendError(reason === 'decline_cooldown' ? 'cooldown' : 'generic');
+      setSendError(
+        reason === 'decline_cooldown'
+          ? 'cooldown'
+          : reason === 'not_searchable'
+            ? 'hidden'
+            : 'generic',
+      );
     } finally {
       setSending(false);
     }
@@ -166,9 +174,13 @@ export function PublishedSearchesPage() {
         />
         {sendError && (
           <p className="mt-2 text-sm text-brand-600">
-            {t(sendError === 'cooldown'
-              ? 'tutor.publishedBoard.contactCooldown'
-              : 'tutor.publishedBoard.contactError')}
+            {t(`tutor.publishedBoard.${
+              sendError === 'cooldown'
+                ? 'contactCooldown'
+                : sendError === 'hidden'
+                  ? 'contactHidden'
+                  : 'contactError'
+            }`)}
           </p>
         )}
         <div className="mt-4 flex gap-2">
