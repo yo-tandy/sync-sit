@@ -1,15 +1,17 @@
 import { describe, expect, it } from 'vitest';
 // The script guards its main() behind require.main, so importing it here only
 // loads the pure helpers (no firebase-admin resolution).
-import { computeRootPatch, isEmpty, SHARED_FIELDS } from '../backfill-shared-identity.cjs';
+import { computeRootPatch, nestedValue, SHARED_FIELDS } from '../backfill-shared-identity.cjs';
 
-describe('isEmpty', () => {
-  it("treats absent, null and '' as empty; anything else as populated", () => {
-    expect(isEmpty(undefined)).toBe(true);
-    expect(isEmpty(null)).toBe(true);
-    expect(isEmpty('')).toBe(true);
-    expect(isEmpty('x')).toBe(false);
-    expect(isEmpty(0)).toBe(false);
+describe('nestedValue', () => {
+  it("resolves non-empty STRINGS only — mirroring shared-core's nonEmpty", () => {
+    expect(nestedValue('x')).toBe('x');
+    expect(nestedValue('')).toBeUndefined();
+    expect(nestedValue(null)).toBeUndefined();
+    expect(nestedValue(undefined)).toBeUndefined();
+    // Junk is invisible to getContact, so it must be invisible here too.
+    expect(nestedValue(42)).toBeUndefined();
+    expect(nestedValue({ nope: true })).toBeUndefined();
   });
 });
 

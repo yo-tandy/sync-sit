@@ -86,6 +86,13 @@ export function StepPreferences({ uid, onComplete }: StepPreferencesProps) {
     }
   };
 
+  // Root contact write rule — see the call sites in the save payload.
+  const rootContactWrite = (key: string, value: string): Record<string, string | null> => {
+    if (value) return { [key]: value };
+    const rootRaw = userDoc as unknown as Record<string, unknown> | null | undefined;
+    return rootRaw?.[key] !== undefined ? { [key]: null } : {};
+  };
+
   const handleSave = async () => {
     setSaving(true);
     setError(null);
@@ -102,9 +109,14 @@ export function StepPreferences({ uid, onComplete }: StepPreferencesProps) {
         'profiles.babysitter.contactEmail': contactEmail || null,
         'profiles.babysitter.contactPhone': contactPhone || null,
         'profiles.babysitter.whatsapp': whatsappSameAsPhone ? (contactPhone || null) : (whatsapp || null),
-        contactEmail: contactEmail || null,
-        contactPhone: contactPhone || null,
-        whatsapp: whatsappSameAsPhone ? (contactPhone || null) : (whatsapp || null),
+        // Root copies follow the server writers' rule (PR #206 rounds 6-8):
+        // a channel the user SUPPLIED is written; one they CLEARED (it was at
+        // the root before) is written as null so the clear sticks; one they
+        // never supplied is OMITTED, because root presence means "set or
+        // cleared by the user" and a null would read as a deliberate clear.
+        ...rootContactWrite('contactEmail', contactEmail),
+        ...rootContactWrite('contactPhone', contactPhone),
+        ...rootContactWrite('whatsapp', whatsappSameAsPhone ? contactPhone : whatsapp),
         'profiles.babysitter.areaMode': areaMode,
         'profiles.babysitter.arrondissements': areaMode === 'arrondissement' ? arrondissements : [],
         'profiles.babysitter.areaAddress': areaMode === 'distance' ? areaAddress : null,

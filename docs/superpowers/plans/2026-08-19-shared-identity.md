@@ -110,8 +110,10 @@ Deliberately left nested-only (with reason):
 
 `scripts/backfill-shared-identity.cjs` — idempotent, DRY-RUN default,
 `--apply` to write (env APPLY=1 also honored, matching the postcode script).
-For each users doc: for each of the four fields, if root is empty
-(absent/null/'') and a nested copy has a value, copy nested → root. When
+For each users doc: for each of the four fields, if the root key is ABSENT
+and a nested copy holds a non-empty string, copy nested → root. An explicit
+root null is a user CLEAR and is never lifted over; non-string nested junk is
+skipped, matching what getContact resolves. When
 babysitter and tutor copies BOTH exist and disagree, the babysitter copy wins
 (sit predates study; sit-origin values are the older, first-verified ones).
 Root-populated fields are never touched, so re-running is a no-op.

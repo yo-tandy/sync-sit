@@ -4,10 +4,16 @@
  * apps, not per-app copies).
  *
  * Fields: ejemEmail, contactEmail, contactPhone, whatsapp. For each users doc
- * and each field: if the ROOT value is empty (absent/null/'') and a nested
- * copy (profiles.babysitter.* / profiles.tutor.*) has a non-empty value, the
- * nested value is copied to the root. Root-populated fields are NEVER
- * touched, so re-running is a no-op (idempotent).
+ * and each field: if the ROOT KEY IS ABSENT and a nested copy
+ * (profiles.babysitter.* / profiles.tutor.*) holds a non-empty STRING, that
+ * value is copied to the root. Two consequences worth stating plainly:
+ *   - an explicit root null/'' is a user CLEAR (root presence is
+ *     authoritative for contact) and is never lifted over — the deletion
+ *     stands;
+ *   - a non-string nested value is invisible here exactly as it is to
+ *     shared-core's getContact, so the lifted root always equals what the
+ *     readers already resolved.
+ * Root-present fields are NEVER touched, so re-running is a no-op.
  *
  * TIEBREAK: when the babysitter and tutor copies both exist and disagree, the
  * BABYSITTER copy wins — sit predates study, so sit-origin values are the
@@ -39,12 +45,6 @@
  */
 
 const SHARED_FIELDS = ['ejemEmail', 'contactEmail', 'contactPhone', 'whatsapp'];
-
-/** Empty means absent/null/'' — same emptiness rule as fillBaseFields and the
- *  shared-core helpers. */
-function isEmpty(value) {
-  return value === undefined || value === null || value === '';
-}
 
 /** A nested value the read helpers would actually resolve: shared-core's
  *  nonEmpty() takes strings only, so a non-string (junk written by some
@@ -91,7 +91,7 @@ function computeRootPatch(data) {
     : null;
 }
 
-module.exports = { computeRootPatch, isEmpty, nestedValue, SHARED_FIELDS };
+module.exports = { computeRootPatch, nestedValue, SHARED_FIELDS };
 
 async function main() {
   // firebase-admin is not installed at the repo root; resolve it through the

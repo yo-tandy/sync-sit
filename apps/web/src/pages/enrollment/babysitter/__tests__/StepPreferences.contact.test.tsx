@@ -63,9 +63,26 @@ describe('StepPreferences shared-identity contact (issue #203)', () => {
     const payload = h.updateDoc.mock.calls[0][1] as Record<string, unknown>;
     expect(payload.contactEmail).toBe('lea@contact.com');
     expect(payload['profiles.babysitter.contactEmail']).toBe('lea@contact.com');
-    // Empty channels write null at BOTH levels (the clear convention).
-    expect(payload.contactPhone).toBeNull();
+    // A channel the user NEVER supplied is omitted at the ROOT (presence
+    // means set-or-cleared; a null would read as a deliberate clear and
+    // block the nested fallback — PR #206 rounds 6-8). The nested copy keeps
+    // its null convention.
+    expect(payload).not.toHaveProperty('contactPhone');
     expect(payload['profiles.babysitter.contactPhone']).toBeNull();
+  });
+
+  it('CLEARING a channel that exists at the root writes an explicit null', async () => {
+    h.auth.userDoc = {
+      uid: 'bs1',
+      contactEmail: 'old@x.com',
+      profiles: { babysitter: { ejemEmail: 'lea@ejm.org', contactEmail: 'old@x.com' } },
+    };
+    renderStep();
+    fireEvent.change(screen.getByLabelText(/^email$/i), { target: { value: '' } });
+    fireEvent.click(screen.getByRole('button', { name: /^save/i }));
+    await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
+    const payload = h.updateDoc.mock.calls[0][1] as Record<string, unknown>;
+    expect(payload).toHaveProperty('contactEmail', null);
   });
 
   it('prefills contact from the canonical ROOT over a stale nested copy', () => {
