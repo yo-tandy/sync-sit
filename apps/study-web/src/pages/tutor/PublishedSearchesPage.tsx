@@ -10,6 +10,24 @@ import { usePublishedSearches } from '@/components/published/usePublishedSearche
 import { PublishedSearchCard } from '@/components/published/PublishedSearchCard';
 
 /**
+ * Every refusal the server marks, mapped to the line the tutor sees. The
+ * board is deliberately unfiltered — by the tutor's own subjects, their
+ * searchable flag, or requests already open with that family — so several of
+ * these are reachable on the ordinary path, not just on stale state. Anything
+ * unmapped falls back to contactError ("this search may have expired"), which
+ * must stay reserved for a search that really is gone (PR #213 review).
+ */
+const CONTACT_ERROR_KEY: Record<string, string> = {
+  decline_cooldown: 'contactCooldown',
+  not_searchable: 'contactHidden',
+  pending_sent: 'contactDuplicate',
+  pending_incoming: 'contactTheirs',
+  subject_mismatch: 'contactSubject',
+  already_approved: 'contactApproved',
+  own_family: 'contactOwnFamily',
+};
+
+/**
  * Published-searches board for tutors (issue #207). Lists every ACTIVE study
  * published search — deliberately unfiltered by the tutor's own subjects or
  * searchable flag (the board's whole point) — newest first.
@@ -54,9 +72,8 @@ export function PublishedSearchesPage() {
   const [contactTarget, setContactTarget] = useState<BoardSearch | null>(null);
   const [contactMessage, setContactMessage] = useState('');
   const [sending, setSending] = useState(false);
-  // false = no error; 'generic' | 'cooldown' picks the copy.
-  const [sendError, setSendError] =
-    useState<false | 'generic' | 'cooldown' | 'hidden' | 'duplicate' | 'theirs'>(false);
+  // false = no error; otherwise the i18n key under tutor.publishedBoard.
+  const [sendError, setSendError] = useState<false | string>(false);
 
   // Which searches this tutor has already answered. Equality-only query on
   // the tutor's own requests (rules: tutorUserId == uid), filtered in code so
@@ -100,17 +117,11 @@ export function PublishedSearchesPage() {
       // request. Each failure a tutor can act on gets its own copy; only a
       // genuinely gone search falls through to the generic line.
       const e = err as { code?: string; details?: { reason?: string } };
-      const reason = e?.details?.reason;
+      const reason = e?.details?.reason ?? '';
       setSendError(
-        reason === 'decline_cooldown'
-          ? 'cooldown'
-          : reason === 'not_searchable'
-            ? 'hidden'
-            : reason === 'pending_incoming'
-              ? 'theirs'
-              : reason === 'pending_sent' || e?.code === 'functions/already-exists'
-                ? 'duplicate'
-                : 'generic',
+        CONTACT_ERROR_KEY[reason]
+          // A pre-reason already-exists (older deploy) is still a duplicate.
+          ?? (e?.code === 'functions/already-exists' ? 'contactDuplicate' : 'contactError'),
       );
     } finally {
       setSending(false);
@@ -181,19 +192,7 @@ export function PublishedSearchesPage() {
           maxLength={1000}
         />
         {sendError && (
-          <p className="mt-2 text-sm text-brand-600">
-            {t(`tutor.publishedBoard.${
-              sendError === 'cooldown'
-                ? 'contactCooldown'
-                : sendError === 'hidden'
-                  ? 'contactHidden'
-                  : sendError === 'duplicate'
-                    ? 'contactDuplicate'
-                    : sendError === 'theirs'
-                      ? 'contactTheirs'
-                      : 'contactError'
-            }`)}
-          </p>
+          <p className="mt-2 text-sm text-brand-600">{t(`tutor.publishedBoard.${sendError}`)}</p>
         )}
         <div className="mt-4 flex gap-2">
           <Button onClick={handleContact} disabled={sending} className="flex-1">

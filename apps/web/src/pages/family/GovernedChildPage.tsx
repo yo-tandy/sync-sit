@@ -581,9 +581,16 @@ export function GovernedChildPage() {
                 <Card key={r.requestId}>
                   <p className="text-sm font-semibold text-gray-900">{r.familyName}</p>
                   <p className="text-xs text-gray-500">
-                    {r.parentName}
-                    {r.subject ? ` · ${t(`governance.subjects.${r.subject}`)}` : ''}
-                    {r.level ? ` · ${r.level}` : ''}
+                    {/* parentName is '' until a parent answers a request
+                        the KID sent, so build the line from what is there
+                        rather than leading with a separator. */}
+                    {[
+                      r.parentName,
+                      r.subject ? t(`governance.subjects.${r.subject}`) : '',
+                      r.level,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
                   </p>
                   {r.message && (
                     <p className="mt-2 rounded-lg bg-gray-50 p-2 text-xs italic text-gray-600">

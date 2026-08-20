@@ -163,7 +163,7 @@ export const respondToFamilyContactRequest = onCall(
     const emailBody = accepted
       ? `
         <p><strong>${escapeHtml(familyLabel)}</strong> accepted your request for <strong>${escapeHtml(result.subject)} (${escapeHtml(result.level)})</strong>.</p>
-        <p>You can now see their details and propose a session.</p>
+        <p>You can now propose a session — your contact details have been shared with them.</p>
         <p style="margin-top: 16px;"><a href="${STUDY_APP_URL}/tutor" style="background: #2563EB; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View in app</a></p>
       `
       : `

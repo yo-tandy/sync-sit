@@ -96,14 +96,25 @@ export const sendFamilyContactRequest = onCall(
       (o: SubjectOffering) => o.subject === subject && o.levels.includes(level),
     );
     if (!offers) {
-      throw new HttpsError('failed-precondition', 'You no longer offer this subject and level');
+      // Reachable on the ordinary path, not on stale state: the board is
+      // deliberately unfiltered by the tutor's own subjects, so a card for a
+      // subject they don't teach still shows its CTA (PR #213 review).
+      throw new HttpsError(
+        'failed-precondition',
+        'You no longer offer this subject and level',
+        { reason: 'subject_mismatch' },
+      );
     }
 
     const familyId = search.familyId as string;
 
     // ── Already approved: contact is unlocked, there is nothing to request ──
     if ((tutor.approvedFamilies || []).includes(familyId)) {
-      throw new HttpsError('failed-precondition', 'This family already has access to your contact details');
+      throw new HttpsError(
+        'failed-precondition',
+        'This family already has access to your contact details',
+        { reason: 'already_approved' },
+      );
     }
 
     const familyDoc = await db.collection('families').doc(familyId).get();
@@ -117,7 +128,9 @@ export const sendFamilyContactRequest = onCall(
     // a parent -- writing their own familyId into their own approvedFamilies
     // and polluting both requests lists (PR #213 review).
     if (((familyData?.parentIds as string[] | undefined) ?? []).includes(uid)) {
-      throw new HttpsError('invalid-argument', 'This is your own family\'s search');
+      throw new HttpsError('invalid-argument', 'This is your own family\'s search', {
+        reason: 'own_family',
+      });
     }
     // A family can lose verification between publishing and being answered,
     // and this is the match-making step -- the same reasoning the sit twin

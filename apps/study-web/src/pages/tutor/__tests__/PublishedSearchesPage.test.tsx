@@ -259,6 +259,18 @@ describe('PublishedSearchesPage (study board)', () => {
     expect(await screen.findByText(/has already contacted you/i)).toBeInTheDocument();
   });
 
+  it('a subject the tutor does not teach is named — the board is unfiltered by subject', async () => {
+    // usePublishedSearches is deliberately unfiltered by the tutor's own
+    // subjects, so this refusal is on the ordinary path (PR #213 review).
+    h.callable.mockRejectedValue({ details: { reason: 'subject_mismatch' } });
+    renderWithProviders(<PublishedSearchesPage />);
+    push([boardDoc('a', SEEN_AT + 1)]);
+    fireEvent.click(await screen.findByRole('button', { name: 'Contact family' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Send request' }));
+
+    expect(await screen.findByText(/don't currently teach this subject/i)).toBeInTheDocument();
+  });
+
   it('a DECLINED prior request leaves the CTA available (the server owns the cooldown)', async () => {
     renderWithProviders(<PublishedSearchesPage />);
     push([boardDoc('a', SEEN_AT + 1)]);

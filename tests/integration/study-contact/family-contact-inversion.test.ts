@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
-import { Timestamp } from 'firebase-admin/firestore';
+import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { clearAll, callFunction, getIdToken, getDb } from '../../setup/emulator.js';
 import { seedTestData, seedStudyContactRequest, type SeedData } from '../../setup/seed.js';
 
@@ -178,6 +178,45 @@ describe('study contact inversion', () => {
     await expect(
       callFunction('sendFamilyContactRequest', { publishedSearchId: searchId }, tutorToken),
     ).rejects.toMatchObject({ code: 'FAILED_PRECONDITION' });
+  });
+
+  it('rejects a tutor who is also a PARENT of the publishing family (not-self)', async () => {
+    // An account can hold both profiles; without this the same person could
+    // answer their own family's post and then accept it as a parent, writing
+    // their own familyId into their own approvedFamilies (PR #213 review).
+    const db = getDb();
+    const searchId = await publish();
+    await db.collection('families').doc(seed.family1Id).update({
+      parentIds: FieldValue.arrayUnion(seed.tutor2.uid),
+    });
+    try {
+      await expect(
+        callFunction('sendFamilyContactRequest', { publishedSearchId: searchId }, tutorToken),
+      ).rejects.toMatchObject({ code: 'INVALID_ARGUMENT' });
+    } finally {
+      await db.collection('families').doc(seed.family1Id).update({
+        parentIds: FieldValue.arrayRemove(seed.tutor2.uid),
+      });
+    }
+  });
+
+  it('rejects a family that lost verification after publishing', async () => {
+    // A family can lose verification between publishing and being answered,
+    // and this is the match-making step.
+    const db = getDb();
+    const searchId = await publish();
+    await db.collection('families').doc(seed.family1Id).update({
+      'verification.isFullyVerified': false,
+    });
+    try {
+      await expect(
+        callFunction('sendFamilyContactRequest', { publishedSearchId: searchId }, tutorToken),
+      ).rejects.toMatchObject({ code: 'FAILED_PRECONDITION' });
+    } finally {
+      await db.collection('families').doc(seed.family1Id).update({
+        'verification.isFullyVerified': true,
+      });
+    }
   });
 
   it('rejects a second contact while one is pending, in EITHER direction', async () => {
