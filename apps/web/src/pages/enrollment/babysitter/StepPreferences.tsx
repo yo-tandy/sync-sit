@@ -26,6 +26,9 @@ export function StepPreferences({ uid, onComplete }: StepPreferencesProps) {
   // types — first found on contact, identical for aboutMe/rate/maxKids/kid
   // ages/area fields.
   const seededRef = useRef(false);
+  // Which channels the prefill actually SHOWED (from any level) — see the
+  // seeding effect and rootContactWrite.
+  const seededContactRef = useRef<Record<string, boolean>>({});
 
   const [languages, setLanguages] = useState<string[]>([]);
   const [kidAgeMin, setKidAgeMin] = useState<number | ''>('');
@@ -58,6 +61,15 @@ export function StepPreferences({ uid, onComplete }: StepPreferencesProps) {
     // Contact resolves root ?? nested (issue #203): a crossApp arrival seeds
     // both copies, and the canonical root wins when they ever diverge.
     const contact = getContact(userDoc);
+    // What the user is SHOWN is what a clear must be able to erase — even if
+    // the value resolved from a nested copy on an un-backfilled doc. Keying
+    // "cleared" off root-key presence alone would drop such a clear and let
+    // getContact resurrect the other profile's copy (PR #206 review).
+    seededContactRef.current = {
+      contactEmail: !!contact.contactEmail,
+      contactPhone: !!contact.contactPhone,
+      whatsapp: !!contact.whatsapp,
+    };
     if (contact.contactEmail) setContactEmail(contact.contactEmail);
     if (contact.contactPhone) setContactPhone(contact.contactPhone);
     if (contact.whatsapp) {
@@ -89,8 +101,13 @@ export function StepPreferences({ uid, onComplete }: StepPreferencesProps) {
   // Root contact write rule — see the call sites in the save payload.
   const rootContactWrite = (key: string, value: string): Record<string, string | null> => {
     if (value) return { [key]: value };
+    // Empty now. Write an explicit null (a CLEAR) when the user had something
+    // here — either stored at the root, or shown to them by the prefill from
+    // a nested copy. Otherwise omit: never-supplied must stay ABSENT so the
+    // nested fallback and the backfill still work.
     const rootRaw = userDoc as unknown as Record<string, unknown> | null | undefined;
-    return rootRaw?.[key] !== undefined ? { [key]: null } : {};
+    const wasShown = seededContactRef.current[key] === true;
+    return rootRaw?.[key] !== undefined || wasShown ? { [key]: null } : {};
   };
 
   const handleSave = async () => {

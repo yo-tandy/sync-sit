@@ -86,9 +86,11 @@ function computeRootPatch(data) {
     const nested = bsVal !== undefined ? bsVal : tuVal;
     if (nested !== undefined) patch[field] = nested;
   }
-  return Object.keys(patch).length > 0 || contested.length > 0
-    ? { patch: Object.keys(patch).length > 0 ? patch : null, contested }
-    : null;
+  // INVARIANT: a field only lands in `contested` when both nested copies hold
+  // values, in which case the tiebreak also puts one in `patch` — so a
+  // non-null return always carries a NON-EMPTY patch. Callers rely on that;
+  // there is no "contested but nothing to write" case (PR #206 review).
+  return Object.keys(patch).length > 0 ? { patch, contested } : null;
 }
 
 module.exports = { computeRootPatch, nestedValue, SHARED_FIELDS };
@@ -124,22 +126,21 @@ async function main() {
 
   let updated = 0;
   let unchanged = 0;
-  let contestedDocs = 0;
+  let contestedFields = 0;
   let skippedContested = 0;
 
   for (const userDoc of usersSnap.docs) {
     const result = computeRootPatch(userDoc.data());
-    if (!result || (!result.patch && result.contested.length === 0)) {
+    if (!result) {
       unchanged += 1;
       continue;
     }
     for (const c of result.contested) {
-      contestedDocs += 1;
+      contestedFields += 1;
       console.log(
         `  CONTESTED users/${userDoc.id} ${c.field}: babysitter='${c.babysitter}' vs tutor='${c.tutor}' — tiebreak keeps the babysitter copy; the tutor copy may be a newer study edit.`,
       );
     }
-    if (!result.patch) { unchanged += 1; continue; }
     const fields = Object.keys(result.patch).join(', ');
     // Structural review gate (PR #206 review): a doc with any contested
     // field is SKIPPED unless --force-contested is passed — the tiebreak must
@@ -163,7 +164,7 @@ async function main() {
     updated += 1;
   }
 
-  console.log(`\nDone. ${apply ? 'Wrote' : 'Would write'} ${updated} doc(s); ${unchanged} already canonical/no source; ${contestedDocs} CONTESTED field(s) flagged; ${skippedContested} doc(s) skipped as contested.`);
+  console.log(`\nDone. ${apply ? 'Wrote' : 'Would write'} ${updated} doc(s); ${unchanged} already canonical/no source; ${contestedFields} CONTESTED field(s) flagged; ${skippedContested} doc(s) skipped as contested.`);
   if (skippedContested > 0 && !apply) {
     console.log(
       `\nNOTE: ${skippedContested} contested doc(s) would be SKIPPED by --apply. Review the CONTESTED lines above, then re-run with --apply --force-contested to include them.`,

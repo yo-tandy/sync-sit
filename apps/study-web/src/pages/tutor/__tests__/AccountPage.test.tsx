@@ -127,6 +127,32 @@ describe('tutor AccountPage', () => {
     expect((screen.getByLabelText('Email') as HTMLInputElement).value).toBe('root@example.com');
   });
 
+  it('a CLEARED channel is not re-proposed on the next mount (study twin of the sit pin)', async () => {
+    // Rounds 3-7 kept re-finding this class in new writers, and tutors edit
+    // contact here — so the cleared-vs-absent branch needs its own pin
+    // (PR #206 review): a cleared email must not fall back to the login
+    // address, and a cleared whatsapp must not re-check "same as phone".
+    const doc = makeUserDoc();
+    (doc.profiles.tutor as Record<string, unknown>).contactEmail = 'stale@example.com';
+    (doc.profiles.tutor as Record<string, unknown>).whatsapp = '+33 622222222';
+    h.auth.userDoc = {
+      ...doc,
+      contactEmail: null,
+      contactPhone: '+33 622222222',
+      whatsapp: null,
+    };
+    renderWithProviders(<AccountPage />);
+    expect((screen.getByLabelText('Email') as HTMLInputElement).value).toBe('');
+    const sameAsPhone = screen.getByRole('checkbox', { name: /same/i }) as HTMLInputElement;
+    expect(sameAsPhone.checked).toBe(false);
+
+    fireEvent.click(screen.getByRole('button', { name: /save contact/i }));
+    await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
+    const payload = h.updateDoc.mock.calls[0][1] as Record<string, unknown>;
+    expect(payload).toHaveProperty('contactEmail', null);
+    expect(payload).toHaveProperty('whatsapp', null);
+  });
+
   it('renders the EJM email from the root field when the nested copy is absent', () => {
     const doc = makeUserDoc();
     delete (doc.profiles.tutor as Record<string, unknown>).ejemEmail;

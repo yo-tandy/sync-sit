@@ -85,6 +85,30 @@ describe('StepPreferences shared-identity contact (issue #203)', () => {
     expect(payload).toHaveProperty('contactEmail', null);
   });
 
+  it('clearing a NESTED-seeded value (un-backfilled doc) still records the clear', async () => {
+    // A tutor with only a nested contactEmail does a classic sit enrollment:
+    // the prefill shows the nested value, so deleting it must write an
+    // explicit root null. Keying "cleared" off root presence alone dropped
+    // it, and getContact then resurrected the tutor copy (PR #206 review).
+    h.auth.userDoc = {
+      uid: 'bs1',
+      profiles: {
+        babysitter: { ejemEmail: 'lea@ejm.org' },
+        tutor: { contactEmail: 'old@x.com' },
+      },
+    };
+    renderStep();
+    const email = screen.getByLabelText(/^email$/i) as HTMLInputElement;
+    expect(email.value).toBe('old@x.com');
+    fireEvent.change(email, { target: { value: '' } });
+    fireEvent.click(screen.getByRole('button', { name: /^save/i }));
+    await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
+    const payload = h.updateDoc.mock.calls[0][1] as Record<string, unknown>;
+    expect(payload).toHaveProperty('contactEmail', null);
+    // A channel that was never shown stays absent at the root.
+    expect(payload).not.toHaveProperty('contactPhone');
+  });
+
   it('prefills contact from the canonical ROOT over a stale nested copy', () => {
     h.auth.userDoc = {
       uid: 'bs1',
