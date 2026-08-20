@@ -57,6 +57,11 @@ export function RequestsPage() {
   // while its id is here — its actions are disabled and its status is NOT yet
   // changed (see respond).
   const [actingId, setActingId] = useState<string | null>(null);
+  // The request whose withdraw-confirmation dialog is open, or null. Withdraw
+  // is not recoverable by re-clicking -- it emails and pushes every parent of
+  // the family -- so it confirms, like the family's Cancel and like a
+  // guardian withdrawing on the kid's behalf (PR #213 review).
+  const [withdrawTarget, setWithdrawTarget] = useState<StudyContactRequestDoc | null>(null);
 
   // Live subscription (issue #117 tier b): the same provable equality query as
   // before, but every snapshot re-renders the inbox — a tutor with an open tab
@@ -258,7 +263,7 @@ export function RequestsPage() {
                       size="sm"
                       variant="outline"
                       disabled={actingId === r.requestId}
-                      onClick={() => withdraw(r)}
+                      onClick={() => setWithdrawTarget(r)}
                     >
                       {t('tutor.requests.withdraw')}
                     </Button>
@@ -337,6 +342,28 @@ export function RequestsPage() {
             {t('tutor.requests.confirmDeclineCta')}
           </Button>
           <Button variant="ghost" className="flex-1" onClick={() => setDeclineTarget(null)}>
+            {t('common.cancel')}
+          </Button>
+        </div>
+      </Dialog>
+
+      <Dialog open={withdrawTarget !== null} onClose={() => setWithdrawTarget(null)}>
+        <h3 className="mb-2 text-lg font-bold">{t('tutor.requests.confirmWithdrawTitle')}</h3>
+        <p className="mb-5 text-sm text-gray-600">{t('tutor.requests.confirmWithdrawDesc')}</p>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            className="flex-1"
+            disabled={actingId !== null}
+            onClick={() => {
+              const target = withdrawTarget;
+              setWithdrawTarget(null);
+              if (target) withdraw(target);
+            }}
+          >
+            {t('tutor.requests.confirmWithdrawCta')}
+          </Button>
+          <Button variant="ghost" className="flex-1" onClick={() => setWithdrawTarget(null)}>
             {t('common.cancel')}
           </Button>
         </div>

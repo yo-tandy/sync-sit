@@ -62,6 +62,11 @@ describe('study contact inversion', () => {
     await db.collection('users').doc(seed.tutor2.uid).update({
       'profiles.tutor.approvedFamilies': [],
       'profiles.tutor.searchable': true,
+      // Restored to the seeded shape: one pin below rewrites them.
+      'profiles.tutor.subjects': [
+        { subject: 'math', levels: ['6e', '5e', '4e'], rate: 25 },
+        { subject: 'english', levels: ['6e'], rate: 22 },
+      ],
       status: 'active',
     });
   });
@@ -374,6 +379,53 @@ describe('study contact inversion', () => {
       ).rejects.toMatchObject({ code: 'FAILED_PRECONDITION' });
     } finally {
       await db.collection('users').doc(seed.tutor2.uid).set(tutorSnap.data()!);
+    }
+  });
+
+  it('a tutor who HIDES between sending and being accepted cannot be accepted', async () => {
+    // Same dead end as the send-side gate, just later: searchTutors filters on
+    // searchable, so the family would accept and still find nothing
+    // (PR #213 review).
+    const requestId = await tutorContacts();
+    const db = getDb();
+    await db.collection('users').doc(seed.tutor2.uid).update({
+      'profiles.tutor.searchable': false,
+    });
+    await expect(
+      callFunction('respondToFamilyContactRequest', { requestId, action: 'accept' }, parentToken),
+    ).rejects.toMatchObject({ code: 'FAILED_PRECONDITION' });
+
+    const tutor = (await db.collection('users').doc(seed.tutor2.uid).get()).data()!;
+    expect(tutor.profiles.tutor.approvedFamilies ?? []).not.toContain(seed.family1Id);
+  });
+
+  it('a tutor SUSPENDED between sending and being accepted cannot be accepted', async () => {
+    const requestId = await tutorContacts();
+    await getDb().collection('users').doc(seed.tutor2.uid).update({ status: 'suspended' });
+    await expect(
+      callFunction('respondToFamilyContactRequest', { requestId, action: 'accept' }, parentToken),
+    ).rejects.toMatchObject({ code: 'FAILED_PRECONDITION' });
+  });
+
+  it('a tutor who DROPS the subject between sending and being accepted cannot be accepted', async () => {
+    // searchTutors needs searchable AND a matching offering, and the family's
+    // post-accept links are built from this request's subject and level.
+    const requestId = await tutorContacts();
+    const db = getDb();
+    await db.collection('users').doc(seed.tutor2.uid).update({
+      'profiles.tutor.subjects': [{ subject: 'physics', levels: ['2nde'], rate: 25 }],
+    });
+    try {
+      await expect(
+        callFunction('respondToFamilyContactRequest', { requestId, action: 'accept' }, parentToken),
+      ).rejects.toMatchObject({ code: 'FAILED_PRECONDITION' });
+    } finally {
+      await db.collection('users').doc(seed.tutor2.uid).update({
+        'profiles.tutor.subjects': [
+        { subject: 'math', levels: ['6e', '5e', '4e'], rate: 25 },
+        { subject: 'english', levels: ['6e'], rate: 22 },
+      ],
+      });
     }
   });
 

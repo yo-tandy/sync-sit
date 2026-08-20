@@ -280,6 +280,20 @@ describe('tutor RequestsPage', () => {
     expect(screen.queryByText('Awaiting your response')).not.toBeInTheDocument();
   });
 
+  it('Withdraw CONFIRMS before calling — it notifies every parent and cannot be undone', async () => {
+    h.requests = [reqDoc({ requestId: 'r9', initiatedBy: 'tutor', publishedSearchId: 'ps1' })];
+    renderWithProviders(<RequestsPage />);
+    await screen.findByText(/Cohen/);
+
+    fireEvent.click(screen.getByRole('button', { name: /withdraw request/i }));
+    expect(h.callable).not.toHaveBeenCalled();
+
+    fireEvent.click(await screen.findByRole('button', { name: /yes, withdraw/i }));
+    await waitFor(() =>
+      expect(h.callable).toHaveBeenCalledWith('cancelContactRequest', { requestId: 'r9' }),
+    );
+  });
+
   it('a FAMILY-initiated pending keeps its Accept/Decline (regression pin)', async () => {
     h.requests = [reqDoc()];
     renderWithProviders(<RequestsPage />);

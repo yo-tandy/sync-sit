@@ -242,6 +242,23 @@ describe('PublishedSearchesPage (study board)', () => {
     expect(await screen.findByText(/already have a pending request/i)).toBeInTheDocument();
   });
 
+  it("a pending the FAMILY opened tells the tutor to answer it, not to wait", async () => {
+    // The pending guard is initiator-agnostic, so already-exists also fires
+    // when the open request is one the tutor has to answer themselves --
+    // reachable whenever a family both contacts a tutor and publishes a
+    // search (PR #213 review).
+    h.callable.mockRejectedValue({
+      code: 'functions/already-exists',
+      details: { reason: 'pending_incoming' },
+    });
+    renderWithProviders(<PublishedSearchesPage />);
+    push([boardDoc('a', SEEN_AT + 1)]);
+    fireEvent.click(await screen.findByRole('button', { name: 'Contact family' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Send request' }));
+
+    expect(await screen.findByText(/has already contacted you/i)).toBeInTheDocument();
+  });
+
   it('a DECLINED prior request leaves the CTA available (the server owns the cooldown)', async () => {
     renderWithProviders(<PublishedSearchesPage />);
     push([boardDoc('a', SEEN_AT + 1)]);

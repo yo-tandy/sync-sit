@@ -134,9 +134,20 @@ export const sendFamilyContactRequest = onCall(
       .get();
 
     // One open request per pair, whoever opened it: a pending request in
-    // either direction is the same conversation.
-    if (existingSnap.docs.some((d) => d.data().status === 'pending')) {
-      throw new HttpsError('already-exists', 'You already have a pending request with this family');
+    // either direction is the same conversation. WHICH direction decides what
+    // the tutor should do about it, so the reason says (PR #213 review) --
+    // a family-initiated pending is one THEY have to answer, on their own
+    // requests page, not something to wait on.
+    const pending = existingSnap.docs.find((d) => d.data().status === 'pending');
+    if (pending) {
+      const mine = pending.data().initiatedBy === 'tutor';
+      throw new HttpsError(
+        'already-exists',
+        mine
+          ? 'You already have a pending request with this family'
+          : 'This family has already contacted you — answer that request instead',
+        { reason: mine ? 'pending_sent' : 'pending_incoming' },
+      );
     }
 
     // Cooldown on the FAMILY's decline of a tutor-initiated request: a "no"

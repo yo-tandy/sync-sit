@@ -311,6 +311,7 @@ export default {
       contactCooldown: 'Cette famille a refusé votre dernière demande. Vous pourrez réessayer dans une semaine.',
       contactHidden: 'Activez d\'abord la visibilité de votre profil — les familles ne peuvent voir vos coordonnées que si votre profil est visible dans la recherche.',
       contactDuplicate: 'Vous avez déjà une demande en attente auprès de cette famille. Elle y répondra depuis sa page de demandes.',
+      contactTheirs: 'Cette famille vous a déjà contacté — répondez à sa demande depuis votre page de demandes.',
       empty: 'Aucune recherche publiée pour le moment. Repassez plus tard — les nouvelles apparaissent ici.',
       error: 'Impossible de charger les recherches publiées. Veuillez réessayer plus tard.',
     },
@@ -355,6 +356,10 @@ export default {
       awaitingFamily: 'Vous avez contacté cette famille — en attente de sa réponse.',
       outgoingTitle: 'En attente de la famille',
       withdraw: 'Retirer la demande',
+      confirmWithdrawTitle: 'Retirer cette demande ?',
+      confirmWithdrawDesc:
+        'La famille sera informée du retrait. Vous pourrez la recontacter plus tard.',
+      confirmWithdrawCta: 'Oui, retirer',
       status: {
         pending: 'En attente',
         accepted: 'Acceptée',

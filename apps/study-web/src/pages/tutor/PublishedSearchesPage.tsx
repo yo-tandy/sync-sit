@@ -56,7 +56,7 @@ export function PublishedSearchesPage() {
   const [sending, setSending] = useState(false);
   // false = no error; 'generic' | 'cooldown' picks the copy.
   const [sendError, setSendError] =
-    useState<false | 'generic' | 'cooldown' | 'hidden' | 'duplicate'>(false);
+    useState<false | 'generic' | 'cooldown' | 'hidden' | 'duplicate' | 'theirs'>(false);
 
   // Which searches this tutor has already answered. Equality-only query on
   // the tutor's own requests (rules: tutorUserId == uid), filtered in code so
@@ -106,9 +106,11 @@ export function PublishedSearchesPage() {
           ? 'cooldown'
           : reason === 'not_searchable'
             ? 'hidden'
-            : e?.code === 'functions/already-exists'
-              ? 'duplicate'
-              : 'generic',
+            : reason === 'pending_incoming'
+              ? 'theirs'
+              : reason === 'pending_sent' || e?.code === 'functions/already-exists'
+                ? 'duplicate'
+                : 'generic',
       );
     } finally {
       setSending(false);
@@ -187,7 +189,9 @@ export function PublishedSearchesPage() {
                   ? 'contactHidden'
                   : sendError === 'duplicate'
                     ? 'contactDuplicate'
-                    : 'contactError'
+                    : sendError === 'theirs'
+                      ? 'contactTheirs'
+                      : 'contactError'
             }`)}
           </p>
         )}

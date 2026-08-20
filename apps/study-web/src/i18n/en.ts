@@ -311,6 +311,7 @@ export default {
       contactCooldown: 'This family declined your last request. You can try again in a week.',
       contactHidden: 'Turn on your profile visibility first — families can only see your details if your profile is visible in search.',
       contactDuplicate: 'You already have a pending request with this family. They will answer it from their requests page.',
+      contactTheirs: 'This family has already contacted you — answer their request from your requests page.',
       empty: 'No published searches right now. Check back later — new ones appear here.',
       error: 'Could not load published searches. Please try again later.',
     },
@@ -355,6 +356,10 @@ export default {
       awaitingFamily: 'You contacted this family — waiting for their answer.',
       outgoingTitle: 'Waiting for the family',
       withdraw: 'Withdraw request',
+      confirmWithdrawTitle: 'Withdraw this request?',
+      confirmWithdrawDesc:
+        'The family will be told you withdrew it. You can contact them again later.',
+      confirmWithdrawCta: 'Yes, withdraw',
       status: {
         pending: 'Pending',
         accepted: 'Accepted',

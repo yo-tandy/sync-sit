@@ -94,6 +94,22 @@ export const respondToFamilyContactRequest = onCall(
         if (tutorData?.profiles?.tutor?.searchable !== true) {
           throw new HttpsError('failed-precondition', 'This tutor is no longer available');
         }
+        // ...and that they still OFFER what the family asked for. searchTutors
+        // requires searchable AND a matching subject+level, and the family's
+        // post-accept surfaces are both built from this request's subject and
+        // level -- so a tutor who drops the subject between sending and being
+        // accepted produces the identical dead end the searchable re-check
+        // exists to prevent (PR #213 review).
+        const offerings = (tutorData?.profiles?.tutor?.subjects ?? []) as {
+          subject: string;
+          levels: string[];
+        }[];
+        const stillOffers = offerings.some(
+          (o) => o.subject === data.subject && (o.levels ?? []).includes(data.level as string),
+        );
+        if (!stillOffers) {
+          throw new HttpsError('failed-precondition', 'This tutor no longer offers that subject');
+        }
       }
 
       tx.update(requestRef, {
