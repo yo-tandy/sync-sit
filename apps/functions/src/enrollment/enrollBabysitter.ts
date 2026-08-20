@@ -163,6 +163,12 @@ export const enrollBabysitter = onCall(
         fillBaseFields: {
           language: 'en',
           ejemEmail: ejemEmailLower,
+        },
+        // Contact is the CANONICAL resolution for this user (root ?? nested),
+        // so writing it back is idempotent when the root already holds it and
+        // corrective when only a nested copy did. Empty channels are omitted:
+        // root presence means "set or cleared by the user" (PR #206 review).
+        setBaseFields: {
           ...(copiedProfileFields.contactEmail ? { contactEmail: copiedProfileFields.contactEmail } : {}),
           ...(copiedProfileFields.contactPhone ? { contactPhone: copiedProfileFields.contactPhone } : {}),
           ...(copiedProfileFields.whatsapp ? { whatsapp: copiedProfileFields.whatsapp } : {}),

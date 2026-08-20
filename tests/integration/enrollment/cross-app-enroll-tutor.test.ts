@@ -606,6 +606,38 @@ describe('enrollTutor crossApp mode', () => {
     expect(tutor.contactEmail).toBe('other@contact.com');
   });
 
+  it('a supplied contact overwrites a populated ROOT, not just the nested copy', async () => {
+    // fillBaseFields only fills EMPTY roots, so a stale root value used to
+    // survive while every reader resolves root-first — the tutor's freshly
+    // supplied contact never reached families (PR #206 review). setBaseFields
+    // now writes it unconditionally.
+    const db = getDb();
+    const uid = 'crossapp-root-overwrite';
+    await seedSitter(uid, 'rootoverwrite@test.com', {
+      contactEmail: 'stale-root@x.com',
+      contactPhone: null,
+    });
+    const token = await getIdToken(uid);
+
+    await callFunction(
+      'enrollTutor',
+      {
+        crossApp: true,
+        consentVersion: '1.0',
+        subjects: SUBJECTS,
+        enrollment: { contactPhone: '+33 611111111' },
+      },
+      token,
+    );
+
+    const after = (await db.collection('users').doc(uid).get()).data()!;
+    // The freshly supplied channel lands at the canonical root...
+    expect(after.contactPhone).toBe('+33 611111111');
+    // ...and the untouched one keeps its stored value (idempotent rewrite).
+    expect(after.contactEmail).toBe('stale-root@x.com');
+    expect(after.profiles.tutor.contactPhone).toBe('+33 611111111');
+  });
+
   it('an explicitly CLEARED contact channel is not resurrected by cross-app enrollment', async () => {
     const db = getDb();
     const uid = 'crossapp-cleared-contact';

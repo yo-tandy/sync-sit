@@ -334,14 +334,21 @@ export const enrollTutor = onCall(
         uid,
         profileKey: 'tutor',
         profileData: tutorProfile,
-        // Root shared-identity fields (issue #203): dual-write the canonical
-        // root copies alongside the nested profile. fillBaseFields writes only
-        // EMPTY root fields, so an existing canonical value always wins.
+        // Root shared-identity fields (issue #203). Identity is set-once, so
+        // it goes through fillBaseFields (empty-only, existing value wins).
         fillBaseFields: {
           firstName: enrollment.firstName,
           lastName: enrollment.lastName,
           dateOfBirth: dobTimestamp,
           ejemEmail: ejemEmailLower,
+        },
+        // CONTACT is not set-once: whatever reached `enrollment` here is what
+        // the user just confirmed -- typed in the classic wizard, or the
+        // canonical/freshly-supplied value on the crossApp path -- so it must
+        // win over an older root copy. Through fillBaseFields it silently did
+        // not, and every reader resolves root-first, so a tutor's freshly
+        // typed contact never reached families (PR #206 review).
+        setBaseFields: {
           contactEmail: enrollment.contactEmail ?? undefined,
           contactPhone: enrollment.contactPhone ?? undefined,
           whatsapp: enrollment.whatsapp ?? undefined,
