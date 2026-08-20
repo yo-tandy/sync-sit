@@ -274,6 +274,10 @@ describe('tutor RequestsPage', () => {
     expect(screen.getByText(/waiting for their answer/i)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^accept$/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^decline$/i })).not.toBeInTheDocument();
+    // ...and it sits in its OWN section, not under "Awaiting your response",
+    // which would read as a to-do the tutor cannot act on.
+    expect(screen.getByText('Waiting for the family')).toBeInTheDocument();
+    expect(screen.queryByText('Awaiting your response')).not.toBeInTheDocument();
   });
 
   it('a FAMILY-initiated pending keeps its Accept/Decline (regression pin)', async () => {

@@ -119,7 +119,16 @@ export function RequestsPage() {
     }
   };
 
-  const pending = (requests ?? []).filter((r) => r.status === 'pending');
+  // Pending splits by WHO opened it (issue #207 PR4): only a family-initiated
+  // request is awaiting THIS tutor. One this tutor opened by answering a
+  // published search is waiting on the family, and grouping it under
+  // "Awaiting your response" would read as a to-do that has no action.
+  const pending = (requests ?? []).filter(
+    (r) => r.status === 'pending' && r.initiatedBy !== 'tutor',
+  );
+  const outgoing = (requests ?? []).filter(
+    (r) => r.status === 'pending' && r.initiatedBy === 'tutor',
+  );
   const history = (requests ?? []).filter((r) => r.status !== 'pending');
 
   return (
@@ -172,33 +181,56 @@ export function RequestsPage() {
                   <p className="mt-1 text-xs text-gray-500">
                     {t('tutor.requests.sentOn', { date: formatDate(r.createdAt) })}
                   </p>
-                  {/* A request THIS TUTOR opened by answering a published
-                      search is the family's to answer (issue #207 PR4) — no
-                      accept/decline here, or the tutor would be approving
-                      their own contact. The server refuses it too. */}
-                  {r.initiatedBy === 'tutor' ? (
-                    <p className="mt-3 text-xs text-gray-500">
-                      {t('tutor.requests.awaitingFamily')}
+                  <div className="mt-3 flex gap-2">
+                    <Button
+                      size="sm"
+                      disabled={actingId === r.requestId}
+                      onClick={() => respond(r, 'accept')}
+                    >
+                      {t('tutor.requests.accept')}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={actingId === r.requestId}
+                      onClick={() => setDeclineTarget(r)}
+                    >
+                      {t('tutor.requests.decline')}
+                    </Button>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── Sent by this tutor, waiting on the family (issue #207 PR4) ──
+            Deliberately its OWN section: these carry no action for the tutor,
+            and answering one would be the tutor approving their own contact
+            (the server refuses it as well). */}
+        {outgoing.length > 0 && (
+          <div className="mb-6">
+            <h2 className="mb-2 text-sm font-semibold text-gray-700">
+              {t('tutor.requests.outgoingTitle')}
+            </h2>
+            <div className="space-y-3">
+              {outgoing.map((r) => (
+                <Card key={r.requestId}>
+                  <p className="text-sm font-semibold text-gray-900">{r.familyName}</p>
+                  <p className="mt-1 text-xs text-gray-500">
+                    {t(`tutor.subjects.names.${r.subject}`)} · {r.level}
+                  </p>
+                  {r.message && (
+                    <p className="mt-2 rounded-lg bg-gray-50 p-2 text-xs italic text-gray-600">
+                      {r.message}
                     </p>
-                  ) : (
-                    <div className="mt-3 flex gap-2">
-                      <Button
-                        size="sm"
-                        disabled={actingId === r.requestId}
-                        onClick={() => respond(r, 'accept')}
-                      >
-                        {t('tutor.requests.accept')}
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={actingId === r.requestId}
-                        onClick={() => setDeclineTarget(r)}
-                      >
-                        {t('tutor.requests.decline')}
-                      </Button>
-                    </div>
                   )}
+                  <p className="mt-1 text-xs text-gray-500">
+                    {t('tutor.requests.sentOn', { date: formatDate(r.createdAt) })}
+                  </p>
+                  <p className="mt-3 text-xs text-gray-500">
+                    {t('tutor.requests.awaitingFamily')}
+                  </p>
                 </Card>
               ))}
             </div>

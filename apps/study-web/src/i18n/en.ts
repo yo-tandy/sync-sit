@@ -351,6 +351,7 @@ export default {
       loadError: 'Could not load your requests. Please refresh and try again.',
       sentOn: 'Sent {{date}}',
       awaitingFamily: 'You contacted this family — waiting for their answer.',
+      outgoingTitle: 'Waiting for the family',
       status: {
         pending: 'Pending',
         accepted: 'Accepted',

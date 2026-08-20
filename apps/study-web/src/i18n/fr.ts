@@ -351,6 +351,7 @@ export default {
       loadError: 'Impossible de charger vos demandes. Veuillez actualiser et réessayer.',
       sentOn: 'Envoyée le {{date}}',
       awaitingFamily: 'Vous avez contacté cette famille — en attente de sa réponse.',
+      outgoingTitle: 'En attente de la famille',
       status: {
         pending: 'En attente',
         accepted: 'Acceptée',
