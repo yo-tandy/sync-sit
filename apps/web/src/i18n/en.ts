@@ -1077,6 +1077,7 @@ export default {
     saveChanges: 'Save Changes',
     messageLabel: 'Message',
     additionalInfoLabel: 'Additional info',
+    declinedByYou: 'You declined this request.',
     resubmit: 'Resubmit',
     resubmitTitle: 'Resubmit Request',
     resubmitDesc: 'Edit the details and add a note explaining the changes. The babysitter will be notified.',

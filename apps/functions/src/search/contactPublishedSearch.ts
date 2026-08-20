@@ -79,7 +79,12 @@ export const contactPublishedSearch = onCall(
     }
     if (!(await passesAgeBackstop({
       governed: !!callerRaw.governedBy,
-      dateOfBirth: sitter.dateOfBirth,
+      // Root identity field, read off the RAW doc like governedBy above.
+      // Sourcing it from the flattened view is fail-OPEN: passesAgeBackstop
+      // deliberately tolerates a falsy DOB (legacy profiles), so a view that
+      // ever stops carrying it would silently pass every caller — the exact
+      // hole the enrollmentComplete gate closes (PR #212 review).
+      dateOfBirth: (callerRaw.dateOfBirth ?? sitter.dateOfBirth) as typeof sitter.dateOfBirth,
       // Read off the nested profile rather than the flattened view: PR #206
       // narrows BabysitterView to drop the root shared-identity quartet, and
       // ejemEmail is immutable + dual-written, so this resolves the same
@@ -109,6 +114,14 @@ export const contactPublishedSearch = onCall(
     const familySnap = await db.collection('families').doc(familyId).get();
     const familyData = familySnap.data();
     if (!familyData) {
+      throw new HttpsError('failed-precondition', 'This published search is no longer available');
+    }
+    // Re-check verification at CONTACT time, matching publishSearch and
+    // sendContactRequest: a family can lose verification between publishing
+    // and being answered, and this is the analogous match-making step
+    // (PR #212 review). Stale board entries are swept by expiry, not by
+    // verification changes, so the check has to be here.
+    if (!familyData.verification?.isFullyVerified) {
       throw new HttpsError('failed-precondition', 'This published search is no longer available');
     }
 

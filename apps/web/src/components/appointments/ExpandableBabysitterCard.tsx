@@ -317,7 +317,15 @@ export function ExpandableBabysitterCard({
               </Button>
             </div>
           )}
-          {variant === 'rejected' && onResubmit && (
+          {variant === 'rejected' && appointment.statusReason === 'declined_by_family' && (
+            // WE declined this one (issue #207 PR3). Without saying so the
+            // card reads as though the sitter refused us, and Resubmit would
+            // silently re-disclose the address to a sitter we just turned
+            // down — this PR's whole thesis is that disclosure follows an
+            // explicit yes (PR #212 review).
+            <p className="mt-3 text-xs text-gray-500">{t('appointment.declinedByYou')}</p>
+          )}
+          {variant === 'rejected' && onResubmit && appointment.statusReason !== 'declined_by_family' && (
             <div className="mt-3">
               <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); onResubmit(); }}>
                 {t('appointment.resubmit')}

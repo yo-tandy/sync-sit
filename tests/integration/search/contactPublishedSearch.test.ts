@@ -248,6 +248,24 @@ describe('contactPublishedSearch (sit)', () => {
     expect(apt.status).toBe('pending');
   });
 
+  it('rejects when the family lost verification after publishing', async () => {
+    // publishSearch and sendContactRequest both gate on isFullyVerified; this
+    // is the analogous match-making step, and expiry sweeps do not react to a
+    // verification change (PR #212 review).
+    const id = await publish();
+    const db = getDb();
+    const famRef = db.collection('families').doc(seed.family1Id);
+    const before = (await famRef.get()).data()!;
+    await famRef.update({ 'verification.isFullyVerified': false });
+    try {
+      await expect(
+        callFunction('contactPublishedSearch', { publishedSearchId: id }, sitterToken),
+      ).rejects.toMatchObject({ code: 'FAILED_PRECONDITION' });
+    } finally {
+      await famRef.set(before);
+    }
+  });
+
   it('rejects an EXPIRED published search', async () => {
     const id = await publish();
     await getDb().collection('publishedSearches').doc(id).update({

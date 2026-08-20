@@ -133,6 +133,17 @@ export const respondToRequest = onCall(
           familyNote: (familyData?.note as string) ?? null,
           familyPhotoUrl: (familyData?.photoUrl as string) ?? null,
         });
+        // The slot is filled: take the search off the board so no further
+        // sitters answer it (PR #212 review). Sibling pendings already minted
+        // stay for the family to answer -- the family-initiated flow has the
+        // same "several requests out, family decides" shape, so declining
+        // them is their call, not ours. Withdraw is a delete, matching the
+        // family's own withdraw button; a missing doc is fine (expired or
+        // already withdrawn).
+        const searchId = appointment.publishedSearchId as string | undefined;
+        if (searchId) {
+          await db.collection('publishedSearches').doc(searchId).delete().catch(() => {});
+        }
       } else {
         await appointmentRef.update({
           status: 'rejected',

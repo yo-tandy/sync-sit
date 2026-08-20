@@ -341,6 +341,38 @@ describe('respondToRequest', () => {
       expect(doc.latLng).toBeNull();
     });
 
+    it('accepting takes the published search off the board (no further answers)', async () => {
+      // A search can be answered by N sitters; once the family says yes the
+      // slot is filled, so the board entry must go — otherwise sitters keep
+      // answering a filled search (PR #212 review). Sibling pendings already
+      // minted stay for the family to answer, matching the family-initiated
+      // "several requests out" shape.
+      const db = getDb();
+      await db.collection('publishedSearches').doc('ps-test-1').set({
+        id: 'ps-test-1', app: 'sit', familyId: seed.family1Id, familyName: 'Test',
+        type: 'one_time', date: '2027-06-07', startTime: '19:00', endTime: '22:00',
+        kidIds: ['kid1'], numberOfKids: 1, areaLabel: '16e',
+        createdAt: new Date(), expiresAt: new Date(Date.now() + 6 * 24 * 3600 * 1000),
+      });
+      const apptId = await seedInverted();
+      const parentToken = await getIdToken(seed.parent1.uid);
+
+      await callFunction('respondToRequest', { appointmentId: apptId, action: 'accept' }, parentToken);
+
+      expect((await db.collection('publishedSearches').doc('ps-test-1').get()).exists).toBe(false);
+    });
+
+    it('accepting an appointment whose search is already gone still succeeds', async () => {
+      // Expired-and-swept, or withdrawn by the family: the delete is
+      // best-effort, never a reason to fail the accept.
+      const apptId = await seedInverted();
+      const parentToken = await getIdToken(seed.parent1.uid);
+      const result = await callFunction<{ success: boolean }>(
+        'respondToRequest', { appointmentId: apptId, action: 'accept' }, parentToken,
+      );
+      expect(result.success).toBe(true);
+    });
+
     it('the babysitter cannot respond to their OWN request', async () => {
       const apptId = await seedInverted();
       await expect(
