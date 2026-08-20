@@ -31,7 +31,7 @@ describe('study contact inversion', () => {
       level: '6e',
       locationPrefs: ['online'],
       maxRate: 30,
-      createdBy: seed.parent1.uid,
+      createdByUserId: seed.parent1.uid,
       createdAt: Timestamp.now(),
       expiresAt: Timestamp.fromMillis(Date.now() + 7 * DAY_MS),
       ...overrides,

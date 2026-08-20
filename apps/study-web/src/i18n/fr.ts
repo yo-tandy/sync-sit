@@ -310,6 +310,7 @@ export default {
       contactError: 'Impossible d\'envoyer votre demande. Cette recherche a peut-être expiré ou été retirée.',
       contactCooldown: 'Cette famille a refusé votre dernière demande. Vous pourrez réessayer dans une semaine.',
       contactHidden: 'Activez d\'abord la visibilité de votre profil — les familles ne peuvent voir vos coordonnées que si votre profil est visible dans la recherche.',
+      contactDuplicate: 'Vous avez déjà une demande en attente auprès de cette famille. Elle y répondra depuis sa page de demandes.',
       empty: 'Aucune recherche publiée pour le moment. Repassez plus tard — les nouvelles apparaissent ici.',
       error: 'Impossible de charger les recherches publiées. Veuillez réessayer plus tard.',
     },

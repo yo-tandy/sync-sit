@@ -100,7 +100,10 @@ export function notificationRoute(
       type === 'study_request_accepted' ||
       type === 'study_request_declined' ||
       // Accept/Decline for a tutor-initiated request lives on this page.
-      type === 'study_published_search_contact'
+      type === 'study_published_search_contact' ||
+      // Parents receive this one too since the inversion (issue #207 PR4):
+      // a tutor withdrawing their own request notifies the family.
+      type === 'study_contact_request_cancelled'
     ) {
       return '/family/requests';
     }

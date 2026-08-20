@@ -310,6 +310,7 @@ export default {
       contactError: 'Could not send your request. This search may have expired or been withdrawn.',
       contactCooldown: 'This family declined your last request. You can try again in a week.',
       contactHidden: 'Turn on your profile visibility first — families can only see your details if your profile is visible in search.',
+      contactDuplicate: 'You already have a pending request with this family. They will answer it from their requests page.',
       empty: 'No published searches right now. Check back later — new ones appear here.',
       error: 'Could not load published searches. Please try again later.',
     },

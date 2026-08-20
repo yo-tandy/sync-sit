@@ -55,7 +55,8 @@ export function PublishedSearchesPage() {
   const [contactMessage, setContactMessage] = useState('');
   const [sending, setSending] = useState(false);
   // false = no error; 'generic' | 'cooldown' picks the copy.
-  const [sendError, setSendError] = useState<false | 'generic' | 'cooldown' | 'hidden'>(false);
+  const [sendError, setSendError] =
+    useState<false | 'generic' | 'cooldown' | 'hidden' | 'duplicate'>(false);
 
   // Which searches this tutor has already answered. Equality-only query on
   // the tutor's own requests (rules: tutorUserId == uid), filtered in code so
@@ -92,17 +93,22 @@ export function PublishedSearchesPage() {
       setContactTarget(null);
       setContactMessage('');
     } catch (err) {
-      // The server marks the failures a tutor can ACT on, so neither reads as
-      // "the search disappeared": a recent decline by this family, and a
-      // profile that is still hidden (the default after enrollment — the
-      // board is deliberately unfiltered, so this is the common first tap).
-      const reason = (err as { details?: { reason?: string } })?.details?.reason;
+      // The server's guards are keyed by the (tutor, FAMILY) pair while
+      // `contactedIds` is keyed by search, and a family may keep three live
+      // searches on the board (PUBLISHED_SEARCH_MAX_ACTIVE) — so a card can
+      // legitimately still show its CTA while the pair already has an open
+      // request. Each failure a tutor can act on gets its own copy; only a
+      // genuinely gone search falls through to the generic line.
+      const e = err as { code?: string; details?: { reason?: string } };
+      const reason = e?.details?.reason;
       setSendError(
         reason === 'decline_cooldown'
           ? 'cooldown'
           : reason === 'not_searchable'
             ? 'hidden'
-            : 'generic',
+            : e?.code === 'functions/already-exists'
+              ? 'duplicate'
+              : 'generic',
       );
     } finally {
       setSending(false);
@@ -179,7 +185,9 @@ export function PublishedSearchesPage() {
                 ? 'contactCooldown'
                 : sendError === 'hidden'
                   ? 'contactHidden'
-                  : 'contactError'
+                  : sendError === 'duplicate'
+                    ? 'contactDuplicate'
+                    : 'contactError'
             }`)}
           </p>
         )}

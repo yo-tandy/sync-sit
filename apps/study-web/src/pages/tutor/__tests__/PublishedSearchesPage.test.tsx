@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { screen, waitFor, act } from '@testing-library/react';
+import { screen, waitFor, act, fireEvent } from '@testing-library/react';
 import { renderWithProviders } from '@/__tests__/test-utils';
 
 /**
@@ -23,11 +23,16 @@ const h = vi.hoisted(() => ({
   snapshotNext: null as null | ((snap: unknown) => void),
   snapshotError: null as null | ((err: unknown) => void),
   requestsNext: null as null | ((snap: unknown) => void),
+  callable: vi.fn(),
   updateDoc: vi.fn(() => Promise.resolve()),
   unsub: vi.fn(),
 }));
 
-vi.mock('@/config/firebase', () => ({ db: {} }));
+vi.mock('@/config/firebase', () => ({ db: {}, functions: {} }));
+
+vi.mock('firebase/functions', () => ({
+  httpsCallable: (_fns: unknown, name: string) => (payload: unknown) => h.callable(name, payload),
+}));
 
 vi.mock('firebase/firestore', () => ({
   doc: (_db: unknown, ...path: string[]) => ({ path: path.join('/') }),
@@ -105,6 +110,8 @@ beforeEach(() => {
   h.snapshotNext = null;
   h.snapshotError = null;
   h.requestsNext = null;
+  h.callable.mockReset();
+  h.callable.mockResolvedValue({ data: { requestId: 'r1' } });
   h.auth.userDoc = tutorDoc(SEEN_AT);
 });
 
@@ -206,6 +213,33 @@ describe('PublishedSearchesPage (study board)', () => {
     }));
     await waitFor(() => expect(screen.getByText('Request sent')).toBeInTheDocument());
     expect(screen.queryByRole('button', { name: 'Contact family' })).toBeNull();
+  });
+
+  // The dialog's error copy: the server's guards are keyed by the (tutor,
+  // FAMILY) pair while the card's "Request sent" state is keyed by SEARCH, so
+  // a card can legitimately offer a CTA the server then refuses. Each failure
+  // the tutor can act on must say what it is, not "the search may have
+  // expired" (PR #213 review).
+  it('a hidden profile is named as the reason, not reported as a vanished search', async () => {
+    h.callable.mockRejectedValue({ details: { reason: 'not_searchable' } });
+    renderWithProviders(<PublishedSearchesPage />);
+    push([boardDoc('a', SEEN_AT + 1)]);
+    fireEvent.click(await screen.findByRole('button', { name: 'Contact family' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Send request' }));
+
+    expect(await screen.findByText(/turn on your profile visibility/i)).toBeInTheDocument();
+  });
+
+  it('an existing pending with the SAME FAMILY is named as such', async () => {
+    // Reachable without any stale state: one family may keep three live
+    // searches on the board, and answering the second is refused.
+    h.callable.mockRejectedValue({ code: 'functions/already-exists' });
+    renderWithProviders(<PublishedSearchesPage />);
+    push([boardDoc('a', SEEN_AT + 1)]);
+    fireEvent.click(await screen.findByRole('button', { name: 'Contact family' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Send request' }));
+
+    expect(await screen.findByText(/already have a pending request/i)).toBeInTheDocument();
   });
 
   it('a DECLINED prior request leaves the CTA available (the server owns the cooldown)', async () => {
