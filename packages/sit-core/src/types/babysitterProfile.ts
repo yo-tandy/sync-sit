@@ -34,6 +34,14 @@ export interface BabysitterProfile extends ProfileBase {
   // Search visibility
   searchable?: boolean;
 
+  /**
+   * When this babysitter last visited the published-searches board (issue
+   * #207). Owner-written from the client on section visit (deliberately not
+   * rules-pinned — it only drives the owner's own "New" tagging/badge):
+   * a board doc is New iff createdAt > this. Absent = never visited.
+   */
+  publishedSearchesSeenAt?: FirestoreTimestamp;
+
   // Revalidation
   lastRevalidatedAt?: FirestoreTimestamp;
   revalidationYear?: number;

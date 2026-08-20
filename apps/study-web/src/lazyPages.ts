@@ -75,6 +75,9 @@ export const TutorRequestsPage = lazy(() =>
 export const TutorFamiliesPage = lazy(() =>
   import('@/pages/tutor/FamiliesPage').then((m) => ({ default: m.FamiliesPage })),
 );
+export const TutorPublishedSearchesPage = lazy(() =>
+  import('@/pages/tutor/PublishedSearchesPage').then((m) => ({ default: m.PublishedSearchesPage })),
+);
 export const FamilySubmittedEndorsementsPage = lazy(() =>
   import('@/pages/family/SubmittedEndorsementsPage').then((m) => ({ default: m.SubmittedEndorsementsPage })),
 );

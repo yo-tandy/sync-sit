@@ -3,6 +3,12 @@ export interface FirestoreTimestamp {
   seconds: number;
   nanoseconds: number;
   toDate: () => Date;
+  /**
+   * Present on every real admin/client SDK Timestamp; optional here so
+   * structural test fakes carrying only seconds/nanoseconds/toDate keep
+   * satisfying the interface. Callers use `?.toMillis?.()` and degrade.
+   */
+  toMillis?: () => number;
 }
 
 /** Latitude/Longitude pair */

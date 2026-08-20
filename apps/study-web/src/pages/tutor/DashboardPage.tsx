@@ -8,6 +8,7 @@ import { getTutorProfile } from '@ejm/study-core';
 import type { StudyContactRequestDoc } from '@ejm/study-core';
 import type { RecurringSlot } from '@ejm/shared-core';
 import { DAYS_OF_WEEK } from '@ejm/shared-core';
+import { PublishedSearchesPreview } from '@/components/published/PublishedSearchesPreview';
 import { SupervisionRequestCard } from '@/components/tutor/SupervisionRequestCard';
 import { InstallAppBanner } from '@/components/ui/InstallAppBanner';
 import type { StudySessionDoc } from '@/types/studySession';
@@ -478,6 +479,14 @@ export function DashboardPage() {
           </p>
         </div>
       )}
+
+      {/* "Posts from families" — the board's entry point lives on the
+          dashboard under the session sections (owner direction on PR #211),
+          not behind a menu entry. Renders nothing only while the first
+          snapshot is pending — an empty or failed read still shows the title,
+          a one-line status and the link, since this is the board's only
+          entry point. */}
+      <PublishedSearchesPreview />
 
       {/* ── Search-visibility confirm dialog (sit's babysitter pattern) ── */}
       <Dialog open={toggleDialog} onClose={() => setToggleDialog(false)}>
