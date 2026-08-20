@@ -134,14 +134,23 @@ export function hasAnyContact(user: User | null | undefined): boolean {
 // parent profile's own `whatsapp?: string` in the flattened spread — omit the
 // root contact trio so the intersection stays well-typed (the parent view is
 // about PARENT contact; provider contact resolves via getContact instead).
-export type ParentView = Omit<User, 'contactEmail' | 'contactPhone' | 'whatsapp'> & ParentProfile;
+//
+// `ejemEmail` is omitted too, for symmetry with BabysitterView/TutorView
+// rather than out of need: role exclusivity (addProfileToUser blocks
+// parent+provider in both directions) means a parent doc carries no root
+// ejemEmail today. These three views are the enforcement point for "a root
+// field never reaches a consumer under a root-looking name through a
+// flattened view", so the rule holds uniformly rather than per-role
+// (PR #206 review).
+export type ParentView =
+  Omit<User, 'ejemEmail' | 'contactEmail' | 'contactPhone' | 'whatsapp'> & ParentProfile;
 
 export function getParentView(
   user: User | null | undefined,
 ): ParentView | null {
   const profile = getParentProfile(user);
   if (!user || !profile) return null;
-  // Drop the root shared-contact trio before the spread (see ParentView).
-  const { contactEmail: _ce, contactPhone: _cp, whatsapp: _wa, ...base } = user;
+  // Drop the root identity+contact quartet before the spread (see ParentView).
+  const { ejemEmail: _ee, contactEmail: _ce, contactPhone: _cp, whatsapp: _wa, ...base } = user;
   return { ...base, ...profile };
 }

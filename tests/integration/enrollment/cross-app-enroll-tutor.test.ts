@@ -127,6 +127,74 @@ describe('enrollTutor cross-app add-profile', () => {
     expect(codeDoc.exists).toBe(false);
   });
 
+  // The CLASSIC (non-crossApp) path is where `enrollment` is the client
+  // payload verbatim — crossApp launders it through pickCrossAppSupplement +
+  // getContact first — so the two root-contact rules need pinning here, not
+  // only on the crossApp twin (PR #206 review).
+  it('classic enrollment: a typed contact overwrites a populated ROOT', async () => {
+    const db = getDb();
+    const uid = 'classic-root-overwrite';
+    const email = 'classicroot@test.com';
+    await getAdminAuth().createUser({ uid, email });
+    await db.collection('users').doc(uid).set({
+      uid,
+      email,
+      firstName: 'Sacha',
+      lastName: 'Sitter',
+      status: 'active',
+      contactEmail: 'stale-root@x.com',
+      profiles: { babysitter: { enrollmentComplete: true, ejemEmail: email } },
+    });
+
+    await callFunction(
+      'enrollTutor',
+      {
+        ejemEmail: EJEM_EMAIL,
+        verificationCode: CODE,
+        consentVersion: '1.0',
+        enrollment: tutorEnrollment({ contactEmail: 'typed@test.com' }),
+      },
+      await getIdToken(uid),
+    );
+
+    const after = (await db.collection('users').doc(uid).get()).data()!;
+    expect(after.contactEmail).toBe('typed@test.com');
+  });
+
+  it('classic enrollment: an EMPTY contact string is "not provided", never a clear', async () => {
+    // The schema accepts '' (no .min(1)); passing it through would write ''
+    // at the root, which getContact reads as an explicit user CLEAR — and the
+    // backfill could never lift the nested copy back, since the root key is
+    // then present (PR #206 review).
+    const db = getDb();
+    const uid = 'classic-empty-contact';
+    const email = 'classicempty@test.com';
+    await getAdminAuth().createUser({ uid, email });
+    await db.collection('users').doc(uid).set({
+      uid,
+      email,
+      firstName: 'Sacha',
+      lastName: 'Sitter',
+      status: 'active',
+      contactPhone: '+33600000009',
+      profiles: { babysitter: { enrollmentComplete: true, ejemEmail: email } },
+    });
+
+    await callFunction(
+      'enrollTutor',
+      {
+        ejemEmail: EJEM_EMAIL,
+        verificationCode: CODE,
+        consentVersion: '1.0',
+        enrollment: tutorEnrollment({ contactPhone: '' }),
+      },
+      await getIdToken(uid),
+    );
+
+    const after = (await db.collection('users').doc(uid).get()).data()!;
+    expect(after.contactPhone).toBe('+33600000009');
+  });
+
   it('rejects when the caller already has a tutor profile (profile-exists)', async () => {
     const token = await getIdToken(seed.tutor1.uid); // seeded with a tutor profile
     await expect(

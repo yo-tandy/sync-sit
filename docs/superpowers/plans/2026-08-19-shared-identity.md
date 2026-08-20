@@ -155,3 +155,13 @@ fresh at 7541f8a.
   address B. Family lookup and the searchBabysitters age-gate then key off B.
   Accepted: one canonical identity per account is the point of this change;
   the backfill's CONTESTED output surfaces any real-world instance.
+
+- The same divergence silently REKEYS the age-gate exemption lookup
+  (`searchBabysitters.ts`, `enrollmentExemptions/{email}`). Those docs are
+  keyed on whatever address an admin typed, read off the babysitter's profile,
+  while the lookup now uses the root `ejemEmail` — so for a two-address
+  account an exemption granted on the nested address is ignored and the
+  babysitter drops out of family search results with no signal to anyone
+  (PR #206 review). Same accepted trade and same detection path as above (the
+  backfill flags the doc CONTESTED); recorded here so the next person
+  debugging a vanished babysitter has the thread.

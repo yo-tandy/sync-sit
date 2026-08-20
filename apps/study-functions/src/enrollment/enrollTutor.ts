@@ -348,10 +348,18 @@ export const enrollTutor = onCall(
         // win over an older root copy. Through fillBaseFields it silently did
         // not, and every reader resolves root-first, so a tutor's freshly
         // typed contact never reached families (PR #206 review).
+        // An EMPTY string is "not provided", never "clear it" (PR #206
+        // review). The schema accepts '' (no .min(1)), and on the classic
+        // path `enrollment` is the client payload verbatim, so passing it
+        // through would write '' at the canonical root -- which getContact
+        // reads as an explicit user CLEAR, silently dropping a channel the
+        // sitter already had, with no way for the backfill to lift it back
+        // (the root key is now present). The sibling writer in
+        // enrollBabysitter already filters on truthiness; this matches it.
         setBaseFields: {
-          contactEmail: enrollment.contactEmail ?? undefined,
-          contactPhone: enrollment.contactPhone ?? undefined,
-          whatsapp: enrollment.whatsapp ?? undefined,
+          ...(enrollment.contactEmail ? { contactEmail: enrollment.contactEmail } : {}),
+          ...(enrollment.contactPhone ? { contactPhone: enrollment.contactPhone } : {}),
+          ...(enrollment.whatsapp ? { whatsapp: enrollment.whatsapp } : {}),
         },
         auditAction: 'tutor.profile_added',
         auditDetails: {

@@ -247,10 +247,10 @@ describe('users collection — Plan D owner-update guards', () => {
   });
 
   it('a NON-owner may not write another user root contact fields', async () => {
-    await seed('ri5', { status: 'active', email: 'b@ejm.org', ejemEmail: 'b@ejm.org', profiles: { babysitter: { ejemEmail: 'b@ejm.org', enrollmentComplete: true } } });
+    await seed('ri6', { status: 'active', email: 'b@ejm.org', ejemEmail: 'b@ejm.org', profiles: { babysitter: { ejemEmail: 'b@ejm.org', enrollmentComplete: true } } });
     const stranger = testEnv.authenticatedContext('someone-else');
     await assertFails(
-      updateDoc(doc(stranger.firestore(), 'users', 'ri5'), { contactEmail: 'evil@x.com' })
+      updateDoc(doc(stranger.firestore(), 'users', 'ri6'), { contactEmail: 'evil@x.com' })
     );
   });
 
