@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
+import { FieldValue } from 'firebase-admin/firestore';
 import { clearAll, callFunction, getIdToken, getDb } from '../../setup/emulator.js';
 import { seedTestData, type SeedData } from '../../setup/seed.js';
 
@@ -131,6 +132,29 @@ describe('contactPublishedSearch (sit)', () => {
     await expect(
       callFunction('contactPublishedSearch', { publishedSearchId: id }, parentToken),
     ).rejects.toMatchObject({ code: 'PERMISSION_DENIED' });
+  });
+
+  it('rejects a sitter who stopped mid-enrollment (no DOB yet = age-gate bypass)', async () => {
+    // Callables are reachable regardless of rules, and the board's READ rule
+    // requires enrollmentComplete. An incomplete account has no DOB (the
+    // wizard collects it), so it would land in the age backstop's legacy
+    // missing-DOB tolerance and pass unconditionally (PR #212 review).
+    const id = await publish();
+    const db = getDb();
+    const uid = seed.babysitter2.uid;
+    const before = (await db.collection('users').doc(uid).get()).data()!;
+    await db.collection('users').doc(uid).update({
+      'profiles.babysitter.enrollmentComplete': false,
+      dateOfBirth: FieldValue.delete(),
+    });
+    const token = await getIdToken(uid);
+    try {
+      await expect(
+        callFunction('contactPublishedSearch', { publishedSearchId: id }, token),
+      ).rejects.toMatchObject({ code: 'PERMISSION_DENIED' });
+    } finally {
+      await db.collection('users').doc(uid).set(before);
+    }
   });
 
   it('rejects a blocked babysitter (status is the hard ban gate)', async () => {

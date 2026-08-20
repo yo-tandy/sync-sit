@@ -67,10 +67,25 @@ export const contactPublishedSearch = onCall(
     if (!sitter) {
       throw new HttpsError('permission-denied', 'Only babysitters can contact published searches');
     }
+    // enrollmentComplete is required here, matching the board's READ rule
+    // (firestore.rules) and searchTutors' equivalent. Callables are reachable
+    // regardless of rules, and an account that stopped mid-enrollment has no
+    // DOB yet (it is collected in the wizard) -- which would land in the age
+    // backstop's legacy missing-DOB tolerance and pass unconditionally, i.e.
+    // exactly the route around the age gate this callable exists to close
+    // (PR #212 review).
+    if (!sitter.enrollmentComplete) {
+      throw new HttpsError('permission-denied', 'Finish your babysitter enrollment first');
+    }
     if (!(await passesAgeBackstop({
       governed: !!callerRaw.governedBy,
       dateOfBirth: sitter.dateOfBirth,
-      ejemEmail: sitter.ejemEmail,
+      // Read off the nested profile rather than the flattened view: PR #206
+      // narrows BabysitterView to drop the root shared-identity quartet, and
+      // ejemEmail is immutable + dual-written, so this resolves the same
+      // value in both worlds. Post-#206 this becomes getEjemEmail(callerRaw).
+      ejemEmail: ((callerRaw.profiles as Record<string, { ejemEmail?: string }> | undefined)
+        ?.babysitter?.ejemEmail) ?? sitter.ejemEmail,
     }))) {
       throw new HttpsError('permission-denied', 'Your profile does not meet the minimum age requirements');
     }
