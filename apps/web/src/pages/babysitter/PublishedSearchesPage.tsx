@@ -53,7 +53,8 @@ export function PublishedSearchesPage() {
   const [contactTarget, setContactTarget] = useState<BoardSearch | null>(null);
   const [contactMessage, setContactMessage] = useState('');
   const [sending, setSending] = useState(false);
-  const [sendError, setSendError] = useState(false);
+  // false = no error; 'generic' | 'cooldown' picks the copy.
+  const [sendError, setSendError] = useState<false | 'generic' | 'cooldown'>(false);
 
   // Which searches this sitter has already answered. Equality-only query on
   // the sitter's own appointments (rules: babysitterUserId == uid), filtered in
@@ -89,8 +90,12 @@ export function PublishedSearchesPage() {
       // The appointments subscription flips the card to "Request sent".
       setContactTarget(null);
       setContactMessage('');
-    } catch {
-      setSendError(true);
+    } catch (err) {
+      // The server marks the one failure a sitter can act on — the family
+      // declined this search recently — so it does not read as "the search
+      // disappeared" (PR #212 review).
+      const reason = (err as { details?: { reason?: string } })?.details?.reason;
+      setSendError(reason === 'decline_cooldown' ? 'cooldown' : 'generic');
     } finally {
       setSending(false);
     }
@@ -115,8 +120,6 @@ export function PublishedSearchesPage() {
 
       <div className="px-5 pt-4 pb-8">
         <p className="mb-4 text-sm text-gray-500">{t('publishedBoard.intro')}</p>
-
-        {searches === null && null}
 
         {searches !== null && errored && (
           <p className="py-6 text-center text-sm text-brand-600">{t('publishedBoard.error')}</p>
@@ -162,7 +165,9 @@ export function PublishedSearchesPage() {
           maxLength={1000}
         />
         {sendError && (
-          <p className="mt-2 text-sm text-brand-600">{t('publishedBoard.contactError')}</p>
+          <p className="mt-2 text-sm text-brand-600">
+            {t(sendError === 'cooldown' ? 'publishedBoard.contactCooldown' : 'publishedBoard.contactError')}
+          </p>
         )}
         <div className="mt-4 flex gap-2">
           <Button onClick={handleContact} disabled={sending} className="flex-1">

@@ -252,6 +252,30 @@ describe('rejected cards: who declined decides the affordance', () => {
     expect(screen.queryByText('appointment.declinedByYou')).toBeNull();
   });
 
+  it('a sitter-WITHDRAWN contact says who withdrew and offers no Resubmit', () => {
+    // cancelAppointment writes cancelled/cancelled_by_babysitter, and
+    // useFamilyAppointments funnels cancelled into rejectedRecent — so this
+    // card renders with variant="rejected" while its status is 'cancelled'.
+    // resubmitAppointment only accepts 'rejected', so a Resubmit button here
+    // could only ever produce an error alert (PR #212 review).
+    const withdrawn = {
+      ...answeredAppointment,
+      status: 'cancelled',
+      statusReason: 'cancelled_by_babysitter',
+    } as AppointmentDoc;
+    render(
+      <ExpandableBabysitterCard
+        appointment={withdrawn}
+        info={info}
+        variant="rejected"
+        onResubmit={vi.fn()}
+      />,
+    );
+    expandCard();
+    expect(screen.getByText('appointment.withdrawnBySitter')).toBeInTheDocument();
+    expect(screen.queryByText('appointment.resubmit')).toBeNull();
+  });
+
   it('a family accepting a sitter answer can still EDIT the confirmed sitting', () => {
     // Edit is dropped only while such a request is pending; once accepted it
     // is a mutual commitment like any other confirmed appointment.

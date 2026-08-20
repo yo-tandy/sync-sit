@@ -86,7 +86,11 @@ export function RequestDetailPage() {
       } catch { /* function unavailable */ }
     }
     loadParents();
-  }, [appointmentId, appointment?.familyId]);
+    // status is a REAL dependency (PR #212 review): the page holds a live
+    // onSnapshot, so when the family accepts, status flips pending ->
+    // confirmed in place while familyId never changes. Without it the effect
+    // never re-runs and the contact card stays missing until a reload.
+  }, [appointmentId, appointment?.familyId, appointment?.status]);
 
   // Check if this is a returning family
   useEffect(() => {

@@ -15,6 +15,14 @@ interface ContactPublishedSearchData {
 }
 
 /**
+ * How long a family's decline of a provider-initiated contact silences new
+ * contacts from that provider for the SAME published search (PR #212 review;
+ * matches the study side's spec). Not a punishment — a family that declined
+ * should not be re-notified on a tap.
+ */
+const DECLINE_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
  * contactPublishedSearch (issue #207 PR3, sit side): the CONTACT INVERSION.
  * An active babysitter answers a family's published search, minting an
  * appointment in exactly the shape `sendContactRequest` produces
@@ -127,12 +135,20 @@ export const contactPublishedSearch = onCall(
 
     // ── Kid details rebuilt server-side from the search's kidIds: ages and
     // languages only, never names (the published doc carries no names either).
+    // kidIds is rebuilt from the kids that ACTUALLY RESOLVED, not copied from
+    // the published doc: publishSearch validates kidIds at publish time, but a
+    // kid deleted between publishing and contact would otherwise leave the two
+    // fields disagreeing on the same appointment — the dashboard card counts
+    // apt.kidIds.length ("2 children") while the detail page renders kids
+    // ("1 child, ages 6") (PR #212 review).
     const kids: { age: number; languages: string[] }[] = [];
+    const resolvedKidIds: string[] = [];
     for (const kidId of (search.kidIds as string[]) || []) {
       const kidSnap = await db.collection('families').doc(familyId).collection('kids').doc(kidId).get();
       if (kidSnap.exists) {
         const k = kidSnap.data()!;
         kids.push({ age: k.age, languages: k.languages || [] });
+        resolvedKidIds.push(kidId);
       }
     }
 
@@ -157,7 +173,7 @@ export const contactPublishedSearch = onCall(
       endTime: search.endTime ?? null,
       recurringSlots: search.recurringSlots ?? null,
       schoolWeeksOnly: search.schoolWeeksOnly ?? false,
-      kidIds: (search.kidIds as string[]) ?? [],
+      kidIds: resolvedKidIds,
       kids,
       // Withheld until the family accepts (see the header note).
       address: null,
@@ -174,8 +190,20 @@ export const contactPublishedSearch = onCall(
 
     // ── Dedupe + create in ONE transaction so two concurrent taps cannot both
     // pass the check (same reasoning as publishSearch's cap, PR #210 review).
-    // Equality-only query -> no composite index needed. A rejected/cancelled
-    // prior contact does NOT block a retry; a live one does. ──
+    // Equality-only query -> no composite index needed.
+    //
+    // Two prior states block a new contact, for different reasons:
+    //   - a LIVE one (pending/confirmed) is the plain duplicate;
+    //   - a family DECLINE inside the cooldown. This PR's thesis is that
+    //     disclosure follows an explicit yes, so letting a sitter re-mint a
+    //     pending immediately after a "no" — each one emailing and pushing
+    //     every parent of that family, with no cap — would let the sitter
+    //     overrule the family's answer for as long as the search is up
+    //     (PR #212 review). The window matches the study side's spec
+    //     (docs/superpowers/plans/2026-08-19-published-searches.md, PR4 T1),
+    //     so the two apps behave identically.
+    // A contact the SITTER withdrew (cancelled_by_babysitter) is not a "no"
+    // from the family and does not start a cooldown. ──
     await db.runTransaction(async (tx) => {
       const priorSnap = await tx.get(
         db.collection('appointments')
@@ -188,6 +216,25 @@ export const contactPublishedSearch = onCall(
       });
       if (live) {
         throw new HttpsError('already-exists', 'You have already contacted this family about this search');
+      }
+      const cooldownFrom = Date.now() - DECLINE_COOLDOWN_MS;
+      const recentlyDeclined = priorSnap.docs.some((d) => {
+        const apt = d.data();
+        if (apt.statusReason !== 'declined_by_family') return false;
+        // A decline with no readable timestamp is treated as recent: the
+        // cooldown must fail CLOSED, since the alternative re-notifies a
+        // family that already said no.
+        const declinedAtMs = apt.updatedAt?.toMillis?.();
+        return typeof declinedAtMs !== 'number' || declinedAtMs > cooldownFrom;
+      });
+      if (recentlyDeclined) {
+        throw new HttpsError(
+          'failed-precondition',
+          'This family declined your last request for this search. You can try again in a week.',
+          // The client distinguishes this from the generic "search is gone"
+          // failure on the reason, not on the message text.
+          { reason: 'decline_cooldown' },
+        );
       }
       tx.set(appointmentRef, appointment);
     });

@@ -331,7 +331,19 @@ export function ExpandableBabysitterCard({
             // explicit yes (PR #212 review).
             <p className="mt-3 text-xs text-gray-500">{t('appointment.declinedByYou')}</p>
           )}
-          {variant === 'rejected' && onResubmit && appointment.statusReason !== 'declined_by_family' && (
+          {variant === 'rejected' && appointment.status === 'cancelled'
+            && appointment.statusReason === 'cancelled_by_babysitter' && (
+            // The sitter withdrew their own contact (issue #207 PR3 made that
+            // reachable for a PENDING request). useFamilyAppointments funnels
+            // cancelled into rejectedRecent, so without this the family reads
+            // "Declined" with no idea who declined (PR #212 review).
+            <p className="mt-3 text-xs text-gray-500">{t('appointment.withdrawnBySitter')}</p>
+          )}
+          {/* Resubmit is gated on the status, not just the variant: cancelled
+              appointments also render as `rejected` here, and
+              resubmitAppointment rejects anything that is not `rejected` — the
+              button could only ever produce an error alert (PR #212 review). */}
+          {variant === 'rejected' && onResubmit && appointment.status === 'rejected' && appointment.statusReason !== 'declined_by_family' && (
             <div className="mt-3">
               <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); onResubmit(); }}>
                 {t('appointment.resubmit')}

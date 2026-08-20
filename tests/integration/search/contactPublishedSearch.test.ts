@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
-import { FieldValue } from 'firebase-admin/firestore';
+import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { clearAll, callFunction, getIdToken, getDb } from '../../setup/emulator.js';
 import { seedTestData, type SeedData } from '../../setup/seed.js';
 
@@ -326,7 +326,10 @@ describe('contactPublishedSearch (sit)', () => {
     expect(res.appointmentId).toBeTruthy();
   });
 
-  it('lets a babysitter retry after their earlier contact was declined', async () => {
+  // A family's "no" holds for a week (PR #212 review): without the cooldown a
+  // sitter could re-mint a pending on every tap, and each one emails and
+  // pushes every parent of that family. Matches the study side's spec.
+  it('BLOCKS a retry while the family decline is inside the cooldown', async () => {
     const id = await publish();
     const first = await callFunction<{ appointmentId: string }>(
       'contactPublishedSearch',
@@ -336,6 +339,61 @@ describe('contactPublishedSearch (sit)', () => {
     await getDb().collection('appointments').doc(first.appointmentId).update({
       status: 'rejected',
       statusReason: 'declined_by_family',
+      updatedAt: Timestamp.now(),
+    });
+    await expect(
+      callFunction('contactPublishedSearch', { publishedSearchId: id }, sitterToken),
+    ).rejects.toMatchObject({ code: 'FAILED_PRECONDITION' });
+  });
+
+  it('lets the babysitter retry once the cooldown has elapsed', async () => {
+    const id = await publish();
+    const first = await callFunction<{ appointmentId: string }>(
+      'contactPublishedSearch',
+      { publishedSearchId: id },
+      sitterToken,
+    );
+    await getDb().collection('appointments').doc(first.appointmentId).update({
+      status: 'rejected',
+      statusReason: 'declined_by_family',
+      updatedAt: Timestamp.fromMillis(Date.now() - 8 * 24 * 60 * 60 * 1000),
+    });
+    const second = await callFunction<{ appointmentId: string }>(
+      'contactPublishedSearch',
+      { publishedSearchId: id },
+      sitterToken,
+    );
+    expect(second.appointmentId).not.toBe(first.appointmentId);
+  });
+
+  it('a decline with no readable timestamp fails CLOSED (still blocked)', async () => {
+    const id = await publish();
+    const first = await callFunction<{ appointmentId: string }>(
+      'contactPublishedSearch',
+      { publishedSearchId: id },
+      sitterToken,
+    );
+    await getDb().collection('appointments').doc(first.appointmentId).update({
+      status: 'rejected',
+      statusReason: 'declined_by_family',
+      updatedAt: FieldValue.delete(),
+    });
+    await expect(
+      callFunction('contactPublishedSearch', { publishedSearchId: id }, sitterToken),
+    ).rejects.toMatchObject({ code: 'FAILED_PRECONDITION' });
+  });
+
+  it("a sitter's OWN withdrawal is not a decline and starts no cooldown", async () => {
+    const id = await publish();
+    const first = await callFunction<{ appointmentId: string }>(
+      'contactPublishedSearch',
+      { publishedSearchId: id },
+      sitterToken,
+    );
+    await getDb().collection('appointments').doc(first.appointmentId).update({
+      status: 'cancelled',
+      statusReason: 'cancelled_by_babysitter',
+      updatedAt: Timestamp.now(),
     });
     const second = await callFunction<{ appointmentId: string }>(
       'contactPublishedSearch',
