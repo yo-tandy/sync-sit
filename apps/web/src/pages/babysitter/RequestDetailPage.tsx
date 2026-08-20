@@ -70,6 +70,10 @@ export function RequestDetailPage() {
   // Load parent contacts via cloud function (bypasses Firestore rules)
   useEffect(() => {
     if (!appointmentId || !appointment) return;
+    // Mirror the callable's gate (PR #212 review): a sitter-initiated request
+    // discloses parent contacts only once the family has CONFIRMED it. Asking
+    // earlier would just be a guaranteed permission-denied.
+    if (appointment.initiatedBy === 'babysitter' && appointment.status !== 'confirmed') return;
     const id = appointmentId;
     async function loadParents() {
       try {
