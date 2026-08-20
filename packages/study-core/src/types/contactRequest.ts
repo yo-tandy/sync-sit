@@ -36,13 +36,22 @@ export interface StudyContactRequestDoc {
    * user docs).
    */
   tutorName: string;
-  /** users/{uid} of the parent who created the request. */
+  /** users/{uid} of the caller who created the request (parent or tutor). */
   createdByUserId: string;
+  /**
+   * Who opened this conversation. ABSENT means 'family' — the inversion
+   * (issue #207 PR4) is new, so every legacy doc is family-initiated by
+   * construction. A tutor-initiated request is answered by a PARENT, through
+   * respondToFamilyContactRequest, and its `parentName` is empty until then.
+   */
+  initiatedBy?: 'tutor';
+  /** The publishedSearches doc a tutor-initiated request answers. */
+  publishedSearchId?: string;
   /** Subject key requested (must be in SUBJECTS). */
   subject: string;
   /** Class level requested (must be in CLASS_LEVELS). */
   level: string;
-  /** Optional free-text message from the parent (<= 1000 chars). */
+  /** Optional free-text message from the sender (<= 1000 chars). */
   message?: string;
   status: StudyContactRequestStatus;
   createdAt: FirestoreTimestamp;

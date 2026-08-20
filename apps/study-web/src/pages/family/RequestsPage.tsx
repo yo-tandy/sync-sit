@@ -33,6 +33,13 @@ import { EndorseTutorDialog } from '@/components/family/EndorseTutorDialog';
  * Accepted rows deep-link back to the search page with the subject/level
  * prefilled; that page auto-runs the search and reveals the tutor's contact
  * block on the matching card (Task 1 auto-search contract).
+ *
+ * Inverted rows (issue #207 PR4): a request with `initiatedBy === 'tutor'` is
+ * one a TUTOR opened by answering this family's published search. The family
+ * answers those instead of cancelling them — Accept unlocks the tutor's
+ * contact exactly as a tutor's own accept does, Decline closes it — so the
+ * pending row swaps the Cancel control for Accept/Decline and says who
+ * reached out. Accepted rows are identical whichever side opened them.
  */
 const STATUS_ORDER: StudyContactRequestStatus[] = ['pending', 'accepted', 'declined', 'cancelled'];
 
@@ -61,6 +68,8 @@ export function RequestsPage() {
   // requestId currently awaiting the cancel callable, or null (row in-flight).
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [cancelError, setCancelError] = useState<string | null>(null);
+  // requestId currently awaiting the respond callable, or null (row in-flight).
+  const [respondingId, setRespondingId] = useState<string | null>(null);
   // tutorUserIds endorsed this session (submit succeeded or already-exists) — the
   // matching accepted row shows a disabled "Endorsed" state (persisted nothing).
   const [endorsedTutors, setEndorsedTutors] = useState<Set<string>>(new Set());
@@ -108,6 +117,30 @@ export function RequestsPage() {
       setCancelError(t('family.requests.actionError'));
     } finally {
       setCancellingId(null);
+    }
+  };
+
+  // NON-OPTIMISTIC, like cancelRequest: the backend owns the transition (it
+  // also writes the tutor's approvedFamilies unlock), so the row only moves
+  // once the callable resolves.
+  const respondToTutor = async (req: StudyContactRequestDoc, action: 'accept' | 'decline') => {
+    setCancelError(null);
+    setRespondingId(req.requestId);
+    try {
+      const fn = httpsCallable(functions, 'respondToFamilyContactRequest');
+      await fn({ requestId: req.requestId, action });
+      setRequests((rs) =>
+        (rs ?? []).map((r) =>
+          r.requestId === req.requestId
+            ? { ...r, status: action === 'accept' ? 'accepted' : 'declined' }
+            : r,
+        ),
+      );
+      toast(t(action === 'accept' ? 'family.requests.status.accepted' : 'family.requests.status.declined'));
+    } catch {
+      setCancelError(t('family.requests.actionError'));
+    } finally {
+      setRespondingId(null);
     }
   };
 
@@ -190,7 +223,33 @@ export function RequestsPage() {
                         </Badge>
                       </div>
 
-                      {r.status === 'pending' && (
+                      {r.initiatedBy === 'tutor' && (
+                        <p className="mt-2 text-xs text-gray-500">
+                          {t('family.requests.answeredPublishedSearch')}
+                        </p>
+                      )}
+
+                      {r.status === 'pending' && r.initiatedBy === 'tutor' && (
+                        <div className="mt-3 flex gap-2">
+                          <Button
+                            size="sm"
+                            disabled={respondingId === r.requestId}
+                            onClick={() => respondToTutor(r, 'accept')}
+                          >
+                            {t('family.requests.accept')}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={respondingId === r.requestId}
+                            onClick={() => respondToTutor(r, 'decline')}
+                          >
+                            {t('family.requests.decline')}
+                          </Button>
+                        </div>
+                      )}
+
+                      {r.status === 'pending' && r.initiatedBy !== 'tutor' && (
                         <div className="mt-3">
                           <Button
                             size="sm"

@@ -172,23 +172,33 @@ export function RequestsPage() {
                   <p className="mt-1 text-xs text-gray-500">
                     {t('tutor.requests.sentOn', { date: formatDate(r.createdAt) })}
                   </p>
-                  <div className="mt-3 flex gap-2">
-                    <Button
-                      size="sm"
-                      disabled={actingId === r.requestId}
-                      onClick={() => respond(r, 'accept')}
-                    >
-                      {t('tutor.requests.accept')}
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={actingId === r.requestId}
-                      onClick={() => setDeclineTarget(r)}
-                    >
-                      {t('tutor.requests.decline')}
-                    </Button>
-                  </div>
+                  {/* A request THIS TUTOR opened by answering a published
+                      search is the family's to answer (issue #207 PR4) — no
+                      accept/decline here, or the tutor would be approving
+                      their own contact. The server refuses it too. */}
+                  {r.initiatedBy === 'tutor' ? (
+                    <p className="mt-3 text-xs text-gray-500">
+                      {t('tutor.requests.awaitingFamily')}
+                    </p>
+                  ) : (
+                    <div className="mt-3 flex gap-2">
+                      <Button
+                        size="sm"
+                        disabled={actingId === r.requestId}
+                        onClick={() => respond(r, 'accept')}
+                      >
+                        {t('tutor.requests.accept')}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={actingId === r.requestId}
+                        onClick={() => setDeclineTarget(r)}
+                      >
+                        {t('tutor.requests.decline')}
+                      </Button>
+                    </div>
+                  )}
                 </Card>
               ))}
             </div>

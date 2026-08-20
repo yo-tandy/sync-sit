@@ -263,6 +263,28 @@ describe('tutor RequestsPage', () => {
     expect(screen.getByText(/2026/)).toBeInTheDocument();
   });
 
+  it('a request THIS TUTOR opened is not answerable here — it waits for the family', async () => {
+    // Answering it would be the tutor approving their own contact: accept
+    // writes the family into approvedFamilies (issue #207 PR4). The server
+    // refuses it as well; this pin keeps the affordance from reappearing.
+    h.requests = [reqDoc({ requestId: 'r9', initiatedBy: 'tutor', publishedSearchId: 'ps1' })];
+    renderWithProviders(<RequestsPage />);
+    await screen.findByText(/Cohen/);
+
+    expect(screen.getByText(/waiting for their answer/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^accept$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^decline$/i })).not.toBeInTheDocument();
+  });
+
+  it('a FAMILY-initiated pending keeps its Accept/Decline (regression pin)', async () => {
+    h.requests = [reqDoc()];
+    renderWithProviders(<RequestsPage />);
+    await screen.findByText(/Cohen/);
+
+    expect(screen.getByRole('button', { name: /^accept$/i })).toBeInTheDocument();
+    expect(screen.queryByText(/waiting for their answer/i)).not.toBeInTheDocument();
+  });
+
   it('history rows (accepted/declined) are read-only', async () => {
     h.requests = [
       reqDoc({ requestId: 'r1', familyName: 'Accepted Fam', status: 'accepted' }),

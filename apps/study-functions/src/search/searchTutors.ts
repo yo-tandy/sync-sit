@@ -76,6 +76,13 @@ export const searchTutors = onCall(
       const data = d.data();
       const tutorId = data.tutorUserId as string | undefined;
       if (!tutorId) return;
+      // A TUTOR-initiated request that is still pending is not something this
+      // family sent, so it must not render the tutor's card as "request sent"
+      // (issue #207 PR4) -- the family's action for it lives on RequestsPage,
+      // and the card should stay a fresh 'none'. Once ACCEPTED the direction
+      // stops mattering: contact is unlocked either way, and the card must
+      // say so.
+      if (data.initiatedBy === 'tutor' && data.status !== 'accepted') return;
       const createdAtMs = data.createdAt?.toMillis
         ? data.createdAt.toMillis()
         : data.createdAt?.toDate

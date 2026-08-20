@@ -22,6 +22,7 @@ const h = vi.hoisted(() => ({
   auth: { userDoc: null as unknown },
   snapshotNext: null as null | ((snap: unknown) => void),
   snapshotError: null as null | ((err: unknown) => void),
+  requestsNext: null as null | ((snap: unknown) => void),
   updateDoc: vi.fn(() => Promise.resolve()),
   unsub: vi.fn(),
 }));
@@ -36,7 +37,18 @@ vi.mock('firebase/firestore', () => ({
   orderBy: (...args: unknown[]) => ({ orderBy: args }),
   limit: (n: number) => ({ limit: n }),
   serverTimestamp: () => ({ __serverTimestamp: true }),
-  onSnapshot: (_q: unknown, next: (snap: unknown) => void, error: (err: unknown) => void) => {
+  // Two subscriptions now live on this page — the board itself and the
+  // tutor's own contact requests (which decides "Request sent") — so the mock
+  // routes by collection instead of keeping one pair of callbacks.
+  onSnapshot: (q: unknown, next: (snap: unknown) => void, error: (err: unknown) => void) => {
+    const path = (q as { query?: { path?: string }[] }).query?.[0]?.path;
+    if (path === 'studyContactRequests') {
+      h.requestsNext = next;
+      // Deliver an empty set immediately: with no live request every card
+      // shows its CTA, which is what most pins assume.
+      next({ docs: [] });
+      return h.unsub;
+    }
     h.snapshotNext = next;
     h.snapshotError = error;
     return h.unsub;
@@ -92,6 +104,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   h.snapshotNext = null;
   h.snapshotError = null;
+  h.requestsNext = null;
   h.auth.userDoc = tutorDoc(SEEN_AT);
 });
 
@@ -173,14 +186,37 @@ describe('PublishedSearchesPage (study board)', () => {
     expect(h.updateDoc).not.toHaveBeenCalled();
   });
 
-  it('offers no contact button — only the contact-soon note (PR4 ships the CTA)', async () => {
+  it('offers a Contact CTA on a card with no live request', async () => {
     renderWithProviders(<PublishedSearchesPage />);
     push([boardDoc('a', SEEN_AT + 1)]);
     await waitFor(() =>
-      expect(screen.getByText('Contacting families arrives in the next update')).toBeInTheDocument(),
+      expect(screen.getByRole('button', { name: 'Contact family' })).toBeInTheDocument(),
     );
-    expect(screen.queryByRole('button', { name: /contact/i })).toBeNull();
-    // The only button on the page is TopNav's back control.
-    expect(screen.getAllByRole('button')).toHaveLength(1);
+  });
+
+  it('swaps the CTA for "Request sent" once a LIVE request exists for that search', async () => {
+    // Live means pending or accepted; the set is read from the tutor's own
+    // requests, so it survives a reload and a second device.
+    renderWithProviders(<PublishedSearchesPage />);
+    push([boardDoc('a', SEEN_AT + 1)]);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Contact family' })).toBeInTheDocument());
+
+    act(() => h.requestsNext!({
+      docs: [{ data: () => ({ publishedSearchId: 'a', status: 'pending' }) }],
+    }));
+    await waitFor(() => expect(screen.getByText('Request sent')).toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: 'Contact family' })).toBeNull();
+  });
+
+  it('a DECLINED prior request leaves the CTA available (the server owns the cooldown)', async () => {
+    renderWithProviders(<PublishedSearchesPage />);
+    push([boardDoc('a', SEEN_AT + 1)]);
+    act(() => h.requestsNext!({
+      docs: [{ data: () => ({ publishedSearchId: 'a', status: 'declined' }) }],
+    }));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Contact family' })).toBeInTheDocument(),
+    );
+    expect(screen.queryByText('Request sent')).toBeNull();
   });
 });

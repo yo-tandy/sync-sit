@@ -265,6 +265,61 @@ describe('family RequestsPage', () => {
 
   // ── Cancel a pending request ──
 
+  // ── Inverted rows: a tutor answered this family's published search
+  //    (issue #207 PR4). The family ANSWERS these instead of cancelling them.
+  it('a tutor-initiated pending row offers Accept/Decline instead of Cancel, and says who reached out', async () => {
+    h.requests = [reqDoc({ requestId: 'r9', initiatedBy: 'tutor', publishedSearchId: 'ps1' })];
+    renderWithProviders(<RequestsPage />);
+    await screen.findByText(/Alex Roy/);
+
+    expect(screen.getByText(/answered your published search/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^accept$/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^decline$/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /cancel request/i })).not.toBeInTheDocument();
+  });
+
+  it('accepting calls respondToFamilyContactRequest and moves the row only after it resolves', async () => {
+    h.requests = [reqDoc({ requestId: 'r9', initiatedBy: 'tutor' })];
+    h.callable.mockResolvedValue({ data: { success: true } });
+    renderWithProviders(<RequestsPage />);
+    await screen.findByText(/Alex Roy/);
+
+    fireEvent.click(screen.getByRole('button', { name: /^accept$/i }));
+    await waitFor(() =>
+      expect(h.callable).toHaveBeenCalledWith('respondToFamilyContactRequest', {
+        requestId: 'r9',
+        action: 'accept',
+      }),
+    );
+    // Accepted rows carry the contact deep-link, whoever opened the request.
+    expect(await screen.findByRole('link', { name: /view contact details/i })).toBeInTheDocument();
+  });
+
+  it('declining calls the same callable with action decline', async () => {
+    h.requests = [reqDoc({ requestId: 'r9', initiatedBy: 'tutor' })];
+    h.callable.mockResolvedValue({ data: { success: true } });
+    renderWithProviders(<RequestsPage />);
+    await screen.findByText(/Alex Roy/);
+
+    fireEvent.click(screen.getByRole('button', { name: /^decline$/i }));
+    await waitFor(() =>
+      expect(h.callable).toHaveBeenCalledWith('respondToFamilyContactRequest', {
+        requestId: 'r9',
+        action: 'decline',
+      }),
+    );
+  });
+
+  it('a FAMILY-initiated pending row is untouched by the inversion (regression pin)', async () => {
+    h.requests = [reqDoc({ requestId: 'r1' })];
+    renderWithProviders(<RequestsPage />);
+    await screen.findByText(/Alex Roy/);
+
+    expect(screen.getByRole('button', { name: /cancel request/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^accept$/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/answered your published search/i)).not.toBeInTheDocument();
+  });
+
   it('pending rows expose a "Cancel request" action; other statuses do not', async () => {
     h.requests = [
       reqDoc({ requestId: 'r1', tutorName: 'Pending Tutor', status: 'pending' }),
