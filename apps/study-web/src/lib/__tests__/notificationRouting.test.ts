@@ -9,6 +9,7 @@ describe('study notificationRouting', () => {
       [
         'study_contact_request',
         'study_contact_request_cancelled',
+        'study_published_search_contact',
         'study_request_accepted',
         'study_request_declined',
         'study_session_request',
@@ -57,6 +58,10 @@ describe('study notificationRouting', () => {
   it.each([
     ['study_request_accepted', '/family/requests'],
     ['study_request_declined', '/family/requests'],
+    // A tutor answered our published search — Accept/Decline lives there.
+    ['study_published_search_contact', '/family/requests'],
+    // ...and a tutor withdrawing their own request notifies the family too.
+    ['study_contact_request_cancelled', '/family/requests'],
     ['study_session_proposed', '/family/sessions'],
     ['study_session_confirmed', '/family/sessions'],
     ['study_session_declined', '/family/sessions'],

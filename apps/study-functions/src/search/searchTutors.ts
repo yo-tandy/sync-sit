@@ -76,6 +76,17 @@ export const searchTutors = onCall(
       const data = d.data();
       const tutorId = data.tutorUserId as string | undefined;
       if (!tutorId) return;
+      // A TUTOR-initiated request that is still pending is not something this
+      // family sent, so it must not render the tutor's card as "request sent"
+      // (issue #207 PR4). It cannot read as a fresh 'none' either: the send
+      // CTA that offers would be rejected as already-exists, contradicting
+      // the card the family just clicked (PR #213 review). It gets its own
+      // status, and the card points at the page where Accept lives. Once
+      // ACCEPTED the direction stops mattering -- contact is unlocked either
+      // way -- and a closed one (declined/cancelled) is not this family's
+      // history at all, so it stays out.
+      const tutorInitiated = data.initiatedBy === 'tutor';
+      if (tutorInitiated && data.status !== 'accepted' && data.status !== 'pending') return;
       const createdAtMs = data.createdAt?.toMillis
         ? data.createdAt.toMillis()
         : data.createdAt?.toDate
@@ -83,7 +94,10 @@ export const searchTutors = onCall(
           : 0;
       const prev = latestRequest.get(tutorId);
       if (!prev || createdAtMs >= prev.createdAtMs) {
-        latestRequest.set(tutorId, { status: data.status as string, createdAtMs });
+        const status = tutorInitiated && data.status === 'pending'
+          ? 'incoming'
+          : (data.status as string);
+        latestRequest.set(tutorId, { status, createdAtMs });
       }
     });
 
@@ -219,7 +233,8 @@ export const searchTutors = onCall(
       // withdrew its request is free to re-send, so search must surface the
       // tutor as 'none' (fresh) rather than echoing the withdrawn state. Any
       // other unrecognized stored value likewise can't leak into the payload.
-      const KNOWN_REQUEST_STATUSES = ['pending', 'accepted', 'declined'] as const;
+      // 'incoming' is this map's own value for a tutor-initiated pending.
+      const KNOWN_REQUEST_STATUSES = ['pending', 'accepted', 'declined', 'incoming'] as const;
       const latest = latestRequest.get(uid);
       const requestStatus: TutorSearchResult['requestStatus'] =
         latest && (KNOWN_REQUEST_STATUSES as readonly string[]).includes(latest.status)

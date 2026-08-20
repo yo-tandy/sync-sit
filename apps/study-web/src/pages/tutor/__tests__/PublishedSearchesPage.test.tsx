@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { screen, waitFor, act } from '@testing-library/react';
+import { screen, waitFor, act, fireEvent } from '@testing-library/react';
 import { renderWithProviders } from '@/__tests__/test-utils';
 
 /**
@@ -22,11 +22,17 @@ const h = vi.hoisted(() => ({
   auth: { userDoc: null as unknown },
   snapshotNext: null as null | ((snap: unknown) => void),
   snapshotError: null as null | ((err: unknown) => void),
+  requestsNext: null as null | ((snap: unknown) => void),
+  callable: vi.fn(),
   updateDoc: vi.fn(() => Promise.resolve()),
   unsub: vi.fn(),
 }));
 
-vi.mock('@/config/firebase', () => ({ db: {} }));
+vi.mock('@/config/firebase', () => ({ db: {}, functions: {} }));
+
+vi.mock('firebase/functions', () => ({
+  httpsCallable: (_fns: unknown, name: string) => (payload: unknown) => h.callable(name, payload),
+}));
 
 vi.mock('firebase/firestore', () => ({
   doc: (_db: unknown, ...path: string[]) => ({ path: path.join('/') }),
@@ -36,7 +42,18 @@ vi.mock('firebase/firestore', () => ({
   orderBy: (...args: unknown[]) => ({ orderBy: args }),
   limit: (n: number) => ({ limit: n }),
   serverTimestamp: () => ({ __serverTimestamp: true }),
-  onSnapshot: (_q: unknown, next: (snap: unknown) => void, error: (err: unknown) => void) => {
+  // Two subscriptions now live on this page — the board itself and the
+  // tutor's own contact requests (which decides "Request sent") — so the mock
+  // routes by collection instead of keeping one pair of callbacks.
+  onSnapshot: (q: unknown, next: (snap: unknown) => void, error: (err: unknown) => void) => {
+    const path = (q as { query?: { path?: string }[] }).query?.[0]?.path;
+    if (path === 'studyContactRequests') {
+      h.requestsNext = next;
+      // Deliver an empty set immediately: with no live request every card
+      // shows its CTA, which is what most pins assume.
+      next({ docs: [] });
+      return h.unsub;
+    }
     h.snapshotNext = next;
     h.snapshotError = error;
     return h.unsub;
@@ -92,6 +109,9 @@ beforeEach(() => {
   vi.clearAllMocks();
   h.snapshotNext = null;
   h.snapshotError = null;
+  h.requestsNext = null;
+  h.callable.mockReset();
+  h.callable.mockResolvedValue({ data: { requestId: 'r1' } });
   h.auth.userDoc = tutorDoc(SEEN_AT);
 });
 
@@ -173,14 +193,93 @@ describe('PublishedSearchesPage (study board)', () => {
     expect(h.updateDoc).not.toHaveBeenCalled();
   });
 
-  it('offers no contact button — only the contact-soon note (PR4 ships the CTA)', async () => {
+  it('offers a Contact CTA on a card with no live request', async () => {
     renderWithProviders(<PublishedSearchesPage />);
     push([boardDoc('a', SEEN_AT + 1)]);
     await waitFor(() =>
-      expect(screen.getByText('Contacting families arrives in the next update')).toBeInTheDocument(),
+      expect(screen.getByRole('button', { name: 'Contact family' })).toBeInTheDocument(),
     );
-    expect(screen.queryByRole('button', { name: /contact/i })).toBeNull();
-    // The only button on the page is TopNav's back control.
-    expect(screen.getAllByRole('button')).toHaveLength(1);
+  });
+
+  it('swaps the CTA for "Request sent" once a LIVE request exists for that search', async () => {
+    // Live means pending or accepted; the set is read from the tutor's own
+    // requests, so it survives a reload and a second device.
+    renderWithProviders(<PublishedSearchesPage />);
+    push([boardDoc('a', SEEN_AT + 1)]);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Contact family' })).toBeInTheDocument());
+
+    act(() => h.requestsNext!({
+      docs: [{ data: () => ({ publishedSearchId: 'a', status: 'pending' }) }],
+    }));
+    await waitFor(() => expect(screen.getByText('Request sent')).toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: 'Contact family' })).toBeNull();
+  });
+
+  // The dialog's error copy: the server's guards are keyed by the (tutor,
+  // FAMILY) pair while the card's "Request sent" state is keyed by SEARCH, so
+  // a card can legitimately offer a CTA the server then refuses. Each failure
+  // the tutor can act on must say what it is, not "the search may have
+  // expired" (PR #213 review).
+  it('a hidden profile is named as the reason, not reported as a vanished search', async () => {
+    h.callable.mockRejectedValue({ details: { reason: 'not_searchable' } });
+    renderWithProviders(<PublishedSearchesPage />);
+    push([boardDoc('a', SEEN_AT + 1)]);
+    fireEvent.click(await screen.findByRole('button', { name: 'Contact family' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Send request' }));
+
+    expect(await screen.findByText(/turn on your profile visibility/i)).toBeInTheDocument();
+  });
+
+  it('an existing pending with the SAME FAMILY is named as such', async () => {
+    // Reachable without any stale state: one family may keep three live
+    // searches on the board, and answering the second is refused.
+    h.callable.mockRejectedValue({ code: 'functions/already-exists' });
+    renderWithProviders(<PublishedSearchesPage />);
+    push([boardDoc('a', SEEN_AT + 1)]);
+    fireEvent.click(await screen.findByRole('button', { name: 'Contact family' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Send request' }));
+
+    expect(await screen.findByText(/already have a pending request/i)).toBeInTheDocument();
+  });
+
+  it("a pending the FAMILY opened tells the tutor to answer it, not to wait", async () => {
+    // The pending guard is initiator-agnostic, so already-exists also fires
+    // when the open request is one the tutor has to answer themselves --
+    // reachable whenever a family both contacts a tutor and publishes a
+    // search (PR #213 review).
+    h.callable.mockRejectedValue({
+      code: 'functions/already-exists',
+      details: { reason: 'pending_incoming' },
+    });
+    renderWithProviders(<PublishedSearchesPage />);
+    push([boardDoc('a', SEEN_AT + 1)]);
+    fireEvent.click(await screen.findByRole('button', { name: 'Contact family' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Send request' }));
+
+    expect(await screen.findByText(/has already contacted you/i)).toBeInTheDocument();
+  });
+
+  it('a subject the tutor does not teach is named — the board is unfiltered by subject', async () => {
+    // usePublishedSearches is deliberately unfiltered by the tutor's own
+    // subjects, so this refusal is on the ordinary path (PR #213 review).
+    h.callable.mockRejectedValue({ details: { reason: 'subject_mismatch' } });
+    renderWithProviders(<PublishedSearchesPage />);
+    push([boardDoc('a', SEEN_AT + 1)]);
+    fireEvent.click(await screen.findByRole('button', { name: 'Contact family' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Send request' }));
+
+    expect(await screen.findByText(/don't currently teach this subject/i)).toBeInTheDocument();
+  });
+
+  it('a DECLINED prior request leaves the CTA available (the server owns the cooldown)', async () => {
+    renderWithProviders(<PublishedSearchesPage />);
+    push([boardDoc('a', SEEN_AT + 1)]);
+    act(() => h.requestsNext!({
+      docs: [{ data: () => ({ publishedSearchId: 'a', status: 'declined' }) }],
+    }));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Contact family' })).toBeInTheDocument(),
+    );
+    expect(screen.queryByText('Request sent')).toBeNull();
   });
 });

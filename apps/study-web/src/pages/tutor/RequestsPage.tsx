@@ -57,6 +57,11 @@ export function RequestsPage() {
   // while its id is here — its actions are disabled and its status is NOT yet
   // changed (see respond).
   const [actingId, setActingId] = useState<string | null>(null);
+  // The request whose withdraw-confirmation dialog is open, or null. Withdraw
+  // is not recoverable by re-clicking -- it emails and pushes every parent of
+  // the family -- so it confirms, like the family's Cancel and like a
+  // guardian withdrawing on the kid's behalf (PR #213 review).
+  const [withdrawTarget, setWithdrawTarget] = useState<StudyContactRequestDoc | null>(null);
 
   // Live subscription (issue #117 tier b): the same provable equality query as
   // before, but every snapshot re-renders the inbox — a tutor with an open tab
@@ -119,7 +124,38 @@ export function RequestsPage() {
     }
   };
 
-  const pending = (requests ?? []).filter((r) => r.status === 'pending');
+  // Withdrawing this tutor's OWN approach (issue #207 PR4). Same
+  // non-optimistic discipline: the backend owns the transition, and until it
+  // resolves the row stays pending. Without this lever a request the family
+  // never answers would block the pair from ever contacting each other again
+  // -- the pending guard is symmetric, so it locks both directions.
+  const withdraw = async (req: StudyContactRequestDoc) => {
+    setError(null);
+    setActingId(req.requestId);
+    try {
+      const fn = httpsCallable(functions, 'cancelContactRequest');
+      await fn({ requestId: req.requestId });
+      setRequests((rs) =>
+        (rs ?? []).map((r) => (r.requestId === req.requestId ? { ...r, status: 'cancelled' } : r)),
+      );
+      toast(t('tutor.requests.status.cancelled'));
+    } catch {
+      setError(t('tutor.requests.actionError'));
+    } finally {
+      setActingId(null);
+    }
+  };
+
+  // Pending splits by WHO opened it (issue #207 PR4): only a family-initiated
+  // request is awaiting THIS tutor. One this tutor opened by answering a
+  // published search is waiting on the family, and grouping it under
+  // "Awaiting your response" would read as a to-do that has no action.
+  const pending = (requests ?? []).filter(
+    (r) => r.status === 'pending' && r.initiatedBy !== 'tutor',
+  );
+  const outgoing = (requests ?? []).filter(
+    (r) => r.status === 'pending' && r.initiatedBy === 'tutor',
+  );
   const history = (requests ?? []).filter((r) => r.status !== 'pending');
 
   return (
@@ -187,6 +223,49 @@ export function RequestsPage() {
                       onClick={() => setDeclineTarget(r)}
                     >
                       {t('tutor.requests.decline')}
+                    </Button>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── Sent by this tutor, waiting on the family (issue #207 PR4) ──
+            Deliberately its OWN section: these carry no action for the tutor,
+            and answering one would be the tutor approving their own contact
+            (the server refuses it as well). */}
+        {outgoing.length > 0 && (
+          <div className="mb-6">
+            <h2 className="mb-2 text-sm font-semibold text-gray-700">
+              {t('tutor.requests.outgoingTitle')}
+            </h2>
+            <div className="space-y-3">
+              {outgoing.map((r) => (
+                <Card key={r.requestId}>
+                  <p className="text-sm font-semibold text-gray-900">{r.familyName}</p>
+                  <p className="mt-1 text-xs text-gray-500">
+                    {t(`tutor.subjects.names.${r.subject}`)} · {r.level}
+                  </p>
+                  {r.message && (
+                    <p className="mt-2 rounded-lg bg-gray-50 p-2 text-xs italic text-gray-600">
+                      {r.message}
+                    </p>
+                  )}
+                  <p className="mt-1 text-xs text-gray-500">
+                    {t('tutor.requests.sentOn', { date: formatDate(r.createdAt) })}
+                  </p>
+                  <p className="mt-3 text-xs text-gray-500">
+                    {t('tutor.requests.awaitingFamily')}
+                  </p>
+                  <div className="mt-3">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={actingId === r.requestId}
+                      onClick={() => setWithdrawTarget(r)}
+                    >
+                      {t('tutor.requests.withdraw')}
                     </Button>
                   </div>
                 </Card>
@@ -263,6 +342,28 @@ export function RequestsPage() {
             {t('tutor.requests.confirmDeclineCta')}
           </Button>
           <Button variant="ghost" className="flex-1" onClick={() => setDeclineTarget(null)}>
+            {t('common.cancel')}
+          </Button>
+        </div>
+      </Dialog>
+
+      <Dialog open={withdrawTarget !== null} onClose={() => setWithdrawTarget(null)}>
+        <h3 className="mb-2 text-lg font-bold">{t('tutor.requests.confirmWithdrawTitle')}</h3>
+        <p className="mb-5 text-sm text-gray-600">{t('tutor.requests.confirmWithdrawDesc')}</p>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            className="flex-1"
+            disabled={actingId !== null}
+            onClick={() => {
+              const target = withdrawTarget;
+              setWithdrawTarget(null);
+              if (target) withdraw(target);
+            }}
+          >
+            {t('tutor.requests.confirmWithdrawCta')}
+          </Button>
+          <Button variant="ghost" className="flex-1" onClick={() => setWithdrawTarget(null)}>
             {t('common.cancel')}
           </Button>
         </div>

@@ -34,8 +34,13 @@ export interface TutorSearchResult {
   endorsementCount: number;
   /** Tutor's cancellation-notice policy in hours (0 = no policy). */
   cancellationNoticeHours: number;
-  /** This family's contact-request status toward the tutor. */
-  requestStatus: 'none' | StudyContactRequestStatus;
+  /**
+   * This family's contact-request status toward the tutor. `'incoming'` is a
+   * TUTOR-initiated pending request (issue #207 PR4): the family did not send
+   * it, so the card must not read "request sent" — but it must not read
+   * "none" either, or the send CTA it offers is rejected as already-exists.
+   */
+  requestStatus: 'none' | 'incoming' | StudyContactRequestStatus;
 
   // Contact fields — projected only when the caller's family is approved.
   contactEmail?: string;

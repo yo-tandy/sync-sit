@@ -177,6 +177,11 @@ export const getGovernedChildDetail = onCall(
           return {
             requestId: d.id,
             status: r.status,
+            // Who OPENED it (issue #207 PR4). A request the kid sent by
+            // answering a published search cannot be DECLINED -- the callable
+            // refuses that -- so the guardian page needs to tell the two
+            // apart and offer a withdraw instead. Absent means family.
+            initiatedBy: r.initiatedBy === 'tutor' ? 'tutor' : null,
             familyName: r.familyName ?? null,
             parentName: r.parentName ?? null,
             subject: r.subject ?? null,

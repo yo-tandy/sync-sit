@@ -115,6 +115,18 @@ describe('TutorCard', () => {
     expect(wa).toHaveAttribute('href', 'https://wa.me/33100000000');
   });
 
+  it('requestStatus=incoming → links to the requests page instead of a send CTA', () => {
+    // THEY contacted US (issue #207 PR4). Offering "Request contact" here
+    // would hand the family a button sendTutorContactRequest rejects as
+    // already-exists (PR #213 review).
+    renderWithProviders(<TutorCard result={tutor({ requestStatus: 'incoming' })} />);
+    expect(screen.getByRole('link', { name: /they contacted you/i })).toHaveAttribute(
+      'href',
+      '/family/requests',
+    );
+    expect(screen.queryByRole('button', { name: /request contact/i })).not.toBeInTheDocument();
+  });
+
   it('requestStatus=declined → shows "Request again"', () => {
     renderWithProviders(<TutorCard result={tutor({ requestStatus: 'declined' })} />);
     expect(screen.getByRole('button', { name: /request again/i })).toBeInTheDocument();

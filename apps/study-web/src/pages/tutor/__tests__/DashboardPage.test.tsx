@@ -247,6 +247,32 @@ describe('tutor DashboardPage', () => {
     expect(screen.queryByText('Levi')).not.toBeInTheDocument();
   });
 
+  it('a request THIS TUTOR sent renders marked, and does not count as a to-do', async () => {
+    // Same rule the section already applies to tutor-authored session
+    // proposals: it awaits the FAMILY, so it is not a to-do (issue #207 PR4).
+    h.auth.userDoc = tutor();
+    h.requests = [
+      {
+        requestId: 'r9',
+        tutorUserId: 't1',
+        status: 'pending',
+        initiatedBy: 'tutor',
+        publishedSearchId: 'ps1',
+        familyName: 'Cohen',
+        // Empty until a parent answers — it must not render a blank line.
+        parentName: '',
+        subject: 'math',
+        level: '6e',
+      },
+    ];
+    renderWithProviders(<DashboardPage />);
+
+    expect(await screen.findByText('Cohen')).toBeInTheDocument();
+    expect(screen.getByText(/waiting for their answer/i)).toBeInTheDocument();
+    // The amber to-do badge stays at zero; the section still shows the row.
+    expect(screen.queryByText('1')).not.toBeInTheDocument();
+  });
+
   it('lists pending session bookings under New Requests, linking to /tutor/sessions', async () => {
     h.auth.userDoc = tutor();
     h.sessions = [

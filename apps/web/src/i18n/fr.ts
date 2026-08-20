@@ -1245,6 +1245,12 @@ export default {
       cancelKeep: 'Garder la session',
       proposedByChild: 'Proposé par {{name}} — en attente de la réponse de la famille.',
       withdrawProposal: 'Retirer la proposition',
+      contactSentByChild: '{{name}} a contacté cette famille — en attente de sa réponse.',
+      withdrawContact: 'Retirer la demande',
+      confirmWithdrawContactTitle: 'Retirer cette demande ?',
+      confirmWithdrawContactCta: 'Oui, retirer',
+      confirmWithdrawContactDesc:
+        'La famille sera informée du retrait. {{name}} pourra la recontacter plus tard.',
       withdrawTitle: 'Retirer cette proposition ?',
       withdrawDesc:
         'La session proposée par {{name}} sera retirée. Indiquez une brève raison — elle sera partagée avec la famille et avec {{name}}.',

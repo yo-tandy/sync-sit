@@ -1271,6 +1271,12 @@ export default {
       cancelKeep: 'Keep session',
       proposedByChild: 'Proposed by {{name}} — awaiting the family\'s reply.',
       withdrawProposal: 'Withdraw proposal',
+      contactSentByChild: '{{name}} contacted this family — awaiting their reply.',
+      withdrawContact: 'Withdraw request',
+      confirmWithdrawContactTitle: 'Withdraw this request?',
+      confirmWithdrawContactCta: 'Yes, withdraw',
+      confirmWithdrawContactDesc:
+        'The family will be told the request was withdrawn. {{name}} can contact them again later.',
       withdrawTitle: 'Withdraw this proposal?',
       withdrawDesc:
         'The session {{name}} proposed will be withdrawn. Give a short reason — it is shared with the family and with {{name}}.',

@@ -8,19 +8,8 @@ import { getParentProfile } from '@ejm/shared-core';
 import type { User } from '@ejm/shared-core';
 import type { StudyUser, TutorProfile, SubjectOffering } from '@ejm/study-core';
 import { sendTutorContactRequestSchema } from '../validation/contact.js';
+import { DECLINE_COOLDOWN_MS, latestDeclineMs } from './declineCooldown.js';
 
-/** Cooldown before a family may re-request a tutor after a decline. */
-const DECLINE_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
-
-function toMillis(value: unknown): number {
-  if (value && typeof (value as { toMillis?: () => number }).toMillis === 'function') {
-    return (value as { toMillis: () => number }).toMillis();
-  }
-  if (value && typeof (value as { toDate?: () => Date }).toDate === 'function') {
-    return (value as { toDate: () => Date }).toDate().getTime();
-  }
-  return 0;
-}
 
 export const sendTutorContactRequest = onCall(
   { region: 'europe-west1', cors: getCorsOrigin() },
@@ -89,24 +78,19 @@ export const sendTutorContactRequest = onCall(
       .where('familyId', '==', familyId)
       .get();
 
-    let latest: { status: string; createdAtMs: number } | null = null;
-    for (const d of existingSnap.docs) {
-      const data = d.data();
-      if (data.status === 'pending') {
-        throw new HttpsError('already-exists', 'A pending request already exists for this tutor');
-      }
-      const createdAtMs = toMillis(data.createdAt);
-      if (!latest || createdAtMs >= latest.createdAtMs) {
-        latest = { status: data.status as string, createdAtMs };
-      }
+    // The pending guard stays initiator-agnostic: one open request per pair,
+    // whichever side opened it, is the same conversation.
+    if (existingSnap.docs.some((d) => d.data().status === 'pending')) {
+      throw new HttpsError('already-exists', 'A pending request already exists for this tutor');
     }
 
-    // ── Cooldown: a decline within the last 7 days blocks re-requesting ──
-    if (
-      latest &&
-      latest.status === 'declined' &&
-      Date.now() - latest.createdAtMs < DECLINE_COOLDOWN_MS
-    ) {
+    // ── Cooldown: only the TUTOR's decline of a request this family opened
+    // silences the family (issue #207 PR4). A family that declined the
+    // tutor's own approach said no to being contacted, not to contacting --
+    // counting that decline here would let a tutor's unwanted approach lock
+    // the family out of the tutor it actually wants. ──
+    const declinedMs = latestDeclineMs(existingSnap.docs.map((d) => d.data()), 'family');
+    if (declinedMs !== null && Date.now() - declinedMs < DECLINE_COOLDOWN_MS) {
       throw new HttpsError(
         'resource-exhausted',
         'This tutor recently declined a request; please wait 7 days before requesting again',
