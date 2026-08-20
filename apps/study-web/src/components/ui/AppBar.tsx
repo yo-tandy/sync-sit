@@ -89,7 +89,6 @@ export function AppBar() {
     }
   }, [uid]);
 
-
   const menuHasBadge = pendingEndorsements > 0;
 
   return (

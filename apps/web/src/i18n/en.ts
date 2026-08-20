@@ -266,7 +266,6 @@ export default {
   // Menu
   menu: {
     openMenu: 'Open menu',
-    openMenuPending: 'Open menu (new items pending)',
     home: 'Home',
     editProfile: 'Edit Profile',
     babysittingOptions: 'Babysitting Options',
@@ -485,6 +484,9 @@ export default {
   publishedBoard: {
     previewTitle: 'Posts from families',
     seeMore: 'See more posts',
+    openBoard: 'Open the board',
+    previewEmpty: 'No posts right now.',
+    previewError: 'Posts could not be loaded right now.',
     title: 'Published searches',
     intro: 'Families publish searches here so babysitters can find them — including searches outside your usual availability.',
     familyTitle: '{{name}} family',

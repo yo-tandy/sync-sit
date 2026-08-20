@@ -289,6 +289,9 @@ export default {
     publishedBoard: {
       previewTitle: 'Posts from families',
       seeMore: 'See more posts',
+      openBoard: 'Open the board',
+      previewEmpty: 'No posts right now.',
+      previewError: 'Posts could not be loaded right now.',
       title: 'Published searches',
       intro: 'Families publish searches here so tutors can find them — including subjects or levels outside your current offering.',
       familyTitle: '{{name}} family',

@@ -4,10 +4,12 @@ import { db } from '@/config/firebase';
 import { isActivePublishedSearch } from '@ejm/shared-core';
 
 /**
- * The published-searches board doc as sit renders it (issue #207): the PII
- * the publish callable deliberately exposed — familyName, area LABEL,
- * schedule, kid ages, rate, additionalInfo — and nothing more (no
- * address/latLng/kid names exist on the doc at all).
+ * The published-searches board doc as STUDY renders it (issue #207): the PII
+ * the tutor-search publish callable deliberately exposed — familyName, area
+ * LABEL, subject and level, location preferences, max rate — and nothing
+ * more (no address/latLng/kid names exist on the doc at all). Sit's board
+ * doc carries a different field set; the two shapes are deliberately not
+ * shared.
  */
 export interface BoardSearch {
   id: string;

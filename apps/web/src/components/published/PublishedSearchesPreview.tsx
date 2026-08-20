@@ -13,9 +13,13 @@ const PREVIEW_MAX = 3;
  * appointment sections, rather than behind a menu entry. Shows the newest
  * few active posts and links to the full board.
  *
- * Renders nothing at all when there is nothing to show — an empty section
- * would be noise on the dashboard, and the full board carries the empty
- * state and the error copy.
+ * Since the menu entries were removed, this section is the ONLY link to the
+ * board — so it must not vanish when the read comes back empty or fails
+ * (PR #211 review): the board's own empty/error copy, and any post the
+ * sitter's next refresh brings, would be reachable only by typing the URL.
+ * It therefore renders a one-line status plus the link in those states, and
+ * stays silent ONLY while the first snapshot is still pending, where an
+ * empty section would just be a flash before the cards arrive.
  */
 export function PublishedSearchesPreview() {
   const { t } = useTranslation();
@@ -26,11 +30,20 @@ export function PublishedSearchesPreview() {
   const seenAtMs = getBabysitterView(userDoc)?.publishedSearchesSeenAt?.toMillis?.() ?? null;
   const { searches, errored } = usePublishedSearches(PREVIEW_MAX);
 
-  if (errored || !searches || searches.length === 0) return null;
+  // First snapshot pending: nothing to say yet.
+  if (searches === null) return null;
+
+  const empty = searches.length === 0;
 
   return (
     <div className="mb-5">
       <h3 className="mb-2 text-sm font-semibold text-gray-700">{t('publishedBoard.previewTitle')}</h3>
+      {errored && (
+        <p className="mb-2 text-sm text-gray-500">{t('publishedBoard.previewError')}</p>
+      )}
+      {!errored && empty && (
+        <p className="mb-2 text-sm text-gray-500">{t('publishedBoard.previewEmpty')}</p>
+      )}
       {searches.map((s) => (
         <PublishedSearchCard key={s.id} search={s} seenAtMs={seenAtMs} />
       ))}
@@ -38,7 +51,7 @@ export function PublishedSearchesPreview() {
         to="/babysitter/published-searches"
         className="text-sm font-medium text-brand-600 hover:underline"
       >
-        {t('publishedBoard.seeMore')}
+        {t(empty ? 'publishedBoard.openBoard' : 'publishedBoard.seeMore')}
       </Link>
     </div>
   );

@@ -40,7 +40,12 @@ export function PublishedSearchCard({
       )}
       {(search.locationPrefs?.length ?? 0) > 0 && (
         <p className="text-sm text-gray-500">
-          {search.locationPrefs!.map((p) => t(`family.search.location.${p}`)).join(', ')}
+          {/* TUTOR-perspective copy. The family.search.location.* block is
+              written from the family's side ("At your home" = the FAMILY's
+              home), so reusing it here inverts every label for the reader
+              (PR #211 review). tutor.sessions.location.* is the same four
+              values said to a tutor. */}
+          {search.locationPrefs!.map((p) => t(`tutor.sessions.location.${p}`)).join(', ')}
         </p>
       )}
       {search.maxRate != null && (

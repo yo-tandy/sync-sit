@@ -255,7 +255,6 @@ export default {
 
   menu: {
     openMenu: 'Ouvrir le menu',
-    openMenuPending: 'Ouvrir le menu (nouveaux éléments en attente)',
     home: 'Accueil',
     editProfile: 'Modifier le profil',
     babysittingOptions: 'Options de babysitting',
@@ -471,6 +470,9 @@ export default {
   publishedBoard: {
     previewTitle: 'Annonces des familles',
     seeMore: 'Voir plus d\'annonces',
+    openBoard: 'Ouvrir le tableau',
+    previewEmpty: 'Aucune annonce pour le moment.',
+    previewError: 'Les annonces n\'ont pas pu être chargées pour le moment.',
     title: 'Recherches publiées',
     intro: 'Les familles publient ici leurs recherches pour que les babysitters les trouvent — y compris des recherches hors de vos disponibilités habituelles.',
     familyTitle: 'Famille {{name}}',

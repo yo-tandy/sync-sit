@@ -43,20 +43,31 @@ describe('PublishedSearchesPreview', () => {
     cleanup();
   });
 
-  it('renders NOTHING when the board is empty (no dead section on the dashboard)', () => {
-    h.snapshot = (next) => next({ docs: [] });
+  it('renders nothing while the FIRST SNAPSHOT is pending (no flash before the cards)', () => {
     const { container } = renderPreview();
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('renders nothing while the first snapshot is pending, and on a failed read', () => {
-    const pending = renderPreview();
-    expect(pending.container).toBeEmptyDOMElement();
-    pending.unmount();
+  // This section is the only link to the board now that the menu entries are
+  // gone (PR #211 review), so an empty or failed read must still leave the
+  // tutor a way in — otherwise the board's own empty/error copy, and every
+  // post a later refresh brings, are reachable only by typing the URL.
+  it('keeps the board reachable when the board is EMPTY', () => {
+    h.snapshot = (next) => next({ docs: [] });
+    renderPreview();
+    expect(screen.getByText('tutor.publishedBoard.previewTitle')).toBeInTheDocument();
+    expect(screen.getByText('tutor.publishedBoard.previewEmpty')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'tutor.publishedBoard.openBoard' }))
+      .toHaveAttribute('href', '/tutor/published-searches');
+  });
 
+  it('keeps the board reachable when the read FAILS, and says so', () => {
     h.snapshot = (_next, err) => err();
-    const failed = renderPreview();
-    expect(failed.container).toBeEmptyDOMElement();
+    renderPreview();
+    expect(screen.getByText('tutor.publishedBoard.previewError')).toBeInTheDocument();
+    expect(screen.queryByText('tutor.publishedBoard.previewEmpty')).toBeNull();
+    expect(screen.getByRole('link', { name: 'tutor.publishedBoard.openBoard' }))
+      .toHaveAttribute('href', '/tutor/published-searches');
   });
 
   it('lists posts under the section title with a link to the full board', () => {

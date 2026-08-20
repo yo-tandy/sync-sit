@@ -10,12 +10,6 @@ import { usePublishedSearches } from '@/components/published/usePublishedSearche
 import { PublishedSearchCard } from '@/components/published/PublishedSearchCard';
 
 /**
- * The published-searches board doc as this page renders it (issue #207, sit
- * side): the PII the publish callable deliberately exposed — familyName,
- * area LABEL, schedule, kid ages, rate, additionalInfo — and nothing more
- * (no address/latLng/kid names exist on the doc).
- */
-/**
  * Published-searches board for babysitters (issue #207). Lists every ACTIVE
  * sit published search — deliberately unfiltered by the sitter's own
  * availability or searchable flag (the board's whole point) — newest first.
@@ -66,8 +60,6 @@ export function PublishedSearchesPage() {
 
       <div className="px-5 pt-4 pb-8">
         <p className="mb-4 text-sm text-gray-500">{t('publishedBoard.intro')}</p>
-
-        {searches === null && null}
 
         {searches !== null && errored && (
           <p className="py-6 text-center text-sm text-brand-600">{t('publishedBoard.error')}</p>

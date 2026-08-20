@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '@/stores/authStore';
-import { Badge } from './Badge';
 import { Dialog } from './Dialog';
 import {
   HomeIcon,
@@ -36,16 +35,11 @@ function MenuIcon({ className }: { className?: string }) {
   );
 }
 
-// Optional badge count on a menu entry — the #198 menu-badge idiom, ported
-// from sync-study's AppBar for the published-searches board (issue #207).
-function MenuItem({ icon, label, badge, to, onClick, onNavigate }: { icon: React.ReactNode; label: string; badge?: number; to?: string; onClick?: () => void; onNavigate?: () => void }) {
+function MenuItem({ icon, label, to, onClick, onNavigate }: { icon: React.ReactNode; label: string; to?: string; onClick?: () => void; onNavigate?: () => void }) {
   const inner = (
     <div className="flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 active:bg-gray-100">
       <span className="text-gray-400">{icon}</span>
       <span>{label}</span>
-      {badge !== undefined && badge > 0 && (
-        <Badge variant="amber" className="ml-auto">{badge}</Badge>
-      )}
     </div>
   );
   if (to) return <Link to={to} className="block" onClick={onNavigate}>{inner}</Link>;
@@ -57,7 +51,6 @@ export function AppBar({ role }: { role: UserRole }) {
   const { userDoc, logout } = useAuthStore();
   const [menuOpen, setMenuOpen] = useState(false);
   const homePath = role === 'babysitter' ? '/babysitter' : role === 'admin' ? '/admin' : '/family';
-
 
   return (
     <>
@@ -78,11 +71,9 @@ export function AppBar({ role }: { role: UserRole }) {
           <button
             onClick={() => setMenuOpen(true)}
             aria-label={t('menu.openMenu')}
-            className="relative -m-1.5 flex h-11 w-11 items-center justify-center text-white"
+            className="-m-1.5 flex h-11 w-11 items-center justify-center text-white"
           >
             <MenuIcon className="h-5 w-5" />
-            {/* Closed-menu signal that some entry inside carries a badge; the
-                aria-label swap above is the screen-reader equivalent (#198). */}
           </button>
         </div>
       </div>

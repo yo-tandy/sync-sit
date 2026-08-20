@@ -8,12 +8,6 @@ import { usePublishedSearches } from '@/components/published/usePublishedSearche
 import { PublishedSearchCard } from '@/components/published/PublishedSearchCard';
 
 /**
- * The published-searches board doc as this page renders it (issue #207,
- * study side): the PII the publish callable deliberately exposed —
- * familyName, area LABEL, subject+level, location prefs, max rate — and
- * nothing more (no address/latLng exists on the doc).
- */
-/**
  * Published-searches board for tutors (issue #207). Lists every ACTIVE study
  * published search — deliberately unfiltered by the tutor's own subjects or
  * searchable flag (the board's whole point) — newest first.

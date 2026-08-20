@@ -114,6 +114,29 @@ describe('PublishedSearchesPage (study board)', () => {
     await waitFor(() => expect(screen.getAllByText('New')).toHaveLength(2));
   });
 
+  it('keeps tags stable when the live userDoc seenAt updates mid-visit (mount capture)', async () => {
+    // The seen-write lands on the SAME userDoc subscription this page reads,
+    // so without the mount capture a tutor's tags would vanish out from under
+    // them while they are still reading the board. Sit pins this; study must
+    // too, since both boards depend on the identical design (PR #211 review).
+    const { rerender } = renderWithProviders(<PublishedSearchesPage />);
+    push([boardDoc('a', SEEN_AT + 1)]);
+    await waitFor(() => expect(screen.getAllByText('New')).toHaveLength(1));
+    h.auth.userDoc = tutorDoc(NOW);
+    rerender(<PublishedSearchesPage />);
+    expect(screen.getAllByText('New')).toHaveLength(1);
+  });
+
+  it('renders location preferences from the TUTOR\'s side, not the family\'s', async () => {
+    // family.search.location.* says "At your home" meaning the FAMILY's home;
+    // reusing it here inverted every label for the reader (PR #211 review).
+    renderWithProviders(<PublishedSearchesPage />);
+    push([boardDoc('a', SEEN_AT + 1, { locationPrefs: ['family_home', 'tutor_home'] })]);
+    await waitFor(() =>
+      expect(screen.getByText("At the family's home, At your home")).toBeInTheDocument(),
+    );
+  });
+
   it('filters expired docs client-side and renders the empty state on an empty board', async () => {
     renderWithProviders(<PublishedSearchesPage />);
     push([

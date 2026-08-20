@@ -146,6 +146,32 @@ describe('PublishedSearchesPage (sit board)', () => {
     expect(screen.getAllByText('New')).toHaveLength(1);
   });
 
+  it('renders a RECURRING post as day names plus times, with the school-weeks line', async () => {
+    // Every other pin uses a one_time doc, so the recurring branch of the
+    // card's schedule builder — day-name lookup, the joined slots, and the
+    // schoolWeeksOnly line — was never exercised (PR #211 review).
+    renderPage();
+    push([
+      boardDoc('r', SEEN_AT + 1, {
+        type: 'recurring',
+        date: null,
+        startTime: null,
+        endTime: null,
+        schoolWeeksOnly: true,
+        recurringSlots: [
+          { day: 'mon', startTime: '17:00', endTime: '19:00' },
+          { day: 'thu', startTime: '18:00', endTime: '20:30' },
+        ],
+      }),
+    ]);
+    await waitFor(() =>
+      expect(
+        screen.getByText('Mondays 17:00–19:00, Thursdays 18:00–20:30'),
+      ).toBeInTheDocument(),
+    );
+    expect(screen.getByText('School weeks only')).toBeInTheDocument();
+  });
+
   it('filters expired docs client-side and renders the empty state on an empty board', async () => {
     renderPage();
     push([
