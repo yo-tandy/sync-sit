@@ -55,6 +55,18 @@ describe('enrollTutor (unauthenticated create path)', () => {
     expect(user.firstName).toBe('Nora');
     expect(user.lastName).toBe('Newtutor');
     expect(user.consentVersion).toBe('1.0');
+    // Canonical ROOT copies (issue #203 shared identity) written alongside
+    // the nested back-compat duplicates on profiles.tutor.
+    expect(user.ejemEmail).toBe(EMAIL);
+    expect(user.contactEmail).toBe('contact@test.com');
+    // Channels the user never supplied are ABSENT at the root, not null:
+    // root presence means "set or cleared by the user", so an
+    // enrollment-written null would read as a deliberate clear and block
+    // both the nested fallback and the backfill (PR #206 review). The
+    // nested duplicates keep their null convention.
+    expect(user.contactPhone).toBeUndefined();
+    expect(user.whatsapp).toBeUndefined();
+    expect(user.profiles.tutor.contactPhone).toBeNull();
 
     const tutor = user.profiles.tutor;
     // Owner decision 2026-08-17: tutors share the babysitter trust model —

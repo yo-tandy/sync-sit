@@ -127,6 +127,74 @@ describe('enrollTutor cross-app add-profile', () => {
     expect(codeDoc.exists).toBe(false);
   });
 
+  // The CLASSIC (non-crossApp) path is where `enrollment` is the client
+  // payload verbatim — crossApp launders it through pickCrossAppSupplement +
+  // getContact first — so the two root-contact rules need pinning here, not
+  // only on the crossApp twin (PR #206 review).
+  it('classic enrollment: a typed contact overwrites a populated ROOT', async () => {
+    const db = getDb();
+    const uid = 'classic-root-overwrite';
+    const email = 'classicroot@test.com';
+    await getAdminAuth().createUser({ uid, email });
+    await db.collection('users').doc(uid).set({
+      uid,
+      email,
+      firstName: 'Sacha',
+      lastName: 'Sitter',
+      status: 'active',
+      contactEmail: 'stale-root@x.com',
+      profiles: { babysitter: { enrollmentComplete: true, ejemEmail: email } },
+    });
+
+    await callFunction(
+      'enrollTutor',
+      {
+        ejemEmail: EJEM_EMAIL,
+        verificationCode: CODE,
+        consentVersion: '1.0',
+        enrollment: tutorEnrollment({ contactEmail: 'typed@test.com' }),
+      },
+      await getIdToken(uid),
+    );
+
+    const after = (await db.collection('users').doc(uid).get()).data()!;
+    expect(after.contactEmail).toBe('typed@test.com');
+  });
+
+  it('classic enrollment: an EMPTY contact string is "not provided", never a clear', async () => {
+    // The schema accepts '' (no .min(1)); passing it through would write ''
+    // at the root, which getContact reads as an explicit user CLEAR — and the
+    // backfill could never lift the nested copy back, since the root key is
+    // then present (PR #206 review).
+    const db = getDb();
+    const uid = 'classic-empty-contact';
+    const email = 'classicempty@test.com';
+    await getAdminAuth().createUser({ uid, email });
+    await db.collection('users').doc(uid).set({
+      uid,
+      email,
+      firstName: 'Sacha',
+      lastName: 'Sitter',
+      status: 'active',
+      contactPhone: '+33600000009',
+      profiles: { babysitter: { enrollmentComplete: true, ejemEmail: email } },
+    });
+
+    await callFunction(
+      'enrollTutor',
+      {
+        ejemEmail: EJEM_EMAIL,
+        verificationCode: CODE,
+        consentVersion: '1.0',
+        enrollment: tutorEnrollment({ contactPhone: '' }),
+      },
+      await getIdToken(uid),
+    );
+
+    const after = (await db.collection('users').doc(uid).get()).data()!;
+    expect(after.contactPhone).toBe('+33600000009');
+  });
+
   it('rejects when the caller already has a tutor profile (profile-exists)', async () => {
     const token = await getIdToken(seed.tutor1.uid); // seeded with a tutor profile
     await expect(
@@ -432,6 +500,46 @@ describe('enrollTutor crossApp mode', () => {
     // Babysitter profile and root identity untouched.
     expect(after.profiles.babysitter.searchable).toBe(true);
     expect(after.firstName).toBe('Sacha');
+    // Canonical ROOT copies filled from the babysitter profile (issue #203
+    // shared identity): fillBaseFields lifts them because the root was empty.
+    expect(after.ejemEmail).toBe('richsitter@test.com');
+    expect(after.contactEmail).toBe('sacha@contact.com');
+    expect(after.contactPhone).toBe('+33600000002');
+  });
+
+  // ── Issue #203 shared identity: root-canonical derivation ──
+
+  it('derives from the ROOT ejemEmail when the nested babysitter copy lacks it', async () => {
+    const uid = 'crossapp-root-derive-t';
+    const db = getDb();
+    await getAdminAuth().createUser({ uid, email: 'rootderivet@test.com' });
+    await db.collection('users').doc(uid).set({
+      uid,
+      email: 'rootderivet@test.com',
+      firstName: 'Root', lastName: 'Derive', dateOfBirth: '2008-04-01',
+      status: 'active',
+      // Post-backfill shape: canonical root, nested copy already cleaned.
+      ejemEmail: 'root.derive.t@ejm-test.org',
+      contactEmail: 'roott@contact.com',
+      profiles: {
+        babysitter: { enrollmentComplete: true, searchable: false, classLevel: '2nde' },
+      },
+    });
+    const token = await getIdToken(uid);
+    const result = await callFunction<{ uid: string }>(
+      'enrollTutor',
+      { crossApp: true, consentVersion: '1.0', subjects: SUBJECTS },
+      token,
+    );
+    expect(result.uid).toBe(uid);
+    const after = (await db.collection('users').doc(uid).get()).data()!;
+    expect(after.profiles.tutor.ejemEmail).toBe('root.derive.t@ejm-test.org');
+    // Root contact resolves into the synthesized enrollment (contact floor met
+    // by the ROOT field alone).
+    expect(after.profiles.tutor.contactEmail).toBe('roott@contact.com');
+    // Root stays untouched (fillBaseFields never overwrites populated fields).
+    expect(after.ejemEmail).toBe('root.derive.t@ejm-test.org');
+    expect(after.contactEmail).toBe('roott@contact.com');
   });
 
   it('records crossApp provenance in the audit trail', async () => {
@@ -555,11 +663,79 @@ describe('enrollTutor crossApp mode', () => {
     );
 
     const tutor = (await db.collection('users').doc(uid).get()).data()!.profiles.tutor;
-    // The seeded babysitter profile carries 2nde/other/sacha@contact.com —
-    // every one of them beats the conflicting client value.
+    // classLevel/gender keep the stored-wins rule (set-once identity shape).
     expect(tutor.classLevel).toBe('2nde');
     expect(tutor.gender).toBe('other');
-    expect(tutor.contactEmail).toBe('sacha@contact.com');
+    // CONTACT does not: stored-wins was coherent when the nested copy was
+    // canonical. Post-clear semantics, a contact the user just typed in the
+    // wizard must beat the stored copy — otherwise clearing and re-entering
+    // a number resurrects the old one (PR #206 review round 4). In practice
+    // the wizard only renders these inputs when the profile has no contact.
+    expect(tutor.contactEmail).toBe('other@contact.com');
+  });
+
+  it('a supplied contact overwrites a populated ROOT, not just the nested copy', async () => {
+    // fillBaseFields only fills EMPTY roots, so a stale root value used to
+    // survive while every reader resolves root-first — the tutor's freshly
+    // supplied contact never reached families (PR #206 review). setBaseFields
+    // now writes it unconditionally.
+    const db = getDb();
+    const uid = 'crossapp-root-overwrite';
+    await seedSitter(uid, 'rootoverwrite@test.com', {
+      contactEmail: 'stale-root@x.com',
+      contactPhone: null,
+    });
+    const token = await getIdToken(uid);
+
+    await callFunction(
+      'enrollTutor',
+      {
+        crossApp: true,
+        consentVersion: '1.0',
+        subjects: SUBJECTS,
+        enrollment: { contactPhone: '+33 611111111' },
+      },
+      token,
+    );
+
+    const after = (await db.collection('users').doc(uid).get()).data()!;
+    // The freshly supplied channel lands at the canonical root...
+    expect(after.contactPhone).toBe('+33 611111111');
+    // ...and the untouched one keeps its stored value (idempotent rewrite).
+    expect(after.contactEmail).toBe('stale-root@x.com');
+    expect(after.profiles.tutor.contactPhone).toBe('+33 611111111');
+  });
+
+  it('an explicitly CLEARED contact channel is not resurrected by cross-app enrollment', async () => {
+    const db = getDb();
+    const uid = 'crossapp-cleared-contact';
+    await seedSitter(uid, 'clearedcontact@test.com', {
+      // The user cleared their phone on the sit Account page: root null, the
+      // nested enrollment copy frozen at the old value.
+      contactEmail: 'sacha@contact.com',
+      contactPhone: null,
+    });
+    const token = await getIdToken(uid);
+
+    await callFunction(
+      'enrollTutor',
+      {
+        crossApp: true,
+        consentVersion: '1.0',
+        subjects: SUBJECTS,
+        enrollment: {},
+      },
+      token,
+    );
+
+    const after = (await db.collection('users').doc(uid).get()).data()!;
+    // Neither the new tutor profile nor the canonical root gets the deleted
+    // number back, even though profiles.babysitter still holds it.
+    expect(after.profiles.tutor.contactPhone ?? null).toBeNull();
+    expect(after.contactPhone ?? null).toBeNull();
+    expect(after.profiles.babysitter.contactPhone).toBe('+33600000002');
+    // The channel the user did NOT clear still crosses over.
+    expect(after.profiles.tutor.contactEmail).toBe('sacha@contact.com');
   });
 
   it('a missing root DOB is filled from the supplement via fillBaseFields', async () => {

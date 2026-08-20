@@ -1,7 +1,7 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { strongPasswordSchema } from '@ejm/sit-core';
-import { validateEjmEmail, checkEnrollmentAge } from '@ejm/shared-core';
+import { validateEjmEmail, checkEnrollmentAge, getEjemEmail, getContact, type User } from '@ejm/shared-core';
 import { db, adminAuth } from '@ejm/shared-functions/config/firebase.js';
 import { writeUserActivity } from '@ejm/shared-functions/admin/writeAuditLog.js';
 import { getCorsOrigin } from '@ejm/shared-functions/config/cors.js';
@@ -27,8 +27,10 @@ interface EnrollTutorData {
   // are copied server-side from the babysitter profile. `enrollment` may carry
   // a PARTIAL supplement for the fields the sit profile never got (issue #203:
   // contact is skippable in sit; pre-age-gate docs lack a DOB; abandoned
-  // signups lack classLevel/identity). Stored values always win over the
-  // supplement — see pickCrossAppSupplement.
+  // signups lack classLevel/identity). Stored values win over the supplement
+  // — EXCEPT the contact trio, which round 4 inverted (a channel typed in the
+  // wizard beats the stored copy, so re-entering a contact right after
+  // clearing it cannot resurrect the old value). See the merge block below.
   crossApp?: boolean;
   subjects?: unknown;
 }
@@ -68,7 +70,6 @@ function pickCrossAppSupplement(input: unknown): Record<string, unknown> {
   return picked;
 }
 
-
 export const enrollTutor = onCall(
   { region: 'europe-west1', cors: getCorsOrigin() },
   async (request) => {
@@ -106,7 +107,8 @@ export const enrollTutor = onCall(
     // (owner call on issue #144); the audit trail records crossApp: true. The
     // wizard sends `subjects` plus an optional partial supplement for fields
     // the sit profile lacks (issue #203); classLevel/gender/contact are copied
-    // from the babysitter profile OVER the supplement (stored wins) and the
+    // from the babysitter profile OVER the supplement (stored wins; contact
+    // excepted — see the merge block) and the
     // merged input is validated through the same schema.
     // Classic: verify the emailed code as before.
     let ejemEmailLower: string;
@@ -115,19 +117,48 @@ export const enrollTutor = onCall(
     if (isCrossApp) {
       const profiles = (callerData.profiles ?? {}) as Record<string, unknown>;
       const babysitterProfile = (profiles.babysitter ?? null) as Record<string, unknown> | null;
-      if (!babysitterProfile || typeof babysitterProfile.ejemEmail !== 'string' || !babysitterProfile.ejemEmail) {
+      // The EJM identity is canonical at the ROOT with a nested fallback
+      // (issue #203 shared identity) — but crossApp still requires the OTHER
+      // provider profile to exist: that profile is what proves the identity
+      // was verified by a real enrollment.
+      const derivedEjemEmail = getEjemEmail(callerData as unknown as User);
+      if (!babysitterProfile || !derivedEjemEmail) {
         throw new HttpsError('failed-precondition', 'No verified EJM identity on this account');
       }
-      ejemEmailLower = babysitterProfile.ejemEmail.toLowerCase();
+      ejemEmailLower = derivedEjemEmail.toLowerCase();
       // Merge order (issue #203): supplement first, stored profile copy LAST —
       // a populated sit-profile value always beats a conflicting client value,
       // matching the set-once identity rule. Root identity in the supplement
       // obeys the same rule downstream: fillBaseFields writes only fields the
       // doc holds empty.
+      //
+      // CONTACT is layered differently (PR #206 review round 4). The
+      // canonical resolution already falls back to the nested copies when the
+      // root was never written, so it is applied over the profile copy
+      // UNFILTERED — including its nulls, which post-clear semantics make an
+      // explicit user deletion. Filtering them would let the frozen nested
+      // copy re-enter and become canonical again, undoing the deletion. A
+      // channel the user just entered in the wizard then wins over both: the
+      // stored-wins rule was written when nested was canonical, and re-typing
+      // a contact right after clearing it must not resurrect the old value.
+      const supplement = pickCrossAppSupplement(data.enrollment);
+      const suppliedContact = Object.fromEntries(
+        (['contactEmail', 'contactPhone', 'whatsapp'] as const)
+          .filter((k) => supplement[k] !== undefined)
+          .map((k) => [k, supplement[k]]),
+      );
+      // Nulls become UNDEFINED here: undefined is what the schema and
+      // fillBaseFields read as "absent", and a spread key holding undefined
+      // still overrides the copied nested value — which is the point.
+      const canonical = getContact(callerData as unknown as User);
       enrollmentInput = {
-        ...pickCrossAppSupplement(data.enrollment),
+        ...supplement,
         subjects: data.subjects,
         ...copySharedProfileFields(babysitterProfile),
+        contactEmail: canonical.contactEmail ?? undefined,
+        contactPhone: canonical.contactPhone ?? undefined,
+        whatsapp: canonical.whatsapp ?? undefined,
+        ...suppliedContact,
       };
     } else {
       if (!data.ejemEmail) {
@@ -303,10 +334,32 @@ export const enrollTutor = onCall(
         uid,
         profileKey: 'tutor',
         profileData: tutorProfile,
+        // Root shared-identity fields (issue #203). Identity is set-once, so
+        // it goes through fillBaseFields (empty-only, existing value wins).
         fillBaseFields: {
           firstName: enrollment.firstName,
           lastName: enrollment.lastName,
           dateOfBirth: dobTimestamp,
+          ejemEmail: ejemEmailLower,
+        },
+        // CONTACT is not set-once: whatever reached `enrollment` here is what
+        // the user just confirmed -- typed in the classic wizard, or the
+        // canonical/freshly-supplied value on the crossApp path -- so it must
+        // win over an older root copy. Through fillBaseFields it silently did
+        // not, and every reader resolves root-first, so a tutor's freshly
+        // typed contact never reached families (PR #206 review).
+        // An EMPTY string is "not provided", never "clear it" (PR #206
+        // review). The schema accepts '' (no .min(1)), and on the classic
+        // path `enrollment` is the client payload verbatim, so passing it
+        // through would write '' at the canonical root -- which getContact
+        // reads as an explicit user CLEAR, silently dropping a channel the
+        // sitter already had, with no way for the backfill to lift it back
+        // (the root key is now present). The sibling writer in
+        // enrollBabysitter already filters on truthiness; this matches it.
+        setBaseFields: {
+          ...(enrollment.contactEmail ? { contactEmail: enrollment.contactEmail } : {}),
+          ...(enrollment.contactPhone ? { contactPhone: enrollment.contactPhone } : {}),
+          ...(enrollment.whatsapp ? { whatsapp: enrollment.whatsapp } : {}),
         },
         auditAction: 'tutor.profile_added',
         auditDetails: {
@@ -348,6 +401,17 @@ export const enrollTutor = onCall(
       firstName: enrollment.firstName!,
       lastName: enrollment.lastName!,
       dateOfBirth: dobTimestamp!,
+      // Canonical root shared-identity copies (issue #203); the nested tutor
+      // profile keeps its duplicates for back-compat readers. Channels the
+      // user never supplied are OMITTED rather than written as null: root
+      // presence now means "the user set or cleared this", and an
+      // enrollment-written null would read as a deliberate clear, blocking
+      // the nested fallback for legacy readers and the backfill (PR #206
+      // review).
+      ejemEmail: ejemEmailLower,
+      ...(enrollment.contactEmail ? { contactEmail: enrollment.contactEmail } : {}),
+      ...(enrollment.contactPhone ? { contactPhone: enrollment.contactPhone } : {}),
+      ...(enrollment.whatsapp ? { whatsapp: enrollment.whatsapp } : {}),
       status: 'active',
       notifPrefs: {
         newRequest: { push: true, email: true },

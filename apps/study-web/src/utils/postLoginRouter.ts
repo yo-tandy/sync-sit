@@ -1,4 +1,4 @@
-import { isBabysitter } from '@ejm/shared-core';
+import { isBabysitter, hasAnyContact, getEjemEmail } from '@ejm/shared-core';
 import type { StudyUser } from '@ejm/study-core';
 
 function babysitterProfileOf(
@@ -20,7 +20,13 @@ function babysitterProfileOf(
  */
 export function canCrossAppEnrollTutor(userDoc: StudyUser | null | undefined): boolean {
   const bs = babysitterProfileOf(userDoc);
-  return typeof bs?.ejemEmail === 'string' && bs.ejemEmail.length > 0;
+  if (!bs) return false;
+  // The EJM identity is canonical at the ROOT with a nested fallback (issue
+  // #203 shared identity) — mirror the server: a babysitter profile must
+  // exist (that is what proves a real enrollment verified the email), and
+  // the email may live at either level.
+  const ejem = getEjemEmail(userDoc as never);
+  return typeof ejem === 'string' && ejem.length > 0;
 }
 
 /** Which crossApp-derivable fields the sit doc does NOT carry — exactly the
@@ -47,7 +53,9 @@ export function crossAppTutorGaps(userDoc: StudyUser | null | undefined): CrossA
     // ANSWERED with "no answer" — only a truly absent field (the step never
     // ran) is asked again.
     gender: bs.gender === undefined,
-    contact: !bs.contactEmail && !bs.contactPhone && !bs.whatsapp,
+    // Root ?? nested resolution (shared identity): a root-only contact edit
+    // counts, matching what the crossApp callable copies.
+    contact: !hasAnyContact(userDoc as never),
   };
 }
 

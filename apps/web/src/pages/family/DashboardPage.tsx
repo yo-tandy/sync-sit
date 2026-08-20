@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { doc, getDoc, collection, getDocs, addDoc, onSnapshot, query, where } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
+import { getContact } from '@ejm/shared-core';
 import { db, functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { useVerificationStore } from '@/stores/verificationStore';
@@ -245,6 +246,7 @@ export function FamilyDashboard() {
           const snap = await getDoc(doc(db, 'users', uid));
           if (snap.exists()) {
             const u = snap.data() as User;
+            const contact = getContact(u);
             const bp = getBabysitterProfile(u);
             const dob = typeof u.dateOfBirth === 'string' ? new Date(u.dateOfBirth) : u.dateOfBirth?.toDate?.() ? u.dateOfBirth.toDate() : null;
             let age: number | undefined;
@@ -263,8 +265,11 @@ export function FamilyDashboard() {
               languages: bp?.languages,
               photoUrl: u.photoUrl,
               aboutMe: bp?.aboutMe,
-              contactEmail: bp?.contactEmail,
-              contactPhone: bp?.contactPhone,
+              // Root-first resolution (issue #203): the Account page writes
+              // contact ROOT-ONLY, so reading the nested copy would freeze
+              // this card at enrollment-time values.
+              contactEmail: contact.contactEmail ?? undefined,
+              contactPhone: contact.contactPhone ?? undefined,
               kidAgeRange: bp?.kidAgeRange,
               maxKids: bp?.maxKids,
             };

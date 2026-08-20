@@ -9,8 +9,24 @@ import {
   isActiveGuardianOf,
   notifyChildOfGuardianAction,
 } from '@ejm/shared-functions/guardian/guardianAccess.js';
-import type { StudyUser, TutorProfile } from '@ejm/study-core';
+import type { StudyUser } from '@ejm/study-core';
+import { getContact } from '@ejm/shared-core';
 import { respondTutorContactRequestSchema } from '../validation/contact.js';
+
+/**
+ * The acceptance email's contact block. Canonical root ?? nested resolution
+ * (issue #203 shared identity): the email must carry the tutor's FRESHEST
+ * contact channels — a root-only Account edit wins over the stale nested
+ * copy. Exported for the unit pin (PR #206 review); every value is escaped.
+ */
+export function buildTutorContactBlock(tutorUser: StudyUser | undefined): string {
+  const { contactEmail, contactPhone, whatsapp } = getContact(tutorUser);
+  return [
+    contactEmail ? `<p><strong>Email:</strong> ${escapeHtml(contactEmail)}</p>` : '',
+    contactPhone ? `<p><strong>Phone:</strong> ${escapeHtml(contactPhone)}</p>` : '',
+    whatsapp ? `<p><strong>WhatsApp:</strong> ${escapeHtml(whatsapp)}</p>` : '',
+  ].join('');
+}
 
 export const respondToTutorContactRequest = onCall(
   { region: 'europe-west1', cors: getCorsOrigin() },
@@ -83,18 +99,10 @@ export const respondToTutorContactRequest = onCall(
     // must see the tutor's name, never the guardian's.
     const tutorDoc = await db.collection('users').doc(tutorUserId).get();
     const tutorUser = tutorDoc.data() as StudyUser | undefined;
-    const tutor: TutorProfile | undefined = tutorUser?.profiles?.tutor;
     const tutorName = `${tutorUser?.firstName || ''} ${tutorUser?.lastName || ''}`.trim() || 'A tutor';
 
     if (action === 'accept') {
-      const contactEmail = tutor?.contactEmail;
-      const contactPhone = tutor?.contactPhone;
-      const whatsapp = tutor?.whatsapp;
-      const contactBlock = [
-        contactEmail ? `<p><strong>Email:</strong> ${escapeHtml(contactEmail)}</p>` : '',
-        contactPhone ? `<p><strong>Phone:</strong> ${escapeHtml(contactPhone)}</p>` : '',
-        whatsapp ? `<p><strong>WhatsApp:</strong> ${escapeHtml(whatsapp)}</p>` : '',
-      ].join('');
+      const contactBlock = buildTutorContactBlock(tutorUser);
 
       await notifyAllParents({
         familyId: result.familyId,

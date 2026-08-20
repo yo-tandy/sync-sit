@@ -49,6 +49,26 @@ describe('postLoginRouter (study)', () => {
     expect(postLoginRouter(undefined, noIdentity)).toBe('/enroll/tutor');
   });
 
+  it('ROOT-only contact clears the contact GAP (issue #203 shared identity)', () => {
+    // Contact edited at the canonical root after backfill: the details phase
+    // must not re-ask for it.
+    const doc = {
+      firstName: 'Noa', lastName: 'Weiss', dateOfBirth: '2008-03-15',
+      contactEmail: 'me@x.com',
+      profiles: { babysitter: { enrollmentComplete: true, ejemEmail: 'b@ejm.org', classLevel: '2nde', gender: null, contactEmail: null, contactPhone: null, whatsapp: null } },
+    } as unknown as StudyUser;
+    expect(crossAppTutorGaps(doc).contact).toBe(false);
+  });
+
+  it('ROOT-only ejemEmail keeps the babysitter eligible for the one-tap path', () => {
+    const doc = {
+      firstName: 'Noa', lastName: 'Weiss', dateOfBirth: '2008-03-15',
+      ejemEmail: 'b@ejm.org',
+      profiles: { babysitter: { enrollmentComplete: true, classLevel: '2nde', contactPhone: '+33 6' } },
+    } as unknown as StudyUser;
+    expect(canCrossAppEnrollTutor(doc)).toBe(true);
+  });
+
   it('keeps /signup for users with no profiles at all', () => {
     expect(postLoginRouter(undefined, emptyDoc)).toBe('/signup');
     expect(postLoginRouter(undefined, null)).toBe('/signup');

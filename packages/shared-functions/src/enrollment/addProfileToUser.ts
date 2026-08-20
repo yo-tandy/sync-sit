@@ -17,6 +17,15 @@ export interface AddProfileParams {
    * object keys while update() would treat dots as field paths).
    */
   fillBaseFields?: Record<string, unknown>;
+  /**
+   * Base fields the caller wants written UNCONDITIONALLY, overwriting a
+   * populated value. Use only for data the user just entered in this very
+   * flow: `fillBaseFields`' empty-only rule is right for set-once identity,
+   * but wrong for contact typed in the wizard — it silently kept an older
+   * value while every reader resolves root-first (PR #206 review). Undefined
+   * entries are skipped, so "not supplied" still means "leave it alone".
+   */
+  setBaseFields?: Record<string, unknown>;
   auditAction: string;
   auditDetails?: Record<string, unknown>;
 }
@@ -103,6 +112,9 @@ export async function addProfileToUser(params: AddProfileParams): Promise<void> 
       if ((existing === undefined || existing === null || existing === '') && value !== undefined) {
         update[field] = value;
       }
+    }
+    for (const [field, value] of Object.entries(params.setBaseFields ?? {})) {
+      if (value !== undefined) update[field] = value;
     }
     tx.update(ref, update);
   });
