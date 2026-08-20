@@ -37,7 +37,9 @@ const renderPreview = () => render(<MemoryRouter><PublishedSearchesPreview /></M
 
 describe('PublishedSearchesPreview', () => {
   beforeEach(() => {
-    h.auth.userDoc = { uid: 't1', profiles: { tutor: { enrollmentComplete: true } } };
+    // status + enrollmentComplete mirror the rules predicate the preview
+    // gates on; without both the section renders nothing at all.
+    h.auth.userDoc = { uid: 't1', status: 'active', profiles: { tutor: { enrollmentComplete: true } } };
     h.snapshot = null;
     h.lastLimit = 0;
     cleanup();
@@ -70,6 +72,42 @@ describe('PublishedSearchesPreview', () => {
       .toHaveAttribute('href', '/tutor/published-searches');
   });
 
+  it('renders nothing for a provider the rules can never grant the read to', () => {
+    // Same predicate as firestore.rules; without it these accounts get a
+    // permanent error line and a link into a board they cannot read
+    // (PR #211 review).
+    h.snapshot = (_next, err) => err();
+    h.auth.userDoc = { uid: 't1', status: 'active', profiles: { tutor: {} } };
+    const incomplete = renderPreview();
+    expect(incomplete.container).toBeEmptyDOMElement();
+    incomplete.unmount();
+    cleanup();
+
+    h.auth.userDoc = {
+      uid: 't1', status: 'suspended',
+      profiles: { tutor: { enrollmentComplete: true } },
+    };
+    const inactive = renderPreview();
+    expect(inactive.container).toBeEmptyDOMElement();
+  });
+
+  it('over-fetches so expired docs at the head cannot starve the preview', () => {
+    // The expiry filter runs client-side, AFTER the server-side limit: asking
+    // for exactly 3 lets 3 expired-but-unswept docs hide every active post
+    // (PR #211 review). The query asks for more and the hook slices after.
+    const expired = { ...post('x', 9000), expiresAt: ts(Date.now() - 864e5) };
+    h.snapshot = (next) => next({
+      docs: [
+        { data: () => expired }, { data: () => expired }, { data: () => expired },
+        { data: () => post('live', 1000) },
+      ],
+    });
+    renderPreview();
+    expect(h.lastLimit).toBeGreaterThan(3);
+    expect(screen.getByText('tutor.publishedBoard.familyTitle')).toBeInTheDocument();
+    expect(screen.queryByText('tutor.publishedBoard.previewEmpty')).toBeNull();
+  });
+
   it('lists posts under the section title with a link to the full board', () => {
     h.snapshot = (next) => next({ docs: [{ data: () => post('p1', 1000) }] });
     renderPreview();
@@ -87,15 +125,20 @@ describe('PublishedSearchesPreview', () => {
 
     h.auth.userDoc = {
       uid: 't1',
+      status: 'active',
       profiles: { tutor: { enrollmentComplete: true, publishedSearchesSeenAt: ts(5000) } },
     };
     renderPreview();
     expect(screen.queryByText('tutor.publishedBoard.newTag')).toBeNull();
   });
 
-  it('asks for at most THREE posts — the dashboard is a preview, not the board', () => {
-    h.snapshot = (next) => next({ docs: [] });
+  it('RENDERS at most three posts — the dashboard is a preview, not the board', () => {
+    // The query over-fetches (see the expiry pin above), so the bound that
+    // matters is what reaches the screen, not what the query asked for.
+    h.snapshot = (next) => next({
+      docs: [1, 2, 3, 4, 5].map((n) => ({ data: () => post(`p${n}`, 1000 + n) })),
+    });
     renderPreview();
-    expect(h.lastLimit).toBe(3);
+    expect(screen.getAllByText('tutor.publishedBoard.familyTitle')).toHaveLength(3);
   });
 });

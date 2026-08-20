@@ -28,7 +28,20 @@ export function PublishedSearchesPreview() {
   // Visiting the FULL board is what marks them seen, so a post stays tagged
   // here until the sitter actually opens the list.
   const seenAtMs = getBabysitterView(userDoc)?.publishedSearchesSeenAt?.toMillis?.() ?? null;
+  // The same predicate firestore.rules uses to grant the board read
+  // (`profiles.babysitter.enrollmentComplete == true && status == 'active'`).
+  // Sit's guard already redirects enrollmentComplete === false, but a
+  // missing-field or non-active doc still reaches the dashboard, and for
+  // those the read is a guaranteed permission-denied — showing them the error
+  // line plus a link into a board they can never read would be permanent
+  // furniture (PR #211 review, study's twin). Providers who CAN read still
+  // get the entry point in every state.
+  const canReadBoard =
+    getBabysitterView(userDoc)?.enrollmentComplete === true && userDoc?.status === 'active';
+
   const { searches, errored } = usePublishedSearches(PREVIEW_MAX);
+
+  if (!canReadBoard) return null;
 
   // First snapshot pending: nothing to say yet.
   if (searches === null) return null;

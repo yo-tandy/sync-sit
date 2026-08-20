@@ -25,7 +25,20 @@ export function PublishedSearchesPreview() {
   // Same New rule as the board; visiting the FULL board is what marks posts
   // seen, so they stay tagged here until the tutor opens the list.
   const seenAtMs = userDoc?.profiles?.tutor?.publishedSearchesSeenAt?.toMillis?.() ?? null;
+  // The same predicate firestore.rules uses to grant the board read
+  // (`profiles.tutor.enrollmentComplete == true && status == 'active'`).
+  // Study's AuthGuard deliberately keeps tutors with incomplete enrollment in
+  // the portal (legacy docs from the retired identity-verification model), and
+  // for those accounts the read is a guaranteed permission-denied — so
+  // without this gate the error line and a link into a dead-end board would
+  // be permanent furniture on their dashboard (PR #211 review). Providers who
+  // CAN read still get the entry point in every state.
+  const canReadBoard =
+    userDoc?.profiles?.tutor?.enrollmentComplete === true && userDoc?.status === 'active';
+
   const { searches, errored } = usePublishedSearches(PREVIEW_MAX);
+
+  if (!canReadBoard) return null;
 
   // First snapshot pending: nothing to say yet.
   if (searches === null) return null;

@@ -269,8 +269,10 @@ export function BabysitterDashboard() {
 
       {/* "Posts from families" — the board's entry point lives on the
           dashboard under the appointment sections (owner direction on
-          PR #211), not behind a menu entry. Renders nothing when there is
-          nothing to show. */}
+          PR #211), not behind a menu entry. Renders nothing only while the
+          first snapshot is pending — an empty or failed read still shows the
+          title, a one-line status and the link, since this is the board's
+          only entry point. */}
       <PublishedSearchesPreview />
 
       {/* ── Toggle Confirmation Dialog ── */}

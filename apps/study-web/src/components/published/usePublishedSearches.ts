@@ -24,6 +24,14 @@ export interface BoardSearch {
 }
 
 /**
+ * How many docs to ask Firestore for per requested post. Expired docs are
+ * filtered client-side (there is no server-side `status` to query on), so the
+ * query has to allow for some expired-but-unswept residue at the head of the
+ * ordering (PR #211 review).
+ */
+const OVERFETCH = 4;
+
+/**
  * Live ACTIVE study published searches, newest first — deliberately unfiltered
  * by the tutor's own subjects or searchable flag (the board's point).
  * Shared by the dashboard preview (max 3) and the full board page, so the
@@ -45,7 +53,13 @@ export function usePublishedSearches(max: number): {
       collection(db, 'publishedSearches'),
       where('app', '==', 'study'),
       orderBy('createdAt', 'desc'),
-      fsLimit(max),
+      // Over-fetch, then slice after the expiry filter (PR #211 review).
+      // The client-side isActivePublishedSearch runs AFTER the server-side
+      // limit, so limiting to `max` lets a few expired-but-unswept docs at
+      // the head of the createdAt ordering starve the caller — the preview
+      // would say "No posts right now" while active posts sit just past the
+      // cutoff, disagreeing with the board that shows them.
+      fsLimit(max * OVERFETCH),
     );
     return onSnapshot(
       q,
@@ -54,7 +68,8 @@ export function usePublishedSearches(max: number): {
         setSearches(
           snap.docs
             .map((d) => d.data() as BoardSearch)
-            .filter((d) => isActivePublishedSearch(d, now)),
+            .filter((d) => isActivePublishedSearch(d, now))
+            .slice(0, max),
         );
         setErrored(false);
       },

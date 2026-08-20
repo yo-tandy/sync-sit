@@ -482,7 +482,10 @@ export function DashboardPage() {
 
       {/* "Posts from families" — the board's entry point lives on the
           dashboard under the session sections (owner direction on PR #211),
-          not behind a menu entry. Renders nothing when empty. */}
+          not behind a menu entry. Renders nothing only while the first
+          snapshot is pending — an empty or failed read still shows the title,
+          a one-line status and the link, since this is the board's only
+          entry point. */}
       <PublishedSearchesPreview />
 
       {/* ── Search-visibility confirm dialog (sit's babysitter pattern) ── */}
