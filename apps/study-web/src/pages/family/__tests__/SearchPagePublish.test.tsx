@@ -85,6 +85,14 @@ async function renderAndSearch() {
   fireEvent.change(screen.getByLabelText('Level'), { target: { value: '6e' } });
   fireEvent.click(screen.getByRole('button', { name: 'Search tutors' }));
   await waitFor(() => expect(h.callable).toHaveBeenCalledWith('searchTutors', expect.anything()));
+  // The callable having been *invoked* is not the settled state. The publish CTA
+  // renders only after the search promise resolves and the page leaves its
+  // loading branch, so callers that click it straight away were racing a
+  // microtask -- green locally, red on a slower CI runner. Wait for the CTA
+  // itself, which is the real post-condition of "a search has run".
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: 'Publish this search' })).toBeTruthy(),
+  );
 }
 
 beforeEach(() => {
