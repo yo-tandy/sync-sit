@@ -5,7 +5,7 @@ import { writeUserActivity } from '@ejm/shared-functions/admin/writeAuditLog.js'
 // haversineDistance lives in @ejm/shared-core (sit-core merely re-exports it);
 // study-functions already depends on @ejm/shared-core, so we import it there
 // directly rather than pulling in sit-core just for the geo helper.
-import { haversineDistance, getParentProfile, postcodeToArrondissement } from '@ejm/shared-core';
+import { haversineDistance, getParentProfile, postcodeToArrondissement, getContact } from '@ejm/shared-core';
 import type { User } from '@ejm/shared-core';
 import type { StudyUser, TutorProfile, SubjectOffering, TutorSearchResult } from '@ejm/study-core';
 import { searchTutorsSchema } from '../validation/search.js';
@@ -246,9 +246,12 @@ export const searchTutors = onCall(
         requestStatus,
       };
       if (contactApproved) {
-        result.contactEmail = tutor.contactEmail;
-        result.contactPhone = tutor.contactPhone;
-        result.whatsapp = tutor.whatsapp;
+        // Canonical root ?? nested resolution (issue #203 shared identity):
+        // a root-only Account edit reaches families immediately.
+        const contact = getContact(user as unknown as User);
+        result.contactEmail = contact.contactEmail ?? undefined;
+        result.contactPhone = contact.contactPhone ?? undefined;
+        result.whatsapp = contact.whatsapp ?? undefined;
       }
       results.push(result);
     }

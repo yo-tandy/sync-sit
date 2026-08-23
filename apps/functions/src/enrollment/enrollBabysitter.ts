@@ -3,6 +3,7 @@ import { db, adminAuth } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { FieldValue } from 'firebase-admin/firestore';
 import { strongPasswordSchema } from '@ejm/sit-core';
+import { getEjemEmail, getContact, type User } from '@ejm/shared-core';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
 import {
   addProfileToUser,
@@ -69,12 +70,36 @@ export const enrollBabysitter = onCall(
     let copiedProfileFields: Record<string, unknown> = {};
     if (isCrossApp) {
       const callerSnap = await db.collection('users').doc(request.auth!.uid).get();
+      const callerData = (callerSnap.data() ?? {}) as unknown as User;
       const tutorProfile = (callerSnap.data()?.profiles?.tutor ?? null) as Record<string, unknown> | null;
-      if (!tutorProfile || typeof tutorProfile.ejemEmail !== 'string' || !tutorProfile.ejemEmail) {
+      // The EJM identity is canonical at the ROOT with a nested fallback
+      // (issue #203 shared identity) — but crossApp still requires the OTHER
+      // provider profile to exist: that profile is what proves the identity
+      // was verified by a real enrollment.
+      const derivedEjemEmail = getEjemEmail(callerData);
+      if (!tutorProfile || !derivedEjemEmail) {
         throw new HttpsError('failed-precondition', 'No verified EJM identity on this account');
       }
-      ejemEmailLower = tutorProfile.ejemEmail.toLowerCase();
-      copiedProfileFields = copySharedProfileFields(tutorProfile);
+      ejemEmailLower = derivedEjemEmail.toLowerCase();
+      // classLevel/gender stay profile-scoped; contact comes from the
+      // canonical resolution, which already falls back to the nested copies
+      // when the root was never written. Its nulls are applied UNFILTERED:
+      // post-clear semantics mean a null is an explicit user deletion, and
+      // filtering it out would let the frozen nested copy re-enter the doc
+      // and become canonical again (PR #206 review round 4).
+      // Canonical contact overrides the copied nested values, clears
+      // included: a cleared channel resolves to null and must NOT fall back
+      // to the frozen nested copy (PR #206 review round 4). null rather than
+      // undefined because these land in a Firestore profile write, and
+      // writing null into an empty root through fillBaseFields is a no-op
+      // in effect (the root of a cleared channel is already null).
+      const canonical = getContact(callerData);
+      copiedProfileFields = {
+        ...copySharedProfileFields(tutorProfile),
+        contactEmail: canonical.contactEmail ?? null,
+        contactPhone: canonical.contactPhone ?? null,
+        whatsapp: canonical.whatsapp ?? null,
+      };
     } else {
       if (!data.ejemEmail) {
         throw new HttpsError('invalid-argument', 'EJM email is required');
@@ -126,7 +151,28 @@ export const enrollBabysitter = onCall(
           // sit-specific (availability).
           ...copiedProfileFields,
         },
-        fillBaseFields: { language: 'en' },
+        // Root shared-identity fields (issue #203): dual-write the canonical
+        // root copies alongside the nested ones. fillBaseFields writes only
+        // EMPTY root fields, so an existing canonical value always wins.
+        // Channels with nothing to copy are OMITTED, never written as null:
+        // root presence means "the user set or cleared this", so a null here
+        // would read as a deliberate clear and block both the nested
+        // fallback and the backfill (same fix as enrollTutor's new-account
+        // write; PR #206 review round 7). The nested profile copy above
+        // keeps its null convention.
+        fillBaseFields: {
+          language: 'en',
+          ejemEmail: ejemEmailLower,
+        },
+        // Contact is the CANONICAL resolution for this user (root ?? nested),
+        // so writing it back is idempotent when the root already holds it and
+        // corrective when only a nested copy did. Empty channels are omitted:
+        // root presence means "set or cleared by the user" (PR #206 review).
+        setBaseFields: {
+          ...(copiedProfileFields.contactEmail ? { contactEmail: copiedProfileFields.contactEmail } : {}),
+          ...(copiedProfileFields.contactPhone ? { contactPhone: copiedProfileFields.contactPhone } : {}),
+          ...(copiedProfileFields.whatsapp ? { whatsapp: copiedProfileFields.whatsapp } : {}),
+        },
         auditAction: 'babysitter_profile_added',
         auditDetails: {
           ejemEmail: ejemEmailLower,
@@ -162,6 +208,9 @@ export const enrollBabysitter = onCall(
     await db.collection('users').doc(uid).set({
       uid,
       email: ejemEmailLower,
+      // Canonical root copy (issue #203 shared identity); the nested copy
+      // below stays for back-compat readers until the later cleanup.
+      ejemEmail: ejemEmailLower,
       status: 'active',
       profiles: {
         babysitter: {

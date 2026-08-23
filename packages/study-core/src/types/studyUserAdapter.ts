@@ -14,14 +14,20 @@ export function getTutorProfile(
 /**
  * Flattened tutor record: User base fields merged with the tutor profile.
  */
-export type TutorView = User & TutorProfile;
+// The root shared-identity quartet (ejemEmail + contact trio, issue #203) is
+// omitted from the User half: the PROFILE copy wins in the flattened view
+// (pre-change behavior). Code that wants the canonical resolution uses
+// getEjemEmail/getContact from shared-core instead of the view.
+export type TutorView =
+  Omit<User, 'ejemEmail' | 'contactEmail' | 'contactPhone' | 'whatsapp'> & TutorProfile;
 
 export function getTutorView(
   user: User | null | undefined,
 ): TutorView | null {
   const profile = getTutorProfile(user);
   if (!user || !profile) return null;
-  return { ...user, ...profile };
+  const { ejemEmail: _ee, contactEmail: _ce, contactPhone: _cp, whatsapp: _wa, ...base } = user;
+  return { ...base, ...profile };
 }
 
 /** The user's role within sync-study, for routing and guards. */

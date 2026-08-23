@@ -42,6 +42,9 @@ describe('enrollBabysitter (unauthenticated create path)', () => {
     expect(user.status).toBe('active');
     expect(user.language).toBe('en');
     expect(user.consentVersion).toBe('1.0');
+    // Canonical ROOT copy (issue #203 shared identity) written alongside the
+    // nested back-compat duplicate below.
+    expect(user.ejemEmail).toBe(EMAIL);
     expect(user.profiles.babysitter).toEqual({
       enrollmentComplete: false,
       ejemEmail: EMAIL,

@@ -3,7 +3,7 @@ import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { haversineDistance, getParentProfile, getBabysitterView } from '@ejm/sit-core';
 import type { LatLng, User, FirestoreTimestamp } from '@ejm/sit-core';
-import { validateEjmEmail, checkEnrollmentAge } from '@ejm/shared-core';
+import { validateEjmEmail, checkEnrollmentAge, getEjemEmail, getContact } from '@ejm/shared-core';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
 
 interface SearchParams {
@@ -122,7 +122,10 @@ export const searchBabysitters = onCall(
     for (const userDoc of usersSnap.docs) {
       // Flattened babysitter view (User + babysitter profile), tolerant of
       // both legacy flat docs and new profiles.babysitter docs.
-      const b = getBabysitterView(userDoc.data() as User);
+      // Decode ONCE per candidate: the Node SDK rebuilds the object from the
+      // proto on every data() call, and this loop reads it four times.
+      const raw = userDoc.data() as User;
+      const b = getBabysitterView(raw);
       if (!b) continue;
       const uid = userDoc.id;
 
@@ -205,10 +208,12 @@ export const searchBabysitters = onCall(
       // governedBy mirror, present iff its guardian link is ACTIVE) is
       // deliberately searchable at any age — supervision is its protection.
       // Read off the raw doc: the flattened view need not carry the mirror.
-      const isGoverned = !!userDoc.data().governedBy;
+      const isGoverned = !!raw.governedBy;
       if (!isGoverned && b.dateOfBirth) {
         if (babysitterAge < 15) continue;
-        const emailCheck = validateEjmEmail(b.ejemEmail || '');
+        // Canonical root ?? nested resolution (issue #203 shared identity).
+        const babysitterEjemEmail = getEjemEmail(raw) || '';
+        const emailCheck = validateEjmEmail(babysitterEjemEmail);
         if (emailCheck.valid && emailCheck.graduationYear !== undefined) {
           const verdict = checkEnrollmentAge({
             dateOfBirth: toDate(b.dateOfBirth),
@@ -219,7 +224,7 @@ export const searchBabysitters = onCall(
           if (verdict === 'age_mismatch') {
             const exemption = await db
               .collection('enrollmentExemptions')
-              .doc(b.ejemEmail.toLowerCase())
+              .doc(babysitterEjemEmail.toLowerCase())
               .get();
             if (!exemption.exists) continue;
           }
@@ -236,6 +241,7 @@ export const searchBabysitters = onCall(
       // Only share contact info if babysitter has approved this family
       const approvedFamilies: string[] = b.approvedFamilies || [];
       const contactApproved = callerFamilyId ? approvedFamilies.includes(callerFamilyId) : false;
+      const contact = getContact(raw);
 
       results.push({
         uid,
@@ -251,8 +257,10 @@ export const searchBabysitters = onCall(
         hourlyRate: b.hourlyRate,
         distance: Math.round(distance * 10) / 10,
         referenceCount: refCount,
-        contactEmail: contactApproved ? b.contactEmail : undefined,
-        contactPhone: contactApproved ? b.contactPhone : undefined,
+        // Contact projects from the canonical root ?? nested resolution so a
+        // root-only Account edit (issue #203) reaches families immediately.
+        contactEmail: contactApproved ? contact.contactEmail ?? undefined : undefined,
+        contactPhone: contactApproved ? contact.contactPhone ?? undefined : undefined,
         isPreferred: preferredSet.has(uid),
       });
     }

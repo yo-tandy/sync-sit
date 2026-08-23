@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { clearAll, callFunction, getIdToken } from '../../setup/emulator.js';
+import { clearAll, callFunction, getIdToken, getDb } from '../../setup/emulator.js';
 import { seedTestData, type SeedData } from '../../setup/seed.js';
 
 interface LookupResult { uid: string; firstName: string; lastName: string; worksInYourArea: boolean; }
@@ -28,6 +28,31 @@ describe('lookupBabysitter', () => {
   it('matches by exact email', async () => {
     const { results } = await callFunction<{ results: LookupResult[] }>('lookupBabysitter', { query: 'camille.moreau@ejm.org' }, parent1Token);
     expect(results.find((r) => r.uid === seed.babysitter3.uid)).toBeDefined();
+  });
+
+  it('matches on the canonical ROOT ejemEmail, not a stale nested copy', async () => {
+    // The lookup moved to getEjemEmail(raw) (issue #203). The RAW doc matters:
+    // the flattened babysitter view spreads the nested profile over the root,
+    // so passing it would invert root-first precedence (PR #206 review).
+    const db = getDb();
+    const uid = seed.babysitter2.uid;
+    const before = (await db.collection('users').doc(uid).get()).data()!;
+    await db.collection('users').doc(uid).update({
+      ejemEmail: 'root.canonical@ejm-test.org',
+      'profiles.babysitter.ejemEmail': 'stale.nested@ejm-test.org',
+    });
+    try {
+      const hit = await callFunction<{ results: LookupResult[] }>(
+        'lookupBabysitter', { query: 'root.canonical@ejm-test.org' }, parent1Token,
+      );
+      expect(hit.results.find((r) => r.uid === uid)).toBeDefined();
+      const miss = await callFunction<{ results: LookupResult[] }>(
+        'lookupBabysitter', { query: 'stale.nested@ejm-test.org' }, parent1Token,
+      );
+      expect(miss.results.find((r) => r.uid === uid)).toBeUndefined();
+    } finally {
+      await db.collection('users').doc(uid).set(before);
+    }
   });
 
   it('rejects queries shorter than 2 chars', async () => {
