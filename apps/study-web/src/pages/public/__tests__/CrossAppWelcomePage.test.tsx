@@ -73,10 +73,36 @@ function renderPage() {
   );
 }
 
+// COMPLETE sit doc: no gaps, so the one-tap flow is welcome -> subjects only.
 const babysitterDoc = {
   firstName: 'Sacha',
   lastName: 'Sitter',
-  profiles: { babysitter: { enrollmentComplete: true, ejemEmail: 'sacha@ejm.org' } },
+  dateOfBirth: '2008-04-01',
+  profiles: {
+    babysitter: {
+      enrollmentComplete: true,
+      ejemEmail: 'sacha@ejm.org',
+      classLevel: '2nde',
+      gender: null,
+      contactPhone: '+33600000002',
+    },
+  },
+};
+// Contact skipped in sit (issue #203): the details phase collects just that.
+const babysitterNoContactDoc = {
+  ...babysitterDoc,
+  profiles: {
+    babysitter: {
+      enrollmentComplete: true,
+      ejemEmail: 'sacha@ejm.org',
+      classLevel: '2nde',
+      gender: null,
+    },
+  },
+};
+// Degenerate doc: only the verified EJM identity — every gap present.
+const babysitterBareDoc = {
+  profiles: { babysitter: { enrollmentComplete: false, ejemEmail: 'sacha@ejm.org' } },
 };
 
 beforeEach(() => {
@@ -125,6 +151,83 @@ describe('CrossAppWelcomePage (study)', () => {
       expect(payload).not.toHaveProperty(key);
     }
     expect(h.refreshUserDoc).toHaveBeenCalled();
+  });
+
+  // ── Issue #203: the details phase collects exactly the sit profile's gaps ──
+
+  it('a contactless sit profile gets a details phase with ONLY the contact inputs', () => {
+    h.auth = { firebaseUser: { uid: 'b1' }, userDoc: babysitterNoContactDoc, loading: false };
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('common.continue') }));
+
+    // Contact inputs render; nothing already on file is re-asked.
+    expect(screen.getByLabelText(i18n.t('enrollment.contactEmail'))).toBeInTheDocument();
+    expect(screen.getByLabelText(i18n.t('enrollment.contactPhone'))).toBeInTheDocument();
+    expect(screen.queryByLabelText(i18n.t('enrollment.dateOfBirth'))).toBeNull();
+    expect(screen.queryByLabelText(i18n.t('enrollment.classLabel'))).toBeNull();
+    expect(screen.queryByText(i18n.t('enrollment.gender'))).toBeNull();
+    expect(screen.queryByLabelText(i18n.t('enrollment.firstName'))).toBeNull();
+    // Subjects not shown yet.
+    expect(screen.queryByText('subjects-next')).toBeNull();
+  });
+
+  it('the details continue stays disabled until a contact field is entered, then the supplement rides the payload', async () => {
+    h.auth = { firebaseUser: { uid: 'b1' }, userDoc: babysitterNoContactDoc, loading: false };
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('common.continue') }));
+
+    const detailsContinue = screen.getByRole('button', { name: i18n.t('common.continue') });
+    expect(detailsContinue).toBeDisabled();
+    fireEvent.change(screen.getByLabelText(i18n.t('enrollment.contactEmail')), {
+      target: { value: 'sacha@contact.com' },
+    });
+    expect(detailsContinue).not.toBeDisabled();
+    fireEvent.click(detailsContinue);
+    fireEvent.click(screen.getByText('subjects-next'));
+
+    await vi.waitFor(() => expect(h.navigate).toHaveBeenCalled());
+    const payload = h.calls.find((c) => c.name === 'enrollTutor')!.payload as Record<string, unknown>;
+    expect(payload.crossApp).toBe(true);
+    // The supplement carries ONLY the gap being filled.
+    expect(payload.enrollment).toEqual({ contactEmail: 'sacha@contact.com' });
+  });
+
+  it('a malformed contact email blocks the details continue even with a phone present', () => {
+    h.auth = { firebaseUser: { uid: 'b1' }, userDoc: babysitterNoContactDoc, loading: false };
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('common.continue') }));
+
+    fireEvent.change(screen.getByLabelText(i18n.t('enrollment.contactPhone')), {
+      target: { value: '+33600000002' },
+    });
+    fireEvent.change(screen.getByLabelText(i18n.t('enrollment.contactEmail')), {
+      target: { value: 'x@y' },
+    });
+    expect(screen.getByRole('button', { name: i18n.t('common.continue') })).toBeDisabled();
+    expect(screen.getByText(i18n.t('enrollment.contactEmailInvalid'))).toBeInTheDocument();
+  });
+
+  it('a degenerate doc (identity gaps too) renders name, DOB, class, gender AND contact inputs', () => {
+    h.auth = { firebaseUser: { uid: 'b1' }, userDoc: babysitterBareDoc, loading: false };
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('common.continue') }));
+
+    expect(screen.getByLabelText(i18n.t('enrollment.firstName'))).toBeInTheDocument();
+    expect(screen.getByLabelText(i18n.t('enrollment.lastName'))).toBeInTheDocument();
+    expect(screen.getByLabelText(i18n.t('enrollment.dateOfBirth'))).toBeInTheDocument();
+    expect(screen.getByLabelText(i18n.t('enrollment.classLabel'))).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('enrollment.gender'))).toBeInTheDocument();
+    expect(screen.getByLabelText(i18n.t('enrollment.contactEmail'))).toBeInTheDocument();
+  });
+
+  it('regression (issue #203): the one-tap page NEVER asks for school verification', () => {
+    // The classic wizard's StepEmail heading must not exist on any phase of
+    // this page — the EJM identity is derived server-side from the sit doc.
+    h.auth = { firebaseUser: { uid: 'b1' }, userDoc: babysitterBareDoc, loading: false };
+    renderPage();
+    expect(screen.queryByText(i18n.t('enrollment.verifySchool'))).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('common.continue') }));
+    expect(screen.queryByText(i18n.t('enrollment.verifySchool'))).toBeNull();
   });
 
   it('profile-exists rejection routes to the tutor portal instead of erroring', async () => {

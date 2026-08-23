@@ -200,7 +200,7 @@ export const createKidInvite = onCall(
       pushSent: false,
       createdAt: now,
     });
-    await sendPushNotification(childUid, title, body, { type: 'supervision_request' });
+    await sendPushNotification(childUid, title, body, { type: 'supervision_request' }, 'auto');
 
     // Parent-entered identity materially differing from the account's stored
     // identity is a quiet admin signal (possible wrong kid / probing); the

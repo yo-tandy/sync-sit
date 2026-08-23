@@ -100,7 +100,7 @@ export const revokeSupervision = onCall(
       pushSent: false,
       createdAt: now,
     });
-    await sendPushNotification(childUid, kidTitle, kidBody, { type: 'supervision_revoked' });
+    await sendPushNotification(childUid, kidTitle, kidBody, { type: 'supervision_revoked' }, 'auto');
 
     await writeAuditLog({
       adminUserId: callerUid,

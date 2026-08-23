@@ -209,6 +209,35 @@ service cloud.firestore {
              || request.resource.data.get(key, null) == resource.data[key];
     }
 
+
+    // Root shared-contact shape (issue #203 / PR #206 review): the trio is
+    // owner-writable and gets READ BACK and processed — embedded in the
+    // acceptance email and projected into mailto:/tel: hrefs — so like the
+    // families postcode/city it carries a shape check: string bounded to the
+    // enrollment-schema limits, or null (the clear path). Only CHANGED fields
+    // are checked, so legacy docs with odd nested values stay updatable.
+    // The 254/40 bounds are introduced HERE (neither enrollment schema bounds
+    // these fields); they are RFC-5321 address length and a generous phone
+    // bound. Format (email shape) is validated on the enrollment path only —
+    // an owner can store a non-address string and have it rendered to
+    // approved families, bounded and escaped, in a fixed mailto:/tel: scheme.
+    // NOTE: deleting a field (FieldValue.delete()) is DENIED by construction
+    // — the key lands in affectedKeys but is absent from request.resource.data,
+    // so the subscript errors and the write fails. Deliberate narrowing,
+    // matching photoUrlValid's idiom: the clear path is `null`, which every
+    // writer uses; pinned below.
+    function rootContactFieldValid(field, max) {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny([field])
+             || request.resource.data[field] == null
+             || (request.resource.data[field] is string
+                 && request.resource.data[field].size() <= max);
+    }
+    function rootContactShapeValid() {
+      return rootContactFieldValid('contactEmail', 254)
+             && rootContactFieldValid('contactPhone', 40)
+             && rootContactFieldValid('whatsapp', 40);
+    }
+
     function rootIdentitySetOnce() {
       return !request.resource.data.diff(resource.data).affectedKeys()
                  .hasAny(['firstName', 'lastName', 'dateOfBirth'])
@@ -229,6 +258,12 @@ service cloud.firestore {
       // - Top-level identity/admin fields must never change client-side:
       //   * uid/email/status/createdAt: identity; `status` is the hard ban gate
       //     that admin's blockUser callable owns.
+      //   * ejemEmail: canonical ROOT copy of the verified EJM identity
+      //     (issue #203 shared identity) — same client-immutable semantics as
+      //     the nested profiles.*.ejemEmail pins below; enrollment callables
+      //     and the backfill (Admin SDK) are the only writers. The root
+      //     contact fields (contactEmail/contactPhone/whatsapp) are
+      //     deliberately NOT listed: owner-editable by design.
       //   * isAdmin: the admin-escalation vector.
       // - profileRolesUnchanged: the SET of role slots can't change — blocks a
       //   client granting itself a new role (e.g. injecting profiles.babysitter).
@@ -250,7 +285,7 @@ service cloud.firestore {
       //   without token revocation, or spoof the coherence signal.
       allow update: if isOwner(userId)
                     && !request.resource.data.diff(resource.data).affectedKeys()
-                        .hasAny(['uid', 'email', 'status', 'createdAt', 'isAdmin',
+                        .hasAny(['uid', 'email', 'ejemEmail', 'status', 'createdAt', 'isAdmin',
                                  'governedBy', 'identityLocked', 'sessionEpoch'])
                     && profileRolesUnchanged()
                     && babysitterIdentityUnchanged()
@@ -258,6 +293,7 @@ service cloud.firestore {
                     && parentFamilyIdUnchanged()
                     && identityUnlockedOrUnchanged()
                     && rootIdentitySetOnce()
+                    && rootContactShapeValid()
                     && tutorNumericBoundsValid()
                     && tutorAreaShapeValid()
                     && photoUrlValid();

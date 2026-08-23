@@ -34,6 +34,23 @@ export interface User {
   dismissedPwaInstallBannerStudy?: boolean;
 
   /**
+   * Shared identity fields, canonical at the ROOT (owner decisions on issue
+   * #203 / PR #205: one account across the sync apps, not per-app copies).
+   * The nested profiles.{babysitter,tutor} copies remain as back-compat
+   * duplicates written by the server enrollment callables; readers go through
+   * getEjemEmail/getContact (root ?? nested fallback) so un-backfilled and
+   * legacy docs keep working.
+   * - ejemEmail: verified EJM identity; server-owned, rules-pinned
+   *   client-immutable (enrollment callables + backfill only).
+   * - contact fields: owner-editable, shared across apps; Account pages
+   *   write these root fields ONLY.
+   */
+  ejemEmail?: string;
+  contactEmail?: string | null;
+  contactPhone?: string | null;
+  whatsapp?: string | null;
+
+  /**
    * Supervision mirror, present iff the guardianLinks/{uid} doc is ACTIVE
    * (a pending claim does NOT set it). Server-owned, rules-pinned.
    */

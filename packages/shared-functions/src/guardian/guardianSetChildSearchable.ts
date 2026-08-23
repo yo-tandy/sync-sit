@@ -72,7 +72,7 @@ export const guardianSetChildSearchable = onCall(
       pushSent: false,
       createdAt: now,
     });
-    await sendPushNotification(childUid, title, body, { type: 'guardian_searchable' });
+    await sendPushNotification(childUid, title, body, { type: 'guardian_searchable' }, 'auto');
 
     await writeAuditLog({
       adminUserId: callerUid,

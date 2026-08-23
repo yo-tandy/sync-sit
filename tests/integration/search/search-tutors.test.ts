@@ -284,6 +284,33 @@ describe('searchTutors', () => {
   // ~5.5 km west of Paris center (radius is 5 km): lng 2.2769 @ lat 48.8566.
   const FAR = { lat: 48.8566, lng: 2.2769 };
 
+  it('ROOT contact wins over a stale nested copy in approved-family projections (issue #203)', async () => {
+    // The family-consumed disclosure path: after a root-only Account edit the
+    // nested copy is stale; the projection must surface the root values
+    // (PR #206 review).
+    const uid = 'temp-tutor-root-contact';
+    const doc = tutorDoc({ uid, status: 'active', searchable: true, enrollmentComplete: true });
+    const tutorProfile = (doc.profiles as { tutor: Record<string, unknown> }).tutor;
+    tutorProfile.approvedFamilies = [seed.family1Id];
+    tutorProfile.contactEmail = 'stale@ejm-test.org';
+    tutorProfile.contactPhone = '+33100000001';
+    (doc as Record<string, unknown>).contactEmail = 'fresh@ejm-test.org';
+    (doc as Record<string, unknown>).contactPhone = '+33100000099';
+    await getDb().collection('users').doc(uid).set(doc);
+    try {
+      const result = await callFunction<{ results: TutorResult[] }>(
+        'searchTutors',
+        { subject: 'math', level: '6e' },
+        parentToken
+      );
+      const row = result.results.find((r) => r.uid === uid);
+      expect(row?.contactEmail).toBe('fresh@ejm-test.org');
+      expect(row?.contactPhone).toBe('+33100000099');
+    } finally {
+      await getDb().collection('users').doc(uid).delete();
+    }
+  });
+
   it('returns an APPROVED tutor beyond the distance radius, with contact fields', async () => {
     const uid = 'temp-tutor-approved-far';
     const doc = tutorDoc({ uid, status: 'active', searchable: true, enrollmentComplete: true });

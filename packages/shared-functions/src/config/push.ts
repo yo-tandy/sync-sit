@@ -29,24 +29,47 @@ const PUSH_BRANDING: Record<NotificationApp, { icon: string; link: string }> = {
 // permission. Degradation is honest (notification doc with pushSent:false,
 // email still fires) and InstallAppBanner is the recovery path.
 //
-// KNOWN GAP (issue #168 ledger, Phase 2): the shared guardian callables
+// PER-RECIPIENT AFFINITY (issue #168 Phase 2): the shared guardian callables
 // (createKidInvite, revokeSupervision, forceRevokeSupervision,
-// guardianSetChildSearchable, guardianAccess) never pass `app`, so they fall
-// through to the 'sit' default and read only `fcmTokens`. A study-only
-// recipient (tokens in `fcmTokensStudy` alone) silently misses those pushes,
-// degrading to the in-app notification doc with an honest pushSent:false.
-// Threading the CALLER's app would be wrong — the push goes to the
-// child/guardian, whose app affinity the caller doesn't know; correct
-// routing needs per-recipient affinity or send-to-both (Phase 2 design).
+// guardianSetChildSearchable, guardianAccess) and the guardian mirror trigger
+// send to a recipient whose app affinity the CALLER doesn't know — threading
+// the caller's app would route by the wrong side of the conversation. Those
+// callers pass app='auto', which resolves per recipient from the same user
+// doc the send already fetches:
+// - tokens in exactly one array -> that app's tokens and branding;
+// - tokens in BOTH arrays -> the `world` hint if the caller knows which
+//   world the event belongs to (the mirror derives it from the mirrored
+//   type via derivePushWorld), otherwise 'sit' — the pre-Phase-2 behavior
+//   for dual-install users;
+// - tokens in neither -> the usual empty short-circuit (returns false).
+// Invalid-token cleanup always writes back to the array actually used.
+// Callers that DO know the recipient-facing app keep passing it explicitly.
 const PUSH_TOKEN_FIELDS: Record<NotificationApp, string> = {
   sit: 'fcmTokens',
   study: 'fcmTokensStudy',
 };
 
 /**
+ * Derive which app's WORLD a notification type belongs to, for use as the
+ * `world` hint of an app='auto' push. Study-world types are prefixed
+ * (`study_*`, plus the `tutor_endorsement_*` family); everything else is sit.
+ * The guardian mirror uses this on the mirrored notification's original type.
+ */
+export function derivePushWorld(notificationType: string): NotificationApp {
+  return notificationType.startsWith('study_') ||
+    notificationType.startsWith('tutor_endorsement_')
+    ? 'study'
+    : 'sit';
+}
+
+/**
  * Send a push notification to a user via FCM, branded for the given app.
  * Loads the app's token array from Firestore (`fcmTokens` for sit,
  * `fcmTokensStudy` for study) and sends to all tokens.
+ * app='auto' resolves the app per recipient from their token arrays (see the
+ * affinity comment above PUSH_TOKEN_FIELDS); `world` is the optional
+ * tie-breaker hint for recipients with tokens in both arrays, ignored
+ * otherwise.
  * Handles invalid tokens by removing them from the same array.
  * Fails silently — push failures should not block user actions.
  * Returns whether at least one token was actually delivered to, so callers
@@ -57,16 +80,35 @@ export async function sendPushNotification(
   title: string,
   body: string,
   data?: Record<string, string>,
-  app: NotificationApp = 'sit'
+  app: NotificationApp | 'auto' = 'sit',
+  world?: NotificationApp
 ): Promise<boolean> {
   try {
-    const tokensField = PUSH_TOKEN_FIELDS[app];
     const userDoc = await db.collection('users').doc(userId).get();
-    const tokens: string[] = userDoc.data()?.[tokensField] || [];
+    const userData = userDoc.data();
+
+    let resolvedApp: NotificationApp;
+    if (app === 'auto') {
+      const hasSit = ((userData?.[PUSH_TOKEN_FIELDS.sit] as string[]) || []).length > 0;
+      const hasStudy = ((userData?.[PUSH_TOKEN_FIELDS.study] as string[]) || []).length > 0;
+      if (hasSit && hasStudy) {
+        resolvedApp = world ?? 'sit';
+      } else if (hasStudy) {
+        resolvedApp = 'study';
+      } else {
+        // sit-only — or neither, which the empty short-circuit below handles.
+        resolvedApp = 'sit';
+      }
+    } else {
+      resolvedApp = app;
+    }
+
+    const tokensField = PUSH_TOKEN_FIELDS[resolvedApp];
+    const tokens: string[] = userData?.[tokensField] || [];
 
     if (tokens.length === 0) return false;
 
-    const { icon, link } = PUSH_BRANDING[app];
+    const { icon, link } = PUSH_BRANDING[resolvedApp];
 
     // Send with notification payload — the browser handles display automatically.
     // The service worker's onBackgroundMessage skips showing if the browser already displayed it.

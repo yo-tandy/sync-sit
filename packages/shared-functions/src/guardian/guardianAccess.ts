@@ -42,5 +42,5 @@ export async function notifyChildOfGuardianAction(
     pushSent: false,
     createdAt: new Date(),
   });
-  await sendPushNotification(childUid, title, body, { ...data, type: 'guardian_action' });
+  await sendPushNotification(childUid, title, body, { ...data, type: 'guardian_action' }, 'auto');
 }

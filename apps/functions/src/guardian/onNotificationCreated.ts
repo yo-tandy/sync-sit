@@ -1,7 +1,7 @@
 import { onDocumentCreated } from 'firebase-functions/v2/firestore';
 import { db } from '../config/firebase.js';
 import { escapeHtml, sendNotificationEmail } from '../config/email.js';
-import { sendPushNotification } from '../config/push.js';
+import { derivePushWorld, sendPushNotification } from '../config/push.js';
 
 /**
  * Guardian notification mirroring (governance design: "child notifications CC
@@ -108,11 +108,21 @@ export const mirrorNotificationToGuardians = onDocumentCreated(
            supervise ${escapeHtml(kidName)}'s account.</p>`,
         );
       }
-      await sendPushNotification(parentUid, title, body, {
-        mirroredFrom: recipientUserId,
-        originalType,
-        type: 'guardian_mirror',
-      });
+      // app='auto': the parent's app affinity is theirs, not the kid's. The
+      // mirrored type tells us which world the event came from — that world
+      // breaks the tie for parents with tokens in both arrays (#168 Phase 2).
+      await sendPushNotification(
+        parentUid,
+        title,
+        body,
+        {
+          mirroredFrom: recipientUserId,
+          originalType,
+          type: 'guardian_mirror',
+        },
+        'auto',
+        derivePushWorld(originalType),
+      );
     }
   },
 );

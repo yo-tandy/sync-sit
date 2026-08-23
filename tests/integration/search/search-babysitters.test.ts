@@ -58,6 +58,38 @@ describe('searchBabysitters', () => {
     expect(uids).not.toContain(seed.babysitter4.uid);
   });
 
+  it('ROOT contact wins over a stale nested copy for an approved family (issue #203)', async () => {
+    // After a root-only Account edit the nested copy is frozen; the projection
+    // an approved family consumes must carry the root values (PR #206 review).
+    const db = getDb();
+    const bsRef = db.collection('users').doc(seed.babysitter1.uid);
+    const before = (await bsRef.get()).data()!;
+    await bsRef.update({
+      'profiles.babysitter.approvedFamilies': [seed.family1Id],
+      'profiles.babysitter.contactEmail': 'stale@ejm-test.org',
+      'profiles.babysitter.contactPhone': '+33100000001',
+      contactEmail: 'fresh@ejm-test.org',
+      contactPhone: '+33100000099',
+    });
+    try {
+      const nextSat = getNextSaturday();
+      const result = await callFunction<{ results: Array<{ uid: string; contactEmail?: string; contactPhone?: string }> }>(
+        'searchBabysitters',
+        {
+          type: 'one_time', date: nextSat, startTime: '10:00', endTime: '13:00',
+          kidAges: [6], numberOfKids: 1, latLng: { lat: 48.8566, lng: 2.2769 }, filters: {},
+        },
+        parentToken
+      );
+      const row = result.results.find((r) => r.uid === seed.babysitter1.uid);
+      expect(row).toBeDefined();
+      expect(row?.contactEmail).toBe('fresh@ejm-test.org');
+      expect(row?.contactPhone).toBe('+33100000099');
+    } finally {
+      await bsRef.set(before);
+    }
+  });
+
   it('excludes babysitters whose rate exceeds offered rate', async () => {
     const nextSat = getNextSaturday();
     const result = await callFunction<{ results: Array<{ uid: string; hourlyRate: number }> }>(

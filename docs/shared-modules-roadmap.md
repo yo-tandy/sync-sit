@@ -54,6 +54,11 @@
 interface UserBase {
   uid: string;
   ejemEmail: string;
+  // Shared contact channels, canonical at the root (issue #203): edited in
+  // either app, read root-first with a nested fallback for legacy docs.
+  contactEmail?: string | null;
+  contactPhone?: string | null;
+  whatsapp?: string | null;
   email: string;
   firstName: string;
   lastName: string;

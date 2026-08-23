@@ -240,6 +240,106 @@ describe('enrollBabysitter crossApp mode', () => {
     expect(after.profiles.tutor.searchable).toBe(true);
     expect(after.firstName).toBe('Rica');
     expect(after.language).toBe('fr');
+    // Canonical ROOT copies filled from the tutor profile (issue #203 shared
+    // identity): fillBaseFields lifts them because the root was empty.
+    expect(after.ejemEmail).toBe('rica.tutor@ejm-test.org');
+    expect(after.contactEmail).toBe('rica@contact.com');
+    expect(after.contactPhone).toBe('+33600000001');
+    expect(after.whatsapp).toBe('+33600000001');
+  });
+
+  // ── Issue #203 shared identity: root-canonical derivation ──
+
+  it('derives from the ROOT ejemEmail when the nested tutor copy lacks it', async () => {
+    const uid = 'crossapp-root-derive';
+    const db = getDb();
+    await getAdminAuth().createUser({ uid, email: 'rootderive@test.com' });
+    await db.collection('users').doc(uid).set({
+      uid,
+      email: 'rootderive@test.com',
+      firstName: 'Root', lastName: 'Derive', dateOfBirth: '2008-05-01',
+      status: 'active',
+      // Post-backfill shape: canonical root, nested copy already cleaned.
+      ejemEmail: 'root.derive@ejm-test.org',
+      contactPhone: '+33600000009',
+      profiles: {
+        tutor: { enrollmentComplete: true, searchable: false, classLevel: '2nde' },
+      },
+    });
+    const token = await getIdToken(uid);
+    const result = await callFunction<{ success: boolean; uid: string }>(
+      'enrollBabysitter',
+      { crossApp: true, consentVersion: '1.0' },
+      token,
+    );
+    expect(result.uid).toBe(uid);
+    const after = (await db.collection('users').doc(uid).get()).data()!;
+    expect(after.profiles.babysitter.ejemEmail).toBe('root.derive@ejm-test.org');
+    // Root contact resolves into the copied profile fields too.
+    expect(after.profiles.babysitter.contactPhone).toBe('+33600000009');
+    // Root stays untouched (fillBaseFields never overwrites populated fields).
+    expect(after.ejemEmail).toBe('root.derive@ejm-test.org');
+    expect(after.contactPhone).toBe('+33600000009');
+  });
+
+  it('channels the tutor never supplied are ABSENT at the root, not null', async () => {
+    // A null here would read as a deliberate clear (root presence is
+    // authoritative), blocking the nested fallback and the backfill —
+    // the same defect round 6 removed from enrollTutor (PR #206 round 7).
+    const uid = 'crossapp-sit-no-contact';
+    const db = getDb();
+    await getAdminAuth().createUser({ uid, email: 'sitnocontact@test.com' });
+    await db.collection('users').doc(uid).set({
+      uid,
+      email: 'sitnocontact@test.com',
+      firstName: 'No', lastName: 'Contact', dateOfBirth: '2008-05-01',
+      status: 'active',
+      ejemEmail: 'no.contact@ejm-test.org',
+      profiles: {
+        tutor: { enrollmentComplete: true, searchable: false, classLevel: '2nde' },
+      },
+    });
+    const token = await getIdToken(uid);
+    await callFunction('enrollBabysitter', { crossApp: true, consentVersion: '1.0' }, token);
+
+    const after = (await db.collection('users').doc(uid).get()).data()!;
+    expect(after.contactEmail).toBeUndefined();
+    expect(after.contactPhone).toBeUndefined();
+    expect(after.whatsapp).toBeUndefined();
+    // The nested profile keeps the null convention.
+    expect(after.profiles.babysitter.contactEmail).toBeNull();
+  });
+
+  it('an explicitly CLEARED contact channel is not resurrected by cross-app enrollment', async () => {
+    // Mirror of the tutor-side pin: a tutor who deleted their phone on the
+    // study Account page (root null, nested copy frozen) must not get it
+    // written back when they add a babysitter profile (PR #206 round 4).
+    const uid = 'crossapp-sit-cleared';
+    const db = getDb();
+    await getAdminAuth().createUser({ uid, email: 'sitcleared@test.com' });
+    await db.collection('users').doc(uid).set({
+      uid,
+      email: 'sitcleared@test.com',
+      firstName: 'Cleared', lastName: 'Contact', dateOfBirth: '2008-05-01',
+      status: 'active',
+      ejemEmail: 'cleared.contact@ejm-test.org',
+      contactPhone: null,
+      contactEmail: 'kept@contact.com',
+      profiles: {
+        tutor: {
+          enrollmentComplete: true, searchable: false, classLevel: '2nde',
+          contactPhone: '+33600000009', contactEmail: 'kept@contact.com',
+        },
+      },
+    });
+    const token = await getIdToken(uid);
+    await callFunction('enrollBabysitter', { crossApp: true, consentVersion: '1.0' }, token);
+
+    const after = (await db.collection('users').doc(uid).get()).data()!;
+    expect(after.profiles.babysitter.contactPhone ?? null).toBeNull();
+    expect(after.contactPhone ?? null).toBeNull();
+    expect(after.profiles.tutor.contactPhone).toBe('+33600000009');
+    expect(after.profiles.babysitter.contactEmail).toBe('kept@contact.com');
   });
 
   it('records crossApp provenance in the audit trail', async () => {
