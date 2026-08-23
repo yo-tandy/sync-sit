@@ -557,6 +557,10 @@ export interface StudyContactRequestSeed {
   createdAt?: Date;
   respondedAt?: Date;
   updatedAt?: Date;
+  /** Tutor-initiated (issue #207 PR4); absent means family-initiated. */
+  initiatedBy?: 'tutor';
+  publishedSearchId?: string;
+  tutorName?: string;
 }
 
 export async function seedStudyContactRequest(
@@ -583,6 +587,9 @@ export async function seedStudyContactRequest(
   };
   if (data.message !== undefined) doc.message = data.message;
   if (data.respondedAt !== undefined) doc.respondedAt = data.respondedAt;
+  if (data.initiatedBy !== undefined) doc.initiatedBy = data.initiatedBy;
+  if (data.publishedSearchId !== undefined) doc.publishedSearchId = data.publishedSearchId;
+  if (data.tutorName !== undefined) doc.tutorName = data.tutorName;
 
   await ref.set(doc);
   return ref.id;

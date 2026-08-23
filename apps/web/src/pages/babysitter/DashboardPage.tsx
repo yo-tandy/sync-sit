@@ -6,6 +6,7 @@ import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { isBabysitterProfileComplete } from '@ejm/sit-core';
+import { PublishedSearchesPreview } from '@/components/published/PublishedSearchesPreview';
 import { useAppointments } from '@/hooks/useAppointments';
 import { useSchedule } from '@/hooks/useSchedule';
 import { AppointmentCard } from '@/components/appointments/AppointmentCard';
@@ -265,6 +266,14 @@ export function BabysitterDashboard() {
           </p>
         </div>
       )}
+
+      {/* "Posts from families" — the board's entry point lives on the
+          dashboard under the appointment sections (owner direction on
+          PR #211), not behind a menu entry. Renders nothing only while the
+          first snapshot is pending — an empty or failed read still shows the
+          title, a one-line status and the link, since this is the board's
+          only entry point. */}
+      <PublishedSearchesPreview />
 
       {/* ── Toggle Confirmation Dialog ── */}
       <Dialog open={toggleDialog} onClose={() => setToggleDialog(false)}>

@@ -8,6 +8,7 @@ import { getTutorProfile } from '@ejm/study-core';
 import type { StudyContactRequestDoc } from '@ejm/study-core';
 import type { RecurringSlot } from '@ejm/shared-core';
 import { DAYS_OF_WEEK } from '@ejm/shared-core';
+import { PublishedSearchesPreview } from '@/components/published/PublishedSearchesPreview';
 import { SupervisionRequestCard } from '@/components/tutor/SupervisionRequestCard';
 import { InstallAppBanner } from '@/components/ui/InstallAppBanner';
 import type { StudySessionDoc } from '@/types/studySession';
@@ -303,7 +304,10 @@ export function DashboardPage() {
   // await the FAMILY's answer) don't count — they still render in the
   // section, marked "awaiting the family" (PR #194 review).
   const newCount =
-    pendingRequests.length +
+    // Same rule for contact requests as for sessions (issue #207 PR4): one
+    // this tutor SENT by answering a published search awaits the FAMILY, so
+    // it is not a to-do — it still renders below, marked.
+    pendingRequests.filter((r) => r.initiatedBy !== 'tutor').length +
     pendingSessions.filter((s) => s.proposedBy !== 'provider').length;
   const newTotal = pendingRequests.length + pendingSessions.length;
   const hasAny = newTotal > 0 || confirmedUpcoming.length > 0;
@@ -396,10 +400,17 @@ export function DashboardPage() {
                   <div className="flex items-center gap-3">
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-semibold text-gray-900">{r.familyName}</p>
-                      <p className="text-xs text-gray-500">{r.parentName}</p>
+                      {/* parentName is '' until a parent answers a request
+                          this tutor sent, so don't render an empty line. */}
+                      {r.parentName && <p className="text-xs text-gray-500">{r.parentName}</p>}
                       <p className="mt-1 text-xs text-gray-500">
                         {t(`tutor.subjects.names.${r.subject}`)} · {r.level}
                       </p>
+                      {r.initiatedBy === 'tutor' && (
+                        <p className="mt-1 text-xs text-amber-700">
+                          {t('tutor.requests.awaitingFamily')}
+                        </p>
+                      )}
                     </div>
                     <ChevronRightIcon className="h-5 w-5 shrink-0 text-gray-400" />
                   </div>
@@ -478,6 +489,14 @@ export function DashboardPage() {
           </p>
         </div>
       )}
+
+      {/* "Posts from families" — the board's entry point lives on the
+          dashboard under the session sections (owner direction on PR #211),
+          not behind a menu entry. Renders nothing only while the first
+          snapshot is pending — an empty or failed read still shows the title,
+          a one-line status and the link, since this is the board's only
+          entry point. */}
+      <PublishedSearchesPreview />
 
       {/* ── Search-visibility confirm dialog (sit's babysitter pattern) ── */}
       <Dialog open={toggleDialog} onClose={() => setToggleDialog(false)}>

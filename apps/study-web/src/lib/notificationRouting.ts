@@ -23,6 +23,9 @@ type StudyRole = 'tutor' | 'parent' | 'admin';
 const STUDY_TYPES = [
   'study_contact_request',
   'study_contact_request_cancelled',
+  // A tutor answered this family's published search (issue #207 PR4) — the
+  // family's only in-app signal for the whole feature.
+  'study_published_search_contact',
   'study_request_accepted',
   'study_request_declined',
   'study_session_request',
@@ -74,7 +77,15 @@ export function notificationRoute(
   role: StudyRole | null | undefined,
 ): string | null {
   if (role === 'tutor') {
-    if (type === 'study_contact_request' || type === 'study_contact_request_cancelled') {
+    if (
+      type === 'study_contact_request' ||
+      type === 'study_contact_request_cancelled' ||
+      // Since the inversion (issue #207 PR4) a TUTOR receives these too, when
+      // the family answers a request the tutor sent — the payoff of the whole
+      // feature, so it must land somewhere.
+      type === 'study_request_accepted' ||
+      type === 'study_request_declined'
+    ) {
       return '/tutor/requests';
     }
     if (SESSION_TYPES.has(type)) return '/tutor/sessions';
@@ -85,7 +96,15 @@ export function notificationRoute(
   }
 
   if (role === 'parent') {
-    if (type === 'study_request_accepted' || type === 'study_request_declined') {
+    if (
+      type === 'study_request_accepted' ||
+      type === 'study_request_declined' ||
+      // Accept/Decline for a tutor-initiated request lives on this page.
+      type === 'study_published_search_contact' ||
+      // Parents receive this one too since the inversion (issue #207 PR4):
+      // a tutor withdrawing their own request notifies the family.
+      type === 'study_contact_request_cancelled'
+    ) {
       return '/family/requests';
     }
     if (SESSION_TYPES.has(type)) return '/family/sessions';

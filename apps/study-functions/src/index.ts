@@ -5,6 +5,8 @@ export { sendTutorContactRequest } from './contact/sendTutorContactRequest.js';
 export { getTutorAvailability } from './availability/getTutorAvailability.js';
 export { respondToTutorContactRequest } from './contact/respondToTutorContactRequest.js';
 export { cancelContactRequest } from './contact/cancelContactRequest.js';
+export { sendFamilyContactRequest } from './contact/sendFamilyContactRequest.js';
+export { respondToFamilyContactRequest } from './contact/respondToFamilyContactRequest.js';
 export { bookSession } from './sessions/bookSession.js';
 export { proposeSession } from './sessions/proposeSession.js';
 export { respondToSession } from './sessions/respondToSession.js';

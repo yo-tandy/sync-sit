@@ -42,3 +42,29 @@ export const cancelContactRequestSchema = z.object({
 });
 
 export type CancelContactRequestInput = z.infer<typeof cancelContactRequestSchema>;
+
+/**
+ * Input for sendFamilyContactRequest (issue #207 PR4, the inverted
+ * direction). The familyId is NEVER accepted from the client — it is read off
+ * the published search the tutor is answering.
+ */
+export const sendFamilyContactRequestSchema = z.object({
+  publishedSearchId: z.string().min(1, 'publishedSearchId is required'),
+  message: z.string().max(1000, 'Message must be at most 1000 characters').optional(),
+});
+
+export type SendFamilyContactRequestInput = z.infer<typeof sendFamilyContactRequestSchema>;
+
+/**
+ * Input for respondToFamilyContactRequest. Only a parent of the family the
+ * request was sent to may accept/decline it (enforced in the callable against
+ * the family doc's parentIds).
+ */
+export const respondFamilyContactRequestSchema = z.object({
+  requestId: z.string().min(1, 'requestId is required'),
+  action: z.enum(['accept', 'decline'], {
+    errorMap: () => ({ message: 'Action must be accept or decline' }),
+  }),
+});
+
+export type RespondFamilyContactRequestInput = z.infer<typeof respondFamilyContactRequestSchema>;

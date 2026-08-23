@@ -58,6 +58,14 @@ export interface TutorProfile extends ProfileBase {
   searchable?: boolean;
 
   /**
+   * When this tutor last visited the published-searches board (issue #207).
+   * Owner-written from the client on section visit (deliberately not
+   * rules-pinned — it only drives the owner's own "New" tagging/badge):
+   * a board doc is New iff createdAt > this. Absent = never visited.
+   */
+  publishedSearchesSeenAt?: FirestoreTimestamp;
+
+  /**
    * Server-owned denormalized count of the tutor's approved/published study
    * endorsements. Written only by respondToTutorEndorsement (accept path,
    * FieldValue.increment) and pinned immutable against owner writes by security

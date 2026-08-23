@@ -382,6 +382,90 @@ describe('guardian protective controls — study', () => {
     expect(kid.profiles.tutor.approvedFamilies ?? []).not.toContain(seed.family2Id);
   });
 
+  // ── The inverted direction (issue #207 PR4): a request the KID sent by
+  //    answering a published search cannot be declined at all, so the
+  //    guardian's protective lever is a WITHDRAW. ──
+
+  it('guardian cannot DECLINE a request the kid sent — that door is closed to everyone', async () => {
+    const requestId = await seedStudyContactRequest({
+      tutorUserId: GOVERNED,
+      familyId: seed.family2Id,
+      createdByUserId: GOVERNED,
+      initiatedBy: 'tutor',
+      publishedSearchId: 'ps-guardian-1',
+    });
+    await expect(
+      callFunction('respondToTutorContactRequest', { requestId, action: 'decline' }, guardianToken),
+    ).rejects.toMatchObject({ code: 'PERMISSION_DENIED' });
+  });
+
+  it('guardian WITHDRAWS a request the kid sent: family notified, kid told, audit says guardian', async () => {
+    const requestId = await seedStudyContactRequest({
+      tutorUserId: GOVERNED,
+      familyId: seed.family2Id,
+      createdByUserId: GOVERNED,
+      initiatedBy: 'tutor',
+      publishedSearchId: 'ps-guardian-2',
+      tutorName: 'Governed Kid',
+    });
+
+    const result = await callFunction('cancelContactRequest', { requestId }, guardianToken);
+    expect(result).toMatchObject({ success: true });
+
+    const db = getDb();
+    const req = (await db.collection('studyContactRequests').doc(requestId).get()).data()!;
+    expect(req.status).toBe('cancelled');
+
+    // The FAMILY hears about it — not the tutor, who is the one withdrawing.
+    const famNotifs = await db.collection('notifications')
+      .where('recipientUserId', '==', seed.parent3.uid)
+      .where('type', '==', 'study_contact_request_cancelled')
+      .get();
+    expect(famNotifs.size).toBe(1);
+
+    // The kid is told a guardian acted for them (the guardian-transparency rule).
+    const kidNotifs = await db.collection('notifications')
+      .where('recipientUserId', '==', GOVERNED)
+      .where('type', '==', 'guardian_action')
+      .get();
+    expect(kidNotifs.size).toBeGreaterThan(0);
+
+    // And the audit entry names the actor role.
+    const audit = await db.collection('auditLogs')
+      .where('action', '==', 'tutor_contact_request_withdrawn')
+      .get();
+    expect(audit.size).toBe(1);
+    expect(audit.docs[0].data().details.actorRole).toBe('guardian');
+  });
+
+  it('getGovernedChildDetail projects initiatedBy so the page can tell the two apart', async () => {
+    await seedStudyContactRequest({
+      requestId: 'gsc-family-initiated',
+      tutorUserId: GOVERNED,
+      familyId: seed.family2Id,
+      createdByUserId: seed.parent3.uid,
+    });
+    await seedStudyContactRequest({
+      requestId: 'gsc-kid-initiated',
+      tutorUserId: GOVERNED,
+      familyId: seed.family2Id,
+      createdByUserId: GOVERNED,
+      initiatedBy: 'tutor',
+      publishedSearchId: 'ps-guardian-3',
+    });
+
+    const detail = await callFunction<{
+      study: { contactRequests: { requestId: string; initiatedBy: string | null }[] };
+    }>('getGovernedChildDetail', { childUid: GOVERNED }, guardianToken);
+
+    const rows = Object.fromEntries(
+      detail.study.contactRequests.map((r) => [r.requestId, r.initiatedBy]),
+    );
+    expect(rows['gsc-kid-initiated']).toBe('tutor');
+    // Absent means family — every legacy row predates the inversion.
+    expect(rows['gsc-family-initiated']).toBeNull();
+  });
+
   it('a pending or absent link grants nothing, and a random parent stays denied', async () => {
     // Pending link → the guardian path must not resolve.
     const pendingSes = await seedSession(PENDING_KID);

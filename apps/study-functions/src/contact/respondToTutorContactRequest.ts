@@ -75,6 +75,17 @@ export const respondToTutorContactRequest = onCall(
         throw new HttpsError('not-found', 'Request not found');
       }
       const data = snap.data()!;
+      // A TUTOR-INITIATED request is the family's to answer (issue #207 PR4).
+      // Without this the tutor who opened it passes the tutorUserId check
+      // below and could accept their own request -- writing the family into
+      // their approvedFamilies and unlocking contact with no consent from the
+      // family at all. respondToFamilyContactRequest is the only door for it.
+      if (data.initiatedBy === 'tutor') {
+        throw new HttpsError(
+          'permission-denied',
+          'This request is waiting for the family to answer',
+        );
+      }
       if (data.tutorUserId !== uid && !guardianActor) {
         throw new HttpsError('permission-denied', 'You are not the tutor for this request');
       }

@@ -401,7 +401,7 @@ describe('GovernedChildPage (sit)', () => {
     expect(h.callable).not.toHaveBeenCalledWith('respondToSession', expect.anything());
   });
 
-  it('declining a study contact request calls respondToTutorContactRequest decline', async () => {
+  it('declining a FAMILY-initiated study contact request calls respondToTutorContactRequest decline', async () => {
     h.detail = detail({ study: { sessions: [], contactRequests: [studyContact()] } });
     renderPage();
 
@@ -413,6 +413,33 @@ describe('GovernedChildPage (sit)', () => {
         requestId: 'r1',
         action: 'decline',
       }),
+    );
+  });
+
+  it('a request the CHILD sent offers Withdraw, never Decline (issue #207 PR4)', async () => {
+    // respondToTutorContactRequest refuses a tutor-initiated request outright,
+    // so a Decline here could only ever fail — the same shape the page already
+    // handles for a session the kid proposed (PR #213 review).
+    h.detail = detail({
+      study: {
+        sessions: [],
+        contactRequests: [studyContact({ initiatedBy: 'tutor', publishedSearchId: 'ps1' })],
+      },
+    });
+    renderPage();
+
+    expect(await screen.findByText(/contacted this family/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^decline$/i })).not.toBeInTheDocument();
+
+    fireEvent.click(await screen.findByRole('button', { name: /withdraw request/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /yes, withdraw/i }));
+
+    await waitFor(() =>
+      expect(h.callable).toHaveBeenCalledWith('cancelContactRequest', { requestId: 'r1' }),
+    );
+    expect(h.callable).not.toHaveBeenCalledWith(
+      'respondToTutorContactRequest',
+      expect.anything(),
     );
   });
 

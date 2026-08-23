@@ -146,6 +146,23 @@ describe('family DashboardPage', () => {
     expect(await screen.findByText('2 pending · 1 accepted')).toBeInTheDocument();
   });
 
+  it('counts a TUTOR-initiated pending apart, and says the family is the one to answer', async () => {
+    // "You have 1 pending request / Tutors usually reply within a day or two"
+    // is backwards on both halves for a request a tutor sent us
+    // (issue #207 PR4, PR #213 review).
+    h.familyData = { familyName: 'Cohen', verification: { isFullyVerified: true } };
+    h.requests = [
+      { requestId: 'r1', familyId: 'fam1', status: 'pending', initiatedBy: 'tutor' },
+      { requestId: 'r2', familyId: 'fam1', status: 'pending' },
+    ];
+    renderWithProviders(<DashboardPage />);
+
+    expect(await screen.findByText(/answered your published search/i)).toBeInTheDocument();
+    expect(screen.queryByText(/tutors usually reply/i)).not.toBeInTheDocument();
+    // The tile keeps them apart too: one to answer, one still waiting on a tutor.
+    expect(await screen.findByText('1 to answer · 1 pending · 0 accepted')).toBeInTheDocument();
+  });
+
   it('shows the empty requests message when the family has none', async () => {
     h.requests = [];
     renderWithProviders(<DashboardPage />);

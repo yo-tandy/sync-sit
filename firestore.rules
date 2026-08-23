@@ -523,9 +523,14 @@ service cloud.firestore {
     }
 
     // Study contact requests: the involved tutor can read own, family members
-    // can read for their family. Writes go exclusively through the
-    // sendTutorContactRequest / respondToTutorContactRequest callables (Admin
-    // SDK), which own the consent state machine and its approvedFamilies unlock.
+    // can read for their family. Writes go exclusively through the four
+    // contact callables (Admin SDK), which own the consent state machine and
+    // its approvedFamilies unlock: sendTutorContactRequest /
+    // respondToTutorContactRequest for a request the FAMILY opened, and
+    // sendFamilyContactRequest / respondToFamilyContactRequest for one a TUTOR
+    // opened by answering a published search (issue #207 PR4) -- that last one
+    // writes the tutor's own user doc, not just this collection.
+    // cancelContactRequest withdraws either, for the side that opened it.
     match /studyContactRequests/{requestId} {
       allow read: if isAuth() && (
         request.auth.uid == resource.data.tutorUserId

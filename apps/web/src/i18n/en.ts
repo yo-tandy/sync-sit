@@ -481,6 +481,25 @@ export default {
     withdrawn: 'Published search withdrawn',
   },
 
+  publishedBoard: {
+    previewTitle: 'Posts from families',
+    seeMore: 'See more posts',
+    openBoard: 'Open the board',
+    previewEmpty: 'No posts right now.',
+    previewError: 'Posts could not be loaded right now.',
+    title: 'Published searches',
+    intro: 'Families publish searches here so babysitters can find them — including searches outside your usual availability.',
+    familyTitle: '{{name}} family',
+    newTag: 'New',
+    kids: '{{count}} kid(s), ages {{ages}}',
+    area: 'Area: {{area}}',
+    rate: 'Offered rate: {{rate}}€/h',
+    expires: 'Visible until {{date}}',
+    contactSoon: 'Contacting families arrives in the next update',
+    empty: 'No published searches right now. Check back later — new ones appear here.',
+    error: 'Could not load published searches. Please try again later.',
+  },
+
   preferred: {
     title: 'Favorite Babysitters',
     searchPlaceholder: 'Search by name or email...',
@@ -1252,6 +1271,12 @@ export default {
       cancelKeep: 'Keep session',
       proposedByChild: 'Proposed by {{name}} — awaiting the family\'s reply.',
       withdrawProposal: 'Withdraw proposal',
+      contactSentByChild: '{{name}} contacted this family — awaiting their reply.',
+      withdrawContact: 'Withdraw request',
+      confirmWithdrawContactTitle: 'Withdraw this request?',
+      confirmWithdrawContactCta: 'Yes, withdraw',
+      confirmWithdrawContactDesc:
+        'The family will be told the request was withdrawn. {{name}} can contact them again later.',
       withdrawTitle: 'Withdraw this proposal?',
       withdrawDesc:
         'The session {{name}} proposed will be withdrawn. Give a short reason — it is shared with the family and with {{name}}.',

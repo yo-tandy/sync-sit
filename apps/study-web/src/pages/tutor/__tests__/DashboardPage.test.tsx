@@ -34,6 +34,12 @@ vi.mock('firebase/firestore', () => ({
   getDocs: (...args: unknown[]) => h.getDocs(...args),
   updateDoc: (...args: unknown[]) => h.updateDoc(...args),
   serverTimestamp: () => 'ts',
+  orderBy: (...args: unknown[]) => ({ orderBy: args }),
+  limit: (n: number) => ({ limit: n }),
+  // The dashboard now hosts the published-searches preview, which subscribes
+  // live; an inert unsubscribe keeps these appointment-focused tests unaware
+  // of it (its own spec covers the section).
+  onSnapshot: () => () => {},
 }));
 
 vi.mock('@/stores/authStore', () => ({
@@ -243,6 +249,32 @@ describe('tutor DashboardPage', () => {
     // Only the pending request counts; the accepted one renders nowhere.
     expect(screen.getByText('1')).toBeInTheDocument();
     expect(screen.queryByText('Levi')).not.toBeInTheDocument();
+  });
+
+  it('a request THIS TUTOR sent renders marked, and does not count as a to-do', async () => {
+    // Same rule the section already applies to tutor-authored session
+    // proposals: it awaits the FAMILY, so it is not a to-do (issue #207 PR4).
+    h.auth.userDoc = tutor();
+    h.requests = [
+      {
+        requestId: 'r9',
+        tutorUserId: 't1',
+        status: 'pending',
+        initiatedBy: 'tutor',
+        publishedSearchId: 'ps1',
+        familyName: 'Cohen',
+        // Empty until a parent answers — it must not render a blank line.
+        parentName: '',
+        subject: 'math',
+        level: '6e',
+      },
+    ];
+    renderWithProviders(<DashboardPage />);
+
+    expect(await screen.findByText('Cohen')).toBeInTheDocument();
+    expect(screen.getByText(/waiting for their answer/i)).toBeInTheDocument();
+    // The amber to-do badge stays at zero; the section still shows the row.
+    expect(screen.queryByText('1')).not.toBeInTheDocument();
   });
 
   it('lists pending session bookings under New Requests, linking to /tutor/sessions', async () => {

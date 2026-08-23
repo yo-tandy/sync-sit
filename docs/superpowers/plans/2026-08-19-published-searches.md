@@ -163,6 +163,17 @@ export const publishSearch = onCall({ region: 'europe-west1', cors: getCorsOrigi
 
 ## PR 2 — provider sections + seen tracking (both apps)
 
+> **Superseded during review (PR #211):** the owner directed that the board's
+> entry point be a **"Posts from families" section on the provider dashboard**,
+> not a menu entry — so T2 and T4 below (the menu badge, the closed-menu dot,
+> the `badge` prop ported into sit's MenuItem) were built, then removed again,
+> and the shipped PR carries none of that machinery. What shipped instead:
+> a shared `usePublishedSearches` hook + `PublishedSearchCard` per app, a
+> `PublishedSearchesPreview` under the dashboard sections showing the newest 3
+> with a link to the full board, and no app-bar surface at all. Read T2/T4
+> as history; PR3 and PR4 build on the preview + card, not on the menu.
+
+
 Branch `feature/published-searches-provider`. Files:
 - Create: `apps/web/src/pages/babysitter/PublishedSearchesPage.tsx` (+test), `apps/study-web/src/pages/tutor/PublishedSearchesPage.tsx` (+test), shared card markup stays per-app (shapes differ; DRY via copy-adapt, the AppBar precedent `study AppBar.tsx:54-58`)
 - Modify: `apps/web/src/router.tsx:106-119` (route `/babysitter/published-searches`), `apps/study-web/src/router.tsx:87-99` + `apps/study-web/src/lazyPages.ts`, `apps/web/src/components/ui/AppBar.tsx` (port badge prop + dot from study `AppBar.tsx:39-51,118-120`; new MenuItem), `apps/study-web/src/components/ui/AppBar.tsx` (new MenuItem with badge), i18n ×4

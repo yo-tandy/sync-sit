@@ -27,7 +27,7 @@ export function TutorCard({ result }: { result: TutorSearchResult }) {
     null,
   );
   // Local, optimistic view of this family's request status toward the tutor.
-  const [status, setStatus] = useState<'none' | StudyContactRequestStatus>(result.requestStatus);
+  const [status, setStatus] = useState<'none' | 'incoming' | StudyContactRequestStatus>(result.requestStatus);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [successOpen, setSuccessOpen] = useState(false);
 
@@ -159,6 +159,16 @@ export function TutorCard({ result }: { result: TutorSearchResult }) {
         )}
         {status === 'pending' && (
           <Button disabled>{t('family.search.card.pending')}</Button>
+        )}
+        {/* THEY contacted US (issue #207 PR4): the send CTA would be rejected
+            as already-exists, so point at the page where Accept lives. */}
+        {status === 'incoming' && (
+          <Link
+            to="/family/requests"
+            className="text-sm font-semibold text-brand-600 hover:underline"
+          >
+            {t('family.search.card.incoming')}
+          </Link>
         )}
         {status === 'declined' && (
           <>

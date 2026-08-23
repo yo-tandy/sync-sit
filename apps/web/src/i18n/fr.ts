@@ -467,6 +467,25 @@ export default {
     withdrawn: 'Recherche publiée retirée',
   },
 
+  publishedBoard: {
+    previewTitle: 'Annonces des familles',
+    seeMore: 'Voir plus d\'annonces',
+    openBoard: 'Ouvrir le tableau',
+    previewEmpty: 'Aucune annonce pour le moment.',
+    previewError: 'Les annonces n\'ont pas pu être chargées pour le moment.',
+    title: 'Recherches publiées',
+    intro: 'Les familles publient ici leurs recherches pour que les babysitters les trouvent — y compris des recherches hors de vos disponibilités habituelles.',
+    familyTitle: 'Famille {{name}}',
+    newTag: 'Nouveau',
+    kids: '{{count}} enfant(s), âges {{ages}}',
+    area: 'Quartier : {{area}}',
+    rate: 'Tarif proposé : {{rate}}€/h',
+    expires: 'Visible jusqu\'au {{date}}',
+    contactSoon: 'Contacter les familles arrive dans la prochaine mise à jour',
+    empty: 'Aucune recherche publiée pour le moment. Repassez plus tard — les nouvelles apparaissent ici.',
+    error: 'Impossible de charger les recherches publiées. Veuillez réessayer plus tard.',
+  },
+
   preferred: {
     title: 'Babysitters favoris',
     searchPlaceholder: 'Rechercher par nom ou email...',
@@ -1226,6 +1245,12 @@ export default {
       cancelKeep: 'Garder la session',
       proposedByChild: 'Proposé par {{name}} — en attente de la réponse de la famille.',
       withdrawProposal: 'Retirer la proposition',
+      contactSentByChild: '{{name}} a contacté cette famille — en attente de sa réponse.',
+      withdrawContact: 'Retirer la demande',
+      confirmWithdrawContactTitle: 'Retirer cette demande ?',
+      confirmWithdrawContactCta: 'Oui, retirer',
+      confirmWithdrawContactDesc:
+        'La famille sera informée du retrait. {{name}} pourra la recontacter plus tard.',
       withdrawTitle: 'Retirer cette proposition ?',
       withdrawDesc:
         'La session proposée par {{name}} sera retirée. Indiquez une brève raison — elle sera partagée avec la famille et avec {{name}}.',
