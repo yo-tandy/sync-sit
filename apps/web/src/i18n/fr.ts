@@ -467,6 +467,25 @@ export default {
     withdrawn: 'Recherche publiée retirée',
   },
 
+  publishedBoard: {
+    previewTitle: 'Annonces des familles',
+    seeMore: 'Voir plus d\'annonces',
+    openBoard: 'Ouvrir le tableau',
+    previewEmpty: 'Aucune annonce pour le moment.',
+    previewError: 'Les annonces n\'ont pas pu être chargées pour le moment.',
+    title: 'Recherches publiées',
+    intro: 'Les familles publient ici leurs recherches pour que les babysitters les trouvent — y compris des recherches hors de vos disponibilités habituelles.',
+    familyTitle: 'Famille {{name}}',
+    newTag: 'Nouveau',
+    kids: '{{count}} enfant(s), âges {{ages}}',
+    area: 'Quartier : {{area}}',
+    rate: 'Tarif proposé : {{rate}}€/h',
+    expires: 'Visible jusqu\'au {{date}}',
+    contactSoon: 'Contacter les familles arrive dans la prochaine mise à jour',
+    empty: 'Aucune recherche publiée pour le moment. Repassez plus tard — les nouvelles apparaissent ici.',
+    error: 'Impossible de charger les recherches publiées. Veuillez réessayer plus tard.',
+  },
+
   preferred: {
     title: 'Babysitters favoris',
     searchPlaceholder: 'Rechercher par nom ou email...',
