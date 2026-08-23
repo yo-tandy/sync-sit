@@ -3,8 +3,10 @@ name: Tests
 on:
   push:
     branches: [main]
+  # No base-branch filter: a PR stacked on a feature branch must be gated too.
+  # Filtering on `branches` here matches the PR base, which silently skipped this
+  # job for every stacked PR while the check rollup still read green (issue #215).
   pull_request:
-    branches: [main]
 
 jobs:
   test:
