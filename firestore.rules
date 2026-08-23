@@ -564,6 +564,44 @@ service cloud.firestore {
       }
     }
 
+    // Published searches (issue #207): a family's deliberately-broadcast
+    // demand. Created exclusively by the publishSearch/publishTutorSearch
+    // callables (Admin SDK) — the verification gate, the server-computed
+    // expiry, and the PII scrubbing (area label, never address/latLng; kid
+    // ages, never names) live there. Read: the owning family, any ACTIVE
+    // provider of the matching app, admin. Deliberately NOT gated on
+    // profiles.*.searchable or any availability — being visible to "a larger
+    // group of providers, even ones ... otherwise hidden from results" IS the
+    // feature; the CALLER's status == 'active' stays the hard ban gate.
+    // Delete: the owning family (withdraw). Expiry is not rules-enforced
+    // (unprovable for list queries against a client-supplied bound): clients
+    // filter, the daily sweep deletes, and the contact callables re-check —
+    // an expired-but-unswept doc leaks nothing its readers couldn't see.
+    // List provability: the provider disjuncts depend only on the query's
+    // `app` equality filter plus callerData() (one get); the family disjunct
+    // is provable for where('familyId','==', <own familyId>) queries. The
+    // provider disjuncts come FIRST so provider lists never evaluate the
+    // family-doc get() (the H2 ||-chain lesson above).
+    match /publishedSearches/{searchId} {
+      allow read: if isAuth() && (
+        (resource.data.app == 'sit'
+           && isBabysitterData(callerData())
+           && bsField(callerData(), 'enrollmentComplete', false) == true
+           && callerData().get('status', '') == 'active')
+        || (resource.data.app == 'study'
+           && callerData().get('profiles', {}).get('tutor', null) != null
+           && tutorField(callerData(), 'enrollmentComplete', false) == true
+           && callerData().get('status', '') == 'active')
+        // isAdmin BEFORE the family get(): a deleted family doc would error
+        // the || chain and deny the read a later disjunct should grant (the
+        // references-rule precedent; PR #210 review).
+        || isAdmin()
+        || isFamilyMember(resource.data.familyId)
+      );
+      allow create, update: if false; // publish callables only
+      allow delete: if isFamilyMember(resource.data.familyId); // withdraw
+    }
+
     // Deny everything else
     match /{document=**} {
       allow read, write: if false;

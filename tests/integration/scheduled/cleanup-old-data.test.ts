@@ -37,6 +37,7 @@ describe('runCleanupOldData', () => {
     const collections = [
       'notifications', 'auditLogs', 'inviteLinks', 'verificationCodes',
       'accountExistsNotices', 'verificationSendCounters', 'appointments',
+      'publishedSearches',
     ];
     await Promise.all(
       collections.map(async (col) => {
@@ -207,6 +208,35 @@ describe('runCleanupOldData', () => {
     const remaining = await db.collection('appointments').get();
     expect(remaining.size).toBe(1);
     expect(remaining.docs[0].id).toBe(recentRef.id);
+  });
+
+  it('deletes expired published searches and keeps active ones (issue #207)', async () => {
+    const db = getDb();
+    const now = new Date();
+
+    // Should be deleted: expired yesterday (both apps go through one sweep).
+    await db.collection('publishedSearches').add({
+      app: 'sit',
+      familyId: seed.family1Id,
+      expiresAt: daysAgo(1),
+      createdAt: daysAgo(8),
+    });
+
+    // Should be kept: still active.
+    const activeRef = await db.collection('publishedSearches').add({
+      app: 'study',
+      familyId: seed.family1Id,
+      expiresAt: daysFromNow(3),
+      createdAt: daysAgo(4),
+    });
+
+    const stats = await runCleanupOldData(db, now);
+
+    expect(stats.publishedSearchesDeleted).toBe(1);
+
+    const remaining = await db.collection('publishedSearches').get();
+    expect(remaining.size).toBe(1);
+    expect(remaining.docs[0].id).toBe(activeRef.id);
   });
 
   it('deletes old audit logs and keeps recent ones', async () => {
