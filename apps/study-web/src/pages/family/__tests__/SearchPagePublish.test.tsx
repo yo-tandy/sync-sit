@@ -85,6 +85,10 @@ async function renderAndSearch() {
   fireEvent.change(screen.getByLabelText('Level'), { target: { value: '6e' } });
   fireEvent.click(screen.getByRole('button', { name: 'Search tutors' }));
   await waitFor(() => expect(h.callable).toHaveBeenCalledWith('searchTutors', expect.anything()));
+  // Wait for the search to fully complete so the Publish CTA is rendered.
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: 'Publish this search' })).toBeTruthy(),
+  );
 }
 
 beforeEach(() => {
