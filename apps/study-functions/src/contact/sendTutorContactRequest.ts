@@ -8,7 +8,11 @@ import { getParentProfile } from '@ejm/shared-core';
 import type { User } from '@ejm/shared-core';
 import type { StudyUser, TutorProfile, SubjectOffering } from '@ejm/study-core';
 import { sendTutorContactRequestSchema } from '../validation/contact.js';
-import { DECLINE_COOLDOWN_MS, latestDeclineMs } from './declineCooldown.js';
+import {
+  DECLINE_COOLDOWN_MS,
+  latestDeclineMs,
+  repairTimestamplessDeclines,
+} from './declineCooldown.js';
 
 
 export const sendTutorContactRequest = onCall(
@@ -89,6 +93,9 @@ export const sendTutorContactRequest = onCall(
     // tutor's own approach said no to being contacted, not to contacting --
     // counting that decline here would let a tutor's unwanted approach lock
     // the family out of the tutor it actually wants. ──
+    // Anchor any timestampless decline before reading the window, so failing
+    // closed lasts a week rather than forever (issue #214).
+    await repairTimestamplessDeclines(existingSnap.docs, 'family');
     const declinedMs = latestDeclineMs(existingSnap.docs.map((d) => d.data()), 'family');
     if (declinedMs !== null && Date.now() - declinedMs < DECLINE_COOLDOWN_MS) {
       throw new HttpsError(

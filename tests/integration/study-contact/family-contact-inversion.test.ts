@@ -270,6 +270,38 @@ describe('study contact inversion', () => {
     expect(res.requestId).toBeTruthy();
   });
 
+  it('anchors a timestampless decline instead of silencing the pair forever', async () => {
+    // No write path produces this shape -- every one stamps updatedAt -- so it
+    // stands in for a hand-edited row or an import. The cooldown fails CLOSED
+    // on it, but "closed" has to mean a week, not forever: with no timestamp to
+    // age from, the check recomputes ~0 elapsed on every call (issue #214).
+    const requestId = await seedStudyContactRequest({
+      tutorUserId: seed.tutor2.uid,
+      familyId: seed.family1Id,
+      createdByUserId: seed.tutor2.uid,
+      initiatedBy: 'tutor',
+      status: 'declined',
+    });
+    const ref = getDb().collection('studyContactRequests').doc(requestId);
+    await ref.update({
+      createdAt: FieldValue.delete(),
+      updatedAt: FieldValue.delete(),
+      respondedAt: FieldValue.delete(),
+    });
+    const before = await ref.get();
+    expect(before.data()?.updatedAt).toBeUndefined();
+
+    const searchId = await publish();
+    // Still refused -- the repair does not open the gate on this attempt.
+    await expect(
+      callFunction('sendFamilyContactRequest', { publishedSearchId: searchId }, tutorToken),
+    ).rejects.toMatchObject({ code: 'FAILED_PRECONDITION' });
+
+    // ...but the doc now carries an anchor, so a week can actually elapse.
+    const after = await ref.get();
+    expect(after.data()?.updatedAt).toBeDefined();
+  });
+
   it("a TUTOR's decline of the family's own request does not silence the tutor here", async () => {
     // The tutor said no to being hired then; that is not the family saying no
     // to being contacted.

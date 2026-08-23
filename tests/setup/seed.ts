@@ -577,7 +577,12 @@ export async function seedStudyContactRequest(
     tutorUserId: data.tutorUserId,
     familyId: data.familyId,
     familyName: data.familyName ?? 'TestFamily',
-    parentName: data.parentName ?? 'Test Parent',
+    // A tutor-initiated request has no parent name until a parent answers --
+    // sendFamilyContactRequest writes ''. Defaulting to a name here would mint
+    // a shape the callable never produces, so an assertion keyed on "no parent
+    // name yet means nobody has answered" would pass on the seed and fail in
+    // production (issue #214).
+    parentName: data.parentName ?? (data.initiatedBy === 'tutor' ? '' : 'Test Parent'),
     createdByUserId: data.createdByUserId,
     subject: data.subject ?? 'math',
     level: data.level ?? '6e',

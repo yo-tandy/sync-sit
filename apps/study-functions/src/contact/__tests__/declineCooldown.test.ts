@@ -1,5 +1,9 @@
-import { describe, it, expect } from 'vitest';
-import { DECLINE_COOLDOWN_MS, latestDeclineMs } from '../declineCooldown.js';
+import { describe, it, expect, vi } from 'vitest';
+import {
+  DECLINE_COOLDOWN_MS,
+  latestDeclineMs,
+  repairTimestamplessDeclines,
+} from '../declineCooldown.js';
 
 /**
  * Unit pins for the shared cooldown helper (issue #207 PR4, PR #213 review).
@@ -71,6 +75,11 @@ describe('latestDeclineMs', () => {
   it('fails CLOSED on a decline with no readable timestamp', () => {
     // Reported as ~now, so the caller stays inside the cooldown. The
     // alternative re-notifies someone who already said no.
+    //
+    // On its own this silences the pair FOREVER -- the value is recomputed on
+    // every call, so the difference never grows (issue #214). What bounds it is
+    // repairTimestamplessDeclines, pinned below: callers stamp the doc first,
+    // so the next call reads a real anchor and the week actually elapses.
     const before = Date.now();
     const got = latestDeclineMs([{ status: 'declined', initiatedBy: 'tutor' }], 'tutor')!;
     expect(got).toBeGreaterThanOrEqual(before);
@@ -79,5 +88,57 @@ describe('latestDeclineMs', () => {
 
   it('exports a seven-day window', () => {
     expect(DECLINE_COOLDOWN_MS).toBe(7 * 24 * 60 * 60 * 1000);
+  });
+});
+
+describe('repairTimestamplessDeclines', () => {
+  const AT = new Date(50_000);
+
+  function doc(data: Record<string, unknown>, update = vi.fn().mockResolvedValue(undefined)) {
+    return { data: () => data, ref: { update }, update };
+  }
+
+  it('stamps updatedAt on a matching decline that carries no timestamp', async () => {
+    const d = doc({ status: 'declined', initiatedBy: 'tutor' });
+    expect(await repairTimestamplessDeclines([d], 'tutor', AT)).toBe(1);
+    expect(d.update).toHaveBeenCalledWith({ updatedAt: AT });
+  });
+
+  it('leaves a decline that already has any readable timestamp alone', async () => {
+    const docs = [
+      doc({ status: 'declined', initiatedBy: 'tutor', respondedAt: ts(1_000) }),
+      doc({ status: 'declined', initiatedBy: 'tutor', updatedAt: ts(1_000) }),
+      doc({ status: 'declined', initiatedBy: 'tutor', createdAt: ts(1_000) }),
+    ];
+    expect(await repairTimestamplessDeclines(docs, 'tutor', AT)).toBe(0);
+    for (const d of docs) expect(d.update).not.toHaveBeenCalled();
+  });
+
+  it('ignores declines opened by the other side, and non-declines', async () => {
+    const docs = [
+      doc({ status: 'declined', initiatedBy: 'family' }),
+      doc({ status: 'pending', initiatedBy: 'tutor' }),
+      doc({ status: 'accepted', initiatedBy: 'tutor' }),
+    ];
+    expect(await repairTimestamplessDeclines(docs, 'tutor', AT)).toBe(0);
+    for (const d of docs) expect(d.update).not.toHaveBeenCalled();
+  });
+
+  it('treats a legacy decline with no initiatedBy as family-opened', async () => {
+    const legacy = doc({ status: 'declined' });
+    expect(await repairTimestamplessDeclines([legacy], 'tutor', AT)).toBe(0);
+    expect(await repairTimestamplessDeclines([legacy], 'family', AT)).toBe(1);
+  });
+
+  it('never throws when the repair write fails -- the caller refuses either way', async () => {
+    const d = doc({ status: 'declined', initiatedBy: 'tutor' }, vi.fn().mockRejectedValue(new Error('denied')));
+    await expect(repairTimestamplessDeclines([d], 'tutor', AT)).resolves.toBe(0);
+  });
+
+  it('anchors the window: after the repair the decline ages out normally', async () => {
+    // The doc the caller re-reads on the NEXT attempt carries the stamp, so
+    // latestDeclineMs reports a fixed point that a week can pass from.
+    const stamped = { status: 'declined', initiatedBy: 'tutor', updatedAt: asDate(50_000) };
+    expect(latestDeclineMs([stamped], 'tutor')).toBe(50_000);
   });
 });
