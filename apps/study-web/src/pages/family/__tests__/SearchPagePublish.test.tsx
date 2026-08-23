@@ -118,6 +118,36 @@ describe('SearchPage publish flow (issue #207)', () => {
     );
   });
 
+  // Pins the `!loading` half of the CTA's render guard (SearchPage.tsx:479).
+  // It only does real work on a RE-search: `setLoading(true)` fires while
+  // `results` still holds the previous run's array, so `results !== null` alone
+  // would leave the CTA on screen mid-search. Holding the second search open
+  // makes that window deterministic. A first search cannot pin this -- `results`
+  // is still null then, so the guard passes on that clause alone.
+  it('hides the publish CTA again while a re-search is in flight', async () => {
+    await renderAndSearch();
+    expect(screen.getByRole('button', { name: 'Publish this search' })).toBeTruthy();
+
+    let release!: (v: unknown) => void;
+    h.callable.mockReturnValueOnce(
+      new Promise((r) => {
+        release = r;
+      }),
+    );
+    fireEvent.change(screen.getByLabelText('Level'), { target: { value: '5e' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Search tutors' }));
+
+    // Second search in flight, stale results still in state: CTA must be gone.
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: 'Publish this search' })).toBeNull(),
+    );
+
+    release({ data: { results: [] } });
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Publish this search' })).toBeTruthy(),
+    );
+  });
+
   it('publishes via the publishTutorSearch callable with the current form values', async () => {
     await renderAndSearch();
     fireEvent.click(screen.getByRole('button', { name: 'Publish this search' }));
