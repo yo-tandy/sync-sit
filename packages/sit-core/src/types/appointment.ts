@@ -44,8 +44,17 @@ export interface SearchDoc {
 
 export interface AppointmentDoc {
   appointmentId: string;
-  searchId: string;
+  /** null for babysitter-initiated docs: the published search IS the search. */
+  searchId: string | null;
   familyId: string;
+  /**
+   * Who started this appointment (issue #207 PR3). Absent on every doc minted
+   * before the contact inversion shipped, and on family-initiated docs since —
+   * absent MEANS 'family'. Only 'babysitter' flips the respond roles.
+   */
+  initiatedBy?: 'family' | 'babysitter';
+  /** Set iff initiatedBy === 'babysitter': the search that was answered. */
+  publishedSearchId?: string | null;
   babysitterUserId: string;
   createdByUserId: string;
   type: SearchType;
@@ -61,8 +70,13 @@ export interface AppointmentDoc {
   recurringSlots?: RecurringSlot[];
   schoolWeeksOnly?: boolean;
   kidIds: string[];
-  address: string;
-  latLng: LatLng;
+  /**
+   * WITHHELD (null) on a pending babysitter-initiated appointment and filled
+   * in by respondToRequest's family-accept branch — disclosure follows the
+   * family's consent (issue #207 PR3).
+   */
+  address: string | null;
+  latLng: LatLng | null;
   offeredRate?: number;
   message?: string;
   additionalInfo?: string;

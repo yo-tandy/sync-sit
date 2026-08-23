@@ -35,6 +35,12 @@ const SIT_TYPES = [
   'reference_received',
   'contact_sharing_request',
   'family_submitted',
+  // Published-search inversion (issue #207 PR3): the sitter answering a
+  // family's published search, and the family's answer back. Both sides land
+  // on their dashboard, where the pending/confirmed lists live.
+  'published_search_contact',
+  'published_search_accepted',
+  'published_search_declined',
 ] as const;
 
 /** Guardian/governance types — listed in BOTH apps (scope decision on #127). */
@@ -65,6 +71,9 @@ const APPOINTMENT_TYPES = new Set([
   'appointment_modified',
   'reminder',
   'general',
+  'published_search_contact',
+  'published_search_accepted',
+  'published_search_declined',
 ]);
 
 /**

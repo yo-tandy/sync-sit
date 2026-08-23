@@ -120,3 +120,175 @@ describe('ExpandableBabysitterCard cancel control', () => {
     expect(screen.queryByText('appointment.cancel')).not.toBeInTheDocument();
   });
 });
+
+/**
+ * Contact inversion (issue #207 PR3): a card for a BABYSITTER-initiated
+ * pending is the family's to answer. It must say so without being expanded,
+ * offer Accept/Decline, and drop the edit/cancel controls that only make
+ * sense on a request the family itself authored.
+ */
+const answeredAppointment = {
+  ...appointment,
+  appointmentId: 'apt-2',
+  initiatedBy: 'babysitter',
+  publishedSearchId: 'ps-1',
+} as AppointmentDoc;
+
+describe('ExpandableBabysitterCard babysitter-initiated pending', () => {
+  it('labels the request as answering a published search without expanding', () => {
+    render(
+      <ExpandableBabysitterCard
+        appointment={answeredAppointment}
+        info={info}
+        variant="pending"
+        onAccept={vi.fn()}
+        onDecline={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('familyDashboard.answeredPublishedSearch')).toBeInTheDocument();
+  });
+
+  it('offers Accept and Decline, and wires each to its handler', () => {
+    const onAccept = vi.fn();
+    const onDecline = vi.fn();
+    render(
+      <ExpandableBabysitterCard
+        appointment={answeredAppointment}
+        info={info}
+        variant="pending"
+        onAccept={onAccept}
+        onDecline={onDecline}
+      />,
+    );
+    expandCard();
+
+    fireEvent.click(screen.getByText('request.accept'));
+    expect(onAccept).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByText('request.decline'));
+    expect(onDecline).toHaveBeenCalledTimes(1);
+  });
+
+  it('drops edit and cancel for a babysitter-initiated pending', () => {
+    render(
+      <ExpandableBabysitterCard
+        appointment={answeredAppointment}
+        info={info}
+        variant="pending"
+        onCancel={vi.fn()}
+        onEdit={vi.fn()}
+        onAccept={vi.fn()}
+        onDecline={vi.fn()}
+      />,
+    );
+    expandCard();
+
+    expect(screen.queryByText('appointment.edit')).not.toBeInTheDocument();
+    expect(screen.queryByText('appointment.cancelRequest')).not.toBeInTheDocument();
+  });
+
+  it('leaves a FAMILY-initiated pending exactly as it was (regression pin)', () => {
+    render(
+      <ExpandableBabysitterCard
+        appointment={appointment}
+        info={info}
+        variant="pending"
+        onCancel={vi.fn()}
+        onEdit={vi.fn()}
+        onAccept={vi.fn()}
+        onDecline={vi.fn()}
+      />,
+    );
+    expandCard();
+
+    expect(screen.getByText('appointment.edit')).toBeInTheDocument();
+    expect(screen.getByText('appointment.cancelRequest')).toBeInTheDocument();
+    expect(screen.queryByText('request.accept')).not.toBeInTheDocument();
+    expect(screen.queryByText('familyDashboard.answeredPublishedSearch')).not.toBeInTheDocument();
+  });
+});
+
+describe('rejected cards: who declined decides the affordance', () => {
+  // resubmitAppointment re-derives the family address onto the resubmission,
+  // so offering Resubmit on a request the FAMILY just declined would silently
+  // disclose it to that sitter — the invariant this PR exists to establish
+  // (PR #212 review). The distinction is three sibling conditionals keyed on
+  // statusReason, so it needs pinning against a refactor.
+  const declinedByFamily = {
+    ...answeredAppointment,
+    status: 'rejected',
+    statusReason: 'declined_by_family',
+  } as AppointmentDoc;
+
+  it('a family-declined card says so and offers no Resubmit', () => {
+    render(
+      <ExpandableBabysitterCard
+        appointment={declinedByFamily}
+        info={info}
+        variant="rejected"
+        onResubmit={vi.fn()}
+      />,
+    );
+    expandCard();
+    expect(screen.getByText('appointment.declinedByYou')).toBeInTheDocument();
+    expect(screen.queryByText('appointment.resubmit')).toBeNull();
+  });
+
+  it('a sitter-declined card still offers Resubmit', () => {
+    const declinedBySitter = {
+      ...appointment,
+      status: 'rejected',
+      statusReason: 'declined_by_babysitter',
+    } as AppointmentDoc;
+    render(
+      <ExpandableBabysitterCard
+        appointment={declinedBySitter}
+        info={info}
+        variant="rejected"
+        onResubmit={vi.fn()}
+      />,
+    );
+    expandCard();
+    expect(screen.getByText('appointment.resubmit')).toBeInTheDocument();
+    expect(screen.queryByText('appointment.declinedByYou')).toBeNull();
+  });
+
+  it('a sitter-WITHDRAWN contact says who withdrew and offers no Resubmit', () => {
+    // cancelAppointment writes cancelled/cancelled_by_babysitter, and
+    // useFamilyAppointments funnels cancelled into rejectedRecent — so this
+    // card renders with variant="rejected" while its status is 'cancelled'.
+    // resubmitAppointment only accepts 'rejected', so a Resubmit button here
+    // could only ever produce an error alert (PR #212 review).
+    const withdrawn = {
+      ...answeredAppointment,
+      status: 'cancelled',
+      statusReason: 'cancelled_by_babysitter',
+    } as AppointmentDoc;
+    render(
+      <ExpandableBabysitterCard
+        appointment={withdrawn}
+        info={info}
+        variant="rejected"
+        onResubmit={vi.fn()}
+      />,
+    );
+    expandCard();
+    expect(screen.getByText('appointment.withdrawnBySitter')).toBeInTheDocument();
+    expect(screen.queryByText('appointment.resubmit')).toBeNull();
+  });
+
+  it('a family accepting a sitter answer can still EDIT the confirmed sitting', () => {
+    // Edit is dropped only while such a request is pending; once accepted it
+    // is a mutual commitment like any other confirmed appointment.
+    render(
+      <ExpandableBabysitterCard
+        appointment={{ ...answeredAppointment, status: 'confirmed' } as AppointmentDoc}
+        info={info}
+        variant="confirmed"
+        onEdit={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+    expandCard();
+    expect(screen.getByText('appointment.edit')).toBeInTheDocument();
+  });
+});
