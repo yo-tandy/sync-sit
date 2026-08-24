@@ -85,6 +85,14 @@ async function renderAndSearch() {
   fireEvent.change(screen.getByLabelText('Level'), { target: { value: '6e' } });
   fireEvent.click(screen.getByRole('button', { name: 'Search tutors' }));
   await waitFor(() => expect(h.callable).toHaveBeenCalledWith('searchTutors', expect.anything()));
+  // The callable having been *invoked* is not the settled state. The publish CTA
+  // renders only after the search promise resolves and the page leaves its
+  // loading branch, so callers that click it straight away were racing a
+  // microtask -- green locally, red on a slower CI runner. Wait for the CTA
+  // itself, which is the real post-condition of "a search has run".
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: 'Publish this search' })).toBeTruthy(),
+  );
 }
 
 beforeEach(() => {
@@ -105,6 +113,36 @@ describe('SearchPage publish flow (issue #207)', () => {
     fireEvent.change(screen.getByLabelText('Subject'), { target: { value: 'math' } });
     fireEvent.change(screen.getByLabelText('Level'), { target: { value: '6e' } });
     fireEvent.click(screen.getByRole('button', { name: 'Search tutors' }));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Publish this search' })).toBeTruthy(),
+    );
+  });
+
+  // Pins the `!loading` half of the CTA's render guard (SearchPage.tsx:479).
+  // It only does real work on a RE-search: `setLoading(true)` fires while
+  // `results` still holds the previous run's array, so `results !== null` alone
+  // would leave the CTA on screen mid-search. Holding the second search open
+  // makes that window deterministic. A first search cannot pin this -- `results`
+  // is still null then, so the guard passes on that clause alone.
+  it('hides the publish CTA again while a re-search is in flight', async () => {
+    await renderAndSearch();
+    expect(screen.getByRole('button', { name: 'Publish this search' })).toBeTruthy();
+
+    let release!: (v: unknown) => void;
+    h.callable.mockReturnValueOnce(
+      new Promise((r) => {
+        release = r;
+      }),
+    );
+    fireEvent.change(screen.getByLabelText('Level'), { target: { value: '5e' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Search tutors' }));
+
+    // Second search in flight, stale results still in state: CTA must be gone.
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: 'Publish this search' })).toBeNull(),
+    );
+
+    release({ data: { results: [] } });
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Publish this search' })).toBeTruthy(),
     );
