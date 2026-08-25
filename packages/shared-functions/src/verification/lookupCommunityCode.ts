@@ -57,6 +57,18 @@ export const lookupCommunityCode = onCall(
 
     // Look up the requester's family and parent info
     const requesterFamily = await db.collection('families').doc(codeData.familyId).get();
+
+    // Already verified — by an admin, or by another parent who acted on this
+    // same request first. Surface it here so the approver learns the request
+    // is stale at lookup, not after confirming (#218).
+    if (requesterFamily.data()?.verification?.isFullyVerified) {
+      throw new HttpsError(
+        'failed-precondition',
+        'This request is no longer valid — this family has already been verified',
+        { reason: 'already_verified' },
+      );
+    }
+
     const requesterUser = await db.collection('users').doc(codeData.requestedByUserId).get();
 
     const familyName = requesterFamily.data()?.familyName || 'Unknown';

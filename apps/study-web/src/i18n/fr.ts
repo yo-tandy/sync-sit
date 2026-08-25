@@ -915,6 +915,7 @@ export default {
       checkboxConfirmEjm: 'Je confirme qu\'ils ont des enfants à l\'EJM',
       approve: 'Approuver',
       approveSuccess: 'Compte approuvé avec succès !',
+      communityAlreadyVerified: 'Cette demande n\'est plus valable — cette famille a déjà été vérifiée.',
     },
     sessions: {
       title: 'Vos cours',

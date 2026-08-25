@@ -3,6 +3,7 @@ import { clearAll, callFunction, getIdToken, getDb } from '../../setup/emulator.
 import {
   seedTestData,
   seedCommunityCode,
+  seedVerification,
   type SeedData,
 } from '../../setup/seed.js';
 
@@ -11,6 +12,7 @@ describe('community verification code flow', () => {
   let verifiedEjmParentToken: string; // parent1 — family-dupont, verified EJM
   let unverifiedParentToken: string; // parent3 — family-martin, not verified
   let babysitterToken: string;
+  let adminToken: string;
 
   beforeAll(async () => {
     await clearAll();
@@ -18,6 +20,7 @@ describe('community verification code flow', () => {
     verifiedEjmParentToken = await getIdToken(seed.parent1.uid);
     unverifiedParentToken = await getIdToken(seed.parent3.uid);
     babysitterToken = await getIdToken(seed.babysitter1.uid);
+    adminToken = await getIdToken(seed.admin.uid);
   });
 
   afterAll(async () => {
@@ -28,6 +31,10 @@ describe('community verification code flow', () => {
     const db = getDb();
     const codes = await db.collection('communityVerificationCodes').get();
     await Promise.all(codes.docs.map((d) => d.ref.delete()));
+    // Verification docs too — the supersede tests below seed their own and
+    // would otherwise read each other's leftovers.
+    const verifications = await db.collection('verifications').get();
+    await Promise.all(verifications.docs.map((d) => d.ref.delete()));
     // Reset family-martin to unverified state between tests
     await db.collection('families').doc(seed.family2Id).update({
       verification: {
@@ -208,6 +215,122 @@ describe('community verification code flow', () => {
       await expect(
         callFunction('approveCommunityCode', { code }, unverifiedParentToken),
       ).rejects.toMatchObject({ code: 'PERMISSION_DENIED' });
+    });
+
+    // Issue #218 — the document request must not outlive the approval.
+    it('supersedes the family\'s pending document requests', async () => {
+      const db = getDb();
+      const pendingId = await seedVerification({
+        familyId: seed.family2Id,
+        uploadedByUserId: seed.parent3.uid,
+        type: 'identity',
+      });
+      const code = await seedCommunityCode({
+        familyId: seed.family2Id,
+        requestedByUserId: seed.parent3.uid,
+      });
+
+      await callFunction('approveCommunityCode', { code }, verifiedEjmParentToken);
+
+      const doc = await db.collection('verifications').doc(pendingId).get();
+      expect(doc.data()!.status).toBe('superseded');
+      expect(doc.data()!.supersededBy).toBe('community');
+      expect(doc.data()!.supersededAt).toBeTruthy();
+      // The file reference survives — superseding must not orphan the upload.
+      expect(doc.data()!.fileUrl).toBeTruthy();
+    });
+
+    it('drops the superseded request out of the admin pending queue', async () => {
+      await seedVerification({
+        familyId: seed.family2Id,
+        uploadedByUserId: seed.parent3.uid,
+        type: 'identity',
+      });
+      const code = await seedCommunityCode({
+        familyId: seed.family2Id,
+        requestedByUserId: seed.parent3.uid,
+      });
+
+      await callFunction('approveCommunityCode', { code }, verifiedEjmParentToken);
+
+      const { verifications } = await callFunction<{
+        verifications: { familyId: string; status: string }[];
+      }>('listPendingVerifications', { statusFilter: 'pending' }, adminToken);
+
+      expect(verifications.filter((v) => v.familyId === seed.family2Id)).toHaveLength(0);
+    });
+
+    it('leaves already-reviewed documents alone', async () => {
+      const db = getDb();
+      const approvedId = await seedVerification({
+        familyId: seed.family2Id,
+        uploadedByUserId: seed.parent3.uid,
+        type: 'ejm_enrollment',
+        status: 'approved',
+      });
+      const code = await seedCommunityCode({
+        familyId: seed.family2Id,
+        requestedByUserId: seed.parent3.uid,
+      });
+
+      await callFunction('approveCommunityCode', { code }, verifiedEjmParentToken);
+
+      const doc = await db.collection('verifications').doc(approvedId).get();
+      expect(doc.data()!.status).toBe('approved');
+      expect(doc.data()!.supersededAt).toBeUndefined();
+    });
+
+    it('refuses a code whose family is already verified, naming the reason', async () => {
+      const db = getDb();
+      const code = await seedCommunityCode({
+        familyId: seed.family2Id,
+        requestedByUserId: seed.parent3.uid,
+      });
+      // Admin (or another parent) got there first.
+      await db.collection('families').doc(seed.family2Id).update({
+        verification: {
+          identityStatus: 'approved',
+          enrollmentStatus: 'approved',
+          isFullyVerified: true,
+          isEjmFamily: true,
+        },
+      });
+
+      await expect(
+        callFunction('approveCommunityCode', { code }, verifiedEjmParentToken),
+      ).rejects.toMatchObject({
+        code: 'FAILED_PRECONDITION',
+        details: { reason: 'already_verified' },
+      });
+
+      // The code must survive a refused attempt — it was never consumed.
+      const codeDoc = await db.collection('communityVerificationCodes').doc(code).get();
+      expect(codeDoc.data()!.used).toBe(false);
+    });
+  });
+
+  describe('lookupCommunityCode — stale request', () => {
+    it('refuses a code whose family is already verified, naming the reason', async () => {
+      const db = getDb();
+      const code = await seedCommunityCode({
+        familyId: seed.family2Id,
+        requestedByUserId: seed.parent3.uid,
+      });
+      await db.collection('families').doc(seed.family2Id).update({
+        verification: {
+          identityStatus: 'approved',
+          enrollmentStatus: 'approved',
+          isFullyVerified: true,
+          isEjmFamily: true,
+        },
+      });
+
+      await expect(
+        callFunction('lookupCommunityCode', { code }, verifiedEjmParentToken),
+      ).rejects.toMatchObject({
+        code: 'FAILED_PRECONDITION',
+        details: { reason: 'already_verified' },
+      });
     });
   });
 });

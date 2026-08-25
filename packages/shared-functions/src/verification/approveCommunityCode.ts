@@ -3,6 +3,7 @@ import { getParentProfile, type User } from '@ejm/shared-core';
 import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
+import { supersedePendingVerifications } from './supersedePendingVerifications.js';
 
 export const approveCommunityCode = onCall(
   { region: 'europe-west1', cors: getCorsOrigin() },
@@ -57,6 +58,19 @@ export const approveCommunityCode = onCall(
       throw new HttpsError('failed-precondition', 'You cannot approve your own family');
     }
 
+    // The family may have been verified since this code was handed out —
+    // by an admin reviewing their documents, or by another parent acting on
+    // the same request first. Refuse BEFORE the code is consumed, and say
+    // that the request is stale rather than silently re-approving (#218).
+    const requesterFamily = await db.collection('families').doc(codeData.familyId).get();
+    if (requesterFamily.data()?.verification?.isFullyVerified) {
+      throw new HttpsError(
+        'failed-precondition',
+        'This request is no longer valid — this family has already been verified',
+        { reason: 'already_verified' },
+      );
+    }
+
     const now = new Date();
 
     // Mark code as used
@@ -77,9 +91,18 @@ export const approveCommunityCode = onCall(
       },
     });
 
+    // Document requests still queued for this family decide nothing now that
+    // the community route has verified them — close them out (#218).
+    const supersededIds = await supersedePendingVerifications(
+      codeData.familyId,
+      'community',
+      now,
+    );
+
     await writeUserActivity(uid, 'community_approval_given', {
       approvedFamilyId: codeData.familyId,
       code,
+      supersededVerificationIds: supersededIds,
     });
 
     await writeUserActivity(codeData.requestedByUserId, 'community_approval_received', {

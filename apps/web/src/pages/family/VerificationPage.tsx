@@ -118,13 +118,20 @@ export function VerificationPage() {
     }
   };
 
+  // The server discriminates actionable failures with details.reason; a stale
+  // request gets its own copy rather than the raw server message (#218).
+  const approveErrorMessage = (err: unknown, fallback: string) => {
+    const reason = (err as { details?: { reason?: string } } | null)?.details?.reason;
+    if (reason === 'already_verified') return t('verification.communityAlreadyVerified');
+    return err instanceof Error ? err.message : fallback;
+  };
+
   const handleLookup = async () => {
     setApproveError('');
     try {
       await lookupCommunityCode(approveCode.trim());
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Invalid code';
-      setApproveError(message);
+      setApproveError(approveErrorMessage(err, 'Invalid code'));
     }
   };
 
@@ -137,8 +144,7 @@ export function VerificationPage() {
       setKnowPerson(false);
       setConfirmEjm(false);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Approval failed';
-      setApproveError(message);
+      setApproveError(approveErrorMessage(err, 'Approval failed'));
     }
   };
 

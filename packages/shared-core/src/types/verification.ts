@@ -1,6 +1,16 @@
 import type { FirestoreTimestamp } from './common.js';
 
 export type VerificationStatus = 'not_submitted' | 'pending' | 'approved' | 'rejected';
+
+/**
+ * Status of a single uploaded document. Distinct from VerificationStatus,
+ * which describes a family's standing per type: a document is `superseded`
+ * when the family reached verified by another route while it still sat in the
+ * admin queue (#218), but a family's identityStatus is never `superseded` —
+ * that route set it to `approved`.
+ */
+export type VerificationDocStatus = 'pending' | 'approved' | 'rejected' | 'superseded';
+
 export type VerificationType = 'identity' | 'ejm_enrollment';
 
 export interface VerificationDoc {
@@ -8,7 +18,7 @@ export interface VerificationDoc {
   familyId: string;
   uploadedByUserId: string;
   type: VerificationType;
-  status: VerificationStatus;
+  status: VerificationDocStatus;
   fileUrl: string;
   fileName: string;
 
@@ -23,6 +33,11 @@ export interface VerificationDoc {
   reviewedByAdminId?: string;
   reviewedAt?: FirestoreTimestamp;
   rejectionReason?: string;
+
+  // Set when the family was verified by another route before an admin got to
+  // this document (#218).
+  supersededAt?: FirestoreTimestamp;
+  supersededBy?: 'community' | 'admin';
 
   createdAt: FirestoreTimestamp;
 }

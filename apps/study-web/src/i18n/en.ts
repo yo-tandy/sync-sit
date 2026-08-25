@@ -915,6 +915,7 @@ export default {
       checkboxConfirmEjm: 'I confirm that they have kids in EJM',
       approve: 'Approve',
       approveSuccess: 'Account approved successfully!',
+      communityAlreadyVerified: 'This request is no longer valid — this family has already been verified.',
     },
     sessions: {
       title: 'Your sessions',
