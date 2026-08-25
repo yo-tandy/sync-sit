@@ -72,6 +72,30 @@ describe('latestDeclineMs', () => {
     ).toBe(4_000);
   });
 
+  it('reads export/import shapes rather than repairing over them', () => {
+    // A JSON export/re-import leaves plain maps, numbers or strings behind.
+    // Reading them matters twice over: the original decline time survives,
+    // and an old imported decline ages out instead of getting a fresh week
+    // from the repair (PR #219 review).
+    const cases: [unknown, number][] = [
+      [4_000, 4_000],
+      [new Date(4_000).toISOString(), 4_000],
+      [new Date(4_000), 4_000],
+      [{ _seconds: 4, _nanoseconds: 0 }, 4_000],
+      [{ seconds: 4, nanoseconds: 500_000_000 }, 4_500],
+    ];
+    for (const [respondedAt, expected] of cases) {
+      expect(
+        latestDeclineMs([{ status: 'declined', initiatedBy: 'tutor', respondedAt }], 'tutor'),
+      ).toBe(expected);
+    }
+    // Genuinely unreadable values still fail closed.
+    const before = Date.now();
+    expect(
+      latestDeclineMs([{ status: 'declined', initiatedBy: 'tutor', respondedAt: 'not a date', updatedAt: NaN }], 'tutor')!,
+    ).toBeGreaterThanOrEqual(before);
+  });
+
   it('fails CLOSED on a decline with no readable timestamp', () => {
     // Reported as ~now, so the caller stays inside the cooldown. The
     // alternative re-notifies someone who already said no.
@@ -135,10 +159,21 @@ describe('repairTimestamplessDeclines', () => {
     await expect(repairTimestamplessDeclines([d], 'tutor', AT)).resolves.toBe(0);
   });
 
-  it('anchors the window: after the repair the decline ages out normally', async () => {
-    // The doc the caller re-reads on the NEXT attempt carries the stamp, so
-    // latestDeclineMs reports a fixed point that a week can pass from.
-    const stamped = { status: 'declined', initiatedBy: 'tutor', updatedAt: asDate(50_000) };
-    expect(latestDeclineMs([stamped], 'tutor')).toBe(50_000);
+  it('anchors the window: latestDeclineMs reads exactly what the repair writes', async () => {
+    // The contract between the two functions: the repair's field name and
+    // value shape must sit on latestDeclineMs's fallback chain. Merging the
+    // update payload into the backing object pins the round-trip -- a repair
+    // that wrote the wrong field, a non-timestamp value, or nothing at all
+    // fails here (PR #219 review; the earlier version of this test hand-built
+    // the stamped doc and never called the repair).
+    const backing: Record<string, unknown> = { status: 'declined', initiatedBy: 'tutor' };
+    const update = vi.fn(async (payload: Record<string, unknown>) => {
+      Object.assign(backing, payload);
+    });
+    expect(await repairTimestamplessDeclines([{ data: () => backing, ref: { update } }], 'tutor', AT)).toBe(1);
+    expect(latestDeclineMs([backing], 'tutor')).toBe(AT.getTime());
+    // AT is far in the past, so the anchored decline is already outside the
+    // window: the pair is no longer silenced, which is the whole point.
+    expect(Date.now() - latestDeclineMs([backing], 'tutor')!).toBeGreaterThan(DECLINE_COOLDOWN_MS);
   });
 });

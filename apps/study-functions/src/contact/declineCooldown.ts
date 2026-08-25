@@ -13,12 +13,38 @@
  */
 export const DECLINE_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
 
+// Reads every timestamp shape a decline doc could plausibly carry, not just
+// live Timestamps. The extra shapes -- epoch number, parseable string, raw
+// Date, and the plain {_seconds}/{seconds} map a JSON export/re-import leaves
+// behind -- matter because anything unreadable here gets repaired by
+// overwriting `updatedAt` (below): reading the value beats clobbering a field
+// the real decline time was recoverable from, and lets an old imported
+// decline age out instead of serving a fresh week (PR #219 review).
 function toMillis(value: unknown): number | null {
-  if (value && typeof (value as { toMillis?: () => number }).toMillis === 'function') {
+  if (value == null) return null;
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : null;
+  }
+  if (typeof value === 'string') {
+    const parsed = Date.parse(value);
+    return Number.isNaN(parsed) ? null : parsed;
+  }
+  if (value instanceof Date) {
+    // What repairTimestamplessDeclines writes; Firestore hands it back as a
+    // Timestamp, but the unit seam between the two functions sees the Date.
+    return value.getTime();
+  }
+  if (typeof (value as { toMillis?: () => number }).toMillis === 'function') {
     return (value as { toMillis: () => number }).toMillis();
   }
-  if (value && typeof (value as { toDate?: () => Date }).toDate === 'function') {
+  if (typeof (value as { toDate?: () => Date }).toDate === 'function') {
     return (value as { toDate: () => Date }).toDate().getTime();
+  }
+  const map = value as { _seconds?: unknown; seconds?: unknown; _nanoseconds?: unknown; nanoseconds?: unknown };
+  const seconds = typeof map._seconds === 'number' ? map._seconds : typeof map.seconds === 'number' ? map.seconds : null;
+  if (seconds !== null) {
+    const nanos = typeof map._nanoseconds === 'number' ? map._nanoseconds : typeof map.nanoseconds === 'number' ? map.nanoseconds : 0;
+    return seconds * 1000 + Math.round(nanos / 1e6);
   }
   return null;
 }
@@ -68,7 +94,7 @@ export function latestDeclineMs(
 /** The minimum a caller needs from a query snapshot to repair a doc. */
 type RepairableDoc = {
   data(): Record<string, unknown>;
-  ref: { update(data: Record<string, unknown>): Promise<unknown> };
+  ref: { path?: string; update(data: Record<string, unknown>): Promise<unknown> };
 };
 
 /**
@@ -98,8 +124,15 @@ export async function repairTimestamplessDeclines(
     try {
       await d.ref.update({ updatedAt: now });
       repaired += 1;
-    } catch {
-      // Leaves the doc unanchored; the caller refuses either way.
+      // A doc in this shape means something wrote outside every path we
+      // control; the server quietly rewriting it deserves a trace.
+      console.warn(`repairTimestamplessDeclines: stamped ${d.ref.path ?? 'decline doc'} with no readable timestamp`);
+    } catch (err) {
+      // Leaves the doc unanchored; the caller refuses either way. But if this
+      // keeps failing the pre-fix behaviour -- a permanently silenced pair --
+      // is back in full, so it must not fail silently (same best-effort shape
+      // as endorsementNotifications.ts / markSessionsCompleted.ts).
+      console.error(`repairTimestamplessDeclines: stamp failed for ${d.ref.path ?? 'decline doc'}`, err);
     }
   }
   return repaired;

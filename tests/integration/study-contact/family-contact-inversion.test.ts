@@ -292,10 +292,12 @@ describe('study contact inversion', () => {
     expect(before.data()?.updatedAt).toBeUndefined();
 
     const searchId = await publish();
-    // Still refused -- the repair does not open the gate on this attempt.
+    // Still refused -- the repair does not open the gate on this attempt. The
+    // reason pins WHICH gate: five other checks in this callable also throw
+    // FAILED_PRECONDITION (PR #219 review).
     await expect(
       callFunction('sendFamilyContactRequest', { publishedSearchId: searchId }, tutorToken),
-    ).rejects.toMatchObject({ code: 'FAILED_PRECONDITION' });
+    ).rejects.toMatchObject({ code: 'FAILED_PRECONDITION', details: { reason: 'decline_cooldown' } });
 
     // ...but the doc now carries an anchor, so a week can actually elapse.
     const after = await ref.get();
