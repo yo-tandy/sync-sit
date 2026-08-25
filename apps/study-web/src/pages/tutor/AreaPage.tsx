@@ -199,6 +199,10 @@ export function AreaPage() {
       });
       await refreshUserDoc();
       setSuccess(true);
+      // Clear before rescheduling: a second save inside the window would
+      // otherwise orphan the first timer -- unreachable by the unmount
+      // cleanup, and clipping the fresh flash short (App.tsx does the same).
+      if (successTimer.current) clearTimeout(successTimer.current);
       successTimer.current = setTimeout(() => setSuccess(false), 3000);
     } catch {
       setError(t('common.error'));
