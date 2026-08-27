@@ -150,7 +150,11 @@ export function FamilyAppointmentsPage() {
       setEditTarget(null);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to modify';
-      alert(message);
+      // modifyAppointment refuses time changes inside the sitter's notice
+      // window (issue #237); surface the policy copy, not the raw code. This
+      // mapping was dropped in the move from DashboardPage (PR #256 review) —
+      // the raw `inside_notice_window` string reached parents for a round.
+      alert(message.includes('inside_notice_window') ? t('appointment.modifyInsideWindow') : message);
     } finally {
       setEditing(false);
     }
