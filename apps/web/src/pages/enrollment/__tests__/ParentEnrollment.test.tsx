@@ -14,6 +14,10 @@ import { screen, fireEvent, render, cleanup } from '@testing-library/react';
 const h = vi.hoisted(() => ({
   calls: [] as { name: string; payload: unknown }[],
   navigate: () => {},
+  // Controllable authStore state — default is signed out (fresh signup);
+  // add-profile tests set a firebaseUser. Mirrors the study-web mock shape.
+  auth: { firebaseUser: null as unknown, userDoc: null as unknown, loading: false },
+  refreshUserDoc: () => Promise.resolve(),
   // The family data the stub StepFamilyInfo submits — tests override the
   // address to pin the conditional postcode/city spread.
   familyData: {} as Record<string, unknown>,
@@ -43,28 +47,27 @@ vi.mock('react-router', async (orig) => ({
   useNavigate: () => h.navigate,
 }));
 vi.mock('@/stores/authStore', () => {
-  // The HOOK stays signed-out (the wizard walks the credential steps), but
-  // getState() returns a resolved post-sign-in state so handleComplete's
-  // auth-store wait settles and navigation is pinnable — mirrors the
-  // study-web test's split, which is what lets it assert navigate('/family').
-  const hookState = () => ({
-    firebaseUser: null,
-    userDoc: null,
-    loading: false,
-    refreshUserDoc: () => Promise.resolve(),
-  });
-  return {
-    useAuthStore: Object.assign(() => hookState(), {
-      getState: () => ({
-        firebaseUser: { uid: 'new' },
-        userDoc: { profiles: { parent: { enrollmentComplete: true, familyId: 'f1' } } },
-        loading: false,
-        refreshUserDoc: () => Promise.resolve(),
-      }),
-      subscribe: () => () => {},
-    }),
-    markNextSignInFresh: () => {},
+  // Mirrors the study-web mock: the hook reads the mutable h.auth (so tests
+  // drive signed-out vs add-profile), while the getState/subscribe statics
+  // model the store AFTER the fresh sign-in has settled — sit's post-signup
+  // wait requires a loaded userDoc, so navigation is pinnable.
+  const useAuthStore = (() => ({
+    firebaseUser: h.auth.firebaseUser,
+    userDoc: h.auth.userDoc,
+    loading: h.auth.loading,
+    refreshUserDoc: h.refreshUserDoc,
+  })) as unknown as {
+    (): unknown;
+    getState: () => unknown;
+    subscribe: (fn: (s: unknown) => void) => () => void;
   };
+  useAuthStore.getState = () => ({
+    loading: false,
+    firebaseUser: { uid: 'new' },
+    userDoc: h.auth.userDoc ?? { profiles: { parent: { enrollmentComplete: true, familyId: 'f1' } } },
+  });
+  useAuthStore.subscribe = () => () => {};
+  return { useAuthStore, markNextSignInFresh: () => {} };
 });
 vi.mock('@ejm/sit-core', () => ({
   getParentProfile: (userDoc: { profiles?: { parent?: unknown } } | null) =>
@@ -122,6 +125,8 @@ beforeEach(() => {
   cleanup();
   h.calls.length = 0;
   h.navigate = vi.fn();
+  h.auth = { firebaseUser: null, userDoc: null, loading: false };
+  h.refreshUserDoc = vi.fn(() => Promise.resolve());
   h.familyData = {
     familyName: 'Durand',
     firstName: 'Claire',
@@ -220,5 +225,35 @@ describe('ParentEnrollment enrollFamily payload (issue #176)', () => {
     expect(enroll.payload).not.toHaveProperty('postcode');
     expect(enroll.payload).not.toHaveProperty('city');
     expect(enroll.payload).toMatchObject({ address: '10 Rue Cler, 75007 Paris' });
+  });
+
+  it('add-profile: payload keeps postcode/city and OMITS the credential keys', async () => {
+    // Authed user without a parent profile: the wizard jumps straight to the
+    // family step and the rest-omit strips email/verificationCode/password —
+    // the postcode/city spread ships through this second call site too.
+    h.auth = { firebaseUser: { uid: 'x1' }, userDoc: { profiles: {} }, loading: false };
+    renderFlow();
+
+    fireEvent.click(await screen.findByText('family-fill'));
+    fireEvent.click(screen.getByText('family-submit'));
+
+    const enroll = await vi.waitFor(() => {
+      const c = h.calls.find((x) => x.name === 'enrollFamily');
+      expect(c).toBeTruthy();
+      return c!;
+    });
+    expect(enroll.payload).toMatchObject({
+      address: '10 Rue Cler, 75007 Paris',
+      postcode: '75007',
+      city: 'Paris',
+    });
+    expect(enroll.payload).not.toHaveProperty('email');
+    expect(enroll.payload).not.toHaveProperty('verificationCode');
+    expect(enroll.payload).not.toHaveProperty('password');
+
+    // Add-profile refreshes the doc in place and lands in the portal without
+    // a new sign-in.
+    await vi.waitFor(() => expect(h.navigate).toHaveBeenCalledWith('/family'));
+    expect(h.refreshUserDoc).toHaveBeenCalled();
   });
 });

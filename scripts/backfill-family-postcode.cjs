@@ -2,6 +2,9 @@
  * One-shot backfill — derive `postcode`/`city` on family docs from their
  * stored `address` string (issue #167).
  *
+ * STATUS: DEFERRED — do NOT run against prod as a release step; the owner
+ * runs it if/when study gets real parent traffic (issue #176, details below).
+ *
  * Family docs created before #167 hold only the display address + latLng, so
  * study search cannot resolve their coverage-area label and arrondissement-mode
  * tutors are excluded from their home/library queries until the parent re-picks
