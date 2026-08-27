@@ -935,6 +935,31 @@ describe('family SessionsPage — session notes (pre)', () => {
     expect(screen.queryByRole('button', { name: /remove note/i })).not.toBeInTheDocument();
   });
 
+  it('a CANCELLED series keeps its per-occurrence notes visible and removable in HISTORY', async () => {
+    // Terminal series strand their instance notes otherwise (round 1): the
+    // fetch must load instances for non-confirmed series and the history
+    // card must render each noted occurrence with the erasure affordance.
+    h.sessions = [recurring({ sessionId: 'sT', status: 'cancelled' })];
+    h.instances = {
+      sT: [instanceDoc({ instanceId: '2026-07-01', date: '2026-07-01', status: 'cancelled', preSessionNote: 'stranded ask' })],
+    };
+    renderWithProviders(<SessionsPage />);
+
+    expect(await screen.findByText('stranded ask')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /remove note/i }));
+    const removeButtons = screen.getAllByRole('button', { name: /remove note/i });
+    fireEvent.click(removeButtons[removeButtons.length - 1]);
+
+    await waitFor(() =>
+      expect(h.callable).toHaveBeenCalledWith('setSessionNote', {
+        sessionId: 'sT',
+        instanceId: '2026-07-01',
+        kind: 'pre',
+        text: '',
+      }),
+    );
+  });
+
   it('removing a note on a cancelled series occurrence carries the instanceId', async () => {
     h.sessions = [confirmedRecurring({ sessionId: 'sR2' })];
     h.instances = {

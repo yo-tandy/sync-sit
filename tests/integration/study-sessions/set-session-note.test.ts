@@ -329,6 +329,30 @@ describe('setSessionNote', () => {
     );
   });
 
+  it('a clear writes a cleared:true audit entry; a no-op clear writes none', async () => {
+    // The one place the no-op early return could silently regress: it must
+    // skip the audit write too, while a real clear stays accountable.
+    const auditFor = async (sessionId: string) => {
+      const snap = await getDb().collection('auditLogs').get();
+      return snap.docs
+        .map((d) => d.data())
+        .filter((a) => a.action === 'session_note_set' && a.details?.sessionId === sessionId);
+    };
+
+    const id = await seedOneTime('ot-clear-audit', {
+      status: 'cancelled',
+      preSessionNote: 'Focus on fractions',
+    });
+    await callFunction('setSessionNote', { sessionId: id, kind: 'pre', text: '' }, parent1Token);
+    const entries = await auditFor(id);
+    expect(entries).toHaveLength(1);
+    expect(entries[0].details).toMatchObject({ kind: 'pre', cleared: true });
+
+    const id2 = await seedOneTime('ot-noop-audit', { status: 'cancelled' });
+    await callFunction('setSessionNote', { sessionId: id2, kind: 'pre', text: '' }, parent1Token);
+    expect(await auditFor(id2)).toHaveLength(0);
+  });
+
   it('a no-op clear (nothing stored) succeeds without touching the doc', async () => {
     const id = await seedOneTime('ot-noop-clear', { status: 'cancelled' });
     const before = (await sessionData(id)).updatedAt;

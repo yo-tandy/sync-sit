@@ -182,12 +182,15 @@ export function SessionsPage() {
       const rows = snap.docs.map((d) => d.data() as StudySessionDoc);
       rows.sort((a, b) => (b.createdAt?.seconds ?? 0) - (a.createdAt?.seconds ?? 0));
 
-      // Load instance subcollections for confirmed recurring series via the
-      // nested path. The read MUST be filtered on the instance's denormalized
-      // familyId: the security rule proves access per-doc from
+      // Load instance subcollections for ALL recurring series via the nested
+      // path — terminal (cancelled/completed) series included, because their
+      // per-occurrence notes must stay visible and ERASABLE in history
+      // (issue #255; the carve-out is worthless for a note the author can no
+      // longer reach). The read MUST be filtered on the instance's
+      // denormalized familyId: the security rule proves access per-doc from
       // resource.data.familyId, and an unconstrained list is unprovable →
       // PERMISSION_DENIED. Single-field equality (no composite needed).
-      const series = rows.filter((r) => r.status === 'confirmed' && r.type === 'recurring');
+      const series = rows.filter((r) => r.type === 'recurring');
       const instanceLists = await Promise.all(
         series.map((s) =>
           getDocs(
@@ -945,6 +948,31 @@ export function SessionsPage() {
                         copy={noteCopy}
                       />
                     )}
+                    {/* A terminal SERIES keeps its per-occurrence notes
+                        reachable too (issue #255 round 1): each noted
+                        occurrence renders read-only with the erasure
+                        affordance — otherwise the notes strand the moment
+                        the series completes or is cancelled, with no
+                        redaction backstop in study. */}
+                    {s.type === 'recurring' &&
+                      (instancesBySeries[s.sessionId] ?? [])
+                        .filter((i) => i.preSessionNote != null || i.postSessionNote != null)
+                        .map((i) => (
+                          <div key={i.instanceId}>
+                            <p className="mt-3 text-[11px] font-medium text-gray-500">
+                              {formatDateStr(i.date)}
+                            </p>
+                            <SessionNotes
+                              pre={i.preSessionNote}
+                              post={i.postSessionNote}
+                              editKind="pre"
+                              canEdit={false}
+                              onEdit={() => {}}
+                              onRemove={() => { setNoteError(null); setNoteRemoveTarget({ session: s, instance: i }); }}
+                              copy={noteCopy}
+                            />
+                          </div>
+                        ))}
                   </Card>
                 );
               })}

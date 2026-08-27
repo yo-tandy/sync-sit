@@ -834,6 +834,29 @@ describe('tutor SessionsPage — session notes (post)', () => {
     expect(screen.queryByText('stale debrief')).not.toBeInTheDocument();
   });
 
+  it('a COMPLETED series keeps its per-occurrence post-notes visible and removable in HISTORY', async () => {
+    // Terminal series strand their instance notes otherwise (round 1).
+    h.sessions = [recurring({ sessionId: 'sT', status: 'completed' })];
+    h.instances = {
+      sT: [instanceDoc({ instanceId: '2026-07-01', date: '2026-07-01', status: 'completed', postSessionNote: 'stranded recap' })],
+    };
+    renderWithProviders(<SessionsPage />);
+
+    expect(await screen.findByText('stranded recap')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /remove note/i }));
+    const removeButtons = screen.getAllByRole('button', { name: /remove note/i });
+    fireEvent.click(removeButtons[removeButtons.length - 1]);
+
+    await waitFor(() =>
+      expect(h.callable).toHaveBeenCalledWith('setSessionNote', {
+        sessionId: 'sT',
+        instanceId: '2026-07-01',
+        kind: 'post',
+        text: '',
+      }),
+    );
+  });
+
   it("the family's pre-note alone offers NO remove (author-only affordance)", async () => {
     h.sessions = [oneTime({ sessionId: 'sO', status: 'cancelled', preSessionNote: 'their ask' })];
     renderWithProviders(<SessionsPage />);
