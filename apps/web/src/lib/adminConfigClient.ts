@@ -13,9 +13,17 @@ let fetchPromise: Promise<Record<string, unknown>> | null = null;
 
 function fetchValues(): Promise<Record<string, unknown>> {
   if (!fetchPromise) {
-    fetchPromise = getDoc(doc(db, 'adminConfig', 'values'))
-      .then((snap) => snap.data() ?? {})
-      .catch(() => ({}));
+    // The try/catch matters: a SYNCHRONOUS throw from getDoc (e.g. a test
+    // environment whose firestore mock lacks the export) must degrade to
+    // defaults exactly like an async read failure, never escape as an
+    // unhandled error from a fire-and-forget caller.
+    try {
+      fetchPromise = getDoc(doc(db, 'adminConfig', 'values'))
+        .then((snap) => snap.data() ?? {})
+        .catch(() => ({}));
+    } catch {
+      fetchPromise = Promise.resolve({});
+    }
   }
   return fetchPromise;
 }

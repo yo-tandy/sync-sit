@@ -54,6 +54,8 @@ vi.mock('@/stores/authStore', () => ({
 vi.mock('@/config/firebase', () => ({ db: {} }));
 
 vi.mock('firebase/firestore', () => ({
+  // pastVisibilityDays config read (issue #250): resolve empty -> default.
+  getDoc: vi.fn().mockResolvedValue({ exists: () => false, data: () => undefined }),
   collection: (_db: unknown, name: string) => ({ __collection: name }),
   query: (c: unknown, ...rest: unknown[]) => ({ __query: { c, rest } }),
   where: (field: string, op: string, val: unknown) => ({

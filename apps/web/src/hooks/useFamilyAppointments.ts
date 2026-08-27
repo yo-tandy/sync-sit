@@ -32,9 +32,9 @@ export function useFamilyAppointments() {
     // fallback and the pre-fetch value, so the first snapshot renders with
     // the default and re-buckets only if the configured value differs.
     let pastVisibilityDays = PAST_VISIBILITY_DAYS;
-    void getClientConfigValue('pastVisibilityDays', PAST_VISIBILITY_DAYS, { min: 1, max: 90 }).then(
-      (v) => { pastVisibilityDays = v; },
-    );
+    void getClientConfigValue('pastVisibilityDays', PAST_VISIBILITY_DAYS, { min: 1, max: 90 })
+      .then((v) => { pastVisibilityDays = v; })
+      .catch(() => {});
     const unsub = onSnapshot(q, (snap) => {
       const now = new Date();
       const cutoff = new Date();
