@@ -232,6 +232,13 @@ describe('ParentEnrollment enrollFamily payload (issue #176)', () => {
     // family step and the rest-omit strips email/verificationCode/password —
     // the postcode/city spread ships through this second call site too.
     h.auth = { firebaseUser: { uid: 'x1' }, userDoc: { profiles: {} }, loading: false };
+    // Model the real store: refreshUserDoc pulls the freshly-added parent
+    // profile. The mount effect's step !== 0 guard must NOT hijack the
+    // success navigation into a replace-redirect once this lands.
+    h.refreshUserDoc = vi.fn().mockImplementation(() => {
+      h.auth.userDoc = { profiles: { parent: {} } };
+      return Promise.resolve();
+    });
     renderFlow();
 
     fireEvent.click(await screen.findByText('family-fill'));
@@ -252,8 +259,10 @@ describe('ParentEnrollment enrollFamily payload (issue #176)', () => {
     expect(enroll.payload).not.toHaveProperty('password');
 
     // Add-profile refreshes the doc in place and lands in the portal without
-    // a new sign-in.
+    // a new sign-in — and the mount effect must not hijack the success
+    // navigation into a replace-redirect after the refresh lands the profile.
     await vi.waitFor(() => expect(h.navigate).toHaveBeenCalledWith('/family'));
     expect(h.refreshUserDoc).toHaveBeenCalled();
+    expect(h.navigate).not.toHaveBeenCalledWith('/family', { replace: true });
   });
 });

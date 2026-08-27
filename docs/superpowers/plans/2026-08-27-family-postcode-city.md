@@ -37,7 +37,10 @@ issue-#148 verify hint. The conditional spread in sit was unguarded: a
 regression to `postcode: x ?? null` would ship silently. This PR mirrors the
 study-web pins (autocomplete pick → postcode+city present; componentless
 address → keys ABSENT), mutation-tested: flattening the spread to
-`?? null` fails the omission pin.
+`?? null` fails the omission pin. A third pin covers sit's second
+`enrollFamily` call site — the add-profile branch — asserting postcode/city
+ride along while the credential keys are rest-omitted, the doc refresh lands
+the new profile, and the mount effect does not hijack the success navigation.
 
 ## Backfill: none, by design
 
