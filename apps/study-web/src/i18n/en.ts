@@ -464,6 +464,7 @@ export default {
       modifiedBadge: 'Modified',
       modifiedDetail: 'The family changed: {{fields}}. Review the new details above.',
       acknowledge: 'Got it',
+      ackError: 'Could not acknowledge — check your connection and try again.',
       modifiedFields: {
         date: 'date',
         startTime: 'start time',
@@ -967,6 +968,7 @@ export default {
       modifyDate: 'Date',
       modifyStart: 'Start time',
       modifyLength: 'Length',
+      modifyLocation: 'Location',
       modifyMessage: 'Message to the tutor (optional)',
       modifySave: 'Save changes',
       modifyTimeUnavailable: 'That time is not available for this tutor. Pick another slot.',

@@ -1,13 +1,13 @@
-import { useState, useEffect, useCallback, useRef } from "react";
-import { SESSION_LENGTHS } from "@ejm/study-core";
-import { useTranslation } from "react-i18next";
-import { collection, query, where, getDocs } from "firebase/firestore";
-import { httpsCallable } from "firebase/functions";
-import type { RecurringSlot, KidDoc } from "@ejm/shared-core";
-import { db, functions } from "@/config/firebase";
-import { useAuthStore } from "@/stores/authStore";
-import { getParentProfile } from "@ejm/shared-core";
-import type { TutorEndorsementDoc } from "@ejm/study-core";
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { SESSION_LENGTHS } from '@ejm/study-core';
+import { useTranslation } from 'react-i18next';
+import { collection, query, where, getDocs } from 'firebase/firestore';
+import { httpsCallable } from 'firebase/functions';
+import type { RecurringSlot, KidDoc } from '@ejm/shared-core';
+import { db, functions } from '@/config/firebase';
+import { useAuthStore } from '@/stores/authStore';
+import { getParentProfile } from '@ejm/shared-core';
+import type { TutorEndorsementDoc } from '@ejm/study-core';
 import {
   Card,
   Button,
@@ -19,28 +19,28 @@ import {
   useRefetchOnFocus,
   EmptyState,
   CalendarIcon,
-} from "@ejm/shared-ui";
-import { ReasonModal } from "@/components/sessions/ReasonModal";
-import { SessionInstanceList } from "@/components/sessions/SessionInstanceList";
-import { SessionNotes } from "@/components/sessions/SessionNotes";
-import { SessionNoteDialog } from "@/components/sessions/SessionNoteDialog";
-import { EndorseTutorDialog } from "@/components/family/EndorseTutorDialog";
+} from '@ejm/shared-ui';
+import { ReasonModal } from '@/components/sessions/ReasonModal';
+import { SessionInstanceList } from '@/components/sessions/SessionInstanceList';
+import { SessionNotes } from '@/components/sessions/SessionNotes';
+import { SessionNoteDialog } from '@/components/sessions/SessionNoteDialog';
+import { EndorseTutorDialog } from '@/components/family/EndorseTutorDialog';
 import {
   humanizeNoticeWindow,
   isLateCancellationClient,
-} from "@/utils/cancellationPolicy";
+} from '@/utils/cancellationPolicy';
 import type {
   StudySessionDoc,
   StudySessionInstanceDoc,
-} from "@/types/studySession";
+} from '@/types/studySession';
 
 const NOTE_MAX = 2000;
 
 /** What the cancel modal is targeting. */
 type CancelTarget =
-  | { kind: "session" | "series"; session: StudySessionDoc }
+  | { kind: 'session' | 'series'; session: StudySessionDoc }
   | {
-      kind: "instance";
+      kind: 'instance';
       session: StudySessionDoc;
       instance: StudySessionInstanceDoc;
     };
@@ -53,45 +53,45 @@ type NoteTarget = {
 };
 
 /** 3-letter weekday code → the full-name i18n key under `days.*`. */
-const DAY_FULL: Record<RecurringSlot["day"], string> = {
-  mon: "monday",
-  tue: "tuesday",
-  wed: "wednesday",
-  thu: "thursday",
-  fri: "friday",
-  sat: "saturday",
-  sun: "sunday",
+const DAY_FULL: Record<RecurringSlot['day'], string> = {
+  mon: 'monday',
+  tue: 'tuesday',
+  wed: 'wednesday',
+  thu: 'thursday',
+  fri: 'friday',
+  sat: 'saturday',
+  sun: 'sunday',
 };
 
-const TERMINAL: StudySessionDoc["status"][] = [
-  "declined",
-  "cancelled",
-  "completed",
+const TERMINAL: StudySessionDoc['status'][] = [
+  'declined',
+  'cancelled',
+  'completed',
 ];
 
 /** Paris "YYYY-MM-DD" today (en-CA renders ISO order; tz-correct via runtime). */
 function parisToday(): string {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Europe/Paris",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Paris',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
   }).format(new Date());
 }
 
 /** Paris "YYYY-MM-DDTHH:MM" now — a sortable stamp for the note timing window. */
 function parisNowStamp(): string {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Europe/Paris",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Paris',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
   }).formatToParts(new Date());
-  const g = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
-  return `${g("year")}-${g("month")}-${g("day")}T${g("hour")}:${g("minute")}`;
+  const g = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
+  return `${g('year')}-${g('month')}-${g('day')}T${g('hour')}:${g('minute')}`;
 }
 
 /** Has the given Paris wall-clock start (date + HH:MM) already passed? The
@@ -122,7 +122,7 @@ export function SessionsPage() {
   const { userDoc } = useAuthStore();
   const familyId = getParentProfile(userDoc)?.familyId ?? null;
   const defaultRefName =
-    `${userDoc?.firstName ?? ""} ${userDoc?.lastName ?? ""}`.trim();
+    `${userDoc?.firstName ?? ''} ${userDoc?.lastName ?? ''}`.trim();
 
   const [sessions, setSessions] = useState<StudySessionDoc[] | null>(null);
   const [instancesBySeries, setInstancesBySeries] = useState<
@@ -136,10 +136,11 @@ export function SessionsPage() {
   );
   const [modifySaving, setModifySaving] = useState(false);
   const [modifyError, setModifyError] = useState<string | null>(null);
-  const [mDate, setMDate] = useState("");
-  const [mStart, setMStart] = useState("");
+  const [mDate, setMDate] = useState('');
+  const [mStart, setMStart] = useState('');
   const [mLength, setMLength] = useState(60);
-  const [mMessage, setMMessage] = useState("");
+  const [mMessage, setMMessage] = useState('');
+  const [mLocation, setMLocation] = useState('online');
   const [cancelError, setCancelError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   // Key of the row awaiting a cancel callable (session id, or `sid::instanceId`).
@@ -195,8 +196,8 @@ export function SessionsPage() {
     try {
       const snap = await getDocs(
         query(
-          collection(db, "study-sessions"),
-          where("familyId", "==", familyId),
+          collection(db, 'study-sessions'),
+          where('familyId', '==', familyId),
         ),
       );
       const rows = snap.docs.map((d) => d.data() as StudySessionDoc);
@@ -210,14 +211,14 @@ export function SessionsPage() {
       // resource.data.familyId, and an unconstrained list is unprovable →
       // PERMISSION_DENIED. Single-field equality (no composite needed).
       const series = rows.filter(
-        (r) => r.status === "confirmed" && r.type === "recurring",
+        (r) => r.status === 'confirmed' && r.type === 'recurring',
       );
       const instanceLists = await Promise.all(
         series.map((s) =>
           getDocs(
             query(
-              collection(db, "study-sessions", s.sessionId, "instances"),
-              where("familyId", "==", familyId),
+              collection(db, 'study-sessions', s.sessionId, 'instances'),
+              where('familyId', '==', familyId),
             ),
           ).then((isnap) => ({
             sessionId: s.sessionId,
@@ -257,9 +258,9 @@ export function SessionsPage() {
     let cancelled = false;
     getDocs(
       query(
-        collection(db, "references"),
-        where("submittedByFamilyId", "==", familyId),
-        where("appSource", "==", "study"),
+        collection(db, 'references'),
+        where('submittedByFamilyId', '==', familyId),
+        where('appSource', '==', 'study'),
       ),
     )
       .then((snap) => {
@@ -285,7 +286,7 @@ export function SessionsPage() {
   useEffect(() => {
     if (!familyId) return;
     let cancelled = false;
-    getDocs(collection(db, "families", familyId, "kids"))
+    getDocs(collection(db, 'families', familyId, 'kids'))
       .then((snap) => {
         if (cancelled) return;
         setKids(
@@ -331,24 +332,24 @@ export function SessionsPage() {
     setRespondingId(s.sessionId);
     try {
       const fn = httpsCallable<
-        { sessionId: string; action: "confirm"; studentIds: string[] },
+        { sessionId: string; action: 'confirm'; studentIds: string[] },
         { success: boolean }
-      >(functions, "respondToSession");
-      await fn({ sessionId: s.sessionId, action: "confirm", studentIds });
+      >(functions, 'respondToSession');
+      await fn({ sessionId: s.sessionId, action: 'confirm', studentIds });
       setSessions((rs) =>
         (rs ?? []).map((x) =>
           x.sessionId === s.sessionId
-            ? { ...x, status: "confirmed", students: chosen }
+            ? { ...x, status: 'confirmed', students: chosen }
             : x,
         ),
       );
       setAcceptTarget(null);
     } catch (e) {
-      const code = (e as { code?: string })?.code ?? "";
+      const code = (e as { code?: string })?.code ?? '';
       setRespondError(
-        code.includes("failed-precondition")
-          ? t("family.sessions.proposalErrorSlot")
-          : t("family.sessions.proposalError"),
+        code.includes('failed-precondition')
+          ? t('family.sessions.proposalErrorSlot')
+          : t('family.sessions.proposalError'),
       );
     } finally {
       setRespondingId(null);
@@ -363,18 +364,18 @@ export function SessionsPage() {
     setRespondingId(s.sessionId);
     try {
       const fn = httpsCallable<
-        { sessionId: string; action: "decline" },
+        { sessionId: string; action: 'decline' },
         { success: boolean }
-      >(functions, "respondToSession");
-      await fn({ sessionId: s.sessionId, action: "decline" });
+      >(functions, 'respondToSession');
+      await fn({ sessionId: s.sessionId, action: 'decline' });
       setSessions((rs) =>
         (rs ?? []).map((x) =>
-          x.sessionId === s.sessionId ? { ...x, status: "declined" } : x,
+          x.sessionId === s.sessionId ? { ...x, status: 'declined' } : x,
         ),
       );
       setDeclineTarget(null);
     } catch {
-      setRespondError(t("family.sessions.proposalError"));
+      setRespondError(t('family.sessions.proposalError'));
     } finally {
       setRespondingId(null);
     }
@@ -383,25 +384,26 @@ export function SessionsPage() {
   // Format a "YYYY-MM-DD" date field-by-field (never `new Date(str)`, which reads
   // as UTC midnight and can slip a day in negative offsets).
   const formatDateStr = (s?: string): string => {
-    if (!s) return "";
-    const [y, m, d] = s.split("-").map(Number);
-    if (!y || !m || !d) return "";
+    if (!s) return '';
+    const [y, m, d] = s.split('-').map(Number);
+    if (!y || !m || !d) return '';
     return new Date(y, m - 1, d).toLocaleDateString(
-      i18n.language === "fr" ? "fr-FR" : "en-US",
+      i18n.language === 'fr' ? 'fr-FR' : 'en-US',
       {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
       },
     );
   };
 
   const openModify = (session: StudySessionDoc) => {
     setModifyTarget(session);
-    setMDate(session.date ?? "");
-    setMStart(session.startTime ?? "");
+    setMDate(session.date ?? '');
+    setMStart(session.startTime ?? '');
     setMLength(session.sessionLengthMinutes ?? 60);
-    setMMessage(session.message ?? "");
+    setMMessage(session.message ?? '');
+    setMLocation((session.location as string) ?? 'online');
     setModifyError(null);
   };
 
@@ -410,25 +412,26 @@ export function SessionsPage() {
     setModifySaving(true);
     setModifyError(null);
     try {
-      const fn = httpsCallable(functions, "modifySession");
+      const fn = httpsCallable(functions, 'modifySession');
       // Only EDITED fields go up: an untouched date/time must not run the
       // server's full when/where boundary against unchanged values
       // (PR #244 round 2).
       await fn({
         sessionId: modifyTarget.sessionId,
-        ...(mDate !== (modifyTarget.date ?? "") ? { date: mDate } : {}),
-        ...(mStart !== (modifyTarget.startTime ?? "")
+        ...(mDate !== (modifyTarget.date ?? '') ? { date: mDate } : {}),
+        ...(mStart !== (modifyTarget.startTime ?? '')
           ? { startTime: mStart }
           : {}),
         ...(mLength !== (modifyTarget.sessionLengthMinutes ?? 60)
           ? { sessionLengthMinutes: mLength }
           : {}),
+        ...(mLocation !== modifyTarget.location ? { location: mLocation } : {}),
         // '' is a real value -- it CLEARS a previously-set message. undefined
         // (field untouched and none existed) means "no change" server-side.
         message:
-          mMessage.trim() === ""
+          mMessage.trim() === ''
             ? modifyTarget.message
-              ? ""
+              ? ''
               : undefined
             : mMessage.trim(),
       });
@@ -438,17 +441,17 @@ export function SessionsPage() {
       const reason = (err as { details?: { reason?: string } })?.details
         ?.reason;
       setModifyError(
-        reason === "time_unavailable"
-          ? t("family.sessions.modifyTimeUnavailable")
-          : reason === "recurring_unsupported"
-            ? t("family.sessions.modifyRecurringUnsupported")
-            : reason === "location_not_offered"
-              ? t("family.sessions.modifyLocationUnavailable")
-              : reason === "length_not_offered"
-                ? t("family.sessions.modifyLengthUnavailable")
-                : reason === "inside_notice_window"
-                  ? t("family.sessions.modifyInsideNotice")
-                  : t("family.sessions.actionError"),
+        reason === 'time_unavailable'
+          ? t('family.sessions.modifyTimeUnavailable')
+          : reason === 'recurring_unsupported'
+            ? t('family.sessions.modifyRecurringUnsupported')
+            : reason === 'location_not_offered'
+              ? t('family.sessions.modifyLocationUnavailable')
+              : reason === 'length_not_offered'
+                ? t('family.sessions.modifyLengthUnavailable')
+                : reason === 'inside_notice_window'
+                  ? t('family.sessions.modifyInsideNotice')
+                  : t('family.sessions.actionError'),
       );
     } finally {
       setModifySaving(false);
@@ -464,17 +467,17 @@ export function SessionsPage() {
     if (!cancelTarget || reason.length < 3) return;
     const { session } = cancelTarget;
     const key =
-      cancelTarget.kind === "instance"
+      cancelTarget.kind === 'instance'
         ? `${session.sessionId}::${cancelTarget.instance.instanceId}`
         : session.sessionId;
     setCancelError(null);
     setCancelKey(key);
     try {
-      if (cancelTarget.kind === "instance") {
+      if (cancelTarget.kind === 'instance') {
         const fn = httpsCallable<
           { sessionId: string; instanceId: string; reason: string },
           { success: boolean }
-        >(functions, "cancelSessionInstance");
+        >(functions, 'cancelSessionInstance');
         await fn({
           sessionId: session.sessionId,
           instanceId: cancelTarget.instance.instanceId,
@@ -486,8 +489,8 @@ export function SessionsPage() {
             i.instanceId === cancelTarget.instance.instanceId
               ? {
                   ...i,
-                  status: "cancelled",
-                  statusReason: "cancelled_by_family",
+                  status: 'cancelled',
+                  statusReason: 'cancelled_by_family',
                 }
               : i,
           ),
@@ -496,29 +499,29 @@ export function SessionsPage() {
         const fn = httpsCallable<
           { sessionId: string; reason: string },
           { success: boolean }
-        >(functions, "cancelSession");
+        >(functions, 'cancelSession');
         await fn({ sessionId: session.sessionId, reason });
         setSessions((rs) =>
           (rs ?? []).map((s) =>
             s.sessionId === session.sessionId
-              ? { ...s, status: "cancelled" }
+              ? { ...s, status: 'cancelled' }
               : s,
           ),
         );
       }
       setCancelTarget(null);
     } catch {
-      setCancelError(t("family.sessions.actionError"));
+      setCancelError(t('family.sessions.actionError'));
     } finally {
       setCancelKey(null);
     }
   };
 
   const noteCopy = {
-    fromFamily: t("family.sessions.notes.fromFamily"),
-    fromTutor: t("family.sessions.notes.fromTutor"),
-    add: t("family.sessions.notes.add"),
-    edit: t("family.sessions.notes.edit"),
+    fromFamily: t('family.sessions.notes.fromFamily'),
+    fromTutor: t('family.sessions.notes.fromTutor'),
+    add: t('family.sessions.notes.add'),
+    edit: t('family.sessions.notes.edit'),
   };
 
   const openNote = (target: NoteTarget) => {
@@ -536,13 +539,13 @@ export function SessionsPage() {
     setNoteSaving(true);
     try {
       const fn = httpsCallable<
-        { sessionId: string; instanceId?: string; kind: "pre"; text: string },
+        { sessionId: string; instanceId?: string; kind: 'pre'; text: string },
         { success: boolean }
-      >(functions, "setSessionNote");
+      >(functions, 'setSessionNote');
       await fn({
         sessionId: session.sessionId,
         ...(instance ? { instanceId: instance.instanceId } : {}),
-        kind: "pre",
+        kind: 'pre',
         text,
       });
       const applied = trimmed.length ? trimmed : undefined;
@@ -566,7 +569,7 @@ export function SessionsPage() {
       }
       setNoteTarget(null);
     } catch {
-      setNoteError(t("family.sessions.notes.error"));
+      setNoteError(t('family.sessions.notes.error'));
     } finally {
       setNoteSaving(false);
     }
@@ -582,7 +585,7 @@ export function SessionsPage() {
   };
 
   const slotLine = (slot: RecurringSlot): string =>
-    t("family.sessions.recurringSlot", {
+    t('family.sessions.recurringSlot', {
       day: t(`days.${DAY_FULL[slot.day]}`),
       start: slot.startTime,
       end: slot.endTime,
@@ -592,10 +595,10 @@ export function SessionsPage() {
   // with at least one completed occurrence. `completed` is the status the hook
   // exists for — this is what turns it into an endorsement.
   const hasCompletedWork = (s: StudySessionDoc): boolean =>
-    s.type === "one_time"
-      ? s.status === "completed"
+    s.type === 'one_time'
+      ? s.status === 'completed'
       : (instancesBySeries[s.sessionId] ?? []).some(
-          (i) => i.status === "completed",
+          (i) => i.status === 'completed',
         );
 
   // The endorse prompt for a session, or null when it isn't completed work or the
@@ -604,30 +607,30 @@ export function SessionsPage() {
     if (!hasCompletedWork(s) || endorsedTutors.has(s.tutorUserId)) return null;
     return (
       <Button size="sm" variant="outline" onClick={() => setEndorsing(s)}>
-        {t("family.sessions.endorse", { name: s.tutorName })}
+        {t('family.sessions.endorse', { name: s.tutorName })}
       </Button>
     );
   };
 
   const all = sessions ?? [];
-  const pending = all.filter((s) => s.status === "pending");
-  const confirmed = all.filter((s) => s.status === "confirmed");
+  const pending = all.filter((s) => s.status === 'pending');
+  const confirmed = all.filter((s) => s.status === 'confirmed');
   const history = all.filter((s) => TERMINAL.includes(s.status));
   const today = parisToday();
 
   // Interleave confirmed one_time sessions and confirmed series by date.
   const upcomingEntries: { sortDate: string; el: React.ReactNode }[] = [];
   for (const s of confirmed) {
-    if (s.type === "one_time") {
+    if (s.type === 'one_time') {
       if (!s.date || s.date < today) continue;
       upcomingEntries.push({ sortDate: s.date, el: renderOneTimeUpcoming(s) });
     } else {
       const instances = instancesBySeries[s.sessionId] ?? [];
       const upcomingInst = instances
-        .filter((i) => i.status === "scheduled" && i.date >= today)
+        .filter((i) => i.status === 'scheduled' && i.date >= today)
         .map((i) => i.date)
         .sort();
-      const sortDate = upcomingInst[0] ?? "9999-12-31";
+      const sortDate = upcomingInst[0] ?? '9999-12-31';
       upcomingEntries.push({ sortDate, el: renderSeries(s, instances) });
     }
   }
@@ -643,7 +646,7 @@ export function SessionsPage() {
           {t(`tutor.subjects.names.${s.subject}`)} · {s.level}
         </p>
         <p className="mt-1 text-xs text-gray-600">
-          {s.students.map((st) => `${st.firstName} (${st.age})`).join(", ")}
+          {s.students.map((st) => `${st.firstName} (${st.age})`).join(', ')}
         </p>
       </>
     );
@@ -655,7 +658,7 @@ export function SessionsPage() {
         {sessionHeader(s)}
         <p className="mt-1 text-xs text-gray-700">
           {formatDateStr(s.date)} · {s.startTime}
-          {s.endTime ? `–${s.endTime}` : ""}
+          {s.endTime ? `–${s.endTime}` : ''}
         </p>
         <p className="text-xs text-gray-500">
           {t(`family.sessions.location.${s.location}`)}
@@ -667,16 +670,16 @@ export function SessionsPage() {
             fullWidth={false}
             onClick={() => openModify(s)}
           >
-            {t("family.sessions.modifySession")}
+            {t('family.sessions.modifySession')}
           </Button>
           <Button
             size="sm"
             variant="outline"
             fullWidth={false}
             disabled={cancelKey === s.sessionId}
-            onClick={() => openCancel({ kind: "session", session: s })}
+            onClick={() => openCancel({ kind: 'session', session: s })}
           >
-            {t("family.sessions.cancelSession")}
+            {t('family.sessions.cancelSession')}
           </Button>
         </div>
         <SessionNotes
@@ -685,7 +688,7 @@ export function SessionsPage() {
           editKind="pre"
           canEdit={!hasStarted(s.date, s.startTime)}
           onEdit={() =>
-            openNote({ session: s, initialText: s.preSessionNote ?? "" })
+            openNote({ session: s, initialText: s.preSessionNote ?? '' })
           }
           copy={noteCopy}
         />
@@ -713,16 +716,16 @@ export function SessionsPage() {
             onClick={() => toggleExpanded(s.sessionId)}
           >
             {isOpen
-              ? t("family.sessions.hideDates")
-              : t("family.sessions.viewDates")}
+              ? t('family.sessions.hideDates')
+              : t('family.sessions.viewDates')}
           </Button>
           <Button
             size="sm"
             variant="outline"
             disabled={cancelKey === s.sessionId}
-            onClick={() => openCancel({ kind: "series", session: s })}
+            onClick={() => openCancel({ kind: 'series', session: s })}
           >
-            {t("family.sessions.cancelSeries")}
+            {t('family.sessions.cancelSeries')}
           </Button>
           {endorseButton(s)}
         </div>
@@ -734,17 +737,17 @@ export function SessionsPage() {
             today={today}
             cancelKey={cancelKey}
             onCancelInstance={(instance) =>
-              openCancel({ kind: "instance", session: s, instance })
+              openCancel({ kind: 'instance', session: s, instance })
             }
             formatDate={formatDateStr}
             copy={{
-              noOccurrences: t("family.sessions.noOccurrences"),
-              cancelInstance: t("family.sessions.cancelInstance"),
-              statusCompleted: t("family.sessions.instanceStatus.completed"),
-              statusSkipped: t("family.sessions.instanceStatus.skipped"),
-              statusCancelled: t("family.sessions.instanceStatus.cancelled"),
-              trial: t("family.sessions.trial.badge"),
-              cancelledLate: t("sessions.cancelledLateBadge"),
+              noOccurrences: t('family.sessions.noOccurrences'),
+              cancelInstance: t('family.sessions.cancelInstance'),
+              statusCompleted: t('family.sessions.instanceStatus.completed'),
+              statusSkipped: t('family.sessions.instanceStatus.skipped'),
+              statusCancelled: t('family.sessions.instanceStatus.cancelled'),
+              trial: t('family.sessions.trial.badge'),
+              cancelledLate: t('sessions.cancelledLateBadge'),
             }}
             renderNotes={(i) => (
               <SessionNotes
@@ -752,13 +755,13 @@ export function SessionsPage() {
                 post={i.postSessionNote}
                 editKind="pre"
                 canEdit={
-                  i.status === "scheduled" && !hasStarted(i.date, i.startTime)
+                  i.status === 'scheduled' && !hasStarted(i.date, i.startTime)
                 }
                 onEdit={() =>
                   openNote({
                     session: s,
                     instance: i,
-                    initialText: i.preSessionNote ?? "",
+                    initialText: i.preSessionNote ?? '',
                   })
                 }
                 copy={noteCopy}
@@ -776,16 +779,16 @@ export function SessionsPage() {
   const cancelWarning = ((): string | undefined => {
     if (!cancelTarget) return undefined;
     const { session } = cancelTarget;
-    if (session.status !== "confirmed") return undefined;
+    if (session.status !== 'confirmed') return undefined;
     const noticeHours = session.cancellationNoticeHours ?? 0;
     if (noticeHours <= 0) return undefined;
     let late = false;
-    if (cancelTarget.kind === "instance") {
+    if (cancelTarget.kind === 'instance') {
       const { date, startTime } = cancelTarget.instance;
       late = isLateCancellationClient(date, startTime, noticeHours);
-    } else if (cancelTarget.kind === "series") {
+    } else if (cancelTarget.kind === 'series') {
       const next = (instancesBySeries[session.sessionId] ?? [])
-        .filter((i) => i.status === "scheduled" && i.date >= today)
+        .filter((i) => i.status === 'scheduled' && i.date >= today)
         .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))[0];
       late =
         !!next &&
@@ -798,7 +801,7 @@ export function SessionsPage() {
       );
     }
     return late
-      ? t("sessions.lateCancelWarning", {
+      ? t('sessions.lateCancelWarning', {
           window: humanizeNoticeWindow(noticeHours, t),
         })
       : undefined;
@@ -806,7 +809,7 @@ export function SessionsPage() {
 
   return (
     <div>
-      <TopNav title={t("family.sessions.title")} backTo="/family" />
+      <TopNav title={t('family.sessions.title')} backTo="/family" />
 
       <div className="px-5 pt-4 pb-8">
         {sessions === null && !loadError && (
@@ -820,7 +823,7 @@ export function SessionsPage() {
             to show (mirrors GovernancePage's dataRef gate). */}
         {loadError && sessions === null && (
           <p className="py-10 text-center text-sm text-brand-600">
-            {t("family.sessions.loadError")}
+            {t('family.sessions.loadError')}
           </p>
         )}
 
@@ -831,8 +834,8 @@ export function SessionsPage() {
             <Card>
               <EmptyState
                 icon={<CalendarIcon className="h-6 w-6" />}
-                message={t("family.sessions.empty")}
-                actionLabel={t("family.sessions.emptyAction")}
+                message={t('family.sessions.empty')}
+                actionLabel={t('family.sessions.emptyAction')}
                 actionTo="/family/search"
               />
             </Card>
@@ -842,11 +845,11 @@ export function SessionsPage() {
         {pending.length > 0 && (
           <div className="mb-6">
             <h2 className="mb-2 text-sm font-semibold text-gray-700">
-              {t("family.sessions.pendingTitle")}
+              {t('family.sessions.pendingTitle')}
             </h2>
             <div className="space-y-3">
               {pending.map((s) => {
-                const isProposal = s.proposedBy === "provider";
+                const isProposal = s.proposedBy === 'provider';
                 return (
                   <Card key={s.sessionId}>
                     <p className="text-sm font-semibold text-gray-900">
@@ -859,14 +862,14 @@ export function SessionsPage() {
                       {s.students.length > 0
                         ? s.students
                             .map((st) => `${st.firstName} (${st.age})`)
-                            .join(", ")
-                        : t("family.sessions.studentsOnAccept")}
+                            .join(', ')
+                        : t('family.sessions.studentsOnAccept')}
                     </p>
                     <div className="mt-2 space-y-0.5 text-xs text-gray-700">
-                      {s.type === "one_time" ? (
+                      {s.type === 'one_time' ? (
                         <p>
                           {formatDateStr(s.date)} · {s.startTime}
-                          {s.endTime ? `–${s.endTime}` : ""}
+                          {s.endTime ? `–${s.endTime}` : ''}
                         </p>
                       ) : (
                         s.recurringSlots?.[0] && (
@@ -881,7 +884,7 @@ export function SessionsPage() {
                       <>
                         <div className="mt-2">
                           <Badge variant="blue">
-                            {t("family.sessions.proposedBy", {
+                            {t('family.sessions.proposedBy', {
                               name: s.tutorName,
                             })}
                           </Badge>
@@ -897,7 +900,7 @@ export function SessionsPage() {
                             disabled={respondingId === s.sessionId}
                             onClick={() => openAccept(s)}
                           >
-                            {t("family.sessions.accept")}
+                            {t('family.sessions.accept')}
                           </Button>
                           <Button
                             size="sm"
@@ -908,26 +911,26 @@ export function SessionsPage() {
                               setDeclineTarget(s);
                             }}
                           >
-                            {t("family.sessions.decline")}
+                            {t('family.sessions.decline')}
                           </Button>
                         </div>
                       </>
                     ) : (
                       <>
                         <p className="mt-1 text-xs text-amber-700">
-                          {t("family.sessions.awaitingTutor")}
+                          {t('family.sessions.awaitingTutor')}
                         </p>
                         <div className="mt-3 flex gap-2">
                           {/* one_time only: a recurring parent would round-trip
                               to the server's recurring_unsupported refusal. */}
-                          {s.type === "one_time" && (
+                          {s.type === 'one_time' && (
                             <Button
                               size="sm"
                               variant="outline"
                               fullWidth={false}
                               onClick={() => openModify(s)}
                             >
-                              {t("family.sessions.modifySession")}
+                              {t('family.sessions.modifySession')}
                             </Button>
                           )}
                           <Button
@@ -936,10 +939,10 @@ export function SessionsPage() {
                             fullWidth={false}
                             disabled={cancelKey === s.sessionId}
                             onClick={() =>
-                              openCancel({ kind: "session", session: s })
+                              openCancel({ kind: 'session', session: s })
                             }
                           >
-                            {t("family.sessions.cancelRequest")}
+                            {t('family.sessions.cancelRequest')}
                           </Button>
                         </div>
                       </>
@@ -955,7 +958,7 @@ export function SessionsPage() {
         {upcomingEntries.length > 0 && (
           <div className="mb-6">
             <h2 className="mb-2 text-sm font-semibold text-gray-700">
-              {t("family.sessions.upcomingTitle")}
+              {t('family.sessions.upcomingTitle')}
             </h2>
             <div className="space-y-3">{upcomingEntries.map((e) => e.el)}</div>
           </div>
@@ -965,7 +968,7 @@ export function SessionsPage() {
         {history.length > 0 && (
           <div className="mb-6">
             <h2 className="mb-2 text-sm font-semibold text-gray-700">
-              {t("family.sessions.historyTitle")}
+              {t('family.sessions.historyTitle')}
             </h2>
             <div className="space-y-3">
               {history.map((s) => {
@@ -982,9 +985,9 @@ export function SessionsPage() {
                         </p>
                       </div>
                       <div className="flex shrink-0 flex-wrap items-center justify-end gap-1">
-                        {s.type === "one_time" && s.lateCancellation && (
+                        {s.type === 'one_time' && s.lateCancellation && (
                           <Badge variant="amber">
-                            {t("sessions.cancelledLateBadge")}
+                            {t('sessions.cancelledLateBadge')}
                           </Badge>
                         )}
                         <Badge variant="gray">
@@ -993,7 +996,7 @@ export function SessionsPage() {
                       </div>
                     </div>
                     {endorse && <div className="mt-3">{endorse}</div>}
-                    {s.type === "one_time" && s.status === "completed" && (
+                    {s.type === 'one_time' && s.status === 'completed' && (
                       <SessionNotes
                         pre={s.preSessionNote}
                         post={s.postSessionNote}
@@ -1029,14 +1032,14 @@ export function SessionsPage() {
         onClose={() => setAcceptTarget(null)}
       >
         <h3 className="mb-2 text-lg font-bold">
-          {t("family.sessions.proposalAcceptTitle")}
+          {t('family.sessions.proposalAcceptTitle')}
         </h3>
         <p className="mb-4 text-sm text-gray-600">
-          {t("family.sessions.proposalAcceptDesc")}
+          {t('family.sessions.proposalAcceptDesc')}
         </p>
         {kids.length === 0 ? (
           <p className="mb-4 text-xs text-gray-500">
-            {t("family.sessions.noStudents")}
+            {t('family.sessions.noStudents')}
           </p>
         ) : (
           <div className="mb-4 space-y-2">
@@ -1060,15 +1063,15 @@ export function SessionsPage() {
             onClick={submitAccept}
           >
             {respondingId !== null
-              ? t("family.sessions.proposalAccepting")
-              : t("family.sessions.proposalAcceptCta")}
+              ? t('family.sessions.proposalAccepting')
+              : t('family.sessions.proposalAcceptCta')}
           </Button>
           <Button
             variant="ghost"
             className="flex-1"
             onClick={() => setAcceptTarget(null)}
           >
-            {t("common.cancel")}
+            {t('common.cancel')}
           </Button>
         </div>
       </Dialog>
@@ -1079,10 +1082,10 @@ export function SessionsPage() {
         onClose={() => setDeclineTarget(null)}
       >
         <h3 className="mb-2 text-lg font-bold">
-          {t("family.sessions.proposalDeclineTitle")}
+          {t('family.sessions.proposalDeclineTitle')}
         </h3>
         <p className="mb-5 text-sm text-gray-600">
-          {t("family.sessions.proposalDeclineDesc")}
+          {t('family.sessions.proposalDeclineDesc')}
         </p>
         {respondError && (
           <p className="mb-2 text-sm text-brand-600">{respondError}</p>
@@ -1094,14 +1097,14 @@ export function SessionsPage() {
             disabled={respondingId !== null}
             onClick={submitDecline}
           >
-            {t("family.sessions.proposalDeclineCta")}
+            {t('family.sessions.proposalDeclineCta')}
           </Button>
           <Button
             variant="ghost"
             className="flex-1"
             onClick={() => setDeclineTarget(null)}
           >
-            {t("common.cancel")}
+            {t('common.cancel')}
           </Button>
         </div>
       </Dialog>
@@ -1109,13 +1112,13 @@ export function SessionsPage() {
       {modifyTarget && (
         <Dialog open onClose={() => setModifyTarget(null)}>
           <h3 className="text-lg font-bold">
-            {t("family.sessions.modifyTitle")}
+            {t('family.sessions.modifyTitle')}
           </h3>
           <p className="mt-1 text-sm text-gray-500">
-            {t("family.sessions.modifyDesc")}
+            {t('family.sessions.modifyDesc')}
           </p>
           <label className="mt-3 block text-sm font-medium text-gray-700">
-            {t("family.sessions.modifyDate")}
+            {t('family.sessions.modifyDate')}
             <input
               type="date"
               className="mt-1 h-11 w-full rounded-lg border-[1.5px] border-gray-300 px-3"
@@ -1124,7 +1127,7 @@ export function SessionsPage() {
             />
           </label>
           <label className="mt-3 block text-sm font-medium text-gray-700">
-            {t("family.sessions.modifyStart")}
+            {t('family.sessions.modifyStart')}
             <input
               type="time"
               step={900}
@@ -1134,7 +1137,7 @@ export function SessionsPage() {
             />
           </label>
           <label className="mt-3 block text-sm font-medium text-gray-700">
-            {t("family.sessions.modifyLength")}
+            {t('family.sessions.modifyLength')}
             <select
               className="mt-1 h-11 w-full rounded-lg border-[1.5px] border-gray-300 bg-white px-3"
               value={mLength}
@@ -1148,7 +1151,21 @@ export function SessionsPage() {
             </select>
           </label>
           <label className="mt-3 block text-sm font-medium text-gray-700">
-            {t("family.sessions.modifyMessage")}
+            {t('family.sessions.modifyLocation')}
+            <select
+              className="mt-1 h-11 w-full rounded-lg border-[1.5px] border-gray-300 bg-white px-3"
+              value={mLocation}
+              onChange={(e) => setMLocation(e.target.value)}
+            >
+              {['family_home', 'tutor_home', 'online', 'library'].map((l) => (
+                <option key={l} value={l}>
+                  {t(`family.sessions.location.${l}`)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="mt-3 block text-sm font-medium text-gray-700">
+            {t('family.sessions.modifyMessage')}
             <textarea
               className="mt-1 w-full rounded-lg border-[1.5px] border-gray-300 p-3 text-sm"
               rows={2}
@@ -1166,15 +1183,15 @@ export function SessionsPage() {
               className="flex-1"
             >
               {modifySaving
-                ? t("common.saving")
-                : t("family.sessions.modifySave")}
+                ? t('common.saving')
+                : t('family.sessions.modifySave')}
             </Button>
             <Button
               variant="ghost"
               onClick={() => setModifyTarget(null)}
               className="flex-1"
             >
-              {t("common.cancel")}
+              {t('common.cancel')}
             </Button>
           </div>
         </Dialog>
@@ -1183,16 +1200,16 @@ export function SessionsPage() {
       <ReasonModal
         open={cancelTarget !== null}
         title={
-          cancelTarget?.kind === "series"
-            ? t("family.sessions.cancelSeriesTitle")
-            : cancelTarget?.kind === "instance"
-              ? t("family.sessions.cancelInstanceTitle")
-              : t("family.sessions.cancelTitle")
+          cancelTarget?.kind === 'series'
+            ? t('family.sessions.cancelSeriesTitle')
+            : cancelTarget?.kind === 'instance'
+              ? t('family.sessions.cancelInstanceTitle')
+              : t('family.sessions.cancelTitle')
         }
-        description={t("family.sessions.cancelDesc")}
-        placeholder={t("family.sessions.cancelReasonPlaceholder")}
-        confirmLabel={t("family.sessions.cancelConfirm")}
-        keepLabel={t("family.sessions.cancelKeep")}
+        description={t('family.sessions.cancelDesc')}
+        placeholder={t('family.sessions.cancelReasonPlaceholder')}
+        confirmLabel={t('family.sessions.cancelConfirm')}
+        keepLabel={t('family.sessions.cancelKeep')}
         submitting={cancelKey !== null}
         error={cancelError}
         warning={cancelWarning}
@@ -1203,12 +1220,12 @@ export function SessionsPage() {
       {/* ── Session note (family authors the pre-note) ── */}
       <SessionNoteDialog
         open={noteTarget !== null}
-        title={t("family.sessions.notes.dialogTitle")}
-        description={t("family.sessions.notes.dialogDesc")}
-        placeholder={t("family.sessions.notes.placeholder")}
-        initialText={noteTarget?.initialText ?? ""}
-        saveLabel={t("family.sessions.notes.save")}
-        cancelLabel={t("common.cancel")}
+        title={t('family.sessions.notes.dialogTitle')}
+        description={t('family.sessions.notes.dialogDesc')}
+        placeholder={t('family.sessions.notes.placeholder')}
+        initialText={noteTarget?.initialText ?? ''}
+        saveLabel={t('family.sessions.notes.save')}
+        cancelLabel={t('common.cancel')}
         maxLength={NOTE_MAX}
         submitting={noteSaving}
         error={noteError}

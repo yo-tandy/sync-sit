@@ -357,6 +357,25 @@ describe('modifySession', () => {
     expect([...s.modifiedFields].sort()).toEqual(['message', 'startTime']);
   });
 
+  it('the union RESETS after acknowledgement -- acknowledged fields do not resurface', async () => {
+    // The `session.modified ? ... : undefined` ternary is the belt to the
+    // ack's suspenders: without it a modify-after-ack would re-report fields
+    // the tutor already saw, and every other pin would stay green
+    // (PR #244 round 3).
+    const id = await seedSession({ status: 'confirmed' });
+    await seedClaim(FUTURE_MON, id, 64, 68);
+    await callFunction('modifySession', { sessionId: id, startTime: '18:00' }, parent1Token);
+    // Simulate ack the way acknowledgeSessionModification writes it, but keep
+    // the STALE modifiedFields behind, so only the ternary protects us.
+    await getDb().collection('study-sessions').doc(id).update({
+      modified: false,
+      modifiedFields: ['startTime'],
+    });
+    await callFunction('modifySession', { sessionId: id, message: 'new note' }, parent1Token);
+    const s = await sessionData(id);
+    expect(s.modifiedFields).toEqual(['message']);
+  });
+
   it('NEVER sets lateCancellation -- a modify is not a cancel', async () => {
     const id = await seedSession({ status: 'confirmed', cancellationNoticeHours: 48 });
     await seedClaim(FUTURE_MON, id, 64, 68);

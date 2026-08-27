@@ -56,7 +56,9 @@ function applyRestore(tx: Transaction, ref: DocumentReference, result: RestoreRe
  * - A tutor-proposed PENDING is not modifiable by the family — that is a
  *   counter-offer; they accept or decline (`reason: 'proposal_not_modifiable'`).
  * - NEVER touches lateCancellation: a modify is not a cancel. That is the
- *   entire point of this callable existing (flows doc §6).
+ *   entire point of this callable existing (issue #234 / parity item A1 in
+ *   docs/flow-parity-issues.md: an innocent reschedule must not look like a
+ *   late cancel).
  *
  * The hard case is a claim-affecting change (date/time/length/location — the
  * padded block depends on all four) on a CONFIRMED session: in ONE
@@ -304,11 +306,15 @@ export const modifySession = onCall(
 
       // A moved session must still respect the notice window, and a session
       // whose CURRENT start already passed is history, not modifiable.
+      // Guarded for EVERY modify, not just claim-affecting ones: rewriting
+      // the roster or message of a session that already ran (in the window
+      // before markSessionsCompleted flips it) is history-editing
+      // (PR #244 round 3).
+      const currentStart = parisWallTimeToUtc(oldDate, oldStart);
+      if (currentStart.getTime() < now.getTime()) {
+        throw new HttpsError('failed-precondition', 'This session has already started');
+      }
       if (claimAffecting) {
-        const currentStart = parisWallTimeToUtc(oldDate, oldStart);
-        if (currentStart.getTime() < now.getTime()) {
-          throw new HttpsError('failed-precondition', 'This session has already started');
-        }
         // The tutor's cancellation-policy snapshot binds the MOVE too: without
         // this, modify-to-next-month-then-cancel-clean was an unguarded escape
         // from the notice window (PR #244 round 2). Symmetry with
@@ -546,7 +552,18 @@ export const modifySession = onCall(
     const tutorUser = tutorDoc.data();
     const familyName = (peek.familyName as string) || 'A family';
     const dateInfo = `${outcome.newDate}, ${outcome.newStart}–${outcome.newEnd}`;
-    const changed = outcome.modifiedFields.join(', ');
+    // Human labels, not internal identifiers -- 'start time', never
+    // 'startTime' (PR #244 round 3). Server copy is English by convention
+    // (all notification bodies here are).
+    const FIELD_LABELS: Record<string, string> = {
+      date: 'date',
+      startTime: 'start time',
+      sessionLengthMinutes: 'length',
+      location: 'location',
+      students: 'students',
+      message: 'message',
+    };
+    const changed = outcome.modifiedFields.map((f) => FIELD_LABELS[f] ?? f).join(', ');
     const prefs = tutorUser?.notifPrefs?.newRequest;
     let emailSent = false;
     if (prefs?.email !== false && tutorUser?.email) {

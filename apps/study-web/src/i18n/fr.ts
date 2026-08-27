@@ -464,6 +464,7 @@ export default {
       modifiedBadge: 'Modifiée',
       modifiedDetail: 'La famille a changé : {{fields}}. Vérifiez les nouveaux détails ci-dessus.',
       acknowledge: 'Bien reçu',
+      ackError: 'Impossible de confirmer — vérifiez votre connexion et réessayez.',
       modifiedFields: {
         date: 'date',
         startTime: 'heure de début',
@@ -967,6 +968,7 @@ export default {
       modifyDate: 'Date',
       modifyStart: 'Heure de début',
       modifyLength: 'Durée',
+      modifyLocation: 'Lieu',
       modifyMessage: 'Message au tuteur (facultatif)',
       modifySave: 'Enregistrer',
       modifyTimeUnavailable: 'Ce créneau n’est pas disponible pour ce tuteur. Choisissez un autre horaire.',

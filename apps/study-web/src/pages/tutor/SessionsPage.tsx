@@ -122,6 +122,7 @@ export function SessionsPage() {
   // Key of the row awaiting a cancel callable (session id, or `sid::instanceId`).
   const [cancelKey, setCancelKey] = useState<string | null>(null);
   const [ackKey, setAckKey] = useState<string | null>(null);
+  const [ackError, setAckError] = useState<string | null>(null);
   // The note dialog target (the tutor authors the POST-note), plus its in-flight
   // guard and error. Non-optimistic — local state updates from the callable success.
   const [noteTarget, setNoteTarget] = useState<NoteTarget | null>(null);
@@ -256,6 +257,7 @@ export function SessionsPage() {
 
   const acknowledge = async (sessionId: string) => {
     setAckKey(sessionId);
+    setAckError(null);
     try {
       const fn = httpsCallable(functions, 'acknowledgeSessionModification');
       await fn({ sessionId });
@@ -263,7 +265,9 @@ export function SessionsPage() {
         prev ? prev.map((x) => (x.sessionId === sessionId ? { ...x, modified: false } : x)) : prev,
       );
     } catch {
-      // Non-fatal: the badge stays and the tutor can tap again.
+      // A silent failure reads as "the tap didn't register" and invites the
+      // same no-op tap again (PR #244 round 3) -- say it failed.
+      setAckError(sessionId);
     } finally {
       setAckKey(null);
     }
@@ -452,6 +456,9 @@ export function SessionsPage() {
             >
               {t('tutor.sessions.acknowledge')}
             </Button>
+            {ackError === s.sessionId && (
+              <p className="mt-1 text-xs text-red-600">{t('tutor.sessions.ackError')}</p>
+            )}
           </div>
         )}
         <div className="mt-3">
