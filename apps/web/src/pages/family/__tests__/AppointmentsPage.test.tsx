@@ -169,3 +169,21 @@ describe('family AppointmentsPage — sections (issue #241)', () => {
     expect(screen.getByRole('button', { name: /Find a Babysitter/i })).toBeTruthy();
   });
 });
+
+describe('family AppointmentsPage — loading skeletons (UX F12, issue #126)', () => {
+  it('shows skeleton cards (no spinner, no empty state) while appointments load', () => {
+    h.apts.loading = true;
+    renderPage();
+    expect(screen.getAllByTestId('skeleton-card').length).toBeGreaterThanOrEqual(2);
+    expect(document.querySelector('.animate-spin')).toBeNull();
+    expect(screen.queryByText('No appointments yet')).toBeNull();
+  });
+
+  it('drops the skeletons once appointments land', () => {
+    h.apts.loading = false;
+    h.apts.confirmed = [apt('a2', 'confirmed')];
+    renderPage();
+    expect(screen.queryByTestId('skeleton-card')).toBeNull();
+    expect(screen.getByTestId('card-a2')).toBeTruthy();
+  });
+});

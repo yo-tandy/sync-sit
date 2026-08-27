@@ -6,7 +6,7 @@ import { httpsCallable } from 'firebase/functions';
 import type { RecurringSlot } from '@ejm/shared-core';
 import { db, functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
-import { Card, Button, Badge, TopNav, Spinner, Dialog, useRefetchOnFocus } from '@ejm/shared-ui';
+import { Card, Button, Badge, TopNav, SkeletonCard, Dialog, useRefetchOnFocus } from '@ejm/shared-ui';
 import { RecurringConflictPreview } from '@/components/tutor/RecurringConflictPreview';
 import { ReasonModal } from '@/components/sessions/ReasonModal';
 import { SessionInstanceList } from '@/components/sessions/SessionInstanceList';
@@ -577,9 +577,13 @@ export function SessionsPage() {
       <div className="px-5 pt-4 pb-8">
         {error && <p className="mb-4 text-sm text-brand-600">{error}</p>}
 
+        {/* Skeletons sized like the loaded session cards, so the list keeps
+            its footprint while loading (UX F12, issue #126) */}
         {sessions === null && !loadError && (
-          <div className="flex justify-center py-20">
-            <Spinner />
+          <div className="space-y-3">
+            <SkeletonCard />
+            <SkeletonCard />
+            <SkeletonCard />
           </div>
         )}
 

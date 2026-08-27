@@ -166,6 +166,24 @@ describe('family SessionsPage', () => {
     expect(action).toHaveAttribute('href', '/family/search');
   });
 
+  it('shows skeleton cards (no spinner) while sessions load, gone once data lands (UX F12)', async () => {
+    // First getDocs call is the sessions read — hold it open.
+    let deliver!: (v: unknown) => void;
+    h.sessions = [oneTime()];
+    h.getDocs.mockImplementationOnce(() => new Promise((res) => { deliver = res; }));
+    renderWithProviders(<SessionsPage />);
+
+    expect(screen.getAllByTestId('skeleton-card').length).toBeGreaterThanOrEqual(2);
+    expect(document.querySelector('.animate-spin')).toBeNull();
+    expect(screen.queryByText(/no sessions/i)).not.toBeInTheDocument();
+
+    await act(async () =>
+      deliver({ docs: h.sessions.map((s) => ({ id: s.sessionId, data: () => s })) }),
+    );
+    expect(await screen.findByText(/Alex Roy/)).toBeInTheDocument();
+    expect(screen.queryByTestId('skeleton-card')).toBeNull();
+  });
+
   it('cancel a pending request → cancelSession({sessionId, reason}) trimmed', async () => {
     h.sessions = [oneTime({ sessionId: 'sP' })];
     renderWithProviders(<SessionsPage />);

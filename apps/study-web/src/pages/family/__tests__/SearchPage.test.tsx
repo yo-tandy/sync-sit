@@ -219,6 +219,24 @@ describe('family SearchPage', () => {
     expect(await screen.findByText(/no tutors found/i)).toBeInTheDocument();
   });
 
+  it('shows avatar skeleton cards (no spinner) while the search runs, gone once results land (UX F12)', async () => {
+    let deliver!: (v: unknown) => void;
+    h.callable.mockImplementation(() => new Promise((res) => { deliver = res; }));
+    renderWithProviders(<SearchPage />, '/family/search?subject=math&level=6e');
+
+    // Auto-search fires on mount; while it is in flight the results area
+    // shows skeletons shaped like TutorCard rows (avatar circle + bars).
+    await waitFor(() => expect(h.callable).toHaveBeenCalled());
+    const skeletons = screen.getAllByTestId('skeleton-card');
+    expect(skeletons.length).toBeGreaterThanOrEqual(2);
+    expect(skeletons[0].querySelector('.rounded-full')).not.toBeNull();
+    expect(document.querySelector('.animate-spin')).toBeNull();
+
+    deliver({ data: { results: [tutorResult()] } });
+    expect(await screen.findByText(/Alex/)).toBeInTheDocument();
+    expect(screen.queryByTestId('skeleton-card')).toBeNull();
+  });
+
   it('empty results offer clear-filters ONLY when a filter is set, and clearing re-runs the search', async () => {
     h.callable.mockResolvedValue({ data: { results: [] } });
     renderWithProviders(<SearchPage />, '/family/search?subject=math&level=6e');

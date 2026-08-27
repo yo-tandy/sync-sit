@@ -1,5 +1,5 @@
 // Curated re-exports for sync-sit consumers. Shared primitives come from
-// @ejm/shared-ui (17 names below); sync-sit-only UI stays local.
+// @ejm/shared-ui (18 names below); sync-sit-only UI stays local.
 //
 // Names NOT in this barrel — consumers import them directly:
 //   DateTag, PhotoLightbox → @/components/ui/DateTag, @/components/ui/PhotoLightbox
@@ -18,6 +18,7 @@ export {
   Input,
   LanguageSelector,
   Select,
+  SkeletonCard,
   Spinner,
   StepIndicator,
   Textarea,

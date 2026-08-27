@@ -13,7 +13,7 @@ import {
   Button,
   Badge,
   TopNav,
-  Spinner,
+  SkeletonCard,
   Dialog,
   Checkbox,
   useRefetchOnFocus,
@@ -715,9 +715,13 @@ export function SessionsPage() {
       <TopNav title={t('family.sessions.title')} backTo="/family" />
 
       <div className="px-5 pt-4 pb-8">
+        {/* Skeletons sized like the loaded session cards, so the list keeps
+            its footprint while loading (UX F12, issue #126) */}
         {sessions === null && !loadError && (
-          <div className="flex justify-center py-20">
-            <Spinner />
+          <div className="space-y-3">
+            <SkeletonCard />
+            <SkeletonCard />
+            <SkeletonCard />
           </div>
         )}
 

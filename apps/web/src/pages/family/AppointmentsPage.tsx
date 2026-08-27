@@ -8,7 +8,7 @@ import { hasStarted, isLateCancellationClient, humanizeNoticeWindow } from '@/ut
 import { db, functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { useFamilyAppointments } from '@/hooks/useFamilyAppointments';
-import { Button, Badge, Card, Spinner, Input, Dialog, Textarea, TopNav } from '@/components/ui';
+import { Button, Badge, Card, SkeletonCard, Input, Dialog, Textarea, TopNav } from '@/components/ui';
 import { CalendarIcon, SearchIcon } from '@/components/ui/Icons';
 import type { AppointmentDoc, BabysitterSummary, RecurringSlot, User } from '@ejm/sit-core';
 import { getBabysitterProfile, getParentProfile } from '@ejm/sit-core';
@@ -345,10 +345,13 @@ export function FamilyAppointmentsPage() {
           </Card>
         )}
 
-        {/* Appointments */}
+        {/* Appointments — skeletons sized like the loaded cards, so the list
+            keeps its footprint while loading (UX F12, issue #126) */}
         {aptsLoading ? (
-          <div className="flex justify-center py-12">
-            <Spinner className="h-8 w-8 text-brand-600" />
+          <div className="space-y-3">
+            <SkeletonCard />
+            <SkeletonCard />
+            <SkeletonCard />
           </div>
         ) : pending.length > 0 || confirmed.length > 0 || pastRecent.length > 0 || rejectedRecent.length > 0 ? (
           <>
