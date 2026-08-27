@@ -75,8 +75,8 @@ export function TutorGuidePage() {
         <Step number={5} title={fr ? 'Rendre votre profil visible' : 'Make your profile visible'}>
           <p>
             {fr
-              ? 'Par défaut, votre profil n\'apparaît pas dans la recherche. Pour le rendre visible, utilisez le bouton d\'activation en haut de votre tableau de bord. Vous pouvez le désactiver à tout moment (par exemple pendant les examens).'
-              : 'By default, your profile does not appear in search. To make it visible, use the activation toggle at the top of your dashboard. You can turn it off anytime (e.g. during exams).'}
+              ? 'Par défaut, votre profil n\'apparaît pas dans la recherche. Une fois vos matières et au moins un créneau de disponibilité renseignés, utilisez le bouton d\'activation en haut de votre tableau de bord pour le rendre visible. Vous pouvez le désactiver à tout moment (par exemple pendant les examens).'
+              : 'By default, your profile does not appear in search. Once you\'ve added your subjects and at least one availability slot, use the activation toggle at the top of your dashboard to make it visible. You can turn it off anytime (e.g. during exams).'}
           </p>
         </Step>
 
@@ -86,8 +86,8 @@ export function TutorGuidePage() {
         <Step number={6} title={fr ? 'Recevoir des demandes de contact' : 'Receive contact requests'}>
           <p>
             {fr
-              ? 'Avant de pouvoir réserver des séances, une famille doit d\'abord vous envoyer une demande de contact pour une matière et un niveau, avec un message optionnel. Vous recevez une notification push et un email, et la demande apparaît sur votre tableau de bord.'
-              : 'Before booking any sessions, a family must first send you a contact request for a subject and class level, with an optional message. You\'ll receive a push notification and an email, and the request appears on your dashboard.'}
+              ? 'Avant toute séance, une demande de contact doit être acceptée. En général, une famille vous en envoie une pour une matière et un niveau, avec un message optionnel — vous recevez une notification push et un email, et la demande apparaît sur votre tableau de bord. Vous pouvez aussi faire le premier pas en répondant à une recherche publiée par une famille ("Annonces des familles" sur votre tableau de bord).'
+              : 'Before any sessions, a contact request has to be accepted. Usually a family sends you one for a subject and class level, with an optional message — you\'ll receive a push notification and an email, and the request appears on your dashboard. You can also make the first move by answering a family\'s published search (the "Posts from families" board on your dashboard).'}
           </p>
         </Step>
 

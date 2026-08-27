@@ -33,6 +33,17 @@ describe('ParentGuidePage (study)', () => {
     expect(screen.getByText(/triggers no waiting period/)).toBeInTheDocument();
   });
 
+  it('covers the published-search path with its privacy facts (issue #207)', () => {
+    renderWithProviders(<ParentGuidePage />);
+
+    expect(screen.getByRole('heading', { name: 'Publish your search' })).toBeInTheDocument();
+    // The consent-relevant facts: wider visibility, what is shown, the caps.
+    expect(screen.getByText(/visible to a larger group of tutors/)).toBeInTheDocument();
+    expect(screen.getByText(/your address is never shown/)).toBeInTheDocument();
+    expect(screen.getByText(/up to 3 published searches at a time/)).toBeInTheDocument();
+    expect(screen.getByText(/stays up for one week/)).toBeInTheDocument();
+  });
+
   it('renders fully in French', async () => {
     await i18n.changeLanguage('fr');
     renderWithProviders(<ParentGuidePage />);

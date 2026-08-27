@@ -30,6 +30,10 @@ describe('TutorGuidePage (study)', () => {
     expect(screen.getByText(/at least 24 hours ahead/)).toBeInTheDocument();
     // Withdrawal belongs to whoever opened the request.
     expect(screen.getByText(/withdrawal always belongs to whoever opened the request/)).toBeInTheDocument();
+    // The relationship can be opened from either side (issue #207 inversion).
+    expect(screen.getByText(/answering a family's published search/)).toBeInTheDocument();
+    // Activation prerequisites (dashboard toggle gate).
+    expect(screen.getByText(/added your subjects and at least one availability slot/)).toBeInTheDocument();
   });
 
   it('renders fully in French', async () => {

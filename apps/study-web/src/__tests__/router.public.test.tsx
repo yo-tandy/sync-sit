@@ -41,13 +41,14 @@ describe('router — guide routes are public (issue #236)', () => {
     }
   });
 
-  it('mirrors sit exactly: the same /guide/parents path, and /guide/tutors for the provider role', () => {
+  it('keeps the exact deep-link paths: /guide/parents as in sit, /guide/tutors for the provider role', () => {
     // Sit registers /guide/parents + /guide/babysitters; study's provider is
-    // the tutor. Guard against a drive-by rename breaking deep links.
+    // the tutor. Guard against a drive-by rename breaking deep links —
+    // order-insensitive, registration order is not part of the contract.
     const publicPaths = branchContaining('/about');
-    expect(publicPaths.filter((p) => p.startsWith('/guide/'))).toEqual([
-      '/guide/tutors',
+    expect(publicPaths.filter((p) => p.startsWith('/guide/')).sort()).toEqual([
       '/guide/parents',
+      '/guide/tutors',
     ]);
   });
 });

@@ -30,7 +30,8 @@ page is the one surface to mirror.
   details (email/phone/WhatsApp — `searchTutors` returns them only for
   approved families). There is no revoke path.
 - **7-day decline cooldown.** `DECLINE_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000`
-  in `sendTutorContactRequest.ts`; keyed on `declined` only.
+  in `contact/declineCooldown.ts`, shared by both contact directions (issue
+  #207 PR4) and keyed on `declined` only — a withdrawal never starts it.
 - **Withdrawal belongs to whoever opened a request.**
   - A family withdraws its own pending contact request
     (`cancelContactRequest`) — family-initiated, does NOT start the cooldown.
