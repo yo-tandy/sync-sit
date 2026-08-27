@@ -111,7 +111,10 @@ export function ParentEnrollment() {
 
   // The account-ready screen treats "merely slow" as the expected case: if
   // the session settles into a guard-passing state while it is shown, advance
-  // to the portal without requiring the click (issue #262 round 3).
+  // to the portal without requiring the click (issue #262 round 3). This
+  // effect owns late-settle recovery ENTIRELY — the immediate check covers
+  // the flip-to-mounted gap and the subscription covers everything after, so
+  // the login CTA stays a plain navigate('/login').
   useEffect(() => {
     if (!signedOutSuccess) return;
     if (passesParentGuard(useAuthStore.getState())) {
@@ -234,8 +237,10 @@ export function ParentEnrollment() {
           const unsub = useAuthStore.subscribe(check);
           check(useAuthStore.getState());
         });
-      } catch {
-        // Swallowed by design — see above.
+      } catch (err) {
+        // Swallowed by design — see above. Logged so a stranded enrollee
+        // leaves a trace: this branch is invisible from the UI.
+        console.warn('post-enrollment sign-in did not settle; showing account-ready state', err);
       }
 
       if (passesParentGuard(useAuthStore.getState())) {
@@ -305,16 +310,7 @@ export function ParentEnrollment() {
         </p>
         <button
           type="button"
-          onClick={() => {
-            // A merely-slow session may have settled after the backstop
-            // fired: re-check the guard's predicate at click time and route
-            // straight to the portal instead of a needless re-login.
-            if (passesParentGuard(useAuthStore.getState())) {
-              navigate('/family');
-            } else {
-              navigate('/login');
-            }
-          }}
+          onClick={() => navigate('/login')}
           className="flex h-12 w-full max-w-xs items-center justify-center rounded-xl bg-brand-600 text-base font-semibold text-white transition-colors hover:bg-brand-600/90"
         >
           {t('enrollment.readyLoginCta')}

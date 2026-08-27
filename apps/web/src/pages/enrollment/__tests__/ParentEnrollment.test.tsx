@@ -31,6 +31,9 @@ const h = vi.hoisted(() => ({
   // Listeners registered through the mocked store subscription — tests fire
   // them to model the auth snapshot landing after sign-in.
   subscribers: [] as Array<(s: unknown) => void>,
+  // One-shot enrollFamily rejection: set to drive a GENUINE enrollment
+  // failure (as opposed to the post-enrollment session failures above).
+  enrollError: null as Error | null,
   // The family data the stub StepFamilyInfo submits — tests override the
   // address to pin the conditional postcode/city spread.
   familyData: {} as Record<string, unknown>,
@@ -49,6 +52,11 @@ vi.mock('@/config/firebase', () => ({ auth: {}, functions: {}, db: {} }));
 vi.mock('firebase/functions', () => ({
   httpsCallable: (_fns: unknown, name: string) => (payload: unknown) => {
     h.calls.push({ name, payload });
+    if (name === 'enrollFamily' && h.enrollError) {
+      const err = h.enrollError;
+      h.enrollError = null;
+      return Promise.reject(err);
+    }
     return Promise.resolve({ data: { success: true } });
   },
 }));
@@ -130,12 +138,14 @@ vi.mock('../parent/StepParentPassword', () => ({
 vi.mock('../parent/StepFamilyInfo', () => ({
   // Controlled stub mirroring the real component's API: `family-fill` pushes
   // h.familyData through onChange, `family-submit` completes the wizard.
-  StepFamilyInfo: ({ onChange, onNext }: {
+  StepFamilyInfo: ({ onChange, onNext, error }: {
     onChange: (partial: Record<string, unknown>) => void;
     onNext: () => void;
+    error?: string | null;
   }) => (
     <div>
       family-info-step
+      {error && <div>{error}</div>}
       <button onClick={() => onChange(h.familyData)}>family-fill</button>
       <button onClick={onNext}>family-submit</button>
     </div>
@@ -155,6 +165,7 @@ beforeEach(() => {
   h.refreshUserDoc = vi.fn(() => Promise.resolve());
   h.signIn.mockClear();
   h.subscribers.length = 0;
+  h.enrollError = null;
   h.familyData = {
     familyName: 'Durand',
     firstName: 'Claire',
@@ -332,7 +343,7 @@ describe('ParentEnrollment post-enrollment session gate (issue #262)', () => {
     expect(h.navigate).toHaveBeenCalledWith('/login');
   });
 
-  it('a user-doc read blip after a SUCCESSFUL sign-in also shows the login state, and the CTA recovers a late session', async () => {
+  it('a user-doc read blip after a SUCCESSFUL sign-in also shows the login state (backstop, no hang)', async () => {
     // firebaseUser present but userDoc never settling: the OLD wait hung the
     // wizard on its spinner forever — the second failure mode of issue #262.
     // The new wait times out (SESSION_SETTLE_TIMEOUT_MS) and the gate fails,
@@ -358,13 +369,28 @@ describe('ParentEnrollment post-enrollment session gate (issue #262)', () => {
     expect(await screen.findByText('Your family account is ready')).toBeInTheDocument();
     expect(h.navigate).not.toHaveBeenCalledWith('/family');
 
-    // The session was merely slow: the doc lands after the backstop fired.
-    // The CTA re-checks the predicate at click time and routes straight to
-    // the portal — no needless re-login.
-    h.auth.userDoc = { profiles: { parent: {} } };
+    // The CTA hands the parent to login. (Late-settle recovery is owned
+    // entirely by the screen's subscription — pinned in the next test — so
+    // the CTA stays a plain navigate.)
     fireEvent.click(screen.getByText('Log in'));
-    expect(h.navigate).toHaveBeenCalledWith('/family');
-    expect(h.navigate).not.toHaveBeenCalledWith('/login');
+    expect(h.navigate).toHaveBeenCalledWith('/login');
+  });
+
+  it('a GENUINE enrollFamily failure still surfaces the enrollment error, never the account-ready screen', async () => {
+    // The other direction of the separation this fix makes: a real
+    // enrollment rejection must keep reading as one — a future refactor
+    // that widens the inner try would silently reclassify it.
+    h.enrollError = new Error('Failed to create account');
+    renderFlow();
+    await reachFamilyStep();
+    fireEvent.click(screen.getByText('family-fill'));
+    fireEvent.click(screen.getByText('family-submit'));
+
+    expect(await screen.findByText(/Failed to create account/)).toBeInTheDocument();
+    expect(screen.queryByText('Your family account is ready')).toBeNull();
+    expect(h.navigate).not.toHaveBeenCalledWith('/family');
+    // The sign-in never ran: enrollment failed before it.
+    expect(h.signIn).not.toHaveBeenCalled();
   });
 
   it('the account-ready screen auto-advances when the session settles late (no click needed)', async () => {
