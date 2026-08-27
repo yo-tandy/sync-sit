@@ -432,11 +432,14 @@ export function WeeklyTimeline({ weekly, onChange, onDayHeaderClick, locationTag
           This grid renders twice per schedule page -- at page level (px-5
           padding: ~350px of content at a 390px viewport) and nested in a Card
           for each holiday period (px-5 + the Card's p-4 + border: ~316px).
-          The old 360px floor overflowed BOTH with no visible affordance,
-          clipping the Sunday column (issue #227; 44px over in the Card).
-          300 <= 316 fits everywhere at 390px; columns are still ~39px --
-          comfortably grabbable -- and the overflow-x wrapper stays as the
-          safety for narrower devices. */}
+          The old 360px floor overflowed BOTH, clipping the Sunday column
+          (issue #227; 44px over in the Card). 300 <= 316 fits everywhere at
+          390px; at the floor, columns are (300-32-14)/7 = ~36px -- thin but
+          grabbable. Honest limit: the wrapper above is touch-none (so drags
+          select slots instead of panning), which means overflow-x-auto only
+          helps mouse users -- on a phone NARROWER than ~340px the grid clips
+          with no touch escape. Accepted for now: that class of device is
+          rare, and fitting it would push columns below ~29px. */}
       <div data-testid="timeline-width-floor" className="min-w-[300px]">
         {/* Header row */}
         <div className="mb-1 grid grid-cols-[32px_repeat(7,1fr)] gap-x-[2px]">
