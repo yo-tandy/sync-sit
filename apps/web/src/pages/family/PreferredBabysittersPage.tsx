@@ -190,7 +190,7 @@ export function PreferredBabysittersPage() {
               return (
                 <button
                   key={apt.appointmentId}
-                  onClick={(e) => { e.stopPropagation(); navigate('/family'); }}
+                  onClick={(e) => { e.stopPropagation(); navigate('/family/appointments'); }}
                   className="flex w-full items-center gap-2 rounded-md bg-gray-50 px-2.5 py-1.5 text-left active:bg-gray-100"
                 >
                   <span className="text-xs text-gray-500">{formatAptDate(apt)}</span>

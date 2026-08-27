@@ -41,6 +41,7 @@ import { FamiliesPage } from '@/pages/babysitter/FamiliesPage';
 import { PublishedSearchesPage } from '@/pages/babysitter/PublishedSearchesPage';
 import { RequestDetailPage } from '@/pages/babysitter/RequestDetailPage';
 import { FamilyDashboard } from '@/pages/family/DashboardPage';
+import { FamilyAppointmentsPage } from '@/pages/family/AppointmentsPage';
 import { FamilySettingsPage } from '@/pages/family/FamilySettingsPage';
 import { InvitePage } from '@/pages/family/InvitePage';
 import { SubmittedEndorsementsPage } from '@/pages/family/SubmittedEndorsementsPage';
@@ -121,6 +122,7 @@ export const router = createBrowserRouter([
     element: <FamilyLayout />,
     children: [
       { path: '/family', element: <FamilyDashboard /> },
+      { path: '/family/appointments', element: <FamilyAppointmentsPage /> },
       { path: '/family/settings', element: <FamilySettingsPage /> },
       { path: '/family/invite', element: <InvitePage /> },
       { path: '/family/endorsements', element: <SubmittedEndorsementsPage /> },

@@ -287,6 +287,7 @@ export default {
     terms: 'Terms & Conditions',
     settings: 'Settings',
     myAccount: 'My Account',
+    myAppointments: 'My Appointments',
     myFamily: 'My Family',
     coParent: 'Co-Parent',
     preferredBabysitters: 'Favorite Babysitters',
@@ -583,6 +584,18 @@ export default {
       save: 'Save note',
       error: 'Couldn\'t save your note. Please try again.',
     },
+    appointmentsTitle: 'Appointments',
+    viewAppointments: 'View your appointments',
+    appointmentsPending_one: '{{count}} pending',
+    appointmentsPending_other: '{{count}} pending',
+    appointmentsUpcoming_one: '{{count}} upcoming',
+    appointmentsUpcoming_other: '{{count}} upcoming',
+    appointmentsNext: 'Next: {{when}}',
+  },
+
+  // Dedicated family appointments page (issue #241)
+  familyAppointments: {
+    title: 'Appointments',
   },
 
   // Request Detail
