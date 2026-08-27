@@ -51,8 +51,9 @@ page is the one surface to mirror.
   dashboard toggle makes the profile visible.
 - **Enrollment.** Tutor: EJM email → code → password → profile+contact →
   subjects (levels + per-subject rate). Family: parent signup, kids +
-  addresses in Family Settings, verification (EJM email or community
-  vouching) gates search.
+  addresses in Family Settings, verification (admin-reviewed identity + EJM
+  enrollment documents, or community vouching — no email path for parents)
+  gates search.
 
 ## Changes
 
@@ -77,7 +78,7 @@ ternaries; both locales ship in the page).
 - `TutorGuidePage.test.tsx` / `ParentGuidePage.test.tsx` — render in en and
   fr (headings + core-flow copy present in each locale; no raw i18n-key
   fallbacks), key flow facts asserted (7-day cooldown, contact unlock).
-- `router.public.test.ts` — the two guide paths are registered in the same
+- `router.public.test.tsx` — the two guide paths are registered in the same
   (guard-free `PublicLayout`) branch as `/login`, not under the tutor/family
   layouts. Sit has no such test (grep), so this is new, matching the issue's
   requirement that the routes be provably public.
