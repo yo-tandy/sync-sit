@@ -72,7 +72,7 @@ carries over directly.
 | Selection | Family requests → provider accepts | Family books slot → tutor accepts | **Students offer → family picks one** |
 | Pricing | Babysitter's hourly rate | Tutor's per-subject rate | **Student quotes per task** |
 | Time | Fixed date + start/end | Calendar slot, tutor-defined lengths | **Fixed / deadline / recurring / ongoing** |
-| Blocks shared availability | Yes | Yes | **No** (§2, decision 9) |
+| Blocks shared availability | Yes | Yes | **No** (§2, decision 10) |
 | Money | Offline | Offline | Offline |
 
 ### Goals
@@ -422,12 +422,21 @@ export interface OfferDoc {
   availabilityNote: string | null;
 
   status: OfferStatus;
-  guardian: {
+  /**
+   * ABSENT (not null) on offers whose sub-category needs no guardian consent
+   * — `doSubmitOffer` simply does not write the field. This is a rules-layer
+   * requirement, not a style choice: Firestore rules' `Map.get(key, default)`
+   * substitutes the default only for an ABSENT key, not for one present with
+   * value null, so §7.2's `resource.data.get('guardian', {})` reads `{}` only
+   * if non-flagged offers omit the field. A present-but-null `guardian` would
+   * make that expression return null and error the disjunct (PR #243 round 8).
+   */
+  guardian?: {
     required: boolean;
     familyId: string | null;       // the SUPERVISING family (student's own)
     decidedAt: FirestoreTimestamp | null;
     decidedByUid: string | null;
-  } | null;
+  };
 
   /** Written by doAcceptOffer inside the §6.4 transaction, on the ACCEPTED
    *  offer only — the two-way reveal. Absent on every other offer, which is
@@ -986,13 +995,19 @@ Three further things worth flagging for the rules review:
   `where('familyId','==',f).where('taskId','==',t).where('status','==',s)`
   (or the `in`-subset form), ordered by `createdAt` — with the matching index
   in §7.3. The `(taskId, status, createdAt)` index alone would not serve it.
-- **The guardian disjunct reads through `.get()` defaults** — as the sketch
-  above now does. `OfferDoc.guardian` is `{…} | null` (§4.2), so direct field
-  access would rely on `&&` short-circuiting to stay safe. That works as
-  ordered, but it is a footgun for whoever reorders the disjuncts later, and it
-  diverges from the house style the references rule uses for exactly this
-  hazard (`firestore.rules:369-375`). The defaulted form costs nothing and
-  removes the ordering dependency.
+- **The guardian disjunct reads through `.get()` defaults — which only works
+  because `guardian` is ABSENT, not null, on non-flagged offers (§4.2).**
+  Rules' `Map.get(key, default)` substitutes the default for an *absent* key
+  only; a key present with value null returns null, and
+  `null.get('familyId', …)` errors the disjunct — which under the H2
+  `||`-chain behaviour denies the whole read (`firestore.rules:369-375` is
+  the precedent for exactly this shape). So the safety here rests on TWO
+  things together: `doSubmitOffer` omitting the field entirely on non-flagged
+  offers, and the `.get()` defaults handling the absent case. An earlier
+  draft claimed the defaults alone made the disjunct reorder-safe against a
+  `guardian: null` doc; they do not, and a reader taking that claim at face
+  value could reintroduce the null shape and break every family read of
+  non-flagged offers at once.
 - **Expiry is not rules-enforced**, identically to `publishedSearches` and for
   the same reason (unprovable against a client-supplied bound). An
   expired-but-unswept task leaks nothing its readers could not already see.
@@ -1075,7 +1090,7 @@ index Firestore creates automatically, but the sweep queries
 
 ### 7.4 Storage
 
-Task photos live at `doTasks/{taskId}/{photoId}` in the existing bucket.
+Task photos live under a task-independent, uploader-keyed prefix — `do-photos/{uid}/{photoId}` — in the existing bucket (see below for why the path carries no `taskId`).
 
 **Storage rules cannot mirror the `doTasks` read rule, and no wording makes
 them.** Firebase Storage rules have no way to read Firestore — there is no
@@ -1181,6 +1196,7 @@ All in `apps/functions/src/do/**`, codebase `default`, region `europe-west1`,
 | `doAdminDeleteTask` | Admin | Hard delete + audit |
 | `doGetTaskPhotoUrl` | Auth | Asserts the §7.2 board audience (or family membership) and returns a short-lived signed URL for a task photo — the §7.4 option-1 read path; final objects are `allow read: if false` |
 | `doStripTaskPhoto` | Storage trigger | Fires on `do-uploads/{uid}/*`: strips EXIF, republishes into the task-independent `do-photos/{uid}/` (no `taskId` exists at upload time — §7.4), deletes the quarantine original. Not a callable |
+| `doSendTaskDigest` | Scheduled | The §10 board digest: batches `new_task_matching` for students whose `profiles.doer.categories` match tasks created since their last digest, at most one per student per 6h. A scheduled batcher rather than an on-create fan-out, because the rate limit is per-RECIPIENT — an on-create trigger would need per-student dedupe state anyway, and the batcher IS that state. Uses the §7.3 `users` composite |
 | `doSweepTasks` | Scheduled | Daily: delete expired `open` tasks and their offers; delete `cancelled` tasks (and their offers) older than 30 days — mirroring `cleanupOldData`'s cancelled/rejected appointment rule; auto-complete stale `doerMarkedDoneAt` tasks; delete unclaimed `do-uploads` quarantine objects (§7.4). Extends the existing `cleanupOldData` schedule rather than adding a second job |
 
 Validation follows the sit house style visible in `publishSearch.ts` — manual
@@ -1508,8 +1524,9 @@ What sync-do **adds** to shared packages (small, deliberate):
   `users` **update** rule gains `doerIdentityUnchanged()` and a `doerField()`
   helper (§7.2). Without it `profiles.doer.enrollmentComplete` is
   client-writable and the board read gate is bypassable.
-- `storage.rules` — the `doTasks/{taskId}/**` block (§7.4), shipped manually
-  since the merge workflow does not deploy it.
+- `storage.rules` — the `do-photos/{uid}/**` (locked) and `do-uploads/{uid}/**`
+  (owner-scoped quarantine) blocks (§7.4), shipped manually since the merge
+  workflow does not deploy it.
 
 One dependency edge §3.2 does not otherwise imply: surfacing existing
 endorsements on the offer card (§9.1) means `do-web` reading both study's
@@ -1594,9 +1611,19 @@ see §12 for why the scaffold, not the family UI, is where they are needed.
   denied. The guardian queue is
   **not** in this list because it has no client query — it is served by the
   Admin SDK (§7.3).
+- **Storage rules** (`tests/rules/storage-rules.test.ts` — the suite already
+  exists; §7.4's surface joins it): a client cannot read `do-photos/{uid}/*`
+  (any uid, own included — reads go through `doGetTaskPhotoUrl`); a client
+  cannot write `do-uploads/{otherUid}/*` — the owner-scoped quarantine write
+  is the entire basis of §7.4's "ownership is structural" claim, so it gets
+  the direct negative test.
 - **Integration** (`tests/integration/`, emulator lane 2 so the dev stack keeps
   running) — post→offer→accept end-to-end; **concurrent accepts of two
-  different offers, exactly one wins**; guardian approve and deny; **an
+  different offers, exactly one wins**; guardian approve and deny; **a
+  `pending_guardian` sibling flipped by acceptance lands in `expired`**
+  (§6.4 step 7); **`doPostTask` refuses a `photoId` that lives under another
+  uploader's `do-photos` prefix** (the round-7 anti-hijack check — without a
+  pin it is one refactor away from becoming a lookup that trusts the id); **an
   UNGOVERNED under-15 caller is refused by `doEnrollDoer`, and a GOVERNED
   under-15 caller is not** (both halves of §11.1's floor — the unconditional
   version of this test would have locked supervised students out and
