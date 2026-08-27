@@ -118,7 +118,7 @@ export function AdminAppointmentsPage() {
       header: t('admin.table.actions'),
       className: 'text-right',
       render: (a) => (
-        <Button variant="outline" size="sm" className="w-auto" onClick={() => setDeleteTarget(a.id)}>
+        <Button variant="outline" size="sm" fullWidth={false} onClick={() => setDeleteTarget(a.id)}>
           <TrashIcon className="h-4 w-4" />
           {t('admin.delete')}
         </Button>
