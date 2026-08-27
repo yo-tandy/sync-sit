@@ -14,6 +14,7 @@ export interface AppointmentNotesCopy {
   fromBabysitter: string; // label above the babysitter's post-note
   add: string; // button when the viewer's own note is absent
   edit: string; // button when the viewer's own note exists
+  remove?: string; // button when the window is closed but the note is the viewer's
 }
 
 interface AppointmentNotesProps {
@@ -24,6 +25,12 @@ interface AppointmentNotesProps {
   /** Whether the viewer may write their kind now (role + timing window). */
   canEdit: boolean;
   onEdit: () => void;
+  /**
+   * Erasure path (issue #255 carve-out): shown when the viewer's own note
+   * exists but the edit window is CLOSED — the callable always lets the
+   * author clear their own note, so the note must never be stranded.
+   */
+  onRemove?: () => void;
   copy: AppointmentNotesCopy;
 }
 
@@ -36,7 +43,15 @@ function NoteBlock({ label, text }: { label: string; text: string }) {
   );
 }
 
-export function AppointmentNotes({ pre, post, editKind, canEdit, onEdit, copy }: AppointmentNotesProps) {
+export function AppointmentNotes({
+  pre,
+  post,
+  editKind,
+  canEdit,
+  onEdit,
+  onRemove,
+  copy,
+}: AppointmentNotesProps) {
   const mine = editKind === 'pre' ? pre : post;
   if (pre == null && post == null && !canEdit) return null;
   return (
@@ -46,6 +61,11 @@ export function AppointmentNotes({ pre, post, editKind, canEdit, onEdit, copy }:
       {canEdit && (
         <Button size="sm" variant="ghost" fullWidth={false} onClick={onEdit}>
           {mine != null ? copy.edit : copy.add}
+        </Button>
+      )}
+      {!canEdit && mine != null && onRemove && copy.remove && (
+        <Button size="sm" variant="ghost" fullWidth={false} onClick={onRemove}>
+          {copy.remove}
         </Button>
       )}
     </div>

@@ -489,7 +489,7 @@ export default {
         add: 'Add session notes',
         edit: 'Edit session notes',
         dialogTitle: 'Session notes',
-        dialogDesc: 'What did you cover? Note any homework or things for next time — the family will see this.',
+        dialogDesc: 'What did you cover? Note any homework or things for next time — the family will see this; if you are supervised, your parents can see it too.',
         placeholder: 'e.g. Covered fractions; homework p.42. Bring a calculator next time.',
         save: 'Save note',
         error: 'Couldn\'t save your note. Please try again.',

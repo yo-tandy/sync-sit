@@ -489,7 +489,7 @@ export default {
         add: 'Ajouter des notes',
         edit: 'Modifier les notes',
         dialogTitle: 'Notes de séance',
-        dialogDesc: 'Qu\'avez-vous abordé ? Indiquez les devoirs ou points à revoir — la famille les verra.',
+        dialogDesc: 'Qu\'avez-vous abordé ? Indiquez les devoirs ou points à revoir — la famille les verra ; si vous êtes supervisé, vos parents peuvent aussi les voir.',
         placeholder: 'ex. Fractions abordées ; devoirs p.42. Prévoir une calculatrice la prochaine fois.',
         save: 'Enregistrer',
         error: 'Impossible d\'enregistrer votre note. Veuillez réessayer.',

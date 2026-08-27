@@ -205,4 +205,63 @@ describe('ExpandableBabysitterCard — appointment notes (pre)', () => {
     expandCard();
     expect(screen.queryByText('familyDashboard.notes.add')).toBeNull();
   });
+
+  it('fails CLOSED like the server: a confirmed non-recurring doc without a date offers NO affordance', () => {
+    // The callable would throw failed-precondition on such a doc (no
+    // scheduled date), so offering the dialog could only ever produce an
+    // error (round-4 review).
+    render(
+      <ExpandableBabysitterCard
+        appointment={apt({ date: undefined, startTime: undefined, endTime: undefined })}
+        info={info}
+        variant="confirmed"
+      />,
+    );
+    expandCard();
+    expect(screen.queryByText('familyDashboard.notes.add')).toBeNull();
+  });
+
+  it('a closed window with an existing own note offers REMOVE, and it clears via the callable', async () => {
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    try {
+      render(
+        <ExpandableBabysitterCard
+          appointment={apt({ date: YESTERDAY, preAppointmentNote: 'Door code 1234B' })}
+          info={info}
+          variant="confirmed"
+        />,
+      );
+      expandCard();
+      expect(screen.queryByText('familyDashboard.notes.add')).toBeNull();
+      expect(screen.queryByText('familyDashboard.notes.edit')).toBeNull();
+      fireEvent.click(screen.getByText('familyDashboard.notes.remove'));
+      await waitFor(() =>
+        expect(h.callable).toHaveBeenCalledWith('setAppointmentNote', {
+          appointmentId: 'apt-1',
+          kind: 'pre',
+          text: '',
+        }),
+      );
+    } finally {
+      confirmSpy.mockRestore();
+    }
+  });
+
+  it('declining the remove confirm sends nothing', () => {
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    try {
+      render(
+        <ExpandableBabysitterCard
+          appointment={apt({ date: YESTERDAY, preAppointmentNote: 'Door code 1234B' })}
+          info={info}
+          variant="confirmed"
+        />,
+      );
+      expandCard();
+      fireEvent.click(screen.getByText('familyDashboard.notes.remove'));
+      expect(h.callable).not.toHaveBeenCalled();
+    } finally {
+      confirmSpy.mockRestore();
+    }
+  });
 });

@@ -43,9 +43,10 @@ describe('setAppointmentNote', () => {
    * future date at noon. */
   async function seedOneTime(
     id: string,
-    { status = 'confirmed', date = TOMORROW(), startTime = '12:00' }: {
+    { status = 'confirmed', date = TOMORROW(), startTime = '12:00', preAppointmentNote, postAppointmentNote }: {
       status?: 'pending' | 'confirmed' | 'rejected' | 'cancelled';
       date?: string; startTime?: string;
+      preAppointmentNote?: string; postAppointmentNote?: string;
     } = {},
   ) {
     await seedAppointment({
@@ -57,6 +58,8 @@ describe('setAppointmentNote', () => {
       date,
       startTime,
       endTime: '13:00',
+      ...(preAppointmentNote !== undefined ? { preAppointmentNote } : {}),
+      ...(postAppointmentNote !== undefined ? { postAppointmentNote } : {}),
     });
     return id;
   }
@@ -317,6 +320,62 @@ describe('setAppointmentNote', () => {
 
     await callFunction('setAppointmentNote', { appointmentId: id, kind: 'pre', text: '   ' }, parent1Token);
     expect('preAppointmentNote' in (await aptData(id))).toBe(false);
+  });
+
+  // ── Erasure carve-out (DELIBERATE divergence from study, issue #255):
+  // a clear passes only the role gate — the author can always erase their
+  // own note, even after the window closes or the appointment leaves
+  // 'confirmed'. Non-empty writes in those states stay rejected (pinned in
+  // the timing/status gate sections above).
+
+  it('the family can CLEAR a pre-note after the sitting has started', async () => {
+    const id = await seedOneTime('ot-clear-late', {
+      date: YESTERDAY(),
+      preAppointmentNote: 'Door code 1234B',
+    });
+    await callFunction('setAppointmentNote', { appointmentId: id, kind: 'pre', text: '' }, parent1Token);
+    expect('preAppointmentNote' in (await aptData(id))).toBe(false);
+  });
+
+  it('the family can CLEAR a pre-note on a cancelled appointment', async () => {
+    const id = await seedOneTime('ot-clear-cancelled', {
+      status: 'cancelled',
+      preAppointmentNote: 'Door code 1234B',
+    });
+    await callFunction('setAppointmentNote', { appointmentId: id, kind: 'pre', text: '' }, parent1Token);
+    expect('preAppointmentNote' in (await aptData(id))).toBe(false);
+  });
+
+  it('the babysitter can CLEAR a post-note on a cancelled appointment', async () => {
+    const id = await seedOneTime('ot-clear-post', {
+      status: 'cancelled',
+      date: YESTERDAY(),
+      postAppointmentNote: 'debrief',
+    });
+    await callFunction('setAppointmentNote', { appointmentId: id, kind: 'post', text: '' }, babysitter1Token);
+    expect('postAppointmentNote' in (await aptData(id))).toBe(false);
+  });
+
+  it('a clear is still author-only: a stranger cannot clear (permission-denied)', async () => {
+    const id = await seedOneTime('ot-clear-stranger', {
+      date: YESTERDAY(),
+      preAppointmentNote: 'Door code 1234B',
+    });
+    await expect(
+      callFunction('setAppointmentNote', { appointmentId: id, kind: 'pre', text: '' }, parent3Token),
+    ).rejects.toMatchObject({ code: 'PERMISSION_DENIED' });
+    expect((await aptData(id)).preAppointmentNote).toBe('Door code 1234B');
+  });
+
+  it('a NON-EMPTY write is still rejected after start — only clears pass the carve-out', async () => {
+    const id = await seedOneTime('ot-late-rewrite', {
+      date: YESTERDAY(),
+      preAppointmentNote: 'old',
+    });
+    await expect(
+      callFunction('setAppointmentNote', { appointmentId: id, kind: 'pre', text: 'new code 9999' }, parent1Token),
+    ).rejects.toMatchObject({ code: 'FAILED_PRECONDITION' });
+    expect((await aptData(id)).preAppointmentNote).toBe('old');
   });
 
   // ── Length bound ──

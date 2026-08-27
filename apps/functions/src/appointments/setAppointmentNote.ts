@@ -44,7 +44,10 @@ import { getParentProfile, type User } from '@ejm/shared-core';
  *
  * Empty `text` clears the note (FieldValue.delete() — the field goes absent,
  * not blank). The author may overwrite their own note freely within its
- * window.
+ * window — and may CLEAR it at ANY time regardless of timing or status (a
+ * deliberate divergence from study, tracked for back-porting in issue #255:
+ * sit's notes solicit door codes/allergies and reach the supervised sitter's
+ * guardians, so the author always keeps an erasure path).
  *
  * Writes are callable-only (rules stay deny-all). v1 is SILENT: writing a
  * note fires NO notification to the counterparty (mirrors study's ledgered
@@ -107,40 +110,50 @@ export const setAppointmentNote = onCall(
       }
     }
 
-    // ── Status gate ── only a confirmed appointment is annotatable. Sit has
-    // no 'completed': a past sitting stays 'confirmed', which is exactly the
-    // state study's completed pin covers. pending / rejected / cancelled
-    // targets have no sitting to annotate.
-    if (apt.status !== 'confirmed') {
-      throw new HttpsError(
-        'failed-precondition',
-        'This appointment cannot take notes in its current state',
-      );
-    }
+    // ── Erasure carve-out (a DELIBERATE divergence from study — see issue
+    // #255 for porting it back): a CLEAR (empty text) passes only the role
+    // gate above. Sit's pre-note copy solicits door codes and a child's
+    // allergies, and since round 1 the note is also projected to the
+    // supervised sitter's guardians — so the author must always be able to
+    // erase their own note, even after the sitting starts or the appointment
+    // leaves 'confirmed'. Authoring CONTENT stays window-bound below.
+    const cleared = text.length === 0;
 
-    // ── Timing gate (DST-safe, Paris wall-clock) ──
-    // Only an explicit recurring doc gets the both-windows-open exemption
-    // (no single start instant; see the docstring). Everything else —
-    // one_time, and defensively any absent/unknown type — fails CLOSED into
-    // the strict windows.
-    if (apt.type !== 'recurring') {
-      if (!apt.date || !apt.startTime) {
-        // A confirmed one_time appointment always carries these; defensive only.
-        throw new HttpsError('failed-precondition', 'Appointment has no scheduled date');
+    if (!cleared) {
+      // ── Status gate ── only a confirmed appointment is annotatable. Sit
+      // has no 'completed': a past sitting stays 'confirmed', which is
+      // exactly the state study's completed pin covers. pending / rejected /
+      // cancelled targets have no sitting to annotate.
+      if (apt.status !== 'confirmed') {
+        throw new HttpsError(
+          'failed-precondition',
+          'This appointment cannot take notes in its current state',
+        );
       }
-      const start = parisWallTimeToUtc(apt.date as string, apt.startTime as string);
-      const started = Date.now() >= start.getTime();
-      if (kind === 'pre' && started) {
-        throw new HttpsError('failed-precondition', 'Appointment already started');
-      }
-      if (kind === 'post' && !started) {
-        throw new HttpsError('failed-precondition', 'Appointment has not started yet');
+
+      // ── Timing gate (DST-safe, Paris wall-clock) ──
+      // Only an explicit recurring doc gets the both-windows-open exemption
+      // (no single start instant; see the docstring). Everything else —
+      // one_time, and defensively any absent/unknown type — fails CLOSED
+      // into the strict windows.
+      if (apt.type !== 'recurring') {
+        if (!apt.date || !apt.startTime) {
+          // A confirmed one_time appointment always carries these; defensive only.
+          throw new HttpsError('failed-precondition', 'Appointment has no scheduled date');
+        }
+        const start = parisWallTimeToUtc(apt.date as string, apt.startTime as string);
+        const started = Date.now() >= start.getTime();
+        if (kind === 'pre' && started) {
+          throw new HttpsError('failed-precondition', 'Appointment already started');
+        }
+        if (kind === 'post' && !started) {
+          throw new HttpsError('failed-precondition', 'Appointment has not started yet');
+        }
       }
     }
 
     // ── Write the note (or clear it) ──
     const field = kind === 'pre' ? 'preAppointmentNote' : 'postAppointmentNote';
-    const cleared = text.length === 0;
     await aptRef.update({
       [field]: cleared ? FieldValue.delete() : text,
       updatedAt: new Date(),

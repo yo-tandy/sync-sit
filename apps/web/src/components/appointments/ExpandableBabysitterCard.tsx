@@ -106,26 +106,50 @@ export function ExpandableBabysitterCard({
   const [noteSaving, setNoteSaving] = useState(false);
   const [noteError, setNoteError] = useState<string | null>(null);
 
-  // The pre-note window mirrors the callable's gate (UX only): a confirmed
-  // one_time until its Paris wall-clock start; a confirmed recurring
-  // arrangement always (there is always a next occurrence).
+  // The pre-note window mirrors the callable's gate (UX only, and fails
+  // CLOSED like the server): a confirmed recurring arrangement always (there
+  // is always a next occurrence); anything else needs a date + startTime
+  // whose Paris wall-clock start has not passed — a doc missing them would
+  // only earn a guaranteed failed-precondition.
   const canEditPre =
     variant === 'confirmed' &&
-    (appointment.type === 'recurring' || !hasStarted(appointment.date, appointment.startTime));
+    (appointment.type === 'recurring'
+      ? true
+      : Boolean(appointment.date && appointment.startTime) &&
+        !hasStarted(appointment.date, appointment.startTime));
   const showNotes = variant === 'confirmed' || variant === 'past' || variant === 'rejected';
+
+  const callSetNote = (text: string) => {
+    const fn = httpsCallable<
+      { appointmentId: string; kind: 'pre'; text: string },
+      { success: boolean }
+    >(functions, 'setAppointmentNote');
+    return fn({ appointmentId: appointment.appointmentId, kind: 'pre', text });
+  };
 
   const saveNote = async (text: string) => {
     setNoteError(null);
     setNoteSaving(true);
     try {
-      const fn = httpsCallable<
-        { appointmentId: string; kind: 'pre'; text: string },
-        { success: boolean }
-      >(functions, 'setAppointmentNote');
-      await fn({ appointmentId: appointment.appointmentId, kind: 'pre', text });
+      await callSetNote(text);
       setNoteOpen(false);
     } catch {
       setNoteError(t('familyDashboard.notes.error'));
+    } finally {
+      setNoteSaving(false);
+    }
+  };
+
+  // Erasure path (issue #255 carve-out): the callable lets the AUTHOR clear
+  // their own note at any time, so once the edit window closes the card
+  // swaps the add/edit affordance for a remove one.
+  const removeNote = async () => {
+    if (!window.confirm(t('familyDashboard.notes.removeConfirm'))) return;
+    setNoteSaving(true);
+    try {
+      await callSetNote('');
+    } catch {
+      window.alert(t('familyDashboard.notes.error'));
     } finally {
       setNoteSaving(false);
     }
@@ -407,11 +431,13 @@ export function ExpandableBabysitterCard({
               editKind="pre"
               canEdit={canEditPre}
               onEdit={() => { setNoteError(null); setNoteOpen(true); }}
+              onRemove={noteSaving ? undefined : removeNote}
               copy={{
                 fromFamily: t('familyDashboard.notes.fromFamily'),
                 fromBabysitter: t('familyDashboard.notes.fromBabysitter'),
                 add: t('familyDashboard.notes.add'),
                 edit: t('familyDashboard.notes.edit'),
+                remove: t('familyDashboard.notes.remove'),
               }}
             />
           )}

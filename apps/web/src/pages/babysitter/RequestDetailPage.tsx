@@ -151,19 +151,39 @@ export function RequestDetailPage() {
     }
   };
 
+  const callSetNote = (text: string) => {
+    const fn = httpsCallable<
+      { appointmentId: string; kind: 'post'; text: string },
+      { success: boolean }
+    >(functions, 'setAppointmentNote');
+    return fn({ appointmentId: appointmentId!, kind: 'post', text });
+  };
+
   const saveNote = async (text: string) => {
     if (!appointmentId) return;
     setNoteError(null);
     setNoteSaving(true);
     try {
-      const fn = httpsCallable<
-        { appointmentId: string; kind: 'post'; text: string },
-        { success: boolean }
-      >(functions, 'setAppointmentNote');
-      await fn({ appointmentId, kind: 'post', text });
+      await callSetNote(text);
       setNoteOpen(false);
     } catch {
       setNoteError(t('request.notes.error'));
+    } finally {
+      setNoteSaving(false);
+    }
+  };
+
+  // Erasure path (issue #255 carve-out): the callable lets the AUTHOR clear
+  // their own note at any time — e.g. after the appointment is cancelled and
+  // the edit window has closed.
+  const removeNote = async () => {
+    if (!appointmentId) return;
+    if (!window.confirm(t('request.notes.removeConfirm'))) return;
+    setNoteSaving(true);
+    try {
+      await callSetNote('');
+    } catch {
+      window.alert(t('request.notes.error'));
     } finally {
       setNoteSaving(false);
     }
@@ -409,11 +429,13 @@ export function RequestDetailPage() {
               editKind="post"
               canEdit={canEditPost}
               onEdit={() => { setNoteError(null); setNoteOpen(true); }}
+              onRemove={noteSaving ? undefined : removeNote}
               copy={{
                 fromFamily: t('request.notes.fromFamily'),
                 fromBabysitter: t('request.notes.fromBabysitter'),
                 add: t('request.notes.add'),
                 edit: t('request.notes.edit'),
+                remove: t('request.notes.remove'),
               }}
             />
           </Card>

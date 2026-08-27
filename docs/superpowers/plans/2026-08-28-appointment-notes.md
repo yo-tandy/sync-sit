@@ -25,6 +25,13 @@ must not disagree on note privacy.
 - Timing is Paris wall-clock (`parisWallTimeToUtc` — DST-safe).
 - Empty `text` clears the note (`FieldValue.delete()` — field goes absent).
   The author overwrites their own note freely within its window.
+  DELIBERATE divergence from study (review round 4; back-port tracked in
+  issue #255): in sit a CLEAR passes only the role gate — the author can
+  always erase their own note even after the window closes or the
+  appointment leaves `confirmed`, because sit's pre-note solicits door
+  codes/allergies and reaches the supervised sitter's guardians. Authoring
+  CONTENT stays window-bound. The UI swaps the add/edit affordance for a
+  confirm-guarded "remove note" once the window closes.
 - Max 2000 chars, trimmed. Zod-validated.
 - Writes are callable-only (rules stay deny-all on appointments). v1 is
   SILENT: no notification to the counterparty (ledgered study decision).

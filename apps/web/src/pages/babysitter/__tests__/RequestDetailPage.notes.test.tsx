@@ -176,6 +176,25 @@ describe('RequestDetailPage — appointment notes (post)', () => {
     ).toBe(false);
   });
 
+  it('a cancelled appointment with an own post-note offers REMOVE, and it clears via the callable', async () => {
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    try {
+      renderWithApt({ status: 'cancelled', date: YESTERDAY, postAppointmentNote: 'old debrief' });
+      expect(screen.queryByText('request.notes.add')).toBeNull();
+      expect(screen.queryByText('request.notes.edit')).toBeNull();
+      fireEvent.click(screen.getByText('request.notes.remove'));
+      await waitFor(() =>
+        expect(h.callable).toHaveBeenCalledWith('setAppointmentNote', {
+          appointmentId: 'apt-1',
+          kind: 'post',
+          text: '',
+        }),
+      );
+    } finally {
+      confirmSpy.mockRestore();
+    }
+  });
+
   it('a confirmed recurring arrangement offers the post affordance (no timing gate)', () => {
     renderWithApt({
       type: 'recurring',
