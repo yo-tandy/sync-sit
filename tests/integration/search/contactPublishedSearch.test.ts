@@ -1,12 +1,12 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
-import { clearAll, callFunction, getIdToken, getDb } from '../../setup/emulator.js';
+import { clearAll, callFunction, getIdToken, getDb, parisDateFromNow } from '../../setup/emulator.js';
 import { seedTestData, seedAppointment, type SeedData } from '../../setup/seed.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 function dateFromNow(days: number): string {
-  return new Date(Date.now() + days * DAY_MS).toISOString().split('T')[0];
+  return parisDateFromNow(days);
 }
 
 /**

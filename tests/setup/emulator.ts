@@ -138,3 +138,23 @@ export async function getIdToken(uid: string): Promise<string> {
   }
   return data.idToken;
 }
+
+/**
+ * Paris-wall-clock date string N days from now (issue: the Paris-midnight
+ * CI flake window). The domain's dates are Paris wall dates, but fixtures
+ * built with `new Date(...).toISOString()` are UTC dates -- between Paris
+ * midnight and 02:00 (CEST) the two disagree by a day, so "tomorrow"
+ * fixtures reference Paris-TODAY and same-day fixtures reference
+ * Paris-YESTERDAY ("date is already past"). Every near-now fixture must
+ * use this instead of a UTC slice.
+ */
+export function parisDateFromNow(days: number): string {
+  const d = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Paris',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(d);
+  return parts; // en-CA formats as YYYY-MM-DD
+}

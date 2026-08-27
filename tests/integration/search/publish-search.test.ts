@@ -1,12 +1,15 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
-import { clearAll, callFunction, getIdToken, getDb } from '../../setup/emulator.js';
+import { clearAll, callFunction, getIdToken, getDb, parisDateFromNow } from '../../setup/emulator.js';
 import { seedTestData, type SeedData } from '../../setup/seed.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** "YYYY-MM-DD" for `days` days from now (UTC date — fine for future-dating). */
+// Paris wall date, NOT a UTC slice: between Paris midnight and 02:00 the
+// two disagree by a day, which made the overnight-sitting pins flake in
+// nightly CI (dateFromNow(0) referenced Paris-YESTERDAY -> "already past").
 function dateFromNow(days: number): string {
-  return new Date(Date.now() + days * DAY_MS).toISOString().split('T')[0];
+  return parisDateFromNow(days);
 }
 
 function oneTimePayload(overrides: Record<string, unknown> = {}) {

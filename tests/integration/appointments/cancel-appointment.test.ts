@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
-import { clearAll, callFunction, getIdToken, getDb } from '../../setup/emulator.js';
+import { clearAll, callFunction, getIdToken, getDb, parisDateFromNow } from '../../setup/emulator.js';
 import { seedTestData, seedAppointment, type SeedData } from '../../setup/seed.js';
 
 describe('cancelAppointment', () => {
@@ -176,14 +176,11 @@ describe('cancelAppointment', () => {
 
   // ── Cancellation policy: allow-but-flag (issue #237, study's contract) ──
   describe('notice-window flag', () => {
-    const soonDate = () => {
-      const d = new Date(Date.now() + 24 * 60 * 60 * 1000); // ~24h out
-      return d.toISOString().slice(0, 10);
-    };
-    const farDate = () => {
-      const d = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
-      return d.toISOString().slice(0, 10);
-    };
+    // Paris wall dates (the Paris-midnight flake window): a UTC slice
+    // references the wrong Paris day between 00:00 and 02:00 CEST, flipping
+    // inside-window and started/not-started semantics.
+    const soonDate = () => parisDateFromNow(1);
+    const farDate = () => parisDateFromNow(14);
 
     it('flags a CONFIRMED one_time family cancel inside the snapshotted window', async () => {
       const apptId = await seedAppointment({
@@ -241,13 +238,12 @@ describe('cancelAppointment', () => {
       // makes past sessions uncancellable; sit has no sweep, so stale
       // confirmed appointments stay cancellable as bookkeeping. Flagging
       // them would mint permanent "Cancelled late" badges for cleanup.
-      const past = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000); // ~2 months ago
       const apptId = await seedAppointment({
         babysitterUserId: seed.babysitter1.uid,
         familyId: seed.family1Id,
         createdByUserId: seed.parent1.uid,
         status: 'confirmed',
-        date: past.toISOString().slice(0, 10),
+        date: parisDateFromNow(-60),
         startTime: '18:00',
         cancellationNoticeHours: 48,
       });
