@@ -406,6 +406,10 @@ describe('ParentEnrollment orchestrator', () => {
     // (found via the sit mirror of this test, PR #259 review).
     await act(async () => {});
     expect(h.navigate).not.toHaveBeenCalledWith('/family', { replace: true });
+    // Exactly the success navigation — nothing before (no premature redirect)
+    // and nothing after the flushed re-render (no hijack), so the pin cannot
+    // go vacuous if the re-render mechanism ever changes.
+    expect(h.navigate).toHaveBeenCalledTimes(1);
   });
 
   async function driveToEnrollFamily() {
