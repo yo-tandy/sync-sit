@@ -10,15 +10,31 @@
  */
 
 /**
- * Capitalize the first letter of each whitespace-separated word.
- * e.g. "yoav yaari" → "Yoav Yaari"
+ * Capitalize the first letter of each word, where words are separated by
+ * whitespace OR hyphens.
+ * e.g. "yoav yaari" → "Yoav Yaari", "jean-claude" → "Jean-Claude"
+ *
+ * The hyphen half matters: French compound given names are commonly
+ * hyphenated (Jean-Claude, Marie-Thérèse, Anne-Sophie), and splitting on
+ * spaces alone lowercases everything after the hyphen — "Jean-claude". Sit's
+ * original had this bug too; it only became visible when study's cards, which
+ * previously rendered the raw field, started going through here.
+ *
+ * Apostrophes count too ("n'golo" → "N'Golo"). That is safe HERE because this
+ * is a GIVEN-name helper: surnames never reach it, since `formatProviderName`
+ * upper-cases them wholesale. The French particle problem ("Jeanne d'Arc",
+ * "Marie de la Tour", where the particle keeps its lower case) is a surname
+ * problem, so it cannot arise on this path.
+ *
+ * The split keeps its separators (odd indices of a capturing split), so the
+ * original spacing and hyphenation survive verbatim.
  */
 export function capitalize(str?: string): string {
   if (!str) return '';
   return str
-    .split(' ')
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
-    .join(' ');
+    .split(/([\s\-']+)/)
+    .map((part, i) => (i % 2 === 1 ? part : part.charAt(0).toUpperCase() + part.slice(1).toLowerCase()))
+    .join('');
 }
 
 /**

@@ -9,8 +9,9 @@ export { capitalize, formatProviderName } from '@ejm/shared-ui';
 import { formatProviderName } from '@ejm/shared-ui';
 
 /**
- * Sit-era name for `formatProviderName`. Kept so the four existing call sites
- * read unchanged; new code should use `formatProviderName` directly.
+ * Sit-era name for `formatProviderName`. Kept so sit's six existing call sites
+ * (across four files) read unchanged; new code should use `formatProviderName`
+ * directly.
  */
 export const formatBabysitterName = formatProviderName;
 

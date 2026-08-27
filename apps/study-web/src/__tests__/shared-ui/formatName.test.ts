@@ -32,8 +32,33 @@ describe('formatProviderName', () => {
     expect(formatProviderName('', '')).toBe('');
   });
 
-  it('capitalizes each word of a compound given name', () => {
+  it('capitalizes across BOTH separators of a compound given name', () => {
+    // The hyphen case is the one that regressed: study's cards used to render
+    // firstName verbatim, so routing them through a space-only capitalize
+    // would have turned Jean-Claude into "Jean-claude". Hyphenated given
+    // names are common in French, which is the convention this whole change
+    // is meant to apply.
     expect(formatProviderName('jean claude', 'dubois')).toBe('Jean Claude DUBOIS');
+    expect(formatProviderName('jean-claude', 'dubois')).toBe('Jean-Claude DUBOIS');
+    expect(formatProviderName('Jean-Claude', 'Dubois')).toBe('Jean-Claude DUBOIS');
+    expect(formatProviderName('marie-thérèse', 'roy')).toBe('Marie-Thérèse ROY');
+    expect(formatProviderName('anne-marie claire', 'roy')).toBe('Anne-Marie Claire ROY');
+  });
+
+  it('capitalizes after an apostrophe too — this only ever sees GIVEN names', () => {
+    // Safe here because surnames never reach capitalize: formatProviderName
+    // upper-cases them wholesale, so the French particle problem
+    // ("Jeanne d'Arc") is structurally out of reach on this path.
+    expect(capitalize("n'golo")).toBe("N'Golo");
+    expect(formatProviderName("n'golo", 'kante')).toBe("N'Golo KANTE");
+  });
+
+  it('preserves the original spacing and hyphenation verbatim', () => {
+    // The capturing split keeps separators, so a double space or a spaced
+    // hyphen survives rather than being normalized into something the user
+    // did not type.
+    expect(capitalize('jean  claude')).toBe('Jean  Claude');
+    expect(capitalize('jean - claude')).toBe('Jean - Claude');
   });
 
   it('capitalize leaves an empty or missing string alone', () => {
