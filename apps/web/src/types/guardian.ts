@@ -127,6 +127,7 @@ export interface GovernedSitAppointment {
   startTime: string | null;
   endTime: string | null;
   offeredRate: number | null;
+  lateCancellation: boolean;
   message: string | null;
   additionalInfo: string | null;
   cancellationReason: string | null;

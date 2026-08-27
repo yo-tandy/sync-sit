@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { doc, updateDoc, serverTimestamp, collection, query, where, getDocs } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
+import { hasStarted, isLateCancellationClient, humanizeNoticeWindow } from '@/utils/cancellationPolicy';
 import { db, functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { isBabysitterProfileComplete } from '@ejm/sit-core';
@@ -381,6 +382,27 @@ export function BabysitterDashboard() {
       <Dialog open={!!cancelTarget} onClose={() => { setCancelTarget(null); setCancelReason(''); }}>
         <h3 className="mb-2 text-lg font-semibold">{t('appointment.cancelTitle')}</h3>
         <p className="mb-4 text-sm text-gray-500">{t('appointment.cancelDesc')}</p>
+        {(() => {
+          // Cancel-time disclosure (issue #237): the flag is symmetric --
+          // whoever cancels late is recorded -- so the sitter gets the same
+          // pre-submit warning the family gets.
+          const target = [...pending, ...confirmed].find((a) => a.appointmentId === cancelTarget);
+          const lateWarn =
+            target?.status === 'confirmed' &&
+            target.type === 'one_time' &&
+            typeof target.date === 'string' &&
+            typeof target.startTime === 'string' &&
+            (target.cancellationNoticeHours ?? 0) > 0 &&
+            !hasStarted(target.date, target.startTime) &&
+            isLateCancellationClient(target.date, target.startTime, target.cancellationNoticeHours ?? 0);
+          return lateWarn ? (
+            <p className="mb-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
+              {t('appointment.lateCancelWarning', {
+                window: humanizeNoticeWindow(target?.cancellationNoticeHours ?? 0, t),
+              })}
+            </p>
+          ) : null;
+        })()}
         <Textarea
           label={t('appointment.cancelReason')}
           value={cancelReason}

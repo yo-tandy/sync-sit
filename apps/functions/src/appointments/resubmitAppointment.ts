@@ -1,4 +1,5 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { clampNoticeWindow } from '@ejm/shared-functions/schedule/lateCancellation.js';
 import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
@@ -105,6 +106,12 @@ export const resubmitAppointment = onCall(
       : data.additionalNotes.trim();
 
     // Use a batch to atomically create the new appointment AND mark the original
+    const sitterDoc = await db.collection('users').doc(original.babysitterUserId as string).get();
+    const resubmitNoticeHours = clampNoticeWindow(
+      (sitterDoc.data()?.profiles as { babysitter?: { cancellationNoticeHours?: number } } | undefined)
+        ?.babysitter?.cancellationNoticeHours,
+    );
+
     const newAppointmentRef = db.collection('appointments').doc();
     const batch = db.batch();
 
@@ -114,6 +121,11 @@ export const resubmitAppointment = onCall(
       familyId: original.familyId,
       familyName: original.familyName || '',
       familyPhotoUrl: familyPhotoUrl || null,
+      // Third create path (PR #248 review): a resubmission is a NEW ask, so
+      // it snapshots the sitter's CURRENT policy -- the same at-creation
+      // semantics as sendContactRequest/contactPublishedSearch, not a carry
+      // of the original's possibly-stale snapshot.
+      cancellationNoticeHours: resubmitNoticeHours,
       babysitterUserId: original.babysitterUserId,
       createdByUserId: uid,
       type: original.type,
@@ -151,8 +163,9 @@ export const resubmitAppointment = onCall(
     await batch.commit();
 
     // Notify babysitter
-    const babysitterDoc = await db.collection('users').doc(original.babysitterUserId).get();
-    const babysitterData = babysitterDoc.data();
+    // sitterDoc was read above for the notice-window snapshot -- reuse it
+    // (PR #248 round 2: this block used to re-read the identical doc).
+    const babysitterData = sitterDoc.data();
     const familyName = original.familyName || 'A family';
     const dateInfo = original.date
       ? `${original.date}${data.startTime || original.startTime ? `, ${data.startTime || original.startTime}` : ''}${data.endTime || original.endTime ? `–${data.endTime || original.endTime}` : ''}`

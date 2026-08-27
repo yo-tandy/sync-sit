@@ -91,6 +91,91 @@ describe('modifyAppointment', () => {
     });
   });
 
+  describe('inside-window modify guard (issue #237, study contract ported)', () => {
+    // "You cannot move what you could not cleanly cancel": even a same-day
+    // startTime move can escape the flag (24h window, start 23h away, move
+    // +14h -> clean cancel) -- the modify-then-cancel hole study closed in
+    // PR #244 round 2.
+    const soonDate = () => new Date(Date.now() + 20 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const farDate = () => new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+    it('blocks a startTime move on a confirmed appointment inside its window', async () => {
+      const apptId = await seedAppointment({
+        babysitterUserId: seed.babysitter1.uid,
+        familyId: seed.family1Id,
+        createdByUserId: seed.parent1.uid,
+        status: 'confirmed',
+        date: soonDate(),
+        startTime: '09:00',
+        endTime: '12:00',
+        cancellationNoticeHours: 48,
+      });
+      try {
+        await callFunction('modifyAppointment', { appointmentId: apptId, startTime: '22:00' }, parentToken);
+        throw new Error('should have thrown');
+      } catch (err) {
+        expect((err as { message?: string }).message).toContain('inside_notice_window');
+      }
+      const apt = (await getDb().collection('appointments').doc(apptId).get()).data()!;
+      expect(apt.startTime).toBe('09:00');
+    });
+
+    it('still allows message/additionalInfo edits inside the window', async () => {
+      const apptId = await seedAppointment({
+        babysitterUserId: seed.babysitter1.uid,
+        familyId: seed.family1Id,
+        createdByUserId: seed.parent1.uid,
+        status: 'confirmed',
+        date: soonDate(),
+        startTime: '09:00',
+        cancellationNoticeHours: 48,
+      });
+      await callFunction('modifyAppointment', { appointmentId: apptId, message: 'Door code is 4321' }, parentToken);
+      const apt = (await getDb().collection('appointments').doc(apptId).get()).data()!;
+      expect(apt.message).toBe('Door code is 4321');
+    });
+
+    it('allows a startTime move OUTSIDE the window, and with no policy', async () => {
+      const outside = await seedAppointment({
+        babysitterUserId: seed.babysitter1.uid,
+        familyId: seed.family1Id,
+        createdByUserId: seed.parent1.uid,
+        status: 'confirmed',
+        date: farDate(),
+        startTime: '09:00',
+        cancellationNoticeHours: 48,
+      });
+      await callFunction('modifyAppointment', { appointmentId: outside, startTime: '10:00' }, parentToken);
+      expect((await getDb().collection('appointments').doc(outside).get()).data()!.startTime).toBe('10:00');
+
+      const noPolicy = await seedAppointment({
+        babysitterUserId: seed.babysitter1.uid,
+        familyId: seed.family1Id,
+        createdByUserId: seed.parent1.uid,
+        status: 'confirmed',
+        date: soonDate(),
+        startTime: '09:00',
+        cancellationNoticeHours: 0,
+      });
+      await callFunction('modifyAppointment', { appointmentId: noPolicy, startTime: '10:00' }, parentToken);
+      expect((await getDb().collection('appointments').doc(noPolicy).get()).data()!.startTime).toBe('10:00');
+    });
+
+    it('does not guard a PENDING appointment inside the window (no claim to escape)', async () => {
+      const apptId = await seedAppointment({
+        babysitterUserId: seed.babysitter1.uid,
+        familyId: seed.family1Id,
+        createdByUserId: seed.parent1.uid,
+        status: 'pending',
+        date: soonDate(),
+        startTime: '09:00',
+        cancellationNoticeHours: 48,
+      });
+      await callFunction('modifyAppointment', { appointmentId: apptId, startTime: '10:00' }, parentToken);
+      expect((await getDb().collection('appointments').doc(apptId).get()).data()!.startTime).toBe('10:00');
+    });
+  });
+
   describe('errors', () => {
     it('rejects unauthenticated calls', async () => {
       await expect(

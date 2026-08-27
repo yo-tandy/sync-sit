@@ -328,6 +328,16 @@ export default {
     notAvailableDesc: "I can't babysit during holidays",
     holidayNotes: 'Holiday notes',
     holidayNotesPlaceholder: 'Any notes about your holiday availability...',
+    cancellationPolicy: {
+      title: 'Cancellation policy',
+      help: 'How much notice you ask families for when cancelling a confirmed babysitting. Late cancellations are allowed but recorded.',
+      none: 'No policy',
+      hours24: '24 hours',
+      hours48: '48 hours',
+      week1: '1 week',
+      save: 'Save policy',
+      saved: 'Cancellation policy saved',
+    },
     saveSchedule: 'Save Schedule',
     availabilityByDate: 'Availability by Date',
     dateOverrideDesc: 'Override your regular schedule for specific dates.',
@@ -407,6 +417,8 @@ export default {
 
   // Search
   search: {
+    cancellationNotice: 'Asks for {{window}} cancellation notice',
+    window: { week: '1 week' },
     findBabysitter: 'Find a Babysitter',
     whatType: 'What type of babysitting?',
     chooseType: 'Choose the type of babysitting you need.',
@@ -1085,6 +1097,9 @@ export default {
     additionalInfoLabel: 'Additional info',
     declinedByYou: 'You declined this request.',
     withdrawnBySitter: 'The babysitter withdrew this request.',
+    cancelledLateBadge: 'Cancelled late',
+    lateCancelWarning: 'This cancellation is inside the {{window}} notice window and will be recorded.',
+    modifyInsideWindow: 'This appointment is inside the cancellation notice window, so its time can no longer be changed. You can still cancel it (recorded as late) or message the babysitter.',
     resubmit: 'Resubmit',
     resubmitTitle: 'Resubmit Request',
     resubmitDesc: 'Edit the details and add a note explaining the changes. The babysitter will be notified.',

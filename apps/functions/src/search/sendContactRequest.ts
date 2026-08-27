@@ -1,4 +1,5 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { clampNoticeWindow } from '@ejm/shared-functions/schedule/lateCancellation.js';
 import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
@@ -105,6 +106,15 @@ export const sendContactRequest = onCall(
       createdByUserId: uid,
       type: data.searchType,
       status: 'pending',
+      // Notice-window snapshot at request time (issue #237, study's V2
+      // feature 7 ported): immutable for this appointment, so a later
+      // profile edit cannot retro-classify a cancel.
+      // clampNoticeWindow: legacy pre-rules values are grandfathered by the
+      // diff-gate, so the snapshot normalizes to the preset set (round down).
+      cancellationNoticeHours: clampNoticeWindow(
+        (babysitterSnap.data()?.profiles as { babysitter?: { cancellationNoticeHours?: number } } | undefined)
+          ?.babysitter?.cancellationNoticeHours,
+      ),
       date: data.date || null,
       startTime: data.startTime || null,
       endTime: data.endTime || null,

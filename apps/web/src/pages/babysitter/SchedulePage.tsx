@@ -1,12 +1,17 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useBlocker } from 'react-router';
 import { useTranslation } from 'react-i18next';
+import { doc, updateDoc } from 'firebase/firestore';
+import { db } from '@/config/firebase';
+import { useAuthStore } from '@/stores/authStore';
+import { getBabysitterProfile } from '@ejm/sit-core';
+import { CANCELLATION_NOTICE_PRESETS } from '@ejm/shared-core';
 import { useSchedule } from '@/hooks/useSchedule';
 import { useHolidays } from '@/hooks/useHolidays';
 import { WeeklyTimeline } from '@/components/schedule/WeeklyTimeline';
 import { DayEditor } from '@/components/schedule/DayEditor';
 import { OverrideList } from '@/components/schedule/OverrideList';
-import { Button, Card, Dialog, TopNav, Textarea, Spinner, useToast } from '@/components/ui';
+import { Button, Card, Dialog, TopNav, Textarea, Spinner, Select, useToast } from '@/components/ui';
 import { ChevronRightIcon } from '@/components/ui/Icons';
 import { DAYS_OF_WEEK, createEmptySlots } from '@ejm/sit-core';
 import type { DayOfWeek, HolidayMode, HolidayPeriod } from '@ejm/sit-core';
@@ -120,6 +125,46 @@ export function SchedulePage() {
   const [editingDay, setEditingDay] = useState<DayOfWeek | null>(null);
   const [saving, setSaving] = useState(false);
   const toast = useToast();
+  // Cancellation policy (issue #237, study's V2 feature 7 ported): a preset
+  // notice window in hours, saved as its own dot-path -- placement and preset
+  // set mirror study's SchedulePage exactly.
+  const { userDoc, firebaseUser, refreshUserDoc } = useAuthStore();
+  const [noticeHours, setNoticeHours] = useState(0);
+  const [policySaving, setPolicySaving] = useState(false);
+  const [policyError, setPolicyError] = useState<string | null>(null);
+  const policySeeded = useRef(false);
+  // Saved value the dirty-guard compares against (PR #248 review round 1:
+  // the policy dropdown was outside the useBlocker/beforeunload snapshot, so
+  // an unsaved choice was silently lost on navigation).
+  const [savedNoticeHours, setSavedNoticeHours] = useState(0);
+  useEffect(() => {
+    if (!userDoc || policySeeded.current) return;
+    policySeeded.current = true;
+    const saved = getBabysitterProfile(userDoc)?.cancellationNoticeHours ?? 0;
+    setSavedNoticeHours(saved);
+    setNoticeHours(saved);
+  }, [userDoc]);
+
+  const handleSavePolicy = async (): Promise<boolean> => {
+    if (!firebaseUser) return false;
+    setPolicySaving(true);
+    setPolicyError(null);
+    try {
+      await updateDoc(doc(db, 'users', firebaseUser.uid), {
+        'profiles.babysitter.cancellationNoticeHours': noticeHours,
+      });
+      await refreshUserDoc();
+      setSavedNoticeHours(noticeHours);
+      toast(t('schedule.cancellationPolicy.saved'));
+      return true;
+    } catch {
+      setPolicyError(t('common.error'));
+      return false;
+    } finally {
+      setPolicySaving(false);
+    }
+  };
+
   const [initialized, setInitialized] = useState(false);
   const [dirty, setDirty] = useState(false);
   const savedSnapshot = useRef<string>('');
@@ -143,8 +188,8 @@ export function SchedulePage() {
       holidaySchedules: localHolidaySchedules,
       holidayNotes: localHolidayNotes,
     });
-    setDirty(current !== savedSnapshot.current);
-  }, [localWeekly, localHolidayMode, localHolidaySchedules, localHolidayNotes, initialized]);
+    setDirty(current !== savedSnapshot.current || noticeHours !== savedNoticeHours);
+  }, [localWeekly, localHolidayMode, localHolidaySchedules, localHolidayNotes, noticeHours, savedNoticeHours, initialized]);
 
   // Block navigation when there are unsaved changes
   const blocker = useBlocker(dirty);
@@ -189,7 +234,10 @@ export function SchedulePage() {
         holidaySchedules: localHolidaySchedules,
         holidayNotes: localHolidayNotes,
       });
-      setDirty(false);
+      // Saving the SCHEDULE must not clear the guard for an unsaved POLICY
+      // choice (PR #248 round 2: a blind setDirty(false) here discarded the
+      // policy silently -- the exact loss the guard exists to prevent).
+      setDirty(noticeHours !== savedNoticeHours);
       toast(t('schedule.scheduleSaved'));
     } finally {
       setSaving(false);
@@ -308,6 +356,33 @@ export function SchedulePage() {
 
         <hr className="my-6 border-gray-200" />
 
+        {/* ─── Cancellation policy (issue #237; study twin) ─── */}
+        <h3 className="mb-1 text-base font-bold text-gray-900">
+          {t('schedule.cancellationPolicy.title')}
+        </h3>
+        <p className="mb-4 text-xs text-gray-500">{t('schedule.cancellationPolicy.help')}</p>
+        <Select
+          aria-label={t('schedule.cancellationPolicy.title')}
+          value={String(noticeHours)}
+          onChange={(e) => setNoticeHours(Number(e.target.value))}
+          options={CANCELLATION_NOTICE_PRESETS.map((h) => ({
+            value: String(h),
+            label: t(
+              h === 0
+                ? 'schedule.cancellationPolicy.none'
+                : h === 168
+                  ? 'schedule.cancellationPolicy.week1'
+                  : `schedule.cancellationPolicy.hours${h}`,
+            ),
+          }))}
+        />
+        {policyError && <p className="mb-4 text-sm text-brand-600">{policyError}</p>}
+        <Button type="button" onClick={handleSavePolicy} disabled={policySaving} className="mt-4 mb-6">
+          {policySaving ? t('common.saving') : t('schedule.cancellationPolicy.save')}
+        </Button>
+
+        <hr className="my-6 border-gray-200" />
+
         {/* ─── Section 2: Availability by Date ─── */}
         <h3 className="mb-1 text-base font-bold text-gray-900">{t('schedule.availabilityByDate')}</h3>
         <p className="mb-4 text-xs text-gray-500">
@@ -329,9 +404,17 @@ export function SchedulePage() {
               type="button"
               onClick={async () => {
                 await handleSave();
+                // "Save and leave" must save EVERYTHING unsaved -- leaving
+                // with a dirty policy would silently discard it (PR #248
+                // round 2, same loss as the sibling-button bug). Stay on the
+                // page if the policy save fails so the error is visible.
+                if (noticeHours !== savedNoticeHours && !(await handleSavePolicy())) {
+                  blocker.reset();
+                  return;
+                }
                 blocker.proceed();
               }}
-              disabled={saving}
+              disabled={saving || policySaving}
             >
               {saving ? t('common.saving') : t('schedule.saveAndLeave')}
             </Button>

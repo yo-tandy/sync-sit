@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { doc, getDoc, collection, getDocs, addDoc, onSnapshot, query, where } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
+import { hasStarted, isLateCancellationClient, humanizeNoticeWindow } from '@/utils/cancellationPolicy';
 import { getContact } from '@ejm/shared-core';
 import { db, functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
@@ -143,8 +144,15 @@ export function FamilyDashboard() {
       });
       setEditTarget(null);
     } catch (err: unknown) {
+      // inside_notice_window (issue #237): the time move is blocked because
+      // the appointment is already inside the sitter's notice window --
+      // surface the policy copy, not the raw error code.
       const message = err instanceof Error ? err.message : 'Failed to modify';
-      alert(message);
+      alert(
+        message.includes('inside_notice_window')
+          ? t('appointment.modifyInsideWindow')
+          : message,
+      );
     } finally {
       setEditing(false);
     }
@@ -564,10 +572,30 @@ export function FamilyDashboard() {
       <Dialog open={!!cancelTarget} onClose={() => { setCancelTarget(null); setCancelReason(''); }}>
         {(() => {
           const isCancellingPending = pending.some((a) => a.appointmentId === cancelTarget);
+          // Cancel-time disclosure (issue #237, PR #248 round 2): warn when
+          // this cancel would be recorded as late, BEFORE it is submitted --
+          // study's cancel dialogs do the same. Approximate; the server flag
+          // is authoritative and never flags an already-started appointment.
+          const target = [...pending, ...confirmed].find((a) => a.appointmentId === cancelTarget);
+          const lateWarn =
+            !isCancellingPending &&
+            target?.type === 'one_time' &&
+            typeof target.date === 'string' &&
+            typeof target.startTime === 'string' &&
+            (target.cancellationNoticeHours ?? 0) > 0 &&
+            !hasStarted(target.date, target.startTime) &&
+            isLateCancellationClient(target.date, target.startTime, target.cancellationNoticeHours ?? 0);
           return (
             <>
               <h3 className="mb-2 text-lg font-semibold">{isCancellingPending ? t('appointment.cancelRequestTitle') : t('appointment.cancelTitle')}</h3>
               <p className="mb-4 text-sm text-gray-500">{isCancellingPending ? t('appointment.cancelRequestDesc') : t('appointment.cancelDesc')}</p>
+              {lateWarn && (
+                <p className="mb-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
+                  {t('appointment.lateCancelWarning', {
+                    window: humanizeNoticeWindow(target?.cancellationNoticeHours ?? 0, t),
+                  })}
+                </p>
+              )}
               <Textarea
                 label={t('appointment.cancelReason')}
                 value={cancelReason}

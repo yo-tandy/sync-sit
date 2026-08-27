@@ -1,18 +1,6 @@
-import { parisWallTimeToUtc } from '@ejm/shared-functions/scheduled/parisTime.js';
-
 /**
- * True when cancelling now, a commitment starting at `date`+`startTime`
- * (Paris wall clock) falls inside the `noticeHours` cancellation window.
- * Strict `<`: cancelling exactly at the cutoff is on-time. A cancel after the
- * start has trivially violated any window. noticeHours <= 0 → never late.
+ * Re-export shim: the predicate moved to shared-functions when sit adopted
+ * the notice-window system (issue #237) — one lateness definition for both
+ * apps, and this file keeps study's five call sites byte-unchanged.
  */
-export function isLateCancellation(
-  date: string,
-  startTime: string,
-  noticeHours: number,
-  now: Date,
-): boolean {
-  if (noticeHours <= 0) return false;
-  const start = parisWallTimeToUtc(date, startTime);
-  return start.getTime() < now.getTime() + noticeHours * 60 * 60 * 1000;
-}
+export { isLateCancellation } from '@ejm/shared-functions/schedule/lateCancellation.js';

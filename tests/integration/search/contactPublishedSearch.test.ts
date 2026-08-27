@@ -173,6 +173,13 @@ describe('contactPublishedSearch (sit)', () => {
 
   it('mints the appointment in the sendContactRequest shape, with the address WITHHELD', async () => {
     const id = await publish();
+    // Give the responding sitter a real policy so the snapshot pin below can
+    // fail for the right reason (PR #248 review round 1: asserting 0 also
+    // matched absence/mis-sourcing -- 0 is the `?? 0` fallback).
+    await getDb()
+      .collection('users')
+      .doc(seed.babysitter1.uid)
+      .update({ 'profiles.babysitter.cancellationNoticeHours': 48 });
     const res = await callFunction<{ appointmentId: string }>(
       'contactPublishedSearch',
       { publishedSearchId: id, message: 'I am free that evening' },
@@ -188,6 +195,15 @@ describe('contactPublishedSearch (sit)', () => {
     expect(apt.createdByUserId).toBe(seed.babysitter1.uid);
     expect(apt.babysitterUserId).toBe(seed.babysitter1.uid);
     expect(apt.searchId).toBeNull();
+    // Notice-window snapshot at create (issue #237), from the RESPONDING
+    // sitter's profile -- 48 seeded above, so absence or mis-sourcing fails.
+    expect(apt.cancellationNoticeHours).toBe(48);
+    // beforeEach clears appointments, not users -- restore the profile so
+    // later tests in this file see the seed default again.
+    await getDb()
+      .collection('users')
+      .doc(seed.babysitter1.uid)
+      .update({ 'profiles.babysitter.cancellationNoticeHours': 0 });
 
     // The standard shape the family dashboard and respondToRequest expect.
     expect(apt.appointmentId).toBe(res.appointmentId);

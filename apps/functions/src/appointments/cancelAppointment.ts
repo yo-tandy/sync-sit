@@ -1,4 +1,6 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { isLateCancellation } from '@ejm/shared-functions/schedule/lateCancellation.js';
+import { parisWallTimeToUtc } from '@ejm/shared-functions/scheduled/parisTime.js';
 import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
@@ -74,7 +76,41 @@ export const cancelAppointment = onCall(
     const now = new Date();
 
     // Update appointment
+    // Allow-but-flag (issue #237, study's V2 feature 7 ported): a CONFIRMED
+    // one_time cancel inside the snapshotted notice window is recorded as
+    // late, whoever cancels -- the flag is a record, not a punishment.
+    // Recurring appointments are never flagged: study's recurring lateness
+    // lives per-instance and sit has no instance model, so a whole-series
+    // cancel has no single start time to be late against.
+    //
+    // Deviation from study (PR #248 round 2): the flag applies only BEFORE
+    // the start. Study never reaches a stale cancel -- its
+    // markSessionsCompleted cron flips past confirmed sessions to completed,
+    // making them uncancellable -- but sit has no completed sweep, so months
+    // -old confirmed appointments stay cancellable as cleanup. Without this
+    // gate, isLateCancellation (start < now + window) is trivially true for
+    // every past appointment and cleanup would mint permanent user-visible
+    // "Cancelled late" badges. The cost: a true no-show cancelled minutes
+    // after start goes unflagged -- acceptable until sit grows a completed
+    // state that can tell the two apart.
+    const hasStart = typeof apt.date === 'string' && typeof apt.startTime === 'string';
+    const started =
+      hasStart &&
+      parisWallTimeToUtc(apt.date as string, apt.startTime as string).getTime() < now.getTime();
+    const late =
+      apt.status === 'confirmed' &&
+      apt.type === 'one_time' &&
+      hasStart &&
+      !started &&
+      isLateCancellation(
+        apt.date as string,
+        apt.startTime as string,
+        (apt.cancellationNoticeHours as number | undefined) ?? 0,
+        now,
+      );
+
     await aptRef.update({
+      ...(late ? { lateCancellation: true } : {}),
       status: 'cancelled',
       statusReason: cancelledBy,
       cancelledFromStatus: apt.status,

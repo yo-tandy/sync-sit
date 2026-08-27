@@ -219,6 +219,11 @@ export function RequestDetailPage() {
               {familyName}
               {isReturningFamily && <span className="ml-1.5 text-blue-500" title="Returning family">⭐</span>}
             </h2>
+            {apt.status === 'cancelled' && apt.lateCancellation === true && (
+              // The allow-but-flag read path (issue #237): the policy promises
+              // "recorded", so the record must be visible to the wronged party.
+              <Badge variant="amber">{t('appointment.cancelledLateBadge')}</Badge>
+            )}
             <Badge
               variant={apt.status === 'pending' ? 'amber' : apt.status === 'confirmed' ? 'green' : apt.status === 'cancelled' ? 'gray' : 'gray'}
             >

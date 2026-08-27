@@ -364,6 +364,7 @@ export interface AppointmentSeed {
   address?: string | null;
   latLng?: { lat: number; lng: number } | null;
   familyPhotoUrl?: string | null;
+  cancellationNoticeHours?: number;
   /** issue #207 PR3: 'babysitter' flips the respond roles. */
   initiatedBy?: 'family' | 'babysitter';
   publishedSearchId?: string;
@@ -407,6 +408,7 @@ export async function seedAppointment(data: AppointmentSeed): Promise<string> {
     address: data.address === undefined ? '15 Rue de Passy, 75016 Paris' : data.address,
     latLng: data.latLng === undefined ? { lat: 48.8566, lng: 2.2769 } : data.latLng,
     ...(data.familyPhotoUrl !== undefined ? { familyPhotoUrl: data.familyPhotoUrl } : {}),
+    ...(data.cancellationNoticeHours !== undefined ? { cancellationNoticeHours: data.cancellationNoticeHours } : {}),
     createdAt: now,
     updatedAt: now,
   };

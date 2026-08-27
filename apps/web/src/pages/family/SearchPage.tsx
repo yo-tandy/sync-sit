@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { humanizeNoticeWindow } from '@/utils/cancellationPolicy';
 import { Link, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { doc, getDoc, collection, getDocs, query, where, limit, onSnapshot, deleteDoc } from 'firebase/firestore';
@@ -689,6 +690,13 @@ export function SearchPage() {
                       )}
                       {(b.referenceCount ?? 0) > 0 && (
                         <p className="text-xs text-gray-500"><span className="text-green-600">✓</span> {b.referenceCount} endorsement{(b.referenceCount ?? 0) > 1 ? 's' : ''}</p>
+                      )}
+                      {(b.cancellationNoticeHours ?? 0) > 0 && (
+                        <p className="text-xs text-gray-500">
+                          {t('search.cancellationNotice', {
+                            window: humanizeNoticeWindow(b.cancellationNoticeHours ?? 0, t),
+                          })}
+                        </p>
                       )}
                       {b.aboutMe && (
                         <p className={`mt-1 text-xs text-gray-600 ${isExpanded ? '' : 'line-clamp-2'}`}>"{b.aboutMe}"</p>

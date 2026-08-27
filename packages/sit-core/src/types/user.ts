@@ -20,6 +20,8 @@ export interface BabysitterSummary {
   kidAgeRange?: { min: number; max: number };
   maxKids?: number;
   hourlyRate?: number;
+  // Notice-window disclosure (issue #237); 0/absent = no policy.
+  cancellationNoticeHours?: number;
   contactEmail?: string;
   contactPhone?: string;
   whatsapp?: string;

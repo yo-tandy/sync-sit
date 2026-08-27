@@ -2143,6 +2143,103 @@ describe('users update — tutor numeric bounds (issue #123 hardening)', () => {
 // territory (Admin SDK bypasses rules).
 // ---------------------------------------------------------------------------
 
+describe('users update — cancellation notice window bounds (issue #237)', () => {
+  // The window is user-editable by design on BOTH profiles (enforcement
+  // reads per-booking snapshots), but constrained to the PRESET SET
+  // ([0, 24, 48, 168], diff-gated for legacy values) because it classifies
+  // OTHER users' cancellations as late.
+  const sitterUid = 'notice-sitter-1';
+  const tutorUid = 'notice-tutor-1';
+
+  beforeEach(async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.firestore().doc(`users/${sitterUid}`).set({
+        uid: sitterUid,
+        email: 'notice-sitter@ejm-test.org',
+        status: 'active',
+        profiles: { babysitter: { ejemEmail: 'notice-sitter@ejm-test.org', approvedFamilies: [] } },
+      });
+      await ctx.firestore().doc(`users/${tutorUid}`).set({
+        uid: tutorUid,
+        email: 'notice-tutor@ejm-test.org',
+        status: 'active',
+        profiles: { tutor: { enrollmentComplete: true, ejemEmail: 'notice-tutor@ejm-test.org', paddingMin: 15 } },
+      });
+    });
+  });
+
+  it('babysitter owner may set a preset window', async () => {
+    const db = testEnv.authenticatedContext(sitterUid).firestore();
+    await assertSucceeds(
+      updateDoc(doc(db, 'users', sitterUid), { 'profiles.babysitter.cancellationNoticeHours': 48 }),
+    );
+  });
+
+  it('rejects an absurd babysitter window (would flag every family cancellation)', async () => {
+    const db = testEnv.authenticatedContext(sitterUid).firestore();
+    await assertFails(
+      updateDoc(doc(db, 'users', sitterUid), { 'profiles.babysitter.cancellationNoticeHours': 1000000000 }),
+    );
+  });
+
+  it('rejects a negative babysitter window', async () => {
+    const db = testEnv.authenticatedContext(sitterUid).firestore();
+    await assertFails(
+      updateDoc(doc(db, 'users', sitterUid), { 'profiles.babysitter.cancellationNoticeHours': -1 }),
+    );
+  });
+
+  it('rejects a non-integer babysitter window', async () => {
+    const db = testEnv.authenticatedContext(sitterUid).firestore();
+    await assertFails(
+      updateDoc(doc(db, 'users', sitterUid), { 'profiles.babysitter.cancellationNoticeHours': '48' }),
+    );
+  });
+
+  it('tutor window is bounded by the same rule', async () => {
+    const db = testEnv.authenticatedContext(tutorUid).firestore();
+    await assertSucceeds(
+      updateDoc(doc(db, 'users', tutorUid), { 'profiles.tutor.cancellationNoticeHours': 168 }),
+    );
+    await assertFails(
+      updateDoc(doc(db, 'users', tutorUid), { 'profiles.tutor.cancellationNoticeHours': 169 }),
+    );
+  });
+
+  it('rejects an in-range NON-PRESET window (the preset set is the contract)', async () => {
+    // modifyAppointment's no-guard reasoning needs every nonzero window
+    // >= 24h; 12 is inside [0,168] but outside the preset set.
+    const db = testEnv.authenticatedContext(sitterUid).firestore();
+    await assertFails(
+      updateDoc(doc(db, 'users', sitterUid), { 'profiles.babysitter.cancellationNoticeHours': 12 }),
+    );
+  });
+
+  it('a legacy out-of-set value does not lock the owner out of unrelated profile edits', async () => {
+    // Seed a bad stored value with rules disabled (as legacy data would be),
+    // then edit an unrelated profile field WITHOUT touching the window:
+    // unchanged values always pass (photoUrlValid's idiom).
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.firestore().doc(`users/${sitterUid}`).update({
+        'profiles.babysitter.cancellationNoticeHours': 999,
+      });
+    });
+    const db = testEnv.authenticatedContext(sitterUid).firestore();
+    await assertSucceeds(
+      updateDoc(doc(db, 'users', sitterUid), { 'profiles.babysitter.languages': ['French'] }),
+    );
+    // But CHANGING it to another out-of-set value still fails -- the gate
+    // is value equality, so only leaving the legacy value untouched passes
+    // (re-writing the identical value is indistinguishable from untouched).
+    await assertFails(
+      updateDoc(doc(db, 'users', sitterUid), {
+        'profiles.babysitter.cancellationNoticeHours': 998,
+        'profiles.babysitter.languages': ['French', 'English'],
+      }),
+    );
+  });
+});
+
 describe('users update — root identity set-once (issue #144)', () => {
   async function seed(id: string, data: Record<string, unknown>) {
     await testEnv.withSecurityRulesDisabled(async (ctx) => {

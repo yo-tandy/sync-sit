@@ -1,4 +1,5 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { clampNoticeWindow } from '@ejm/shared-functions/schedule/lateCancellation.js';
 import { db } from '@ejm/shared-functions/config/firebase.js';
 import { getCorsOrigin } from '@ejm/shared-functions/config/cors.js';
 import { writeUserActivity } from '@ejm/shared-functions/admin/writeAuditLog.js';
@@ -332,7 +333,7 @@ export const bookSession = onCall(
         schoolWeeksOnly,
         location,
         paddingMinutes,
-        cancellationNoticeHours: tutor.cancellationNoticeHours ?? 0,
+        cancellationNoticeHours: clampNoticeWindow(tutor.cancellationNoticeHours),
         status: 'pending',
         createdAt: now,
         updatedAt: now,
@@ -436,7 +437,7 @@ export const bookSession = onCall(
         sessionLengthMinutes,
         location,
         paddingMinutes,
-        cancellationNoticeHours: tutor.cancellationNoticeHours ?? 0,
+        cancellationNoticeHours: clampNoticeWindow(tutor.cancellationNoticeHours),
         status: 'pending',
         createdAt: now,
         updatedAt: now,
