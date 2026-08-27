@@ -227,11 +227,17 @@ pattern already shipped for sit↔study (`docs/shared-modules-roadmap.md` Plan D
 and the frictionless switch in PRs #145/#146). A brand-new student gets the
 full enrollment flow from `@ejm/shared-ui/enrollment/*`.
 
-**App switcher.** The existing two-way switch (`appHandoffCodes` +
-`packages/shared-functions/src/handoff/appHandoff.ts`) becomes three-way. This
-is the one piece of existing cross-app code that needs generalizing rather than
-extending — the handoff currently assumes a single sibling target. Budget a PR
-for it (§13, PR2).
+**App switcher.** The existing two-way switch becomes three-way — but the
+backend needs nothing. `packages/shared-functions/src/handoff/appHandoff.ts` is
+already app-agnostic: `createAppHandoffCode` stores `{ uid, tokenHash,
+createdAt, expiresAt }` with no target app anywhere, and `redeemAppHandoffCode`
+takes `{ code }` and returns a custom sign-in token that any origin can redeem.
+The two-way assumption lives in the **frontend switcher UI** (a button that
+goes to "the other app", which now has to choose between two) and in the
+**Firebase Auth authorized-domains list**, which needs a `sync-do-app` entry —
+a console setting, and a day-one blocker for PR2's "empty shell that builds and
+deploys". CORS is fine: `getCorsOrigin()` returns `true`, so there is no
+allowlist to extend.
 
 ### 3.4 What sync-do deliberately does *not* touch
 
@@ -292,6 +298,19 @@ export interface TaskDoc {
 
   // ── Lifecycle
   status: TaskStatus;
+  /**
+   * OFFERS EVER — a monotonic lifetime counter, never decremented, by
+   * withdraw or by decline. This is the reading that actually bounds §6.4's
+   * transaction: a live count would let a churning student submit/withdraw
+   * indefinitely, and decrementing on decline would let a family that
+   * declines offers as they arrive permanently close their own task (25
+   * declines, `offerCount == 25`, every later student refused on a task
+   * showing zero live offers — the opposite of the intent).
+   *
+   * Consequence: §9.1's "live offer count" badge is NOT this field. The
+   * family's offer list is already fetched to render the page; the badge
+   * counts that.
+   */
   offerCount: number;                // denormalized; maintained transactionally
   assignedUserId: string | null;
   assignedOfferId: string | null;
@@ -812,16 +831,71 @@ match /taskOffers/{offerId} {
 }
 ```
 
-Three things worth flagging for the rules review:
+**`profiles.doer.enrollmentComplete` must be pinned server-owned — this is a
+third rules change, not just the two blocks above.** The board read rule makes
+that field load-bearing, and §11.1 makes it the offering gate too. Walk the
+existing `users` update rule (`firestore.rules:288-302`) with a `doer` slot
+added and it is *client-writable*: the `affectedKeys().hasAny([...])` deny-list
+is top-level only and does not include `profiles`; `profileRolesUnchanged()`
+(`firestore.rules:44-49`) pins only the *set* of role-slot keys, so editing a
+field inside an existing slot passes; and `babysitterIdentityUnchanged()` /
+`tutorIdentityUnchanged()` never look at `profiles.doer`. So once
+`doEnrollDoer` creates the slot, the owner can call
+`updateDoc(users/{uid}, { 'profiles.doer.enrollmentComplete': true })` straight
+from the client SDK, abandon enrollment, and read **every open task on the
+board** — free-text descriptions, photos, `areaLabel`, `familyName`: exactly
+the PII surface §11.2 governs.
+
+The repo already treats this as a known hazard and draws the line in the right
+place (`firestore.rules:78-82`): tutor `enrollmentComplete` is pinned
+server-owned, while babysitter `enrollmentComplete` is *intentionally*
+client-writable. **sync-do is in the tutor case, not the babysitter case**,
+because the field gates a read rule rather than only search visibility. So:
+
+```
+function doerField(u, k, dflt) {
+  return u.get('profiles', {}).get('doer', {}).get(k, dflt);
+}
+function doerIdentityUnchanged() {
+  // enrollmentComplete is server-owned: doEnrollDoer sets it, nothing else.
+  return doerField(request.resource.data, 'enrollmentComplete', false)
+      == doerField(resource.data, 'enrollmentComplete', false);
+}
+```
+
+added to the `users` update chain alongside its two siblings. §12 lists this as
+a shared-surface change, §13 puts it in PR3's scope, and §14 pins it.
+
+Three further things worth flagging for the rules review:
 
 - **`doTasks` delete is `false`,** unlike `publishedSearches` where withdraw is
   a rules-gated client delete. A task with offers attached cannot be deleted
   without also expiring those offers, so withdrawal is a callable
   (`doCancelTask`) that does both.
 - **The `pending_guardian` read split** is what keeps an unapproved offer
-  invisible to the hiring family. It is provable for list queries because the
-  status equality is in the query filter — the family's list is
-  `where('taskId','==',t).where('status','in',['pending','accepted','declined'])`.
+  invisible to the hiring family — and making it *provable* constrains the
+  query, not just the rule. Two constraints, both easy to get wrong:
+  - `where('status','in',[…])` does not satisfy a `!=` condition in the rule.
+    Firestore's analyzer matching `in` against `!=` is not something to rely
+    on; the family's list issues a **per-status equality** query
+    (`where('status','==','pending')`, and separately for `accepted` /
+    `declined`).
+  - The same disjunct's other half, `isFamilyMember(resource.data.familyId)`,
+    needs a matching **query constraint on `familyId`** — a list query is
+    evaluated against its potential result set, so a rule that reads
+    `resource.data.familyId` is unprovable unless the query filters on it.
+
+  So the family's offer query is
+  `where('familyId','==',f).where('taskId','==',t).where('status','==',s)`,
+  ordered by `createdAt` — with the matching index in §7.3. The
+  `(taskId, status, createdAt)` index alone would not serve it.
+- **The guardian disjunct reads through `.get()` defaults.** `OfferDoc.guardian`
+  is `{…} | null` (§4.2), so `resource.data.guardian.familyId` relies on `&&`
+  short-circuiting for safety. That works as ordered, but it is a footgun for
+  whoever reorders the disjuncts later, and it diverges from the house style
+  the references rule uses for exactly this hazard
+  (`firestore.rules:369-371`). Write it
+  `resource.data.get('guardian', {}).get('familyId', null)` — it costs nothing.
 - **Expiry is not rules-enforced**, identically to `publishedSearches` and for
   the same reason (unprovable against a client-supplied bound). An
   expired-but-unswept task leaks nothing its readers could not already see.
@@ -838,10 +912,17 @@ doTasks:    (familyId ASC, createdAt DESC)                  — "my tasks"
 doTasks:    (assignedUserId ASC, status ASC, updatedAt DESC)— "my assignments"
 doTasks:    (status ASC, expiresAt ASC)                     — the sweep, expiry half
 doTasks:    (status ASC, doerMarkedDoneAt ASC)              — the sweep, auto-complete half
-taskOffers: (taskId ASC, status ASC, createdAt ASC)         — offers on a task
+taskOffers: (familyId ASC, taskId ASC, status ASC, createdAt ASC)
+                                                            — offers on a task, family side
+taskOffers: (taskId ASC, status ASC, createdAt ASC)         — offers on a task, admin side
 taskOffers: (doerUserId ASC, status ASC, createdAt DESC)    — "my offers"
 taskOffers: (guardian.familyId ASC, status ASC)             — guardian queue
 ```
+
+The family-side offer index leads with `familyId` because the read rule's
+family disjunct is only provable when the query filters on it (§7.2) — the
+`taskId`-first index cannot serve that query, and is kept only for admin, which
+reads under `isAdmin()` and needs no `familyId` constraint.
 
 **The board filters do not all get indexes, and that is a decision, not an
 omission.** §9.2 offers six filters (category, sub-category, timing, area,
@@ -865,10 +946,50 @@ index Firestore creates automatically, but the sweep queries
 
 ### 7.4 Storage
 
-Task photos live at `doTasks/{taskId}/{photoId}` in the existing bucket, with
-`storage.rules` mirroring the `doTasks` read rule. Note the deployment gotcha
-from the README: **storage rules are not auto-deployed** by the merge workflow
-and must be shipped manually.
+Task photos live at `doTasks/{taskId}/{photoId}` in the existing bucket.
+
+**Storage rules cannot mirror the `doTasks` read rule, and no wording makes
+them.** Firebase Storage rules have no way to read Firestore — there is no
+`get()`/`exists()` against Firestore documents in the Storage rules language —
+so `profiles.doer.enrollmentComplete`, `status == 'active'` and
+`isFamilyMember(…)` are all unreachable from a Storage rule. This repo already
+hit the wall and took the only available exit (`storage.rules`):
+
+```
+// Verification documents — write-only for authenticated users
+// Reads go through getVerificationDocument cloud function (checks family ownership)
+match /verification-documents/{familyId}/{allPaths=**} {
+  allow read: if false;
+  allow write: if request.auth != null;
+}
+```
+
+Three options, named here so PR10 does not have to invent one under deadline:
+
+1. **`allow read, write: if false` + a `doGetTaskPhotoUrl` callable** that
+   asserts the §7.2 audience and returns a short-lived signed URL. The
+   `getVerificationDocument` precedent, and the only option that actually
+   reproduces the read rule.
+2. **`allow read: if request.auth != null`**, accepting that task photos are
+   readable by *every authenticated platform user* — including sit-only and
+   study-only accounts the §7.2 rule deliberately keeps off the board — and
+   documenting it as an explicit §11.2 exception.
+3. Unguessable object IDs as a capability, which is option 2 with extra steps.
+
+**Recommendation: option 1.** §11.2's whole premise is that a photo may show a
+garden, a front door or a flat interior; option 2 hands that to a wider
+audience than the board itself has.
+
+**Writes need bounding too, and this is bigger than it looks.** §11.2 requires
+photos to be EXIF-stripped server-side, which means the client must *not* be
+able to write final objects under `doTasks/{taskId}/` at all — otherwise a
+geotagged original lands straight past the stripper. That implies a quarantine
+prefix the client writes to, plus a storage-trigger or callable that strips and
+republishes. PR10's one-line "EXIF stripping on upload" bullet understates it;
+budget the trigger.
+
+Deployment gotcha from the README: **storage rules are not auto-deployed** by
+the merge workflow and must be shipped manually.
 
 ---
 
@@ -886,7 +1007,7 @@ All in `apps/functions/src/do/**`, codebase `default`, region `europe-west1`,
 | `doCancelTask` | Auth (owner family) | Task → `cancelled`, all live offers → `expired`, notify |
 | `doSubmitOffer` | Auth (active doer) | Enforces the ceiling, resolves the guardian gate, writes `pending` or `pending_guardian` |
 | `doUpdateOffer` | Auth (offering student) | Price/message/helper while `pending` |
-| `doWithdrawOffer` | Auth (offering student) | → `withdrawn`, decrements `offerCount` |
+| `doWithdrawOffer` | Auth (offering student) | → `withdrawn`. Does **not** touch `offerCount` — it counts offers ever (§4.1) |
 | `doDecideOfferAsGuardian` | Auth (supervising parent) | `pending_guardian` → `pending` or `withdrawn` |
 | `doAcceptOffer` | Auth (owner family) | The §6.4 transaction |
 | `doDeclineOffer` | Auth (owner family) | Single offer → `declined` |
@@ -921,14 +1042,38 @@ chrome, enrollment steps, forms and theme.
   tools/transport → optional suggested budget → review + publish. The review
   step warns that the description and photos are visible to every enrolled
   student, mirroring the `publishedSearches` publish-dialog warning.
-- **My tasks** — open (with a live offer count badge), assigned, completed,
+- **My tasks** — open (with a live offer count badge, computed from the offer
+  list the page already fetches — *not* from `offerCount`, which counts offers
+  ever), assigned, completed,
   cancelled.
 - **Task detail with offers** — the offer list is the heart of the product:
   student name, photo, bio, price, basis, message, declared helper, and their
-  **existing platform endorsements** (decision 12 — the endorsements that
-  already exist in `packages/study-core/src/types/endorsement.ts`, surfaced
-  here; deliberately **no completed-task count** and no sync-do-specific
-  rating). Accept / decline per offer.
+  **existing platform endorsements** (decision 12; deliberately **no
+  completed-task count** and no sync-do-specific rating).
+
+  Three things that decision carries, which are easy to miss:
+
+  - **There is no doer endorsement shape, and there will not be one.**
+    `TutorEndorsementDoc` has `appSource: 'study'` as a literal and keys on
+    `tutorUserId` (`packages/study-core/src/types/endorsement.ts:16-19`);
+    sit's equivalent is `ReferenceDoc`, keyed on `babysitterUserId`. Surfacing
+    "existing endorsements" therefore means **two queries against the shared
+    `references` collection** — `where('tutorUserId','==',uid)` and
+    `where('babysitterUserId','==',uid)`. No rules change is needed: the
+    `references` read rule allows `status in ['approved','published']` to any
+    authenticated caller (`firestore.rules:376-385`), so both are provable.
+  - **A doer-only student has none.** That is the modal case for a new sync-do
+    enrollee — precisely the moment a family most needs signal. With ratings
+    and task counts both ruled out, the offer card for a new student shows
+    price, message and bio and nothing else. Stated here as a consequence of
+    decision 12 rather than discovered at PR7; §16 item 1 is where it gets
+    revisited if families struggle.
+  - **A sit reference vouches for babysitting; a study endorsement vouches for
+    tutoring.** Neither is evidence about wall-mounting or a dump run. The
+    card should label them by their origin app rather than presenting them as
+    generic reputation — a small product judgement, made here deliberately.
+
+  Accept / decline per offer.
 - **Assigned task** — contact details revealed, considerations rendered as a
   shared checklist, mark-done, cancel.
 
@@ -1124,6 +1269,18 @@ What sync-do **adds** to shared packages (small, deliberate):
 - `shared-core/types/user.ts` — `profiles.doer`, plus `fcmTokensDo` and
   `dismissedPwaInstallBannerDo` alongside their existing `*Study` siblings on
   `User`.
+- `firestore.rules` — not a package, but a shared surface all the same: the
+  `users` **update** rule gains `doerIdentityUnchanged()` and a `doerField()`
+  helper (§7.2). Without it `profiles.doer.enrollmentComplete` is
+  client-writable and the board read gate is bypassable.
+- `storage.rules` — the `doTasks/{taskId}/**` block (§7.4), shipped manually
+  since the merge workflow does not deploy it.
+
+One dependency edge §3.2 does not otherwise imply: surfacing existing
+endorsements on the offer card (§9.1) means `do-web` reading both study's
+`TutorEndorsementDoc` and sit's `ReferenceDoc` shapes, so `do-core` or
+`do-web` takes a dependency on `@ejm/study-core` and `@ejm/sit-core`. Small,
+but it contradicts a flat reading of "everything else lives in `do-core`".
 
 Everything else lives in `do-core`. The roadmap's Tier-1 extractions (Plans A–C)
 would each save sync-do a duplicated tree; where one is still `[ ]` at build
@@ -1153,7 +1310,7 @@ the repo has been using.
 |---|---|---|
 | **1** | `packages/do-core`: types (task, offer, doer profile), the seven categories with sub-categories, the considerations content EN+FR, validation bounds, unit tests. No UI, no schema. | 8 |
 | **2** | `apps/do-web` scaffold + third hosting target + three-way app switcher + brand-mark consolidation into `shared-ui`. Empty shell that builds and deploys. | 8 |
-| **3** | Firestore: `doTasks` + `taskOffers` rules and indexes, plus rules tests under the stripped-copy mutation-verify harness. | 6 |
+| **3** | Firestore: `doTasks` + `taskOffers` rules and indexes, **plus the `users` update-rule amendment** (`doerIdentityUnchanged()`, §7.2) — without it the board gate is client-bypassable. Rules tests under the stripped-copy mutation-verify harness. | 8 |
 | **4** | `profiles.doer` + `doEnrollDoer` / `doUpdateDoerProfile`, abbreviated cross-app enrollment, enrollment UI. | 8 |
 | **5** | Task callables: `doPostTask`, `doUpdateTask`, `doCancelTask`, the sweep. Integration tests. | 8 |
 | **6** | Offer callables: submit / update / withdraw / guardian-decide / accept / decline, incl. the §6.4 transaction and its concurrency test. | 10 |
@@ -1178,8 +1335,13 @@ see §12 for why the scaffold, not the family UI, is where they are needed.
 - **Rules** (`tests/rules/`) — mutation-verified in an isolated stripped-copy
   env per `feedback_rules_mutation_verify`. Cases: a non-doer cannot read the
   board; a blocked doer cannot; the hiring family cannot read a
-  `pending_guardian` offer; the supervising family can; list-query provability
-  for every rule disjunct; no client write path exists on either collection.
+  `pending_guardian` offer; the supervising family can; no client write path
+  exists on either collection; **a doer cannot client-write
+  `profiles.doer.enrollmentComplete`** (the §7.2 escalation — the one case
+  that lives on `users`, not on the two new collections); and list-query
+  provability for every rule disjunct, specifically including the family's
+  offer query in the exact `(familyId, taskId, status)` shape §7.2 requires —
+  a `status in […]` form does not satisfy the rule and must fail this test.
 - **Integration** (`tests/integration/`, emulator lane 2 so the dev stack keeps
   running) — post→offer→accept end-to-end; **concurrent accepts of two
   different offers, exactly one wins**; guardian approve and deny; ceiling
@@ -1280,10 +1442,11 @@ and rejects with `failed-precondition` when it falls short; the board also hides
 tasks the student cannot take, so the rejection is a backstop rather than the
 first time they hear about it.
 
-**Proposed values.** Three tiers — 13 as the platform baseline (matching the
-governed-provider age already assumed by the parental-governance work), 15 for
-tasks carrying real responsibility, 16 for power tools, heavy loads, transport,
-and anything involving prescriptions or other people's money.
+**Proposed values.** Four tiers — 13 as the platform baseline (matching the
+governed-provider age already assumed by the parental-governance work), 14 for
+ordinary indoor and manual work, 15 for tasks carrying real responsibility for
+a person, an animal or someone else's money, and 16 for power tools, heavy
+loads, transport, and prescriptions.
 
 | Age | Sub-categories |
 |---|---|
