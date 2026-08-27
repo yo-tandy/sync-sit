@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { act, screen, fireEvent, render, cleanup } from '@testing-library/react';
 
 // Issue #148: the verify call must carry the sit app hint — it selects the
@@ -18,14 +18,19 @@ const h = vi.hoisted(() => ({
   // add-profile tests set a firebaseUser. Mirrors the study-web mock shape.
   auth: { firebaseUser: null as unknown, userDoc: null as unknown, loading: false },
   refreshUserDoc: () => Promise.resolve(),
-  // A successful sign-in settles the store with the freshly-written parent
-  // doc (models the real store); the navigate gate reads it via getState.
-  // Failure paths override per-test and leave the doc null, so the gate
+  // A successful sign-in settles the store with the signed-in user AND the
+  // freshly-written parent doc (models the real store); the navigate gate
+  // reads them via getState. Failure paths override per-test: a rejection
+  // settles nothing, a doc blip settles only firebaseUser — so the gate
   // fails and the account-ready login state renders (issue #262).
   signIn: vi.fn(() => {
+    h.auth.firebaseUser = { uid: 'new' };
     h.auth.userDoc = { profiles: { parent: {} } };
     return Promise.resolve();
   }),
+  // Listeners registered through the mocked store subscription — tests fire
+  // them to model the auth snapshot landing after sign-in.
+  subscribers: [] as Array<(s: unknown) => void>,
   // The family data the stub StepFamilyInfo submits — tests override the
   // address to pin the conditional postcode/city spread.
   familyData: {} as Record<string, unknown>,
@@ -58,10 +63,11 @@ vi.mock('@/stores/authStore', () => {
   // Mirrors the study-web mock: the hook reads the mutable h.auth (so tests
   // drive signed-out vs add-profile), while the getState/subscribe statics
   // model the post-sign-in store. Whether it reads as settled depends on
-  // h.signIn having landed the parent doc — so the guard-predicate gate
-  // (issue #262) genuinely passes on a successful sign-in and fails on the
-  // failure paths. subscribe stays a no-op: the failure-path wait resolves
-  // only via its 5s timeout backstop.
+  // h.signIn having landed firebaseUser + the parent doc — so the
+  // guard-predicate gate (issue #262) genuinely passes on a successful
+  // sign-in and fails on the failure paths. subscribe RECORDS listeners
+  // (h.subscribers) so tests can model the snapshot landing late; unfired
+  // listeners leave the wait to its timeout backstop.
   const useAuthStore = (() => ({
     firebaseUser: h.auth.firebaseUser,
     userDoc: h.auth.userDoc,
@@ -74,10 +80,16 @@ vi.mock('@/stores/authStore', () => {
   };
   useAuthStore.getState = () => ({
     loading: false,
-    firebaseUser: h.auth.userDoc ? { uid: 'new' } : null,
+    firebaseUser: h.auth.firebaseUser,
     userDoc: h.auth.userDoc,
   });
-  useAuthStore.subscribe = () => () => {};
+  useAuthStore.subscribe = (fn: (s: unknown) => void) => {
+    h.subscribers.push(fn);
+    return () => {
+      const i = h.subscribers.indexOf(fn);
+      if (i >= 0) h.subscribers.splice(i, 1);
+    };
+  };
   return { useAuthStore, markNextSignInFresh: () => {} };
 });
 vi.mock('@ejm/sit-core', () => ({
@@ -142,6 +154,7 @@ beforeEach(() => {
   h.auth = { firebaseUser: null, userDoc: null, loading: false };
   h.refreshUserDoc = vi.fn(() => Promise.resolve());
   h.signIn.mockClear();
+  h.subscribers.length = 0;
   h.familyData = {
     familyName: 'Durand',
     firstName: 'Claire',
@@ -149,6 +162,12 @@ beforeEach(() => {
     pets: 'Cat',
     note: 'Ring twice',
   };
+});
+
+afterEach(() => {
+  // Safety: a fake-timer test that fails mid-way must not leak fake timers
+  // into the next test.
+  vi.useRealTimers();
 });
 
 function renderFlow() {
@@ -313,21 +332,68 @@ describe('ParentEnrollment post-enrollment session gate (issue #262)', () => {
     expect(h.navigate).toHaveBeenCalledWith('/login');
   });
 
-  it('a user-doc read blip after a SUCCESSFUL sign-in also shows the login state (guard would spin, then strand)', async () => {
-    // firebaseUser present but userDoc never settling satisfied the OLD wait
-    // never (it hung the wizard on a spinner forever — the second failure
-    // mode of issue #262). The new wait times out at 5s and the gate fails,
+  it('a user-doc read blip after a SUCCESSFUL sign-in also shows the login state, and the CTA recovers a late session', async () => {
+    // firebaseUser present but userDoc never settling: the OLD wait hung the
+    // wizard on its spinner forever — the second failure mode of issue #262.
+    // The new wait times out (SESSION_SETTLE_TIMEOUT_MS) and the gate fails,
     // so the parent gets the confirm-plus-login state instead of a hang.
-    h.signIn.mockImplementationOnce(() => Promise.resolve()); // does NOT settle userDoc
+    // Signed in, but the doc read blips:
+    h.signIn.mockImplementationOnce(() => {
+      h.auth.firebaseUser = { uid: 'new' };
+      return Promise.resolve();
+    });
     renderFlow();
     await reachFamilyStep();
+    fireEvent.click(screen.getByText('family-fill'));
 
+    // Fake timers from here so the 5s backstop is advanced, not slept. All
+    // in-between progress is microtasks (mock promises), which act() flushes.
+    vi.useFakeTimers();
+    fireEvent.click(screen.getByText('family-submit'));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5001); // SESSION_SETTLE_TIMEOUT_MS + 1
+    });
+    vi.useRealTimers();
+
+    expect(await screen.findByText('Your family account is ready')).toBeInTheDocument();
+    expect(h.navigate).not.toHaveBeenCalledWith('/family');
+
+    // The session was merely slow: the doc lands after the backstop fired.
+    // The CTA re-checks the predicate at click time and routes straight to
+    // the portal — no needless re-login.
+    h.auth.userDoc = { profiles: { parent: {} } };
+    fireEvent.click(screen.getByText('Log in'));
+    expect(h.navigate).toHaveBeenCalledWith('/family');
+    expect(h.navigate).not.toHaveBeenCalledWith('/login');
+  });
+
+  it('resolves through the store SUBSCRIPTION when the doc settles after sign-in (production path, no backstop stall)', async () => {
+    // Production ordering: signInWithEmailAndPassword resolves before the
+    // user-doc snapshot lands, so the wait's immediate check fails and
+    // resolution comes from the subscribed listener every time. A broken
+    // subscription would ship as "every signup stalls 5s, then shows the
+    // login state" — this pin is the only one that exercises that path.
+    h.signIn.mockImplementationOnce(() => {
+      h.auth.firebaseUser = { uid: 'new' };
+      return Promise.resolve(); // doc NOT settled yet
+    });
+    renderFlow();
+    await reachFamilyStep();
     fireEvent.click(screen.getByText('family-fill'));
     fireEvent.click(screen.getByText('family-submit'));
 
-    expect(
-      await screen.findByText('Your family account is ready', {}, { timeout: 7000 }),
-    ).toBeInTheDocument();
+    // The wait registered its listener (immediate check failed).
+    await vi.waitFor(() => expect(h.subscribers.length).toBe(1));
     expect(h.navigate).not.toHaveBeenCalledWith('/family');
-  }, 10000);
+
+    // The snapshot lands: settle the store and notify the listener.
+    h.auth.userDoc = { profiles: { parent: {} } };
+    await act(async () => {
+      h.subscribers[0]({ loading: false, firebaseUser: h.auth.firebaseUser, userDoc: h.auth.userDoc });
+    });
+
+    await vi.waitFor(() => expect(h.navigate).toHaveBeenCalledWith('/family'));
+    // The resolved wait unsubscribed itself (the unsub/clearTimeout handshake).
+    expect(h.subscribers.length).toBe(0);
+  });
 });

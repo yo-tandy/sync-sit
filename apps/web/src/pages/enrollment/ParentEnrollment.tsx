@@ -47,6 +47,12 @@ export interface ParentFormData {
   consentChildrenAccepted: boolean;
 }
 
+// How long the post-signup wait gives the auth store to settle into a state
+// that passes AuthGuard's predicate before falling back to the in-wizard
+// account-ready login state (issue #262). The stranding tests derive their
+// wait budgets from this value.
+const SESSION_SETTLE_TIMEOUT_MS = 5000;
+
 const INITIAL_DATA: ParentFormData = {
   email: '',
   verificationCode: '',
@@ -197,9 +203,9 @@ export function ParentEnrollment() {
           // Resolve when the guard's predicate would pass (signed in AND the
           // parent role resolved from the doc); the timeout backstops a store
           // that never settles or a doc read that keeps blipping.
-          const timer = setTimeout(() => { unsub(); resolve(); }, 5000);
-          const check = (state: { loading: boolean; firebaseUser: unknown; userDoc: unknown }) => {
-            if (!state.loading && state.firebaseUser && getSitRole(state.userDoc as never) === 'parent') {
+          const timer = setTimeout(() => { unsub(); resolve(); }, SESSION_SETTLE_TIMEOUT_MS);
+          const check = (state: ReturnType<typeof useAuthStore.getState>) => {
+            if (!state.loading && state.firebaseUser && getSitRole(state.userDoc) === 'parent') {
               clearTimeout(timer);
               unsub();
               resolve();
@@ -212,8 +218,8 @@ export function ParentEnrollment() {
         // Swallowed by design — see above.
       }
 
-      const settled = useAuthStore.getState() as { firebaseUser: unknown; userDoc: unknown };
-      if (settled.firebaseUser && getSitRole(settled.userDoc as never) === 'parent') {
+      const settled = useAuthStore.getState();
+      if (settled.firebaseUser && getSitRole(settled.userDoc) === 'parent') {
         navigate('/family');
       } else {
         setSignedOutSuccess(true);
@@ -280,7 +286,17 @@ export function ParentEnrollment() {
         </p>
         <button
           type="button"
-          onClick={() => navigate('/login')}
+          onClick={() => {
+            // A merely-slow session may have settled after the backstop
+            // fired: re-check the guard's predicate at click time and route
+            // straight to the portal instead of a needless re-login.
+            const now = useAuthStore.getState();
+            if (now.firebaseUser && getSitRole(now.userDoc) === 'parent') {
+              navigate('/family');
+            } else {
+              navigate('/login');
+            }
+          }}
           className="flex h-12 w-full max-w-xs items-center justify-center rounded-xl bg-brand-600 text-base font-semibold text-white transition-colors hover:bg-brand-600/90"
         >
           {t('enrollment.readyLoginCta')}
