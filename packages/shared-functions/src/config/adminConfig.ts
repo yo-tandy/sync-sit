@@ -112,7 +112,17 @@ export async function getConfigValue(key: AdminConfigKey): Promise<number> {
     : def.default;
 }
 
-/** Test seam: drop the cache so the next read hits Firestore. */
-export function __resetAdminConfigCacheForTests(): void {
+/**
+ * Drop the cache so the next read hits Firestore. updateAdminConfig calls
+ * this after writing: the updating INSTANCE serves the new value
+ * immediately (and, in the single-process emulator, so does everything --
+ * which is what makes the effect pins deterministic). Other prod instances
+ * still converge within one TTL; that propagation window is the accepted
+ * design.
+ */
+export function invalidateAdminConfigCache(): void {
   cache = null;
 }
+
+/** Test seam alias. */
+export const __resetAdminConfigCacheForTests = invalidateAdminConfigCache;

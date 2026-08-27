@@ -6,6 +6,7 @@ import { writeAuditLog } from './writeAuditLog.js';
 import {
   ADMIN_CONFIG_DEFS,
   ADMIN_CONFIG_DOC,
+  invalidateAdminConfigCache,
   type AdminConfigKey,
 } from '../config/adminConfig.js';
 
@@ -68,6 +69,7 @@ export const updateAdminConfig = onCall(
     const ref = db.doc(ADMIN_CONFIG_DOC);
     const before = (await ref.get()).data() ?? {};
     await ref.set(clean, { merge: true });
+    invalidateAdminConfigCache();
 
     await writeAuditLog({
       adminUserId: request.auth.uid,
