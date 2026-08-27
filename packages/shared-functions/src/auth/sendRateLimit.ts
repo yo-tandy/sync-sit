@@ -95,7 +95,7 @@ export function nextSendCounter(
  */
 async function registerSend(
   docId: string,
-  kind: 'address' | 'bypass',
+  kind: 'address' | 'bypass' | 'lookup',
   cap: number,
   windowMs: number,
 ): Promise<boolean> {
@@ -119,4 +119,20 @@ export function registerVerificationSend(email: string): Promise<boolean> {
 /** Per-uid hourly budget for the authed own-email bypass. */
 export function registerBypassSend(uid: string): Promise<boolean> {
   return registerSend(uid, 'bypass', BYPASS_SEND_CAP, BYPASS_SEND_WINDOW_MS);
+}
+
+/**
+ * Per-uid hourly budget for tutor lookups (issue #235, PR #254 review):
+ * the lookup surface is deliberately reachable by unverified families, so
+ * the throttle -- not a verification gate -- is what keeps one account
+ * from driving repeated full scans of the tutor collection. 60/h covers
+ * any real typing session (the client debounces to at most ~2 calls/s of
+ * sustained typing, and a name needs a handful); the doc id is prefixed
+ * so a uid's lookup budget never collides with its bypass-send budget.
+ */
+export const LOOKUP_CAP = 60;
+export const LOOKUP_WINDOW_MS = 60 * 60 * 1000;
+
+export function registerLookup(uid: string): Promise<boolean> {
+  return registerSend(`lookup:${uid}`, 'lookup', LOOKUP_CAP, LOOKUP_WINDOW_MS);
 }

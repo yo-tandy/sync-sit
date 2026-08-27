@@ -695,6 +695,7 @@ export default {
       noResults: 'No tutors found',
       connected: 'Connected',
       errorVerify: 'Your family needs to be verified before you can contact tutors.',
+      rateLimited: 'Too many searches for now — please try again in a little while.',
     },
     search: {
       subjectLabel: 'Subject',

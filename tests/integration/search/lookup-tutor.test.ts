@@ -242,6 +242,35 @@ describe('lookupTutor', () => {
     expect(JSON.stringify(entries)).not.toContain('yael');
   });
 
+  it('throttles per uid: a spent window rejects, a stale window admits (PR #254 round 2)', async () => {
+    const db = getDb();
+    const counterRef = db.collection('verificationSendCounters').doc(`lookup:${seed.parent1.uid}`);
+    // Spent live window -> resource-exhausted, and the counter is NOT bumped.
+    await counterRef.set({ key: `lookup:${seed.parent1.uid}`, kind: 'lookup', count: 60, windowStart: new Date() });
+    try {
+      try {
+        await callFunction('lookupTutor', { query: 'yael' }, parentToken);
+        throw new Error('should have thrown');
+      } catch (err) {
+        expect((err as { code?: string }).code).toBe('RESOURCE_EXHAUSTED');
+      }
+      expect((await counterRef.get()).data()!.count).toBe(60);
+
+      // Expired window -> admitted, counter restarts at 1.
+      await counterRef.set({
+        key: `lookup:${seed.parent1.uid}`, kind: 'lookup', count: 60,
+        windowStart: new Date(Date.now() - 2 * 60 * 60 * 1000),
+      });
+      const res = await callFunction<{ results: LookupResult[] }>(
+        'lookupTutor', { query: 'yael' }, parentToken,
+      );
+      expect(res.results.map((r) => r.uid)).toContain(seed.tutor2.uid);
+      expect((await counterRef.get()).data()!.count).toBe(1);
+    } finally {
+      await counterRef.delete();
+    }
+  });
+
   it('caps results at 10', async () => {
     const db = getDb();
     const created: string[] = [];

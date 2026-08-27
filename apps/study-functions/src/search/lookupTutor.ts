@@ -2,6 +2,7 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { db } from '@ejm/shared-functions/config/firebase.js';
 import { getCorsOrigin } from '@ejm/shared-functions/config/cors.js';
 import { writeUserActivity } from '@ejm/shared-functions/admin/writeAuditLog.js';
+import { registerLookup } from '@ejm/shared-functions/auth/sendRateLimit.js';
 import { getEjemEmail, getParentProfile } from '@ejm/shared-core';
 import { getTutorView } from '@ejm/study-core';
 import type { TutorLookupResult } from '@ejm/study-core';
@@ -50,6 +51,14 @@ export const lookupTutor = onCall(
       throw new HttpsError('permission-denied', 'Only parents can look up tutors');
     }
     const familyId = caller.familyId;
+
+    // Throttle, not a gate (PR #254 round 2): the surface is deliberately
+    // reachable by unverified families, so the per-uid budget is what makes
+    // scraping expensive rather than merely visible-in-audit. Same counter
+    // shape as the email-send limits (exact under concurrency).
+    if (!(await registerLookup(uid))) {
+      throw new HttpsError('resource-exhausted', 'lookup_rate_limited');
+    }
 
     const q = parsed.data.query.toLowerCase();
     const results: TutorLookupResult[] = [];

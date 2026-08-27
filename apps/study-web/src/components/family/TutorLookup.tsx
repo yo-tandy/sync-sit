@@ -25,7 +25,7 @@ export function TutorLookup() {
   const [searching, setSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
   const [requestTarget, setRequestTarget] = useState<TutorLookupResult | null>(null);
-  const [lookupError, setLookupError] = useState(false);
+  const [lookupError, setLookupError] = useState<'generic' | 'rateLimited' | false>(false);
   // Monotonic sequence guarding against BOTH the pre-debounce cancel and a
   // stale in-flight response overwriting a newer query (PR #254 round 1).
   const seq = useRef(0);
@@ -61,13 +61,19 @@ export function TutorLookup() {
         setResults(res.data.results || []);
         setHasSearched(true);
         setLookupError(false);
-      } catch {
+      } catch (err: unknown) {
         if (seq.current !== mySeq) return;
         // A failed lookup must not leave the PREVIOUS query's rows standing
-        // as though they answered this one (PR #254 round 1).
+        // as though they answered this one (PR #254 round 1). The per-uid
+        // throttle gets its own copy -- "something went wrong" would send
+        // a fast typer into retry loops that keep the window spent.
         setResults([]);
         setHasSearched(false);
-        setLookupError(true);
+        setLookupError(
+          (err as { code?: string })?.code === 'functions/resource-exhausted'
+            ? 'rateLimited'
+            : 'generic',
+        );
       } finally {
         if (seq.current === mySeq) setSearching(false);
       }
@@ -93,7 +99,9 @@ export function TutorLookup() {
         <p className="mt-2 text-xs text-gray-500">{t('family.lookup.noResults')}</p>
       )}
       {!searching && lookupError && (
-        <p className="mt-2 text-xs text-brand-600">{t('family.search.error')}</p>
+        <p className="mt-2 text-xs text-brand-600">
+          {t(lookupError === 'rateLimited' ? 'family.lookup.rateLimited' : 'family.search.error')}
+        </p>
       )}
       {results.length > 0 && (
         <div className="mt-3 space-y-2">

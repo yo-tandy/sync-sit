@@ -31,7 +31,6 @@ function tutor(overrides: Partial<TutorLookupResult> = {}): TutorLookupResult {
       { subject: 'math', levels: ['6e', '5e'] },
       { subject: 'english', levels: ['6e'] },
     ],
-    aboutMe: null,
     requestStatus: 'none',
     ...overrides,
   };
@@ -158,6 +157,42 @@ describe('TutorLookup', () => {
     await waitFor(() =>
       expect(screen.getByText(/needs to be verified/)).toBeInTheDocument(),
     );
+  });
+
+  it('discards a stale in-flight response that resolves AFTER a newer query (out-of-order)', async () => {
+    // The pre-debounce cancel path is pinned above; this is the other half
+    // of the seq guard (PR #254 round 2): call A ("yae") still in flight
+    // when call B ("yael x") fires and resolves first -- A resolving late
+    // must not overwrite B's rows.
+    let resolveA!: (v: unknown) => void;
+    const slowA = new Promise((r) => { resolveA = r; });
+    h.callable
+      .mockImplementationOnce(() => slowA)
+      .mockImplementationOnce(() =>
+        Promise.resolve({ data: { results: [tutor({ uid: 'b', firstName: 'Newer' })] } }),
+      );
+    renderWithProviders(<TutorLookup />);
+    const input = screen.getByRole('textbox');
+    fireEvent.change(input, { target: { value: 'yae' } });
+    await waitFor(() => expect(h.callable).toHaveBeenCalledTimes(1));
+    fireEvent.change(input, { target: { value: 'yael x' } });
+    await waitFor(() => expect(h.callable).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.getByText('Newer Cohen')).toBeInTheDocument());
+    // The stale response lands late -- and changes nothing.
+    resolveA({ data: { results: [tutor({ uid: 'a', firstName: 'Stale' })] } });
+    await new Promise((r) => setTimeout(r, 50));
+    expect(screen.queryByText('Stale Cohen')).not.toBeInTheDocument();
+    expect(screen.getByText('Newer Cohen')).toBeInTheDocument();
+  });
+
+  it('shows the dedicated throttle copy on resource-exhausted, not the generic error', async () => {
+    h.callable.mockRejectedValue({ code: 'functions/resource-exhausted' });
+    renderWithProviders(<TutorLookup />);
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'yael' } });
+    await waitFor(() =>
+      expect(screen.getByText(/Too many searches/)).toBeInTheDocument(),
+    );
+    expect(screen.queryByText('Something went wrong. Please try again.')).not.toBeInTheDocument();
   });
 
   it('surfaces the already-exists error copy instead of closing the dialog', async () => {

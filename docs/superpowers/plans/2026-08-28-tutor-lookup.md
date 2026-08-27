@@ -33,6 +33,17 @@
   subject to inherit) and posts through the ordinary
   `sendTutorContactRequest` flow.
 
-**Tests:** 13 integration pins (gates, match modes, status mapping incl.
-incoming, cap, no-contact-fields) + 6 component pins (debounce, rows,
-status rendering, chosen-subject payload, error copy).
+**Throttle (round 2):** per-uid lookup budget (60/h, `registerLookup` --
+the email-send counter shape, exact under concurrency, doc id prefixed
+`lookup:` to avoid colliding with the bypass budget). The surface is
+deliberately reachable by unverified families, so the throttle -- not a
+verification gate -- is what makes scraping expensive; the audit entry
+makes it visible. Dedicated client copy for resource-exhausted.
+
+**Tests:** 18 integration pins (gates incl. enrollmentComplete, match
+modes, status mapping incl. incoming/declined + latest-wins, cap,
+no-contact-fields, named unverified-family accepted-risk pin, audit entry,
+throttle spent/expired-window) + 12 component pins (debounce incl. the
+no-call and stuck-spinner transitions, out-of-order stale-response
+discard, rows, status rendering, chosen-subject payload, error copy per
+code incl. verification and throttle).
