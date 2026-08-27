@@ -88,12 +88,16 @@ export function TutorLookup() {
             const status = statusOf(r);
             return (
               <Card key={r.uid}>
-                <div className="flex items-center gap-3">
+                {/* flex-wrap + a real min-width on the name block: a wide
+                    status control (the incoming link) drops below the name
+                    instead of crushing it to "Lu..." -- min-w-0 alone would
+                    let the name shrink forever and the row would never wrap. */}
+                <div className="flex flex-wrap items-center gap-3">
                   <Avatar
                     initials={`${(r.firstName || '')[0] || ''}${(r.lastName || '')[0] || ''}`}
                     src={r.photoUrl || undefined}
                   />
-                  <div className="min-w-0 flex-1">
+                  <div className="min-w-[55%] flex-1">
                     <p className="truncate font-semibold text-gray-900">
                       {r.firstName} {r.lastName}
                     </p>
@@ -102,7 +106,7 @@ export function TutorLookup() {
                       {r.languages.length > 0 && <> · {r.languages.join(', ')}</>}
                     </p>
                   </div>
-                  <div className="shrink-0">
+                  <div className="ml-auto shrink-0">
                     {status === 'none' && (
                       <Button size="sm" variant="outline" onClick={() => setRequestTarget(r)}>
                         {t('family.search.card.request')}
