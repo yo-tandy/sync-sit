@@ -1,4 +1,5 @@
 import { onSchedule } from 'firebase-functions/v2/scheduler';
+import { FieldValue } from 'firebase-admin/firestore';
 import type { Firestore } from 'firebase-admin/firestore';
 import { db } from '../config/firebase.js';
 
@@ -12,6 +13,7 @@ export interface CleanupStats {
   verificationSendCountersDeleted: number;
   appointmentsDeleted: number;
   publishedSearchesDeleted: number;
+  appointmentNotesRedacted: number;
 }
 
 /**
@@ -30,6 +32,13 @@ export interface CleanupStats {
  * - Cancelled/rejected appointments: 30 days AND date > 7 days ago
  * - Published searches: immediate (past expiresAt — the server-computed
  *   min(publish + 7d, babysitting date) lifetime; issue #207)
+ * - Appointment notes (issue #238): redacted once the appointment leaves
+ *   every UI surface (PAST_VISIBILITY_DAYS = 7). The notes solicit door
+ *   codes and a child's allergies, and setAppointmentNote guarantees the
+ *   author an erasure path — but the remove affordance lives on cards the
+ *   dashboards stop rendering after 7 days, so past that point the system
+ *   erases for them. Confirmed recurring arrangements (no date) stay
+ *   visible, so their notes are never redacted here.
  */
 export async function runCleanupOldData(
   firestoreDb: Firestore,
@@ -47,6 +56,7 @@ export async function runCleanupOldData(
     verificationSendCountersDeleted: 0,
     appointmentsDeleted: 0,
     publishedSearchesDeleted: 0,
+    appointmentNotesRedacted: 0,
   };
 
   // 1. Delete old notifications (> 30 days)
@@ -207,6 +217,54 @@ export async function runCleanupOldData(
       stats.appointmentsDeleted = count;
       stats.totalDeleted += count;
       console.log(`Deleted ${count} old cancelled/rejected appointments`);
+    }
+  }
+
+  // 7b. Redact appointment notes once the appointment has left every UI
+  // surface (issue #238). Both dashboards bound their lists by
+  // PAST_VISIBILITY_DAYS = 7 (past confirmed by `date`, cancelled/rejected
+  // by `updatedAt`), and sit has no per-appointment route beyond them — so
+  // once a card ages out, the note's author can no longer reach the remove
+  // affordance that setAppointmentNote's erasure carve-out feeds. The cron
+  // erases for them: door codes and allergy details are operational data
+  // with no value past the engagement. One single-field range query per
+  // note field (docs missing the field never match), window filtering in
+  // memory; the doc itself is kept.
+  {
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const sevenDaysAgoStr = sevenDaysAgo.toISOString().split('T')[0];
+    const outOfReach = (data: FirebaseFirestore.DocumentData): boolean => {
+      if (data.status === 'confirmed') {
+        // Dateless (recurring) arrangements stay on the dashboard forever.
+        return typeof data.date === 'string' && data.date !== '' && data.date < sevenDaysAgoStr;
+      }
+      if (data.status === 'cancelled' || data.status === 'rejected') {
+        const updatedAt = data.updatedAt?.toDate?.() ?? null;
+        return updatedAt !== null && updatedAt < sevenDaysAgo;
+      }
+      return false; // pending cards are always rendered
+    };
+
+    for (const field of ['preAppointmentNote', 'postAppointmentNote'] as const) {
+      const noted = await firestoreDb
+        .collection('appointments')
+        .where(field, '>', '')
+        .limit(500)
+        .get();
+      if (noted.empty) continue;
+      const batch = firestoreDb.batch();
+      let count = 0;
+      for (const doc of noted.docs) {
+        if (outOfReach(doc.data())) {
+          batch.update(doc.ref, { [field]: FieldValue.delete() });
+          count++;
+        }
+      }
+      if (count > 0) {
+        await batch.commit();
+        stats.appointmentNotesRedacted += count;
+        console.log(`Redacted ${count} out-of-reach ${field} values`);
+      }
     }
   }
 

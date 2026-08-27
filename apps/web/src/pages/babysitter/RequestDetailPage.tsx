@@ -63,6 +63,7 @@ export function RequestDetailPage() {
   // pre-note is read-only. Non-optimistic save: the page holds a live
   // onSnapshot, which refreshes the note once the callable resolves.
   const [noteOpen, setNoteOpen] = useState(false);
+  const [noteRemoveOpen, setNoteRemoveOpen] = useState(false);
   const [noteSaving, setNoteSaving] = useState(false);
   const [noteError, setNoteError] = useState<string | null>(null);
 
@@ -175,15 +176,17 @@ export function RequestDetailPage() {
 
   // Erasure path (issue #255 carve-out): the callable lets the AUTHOR clear
   // their own note at any time — e.g. after the appointment is cancelled and
-  // the edit window has closed.
+  // the edit window has closed. Confirmation and errors go through the
+  // shared Dialog + notes.error copy like every other flow on this page.
   const removeNote = async () => {
     if (!appointmentId) return;
-    if (!window.confirm(t('request.notes.removeConfirm'))) return;
+    setNoteError(null);
     setNoteSaving(true);
     try {
       await callSetNote('');
+      setNoteRemoveOpen(false);
     } catch {
-      window.alert(t('request.notes.error'));
+      setNoteError(t('request.notes.error'));
     } finally {
       setNoteSaving(false);
     }
@@ -429,7 +432,7 @@ export function RequestDetailPage() {
               editKind="post"
               canEdit={canEditPost}
               onEdit={() => { setNoteError(null); setNoteOpen(true); }}
-              onRemove={noteSaving ? undefined : removeNote}
+              onRemove={() => { setNoteError(null); setNoteRemoveOpen(true); }}
               copy={{
                 fromFamily: t('request.notes.fromFamily'),
                 fromBabysitter: t('request.notes.fromBabysitter'),
@@ -478,6 +481,22 @@ export function RequestDetailPage() {
           </div>
         )}
       </div>
+
+      {/* Remove-note confirmation (erasure path) — shared Dialog, same error
+          copy as the save path. */}
+      <Dialog open={noteRemoveOpen} onClose={() => setNoteRemoveOpen(false)}>
+        <h3 className="mb-2 text-lg font-bold">{t('request.notes.removeTitle')}</h3>
+        <p className="mb-3 text-sm text-gray-600">{t('request.notes.removeDesc')}</p>
+        {noteError && <p className="mb-3 text-sm text-brand-600">{noteError}</p>}
+        <div className="flex gap-2">
+          <Button variant="outline" className="flex-1" disabled={noteSaving} onClick={removeNote}>
+            {t('request.notes.remove')}
+          </Button>
+          <Button variant="ghost" className="flex-1" disabled={noteSaving} onClick={() => setNoteRemoveOpen(false)}>
+            {t('common.cancel')}
+          </Button>
+        </div>
+      </Dialog>
 
       {/* Post-note dialog (issue #238) */}
       <AppointmentNoteDialog

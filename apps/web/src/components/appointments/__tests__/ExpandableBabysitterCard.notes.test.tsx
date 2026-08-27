@@ -221,47 +221,81 @@ describe('ExpandableBabysitterCard — appointment notes (pre)', () => {
     expect(screen.queryByText('familyDashboard.notes.add')).toBeNull();
   });
 
-  it('a closed window with an existing own note offers REMOVE, and it clears via the callable', async () => {
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
-    try {
-      render(
-        <ExpandableBabysitterCard
-          appointment={apt({ date: YESTERDAY, preAppointmentNote: 'Door code 1234B' })}
-          info={info}
-          variant="confirmed"
-        />,
-      );
-      expandCard();
-      expect(screen.queryByText('familyDashboard.notes.add')).toBeNull();
-      expect(screen.queryByText('familyDashboard.notes.edit')).toBeNull();
-      fireEvent.click(screen.getByText('familyDashboard.notes.remove'));
-      await waitFor(() =>
-        expect(h.callable).toHaveBeenCalledWith('setAppointmentNote', {
-          appointmentId: 'apt-1',
-          kind: 'pre',
-          text: '',
-        }),
-      );
-    } finally {
-      confirmSpy.mockRestore();
-    }
+  it('a closed window with an existing own note offers REMOVE, confirmed via the shared Dialog', async () => {
+    render(
+      <ExpandableBabysitterCard
+        appointment={apt({ date: YESTERDAY, preAppointmentNote: 'Door code 1234B' })}
+        info={info}
+        variant="confirmed"
+      />,
+    );
+    expandCard();
+    expect(screen.queryByText('familyDashboard.notes.add')).toBeNull();
+    expect(screen.queryByText('familyDashboard.notes.edit')).toBeNull();
+    // The affordance opens the confirm dialog; the dialog's own remove
+    // button (same label, rendered second) fires the clear.
+    fireEvent.click(screen.getByText('familyDashboard.notes.remove'));
+    expect(screen.getByText('familyDashboard.notes.removeTitle')).toBeTruthy();
+    const buttons = screen.getAllByText('familyDashboard.notes.remove');
+    fireEvent.click(buttons[buttons.length - 1]);
+    await waitFor(() =>
+      expect(h.callable).toHaveBeenCalledWith('setAppointmentNote', {
+        appointmentId: 'apt-1',
+        kind: 'pre',
+        text: '',
+      }),
+    );
+    // Non-optimistic close on success.
+    await waitFor(() =>
+      expect(screen.queryByText('familyDashboard.notes.removeTitle')).toBeNull(),
+    );
   });
 
-  it('declining the remove confirm sends nothing', () => {
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
-    try {
-      render(
-        <ExpandableBabysitterCard
-          appointment={apt({ date: YESTERDAY, preAppointmentNote: 'Door code 1234B' })}
-          info={info}
-          variant="confirmed"
-        />,
-      );
-      expandCard();
-      fireEvent.click(screen.getByText('familyDashboard.notes.remove'));
-      expect(h.callable).not.toHaveBeenCalled();
-    } finally {
-      confirmSpy.mockRestore();
-    }
+  it('cancelling the remove dialog sends nothing', () => {
+    render(
+      <ExpandableBabysitterCard
+        appointment={apt({ date: YESTERDAY, preAppointmentNote: 'Door code 1234B' })}
+        info={info}
+        variant="confirmed"
+      />,
+    );
+    expandCard();
+    fireEvent.click(screen.getByText('familyDashboard.notes.remove'));
+    fireEvent.click(screen.getByText('common.cancel'));
+    expect(h.callable).not.toHaveBeenCalled();
+    expect(screen.queryByText('familyDashboard.notes.removeTitle')).toBeNull();
+  });
+
+  it('a failed remove surfaces the error and keeps the confirm dialog open', async () => {
+    h.callable.mockRejectedValueOnce(new Error('boom'));
+    render(
+      <ExpandableBabysitterCard
+        appointment={apt({ date: YESTERDAY, preAppointmentNote: 'Door code 1234B' })}
+        info={info}
+        variant="confirmed"
+      />,
+    );
+    expandCard();
+    fireEvent.click(screen.getByText('familyDashboard.notes.remove'));
+    const buttons = screen.getAllByText('familyDashboard.notes.remove');
+    fireEvent.click(buttons[buttons.length - 1]);
+    await waitFor(() => expect(screen.getByText('familyDashboard.notes.error')).toBeTruthy());
+    expect(screen.getByText('familyDashboard.notes.removeTitle')).toBeTruthy();
+  });
+
+  it('the OTHER party\'s note alone offers NO remove (the affordance is author-only)', () => {
+    // Only a babysitter post-note exists; the family authors pre — nothing
+    // of theirs to remove, so no affordance of any kind.
+    render(
+      <ExpandableBabysitterCard
+        appointment={apt({ date: YESTERDAY, postAppointmentNote: 'their debrief' })}
+        info={info}
+        variant="confirmed"
+      />,
+    );
+    expandCard();
+    expect(screen.getByText('their debrief')).toBeTruthy();
+    expect(screen.queryByText('familyDashboard.notes.remove')).toBeNull();
+    expect(screen.queryByText('familyDashboard.notes.add')).toBeNull();
   });
 });

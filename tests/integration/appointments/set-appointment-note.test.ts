@@ -356,6 +356,18 @@ describe('setAppointmentNote', () => {
     expect('postAppointmentNote' in (await aptData(id))).toBe(false);
   });
 
+  it('the family can CLEAR a pre-note on a pending appointment (carve-out covers every status)', async () => {
+    // A note can only land on a pending doc via odd histories (e.g. admin
+    // edits), but the carve-out is status-blind by design: erasure is never
+    // refused to the author.
+    const id = await seedOneTime('ot-clear-pending', {
+      status: 'pending',
+      preAppointmentNote: 'stale',
+    });
+    await callFunction('setAppointmentNote', { appointmentId: id, kind: 'pre', text: '' }, parent1Token);
+    expect('preAppointmentNote' in (await aptData(id))).toBe(false);
+  });
+
   it('a clear is still author-only: a stranger cannot clear (permission-denied)', async () => {
     const id = await seedOneTime('ot-clear-stranger', {
       date: YESTERDAY(),

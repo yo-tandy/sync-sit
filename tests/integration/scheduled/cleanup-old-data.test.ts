@@ -210,6 +210,65 @@ describe('runCleanupOldData', () => {
     expect(remaining.docs[0].id).toBe(recentRef.id);
   });
 
+  it('redacts appointment notes once the appointment leaves the UI window (issue #238)', async () => {
+    const db = getDb();
+    const now = new Date();
+
+    // Out of reach: confirmed, sitting was 8 days ago -> BOTH notes redacted,
+    // doc kept.
+    const staleRef = await db.collection('appointments').add({
+      familyId: seed.family1Id,
+      babysitterUserId: seed.babysitter1.uid,
+      status: 'confirmed',
+      date: daysAgo(8).toISOString().split('T')[0],
+      createdAt: daysAgo(20),
+      updatedAt: daysAgo(8),
+      preAppointmentNote: 'Door code 1234B',
+      postAppointmentNote: 'Kids asleep by 21:00',
+    });
+    // Out of reach: cancelled 8 days ago (updatedAt bound) -> redacted.
+    const cancelledRef = await db.collection('appointments').add({
+      familyId: seed.family1Id,
+      babysitterUserId: seed.babysitter1.uid,
+      status: 'cancelled',
+      date: daysFromNow(3).toISOString().split('T')[0],
+      createdAt: daysAgo(10),
+      updatedAt: daysAgo(8),
+      preAppointmentNote: 'stale code',
+    });
+    // Still reachable: confirmed, sitting only 6 days ago -> notes kept.
+    const recentRef = await db.collection('appointments').add({
+      familyId: seed.family1Id,
+      babysitterUserId: seed.babysitter1.uid,
+      status: 'confirmed',
+      date: daysAgo(6).toISOString().split('T')[0],
+      createdAt: daysAgo(10),
+      updatedAt: daysAgo(6),
+      preAppointmentNote: 'still visible',
+    });
+    // Always reachable: confirmed RECURRING (no date) -> notes kept forever.
+    const recurringRef = await db.collection('appointments').add({
+      familyId: seed.family1Id,
+      babysitterUserId: seed.babysitter1.uid,
+      status: 'confirmed',
+      type: 'recurring',
+      createdAt: daysAgo(300),
+      updatedAt: daysAgo(300),
+      preAppointmentNote: 'door code for Mondays',
+    });
+
+    const stats = await runCleanupOldData(db, now);
+    expect(stats.appointmentNotesRedacted).toBe(3); // stale pre+post, cancelled pre
+
+    const stale = (await staleRef.get()).data()!;
+    expect(stale.status).toBe('confirmed'); // doc itself survives
+    expect('preAppointmentNote' in stale).toBe(false);
+    expect('postAppointmentNote' in stale).toBe(false);
+    expect('preAppointmentNote' in (await cancelledRef.get()).data()!).toBe(false);
+    expect((await recentRef.get()).data()!.preAppointmentNote).toBe('still visible');
+    expect((await recurringRef.get()).data()!.preAppointmentNote).toBe('door code for Mondays');
+  });
+
   it('deletes expired published searches and keeps active ones (issue #207)', async () => {
     const db = getDb();
     const now = new Date();

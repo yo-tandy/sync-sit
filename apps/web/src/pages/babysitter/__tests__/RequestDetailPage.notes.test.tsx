@@ -176,23 +176,22 @@ describe('RequestDetailPage — appointment notes (post)', () => {
     ).toBe(false);
   });
 
-  it('a cancelled appointment with an own post-note offers REMOVE, and it clears via the callable', async () => {
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
-    try {
-      renderWithApt({ status: 'cancelled', date: YESTERDAY, postAppointmentNote: 'old debrief' });
-      expect(screen.queryByText('request.notes.add')).toBeNull();
-      expect(screen.queryByText('request.notes.edit')).toBeNull();
-      fireEvent.click(screen.getByText('request.notes.remove'));
-      await waitFor(() =>
-        expect(h.callable).toHaveBeenCalledWith('setAppointmentNote', {
-          appointmentId: 'apt-1',
-          kind: 'post',
-          text: '',
-        }),
-      );
-    } finally {
-      confirmSpy.mockRestore();
-    }
+  it('a cancelled appointment with an own post-note offers REMOVE, confirmed via the shared Dialog', async () => {
+    renderWithApt({ status: 'cancelled', date: YESTERDAY, postAppointmentNote: 'old debrief' });
+    expect(screen.queryByText('request.notes.add')).toBeNull();
+    expect(screen.queryByText('request.notes.edit')).toBeNull();
+    fireEvent.click(screen.getByText('request.notes.remove'));
+    expect(screen.getByText('request.notes.removeTitle')).toBeTruthy();
+    const buttons = screen.getAllByText('request.notes.remove');
+    fireEvent.click(buttons[buttons.length - 1]);
+    await waitFor(() =>
+      expect(h.callable).toHaveBeenCalledWith('setAppointmentNote', {
+        appointmentId: 'apt-1',
+        kind: 'post',
+        text: '',
+      }),
+    );
+    await waitFor(() => expect(screen.queryByText('request.notes.removeTitle')).toBeNull());
   });
 
   it('a confirmed recurring arrangement offers the post affordance (no timing gate)', () => {

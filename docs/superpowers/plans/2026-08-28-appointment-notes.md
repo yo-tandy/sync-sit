@@ -31,7 +31,13 @@ must not disagree on note privacy.
   appointment leaves `confirmed`, because sit's pre-note solicits door
   codes/allergies and reaches the supervised sitter's guardians. Authoring
   CONTENT stays window-bound. The UI swaps the add/edit affordance for a
-  confirm-guarded "remove note" once the window closes.
+  Dialog-confirmed "remove note" once the window closes. And because both
+  dashboards stop rendering a card PAST_VISIBILITY_DAYS (7) after the
+  engagement — leaving the author no route to the remove affordance —
+  cleanupOldData redacts both notes once an appointment leaves every UI
+  surface (round 5): erasure by the system once the author can no longer
+  do it themselves. Confirmed recurring arrangements stay visible, so
+  their notes are never auto-redacted.
 - Max 2000 chars, trimmed. Zod-validated.
 - Writes are callable-only (rules stay deny-all on appointments). v1 is
   SILENT: no notification to the counterparty (ledgered study decision).

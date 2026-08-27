@@ -47,7 +47,11 @@ import { getParentProfile, type User } from '@ejm/shared-core';
  * window — and may CLEAR it at ANY time regardless of timing or status (a
  * deliberate divergence from study, tracked for back-porting in issue #255:
  * sit's notes solicit door codes/allergies and reach the supervised sitter's
- * guardians, so the author always keeps an erasure path).
+ * guardians, so the author keeps an erasure path for as long as the
+ * appointment is reachable in the UI). The UI stops rendering a card
+ * PAST_VISIBILITY_DAYS after the engagement, so past that point the
+ * cleanupOldData cron redacts both notes — erasure by the system once the
+ * author can no longer do it themselves.
  *
  * Writes are callable-only (rules stay deny-all). v1 is SILENT: writing a
  * note fires NO notification to the counterparty (mirrors study's ledgered

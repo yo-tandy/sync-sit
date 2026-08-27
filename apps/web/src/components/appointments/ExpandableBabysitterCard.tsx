@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { collection, getDocs, query as fsQuery, where as fsWhere, limit as fsLimit } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '@/config/firebase';
-import { Button, Badge, Card } from '@/components/ui';
+import { Button, Badge, Card, Dialog } from '@/components/ui';
 import { AppointmentNotes } from './AppointmentNotes';
 import { AppointmentNoteDialog } from './AppointmentNoteDialog';
 import { hasStarted } from '@/lib/appointmentTime';
@@ -103,6 +103,7 @@ export function ExpandableBabysitterCard({
   // the note after a save, so the save is non-optimistic and there is no
   // local patching.
   const [noteOpen, setNoteOpen] = useState(false);
+  const [noteRemoveOpen, setNoteRemoveOpen] = useState(false);
   const [noteSaving, setNoteSaving] = useState(false);
   const [noteError, setNoteError] = useState<string | null>(null);
 
@@ -142,14 +143,17 @@ export function ExpandableBabysitterCard({
 
   // Erasure path (issue #255 carve-out): the callable lets the AUTHOR clear
   // their own note at any time, so once the edit window closes the card
-  // swaps the add/edit affordance for a remove one.
+  // swaps the add/edit affordance for a remove one. Confirmation and errors
+  // go through the shared Dialog + notes.error copy, like every other flow
+  // (native confirm/alert render OS chrome and can be suppressed entirely).
   const removeNote = async () => {
-    if (!window.confirm(t('familyDashboard.notes.removeConfirm'))) return;
+    setNoteError(null);
     setNoteSaving(true);
     try {
       await callSetNote('');
+      setNoteRemoveOpen(false);
     } catch {
-      window.alert(t('familyDashboard.notes.error'));
+      setNoteError(t('familyDashboard.notes.error'));
     } finally {
       setNoteSaving(false);
     }
@@ -431,7 +435,7 @@ export function ExpandableBabysitterCard({
               editKind="pre"
               canEdit={canEditPre}
               onEdit={() => { setNoteError(null); setNoteOpen(true); }}
-              onRemove={noteSaving ? undefined : removeNote}
+              onRemove={() => { setNoteError(null); setNoteRemoveOpen(true); }}
               copy={{
                 fromFamily: t('familyDashboard.notes.fromFamily'),
                 fromBabysitter: t('familyDashboard.notes.fromBabysitter'),
@@ -443,6 +447,22 @@ export function ExpandableBabysitterCard({
           )}
         </div>
       )}
+
+      {/* Remove-note confirmation (erasure path) — shared Dialog, same error
+          copy as the save path. */}
+      <Dialog open={noteRemoveOpen} onClose={() => setNoteRemoveOpen(false)}>
+        <h3 className="mb-2 text-lg font-bold">{t('familyDashboard.notes.removeTitle')}</h3>
+        <p className="mb-3 text-sm text-gray-600">{t('familyDashboard.notes.removeDesc')}</p>
+        {noteError && <p className="mb-3 text-sm text-brand-600">{noteError}</p>}
+        <div className="flex gap-2">
+          <Button variant="outline" className="flex-1" disabled={noteSaving} onClick={removeNote}>
+            {t('familyDashboard.notes.remove')}
+          </Button>
+          <Button variant="ghost" className="flex-1" disabled={noteSaving} onClick={() => setNoteRemoveOpen(false)}>
+            {t('common.cancel')}
+          </Button>
+        </div>
+      </Dialog>
 
       <AppointmentNoteDialog
         open={noteOpen}
