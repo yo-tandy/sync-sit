@@ -5,11 +5,28 @@ import { screen, fireEvent, render, cleanup } from '@testing-library/react';
 // copy of the silent account-exists email. A dropped hint fails silently
 // (normalizeAccountExistsApp collapses anything unrecognized to 'sit'), so
 // this pin is the only guard. Mirrors the babysitter/tutor wizard pins.
+//
+// Issue #176: the enrollFamily payload pins mirror study-web's — the geocoder
+// components (postcode/city) must ride along on an autocomplete pick so the
+// family doc can area-match in tutor search, and must be ABSENT (conditional
+// spread, not null/'') when the address carries none.
 
 const h = vi.hoisted(() => ({
   calls: [] as { name: string; payload: unknown }[],
   navigate: () => {},
+  // The family data the stub StepFamilyInfo submits — tests override the
+  // address to pin the conditional postcode/city spread.
+  familyData: {} as Record<string, unknown>,
 }));
+
+const FULL_ADDRESS = {
+  fullAddress: '10 Rue Cler, 75007 Paris',
+  street: '10 Rue Cler',
+  city: 'Paris',
+  postcode: '75007',
+  lat: 48.857,
+  lng: 2.305,
+};
 
 vi.mock('@/config/firebase', () => ({ auth: {}, functions: {}, db: {} }));
 vi.mock('firebase/functions', () => ({
@@ -57,13 +74,34 @@ vi.mock('../parent/StepParentEmail', () => ({
   ),
 }));
 vi.mock('../parent/StepParentVerify', () => ({
-  StepParentVerify: () => <div>parent-verify-step</div>,
+  StepParentVerify: ({ onNext }: { onNext: () => void }) => (
+    <div>
+      parent-verify-step
+      <button onClick={onNext}>verify-submit</button>
+    </div>
+  ),
 }));
 vi.mock('../parent/StepParentPassword', () => ({
-  StepParentPassword: () => <div>parent-password-step</div>,
+  StepParentPassword: ({ onNext }: { onNext: () => void }) => (
+    <div>
+      parent-password-step
+      <button onClick={onNext}>password-submit</button>
+    </div>
+  ),
 }));
 vi.mock('../parent/StepFamilyInfo', () => ({
-  StepFamilyInfo: () => <div>family-info-step</div>,
+  // Controlled stub mirroring the real component's API: `family-fill` pushes
+  // h.familyData through onChange, `family-submit` completes the wizard.
+  StepFamilyInfo: ({ onChange, onNext }: {
+    onChange: (partial: Record<string, unknown>) => void;
+    onNext: () => void;
+  }) => (
+    <div>
+      family-info-step
+      <button onClick={() => onChange(h.familyData)}>family-fill</button>
+      <button onClick={onNext}>family-submit</button>
+    </div>
+  ),
 }));
 
 import { I18nextProvider } from 'react-i18next';
@@ -75,17 +113,36 @@ beforeEach(() => {
   cleanup();
   h.calls.length = 0;
   h.navigate = vi.fn();
+  h.familyData = {
+    familyName: 'Durand',
+    firstName: 'Claire',
+    address: { ...FULL_ADDRESS },
+    pets: 'Cat',
+    note: 'Ring twice',
+  };
 });
+
+function renderFlow() {
+  render(
+    <I18nextProvider i18n={i18n}>
+      <MemoryRouter>
+        <ParentEnrollment />
+      </MemoryRouter>
+    </I18nextProvider>,
+  );
+}
+
+// Click through the credential steps (all stubs) to reach StepFamilyInfo.
+async function reachFamilyStep() {
+  fireEvent.click(screen.getByText('parent-email-submit'));
+  fireEvent.click(await screen.findByText('verify-submit'));
+  fireEvent.click(await screen.findByText('password-submit'));
+  await screen.findByText('family-submit');
+}
 
 describe('ParentEnrollment verify payload (issue #148)', () => {
   it('verifyParentEmail is called with the sit app hint', async () => {
-    render(
-      <I18nextProvider i18n={i18n}>
-        <MemoryRouter>
-          <ParentEnrollment />
-        </MemoryRouter>
-      </I18nextProvider>,
-    );
+    renderFlow();
 
     fireEvent.click(screen.getByText('parent-email-submit'));
     await vi.waitFor(() => {
@@ -95,5 +152,60 @@ describe('ParentEnrollment verify payload (issue #148)', () => {
     });
     // The send advanced the wizard to the verify step.
     expect(await screen.findByText('parent-verify-step')).toBeInTheDocument();
+  });
+});
+
+describe('ParentEnrollment enrollFamily payload (issue #176)', () => {
+  it('an autocomplete pick sends postcode and city alongside address/latLng', async () => {
+    renderFlow();
+    await reachFamilyStep();
+
+    fireEvent.click(screen.getByText('family-fill'));
+    fireEvent.click(screen.getByText('family-submit'));
+
+    const enroll = await vi.waitFor(() => {
+      const c = h.calls.find((x) => x.name === 'enrollFamily');
+      expect(c).toBeTruthy();
+      return c!;
+    });
+    expect(enroll.payload).toMatchObject({
+      familyName: 'Durand',
+      firstName: 'Claire',
+      address: '10 Rue Cler, 75007 Paris',
+      latLng: { lat: 48.857, lng: 2.305 },
+      // Geocoder components ride along from the AddressResult (issue #167) —
+      // coverage-area matching in tutor search depends on them.
+      postcode: '75007',
+      city: 'Paris',
+      pets: 'Cat',
+      note: 'Ring twice',
+    });
+  });
+
+  it('an address without geocoder components OMITS postcode/city (no empty-string keys)', async () => {
+    h.familyData = {
+      ...h.familyData,
+      // A legacy/hand-typed shape: the AddressResult fields exist but the
+      // geocoder produced no components — empty strings, not undefined.
+      address: { ...FULL_ADDRESS, postcode: '', city: '' },
+    };
+    renderFlow();
+    await reachFamilyStep();
+
+    fireEvent.click(screen.getByText('family-fill'));
+    fireEvent.click(screen.getByText('family-submit'));
+
+    const enroll = await vi.waitFor(() => {
+      const c = h.calls.find((x) => x.name === 'enrollFamily');
+      expect(c).toBeTruthy();
+      return c!;
+    });
+    // The keys must be ABSENT (conditional spread), never '' or null: the
+    // enrollment schema takes optional strings (absent-or-bounded), and the
+    // backend owns the missing→null normalization. Mirrors the study-web pin
+    // so both apps hold the same wire contract.
+    expect(enroll.payload).not.toHaveProperty('postcode');
+    expect(enroll.payload).not.toHaveProperty('city');
+    expect(enroll.payload).toMatchObject({ address: '10 Rue Cler, 75007 Paris' });
   });
 });
