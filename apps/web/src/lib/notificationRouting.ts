@@ -36,8 +36,9 @@ const SIT_TYPES = [
   'contact_sharing_request',
   'family_submitted',
   // Published-search inversion (issue #207 PR3): the sitter answering a
-  // family's published search, and the family's answer back. Both sides land
-  // on their dashboard, where the pending/confirmed lists live.
+  // family's published search, and the family's answer back. Each side lands
+  // where its pending/confirmed lists live (sitter dashboard / family
+  // appointments page).
   'published_search_contact',
   'published_search_accepted',
   'published_search_declined',
@@ -60,8 +61,10 @@ export const VISIBLE_NOTIFICATION_TYPES: ReadonlySet<string> = new Set([
   ...GUARDIAN_TYPES,
 ]);
 
-// Appointment lifecycle types land on the recipient's dashboard, where the
-// request/appointment lists live (there is no standalone requests page).
+// Appointment lifecycle types land where the recipient's request/appointment
+// lists live: the babysitter's dashboard (no standalone babysitter page), and
+// the family's dedicated /family/appointments page (issue #241 — the dashboard
+// now only keeps a summary card that links there).
 const APPOINTMENT_TYPES = new Set([
   'new_request',
   'request_accepted',
@@ -96,7 +99,7 @@ export function notificationRoute(
   }
 
   if (role === 'parent') {
-    if (APPOINTMENT_TYPES.has(type)) return '/family';
+    if (APPOINTMENT_TYPES.has(type)) return '/family/appointments';
     if (
       type === 'supervision_confirmed' ||
       type === 'supervision_revoked' ||

@@ -5,6 +5,9 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
  * dialog for a confirmed appointment INSIDE the sitter's notice window shows
  * the "will be recorded" warning before submit; outside the window it does
  * not. Client-side approximation — the server flag stays authoritative.
+ *
+ * Moved from DashboardPage with the dialog itself (issue #241): the family's
+ * appointment lists and their dialogs now live on /family/appointments.
  */
 const h = vi.hoisted(() => ({
   appointments: {
@@ -14,10 +17,15 @@ const h = vi.hoisted(() => ({
     rejectedRecent: [] as unknown[],
     loading: false,
   },
+  // Per-callable overrides; anything unlisted resolves undefined.
+  callables: {} as Record<string, (payload: unknown) => Promise<unknown>>,
 }));
 
 vi.mock('@/config/firebase', () => ({ db: {}, functions: {} }));
-vi.mock('firebase/functions', () => ({ httpsCallable: () => vi.fn() }));
+vi.mock('firebase/functions', () => ({
+  httpsCallable: (_fns: unknown, name: string) => (payload: unknown) =>
+    (h.callables[name] ?? (() => Promise.resolve(undefined)))(payload),
+}));
 vi.mock('firebase/firestore', () => ({
   collection: (_db: unknown, ...path: string[]) => ({ path: path.join('/') }),
   query: (...args: unknown[]) => ({ query: args }),
@@ -47,12 +55,12 @@ vi.mock('@/hooks/useHolidays', () => ({ useHolidays: () => ({ periods: [], loadi
 import '@/i18n';
 import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
-import { FamilyDashboard } from '../DashboardPage';
+import { FamilyAppointmentsPage } from '../AppointmentsPage';
 
 function renderPage() {
   return render(
     <MemoryRouter>
-      <FamilyDashboard />
+      <FamilyAppointmentsPage />
     </MemoryRouter>,
   );
 }
@@ -120,5 +128,35 @@ describe('family cancel dialog late warning (issue #237)', () => {
     await openCancelDialog();
     await waitFor(() => expect(screen.getAllByText(/reason/i).length).toBeGreaterThan(0));
     expect(screen.queryByText(/will be recorded/)).not.toBeInTheDocument();
+  });
+
+  it('an inside_notice_window modify refusal surfaces the policy copy, not the raw code', async () => {
+    // The other half of #237's family-side surface. This mapping existed on
+    // DashboardPage, was dropped in the move to this page, and nothing
+    // pinned it — so a parent briefly got a raw "inside_notice_window" alert
+    // (PR #256 review). Mock the callable refusal, drive the edit dialog,
+    // and assert the localized line is what reaches the alert.
+    h.appointments.confirmed = [confirmedApt(1, 48)];
+    h.callables.modifyAppointment = () =>
+      Promise.reject(new Error('inside_notice_window'));
+    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
+
+    renderPage();
+    // Let effects settle before poking at the card (same reason
+    // openCancelDialog awaits first), then expand it and open Edit.
+    await screen.findAllByRole('button');
+    for (const b of screen.getAllByRole('button')) {
+      fireEvent.click(b);
+      if (screen.queryByText('Edit')) break;
+    }
+    fireEvent.click(await screen.findByText('Edit'));
+    fireEvent.click(await screen.findByText('Save Changes'));
+
+    await waitFor(() => expect(alertSpy).toHaveBeenCalled());
+    const alerted = String(alertSpy.mock.calls[0][0]);
+    expect(alerted).toMatch(/notice window/i);
+    expect(alerted).not.toBe('inside_notice_window');
+    alertSpy.mockRestore();
+    delete h.callables.modifyAppointment;
   });
 });

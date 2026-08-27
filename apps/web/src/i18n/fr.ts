@@ -273,6 +273,7 @@ export default {
     terms: 'Conditions g\u00e9n\u00e9rales',
     settings: 'Param\u00e8tres',
     myAccount: 'Mon compte',
+    myAppointments: 'Mes rendez-vous',
     myFamily: 'Ma famille',
     coParent: 'Co-parent',
     preferredBabysitters: 'Babysitters favoris',
@@ -565,6 +566,18 @@ export default {
       save: 'Enregistrer la note',
       error: 'Impossible d’enregistrer votre note. Veuillez réessayer.',
     },
+    appointmentsTitle: 'Rendez-vous',
+    viewAppointments: 'Voir vos rendez-vous',
+    appointmentsPending_one: '{{count}} en attente',
+    appointmentsPending_other: '{{count}} en attente',
+    appointmentsUpcoming_one: '{{count}} à venir',
+    appointmentsUpcoming_other: '{{count}} à venir',
+    appointmentsNext: 'Prochain : {{when}}',
+  },
+
+  // Page dédiée aux rendez-vous de la famille (issue #241)
+  familyAppointments: {
+    title: 'Rendez-vous',
   },
 
   request: {

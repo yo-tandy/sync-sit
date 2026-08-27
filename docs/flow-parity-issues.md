@@ -99,10 +99,10 @@ note-worthy as tutoring topics.
 
 ## C. Questions — your call before anything is opened
 
-### Q1 · Should Sit families get dedicated Requests/Sessions pages? — **DECIDED: (b), opened as #241**
+### Q1 · Should Sit families get dedicated Requests/Sessions pages? — **DECIDED: (b), opened as #241, landed in PR #256**
 Study gives families `/family/requests` and `/family/sessions` as first-class pages;
-sit embeds appointments in the family dashboard (no dedicated route — verified from
-the router). Sit's dashboard-centric layout is the production-verified one; study's
+sit embedded appointments in the family dashboard until #256 added
+`/family/appointments` (the dashboard keeps a summary card). Sit's dashboard-centric layout is the production-verified one; study's
 dedicated pages scale better as volume grows.
 **Options:** (a) keep each app as-is and declare it deliberate · (b) add
 `/family/appointments` to sit mirroring study's page shape · (c) fold study's pages

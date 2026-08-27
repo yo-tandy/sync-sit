@@ -45,6 +45,11 @@ describe('sit notificationRouting', () => {
     ['appointment_modified', '/babysitter'],
     ['reminder', '/babysitter'],
     ['general', '/babysitter'],
+    // Issue #241 non-change pin: the babysitter branch STAYS on the dashboard
+    // (sit has no standalone babysitter requests page).
+    ['published_search_contact', '/babysitter'],
+    ['published_search_accepted', '/babysitter'],
+    ['published_search_declined', '/babysitter'],
     ['reference_received', '/babysitter/endorsements'],
     ['contact_sharing_request', '/babysitter/families'],
     ['supervision_request', '/babysitter'],
@@ -57,13 +62,18 @@ describe('sit notificationRouting', () => {
   });
 
   it.each([
-    ['request_accepted', '/family'],
-    ['request_declined', '/family'],
-    ['request_cancelled', '/family'],
-    ['appointment_cancelled', '/family'],
-    ['appointment_modified', '/family'],
-    ['reminder', '/family'],
-    ['general', '/family'],
+    // Issue #241: family-recipient appointment types land on the dedicated
+    // /family/appointments page (the dashboard only keeps a summary card).
+    ['request_accepted', '/family/appointments'],
+    ['request_declined', '/family/appointments'],
+    ['request_cancelled', '/family/appointments'],
+    ['appointment_cancelled', '/family/appointments'],
+    ['appointment_modified', '/family/appointments'],
+    ['reminder', '/family/appointments'],
+    ['general', '/family/appointments'],
+    ['published_search_contact', '/family/appointments'],
+    ['published_search_accepted', '/family/appointments'],
+    ['published_search_declined', '/family/appointments'],
     ['supervision_confirmed', '/family/governance'],
     ['supervision_revoked', '/family/governance'],
     ['guardian_invite_accepted', '/family/governance'],

@@ -96,6 +96,7 @@ export function AppBar({ role }: { role: UserRole }) {
 
           {role === 'parent' && (
             <>
+              <MenuItem icon={<CalendarIcon className="h-5 w-5" />} label={t('menu.myAppointments')} to="/family/appointments" onNavigate={() => setMenuOpen(false)} />
               <MenuItem icon={<ShieldIcon className="h-5 w-5" />} label={t('verification.menuTitle')} to="/family/verification" onNavigate={() => setMenuOpen(false)} />
               <MenuItem icon={<UserIcon className="h-5 w-5" />} label={t('menu.myAccount')} to="/family/account" onNavigate={() => setMenuOpen(false)} />
               <MenuItem icon={<SettingsIcon className="h-5 w-5" />} label={t('menu.myFamily')} to="/family/settings" onNavigate={() => setMenuOpen(false)} />
