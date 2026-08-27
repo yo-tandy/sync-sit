@@ -72,8 +72,10 @@ export function PublishedSearchesPage() {
       (snap) => {
         const ids = new Set<string>();
         snap.docs.forEach((d) => {
-          const apt = d.data() as { publishedSearchId?: string | null; status?: string };
-          if (apt.publishedSearchId && (apt.status === 'pending' || apt.status === 'confirmed')) {
+          // The query already bounds status to pending/confirmed; only the
+          // board linkage needs checking here.
+          const apt = d.data() as { publishedSearchId?: string | null };
+          if (apt.publishedSearchId) {
             ids.add(apt.publishedSearchId);
           }
         });

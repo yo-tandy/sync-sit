@@ -363,6 +363,7 @@ export interface AppointmentSeed {
   /** Explicit null seeds the WITHHELD state of a babysitter-initiated doc. */
   address?: string | null;
   latLng?: { lat: number; lng: number } | null;
+  familyPhotoUrl?: string | null;
   /** issue #207 PR3: 'babysitter' flips the respond roles. */
   initiatedBy?: 'family' | 'babysitter';
   publishedSearchId?: string;
@@ -405,6 +406,7 @@ export async function seedAppointment(data: AppointmentSeed): Promise<string> {
     // a babysitter-initiated pending must be seeded in (address withheld).
     address: data.address === undefined ? '15 Rue de Passy, 75016 Paris' : data.address,
     latLng: data.latLng === undefined ? { lat: 48.8566, lng: 2.2769 } : data.latLng,
+    ...(data.familyPhotoUrl !== undefined ? { familyPhotoUrl: data.familyPhotoUrl } : {}),
     createdAt: now,
     updatedAt: now,
   };

@@ -248,11 +248,11 @@ describe('contactPublishedSearch (sit)', () => {
     expect(apt.status).toBe('pending');
   });
 
-  it('caps concurrent PENDING board contacts across searches, and frees a slot when one is answered', async () => {
-    // The per-search dedupe + cooldown bound one pair; without a cross-search
-    // ceiling one sitter could notify every family on the board, once per
-    // search, each contact fanning out email + push to every parent
-    // (issue #225 item 3). Five concurrent pendings is the ceiling.
+  it('caps board contacts CREATED in 24h -- withdrawing does not free a slot, aging out does', async () => {
+    // A pending-only ceiling was sitter-bypassable: withdraw a pending
+    // (deliberately cooldown-free) and the slot came straight back, so the
+    // notify-every-family sweep survived (PR #232 review). Creation spends
+    // the slot: status is irrelevant, and slots return only by clock.
     for (let i = 0; i < 5; i++) {
       await seedAppointment({
         babysitterUserId: seed.babysitter1.uid,
@@ -260,7 +260,9 @@ describe('contactPublishedSearch (sit)', () => {
         createdByUserId: seed.babysitter1.uid,
         initiatedBy: 'babysitter',
         publishedSearchId: `ps-cap-${i}`,
-        status: 'pending',
+        // Two of the five already withdrawn: they still count.
+        status: i < 2 ? 'cancelled' : 'pending',
+        ...(i < 2 ? { statusReason: 'cancelled_by_babysitter' } : {}),
       });
     }
     const id = await publish();
@@ -268,14 +270,14 @@ describe('contactPublishedSearch (sit)', () => {
       callFunction('contactPublishedSearch', { publishedSearchId: id }, sitterToken),
     ).rejects.toMatchObject({ code: 'RESOURCE_EXHAUSTED', details: { reason: 'board_contact_cap' } });
 
-    // An ANSWER in either direction frees a slot -- the ceiling is
-    // self-healing, not a punishment.
+    // A creation older than the window no longer counts.
     const snap = await getDb()
       .collection('appointments')
       .where('publishedSearchId', '==', 'ps-cap-0')
       .get();
-    await snap.docs[0].ref.update({ status: 'rejected', statusReason: 'declined_by_family' });
-    // ps-cap-0's decline is for a DIFFERENT search, so no cooldown applies here.
+    await snap.docs[0].ref.update({
+      createdAt: Timestamp.fromMillis(Date.now() - 25 * 60 * 60 * 1000),
+    });
     const res = await callFunction<{ appointmentId: string }>(
       'contactPublishedSearch',
       { publishedSearchId: id },

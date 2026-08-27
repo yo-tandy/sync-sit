@@ -24,12 +24,16 @@ interface ContactPublishedSearchData {
 const DECLINE_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
 // Cross-search ceiling (issue #225 item 3): per-search dedupe + cooldown bound
 // one pair, but nothing bounded one sitter across DIFFERENT searches -- each
-// successful contact emails + pushes every parent of that family, so an
-// unbounded sitter could notify every family on the board in one sitting. The
-// ceiling counts CONCURRENT PENDING board contacts: self-healing (an answer in
-// either direction frees a slot), no clock, and 5 is far above any legitimate
-// browsing session while making a board-wide sweep impossible.
-const MAX_PENDING_BOARD_CONTACTS = 5;
+// successful contact emails + pushes every parent of that family. The ceiling
+// counts board contacts CREATED in a rolling 24h window, REGARDLESS of their
+// later status: a pending-only count was sitter-bypassable (withdraw a
+// pending -- deliberately cooldown-free -- and the slot came straight back,
+// PR #232 review), and it let five never-answering families hold a sitter's
+// board access forever. Creation spending the slot closes both: at most
+// MAX_BOARD_CONTACTS_PER_DAY families can be notified per day, and slots
+// return by clock, not by anyone's action.
+const MAX_BOARD_CONTACTS_PER_DAY = 5;
+const BOARD_CONTACT_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 /**
  * contactPublishedSearch (issue #207 PR3, sit side): the CONTACT INVERSION.
@@ -218,22 +222,7 @@ export const contactPublishedSearch = onCall(
           .where('babysitterUserId', '==', uid)
           .where('publishedSearchId', '==', data.publishedSearchId),
       );
-      // Cross-search ceiling -- inside the transaction so concurrent taps on
-      // different searches cannot each pass the count. Three equality
-      // filters: no composite index needed.
-      const pendingBoardSnap = await tx.get(
-        db.collection('appointments')
-          .where('babysitterUserId', '==', uid)
-          .where('initiatedBy', '==', 'babysitter')
-          .where('status', '==', 'pending'),
-      );
-      if (pendingBoardSnap.size >= MAX_PENDING_BOARD_CONTACTS) {
-        throw new HttpsError(
-          'resource-exhausted',
-          'You have too many unanswered requests to families. Wait for answers before contacting more.',
-          { reason: 'board_contact_cap' },
-        );
-      }
+
       const live = priorSnap.docs.some((d) => {
         const status = d.data().status;
         return status === 'pending' || status === 'confirmed';
@@ -258,6 +247,33 @@ export const contactPublishedSearch = onCall(
           // The client distinguishes this from the generic "search is gone"
           // failure on the reason, not on the message text.
           { reason: 'decline_cooldown' },
+        );
+      }
+      // Cross-search ceiling -- inside the transaction so concurrent taps on
+      // different searches cannot each pass the count, and AFTER the dedupe +
+      // cooldown checks so a capped sitter still gets the more specific error
+      // for those cases (PR #232 review). The orderBy+limit bounds the read to
+      // the newest MAX docs (composite index in firestore.indexes.json);
+      // status is deliberately not filtered -- creation spent the slot.
+      const recentBoardSnap = await tx.get(
+        db.collection('appointments')
+          .where('babysitterUserId', '==', uid)
+          .where('initiatedBy', '==', 'babysitter')
+          .orderBy('createdAt', 'desc')
+          .limit(MAX_BOARD_CONTACTS_PER_DAY),
+      );
+      const windowFrom = Date.now() - BOARD_CONTACT_WINDOW_MS;
+      const recentCount = recentBoardSnap.docs.filter((d) => {
+        const createdMs = d.data().createdAt?.toMillis?.();
+        // Unreadable createdAt counts as recent: the cap must fail CLOSED,
+        // same posture as the cooldown above.
+        return typeof createdMs !== 'number' || createdMs > windowFrom;
+      }).length;
+      if (recentCount >= MAX_BOARD_CONTACTS_PER_DAY) {
+        throw new HttpsError(
+          'resource-exhausted',
+          'You have contacted several families in the last 24 hours. You can send more requests tomorrow.',
+          { reason: 'board_contact_cap' },
         );
       }
       tx.set(appointmentRef, appointment);

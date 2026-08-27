@@ -273,6 +273,37 @@ describe('PublishedSearchesPage (sit board)', () => {
     );
   });
 
+  it('shows the cooldown copy when the refusal carries reason decline_cooldown', async () => {
+    // The branch is picked by details.reason, not message text; without a pin
+    // a typo in the reason string would silently fall through to the generic
+    // copy (PR #232 review).
+    h.callable.mockRejectedValueOnce(
+      Object.assign(new Error('failed-precondition'), { details: { reason: 'decline_cooldown' } }),
+    );
+    renderPage();
+    push([boardDoc('ps-1', SEEN_AT + 1)]);
+    await waitFor(() => expect(screen.getByText('Contact family')).toBeInTheDocument());
+    fireEvent.click(screen.getByText('Contact family'));
+    fireEvent.click(screen.getByText('Send request'));
+    await waitFor(() =>
+      expect(screen.getByText(/declined your last request/)).toBeInTheDocument(),
+    );
+  });
+
+  it('shows the daily-cap copy when the refusal carries reason board_contact_cap', async () => {
+    h.callable.mockRejectedValueOnce(
+      Object.assign(new Error('resource-exhausted'), { details: { reason: 'board_contact_cap' } }),
+    );
+    renderPage();
+    push([boardDoc('ps-1', SEEN_AT + 1)]);
+    await waitFor(() => expect(screen.getByText('Contact family')).toBeInTheDocument());
+    fireEvent.click(screen.getByText('Contact family'));
+    fireEvent.click(screen.getByText('Send request'));
+    await waitFor(() =>
+      expect(screen.getByText(/more requests tomorrow/)).toBeInTheDocument(),
+    );
+  });
+
   it('replaces the CTA with "Request sent" for a search with a LIVE appointment only', async () => {
     renderPage();
     push([
@@ -281,12 +312,11 @@ describe('PublishedSearchesPage (sit board)', () => {
     ]);
     await waitFor(() => expect(screen.getAllByText('Contact family')).toHaveLength(2));
 
-    pushAppointments([
-      { publishedSearchId: 'ps-live', status: 'pending' },
-      // A declined prior contact must NOT consume the CTA: the server lets
-      // the sitter try again.
-      { publishedSearchId: 'ps-declined', status: 'rejected' },
-    ]);
+    // The listener's query bounds status to pending/confirmed server-side,
+    // so a declined prior contact never reaches the snapshot at all -- which
+    // is exactly why its CTA below stays available (the server lets the
+    // sitter try again).
+    pushAppointments([{ publishedSearchId: 'ps-live', status: 'pending' }]);
 
     await waitFor(() => expect(screen.getByText('Request sent')).toBeInTheDocument());
     expect(screen.getAllByText('Contact family')).toHaveLength(1);
