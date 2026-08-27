@@ -12,6 +12,8 @@ export default {
     error: 'An error occurred',
     optional: 'Optional',
     signOut: 'Sign out',
+    hello: 'Hello,',
+    helloNoName: 'Hello',
     add: 'Add',
     date: 'Date',
     remove: 'Remove',
@@ -628,7 +630,7 @@ export default {
     requestsTitle: 'Requests',
     contactDesc: 'Tutors you connect with will use these details to reach you.',
     dashboard: {
-      hello: 'Hello',
+      family: 'family',
       verifyBannerTitle: 'Verify your family',
       verifyBannerDesc:
         'Until your family is verified, searching for tutors stays locked.',

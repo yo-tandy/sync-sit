@@ -12,6 +12,8 @@ export default {
     error: 'Une erreur est survenue',
     optional: 'Facultatif',
     signOut: 'Se déconnecter',
+    hello: 'Bonjour,',
+    helloNoName: 'Bonjour',
     add: 'Ajouter',
     date: 'Date',
     remove: 'Supprimer',
@@ -628,7 +630,7 @@ export default {
     requestsTitle: 'Demandes',
     contactDesc: 'Les professeurs avec qui vous êtes en contact utiliseront ces coordonnées pour vous joindre.',
     dashboard: {
-      hello: 'Bonjour',
+      family: 'famille',
       verifyBannerTitle: 'Vérifiez votre famille',
       verifyBannerDesc:
         'Tant que votre famille n\'est pas vérifiée, la recherche de professeurs reste verrouillée.',

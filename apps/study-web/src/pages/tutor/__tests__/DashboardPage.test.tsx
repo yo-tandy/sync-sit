@@ -82,6 +82,30 @@ function reset() {
 describe('tutor DashboardPage', () => {
   beforeEach(() => reset());
 
+  // ── Greeting (parity D1, issue #239) ──
+
+  it('greets the tutor BY NAME — this page used to greet nobody', async () => {
+    // Before #239 the header was a static t('tutor.dashboardTitle'), which
+    // reads "Dashboard". The other three dashboards all used the reader's
+    // name.
+    h.auth.userDoc = { ...tutor(), firstName: 'claire' };
+    renderWithProviders(<DashboardPage />);
+    await waitFor(() => expect(h.getDocs).toHaveBeenCalled());
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Hello, Claire 👋');
+  });
+
+  it('a doc with no firstName greets plainly, never "Hello, Dashboard"', async () => {
+    // The first cut of #239 passed t('tutor.dashboardTitle') as a fallback
+    // NAME, producing "Hello, Dashboard 👋" / "Bonjour, Tableau de bord 👋"
+    // (PR #249 review). The component now owns the no-name case.
+    h.auth.userDoc = tutor();
+    renderWithProviders(<DashboardPage />);
+    await waitFor(() => expect(h.getDocs).toHaveBeenCalled());
+    const heading = screen.getByRole('heading', { level: 1 });
+    expect(heading).toHaveTextContent('Hello 👋');
+    expect(heading.textContent).not.toMatch(/dashboard/i);
+  });
+
   // ── No verification surface (feature dropped, owner decision 2026-08-17) ──
 
   it('renders no verification banner, tile, or link anywhere', async () => {

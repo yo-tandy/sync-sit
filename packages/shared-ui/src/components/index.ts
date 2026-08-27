@@ -1,4 +1,6 @@
 export { Spinner } from './Spinner.js';
+export { DashboardGreeting } from './DashboardGreeting.js';
+export type { DashboardGreetingProps } from './DashboardGreeting.js';
 export { Badge } from './Badge.js';
 export { Chip } from './Chip.js';
 export { SupervisionChip } from './SupervisionChip.js';

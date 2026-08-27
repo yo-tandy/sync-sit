@@ -21,6 +21,8 @@ export default {
     done: 'Done',
     search: 'Search',
     signOut: 'Sign out',
+    hello: 'Hello,',
+    helloNoName: 'Hello',
     yes: 'Yes',
     no: 'No',
     or: 'or',
@@ -228,7 +230,6 @@ export default {
 
   // Babysitter Dashboard
   babysitterDashboard: {
-    hello: 'Hello,',
     active: 'Active',
     inactive: 'Inactive',
     myAvailability: 'My availability',

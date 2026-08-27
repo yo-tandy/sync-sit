@@ -22,6 +22,7 @@ import {
   ChevronRightIcon,
   UsersIcon,
   useRefetchOnFocus,
+  DashboardGreeting,
 } from '@ejm/shared-ui';
 
 /** Paris "YYYY-MM-DD" today (en-CA renders ISO order; tz-correct via runtime). */
@@ -314,36 +315,39 @@ export function DashboardPage() {
 
   return (
     <div className="px-5 pt-4 pb-8">
-      {/* ── Header: title left, search-visibility pill top right — the same
-          treatment as sit's babysitter dashboard (owner request, PR #194).
+      {/* ── Header: greeting left, search-visibility pill top right — the same
+          treatment as sit's babysitter dashboard (owner request, PR #194),
+          now literally the same component (parity D1, issue #239). This was
+          the one dashboard of the four that greeted nobody: a static "Tutor
+          dashboard" title where the other three used the reader's name.
           The pill opens a confirm dialog; while the activation gate (subjects
           + slots) is unmet it renders dimmed and inert, with the amber hint
           card below carrying the explanation. ── */}
-      <div className="mb-5 flex items-center justify-between">
-        <div>
-          <h1 className="mb-1 text-lg font-bold text-gray-900">{t('tutor.dashboardTitle')}</h1>
-          <p className="text-sm text-gray-500">{t('tutor.dashboard.greeting')}</p>
-        </div>
-        {enrollmentComplete && (
-          <button
-            type="button"
-            onClick={() => {
-              if (!isSearchable && !canActivate) return;
-              setToggleDialog(true);
-            }}
-            className={`flex shrink-0 items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
-              isSearchable
-                ? 'bg-green-100 text-green-700'
-                : canActivate
-                  ? 'bg-gray-100 text-gray-500'
-                  : 'bg-gray-100 text-gray-400 opacity-50'
-            }`}
-          >
-            <div className={`h-2 w-2 rounded-full ${isSearchable ? 'bg-green-500' : 'bg-gray-400'}`} />
-            {isSearchable ? t('tutor.dashboard.active') : t('tutor.dashboard.inactive')}
-          </button>
-        )}
-      </div>
+      <DashboardGreeting
+        firstName={userDoc?.firstName}
+        contextLine={t('tutor.dashboard.greeting')}
+        action={
+          enrollmentComplete && (
+            <button
+              type="button"
+              onClick={() => {
+                if (!isSearchable && !canActivate) return;
+                setToggleDialog(true);
+              }}
+              className={`flex shrink-0 items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
+                isSearchable
+                  ? 'bg-green-100 text-green-700'
+                  : canActivate
+                    ? 'bg-gray-100 text-gray-500'
+                    : 'bg-gray-100 text-gray-400 opacity-50'
+              }`}
+            >
+              <div className={`h-2 w-2 rounded-full ${isSearchable ? 'bg-green-500' : 'bg-gray-400'}`} />
+              {isSearchable ? t('tutor.dashboard.active') : t('tutor.dashboard.inactive')}
+            </button>
+          )
+        }
+      />
 
       {/* ── Ask-to-supervise prompt (pending claim on guardianLinks/{uid}) ── */}
       <SupervisionRequestCard />

@@ -17,6 +17,7 @@ import {
   UserIcon,
   ChevronRightIcon,
   useRefetchOnFocus,
+  DashboardGreeting,
 } from '@ejm/shared-ui';
 
 /** The soonest confirmed one_time session, extracted alongside the counts.
@@ -94,6 +95,7 @@ export function DashboardPage() {
 
   // null = still loading; true/false once the family doc has resolved.
   const [isVerified, setIsVerified] = useState<boolean | null>(null);
+  const [familyName, setFamilyName] = useState<string | null>(null);
   // Live pending/accepted request counts (null while loading).
   const [counts, setCounts] = useState<
     { pending: number; accepted: number; incoming: number } | null
@@ -128,6 +130,10 @@ export function DashboardPage() {
           ? snap.data()?.verification?.isFullyVerified === true
           : false;
         setIsVerified(verified);
+        // The greeting's context line (parity D1, issue #239) — read off the
+        // snapshot this gate already fetches, so the header costs no extra
+        // request. Absent name leaves the line off entirely.
+        setFamilyName(snap.exists() ? (snap.data()?.familyName as string | undefined) ?? null : null);
       })
       .catch(() => {
         // A FAILED read is unknown, not unverified: only flip to false when
@@ -315,9 +321,13 @@ export function DashboardPage() {
 
   return (
     <div className="px-5 pt-4 pb-8">
-      <h1 className="mb-5 text-lg font-bold text-gray-900">
-        {t('family.dashboard.hello')} {userDoc?.firstName || ''}
-      </h1>
+      {/* Header — the shared idiom (parity D1, issue #239). This one had
+          neither comma, wave, nor context line, and rendered an empty
+          greeting for a doc with no firstName. */}
+      <DashboardGreeting
+        firstName={userDoc?.firstName}
+        contextLine={familyName ? `${familyName.toUpperCase()} ${t('family.dashboard.family')}` : undefined}
+      />
 
       {/* One-time cross-app welcome (issue #144) */}
       <CrossAppWelcomeCard />

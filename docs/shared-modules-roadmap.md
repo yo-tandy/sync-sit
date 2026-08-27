@@ -129,6 +129,7 @@ interface UserBase {
 ### I. Shared dashboard skeleton `[ ]`
 **Plan slug (to write):** `2026-XX-XX-shared-dashboard.md`
 **Scope:** every role on both apps has a Dashboard with greeting + pending requests + confirmed/upcoming engagements + footer prompts. Common scaffold lives in `@ejm/shared-ui`; per-role cards (`AppointmentCard`, `SessionCard`, future tutor-request card) plug in as children.
+**Already shared:** the greeting header — `DashboardGreeting` in `@ejm/shared-ui`, consumed by all four dashboards (issue #239, parity D1). It owns the name idiom, the optional context line and the provider dashboards' visibility-pill slot, so this plan inherits it rather than re-solving it.
 **Estimate:** 6 commits / 1 PR.
 **Depends on:** D + H (consumption pattern from H translates here).
 
