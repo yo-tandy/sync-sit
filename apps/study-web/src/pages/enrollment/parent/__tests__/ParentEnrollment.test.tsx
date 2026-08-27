@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { screen, fireEvent } from '@testing-library/react';
+import { act, screen, fireEvent } from '@testing-library/react';
 
 // Hoisted shared state the mocks record into.
 const h = vi.hoisted(() => ({
@@ -400,8 +400,15 @@ describe('ParentEnrollment orchestrator', () => {
     // refreshUserDoc must be awaited before the success navigation.
     await vi.waitFor(() => expect(h.navigate).toHaveBeenCalledWith('/family'));
     expect(h.refreshUserDoc).toHaveBeenCalled();
-    // The now-present parent profile must not divert the navigation.
+    // The now-present parent profile must not divert the navigation. Flush
+    // the post-refresh render + effects first — without it the hijack
+    // navigate would not have fired yet and the pin would pass vacuously
+    // (found via the sit mirror of this test, PR #259 review).
+    await act(async () => {});
     expect(h.navigate).not.toHaveBeenCalledWith('/family', { replace: true });
+    // Exactly the success navigation — nothing before (no premature redirect)
+    // and nothing after the flushed re-render (no extra navigation).
+    expect(h.navigate).toHaveBeenCalledTimes(1);
   });
 
   async function driveToEnrollFamily() {

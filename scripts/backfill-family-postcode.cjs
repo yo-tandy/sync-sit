@@ -2,6 +2,10 @@
  * One-shot backfill — derive `postcode`/`city` on family docs from their
  * stored `address` string (issue #167).
  *
+ * STATUS: DEFERRED — do NOT run against prod as a release step; the owner
+ * runs it if/when study gets real parent traffic. Trigger tracked in open
+ * issue #261 (deferral recorded on #176, closed; details below).
+ *
  * Family docs created before #167 hold only the display address + latLng, so
  * study search cannot resolve their coverage-area label and arrondissement-mode
  * tutors are excluded from their home/library queries until the parent re-picks
@@ -28,14 +32,16 @@
  * authenticated gcloud env). To test against the emulator, export
  * FIRESTORE_EMULATOR_HOST first.
  *
- * DEPLOY STEP (issue #167): run this ONCE against prod right after the
- * coverage-area release ships — dry-run first, review the output, then
- * APPLY=1. Until it runs, families enrolled before the release see the
- * search page's amber hint and get NO arrondissement-mode tutors on their
- * home/library queries (deliberate fail-closed). Unmatched addresses are
- * logged, skipped, and self-heal the next time the family picks an address
- * in settings or search. Note the output includes full home addresses —
- * treat the log accordingly.
+ * NOT A DEPLOY STEP — DEFERRED (issue #176): the owner recorded a deferral
+ * (no parent traffic on sync/study yet), so do NOT run this against prod as
+ * part of any release; running it is the owner's explicit call for whenever
+ * study gets real parent traffic. When that day comes: dry-run first, review
+ * the output, then APPLY=1. Until it runs, families enrolled before the
+ * coverage-area release (issue #167) see the search page's amber hint and get
+ * NO arrondissement-mode tutors on their home/library queries (deliberate
+ * fail-closed). Unmatched addresses are logged, skipped, and self-heal the
+ * next time the family picks an address in settings or search. Note the
+ * output includes full home addresses — treat the log accordingly.
  */
 
 // Same endpoint as packages/shared-ui/src/forms/AddressAutocomplete.tsx.
