@@ -12,6 +12,7 @@ import { LoginPage } from '@/pages/public/LoginPage';
 import { ForgotPasswordPage } from '@/pages/public/ForgotPasswordPage';
 import { AboutPage } from '@/pages/public/AboutPage';
 import { PrivacyPage, TermsPage } from '@ejm/shared-ui';
+import { BRAND, SUPPORT_EMAIL } from '@/constants/brand';
 import { SyncSitReportProblemPage } from '@/pages/public/SyncSitReportProblemPage';
 
 import { SharePage } from '@/pages/public/SharePage';
