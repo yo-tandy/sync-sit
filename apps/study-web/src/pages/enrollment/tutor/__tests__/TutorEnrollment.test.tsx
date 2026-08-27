@@ -209,7 +209,14 @@ beforeEach(() => {
   h.subs = [];
   h.navigate = vi.fn();
   h.auth = { firebaseUser: null, userDoc: null, loading: false };
-  h.refreshUserDoc = vi.fn().mockResolvedValue(undefined);
+  // Models the real store: a successful refresh lands the freshly-written
+  // tutor profile (round 4 -- the add-profile branch now refuses to
+  // navigate without it). Tests modeling misses override this.
+  h.refreshUserDoc = vi.fn().mockImplementation(() => {
+    const prev = (h.auth.userDoc ?? {}) as { profiles?: Record<string, unknown> };
+    h.auth.userDoc = { ...prev, profiles: { ...(prev.profiles ?? {}), tutor: {} } };
+    return Promise.resolve();
+  });
   h.signIn.mockClear();
   h.errorReason = null;
   h.rawError = null;
@@ -311,6 +318,8 @@ describe('TutorEnrollment orchestrator', () => {
       h.signedIn = true;
       return Promise.resolve();
     });
+    // The doc read keeps missing: the recovery refresh must find nothing.
+    h.refreshUserDoc = vi.fn().mockResolvedValue(undefined);
     renderFlow();
     fireEvent.click(screen.getByText('email-submit'));
     fireEvent.click(await screen.findByText('verify-submit'));
@@ -337,6 +346,8 @@ describe('TutorEnrollment orchestrator', () => {
       h.signedIn = true;
       return Promise.resolve();
     });
+    // The doc read keeps missing: the recovery refresh must find nothing.
+    h.refreshUserDoc = vi.fn().mockResolvedValue(undefined);
     renderFlow();
     fireEvent.click(screen.getByText('email-submit'));
     fireEvent.click(await screen.findByText('verify-submit'));
@@ -379,6 +390,21 @@ describe('TutorEnrollment orchestrator', () => {
     fireEvent.click(await screen.findByText('subjects-next'));
     await vi.waitFor(() => expect(h.navigate).toHaveBeenCalledWith('/tutor'), { timeout: 3000 });
     expect(h.refreshUserDoc).toHaveBeenCalledTimes(2);
+  });
+
+  it('add-profile BOTH-miss: never navigates blind into the guard; shows the account-ready state (round-4 pin)', async () => {
+    h.auth = { firebaseUser: { uid: 'p1' }, userDoc: { profiles: { parent: {} } }, loading: false };
+    // Both refreshes leave the doc without a tutor profile.
+    h.refreshUserDoc = vi.fn().mockResolvedValue(undefined);
+    renderFlow();
+    fireEvent.click(screen.getByText('email-submit'));
+    fireEvent.click(await screen.findByText('verify-submit'));
+    fireEvent.click(await screen.findByTestId('step-password'));
+    fireEvent.click(await screen.findByText('profile-next'));
+    fireEvent.click(await screen.findByText('subjects-next'));
+    expect(await screen.findByText('Your tutor account is ready', {}, { timeout: 3000 })).toBeInTheDocument();
+    expect(h.refreshUserDoc).toHaveBeenCalledTimes(2);
+    expect(h.navigate).not.toHaveBeenCalledWith('/tutor');
   });
 
   it('authed without a tutor profile: consent-only StepPassword, enrollTutor omits password, refreshes doc', async () => {

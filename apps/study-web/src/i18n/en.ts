@@ -1195,7 +1195,7 @@ export default {
     },
     alreadyInFamily: 'You already belong to a family.',
     crossApp: {
-      profileLoadError: 'Your tutor profile was created, but we could not load it yet. Tap Continue to try again.',
+      profileLoadError: 'Your tutor profile was created, but we could not load it yet. Tap \"Complete sign-up\" to try again.',
     },
     joinFamilyConfirm: 'Join the {{familyName}} family',
     tutorTitle: 'Tutor Sign Up',

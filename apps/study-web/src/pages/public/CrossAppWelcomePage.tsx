@@ -102,7 +102,7 @@ export function CrossAppWelcomePage() {
       // user off AuthGuard to /signup (PR #257 rounds 2-3). If BOTH reads
       // miss, do not navigate blind into the guard: surface an error and
       // leave the button usable -- a resubmit hits profile-exists, whose
-      // handler navigates once the doc is finally readable.
+      // handler runs the same doc-aware recovery (round 4).
       if (!getTutorProfile(useAuthStore.getState().userDoc)) {
         await new Promise((r) => setTimeout(r, 400));
         await refreshUserDoc().catch(() => {});
@@ -116,7 +116,20 @@ export function CrossAppWelcomePage() {
       navigate('/tutor');
     } catch (err: unknown) {
       if (enrollmentErrorReason(err) === 'profile-exists') {
-        navigate('/tutor');
+        // The profile exists server-side; make sure the STORE can prove it
+        // before entering the guard (round 4 -- this handler used to
+        // navigate unconditionally, the same blind-navigate class).
+        await refreshUserDoc().catch(() => {});
+        if (!getTutorProfile(useAuthStore.getState().userDoc)) {
+          await new Promise((r) => setTimeout(r, 400));
+          await refreshUserDoc().catch(() => {});
+        }
+        if (getTutorProfile(useAuthStore.getState().userDoc)) {
+          navigate('/tutor');
+        } else {
+          setError(t('enrollment.crossApp.profileLoadError'));
+          setSubmitting(false);
+        }
         return;
       }
       setError(translateEnrollError(err));

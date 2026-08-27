@@ -46,3 +46,14 @@ when both reads miss and surfaces `enrollment.crossApp.profileLoadError`
 instead (a resubmit hits profile-exists once the doc is readable). New
 i18n: `enrollment.tutor.readyLogin{Title,Desc,Cta}` +
 `enrollment.crossApp.profileLoadError` (en/fr).
+
+**Round 4:** the add-profile branch gets the same both-miss protection as
+the other two paths (it was the one blind navigate the hardening missed --
+and a regression THIS PR introduced, since the old destination was
+public): both refreshes swallowed, and a double miss latches the
+account-ready state, which the auto-advance effect resolves the moment the
+doc lands. CrossAppWelcomePage's profile-exists handler runs the same
+doc-aware recovery instead of navigating unconditionally; the
+profileLoadError copy names the button that actually exists ("Complete
+sign-up"); the redundant unknown/never casts are gone (the store is fully
+typed).

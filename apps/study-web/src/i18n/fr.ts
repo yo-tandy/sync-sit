@@ -1195,7 +1195,7 @@ export default {
     },
     alreadyInFamily: 'Vous appartenez déjà à une famille.',
     crossApp: {
-      profileLoadError: "Votre profil tuteur a été créé, mais nous n'avons pas encore pu le charger. Appuyez sur Continuer pour réessayer.",
+      profileLoadError: "Votre profil tuteur a été créé, mais nous n'avons pas encore pu le charger. Appuyez sur « Terminer l'inscription » pour réessayer.",
     },
     joinFamilyConfirm: 'Rejoindre la famille {{familyName}}',
     tutorTitle: 'Inscription Tuteur',
