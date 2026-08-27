@@ -36,10 +36,14 @@ const sizeClasses: Record<ButtonSize, string> = {
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
   ({ variant = 'primary', size = 'default', fullWidth = true, className = '', children, ...props }, ref) => {
+    // icon is intrinsically sized by its token (w-10); emitting w-full/w-auto
+    // beside it would re-create the stylesheet-order coin toss this prop
+    // exists to eliminate (PR #229 review).
+    const widthClass = size === 'icon' ? '' : fullWidth ? 'w-full' : 'w-auto';
     return (
       <button
         ref={ref}
-        className={`inline-flex ${fullWidth ? 'w-full' : 'w-auto'} items-center justify-center gap-2 font-semibold transition-all cursor-pointer disabled:cursor-not-allowed ${variantClasses[variant]} ${sizeClasses[size]} ${className}`}
+        className={`inline-flex ${widthClass} items-center justify-center gap-2 font-semibold transition-all cursor-pointer disabled:cursor-not-allowed ${variantClasses[variant]} ${sizeClasses[size]} ${className}`}
         {...props}
       >
         {children}

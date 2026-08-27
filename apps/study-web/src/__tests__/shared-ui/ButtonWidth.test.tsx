@@ -25,4 +25,14 @@ describe('Button width', () => {
     expect(b.className).toContain('w-auto');
     expect(b.className).not.toContain('w-full');
   });
+
+  it("size='icon' is sized by its own token, with neither w-full nor w-auto emitted", () => {
+    // The icon token carries w-10; a competing width utility beside it would
+    // re-create the stylesheet-order coin toss the prop removes.
+    render(<Button size="icon" aria-label="bell" />);
+    const b = screen.getByRole('button', { name: 'bell' });
+    expect(b.className).toContain('w-10');
+    expect(b.className).not.toContain('w-full');
+    expect(b.className).not.toContain('w-auto');
+  });
 });
