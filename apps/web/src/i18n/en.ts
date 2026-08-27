@@ -557,7 +557,7 @@ export default {
       edit: 'Edit note',
       remove: 'Remove note',
       removeTitle: 'Remove this note?',
-      removeDesc: 'The babysitter will no longer see it, and the editing window has closed — you cannot write a new one.',
+      removeDesc: 'The babysitter will no longer see it.',
       dialogTitle: 'Note for the babysitter',
       dialogDesc: 'Share the practical details — door code, bedtime, allergies. The babysitter will see this before the sitting; if the babysitter is supervised, their parents can see it too.',
       placeholder: 'e.g. Door code 1234B. Bedtime at 20:30. Léa is allergic to peanuts.',

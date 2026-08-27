@@ -542,7 +542,7 @@ export default {
       edit: 'Modifier la note',
       remove: 'Supprimer la note',
       removeTitle: 'Supprimer cette note ?',
-      removeDesc: 'Le babysitter ne la verra plus, et la fenêtre de modification est fermée — vous ne pourrez pas en écrire une nouvelle.',
+      removeDesc: 'Le babysitter ne la verra plus.',
       dialogTitle: 'Note pour le babysitter',
       dialogDesc: 'Partagez les détails pratiques — code de la porte, heure du coucher, allergies. Le babysitter la verra avant la garde ; si le babysitter est supervisé, ses parents peuvent aussi la voir.',
       placeholder: 'ex. Code 1234B. Coucher à 20h30. Léa est allergique aux cacahuètes.',

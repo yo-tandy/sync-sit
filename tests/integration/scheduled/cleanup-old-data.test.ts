@@ -253,6 +253,18 @@ describe('runCleanupOldData', () => {
       updatedAt: daysAgo(6),
       preAppointmentNote: 'still visible',
     });
+    // Out of reach: cancelled with a MISSING updatedAt -> redacted. The
+    // dashboards coalesce absent updatedAt to epoch and hide the card
+    // immediately, so the cron must fail CLOSED and erase what nobody can
+    // reach (round-7 review).
+    const noUpdatedAtRef = await db.collection('appointments').add({
+      familyId: seed.family1Id,
+      babysitterUserId: seed.babysitter1.uid,
+      status: 'cancelled',
+      date: daysAgo(2).toISOString().split('T')[0],
+      createdAt: daysAgo(10),
+      preAppointmentNote: 'unreachable code',
+    });
     // Always reachable: confirmed RECURRING (no date) -> notes kept forever.
     const recurringRef = await db.collection('appointments').add({
       familyId: seed.family1Id,
@@ -265,13 +277,14 @@ describe('runCleanupOldData', () => {
     });
 
     const stats = await runCleanupOldData(db, now);
-    expect(stats.appointmentNotesRedacted).toBe(3); // stale pre+post, cancelled pre
+    expect(stats.appointmentNotesRedacted).toBe(4); // stale pre+post, cancelled pre, missing-updatedAt pre
 
     const stale = (await staleRef.get()).data()!;
     expect(stale.status).toBe('confirmed'); // doc itself survives
     expect('preAppointmentNote' in stale).toBe(false);
     expect('postAppointmentNote' in stale).toBe(false);
     expect('preAppointmentNote' in (await cancelledRef.get()).data()!).toBe(false);
+    expect('preAppointmentNote' in (await noUpdatedAtRef.get()).data()!).toBe(false);
     expect((await recentRef.get()).data()!.preAppointmentNote).toBe('still visible');
     expect((await recurringRef.get()).data()!.preAppointmentNote).toBe('door code for Mondays');
   });

@@ -38,7 +38,10 @@ export interface CleanupStats {
  *   author an erasure path — but the remove affordance lives on cards the
  *   dashboards stop rendering after 7 days, so past that point the system
  *   erases for them. Confirmed recurring arrangements (no date) stay
- *   visible, so their notes are never redacted here.
+ *   visible, so their notes are never redacted here. DELIBERATE exception:
+ *   notes on PENDING docs are retained indefinitely -- pending cards render
+ *   forever, so the author permanently keeps the remove affordance instead
+ *   of the cron.
  */
 export async function runCleanupOldData(
   firestoreDb: Firestore,
@@ -239,10 +242,19 @@ export async function runCleanupOldData(
         return typeof data.date === 'string' && data.date !== '' && data.date < sevenDaysAgoStr;
       }
       if (data.status === 'cancelled' || data.status === 'rejected') {
-        const updatedAt = data.updatedAt?.toDate?.() ?? null;
-        return updatedAt !== null && updatedAt < sevenDaysAgo;
+        // Absent/malformed updatedAt counts as OUT of reach: the dashboards
+        // coalesce it to epoch (`?.toDate?.() || new Date(0)`), which hides
+        // the card immediately -- so the cron must erase what nobody can
+        // reach, not fail open and retain it (round-7 review).
+        const updatedAt = data.updatedAt?.toDate?.() ?? new Date(0);
+        return updatedAt < sevenDaysAgo;
       }
-      return false; // pending cards are always rendered
+      // pending: never redacted -- a DELIBERATE, unbounded retention
+      // exception. Pending cards render forever, so the author permanently
+      // keeps the remove affordance instead of the cron; nothing else in
+      // this file deletes a pending doc either, so an odd-history note on
+      // one lives until its author removes it.
+      return false;
     };
 
     // Cursor-paginated drain, not a single capped pass: the range query
@@ -279,6 +291,13 @@ export async function runCleanupOldData(
         }
         cursor = noted.docs[noted.docs.length - 1];
         if (noted.size < 500) break;
+        if (pass === 39) {
+          // Exiting by pass exhaustion, not by draining -- without this a
+          // truncated sweep looks identical to a clean one (round-7 review).
+          console.warn(
+            `Appointment-note redaction sweep hit its 40-pass ceiling for ${field}; backlog remains`,
+          );
+        }
       }
     }
   }
