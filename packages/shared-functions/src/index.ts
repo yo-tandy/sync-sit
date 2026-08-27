@@ -73,6 +73,7 @@ export { listFamilies } from './admin/listFamilies.js';
 export { blockUser } from './admin/blockUser.js';
 export { getAdminConfig, updateAdminConfig } from './admin/adminConfig.js';
 export { getConfigValue, ADMIN_CONFIG_DEFS, __resetAdminConfigCacheForTests } from './config/adminConfig.js';
+export { correctUserIdentity } from './admin/correctUserIdentity.js';
 export { deleteUser } from './admin/deleteUser.js';
 export { resetUserPassword } from './admin/resetUserPassword.js';
 export { updateHolidays } from './admin/updateHolidays.js';

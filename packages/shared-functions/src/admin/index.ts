@@ -4,6 +4,7 @@ export * from './getAdminDashboard.js';
 export * from './listUsers.js';
 export * from './listFamilies.js';
 export * from './blockUser.js';
+export * from './correctUserIdentity.js';
 export * from './deleteUser.js';
 export * from './resetUserPassword.js';
 export * from './updateHolidays.js';

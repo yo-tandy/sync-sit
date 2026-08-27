@@ -1,0 +1,53 @@
+{
+  "emulators": {
+    "auth": {
+      "port": 39099
+    },
+    "functions": {
+      "port": 35001
+    },
+    "firestore": {
+      "port": 38080
+    },
+    "storage": {
+      "port": 39199
+    },
+    "hosting": {
+      "port": 35002
+    },
+    "ui": {
+      "enabled": false
+    },
+    "hub": {
+      "port": 34400
+    },
+    "eventarc": {
+      "port": 29299
+    },
+    "tasks": {
+      "port": 29499
+    },
+    "logging": {
+      "port": 34500
+    }
+  },
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "storage": {
+    "rules": "storage.rules"
+  },
+  "functions": [
+    {
+      "source": "apps/functions",
+      "runtime": "nodejs20",
+      "codebase": "default"
+    },
+    {
+      "source": "apps/study-functions",
+      "runtime": "nodejs20",
+      "codebase": "study"
+    }
+  ]
+}

@@ -2398,6 +2398,13 @@ describe('users update — root identity set-once (issue #144)', () => {
     await assertFails(updateDoc(doc(db, 'users', 'setonce5'), { firstName: deleteField() }));
   });
 
+  it('even an ADMIN on the client SDK cannot write root identity (users update is owner-only; corrections go through the correctUserIdentity callable, issue #158)', async () => {
+    await seed('setonceAdm', { isAdmin: true, status: 'active', email: 'a@x.com', profiles: {} });
+    await seed('setonceT1', withIdentity);
+    const db = testEnv.authenticatedContext('setonceAdm').firestore();
+    await assertFails(updateDoc(doc(db, 'users', 'setonceT1'), { firstName: 'AdminEdit' }));
+  });
+
   it('rewriting the SAME identity values passes (idempotent write)', async () => {
     await seed('setonce6', withIdentity);
     const db = testEnv.authenticatedContext('setonce6').firestore();
