@@ -89,6 +89,34 @@ describe('AdminConfigurationPage', () => {
     expect(h.calls.some((c) => c.name === 'updateAdminConfig')).toBe(false);
   });
 
+  it('clearing an overridden key sends null -- the revert-to-default path (round-1 catch)', async () => {
+    renderPage();
+    await screen.findByText('publishedSearchMaxActive');
+    fireEvent.change(screen.getByLabelText('publishedSearchMaxActive'), { target: { value: '' } });
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+    await waitFor(() => {
+      const update = h.calls.find((c) => c.name === 'updateAdminConfig');
+      expect(update!.payload).toEqual({ updates: { publishedSearchMaxActive: null } });
+    });
+    // The row now reads as default (override gone locally too).
+    expect(screen.getAllByText(/using default/).length).toBe(2);
+  });
+
+  it('an unknown stored key neither renders nor wedges the save button (round-1 catch)', async () => {
+    h.getResult.values = { publishedSearchMaxActive: 5, ghostKey: 42 } as never;
+    renderPage();
+    await screen.findByText('publishedSearchMaxActive');
+    expect(screen.queryByText('ghostKey')).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('boardContactsPerDay'), { target: { value: '10' } });
+    expect(screen.getByRole('button', { name: /save changes/i })).not.toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+    await waitFor(() => {
+      const update = h.calls.find((c) => c.name === 'updateAdminConfig');
+      expect(update!.payload).toEqual({ updates: { boardContactsPerDay: 10 } });
+    });
+    h.getResult.values = { publishedSearchMaxActive: 5 } as never;
+  });
+
   it('surfaces a save failure', async () => {
     h.updateError = new Error('denied');
     renderPage();

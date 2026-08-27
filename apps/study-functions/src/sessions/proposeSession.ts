@@ -111,7 +111,7 @@ export const proposeSession = onCall(
 
     // ── 24h minimum notice (Paris wall clock, DST-safe) ──
     const sessionStart = parisWallTimeToUtc(date, startTime);
-    if (sessionStart.getTime() < now.getTime() + (await getConfigValue('bookingNoticeHours').catch(() => NOTICE_HOURS)) * 60 * 60 * 1000) {
+    if (sessionStart.getTime() < now.getTime() + (await getConfigValue('bookingNoticeHours')) * 60 * 60 * 1000) {
       throw new HttpsError(
         'failed-precondition',
         'Sessions must be proposed at least 24 hours in advance',

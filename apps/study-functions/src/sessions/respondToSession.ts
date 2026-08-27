@@ -198,10 +198,11 @@ export const respondToSession = onCall(
         // first-occurrence notice logic. (A Task-1 review finding about
         // hour-granularity on this date-anchored window, if it lands, fixes both.)
         const fromDate = parisDateString(
-          new Date(now.getTime() + (await getConfigValue('bookingNoticeHours').catch(() => NOTICE_HOURS)) * 60 * 60 * 1000),
+          new Date(now.getTime() + (await getConfigValue('bookingNoticeHours')) * 60 * 60 * 1000),
         );
         let horizonEnd = fromDate;
-        for (let i = 0; i < (await getConfigValue('recurringHorizonWeeks').catch(() => RECURRING_HORIZON_WEEKS)) * 7; i++) horizonEnd = incrementDate(horizonEnd);
+        const horizonWeeks = await getConfigValue('recurringHorizonWeeks');
+        for (let i = 0; i < horizonWeeks * 7; i++) horizonEnd = incrementDate(horizonEnd);
         const rangeEnd = endDate !== undefined && endDate < horizonEnd ? endDate : horizonEnd;
 
         // School-holiday periods across the window — drives schoolWeeksOnly AND
@@ -221,7 +222,7 @@ export const respondToSession = onCall(
           const rawCandidates = expandRecurringDates(
             slot,
             fromDate,
-            (await getConfigValue('recurringHorizonWeeks').catch(() => RECURRING_HORIZON_WEEKS)),
+            horizonWeeks,
             endDate,
             schoolWeeksOnly,
             holidayPeriods,
@@ -229,7 +230,7 @@ export const respondToSession = onCall(
           // Drop occurrences inside the precise 24h notice window ENTIRELY (no
           // instance), so the date-granular anchor never yields a spurious
           // conflict_skip for the first occurrence — it simply rolls to next week.
-          const candidates = dropWithinNotice(rawCandidates, slot.startTime, now, (await getConfigValue('bookingNoticeHours').catch(() => NOTICE_HOURS)));
+          const candidates = dropWithinNotice(rawCandidates, slot.startTime, now, (await getConfigValue('bookingNoticeHours')));
           recurringPlan = { slot, candidates };
         }
       } else {
@@ -432,7 +433,7 @@ export const respondToSession = onCall(
 
       // Re-check the 24h notice — a pending request can go stale.
       const sessionStart = parisWallTimeToUtc(date, startTime);
-      if (sessionStart.getTime() < now.getTime() + (await getConfigValue('bookingNoticeHours').catch(() => NOTICE_HOURS)) * 60 * 60 * 1000) {
+      if (sessionStart.getTime() < now.getTime() + (await getConfigValue('bookingNoticeHours')) * 60 * 60 * 1000) {
         throw new HttpsError(
           'failed-precondition',
           'This request is too close to the session time',
@@ -491,7 +492,7 @@ export const respondToSession = onCall(
           paddingMin: paddingMinutes,
         },
         parisWallClockPosition(now),
-        (await getConfigValue('bookingNoticeHours').catch(() => NOTICE_HOURS)),
+        (await getConfigValue('bookingNoticeHours')),
       );
 
       // The raw session slots must all still be free.

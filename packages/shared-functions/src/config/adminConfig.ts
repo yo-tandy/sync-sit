@@ -1,4 +1,8 @@
 import { db } from './firebase.js';
+import { ADMIN_CONFIG_DEFS, type AdminConfigKey } from '@ejm/shared-core';
+
+export { ADMIN_CONFIG_DEFS } from '@ejm/shared-core';
+export type { AdminConfigKey, AdminConfigDef } from '@ejm/shared-core';
 
 /**
  * Admin-editable operational parameters (issue #250). One flat doc,
@@ -11,73 +15,6 @@ import { db } from './firebase.js';
  * signed-in reads (pastVisibilityDays is consumed client-side, and the
  * values are caps and windows, not secrets).
  */
-export interface AdminConfigDef {
-  default: number;
-  min: number;
-  max: number;
-  description: string;
-}
-
-export const ADMIN_CONFIG_DEFS = {
-  boardContactsPerDay: {
-    default: 5, min: 1, max: 50,
-    description: 'Board contacts a sitter/tutor may send per window (anti-spam cap, both apps).',
-  },
-  boardContactWindowHours: {
-    default: 24, min: 1, max: 168,
-    description: 'Window (hours) for the board-contact cap.',
-  },
-  declineCooldownDays: {
-    default: 7, min: 0, max: 90,
-    description: 'Days a family/sitter pair is blocked from re-requesting after a decline (both apps).',
-  },
-  publishedSearchTtlDays: {
-    default: 7, min: 1, max: 60,
-    description: 'Lifetime (days) of a demand-board post.',
-  },
-  publishedSearchMaxActive: {
-    default: 3, min: 1, max: 20,
-    description: 'Live demand-board posts per family.',
-  },
-  bookingNoticeHours: {
-    default: 24, min: 0, max: 168,
-    description: 'Minimum lead time (hours) for study bookings and moves.',
-  },
-  recurringHorizonWeeks: {
-    default: 8, min: 1, max: 52,
-    description: 'How far ahead (weeks) recurring study sessions are materialized.',
-  },
-  kidInviteValidityDays: {
-    default: 7, min: 1, max: 90,
-    description: 'Kid-invite expiry (days).',
-  },
-  verificationCodeCooldownS: {
-    default: 60, min: 30, max: 600,
-    description: 'Resend cooldown (seconds) per email address for verification codes.',
-  },
-  dailySendCap: {
-    default: 10, min: 1, max: 100,
-    description: 'Verification emails per address per day (abuse lever).',
-  },
-  bypassSendCap: {
-    default: 6, min: 1, max: 100,
-    description: 'Authed own-email verification sends per user per hour (abuse lever).',
-  },
-  verifyCodeMaxAttempts: {
-    default: 5, min: 3, max: 10,
-    description: 'Wrong-code attempts before a verification code burns.',
-  },
-  pastVisibilityDays: {
-    default: 7, min: 1, max: 90,
-    description: 'How long (days) past appointments stay on dashboards.',
-  },
-  availabilityMaxRangeDays: {
-    default: 28, min: 7, max: 90,
-    description: 'Widest availability range (days) a client may query.',
-  },
-} as const satisfies Record<string, AdminConfigDef>;
-
-export type AdminConfigKey = keyof typeof ADMIN_CONFIG_DEFS;
 
 export const ADMIN_CONFIG_DOC = 'adminConfig/values';
 

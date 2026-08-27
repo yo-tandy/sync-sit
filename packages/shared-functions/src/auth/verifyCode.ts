@@ -31,7 +31,7 @@ export const verifyCode = onCall(
 
     // Rate limiting: check attempt count
     const attempts = codeData.attempts || 0;
-    const maxAttempts = await getConfigValue('verifyCodeMaxAttempts').catch(() => MAX_ATTEMPTS);
+    const maxAttempts = await getConfigValue('verifyCodeMaxAttempts');
     if (attempts >= maxAttempts) {
       throw new HttpsError(
         'resource-exhausted',

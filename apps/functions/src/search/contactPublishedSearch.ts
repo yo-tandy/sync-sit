@@ -236,10 +236,10 @@ export const contactPublishedSearch = onCall(
       if (live) {
         throw new HttpsError('already-exists', 'You have already contacted this family about this search');
       }
-      const cooldownDays = await getConfigValue('declineCooldownDays').catch(() => DECLINE_COOLDOWN_MS / 86400_000);
+      const cooldownDays = await getConfigValue('declineCooldownDays');
       const cooldownFrom = Date.now() - cooldownDays * 86400_000;
-      const boardCap = await getConfigValue('boardContactsPerDay').catch(() => MAX_BOARD_CONTACTS_PER_DAY);
-      const boardWindowHours = await getConfigValue('boardContactWindowHours').catch(() => BOARD_CONTACT_WINDOW_MS / 3600_000);
+      const boardCap = await getConfigValue('boardContactsPerDay');
+      const boardWindowHours = await getConfigValue('boardContactWindowHours');
       const recentlyDeclined = priorSnap.docs.some((d) => {
         const apt = d.data();
         if (apt.statusReason !== 'declined_by_family') return false;

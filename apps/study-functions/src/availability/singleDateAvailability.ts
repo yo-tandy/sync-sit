@@ -139,7 +139,7 @@ export async function computeSingleDateAvailability(
       date,
       inputs,
       parisWallClockPosition(new Date()),
-      (await getConfigValue('bookingNoticeHours').catch(() => NOTICE_HOURS)),
+      (await getConfigValue('bookingNoticeHours')),
     ),
     locationCells: resolveDateLocationCells(date, inputs),
   };

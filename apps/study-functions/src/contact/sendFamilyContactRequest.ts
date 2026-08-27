@@ -196,7 +196,7 @@ export const sendFamilyContactRequest = onCall(
     // closed lasts a week rather than forever (issue #214).
     await repairTimestamplessDeclines(existingSnap.docs, 'tutor');
     const declinedMs = latestDeclineMs(existingSnap.docs.map((d) => d.data()), 'tutor');
-    const declineCooldownMs = (await getConfigValue('declineCooldownDays').catch(() => DECLINE_COOLDOWN_MS / 86400_000)) * 86400_000;
+    const declineCooldownMs = (await getConfigValue('declineCooldownDays')) * 86400_000;
     if (declinedMs !== null && Date.now() - declinedMs < declineCooldownMs) {
       throw new HttpsError(
         'failed-precondition',
@@ -244,8 +244,8 @@ export const sendFamilyContactRequest = onCall(
     // the doc refs directly, which a transaction cannot carry, and the pair
     // dedupe's non-atomicity is pre-existing and unchanged by this PR.
     await db.runTransaction(async (tx) => {
-      const boardCap = await getConfigValue('boardContactsPerDay').catch(() => MAX_BOARD_CONTACTS_PER_DAY);
-      const boardWindowHours = await getConfigValue('boardContactWindowHours').catch(() => BOARD_CONTACT_WINDOW_MS / 3600_000);
+      const boardCap = await getConfigValue('boardContactsPerDay');
+      const boardWindowHours = await getConfigValue('boardContactWindowHours');
       const recentSnap = await tx.get(
         db.collection('studyContactRequests')
           .where('tutorUserId', '==', uid)

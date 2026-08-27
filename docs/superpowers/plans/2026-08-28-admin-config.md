@@ -28,14 +28,16 @@ nothing.
 - `firestore.rules`: `adminConfig/{doc}` readable by any SIGNED-IN user
   (pastVisibilityDays is consumed client-side; the values are caps and
   windows, not secrets), writes denied (callable-only).
-- Client: `useAdminConfig` hook in apps/web (one read, default fallback)
-  feeding the two dashboard hooks that consume pastVisibilityDays.
+- Client: `getClientConfigValue` (apps/web/src/lib/adminConfigClient.ts;
+  one shared read, identical fallback semantics incl. sync-throw, unit
+  tested) resolved BEFORE the dashboard hooks subscribe, so the first
+  bucketing already uses the configured pastVisibilityDays.
 - `availabilityMaxRangeDays`: the zod schema keeps an ABSOLUTE ceiling
   (90); the configured value is enforced dynamically in
   getTutorAvailability (schemas are built at module load and must not
   capture a mutable config read).
 
-**Keys (13):** boardContactsPerDay(5,1..50), boardContactWindowHours
+**Keys (14):** boardContactsPerDay(5,1..50), boardContactWindowHours
 (24,1..168), declineCooldownDays(7,0..90), publishedSearchTtlDays(7,1..60),
 publishedSearchMaxActive(3,1..20), bookingNoticeHours(24,0..168),
 recurringHorizonWeeks(8,1..52), kidInviteValidityDays(7,1..90),
@@ -62,3 +64,16 @@ tests (render defs, save payload, bounds hint).
 **Admin panel:** ConfigurationPage in apps/web admin section -- one row
 per key (description, default, bounds, current input), save via
 updateAdminConfig, i18n en/fr.
+
+**Round 1 (PR #266):** definition table moved to shared-core (one table
+for server getter, validator, panel, and client -- no drift); config
+resolved before the dashboard hooks subscribe (a post-hoc `let` was never
+applied on a quiet dashboard); null-revert path (empty panel field
+deletes the field; audit records to: null); unknown stored keys neither
+render nor wedge the panel; extendRecurring wired (it was enforcing the
+hardcoded 24h) and the loop-condition awaits hoisted; unreachable
+.catch fallbacks removed (getConfigValue cannot reject); dead
+SEND_COOLDOWN_MS deleted; verificationCodeCooldownS floor raised to 60
+(today's fixed value -- the panel cannot weaken the resend posture);
+rules narrowed to /adminConfig/values and re-homed below the
+notifications block; client reader unit-tested.

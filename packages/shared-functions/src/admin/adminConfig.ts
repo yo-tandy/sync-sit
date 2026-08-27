@@ -1,4 +1,5 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { FieldValue } from 'firebase-admin/firestore';
 import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { verifyAdmin } from './verifyAdmin.js';
@@ -48,14 +49,24 @@ export const updateAdminConfig = onCall(
       throw new HttpsError('invalid-argument', 'updates must be a non-empty object');
     }
 
-    const clean: Record<string, number> = {};
+    // null reverts a key to its code default (the field is DELETED, so
+    // "using default" in the panel means exactly that -- round-1 review:
+    // without this, an override could never be removed and the help text
+    // promising "empty field = code default" was false).
+    const clean: Record<string, number | FieldValue> = {};
+    const auditTo: Record<string, number | null> = {};
     for (const [key, raw] of Object.entries(updates)) {
       const def = ADMIN_CONFIG_DEFS[key as AdminConfigKey];
       if (!def) {
         throw new HttpsError('invalid-argument', `Unknown config key: ${key}`);
       }
+      if (raw === null) {
+        clean[key] = FieldValue.delete();
+        auditTo[key] = null;
+        continue;
+      }
       if (typeof raw !== 'number' || !Number.isInteger(raw)) {
-        throw new HttpsError('invalid-argument', `${key} must be an integer`);
+        throw new HttpsError('invalid-argument', `${key} must be an integer or null`);
       }
       if (raw < def.min || raw > def.max) {
         throw new HttpsError(
@@ -64,6 +75,7 @@ export const updateAdminConfig = onCall(
         );
       }
       clean[key] = raw;
+      auditTo[key] = raw;
     }
 
     const ref = db.doc(ADMIN_CONFIG_DOC);
@@ -76,7 +88,7 @@ export const updateAdminConfig = onCall(
       action: 'admin_config_updated',
       details: {
         changes: Object.fromEntries(
-          Object.entries(clean).map(([k, v]) => [
+          Object.entries(auditTo).map(([k, v]) => [
             k,
             { from: (before as Record<string, unknown>)[k] ?? null, to: v },
           ]),

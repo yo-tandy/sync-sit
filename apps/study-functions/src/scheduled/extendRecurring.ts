@@ -108,7 +108,12 @@ async function extendOne(
   // PR 4's completion cron — keeping this cron purely additive.
   const fromDate = parisDateString(now);
   let horizonEnd = fromDate;
-  for (let i = 0; i < (await getConfigValue('recurringHorizonWeeks').catch(() => HORIZON_WEEKS)) * 7; i++) horizonEnd = incrementDate(horizonEnd);
+  const horizonWeeks = await getConfigValue('recurringHorizonWeeks');
+  // The recurring notice window follows the same configured value the
+  // booking/confirm paths use (issue #250 review round 1 -- this site was
+  // the one enforcing the hardcoded 24h while its siblings were config-fed).
+  const noticeHours = await getConfigValue('bookingNoticeHours');
+  for (let i = 0; i < horizonWeeks * 7; i++) horizonEnd = incrementDate(horizonEnd);
   const rangeEnd = endDate !== undefined && endDate < horizonEnd ? endDate : horizonEnd;
 
   // Static availability config (per-tutor) + school-holiday periods across range.
@@ -133,9 +138,10 @@ async function extendOne(
   }
 
   const candidates = dropWithinNotice(
-    expandRecurringDates(slot, fromDate, (await getConfigValue('recurringHorizonWeeks').catch(() => HORIZON_WEEKS)), endDate, schoolWeeksOnly, holidayPeriods),
+    expandRecurringDates(slot, fromDate, horizonWeeks, endDate, schoolWeeksOnly, holidayPeriods),
     slot.startTime,
     now,
+    noticeHours,
   );
   if (candidates.length === 0) {
     return { scheduledDates: [], skippedDates: [] };

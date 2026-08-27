@@ -4,6 +4,7 @@ import { db } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { PAST_VISIBILITY_DAYS } from '@ejm/sit-core';
 import { getClientConfigValue } from '@/lib/adminConfigClient';
+import { ADMIN_CONFIG_DEFS } from '@ejm/shared-core';
 import type { AppointmentDoc } from '@ejm/sit-core';
 import { getParentProfile } from '@ejm/sit-core';
 
@@ -28,14 +29,20 @@ export function useFamilyAppointments() {
       where('familyId', '==', familyId)
     );
 
-    // Admin-configurable since issue #250; the code constant stays the
-    // fallback and the pre-fetch value, so the first snapshot renders with
-    // the default and re-buckets only if the configured value differs.
-    let pastVisibilityDays = PAST_VISIBILITY_DAYS;
-    void getClientConfigValue('pastVisibilityDays', PAST_VISIBILITY_DAYS, { min: 1, max: 90 })
-      .then((v) => { pastVisibilityDays = v; })
-      .catch(() => {});
-    const unsub = onSnapshot(q, (snap) => {
+    // Admin-configurable since issue #250. The value is resolved BEFORE
+    // subscribing (round-1 review: a `let` mutated after the fact was only
+    // read on the NEXT snapshot, so a quiet dashboard never applied it);
+    // the read is one cached getDoc that falls back to the code default on
+    // any failure, and the bounds come from the shared definition table.
+    let unsub: (() => void) | undefined;
+    let cancelled = false;
+    void getClientConfigValue(
+      'pastVisibilityDays',
+      PAST_VISIBILITY_DAYS,
+      ADMIN_CONFIG_DEFS.pastVisibilityDays,
+    ).then((pastVisibilityDays) => {
+      if (cancelled) return;
+      unsub = onSnapshot(q, (snap) => {
       const now = new Date();
       const cutoff = new Date();
       cutoff.setDate(cutoff.getDate() - pastVisibilityDays);
@@ -79,7 +86,11 @@ export function useFamilyAppointments() {
       setLoading(false);
     });
 
-    return unsub;
+    });
+    return () => {
+      cancelled = true;
+      unsub?.();
+    };
   }, [familyId]);
 
   return { pending, confirmed, pastRecent, rejectedRecent, loading };

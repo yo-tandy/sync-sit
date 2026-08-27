@@ -32,6 +32,8 @@
  * diffFrames message.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { __resetAdminConfigClientCacheForTests } from '@/lib/adminConfigClient';
+import { getDoc as fsGetDoc } from 'firebase/firestore';
 import { act, renderHook } from '@testing-library/react';
 import { diffFrames } from './_helpers/replayHook';
 
@@ -56,6 +58,7 @@ vi.mock('@/config/firebase', () => ({ db: {} }));
 vi.mock('firebase/firestore', () => ({
   // pastVisibilityDays config read (issue #250): resolve empty -> default.
   getDoc: vi.fn().mockResolvedValue({ exists: () => false, data: () => undefined }),
+  doc: (_db: unknown, ...path: string[]) => ({ __doc: path.join('/') }),
   collection: (_db: unknown, name: string) => ({ __collection: name }),
   query: (c: unknown, ...rest: unknown[]) => ({ __query: { c, rest } }),
   where: (field: string, op: string, val: unknown) => ({
@@ -119,6 +122,7 @@ beforeEach(() => {
   authState.firebaseUser = null;
   snapState.cb = null;
   snapState.unsubCount = 0;
+  __resetAdminConfigClientCacheForTests();
 });
 
 afterEach(() => {
@@ -185,6 +189,40 @@ const r2 = {
 };
 
 // --- tests ------------------------------------------------------------------
+
+describe('configured pastVisibilityDays (issue #250)', () => {
+  it('a configured 30-day window keeps a 20-day-old sitting that the default 7 would drop', async () => {
+    // The config resolves BEFORE the subscription (round-1 review: a value
+    // arriving after the only snapshot was never applied on a quiet
+    // dashboard), so the FIRST bucketing already uses it.
+    vi.mocked(fsGetDoc).mockResolvedValueOnce({
+      exists: () => true,
+      data: () => ({ pastVisibilityDays: 30 }),
+    } as never);
+    const old20 = {
+      appointmentId: 'old20',
+      status: 'confirmed' as const,
+      babysitterUserId: 'a',
+      familyId: 'f1',
+      date: '2026-04-25', // 20 days before SYSTEM_NOW; default cutoff is 05-08
+      startTime: '08:00',
+      endTime: '10:00',
+      updatedAt: makeTimestamp(new Date('2026-04-24T10:00:00Z')),
+    };
+    authState.firebaseUser = { uid: 'a' };
+    const { result, unmount } = renderHook(() => useAppointments());
+    // The subscription now registers after the config promise chain --
+    // flush microtask rounds until the snapshot callback exists.
+    for (let i = 0; i < 5 && !snapState.cb; i++) await act(async () => {});
+    expect(snapState.cb).toBeTruthy();
+    act(() => {
+      snapState.cb?.({ docs: [{ data: () => old20 }] });
+    });
+    await act(async () => {});
+    expect(result.current.pastRecent.map((a) => a.appointmentId)).toEqual(['old20']);
+    unmount();
+  });
+});
 
 describe('L1: useAppointments — Gate 2 oracle-diff', () => {
   it('cold mount with uid=undefined: loading=false, no subscription created', async () => {

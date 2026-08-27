@@ -57,7 +57,7 @@ export const publishTutorSearch = onCall(
     }
 
     const now = new Date();
-    const expiresAt = new Date(now.getTime() + (await getConfigValue('publishedSearchTtlDays').catch(() => PUBLISHED_SEARCH_TTL_DAYS)) * 24 * 60 * 60 * 1000);
+    const expiresAt = new Date(now.getTime() + (await getConfigValue('publishedSearchTtlDays')) * 24 * 60 * 60 * 1000);
 
     // ── Cap: at most PUBLISHED_SEARCH_MAX_ACTIVE active docs per family per
     // app; expiry filtered in code so expired-but-unswept docs don't count. ──
@@ -70,7 +70,7 @@ export const publishTutorSearch = onCall(
       const expMs = exp?.toMillis ? exp.toMillis() : exp?.toDate ? exp.toDate().getTime() : 0;
       return expMs > now.getTime();
     }).length;
-    const maxActive = await getConfigValue('publishedSearchMaxActive').catch(() => PUBLISHED_SEARCH_MAX_ACTIVE);
+    const maxActive = await getConfigValue('publishedSearchMaxActive');
     if (activeCount >= maxActive) {
       throw new HttpsError('resource-exhausted', 'Too many active published searches for this family');
     }

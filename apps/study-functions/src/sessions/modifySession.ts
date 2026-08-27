@@ -354,7 +354,7 @@ export const modifySession = onCall(
           );
         }
         const sessionStart = parisWallTimeToUtc(newDate, newStart);
-        if (sessionStart.getTime() < now.getTime() + (await getConfigValue('bookingNoticeHours').catch(() => NOTICE_HOURS)) * 60 * 60 * 1000) {
+        if (sessionStart.getTime() < now.getTime() + (await getConfigValue('bookingNoticeHours')) * 60 * 60 * 1000) {
           throw new HttpsError(
             'failed-precondition',
             'The new time is too close — sessions need 24 hours notice',
@@ -498,7 +498,7 @@ export const modifySession = onCall(
           paddingMin: paddingMinutes,
         },
         parisWallClockPosition(now),
-        (await getConfigValue('bookingNoticeHours').catch(() => NOTICE_HOURS)),
+        (await getConfigValue('bookingNoticeHours')),
       );
       for (let i = startIdx; i < endIdx; i++) {
         if (!grid[i]) {

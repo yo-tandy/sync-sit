@@ -211,7 +211,7 @@ export const getTutorAvailability = onCall(
     // boolean grids are unchanged. ──
     const locationDefaults = tutor.locationPrefs ?? [];
     const nowParis = parisWallClockPosition(new Date());
-    const noticeHours = await getConfigValue('bookingNoticeHours').catch(() => NOTICE_HOURS);
+    const noticeHours = await getConfigValue('bookingNoticeHours');
     const dates = eachDateInRange(startDate, endDate).map((date) => {
       const inputs = {
         weekly,

@@ -48,9 +48,14 @@ export function AdminConfigurationPage() {
         if (cancelled) return;
         setDefs(res.data.defs);
         setValues(res.data.values ?? {});
+        // Seed drafts from KNOWN keys only: a stray doc field (console
+        // edit, removed key) must neither render nor wedge the save button
+        // (round-1 review).
         setDrafts(
           Object.fromEntries(
-            Object.entries(res.data.values ?? {}).map(([k, v]) => [k, String(v)]),
+            Object.entries(res.data.values ?? {})
+              .filter(([k]) => k in res.data.defs)
+              .map(([k, v]) => [k, String(v)]),
           ),
         );
       } catch {
@@ -66,9 +71,8 @@ export function AdminConfigurationPage() {
 
   const invalids = defs
     ? Object.entries(drafts).filter(([k, raw]) => {
-        if (raw.trim() === '') return false;
         const def = defs[k];
-        if (!def) return true;
+        if (!def || raw.trim() === '') return false;
         const n = Number(raw);
         return !Number.isInteger(n) || n < def.min || n > def.max;
       })
@@ -76,9 +80,16 @@ export function AdminConfigurationPage() {
 
   const handleSave = async () => {
     if (!defs) return;
-    const updates: Record<string, number> = {};
+    const updates: Record<string, number | null> = {};
     for (const [k, raw] of Object.entries(drafts)) {
-      if (raw.trim() === '') continue;
+      if (!(k in defs)) continue;
+      if (raw.trim() === '') {
+        // Clearing an OVERRIDDEN key reverts it to the code default -- the
+        // help text promises exactly this (round-1 review: there was no
+        // path back to the default at all).
+        if (typeof values[k] === 'number') updates[k] = null;
+        continue;
+      }
       const n = Number(raw);
       // Skip unchanged values so the audit log records real changes only.
       if (values[k] === n) continue;
@@ -90,7 +101,14 @@ export function AdminConfigurationPage() {
     try {
       const fn = httpsCallable(functions, 'updateAdminConfig');
       await fn({ updates });
-      setValues((prev) => ({ ...prev, ...updates }));
+      setValues((prev) => {
+        const next = { ...prev };
+        for (const [k, v] of Object.entries(updates)) {
+          if (v === null) delete next[k];
+          else next[k] = v;
+        }
+        return next;
+      });
       toast(t('admin.config.saved'));
     } catch {
       setError(t('admin.config.saveError'));

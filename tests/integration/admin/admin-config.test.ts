@@ -116,6 +116,19 @@ describe('adminConfig', () => {
     });
   });
 
+  it('null reverts a key: the field is DELETED and the audit records to: null', async () => {
+    await callFunction('updateAdminConfig', { updates: { publishedSearchMaxActive: 5 } }, adminToken);
+    await callFunction('updateAdminConfig', { updates: { publishedSearchMaxActive: null } }, adminToken);
+    const doc = (await getDb().doc('adminConfig/values').get()).data()!;
+    expect('publishedSearchMaxActive' in doc).toBe(false);
+    const logs = await getDb().collection('auditLogs')
+      .where('action', '==', 'admin_config_updated').get();
+    expect(logs.docs.map((d) => d.data()).some((e) =>
+      (e.details as { changes?: Record<string, { to: unknown }> })
+        ?.changes?.publishedSearchMaxActive?.to === null,
+    )).toBe(true);
+  });
+
   describe('effect on callables (ADMIN_CONFIG_TTL_MS=0)', () => {
     it('a lowered publishedSearchMaxActive takes effect: second publish rejected at cap 1', async () => {
       await callFunction('updateAdminConfig', { updates: { publishedSearchMaxActive: 1 } }, adminToken);

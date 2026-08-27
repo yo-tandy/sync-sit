@@ -193,12 +193,13 @@ export const bookSession = onCall(
       // is skipped and the first occurrence rolls to next week. This is how the
       // 24h notice applies to a recurring series' FIRST occurrence.
       const fromDate = parisDateString(
-        new Date(now.getTime() + (await getConfigValue('bookingNoticeHours').catch(() => NOTICE_HOURS)) * 60 * 60 * 1000),
+        new Date(now.getTime() + (await getConfigValue('bookingNoticeHours')) * 60 * 60 * 1000),
       );
       // Upper bound of the window (for the holiday-year lookup); endDate only
       // truncates WITHIN it, so we still load holidays across the full horizon.
       let horizonEnd = fromDate;
-      for (let i = 0; i < (await getConfigValue('recurringHorizonWeeks').catch(() => RECURRING_HORIZON_WEEKS)) * 7; i++) horizonEnd = incrementDate(horizonEnd);
+      const horizonWeeks = await getConfigValue('recurringHorizonWeeks');
+      for (let i = 0; i < horizonWeeks * 7; i++) horizonEnd = incrementDate(horizonEnd);
       const rangeEnd = endDate !== undefined && endDate < horizonEnd ? endDate : horizonEnd;
 
       // French school-holiday periods across the window — drives schoolWeeksOnly.
@@ -217,7 +218,7 @@ export const bookSession = onCall(
       const candidates = expandRecurringDates(
         slotWithEnd,
         fromDate,
-        (await getConfigValue('recurringHorizonWeeks').catch(() => RECURRING_HORIZON_WEEKS)),
+        horizonWeeks,
         endDate,
         schoolWeeksOnly,
         holidayPeriods,
@@ -360,7 +361,7 @@ export const bookSession = onCall(
 
       // ── 24h minimum notice (Paris wall clock, DST-safe) ──
       const sessionStart = parisWallTimeToUtc(bookingDate, bookingStart);
-      if (sessionStart.getTime() < now.getTime() + (await getConfigValue('bookingNoticeHours').catch(() => NOTICE_HOURS)) * 60 * 60 * 1000) {
+      if (sessionStart.getTime() < now.getTime() + (await getConfigValue('bookingNoticeHours')) * 60 * 60 * 1000) {
         throw new HttpsError(
           'failed-precondition',
           'Sessions must be booked at least 24 hours in advance',
