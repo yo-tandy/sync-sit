@@ -139,7 +139,15 @@ describe('reviewVerification', () => {
   // Issue #218 — a community approval vouches for BOTH types. Re-approving one
   // document later must not silently revoke the other.
   describe('community-granted families', () => {
-    async function grantCommunityApproval() {
+    /**
+     * Stub grant: writes the family verification map directly, WITHOUT
+     * running approveCommunityCode — so the supersede never runs. That makes
+     * this helper double as the simulation of a grant whose (deliberately
+     * non-fatal) supersede FAILED, which is exactly what the recompute's
+     * communityApprovedAt ordering must survive. Pass `legacy: true` to omit
+     * the timestamp, modelling a pre-#220 grant.
+     */
+    async function grantCommunityApproval(opts: { legacy?: boolean } = {}) {
       await getDb().collection('families').doc(seed.family2Id).update({
         verification: {
           identityStatus: 'approved',
@@ -147,6 +155,7 @@ describe('reviewVerification', () => {
           isFullyVerified: true,
           isEjmFamily: true,
           communityApprovedBy: seed.parent1.uid,
+          ...(opts.legacy ? {} : { communityApprovedAt: new Date() }),
         },
       });
     }
@@ -257,6 +266,77 @@ describe('reviewVerification', () => {
         .data()!.verification;
       expect(verification.identityStatus).toBe('approved');
       expect(verification.isFullyVerified).toBe(true);
+    });
+
+    it('a SWALLOWED supersede failure cannot resurface a pre-grant rejection', async () => {
+      // approveCommunityCode's supersede is deliberately non-fatal; the
+      // recompute must therefore not lean on it having run. The stub grant
+      // here IS that failure mode: communityApprovedAt written, rejected doc
+      // left live. Ordering comes from the timestamp, not the supersede
+      // (PR #220 review — the commit-3 catch had quietly become load-bearing
+      // for commit 4's correctness).
+      const staleReject = await seedVerification({
+        familyId: seed.family2Id,
+        uploadedByUserId: seed.parent3.uid,
+        type: 'identity',
+      });
+      await callFunction(
+        'reviewVerification',
+        { verificationId: staleReject, decision: 'rejected', rejectionReason: 'Blurry' },
+        adminToken,
+      );
+
+      // Grant with timestamp, supersede "failed": the rejected doc survives.
+      await grantCommunityApproval();
+      const enrollVerification = await seedVerification({
+        familyId: seed.family2Id,
+        uploadedByUserId: seed.parent3.uid,
+        type: 'ejm_enrollment',
+      });
+      const result = await callFunction<{ isFullyVerified: boolean }>(
+        'reviewVerification',
+        { verificationId: enrollVerification, decision: 'approved' },
+        adminToken,
+      );
+
+      expect(result.isFullyVerified).toBe(true);
+      const verification = (await getDb().collection('families').doc(seed.family2Id).get())
+        .data()!.verification;
+      expect(verification.identityStatus).toBe('approved');
+      // The ordering must survive the recompute's own rewrite of the map.
+      expect(verification.communityApprovedAt).toBeTruthy();
+    });
+
+    it('a LEGACY grant (no communityApprovedAt) falls back to supersede ordering', async () => {
+      // Pre-#220 grants carry no timestamp. For them a surviving rejection
+      // still wins — the supersede (which DID run on the real path, and
+      // closes rejected docs since this PR) is the only ordering available.
+      const staleReject = await seedVerification({
+        familyId: seed.family2Id,
+        uploadedByUserId: seed.parent3.uid,
+        type: 'identity',
+      });
+      await callFunction(
+        'reviewVerification',
+        { verificationId: staleReject, decision: 'rejected', rejectionReason: 'Blurry' },
+        adminToken,
+      );
+      await grantCommunityApproval({ legacy: true });
+      const enrollVerification = await seedVerification({
+        familyId: seed.family2Id,
+        uploadedByUserId: seed.parent3.uid,
+        type: 'ejm_enrollment',
+      });
+      await callFunction(
+        'reviewVerification',
+        { verificationId: enrollVerification, decision: 'approved' },
+        adminToken,
+      );
+
+      const verification = (await getDb().collection('families').doc(seed.family2Id).get())
+        .data()!.verification;
+      expect(verification.identityStatus).toBe('rejected');
+      expect(verification.isFullyVerified).toBe(false);
     });
 
     it('a live PENDING doc of the other type does not drop the grant mid-review', async () => {

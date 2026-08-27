@@ -67,15 +67,32 @@ export const reviewVerification = onCall(
     let identityStatus: string = 'not_submitted';
     let enrollmentStatus: string = 'not_submitted';
     let isEjmFamily = false;
+    // When each type's contributing rejection was decided — feeds the
+    // pre/post-grant ordering below. The doc being decided RIGHT NOW is
+    // stamped Infinity: this review is by construction after any grant.
+    let identityRejectedAtMs: number | null = null;
+    let enrollmentRejectedAtMs: number | null = null;
+
+    const reviewedAtMs = (d: Record<string, unknown>): number | null => {
+      const v = d.reviewedAt as { toMillis?: () => number } | Date | undefined;
+      if (!v) return null;
+      if (v instanceof Date) return v.getTime();
+      return typeof v.toMillis === 'function' ? v.toMillis() : null;
+    };
 
     for (const doc of allVerifications.docs) {
       const d = doc.data();
-      const docStatus = doc.id === verificationId ? decision : d.status;
+      const isCurrent = doc.id === verificationId;
+      const docStatus = isCurrent ? decision : d.status;
+      const rejMs = isCurrent ? Infinity : reviewedAtMs(d);
 
       if (d.type === 'identity') {
         if (docStatus === 'approved') identityStatus = 'approved';
         else if (docStatus === 'pending' && identityStatus !== 'approved') identityStatus = 'pending';
-        else if (docStatus === 'rejected' && identityStatus === 'not_submitted') identityStatus = 'rejected';
+        else if (docStatus === 'rejected' && identityStatus === 'not_submitted') {
+          identityStatus = 'rejected';
+          identityRejectedAtMs = rejMs;
+        }
       }
 
       if (d.type === 'ejm_enrollment') {
@@ -84,7 +101,10 @@ export const reviewVerification = onCall(
           isEjmFamily = true;
         }
         else if (docStatus === 'pending' && enrollmentStatus !== 'approved') enrollmentStatus = 'pending';
-        else if (docStatus === 'rejected' && enrollmentStatus === 'not_submitted') enrollmentStatus = 'rejected';
+        else if (docStatus === 'rejected' && enrollmentStatus === 'not_submitted') {
+          enrollmentStatus = 'rejected';
+          enrollmentRejectedAtMs = rejMs;
+        }
       }
     }
 
@@ -104,22 +124,51 @@ export const reviewVerification = onCall(
     //   isFullyVerified: false (and clearing isEjmFamily) for the whole window
     //   between upload and review — an outcome no admin chose.
     // - `rejected` is a decision, but only a POST-grant one counts. A
-    //   rejection that predates the grant was already overridden by it, and
-    //   this recompute has no notion of ordering. supersedeOpenVerifications
-    //   supplies that ordering by closing pre-grant pending AND rejected docs
-    //   at grant time, so anything still `rejected` here is necessarily a
-    //   decision the family earned after they were already verified — and it
-    //   still wins, as it should.
+    //   rejection that predates the grant was already overridden by it. The
+    //   ordering is explicit: the grant stamps communityApprovedAt, and a
+    //   rejection whose reviewedAt predates it is treated as undecided here.
+    //   supersedeOpenVerifications closes pre-grant docs at grant time too,
+    //   but the recompute must not LEAN on that write having succeeded — it
+    //   is deliberately non-fatal in approveCommunityCode, and a swallowed
+    //   failure there must degrade to a stale queue entry, not to a family
+    //   silently un-verified by a later approval (PR #220 review).
+    //
+    //   Legacy grants (pre-#220, no communityApprovedAt) fall back to the
+    //   supersede-based ordering: a surviving rejection wins. A rejection
+    //   with no readable reviewedAt is treated as post-grant — failing
+    //   toward "the admin's decision stands" on the side that gates access.
+    //
+    //   Known limit, deliberate: a POST-grant rejection is durable only
+    //   while its row survives. submitVerification deletes all prior docs of
+    //   a type on re-upload, so a family can replace a post-grant-rejected
+    //   doc and the grant then covers the type again while the replacement
+    //   awaits review. The grant DID vouch for that type independently, so
+    //   this is accepted rather than accidental; revisit if re-upload churn
+    //   becomes an abuse pattern.
     const familyRef = db.collection('families').doc(familyId);
     const priorVerification = (await familyRef.get()).data()?.verification;
     const communityApprovedBy = priorVerification?.communityApprovedBy;
+    const grantAt = priorVerification?.communityApprovedAt as
+      | { toMillis?: () => number }
+      | Date
+      | undefined;
+    const grantAtMs =
+      grantAt instanceof Date
+        ? grantAt.getTime()
+        : typeof grantAt?.toMillis === 'function'
+          ? grantAt.toMillis()
+          : null;
 
-    // Statuses that represent "no post-grant admin decision for this type".
-    const undecided = (s: string) => s === 'not_submitted' || s === 'pending';
+    // "No post-grant admin decision for this type": never decided, decided
+    // by nobody yet (pending), or decided BEFORE the grant that overrode it.
+    const undecided = (s: string, rejMs: number | null) =>
+      s === 'not_submitted' ||
+      s === 'pending' ||
+      (s === 'rejected' && grantAtMs !== null && rejMs !== null && rejMs < grantAtMs);
 
     if (communityApprovedBy) {
-      if (undecided(identityStatus)) identityStatus = 'approved';
-      if (undecided(enrollmentStatus)) {
+      if (undecided(identityStatus, identityRejectedAtMs)) identityStatus = 'approved';
+      if (undecided(enrollmentStatus, enrollmentRejectedAtMs)) {
         enrollmentStatus = 'approved';
         isEjmFamily = true;
       }
@@ -133,9 +182,13 @@ export const reviewVerification = onCall(
         enrollmentStatus,
         isFullyVerified,
         isEjmFamily,
-        // Carrying this forward is what keeps the grant durable across
-        // repeated document rounds.
+        // Carrying these forward is what keeps the grant durable across
+        // repeated document rounds — communityApprovedAt included, or the
+        // ordering above would be lost on the first recompute.
         ...(communityApprovedBy ? { communityApprovedBy } : {}),
+        ...(communityApprovedBy && priorVerification?.communityApprovedAt
+          ? { communityApprovedAt: priorVerification.communityApprovedAt }
+          : {}),
       },
     });
 

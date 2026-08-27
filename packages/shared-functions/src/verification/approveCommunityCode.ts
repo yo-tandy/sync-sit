@@ -62,6 +62,12 @@ export const approveCommunityCode = onCall(
     // by an admin reviewing their documents, or by another parent acting on
     // the same request first. Refuse BEFORE the code is consumed, and say
     // that the request is stale rather than silently re-approving (#218).
+    //
+    // Sequential attempts only: this is a plain read, not a transaction, so
+    // two approvers landing CONCURRENTLY can both pass it (and the `used`
+    // check above — pre-existing). The damage is bounded to a wrong
+    // "who vouched" attribution and a duplicate activity row; the second
+    // verification write is idempotent (PR #220 review).
     const requesterFamily = await db.collection('families').doc(codeData.familyId).get();
     if (requesterFamily.data()?.verification?.isFullyVerified) {
       throw new HttpsError(
@@ -80,7 +86,11 @@ export const approveCommunityCode = onCall(
       usedAt: now,
     });
 
-    // Set requester's family as fully verified + EJM family
+    // Set requester's family as fully verified + EJM family.
+    // communityApprovedAt is what makes the grant's ORDERING explicit:
+    // reviewVerification ignores rejections whose reviewedAt predates it, so
+    // pre-grant decisions cannot resurface even if the supersede below fails
+    // (PR #220 review). communityApprovedBy alone couldn't say WHEN.
     await db.collection('families').doc(codeData.familyId).update({
       verification: {
         identityStatus: 'approved',
@@ -88,6 +98,7 @@ export const approveCommunityCode = onCall(
         isFullyVerified: true,
         isEjmFamily: true,
         communityApprovedBy: uid,
+        communityApprovedAt: now,
       },
     });
 
@@ -97,12 +108,15 @@ export const approveCommunityCode = onCall(
     // Deliberately non-fatal: the approval has already landed above. Throwing
     // here would tell the approver "Approval failed" about an approval that
     // succeeded, and a retry would hit the already_verified guard — leaving no
-    // route back. A stale queue entry is the lesser failure, and it is
-    // recoverable by the next approval or by an admin.
+    // route back. And a failure here really is only a stale queue entry now:
+    // the recompute's pre/post-grant ordering rests on communityApprovedAt
+    // (written atomically with the grant above), NOT on this write having run.
     let supersededIds: string[] = [];
+    let supersedeFailed = false;
     try {
       supersededIds = await supersedeOpenVerifications(codeData.familyId, now);
     } catch (err) {
+      supersedeFailed = true;
       console.error('approveCommunityCode: failed to supersede pending verifications', {
         familyId: codeData.familyId,
         err,
@@ -113,6 +127,9 @@ export const approveCommunityCode = onCall(
       approvedFamilyId: codeData.familyId,
       code,
       supersededVerificationIds: supersededIds,
+      // Distinguishes "nothing to supersede" from "the supersede failed" in
+      // the audit trail — an empty ids list alone couldn't (PR #220 review).
+      ...(supersedeFailed ? { supersedeFailed: true } : {}),
     });
 
     await writeUserActivity(codeData.requestedByUserId, 'community_approval_received', {

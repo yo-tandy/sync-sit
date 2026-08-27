@@ -50,4 +50,12 @@ export interface FamilyVerificationStatus {
   isFullyVerified: boolean;
   isEjmFamily: boolean;
   communityApprovedBy?: string; // uid of the parent who vouched
+  /**
+   * When the community grant landed. The explicit pre/post-grant ordering for
+   * reviewVerification's recompute: a rejection whose reviewedAt predates it
+   * is treated as overridden by the grant, whether or not the (deliberately
+   * non-fatal) supersede managed to close the doc (PR #220 review). Absent on
+   * legacy grants, which fall back to supersede-based ordering.
+   */
+  communityApprovedAt?: FirestoreTimestamp;
 }
