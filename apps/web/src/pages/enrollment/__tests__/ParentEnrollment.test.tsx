@@ -43,15 +43,24 @@ vi.mock('react-router', async (orig) => ({
   useNavigate: () => h.navigate,
 }));
 vi.mock('@/stores/authStore', () => {
-  const storeState = () => ({
+  // The HOOK stays signed-out (the wizard walks the credential steps), but
+  // getState() returns a resolved post-sign-in state so handleComplete's
+  // auth-store wait settles and navigation is pinnable — mirrors the
+  // study-web test's split, which is what lets it assert navigate('/family').
+  const hookState = () => ({
     firebaseUser: null,
     userDoc: null,
     loading: false,
     refreshUserDoc: () => Promise.resolve(),
   });
   return {
-    useAuthStore: Object.assign(() => storeState(), {
-      getState: () => storeState(),
+    useAuthStore: Object.assign(() => hookState(), {
+      getState: () => ({
+        firebaseUser: { uid: 'new' },
+        userDoc: { profiles: { parent: { enrollmentComplete: true, familyId: 'f1' } } },
+        loading: false,
+        refreshUserDoc: () => Promise.resolve(),
+      }),
       subscribe: () => () => {},
     }),
     markNextSignInFresh: () => {},
@@ -180,6 +189,10 @@ describe('ParentEnrollment enrollFamily payload (issue #176)', () => {
       pets: 'Cat',
       note: 'Ring twice',
     });
+    // The fresh-signup path completes: sign-in resolves, the auth-store wait
+    // settles (getState is mocked resolved), and the wizard lands in the
+    // portal.
+    await vi.waitFor(() => expect(h.navigate).toHaveBeenCalledWith('/family'));
   });
 
   it('an address without geocoder components OMITS postcode/city (no empty-string keys)', async () => {
