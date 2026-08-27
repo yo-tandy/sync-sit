@@ -1223,6 +1223,7 @@ export default {
       readyLoginCta: 'Log in',
       readyAddProfileDesc: 'Your tutor profile was added, but we could not load it yet. It usually appears within a moment and this screen will continue on its own.',
       readyAddProfileCta: 'Try again',
+      readyRetryMiss: 'Still loading — give it a moment and try again.',
     },
     verifySchool: 'Verify your school',
     verifySchoolDesc: "Enter your EJM email address. We'll send a code to verify you're a current student.",

@@ -8,6 +8,7 @@ import type { StudyUser, SubjectOffering } from '@ejm/study-core';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth, functions } from '@/config/firebase';
 import { markNextSignInFresh, useAuthStore } from '@/stores/authStore';
+import { ensureTutorProfileLoaded } from '@/lib/ensureTutorProfileLoaded';
 import { EnrollmentAppBar } from '@/components/ui/EnrollmentAppBar';
 import { StepSubjects } from './StepSubjects';
 import type { Row as SubjectRow } from './StepSubjects';
@@ -78,7 +79,30 @@ export function TutorEnrollment() {
   // confirm success in-wizard and hand the tutor to login instead of
   // navigating into a guard that would bounce them to /login or /signup
   // with no confirmation (PR #257 round 1).
-  const [signedOutSuccess, setSignedOutSuccess] = useState<false | 'newAccount' | 'addProfile'>(false);
+  // Variant by CAUSE (PR #257 round 6): 'login' = the session is signed
+  // OUT (manual login is genuinely the next step); 'profileLoad' = signed
+  // IN but the doc has not surfaced (a /login pointer would bounce -- the
+  // CTA retries the read instead, and the auto-advance resolves it
+  // hands-free when the snapshot lands).
+  const [signedOutSuccess, setSignedOutSuccess] = useState<false | 'login' | 'profileLoad'>(false);
+  const [retrying, setRetrying] = useState(false);
+  const [retryMissed, setRetryMissed] = useState(false);
+  const retryProfileLoad = async () => {
+    // A retry that still misses must be VISIBLE (round 6): the button shows
+    // progress while running and a "still loading" line after a miss --
+    // silence read as a dead button.
+    setRetrying(true);
+    setRetryMissed(false);
+    try {
+      if (await ensureTutorProfileLoaded(refreshUserDoc)) {
+        navigate('/tutor');
+      } else {
+        setRetryMissed(true);
+      }
+    } finally {
+      setRetrying(false);
+    }
+  };
   // While the fallback state shows, keep listening: the store's snapshot
   // listener is still live, so a slow doc read typically lands moments
   // later -- auto-advance the moment the guard's predicate passes instead
@@ -207,15 +231,10 @@ export function TutorEnrollment() {
         // account-ready state as the new-account path takes over instead of
         // a blind navigate into the guard: the auto-advance effect delivers
         // the tutor to /tutor the moment the doc lands.
-        await refreshUserDoc().catch(() => {});
-        if (!getTutorProfile(useAuthStore.getState().userDoc)) {
-          await new Promise((r) => setTimeout(r, 400));
-          await refreshUserDoc().catch(() => {});
-        }
-        if (getTutorProfile(useAuthStore.getState().userDoc)) {
+        if (await ensureTutorProfileLoaded(refreshUserDoc)) {
           navigate('/tutor');
         } else {
-          setSignedOutSuccess('addProfile');
+          setSignedOutSuccess('profileLoad');
         }
         return;
       }
@@ -254,12 +273,10 @@ export function TutorEnrollment() {
       let settled = useAuthStore.getState();
       if (settled.firebaseUser && !getTutorProfile(settled.userDoc)) {
         // Timed out with a live session but no doc yet: one explicit
-        // recovery read before telling the user anything (PR #257 round 2
-        // -- a slow first server snapshot can exceed the 5s budget). Short
-        // backoff first: an immediate identical getDoc under the same
-        // conditions would almost always return the same miss (round 3).
-        await new Promise((r) => setTimeout(r, 400));
-        await refreshUserDoc().catch(() => {});
+        // recovery pass before telling the user anything (PR #257 rounds
+        // 2-3, extracted round 6 -- a slow first server snapshot can
+        // exceed the 5s budget).
+        await ensureTutorProfileLoaded(refreshUserDoc);
         settled = useAuthStore.getState();
       }
       if (settled.firebaseUser && getTutorProfile(settled.userDoc)) {
@@ -268,7 +285,7 @@ export function TutorEnrollment() {
         // next steps.
         navigate('/tutor');
       } else {
-        setSignedOutSuccess('newAccount');
+        setSignedOutSuccess(settled.firebaseUser ? 'profileLoad' : 'login');
       }
 
     } catch (err: unknown) {
@@ -367,26 +384,28 @@ export function TutorEnrollment() {
     // need a manual login, while an add-profile enrollee is already
     // authenticated and never chose a password -- their CTA retries the
     // profile read (the auto-advance also resolves this hands-free).
-    const isAddProfileFallback = signedOutSuccess === 'addProfile';
-    const retryProfileLoad = async () => {
-      await refreshUserDoc().catch(() => {});
-      if (getTutorProfile(useAuthStore.getState().userDoc)) navigate('/tutor');
-    };
+    const isProfileLoadFallback = signedOutSuccess === 'profileLoad';
     return (
       <div className="flex min-h-[100dvh] flex-col items-center justify-center px-6 text-center">
         <h1 className="mb-3 text-2xl font-bold text-gray-950">
           {t('enrollment.tutor.readyLoginTitle')}
         </h1>
         <p className="mb-8 max-w-[300px] text-sm leading-relaxed text-gray-500">
-          {t(isAddProfileFallback ? 'enrollment.tutor.readyAddProfileDesc' : 'enrollment.tutor.readyLoginDesc')}
+          {t(isProfileLoadFallback ? 'enrollment.tutor.readyAddProfileDesc' : 'enrollment.tutor.readyLoginDesc')}
         </p>
         <button
           type="button"
-          onClick={() => (isAddProfileFallback ? retryProfileLoad() : navigate('/login'))}
-          className="flex h-12 w-full max-w-xs items-center justify-center rounded-xl bg-brand-600 text-base font-semibold text-white transition-colors hover:bg-brand-600/90"
+          disabled={retrying}
+          onClick={() => (isProfileLoadFallback ? retryProfileLoad() : navigate('/login'))}
+          className="flex h-12 w-full max-w-xs items-center justify-center rounded-xl bg-brand-600 text-base font-semibold text-white transition-colors hover:bg-brand-600/90 disabled:opacity-50"
         >
-          {t(isAddProfileFallback ? 'enrollment.tutor.readyAddProfileCta' : 'enrollment.tutor.readyLoginCta')}
+          {retrying
+            ? t('common.loading')
+            : t(isProfileLoadFallback ? 'enrollment.tutor.readyAddProfileCta' : 'enrollment.tutor.readyLoginCta')}
         </button>
+        {retryMissed && !retrying && (
+          <p className="mt-3 text-xs text-gray-500">{t('enrollment.tutor.readyRetryMiss')}</p>
+        )}
       </div>
     );
   }

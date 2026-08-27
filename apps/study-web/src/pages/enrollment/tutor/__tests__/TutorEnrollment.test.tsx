@@ -336,6 +336,11 @@ describe('TutorEnrollment orchestrator', () => {
     }
     expect(await screen.findByText('Your tutor account is ready')).toBeInTheDocument();
     expect(h.navigate).not.toHaveBeenCalledWith('/tutor');
+    // Cause-true variant (round 6): the session IS signed in, so no /login
+    // pointer and no password sentence -- the CTA retries the profile read.
+    expect(screen.getByText(/could not load it yet/)).toBeInTheDocument();
+    expect(screen.queryByText(/password you just chose/)).not.toBeInTheDocument();
+    expect(screen.getByText('Try again')).toBeInTheDocument();
   });
 
   it('auto-advances off the account-ready state when the doc finally lands (round-3 pin)', async () => {
@@ -410,12 +415,17 @@ describe('TutorEnrollment orchestrator', () => {
     // retries the profile read and navigates once it lands.
     expect(screen.getByText(/could not load it yet/)).toBeInTheDocument();
     expect(screen.queryByText(/password you just chose/)).not.toBeInTheDocument();
+    // A retry that STILL misses is visible, not a dead button (round 6).
+    fireEvent.click(screen.getByText('Try again'));
+    expect(await screen.findByText(/Still loading/, {}, { timeout: 3000 })).toBeInTheDocument();
+    expect(h.navigate).not.toHaveBeenCalledWith('/tutor');
+    // The next retry lands the doc and navigates.
     h.refreshUserDoc.mockImplementationOnce(() => {
       h.auth.userDoc = { profiles: { parent: {}, tutor: {} } };
       return Promise.resolve();
     });
     fireEvent.click(screen.getByText('Try again'));
-    await vi.waitFor(() => expect(h.navigate).toHaveBeenCalledWith('/tutor'));
+    await vi.waitFor(() => expect(h.navigate).toHaveBeenCalledWith('/tutor'), { timeout: 3000 });
   });
 
   it('authed without a tutor profile: consent-only StepPassword, enrollTutor omits password, refreshes doc', async () => {

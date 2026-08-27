@@ -65,3 +65,12 @@ add-profile variant says the PROFILE could not load yet (the enrollee is
 authenticated and never chose a password) and its CTA retries the read
 instead of pointing at /login; the useless `\"` escape is gone; the
 profile-exists both-miss branch got its pin.
+
+**Round 6:** the fallback variant is chosen by CAUSE, not by branch --
+'login' only when the session is genuinely signed OUT; a signed-in
+doc-null enrollee (either branch) gets the profile-load copy and a
+"Try again" CTA (a /login pointer for them could reproduce the round-1
+bounce). Retries are visible: the button shows progress and a miss
+surfaces "Still loading" instead of reading as a dead button. The
+refresh-check-backoff-refresh sequence, hand-rolled four times, lives
+once in lib/ensureTutorProfileLoaded.ts.

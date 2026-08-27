@@ -1223,6 +1223,7 @@ export default {
       readyLoginCta: 'Se connecter',
       readyAddProfileDesc: "Votre profil tuteur a été ajouté, mais nous n'avons pas encore pu le charger. Il apparaît généralement en quelques instants et cet écran continuera tout seul.",
       readyAddProfileCta: 'Réessayer',
+      readyRetryMiss: 'Chargement en cours — patientez un instant puis réessayez.',
     },
     verifySchool: 'Vérifiez votre école',
     verifySchoolDesc: 'Entrez votre adresse email EJM. Nous vous enverrons un code pour vérifier que vous êtes élève.',
