@@ -650,8 +650,11 @@ Flags: every sub-category → `livingCreature`; dog walking and vet trips →
 `guardianConsent` — **and so do drop-in checks and feeding-while-away.** Those
 two put a student alone in a stranger's empty home with keys, door codes and
 the alarm, which is the overnight sub-category decision 13 cut, minus the
-sleeping. With no minimum age in force (§11.1), leaving them unflagged would
-mean no gate at all on the youngest students for exactly that scenario;
+sleeping. With no *per-sub-category* age gate (§11.1, decision 7), leaving
+them unflagged would mean no gate at all for exactly that scenario on either
+population that reaches it: a governed student of any age — whom this flag now
+covers — and an ungoverned student, 15 by construction, whom nothing else
+covers (the §17 Q2 case);
 flagging them closes it with machinery the plan already has, without reopening
 decision 7.
 
@@ -844,7 +847,7 @@ choose at all, and nothing that locates either party.
 | Collection | Written by | Read by |
 |---|---|---|
 | `doTasks/{taskId}` | callables only (Admin SDK) | owning family · any active enrolled doer · admin |
-| `taskOffers/{offerId}` | callables only (Admin SDK) | the offering student · the task's family (when `status != 'pending_guardian'`) · the student's supervising parent (when `pending_guardian`) · admin |
+| `taskOffers/{offerId}` | callables only (Admin SDK) | the offering student · the task's family (when status is `pending`, `accepted` or `declined` — an ALLOW-list, see §7.2; a withdrawn offer, whether by the student or by guardian denial, is invisible to them) · the student's supervising parent (when `pending_guardian`) · admin |
 
 Both are prefixed `do*` / `task*` rather than reusing generic names, because the
 rules file is shared by three apps and a collection called `tasks` will not age
@@ -979,14 +982,20 @@ doTasks:    (familyId ASC, createdAt DESC)                  — "my tasks"
 doTasks:    (assignedUserId ASC, status ASC, updatedAt DESC)— "my assignments"
 doTasks:    (status ASC, expiresAt ASC)                     — the sweep, expiry half
 doTasks:    (status ASC, doerMarkedDoneAt ASC)              — the sweep, auto-complete half
+doTasks:    (status ASC, cancelledAt ASC)                   — the sweep, cancelled-retention half
 taskOffers: (familyId ASC, taskId ASC, status ASC, createdAt ASC)
                                                             — offers on a task, family side
 taskOffers: (taskId ASC, status ASC, createdAt ASC)         — offers on a task, admin side
 taskOffers: (doerUserId ASC, status ASC, createdAt DESC)    — "my offers"
 taskOffers: (guardian.familyId ASC, status ASC)             — guardian queue (server-side, see below)
-references: (babysitterUserId ASC, status ASC)              — offer-card endorsements, sit side
-references: (tutorUserId ASC, status ASC)                   — offer-card endorsements, study side
+references: (tutorUserId ASC, status ASC)                   — offer-card endorsements, study side (NEW)
 ```
+
+The sit-side offer-card query needs `(babysitterUserId, status)`, which
+**already exists** in `firestore.indexes.json:22-27` — it is what serves
+sit's own constrained reference queries today, and re-adding it at PR3 would
+be a duplicate entry. Only the tutor-side composite above is new: the existing
+`(tutorUserId, createdAt DESC)` index cannot serve a `status` filter.
 
 The two `references` indexes serve §9.1's offer-card queries, which **must**
 carry their `status in ['approved','published']` constraint to be provable
@@ -1117,16 +1126,23 @@ All in `apps/functions/src/do/**`, codebase `default`, region `europe-west1`,
 | `doListBoard` | — | **Not a callable.** The board is a direct Firestore query under the §7.2 read rule, like `usePublishedSearches`. |
 | `doAdminListTasks` | Admin | Search/filter for the admin panel |
 | `doAdminDeleteTask` | Admin | Hard delete + audit |
-| `doSweepTasks` | Scheduled | Daily: delete expired `open` tasks and their offers; auto-complete stale `doerMarkedDoneAt` tasks. Extends the existing `cleanupOldData` schedule rather than adding a second job |
+| `doGetTaskPhotoUrl` | Auth | Asserts the §7.2 board audience (or family membership) and returns a short-lived signed URL for a task photo — the §7.4 option-1 read path; final objects are `allow read: if false` |
+| `doStripTaskPhoto` | Storage trigger | Fires on `do-uploads/{uid}/*`: strips EXIF, republishes into `doTasks/{taskId}/`, deletes the quarantine original (§7.4). Not a callable |
+| `doSweepTasks` | Scheduled | Daily: delete expired `open` tasks and their offers; delete `cancelled` tasks (and their offers) older than 30 days — mirroring `cleanupOldData`'s cancelled/rejected appointment rule; auto-complete stale `doerMarkedDoneAt` tasks; delete unclaimed `do-uploads` quarantine objects (§7.4). Extends the existing `cleanupOldData` schedule rather than adding a second job |
 
 Validation follows the sit house style visible in `publishSearch.ts` — manual
 guards throwing `HttpsError('invalid-argument', …)`, with the shared bounds
 (`DO_TASK_MAX_ACTIVE`, length ceilings, price range) exported from `do-core` so
 the frontend enforces the same numbers.
 
-GDPR: `exportUserData` and `deleteUser` in `apps/functions/src/admin/` both need
-`doTasks` and `taskOffers` added to their collection lists. This is easy to
-forget and is called out as a checklist item in §13 PR8.
+GDPR: `exportUserData` and `deleteUser` both need `doTasks` and `taskOffers`
+added to their collection lists — and the lists live in
+`packages/shared-functions/src/admin/exportUserData.ts` / `deleteUser.ts`, not
+in `apps/functions/src/admin/`, whose files are one-line re-export shims (the
+same shim shape §12 already notes for `writeAuditLog.ts`). That makes this a
+shared-surface edit for §12's list, though only `apps/functions` registers the
+two callables today, so there is no study-side deploy impact. This is easy to
+forget and is called out as a checklist item in §13 PR10 (the admin/GDPR PR — not the UI PRs, where it would have no natural home).
 
 ---
 
@@ -1357,8 +1373,11 @@ discovered in an incident.
 ### 11.4 GDPR
 
 - `doTasks` and `taskOffers` join `exportUserData` and the hard-delete path.
-- Retention: expired and cancelled tasks and their offers are deleted by the
-  daily sweep.
+- Retention: expired `open` tasks are deleted by the daily sweep; `cancelled`
+  tasks (and their offers) are deleted once older than 30 days — the same
+  window `cleanupOldData` already applies to cancelled/rejected appointments.
+  Both halves are in `doSweepTasks`' §8 row, with the `(status, cancelledAt)`
+  index in §7.3 that the second query needs.
 
   **Completed tasks are retained indefinitely, matching the platform** — and
   that is a deliberate statement, not a deferral. An earlier draft said they
@@ -1510,8 +1529,12 @@ see §12 for why the scaffold, not the family UI, is where they are needed.
   abstract: the family's offer query in the exact `(familyId, taskId, status)`
   shape §7.2 requires (a `status in […]` form does not satisfy the rule and
   must **fail** this test); the doer's board read; the doer's own-offers query;
-  and §9.1's two `references` queries, which must carry
-  `status in ['approved','published']` or be denied. The guardian queue is
+  the family's own-tasks query (`where('familyId','==',f)` — the same
+  reasoning that gives the offer-side family disjunct its `familyId`
+  constraint applies to `doTasks`' `isFamilyMember` disjunct, and §7.3's
+  `(familyId, createdAt)` index exists for it); and §9.1's two `references`
+  queries, which must carry `status in ['approved','published']` or be
+  denied. The guardian queue is
   **not** in this list because it has no client query — it is served by the
   Admin SDK (§7.3).
 - **Integration** (`tests/integration/`, emulator lane 2 so the dev stack keeps
