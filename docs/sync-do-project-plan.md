@@ -187,9 +187,22 @@ profiles: {
 ```ts
 // packages/do-core/src/types/doerProfile.ts
 export interface DoerProfile extends ProfileBase {   // ProfileBase = { enrollmentComplete: boolean }
-  /** Board visibility + notification opt-in. Owner-controlled, exactly like
-   *  profiles.babysitter.searchable — status is the hard ban gate. */
-  searchable: boolean;
+  /**
+   * NOTIFICATION OPT-IN ONLY — deliberately not called `searchable`.
+   *
+   * On profiles.babysitter, `searchable` soft-hides a PROVIDER from a
+   * family's search (firestore.rules:273-275). sync-do inverts the
+   * direction: nothing about a doer is searched by families, and the board is
+   * something the doer READS. So the sit name would import a meaning that
+   * does not exist here, and an implementer could reasonably add a
+   * `searchable` check to the §7.2 doTasks read rule — which would then be
+   * unprovable for any list query whose client does not filter on it.
+   *
+   * The §7.2 read rule checks `enrollmentComplete` and `status == 'active'`
+   * and MUST NOT check this field. Its only consumer is §10's
+   * `new_task_matching` digest.
+   */
+  notifyNewTasks: boolean;
   /** Categories the student wants to see and be notified about. Empty = all. */
   categories: TaskCategory[];
   /** Free-text blurb shown to a family alongside an offer. */
@@ -284,6 +297,10 @@ export interface TaskDoc {
   assignedOfferId: string | null;
   assignedAt: FirestoreTimestamp | null;
   agreedPrice: number | null;        // copied from the accepted offer, for the record
+  /** Set by the assigned student's mark-done; the sweep auto-completes a task
+   *  the family never confirmed after 7 days (§6.5). Needs the
+   *  (status, doerMarkedDoneAt) index in §7.3. */
+  doerMarkedDoneAt: FirestoreTimestamp | null;
   completedAt: FirestoreTimestamp | null;
   cancelledAt: FirestoreTimestamp | null;
   cancelledBy: 'family' | 'doer' | 'admin' | null;
@@ -331,6 +348,14 @@ export interface OfferDoc {
   doerUserId: string;
   familyId: string;              // denormalized from the task, for rules
 
+  /** Denormalized at submit time so the family's offer card renders under the
+   *  offer read rule alone — an unrelated family cannot read a doer-only
+   *  `users/{uid}` doc (§6.4). Name, photo and bio only: nothing that locates
+   *  the student. */
+  doerFirstName: string;
+  doerPhotoUrl: string | null;
+  doerBio: string | null;
+
   price: number;                 // the student's quote, EUR
   priceBasis: 'flat' | 'hourly';
   message: string;               // ≤ 1000 chars, free text
@@ -348,6 +373,17 @@ export interface OfferDoc {
     familyId: string | null;       // the SUPERVISING family (student's own)
     decidedAt: FirestoreTimestamp | null;
     decidedByUid: string | null;
+  } | null;
+
+  /** Written by doAcceptOffer inside the §6.4 transaction, on the ACCEPTED
+   *  offer only — the two-way reveal. Absent on every other offer, which is
+   *  what makes "an un-accepted offer leaks nothing" true by construction. */
+  contact: {
+    familyAddress: string;
+    familyPhone: string | null;
+    doerContactEmail: string | null;
+    doerContactPhone: string | null;
+    doerWhatsapp: string | null;
   } | null;
 
   declinedReason: 'family_declined' | 'sibling_accepted' | 'task_closed' | null;
@@ -538,9 +574,18 @@ pays** · keys, door codes and alarm · what counts as an emergency and who to
 call first · neighbours to notify · insurance, if any.
 
 Flags: every sub-category → `livingCreature`; dog walking and vet trips →
-`guardianConsent`. Drop-in checks and feeding happen in an empty home by
-definition, so the posting form requires an explicit `adultPresent: 'no'`
-acknowledgement rather than nudging toward `'yes'`.
+`guardianConsent` — **and so do drop-in checks and feeding-while-away.** Those
+two put a student alone in a stranger's empty home with keys, door codes and
+the alarm, which is the overnight sub-category decision 13 cut, minus the
+sleeping. With no minimum age in force (§11.1), leaving them unflagged would
+mean no gate at all on the youngest students for exactly that scenario;
+flagging them closes it with machinery the plan already has, without reopening
+decision 7.
+
+The posting form additionally requires an explicit `adultPresent: 'no'`
+acknowledgement for these two rather than nudging toward `'yes'` — but note
+that is a declaration by the *family* and gates nothing on the student's side.
+The guardian flag is what does the gating.
 
 ---
 
@@ -604,8 +649,8 @@ with an "awaiting your parent" badge.
 | Timing | `expiresAt` |
 |---|---|
 | `fixed` | `min(now + 14d, end of the task's day, Paris wall clock)` |
-| `deadline` | `min(now + 14d, end of `dueDate`)` |
-| `recurring` | `min(now + 14d, end of `startDate`)` — the board offer window closes when the series starts |
+| `deadline` | `min(now + 14d, end of dueDate)` |
+| `recurring` | `min(now + 14d, end of startDate)` — the board offer window closes when the series starts |
 | `ongoing` | `now + 14d` |
 
 14 days rather than `publishedSearches`' 7: a task board with an offer cycle
@@ -613,9 +658,14 @@ needs longer to attract bids than a one-shot broadcast. `parisWallTimeToUtc`
 from `@ejm/shared-functions/scheduled/parisTime.js` does the day-end maths — it
 is already the codebase's answer to this exact problem.
 
-Anti-spam ceiling: **`DO_TASK_MAX_ACTIVE = 5`** open tasks per family, and
-**`DO_OFFER_MAX_ACTIVE = 10`** pending offers per student. Both enforced in the
-callable, both exported from `do-core` so the UI can pre-empt the error.
+Ceilings, all enforced in the callables and all exported from `do-core` so the
+UI can pre-empt the error rather than surfacing it:
+
+| Constant | Bounds | Why |
+|---|---|---|
+| `DO_TASK_MAX_ACTIVE = 5` | open tasks per family | anti-spam on the board |
+| `DO_OFFER_MAX_ACTIVE = 10` | pending offers per student | anti-spam on families |
+| `DO_OFFER_MAX_PER_TASK = 25` | offers on one task | bounds §6.4's transaction write set — the only one of the three that is a correctness constraint rather than a policy |
 
 ### 6.4 Acceptance — the one transaction that matters
 
@@ -636,17 +686,66 @@ callable, both exported from `do-core` so the UI can pre-empt the error.
 9. Audit-log the assignment via `writeUserActivity`.
 
 Step 7 is why acceptance is transactional and not a sequence of writes: a
-second parent accepting a different offer concurrently must lose. With
-`DO_OFFER_MAX_ACTIVE` bounding the loser set at a handful of documents, the
-transaction stays well inside Firestore's 500-write limit.
+second parent accepting a different offer concurrently must lose.
 
-**Contact reveal happens here.** Before acceptance, neither side has the
-other's address or phone — the board shows `areaLabel` and `familyName` only,
-and the offer shows the student's first name, photo and bio. On acceptance the
-assigned task detail renders the family address and phone to the assigned
-student, and the student's contact channels (`getContact`) to the family. This
-is the same reveal boundary sync-sit uses for appointments, and it means an
-un-accepted offer leaks nothing.
+**What bounds the write set.** Not `DO_OFFER_MAX_ACTIVE` — that caps pending
+offers *per student*, and `DO_TASK_MAX_ACTIVE` caps open tasks *per family*.
+Neither limits how many distinct students pile onto one popular task, so the
+sibling-decline set in step 7 is bounded by cohort size, not by either
+constant. At EJM scale that stays far below Firestore's hard 500-writes-per-
+transaction limit, but "very likely fine" is not a bound. `DO_OFFER_MAX_PER_TASK
+= 25`, enforced in `doSubmitOffer` against the transactionally-maintained
+`offerCount`, makes it one — and doubles as reasonable product behaviour, since
+a task carrying 25 offers does not need a 26th. The refusal is its own error
+(`reason: 'task_offer_cap'`) so the student is told the task is oversubscribed
+rather than that something broke.
+
+**Contact reveal happens here — and it needs a named mechanism, because the
+rules alone cannot deliver it.** Before acceptance, neither side has the
+other's address or phone: the board shows `areaLabel` and `familyName` only.
+After acceptance each side needs the other's details. Neither half works by
+reading the counterparty's document:
+
+- **Student → family address.** `families/{familyId}` is
+  `allow read: if isFamilyMember(familyId) || isAdmin()`
+  (`firestore.rules:304`). The assigned doer is neither.
+- **Family → student contact.** `getContact(user)` takes a `User`, so the
+  family would have to read `users/{doerUserId}`. That rule's provider
+  disjunct keys on `profiles.babysitter` (`firestore.rules:251-255`), so a
+  doer-only student is not readable by an unrelated family. The same gap
+  applies *before* acceptance to the offer card in §9.1.
+
+sync-sit solves its half by **denormalizing** `address` and `latLng` onto
+`AppointmentDoc` (`packages/sit-core/src/types/appointment.ts:32-33`) behind a
+read rule scoped to the two parties. That exact move is unavailable to
+`doTasks`, because §7.2 grants every active doer read on every task — putting
+the address there would publish it to the whole board, which is what §11.2
+forbids. sync-study hit the same wall and denormalized onto the *request*
+(`tutorName` / `familyName` / `parentName` on `studyContactRequests`,
+`packages/study-core/src/types/contactRequest.ts:21-38`).
+
+**So the offer is the carrier, not the task.** `taskOffers` is already scoped
+to the two parties plus admin, which is exactly the audience a reveal needs:
+
+1. **Pre-acceptance, for the offer card:** `doSubmitOffer` denormalizes
+   `doerFirstName`, `doerPhotoUrl` and `doerBio` onto the offer (§4.2). The
+   family's offer list then renders under the existing offer read rule with no
+   change to `users`.
+2. **Post-acceptance, for the two-way reveal:** `doAcceptOffer` writes a
+   `contact` block onto the **accepted offer** inside the §6.4 transaction —
+   the family's address and phone, and the student's channels from
+   `getContact`. A `doGetAssignedContact` callable (Admin SDK, asserts
+   assignment, returns both sides) is the equivalent alternative if we would
+   rather not persist a second copy of the address; §17 Q6 records the choice.
+
+**Ruled out in writing:** adding a `profiles.doer` disjunct to the `users` read
+rule. It would expose every enrolled doer's user document to every
+authenticated user — far wider than this feature needs, and the kind of change
+that gets made under deadline at PR7 if this section stays vague.
+
+Either mechanism keeps the promise that an **un-accepted offer leaks nothing**:
+the pre-acceptance fields are name, photo and bio, which the family needs to
+choose at all, and nothing that locates either party.
 
 ### 6.5 Completion and cancellation
 
@@ -697,12 +796,17 @@ match /doTasks/{taskId} {
 match /taskOffers/{offerId} {
   allow read: if isAuth() && (
        request.auth.uid == resource.data.doerUserId
+    // isAdmin BEFORE either isFamilyMember(): both are get()s on a document
+    // that may not exist, and a deleted family would error the || chain and
+    // deny the read a later disjunct should grant (firestore.rules:600-604,
+    // the references-rule precedent from PR #210 review). Inspecting an
+    // offer whose family was deleted is exactly what admin access is for.
+    || isAdmin()
     || (resource.data.status != 'pending_guardian'
         && isFamilyMember(resource.data.familyId))
     || (resource.data.status == 'pending_guardian'
         && resource.data.guardian.familyId != null
         && isFamilyMember(resource.data.guardian.familyId))
-    || isAdmin()
   );
   allow create, update, delete: if false;               // callables only
 }
@@ -728,15 +832,36 @@ by weakening the live rules file (`feedback_rules_mutation_verify`).
 ### 7.3 Indexes
 
 ```
-doTasks:    (status ASC, category ASC, createdAt DESC)      — the board, filtered
+doTasks:    (status ASC, category ASC, createdAt DESC)      — the board, by category
 doTasks:    (status ASC, createdAt DESC)                    — the board, unfiltered
 doTasks:    (familyId ASC, createdAt DESC)                  — "my tasks"
 doTasks:    (assignedUserId ASC, status ASC, updatedAt DESC)— "my assignments"
-doTasks:    (expiresAt ASC)                                 — the daily sweep
+doTasks:    (status ASC, expiresAt ASC)                     — the sweep, expiry half
+doTasks:    (status ASC, doerMarkedDoneAt ASC)              — the sweep, auto-complete half
 taskOffers: (taskId ASC, status ASC, createdAt ASC)         — offers on a task
 taskOffers: (doerUserId ASC, status ASC, createdAt DESC)    — "my offers"
 taskOffers: (guardian.familyId ASC, status ASC)             — guardian queue
 ```
+
+**The board filters do not all get indexes, and that is a decision, not an
+omission.** §9.2 offers six filters (category, sub-category, timing, area,
+adult-present, transport-needed) plus a newest-first sort. Firestore needs a
+composite per *combination* of equality filters used with an `orderBy`, so
+indexing all six means indexing their power set — unmaintainable, and the kind
+of thing discovered at PR8 when a filter silently 400s.
+
+**The split:** `status` + `category` are the only server-side filters; the
+board query is always `where('status','==','open')` plus an optional
+`where('category','==',…)`, ordered by `createdAt desc`. Everything else —
+sub-category, timing, area, adult-present, transport — narrows **client-side**
+over the fetched page. At the volumes a single school community produces, the
+open-task set is small enough that this is honest rather than a compromise; if
+it ever isn't, `offerCount` and the board's own page sizes are the signal, and
+promoting one more dimension to the server is one index.
+
+Note that `(expiresAt ASC)` alone would have been wrong: it is a single-field
+index Firestore creates automatically, but the sweep queries
+`status == 'open' && expiresAt <= now`, which needs the composite above.
 
 ### 7.4 Storage
 
@@ -755,7 +880,7 @@ All in `apps/functions/src/do/**`, codebase `default`, region `europe-west1`,
 | Callable | Auth | Does |
 |---|---|---|
 | `doEnrollDoer` | Auth | Creates `profiles.doer` — full or abbreviated depending on existing profiles |
-| `doUpdateDoerProfile` | Auth | Categories, bio, transport, `searchable` |
+| `doUpdateDoerProfile` | Auth | Categories, bio, transport, `notifyNewTasks` |
 | `doPostTask` | Auth (verified family) | Validates, scrubs, computes `areaLabel` + `expiresAt`, enforces `DO_TASK_MAX_ACTIVE` |
 | `doUpdateTask` | Auth (owner family) | `open` tasks only; description/photos/budget/timing. Notifies students with pending offers that terms changed |
 | `doCancelTask` | Auth (owner family) | Task → `cancelled`, all live offers → `expired`, notify |
@@ -861,7 +986,7 @@ should not pre-empt it.
 **The board digest is the one genuinely new notification.** Demand-first means a
 student who never opens the app sees nothing. `new_task_matching` fires on task
 creation to students whose `profiles.doer.categories` include the task's
-category and who are `searchable`. Rate-limit: at most one digest per student
+category and who have `notifyNewTasks` on. Rate-limit: at most one digest per student
 per 6 hours, batching whatever accumulated. Without this the board is dead; with
 it unbounded, it is spam.
 
@@ -922,8 +1047,12 @@ Mitigation, not resolution:
 
 - The offer captures their first name, last name and age, and the family sees
   all three before accepting.
-- The accepted offer's helper is copied onto the task, so the record of who was
-  expected on site survives.
+- The record of who was expected on site lives on the **offer**, which is
+  already scoped to the two parties plus admin — it is deliberately *not*
+  copied onto the task. `doTasks` is readable by every enrolled doer (§7.2),
+  so copying a third party's full name and age there would publish a
+  non-member's identity to the entire board. The accepted offer is durable and
+  admin-readable, which is all the record needs to be.
 - Copy on both the offer form and the acceptance dialog states plainly that the
   helper is not a verified Sync member and that the assigned student remains
   responsible.
@@ -999,10 +1128,19 @@ What sync-do **adds** to shared packages (small, deliberate):
 Everything else lives in `do-core`. The roadmap's Tier-1 extractions (Plans A–C)
 would each save sync-do a duplicated tree; where one is still `[ ]` at build
 time, sync-do copies from `study-web` and the copy becomes the third instance
-that makes the extraction unavoidable. **Recommendation:** land roadmap Plans B
-and C *before* PR5, so sync-do consumes shared public/auth/static pages rather
-than triplicating them. That is the single highest-leverage sequencing choice in
-this plan.
+that makes the extraction unavoidable.
+
+**Recommendation: land roadmap Plans B and C before PR2**, not later. Plan B is
+the static/legal pages (`PrivacyPage`, `TermsPage`, `AboutPage`,
+`ReportProblemPage`) and Plan C the public auth pages (`WelcomePage`,
+`LoginPage`, `SignUpRolePage`, `ForgotPasswordPage`) —
+`docs/shared-modules-roadmap.md:24-42`. Those are exactly the trees a scaffold
+needs: the roadmap records that PR #57 had to add "Coming soon" stubs to
+sync-study purely so the welcome page's footer links would resolve, and PR2's
+"empty shell that builds and deploys" hits the same wall on day one. If B and C
+have not landed by then, PR2 ships stubs and a later PR swaps them for the
+shared pages — say which, rather than discovering it. This is the single
+highest-leverage sequencing choice in the plan.
 
 ---
 
@@ -1026,7 +1164,8 @@ the repo has been using.
 | **11** | Completion + cancellation flows, FR i18n pass, Playwright e2e for post→offer→accept→complete, screenshots on the PR. | 8 |
 
 Dependencies: 1 → 2 → {3, 4} → 5 → 6 → {7, 8} → 9 → 10 → 11. PRs 7 and 8 can run
-in parallel once 6 lands. Roadmap Plans B and C should land before 7.
+in parallel once 6 lands. Roadmap Plans B and C should land **before PR2** —
+see §12 for why the scaffold, not the family UI, is where they are needed.
 
 ---
 
@@ -1178,6 +1317,14 @@ petrol-mower or wall-drilling work with nothing between them and the task.
 
 - **Q4 — Brand and domain.** `sync-do.com`? Hosting site id? The plan assumes
   `sync-do-app` as the Firebase site, matching `sync-study-app`.
+- **Q6 — Which post-acceptance reveal mechanism?** §6.4 settles that the
+  *offer* is the carrier and rules out widening the `users` read rule, but
+  leaves two equivalent options: write a `contact` block onto the accepted
+  offer inside the acceptance transaction (one more stored copy of the
+  family's address, but no extra round trip and it works offline), or serve it
+  from a `doGetAssignedContact` callable (no second copy, one more callable
+  and a load state). Implementer's call at PR6 unless the owner has a
+  preference; the plan's `OfferDoc` currently shows the stored-block form.
 
 ### Risks
 
