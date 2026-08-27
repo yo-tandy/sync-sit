@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { clearAll, callFunction, getIdToken, getDb } from '../../setup/emulator.js';
-import { seedTestData, type SeedData } from '../../setup/seed.js';
+import { seedTestData, seedAppointment, type SeedData } from '../../setup/seed.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -246,6 +246,42 @@ describe('contactPublishedSearch (sit)', () => {
     const apt = (await getDb().collection('appointments').doc(res.appointmentId).get()).data()!;
     expect(apt.babysitterUserId).toBe(seed.babysitter4.uid);
     expect(apt.status).toBe('pending');
+  });
+
+  it('caps concurrent PENDING board contacts across searches, and frees a slot when one is answered', async () => {
+    // The per-search dedupe + cooldown bound one pair; without a cross-search
+    // ceiling one sitter could notify every family on the board, once per
+    // search, each contact fanning out email + push to every parent
+    // (issue #225 item 3). Five concurrent pendings is the ceiling.
+    for (let i = 0; i < 5; i++) {
+      await seedAppointment({
+        babysitterUserId: seed.babysitter1.uid,
+        familyId: seed.family1Id,
+        createdByUserId: seed.babysitter1.uid,
+        initiatedBy: 'babysitter',
+        publishedSearchId: `ps-cap-${i}`,
+        status: 'pending',
+      });
+    }
+    const id = await publish();
+    await expect(
+      callFunction('contactPublishedSearch', { publishedSearchId: id }, sitterToken),
+    ).rejects.toMatchObject({ code: 'RESOURCE_EXHAUSTED', details: { reason: 'board_contact_cap' } });
+
+    // An ANSWER in either direction frees a slot -- the ceiling is
+    // self-healing, not a punishment.
+    const snap = await getDb()
+      .collection('appointments')
+      .where('publishedSearchId', '==', 'ps-cap-0')
+      .get();
+    await snap.docs[0].ref.update({ status: 'rejected', statusReason: 'declined_by_family' });
+    // ps-cap-0's decline is for a DIFFERENT search, so no cooldown applies here.
+    const res = await callFunction<{ appointmentId: string }>(
+      'contactPublishedSearch',
+      { publishedSearchId: id },
+      sitterToken,
+    );
+    expect(res.appointmentId).toBeTruthy();
   });
 
   it('rejects when the family lost verification after publishing', async () => {
