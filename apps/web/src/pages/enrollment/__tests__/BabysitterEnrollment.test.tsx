@@ -67,6 +67,12 @@ vi.mock('@ejm/sit-core', () => ({
 
 // Lightweight stand-ins for the child step components.
 vi.mock('@ejm/shared-ui', () => ({
+  // The app's adminConfigClient wrapper instantiates this at import time
+  // (issue #250) -- stub returns the caller's fallback (code default).
+  createAdminConfigReader: () => ({
+    getClientConfigValue: (_k: string, fallback: number) => Promise.resolve(fallback),
+    __resetAdminConfigClientCacheForTests: () => {},
+  }),
   // Mirrors the real helper: read details.reason off the rejected value.
   enrollmentErrorReason: (err: { details?: { reason?: unknown } } | null) => {
     const reason = err?.details?.reason;

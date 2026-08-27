@@ -109,11 +109,12 @@ export const proposeSession = onCall(
     const paddingMinutes = tutor.paddingMin ?? 0;
 
     // ── 24h minimum notice (Paris wall clock, DST-safe) ──
-    const sessionStart = parisWallTimeToUtc(date, startTime);
-    if (sessionStart.getTime() < now.getTime() + (await getConfigValue('bookingNoticeHours')) * 60 * 60 * 1000) {
+    const sessionStart = parisWallTimeToUtc(date, startTime);    const noticeHours = await getConfigValue('bookingNoticeHours');
+
+    if (sessionStart.getTime() < now.getTime() + noticeHours * 60 * 60 * 1000) {
       throw new HttpsError(
         'failed-precondition',
-        'Sessions must be proposed at least 24 hours in advance',
+        `Sessions must be proposed at least ${noticeHours} hours in advance`,
       );
     }
 

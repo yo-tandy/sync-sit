@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react';
+import { useClientConfigValue } from '@/lib/adminConfigClient';
+import { ADMIN_CONFIG_DEFS } from '@ejm/shared-core';
 import { useParams, useNavigate, Link } from 'react-router';
 import { useTranslation, Trans } from 'react-i18next';
 import { httpsCallable } from 'firebase/functions';
@@ -16,6 +18,14 @@ export function JoinFamilyPage() {
   const { token } = useParams<{ token: string }>();
   const navigate = useNavigate();
   const { firebaseUser, userDoc, loading: authLoading, refreshUserDoc } = useAuthStore();
+
+  // Admin-configurable resend window (issue #250) -- must match the
+  // server's, whose repeat path answers with a decoy success.
+  const resendCooldownS = useClientConfigValue(
+    'verificationCodeCooldownS',
+    ADMIN_CONFIG_DEFS.verificationCodeCooldownS.default,
+    ADMIN_CONFIG_DEFS.verificationCodeCooldownS,
+  );
 
   const [step, setStep] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -105,7 +115,7 @@ export function JoinFamilyPage() {
       const verifyEmail = httpsCallable(functions, 'verifyParentEmail');
       // `app` only selects the copy of the silent account-exists email.
       await verifyEmail({ email, app: 'sit' });
-      setResendCooldown(60);
+      setResendCooldown(resendCooldownS);
       setStep(1);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to send verification code';
@@ -116,7 +126,7 @@ export function JoinFamilyPage() {
   };
 
   const handleResend = async () => {
-    setResendCooldown(60);
+    setResendCooldown(resendCooldownS);
     setResendCount((c) => c + 1);
     setCodeVerified(false);
     setVerificationCode('');

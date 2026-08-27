@@ -10,12 +10,21 @@ interface StepVerifyProps {
   onVerify: (code: string) => Promise<void>;
   onResend: () => Promise<void>;
   error: string | null;
+  /**
+   * Resend-cooldown seconds. Admin-configurable (issue #250,
+   * verificationCodeCooldownS): pages pass the CONFIGURED value read via
+   * their app's config reader -- the server's cooldown path answers
+   * repeats with a decoy success (anti-enumeration), so a timer shorter
+   * than the real window would re-enable a button that silently does
+   * nothing. Defaults to the table's default.
+   */
+  resendCooldownS?: number;
 }
 
-export function StepVerify({ ejemEmail, onVerify, onResend, error }: StepVerifyProps) {
+export function StepVerify({ ejemEmail, onVerify, onResend, error, resendCooldownS = 60 }: StepVerifyProps) {
   const { t } = useTranslation();
   const [codeError, setCodeError] = useState<string | null>(null);
-  const [resendCooldown, setResendCooldown] = useState(60);
+  const [resendCooldown, setResendCooldown] = useState(resendCooldownS);
   const [resendCount, setResendCount] = useState(0);
   const [verifying, setVerifying] = useState(false);
 
@@ -40,7 +49,7 @@ export function StepVerify({ ejemEmail, onVerify, onResend, error }: StepVerifyP
   };
 
   const handleResend = async () => {
-    setResendCooldown(60);
+    setResendCooldown(resendCooldownS);
     setResendCount((c) => c + 1);
     setCodeError(null);
     try {

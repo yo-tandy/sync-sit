@@ -23,8 +23,6 @@ import type { RecurringSlot } from './appointment.js';
  * callables (PR3/PR4) re-check server-side.
  */
 
-
-
 interface PublishedSearchBase {
   id: string; // == doc id
   familyId: string;

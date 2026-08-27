@@ -358,11 +358,12 @@ export const bookSession = onCall(
       const bookingStart = startTime!;
 
       // ── 24h minimum notice (Paris wall clock, DST-safe) ──
-      const sessionStart = parisWallTimeToUtc(bookingDate, bookingStart);
-      if (sessionStart.getTime() < now.getTime() + (await getConfigValue('bookingNoticeHours')) * 60 * 60 * 1000) {
+      const sessionStart = parisWallTimeToUtc(bookingDate, bookingStart);      const noticeHours = await getConfigValue('bookingNoticeHours');
+
+      if (sessionStart.getTime() < now.getTime() + noticeHours * 60 * 60 * 1000) {
         throw new HttpsError(
           'failed-precondition',
-          'Sessions must be booked at least 24 hours in advance',
+          `Sessions must be booked at least ${noticeHours} hours in advance`,
         );
       }
 

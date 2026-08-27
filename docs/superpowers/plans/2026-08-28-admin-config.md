@@ -28,10 +28,10 @@ nothing.
 - `firestore.rules`: `adminConfig/{doc}` readable by any SIGNED-IN user
   (pastVisibilityDays is consumed client-side; the values are caps and
   windows, not secrets), writes denied (callable-only).
-- Client: `getClientConfigValue` (apps/web/src/lib/adminConfigClient.ts;
-  one shared read, identical fallback semantics incl. sync-throw, unit
-  tested) resolved BEFORE the dashboard hooks subscribe, so the first
-  bucketing already uses the configured pastVisibilityDays.
+- Client: `createAdminConfigReader` (shared-ui; ONE factory, six-case
+  fallback matrix tested once) instantiated per app; the dashboard hooks
+  subscribe immediately and RE-BUCKET the remembered snapshot when the
+  configured pastVisibilityDays arrives.
 - `availabilityMaxRangeDays`: the zod schema keeps an ABSOLUTE ceiling
   (90); the configured value is enforced dynamically in
   getTutorAvailability (schemas are built at module load and must not
@@ -105,3 +105,16 @@ longer hardcodes 60s; surviving legacy constants (send caps,
 PAST_VISIBILITY_DAYS, KID_INVITE_VALIDITY_DAYS) are LINKED to the table
 (= ADMIN_CONFIG_DEFS.*.default) and their exact-value pins repointed;
 dead DECLINE_COOLDOWN_MS / PUBLISHED_SEARCH_* removed.
+
+**Round 4 (PR #266):** the resend-cooldown clients follow the knob --
+StepVerify takes resendCooldownS (all three enrollment consumers and
+JoinFamilyPage read it via useClientConfigValue), closing the silent
+dead-end where the server's anti-enumeration decoy success masked a
+longer configured window behind a 60s button; VERIFICATION_CODE_COOLDOWN_S
+linked to the table; notice-window error copy interpolates the configured
+hours (book/propose/modify); admin_config_updated added to the audit-log
+filter options; a DECLARED-but-blank ADMIN_CONFIG_TTL_MS reads as unset
+(Number('') is 0 -- would have silently disabled prod caching); the
+redaction-deferral invariant and the preview's configured-horizon read
+are pinned; README's admin list gains Configuration; the plan's
+Architecture section now describes the round-3 designs.

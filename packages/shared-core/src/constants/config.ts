@@ -31,7 +31,7 @@ export const KID_INVITE_VALIDITY_DAYS = ADMIN_CONFIG_DEFS.kidInviteValidityDays.
 export const VERIFICATION_CODE_LENGTH = 6;
 
 /** Verification code cooldown in seconds */
-export const VERIFICATION_CODE_COOLDOWN_S = 60;
+export const VERIFICATION_CODE_COOLDOWN_S = ADMIN_CONFIG_DEFS.verificationCodeCooldownS.default;
 
 /** Past/rejected appointment visibility in days */
 export const PAST_VISIBILITY_DAYS = ADMIN_CONFIG_DEFS.pastVisibilityDays.default;

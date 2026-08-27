@@ -83,6 +83,7 @@ sync-sit/
 - **Appointment Management** — search, filter, delete
 - **Verification Review** — approve/reject identity and enrollment documents, view registered family data
 - **School Holiday Calendar** — manage Zone C holiday periods
+- **Configuration** — admin-tunable operational parameters (caps, windows, cooldowns; issue #250)
 - **Audit Log** — searchable admin action log with user resolution
 - **GDPR Data Export** — export all user data as JSON
 

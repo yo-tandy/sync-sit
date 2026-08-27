@@ -24,7 +24,11 @@ export const ADMIN_CONFIG_DOC = 'adminConfig/values';
  * Firestore get per instance per minute.
  */
 function ttlMs(): number {
-  const raw = Number(process.env.ADMIN_CONFIG_TTL_MS);
+  const rawStr = process.env.ADMIN_CONFIG_TTL_MS;
+  // A DECLARED-but-blank env var must read as unset: Number('') is 0,
+  // which would silently disable caching in prod (round-4 review).
+  if (rawStr === undefined || rawStr.trim() === '') return 60_000;
+  const raw = Number(rawStr);
   return Number.isFinite(raw) && raw >= 0 ? raw : 60_000;
 }
 

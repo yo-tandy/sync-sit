@@ -353,10 +353,11 @@ export const modifySession = onCall(
           );
         }
         const sessionStart = parisWallTimeToUtc(newDate, newStart);
-        if (sessionStart.getTime() < now.getTime() + (await getConfigValue('bookingNoticeHours')) * 60 * 60 * 1000) {
+        const bookingNoticeHours = await getConfigValue('bookingNoticeHours');
+        if (sessionStart.getTime() < now.getTime() + bookingNoticeHours * 60 * 60 * 1000) {
           throw new HttpsError(
             'failed-precondition',
-            'The new time is too close — sessions need 24 hours notice',
+            `The new time is too close — sessions need ${bookingNoticeHours} hours notice`,
             { reason: 'time_unavailable' },
           );
         }
