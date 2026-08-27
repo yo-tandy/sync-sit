@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { searchTutorsSchema } from '../search.js';
+import { searchTutorsSchema, lookupTutorSchema } from '../search.js';
 
 const BASE = { subject: 'math', level: '6e' };
 
@@ -53,5 +53,20 @@ describe('searchTutorsSchema — areaLabel is degrade-to-absent', () => {
     const parsed = searchTutorsSchema.safeParse({ ...BASE, areaLabel: 42 });
     expect(parsed.success).toBe(true);
     if (parsed.success) expect(parsed.data.areaLabel).toBeUndefined();
+  });
+});
+
+describe('lookupTutorSchema — bounds (issue #235)', () => {
+  it('accepts a trimmed 2-char query and rejects 1 char', () => {
+    expect(lookupTutorSchema.safeParse({ query: ' ya ' }).success).toBe(true);
+    expect(lookupTutorSchema.safeParse({ query: 'y' }).success).toBe(false);
+  });
+  it('rejects a query over 200 chars — the in-memory scan must never compare megabyte strings', () => {
+    expect(lookupTutorSchema.safeParse({ query: 'x'.repeat(200) }).success).toBe(true);
+    expect(lookupTutorSchema.safeParse({ query: 'x'.repeat(201) }).success).toBe(false);
+  });
+  it('rejects non-string shapes instead of crashing into a 500', () => {
+    expect(lookupTutorSchema.safeParse({ query: 42 }).success).toBe(false);
+    expect(lookupTutorSchema.safeParse({}).success).toBe(false);
   });
 });

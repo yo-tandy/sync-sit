@@ -26,6 +26,7 @@ export function TutorLookup() {
   const [hasSearched, setHasSearched] = useState(false);
   const [requestTarget, setRequestTarget] = useState<TutorLookupResult | null>(null);
   const [lookupError, setLookupError] = useState<'generic' | 'rateLimited' | false>(false);
+  const [truncated, setTruncated] = useState(false);
   // Monotonic sequence guarding against BOTH the pre-debounce cancel and a
   // stale in-flight response overwriting a newer query (PR #254 round 1).
   const seq = useRef(0);
@@ -46,19 +47,21 @@ export function TutorLookup() {
       setHasSearched(false);
       setSearching(false);
       setLookupError(false);
+      setTruncated(false);
       return;
     }
     setSearching(true);
     const mySeq = ++seq.current;
     const timer = setTimeout(async () => {
       try {
-        const fn = httpsCallable<{ query: string }, { results?: TutorLookupResult[] }>(
+        const fn = httpsCallable<{ query: string }, { results?: TutorLookupResult[]; truncated?: boolean }>(
           functions,
           'lookupTutor',
         );
         const res = await fn({ query: q });
         if (seq.current !== mySeq) return; // stale response, newer query owns the UI
         setResults(res.data.results || []);
+        setTruncated(res.data.truncated === true);
         setHasSearched(true);
         setLookupError(false);
       } catch (err: unknown) {
@@ -103,6 +106,9 @@ export function TutorLookup() {
           {t(lookupError === 'rateLimited' ? 'family.lookup.rateLimited' : 'family.search.error')}
         </p>
       )}
+      {truncated && (
+        <p className="mt-2 text-xs text-gray-500">{t('family.lookup.refine')}</p>
+      )}
       {results.length > 0 && (
         <div className="mt-3 space-y-2">
           {results.map((r) => {
@@ -142,7 +148,15 @@ export function TutorLookup() {
                       </Link>
                     )}
                     {status === 'accepted' && (
-                      <Badge variant="green">{t('family.lookup.connected')}</Badge>
+                      // Not a dead end: the family this feature serves is
+                      // disproportionately one ALREADY connected -- link
+                      // straight to where the contact details live.
+                      <span className="flex items-center gap-2">
+                        <Badge variant="green">{t('family.lookup.connected')}</Badge>
+                        <Link to="/family/requests" className="text-xs font-semibold text-brand-600 underline">
+                          {t('family.lookup.viewContact')}
+                        </Link>
+                      </span>
                     )}
                     {status === 'declined' && (
                       // searchTutors surfaces declined pairs the same way:

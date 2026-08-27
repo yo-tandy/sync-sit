@@ -696,6 +696,8 @@ export default {
       connected: 'Connecté',
       errorVerify: 'Votre famille doit être vérifiée avant de pouvoir contacter des tuteurs.',
       rateLimited: 'Trop de recherches pour le moment — veuillez réessayer dans un instant.',
+      refine: 'Affichage des 10 premiers résultats — affinez votre recherche.',
+      viewContact: 'Voir le contact',
     },
     search: {
       subjectLabel: 'Matière',

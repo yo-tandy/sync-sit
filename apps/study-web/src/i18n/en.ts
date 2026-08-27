@@ -696,6 +696,8 @@ export default {
       connected: 'Connected',
       errorVerify: 'Your family needs to be verified before you can contact tutors.',
       rateLimited: 'Too many searches for now — please try again in a little while.',
+      refine: 'Showing the first 10 matches — refine your search to narrow it down.',
+      viewContact: 'View contact',
     },
     search: {
       subjectLabel: 'Subject',

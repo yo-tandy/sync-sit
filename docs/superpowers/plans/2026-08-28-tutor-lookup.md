@@ -33,17 +33,35 @@
   subject to inherit) and posts through the ordinary
   `sendTutorContactRequest` flow.
 
-**Throttle (round 2):** per-uid lookup budget (60/h, `registerLookup` --
+**Throttle (rounds 2-3):** per-uid lookup budget, TIERED by family
+verification (120/h verified, 12/h unverified -- a bare account is free,
+a verified family costs document review, so the unverified budget is
+sized for "find the tutor I already know", never enumeration; each
+400ms-debounced query is ONE call, not one per keystroke). `registerLookup` --
 the email-send counter shape, exact under concurrency, doc id prefixed
 `lookup:` to avoid colliding with the bypass budget). The surface is
 deliberately reachable by unverified families, so the throttle -- not a
 verification gate -- is what makes scraping expensive; the audit entry
 makes it visible. Dedicated client copy for resource-exhausted.
 
-**Tests:** 18 integration pins (gates incl. enrollmentComplete, match
+**Round 3 additions:** shared `resolveFamilyRequestStatuses` helper (the
+status block was a near-verbatim copy of searchTutors'; both callables now
+consume the one implementation), deterministic name-sorted results with a
+`truncated` flag (Firestore doc order made the capped 10 arbitrary) + a
+"refine your search" hint, a View-contact link on Connected rows (the
+feature's main audience is already-connected families), and schema-bounds
+unit pins (2/200/non-string).
+
+**OPEN -- owner to confirm on the record (round 3 reviewer ask):** the
+no-verification-gate decision means any signed-up parent profile can
+resolve tutor names/photos at 12 lookups/h. Parity with sit + tiered
+throttle + audit is the shipped mitigation; the owner should confirm this
+residual is acceptable or direct a gate.
+
+**Tests:** 20 integration pins (gates incl. enrollmentComplete, match
 modes, status mapping incl. incoming/declined + latest-wins, cap,
 no-contact-fields, named unverified-family accepted-risk pin, audit entry,
-throttle spent/expired-window) + 12 component pins (debounce incl. the
+throttle spent/expired-window + unverified tier, truncation order/flag) + 14 component pins (debounce incl. the
 no-call and stuck-spinner transitions, out-of-order stale-response
 discard, rows, status rendering, chosen-subject payload, error copy per
 code incl. verification and throttle).

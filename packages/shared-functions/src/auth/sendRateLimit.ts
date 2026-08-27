@@ -2,8 +2,9 @@ import { Timestamp } from 'firebase-admin/firestore';
 import { db } from '../config/firebase.js';
 
 /**
- * Send-volume caps for the signup verification callables (issue #155). Two
- * independent budgets, both tracked in the server-only
+ * Send/READ-volume caps tracked in the server-only budget collection
+ * (issue #155; originally the two signup-verification send budgets, plus
+ * the lookup budget since issue #235). All are in the server-only
  * verificationSendCounters collection (clients cannot reach it:
  * firestore.rules has no match for the collection, so the default-deny
  * catch-all applies — same posture as accountExistsNotices):
@@ -25,6 +26,11 @@ import { db } from '../config/firebase.js';
  *    failed-precondition: the caller is authenticated and operating on their
  *    OWN account, so there is nothing to enumerate and a clear error beats
  *    silent mail loss.
+ *
+ * 3. Per-UID lookup budget — LOOKUP_CAP_(UN)VERIFIED tutor lookups per uid
+ *    per hour (issue #235): the first entry here that is not a SEND — same
+ *    counter mechanics, `lookup:`-prefixed doc ids, explicit
+ *    resource-exhausted on a spent window.
  *
  * Windows are FIXED, anchored at the first send: a capped request does not
  * write (no sliding lockout), so the budget always frees up windowMs after
@@ -122,17 +128,27 @@ export function registerBypassSend(uid: string): Promise<boolean> {
 }
 
 /**
- * Per-uid hourly budget for tutor lookups (issue #235, PR #254 review):
- * the lookup surface is deliberately reachable by unverified families, so
- * the throttle -- not a verification gate -- is what keeps one account
- * from driving repeated full scans of the tutor collection. 60/h covers
- * any real typing session (the client debounces to at most ~2 calls/s of
- * sustained typing, and a name needs a handful); the doc id is prefixed
- * so a uid's lookup budget never collides with its bypass-send budget.
+ * Per-uid hourly budgets for tutor lookups (issue #235, PR #254 rounds
+ * 2-3): the lookup surface is deliberately reachable by unverified
+ * families, so the throttle -- not a verification gate -- is what makes
+ * scraping expensive. Two tiers, because a bare account is free while a
+ * VERIFIED family costs real effort (document review): the unverified
+ * budget suffices to find a tutor you already know (each 400ms-debounced
+ * query is ONE call, not one per keystroke, and a name takes a handful of
+ * refinements) while making per-account roster enumeration useless; the
+ * verified budget leaves room for heavy legitimate sessions. The doc id
+ * is prefixed so a uid's lookup budget never collides with its
+ * bypass-send budget.
  */
-export const LOOKUP_CAP = 60;
+export const LOOKUP_CAP_VERIFIED = 120;
+export const LOOKUP_CAP_UNVERIFIED = 12;
 export const LOOKUP_WINDOW_MS = 60 * 60 * 1000;
 
-export function registerLookup(uid: string): Promise<boolean> {
-  return registerSend(`lookup:${uid}`, 'lookup', LOOKUP_CAP, LOOKUP_WINDOW_MS);
+export function registerLookup(uid: string, verified: boolean): Promise<boolean> {
+  return registerSend(
+    `lookup:${uid}`,
+    'lookup',
+    verified ? LOOKUP_CAP_VERIFIED : LOOKUP_CAP_UNVERIFIED,
+    LOOKUP_WINDOW_MS,
+  );
 }

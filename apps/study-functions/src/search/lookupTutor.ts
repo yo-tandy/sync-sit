@@ -3,6 +3,7 @@ import { db } from '@ejm/shared-functions/config/firebase.js';
 import { getCorsOrigin } from '@ejm/shared-functions/config/cors.js';
 import { writeUserActivity } from '@ejm/shared-functions/admin/writeAuditLog.js';
 import { registerLookup } from '@ejm/shared-functions/auth/sendRateLimit.js';
+import { resolveFamilyRequestStatuses } from '../contact/requestStatus.js';
 import { getEjemEmail, getParentProfile } from '@ejm/shared-core';
 import { getTutorView } from '@ejm/study-core';
 import type { TutorLookupResult } from '@ejm/study-core';
@@ -52,16 +53,21 @@ export const lookupTutor = onCall(
     }
     const familyId = caller.familyId;
 
-    // Throttle, not a gate (PR #254 round 2): the surface is deliberately
-    // reachable by unverified families, so the per-uid budget is what makes
-    // scraping expensive rather than merely visible-in-audit. Same counter
-    // shape as the email-send limits (exact under concurrency).
-    if (!(await registerLookup(uid))) {
+    // Throttle, not a gate (PR #254 rounds 2-3): the surface is
+    // deliberately reachable by unverified families, so the per-uid budget
+    // is what makes scraping expensive rather than merely visible-in-audit.
+    // TIERED by family verification -- a bare account is free, a verified
+    // family is not, so the unverified budget is sized for "find the tutor
+    // I already know", never enumeration. Same counter shape as the
+    // email-send limits (exact under concurrency).
+    const familyDoc = await db.collection('families').doc(familyId).get();
+    const isVerifiedFamily = familyDoc.data()?.verification?.isFullyVerified === true;
+    if (!(await registerLookup(uid, isVerifiedFamily))) {
       throw new HttpsError('resource-exhausted', 'lookup_rate_limited');
     }
 
     const q = parsed.data.query.toLowerCase();
-    const results: TutorLookupResult[] = [];
+    const matches: TutorLookupResult[] = [];
 
     const snap = await db.collection('users')
       .where('status', '==', 'active')
@@ -69,44 +75,10 @@ export const lookupTutor = onCall(
       .where('profiles.tutor.enrollmentComplete', '==', true)
       .get();
 
-    // The pair's existing requests, for per-result status -- searchTutors'
-    // resolution EXACTLY (latest request per pair wins, by createdAt):
-    // a TUTOR-initiated pending is 'incoming', never 'pending' (rendering
-    // "request sent" would lie; 'none' would offer a send CTA that fails as
-    // already-exists -- issue #207 PR4 / PR #213 review). A tutor-initiated
-    // closed request is not this family's history and stays out. A
-    // family-initiated declined surfaces as 'declined' so the CTA carries
-    // the cooldown hint instead of promising a clean send.
-    const reqSnap = await db.collection('studyContactRequests')
-      .where('familyId', '==', familyId)
-      .get();
-    const latestRequest = new Map<string, { status: string; createdAtMs: number }>();
-    reqSnap.docs.forEach((d) => {
-      const data = d.data();
-      const tutorId = data.tutorUserId as string;
-      if (!tutorId) return;
-      const tutorInitiated = data.initiatedBy === 'tutor';
-      if (tutorInitiated && data.status !== 'accepted' && data.status !== 'pending') return;
-      const createdAtMs = data.createdAt?.toMillis
-        ? data.createdAt.toMillis()
-        : data.createdAt?.toDate
-          ? data.createdAt.toDate().getTime()
-          : 0;
-      const prev = latestRequest.get(tutorId);
-      if (!prev || createdAtMs >= prev.createdAtMs) {
-        const status = tutorInitiated && data.status === 'pending'
-          ? 'incoming'
-          : (data.status as string);
-        latestRequest.set(tutorId, { status, createdAtMs });
-      }
-    });
-    const KNOWN = ['pending', 'accepted', 'declined', 'incoming'] as const;
-    const statusOf = (tutorId: string): TutorLookupResult['requestStatus'] => {
-      const s = latestRequest.get(tutorId)?.status;
-      return (KNOWN as readonly string[]).includes(s ?? '')
-        ? (s as TutorLookupResult['requestStatus'])
-        : 'none';
-    };
+    // This family's per-tutor request status -- the ONE resolution, shared
+    // with searchTutors (extracted PR #254 round 3; semantics documented at
+    // the helper).
+    const statusOf = await resolveFamilyRequestStatuses(familyId);
 
     for (const doc of snap.docs) {
       // getEjemEmail MUST see the RAW doc (root-first precedence, issue #203);
@@ -118,7 +90,7 @@ export const lookupTutor = onCall(
       const email = ((raw.email as string | undefined) || '').toLowerCase();
       const ejemEmail = (getEjemEmail(raw) || '').toLowerCase();
       if (fullName.includes(q) || email === q || ejemEmail === q) {
-        results.push({
+        matches.push({
           uid: doc.id,
           firstName: view.firstName || '',
           lastName: view.lastName || '',
@@ -129,8 +101,18 @@ export const lookupTutor = onCall(
           requestStatus: statusOf(doc.id),
         });
       }
-      if (results.length >= 10) break;
     }
+
+    // Deterministic order + an explicit truncation signal (PR #254 round 3):
+    // snap.docs order is Firestore-internal and can shift between identical
+    // queries, so an untyped cap silently returned an ARBITRARY 10. Sort by
+    // name, cap, and tell the client the list is partial so it can say
+    // "refine your search" instead of implying completeness.
+    matches.sort((a, b) =>
+      (`${a.lastName} ${a.firstName}`).localeCompare(`${b.lastName} ${b.firstName}`),
+    );
+    const truncated = matches.length > 10;
+    const results = matches.slice(0, 10);
 
     // Audit: an ungated enumeration surface is exactly where an activity
     // record earns its keep. The query itself is NOT logged -- it may be an
@@ -138,8 +120,9 @@ export const lookupTutor = onCall(
     await writeUserActivity(uid, 'lookup_tutor', {
       queryLength: q.length,
       resultCount: results.length,
+      truncated,
     });
 
-    return { results };
+    return { results, truncated };
   },
 );

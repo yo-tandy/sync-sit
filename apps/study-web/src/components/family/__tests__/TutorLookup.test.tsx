@@ -72,6 +72,13 @@ describe('TutorLookup', () => {
     await waitFor(() => expect(screen.getByText('No tutors found')).toBeInTheDocument());
   });
 
+  it('says the list is partial when the server reports truncation', async () => {
+    h.callable.mockResolvedValue({ data: { results: [tutor()], truncated: true } });
+    renderWithProviders(<TutorLookup />);
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'yael' } });
+    await waitFor(() => expect(screen.getByText(/first 10 matches/)).toBeInTheDocument());
+  });
+
   it('renders pending / incoming / accepted statuses without a send CTA', async () => {
     await typeAndResolve([
       tutor({ uid: 'p', firstName: 'Pending', requestStatus: 'pending' }),
@@ -83,6 +90,9 @@ describe('TutorLookup', () => {
     const incoming = screen.getByText('They contacted you — respond');
     expect(incoming.closest('a')).toHaveAttribute('href', '/family/requests');
     expect(screen.getByText('Connected')).toBeInTheDocument();
+    // Connected is not a dead end: the contact link points at the requests
+    // page where the revealed details live (round-3 catch).
+    expect(screen.getByText('View contact').closest('a')).toHaveAttribute('href', '/family/requests');
     expect(screen.queryByRole('button', { name: 'Request contact' })).not.toBeInTheDocument();
   });
 

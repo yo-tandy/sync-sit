@@ -64,10 +64,11 @@ describe('lookupTutor', () => {
   });
 
   it('finds a searchable tutor by name substring, without contact fields', async () => {
-    const res = await callFunction<{ results: LookupResult[] }>(
+    const res = await callFunction<{ results: LookupResult[]; truncated?: boolean }>(
       'lookupTutor', { query: 'yae' }, parentToken,
     );
     expect(res.results.map((r) => r.uid)).toContain(seed.tutor2.uid);
+    expect(res.truncated).toBe(false);
     const hit = res.results.find((r) => r.uid === seed.tutor2.uid)!;
     expect(hit.firstName).toBe('Yael');
     expect(hit.requestStatus).toBe('none');
@@ -242,11 +243,12 @@ describe('lookupTutor', () => {
     expect(JSON.stringify(entries)).not.toContain('yael');
   });
 
-  it('throttles per uid: a spent window rejects, a stale window admits (PR #254 round 2)', async () => {
+  it('throttles per uid: a spent window rejects, a stale window admits (PR #254 rounds 2-3)', async () => {
     const db = getDb();
     const counterRef = db.collection('verificationSendCounters').doc(`lookup:${seed.parent1.uid}`);
-    // Spent live window -> resource-exhausted, and the counter is NOT bumped.
-    await counterRef.set({ key: `lookup:${seed.parent1.uid}`, kind: 'lookup', count: 60, windowStart: new Date() });
+    // Spent live window (verified tier = 120) -> resource-exhausted, and
+    // the counter is NOT bumped.
+    await counterRef.set({ key: `lookup:${seed.parent1.uid}`, kind: 'lookup', count: 120, windowStart: new Date() });
     try {
       try {
         await callFunction('lookupTutor', { query: 'yael' }, parentToken);
@@ -254,11 +256,11 @@ describe('lookupTutor', () => {
       } catch (err) {
         expect((err as { code?: string }).code).toBe('RESOURCE_EXHAUSTED');
       }
-      expect((await counterRef.get()).data()!.count).toBe(60);
+      expect((await counterRef.get()).data()!.count).toBe(120);
 
       // Expired window -> admitted, counter restarts at 1.
       await counterRef.set({
-        key: `lookup:${seed.parent1.uid}`, kind: 'lookup', count: 60,
+        key: `lookup:${seed.parent1.uid}`, kind: 'lookup', count: 120,
         windowStart: new Date(Date.now() - 2 * 60 * 60 * 1000),
       });
       const res = await callFunction<{ results: LookupResult[] }>(
@@ -268,6 +270,30 @@ describe('lookupTutor', () => {
       expect((await counterRef.get()).data()!.count).toBe(1);
     } finally {
       await counterRef.delete();
+    }
+  });
+
+  it('an UNVERIFIED family gets the small tier: 12 spent rejects, while a verified family at 12 is admitted', async () => {
+    const db = getDb();
+    const parent3Token = await getIdToken(seed.parent3.uid);
+    const unverifiedRef = db.collection('verificationSendCounters').doc(`lookup:${seed.parent3.uid}`);
+    const verifiedRef = db.collection('verificationSendCounters').doc(`lookup:${seed.parent1.uid}`);
+    await unverifiedRef.set({ key: `lookup:${seed.parent3.uid}`, kind: 'lookup', count: 12, windowStart: new Date() });
+    await verifiedRef.set({ key: `lookup:${seed.parent1.uid}`, kind: 'lookup', count: 12, windowStart: new Date() });
+    try {
+      try {
+        await callFunction('lookupTutor', { query: 'yael' }, parent3Token);
+        throw new Error('should have thrown');
+      } catch (err) {
+        expect((err as { code?: string }).code).toBe('RESOURCE_EXHAUSTED');
+      }
+      const res = await callFunction<{ results: LookupResult[] }>(
+        'lookupTutor', { query: 'yael' }, parentToken,
+      );
+      expect(res.results.map((r) => r.uid)).toContain(seed.tutor2.uid);
+    } finally {
+      await unverifiedRef.delete();
+      await verifiedRef.delete();
     }
   });
 
@@ -288,10 +314,16 @@ describe('lookupTutor', () => {
       });
     }
     try {
-      const res = await callFunction<{ results: LookupResult[] }>(
+      const res = await callFunction<{ results: LookupResult[]; truncated?: boolean }>(
         'lookupTutor', { query: 'capmatch' }, parentToken,
       );
       expect(res.results).toHaveLength(10);
+      // Deterministic: sorted by name, so the kept 10 are the localeCompare
+      // -first ten of Tutor0..Tutor11, not Firestore's internal doc order.
+      const names = res.results.map((r) => `${(r as unknown as { lastName: string }).lastName}`);
+      expect(names).toEqual([...names].sort((a, b) => a.localeCompare(b)));
+      // And the client is TOLD the list is partial.
+      expect(res.truncated).toBe(true);
     } finally {
       await Promise.all(created.map((id) => db.collection('users').doc(id).delete()));
     }
