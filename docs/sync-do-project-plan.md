@@ -1,0 +1,1213 @@
+# Sync-Do Project Plan
+
+> **Status:** planning draft, 2026-08-27. Owner decisions in §2 are settled;
+> everything marked **OPEN** in §17 is not.
+>
+> Companion docs: `docs/sync-study-project-plan.md` (the template this plan
+> follows), `docs/shared-modules-roadmap.md` (the shared-package contract).
+
+## Table of Contents
+
+1. [Project Overview](#1-project-overview)
+2. [Decisions Taken](#2-decisions-taken)
+3. [Architecture](#3-architecture)
+4. [Domain Model](#4-domain-model)
+5. [Category Taxonomy](#5-category-taxonomy)
+6. [Task & Offer Lifecycle](#6-task--offer-lifecycle)
+7. [Firestore: Collections, Rules, Indexes](#7-firestore-collections-rules-indexes)
+8. [Cloud Functions](#8-cloud-functions)
+9. [Frontend Surfaces](#9-frontend-surfaces)
+10. [Notifications](#10-notifications)
+11. [Safety, Privacy & GDPR](#11-safety-privacy--gdpr)
+12. [Shared-Package Impact](#12-shared-package-impact)
+13. [Delivery Plan](#13-delivery-plan)
+14. [Testing Plan](#14-testing-plan)
+15. [V1 Scope Decisions](#15-v1-scope-decisions)
+16. [Future Roadmap](#16-future-roadmap)
+17. [Open Questions & Risks](#17-open-questions--risks)
+
+---
+
+## 1. Project Overview
+
+### What we're building
+
+**sync-do** is the third app in the Sync platform for the EJM (École Jeannine
+Manuel) community in Paris. EJM students take on practical, one-off tasks that
+families need done — plant care during the holidays, packing a move, assembling
+flat-pack furniture, staffing a birthday party, fixing the Wi-Fi.
+
+### The inversion
+
+sync-sit and sync-study are **supply-first**: providers publish availability,
+families search it. sync-do is **demand-first**: families publish tasks,
+students offer to do them.
+
+```
+sync-sit / sync-study            sync-do
+─────────────────────            ───────
+babysitter publishes             family posts a task
+  availability                     │
+  │                                ├── Léa offers  €40  "done IKEA before"
+family searches                    ├── Adam offers €35
+  → picks a provider               └── Sara offers €50
+  → sends a request                        │
+  → provider accepts               family accepts ONE
+                                     → task assigned
+```
+
+There is prior art in the repo. Issue #207 shipped `publishedSearches` — a
+family's *deliberately broadcast* demand, readable by every active provider of
+the matching app. sync-do is that idea promoted from a secondary channel to the
+whole product, with a real offer/selection lifecycle attached. §12 lists what
+carries over directly.
+
+### How the three apps relate
+
+| Aspect | sync-sit | sync-study | **sync-do** |
+|---|---|---|---|
+| Provider | Babysitter | Tutor | **Doer** |
+| Consumer | Family | Family | Family |
+| Direction | Family searches supply | Family searches supply | **Family publishes demand** |
+| Selection | Family requests → provider accepts | Family books slot → tutor accepts | **Students offer → family picks one** |
+| Pricing | Babysitter's hourly rate | Tutor's per-subject rate | **Student quotes per task** |
+| Time | Fixed date + start/end | Calendar slot, tutor-defined lengths | **Fixed / deadline / recurring / ongoing** |
+| Blocks shared availability | Yes | Yes | **No** (§2, decision 9) |
+| Money | Offline | Offline | Offline |
+
+### Goals
+
+1. Ship a demand-board marketplace with an offer→selection lifecycle.
+2. Reuse the platform's identity, family, verification, guardianship, audit and
+   notification machinery rather than re-growing it.
+3. Do not regress sync-sit or sync-study — every step leaves both buildable and
+   deployable.
+
+---
+
+## 2. Decisions Taken
+
+Settled with the owner during planning on 2026-08-27. These are inputs to the
+design, not proposals.
+
+| # | Question | Decision |
+|---|---|---|
+| 1 | Match model | **Offers → parent picks.** Students submit an offer; the family reviews competing offers and accepts one. |
+| 2 | Pricing | **Student quotes in their offer.** The family may post an optional suggested budget; the offer carries the actual number. |
+| 3 | Time models | **All four** — fixed appointment, deadline window, multi-day recurring, open-ended/ongoing. |
+| 4 | Provider account | **New `profiles.doer`** on the existing `users/{uid}` document, alongside `babysitter` and `tutor`. One identity, three apps. |
+| 5 | Taxonomy | **Categories + sub-categories**, each carrying a curated "things to cover" overview. The description field itself stays **free text**. |
+| 6 | Categories in V1 | The five named, plus **Errands** and **Pet & house-sitting**. Seven total. |
+| 7 | Safety gates | **Reuse the family verification gate**; **guardian consent** for flagged sub-categories; **adult-present declaration** on the task. *No per-category minimum age.* |
+| 8 | Payments | **None.** The accepted price is recorded for clarity; the family pays the student directly. No PSP, no regulated money handling. |
+| 9 | Team tasks | **One assigned student**, whose offer may declare a **+1 helper**. No multi-offer accounting. |
+| 10 | Availability blocking | **Nothing blocks.** sync-do writes no schedule overrides; sit and study bookings are unaffected. |
+| 11 | Monorepo shape | **Third web app + `do-core`; callables live in an existing functions codebase**, not a third one. |
+
+Settled in plan review, same day:
+
+| # | Question | Decision |
+|---|---|---|
+| 12 | Choosing between offers | **Existing endorsements on the offer card. No completed-task count**, and no new rating system. |
+| 13 | Overnight house-sitting | **Cut.** Not relevant to the product; removed from the taxonomy entirely. |
+| 14 | Family verification | **Mandatory to post**, and **portable across all three apps** — the same approval that unlocks sync-sit and sync-study unlocks sync-do. Never re-verify per app. |
+| 15 | Liability & insurance | **The family's responsibility. The platform performs the handshake only.** Insurance, accidents, and damage disputes (including a doer breaking what they assembled) are between the family and the student — stated in the terms and in-product, and true of sync-sit today as much as sync-do. |
+
+Two decisions carry known trade-offs that the design mitigates rather than
+removes — see §11 (the +1 helper is an unvetted person on site) and §17 R2
+(nothing blocks ⇒ a student can double-book).
+
+---
+
+## 3. Architecture
+
+### 3.1 One Firebase project, three hosting targets
+
+sync-do joins the existing project. Same Auth instance (SSO across all three
+apps for free), same Firestore, same rules file, same storage bucket.
+
+```
+.firebaserc  targets.sync-sit.hosting
+  web    → sync-sit          (apps/web)
+  study  → sync-study-app    (apps/study-web)
+  do     → sync-do-app       (apps/do-web)        ◀ new
+```
+
+`firebase.json` gains a third `hosting` entry, copied from the `study` entry
+(same security headers, same SPA rewrite, same immutable asset caching).
+
+### 3.2 Code layout
+
+Per decision 11, sync-do is a new **web app** and a new **core package**, but
+its callables live in an existing functions codebase.
+
+```
+apps/
+  web/                sync-sit frontend
+  functions/          codebase "default"  ── sync-sit callables + sync-do callables ◀
+  study-web/          sync-study frontend
+  study-functions/    codebase "study"
+  do-web/             sync-do frontend                                              ◀ new
+packages/
+  shared-core/        app-agnostic types, constants, utils
+  shared-ui/          React component library + themes
+  shared-functions/   cloud-function helpers (guardian, handoff, schedule, …)
+  sit-core/
+  study-core/
+  do-core/            task + offer types, taxonomy content, validation            ◀ new
+```
+
+**Which codebase hosts the callables:** `apps/functions` (codebase `default`).
+Rationale — sync-do's callables need the family-verification gate, the
+`families`/kids reads, `resolveAreaLabel`, the audit-log writer and the
+guardian helpers. `apps/functions` already imports all of them and already
+hosts `publishSearch`, the nearest analogue. `apps/study-functions` has none of
+the family-verification surface. New code goes in `apps/functions/src/do/**`
+with a `do` prefix on every exported callable name (`doPostTask`,
+`doSubmitOffer`, …) so the two domains never collide in one deploy unit.
+
+**Consequence to accept:** every sync-do deploy redeploys the sync-sit
+functions codebase. That is already true of sync-sit's own changes, and the
+merge workflow deploys both codebases on every merge to `main` regardless
+(`project_prod_deploy_pipeline`), so the blast radius is unchanged in practice.
+
+### 3.3 The `doer` profile
+
+`users/{uid}.profiles` gains a third key. From `packages/shared-core/src/types/user.ts`:
+
+```ts
+profiles: {
+  babysitter?: ProfileBase;
+  tutor?: ProfileBase;
+  doer?: DoerProfile;        // ◀ new
+  parent?: ParentProfile;
+}
+```
+
+```ts
+// packages/do-core/src/types/doerProfile.ts
+export interface DoerProfile extends ProfileBase {   // ProfileBase = { enrollmentComplete: boolean }
+  /** Board visibility + notification opt-in. Owner-controlled, exactly like
+   *  profiles.babysitter.searchable — status is the hard ban gate. */
+  searchable: boolean;
+  /** Categories the student wants to see and be notified about. Empty = all. */
+  categories: TaskCategory[];
+  /** Free-text blurb shown to a family alongside an offer. */
+  bio?: string;
+  /** Optional: a default flat price hint, purely to pre-fill the offer form. */
+  defaultRate?: number | null;
+  hasCar?: boolean;
+  hasBike?: boolean;
+}
+```
+
+Root identity fields (`ejemEmail`, `contactEmail`, `contactPhone`, `whatsapp`,
+`firstName`, `photoUrl`, `dateOfBirth`) are **not** duplicated — they are
+already canonical at the root per issue #203, and sync-do reads them through
+the existing `getEjemEmail` / `getContact` accessors.
+
+**Cross-app enrollment.** A student who is already a babysitter or tutor lands
+in sync-do authenticated with `profiles.doer` absent. The auth guard routes
+them to an abbreviated flow: skip email verification, skip identity, skip
+password — collect only categories, transport, bio, consent. This is the exact
+pattern already shipped for sit↔study (`docs/shared-modules-roadmap.md` Plan D,
+and the frictionless switch in PRs #145/#146). A brand-new student gets the
+full enrollment flow from `@ejm/shared-ui/enrollment/*`.
+
+**App switcher.** The existing two-way switch (`appHandoffCodes` +
+`packages/shared-functions/src/handoff/appHandoff.ts`) becomes three-way. This
+is the one piece of existing cross-app code that needs generalizing rather than
+extending — the handoff currently assumes a single sibling target. Budget a PR
+for it (§13, PR2).
+
+### 3.4 What sync-do deliberately does *not* touch
+
+- `schedules/{userId}` and its `overrides` subcollection — decision 10.
+- The `appointments` and `study-sessions` collections.
+- The matching/Haversine search engine — sync-do has a board, not a search.
+- Payment, invoicing, or any money movement.
+
+---
+
+## 4. Domain Model
+
+Two documents carry the whole product: a **Task** (the family's demand) and an
+**Offer** (a student's bid on it).
+
+### 4.1 TaskDoc
+
+```ts
+// packages/do-core/src/types/task.ts
+
+export type TaskTiming = 'fixed' | 'deadline' | 'recurring' | 'ongoing';
+export type TaskStatus = 'open' | 'assigned' | 'completed' | 'cancelled';
+export type AdultPresence = 'yes' | 'no' | 'partly';
+
+export interface TaskDoc {
+  taskId: string;                    // == doc id
+  familyId: string;
+  createdByUserId: string;
+
+  // ── Board-visible identity. Mirrors the publishedSearches PII stance:
+  //    area LABEL only, never address or latLng, pre-assignment.
+  familyName: string;
+  areaLabel: string | null;          // resolveAreaLabel(family postcode/city)
+
+  // ── What
+  category: TaskCategory;
+  subCategory: string;               // key within the category, or '<cat>_other'
+  title: string;                     // ≤ 80 chars
+  description: string;               // ≤ 2000 chars, free text, provider-visible
+  photoIds: string[];                // ≤ 6, GCS objects, EXIF-stripped (§11)
+
+  // ── When (discriminated by `timing`; exactly one group is non-null)
+  timing: TaskTiming;
+  date: string | null;               // fixed:     "YYYY-MM-DD"
+  startTime: string | null;          // fixed:     "HH:MM"
+  endTime: string | null;            // fixed
+  dueDate: string | null;            // deadline:  "YYYY-MM-DD"
+  startDate: string | null;          // recurring | ongoing
+  endDate: string | null;            // recurring (null for ongoing)
+  cadence: TaskCadence | null;       // recurring | ongoing — see below
+  estimatedHours: number | null;     // family's honest guess, all timings
+
+  // ── Terms
+  suggestedBudget: number | null;    // optional indication; the OFFER sets the price
+  adultPresent: AdultPresence;       // decision 7 — declared, not derived
+  toolsProvided: boolean | null;
+  transportNeeded: boolean;          // car/bike expected (dump runs, store pickup)
+
+  // ── Lifecycle
+  status: TaskStatus;
+  offerCount: number;                // denormalized; maintained transactionally
+  assignedUserId: string | null;
+  assignedOfferId: string | null;
+  assignedAt: FirestoreTimestamp | null;
+  agreedPrice: number | null;        // copied from the accepted offer, for the record
+  completedAt: FirestoreTimestamp | null;
+  cancelledAt: FirestoreTimestamp | null;
+  cancelledBy: 'family' | 'doer' | 'admin' | null;
+
+  createdAt: FirestoreTimestamp;
+  updatedAt: FirestoreTimestamp;
+  expiresAt: FirestoreTimestamp;     // server-computed, see §6.3
+}
+
+export interface TaskCadence {
+  kind: 'daily' | 'weekly' | 'custom';
+  /** weekly: which days. daily: ignored. custom: free text in `note`. */
+  days?: ('sun'|'mon'|'tue'|'wed'|'thu'|'fri'|'sat')[];
+  /** Indicative time of day ("around 18:00"); NOT a booking — nothing blocks. */
+  timeHint?: string | null;
+  note?: string | null;
+}
+```
+
+**No `instances` subcollection.** sync-study tracks per-occurrence state because
+each occurrence is a bookable slot that blocks availability. Decision 10 removes
+that requirement: a recurring sync-do task is one agreement between two people,
+described by a cadence. If per-visit check-off is wanted later it is additive
+(§16).
+
+**Contact details are not on the task.** The family's address, phone and the
+student's contact are revealed only on acceptance — §6.4.
+
+### 4.2 OfferDoc
+
+```ts
+// packages/do-core/src/types/offer.ts
+
+export type OfferStatus =
+  | 'pending_guardian'   // awaiting the student's supervising parent (§6.2)
+  | 'pending'            // visible to the family, awaiting their decision
+  | 'accepted'
+  | 'declined'           // family declined, or auto-declined when a sibling won
+  | 'withdrawn'          // student pulled it
+  | 'expired';           // task expired or was cancelled underneath it
+
+export interface OfferDoc {
+  offerId: string;               // == `${taskId}_${doerUserId}` — see below
+  taskId: string;
+  doerUserId: string;
+  familyId: string;              // denormalized from the task, for rules
+
+  price: number;                 // the student's quote, EUR
+  priceBasis: 'flat' | 'hourly';
+  message: string;               // ≤ 1000 chars, free text
+
+  /** Decision 9: the student may bring one helper. Recorded, shown to the
+   *  family, and NOT an account — see the §11 caveat. */
+  helper: { firstName: string; lastName: string; age: number } | null;
+
+  /** For deadline/recurring/ongoing tasks: when the student proposes to do it. */
+  availabilityNote: string | null;
+
+  status: OfferStatus;
+  guardian: {
+    required: boolean;
+    familyId: string | null;       // the SUPERVISING family (student's own)
+    decidedAt: FirestoreTimestamp | null;
+    decidedByUid: string | null;
+  } | null;
+
+  declinedReason: 'family_declined' | 'sibling_accepted' | 'task_closed' | null;
+  createdAt: FirestoreTimestamp;
+  updatedAt: FirestoreTimestamp;
+}
+```
+
+**`offerId == \`${taskId}_${doerUserId}\`** is deliberate. It makes "one offer
+per student per task" a *structural* invariant enforced by Firestore's
+create-if-absent semantics, not a query the callable has to remember to run. A
+student who wants to change their price withdraws and re-offers, or edits in
+place (`updateOffer`, allowed while `pending`).
+
+**Top-level collection, not a subcollection.** `taskOffers/{offerId}` rather
+than `tasks/{taskId}/offers/{offerId}`. The student's "my offers" view is a
+plain `where('doerUserId','==',uid)` query; as a subcollection it would need a
+collection-group read rule, and the codebase has already decided against
+collection-group rules once (`study-sessions/instances`, see `firestore.rules`).
+This mirrors `studyContactRequests`, which is top-level for the same reason.
+
+### 4.3 Category taxonomy types
+
+The taxonomy is **content, not schema**: adding a sub-category or editing a
+consideration list is an i18n string change with no migration.
+
+```ts
+// packages/do-core/src/constants/categories.ts
+
+export type TaskCategory =
+  | 'green_thumb' | 'boxes' | 'ikea' | 'party'
+  | 'it' | 'errands' | 'pet_house';
+
+export interface SubCategoryDef {
+  key: string;                    // e.g. 'ikea_assembly'
+  category: TaskCategory;
+  /** i18n keys for the "things to cover" list — EN + FR in do-core's content
+   *  module, rendered in three places (§5). */
+  considerationKeys: string[];
+  flags: {
+    /** Sub-category is flagged: a governed student's supervising parent must
+     *  approve the offer before the family sees it (decision 7). */
+    guardianConsent?: boolean;
+    /** The posting form nudges the family toward adultPresent: 'yes'. */
+    recommendAdultPresent?: boolean;
+    /** Student would handle the family's money or card — the Errands policy. */
+    handlesFamilyMoney?: boolean;
+    /** A living creature depends on this being done. */
+    livingCreature?: boolean;
+    /** Transport is usually required. */
+    transport?: boolean;
+  };
+}
+```
+
+---
+
+## 5. Category Taxonomy
+
+Seven categories. Each sub-category carries a **considerations list** — a
+curated set of "things worth covering" that renders in three places:
+
+1. **Beside the family's description box** while posting, as hints. It does not
+   pre-fill or constrain the text; the description stays free.
+2. **On the task detail** a student sees, so they know what to ask before
+   offering.
+3. **As an optional pre-start checklist** on the assigned task, for both sides.
+
+Lists below are the V1 content. They are i18n keys in
+`packages/do-core/src/content/considerations.{en,fr}.ts`.
+
+### 5.1 Green-Thumb `green_thumb`
+
+Sub-categories: vacation indoor plant care · garden & terrace watering while
+away · lawn mowing and edging · planting & potting · weeding, pruning and
+tidy-up · green-waste and bin duty · other.
+
+**Things to cover:** access — keys, door codes, alarm · the exact absence dates
+and how often to come · which plants, how much water, which ones are fussy ·
+where the watering can, hose and tools live · outdoor tap access · pets on site
+· allergies · what to do if something dies or the weather turns · whether photo
+updates are expected · mower type, petrol or electric · garden size · where
+green waste goes.
+
+Flags: mowing and pruning → `guardianConsent`. Vacation care → `livingCreature`
+(a plant is a low-stakes one, but the same "someone is depending on this"
+prompt applies). Green-waste runs → `transport`.
+
+### 5.2 Boxes `boxes`
+
+Sub-categories: packing before a move · unpacking and putting away · loading
+and unloading a van · cellar, attic or garage clear-out · moving furniture
+within the home · dump and donation runs · other.
+
+**Things to cover:** how much lifting, and which floor — is there a lift · how
+many rooms or boxes, realistically · who supplies boxes, tape and labels ·
+fragile or valuable items and who handles them · the move date is usually
+immovable — say so · an honest duration estimate · working alone or alongside
+others · what happens if something breaks · whether a car or licence is needed ·
+gloves and suitable clothing.
+
+Flags: van loading, clear-outs and furniture moving → `guardianConsent`,
+`recommendAdultPresent`. Dump runs → `transport`.
+
+### 5.3 Ikea `ikea`
+
+Sub-categories: assembly from instructions · disassembly before a move · wall
+mounting and anchoring · store pick-up and transport · fixing or adjusting
+existing furniture · other.
+
+**Things to cover:** how many items and which — links or model names · are the
+instructions and all the parts actually there · which tools are on site vs
+bring-your-own · drilling into walls: landlord permission, and pipes and cables
+behind them · which items genuinely need two people · floor protection · who
+disposes of the packaging · a realistic time per item · ladder and ceiling
+height.
+
+Flags: wall mounting → `guardianConsent`, `recommendAdultPresent`. Store pick-up
+→ `transport`.
+
+### 5.4 Party `party`
+
+Sub-categories: setup and decoration · kids' entertainment during the party ·
+serving and catering help · music, photo and tech · clean-up after · baking and
+food prep beforehand · other.
+
+**Things to cover:** the date and a **hard end time** — a late finish means
+transport home and a guardian conversation · guest count and the ages of any
+children · whether this is actually child supervision, in which case sync-sit's
+rules and ratios are the right frame, not this one · alcohol present · food
+handling and allergies · dress code · is the student fed · who else is helping ·
+is an adult present throughout · neighbours and noise · what time to arrive
+before guests.
+
+Flags: kids' entertainment → `guardianConsent`, `recommendAdultPresent`, and
+the posting form shows an explicit **"is this childcare?" → link to sync-sit**
+interstitial. Serving → `recommendAdultPresent`.
+
+### 5.5 IT `it`
+
+Sub-categories: device setup — phone, laptop, printer, tablet · Wi-Fi, router
+and smart home · data transfer and backup · troubleshooting and clean-up ·
+teaching a person, e.g. a grandparent phone lesson · TV, audio and streaming ·
+other.
+
+**Things to cover:** **passwords — the family types them, the student never
+collects or keeps them** · what personal data the student will be able to see ·
+back up before changing anything · brand, OS, model and age of the device ·
+whether the work voids a warranty · who owns the account being touched · **no
+purchases on the family's behalf** · remote or in person · agree a concrete
+outcome, not "make it faster" · a short written summary of what changed.
+
+Flags: none require guardian consent (low physical risk); data transfer and
+troubleshooting carry the strongest privacy copy in the list.
+
+### 5.6 Errands `errands`
+
+Sub-categories: grocery and market shopping · pharmacy pick-up · parcels, post
+and drop-off points · dry cleaning and laundry · returns and exchanges · other.
+
+**Things to cover:** **how the money works — a pre-paid card, cash handed over
+and counted, or reimbursement on a receipt** · always keep the receipt · what to
+do when an item is out of stock — substitute or skip · prescriptions and
+pharmacy ID requirements · spending ceiling · how far, and by what transport ·
+cold chain for frozen or fresh items · how heavy the load will be · where to
+leave things if nobody is home.
+
+Flags: every sub-category → `handlesFamilyMoney`; pharmacy →
+`guardianConsent`. `handlesFamilyMoney` surfaces a standing platform line on
+the task and the offer: **sync-do handles no money and mediates no
+reimbursement disputes** — agree the mechanism in writing before starting.
+
+### 5.7 Pet & house-sitting `pet_house`
+
+Sub-categories: dog walking · feeding and litter while the family is away ·
+drop-in checks on an empty flat · vet or grooming trips · other.
+
+> **Cut from V1 (decision 13): overnight presence.** It was the highest-risk,
+> least task-shaped item in the taxonomy — a student sleeping alone in a
+> stranger's empty home is a different product with different duty-of-care
+> obligations. Not deferred, removed.
+
+**Things to cover:** the animal — species, breed, size, age, temperament, and
+whether it has ever bitten or bolted · the exact feeding routine and quantities
+· medication · lead, harness and where to walk · behaviour with other dogs and
+with strangers · **the vet's name, number, and who authorises treatment and
+pays** · keys, door codes and alarm · what counts as an emergency and who to
+call first · neighbours to notify · insurance, if any.
+
+Flags: every sub-category → `livingCreature`; dog walking and vet trips →
+`guardianConsent`. Drop-in checks and feeding happen in an empty home by
+definition, so the posting form requires an explicit `adultPresent: 'no'`
+acknowledgement rather than nudging toward `'yes'`.
+
+---
+
+## 6. Task & Offer Lifecycle
+
+### 6.1 States
+
+```
+                 ┌──────────── withdrawn / expired (offer)
+                 │
+  ┌────────┐  offer   ┌─────────────────┐  accept   ┌──────────┐  complete  ┌───────────┐
+  │  open  │ ───────▶ │ open (N offers) │ ────────▶ │ assigned │ ─────────▶ │ completed │
+  └────────┘          └─────────────────┘           └──────────┘            └───────────┘
+       │                      │                          │
+       │  expiresAt / withdraw│                          │ cancel (either side)
+       ▼                      ▼                          ▼
+  ┌───────────┐                                    ┌───────────┐
+  │ cancelled │◀───────────────────────────────────│ cancelled │
+  └───────────┘                                    └───────────┘
+```
+
+Task status is a closed set of four: `open`, `assigned`, `completed`,
+`cancelled`. Expiry is *not* a status — following the `publishedSearches`
+precedent, an expired task is one where `expiresAt <= now`, filtered
+client-side, swept daily, and re-checked server-side by every callable that
+acts on it. This avoids a status field that only a scheduled job can advance.
+
+### 6.2 Offering, with guardian consent
+
+```
+student taps "I'll do it"
+   │
+   ├─ sub-category flagged guardianConsent?  ──no──▶ status: 'pending'  ─▶ family sees it
+   │                        │yes
+   │                        ▼
+   │            student has an ACTIVE governedBy link?
+   │                 │                    │
+   │                no                   yes
+   │                 │                    │
+   │                 ▼                    ▼
+   │           status: 'pending'    status: 'pending_guardian'
+   │           (no guardian to ask)   → notify the supervising parent
+   │                                  → parent approves in the existing
+   │                                    supervised-child surface
+   │                                  → status: 'pending', family sees it
+```
+
+The consent hook reuses `guardianLinks/{childUid}` and the helpers in
+`packages/shared-functions/src/guardian/` — specifically `guardianAccess.ts` for
+the "is this caller the supervising parent" check and `oversight.ts` for the
+listing surface. No new consent collection.
+
+An offer in `pending_guardian` is **invisible to the family**: the family's
+offer list filters on `status == 'pending'`. The student sees their own offer
+with an "awaiting your parent" badge.
+
+### 6.3 Expiry
+
+`expiresAt` is server-computed at post time, never client-supplied:
+
+| Timing | `expiresAt` |
+|---|---|
+| `fixed` | `min(now + 14d, end of the task's day, Paris wall clock)` |
+| `deadline` | `min(now + 14d, end of `dueDate`)` |
+| `recurring` | `min(now + 14d, end of `startDate`)` — the board offer window closes when the series starts |
+| `ongoing` | `now + 14d` |
+
+14 days rather than `publishedSearches`' 7: a task board with an offer cycle
+needs longer to attract bids than a one-shot broadcast. `parisWallTimeToUtc`
+from `@ejm/shared-functions/scheduled/parisTime.js` does the day-end maths — it
+is already the codebase's answer to this exact problem.
+
+Anti-spam ceiling: **`DO_TASK_MAX_ACTIVE = 5`** open tasks per family, and
+**`DO_OFFER_MAX_ACTIVE = 10`** pending offers per student. Both enforced in the
+callable, both exported from `do-core` so the UI can pre-empt the error.
+
+### 6.4 Acceptance — the one transaction that matters
+
+`doAcceptOffer` runs a single Firestore transaction:
+
+1. Re-read the task. Assert `status == 'open'` and `expiresAt > now`.
+2. Re-read the offer. Assert `status == 'pending'` and `taskId` matches.
+3. Assert the caller is a member of the task's family.
+4. Assert the offering student is still `status == 'active'` and still has
+   `profiles.doer.enrollmentComplete`.
+5. Task → `assigned`; write `assignedUserId`, `assignedOfferId`, `assignedAt`,
+   `agreedPrice`.
+6. Accepted offer → `accepted`.
+7. **Every other `pending` and `pending_guardian` offer on the task →
+   `declined`, `declinedReason: 'sibling_accepted'`.**
+8. Write notifications: winner, each loser, the winner's guardian if there is
+   an active link.
+9. Audit-log the assignment via `writeUserActivity`.
+
+Step 7 is why acceptance is transactional and not a sequence of writes: a
+second parent accepting a different offer concurrently must lose. With
+`DO_OFFER_MAX_ACTIVE` bounding the loser set at a handful of documents, the
+transaction stays well inside Firestore's 500-write limit.
+
+**Contact reveal happens here.** Before acceptance, neither side has the
+other's address or phone — the board shows `areaLabel` and `familyName` only,
+and the offer shows the student's first name, photo and bio. On acceptance the
+assigned task detail renders the family address and phone to the assigned
+student, and the student's contact channels (`getContact`) to the family. This
+is the same reveal boundary sync-sit uses for appointments, and it means an
+un-accepted offer leaks nothing.
+
+### 6.5 Completion and cancellation
+
+- Either side can mark the task done. The student's mark sets a
+  `doerMarkedDoneAt` timestamp and notifies the family; the **family's** mark
+  moves the task to `completed`. A task the student marked done but the family
+  never confirmed auto-completes after 7 days via the daily sweep.
+- Either side can cancel an `assigned` task. `cancelledBy` records who. No
+  penalty, no policy engine — decision 8 means there is no money to claw back.
+  The V2 cancellation-policy work from PR #101 is deliberately *not* extended
+  here (§16).
+
+---
+
+## 7. Firestore: Collections, Rules, Indexes
+
+### 7.1 New collections
+
+| Collection | Written by | Read by |
+|---|---|---|
+| `doTasks/{taskId}` | callables only (Admin SDK) | owning family · any active enrolled doer · admin |
+| `taskOffers/{offerId}` | callables only (Admin SDK) | the offering student · the task's family (when `status != 'pending_guardian'`) · the student's supervising parent (when `pending_guardian`) · admin |
+
+Both are prefixed `do*` / `task*` rather than reusing generic names, because the
+rules file is shared by three apps and a collection called `tasks` will not age
+well.
+
+### 7.2 Rules sketch
+
+Follows the house style established by `publishedSearches` — provider disjuncts
+first so a provider's list query never evaluates a family-doc `get()` (the H2
+`||`-chain lesson recorded in `firestore.rules`), and every write denied to
+clients except the owner's withdraw.
+
+```
+match /doTasks/{taskId} {
+  allow read: if isAuth() && (
+       (callerData().get('profiles', {}).get('doer', null) != null
+        && doerField(callerData(), 'enrollmentComplete', false) == true
+        && callerData().get('status', '') == 'active')
+    || isAdmin()
+    || isFamilyMember(resource.data.familyId)
+  );
+  allow create, update: if false;                       // callables only
+  allow delete:         if false;                       // cancel is a callable
+}
+
+match /taskOffers/{offerId} {
+  allow read: if isAuth() && (
+       request.auth.uid == resource.data.doerUserId
+    || (resource.data.status != 'pending_guardian'
+        && isFamilyMember(resource.data.familyId))
+    || (resource.data.status == 'pending_guardian'
+        && resource.data.guardian.familyId != null
+        && isFamilyMember(resource.data.guardian.familyId))
+    || isAdmin()
+  );
+  allow create, update, delete: if false;               // callables only
+}
+```
+
+Three things worth flagging for the rules review:
+
+- **`doTasks` delete is `false`,** unlike `publishedSearches` where withdraw is
+  a rules-gated client delete. A task with offers attached cannot be deleted
+  without also expiring those offers, so withdrawal is a callable
+  (`doCancelTask`) that does both.
+- **The `pending_guardian` read split** is what keeps an unapproved offer
+  invisible to the hiring family. It is provable for list queries because the
+  status equality is in the query filter — the family's list is
+  `where('taskId','==',t).where('status','in',['pending','accepted','declined'])`.
+- **Expiry is not rules-enforced**, identically to `publishedSearches` and for
+  the same reason (unprovable against a client-supplied bound). An
+  expired-but-unswept task leaks nothing its readers could not already see.
+
+Rules changes get mutation-verified in an isolated stripped-copy test env, never
+by weakening the live rules file (`feedback_rules_mutation_verify`).
+
+### 7.3 Indexes
+
+```
+doTasks:    (status ASC, category ASC, createdAt DESC)      — the board, filtered
+doTasks:    (status ASC, createdAt DESC)                    — the board, unfiltered
+doTasks:    (familyId ASC, createdAt DESC)                  — "my tasks"
+doTasks:    (assignedUserId ASC, status ASC, updatedAt DESC)— "my assignments"
+doTasks:    (expiresAt ASC)                                 — the daily sweep
+taskOffers: (taskId ASC, status ASC, createdAt ASC)         — offers on a task
+taskOffers: (doerUserId ASC, status ASC, createdAt DESC)    — "my offers"
+taskOffers: (guardian.familyId ASC, status ASC)             — guardian queue
+```
+
+### 7.4 Storage
+
+Task photos live at `doTasks/{taskId}/{photoId}` in the existing bucket, with
+`storage.rules` mirroring the `doTasks` read rule. Note the deployment gotcha
+from the README: **storage rules are not auto-deployed** by the merge workflow
+and must be shipped manually.
+
+---
+
+## 8. Cloud Functions
+
+All in `apps/functions/src/do/**`, codebase `default`, region `europe-west1`,
+`cors: getCorsOrigin()`. Every name is `do`-prefixed.
+
+| Callable | Auth | Does |
+|---|---|---|
+| `doEnrollDoer` | Auth | Creates `profiles.doer` — full or abbreviated depending on existing profiles |
+| `doUpdateDoerProfile` | Auth | Categories, bio, transport, `searchable` |
+| `doPostTask` | Auth (verified family) | Validates, scrubs, computes `areaLabel` + `expiresAt`, enforces `DO_TASK_MAX_ACTIVE` |
+| `doUpdateTask` | Auth (owner family) | `open` tasks only; description/photos/budget/timing. Notifies students with pending offers that terms changed |
+| `doCancelTask` | Auth (owner family) | Task → `cancelled`, all live offers → `expired`, notify |
+| `doSubmitOffer` | Auth (active doer) | Enforces the ceiling, resolves the guardian gate, writes `pending` or `pending_guardian` |
+| `doUpdateOffer` | Auth (offering student) | Price/message/helper while `pending` |
+| `doWithdrawOffer` | Auth (offering student) | → `withdrawn`, decrements `offerCount` |
+| `doDecideOfferAsGuardian` | Auth (supervising parent) | `pending_guardian` → `pending` or `withdrawn` |
+| `doAcceptOffer` | Auth (owner family) | The §6.4 transaction |
+| `doDeclineOffer` | Auth (owner family) | Single offer → `declined` |
+| `doMarkTaskDone` | Auth (family or assigned doer) | §6.5 |
+| `doListBoard` | — | **Not a callable.** The board is a direct Firestore query under the §7.2 read rule, like `usePublishedSearches`. |
+| `doAdminListTasks` | Admin | Search/filter for the admin panel |
+| `doAdminDeleteTask` | Admin | Hard delete + audit |
+| `doSweepTasks` | Scheduled | Daily: delete expired `open` tasks and their offers; auto-complete stale `doerMarkedDoneAt` tasks. Extends the existing `cleanupOldData` schedule rather than adding a second job |
+
+Validation follows the sit house style visible in `publishSearch.ts` — manual
+guards throwing `HttpsError('invalid-argument', …)`, with the shared bounds
+(`DO_TASK_MAX_ACTIVE`, length ceilings, price range) exported from `do-core` so
+the frontend enforces the same numbers.
+
+GDPR: `exportUserData` and `deleteUser` in `apps/functions/src/admin/` both need
+`doTasks` and `taskOffers` added to their collection lists. This is easy to
+forget and is called out as a checklist item in §13 PR8.
+
+---
+
+## 9. Frontend Surfaces
+
+`apps/do-web`, scaffolded from `apps/study-web` (React 19 + Vite + Tailwind +
+Zustand + React Router v7 + react-i18next), consuming `@ejm/shared-ui` for
+chrome, enrollment steps, forms and theme.
+
+### 9.1 Family
+
+- **Post a task** — a wizard: category → sub-category → timing (the four models
+  each with their own small form) → title + free-text description *with the
+  considerations list rendered alongside* → photos → adult-present declaration →
+  tools/transport → optional suggested budget → review + publish. The review
+  step warns that the description and photos are visible to every enrolled
+  student, mirroring the `publishedSearches` publish-dialog warning.
+- **My tasks** — open (with a live offer count badge), assigned, completed,
+  cancelled.
+- **Task detail with offers** — the offer list is the heart of the product:
+  student name, photo, bio, price, basis, message, declared helper, and their
+  **existing platform endorsements** (decision 12 — the endorsements that
+  already exist in `packages/study-core/src/types/endorsement.ts`, surfaced
+  here; deliberately **no completed-task count** and no sync-do-specific
+  rating). Accept / decline per offer.
+- **Assigned task** — contact details revealed, considerations rendered as a
+  shared checklist, mark-done, cancel.
+
+### 9.2 Doer (student)
+
+- **Board** — the demand feed. Filters: category, sub-category, timing, area,
+  adult-present, transport-needed. Sorted newest-first by default. This is the
+  app's home screen.
+- **Task detail** — everything the family published, plus the considerations
+  list as "what to ask before you offer", plus an `adultPresent` badge.
+- **Make an offer** — price + basis, message, optional +1 helper (name and
+  age), availability note. Shows the guardian gate up front when the
+  sub-category is flagged, so the wait is expected rather than mysterious.
+- **My offers** — pending, awaiting-parent, accepted, declined, withdrawn.
+- **My tasks** — assigned work, contact details, checklist, mark-done.
+
+### 9.3 Guardian
+
+No new surface. The pending-approval item appears in the existing supervised-
+child oversight view (`packages/shared-functions/src/guardian/oversight.ts` and
+its frontend counterpart), with a link that deep-links into sync-do.
+
+### 9.4 Admin
+
+Admin lives only in `apps/web` today — `apps/study-web` has no admin tree, and
+sync-do will not grow one either. Extend the existing panel: a Tasks tab
+(search, filter by category/status/family, view offers, delete), task counts on
+the admin dashboard, and sync-do actions flowing into the existing audit log.
+
+### 9.5 Cross-app switch
+
+The switcher in all three apps becomes three-way. Each app ships brand marks for
+the other two; `docs/shared-modules-roadmap.md` already flags consolidating
+those marks into `shared-ui` as overdue — with a third app they become 6
+byte-copies, so do the consolidation as part of PR2 rather than after.
+
+---
+
+## 10. Notifications
+
+Reuses `NotificationDoc` + the existing Resend and FCM plumbing. New
+`NotificationType` values (additive to
+`packages/shared-core/src/types/notification.ts`):
+
+`task_offer_received` · `task_offer_accepted` · `task_offer_declined` ·
+`task_assigned` · `task_cancelled` · `task_updated` · `task_guardian_approval` ·
+`task_marked_done` · `new_task_matching` (the board digest).
+
+**Push tokens.** The user doc already has `fcmTokens` (sit, legacy flat array)
+and `fcmTokensStudy`. sync-do adds `fcmTokensDo`, following the established
+per-app pattern rather than trying to unify — issue #168's Phase-2
+recipient-affinity routing is the place that unification belongs, and this plan
+should not pre-empt it.
+
+**The board digest is the one genuinely new notification.** Demand-first means a
+student who never opens the app sees nothing. `new_task_matching` fires on task
+creation to students whose `profiles.doer.categories` include the task's
+category and who are `searchable`. Rate-limit: at most one digest per student
+per 6 hours, batching whatever accumulated. Without this the board is dead; with
+it unbounded, it is spam.
+
+---
+
+## 11. Safety, Privacy & GDPR
+
+### 11.1 Gates (decision 7)
+
+- **Posting** requires a fully verified family — identity + enrollment
+  documents, or community vouching. Mandatory, no exceptions (decision 14). It
+  is the reason a stranger cannot post a task luring students to an address.
+
+  **Verification is already portable, and that is not new work.** The approval
+  lives on the shared `families/{familyId}` document as
+  `verification.isFullyVerified` (`FamilyVerificationStatus` in
+  `packages/shared-core/src/types/verification.ts`), and both existing function
+  codebases read that one field — `publishTutorSearch.ts:54` in study, the
+  verification gate in sit. sync-do reads the same field. A family verified for
+  babysitting is verified for tutoring and for tasks, on the same day, with no
+  second upload and no per-app status. The rule to preserve through review:
+  **never introduce a `verification.do` or any per-app verification state.**
+  One family, one approval, three apps.
+- **Offering** requires `status == 'active'`, `profiles.doer.enrollmentComplete`,
+  and — for flagged sub-categories — an approving guardian when the student is
+  supervised.
+- **Adult presence** is declared on every task and shown as a badge on the
+  board. Sub-categories flagged `recommendAdultPresent` nudge the family at
+  posting time. It is a declaration, not a verified fact; the copy says so.
+- **No minimum age.** Per decision 7, sync-do does not gate sub-categories on
+  the student's date of birth. The guardian gate is the mechanism instead: for a
+  supervised student, a parent decides. For an unsupervised student — typically
+  an older one — no gate applies. Recorded here because it is the decision most
+  likely to be revisited (§17 Q2).
+
+### 11.2 PII on the board
+
+The `publishedSearches` stance carries over exactly: **area label, never address
+or `latLng`**, until acceptance. `familyName` is included, as it already is in
+both apps' pre-accept flows.
+
+Two sync-do-specific exposures need handling:
+
+- **Free-text description.** A family can type their address into it. The
+  publish step warns explicitly ("this is visible to every enrolled student"),
+  the same way `additionalInfo` is warned on today. No server-side redaction —
+  that path is a false-confidence generator.
+- **Photos.** A photo of the garden or the flat-pack box is genuinely useful, so
+  photos are board-visible. **EXIF is stripped server-side on upload** — a
+  geotagged photo of a front door is an address leak that a warning will not
+  fix. This is new work: no existing upload path in the repo strips EXIF.
+
+### 11.3 The +1 helper
+
+Decision 9 lets an offer declare a helper. That person has no account, no
+verification, no consent record, and the platform has no relationship with them.
+Mitigation, not resolution:
+
+- The offer captures their first name, last name and age, and the family sees
+  all three before accepting.
+- The accepted offer's helper is copied onto the task, so the record of who was
+  expected on site survives.
+- Copy on both the offer form and the acceptance dialog states plainly that the
+  helper is not a verified Sync member and that the assigned student remains
+  responsible.
+
+This is called out here so the trade-off is visible in review rather than
+discovered in an incident.
+
+### 11.4 GDPR
+
+- `doTasks` and `taskOffers` join `exportUserData` and the hard-delete path.
+- Retention: expired and cancelled tasks and their offers are deleted by the
+  daily sweep; completed tasks follow the existing 30-day retention rule for
+  finished engagements.
+- Consent: the abbreviated cross-app enrollment still records `consentAt` /
+  `consentVersion` for the sync-do terms, and a governed student's guardian
+  consent uses the existing `GuardianConsent` record shape.
+
+### 11.5 Liability: the platform performs the handshake only
+
+**Decision 15.** Sync introduces a family to a student and gets out of the way.
+It does not employ the student, does not supervise the work, does not insure
+anyone, and does not adjudicate what happens afterwards. Insurance against
+accidents sits **on the family side** — as it already should for a babysitter —
+and so does the decision about how to handle a problem: an injury, a scratched
+floor, a bookcase assembled wrong, an item broken in transit.
+
+This is a stance the *product* has to state, not just a paragraph in a contract:
+
+- **Terms of service** for sync-do carry it explicitly, and the wording should
+  be reconciled with sync-sit's and sync-study's — the position is
+  platform-wide, not sync-do's alone, and today it is under-stated for
+  babysitting.
+- **The posting flow** says it once, plainly, at the review step: the family is
+  responsible for insurance and for resolving any damage or injury directly
+  with the student.
+- **The acceptance dialog** repeats it at the moment money and access are
+  actually being committed, alongside the §11.3 helper disclosure.
+- **The considerations lists** already carry the concrete version per
+  sub-category — "what happens if something breaks" (Boxes), "who authorises
+  treatment and pays" (Pet), "does this void a warranty" (IT). Those lines are
+  the operational face of this policy and should not be softened.
+
+There is no damage-claim flow, no dispute queue, and no mediation surface in
+V1 — deliberately. Building one would imply a responsibility this decision
+declines. Admin can see the task record and the agreed price if asked to help
+two members reconstruct what was agreed; that is the limit.
+
+**Still worth a lawyer's eye before launch, not before build:** whether French
+rules on minors' occasional work bear on any of this, and whether the ToS
+wording achieves what decision 15 intends. That is a Tandy SARL item, and it is
+the only launch blocker in this document.
+
+---
+
+## 12. Shared-Package Impact
+
+What sync-do reuses as-is:
+
+| From | What |
+|---|---|
+| `shared-core` | `User`, `ProfileBase`, `ParentProfile`, `FirestoreTimestamp`, `NotifPrefs`, `NotificationDoc`, `GuardianLink`, `GuardianConsent`, `AccountStatus`, `resolveAreaLabel` |
+| `shared-functions` | `guardian/*` (the whole consent surface), `handoff/appHandoff.ts`, `scheduled/parisTime.ts`, `config/*`, verification helpers |
+| `shared-ui` | enrollment steps, forms, theme tokens, `AppBar`/layouts (as they land per roadmap Plan E), account-page shell |
+| `apps/functions` | `writeUserActivity` audit writer, family-verification gate, `families`/kids reads, Resend + FCM senders |
+
+What sync-do **adds** to shared packages (small, deliberate):
+
+- `shared-core/types/notification.ts` — the nine new `NotificationType` values.
+- `shared-core/types/user.ts` — `profiles.doer`, plus `fcmTokensDo` and
+  `dismissedPwaInstallBannerDo` alongside their existing `*Study` siblings on
+  `User`.
+
+Everything else lives in `do-core`. The roadmap's Tier-1 extractions (Plans A–C)
+would each save sync-do a duplicated tree; where one is still `[ ]` at build
+time, sync-do copies from `study-web` and the copy becomes the third instance
+that makes the extraction unavoidable. **Recommendation:** land roadmap Plans B
+and C *before* PR5, so sync-do consumes shared public/auth/static pages rather
+than triplicating them. That is the single highest-leverage sequencing choice in
+this plan.
+
+---
+
+## 13. Delivery Plan
+
+Each PR leaves all three apps buildable. Sizes are commit counts in the style
+the repo has been using.
+
+| PR | Scope | Est. |
+|---|---|---|
+| **1** | `packages/do-core`: types (task, offer, doer profile), the seven categories with sub-categories, the considerations content EN+FR, validation bounds, unit tests. No UI, no schema. | 8 |
+| **2** | `apps/do-web` scaffold + third hosting target + three-way app switcher + brand-mark consolidation into `shared-ui`. Empty shell that builds and deploys. | 8 |
+| **3** | Firestore: `doTasks` + `taskOffers` rules and indexes, plus rules tests under the stripped-copy mutation-verify harness. | 6 |
+| **4** | `profiles.doer` + `doEnrollDoer` / `doUpdateDoerProfile`, abbreviated cross-app enrollment, enrollment UI. | 8 |
+| **5** | Task callables: `doPostTask`, `doUpdateTask`, `doCancelTask`, the sweep. Integration tests. | 8 |
+| **6** | Offer callables: submit / update / withdraw / guardian-decide / accept / decline, incl. the §6.4 transaction and its concurrency test. | 10 |
+| **7** | Family UI: post wizard, my tasks, offer review, assigned task, contact reveal. | 12 |
+| **8** | Doer UI: board with filters, task detail, offer form, my offers, my assignments. | 12 |
+| **9** | Notifications: nine types, email templates EN+FR, `fcmTokensDo` push, the rate-limited board digest. | 8 |
+| **10** | Admin tasks tab, audit coverage, GDPR export + hard-delete coverage, EXIF stripping on upload, storage rules (**manual deploy**), and the decision-15 liability copy in the ToS + posting review + acceptance dialog. | 9 |
+| **11** | Completion + cancellation flows, FR i18n pass, Playwright e2e for post→offer→accept→complete, screenshots on the PR. | 8 |
+
+Dependencies: 1 → 2 → {3, 4} → 5 → 6 → {7, 8} → 9 → 10 → 11. PRs 7 and 8 can run
+in parallel once 6 lands. Roadmap Plans B and C should land before 7.
+
+---
+
+## 14. Testing Plan
+
+- **Unit** (`packages/do-core/src/**/__tests__/`) — timing discriminant
+  validation, expiry computation across the four models and Paris DST, taxonomy
+  integrity (every sub-category has considerations in both locales; every flag
+  references a real category), price and length bounds.
+- **Rules** (`tests/rules/`) — mutation-verified in an isolated stripped-copy
+  env per `feedback_rules_mutation_verify`. Cases: a non-doer cannot read the
+  board; a blocked doer cannot; the hiring family cannot read a
+  `pending_guardian` offer; the supervising family can; list-query provability
+  for every rule disjunct; no client write path exists on either collection.
+- **Integration** (`tests/integration/`, emulator lane 2 so the dev stack keeps
+  running) — post→offer→accept end-to-end; **concurrent accepts of two
+  different offers, exactly one wins**; guardian approve and deny; ceiling
+  enforcement; sweep deleting expired tasks and cascading their offers;
+  contact-reveal boundary asserted from both sides.
+- **E2E** (`tests-e2e/`, Playwright) — the happy path in the browser, plus
+  screenshots attached natively to the UI PRs per `feedback_pr_ui_screenshots`.
+- **Regression** — full `pnpm test:unit` + `pnpm test:integration` on every PR;
+  sync-sit and sync-study suites must stay green, which is the whole point of
+  keeping the shared-package additions additive.
+
+Watch the CI gap recorded in `project_ci_test_gate_gap`: a green rollup can hide
+an absent test job on stacked PRs. With eleven stacked PRs, verify the test job
+actually ran on each.
+
+---
+
+## 15. V1 Scope Decisions
+
+| Feature | V1 | Rationale |
+|---|---|---|
+| Offer→pick marketplace | **Yes** | Decision 1; the product. |
+| Student-quoted price | **Yes** | Decision 2. |
+| Four timing models | **Yes** | Decision 3. `TaskDoc` discriminates on `timing`. |
+| Seven categories + sub-categories | **Yes** | Decisions 5, 6. Content, so cheap to extend. |
+| Guardian consent on flagged work | **Yes** | Decision 7; reuses existing machinery. |
+| In-app payment | **No** | Decision 8. |
+| Multi-student tasks | **No** | Decision 9 — one assignee, optional declared helper. |
+| Availability blocking | **No** | Decision 10. Conflict *hint* proposed in §17 R2. |
+| Per-category age floors | **No** | Decision 7 — but a worked proposal is on the table in §17 Q2, pending a call. |
+| Overnight house-sitting | **No** | Decision 13 — removed from the taxonomy, not deferred. |
+| Damage / dispute handling | **No** | Decision 15 — building one would imply a responsibility the platform declines. |
+| Endorsements on the offer card | **Yes** | Decision 12 — reuse what exists. |
+| Ratings, reviews, completed-task counts | **No** | Decision 12, explicitly. No new reputation primitive. |
+| In-app messaging | **No** | Consistent with both other apps. |
+| Per-visit tracking on recurring tasks | **No** | No availability blocking ⇒ no instance documents needed. |
+| Non-EJM students | **No** | Platform-wide V2 item, not sync-do's to decide. |
+| Recurring cancellation policy | **No** | PR #101's V2 policy engine is not extended here. |
+
+---
+
+## 16. Future Roadmap
+
+**Near-term (V1.1)**
+
+1. **Better signal for choosing between offers** — decision 12 keeps V1 to
+   existing endorsements only. If families still struggle to choose between five
+   similar bids, the next lever is richer doer profiles (photos of past work,
+   a skills blurb per category), *not* a rating system.
+2. **Saved/favourite doers and direct invitations** — a family that liked a
+   student invites them to a task directly, optionally keeping it private to
+   invitees. Pairs with the existing favourites work.
+3. **Per-visit check-off on recurring tasks** — a lightweight `visits` array on
+   the task, not a subcollection. "Watered on the 3rd" is genuinely reassuring
+   to a family on holiday.
+4. **Structured fields per sub-category** — graduate the highest-traffic
+   sub-categories from pure free text to a few typed fields (item count for IKEA,
+   guest count for Party), keeping the description alongside.
+
+**Medium-term (V2)**
+
+5. **Team tasks** — a real headcount with N accepted offers. §4 keeps the
+   assignment state in one place (`assignedUserId` / `assignedOfferId`) so
+   promoting it to an array is a contained migration.
+6. **Availability conflict awareness** — beyond the read-only hint in §17 R2,
+   optionally let a fixed-time task block like a sit appointment.
+7. **In-app payment** — the decision most likely to change if volume grows;
+   nothing in this design forecloses it, since `agreedPrice` is already recorded.
+
+**Long-term (V3)**
+
+8. Shared messaging across all three apps. 9. A unified admin panel. 10. Demand
+analytics — which categories go unfilled, where the supply gaps are.
+
+---
+
+## 17. Open Questions & Risks
+
+### Resolved in review
+
+- **Q1 — choosing between offers** → decision 12. Endorsements yes, completed-
+  task count no.
+- **Q3 — overnight house-sitting** → decision 13. Cut.
+- **Q5 — verification gate** → decision 14. Mandatory, and portable across all
+  three apps (§11.1).
+- **Liability** → decision 15. The family's responsibility; the platform does
+  the handshake only (§11.5).
+
+### Q2 — per-sub-category minimum ages: a worked example
+
+**Still open.** Decision 7 declined age gating; this section exists so the
+decision is made against something concrete rather than in the abstract. Nothing
+below is built unless the owner says so.
+
+**The mechanism** would be one optional field, `minAge`, on `SubCategoryDef`
+(§4.3). `doSubmitOffer` computes the student's age from `users/{uid}.dateOfBirth`
+and rejects with `failed-precondition` when it falls short; the board also hides
+tasks the student cannot take, so the rejection is a backstop rather than the
+first time they hear about it.
+
+**Proposed values.** Three tiers — 13 as the platform baseline (matching the
+governed-provider age already assumed by the parental-governance work), 15 for
+tasks carrying real responsibility, 16 for power tools, heavy loads, transport,
+and anything involving prescriptions or other people's money.
+
+| Age | Sub-categories |
+|---|---|
+| **13** | vacation indoor plant care · garden & terrace watering · planting & potting · feeding and litter · every IT sub-category, including teaching a person |
+| **14** | packing · unpacking · IKEA assembly · disassembly · fixing existing furniture · party setup & decoration · music/photo/tech · clean-up after · baking & food prep · grocery shopping · parcels and post · dry cleaning · drop-in checks on an empty flat |
+| **15** | weeding & pruning · kids' entertainment at a party · serving & catering · returns and exchanges · dog walking |
+| **16** | lawn mowing & edging · green-waste runs · van loading/unloading · cellar/attic clear-outs · moving furniture · dump and donation runs · wall mounting & anchoring · store pick-up · pharmacy pick-up · vet and grooming trips |
+
+**Plus one cross-cutting rule that is not a category at all:** any `fixed`-timing
+task whose `endTime` is after **22:00** requires 16+, whatever the category. A
+14-year-old clearing up after a party at midnight is a transport-home problem
+that no per-category value catches.
+
+**Two details that make this less free than it looks:**
+
+- `dateOfBirth` is **optional** on `User`. A student without one would be
+  ineligible for anything above the baseline; the enrollment flow would need to
+  make it required for `profiles.doer`, and existing users would need a prompt.
+- Age is checked at **offer time**, not at assignment. A student who turns 16
+  between offering and starting is fine; one who offers at 15 for 16+ work is
+  refused up front. That is the right boundary, but it is worth stating.
+
+**How this interacts with what was already decided:** age gating and the
+guardian gate solve different halves of the problem. The guardian gate covers a
+*supervised* student of any age — a parent decides. Age gating is what covers an
+**unsupervised 15-year-old**, who today has no gate at all. Kept as-is, the
+riskiest combination in the product is an unsupervised young student offering on
+petrol-mower or wall-drilling work with nothing between them and the task.
+
+### Still open
+
+- **Q4 — Brand and domain.** `sync-do.com`? Hosting site id? The plan assumes
+  `sync-do-app` as the Firebase site, matching `sync-study-app`.
+
+### Risks
+
+- **R1 — The board is only as good as its liquidity.** Demand-first fails
+  silently when nobody offers. Mitigations: the §10 rate-limited digest, showing
+  offer counts so families see activity, and seeding the first weeks with a
+  known cohort. This is a launch risk, not an architecture risk, and it is the
+  one most likely to decide whether the app works.
+- **R2 — Double-booking.** Decision 10 means nothing blocks, so a student can
+  accept a party task and a babysitting job for the same Saturday evening.
+  Cheap mitigation that respects the decision: on a `fixed`-timing task, show
+  the student a **read-only conflict hint** — "you have a sync-sit booking that
+  evening" — computed from the schedule they already own. Reads only, writes
+  nothing. Recommend including it in PR8.
+- **R3 — Free-text descriptions carry PII to a wide audience.** Warned, not
+  redacted (§11.2). Same posture as `publishedSearches`.
+- **R4 — Photos leak location.** Handled by server-side EXIF stripping, which is
+  new code with no precedent in the repo — do not let it slip past PR10.
+- **R5 — The +1 helper is unvetted.** Recorded and disclosed (§11.3); not
+  solved.
+- **R6 — Deploy blast radius.** sync-do callables ship inside the sync-sit
+  functions codebase (decision 11). Already the practical status quo, but it
+  means a bad sync-do deploy can take sync-sit's functions with it. Namespacing
+  and the integration suite are the guard.
+- **R7 — Eleven stacked PRs.** Watch mergeable state and rebase proactively as
+  siblings merge (`feedback_monitor_pr_conflicts`), and confirm the test job
+  actually ran on each (`project_ci_test_gate_gap`).
+- **R8 — Liability for minors doing physical work.** Answered by decision 15:
+  the family's responsibility, the platform does the handshake only. The
+  residual risk is that this must be *stated* convincingly — in the ToS, at the
+  posting review step, and at acceptance (§11.5) — and that the same position
+  is currently under-stated for sync-sit. A lawyer's read on the wording before
+  launch is the only remaining launch blocker in this plan.
