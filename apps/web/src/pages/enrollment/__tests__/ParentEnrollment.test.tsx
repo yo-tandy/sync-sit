@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { screen, fireEvent, render, cleanup } from '@testing-library/react';
+import { act, screen, fireEvent, render, cleanup } from '@testing-library/react';
 
 // Issue #148: the verify call must carry the sit app hint — it selects the
 // copy of the silent account-exists email. A dropped hint fails silently
@@ -265,6 +265,11 @@ describe('ParentEnrollment enrollFamily payload (issue #176)', () => {
     // navigation into a replace-redirect after the refresh lands the profile.
     await vi.waitFor(() => expect(h.navigate).toHaveBeenCalledWith('/family'));
     expect(h.refreshUserDoc).toHaveBeenCalled();
+    // Flush the post-refresh render + effects before the negative assertion —
+    // without it the hijack navigate would not have fired yet and the pin
+    // would pass vacuously (mutation-tested: deleting the step !== 0 guard
+    // goes red only with this flush).
+    await act(async () => {});
     expect(h.navigate).not.toHaveBeenCalledWith('/family', { replace: true });
   });
 });
