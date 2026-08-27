@@ -101,7 +101,6 @@ export interface SessionDoc {
   // while the session was CONFIRMED. Recurring lateness lives per-instance.
   lateCancellation?: boolean;
 
-
   // Status
   status: SessionStatus;
   statusReason?: string;

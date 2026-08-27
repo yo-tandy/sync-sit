@@ -157,7 +157,7 @@ describe('modifySession', () => {
 
   // ── Pending: plain update, no ledger involvement ──
 
-  it('modifies a pending session and flags it, without touching any override', async () => {
+  it('modifies a pending session WITHOUT flagging it, and without touching any override', async () => {
     const id = await seedSession();
     const res = await callFunction<{ modified: boolean; modifiedFields: string[] }>(
       'modifySession',
@@ -170,8 +170,10 @@ describe('modifySession', () => {
     expect(s.startTime).toBe('17:00');
     expect(s.endTime).toBe('18:00');
     expect(s.message).toBe('Running later now');
-    expect(s.modified).toBe(true);
-    expect(s.modifiedFields.sort()).toEqual(['message', 'startTime']);
+    // No modified flag on a pending: the tutor answers the UPDATED request,
+    // so confirm/decline IS the acknowledgement -- a flag would have no
+    // pending-card surface to clear it (PR #244 review).
+    expect(s.modified).toBeUndefined();
     expect((await overrideRef(FUTURE_MON).get()).exists).toBe(false);
   });
 
@@ -252,6 +254,50 @@ describe('modifySession', () => {
     const p = await sessionData(pendingId);
     expect(p.status).toBe('declined');
     expect(p.statusReason).toBe('slot_taken');
+  });
+
+  it('a location change alone moves the claim to a WIDER padded block (travel padding)', async () => {
+    // paddedBlock pads only PADDED_LOCATIONS (travel/prep); online pads
+    // nothing. So online -> family_home with paddingMinutes: 30 is the one
+    // case where the restored and claimed blocks have different widths
+    // (PR #244 review).
+    const id = await seedSession({ status: 'confirmed', paddingMinutes: 30, location: 'online' });
+    await seedClaim(FUTURE_MON, id, 64, 68);
+    await callFunction('modifySession', { sessionId: id, location: 'family_home' }, parent1Token);
+    const ov = (await overrideRef(FUTURE_MON).get()).data()!;
+    expect(ov.sessionBlocks).toEqual([{ sessionId: id, startIdx: 62, endIdx: 70 }]);
+    const slots = ov.slots as boolean[];
+    for (let i = 62; i < 70; i++) expect(slots[i]).toBe(false);
+    expect((await sessionData(id)).location).toBe('family_home');
+  });
+
+  it('re-denormalizes students on a roster change, and rejects a kid from another family', async () => {
+    const id = await seedSession();
+    await callFunction('modifySession', { sessionId: id, studentIds: ['kid1', 'kid2'] }, parent1Token);
+    const s = await sessionData(id);
+    expect(s.studentIds).toEqual(['kid1', 'kid2']);
+    expect(s.students).toHaveLength(2);
+    await expect(
+      callFunction('modifySession', { sessionId: id, studentIds: ['kid4'] }, parent1Token),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+
+  it('rejects a modify that would run past midnight', async () => {
+    const id = await seedSession();
+    await expect(
+      callFunction('modifySession', { sessionId: id, startTime: '23:45', sessionLengthMinutes: 75 }, parent1Token),
+    ).rejects.toMatchObject({ code: 'INVALID_ARGUMENT' });
+  });
+
+  it('enforces the per-slot location trust boundary with reason location_not_offered', async () => {
+    const id = await seedSession({ status: 'confirmed' });
+    await seedClaim(FUTURE_MON, id, 64, 68);
+    await expect(
+      callFunction('modifySession', { sessionId: id, location: 'library' }, parent1Token),
+    ).rejects.toMatchObject({
+      code: 'INVALID_ARGUMENT',
+      details: { reason: 'location_not_offered' },
+    });
   });
 
   it('NEVER sets lateCancellation -- a modify is not a cancel', async () => {

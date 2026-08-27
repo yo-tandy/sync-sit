@@ -970,6 +970,8 @@ export default {
       modifyMessage: 'Message to the tutor (optional)',
       modifySave: 'Save changes',
       modifyTimeUnavailable: 'That time is not available for this tutor. Pick another slot.',
+      modifyRecurringUnsupported: 'A recurring series can’t be modified in place — cancel it and book the new schedule.',
+      modifyLocationUnavailable: 'The tutor doesn’t offer that location for this time slot.',
       cancelSeries: 'Cancel series',
       cancelInstance: 'Cancel this date',
       cancelTitle: 'Cancel this session?',

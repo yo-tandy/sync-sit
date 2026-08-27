@@ -32,8 +32,8 @@ In one transaction: read session + tutor override docs for old and new date;
 against weekly availability + overrides (`overlaps`/`paddedBlock`, same
 predicates respondToSession's confirm uses) → refuse with
 `reason: 'time_unavailable'`; `buildMergedOverride` the new claim in; write
-session fields + `modified: true, modifiedAt, modifiedFields,
-modificationAcknowledged: false`. Post-transaction: auto-decline overlapping
+session fields + `modified: true, modifiedAt, modifiedFields` (clearing
+`modified` IS the acknowledgement -- no separate flag, sit's contract). Post-transaction: auto-decline overlapping
 dated one_time PENDINGS at the new time (respondToSession's post-confirm
 sweep, same copy), notify the tutor (`study_session_modified`).
 
@@ -43,8 +43,13 @@ sweep, same copy), notify the tutor (`study_session_modified`).
    sessionLengthMinutes/location/studentIds/message) in validation; types.
 2. `modifySession` callable + unit-testable field-diff helper.
 3. `acknowledgeSessionModification` callable (tutor-only; clears
-   modified/modifiedFields, sets modificationAcknowledged; audit log; no
+   modified/modifiedFields -- that IS the ack, no separate flag; audit log; no
    notification — sit's ack is silent, mirror it).
+
+   AMENDED IN REVIEW (PR #244): a PENDING modify does NOT set `modified` --
+   the tutor answers the UPDATED request, so confirm/decline is the
+   acknowledgement; a flag would have no pending-card surface to clear it
+   and would resurface post-confirm.
 4. Routing: `study_session_modified` → tutor `/tutor/sessions`; add to
    VISIBLE_NOTIFICATION_TYPES; pin the row (tutor branch — the #214 lesson).
 5. study-web: family sessions page Modify dialog (one_time only); tutor

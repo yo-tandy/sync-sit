@@ -10,7 +10,13 @@ import { parisWallClockPosition, parisWallTimeToUtc } from '@ejm/shared-function
 import { timeToSlotIndex, slotIndexToTime, getParentProfile } from '@ejm/shared-core';
 import type { User } from '@ejm/shared-core';
 import type { LocationPref } from '@ejm/study-core';
-import { getSchoolYearsInRange, dayOfWeek, type DayOverride } from '@ejm/study-core';
+import {
+  getSchoolYearsInRange,
+  dayOfWeek,
+  resolveEffectiveLocations,
+  type DayOverride,
+} from '@ejm/study-core';
+import { computeSingleDateAvailability } from '../availability/singleDateAvailability.js';
 import { modifySessionSchema, type ModifySessionInput } from '../validation/session.js';
 import {
   computeDateAvailability,
@@ -167,6 +173,62 @@ export const modifySession = onCall(
       }
     }
 
+    // ── The when/where trust boundary, OUTSIDE the transaction ──
+    // Location tags and the tutor's prefs are tutor-set config, not the
+    // contended claim state (claims never change tags), so this mirrors
+    // bookSession's checks at the same trust level. modifySession is a
+    // directly-callable endpoint: the family UI not sending `location` does
+    // not constrain a caller (PR #244 review; issue #166's boundary).
+    const newStartPeek = data.startTime ?? (peek.startTime as string);
+    const newLengthPeek = (data.sessionLengthMinutes ?? peek.sessionLengthMinutes) as number;
+    const newLocationPeek = (data.location ?? peek.location) as LocationPref;
+    const whenChanged =
+      data.date !== undefined ||
+      data.startTime !== undefined ||
+      data.sessionLengthMinutes !== undefined ||
+      data.location !== undefined;
+    if (whenChanged) {
+      const startIdxPeek = timeToSlotIndex(newStartPeek);
+      const endIdxPeek = startIdxPeek + newLengthPeek / 15;
+      if (endIdxPeek > 96) {
+        // bookSession's guard verbatim: without it a 23:45 + 75min modify
+        // writes endTime '25:00' and the session becomes permanently
+        // unconfirmable (the confirm grid check reads grid[96..] === undefined).
+        throw new HttpsError('invalid-argument', 'Session cannot run past midnight');
+      }
+      const tutorProfileDoc = await db.collection('users').doc(tutorUserId).get();
+      const tutorProfile = (tutorProfileDoc.data()?.profiles as
+        | { tutor?: { locationPrefs?: LocationPref[] } }
+        | undefined)?.tutor;
+      const single = await computeSingleDateAvailability(tutorUserId, newDatePeek, paddingMinutes);
+      const effective = resolveEffectiveLocations(
+        single.locationCells,
+        startIdxPeek,
+        endIdxPeek,
+        tutorProfile?.locationPrefs ?? [],
+      );
+      if (!effective.includes(newLocationPeek)) {
+        throw new HttpsError(
+          'invalid-argument',
+          'Tutor does not offer this location for this time slot',
+          { reason: 'location_not_offered' },
+        );
+      }
+      // Pending availability pre-check (bookSession parity). The CONFIRMED
+      // path re-checks transactionally against the restored ledger below --
+      // this grid still counts the session's own old claim, so it would
+      // false-refuse a confirmed same-day move.
+      if (peek.status === 'pending') {
+        for (let i = startIdxPeek; i < endIdxPeek; i++) {
+          if (!single.slots[i]) {
+            throw new HttpsError('failed-precondition', 'The new time is not available', {
+              reason: 'time_unavailable',
+            });
+          }
+        }
+      }
+    }
+
     // ── The modify transaction: all reads before any writes. ──
     const outcome = await db.runTransaction(async (tx) => {
       const authSnap = await tx.get(sessionRef);
@@ -260,8 +322,29 @@ export const modifySession = onCall(
       }
       if (modifiedFields.includes('message')) updates.message = data.message;
 
-      // ── Pending: no claim exists yet; the update alone is the whole story. ──
-      if (session.status === 'pending' || !claimAffecting) {
+      // ── Pending: no claim exists yet, AND no modified flag -- the tutor
+      // answers the UPDATED request, so their confirm/decline IS the
+      // acknowledgement. A flag here would have no surface to clear it from
+      // (the pending card is Confirm/Decline) and would resurface post-confirm
+      // as a badge for a change the tutor already saw (PR #244 review). ──
+      if (session.status === 'pending') {
+        delete updates.modified;
+        delete updates.modifiedAt;
+        // modifiedFields still returns to the caller; only the flag is elided.
+        delete updates.modifiedFields;
+        tx.update(sessionRef, updates);
+        return {
+          modified: true as const,
+          modifiedFields,
+          status: session.status as string,
+          movedClaim: false as const,
+          newDate,
+          newStart,
+          newEnd,
+          newLocation,
+        };
+      }
+      if (!claimAffecting) {
         tx.update(sessionRef, updates);
         return {
           modified: true as const,

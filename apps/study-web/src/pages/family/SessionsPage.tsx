@@ -378,7 +378,14 @@ export function SessionsPage() {
         date: mDate,
         startTime: mStart,
         sessionLengthMinutes: mLength,
-        message: mMessage.trim() === '' ? undefined : mMessage.trim(),
+        // '' is a real value -- it CLEARS a previously-set message. undefined
+        // (field untouched and none existed) means "no change" server-side.
+        message:
+          mMessage.trim() === ''
+            ? modifyTarget.message
+              ? ''
+              : undefined
+            : mMessage.trim(),
       });
       setModifyTarget(null);
       void load();
@@ -387,7 +394,11 @@ export function SessionsPage() {
       setModifyError(
         reason === 'time_unavailable'
           ? t('family.sessions.modifyTimeUnavailable')
-          : t('family.sessions.actionError'),
+          : reason === 'recurring_unsupported'
+            ? t('family.sessions.modifyRecurringUnsupported')
+            : reason === 'location_not_offered'
+              ? t('family.sessions.modifyLocationUnavailable')
+              : t('family.sessions.actionError'),
       );
     } finally {
       setModifySaving(false);
@@ -793,14 +804,18 @@ export function SessionsPage() {
                           {t('family.sessions.awaitingTutor')}
                         </p>
                         <div className="mt-3 flex gap-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            fullWidth={false}
-                            onClick={() => openModify(s)}
-                          >
-                            {t('family.sessions.modifySession')}
-                          </Button>
+                          {/* one_time only: a recurring parent would round-trip
+                              to the server's recurring_unsupported refusal. */}
+                          {s.type === 'one_time' && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              fullWidth={false}
+                              onClick={() => openModify(s)}
+                            >
+                              {t('family.sessions.modifySession')}
+                            </Button>
+                          )}
                           <Button
                             size="sm"
                             variant="outline"
@@ -941,8 +956,7 @@ export function SessionsPage() {
         </div>
       </Dialog>
 
-      {/* ── Cancellation (reason required, ≥3 chars) ── */}
-      {modifyTarget && (
+            {modifyTarget && (
           <Dialog open onClose={() => setModifyTarget(null)}>
             <h3 className="text-lg font-bold">{t('family.sessions.modifyTitle')}</h3>
             <p className="mt-1 text-sm text-gray-500">{t('family.sessions.modifyDesc')}</p>
@@ -997,6 +1011,7 @@ export function SessionsPage() {
             </div>
           </Dialog>
         )}
+        {/* ── Cancellation (reason required, ≥3 chars) ── */}
         <ReasonModal
         open={cancelTarget !== null}
         title={
