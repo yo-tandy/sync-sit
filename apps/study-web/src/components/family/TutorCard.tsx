@@ -74,12 +74,19 @@ export function TutorCard({ result }: { result: TutorSearchResult }) {
                 {result.firstName} {result.lastName}
               </p>
               <p className="text-xs text-gray-500">
-                {t(`tutor.subjects.names.${result.subject}`)} · {result.level} · {result.classLevel}
+                {/* classLevel is optional on the profile; joining through a
+                    Boolean filter keeps a sparse tutor from rendering a
+                    trailing separator (issue #228). */}
+                {[t(`tutor.subjects.names.${result.subject}`), result.level, result.classLevel]
+                  .filter(Boolean)
+                  .join(' · ')}
               </p>
             </div>
-            <p className="shrink-0 text-sm font-semibold text-gray-900">
-              {t('family.search.rate', { rate: result.rate })}
-            </p>
+            {typeof result.rate === 'number' && (
+              <p className="shrink-0 text-sm font-semibold text-gray-900">
+                {t('family.search.rate', { rate: result.rate })}
+              </p>
+            )}
           </div>
 
           <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-gray-500">
