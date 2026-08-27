@@ -12,6 +12,25 @@ import {
   repairTimestamplessDeclines,
 } from './declineCooldown.js';
 
+// Cross-search ceiling (issue #233), the twin of sit's
+// MAX_BOARD_CONTACTS_PER_DAY (contactPublishedSearch.ts). The per-pair guards
+// below -- one open request per pair, plus the 7-day decline cooldown -- bound
+// ONE (tutor, family) conversation and nothing else: a family may hold three
+// live searches (PUBLISHED_SEARCH_MAX_ACTIVE) and the board carries every
+// family's, so one tutor could answer all of them, each contact fanning out
+// email + push + in-app to every parent of that family via notifyAllParents.
+//
+// The ceiling counts contacts CREATED in a rolling 24h window, REGARDLESS of
+// their later status. A concurrent-pending count (what issue #233's text
+// proposed) was tutor-bypassable for the same reason it was on the sit side:
+// cancelContactRequest is deliberately cooldown-free, so withdrawing a pending
+// returned the slot immediately, and five never-answering families could pin a
+// tutor's board access shut forever. Creation spending the slot closes both --
+// at most MAX_BOARD_CONTACTS_PER_DAY families can be notified per day, and
+// slots return by clock, not by anyone's action (PR #232 review).
+const MAX_BOARD_CONTACTS_PER_DAY = 5;
+const BOARD_CONTACT_WINDOW_MS = 24 * 60 * 60 * 1000;
+
 /**
  * sendFamilyContactRequest (issue #207 PR4, study side): the CONTACT
  * INVERSION. A tutor answers a family's published search, minting a
@@ -209,7 +228,46 @@ export const sendFamilyContactRequest = onCall(
       updatedAt: now,
     };
     if (message !== undefined) doc.message = message;
-    await requestRef.set(doc);
+
+    // Cross-search ceiling. The count and the create share a transaction so
+    // concurrent taps on different searches cannot each pass it -- the same
+    // shape sit uses. It runs LAST, after every per-pair and per-search guard,
+    // so a capped tutor still gets the more specific error where one applies
+    // (PR #232 review). The orderBy+limit bounds the read to the newest MAX
+    // docs; `status` is deliberately not filtered, because creation spent the
+    // slot.
+    //
+    // Not moved into this transaction: the pair dedupe and the decline
+    // cooldown above. The cooldown's repair pass (issue #214) writes through
+    // the doc refs directly, which a transaction cannot carry, and the pair
+    // dedupe's non-atomicity is pre-existing and unchanged by this PR.
+    await db.runTransaction(async (tx) => {
+      const recentSnap = await tx.get(
+        db.collection('studyContactRequests')
+          .where('tutorUserId', '==', uid)
+          .where('initiatedBy', '==', 'tutor')
+          .orderBy('createdAt', 'desc')
+          .limit(MAX_BOARD_CONTACTS_PER_DAY),
+      );
+      const windowFrom = Date.now() - BOARD_CONTACT_WINDOW_MS;
+      const recentCount = recentSnap.docs.filter((d) => {
+        const createdMs = d.data().createdAt?.toMillis?.();
+        // A present-but-unreadable createdAt counts as recent (fail closed).
+        // A doc MISSING the field entirely never reaches this filter: orderBy
+        // excludes it from the query, so it is invisible to the cap -- fail
+        // OPEN, acceptable only because this callable is the sole writer of
+        // initiatedBy: 'tutor' and always stamps createdAt (PR #232 review).
+        return typeof createdMs !== 'number' || createdMs > windowFrom;
+      }).length;
+      if (recentCount >= MAX_BOARD_CONTACTS_PER_DAY) {
+        throw new HttpsError(
+          'resource-exhausted',
+          'You have contacted several families in the last 24 hours. You can send more requests tomorrow.',
+          { reason: 'board_contact_cap' },
+        );
+      }
+      tx.set(requestRef, doc);
+    });
 
     // ── Notify the family (all parents), mirroring the tutor-side
     // notification for the inverted direction. ──

@@ -124,6 +124,15 @@
       "collectionGroup": "studyContactRequests",
       "queryScope": "COLLECTION",
       "fields": [
+        { "fieldPath": "tutorUserId", "order": "ASCENDING" },
+        { "fieldPath": "initiatedBy", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "studyContactRequests",
+      "queryScope": "COLLECTION",
+      "fields": [
         { "fieldPath": "familyId", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "DESCENDING" }
       ]

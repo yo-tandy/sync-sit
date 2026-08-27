@@ -271,6 +271,23 @@ describe('PublishedSearchesPage (study board)', () => {
     expect(await screen.findByText(/don't currently teach this subject/i)).toBeInTheDocument();
   });
 
+  it('the 24h board-contact ceiling is named as a wait, not as a vanished search', async () => {
+    // The cap is the only refusal that is not about THIS family or THIS
+    // search, so the generic "may have expired" line would be actively
+    // misleading here -- the search is fine, the tutor is out of slots
+    // (issue #233).
+    h.callable.mockRejectedValue({
+      code: 'functions/resource-exhausted',
+      details: { reason: 'board_contact_cap' },
+    });
+    renderWithProviders(<PublishedSearchesPage />);
+    push([boardDoc('a', SEEN_AT + 1)]);
+    fireEvent.click(await screen.findByRole('button', { name: 'Contact family' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Send request' }));
+
+    expect(await screen.findByText(/send more requests tomorrow/i)).toBeInTheDocument();
+  });
+
   it('a DECLINED prior request leaves the CTA available (the server owns the cooldown)', async () => {
     renderWithProviders(<PublishedSearchesPage />);
     push([boardDoc('a', SEEN_AT + 1)]);
