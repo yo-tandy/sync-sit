@@ -13,6 +13,8 @@ export { respondToSession } from './sessions/respondToSession.js';
 export { cancelSession } from './sessions/cancelSession.js';
 export { cancelSessionInstance } from './sessions/cancelSessionInstance.js';
 export { setSessionNote } from './sessions/setSessionNote.js';
+export { modifySession } from './sessions/modifySession.js';
+export { acknowledgeSessionModification } from './sessions/acknowledgeSessionModification.js';
 export { submitTutorEndorsement } from './endorsements/submitTutorEndorsement.js';
 export { respondToTutorEndorsement } from './endorsements/respondToTutorEndorsement.js';
 export { extendRecurring } from './scheduled/extendRecurring.js';

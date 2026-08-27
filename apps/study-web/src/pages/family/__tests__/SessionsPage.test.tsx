@@ -185,6 +185,48 @@ describe('family SessionsPage', () => {
   });
 });
 
+// ── Modify (issue #234) ──
+describe('family SessionsPage — modify', () => {
+  beforeEach(reset);
+
+  it('modifies a pending request → modifySession with the dialog values', async () => {
+    h.sessions = [oneTime({ sessionId: 'sM', date: '2027-06-07', startTime: '16:00', sessionLengthMinutes: 60 })];
+    renderWithProviders(<SessionsPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /^modify$/i }));
+    const dialog = await screen.findByText(/modify this session/i);
+    expect(dialog).toBeInTheDocument();
+    const time = document.querySelector('input[type="time"]') as HTMLInputElement;
+    fireEvent.change(time, { target: { value: '18:00' } });
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+
+    await waitFor(() =>
+      expect(h.callable).toHaveBeenCalledWith('modifySession', {
+        sessionId: 'sM',
+        date: '2027-06-07',
+        startTime: '18:00',
+        sessionLengthMinutes: 60,
+        message: undefined,
+      }),
+    );
+  });
+
+  it('maps reason time_unavailable to its dedicated copy and keeps the dialog open', async () => {
+    h.sessions = [oneTime({ sessionId: 'sM' })];
+    h.callable.mockRejectedValueOnce(
+      Object.assign(new Error('failed-precondition'), { details: { reason: 'time_unavailable' } }),
+    );
+    renderWithProviders(<SessionsPage />);
+    fireEvent.click(await screen.findByRole('button', { name: /^modify$/i }));
+    const time = document.querySelector('input[type="time"]') as HTMLInputElement;
+    fireEvent.change(time, { target: { value: '18:00' } });
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+    await waitFor(() =>
+      expect(screen.getByText(/not available for this tutor/i)).toBeInTheDocument(),
+    );
+  });
+});
+
 // ── Upcoming / history / cancellation (pinned "today") ──
 describe('family SessionsPage — management', () => {
   beforeEach(() => {
