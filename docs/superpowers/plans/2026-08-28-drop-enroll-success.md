@@ -32,3 +32,17 @@ signed-out user at a guarded route). The post-signin wait resolves on the
 same predicate. Both stranding paths pinned; the vacuous router pin was
 replaced with an export-absence assertion; the gateNoSlots banner (the
 state a fresh enrollee actually lands in) got its own pin.
+
+**Rounds 2-3 (PR #257):** while the account-ready fallback shows, a live
+store subscription auto-advances to /tutor the moment the guard predicate
+passes -- checking the CURRENT state before subscribing, since zustand
+only fires on subsequent changes; one recovery `refreshUserDoc` (short
+backoff -- an immediate identical read returns the same miss) runs before
+latching, and the copy says "could not confirm" because the wizard cannot
+distinguish failure from a slow first server snapshot. The two
+authenticated refresh->navigate paths (add-profile, CrossAppWelcomePage)
+retry once with backoff; CrossAppWelcomePage refuses to navigate blind
+when both reads miss and surfaces `enrollment.crossApp.profileLoadError`
+instead (a resubmit hits profile-exists once the doc is readable). New
+i18n: `enrollment.tutor.readyLogin{Title,Desc,Cta}` +
+`enrollment.crossApp.profileLoadError` (en/fr).

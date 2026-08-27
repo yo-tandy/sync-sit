@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { screen, fireEvent } from '@testing-library/react';
+import { screen, fireEvent, act } from '@testing-library/react';
 
 // Hoisted shared state the mocks record into.
 const h = vi.hoisted(() => ({
@@ -12,6 +12,7 @@ const h = vi.hoisted(() => ({
   // from the doc made "signed in but doc null" unrepresentable (round-2
   // catch -- the doc-blip pin silently re-tested the failure path).
   signedIn: false,
+  subs: [] as ((s: unknown) => void)[],
   refreshUserDoc: () => Promise.resolve(),
   // A successful sign-in settles the store with the freshly-written tutor
   // doc (models the real store); the navigate gate reads it via getState.
@@ -83,7 +84,14 @@ vi.mock('@/stores/authStore', () => {
   };
   // Statics used by the post-signup auto-login wait.
   useAuthStore.getState = () => ({ loading: false, firebaseUser: h.signedIn || h.auth.firebaseUser ? { uid: 'new' } : null, userDoc: h.auth.userDoc });
-  useAuthStore.subscribe = () => () => {};
+  // Capture listeners so tests can model the store settling late -- a no-op
+  // stub left the round-2 auto-advance with zero coverage (round-3 catch).
+  useAuthStore.subscribe = (fn: (s: unknown) => void) => {
+    h.subs.push(fn);
+    return () => {
+      h.subs = h.subs.filter((f) => f !== fn);
+    };
+  };
   return { useAuthStore, markNextSignInFresh: () => {} };
 });
 vi.mock('@ejm/study-core', () => ({
@@ -198,6 +206,7 @@ function renderFlow() {
 beforeEach(() => {
   h.calls.length = 0;
   h.signedIn = false;
+  h.subs = [];
   h.navigate = vi.fn();
   h.auth = { firebaseUser: null, userDoc: null, loading: false };
   h.refreshUserDoc = vi.fn().mockResolvedValue(undefined);
@@ -311,12 +320,65 @@ describe('TutorEnrollment orchestrator', () => {
     vi.useFakeTimers();
     try {
       fireEvent.click(finalNext);
-      await vi.advanceTimersByTimeAsync(5200);
+      // 5s wait backstop + the 400ms recovery backoff added in round 3.
+      await vi.advanceTimersByTimeAsync(6000);
     } finally {
       vi.useRealTimers();
     }
     expect(await screen.findByText('Your tutor account is ready')).toBeInTheDocument();
     expect(h.navigate).not.toHaveBeenCalledWith('/tutor');
+  });
+
+  it('auto-advances off the account-ready state when the doc finally lands (round-3 pin)', async () => {
+    // Reach the login fallback via the doc-blip path, then model the store's
+    // still-live snapshot listener delivering the doc: the fallback effect
+    // must navigate without any user action.
+    h.signIn.mockImplementationOnce(() => {
+      h.signedIn = true;
+      return Promise.resolve();
+    });
+    renderFlow();
+    fireEvent.click(screen.getByText('email-submit'));
+    fireEvent.click(await screen.findByText('verify-submit'));
+    fireEvent.click(await screen.findByText('password-submit'));
+    fireEvent.click(await screen.findByText('profile-next'));
+    const finalNext = await screen.findByText('subjects-next');
+    vi.useFakeTimers();
+    try {
+      fireEvent.click(finalNext);
+      await vi.advanceTimersByTimeAsync(6000);
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(await screen.findByText('Your tutor account is ready')).toBeInTheDocument();
+    expect(h.navigate).not.toHaveBeenCalledWith('/tutor');
+
+    // The snapshot lands: every live listener sees the settled state.
+    h.auth.userDoc = { profiles: { tutor: {} } };
+    const settled = { loading: false, firebaseUser: { uid: 'new' }, userDoc: h.auth.userDoc };
+    await act(async () => {
+      h.subs.forEach((fn) => fn(settled));
+    });
+    expect(h.navigate).toHaveBeenCalledWith('/tutor');
+  });
+
+  it('add-profile retries the silently-no-op refresh once before navigating (round-3 pin)', async () => {
+    h.auth = { firebaseUser: { uid: 'p1' }, userDoc: { profiles: { parent: {} } }, loading: false };
+    // First refresh no-ops (cache miss); the second lands the profile.
+    let calls = 0;
+    h.refreshUserDoc = vi.fn().mockImplementation(() => {
+      calls += 1;
+      if (calls >= 2) h.auth.userDoc = { profiles: { parent: {}, tutor: {} } };
+      return Promise.resolve();
+    });
+    renderFlow();
+    fireEvent.click(screen.getByText('email-submit'));
+    fireEvent.click(await screen.findByText('verify-submit'));
+    fireEvent.click(await screen.findByTestId('step-password'));
+    fireEvent.click(await screen.findByText('profile-next'));
+    fireEvent.click(await screen.findByText('subjects-next'));
+    await vi.waitFor(() => expect(h.navigate).toHaveBeenCalledWith('/tutor'), { timeout: 3000 });
+    expect(h.refreshUserDoc).toHaveBeenCalledTimes(2);
   });
 
   it('authed without a tutor profile: consent-only StepPassword, enrollTutor omits password, refreshes doc', async () => {

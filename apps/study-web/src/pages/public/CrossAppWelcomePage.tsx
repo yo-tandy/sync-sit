@@ -97,12 +97,22 @@ export function CrossAppWelcomePage() {
       });
       await refreshUserDoc();
       // refreshUserDoc is a single getDoc that silently no-ops on a cache
-      // miss; one retry keeps a blip from bouncing this authenticated user
-      // off AuthGuard to /signup (PR #257 round 2). Straight to the
-      // dashboard (issue #242, parity Q5=b).
+      // miss; one retry (short backoff -- an immediate identical read would
+      // return the same miss) keeps a blip from bouncing this authenticated
+      // user off AuthGuard to /signup (PR #257 rounds 2-3). If BOTH reads
+      // miss, do not navigate blind into the guard: surface an error and
+      // leave the button usable -- a resubmit hits profile-exists, whose
+      // handler navigates once the doc is finally readable.
       if (!getTutorProfile(useAuthStore.getState().userDoc)) {
+        await new Promise((r) => setTimeout(r, 400));
         await refreshUserDoc().catch(() => {});
       }
+      if (!getTutorProfile(useAuthStore.getState().userDoc)) {
+        setError(t('enrollment.crossApp.profileLoadError'));
+        setSubmitting(false);
+        return;
+      }
+      // Straight to the dashboard (issue #242, parity Q5=b).
       navigate('/tutor');
     } catch (err: unknown) {
       if (enrollmentErrorReason(err) === 'profile-exists') {

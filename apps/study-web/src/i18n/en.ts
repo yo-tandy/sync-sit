@@ -1194,6 +1194,9 @@ export default {
       mismatch: "Your date of birth doesn't match your school year. Please contact the EJM administrator.",
     },
     alreadyInFamily: 'You already belong to a family.',
+    crossApp: {
+      profileLoadError: 'Your tutor profile was created, but we could not load it yet. Tap Continue to try again.',
+    },
     joinFamilyConfirm: 'Join the {{familyName}} family',
     tutorTitle: 'Tutor Sign Up',
     // Parent (family) signup wizard

@@ -135,10 +135,10 @@ apps, so it deserves an explicit "deliberate, will not converge" decision from y
 rather than silence.
 
 ### Q5 · Enrollment success page — **DECIDED: (b), opened as #242**
-RESOLVED by #242 / PR #257: study's `/enroll/tutor/success` removed; both apps now end enrollment on the dashboard (redirect kept for stale links). Cosmetic either
-way. **Options:** (a) add a success page to sit's babysitter enrollment · (b) drop
-study's and route straight to the dashboard like sit · (c) ignore. My read: (c) unless
-you are already touching enrollment.
+RESOLVED by #242 / PR #257 (owner picked option b): study's
+`/enroll/tutor/success` removed; both apps now end enrollment on the
+dashboard, with a redirect kept for stale links and a guarded-navigation
+fallback for best-effort sign-in trouble.
 
 ---
 

@@ -1194,6 +1194,9 @@ export default {
       mismatch: "Votre date de naissance ne correspond pas à votre année scolaire. Veuillez contacter l'administrateur de l'EJM.",
     },
     alreadyInFamily: 'Vous appartenez déjà à une famille.',
+    crossApp: {
+      profileLoadError: "Votre profil tuteur a été créé, mais nous n'avons pas encore pu le charger. Appuyez sur Continuer pour réessayer.",
+    },
     joinFamilyConfirm: 'Rejoindre la famille {{familyName}}',
     tutorTitle: 'Inscription Tuteur',
     // Parent (family) signup wizard

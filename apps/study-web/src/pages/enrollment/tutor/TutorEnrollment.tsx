@@ -85,9 +85,14 @@ export function TutorEnrollment() {
   // of leaving a signed-in tutor parked on a login CTA (PR #257 round 2).
   useEffect(() => {
     if (!signedOutSuccess) return;
-    return useAuthStore.subscribe((s: { firebaseUser: unknown; userDoc: unknown }) => {
+    const check = (s: { firebaseUser: unknown; userDoc: unknown }) => {
       if (s.firebaseUser && getTutorProfile(s.userDoc as never)) navigate('/tutor');
-    });
+    };
+    // Check the CURRENT state before subscribing -- zustand's subscribe only
+    // fires on subsequent changes, so a snapshot landing between the latch
+    // and this effect would otherwise be missed (PR #257 round 3).
+    check(useAuthStore.getState() as { firebaseUser: unknown; userDoc: unknown });
+    return useAuthStore.subscribe(check);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [signedOutSuccess]);
 
@@ -201,6 +206,7 @@ export function TutorEnrollment() {
         // the least of the problems.
         await refreshUserDoc();
         if (!getTutorProfile(useAuthStore.getState().userDoc as never)) {
+          await new Promise((r) => setTimeout(r, 400));
           await refreshUserDoc().catch(() => {});
         }
         navigate('/tutor');
@@ -242,7 +248,10 @@ export function TutorEnrollment() {
       if (settled.firebaseUser && !getTutorProfile(settled.userDoc as never)) {
         // Timed out with a live session but no doc yet: one explicit
         // recovery read before telling the user anything (PR #257 round 2
-        // -- a slow first server snapshot can exceed the 5s budget).
+        // -- a slow first server snapshot can exceed the 5s budget). Short
+        // backoff first: an immediate identical getDoc under the same
+        // conditions would almost always return the same miss (round 3).
+        await new Promise((r) => setTimeout(r, 400));
         await refreshUserDoc().catch(() => {});
         settled = useAuthStore.getState() as { firebaseUser: unknown; userDoc: unknown };
       }
