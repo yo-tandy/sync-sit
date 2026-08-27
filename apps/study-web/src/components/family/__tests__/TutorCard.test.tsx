@@ -64,6 +64,16 @@ function reset() {
 describe('TutorCard', () => {
   beforeEach(() => reset());
 
+  // ── Name presentation (parity D2, issue #240) ──
+  it('renders the name in the shared French form, not raw title case', () => {
+    // Sit's cards have always printed "Lea BERNARD"; study printed
+    // "Camille Moreau". The surname carries the caps so the two apps' result
+    // cards read identically.
+    renderWithProviders(<TutorCard result={tutor()} />);
+    expect(screen.getByText('Alex ROY')).toBeInTheDocument();
+    expect(screen.queryByText('Alex Roy')).not.toBeInTheDocument();
+  });
+
   // ── Photo (issue #143) ──
   it('renders the tutor photo when photoUrl is present', () => {
     renderWithProviders(<TutorCard result={tutor({ photoUrl: 'https://cdn.example/t1.png' })} />);

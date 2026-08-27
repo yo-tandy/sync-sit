@@ -1,28 +1,26 @@
 /**
- * Capitalize the first letter of each word.
- * e.g. "yoav yaari" → "Yoav Yaari"
+ * Sit's name helpers. `capitalize` and the provider-name form now live in
+ * `@ejm/shared-ui` (parity D2, issue #240) so study's cards render the same
+ * "Marie DUPONT" idiom; this module re-exports them so sit's existing call
+ * sites keep their import path — the copy-then-re-export shape the shared
+ * extraction has used throughout.
  */
-export function capitalize(str?: string): string {
-  if (!str) return '';
-  return str
-    .split(' ')
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
-    .join(' ');
-}
+export { capitalize, formatProviderName } from '@ejm/shared-ui';
+import { formatProviderName } from '@ejm/shared-ui';
 
 /**
- * Format babysitter name: First name capitalized, last name in ALL CAPS
- * e.g. "Marie DUPONT"
+ * Sit-era name for `formatProviderName`. Kept so sit's six existing call sites
+ * (across four files) read unchanged; new code should use `formatProviderName`
+ * directly.
  */
-export function formatBabysitterName(firstName?: string, lastName?: string): string {
-  const first = capitalize(firstName);
-  const last = lastName ? lastName.toUpperCase() : '';
-  return `${first} ${last}`.trim();
-}
+export const formatBabysitterName = formatProviderName;
 
 /**
  * Format family name: ALL CAPS
  * e.g. "NIV YAARI"
+ *
+ * Stays sit-local: the 'Family' fallback is sit's own copy, and study has no
+ * equivalent surface today.
  */
 export function formatFamilyTitle(familyName?: string): string {
   if (!familyName) return 'Family';

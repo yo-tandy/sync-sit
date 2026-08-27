@@ -5,7 +5,7 @@ import { collection, query, where, limit, getDocs } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '@/config/firebase';
 import type { TutorSearchResult, StudyContactRequestStatus } from '@ejm/study-core';
-import { Card, Button, Badge, Avatar, Dialog, Textarea } from '@ejm/shared-ui';
+import { Card, Button, Badge, Avatar, Dialog, Textarea, formatProviderName } from '@ejm/shared-ui';
 import { humanizeNoticeWindow } from '@/utils/cancellationPolicy';
 
 /**
@@ -71,7 +71,7 @@ export function TutorCard({ result }: { result: TutorSearchResult }) {
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
               <p className="text-sm font-semibold text-gray-900">
-                {result.firstName} {result.lastName}
+                {formatProviderName(result.firstName, result.lastName)}
               </p>
               <p className="text-xs text-gray-500">
                 {/* classLevel is optional on the profile; joining through a
