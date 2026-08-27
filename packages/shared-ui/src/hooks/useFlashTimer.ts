@@ -28,13 +28,17 @@ export function useFlashTimer(): (fn: () => void, delayMs: number) => void {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mounted = useRef(true);
 
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    // StrictMode runs setup -> cleanup -> setup on mount and PRESERVES refs
+    // across that simulated remount, so the flag must be restored in the
+    // body -- a cleanup-only ref stays false forever on the second setup and
+    // silently disables every flash in dev (PR #223 review round 2).
+    mounted.current = true;
+    return () => {
       mounted.current = false;
       if (timer.current) clearTimeout(timer.current);
-    },
-    [],
-  );
+    };
+  }, []);
 
   return useCallback((fn: () => void, delayMs: number) => {
     if (timer.current) clearTimeout(timer.current);

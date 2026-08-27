@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import { useState } from 'react';
+import { StrictMode, useState } from 'react';
 import { useFlashTimer } from '@ejm/shared-ui';
 
 /**
@@ -76,6 +76,26 @@ describe('useFlashTimer', () => {
     expect(vi.getTimerCount()).toBe(1);
     unmount();
     expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('still flashes under StrictMode double-invoked effects', () => {
+    // StrictMode's setup -> cleanup -> setup on mount preserves refs, so a
+    // mounted flag restored only in cleanup would be stuck false and every
+    // schedule call would be silently dropped -- in dev only, which is why
+    // CI could not see it (PR #223 review round 2). Must be a real
+    // <StrictMode> render: mount/unmount/mount creates fresh refs and would
+    // not catch it.
+    render(
+      <StrictMode>
+        <Demo />
+      </StrictMode>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'trigger' }));
+    expect(vi.getTimerCount()).toBe(1);
+    act(() => {
+      vi.advanceTimersByTime(3000);
+    });
+    expect(screen.getByTestId('flag')).toHaveTextContent('off');
   });
 
   it('ignores a schedule call made after unmount', () => {
