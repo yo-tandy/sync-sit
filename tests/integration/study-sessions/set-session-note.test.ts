@@ -72,7 +72,7 @@ describe('setSessionNote', () => {
   async function seedInstance(
     id: string, date: string,
     { status = 'scheduled', startTime = '12:00', ...extra }: {
-      status?: string; startTime?: string;
+      status?: string; startTime?: string; statusReason?: string;
       preSessionNote?: string; postSessionNote?: string;
     } = {},
   ) {
@@ -301,10 +301,16 @@ describe('setSessionNote', () => {
     expect('preSessionNote' in (await instanceData(id, d))).toBe(false);
   });
 
-  it('the tutor can CLEAR a post-note on a SKIPPED occurrence', async () => {
+  it('the tutor can CLEAR a post-note on a conflict-SKIPPED occurrence', async () => {
+    // A "skip" is materialized as cancelled + statusReason 'conflict_skip'
+    // (sessionInstance.ts) — there is no 'skipped' status in the model.
     const id = await seedSeries('rec-clear-skip');
     const d = YESTERDAY();
-    await seedInstance(id, d, { status: 'skipped', postSessionNote: 'orphaned' });
+    await seedInstance(id, d, {
+      status: 'cancelled',
+      statusReason: 'conflict_skip',
+      postSessionNote: 'orphaned',
+    });
     await callFunction('setSessionNote', { sessionId: id, instanceId: d, kind: 'post', text: '' }, tutor2Token);
     expect('postSessionNote' in (await instanceData(id, d))).toBe(false);
   });

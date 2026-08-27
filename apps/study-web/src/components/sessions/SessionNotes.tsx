@@ -1,12 +1,19 @@
 import { Button } from '@ejm/shared-ui';
 
 /**
- * Shared read-view of a session's notes plus the single edit affordance for the
- * viewer's own note kind (V1.1 session notes). Presentation only: it renders
- * whichever of the pre/post notes exist (each with its author label), and — when
- * the viewer may write their kind within its window — an Add/Edit button wired to
- * `onEdit`. All copy is passed in so the family and tutor contexts keep their own
- * wording (the family authors the pre-note; the tutor the post-note).
+ * Shared read-view of a session's notes plus the viewer's own-kind affordance
+ * (V1.1 session notes). Presentation only: it renders whichever of the
+ * pre/post notes exist (each with its author label), and — when the viewer may
+ * write their kind within its window — an Add/Edit button wired to `onEdit`.
+ * When the window is CLOSED but the viewer's own note exists, an author-only
+ * Remove button wired to `onRemove` renders instead (issue #255 erasure
+ * carve-out). All copy is passed in so the family and tutor contexts keep
+ * their own wording (the family authors the pre-note; the tutor the
+ * post-note).
+ *
+ * `onRemove` and `copy.remove` are an all-or-nothing PAIR: the remove button
+ * renders only when both are present. Read-only contexts (guardians) omit
+ * both; a write context must wire both or its author strands their note.
  *
  * Used both by the SessionInstanceList (per recurring occurrence) and by the
  * one_time rows on each SessionsPage.

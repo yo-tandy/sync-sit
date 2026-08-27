@@ -917,6 +917,38 @@ describe('family SessionsPage — session notes (pre)', () => {
     expect(screen.queryByText(/remove this note\?/i)).not.toBeInTheDocument();
   });
 
+  it('a failed remove surfaces the error, keeps the dialog open, and the note survives', async () => {
+    // The worst outcome for this feature is a silent failed erasure — the
+    // author believing the note is gone when it is not.
+    h.sessions = [
+      confirmedOneTime({ sessionId: 'sRm', date: '2026-08-01', startTime: '09:00', preSessionNote: 'stale ask' }),
+    ];
+    renderWithProviders(<SessionsPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /remove note/i }));
+    h.callable.mockRejectedValueOnce(new Error('boom'));
+    const removeButtons = screen.getAllByRole('button', { name: /remove note/i });
+    fireEvent.click(removeButtons[removeButtons.length - 1]);
+
+    expect(await screen.findByText(/couldn't save your note/i)).toBeInTheDocument();
+    expect(screen.getByText(/remove this note\?/i)).toBeInTheDocument();
+    // Local state untouched: the note is still there behind the dialog.
+    expect(screen.getByText('stale ask')).toBeInTheDocument();
+  });
+
+  it('a stranded CONFIRMED past-dated one_time renders in history with its note removable', async () => {
+    // The completion cron normally flips this doc within the hour, but a doc
+    // it never completes (no endTime / persistent throw) used to render in
+    // NO bucket — note unreachable (round 2).
+    h.sessions = [
+      oneTime({ sessionId: 'sZ', status: 'confirmed', date: '2026-07-01', startTime: '09:00', preSessionNote: 'limbo ask' }),
+    ];
+    renderWithProviders(<SessionsPage />);
+
+    expect(await screen.findByText('limbo ask')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /remove note/i })).toBeInTheDocument();
+  });
+
   it('a CANCELLED one_time in history still shows the own note and offers REMOVE (never stranded)', async () => {
     // The history render used to be completed-only; a cancelled session's
     // note is exactly the one the author must still see and erase.

@@ -857,6 +857,42 @@ describe('tutor SessionsPage — session notes (post)', () => {
     );
   });
 
+  it('cancelling the remove dialog sends nothing', async () => {
+    h.sessions = [oneTime({ sessionId: 'sRm', status: 'cancelled', date: '2026-07-20', postSessionNote: 'stale debrief' })];
+    renderWithProviders(<SessionsPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /remove note/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^cancel$/i }));
+    expect(h.callable).not.toHaveBeenCalledWith('setSessionNote', expect.anything());
+    expect(screen.queryByText(/remove this note\?/i)).not.toBeInTheDocument();
+  });
+
+  it('a failed remove surfaces the error and keeps the confirm dialog open', async () => {
+    h.sessions = [oneTime({ sessionId: 'sRm', status: 'cancelled', date: '2026-07-20', postSessionNote: 'stale debrief' })];
+    renderWithProviders(<SessionsPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /remove note/i }));
+    h.callable.mockRejectedValueOnce(new Error('boom'));
+    const removeButtons = screen.getAllByRole('button', { name: /remove note/i });
+    fireEvent.click(removeButtons[removeButtons.length - 1]);
+
+    expect(await screen.findByText(/couldn't save your note/i)).toBeInTheDocument();
+    expect(screen.getByText(/remove this note\?/i)).toBeInTheDocument();
+    expect(screen.getByText('stale debrief')).toBeInTheDocument();
+  });
+
+  it('a stranded CONFIRMED past-dated one_time renders in history with the post window OPEN', async () => {
+    // Confirmed + started keeps the post window open server-side, so the
+    // stranded shape gets the EDIT affordance (not just remove).
+    h.sessions = [
+      oneTime({ sessionId: 'sZ', status: 'confirmed', date: '2026-07-01', startTime: '09:00', postSessionNote: 'limbo recap' }),
+    ];
+    renderWithProviders(<SessionsPage />);
+
+    expect(await screen.findByText('limbo recap')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /edit session notes/i })).toBeInTheDocument();
+  });
+
   it("the family's pre-note alone offers NO remove (author-only affordance)", async () => {
     h.sessions = [oneTime({ sessionId: 'sO', status: 'cancelled', preSessionNote: 'their ask' })];
     renderWithProviders(<SessionsPage />);

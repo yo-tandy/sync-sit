@@ -605,8 +605,17 @@ export function SessionsPage() {
   const all = sessions ?? [];
   const pending = all.filter((s) => s.status === 'pending');
   const confirmed = all.filter((s) => s.status === 'confirmed');
-  const history = all.filter((s) => TERMINAL.includes(s.status));
   const today = parisToday();
+  const history = all.filter(
+    (s) =>
+      TERMINAL.includes(s.status) ||
+      // A confirmed one_time whose date has passed renders in NO bucket
+      // otherwise (upcoming skips past dates; the completion cron normally
+      // flips it within the hour, but a doc without endTime — or one that
+      // keeps throwing — never completes and falls out of the cron's window).
+      // Its note must stay reachable/erasable (issue #255 round 2).
+      (s.type === 'one_time' && s.status === 'confirmed' && !!s.date && s.date < today),
+  );
 
   // Interleave confirmed one_time sessions and confirmed series by date.
   const upcomingEntries: { sortDate: string; el: React.ReactNode }[] = [];
