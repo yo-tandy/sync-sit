@@ -21,7 +21,7 @@ vi.mock('@/stores/verificationStore', () => ({
 }));
 
 import i18n from '@/i18n';
-import { render, screen, cleanup } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 import { afterEach } from 'vitest';
 import { MemoryRouter } from 'react-router';
 import { AdminVerificationsPage } from '../VerificationsPage';
@@ -78,6 +78,24 @@ describe('AdminVerificationsPage family verification review', () => {
       screen.getByRole('option', { name: i18n.t('verification.typeEnrollment') }),
     ).toBeInTheDocument();
     expect(screen.queryByRole('option', { name: /tutor/i })).not.toBeInTheDocument();
+  });
+
+  it('offers the Superseded status filter and refetches with it (issue #218)', () => {
+    // The one user-visible surface of the supersede feature: without this
+    // option an admin cannot see the docs a community grant closed. Pins both
+    // the option and the wiring, so a dropped locale key or a dropped filter
+    // value fails here rather than silently rendering an empty label.
+    renderPage();
+    const option = screen.getByRole('option', {
+      name: i18n.t('verification.status_superseded'),
+    }) as HTMLOptionElement;
+    expect(option).toBeInTheDocument();
+    expect(option.value).toBe('superseded');
+
+    fireEvent.change(option.closest('select')!, { target: { value: 'superseded' } });
+    expect(storeState.fetchPendingVerifications).toHaveBeenLastCalledWith(
+      expect.objectContaining({ status: 'superseded' }),
+    );
   });
 });
 

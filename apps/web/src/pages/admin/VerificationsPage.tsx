@@ -121,6 +121,7 @@ export function AdminVerificationsPage() {
               { value: 'pending', label: t('verification.status_pending') },
               { value: 'approved', label: t('verification.status_approved') },
               { value: 'rejected', label: t('verification.status_rejected') },
+              { value: 'superseded', label: t('verification.status_superseded') },
             ]}
           />
           <Select

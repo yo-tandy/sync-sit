@@ -1,6 +1,11 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
 import { clearAll, callFunction, getIdToken, getDb } from '../../setup/emulator.js';
-import { seedTestData, seedVerification, type SeedData } from '../../setup/seed.js';
+import {
+  seedTestData,
+  seedVerification,
+  seedCommunityCode,
+  type SeedData,
+} from '../../setup/seed.js';
 
 describe('reviewVerification', () => {
   let seed: SeedData;
@@ -128,6 +133,262 @@ describe('reviewVerification', () => {
 
       const familyDoc = await getDb().collection('families').doc(seed.family2Id).get();
       expect(familyDoc.data()!.verification.identityStatus).toBe('rejected');
+    });
+  });
+
+  // Issue #218 — a community approval vouches for BOTH types. Re-approving one
+  // document later must not silently revoke the other.
+  describe('community-granted families', () => {
+    /**
+     * Stub grant: writes the family verification map directly, WITHOUT
+     * running approveCommunityCode — so the supersede never runs. That makes
+     * this helper double as the simulation of a grant whose (deliberately
+     * non-fatal) supersede FAILED, which is exactly what the recompute's
+     * communityApprovedAt ordering must survive. Pass `legacy: true` to omit
+     * the timestamp, modelling a pre-#220 grant.
+     */
+    async function grantCommunityApproval(opts: { legacy?: boolean } = {}) {
+      await getDb().collection('families').doc(seed.family2Id).update({
+        verification: {
+          identityStatus: 'approved',
+          enrollmentStatus: 'approved',
+          isFullyVerified: true,
+          isEjmFamily: true,
+          communityApprovedBy: seed.parent1.uid,
+          ...(opts.legacy ? {} : { communityApprovedAt: new Date() }),
+        },
+      });
+    }
+
+    it('approving a new enrollment doc keeps the community identity approval', async () => {
+      await grantCommunityApproval();
+      // The identity doc that was pending when the community vouched.
+      await seedVerification({
+        familyId: seed.family2Id,
+        uploadedByUserId: seed.parent3.uid,
+        type: 'identity',
+        status: 'superseded',
+      });
+      // Next school year's certificate.
+      const enrollVerification = await seedVerification({
+        familyId: seed.family2Id,
+        uploadedByUserId: seed.parent3.uid,
+        type: 'ejm_enrollment',
+      });
+
+      const result = await callFunction<{ isFullyVerified: boolean }>(
+        'reviewVerification',
+        { verificationId: enrollVerification, decision: 'approved' },
+        adminToken,
+      );
+
+      expect(result.isFullyVerified).toBe(true);
+
+      const verification = (await getDb().collection('families').doc(seed.family2Id).get())
+        .data()!.verification;
+      expect(verification.identityStatus).toBe('approved');
+      expect(verification.isFullyVerified).toBe(true);
+      expect(verification.communityApprovedBy).toBe(seed.parent1.uid);
+    });
+
+    it('an explicit rejection still wins over the grant for that type', async () => {
+      await grantCommunityApproval();
+      const idVerification = await seedVerification({
+        familyId: seed.family2Id,
+        uploadedByUserId: seed.parent3.uid,
+        type: 'identity',
+      });
+
+      await callFunction(
+        'reviewVerification',
+        { verificationId: idVerification, decision: 'rejected', rejectionReason: 'Expired ID' },
+        adminToken,
+      );
+
+      const verification = (await getDb().collection('families').doc(seed.family2Id).get())
+        .data()!.verification;
+      expect(verification.identityStatus).toBe('rejected');
+      expect(verification.isFullyVerified).toBe(false);
+      // Enrollment had no document of its own, so the grant still covers it.
+      expect(verification.enrollmentStatus).toBe('approved');
+      expect(verification.communityApprovedBy).toBe(seed.parent1.uid);
+    });
+
+    it('a PRE-GRANT rejection does not revoke the grant on a later approval', async () => {
+      // The bug this pins (PR #220 review): approveCommunityCode superseded
+      // only `pending` docs, so a doc an admin had already REJECTED before the
+      // family routed around it via the community code stayed live. The next
+      // time an admin approved anything for that family, the recompute read
+      // that stale rejection and silently un-verified a community-approved
+      // family — through an APPROVAL. Reachable with no unusual steps.
+      //
+      // This one drives the REAL approveCommunityCode rather than
+      // grantCommunityApproval(), which stubs the grant by writing the family
+      // doc directly and so never runs the supersede — the whole mechanism
+      // under test here.
+      const staleReject = await seedVerification({
+        familyId: seed.family2Id,
+        uploadedByUserId: seed.parent3.uid,
+        type: 'identity',
+      });
+      await callFunction(
+        'reviewVerification',
+        { verificationId: staleReject, decision: 'rejected', rejectionReason: 'Blurry' },
+        adminToken,
+      );
+
+      // The family gives up on documents and asks a friend to vouch. The
+      // grant must close the rejected doc, not just pending ones.
+      const code = await seedCommunityCode({
+        familyId: seed.family2Id,
+        requestedByUserId: seed.parent3.uid,
+      });
+      await callFunction('approveCommunityCode', { code }, parentToken);
+
+      const rejectedDoc = (await getDb().collection('verifications').doc(staleReject).get()).data()!;
+      expect(rejectedDoc.status).toBe('superseded');
+      expect(rejectedDoc.supersededBy).toBe('community');
+
+      // Next school year's certificate, approved.
+      const enrollVerification = await seedVerification({
+        familyId: seed.family2Id,
+        uploadedByUserId: seed.parent3.uid,
+        type: 'ejm_enrollment',
+      });
+      const result = await callFunction<{ isFullyVerified: boolean }>(
+        'reviewVerification',
+        { verificationId: enrollVerification, decision: 'approved' },
+        adminToken,
+      );
+
+      expect(result.isFullyVerified).toBe(true);
+      const verification = (await getDb().collection('families').doc(seed.family2Id).get())
+        .data()!.verification;
+      expect(verification.identityStatus).toBe('approved');
+      expect(verification.isFullyVerified).toBe(true);
+    });
+
+    it('a SWALLOWED supersede failure cannot resurface a pre-grant rejection', async () => {
+      // approveCommunityCode's supersede is deliberately non-fatal; the
+      // recompute must therefore not lean on it having run. The stub grant
+      // here IS that failure mode: communityApprovedAt written, rejected doc
+      // left live. Ordering comes from the timestamp, not the supersede
+      // (PR #220 review — the commit-3 catch had quietly become load-bearing
+      // for commit 4's correctness).
+      const staleReject = await seedVerification({
+        familyId: seed.family2Id,
+        uploadedByUserId: seed.parent3.uid,
+        type: 'identity',
+      });
+      await callFunction(
+        'reviewVerification',
+        { verificationId: staleReject, decision: 'rejected', rejectionReason: 'Blurry' },
+        adminToken,
+      );
+
+      // Grant with timestamp, supersede "failed": the rejected doc survives.
+      await grantCommunityApproval();
+      const enrollVerification = await seedVerification({
+        familyId: seed.family2Id,
+        uploadedByUserId: seed.parent3.uid,
+        type: 'ejm_enrollment',
+      });
+      const result = await callFunction<{ isFullyVerified: boolean }>(
+        'reviewVerification',
+        { verificationId: enrollVerification, decision: 'approved' },
+        adminToken,
+      );
+
+      expect(result.isFullyVerified).toBe(true);
+      const verification = (await getDb().collection('families').doc(seed.family2Id).get())
+        .data()!.verification;
+      expect(verification.identityStatus).toBe('approved');
+      // The ordering must survive the recompute's own rewrite of the map.
+      expect(verification.communityApprovedAt).toBeTruthy();
+    });
+
+    it('a LEGACY grant (no communityApprovedAt) falls back to supersede ordering', async () => {
+      // Pre-#220 grants carry no timestamp. For them a surviving rejection
+      // still wins — the supersede (which DID run on the real path, and
+      // closes rejected docs since this PR) is the only ordering available.
+      const staleReject = await seedVerification({
+        familyId: seed.family2Id,
+        uploadedByUserId: seed.parent3.uid,
+        type: 'identity',
+      });
+      await callFunction(
+        'reviewVerification',
+        { verificationId: staleReject, decision: 'rejected', rejectionReason: 'Blurry' },
+        adminToken,
+      );
+      await grantCommunityApproval({ legacy: true });
+      const enrollVerification = await seedVerification({
+        familyId: seed.family2Id,
+        uploadedByUserId: seed.parent3.uid,
+        type: 'ejm_enrollment',
+      });
+      await callFunction(
+        'reviewVerification',
+        { verificationId: enrollVerification, decision: 'approved' },
+        adminToken,
+      );
+
+      const verification = (await getDb().collection('families').doc(seed.family2Id).get())
+        .data()!.verification;
+      expect(verification.identityStatus).toBe('rejected');
+      expect(verification.isFullyVerified).toBe(false);
+    });
+
+    it('a live PENDING doc of the other type does not drop the grant mid-review', async () => {
+      // `pending` is not a decision. A family that uploads both documents
+      // after being community-verified used to fall to isFullyVerified: false
+      // (and lose isEjmFamily) for the whole window between the first
+      // approval and the second review — an outcome no admin chose.
+      await grantCommunityApproval();
+      await seedVerification({
+        familyId: seed.family2Id,
+        uploadedByUserId: seed.parent3.uid,
+        type: 'ejm_enrollment',
+      });
+      const idVerification = await seedVerification({
+        familyId: seed.family2Id,
+        uploadedByUserId: seed.parent3.uid,
+        type: 'identity',
+      });
+
+      await callFunction(
+        'reviewVerification',
+        { verificationId: idVerification, decision: 'approved' },
+        adminToken,
+      );
+
+      const verification = (await getDb().collection('families').doc(seed.family2Id).get())
+        .data()!.verification;
+      expect(verification.identityStatus).toBe('approved');
+      expect(verification.enrollmentStatus).toBe('approved');
+      expect(verification.isFullyVerified).toBe(true);
+      expect(verification.isEjmFamily).toBe(true);
+    });
+
+    it('leaves a document-verified family untouched (no grant, no baseline)', async () => {
+      const idVerification = await seedVerification({
+        familyId: seed.family2Id,
+        uploadedByUserId: seed.parent3.uid,
+        type: 'identity',
+      });
+
+      await callFunction(
+        'reviewVerification',
+        { verificationId: idVerification, decision: 'approved' },
+        adminToken,
+      );
+
+      const verification = (await getDb().collection('families').doc(seed.family2Id).get())
+        .data()!.verification;
+      expect(verification.identityStatus).toBe('approved');
+      expect(verification.enrollmentStatus).toBe('not_submitted');
+      expect(verification.isFullyVerified).toBe(false);
+      expect(verification.communityApprovedBy).toBeUndefined();
     });
   });
 

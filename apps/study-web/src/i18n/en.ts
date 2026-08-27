@@ -919,6 +919,7 @@ export default {
       status_pending: 'Pending Review',
       status_approved: 'Approved',
       status_rejected: 'Rejected',
+      status_superseded: 'Superseded',
       pendingReview: 'Pending review',
       rejectedReason: 'Rejection reason:',
       identityDesc: 'Upload a valid identity document (passport, ID card, or driver\'s license). Max 10 MB.',
@@ -949,6 +950,7 @@ export default {
       checkboxConfirmEjm: 'I confirm that they have kids in EJM',
       approve: 'Approve',
       approveSuccess: 'Account approved successfully!',
+      communityAlreadyVerified: 'This request is no longer valid — this family has already been verified.',
     },
     sessions: {
       title: 'Your sessions',

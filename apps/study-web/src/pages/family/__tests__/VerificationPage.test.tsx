@@ -291,4 +291,52 @@ describe('family VerificationPage', () => {
     expect(screen.getByText(/2026-2027/)).toBeInTheDocument();
     expect(screen.getByText(/CE2/)).toBeInTheDocument();
   });
+
+  // Issue #218 — a community approval supersedes the family's pending docs,
+  // and getVerificationStatus hands every doc back unfiltered, so this status
+  // reaches BOTH family apps. Without a locale key the badge renders the raw
+  // i18n path.
+  it('labels a superseded document instead of leaking the raw i18n key', async () => {
+    statusResponse = {
+      verification: { identityStatus: 'approved', enrollmentStatus: 'approved', isFullyVerified: true, isEjmFamily: true },
+      documents: [
+        { id: 'v3', type: 'ejm_enrollment', status: 'superseded', fileName: 'cert.pdf', childName: 'Chloe Martin' },
+      ],
+    };
+    renderWithProviders(<VerificationPage />);
+
+    // The per-document badge lives on the enrollment tab.
+    fireEvent.click(await screen.findByRole('button', { name: /EJM Enrollment/ }));
+
+    expect(await screen.findByText('Superseded')).toBeInTheDocument();
+    expect(screen.queryByText(/family\.verification\.status_/)).not.toBeInTheDocument();
+  });
+
+  it('names a stale community request rather than echoing the server message', async () => {
+    statusResponse = {
+      verification: { identityStatus: 'approved', enrollmentStatus: 'approved', isFullyVerified: true, isEjmFamily: true },
+      documents: [],
+    };
+    h.callable.mockImplementation((name: string, payload: unknown) => {
+      if (name === 'lookupCommunityCode') {
+        return Promise.reject(
+          Object.assign(new Error('raw server text that must not surface'), {
+            details: { reason: 'already_verified' },
+          }),
+        );
+      }
+      return defaultCallable(name, payload);
+    });
+
+    renderWithProviders(<VerificationPage />);
+    expect(await screen.findByText('Approve a friend')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByPlaceholderText('Enter code'), { target: { value: 'zz99xx' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Look Up' }));
+
+    expect(
+      await screen.findByText('This request is no longer valid — this family has already been verified.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/raw server text/)).not.toBeInTheDocument();
+  });
 });

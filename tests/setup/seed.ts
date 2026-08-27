@@ -445,7 +445,7 @@ export interface VerificationSeed {
   familyId: string;
   uploadedByUserId: string;
   type: 'identity' | 'ejm_enrollment';
-  status?: 'pending' | 'approved' | 'rejected';
+  status?: 'pending' | 'approved' | 'rejected' | 'superseded';
   fileUrl?: string;
   fileName?: string;
   rejectionReason?: string;

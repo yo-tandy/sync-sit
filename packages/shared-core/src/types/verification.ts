@@ -1,6 +1,16 @@
 import type { FirestoreTimestamp } from './common.js';
 
 export type VerificationStatus = 'not_submitted' | 'pending' | 'approved' | 'rejected';
+
+/**
+ * Status of a single uploaded document. Distinct from VerificationStatus,
+ * which describes a family's standing per type: a document is `superseded`
+ * when the family reached verified by another route while it still sat in the
+ * admin queue (#218), but a family's identityStatus is never `superseded` —
+ * that route set it to `approved`.
+ */
+export type VerificationDocStatus = 'pending' | 'approved' | 'rejected' | 'superseded';
+
 export type VerificationType = 'identity' | 'ejm_enrollment';
 
 export interface VerificationDoc {
@@ -8,7 +18,7 @@ export interface VerificationDoc {
   familyId: string;
   uploadedByUserId: string;
   type: VerificationType;
-  status: VerificationStatus;
+  status: VerificationDocStatus;
   fileUrl: string;
   fileName: string;
 
@@ -24,6 +34,13 @@ export interface VerificationDoc {
   reviewedAt?: FirestoreTimestamp;
   rejectionReason?: string;
 
+  // Set when the community route verified the family, closing a document
+  // request the grant made moot — either one an admin had not reached yet, or
+  // one they had already rejected and the family routed around (#218). Only
+  // that route supersedes — see supersedeOpenVerifications.
+  supersededAt?: FirestoreTimestamp;
+  supersededBy?: 'community';
+
   createdAt: FirestoreTimestamp;
 }
 
@@ -33,4 +50,12 @@ export interface FamilyVerificationStatus {
   isFullyVerified: boolean;
   isEjmFamily: boolean;
   communityApprovedBy?: string; // uid of the parent who vouched
+  /**
+   * When the community grant landed. The explicit pre/post-grant ordering for
+   * reviewVerification's recompute: a rejection whose reviewedAt predates it
+   * is treated as overridden by the grant, whether or not the (deliberately
+   * non-fatal) supersede managed to close the doc (PR #220 review). Absent on
+   * legacy grants, which fall back to supersede-based ordering.
+   */
+  communityApprovedAt?: FirestoreTimestamp;
 }

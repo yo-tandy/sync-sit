@@ -1014,6 +1014,7 @@ export default {
     status_pending: 'En attente de révision',
     status_approved: 'Approuvé',
     status_rejected: 'Rejeté',
+    status_superseded: 'Obsolète',
     pendingReview: 'En attente de révision',
     rejectedReason: 'Motif du rejet :',
     identityDesc: 'Téléchargez un document d\'identité valide (passeport, carte d\'identité ou permis de conduire). Max 10 Mo.',
@@ -1071,6 +1072,7 @@ export default {
     checkboxKnowPerson: 'Je connais cette personne et j\'approuve son compte',
     checkboxConfirmEjm: 'Je confirme qu\'ils ont des enfants à l\'EJM',
     approveSuccess: 'Compte approuvé avec succès !',
+    communityAlreadyVerified: 'Cette demande n\'est plus valable — cette famille a déjà été vérifiée.',
   },
 
   // Appointment actions

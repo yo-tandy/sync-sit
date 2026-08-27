@@ -919,6 +919,7 @@ export default {
       status_pending: 'En attente de révision',
       status_approved: 'Approuvé',
       status_rejected: 'Rejeté',
+      status_superseded: 'Obsolète',
       pendingReview: 'En attente de révision',
       rejectedReason: 'Motif du rejet :',
       identityDesc: 'Téléchargez un document d\'identité valide (passeport, carte d\'identité ou permis de conduire). Max 10 Mo.',
@@ -949,6 +950,7 @@ export default {
       checkboxConfirmEjm: 'Je confirme qu\'ils ont des enfants à l\'EJM',
       approve: 'Approuver',
       approveSuccess: 'Compte approuvé avec succès !',
+      communityAlreadyVerified: 'Cette demande n\'est plus valable — cette famille a déjà été vérifiée.',
     },
     sessions: {
       title: 'Vos cours',
