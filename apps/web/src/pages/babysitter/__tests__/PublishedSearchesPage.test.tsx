@@ -27,6 +27,7 @@ const h = vi.hoisted(() => ({
   snapshotNext: null as null | ((snap: unknown) => void),
   snapshotError: null as null | ((err: unknown) => void),
   aptNext: null as null | ((snap: unknown) => void),
+  aptQuery: null as unknown,
   updateDoc: vi.fn(() => Promise.resolve()),
   callable: vi.fn(() => Promise.resolve({ data: { appointmentId: 'apt-1' } })),
   unsub: vi.fn(),
@@ -46,7 +47,7 @@ vi.mock('firebase/firestore', () => ({
   orderBy: (...args: unknown[]) => ({ orderBy: args }),
   limit: (n: number) => ({ limit: n }),
   serverTimestamp: () => ({ __serverTimestamp: true }),
-  onSnapshot: (_q: unknown, next: (snap: unknown) => void, error: (err: unknown) => void) => {
+  onSnapshot: (q: unknown, next: (snap: unknown) => void, error: (err: unknown) => void) => {
     // The page subscribes to the board first, then to the sitter's own
     // appointments (the "already contacted" set).
     if (h.snapshotNext === null) {
@@ -54,6 +55,7 @@ vi.mock('firebase/firestore', () => ({
       h.snapshotError = error;
     } else {
       h.aptNext = next;
+      h.aptQuery = q;
     }
     return h.unsub;
   },
@@ -128,6 +130,7 @@ beforeEach(() => {
   h.snapshotNext = null;
   h.snapshotError = null;
   h.aptNext = null;
+    h.aptQuery = null;
   h.auth.userDoc = sitterDoc(SEEN_AT);
 });
 
@@ -315,7 +318,12 @@ describe('PublishedSearchesPage (sit board)', () => {
     // The listener's query bounds status to pending/confirmed server-side,
     // so a declined prior contact never reaches the snapshot at all -- which
     // is exactly why its CTA below stays available (the server lets the
-    // sitter try again).
+    // sitter try again). The mock feeds callbacks directly, so pin the
+    // BOUND itself off the captured query args: dropping the status clause
+    // would silently restore the whole-history subscription (issue #225
+    // item 4, PR #232 review).
+    expect(JSON.stringify(h.aptQuery)).toContain('appointments');
+    expect(JSON.stringify(h.aptQuery)).toContain('"status","in",["pending","confirmed"]');
     pushAppointments([{ publishedSearchId: 'ps-live', status: 'pending' }]);
 
     await waitFor(() => expect(screen.getByText('Request sent')).toBeInTheDocument());

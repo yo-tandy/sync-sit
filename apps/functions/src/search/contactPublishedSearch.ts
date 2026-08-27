@@ -265,8 +265,12 @@ export const contactPublishedSearch = onCall(
       const windowFrom = Date.now() - BOARD_CONTACT_WINDOW_MS;
       const recentCount = recentBoardSnap.docs.filter((d) => {
         const createdMs = d.data().createdAt?.toMillis?.();
-        // Unreadable createdAt counts as recent: the cap must fail CLOSED,
-        // same posture as the cooldown above.
+        // A present-but-unreadable createdAt counts as recent (fail closed).
+        // A doc MISSING the field entirely never reaches this filter at all:
+        // orderBy excludes it from the query, so that case is invisible to
+        // the cap -- fail OPEN, acceptable only because this callable is the
+        // sole writer of initiatedBy: 'babysitter' and always stamps
+        // createdAt (PR #232 review).
         return typeof createdMs !== 'number' || createdMs > windowFrom;
       }).length;
       if (recentCount >= MAX_BOARD_CONTACTS_PER_DAY) {
