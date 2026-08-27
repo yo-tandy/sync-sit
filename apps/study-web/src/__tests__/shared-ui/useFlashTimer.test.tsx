@@ -104,8 +104,9 @@ describe('useFlashTimer', () => {
     // there would create a timer nothing owns -- the exact failure mode the
     // hook exists to close (PR #223 review).
     const { result, unmount } = renderHook(() => useFlashTimer());
+    const flashAfter = result.current;
     unmount();
-    result.current(() => {}, 3000);
+    flashAfter(() => {}, 3000);
     expect(vi.getTimerCount()).toBe(0);
   });
 });
