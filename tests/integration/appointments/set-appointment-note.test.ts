@@ -164,6 +164,33 @@ describe('setAppointmentNote', () => {
     ).rejects.toMatchObject({ code: 'PERMISSION_DENIED' });
   });
 
+  it('an ACTIVE guardian of the babysitter cannot write either note (no guardian branch)', async () => {
+    // parent3's family actively supervises babysitter1 — cancelAppointment
+    // would let them act for the sitter, but setAppointmentNote deliberately
+    // has NO guardian branch (mirrors study). The guardian reads notes via
+    // getGovernedChildDetail; they never author them.
+    await getDb().collection('guardianLinks').doc(seed.babysitter1.uid).set({
+      childUid: seed.babysitter1.uid,
+      familyId: seed.parent3.familyId,
+      createdByParentUid: seed.parent3.uid,
+      status: 'active',
+      origin: 'parent_created',
+      requestedAt: new Date(),
+      confirmedAt: new Date(),
+    });
+    try {
+      const id = await seedOneTime('ot-guardian', { date: YESTERDAY() });
+      await expect(
+        callFunction('setAppointmentNote', { appointmentId: id, kind: 'post', text: 'x' }, parent3Token),
+      ).rejects.toMatchObject({ code: 'PERMISSION_DENIED' });
+      await expect(
+        callFunction('setAppointmentNote', { appointmentId: id, kind: 'pre', text: 'x' }, parent3Token),
+      ).rejects.toMatchObject({ code: 'PERMISSION_DENIED' });
+    } finally {
+      await getDb().collection('guardianLinks').doc(seed.babysitter1.uid).delete();
+    }
+  });
+
   // ── Timing gates (one_time) ──
 
   it('pre-note rejected once the appointment has started (failed-precondition)', async () => {
