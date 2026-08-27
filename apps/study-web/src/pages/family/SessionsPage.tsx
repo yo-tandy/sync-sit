@@ -968,78 +968,78 @@ export function SessionsPage() {
         </div>
       </Dialog>
 
-      {/* ── Cancellation (reason required, ≥3 chars) ── */}
       {modifyTarget && (
-          <Dialog open onClose={() => setModifyTarget(null)}>
-            <h3 className="text-lg font-bold">{t('family.sessions.modifyTitle')}</h3>
-            <p className="mt-1 text-sm text-gray-500">{t('family.sessions.modifyDesc')}</p>
-            <label className="mt-3 block text-sm font-medium text-gray-700">
-              {t('family.sessions.modifyDate')}
-              <input
-                type="date"
-                className="mt-1 h-11 w-full rounded-lg border-[1.5px] border-gray-300 px-3"
-                value={mDate}
-                onChange={(e) => setMDate(e.target.value)}
-              />
-            </label>
-            <label className="mt-3 block text-sm font-medium text-gray-700">
-              {t('family.sessions.modifyStart')}
-              <input
-                type="time"
-                step={900}
-                className="mt-1 h-11 w-full rounded-lg border-[1.5px] border-gray-300 px-3"
-                value={mStart}
-                onChange={(e) => setMStart(e.target.value)}
-              />
-            </label>
-            <label className="mt-3 block text-sm font-medium text-gray-700">
-              {t('family.sessions.modifyLength')}
-              <select
-                className="mt-1 h-11 w-full rounded-lg border-[1.5px] border-gray-300 bg-white px-3"
-                value={mLength}
-                onChange={(e) => setMLength(Number(e.target.value))}
-              >
-                {SESSION_LENGTHS.map((l) => (
-                  <option key={l} value={l}>
-                    {l} min
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="mt-3 block text-sm font-medium text-gray-700">
-              {t('family.sessions.modifyLocation')}
-              <select
-                className="mt-1 h-11 w-full rounded-lg border-[1.5px] border-gray-300 bg-white px-3"
-                value={mLocation}
-                onChange={(e) => setMLocation(e.target.value)}
-              >
-                {['family_home', 'tutor_home', 'online', 'library'].map((l) => (
-                  <option key={l} value={l}>
-                    {t(`family.sessions.location.${l}`)}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="mt-3 block text-sm font-medium text-gray-700">
-              {t('family.sessions.modifyMessage')}
-              <textarea
-                className="mt-1 w-full rounded-lg border-[1.5px] border-gray-300 p-3 text-sm"
-                rows={2}
-                value={mMessage}
-                onChange={(e) => setMMessage(e.target.value)}
-              />
-            </label>
-            {modifyError && <p className="mt-2 text-sm text-red-600">{modifyError}</p>}
-            <div className="mt-4 flex gap-2">
-              <Button onClick={submitModify} disabled={modifySaving} className="flex-1">
-                {modifySaving ? t('common.saving') : t('family.sessions.modifySave')}
-              </Button>
-              <Button variant="ghost" onClick={() => setModifyTarget(null)} className="flex-1">
-                {t('common.cancel')}
-              </Button>
-            </div>
-          </Dialog>
-        )}
+        <Dialog open onClose={() => setModifyTarget(null)}>
+          <h3 className="text-lg font-bold">{t('family.sessions.modifyTitle')}</h3>
+          <p className="mt-1 text-sm text-gray-500">{t('family.sessions.modifyDesc')}</p>
+          <label className="mt-3 block text-sm font-medium text-gray-700">
+            {t('family.sessions.modifyDate')}
+            <input
+              type="date"
+              className="mt-1 h-11 w-full rounded-lg border-[1.5px] border-gray-300 px-3"
+              value={mDate}
+              onChange={(e) => setMDate(e.target.value)}
+            />
+          </label>
+          <label className="mt-3 block text-sm font-medium text-gray-700">
+            {t('family.sessions.modifyStart')}
+            <input
+              type="time"
+              step={900}
+              className="mt-1 h-11 w-full rounded-lg border-[1.5px] border-gray-300 px-3"
+              value={mStart}
+              onChange={(e) => setMStart(e.target.value)}
+            />
+          </label>
+          <label className="mt-3 block text-sm font-medium text-gray-700">
+            {t('family.sessions.modifyLength')}
+            <select
+              className="mt-1 h-11 w-full rounded-lg border-[1.5px] border-gray-300 bg-white px-3"
+              value={mLength}
+              onChange={(e) => setMLength(Number(e.target.value))}
+            >
+              {SESSION_LENGTHS.map((l) => (
+                <option key={l} value={l}>
+                  {l} min
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="mt-3 block text-sm font-medium text-gray-700">
+            {t('family.sessions.modifyLocation')}
+            <select
+              className="mt-1 h-11 w-full rounded-lg border-[1.5px] border-gray-300 bg-white px-3"
+              value={mLocation}
+              onChange={(e) => setMLocation(e.target.value)}
+            >
+              {['family_home', 'tutor_home', 'online', 'library'].map((l) => (
+                <option key={l} value={l}>
+                  {t(`family.sessions.location.${l}`)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="mt-3 block text-sm font-medium text-gray-700">
+            {t('family.sessions.modifyMessage')}
+            <textarea
+              className="mt-1 w-full rounded-lg border-[1.5px] border-gray-300 p-3 text-sm"
+              rows={2}
+              value={mMessage}
+              onChange={(e) => setMMessage(e.target.value)}
+            />
+          </label>
+          {modifyError && <p className="mt-2 text-sm text-red-600">{modifyError}</p>}
+          <div className="mt-4 flex gap-2">
+            <Button onClick={submitModify} disabled={modifySaving} className="flex-1">
+              {modifySaving ? t('common.saving') : t('family.sessions.modifySave')}
+            </Button>
+            <Button variant="ghost" onClick={() => setModifyTarget(null)} className="flex-1">
+              {t('common.cancel')}
+            </Button>
+          </div>
+        </Dialog>
+      )}
+      {/* ── Cancellation (reason required, ≥3 chars) ── */}
       <ReasonModal
         open={cancelTarget !== null}
         title={

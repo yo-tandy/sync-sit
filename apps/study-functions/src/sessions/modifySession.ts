@@ -206,9 +206,9 @@ export const modifySession = onCall(
       // verification was pulled. (approvedFamilies needs no re-check: it is
       // arrayUnion-only with no removal path, so it cannot go stale.)
       if (tutorProfileDoc.data()?.status !== 'active') {
-        throw new HttpsError('failed-precondition', 'This tutor is not available', {
-          reason: 'time_unavailable',
-        });
+        // No reason field: 'time_unavailable' would tell the family to pick
+        // another slot, which cannot help (PR #244 round 5).
+        throw new HttpsError('failed-precondition', 'This tutor is not available');
       }
       const familyDoc = await db.collection('families').doc(peek.familyId as string).get();
       if (!familyDoc.data()?.verification?.isFullyVerified) {
@@ -383,6 +383,12 @@ export const modifySession = onCall(
         updates.students = studentDenorm.students;
       }
       if (modifiedFields.includes('message')) updates.message = data.message;
+      if (claimAffecting) {
+        // The 24h-reminder dedup flag is keyed to the OLD time: a session
+        // whose reminder already fired and is then moved later must remind
+        // again for the new time (PR #244 round 5's blocker).
+        updates.reminderSent = false;
+      }
 
       // ── Pending: no claim exists yet, AND no modified flag -- the tutor
       // answers the UPDATED request, so their confirm/decline IS the

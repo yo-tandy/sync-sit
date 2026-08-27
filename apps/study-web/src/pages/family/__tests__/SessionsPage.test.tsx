@@ -211,6 +211,36 @@ describe('family SessionsPage — modify', () => {
     );
   });
 
+  it('sends a changed location under the edits-only contract', async () => {
+    h.sessions = [oneTime({ sessionId: 'sL', location: 'online' })];
+    renderWithProviders(<SessionsPage />);
+    fireEvent.click(await screen.findByRole('button', { name: /^modify$/i }));
+    const locSelect = screen.getByLabelText(/^location$/i);
+    fireEvent.change(locSelect, { target: { value: 'family_home' } });
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+    await waitFor(() =>
+      expect(h.callable).toHaveBeenCalledWith('modifySession', {
+        sessionId: 'sL',
+        location: 'family_home',
+        message: undefined,
+      }),
+    );
+  });
+
+  it('maps reason location_not_offered to its dedicated copy', async () => {
+    h.sessions = [oneTime({ sessionId: 'sL', location: 'online' })];
+    h.callable.mockRejectedValueOnce(
+      Object.assign(new Error('invalid-argument'), { details: { reason: 'location_not_offered' } }),
+    );
+    renderWithProviders(<SessionsPage />);
+    fireEvent.click(await screen.findByRole('button', { name: /^modify$/i }));
+    fireEvent.change(screen.getByLabelText(/^location$/i), { target: { value: 'family_home' } });
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+    await waitFor(() =>
+      expect(screen.getByText(/doesn’t offer that location|doesn't offer that location/i)).toBeInTheDocument(),
+    );
+  });
+
   it('maps reason time_unavailable to its dedicated copy and keeps the dialog open', async () => {
     h.sessions = [oneTime({ sessionId: 'sM' })];
     h.callable.mockRejectedValueOnce(

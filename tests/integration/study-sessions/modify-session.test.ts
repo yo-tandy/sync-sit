@@ -404,6 +404,18 @@ describe('modifySession', () => {
     }
   });
 
+  it('clears the reminderSent dedup flag on a claim-affecting move, and only then', async () => {
+    // The 24h reminder already fired for the OLD time; moving the session
+    // later must let it fire again for the new time (PR #244 round 5's
+    // blocker). A message-only modify keeps the flag.
+    const id = await seedSession({ status: 'confirmed', reminderSent: true });
+    await seedClaim(FUTURE_MON, id, 64, 68);
+    await callFunction('modifySession', { sessionId: id, message: 'gate code 4821' }, parent1Token);
+    expect((await sessionData(id)).reminderSent).toBe(true);
+    await callFunction('modifySession', { sessionId: id, date: FUTURE_MON_2 }, parent1Token);
+    expect((await sessionData(id)).reminderSent).toBe(false);
+  });
+
   it('NEVER sets lateCancellation -- a modify is not a cancel', async () => {
     const id = await seedSession({ status: 'confirmed', cancellationNoticeHours: 48 });
     await seedClaim(FUTURE_MON, id, 64, 68);
@@ -464,6 +476,12 @@ describe('acknowledgeSessionModification', () => {
     const s = (await getDb().collection('study-sessions').doc(id).get()).data()!;
     expect(s.modified).toBe(false);
     expect(s.modifiedFields).toEqual([]);
+  });
+
+  it('returns not-found for a missing session', async () => {
+    await expect(
+      callFunction('acknowledgeSessionModification', { sessionId: 'no-such-session' }, tutor2Token),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
   });
 
   it('refuses anyone but the session tutor -- including the modifying family', async () => {
