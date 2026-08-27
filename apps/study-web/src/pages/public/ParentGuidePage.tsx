@@ -43,16 +43,16 @@ export function ParentGuidePage() {
         <Step number={1} title={fr ? 'Créer un compte' : 'Create an account'}>
           <p>
             {fr
-              ? 'Ouvrez Sync/Study et cliquez sur "Parent". Entrez votre email et vérifiez-le avec le code reçu. Renseignez votre nom, prénom et créez un mot de passe.'
-              : 'Open Sync/Study and tap "Parent". Enter your email and verify it with the code you receive. Fill in your first name, last name, and create a password.'}
+              ? 'Ouvrez Sync/Study et cliquez sur "Parent". Entrez votre email et vérifiez-le avec le code reçu, créez un mot de passe, puis renseignez les informations de votre famille : nom de famille, votre prénom et votre adresse.'
+              : 'Open Sync/Study and tap "Parent". Enter your email and verify it with the code you receive, create a password, then fill in your family details: family name, your first name, and your home address.'}
           </p>
         </Step>
 
         <Step number={2} title={fr ? 'Configurer votre famille' : 'Set up your family'}>
           <p>
             {fr
-              ? 'Dans "Paramètres de la famille", ajoutez vos enfants et votre adresse — elle sert à trouver des tuteurs à proximité. Votre famille est partagée avec Sync/Sit : les enfants et l\'adresse renseignés ici valent pour les deux applications.'
-              : 'In "Family Settings", add your children and your home address — it\'s used to find nearby tutors. Your family is shared with Sync/Sit: the children and address you enter here apply in both apps.'}
+              ? 'Dans "Paramètres de la famille", ajoutez vos enfants, et tenez à jour l\'adresse renseignée à l\'inscription — elle sert à trouver des tuteurs à proximité. Votre famille est partagée avec Sync/Sit : les enfants et l\'adresse renseignés ici valent pour les deux applications.'
+              : 'In "Family Settings", add your children, and keep the address you gave at signup up to date — it\'s used to find nearby tutors. Your family is shared with Sync/Sit: the children and address you enter here apply in both apps.'}
           </p>
         </Step>
 
@@ -129,8 +129,8 @@ export function ParentGuidePage() {
         <Step number={11} title={fr ? 'Modifier ou annuler' : 'Modify or cancel'}>
           <p>
             {fr
-              ? 'Vous pouvez modifier une séance ponctuelle confirmée : le tuteur est informé des changements et devra les confirmer, et votre séance reste réservée. Pour annuler, donnez une courte raison — le tuteur est notifié. Chaque tuteur affiche un délai de préavis d\'annulation ; les annulations tardives sont signalées, alors annulez le plus tôt possible. Une demande encore en attente peut être retirée à tout moment.'
-              : 'You can modify a confirmed one-time session: the tutor is notified of the changes and asked to acknowledge them, and your session stays booked. To cancel, give a short reason — the tutor is notified. Each tutor shows a cancellation notice window; late cancellations are flagged, so cancel as early as you can. A request that is still pending can be withdrawn at any time.'}
+              ? 'Vous pouvez modifier une séance ponctuelle confirmée, tant qu\'elle n\'est pas déjà dans le délai de préavis du tuteur et que le nouvel horaire est à au moins 24 heures : le tuteur est informé des changements et devra les confirmer, et votre séance reste réservée. Pour annuler, donnez une courte raison — le tuteur est notifié. Chaque tuteur affiche un délai de préavis d\'annulation ; les annulations tardives sont signalées, alors annulez le plus tôt possible. Une demande encore en attente peut être retirée à tout moment.'
+              : 'You can modify a confirmed one-time session, as long as it isn\'t already inside the tutor\'s notice window and the new time is at least 24 hours away: the tutor is notified of the changes and asked to acknowledge them, and your session stays booked. To cancel, give a short reason — the tutor is notified. Each tutor shows a cancellation notice window; late cancellations are flagged, so cancel as early as you can. A request that is still pending can be withdrawn at any time.'}
           </p>
         </Step>
 
