@@ -85,6 +85,37 @@ describe('resubmitAppointment', () => {
     });
   });
 
+  // issue #207 PR3: an original whose address was WITHHELD (a babysitter-
+  // initiated request the family declined) must not resubmit as a request with
+  // no address — the resubmission is the family asking, so their own address
+  // is re-derived from the family doc.
+  it('re-derives the address when the declined original had it withheld', async () => {
+    const originalId = await seedAppointment({
+      babysitterUserId: seed.babysitter1.uid,
+      familyId: seed.family1Id,
+      createdByUserId: seed.babysitter1.uid,
+      initiatedBy: 'babysitter',
+      publishedSearchId: 'ps-resubmit-1',
+      status: 'rejected',
+      statusReason: 'declined_by_family',
+      address: null,
+      latLng: null,
+    });
+
+    const result = await callFunction<{ appointmentId: string }>(
+      'resubmitAppointment',
+      { originalAppointmentId: originalId, additionalNotes: 'We changed our minds' },
+      parentToken,
+    );
+
+    const apt = (await getDb().collection('appointments').doc(result.appointmentId).get()).data()!;
+    expect(apt.address).toBe('15 Rue de Passy, 75016 Paris');
+    expect(apt.latLng).toEqual({ lat: 48.8566, lng: 2.2769 });
+    // The resubmission is a plain family-initiated request again.
+    expect(apt.initiatedBy).toBeUndefined();
+    expect(apt.createdByUserId).toBe(seed.parent1.uid);
+  });
+
   describe('errors', () => {
     it('rejects unauthenticated calls', async () => {
       await expect(

@@ -2,8 +2,9 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { haversineDistance, getParentProfile, getBabysitterView } from '@ejm/sit-core';
-import type { LatLng, User, FirestoreTimestamp } from '@ejm/sit-core';
-import { validateEjmEmail, checkEnrollmentAge, getEjemEmail, getContact } from '@ejm/shared-core';
+import type { LatLng, User } from '@ejm/sit-core';
+import { getEjemEmail, getContact } from '@ejm/shared-core';
+import { calculateAge, passesAgeBackstop } from './ageBackstop.js';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
 
 interface SearchParams {
@@ -43,19 +44,6 @@ interface BabysitterResult {
   contactEmail?: string;
   contactPhone?: string;
   isPreferred?: boolean;
-}
-
-function toDate(dob: string | Date | FirestoreTimestamp): Date {
-  return typeof dob === 'string' ? new Date(dob) : dob instanceof Date ? dob : (dob as FirestoreTimestamp).toDate();
-}
-
-function calculateAge(dob: string | Date | FirestoreTimestamp): number {
-  const birthDate = toDate(dob);
-  const today = new Date();
-  let age = today.getFullYear() - birthDate.getFullYear();
-  const m = today.getMonth() - birthDate.getMonth();
-  if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) age--;
-  return age;
 }
 
 function timeToSlotIndex(time: string): number {
@@ -197,39 +185,20 @@ export const searchBabysitters = onCall(
       const babysitterAge = b.dateOfBirth ? calculateAge(b.dateOfBirth) : 0;
       if (params.filters.minAge && babysitterAge < params.filters.minAge) continue;
 
-      // Age backstop (governance PR 1): sit has no server-side DOB at
-      // enrollment, so search is the operative gate. A provider whose DOB says
-      // under-15 is excluded outright; one whose DOB contradicts the EJM
-      // email's graduation year beyond one class is excluded unless an admin
-      // exemption exists (exemption doc read only on failure — rare path).
-      // Missing DOB or unparseable stored email (legacy profiles) are NOT
-      // excluded — the count script measures those first.
-      // GOVERNED bypass (governance PR 2): a supervised account (server-owned
-      // governedBy mirror, present iff its guardian link is ACTIVE) is
-      // deliberately searchable at any age — supervision is its protection.
-      // Read off the raw doc: the flattened view need not carry the mirror.
-      const isGoverned = !!raw.governedBy;
-      if (!isGoverned && b.dateOfBirth) {
-        if (babysitterAge < 15) continue;
-        // Canonical root ?? nested resolution (issue #203 shared identity).
-        const babysitterEjemEmail = getEjemEmail(raw) || '';
-        const emailCheck = validateEjmEmail(babysitterEjemEmail);
-        if (emailCheck.valid && emailCheck.graduationYear !== undefined) {
-          const verdict = checkEnrollmentAge({
-            dateOfBirth: toDate(b.dateOfBirth),
-            graduationYear: emailCheck.graduationYear,
-          });
-          // The floor is never waivable; only a mismatch consults exemptions.
-          if (verdict === 'under_15') continue;
-          if (verdict === 'age_mismatch') {
-            const exemption = await db
-              .collection('enrollmentExemptions')
-              .doc(babysitterEjemEmail.toLowerCase())
-              .get();
-            if (!exemption.exists) continue;
-          }
-        }
-      }
+      // Age backstop (governance PR 1 + PR 2's governed bypass), now shared
+      // with contactPublishedSearch (issue #207 PR3) so the only operative sit
+      // age gate has ONE implementation: see ./ageBackstop.ts for the full
+      // rationale (under-15 floor, grad-year mismatch vs enrollmentExemptions,
+      // governed bypass, legacy-tolerant). The governed mirror is read off the
+      // RAW doc -- the flattened view need not carry it. The email is resolved
+      // canonical-root-first (issue #203 shared identity), which the inline
+      // block had adopted after the extraction branched -- the caller owns
+      // resolution, the helper owns the verdict.
+      if (!(await passesAgeBackstop({
+        governed: !!raw.governedBy,
+        dateOfBirth: b.dateOfBirth,
+        ejemEmail: getEjemEmail(raw) || '',
+      }))) continue;
 
       // Filter: gender
       if (params.filters.gender && params.filters.gender !== 'any' && b.gender !== params.filters.gender) continue;

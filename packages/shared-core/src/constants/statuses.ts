@@ -19,6 +19,8 @@ export type AppointmentStatus =
 
 export const AppointmentStatusReason = {
   DECLINED_BY_BABYSITTER: 'declined_by_babysitter',
+  /** Family declined a BABYSITTER-initiated request (issue #207 PR3). */
+  DECLINED_BY_FAMILY: 'declined_by_family',
   CANCELLED_BY_FAMILY: 'cancelled_by_family',
   CANCELLED_BY_BABYSITTER: 'cancelled_by_babysitter',
   ACCOUNT_DELETED: 'account_deleted',

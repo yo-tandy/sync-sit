@@ -58,6 +58,60 @@ describe('getParentContacts', () => {
     expect(marie?.phone).toBe('+33 612345678');
   });
 
+  it('withholds contacts on a PENDING sitter-initiated request (issue #207 PR3)', async () => {
+    // Being on the appointment was enough while only a family could create
+    // one. Published searches let any active sitter mint a pending
+    // appointment unilaterally, so contacts must wait for the family's yes —
+    // the same consent boundary address/latLng/pets/note sit behind
+    // (PR #212 review).
+    const apptId = await seedAppointment({
+      babysitterUserId: seed.babysitter1.uid,
+      familyId: seed.family1Id,
+      createdByUserId: seed.babysitter1.uid,
+      initiatedBy: 'babysitter',
+      publishedSearchId: 'ps-1',
+      status: 'pending',
+    });
+
+    await expect(
+      callFunction('getParentContacts', { appointmentId: apptId }, babysitterToken),
+    ).rejects.toMatchObject({ code: 'PERMISSION_DENIED' });
+  });
+
+  it('a DECLINED sitter-initiated request keeps contacts withheld', async () => {
+    // The doc persists after a decline, so a status check that only excluded
+    // 'pending' would hand them over afterwards.
+    const apptId = await seedAppointment({
+      babysitterUserId: seed.babysitter1.uid,
+      familyId: seed.family1Id,
+      createdByUserId: seed.babysitter1.uid,
+      initiatedBy: 'babysitter',
+      publishedSearchId: 'ps-1',
+      status: 'rejected',
+      statusReason: 'declined_by_family',
+    });
+
+    await expect(
+      callFunction('getParentContacts', { appointmentId: apptId }, babysitterToken),
+    ).rejects.toMatchObject({ code: 'PERMISSION_DENIED' });
+  });
+
+  it('releases contacts once the family CONFIRMS a sitter-initiated request', async () => {
+    const apptId = await seedAppointment({
+      babysitterUserId: seed.babysitter1.uid,
+      familyId: seed.family1Id,
+      createdByUserId: seed.babysitter1.uid,
+      initiatedBy: 'babysitter',
+      publishedSearchId: 'ps-1',
+      status: 'confirmed',
+    });
+
+    const result = await callFunction<{ contacts: unknown[] }>(
+      'getParentContacts', { appointmentId: apptId }, babysitterToken,
+    );
+    expect(result.contacts).toHaveLength(2);
+  });
+
   it('rejects non-assigned babysitter', async () => {
     const apptId = await seedAppointment({
       babysitterUserId: seed.babysitter1.uid,
