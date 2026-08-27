@@ -31,7 +31,7 @@ vi.mock('firebase/firestore', () => ({
   limit: (n: number) => ({ limit: n }),
   getDoc: (...args: unknown[]) => h.getDoc(...args),
   getDocs: (...args: unknown[]) => h.getDocs(...args),
-  onSnapshot: (_q: unknown, _next: unknown) => h.unsub,
+  onSnapshot: () => h.unsub,
   deleteDoc: () => Promise.resolve(),
 }));
 

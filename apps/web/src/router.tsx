@@ -11,16 +11,9 @@ import { WelcomePage } from '@/pages/public/WelcomePage';
 import { LoginPage } from '@/pages/public/LoginPage';
 import { ForgotPasswordPage } from '@/pages/public/ForgotPasswordPage';
 import { AboutPage } from '@/pages/public/AboutPage';
-import { PrivacyPage, TermsPage, ReportProblemPage } from '@ejm/shared-ui';
-import { useAuthStore } from '@/stores/authStore';
+import { PrivacyPage, TermsPage } from '@ejm/shared-ui';
+import { SyncSitReportProblemPage } from '@/pages/public/SyncSitReportProblemPage';
 
-const SUPPORT_EMAIL = 'support@sync-sit.com';
-const BRAND = 'Sync/Sit';
-
-function SyncSitReportProblemPage() {
-  const { userDoc } = useAuthStore();
-  return <ReportProblemPage brand={BRAND} supportEmail={SUPPORT_EMAIL} userId={userDoc?.uid} />;
-}
 import { SharePage } from '@/pages/public/SharePage';
 import { SignUpRolePage } from '@/pages/public/SignUpRolePage';
 import { ParentGuidePage } from '@/pages/public/ParentGuidePage';
