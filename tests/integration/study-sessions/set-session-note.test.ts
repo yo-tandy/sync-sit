@@ -36,8 +36,9 @@ describe('setSessionNote', () => {
   /** A one_time session (family1 / tutor2). Defaults to a confirmed, future date. */
   async function seedOneTime(
     id: string,
-    { status = 'confirmed', date = TOMORROW(), startTime = '12:00' }: {
+    { status = 'confirmed', date = TOMORROW(), startTime = '12:00', ...extra }: {
       status?: string; date?: string; startTime?: string;
+      preSessionNote?: string; postSessionNote?: string;
     } = {},
   ) {
     await sessionRef(id).set({
@@ -48,6 +49,7 @@ describe('setSessionNote', () => {
       type: 'one_time', date, startTime, endTime: '13:00', sessionLengthMinutes: 60,
       location: 'online', paddingMinutes: 0,
       status, createdAt: new Date(), updatedAt: new Date(), confirmedAt: new Date(),
+      ...extra,
     });
     return id;
   }
@@ -69,13 +71,17 @@ describe('setSessionNote', () => {
 
   async function seedInstance(
     id: string, date: string,
-    { status = 'scheduled', startTime = '12:00' }: { status?: string; startTime?: string } = {},
+    { status = 'scheduled', startTime = '12:00', ...extra }: {
+      status?: string; startTime?: string;
+      preSessionNote?: string; postSessionNote?: string;
+    } = {},
   ) {
     await instanceRef(id, date).set({
       instanceId: date, sessionId: id, tutorUserId: seed.tutor2.uid, familyId: seed.family1Id,
       date, startTime, endTime: '13:00', sessionLengthMinutes: 60, paddingMinutes: 0,
       subject: 'math', level: '6e', rate: 25, location: 'online',
       status, createdAt: new Date(), updatedAt: new Date(),
+      ...extra,
     });
   }
 
@@ -247,6 +253,131 @@ describe('setSessionNote', () => {
     const after = await sessionData(id);
     expect('preSessionNote' in after).toBe(false);
     expect(after.preSessionNote).toBeUndefined();
+  });
+
+  // ── Erasure carve-out (issue #255 — PARITY with sit's setAppointmentNote,
+  // where the carve-out landed first in PR #253; the sit twin pins live in
+  // tests/integration/appointments/set-appointment-note.test.ts and the two
+  // suites must not disagree): a clear passes only the role gate — the author
+  // can always erase their own note, even after the window closes or the
+  // target leaves its annotatable status. Non-empty writes in those states
+  // stay rejected (pinned in the timing/status gate sections above). ──
+
+  it('the family can CLEAR a pre-note after the session has started', async () => {
+    const id = await seedOneTime('ot-clear-late', {
+      date: YESTERDAY(),
+      preSessionNote: 'Focus on fractions',
+    });
+    await callFunction('setSessionNote', { sessionId: id, kind: 'pre', text: '' }, parent1Token);
+    expect('preSessionNote' in (await sessionData(id))).toBe(false);
+  });
+
+  it('the family can CLEAR a pre-note on a cancelled session', async () => {
+    const id = await seedOneTime('ot-clear-cancelled', {
+      status: 'cancelled',
+      preSessionNote: 'Focus on fractions',
+    });
+    await callFunction('setSessionNote', { sessionId: id, kind: 'pre', text: '' }, parent1Token);
+    expect('preSessionNote' in (await sessionData(id))).toBe(false);
+  });
+
+  it('the tutor can CLEAR a post-note on a cancelled session', async () => {
+    const id = await seedOneTime('ot-clear-post', {
+      status: 'cancelled',
+      date: YESTERDAY(),
+      postSessionNote: 'debrief',
+    });
+    await callFunction('setSessionNote', { sessionId: id, kind: 'post', text: '' }, tutor2Token);
+    expect('postSessionNote' in (await sessionData(id))).toBe(false);
+  });
+
+  it('the family can CLEAR a pre-note on a CANCELLED recurring occurrence (per-instance carve-out)', async () => {
+    // Study stores recurring notes per occurrence — the carve-out must reach
+    // the instance doc, not just the parent.
+    const id = await seedSeries('rec-clear');
+    const d = TOMORROW();
+    await seedInstance(id, d, { status: 'cancelled', preSessionNote: 'stale ask' });
+    await callFunction('setSessionNote', { sessionId: id, instanceId: d, kind: 'pre', text: '' }, parent1Token);
+    expect('preSessionNote' in (await instanceData(id, d))).toBe(false);
+  });
+
+  it('the tutor can CLEAR a post-note on a SKIPPED occurrence', async () => {
+    const id = await seedSeries('rec-clear-skip');
+    const d = YESTERDAY();
+    await seedInstance(id, d, { status: 'skipped', postSessionNote: 'orphaned' });
+    await callFunction('setSessionNote', { sessionId: id, instanceId: d, kind: 'post', text: '' }, tutor2Token);
+    expect('postSessionNote' in (await instanceData(id, d))).toBe(false);
+  });
+
+  it('a clear does NOT bump updatedAt; a content write does (mirrors sit)', async () => {
+    const id = await seedOneTime('ot-clear-noresurface', {
+      status: 'cancelled',
+      preSessionNote: 'Focus on fractions',
+    });
+    const before = (await sessionData(id)).updatedAt;
+    await callFunction('setSessionNote', { sessionId: id, kind: 'pre', text: '' }, parent1Token);
+    const afterClear = await sessionData(id);
+    expect('preSessionNote' in afterClear).toBe(false);
+    expect(afterClear.updatedAt.toDate().getTime()).toBe(before.toDate().getTime());
+
+    // A content write (confirmed, in-window) still bumps updatedAt.
+    const id2 = await seedOneTime('ot-write-bumps');
+    const before2 = (await sessionData(id2)).updatedAt;
+    await callFunction('setSessionNote', { sessionId: id2, kind: 'pre', text: 'hello' }, parent1Token);
+    expect((await sessionData(id2)).updatedAt.toDate().getTime()).toBeGreaterThan(
+      before2.toDate().getTime(),
+    );
+  });
+
+  it('a no-op clear (nothing stored) succeeds without touching the doc', async () => {
+    const id = await seedOneTime('ot-noop-clear', { status: 'cancelled' });
+    const before = (await sessionData(id)).updatedAt;
+    const res = await callFunction('setSessionNote', { sessionId: id, kind: 'pre', text: '' }, parent1Token);
+    expect(res).toMatchObject({ success: true });
+    const after = await sessionData(id);
+    expect('preSessionNote' in after).toBe(false);
+    expect(after.updatedAt.toDate().getTime()).toBe(before.toDate().getTime());
+  });
+
+  it('a clear is still author-only: a stranger cannot clear (permission-denied)', async () => {
+    const id = await seedOneTime('ot-clear-stranger', {
+      date: YESTERDAY(),
+      preSessionNote: 'Focus on fractions',
+    });
+    await expect(
+      callFunction('setSessionNote', { sessionId: id, kind: 'pre', text: '' }, parent3Token),
+    ).rejects.toMatchObject({ code: 'PERMISSION_DENIED' });
+    expect((await sessionData(id)).preSessionNote).toBe('Focus on fractions');
+  });
+
+  it('whitespace-only text also clears (input is trimmed)', async () => {
+    const id = await seedOneTime('ot-trim');
+    await callFunction('setSessionNote', { sessionId: id, kind: 'pre', text: '  padded  ' }, parent1Token);
+    expect((await sessionData(id)).preSessionNote).toBe('padded');
+
+    await callFunction('setSessionNote', { sessionId: id, kind: 'pre', text: '   ' }, parent1Token);
+    expect('preSessionNote' in (await sessionData(id))).toBe(false);
+  });
+
+  it('a NON-EMPTY write is still rejected after start — only clears pass the carve-out', async () => {
+    const id = await seedOneTime('ot-late-rewrite', {
+      date: YESTERDAY(),
+      preSessionNote: 'old',
+    });
+    await expect(
+      callFunction('setSessionNote', { sessionId: id, kind: 'pre', text: 'new ask' }, parent1Token),
+    ).rejects.toMatchObject({ code: 'FAILED_PRECONDITION' });
+    expect((await sessionData(id)).preSessionNote).toBe('old');
+  });
+
+  it('a NON-EMPTY write is still rejected on a cancelled occurrence — the instance gates hold too', async () => {
+    const id = await seedSeries('rec-late-rewrite');
+    const d = TOMORROW();
+    await seedInstance(id, d, { status: 'cancelled', preSessionNote: 'old' });
+    await expect(
+      callFunction('setSessionNote', { sessionId: id, instanceId: d, kind: 'pre', text: 'new ask' }, parent1Token),
+    ).rejects.toMatchObject({ code: 'FAILED_PRECONDITION' });
+    expect((await instanceData(id, d)).preSessionNote).toBe('old');
   });
 
   // ── Length bound ──

@@ -806,6 +806,42 @@ describe('tutor SessionsPage — session notes (post)', () => {
     );
   });
 
+  // ── Erasure affordance (issue #255 carve-out — twin of sit's remove pins,
+  // post-note side): where the post window is closed but the tutor's own
+  // note exists, add/edit swaps for REMOVE which clears via the callable. ──
+
+  it('a CANCELLED one_time with an own post-note offers REMOVE and clears via the callable', async () => {
+    h.sessions = [oneTime({ sessionId: 'sRm', status: 'cancelled', date: '2026-07-20', postSessionNote: 'stale debrief' })];
+    renderWithProviders(<SessionsPage />);
+
+    expect(await screen.findByText('stale debrief')).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /add session notes|edit session notes/i }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /remove note/i }));
+    expect(screen.getByText(/remove this note\?/i)).toBeInTheDocument();
+    const removeButtons = screen.getAllByRole('button', { name: /remove note/i });
+    fireEvent.click(removeButtons[removeButtons.length - 1]);
+
+    await waitFor(() =>
+      expect(h.callable).toHaveBeenCalledWith('setSessionNote', {
+        sessionId: 'sRm',
+        kind: 'post',
+        text: '',
+      }),
+    );
+    await waitFor(() => expect(screen.queryByText(/remove this note\?/i)).not.toBeInTheDocument());
+    expect(screen.queryByText('stale debrief')).not.toBeInTheDocument();
+  });
+
+  it("the family's pre-note alone offers NO remove (author-only affordance)", async () => {
+    h.sessions = [oneTime({ sessionId: 'sO', status: 'cancelled', preSessionNote: 'their ask' })];
+    renderWithProviders(<SessionsPage />);
+
+    expect(await screen.findByText('their ask')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /remove note/i })).not.toBeInTheDocument();
+  });
+
   it('does NOT offer the post affordance on a future series occurrence (pre shows read-only)', async () => {
     h.sessions = [confirmedRecurring({ sessionId: 'sR' })];
     h.instances = {

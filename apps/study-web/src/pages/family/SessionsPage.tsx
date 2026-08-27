@@ -131,6 +131,11 @@ export function SessionsPage() {
   // The note dialog target (the family authors the PRE-note), plus its in-flight
   // guard and error. Non-optimistic — local state updates from the callable success.
   const [noteTarget, setNoteTarget] = useState<NoteTarget | null>(null);
+  // Erasure confirm (issue #255 carve-out): which note a "remove" click targets.
+  const [noteRemoveTarget, setNoteRemoveTarget] = useState<{
+    session: StudySessionDoc;
+    instance?: StudySessionInstanceDoc;
+  } | null>(null);
   const [noteSaving, setNoteSaving] = useState(false);
   const [noteError, setNoteError] = useState<string | null>(null);
   // tutorUserIds this family has already endorsed (from their own references) —
@@ -471,6 +476,7 @@ export function SessionsPage() {
     fromTutor: t('family.sessions.notes.fromTutor'),
     add: t('family.sessions.notes.add'),
     edit: t('family.sessions.notes.edit'),
+    remove: t('family.sessions.notes.remove'),
   };
 
   const openNote = (target: NoteTarget) => {
@@ -497,22 +503,60 @@ export function SessionsPage() {
         kind: 'pre',
         text,
       });
-      const applied = trimmed.length ? trimmed : undefined;
-      if (instance) {
-        setInstancesBySeries((m) => ({
-          ...m,
-          [session.sessionId]: (m[session.sessionId] ?? []).map((i) =>
-            i.instanceId === instance.instanceId ? { ...i, preSessionNote: applied } : i,
-          ),
-        }));
-      } else {
-        setSessions((rs) =>
-          (rs ?? []).map((s) =>
-            s.sessionId === session.sessionId ? { ...s, preSessionNote: applied } : s,
-          ),
-        );
-      }
+      patchLocalNote(session, instance, trimmed.length ? trimmed : undefined);
       setNoteTarget(null);
+    } catch {
+      setNoteError(t('family.sessions.notes.error'));
+    } finally {
+      setNoteSaving(false);
+    }
+  };
+
+  /** Reflect a saved/cleared PRE-note in local state (non-optimistic: called
+   * only after the callable resolves). */
+  const patchLocalNote = (
+    session: StudySessionDoc,
+    instance: StudySessionInstanceDoc | undefined,
+    applied: string | undefined,
+  ) => {
+    if (instance) {
+      setInstancesBySeries((m) => ({
+        ...m,
+        [session.sessionId]: (m[session.sessionId] ?? []).map((i) =>
+          i.instanceId === instance.instanceId ? { ...i, preSessionNote: applied } : i,
+        ),
+      }));
+    } else {
+      setSessions((rs) =>
+        (rs ?? []).map((s) =>
+          s.sessionId === session.sessionId ? { ...s, preSessionNote: applied } : s,
+        ),
+      );
+    }
+  };
+
+  // Erasure path (issue #255 carve-out, mirrors sit): the callable lets the
+  // AUTHOR clear their own note at any time, so once the edit window closes
+  // the card swaps the add/edit affordance for a remove one. Confirmation and
+  // errors go through the shared Dialog + notes.error copy.
+  const removeNote = async () => {
+    if (!noteRemoveTarget) return;
+    const { session, instance } = noteRemoveTarget;
+    setNoteError(null);
+    setNoteSaving(true);
+    try {
+      const fn = httpsCallable<
+        { sessionId: string; instanceId?: string; kind: 'pre'; text: string },
+        { success: boolean }
+      >(functions, 'setSessionNote');
+      await fn({
+        sessionId: session.sessionId,
+        ...(instance ? { instanceId: instance.instanceId } : {}),
+        kind: 'pre',
+        text: '',
+      });
+      patchLocalNote(session, instance, undefined);
+      setNoteRemoveTarget(null);
     } catch {
       setNoteError(t('family.sessions.notes.error'));
     } finally {
@@ -622,6 +666,7 @@ export function SessionsPage() {
           editKind="pre"
           canEdit={!hasStarted(s.date, s.startTime)}
           onEdit={() => openNote({ session: s, initialText: s.preSessionNote ?? '' })}
+          onRemove={() => { setNoteError(null); setNoteRemoveTarget({ session: s }); }}
           copy={noteCopy}
         />
       </Card>
@@ -675,6 +720,7 @@ export function SessionsPage() {
                 editKind="pre"
                 canEdit={i.status === 'scheduled' && !hasStarted(i.date, i.startTime)}
                 onEdit={() => openNote({ session: s, instance: i, initialText: i.preSessionNote ?? '' })}
+                onRemove={() => { setNoteError(null); setNoteRemoveTarget({ session: s, instance: i }); }}
                 copy={noteCopy}
               />
             )}
@@ -883,13 +929,19 @@ export function SessionsPage() {
                       </div>
                     </div>
                     {endorse && <div className="mt-3">{endorse}</div>}
-                    {s.type === 'one_time' && s.status === 'completed' && (
+                    {/* Any settled one_time keeps its notes visible read-only
+                        (not just completed): a cancelled session's note is
+                        exactly the one its author must still be able to see
+                        and REMOVE (issue #255 — mirrors sit's every-variant
+                        rendering). The component self-nulls when empty. */}
+                    {s.type === 'one_time' && (
                       <SessionNotes
                         pre={s.preSessionNote}
                         post={s.postSessionNote}
                         editKind="pre"
                         canEdit={false}
                         onEdit={() => {}}
+                        onRemove={() => { setNoteError(null); setNoteRemoveTarget({ session: s }); }}
                         copy={noteCopy}
                       />
                     )}
@@ -1061,6 +1113,25 @@ export function SessionsPage() {
       />
 
       {/* ── Session note (family authors the pre-note) ── */}
+      {/* Remove-note confirmation (erasure path, issue #255) — shared Dialog,
+          same error copy as the save path. onClose gated on noteSaving: the
+          Dialog closes on backdrop click, and dismissing mid-flight would
+          unmount the only thing that can render the error of a
+          non-optimistic (erasure!) call. */}
+      <Dialog open={noteRemoveTarget !== null} onClose={() => { if (!noteSaving) setNoteRemoveTarget(null); }}>
+        <h3 className="mb-2 text-lg font-bold">{t('family.sessions.notes.removeTitle')}</h3>
+        <p className="mb-3 text-sm text-gray-600">{t('family.sessions.notes.removeDesc')}</p>
+        {noteError && <p className="mb-3 text-sm text-brand-600">{noteError}</p>}
+        <div className="flex gap-2">
+          <Button variant="outline" className="flex-1" disabled={noteSaving} onClick={removeNote}>
+            {t('family.sessions.notes.remove')}
+          </Button>
+          <Button variant="ghost" className="flex-1" disabled={noteSaving} onClick={() => setNoteRemoveTarget(null)}>
+            {t('common.cancel')}
+          </Button>
+        </div>
+      </Dialog>
+
       <SessionNoteDialog
         open={noteTarget !== null}
         title={t('family.sessions.notes.dialogTitle')}

@@ -876,6 +876,87 @@ describe('family SessionsPage — session notes (pre)', () => {
     );
   });
 
+  // ── Erasure affordance (issue #255 carve-out — twin of sit's
+  // ExpandableBabysitterCard.notes remove pins): once the window closes the
+  // author's add/edit swaps for a REMOVE that clears via the callable. ──
+
+  it('a started one_time with an own pre-note offers REMOVE, confirmed via the dialog', async () => {
+    h.sessions = [
+      confirmedOneTime({ sessionId: 'sRm', date: '2026-08-01', startTime: '09:00', preSessionNote: 'stale ask' }),
+    ];
+    renderWithProviders(<SessionsPage />);
+
+    expect(await screen.findByText('stale ask')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /add a note|edit note/i })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /remove note/i }));
+    expect(screen.getByText(/remove this note\?/i)).toBeInTheDocument();
+    const removeButtons = screen.getAllByRole('button', { name: /remove note/i });
+    fireEvent.click(removeButtons[removeButtons.length - 1]);
+
+    await waitFor(() =>
+      expect(h.callable).toHaveBeenCalledWith('setSessionNote', {
+        sessionId: 'sRm',
+        kind: 'pre',
+        text: '',
+      }),
+    );
+    // Non-optimistic close on success; the note left local state too.
+    await waitFor(() => expect(screen.queryByText(/remove this note\?/i)).not.toBeInTheDocument());
+    expect(screen.queryByText('stale ask')).not.toBeInTheDocument();
+  });
+
+  it('cancelling the remove dialog sends nothing', async () => {
+    h.sessions = [
+      confirmedOneTime({ sessionId: 'sRm', date: '2026-08-01', startTime: '09:00', preSessionNote: 'stale ask' }),
+    ];
+    renderWithProviders(<SessionsPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /remove note/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^cancel$/i }));
+    expect(h.callable).not.toHaveBeenCalledWith('setSessionNote', expect.anything());
+    expect(screen.queryByText(/remove this note\?/i)).not.toBeInTheDocument();
+  });
+
+  it('a CANCELLED one_time in history still shows the own note and offers REMOVE (never stranded)', async () => {
+    // The history render used to be completed-only; a cancelled session's
+    // note is exactly the one the author must still see and erase.
+    h.sessions = [oneTime({ sessionId: 'sX', status: 'cancelled', preSessionNote: 'orphaned ask' })];
+    renderWithProviders(<SessionsPage />);
+
+    expect(await screen.findByText('orphaned ask')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /remove note/i })).toBeInTheDocument();
+  });
+
+  it("the tutor's note alone offers NO remove (author-only affordance)", async () => {
+    h.sessions = [oneTime({ sessionId: 'sO', status: 'completed', postSessionNote: 'their recap' })];
+    renderWithProviders(<SessionsPage />);
+
+    expect(await screen.findByText('their recap')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /remove note/i })).not.toBeInTheDocument();
+  });
+
+  it('removing a note on a cancelled series occurrence carries the instanceId', async () => {
+    h.sessions = [confirmedRecurring({ sessionId: 'sR2' })];
+    h.instances = {
+      sR2: [instanceDoc({ instanceId: '2026-07-15', date: '2026-07-15', status: 'cancelled', preSessionNote: 'per-occurrence ask' })],
+    };
+    renderWithProviders(<SessionsPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /view dates/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /remove note/i }));
+    const removeButtons = screen.getAllByRole('button', { name: /remove note/i });
+    fireEvent.click(removeButtons[removeButtons.length - 1]);
+
+    await waitFor(() =>
+      expect(h.callable).toHaveBeenCalledWith('setSessionNote', {
+        sessionId: 'sR2',
+        instanceId: '2026-07-15',
+        kind: 'pre',
+        text: '',
+      }),
+    );
+  });
+
   it('adds a pre-note to a series occurrence → setSessionNote carries instanceId', async () => {
     h.sessions = [confirmedRecurring({ sessionId: 'sR' })];
     h.instances = {

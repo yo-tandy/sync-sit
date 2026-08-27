@@ -16,6 +16,7 @@ export interface SessionNotesCopy {
   fromTutor: string; // label above the tutor's post-note
   add: string; // button when the viewer's own note is absent
   edit: string; // button when the viewer's own note exists
+  remove?: string; // button when the window is closed but the note is the viewer's
 }
 
 interface SessionNotesProps {
@@ -26,6 +27,13 @@ interface SessionNotesProps {
   /** Whether the viewer may write their kind now (role + timing window). */
   canEdit: boolean;
   onEdit: () => void;
+  /**
+   * Erasure path (issue #255 carve-out, twin of sit's AppointmentNotes):
+   * shown when the viewer's own note exists but the edit window is CLOSED —
+   * the callable always lets the author clear their own note, so the note
+   * must never be stranded.
+   */
+  onRemove?: () => void;
   copy: SessionNotesCopy;
 }
 
@@ -38,7 +46,7 @@ function NoteBlock({ label, text }: { label: string; text: string }) {
   );
 }
 
-export function SessionNotes({ pre, post, editKind, canEdit, onEdit, copy }: SessionNotesProps) {
+export function SessionNotes({ pre, post, editKind, canEdit, onEdit, onRemove, copy }: SessionNotesProps) {
   const mine = editKind === 'pre' ? pre : post;
   if (pre == null && post == null && !canEdit) return null;
   return (
@@ -48,6 +56,11 @@ export function SessionNotes({ pre, post, editKind, canEdit, onEdit, copy }: Ses
       {canEdit && (
         <Button size="sm" variant="ghost" onClick={onEdit}>
           {mine != null ? copy.edit : copy.add}
+        </Button>
+      )}
+      {!canEdit && mine != null && onRemove && copy.remove && (
+        <Button size="sm" variant="ghost" onClick={onRemove}>
+          {copy.remove}
         </Button>
       )}
     </div>
