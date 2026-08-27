@@ -132,6 +132,11 @@ export const getGovernedChildDetail = onCall(
           offeredRate: a.offeredRate ?? null,
           message: a.message ?? null,
           additionalInfo: a.additionalInfo ?? null,
+          // Ruling 8 (full transparency): appointment notes surface to the
+          // guardian exactly like study's session notes above (issue #238 —
+          // the twins must not disagree on note visibility).
+          preAppointmentNote: a.preAppointmentNote ?? null,
+          postAppointmentNote: a.postAppointmentNote ?? null,
           cancellationReason: a.cancellationReason ?? null,
           createdAt: iso(a.createdAt),
         };

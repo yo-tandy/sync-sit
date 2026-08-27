@@ -176,6 +176,24 @@ describe('ExpandableBabysitterCard — appointment notes (pre)', () => {
     expect(screen.getByText('familyDashboard.notes.add')).toBeTruthy();
   });
 
+  it('a failed save surfaces the error and keeps the dialog open', async () => {
+    h.callable.mockRejectedValueOnce(new Error('boom'));
+    render(<ExpandableBabysitterCard appointment={apt()} info={info} variant="confirmed" />);
+    expandCard();
+    fireEvent.click(screen.getByText('familyDashboard.notes.add'));
+    fireEvent.change(screen.getByPlaceholderText('familyDashboard.notes.placeholder'), {
+      target: { value: 'x' },
+    });
+    fireEvent.click(screen.getByText('familyDashboard.notes.save'));
+    await waitFor(() => expect(screen.getByText('familyDashboard.notes.error')).toBeTruthy());
+    // Dialog stays open (non-optimistic) and the save button is re-enabled.
+    expect(screen.getByText('familyDashboard.notes.dialogTitle')).toBeTruthy();
+    expect(
+      (screen.getByText('familyDashboard.notes.save') as HTMLButtonElement).closest('button')!
+        .disabled,
+    ).toBe(false);
+  });
+
   it('a confirmed one_time that already started offers NO pre affordance', () => {
     render(
       <ExpandableBabysitterCard

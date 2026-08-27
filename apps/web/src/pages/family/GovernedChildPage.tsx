@@ -322,6 +322,13 @@ export function GovernedChildPage() {
       {a.additionalInfo && (
         <p className="mt-2 rounded-lg bg-gray-50 p-2 text-xs text-gray-600">{a.additionalInfo}</p>
       )}
+      {/* Ruling 8: appointment notes are guardian-visible, exactly like
+          study's session notes below (issue #238 — twin parity). */}
+      {sessionTransparency({
+        message: null,
+        preSessionNote: a.preAppointmentNote,
+        postSessionNote: a.postAppointmentNote,
+      })}
     </>
   );
 

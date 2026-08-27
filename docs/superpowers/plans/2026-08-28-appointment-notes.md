@@ -49,10 +49,16 @@ must not disagree on note privacy.
 4. **Status gate**: sit has no `completed` status — a past sitting stays
    `confirmed`. So annotatable == `status === 'confirmed'`, which naturally
    covers study's "completed" case (post-note on a finished engagement).
-5. **No guardian path**: study's setSessionNote has no guardian-actor branch,
-   so sit's gets none either (guardians read notes through the appointment
-   doc they can already see via their own surfaces, exactly like study
-   supervision does).
+5. **No guardian WRITE path**: study's setSessionNote has no guardian-actor
+   branch, so sit's gets none either. Guardian READ visibility is a separate
+   channel: supervision reads appointment data only through the whitelist
+   projection in `getGovernedChildDetail` (guardians are NOT covered by the
+   appointment doc's read rule), and study's half of that projection exposes
+   session notes under ruling 8 — so sit's half must expose
+   `preAppointmentNote`/`postAppointmentNote` the same way, or the twins
+   disagree on exactly the visibility this feature promises to keep aligned.
+   (Caught in review round 1; fixed in the shared projection + the
+   GovernedChildPage render + an oversight pin.)
 
 ## Architecture
 

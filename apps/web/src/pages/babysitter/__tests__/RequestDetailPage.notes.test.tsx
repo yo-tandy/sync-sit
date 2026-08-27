@@ -98,6 +98,12 @@ function renderWithApt(overrides: Partial<AppointmentDoc> = {}) {
 afterEach(() => {
   cleanup();
   h.callable.mockClear();
+  // Restore the default implementation (the failure-path test overrides it).
+  h.callable.mockImplementation((name: string) =>
+    name === 'getParentContacts'
+      ? Promise.resolve({ data: { contacts: [] } })
+      : Promise.resolve({ data: { success: true } }),
+  );
   h.docNext = null;
 });
 
@@ -146,6 +152,28 @@ describe('RequestDetailPage — appointment notes (post)', () => {
         text: '',
       }),
     );
+  });
+
+  it('a failed save surfaces the error and keeps the dialog open', async () => {
+    // getParentContacts fires first on load and must keep resolving; only the
+    // note save rejects. (afterEach restores the default implementation.)
+    h.callable.mockImplementation((name: string) =>
+      name === 'getParentContacts'
+        ? Promise.resolve({ data: { contacts: [] } })
+        : Promise.reject(new Error('boom')),
+    );
+    renderWithApt({ date: YESTERDAY });
+    fireEvent.click(screen.getByText('request.notes.add'));
+    fireEvent.change(screen.getByPlaceholderText('request.notes.placeholder'), {
+      target: { value: 'x' },
+    });
+    fireEvent.click(screen.getByText('request.notes.save'));
+    await waitFor(() => expect(screen.getByText('request.notes.error')).toBeTruthy());
+    // Dialog stays open (non-optimistic) and the save button is re-enabled.
+    expect(screen.getByText('request.notes.dialogTitle')).toBeTruthy();
+    expect(
+      (screen.getByText('request.notes.save') as HTMLButtonElement).closest('button')!.disabled,
+    ).toBe(false);
   });
 
   it('a confirmed recurring arrangement offers the post affordance (no timing gate)', () => {

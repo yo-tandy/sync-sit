@@ -126,6 +126,13 @@ describe('setAppointmentNote', () => {
     expect((await aptData(id)).postAppointmentNote).toBe('Wrapped up.');
   });
 
+  it('rejects an unauthenticated caller', async () => {
+    const id = await seedOneTime('ot-noauth');
+    await expect(
+      callFunction('setAppointmentNote', { appointmentId: id, kind: 'pre', text: 'x' }),
+    ).rejects.toMatchObject({ code: 'UNAUTHENTICATED' });
+  });
+
   // ── Role gates ──
 
   it('babysitter cannot set the pre-note (permission-denied)', async () => {

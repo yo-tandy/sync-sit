@@ -129,6 +129,9 @@ export interface GovernedSitAppointment {
   offeredRate: number | null;
   message: string | null;
   additionalInfo: string | null;
+  /** Ruling 8: appointment notes are guardian-visible (issue #238). */
+  preAppointmentNote: string | null;
+  postAppointmentNote: string | null;
   cancellationReason: string | null;
   createdAt: string | null;
 }
