@@ -121,6 +121,8 @@ export function SessionsPage() {
   const [actingId, setActingId] = useState<string | null>(null);
   // Key of the row awaiting a cancel callable (session id, or `sid::instanceId`).
   const [cancelKey, setCancelKey] = useState<string | null>(null);
+  const [ackKey, setAckKey] = useState<string | null>(null);
+  const [ackError, setAckError] = useState<string | null>(null);
   // The note dialog target (the tutor authors the POST-note), plus its in-flight
   // guard and error. Non-optimistic — local state updates from the callable success.
   const [noteTarget, setNoteTarget] = useState<NoteTarget | null>(null);
@@ -251,6 +253,24 @@ export function SessionsPage() {
     if (code.includes('permission-denied')) return t('tutor.sessions.errorPermission');
     if (code.includes('not-found')) return t('tutor.sessions.errorNotFound');
     return t('tutor.sessions.actionError');
+  };
+
+  const acknowledge = async (sessionId: string) => {
+    setAckKey(sessionId);
+    setAckError(null);
+    try {
+      const fn = httpsCallable(functions, 'acknowledgeSessionModification');
+      await fn({ sessionId });
+      setSessions((prev) =>
+        prev ? prev.map((x) => (x.sessionId === sessionId ? { ...x, modified: false } : x)) : prev,
+      );
+    } catch {
+      // A silent failure reads as "the tap didn't register" and invites the
+      // same no-op tap again (PR #244 round 3) -- say it failed.
+      setAckError(sessionId);
+    } finally {
+      setAckKey(null);
+    }
   };
 
   const openCancel = (target: CancelTarget) => {
@@ -404,7 +424,10 @@ export function SessionsPage() {
   function renderOneTimeUpcoming(s: StudySessionDoc) {
     return (
       <Card key={s.sessionId}>
-        <p className="text-sm font-semibold text-gray-900">{s.familyName}</p>
+        <div className="flex items-start justify-between gap-2">
+          <p className="text-sm font-semibold text-gray-900">{s.familyName}</p>
+          {s.modified && <Badge variant="amber">{t('tutor.sessions.modifiedBadge')}</Badge>}
+        </div>
         <p className="text-xs text-gray-500">
           {t(`tutor.subjects.names.${s.subject}`)} · {s.level}
         </p>
@@ -413,6 +436,31 @@ export function SessionsPage() {
           {s.endTime ? `–${s.endTime}` : ''}
         </p>
         <p className="text-xs text-gray-500">{t(`tutor.sessions.location.${s.location}`)}</p>
+        {/* Family modification (issue #234): clearing the flag IS the
+            acknowledgement -- sit's appointment contract. */}
+        {s.modified && (
+          <div className="mt-2 rounded-lg bg-amber-50 p-2 text-xs text-amber-800">
+            <p>
+              {t('tutor.sessions.modifiedDetail', {
+                fields: (s.modifiedFields ?? [])
+                  .map((f) => t(`tutor.sessions.modifiedFields.${f}`, { defaultValue: f }))
+                  .join(', '),
+              })}
+            </p>
+            <Button
+              size="sm"
+              fullWidth={false}
+              className="mt-2"
+              disabled={ackKey === s.sessionId}
+              onClick={() => acknowledge(s.sessionId)}
+            >
+              {t('tutor.sessions.acknowledge')}
+            </Button>
+            {ackError === s.sessionId && (
+              <p className="mt-1 text-xs text-red-600">{t('tutor.sessions.ackError')}</p>
+            )}
+          </div>
+        )}
         <div className="mt-3">
           <Button
             size="sm"

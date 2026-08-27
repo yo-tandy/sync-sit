@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { SESSION_LENGTHS } from '@ejm/study-core';
 import { useTranslation } from 'react-i18next';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
@@ -114,6 +115,15 @@ export function SessionsPage() {
   >({});
   const [loadError, setLoadError] = useState(false);
   const [cancelTarget, setCancelTarget] = useState<CancelTarget | null>(null);
+  // Modify (issue #234): one_time only; dialog state mirrors the cancel flow.
+  const [modifyTarget, setModifyTarget] = useState<StudySessionDoc | null>(null);
+  const [modifySaving, setModifySaving] = useState(false);
+  const [modifyError, setModifyError] = useState<string | null>(null);
+  const [mDate, setMDate] = useState('');
+  const [mStart, setMStart] = useState('');
+  const [mLength, setMLength] = useState(60);
+  const [mLocation, setMLocation] = useState('online');
+  const [mMessage, setMMessage] = useState('');
   const [cancelError, setCancelError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   // Key of the row awaiting a cancel callable (session id, or `sid::instanceId`).
@@ -349,6 +359,64 @@ export function SessionsPage() {
     });
   };
 
+  const openModify = (session: StudySessionDoc) => {
+    setModifyTarget(session);
+    setMDate(session.date ?? '');
+    setMStart(session.startTime ?? '');
+    setMLength(session.sessionLengthMinutes ?? 60);
+    setMLocation((session.location as string) ?? 'online');
+    setMMessage(session.message ?? '');
+    setModifyError(null);
+  };
+
+  const submitModify = async () => {
+    if (!modifyTarget) return;
+    setModifySaving(true);
+    setModifyError(null);
+    try {
+      const fn = httpsCallable(functions, 'modifySession');
+      // Only EDITED fields go up: an untouched date/time must not run the
+      // server's full when/where boundary against unchanged values
+      // (PR #244 round 2).
+      await fn({
+        sessionId: modifyTarget.sessionId,
+        ...(mDate !== (modifyTarget.date ?? '') ? { date: mDate } : {}),
+        ...(mStart !== (modifyTarget.startTime ?? '') ? { startTime: mStart } : {}),
+        ...(mLength !== (modifyTarget.sessionLengthMinutes ?? 60)
+          ? { sessionLengthMinutes: mLength }
+          : {}),
+        ...(mLocation !== modifyTarget.location ? { location: mLocation } : {}),
+        // '' is a real value -- it CLEARS a previously-set message. undefined
+        // (field untouched and none existed) means "no change" server-side.
+        message:
+          mMessage.trim() === ''
+            ? modifyTarget.message
+              ? ''
+              : undefined
+            : mMessage.trim(),
+      });
+      setModifyTarget(null);
+      void load();
+    } catch (err) {
+      const reason = (err as { details?: { reason?: string } })?.details?.reason;
+      setModifyError(
+        reason === 'time_unavailable'
+          ? t('family.sessions.modifyTimeUnavailable')
+          : reason === 'recurring_unsupported'
+            ? t('family.sessions.modifyRecurringUnsupported')
+            : reason === 'location_not_offered'
+              ? t('family.sessions.modifyLocationUnavailable')
+              : reason === 'length_not_offered'
+                ? t('family.sessions.modifyLengthUnavailable')
+                : reason === 'inside_notice_window'
+                  ? t('family.sessions.modifyInsideNotice')
+                  : t('family.sessions.actionError'),
+      );
+    } finally {
+      setModifySaving(false);
+    }
+  };
+
   const openCancel = (target: CancelTarget) => {
     setCancelError(null);
     setCancelTarget(target);
@@ -534,10 +602,14 @@ export function SessionsPage() {
           {s.endTime ? `–${s.endTime}` : ''}
         </p>
         <p className="text-xs text-gray-500">{t(`family.sessions.location.${s.location}`)}</p>
-        <div className="mt-3">
+        <div className="mt-3 flex gap-2">
+          <Button size="sm" variant="outline" fullWidth={false} onClick={() => openModify(s)}>
+            {t('family.sessions.modifySession')}
+          </Button>
           <Button
             size="sm"
             variant="outline"
+            fullWidth={false}
             disabled={cancelKey === s.sessionId}
             onClick={() => openCancel({ kind: 'session', session: s })}
           >
@@ -743,10 +815,23 @@ export function SessionsPage() {
                         <p className="mt-1 text-xs text-amber-700">
                           {t('family.sessions.awaitingTutor')}
                         </p>
-                        <div className="mt-3">
+                        <div className="mt-3 flex gap-2">
+                          {/* one_time only: a recurring parent would round-trip
+                              to the server's recurring_unsupported refusal. */}
+                          {s.type === 'one_time' && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              fullWidth={false}
+                              onClick={() => openModify(s)}
+                            >
+                              {t('family.sessions.modifySession')}
+                            </Button>
+                          )}
                           <Button
                             size="sm"
                             variant="outline"
+                            fullWidth={false}
                             disabled={cancelKey === s.sessionId}
                             onClick={() => openCancel({ kind: 'session', session: s })}
                           >
@@ -883,6 +968,77 @@ export function SessionsPage() {
         </div>
       </Dialog>
 
+      {modifyTarget && (
+        <Dialog open onClose={() => setModifyTarget(null)}>
+          <h3 className="text-lg font-bold">{t('family.sessions.modifyTitle')}</h3>
+          <p className="mt-1 text-sm text-gray-500">{t('family.sessions.modifyDesc')}</p>
+          <label className="mt-3 block text-sm font-medium text-gray-700">
+            {t('family.sessions.modifyDate')}
+            <input
+              type="date"
+              className="mt-1 h-11 w-full rounded-lg border-[1.5px] border-gray-300 px-3"
+              value={mDate}
+              onChange={(e) => setMDate(e.target.value)}
+            />
+          </label>
+          <label className="mt-3 block text-sm font-medium text-gray-700">
+            {t('family.sessions.modifyStart')}
+            <input
+              type="time"
+              step={900}
+              className="mt-1 h-11 w-full rounded-lg border-[1.5px] border-gray-300 px-3"
+              value={mStart}
+              onChange={(e) => setMStart(e.target.value)}
+            />
+          </label>
+          <label className="mt-3 block text-sm font-medium text-gray-700">
+            {t('family.sessions.modifyLength')}
+            <select
+              className="mt-1 h-11 w-full rounded-lg border-[1.5px] border-gray-300 bg-white px-3"
+              value={mLength}
+              onChange={(e) => setMLength(Number(e.target.value))}
+            >
+              {SESSION_LENGTHS.map((l) => (
+                <option key={l} value={l}>
+                  {l} min
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="mt-3 block text-sm font-medium text-gray-700">
+            {t('family.sessions.modifyLocation')}
+            <select
+              className="mt-1 h-11 w-full rounded-lg border-[1.5px] border-gray-300 bg-white px-3"
+              value={mLocation}
+              onChange={(e) => setMLocation(e.target.value)}
+            >
+              {['family_home', 'tutor_home', 'online', 'library'].map((l) => (
+                <option key={l} value={l}>
+                  {t(`family.sessions.location.${l}`)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="mt-3 block text-sm font-medium text-gray-700">
+            {t('family.sessions.modifyMessage')}
+            <textarea
+              className="mt-1 w-full rounded-lg border-[1.5px] border-gray-300 p-3 text-sm"
+              rows={2}
+              value={mMessage}
+              onChange={(e) => setMMessage(e.target.value)}
+            />
+          </label>
+          {modifyError && <p className="mt-2 text-sm text-red-600">{modifyError}</p>}
+          <div className="mt-4 flex gap-2">
+            <Button onClick={submitModify} disabled={modifySaving} className="flex-1">
+              {modifySaving ? t('common.saving') : t('family.sessions.modifySave')}
+            </Button>
+            <Button variant="ghost" onClick={() => setModifyTarget(null)} className="flex-1">
+              {t('common.cancel')}
+            </Button>
+          </div>
+        </Dialog>
+      )}
       {/* ── Cancellation (reason required, ≥3 chars) ── */}
       <ReasonModal
         open={cancelTarget !== null}

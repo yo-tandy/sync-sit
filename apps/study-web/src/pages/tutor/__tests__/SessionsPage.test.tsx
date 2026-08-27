@@ -571,6 +571,50 @@ describe('tutor SessionsPage — management', () => {
 // ── Task 1: refetch after a successful confirm ──
 // A confirm materialises server state (recurring instances especially), so the
 // page re-runs its own load rather than only flipping the row's status locally.
+// ── Family modification: badge + acknowledge (issue #234) ──
+describe('tutor SessionsPage — modification acknowledgement', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-08-01T09:00:00Z'));
+    reset();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('badges a modified session, lists the changed fields, and acknowledges', async () => {
+    h.sessions = [
+      oneTime({
+        sessionId: 'sMod',
+        status: 'confirmed',
+        date: '2026-08-20',
+        modified: true,
+        modifiedFields: ['startTime', 'date'],
+      }),
+    ];
+    renderWithProviders(<SessionsPage />);
+
+    expect(await screen.findByText('Modified')).toBeInTheDocument();
+    expect(screen.getByText(/start time, date/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /got it/i }));
+    await waitFor(() =>
+      expect(h.callable).toHaveBeenCalledWith('acknowledgeSessionModification', {
+        sessionId: 'sMod',
+      }),
+    );
+    // The badge clears locally without a refetch.
+    await waitFor(() => expect(screen.queryByText('Modified')).not.toBeInTheDocument());
+  });
+
+  it('shows no badge on an unmodified session', async () => {
+    h.sessions = [oneTime({ sessionId: 'sPlain', status: 'confirmed', date: '2026-08-20' })];
+    renderWithProviders(<SessionsPage />);
+    await screen.findByText(/aug/i);
+    expect(screen.queryByText('Modified')).not.toBeInTheDocument();
+  });
+});
+
 describe('tutor SessionsPage — refetch after confirm', () => {
   beforeEach(() => reset());
 

@@ -34,6 +34,8 @@ const STUDY_TYPES = [
   'study_session_declined',
   'study_session_cancelled',
   'study_session_reminder',
+  // Family modified a session; the tutor acknowledges (issue #234).
+  'study_session_modified',
   'tutor_endorsement_received',
   'tutor_endorsement_declined',
   'tutor_endorsement_published',
@@ -64,6 +66,7 @@ const SESSION_TYPES = new Set([
   'study_session_declined',
   'study_session_cancelled',
   'study_session_reminder',
+  'study_session_modified',
 ]);
 
 /**
