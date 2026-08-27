@@ -257,6 +257,21 @@ describe('lookupTutor', () => {
         expect((err as { code?: string }).code).toBe('RESOURCE_EXHAUSTED');
       }
       expect((await counterRef.get()).data()!.count).toBe(120);
+      // A throttled call writes NO audit entry -- exhausted attempts are
+      // recorded by the counter doc, not the audit log (round-4 pin: the
+      // audit log is the cited scraping-visibility mitigation, so its blind
+      // spot is pinned explicitly rather than discovered later).
+      const auditAfterReject = await db.collection('auditLogs')
+        .where('action', '==', 'lookup_tutor').get();
+      const preCount = auditAfterReject.size;
+      try {
+        await callFunction('lookupTutor', { query: 'yael' }, parentToken);
+      } catch {
+        // rejected again -- same spent window
+      }
+      const auditAfterSecond = await db.collection('auditLogs')
+        .where('action', '==', 'lookup_tutor').get();
+      expect(auditAfterSecond.size).toBe(preCount);
 
       // Expired window -> admitted, counter restarts at 1.
       await counterRef.set({

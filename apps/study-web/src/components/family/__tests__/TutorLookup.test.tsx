@@ -79,6 +79,18 @@ describe('TutorLookup', () => {
     await waitFor(() => expect(screen.getByText(/first 10 matches/)).toBeInTheDocument());
   });
 
+  it('a failed lookup clears a stale truncation hint too (round-4 catch)', async () => {
+    h.callable.mockResolvedValueOnce({ data: { results: [tutor()], truncated: true } });
+    renderWithProviders(<TutorLookup />);
+    const input = screen.getByRole('textbox');
+    fireEvent.change(input, { target: { value: 'yael' } });
+    await waitFor(() => expect(screen.getByText(/first 10 matches/)).toBeInTheDocument());
+    h.callable.mockRejectedValueOnce(new Error('offline'));
+    fireEvent.change(input, { target: { value: 'yael xyz' } });
+    await waitFor(() => expect(screen.getByText('Something went wrong. Please try again.')).toBeInTheDocument());
+    expect(screen.queryByText(/first 10 matches/)).not.toBeInTheDocument();
+  });
+
   it('renders pending / incoming / accepted statuses without a send CTA', async () => {
     await typeAndResolve([
       tutor({ uid: 'p', firstName: 'Pending', requestStatus: 'pending' }),

@@ -58,10 +58,10 @@ resolve tutor names/photos at 12 lookups/h. Parity with sit + tiered
 throttle + audit is the shipped mitigation; the owner should confirm this
 residual is acceptable or direct a gate.
 
-**Tests:** 20 integration pins (gates incl. enrollmentComplete, match
+**Tests:** 19 integration `it` blocks (the no-audit-on-throttled-call assertion lives inside the throttle test) (gates incl. enrollmentComplete, match
 modes, status mapping incl. incoming/declined + latest-wins, cap,
 no-contact-fields, named unverified-family accepted-risk pin, audit entry,
-throttle spent/expired-window + unverified tier, truncation order/flag) + 14 component pins (debounce incl. the
+throttle spent/expired-window + unverified tier, truncation order/flag) + 14 component `it` blocks (incl. stale-truncated reset) (debounce incl. the
 no-call and stuck-spinner transitions, out-of-order stale-response
 discard, rows, status rendering, chosen-subject payload, error copy per
 code incl. verification and throttle).

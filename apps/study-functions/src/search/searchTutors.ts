@@ -200,7 +200,9 @@ export const searchTutors = onCall(
         continue;
       }
 
-      // Whitelist the ACTIONABLE lifecycle statuses; anything else falls back to
+      // The shared resolver whitelists the actionable lifecycle statuses;
+      // anything else (cancelled, unknown) reads as 'none' -- semantics
+      // documented at contact/requestStatus.ts.
       const requestStatus: TutorSearchResult['requestStatus'] = statusOf(uid);
 
       const result: TutorSearchResult = {

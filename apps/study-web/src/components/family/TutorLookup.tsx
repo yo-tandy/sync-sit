@@ -72,6 +72,7 @@ export function TutorLookup() {
         // a fast typer into retry loops that keep the window spent.
         setResults([]);
         setHasSearched(false);
+        setTruncated(false);
         setLookupError(
           (err as { code?: string })?.code === 'functions/resource-exhausted'
             ? 'rateLimited'
