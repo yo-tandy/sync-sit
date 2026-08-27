@@ -28,6 +28,10 @@ export interface BabysitterProfile extends ProfileBase {
   kidAgeRange: { min: number; max: number };
   maxKids: number;
   hourlyRate: number;
+  // Notice window (hours) families are asked to respect when cancelling; 0 =
+  // no policy. Snapshotted onto each appointment at creation (issue #237,
+  // study's V2 feature 7 ported to sit).
+  cancellationNoticeHours?: number;
   contactSharingConsent?: boolean;
   approvedFamilies?: string[];
 

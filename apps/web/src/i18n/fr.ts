@@ -315,6 +315,16 @@ export default {
     notAvailableDesc: 'Je ne peux pas garder d\u2019enfants pendant les vacances',
     holidayNotes: 'Notes vacances',
     holidayNotesPlaceholder: 'Notes sur vos disponibilit\u00e9s pendant les vacances...',
+    cancellationPolicy: {
+      title: 'Politique d’annulation',
+      help: 'Le préavis que vous demandez aux familles pour annuler un babysitting confirmé. Les annulations tardives sont autorisées mais enregistrées.',
+      none: 'Aucune politique',
+      hours24: '24 heures',
+      hours48: '48 heures',
+      week1: '1 semaine',
+      save: 'Enregistrer',
+      saved: 'Politique d’annulation enregistrée',
+    },
     saveSchedule: 'Enregistrer le planning',
     availabilityByDate: 'Disponibilit\u00e9s par date',
     dateOverrideDesc: 'Modifiez votre planning r\u00e9gulier pour des dates sp\u00e9cifiques.',
@@ -392,6 +402,8 @@ export default {
   },
 
   search: {
+    cancellationNotice: 'Demande un préavis d’annulation de {{window}}',
+    window: { week: '1 semaine' },
     findBabysitter: 'Trouver un(e) babysitter',
     whatType: 'Quel type de babysitting ?',
     chooseType: 'Choisissez le type de babysitting dont vous avez besoin.',

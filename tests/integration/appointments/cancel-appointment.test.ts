@@ -106,6 +106,118 @@ describe('cancelAppointment', () => {
     });
   });
 
+  // ── Snapshot at create: the family-initiated path (issue #237) ──
+  describe('notice-window snapshot', () => {
+    it('sendContactRequest snapshots the sitter profile policy onto the appointment', async () => {
+      const db = getDb();
+      await db.collection('users').doc(seed.babysitter1.uid).update({
+        'profiles.babysitter.cancellationNoticeHours': 48,
+      });
+      try {
+        const date = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+        const res = await callFunction<{ appointmentId: string }>(
+          'sendContactRequest',
+          {
+            babysitterUserId: seed.babysitter1.uid,
+            searchType: 'one_time',
+            date,
+            startTime: '18:00',
+            endTime: '21:00',
+            kidIds: ['kid1'],
+            address: '15 Rue de Passy, 75016 Paris',
+            latLng: { lat: 48.8566, lng: 2.2769 },
+            familyId: seed.family1Id,
+          },
+          parentToken,
+        );
+        const apt = (await db.collection('appointments').doc(res.appointmentId).get()).data()!;
+        expect(apt.cancellationNoticeHours).toBe(48);
+      } finally {
+        await db.collection('users').doc(seed.babysitter1.uid).update({
+          'profiles.babysitter.cancellationNoticeHours': 0,
+        });
+      }
+    });
+  });
+
+  // ── Cancellation policy: allow-but-flag (issue #237, study's contract) ──
+  describe('notice-window flag', () => {
+    const soonDate = () => {
+      const d = new Date(Date.now() + 24 * 60 * 60 * 1000); // ~24h out
+      return d.toISOString().slice(0, 10);
+    };
+    const farDate = () => {
+      const d = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
+      return d.toISOString().slice(0, 10);
+    };
+
+    it('flags a CONFIRMED one_time family cancel inside the snapshotted window', async () => {
+      const apptId = await seedAppointment({
+        babysitterUserId: seed.babysitter1.uid,
+        familyId: seed.family1Id,
+        createdByUserId: seed.parent1.uid,
+        status: 'confirmed',
+        date: soonDate(),
+        startTime: '18:00',
+        cancellationNoticeHours: 48,
+      });
+      await callFunction('cancelAppointment', { appointmentId: apptId, reason: 'Late change' }, parentToken);
+      const apt = (await getDb().collection('appointments').doc(apptId).get()).data()!;
+      expect(apt.status).toBe('cancelled');
+      expect(apt.lateCancellation).toBe(true);
+    });
+
+    it('does NOT flag an on-time cancel, a pending cancel, or a no-policy cancel', async () => {
+      for (const over of [
+        { status: 'confirmed', date: farDate(), cancellationNoticeHours: 48 }, // on time
+        { status: 'pending', date: soonDate(), cancellationNoticeHours: 48 }, // never for pendings
+        { status: 'confirmed', date: soonDate(), cancellationNoticeHours: 0 }, // no policy
+      ] as const) {
+        const apptId = await seedAppointment({
+          babysitterUserId: seed.babysitter1.uid,
+          familyId: seed.family1Id,
+          createdByUserId: seed.parent1.uid,
+          startTime: '18:00',
+          ...over,
+        });
+        await callFunction('cancelAppointment', { appointmentId: apptId, reason: 'Changed plans' }, parentToken);
+        const apt = (await getDb().collection('appointments').doc(apptId).get()).data()!;
+        expect(apt.lateCancellation).toBeUndefined();
+      }
+    });
+
+    it('flags a BABYSITTER late cancel too -- the flag is a record, whoever cancels', async () => {
+      const apptId = await seedAppointment({
+        babysitterUserId: seed.babysitter1.uid,
+        familyId: seed.family1Id,
+        createdByUserId: seed.parent1.uid,
+        status: 'confirmed',
+        date: soonDate(),
+        startTime: '18:00',
+        cancellationNoticeHours: 48,
+      });
+      await callFunction('cancelAppointment', { appointmentId: apptId, reason: 'Sick today' }, babysitterToken);
+      expect(
+        (await getDb().collection('appointments').doc(apptId).get()).data()!.lateCancellation,
+      ).toBe(true);
+    });
+
+    it('never flags a recurring cancel -- no single start to be late against (v1 deviation)', async () => {
+      const apptId = await seedAppointment({
+        babysitterUserId: seed.babysitter1.uid,
+        familyId: seed.family1Id,
+        createdByUserId: seed.parent1.uid,
+        status: 'confirmed',
+        type: 'recurring',
+        cancellationNoticeHours: 48,
+      });
+      await callFunction('cancelAppointment', { appointmentId: apptId, reason: 'Term over, thanks' }, parentToken);
+      expect(
+        (await getDb().collection('appointments').doc(apptId).get()).data()!.lateCancellation,
+      ).toBeUndefined();
+    });
+  });
+
   describe('errors', () => {
     it('rejects unauthenticated calls', async () => {
       await expect(

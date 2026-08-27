@@ -39,6 +39,8 @@ interface BabysitterResult {
   kidAgeRange: { min: number; max: number };
   maxKids: number;
   hourlyRate: number;
+  // Notice-window disclosure on the card (issue #237); 0 = no policy.
+  cancellationNoticeHours: number;
   distance: number; // km
   referenceCount: number;
   contactEmail?: string;
@@ -224,6 +226,9 @@ export const searchBabysitters = onCall(
         kidAgeRange: b.kidAgeRange || { min: 0, max: 18 },
         maxKids: b.maxKids || 1,
         hourlyRate: b.hourlyRate,
+        // Families see the policy BEFORE contacting (issue #237): the card's
+        // notice-window line is the sole disclosure surface pre-request.
+        cancellationNoticeHours: b.cancellationNoticeHours ?? 0,
         distance: Math.round(distance * 10) / 10,
         referenceCount: refCount,
         // Contact projects from the canonical root ?? nested resolution so a

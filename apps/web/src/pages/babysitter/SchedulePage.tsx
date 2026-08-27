@@ -1,12 +1,16 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useBlocker } from 'react-router';
 import { useTranslation } from 'react-i18next';
+import { doc, updateDoc } from 'firebase/firestore';
+import { db } from '@/config/firebase';
+import { useAuthStore } from '@/stores/authStore';
+import { getBabysitterProfile } from '@ejm/sit-core';
 import { useSchedule } from '@/hooks/useSchedule';
 import { useHolidays } from '@/hooks/useHolidays';
 import { WeeklyTimeline } from '@/components/schedule/WeeklyTimeline';
 import { DayEditor } from '@/components/schedule/DayEditor';
 import { OverrideList } from '@/components/schedule/OverrideList';
-import { Button, Card, Dialog, TopNav, Textarea, Spinner, useToast } from '@/components/ui';
+import { Button, Card, Dialog, TopNav, Textarea, Spinner, Select, useToast } from '@/components/ui';
 import { ChevronRightIcon } from '@/components/ui/Icons';
 import { DAYS_OF_WEEK, createEmptySlots } from '@ejm/sit-core';
 import type { DayOfWeek, HolidayMode, HolidayPeriod } from '@ejm/sit-core';
@@ -120,6 +124,37 @@ export function SchedulePage() {
   const [editingDay, setEditingDay] = useState<DayOfWeek | null>(null);
   const [saving, setSaving] = useState(false);
   const toast = useToast();
+  // Cancellation policy (issue #237, study's V2 feature 7 ported): a preset
+  // notice window in hours, saved as its own dot-path -- placement and preset
+  // set mirror study's SchedulePage exactly.
+  const { userDoc, firebaseUser, refreshUserDoc } = useAuthStore();
+  const [noticeHours, setNoticeHours] = useState(0);
+  const [policySaving, setPolicySaving] = useState(false);
+  const [policyError, setPolicyError] = useState<string | null>(null);
+  const policySeeded = useRef(false);
+  useEffect(() => {
+    if (!userDoc || policySeeded.current) return;
+    policySeeded.current = true;
+    setNoticeHours(getBabysitterProfile(userDoc)?.cancellationNoticeHours ?? 0);
+  }, [userDoc]);
+
+  const handleSavePolicy = async () => {
+    if (!firebaseUser) return;
+    setPolicySaving(true);
+    setPolicyError(null);
+    try {
+      await updateDoc(doc(db, 'users', firebaseUser.uid), {
+        'profiles.babysitter.cancellationNoticeHours': noticeHours,
+      });
+      await refreshUserDoc();
+      toast(t('schedule.cancellationPolicy.saved'));
+    } catch {
+      setPolicyError(t('common.error'));
+    } finally {
+      setPolicySaving(false);
+    }
+  };
+
   const [initialized, setInitialized] = useState(false);
   const [dirty, setDirty] = useState(false);
   const savedSnapshot = useRef<string>('');
@@ -304,6 +339,29 @@ export function SchedulePage() {
 
         <Button type="button" onClick={handleSave} disabled={saving} className="mt-4 mb-6">
           {saving ? t('common.saving') : t('schedule.saveSchedule')}
+        </Button>
+
+        <hr className="my-6 border-gray-200" />
+
+        {/* ─── Cancellation policy (issue #237; study twin) ─── */}
+        <h3 className="mb-1 text-base font-bold text-gray-900">
+          {t('schedule.cancellationPolicy.title')}
+        </h3>
+        <p className="mb-4 text-xs text-gray-500">{t('schedule.cancellationPolicy.help')}</p>
+        <Select
+          aria-label={t('schedule.cancellationPolicy.title')}
+          value={String(noticeHours)}
+          onChange={(e) => setNoticeHours(Number(e.target.value))}
+          options={[
+            { value: '0', label: t('schedule.cancellationPolicy.none') },
+            { value: '24', label: t('schedule.cancellationPolicy.hours24') },
+            { value: '48', label: t('schedule.cancellationPolicy.hours48') },
+            { value: '168', label: t('schedule.cancellationPolicy.week1') },
+          ]}
+        />
+        {policyError && <p className="mb-4 text-sm text-brand-600">{policyError}</p>}
+        <Button type="button" onClick={handleSavePolicy} disabled={policySaving} className="mt-4 mb-6">
+          {policySaving ? t('common.saving') : t('schedule.cancellationPolicy.save')}
         </Button>
 
         <hr className="my-6 border-gray-200" />

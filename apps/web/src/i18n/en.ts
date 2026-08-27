@@ -327,6 +327,16 @@ export default {
     notAvailableDesc: "I can't babysit during holidays",
     holidayNotes: 'Holiday notes',
     holidayNotesPlaceholder: 'Any notes about your holiday availability...',
+    cancellationPolicy: {
+      title: 'Cancellation policy',
+      help: 'How much notice you ask families for when cancelling a confirmed babysitting. Late cancellations are allowed but recorded.',
+      none: 'No policy',
+      hours24: '24 hours',
+      hours48: '48 hours',
+      week1: '1 week',
+      save: 'Save policy',
+      saved: 'Cancellation policy saved',
+    },
     saveSchedule: 'Save Schedule',
     availabilityByDate: 'Availability by Date',
     dateOverrideDesc: 'Override your regular schedule for specific dates.',
@@ -406,6 +416,8 @@ export default {
 
   // Search
   search: {
+    cancellationNotice: 'Asks for {{window}} cancellation notice',
+    window: { week: '1 week' },
     findBabysitter: 'Find a Babysitter',
     whatType: 'What type of babysitting?',
     chooseType: 'Choose the type of babysitting you need.',

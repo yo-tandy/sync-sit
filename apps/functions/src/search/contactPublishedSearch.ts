@@ -180,6 +180,8 @@ export const contactPublishedSearch = onCall(
       createdByUserId: uid,
       type: search.type,
       status: 'pending',
+      // Notice-window snapshot (issue #237) -- same as sendContactRequest's.
+      cancellationNoticeHours: sitter.cancellationNoticeHours ?? 0,
       date: search.date ?? null,
       startTime: search.startTime ?? null,
       endTime: search.endTime ?? null,

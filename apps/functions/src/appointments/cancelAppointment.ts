@@ -1,4 +1,5 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { isLateCancellation } from '@ejm/shared-functions/schedule/lateCancellation.js';
 import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
@@ -74,7 +75,26 @@ export const cancelAppointment = onCall(
     const now = new Date();
 
     // Update appointment
+    // Allow-but-flag (issue #237, study's V2 feature 7 ported): a CONFIRMED
+    // one_time cancel inside the snapshotted notice window is recorded as
+    // late, whoever cancels -- the flag is a record, not a punishment.
+    // Recurring appointments are never flagged: study's recurring lateness
+    // lives per-instance and sit has no instance model, so a whole-series
+    // cancel has no single start time to be late against.
+    const late =
+      apt.status === 'confirmed' &&
+      apt.type === 'one_time' &&
+      typeof apt.date === 'string' &&
+      typeof apt.startTime === 'string' &&
+      isLateCancellation(
+        apt.date as string,
+        apt.startTime as string,
+        (apt.cancellationNoticeHours as number | undefined) ?? 0,
+        now,
+      );
+
     await aptRef.update({
+      ...(late ? { lateCancellation: true } : {}),
       status: 'cancelled',
       statusReason: cancelledBy,
       cancelledFromStatus: apt.status,

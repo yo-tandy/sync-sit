@@ -51,6 +51,11 @@ describe('searchBabysitters', () => {
     );
 
     expect(result.results).toBeDefined();
+    // Notice-window disclosure (issue #237): families must see the policy
+    // BEFORE contacting; the payload carries it for every result (0 = none).
+    for (const r of result.results as Array<{ cancellationNoticeHours?: number }>) {
+      expect(typeof r.cancellationNoticeHours).toBe('number');
+    }
     expect(result.results.length).toBeGreaterThan(0);
 
     // Tom (inactive) should NOT be in results

@@ -188,6 +188,9 @@ describe('contactPublishedSearch (sit)', () => {
     expect(apt.createdByUserId).toBe(seed.babysitter1.uid);
     expect(apt.babysitterUserId).toBe(seed.babysitter1.uid);
     expect(apt.searchId).toBeNull();
+    // Notice-window snapshot at create (issue #237): babysitter1's profile
+    // has no policy, so the snapshot is 0 -- present, not absent.
+    expect(apt.cancellationNoticeHours).toBe(0);
 
     // The standard shape the family dashboard and respondToRequest expect.
     expect(apt.appointmentId).toBe(res.appointmentId);

@@ -105,6 +105,12 @@ export const sendContactRequest = onCall(
       createdByUserId: uid,
       type: data.searchType,
       status: 'pending',
+      // Notice-window snapshot at request time (issue #237, study's V2
+      // feature 7 ported): immutable for this appointment, so a later
+      // profile edit cannot retro-classify a cancel.
+      cancellationNoticeHours:
+        (babysitterSnap.data()?.profiles as { babysitter?: { cancellationNoticeHours?: number } } | undefined)
+          ?.babysitter?.cancellationNoticeHours ?? 0,
       date: data.date || null,
       startTime: data.startTime || null,
       endTime: data.endTime || null,
