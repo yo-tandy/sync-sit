@@ -5,6 +5,9 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
  * dialog for a confirmed appointment INSIDE the sitter's notice window shows
  * the "will be recorded" warning before submit; outside the window it does
  * not. Client-side approximation — the server flag stays authoritative.
+ *
+ * Moved from DashboardPage with the dialog itself (issue #241): the family's
+ * appointment lists and their dialogs now live on /family/appointments.
  */
 const h = vi.hoisted(() => ({
   appointments: {
@@ -47,12 +50,12 @@ vi.mock('@/hooks/useHolidays', () => ({ useHolidays: () => ({ periods: [], loadi
 import '@/i18n';
 import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
-import { FamilyDashboard } from '../DashboardPage';
+import { FamilyAppointmentsPage } from '../AppointmentsPage';
 
 function renderPage() {
   return render(
     <MemoryRouter>
-      <FamilyDashboard />
+      <FamilyAppointmentsPage />
     </MemoryRouter>,
   );
 }
