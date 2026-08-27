@@ -121,7 +121,7 @@ export function AdminConfigurationPage() {
                 <Card key={key} className="mb-3">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">
-                      <p className="font-mono text-sm font-semibold text-gray-900">{key}</p>
+                      <p className="break-all font-mono text-sm font-semibold text-gray-900">{key}</p>
                       <p className="mt-1 text-xs text-gray-500">{def.description}</p>
                       <p className="mt-1 text-xs text-gray-400">
                         {t('admin.config.bounds', {
