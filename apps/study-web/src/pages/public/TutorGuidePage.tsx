@@ -59,16 +59,16 @@ export function TutorGuidePage() {
         <Step number={3} title={fr ? 'Définir vos matières et tarifs' : 'Set your subjects and rates'}>
           <p>
             {fr
-              ? 'Dans le menu, allez dans "Matières" pour choisir les matières que vous enseignez, les niveaux de classe que vous acceptez et votre tarif horaire pour chaque matière.'
-              : 'From the menu, go to "Subjects" to choose the subjects you teach, the class levels you accept, and your hourly rate for each subject.'}
+              ? 'Dans le menu, allez dans "Matières et tarifs" pour choisir les matières que vous enseignez, les niveaux de classe que vous acceptez et votre tarif horaire pour chaque matière.'
+              : 'From the menu, go to "Subjects & Rates" to choose the subjects you teach, the class levels you accept, and your hourly rate for each subject.'}
           </p>
         </Step>
 
         <Step number={4} title={fr ? 'Définir votre zone et vos disponibilités' : 'Set your area and availability'}>
           <p>
             {fr
-              ? 'Dans "Ma zone", indiquez où vous donnez des cours. Dans "Mon planning", configurez vos créneaux hebdomadaires de disponibilité. C\'est aussi là que vous définissez votre délai de préavis d\'annulation.'
-              : 'In "My Area", set where you tutor. In "My Schedule", set up your weekly availability slots. This is also where you set your cancellation notice window.'}
+              ? 'Dans le menu, ouvrez "Disponibilités" pour configurer vos créneaux hebdomadaires. C\'est aussi là que vous définissez votre délai de préavis d\'annulation. Votre zone d\'intervention ("Zone couverte") se règle depuis "Mon compte".'
+              : 'From the menu, open "Schedule" to set up your weekly availability slots. This is also where you set your cancellation notice window. Your coverage area ("Area you cover") is set from "My Account".'}
           </p>
         </Step>
 
@@ -137,8 +137,8 @@ export function TutorGuidePage() {
         <Step number={12} title={fr ? 'Annuler une séance' : 'Cancel a session'}>
           <p>
             {fr
-              ? 'Si une séance confirmée doit être annulée, appuyez sur sa carte et donnez une courte raison — l\'autre partie est notifiée. Votre délai de préavis (défini dans "Mon planning") indique aux familles le préavis attendu ; les annulations tardives sont signalées. Annulez le plus tôt possible.'
-              : 'If a confirmed session must be cancelled, tap its card and give a short reason — the other side is notified. Your notice window (set in "My Schedule") tells families how much notice you expect; late cancellations are flagged. Cancel as early as you can.'}
+              ? 'Si une séance confirmée doit être annulée, appuyez sur sa carte et donnez une courte raison — l\'autre partie est notifiée. Votre délai de préavis (défini sur votre page "Disponibilités") indique aux familles le préavis attendu ; les annulations tardives sont signalées. Annulez le plus tôt possible.'
+              : 'If a confirmed session must be cancelled, tap its card and give a short reason — the other side is notified. Your notice window (set on your "Schedule" page) tells families how much notice you expect; late cancellations are flagged. Cancel as early as you can.'}
           </p>
         </Step>
 

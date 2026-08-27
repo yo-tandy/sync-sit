@@ -51,8 +51,8 @@ export function ParentGuidePage() {
         <Step number={2} title={fr ? 'Configurer votre famille' : 'Set up your family'}>
           <p>
             {fr
-              ? 'Dans les réglages de la famille, ajoutez vos enfants et votre adresse — elle sert à trouver des tuteurs à proximité. Vous pouvez aussi inviter un co-parent pour qu\'il puisse gérer les demandes.'
-              : 'In your family settings, add your children and your home address — it\'s used to find nearby tutors. You can also invite a co-parent so they can manage requests too.'}
+              ? 'Dans "Paramètres de la famille", ajoutez vos enfants et votre adresse — elle sert à trouver des tuteurs à proximité. Vous pouvez aussi inviter un co-parent pour qu\'il puisse gérer les demandes.'
+              : 'In "Family Settings", add your children and your home address — it\'s used to find nearby tutors. You can also invite a co-parent so they can manage requests too.'}
           </p>
         </Step>
 
@@ -133,15 +133,15 @@ export function ParentGuidePage() {
           <p>
             {fr
               ? 'Après des séances avec un tuteur, vous pouvez lui laisser une recommandation depuis "Mes recommandations" dans le menu. Elle est envoyée au tuteur, qui choisit de la publier ou non pour les autres familles.'
-              : 'After sessions with a tutor, you can leave them an endorsement from "My Endorsements" in the menu. It is sent to the tutor, who chooses whether to publish it for other families to see.'}
+              : 'After sessions with a tutor, you can leave them an endorsement from "My endorsements" in the menu. It is sent to the tutor, who chooses whether to publish it for other families to see.'}
           </p>
         </Step>
 
         <Step number={12} title={fr ? 'Si votre enfant devient tuteur' : 'If your child becomes a tutor'}>
           <p>
             {fr
-              ? 'Depuis "Gouvernance" dans le menu, vous pouvez inviter votre propre enfant à créer un compte tuteur supervisé : vous suivez son activité de tutorat et pouvez refuser des demandes en son nom — mais jamais accepter à sa place.'
-              : 'From "Governance" in the menu, you can invite your own child to create a supervised tutor account: you can follow their tutoring activity and decline requests on their behalf — but never accept in their place.'}
+              ? 'Depuis "Comptes supervisés" dans le menu, vous pouvez inviter votre propre enfant à créer un compte tuteur supervisé : vous suivez son activité de tutorat et pouvez refuser des demandes en son nom — mais jamais accepter à sa place.'
+              : 'From "Supervised kids" in the menu, you can invite your own child to create a supervised tutor account: you can follow their tutoring activity and decline requests on their behalf — but never accept in their place.'}
           </p>
         </Step>
 
