@@ -4,6 +4,17 @@ on:
     branches:
       - main
 
+# Serialize merge deploys (2026-08-28 incident): five PRs merged in quick
+# succession each launched a full functions deploy in parallel and the
+# Cloud Functions API returned 429 "Per project mutation requests" quota
+# exceeded, leaving prod one merge behind. One deploy at a time; a queued
+# run always deploys the branch tip, and GitHub keeps only the newest
+# pending run per group, so intermediate pushes coalesce. cancel-in-progress
+# stays FALSE deliberately -- never kill a prod deploy mid-flight.
+concurrency:
+  group: firebase-deploy-main
+  cancel-in-progress: false
+
 permissions:
   contents: read
   id-token: write
@@ -84,9 +95,18 @@ jobs:
       # Build functions
       - run: cd apps/functions && npx tsc
 
-      # Deploy functions (uses ADC from auth step)
+      # Deploy functions (uses ADC from auth step). One retry after a
+      # 2-minute backoff: the mutation-request quota that failed the
+      # 2026-08-28 run is a short-window rate limit, so a single spaced
+      # retry recovers residual pressure that serialization cannot (e.g. a
+      # manual console deploy running concurrently).
       - name: Deploy Cloud Functions
-        run: pnpm exec firebase deploy --only functions --project sync-sit --non-interactive --force
+        run: |
+          if ! pnpm exec firebase deploy --only functions --project sync-sit --non-interactive --force; then
+            echo "functions deploy failed -- backing off 120s and retrying once"
+            sleep 120
+            pnpm exec firebase deploy --only functions --project sync-sit --non-interactive --force
+          fi
 
       # Unbundle shared
       - run: node scripts/unbundle-shared-after-deploy.js
