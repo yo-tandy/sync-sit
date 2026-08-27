@@ -992,7 +992,7 @@ export default {
         add: 'Ajouter une note',
         edit: 'Modifier la note',
         dialogTitle: 'Note pour le professeur',
-        dialogDesc: 'Indiquez sur quoi vous concentrer cette séance — le professeur la verra avant votre rencontre.',
+        dialogDesc: 'Indiquez sur quoi vous concentrer cette séance — le professeur la verra avant votre rencontre ; si le professeur est supervisé, ses parents peuvent aussi la voir.',
         placeholder: 'ex. Merci de travailler les fractions cette semaine.',
         save: 'Enregistrer',
         error: 'Impossible d\'enregistrer votre note. Veuillez réessayer.',

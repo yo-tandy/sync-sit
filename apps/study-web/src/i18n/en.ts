@@ -992,7 +992,7 @@ export default {
         add: 'Add a note',
         edit: 'Edit note',
         dialogTitle: 'Note for the tutor',
-        dialogDesc: 'Share what to focus on this session — the tutor will see this before you meet.',
+        dialogDesc: 'Share what to focus on this session — the tutor will see this before you meet; if the tutor is supervised, their parents can see it too.',
         placeholder: 'e.g. Please focus on fractions this week.',
         save: 'Save note',
         error: 'Couldn\'t save your note. Please try again.',
