@@ -885,6 +885,7 @@ export default {
       status_pending: 'Pending Review',
       status_approved: 'Approved',
       status_rejected: 'Rejected',
+      status_superseded: 'Superseded',
       pendingReview: 'Pending review',
       rejectedReason: 'Rejection reason:',
       identityDesc: 'Upload a valid identity document (passport, ID card, or driver\'s license). Max 10 MB.',
