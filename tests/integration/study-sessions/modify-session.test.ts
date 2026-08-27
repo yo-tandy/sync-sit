@@ -376,6 +376,34 @@ describe('modifySession', () => {
     expect(s.modifiedFields).toEqual(['message']);
   });
 
+  it('refuses a claim-affecting modify when the tutor was suspended (lifecycle re-check)', async () => {
+    // A modify ACQUIRES slots like a booking; admin-driven states are
+    // re-checked at claim time (PR #244 round 4).
+    const id = await seedSession({ status: 'confirmed' });
+    await seedClaim(FUTURE_MON, id, 64, 68);
+    await getDb().collection('users').doc(seed.tutor2.uid).update({ status: 'blocked' });
+    try {
+      await expect(
+        callFunction('modifySession', { sessionId: id, startTime: '18:00' }, parent1Token),
+      ).rejects.toMatchObject({ code: 'FAILED_PRECONDITION' });
+    } finally {
+      await getDb().collection('users').doc(seed.tutor2.uid).update({ status: 'active' });
+    }
+  });
+
+  it('refuses a claim-affecting modify when the family lost verification', async () => {
+    const id = await seedSession({ status: 'confirmed' });
+    await seedClaim(FUTURE_MON, id, 64, 68);
+    await getDb().collection('families').doc(seed.family1Id).update({ 'verification.isFullyVerified': false });
+    try {
+      await expect(
+        callFunction('modifySession', { sessionId: id, startTime: '18:00' }, parent1Token),
+      ).rejects.toMatchObject({ code: 'FAILED_PRECONDITION' });
+    } finally {
+      await getDb().collection('families').doc(seed.family1Id).update({ 'verification.isFullyVerified': true });
+    }
+  });
+
   it('NEVER sets lateCancellation -- a modify is not a cancel', async () => {
     const id = await seedSession({ status: 'confirmed', cancellationNoticeHours: 48 });
     await seedClaim(FUTURE_MON, id, 64, 68);

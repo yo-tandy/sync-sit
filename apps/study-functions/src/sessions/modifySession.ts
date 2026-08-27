@@ -199,6 +199,21 @@ export const modifySession = onCall(
         throw new HttpsError('invalid-argument', 'Session cannot run past midnight');
       }
       const tutorProfileDoc = await db.collection('users').doc(tutorUserId).get();
+      // Lifecycle gates (PR #244 round 4): a claim-affecting modify ACQUIRES
+      // ledger slots the way bookSession -> respondToSession does, so the
+      // admin-driven states booking checks are re-checked here -- a suspended
+      // tutor's schedule must not be claimable, nor by a family whose
+      // verification was pulled. (approvedFamilies needs no re-check: it is
+      // arrayUnion-only with no removal path, so it cannot go stale.)
+      if (tutorProfileDoc.data()?.status !== 'active') {
+        throw new HttpsError('failed-precondition', 'This tutor is not available', {
+          reason: 'time_unavailable',
+        });
+      }
+      const familyDoc = await db.collection('families').doc(peek.familyId as string).get();
+      if (!familyDoc.data()?.verification?.isFullyVerified) {
+        throw new HttpsError('failed-precondition', 'Family verification required');
+      }
       const tutorProfile = (tutorProfileDoc.data()?.profiles as
         | { tutor?: { locationPrefs?: LocationPref[]; sessionLengthsMin?: number[] } }
         | undefined)?.tutor;
