@@ -13,7 +13,6 @@ import {
 } from './computeDateAvailability.js';
 
 /** Notice window: sessions cannot be booked within this many hours of "now". */
-const NOTICE_HOURS = 24;
 
 /**
  * Best-effort single-date availability grid for a tutor+date.

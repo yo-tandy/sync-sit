@@ -31,11 +31,9 @@ import { computeSingleDateAvailability } from '../availability/singleDateAvailab
 import type { HolidayPeriod } from '../availability/computeDateAvailability.js';
 
 /** Notice window: families cannot book within this many hours of "now". */
-const NOTICE_HOURS = 24;
 const SLOT_MINUTES = 15;
 const SLOTS_PER_DAY = 96;
 /** How many weeks of candidate occurrences a recurring request is expanded over. */
-const RECURRING_HORIZON_WEEKS = 8;
 
 /** Human-readable weekday for notification copy. */
 const DAY_LABELS: Record<DayOfWeek, string> = {

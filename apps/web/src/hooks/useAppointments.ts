@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, type QuerySnapshot } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { PAST_VISIBILITY_DAYS } from '@ejm/sit-core';
@@ -27,20 +27,32 @@ export function useAppointments() {
       where('babysitterUserId', '==', uid)
     );
 
-    // Admin-configurable since issue #250. The value is resolved BEFORE
-    // subscribing (round-1 review: a `let` mutated after the fact was only
-    // read on the NEXT snapshot, so a quiet dashboard never applied it);
-    // the read is one cached getDoc that falls back to the code default on
-    // any failure, and the bounds come from the shared definition table.
-    let unsub: (() => void) | undefined;
+    // Admin-configurable since issue #250, applied WITHOUT gating first
+    // paint (round-2 review: resolve-before-subscribe added a serial round
+    // trip in front of the cache-served snapshot): subscribe immediately
+    // with the code default, remember the latest snapshot, and re-bucket
+    // it the moment the configured value arrives -- which also covers the
+    // quiet dashboard whose only snapshot fired before the config resolved
+    // (the round-1 defect).
     let cancelled = false;
+    let pastVisibilityDays = PAST_VISIBILITY_DAYS;
+    let latestSnap: QuerySnapshot | null = null;
     void getClientConfigValue(
       'pastVisibilityDays',
       PAST_VISIBILITY_DAYS,
       ADMIN_CONFIG_DEFS.pastVisibilityDays,
-    ).then((pastVisibilityDays) => {
-      if (cancelled) return;
-      unsub = onSnapshot(q, (snap) => {
+    )
+      .then((v) => {
+        if (cancelled || v === pastVisibilityDays) return;
+        pastVisibilityDays = v;
+        if (latestSnap) bucket(latestSnap);
+      })
+      .catch(() => {});
+    const unsub = onSnapshot(q, (snap) => {
+      latestSnap = snap;
+      bucket(snap);
+    });
+    function bucket(snap: QuerySnapshot) {
       const now = new Date();
       const cutoff = new Date();
       cutoff.setDate(cutoff.getDate() - pastVisibilityDays);
@@ -85,12 +97,11 @@ export function useAppointments() {
       setPastRecent(_past);
       setRejectedRecent(_rejected);
       setLoading(false);
-    });
+    }
 
-    });
     return () => {
       cancelled = true;
-      unsub?.();
+      unsub();
     };
   }, [uid]);
 

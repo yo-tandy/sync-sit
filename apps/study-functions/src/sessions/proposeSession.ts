@@ -14,7 +14,6 @@ import { proposeSessionInputSchema } from '../validation/session.js';
 import { computeSingleDateAvailability } from '../availability/singleDateAvailability.js';
 
 /** Notice window: a proposal's session cannot start within this many hours. */
-const NOTICE_HOURS = 24;
 const SLOT_MINUTES = 15;
 
 /**

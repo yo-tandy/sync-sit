@@ -24,7 +24,6 @@ import {
 } from './computeDateAvailability.js';
 
 /** Notice window: families cannot book within this many hours of "now". */
-const NOTICE_HOURS = 24;
 
 /**
  * Every "YYYY-MM-DD" date from startDate to endDate inclusive. Composes

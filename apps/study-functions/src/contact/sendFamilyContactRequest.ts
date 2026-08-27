@@ -8,7 +8,6 @@ import { escapeHtml, STUDY_APP_URL } from '@ejm/shared-functions/config/email.js
 import type { StudyUser, TutorProfile, SubjectOffering } from '@ejm/study-core';
 import { sendFamilyContactRequestSchema } from '../validation/contact.js';
 import {
-  DECLINE_COOLDOWN_MS,
   latestDeclineMs,
   repairTimestamplessDeclines,
 } from './declineCooldown.js';
@@ -29,8 +28,6 @@ import {
 // tutor's board access shut forever. Creation spending the slot closes both --
 // at most MAX_BOARD_CONTACTS_PER_DAY families can be notified per day, and
 // slots return by clock, not by anyone's action (PR #232 review).
-const MAX_BOARD_CONTACTS_PER_DAY = 5;
-const BOARD_CONTACT_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 /**
  * sendFamilyContactRequest (issue #207 PR4, study side): the CONTACT
@@ -200,7 +197,7 @@ export const sendFamilyContactRequest = onCall(
     if (declinedMs !== null && Date.now() - declinedMs < declineCooldownMs) {
       throw new HttpsError(
         'failed-precondition',
-        'This family declined your last request. You can try again in a week.',
+        `This family declined your last request. You can try again in ${Math.round(declineCooldownMs / 86400_000)} days.`,
         // The client distinguishes this from the generic "the search is gone"
         // failure on the reason, not on the message text.
         { reason: 'decline_cooldown' },

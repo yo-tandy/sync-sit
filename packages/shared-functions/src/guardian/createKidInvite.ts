@@ -3,7 +3,6 @@ import { getConfigValue } from '../config/adminConfig.js';
 import {
   ageFromDob,
   kidIdentitySchema,
-  KID_INVITE_VALIDITY_DAYS,
   validateEjmEmail,
 } from '@ejm/shared-core';
 import { db } from '../config/firebase.js';

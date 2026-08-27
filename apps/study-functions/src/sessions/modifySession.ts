@@ -33,7 +33,6 @@ import {
   type RestoreResult,
 } from './sessionOverride.js';
 
-const NOTICE_HOURS = 24;
 
 /** Apply a restoration result to an override ref inside the transaction (cancelSession idiom). */
 function applyRestore(tx: Transaction, ref: DocumentReference, result: RestoreResult): void {

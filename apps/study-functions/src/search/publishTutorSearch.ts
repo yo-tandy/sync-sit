@@ -6,8 +6,6 @@ import { writeUserActivity } from '@ejm/shared-functions/admin/writeAuditLog.js'
 import {
   getParentProfile,
   resolveAreaLabel,
-  PUBLISHED_SEARCH_MAX_ACTIVE,
-  PUBLISHED_SEARCH_TTL_DAYS,
 } from '@ejm/shared-core';
 import type { User } from '@ejm/shared-core';
 import { publishTutorSearchSchema } from '../validation/publishSearch.js';

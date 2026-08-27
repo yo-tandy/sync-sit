@@ -7,8 +7,6 @@ import { getParentProfile } from '@ejm/sit-core';
 import type { User } from '@ejm/sit-core';
 import {
   resolveAreaLabel,
-  PUBLISHED_SEARCH_MAX_ACTIVE,
-  PUBLISHED_SEARCH_TTL_DAYS,
 } from '@ejm/shared-core';
 import { parisWallTimeToUtc } from '@ejm/shared-functions/scheduled/parisTime.js';
 

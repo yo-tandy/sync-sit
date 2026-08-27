@@ -477,6 +477,11 @@ service cloud.firestore {
     }
 
     // Invite links: no client access (validated via validateInviteLink Cloud Function)
+    match /inviteLinks/{token} {
+      allow read, write: if false;
+    }
+
+
     // Admin-panel configuration (issue #250): operational caps and windows,
     // not secrets -- readable by any signed-in user (pastVisibilityDays is
     // consumed by the sit dashboards client-side). Writes are denied here:
@@ -488,10 +493,6 @@ service cloud.firestore {
     match /adminConfig/values {
       allow read: if request.auth != null;
       allow write: if false;
-    }
-
-    match /inviteLinks/{token} {
-      allow read, write: if false;
     }
 
     // Verification codes: no client access

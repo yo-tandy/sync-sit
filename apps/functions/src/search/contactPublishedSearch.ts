@@ -23,9 +23,6 @@ interface ContactPublishedSearchData {
  * matches the study side's spec). Not a punishment — a family that declined
  * should not be re-notified on a tap.
  */
-// Code defaults; admin-configurable since issue #250 (declineCooldownDays,
-// boardContactsPerDay, boardContactWindowHours) -- read per call below.
-const DECLINE_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
 // Cross-search ceiling (issue #225 item 3): per-search dedupe + cooldown bound
 // one pair, but nothing bounded one sitter across DIFFERENT searches -- each
 // successful contact emails + pushes every parent of that family. The ceiling
@@ -36,8 +33,6 @@ const DECLINE_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
 // board access forever. Creation spending the slot closes both: at most
 // MAX_BOARD_CONTACTS_PER_DAY families can be notified per day, and slots
 // return by clock, not by anyone's action.
-const MAX_BOARD_CONTACTS_PER_DAY = 5;
-const BOARD_CONTACT_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 /**
  * contactPublishedSearch (issue #207 PR3, sit side): the CONTACT INVERSION.
@@ -252,7 +247,7 @@ export const contactPublishedSearch = onCall(
       if (recentlyDeclined) {
         throw new HttpsError(
           'failed-precondition',
-          'This family declined your last request for this search. You can try again in a week.',
+          `This family declined your last request for this search. You can try again in ${cooldownDays} days.`,
           // The client distinguishes this from the generic "search is gone"
           // failure on the reason, not on the message text.
           { reason: 'decline_cooldown' },

@@ -26,7 +26,6 @@ import { generateInstances, type PerDateClaimInputs } from '../sessions/generate
 import { dropWithinNotice } from '../sessions/recurringWindow.js';
 
 /** The rolling horizon extendRecurring maintains ahead of "now". */
-const HORIZON_WEEKS = 8;
 
 export interface ExtendRecurringStats {
   seriesProcessed: number;

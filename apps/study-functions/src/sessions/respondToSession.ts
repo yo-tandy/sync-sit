@@ -38,10 +38,8 @@ import { generateInstances, type PerDateClaimInputs } from './generateInstances.
 import { dropWithinNotice } from './recurringWindow.js';
 
 /** How many weeks of occurrences a recurring confirm materializes up front. */
-const RECURRING_HORIZON_WEEKS = 8;
 
 /** Notice window: a session cannot be confirmed within this many hours of "now". */
-const NOTICE_HOURS = 24;
 
 /**
  * respondToSession — the tutor confirms or declines a pending session request.

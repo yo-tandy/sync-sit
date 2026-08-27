@@ -77,3 +77,16 @@ SEND_COOLDOWN_MS deleted; verificationCodeCooldownS floor raised to 60
 (today's fixed value -- the panel cannot weaken the resend posture);
 rules narrowed to /adminConfig/values and re-homed below the
 notifications block; client reader unit-tested.
+
+**Round 2 (PR #266):** the mirrors follow the knobs -- the tutor
+RecurringConflictPreview reads recurringHorizonWeeks + bookingNoticeHours
+through a study-web twin of the client reader (the preview must predict
+exactly what respondToSession materializes), and the cleanup cron's note
+redaction reads pastVisibilityDays (raising the dashboard window defers
+redaction, keeping the remove affordance reachable for the note's whole
+visible life). Dashboard hooks subscribe immediately and RE-BUCKET the
+remembered snapshot when the config arrives (no serial round trip before
+first paint; still covers the quiet dashboard). Cooldown error copy
+interpolates the configured days; ~14 orphaned constants and unused
+imports swept; the rules block re-homed below inviteLinks (brace-counted
+this time).

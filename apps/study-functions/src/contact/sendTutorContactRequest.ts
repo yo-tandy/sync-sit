@@ -10,7 +10,6 @@ import type { User } from '@ejm/shared-core';
 import type { StudyUser, TutorProfile, SubjectOffering } from '@ejm/study-core';
 import { sendTutorContactRequestSchema } from '../validation/contact.js';
 import {
-  DECLINE_COOLDOWN_MS,
   latestDeclineMs,
   repairTimestamplessDeclines,
 } from './declineCooldown.js';
@@ -102,7 +101,7 @@ export const sendTutorContactRequest = onCall(
     if (declinedMs !== null && Date.now() - declinedMs < declineCooldownMs) {
       throw new HttpsError(
         'resource-exhausted',
-        'This tutor recently declined a request; please wait 7 days before requesting again',
+        `This tutor recently declined a request; please wait ${Math.round(declineCooldownMs / 86400_000)} days before requesting again`,
       );
     }
 

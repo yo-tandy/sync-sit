@@ -4,8 +4,6 @@ import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { FieldValue } from 'firebase-admin/firestore';
 
-// Code default; admin-configurable since issue #250 (verifyCodeMaxAttempts).
-const MAX_ATTEMPTS = 5;
 
 export const verifyCode = onCall(
   { region: 'europe-west1', cors: getCorsOrigin() },

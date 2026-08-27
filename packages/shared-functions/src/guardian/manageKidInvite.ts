@@ -1,6 +1,5 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { getConfigValue } from '../config/adminConfig.js';
-import { KID_INVITE_VALIDITY_DAYS } from '@ejm/shared-core';
 import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { writeUserActivity } from '../admin/writeAuditLog.js';

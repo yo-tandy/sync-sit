@@ -192,9 +192,9 @@ const r2 = {
 
 describe('configured pastVisibilityDays (issue #250)', () => {
   it('a configured 30-day window keeps a 20-day-old sitting that the default 7 would drop', async () => {
-    // The config resolves BEFORE the subscription (round-1 review: a value
-    // arriving after the only snapshot was never applied on a quiet
-    // dashboard), so the FIRST bucketing already uses it.
+    // The configured value must apply even when the ONLY snapshot fired
+    // before the config resolved (round-1 defect); the round-2 design
+    // re-buckets the remembered snapshot on arrival.
     vi.mocked(fsGetDoc).mockResolvedValueOnce({
       exists: () => true,
       data: () => ({ pastVisibilityDays: 30 }),
@@ -211,8 +211,9 @@ describe('configured pastVisibilityDays (issue #250)', () => {
     };
     authState.firebaseUser = { uid: 'a' };
     const { result, unmount } = renderHook(() => useAppointments());
-    // The subscription now registers after the config promise chain --
-    // flush microtask rounds until the snapshot callback exists.
+    // Subscription is immediate; the config resolves in parallel and
+    // re-buckets the remembered snapshot (round-2 design). Flush a few
+    // microtask rounds so both have settled before delivering the snap.
     for (let i = 0; i < 5 && !snapState.cb; i++) await act(async () => {});
     expect(snapState.cb).toBeTruthy();
     act(() => {
