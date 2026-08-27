@@ -1,6 +1,6 @@
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { resolveConfigValue } from '@ejm/shared-functions/config/adminConfig.js';
-import { FieldValue } from 'firebase-admin/firestore';
+import { FieldPath, FieldValue } from 'firebase-admin/firestore';
 import type { Firestore } from 'firebase-admin/firestore';
 import { db } from '../config/firebase.js';
 
@@ -282,24 +282,38 @@ export async function runCleanupOldData(
       return true;
     };
 
-    // Cursor-paginated drain, not a single capped pass: the range query
-    // matches EVERY note-carrying doc (in-window ones included), so a plain
-    // limit(500) sweep would let a large in-window population starve the
-    // out-of-window backlog — the scale-dependence the PR #210 review
-    // ledgered as unacceptable for the sibling sweeps in this file. The
-    // cursor walks the whole index per run; the pass ceiling (40 = 20k
-    // note-carrying docs) is a runaway backstop far above real volume.
+    // Cursor-paginated drain WITH a persisted cursor: the range query
+    // matches EVERY note-carrying doc (in-window ones included), so a
+    // capped in-run walk could permanently skip the index tail once
+    // note-carrying docs exceed 40 passes x 500 — unlike the sibling
+    // sweeps, whose queries match only deletable docs and therefore drain
+    // across runs by construction (round-10 review). Persisting the cursor
+    // (cronState/appointmentNoteRedaction) makes this sweep drain across
+    // runs the same way: a run that hits the pass ceiling stores where it
+    // stopped and the next run RESUMES there; an exhausted walk resets the
+    // cursor so the next run starts from the head. Ties on the note text
+    // are broken by document id so resume never skips a doc.
+    const cursorStateRef = firestoreDb.collection('cronState').doc('appointmentNoteRedaction');
+    const cursorState = (await cursorStateRef.get()).data() ?? {};
+    const nextCursorState: Record<string, { value: string; id: string } | null> = {};
+
     for (const field of ['preAppointmentNote', 'postAppointmentNote'] as const) {
-      let cursor: FirebaseFirestore.QueryDocumentSnapshot | null = null;
+      const stored = cursorState[`${field}Cursor`] as { value: string; id: string } | null | undefined;
+      let cursor: { value: string; id: string } | null = stored ?? null;
+      let exhausted = false;
       for (let pass = 0; pass < 40; pass++) {
         let query = firestoreDb
           .collection('appointments')
           .where(field, '>', '')
           .orderBy(field)
+          .orderBy(FieldPath.documentId())
           .limit(500);
-        if (cursor) query = query.startAfter(cursor);
+        if (cursor) query = query.startAfter(cursor.value, cursor.id);
         const noted = await query.get();
-        if (noted.empty) break;
+        if (noted.empty) {
+          exhausted = true;
+          break;
+        }
 
         const batch = firestoreDb.batch();
         let count = 0;
@@ -314,17 +328,25 @@ export async function runCleanupOldData(
           stats.appointmentNotesRedacted += count;
           console.log(`Redacted ${count} out-of-reach ${field} values`);
         }
-        cursor = noted.docs[noted.docs.length - 1];
-        if (noted.size < 500) break;
+        const last = noted.docs[noted.docs.length - 1];
+        cursor = { value: last.get(field) as string, id: last.id };
+        if (noted.size < 500) {
+          exhausted = true;
+          break;
+        }
         if (pass === 39) {
-          // Exiting by pass exhaustion, not by draining -- without this a
-          // truncated sweep looks identical to a clean one (round-7 review).
+          // Deferred, not lost: the stored cursor makes the next run resume
+          // exactly here (round-7 asked for the truncation to be visible;
+          // round-10 made it recoverable).
           console.warn(
-            `Appointment-note redaction sweep hit its 40-pass ceiling for ${field}; backlog remains`,
+            `Appointment-note redaction sweep hit its 40-pass ceiling for ${field}; resuming from stored cursor next run`,
           );
         }
       }
+      // Exhausted -> wrap to the head next run; truncated -> resume.
+      nextCursorState[`${field}Cursor`] = exhausted ? null : cursor;
     }
+    await cursorStateRef.set(nextCursorState, { merge: true });
   }
 
   // 8. Delete expired published searches (issue #207). Client queries filter

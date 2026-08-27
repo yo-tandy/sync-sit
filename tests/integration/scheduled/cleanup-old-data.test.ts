@@ -37,7 +37,7 @@ describe('runCleanupOldData', () => {
     const collections = [
       'notifications', 'auditLogs', 'inviteLinks', 'verificationCodes',
       'accountExistsNotices', 'verificationSendCounters', 'appointments',
-      'publishedSearches',
+      'publishedSearches', 'cronState',
     ];
     await Promise.all(
       collections.map(async (col) => {
@@ -336,6 +336,13 @@ describe('runCleanupOldData', () => {
     expect('preAppointmentNote' in (await badStatusRef.get()).data()!).toBe(false);
     expect((await recentRef.get()).data()!.preAppointmentNote).toBe('still visible');
     expect((await recurringRef.get()).data()!.preAppointmentNote).toBe('door code for Mondays');
+
+    // Persisted-cursor wiring (round-10): an exhausted walk resets both
+    // cursors to null so the next run starts from the head of the index; a
+    // pass-ceiling truncation would store a resume point here instead.
+    const cursorState = (await db.collection('cronState').doc('appointmentNoteRedaction').get()).data()!;
+    expect(cursorState.preAppointmentNoteCursor).toBeNull();
+    expect(cursorState.postAppointmentNoteCursor).toBeNull();
   });
 
   it('deletes expired published searches and keeps active ones (issue #207)', async () => {
