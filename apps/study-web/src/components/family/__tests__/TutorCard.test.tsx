@@ -192,6 +192,23 @@ describe('TutorCard', () => {
   });
 
   // ── Cancellation policy line (V2 feature 7) ──
+  it('renders no bare unit and no trailing separator when optional fields are absent (issue #228)', () => {
+    // A tutor with no per-offering rate and no classLevel used to render a
+    // dangling "€/h" and "Mathematics · 6e ·" -- visibly glitched next to a
+    // populated card. The type says rate: number, but searchTutors passes
+    // offering.rate through unvalidated, so the runtime value can be absent.
+    renderWithProviders(<TutorCard result={tutor({ rate: undefined as unknown as number, classLevel: '' })} />);
+    expect(screen.queryByText(/€\/h/)).not.toBeInTheDocument();
+    const subtitle = screen.getByText(/6e/);
+    expect(subtitle.textContent?.trim().endsWith('·')).toBe(false);
+  });
+
+  it('renders rate and full subtitle when the fields are present', () => {
+    renderWithProviders(<TutorCard result={tutor()} />);
+    expect(screen.getByText(/25\s*€\/h|€\/h/)).toBeInTheDocument();
+    expect(screen.getByText(/Terminale/)).toBeInTheDocument();
+  });
+
   it('renders a humanized cancellation-notice line when the policy is set', () => {
     renderWithProviders(<TutorCard result={tutor({ cancellationNoticeHours: 48 })} />);
     expect(screen.getByText(/48h cancellation notice/i)).toBeInTheDocument();
