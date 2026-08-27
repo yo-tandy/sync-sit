@@ -1069,6 +1069,7 @@ export default {
     declinedByYou: 'Vous avez refusé cette demande.',
     withdrawnBySitter: 'La babysitter a retiré cette demande.',
     cancelledLateBadge: 'Annulée tardivement',
+    lateCancelWarning: 'Cette annulation intervient dans le délai de préavis de {{window}} et sera enregistrée.',
     resubmit: 'Renvoyer',
     resubmitTitle: 'Renvoyer la demande',
     resubmitDesc: 'Modifiez les détails et ajoutez une note explicative. Le/la babysitter sera notifié(e).',

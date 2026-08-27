@@ -202,6 +202,27 @@ describe('cancelAppointment', () => {
       ).toBe(true);
     });
 
+    it('never flags a cancel of an appointment that already STARTED (cleanup, not lateness)', async () => {
+      // Deviation from study (PR #248 round 2): study's completed-sweep cron
+      // makes past sessions uncancellable; sit has no sweep, so stale
+      // confirmed appointments stay cancellable as bookkeeping. Flagging
+      // them would mint permanent "Cancelled late" badges for cleanup.
+      const past = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000); // ~2 months ago
+      const apptId = await seedAppointment({
+        babysitterUserId: seed.babysitter1.uid,
+        familyId: seed.family1Id,
+        createdByUserId: seed.parent1.uid,
+        status: 'confirmed',
+        date: past.toISOString().slice(0, 10),
+        startTime: '18:00',
+        cancellationNoticeHours: 48,
+      });
+      await callFunction('cancelAppointment', { appointmentId: apptId, reason: 'Old cleanup' }, parentToken);
+      const apt = (await getDb().collection('appointments').doc(apptId).get()).data()!;
+      expect(apt.status).toBe('cancelled');
+      expect(apt.lateCancellation).toBeUndefined();
+    });
+
     it('never flags a recurring cancel -- no single start to be late against (v1 deviation)', async () => {
       const apptId = await seedAppointment({
         babysitterUserId: seed.babysitter1.uid,

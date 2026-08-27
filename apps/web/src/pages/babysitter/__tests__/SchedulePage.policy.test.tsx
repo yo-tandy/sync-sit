@@ -139,6 +139,32 @@ describe('sitter SchedulePage — cancellation policy (issue #237)', () => {
     );
   });
 
+  it('keeps the unsaved-policy guard alive across a schedule save (round-2 regression)', async () => {
+    // PR #248 round 2: handleSave's blind setDirty(false) cancelled the
+    // guard round 1 added -- Save Schedule with an unsaved policy choice
+    // silently discarded it. The beforeunload guard is the observable:
+    // preventDefault fires iff the page still counts itself dirty.
+    renderSchedule();
+    fireEvent.change(screen.getByRole('combobox', { name: /cancellation policy/i }), { target: { value: '48' } });
+    fireEvent.click(screen.getByRole('button', { name: /save schedule/i }));
+    await waitFor(() => expect(h.schedule.saveWeekly).toHaveBeenCalled());
+
+    const evt = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(evt);
+    expect(evt.defaultPrevented).toBe(true);
+
+    // Saving the POLICY releases the guard.
+    fireEvent.click(screen.getByRole('button', { name: /save policy/i }));
+    // Wait for the saved toast -- it renders AFTER setSavedNoticeHours, so
+    // the dirty recomputation has committed by then.
+    await screen.findByText('Cancellation policy saved');
+    await waitFor(() => {
+      const evt2 = new Event('beforeunload', { cancelable: true });
+      window.dispatchEvent(evt2);
+      expect(evt2.defaultPrevented).toBe(false);
+    });
+  });
+
   it('surfaces a policy save failure instead of a silent success', async () => {
     h.updateDoc.mockRejectedValueOnce(new Error('unavailable'));
     renderSchedule();

@@ -58,7 +58,9 @@ export const modifyAppointment = onCall(
     // modifySession blocks inside-window date moves because moving a session
     // to next month and then cancelling cleanly was an unguarded escape from
     // the window. Sit's modify cannot change `date` -- only startTime/endTime
-    // on the SAME day -- and every offered window is >= 24h, so a same-day
+    // on the SAME day -- and every offered nonzero window is >= 24h (the
+    // preset set, enforced by noticeWindowBoundsValid in firestore.rules,
+    // not merely offered by the editor), so a same-day
     // move can never exit a window the appointment is already inside
     // (max same-day distance < 24h). If a date field is ever added here, the
     // inside-window guard must come with it.

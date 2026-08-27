@@ -133,17 +133,25 @@ service cloud.firestore {
 
     // Cancellation notice window (issue #237): user-editable by design on
     // BOTH profiles (enforcement reads per-booking snapshots, so live edits
-    // cannot retro-classify), but bounded here because the value classifies
-    // OTHER users' cancellations as late -- an absurd window (e.g. 10^9h)
-    // would flag every family cancellation. 168h (1 week) is the largest
-    // offered preset (CANCELLATION_NOTICE_PRESETS in shared-core).
+    // cannot retro-classify), but constrained here because the value
+    // classifies OTHER users' cancellations as late -- an absurd window
+    // (e.g. 10^9h) would flag every family cancellation. Constrained to the
+    // PRESET SET (CANCELLATION_NOTICE_PRESETS in shared-core), not a range:
+    // modifyAppointment's no-guard reasoning leans on "every nonzero window
+    // is >= 24h", and this is where that invariant is enforced (PR #248
+    // round 2). UNCHANGED values always pass, like photoUrlValid: a legacy
+    // out-of-set value must not lock its owner out of every self-service
+    // profile edit.
+    function noticeWindowValueOk(v) {
+      return v is int && v in [0, 24, 48, 168];
+    }
     function noticeWindowBoundsValid() {
-      return (tutorField(request.resource.data, 'cancellationNoticeHours', 0) is int
-              && tutorField(request.resource.data, 'cancellationNoticeHours', 0) >= 0
-              && tutorField(request.resource.data, 'cancellationNoticeHours', 0) <= 168)
-             && (bsField(request.resource.data, 'cancellationNoticeHours', 0) is int
-                 && bsField(request.resource.data, 'cancellationNoticeHours', 0) >= 0
-                 && bsField(request.resource.data, 'cancellationNoticeHours', 0) <= 168);
+      return (tutorField(request.resource.data, 'cancellationNoticeHours', 0)
+                == tutorField(resource.data, 'cancellationNoticeHours', 0)
+              || noticeWindowValueOk(tutorField(request.resource.data, 'cancellationNoticeHours', 0)))
+             && (bsField(request.resource.data, 'cancellationNoticeHours', 0)
+                   == bsField(resource.data, 'cancellationNoticeHours', 0)
+                 || noticeWindowValueOk(bsField(request.resource.data, 'cancellationNoticeHours', 0)));
     }
 
     // Helper: profiles.tutor.arrondissements is READ BACK and processed by

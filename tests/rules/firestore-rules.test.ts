@@ -2204,6 +2204,39 @@ describe('users update — cancellation notice window bounds (issue #237)', () =
       updateDoc(doc(db, 'users', tutorUid), { 'profiles.tutor.cancellationNoticeHours': 169 }),
     );
   });
+
+  it('rejects an in-range NON-PRESET window (the preset set is the contract)', async () => {
+    // modifyAppointment's no-guard reasoning needs every nonzero window
+    // >= 24h; 12 is inside [0,168] but outside the preset set.
+    const db = testEnv.authenticatedContext(sitterUid).firestore();
+    await assertFails(
+      updateDoc(doc(db, 'users', sitterUid), { 'profiles.babysitter.cancellationNoticeHours': 12 }),
+    );
+  });
+
+  it('a legacy out-of-set value does not lock the owner out of unrelated profile edits', async () => {
+    // Seed a bad stored value with rules disabled (as legacy data would be),
+    // then edit an unrelated profile field WITHOUT touching the window:
+    // unchanged values always pass (photoUrlValid's idiom).
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.firestore().doc(`users/${sitterUid}`).update({
+        'profiles.babysitter.cancellationNoticeHours': 999,
+      });
+    });
+    const db = testEnv.authenticatedContext(sitterUid).firestore();
+    await assertSucceeds(
+      updateDoc(doc(db, 'users', sitterUid), { 'profiles.babysitter.languages': ['French'] }),
+    );
+    // But CHANGING it to another out-of-set value still fails -- the gate
+    // is value equality, so only leaving the legacy value untouched passes
+    // (re-writing the identical value is indistinguishable from untouched).
+    await assertFails(
+      updateDoc(doc(db, 'users', sitterUid), {
+        'profiles.babysitter.cancellationNoticeHours': 998,
+        'profiles.babysitter.languages': ['French', 'English'],
+      }),
+    );
+  });
 });
 
 describe('users update — root identity set-once (issue #144)', () => {

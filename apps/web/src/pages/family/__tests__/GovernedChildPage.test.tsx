@@ -195,6 +195,22 @@ describe('GovernedChildPage (sit)', () => {
   });
 
   // ── The no-accept pin: guardian surfaces NEVER render accept affordances. ──
+  it('badges a late-cancelled appointment in history (issue #237 read surface)', async () => {
+    h.detail = detail({
+      sit: {
+        appointments: [
+          appointment({ appointmentId: 'late1', status: 'cancelled', lateCancellation: true }),
+          appointment({ appointmentId: 'clean1', status: 'cancelled', lateCancellation: false }),
+        ],
+        contactSharingRequests: [],
+      },
+    });
+    renderPage();
+    // Exactly ONE late badge: the flagged cancel, not the clean one.
+    expect(await screen.findByText('Cancelled late')).toBeInTheDocument();
+    expect(screen.getAllByText('Cancelled late')).toHaveLength(1);
+  });
+
   it('renders NO accept affordance for any pending item of either app', async () => {
     h.detail = detail({
       sit: {

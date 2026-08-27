@@ -70,6 +70,32 @@ function expandCard() {
 
 afterEach(cleanup);
 
+describe('ExpandableBabysitterCard late-cancellation record (issue #237)', () => {
+  it('renders the late line for a cancelled appointment flagged late', () => {
+    render(
+      <ExpandableBabysitterCard
+        appointment={{ ...appointment, status: 'cancelled', lateCancellation: true } as AppointmentDoc}
+        info={info}
+        variant="rejected"
+      />,
+    );
+    expandCard();
+    expect(screen.getByText('appointment.cancelledLateBadge')).toBeInTheDocument();
+  });
+
+  it('renders NO late line for an ordinary cancellation', () => {
+    render(
+      <ExpandableBabysitterCard
+        appointment={{ ...appointment, status: 'cancelled' } as AppointmentDoc}
+        info={info}
+        variant="rejected"
+      />,
+    );
+    expandCard();
+    expect(screen.queryByText('appointment.cancelledLateBadge')).not.toBeInTheDocument();
+  });
+});
+
 describe('ExpandableBabysitterCard cancel control', () => {
   it('renders a Cancel Request button for a pending request', () => {
     const onCancel = vi.fn();

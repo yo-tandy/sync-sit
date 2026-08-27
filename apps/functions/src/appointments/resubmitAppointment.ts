@@ -161,8 +161,9 @@ export const resubmitAppointment = onCall(
     await batch.commit();
 
     // Notify babysitter
-    const babysitterDoc = await db.collection('users').doc(original.babysitterUserId).get();
-    const babysitterData = babysitterDoc.data();
+    // sitterDoc was read above for the notice-window snapshot -- reuse it
+    // (PR #248 round 2: this block used to re-read the identical doc).
+    const babysitterData = sitterDoc.data();
     const familyName = original.familyName || 'A family';
     const dateInfo = original.date
       ? `${original.date}${data.startTime || original.startTime ? `, ${data.startTime || original.startTime}` : ''}${data.endTime || original.endTime ? `–${data.endTime || original.endTime}` : ''}`

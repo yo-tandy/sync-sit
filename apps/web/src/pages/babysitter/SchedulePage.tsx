@@ -145,8 +145,8 @@ export function SchedulePage() {
     setNoticeHours(saved);
   }, [userDoc]);
 
-  const handleSavePolicy = async () => {
-    if (!firebaseUser) return;
+  const handleSavePolicy = async (): Promise<boolean> => {
+    if (!firebaseUser) return false;
     setPolicySaving(true);
     setPolicyError(null);
     try {
@@ -156,8 +156,10 @@ export function SchedulePage() {
       await refreshUserDoc();
       setSavedNoticeHours(noticeHours);
       toast(t('schedule.cancellationPolicy.saved'));
+      return true;
     } catch {
       setPolicyError(t('common.error'));
+      return false;
     } finally {
       setPolicySaving(false);
     }
@@ -232,7 +234,10 @@ export function SchedulePage() {
         holidaySchedules: localHolidaySchedules,
         holidayNotes: localHolidayNotes,
       });
-      setDirty(false);
+      // Saving the SCHEDULE must not clear the guard for an unsaved POLICY
+      // choice (PR #248 round 2: a blind setDirty(false) here discarded the
+      // policy silently -- the exact loss the guard exists to prevent).
+      setDirty(noticeHours !== savedNoticeHours);
       toast(t('schedule.scheduleSaved'));
     } finally {
       setSaving(false);
@@ -399,9 +404,17 @@ export function SchedulePage() {
               type="button"
               onClick={async () => {
                 await handleSave();
+                // "Save and leave" must save EVERYTHING unsaved -- leaving
+                // with a dirty policy would silently discard it (PR #248
+                // round 2, same loss as the sibling-button bug). Stay on the
+                // page if the policy save fails so the error is visible.
+                if (noticeHours !== savedNoticeHours && !(await handleSavePolicy())) {
+                  blocker.reset();
+                  return;
+                }
                 blocker.proceed();
               }}
-              disabled={saving}
+              disabled={saving || policySaving}
             >
               {saving ? t('common.saving') : t('schedule.saveAndLeave')}
             </Button>

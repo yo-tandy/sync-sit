@@ -1097,6 +1097,7 @@ export default {
     declinedByYou: 'You declined this request.',
     withdrawnBySitter: 'The babysitter withdrew this request.',
     cancelledLateBadge: 'Cancelled late',
+    lateCancelWarning: 'This cancellation is inside the {{window}} notice window and will be recorded.',
     resubmit: 'Resubmit',
     resubmitTitle: 'Resubmit Request',
     resubmitDesc: 'Edit the details and add a note explaining the changes. The babysitter will be notified.',
