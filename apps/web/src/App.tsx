@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { RouterProvider } from 'react-router';
-import { ToastProvider } from '@ejm/shared-ui';
+import { ToastProvider, useFlashTimer } from '@ejm/shared-ui';
 import { router } from './router';
 import { ForcedSignOutWatcher } from '@/components/ui/ForcedSignOutWatcher';
 import { PushPrompt } from '@/components/ui/PushPrompt';
@@ -9,14 +9,28 @@ import { setupForegroundMessages } from '@/lib/pushNotifications';
 export default function App() {
   const [toast, setToast] = useState<{ title: string; body: string } | null>(null);
 
+  // Dismiss-timer lifecycle (clear on re-toast, clear on unmount) lives in
+  // the shared hook (issue #222). The cancelled guard matches study-web's
+  // App: setupForegroundMessages resolves async, and a listener resolving
+  // after cleanup (StrictMode double-invoke) must detach immediately --
+  // this file had drifted from its twin on both counts.
+  const flashAfter = useFlashTimer();
+
   useEffect(() => {
     let unsub: (() => void) | undefined;
+    let cancelled = false;
     setupForegroundMessages((title, body) => {
       setToast({ title, body });
-      setTimeout(() => setToast(null), 5000);
-    }).then((fn) => { unsub = fn; });
-    return () => { unsub?.(); };
-  }, []);
+      flashAfter(() => setToast(null), 5000);
+    }).then((fn) => {
+      if (cancelled) fn?.();
+      else unsub = fn;
+    });
+    return () => {
+      cancelled = true;
+      unsub?.();
+    };
+  }, [flashAfter]);
 
   return (
     <ToastProvider>

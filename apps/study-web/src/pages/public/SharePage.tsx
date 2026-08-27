@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useFlashTimer } from '@ejm/shared-ui';
 import { useTranslation } from 'react-i18next';
 import { TopNav, Button, Card, Spinner, useToast, ShareIcon, MailIcon } from '@ejm/shared-ui';
 import { getStudyRole } from '@ejm/study-core';
@@ -24,6 +25,7 @@ export function SharePage() {
   const { userDoc, loading: authLoading } = useAuthStore();
   const toast = useToast();
   const [copied, setCopied] = useState(false);
+  const flashAfter = useFlashTimer();
   const isFr = i18n.language?.startsWith('fr');
   const isTutor = getStudyRole(userDoc) === 'tutor';
 
@@ -74,7 +76,7 @@ export function SharePage() {
       document.body.removeChild(textarea);
     }
     setCopied(true);
-    setTimeout(() => setCopied(false), 3000);
+    flashAfter(() => setCopied(false), 3000);
     toast(t('share.copied'));
   };
 

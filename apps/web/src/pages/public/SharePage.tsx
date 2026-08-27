@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useFlashTimer } from '@ejm/shared-ui';
 import { useTranslation } from 'react-i18next';
 import { TopNav, Button, Card, useToast } from '@/components/ui';
 import { ShareIcon, MailIcon } from '@/components/ui/Icons';
@@ -7,6 +8,7 @@ export function SharePage() {
   const { t, i18n } = useTranslation();
   const toast = useToast();
   const [copied, setCopied] = useState(false);
+  const flashAfter = useFlashTimer();
   const isFr = i18n.language?.startsWith('fr');
 
   const shareText = isFr
@@ -41,7 +43,7 @@ export function SharePage() {
       document.body.removeChild(textarea);
     }
     setCopied(true);
-    setTimeout(() => setCopied(false), 3000);
+    flashAfter(() => setCopied(false), 3000);
     toast(t('share.copied'));
   };
 
