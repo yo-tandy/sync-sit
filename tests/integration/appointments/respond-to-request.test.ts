@@ -271,4 +271,152 @@ describe('respondToRequest', () => {
       ).rejects.toThrow();
     });
   });
+
+  // ── Family responder branch (issue #207 PR3: contact inversion) ──────────
+  // A babysitter-initiated appointment (contactPublishedSearch) is answered by
+  // the FAMILY. Accepting is what discloses the address the pending doc
+  // deliberately withheld.
+  describe('babysitter-initiated (family responds)', () => {
+    async function seedInverted(overrides: Record<string, unknown> = {}) {
+      return seedAppointment({
+        babysitterUserId: seed.babysitter1.uid,
+        familyId: seed.family1Id,
+        createdByUserId: seed.babysitter1.uid,
+        initiatedBy: 'babysitter',
+        publishedSearchId: 'ps-test-1',
+        // The withheld state the callable mints.
+        address: null,
+        latLng: null,
+        ...overrides,
+      });
+    }
+
+    it('a parent accepting fills in the address and reaches the same terminal state', async () => {
+      const apptId = await seedInverted();
+      const parentToken = await getIdToken(seed.parent1.uid);
+
+      const result = await callFunction<{ success: boolean }>(
+        'respondToRequest',
+        { appointmentId: apptId, action: 'accept' },
+        parentToken,
+      );
+      expect(result.success).toBe(true);
+
+      const doc = (await getDb().collection('appointments').doc(apptId).get()).data()!;
+      // Same terminal state a family-initiated accept reaches...
+      expect(doc.status).toBe('confirmed');
+      expect(doc.confirmedAt).toBeDefined();
+      expect(doc.updatedAt).toBeDefined();
+      // ...plus the disclosure that consent unlocks.
+      expect(doc.address).toBe('15 Rue de Passy, 75016 Paris');
+      expect(doc.latLng).toEqual({ lat: 48.8566, lng: 2.2769 });
+    });
+
+    it('notifies the babysitter (not the family) on accept', async () => {
+      const apptId = await seedInverted();
+      const parentToken = await getIdToken(seed.parent1.uid);
+      await callFunction('respondToRequest', { appointmentId: apptId, action: 'accept' }, parentToken);
+
+      const notifs = await getDb()
+        .collection('notifications')
+        .where('data.appointmentId', '==', apptId)
+        .get();
+      const recipients = notifs.docs.map((d) => d.data().recipientUserId);
+      expect(recipients).toContain(seed.babysitter1.uid);
+      expect(recipients).not.toContain(seed.parent1.uid);
+      expect(notifs.docs[0].data().type).toBe('published_search_accepted');
+    });
+
+    it('a parent declining marks it declined_by_family, distinctly from a sitter decline', async () => {
+      const apptId = await seedInverted();
+      const parentToken = await getIdToken(seed.parent1.uid);
+
+      await callFunction('respondToRequest', { appointmentId: apptId, action: 'decline' }, parentToken);
+
+      const doc = (await getDb().collection('appointments').doc(apptId).get()).data()!;
+      expect(doc.status).toBe('rejected');
+      expect(doc.statusReason).toBe('declined_by_family');
+      // Declining discloses nothing.
+      expect(doc.address).toBeNull();
+      expect(doc.latLng).toBeNull();
+    });
+
+    it('accepting takes the published search off the board (no further answers)', async () => {
+      // A search can be answered by N sitters; once the family says yes the
+      // slot is filled, so the board entry must go — otherwise sitters keep
+      // answering a filled search (PR #212 review). Sibling pendings already
+      // minted stay for the family to answer, matching the family-initiated
+      // "several requests out" shape.
+      const db = getDb();
+      await db.collection('publishedSearches').doc('ps-test-1').set({
+        id: 'ps-test-1', app: 'sit', familyId: seed.family1Id, familyName: 'Test',
+        type: 'one_time', date: '2027-06-07', startTime: '19:00', endTime: '22:00',
+        kidIds: ['kid1'], numberOfKids: 1, areaLabel: '16e',
+        createdAt: new Date(), expiresAt: new Date(Date.now() + 6 * 24 * 3600 * 1000),
+      });
+      const apptId = await seedInverted();
+      const parentToken = await getIdToken(seed.parent1.uid);
+
+      await callFunction('respondToRequest', { appointmentId: apptId, action: 'accept' }, parentToken);
+
+      expect((await db.collection('publishedSearches').doc('ps-test-1').get()).exists).toBe(false);
+    });
+
+    it('accepting an appointment whose search is already gone still succeeds', async () => {
+      // Expired-and-swept, or withdrawn by the family: the delete is
+      // best-effort, never a reason to fail the accept.
+      const apptId = await seedInverted();
+      const parentToken = await getIdToken(seed.parent1.uid);
+      const result = await callFunction<{ success: boolean }>(
+        'respondToRequest', { appointmentId: apptId, action: 'accept' }, parentToken,
+      );
+      expect(result.success).toBe(true);
+    });
+
+    it('the babysitter cannot respond to their OWN request', async () => {
+      const apptId = await seedInverted();
+      await expect(
+        callFunction('respondToRequest', { appointmentId: apptId, action: 'accept' }, babysitterToken),
+      ).rejects.toMatchObject({ code: 'PERMISSION_DENIED' });
+    });
+
+    it('a parent of another family cannot respond', async () => {
+      const apptId = await seedInverted();
+      const outsiderToken = await getIdToken(seed.parent3.uid);
+      await expect(
+        callFunction('respondToRequest', { appointmentId: apptId, action: 'accept' }, outsiderToken),
+      ).rejects.toMatchObject({ code: 'PERMISSION_DENIED' });
+    });
+
+    it('the SECOND parent of the family may also respond', async () => {
+      const apptId = await seedInverted();
+      const parent2Token = await getIdToken(seed.parent2.uid);
+      const result = await callFunction<{ success: boolean }>(
+        'respondToRequest',
+        { appointmentId: apptId, action: 'decline' },
+        parent2Token,
+      );
+      expect(result.success).toBe(true);
+    });
+
+    it('regression: a family member still cannot respond to a FAMILY-initiated request', async () => {
+      const apptId = await seedAppointment({
+        babysitterUserId: seed.babysitter1.uid,
+        familyId: seed.family1Id,
+        createdByUserId: seed.parent1.uid,
+      });
+      const parentToken = await getIdToken(seed.parent1.uid);
+      await expect(
+        callFunction('respondToRequest', { appointmentId: apptId, action: 'accept' }, parentToken),
+      ).rejects.toMatchObject({ code: 'PERMISSION_DENIED' });
+    });
+
+    it('rejects a non-pending babysitter-initiated appointment', async () => {
+      const apptId = await seedInverted({ status: 'confirmed' });
+      const parentToken = await getIdToken(seed.parent1.uid);
+      await expect(
+        callFunction('respondToRequest', { appointmentId: apptId, action: 'accept' }, parentToken),
+      ).rejects.toMatchObject({ code: 'FAILED_PRECONDITION' });
+    });
+  });
 });

@@ -66,6 +66,7 @@ export { enrollBabysitter } from './enrollment/enrollBabysitter.js';
 export { searchBabysitters } from './search/searchBabysitters.js';
 export { sendContactRequest } from './search/sendContactRequest.js';
 export { publishSearch } from './search/publishSearch.js';
+export { contactPublishedSearch } from './search/contactPublishedSearch.js';
 export { addPreferredBabysitter } from './family/addPreferredBabysitter.js';
 export { removePreferredBabysitter } from './family/removePreferredBabysitter.js';
 export { lookupBabysitter } from './family/lookupBabysitter.js';

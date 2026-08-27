@@ -40,6 +40,11 @@ const EMAIL_PREF_CATEGORY: Record<string, 'newRequest' | 'confirmed' | 'cancelle
   study_session_cancelled: 'cancelled',
   study_session_declined: 'cancelled',
   study_request_declined: 'cancelled',
+  // Published-search inversion (issue #207 PR3). Without these, a governed
+  // sitter's guardian gets the mirror in-app and by push but never by email.
+  published_search_contact: 'newRequest',
+  published_search_accepted: 'confirmed',
+  published_search_declined: 'cancelled',
 };
 
 export const mirrorNotificationToGuardians = onDocumentCreated(

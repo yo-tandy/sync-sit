@@ -82,6 +82,28 @@ export function FamilyDashboard() {
   const [resubmitNotes, setResubmitNotes] = useState('');
   const [resubmitting, setResubmitting] = useState(false);
 
+  // ── Answering a babysitter-initiated request (issue #207 PR3) ──
+  // A sitter answered one of this family's published searches; respondToRequest
+  // takes the family branch. Accepting is what releases the address to them,
+  // so it is confirmed in a dialog rather than fired from the card.
+  const [respondTarget, setRespondTarget] = useState<{ appointmentId: string; action: 'accept' | 'decline' } | null>(null);
+  const [responding, setResponding] = useState(false);
+
+  const handleRespond = async () => {
+    if (!respondTarget) return;
+    setResponding(true);
+    try {
+      const fn = httpsCallable(functions, 'respondToRequest');
+      await fn({ appointmentId: respondTarget.appointmentId, action: respondTarget.action });
+      setRespondTarget(null);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to respond';
+      alert(message);
+    } finally {
+      setResponding(false);
+    }
+  };
+
   const handleCancel = async () => {
     if (!cancelTarget || !cancelReason.trim()) return;
     setCancelling(true);
@@ -465,6 +487,8 @@ export function FamilyDashboard() {
                       onTogglePreferred={() => togglePreferred(apt.babysitterUserId)}
                       onCancel={() => setCancelTarget(apt.appointmentId)}
                       onEdit={() => openEdit(apt)}
+                      onAccept={() => setRespondTarget({ appointmentId: apt.appointmentId, action: 'accept' })}
+                      onDecline={() => setRespondTarget({ appointmentId: apt.appointmentId, action: 'decline' })}
                     />
                   ))}
                 </div>
@@ -518,6 +542,24 @@ export function FamilyDashboard() {
           </p>
         </div>
       )}
+
+      {/* Accept / decline a babysitter-initiated request (issue #207 PR3) */}
+      <Dialog open={!!respondTarget} onClose={() => setRespondTarget(null)}>
+        <h3 className="mb-2 text-lg font-semibold">
+          {respondTarget?.action === 'accept' ? t('familyDashboard.acceptSitterTitle') : t('familyDashboard.declineSitterTitle')}
+        </h3>
+        <p className="mb-4 text-sm text-gray-500">
+          {respondTarget?.action === 'accept' ? t('familyDashboard.acceptSitterDesc') : t('familyDashboard.declineSitterDesc')}
+        </p>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={() => setRespondTarget(null)}>
+            {t('common.back')}
+          </Button>
+          <Button size="sm" onClick={handleRespond} disabled={responding}>
+            {responding ? '...' : respondTarget?.action === 'accept' ? t('request.accept') : t('request.decline')}
+          </Button>
+        </div>
+      </Dialog>
 
       <Dialog open={!!cancelTarget} onClose={() => { setCancelTarget(null); setCancelReason(''); }}>
         {(() => {
