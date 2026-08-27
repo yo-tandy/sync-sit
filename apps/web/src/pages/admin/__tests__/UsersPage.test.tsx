@@ -112,6 +112,24 @@ describe('AdminUsersPage — identity-correction dialog (issue #158)', () => {
     expect(screen.getByRole('button', { name: i18n.t('common.save') })).toBeDisabled();
   });
 
+  it('blanking a populated field shows the cannot-be-empty hint and keeps save disabled', async () => {
+    renderPage();
+    await screen.findByText('Typoed Name');
+
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('admin.correctIdentity') }));
+    fireEvent.change(screen.getByLabelText(i18n.t('admin.identityFirstName')), {
+      target: { value: 'Fixed' },
+    });
+    fireEvent.change(screen.getByLabelText(i18n.t('admin.identityLastName')), {
+      target: { value: '   ' },
+    });
+
+    expect(screen.getByText(i18n.t('admin.identityCannotBeEmpty'))).toBeInTheDocument();
+    // Even with another valid change pending, save stays disabled — the
+    // blanked field would otherwise be silently dropped.
+    expect(screen.getByRole('button', { name: i18n.t('common.save') })).toBeDisabled();
+  });
+
   it('sends ONLY the changed field, closes, and reloads the list', async () => {
     renderPage();
     await screen.findByText('Typoed Name');

@@ -22,10 +22,10 @@
       "port": 34400
     },
     "eventarc": {
-      "port": 29299
+      "port": 39299
     },
     "tasks": {
-      "port": 29499
+      "port": 39499
     },
     "logging": {
       "port": 34500

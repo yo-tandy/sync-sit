@@ -936,6 +936,7 @@ export default {
     identityLastName: 'Last name',
     identityDob: 'Date of birth',
     identityCorrectionFailed: 'Identity correction failed',
+    identityCannotBeEmpty: 'Identity fields cannot be emptied — enter a replacement value.',
     searchAppointments: 'Search by name, family, or date...',
     recurring: 'Recurring',
     family: 'Family',

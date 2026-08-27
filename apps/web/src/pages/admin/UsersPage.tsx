@@ -130,6 +130,19 @@ export function AdminUsersPage() {
     setIdentityDialog({ open: true, user: u });
   };
 
+  // Blanking a populated field is not a valid correction (root identity
+  // cannot be cleared; the backend rejects empty names) — surface it instead
+  // of silently dropping the field from the payload.
+  const identityBlanked = () => {
+    const u = identityDialog.user;
+    if (!u) return false;
+    return (
+      (!identityForm.firstName.trim() && !!u.firstName) ||
+      (!identityForm.lastName.trim() && !!u.lastName) ||
+      (!identityForm.dateOfBirth.trim() && !!formatDob(u))
+    );
+  };
+
   const identityChanges = () => {
     const u = identityDialog.user;
     if (!u) return null;
@@ -148,7 +161,7 @@ export function AdminUsersPage() {
   const handleIdentitySave = async () => {
     const u = identityDialog.user;
     const changes = identityChanges();
-    if (!u || !changes || identitySaving) return;
+    if (!u || !changes || identityBlanked() || identitySaving) return;
     setIdentitySaving(true);
     setIdentityError('');
     try {
@@ -394,6 +407,9 @@ export function AdminUsersPage() {
           value={identityForm.dateOfBirth}
           onChange={(e) => setIdentityForm((prev) => ({ ...prev, dateOfBirth: e.target.value }))}
         />
+        {identityBlanked() && (
+          <p className="mb-4 text-sm text-red-600">{t('admin.identityCannotBeEmpty')}</p>
+        )}
         {identityError && <p className="mb-4 text-sm text-red-600">{identityError}</p>}
         <div className="flex gap-3">
           <Button variant="secondary" size="sm" onClick={closeIdentityDialog}>
@@ -402,7 +418,7 @@ export function AdminUsersPage() {
           <Button
             variant="primary"
             size="sm"
-            disabled={identitySaving || !identityChanges()}
+            disabled={identitySaving || !identityChanges() || identityBlanked()}
             onClick={handleIdentitySave}
           >
             {t('common.save')}

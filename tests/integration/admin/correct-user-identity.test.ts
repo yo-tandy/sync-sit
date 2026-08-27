@@ -153,6 +153,32 @@ describe('correctUserIdentity', () => {
       expect(kid.governedBy.familyId).toBe(seed.parent1.familyId);
     });
 
+    it('audits the before-DOB when it is stored as a raw string (client-side enrollment shape)', async () => {
+      // Babysitter/tutor enrollment writes dateOfBirth as a plain
+      // 'YYYY-MM-DD' string via the client SDK (StepProfile) — exactly the
+      // self-managed accounts this callable exists for.
+      await seedUser('cuiUser9', { dateOfBirth: '2008-11-23' });
+
+      await callFunction(
+        'correctUserIdentity',
+        { targetUserId: 'cuiUser9', dateOfBirth: '2008-11-24' },
+        adminToken,
+      );
+
+      const user = (await getDb().collection('users').doc('cuiUser9').get()).data()!;
+      // The corrected value is normalized to a Timestamp.
+      expect(user.dateOfBirth.toDate().toISOString().slice(0, 10)).toBe('2008-11-24');
+
+      const audits = await getDb()
+        .collection('auditLogs')
+        .where('action', '==', 'user_identity_corrected')
+        .get();
+      const mine = audits.docs.map((d) => d.data()).filter((a) => a.targetUserId === 'cuiUser9');
+      expect(mine.length).toBe(1);
+      expect(mine[0].details.before).toEqual({ dateOfBirth: '2008-11-23' });
+      expect(mine[0].details.after).toEqual({ dateOfBirth: '2008-11-24' });
+    });
+
     it('trims whitespace around names', async () => {
       await seedUser('cuiUser3');
       await callFunction(

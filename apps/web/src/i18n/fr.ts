@@ -905,6 +905,7 @@ export default {
     identityLastName: 'Nom',
     identityDob: 'Date de naissance',
     identityCorrectionFailed: 'Échec de la correction d\'identité',
+    identityCannotBeEmpty: 'Les champs d\'identité ne peuvent pas être vidés — saisissez une valeur de remplacement.',
     searchAppointments: 'Rechercher par nom, famille ou date...',
     recurring: 'Récurrent',
     family: 'Famille',

@@ -70,7 +70,16 @@ export const correctUserIdentity = onCall(
       updates.lastName = fields.lastName;
     }
     if (fields.dateOfBirth) {
-      before.dateOfBirth = user.dateOfBirth?.toDate?.()?.toISOString()?.slice(0, 10) ?? null;
+      // The stored DOB has two live shapes: a Timestamp (server-written, e.g.
+      // redeemKidInvite) or a raw 'YYYY-MM-DD' string (babysitter/tutor
+      // enrollment writes it client-side — see StepProfile / ageBackstop's
+      // union type). Record the before-value for both; the audit entry is the
+      // compensating control for bypassing set-once, so it must not drop it.
+      const rawDob = user.dateOfBirth;
+      before.dateOfBirth =
+        typeof rawDob === 'string'
+          ? rawDob.slice(0, 10)
+          : rawDob?.toDate?.()?.toISOString()?.slice(0, 10) ?? null;
       after.dateOfBirth = fields.dateOfBirth;
       updates.dateOfBirth = Timestamp.fromDate(new Date(`${fields.dateOfBirth}T00:00:00Z`));
     }

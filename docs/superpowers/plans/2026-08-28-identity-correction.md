@@ -38,18 +38,40 @@ Checked everywhere `firstName`/`lastName` is copied out of a users doc
 (`grep -rn firstName` over `packages/shared-functions/src`,
 `apps/functions/src`, `apps/study-functions/src`):
 
-- **No persisted Firestore copy exists.** Search results
-  (`searchBabysitters`, `searchTutors`, `lookupBabysitter`, `lookupTutor`),
-  admin listings (`listUsers`, `listFamilies`, `listAuditLogs`,
-  `listPendingVerifications`), contact payloads (`getParentContacts`) and
-  oversight views (`getGovernedChildDetail`) all read the users doc **live**
-  at call time. Appointment docs carry `familyName`, not user names; the
-  names that appear in appointment/search flows (`sitterName`,
-  `babysitterName` in `respondToRequest`, `contactPublishedSearch`) are
-  interpolated into one-shot notification/email bodies, not stored.
-- **Study session docs denormalize `students: {firstName, age}`** — but those
-  come from the family `kids` subcollection (parent-entered kid records),
-  not from users-doc root identity. Unaffected.
+**Live reads (unaffected by a correction):** search results
+(`searchBabysitters`, `searchTutors`, `lookupBabysitter`, `lookupTutor`),
+admin listings (`listUsers`, `listFamilies`, `listAuditLogs`,
+`listPendingVerifications`), contact payloads (`getParentContacts`) and
+oversight views (`getGovernedChildDetail`) read the users doc at call time.
+Sit appointment docs carry `familyName`, not user names; the names in sit
+appointment/search flows (`sitterName`, `babysitterName`) are interpolated
+into one-shot notification/email bodies, not stored.
+
+**Persisted copies (STALE after a correction — known limitation, #273):**
+
+- `study-sessions` docs store `tutorName` (bookSession, proposeSession) and
+  `parentName` (bookSession; respondToSession fills it on provider-proposal
+  confirm). Study surfaces deliberately render the stored copy — e.g. the
+  family RequestsPage renders `tutorName` because parents cannot read the
+  tutor's user doc under the rules — and `cancelSession` notifications reuse
+  `session.tutorName`.
+- `contactSharingRequests` docs store `parentName`
+  (addPreferredBabysitter; note it uppercases the last name).
+
+Neither correction path refreshes these: `correctChildIdentity` has had the
+same gap since #146, and this callable mirrors it. A clean fan-out is
+blocked by a schema gap — `tutorName` is attributable via `tutorUserId`,
+but `parentName`'s owner uid is never stored next to it (a provider-
+proposal confirm doesn't record the confirming parent, and
+`contactSharingRequests` records only `familyId`, which can hold several
+parents). Follow-up issue #273 tracks recording the name-owner uid and
+fanning out from BOTH correction callables.
+
+**Other derived copies:**
+
+- Study session `students: {firstName, age}` come from the family `kids`
+  subcollection (parent-entered kid records), not users-doc root identity.
+  Unaffected.
 - **Firebase Auth `displayName`** is derived from firstName/lastName at
   account creation (`enrollFamily`, `joinFamily`, `redeemKidInvite`,
   `enrollBabysitter`). `correctChildIdentity` deliberately does not sync it
@@ -57,7 +79,8 @@ Checked everywhere `firstName`/`lastName` is copied out of a users doc
   `correctUserIdentity` mirrors that and leaves it alone too.
 
 Conclusion: mirror `correctChildIdentity` exactly — write the users doc, no
-fan-out.
+fan-out — with the study-side display-name staleness documented above and
+tracked in #273.
 
 ## Changes
 
