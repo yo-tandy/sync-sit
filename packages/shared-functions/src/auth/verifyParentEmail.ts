@@ -2,7 +2,7 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import * as crypto from 'crypto';
 import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
-import { sendVerificationEmail } from '../config/email.js';
+import { sendVerificationEmail, normalizeAccountExistsApp } from '../config/email.js';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
 import { handleExistingAccountSignup } from './accountExistsNotice.js';
 import { isInSendCooldown } from './sendCooldown.js';
@@ -81,7 +81,9 @@ export const verifyParentEmail = onCall(
       createdAt: new Date(),
     });
 
-    await sendVerificationEmail(normalizedEmail, code);
+    // Branded per app (issue #156): the same untrusted display-only hint
+    // the account-exists path already normalizes.
+    await sendVerificationEmail(normalizedEmail, code, normalizeAccountExistsApp(app));
 
     await writeUserActivity('system', 'verification_email_sent', { email: normalizedEmail });
 
