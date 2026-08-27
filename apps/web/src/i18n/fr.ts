@@ -1068,6 +1068,7 @@ export default {
     additionalInfoLabel: 'Informations supplémentaires',
     declinedByYou: 'Vous avez refusé cette demande.',
     withdrawnBySitter: 'La babysitter a retiré cette demande.',
+    cancelledLateBadge: 'Annulée tardivement',
     resubmit: 'Renvoyer',
     resubmitTitle: 'Renvoyer la demande',
     resubmitDesc: 'Modifiez les détails et ajoutez une note explicative. Le/la babysitter sera notifié(e).',

@@ -1096,6 +1096,7 @@ export default {
     additionalInfoLabel: 'Additional info',
     declinedByYou: 'You declined this request.',
     withdrawnBySitter: 'The babysitter withdrew this request.',
+    cancelledLateBadge: 'Cancelled late',
     resubmit: 'Resubmit',
     resubmitTitle: 'Resubmit Request',
     resubmitDesc: 'Edit the details and add a note explaining the changes. The babysitter will be notified.',

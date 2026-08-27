@@ -131,6 +131,21 @@ service cloud.firestore {
                      && tutorField(request.resource.data, 'aboutMe', null).size() <= 1000));
     }
 
+    // Cancellation notice window (issue #237): user-editable by design on
+    // BOTH profiles (enforcement reads per-booking snapshots, so live edits
+    // cannot retro-classify), but bounded here because the value classifies
+    // OTHER users' cancellations as late -- an absurd window (e.g. 10^9h)
+    // would flag every family cancellation. 168h (1 week) is the largest
+    // offered preset (CANCELLATION_NOTICE_PRESETS in shared-core).
+    function noticeWindowBoundsValid() {
+      return (tutorField(request.resource.data, 'cancellationNoticeHours', 0) is int
+              && tutorField(request.resource.data, 'cancellationNoticeHours', 0) >= 0
+              && tutorField(request.resource.data, 'cancellationNoticeHours', 0) <= 168)
+             && (bsField(request.resource.data, 'cancellationNoticeHours', 0) is int
+                 && bsField(request.resource.data, 'cancellationNoticeHours', 0) >= 0
+                 && bsField(request.resource.data, 'cancellationNoticeHours', 0) <= 168);
+    }
+
     // Helper: profiles.tutor.arrondissements is READ BACK and processed by
     // searchTutors (each element flows through postcodeToArrondissement), so
     // its stored shape is bounded: absent/list only, at most 60 entries (45
@@ -273,10 +288,12 @@ service cloud.firestore {
       // NOTE: `profiles.babysitter.searchable` and `profiles.tutor.searchable`
       //   are intentionally editable — they are user-controlled by design
       //   (soft hide from search).
-      // NOTE: `profiles.tutor.cancellationNoticeHours` is also intentionally
-      //   editable — enforcement reads the per-session SNAPSHOT taken at
-      //   request time (bookSession/proposeSession), so live edits cannot
-      //   retro-classify existing bookings.
+      // NOTE: `profiles.tutor.cancellationNoticeHours` and
+      //   `profiles.babysitter.cancellationNoticeHours` are also intentionally
+      //   editable — enforcement reads the per-booking SNAPSHOT taken at
+      //   request time (bookSession/proposeSession; sendContactRequest/
+      //   contactPublishedSearch/resubmitAppointment), so live edits cannot
+      //   retro-classify existing bookings. Bounds via noticeWindowBoundsValid.
       // - governedBy / identityLocked: supervision mirrors owned by the
       //   guardian callables (governedBy present iff the guardianLinks doc is
       //   ACTIVE; identityLocked marks parent-attested identity).
@@ -295,6 +312,7 @@ service cloud.firestore {
                     && rootIdentitySetOnce()
                     && rootContactShapeValid()
                     && tutorNumericBoundsValid()
+                    && noticeWindowBoundsValid()
                     && tutorAreaShapeValid()
                     && photoUrlValid();
     }

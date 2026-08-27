@@ -54,6 +54,14 @@ export const modifyAppointment = onCall(
       throw new HttpsError('permission-denied', 'You are not part of this appointment');
     }
 
+    // No notice-window guard here, deliberately (PR #248 review): study's
+    // modifySession blocks inside-window date moves because moving a session
+    // to next month and then cancelling cleanly was an unguarded escape from
+    // the window. Sit's modify cannot change `date` -- only startTime/endTime
+    // on the SAME day -- and every offered window is >= 24h, so a same-day
+    // move can never exit a window the appointment is already inside
+    // (max same-day distance < 24h). If a date field is ever added here, the
+    // inside-window guard must come with it.
     // Build update object and track changed fields
     const updates: Record<string, any> = {};
     const modifiedFields: string[] = [];

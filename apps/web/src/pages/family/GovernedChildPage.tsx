@@ -702,7 +702,12 @@ export function GovernedChildPage() {
                 <Card key={a.appointmentId}>
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">{appointmentMeta(a)}</div>
-                    <Badge variant="gray">{t(`governance.child.status.${a.status}`)}</Badge>
+                    <div className="flex shrink-0 flex-wrap items-center justify-end gap-1">
+                      {a.lateCancellation && (
+                        <Badge variant="amber">{t('appointment.cancelledLateBadge')}</Badge>
+                      )}
+                      <Badge variant="gray">{t(`governance.child.status.${a.status}`)}</Badge>
+                    </div>
                   </div>
                 </Card>
               ))}

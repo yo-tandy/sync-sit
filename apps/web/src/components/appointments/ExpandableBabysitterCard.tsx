@@ -339,6 +339,11 @@ export function ExpandableBabysitterCard({
             // "Declined" with no idea who declined (PR #212 review).
             <p className="mt-3 text-xs text-gray-500">{t('appointment.withdrawnBySitter')}</p>
           )}
+          {appointment.status === 'cancelled' && appointment.lateCancellation === true && (
+            // Allow-but-flag read path (issue #237): symmetric -- whoever
+            // cancelled late, the other party sees the record.
+            <p className="mt-3 text-xs font-medium text-amber-700">{t('appointment.cancelledLateBadge')}</p>
+          )}
           {/* Resubmit is gated on the status, not just the variant: cancelled
               appointments also render as `rejected` here, and
               resubmitAppointment rejects anything that is not `rejected` — the

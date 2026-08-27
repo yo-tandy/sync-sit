@@ -59,6 +59,48 @@ describe('resubmitAppointment', () => {
       expect(originalDoc.data()!.resubmitted).toBe(true);
     });
 
+    it('snapshots the sitter CURRENT notice window, not the original appointment (issue #237)', async () => {
+      // Original minted with a stale snapshot (12), then the sitter changes
+      // policy to 48 BEFORE the resubmit: the new doc must read 48 -- proving
+      // the third create path re-reads the profile instead of carrying the
+      // original's snapshot or omitting the field.
+      const originalId = await seedAppointment({
+        babysitterUserId: seed.babysitter1.uid,
+        familyId: seed.family1Id,
+        createdByUserId: seed.parent1.uid,
+        status: 'rejected',
+        statusReason: 'declined_by_babysitter',
+        startTime: '18:00',
+        endTime: '22:00',
+        cancellationNoticeHours: 12,
+      });
+      await getDb()
+        .collection('users')
+        .doc(seed.babysitter1.uid)
+        .update({ 'profiles.babysitter.cancellationNoticeHours': 48 });
+
+      try {
+        const result = await callFunction<{ appointmentId: string }>(
+          'resubmitAppointment',
+          {
+            originalAppointmentId: originalId,
+            startTime: '19:00',
+            endTime: '23:00',
+            additionalNotes: 'Second try',
+          },
+          parentToken
+        );
+        const newDoc = await getDb().collection('appointments').doc(result.appointmentId).get();
+        expect(newDoc.data()!.cancellationNoticeHours).toBe(48);
+      } finally {
+        // beforeEach clears appointments, not users.
+        await getDb()
+          .collection('users')
+          .doc(seed.babysitter1.uid)
+          .update({ 'profiles.babysitter.cancellationNoticeHours': 0 });
+      }
+    });
+
     it('resubmit with kidIds change denormalizes new kids', async () => {
       const originalId = await seedAppointment({
         babysitterUserId: seed.babysitter1.uid,

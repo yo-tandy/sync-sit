@@ -130,6 +130,7 @@ export const getGovernedChildDetail = onCall(
           startTime: a.startTime ?? null,
           endTime: a.endTime ?? null,
           offeredRate: a.offeredRate ?? null,
+          lateCancellation: a.lateCancellation === true,
           message: a.message ?? null,
           additionalInfo: a.additionalInfo ?? null,
           cancellationReason: a.cancellationReason ?? null,

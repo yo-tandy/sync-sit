@@ -5,6 +5,7 @@ import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { getBabysitterProfile } from '@ejm/sit-core';
+import { CANCELLATION_NOTICE_PRESETS } from '@ejm/shared-core';
 import { useSchedule } from '@/hooks/useSchedule';
 import { useHolidays } from '@/hooks/useHolidays';
 import { WeeklyTimeline } from '@/components/schedule/WeeklyTimeline';
@@ -132,10 +133,16 @@ export function SchedulePage() {
   const [policySaving, setPolicySaving] = useState(false);
   const [policyError, setPolicyError] = useState<string | null>(null);
   const policySeeded = useRef(false);
+  // Saved value the dirty-guard compares against (PR #248 review round 1:
+  // the policy dropdown was outside the useBlocker/beforeunload snapshot, so
+  // an unsaved choice was silently lost on navigation).
+  const [savedNoticeHours, setSavedNoticeHours] = useState(0);
   useEffect(() => {
     if (!userDoc || policySeeded.current) return;
     policySeeded.current = true;
-    setNoticeHours(getBabysitterProfile(userDoc)?.cancellationNoticeHours ?? 0);
+    const saved = getBabysitterProfile(userDoc)?.cancellationNoticeHours ?? 0;
+    setSavedNoticeHours(saved);
+    setNoticeHours(saved);
   }, [userDoc]);
 
   const handleSavePolicy = async () => {
@@ -147,6 +154,7 @@ export function SchedulePage() {
         'profiles.babysitter.cancellationNoticeHours': noticeHours,
       });
       await refreshUserDoc();
+      setSavedNoticeHours(noticeHours);
       toast(t('schedule.cancellationPolicy.saved'));
     } catch {
       setPolicyError(t('common.error'));
@@ -178,8 +186,8 @@ export function SchedulePage() {
       holidaySchedules: localHolidaySchedules,
       holidayNotes: localHolidayNotes,
     });
-    setDirty(current !== savedSnapshot.current);
-  }, [localWeekly, localHolidayMode, localHolidaySchedules, localHolidayNotes, initialized]);
+    setDirty(current !== savedSnapshot.current || noticeHours !== savedNoticeHours);
+  }, [localWeekly, localHolidayMode, localHolidaySchedules, localHolidayNotes, noticeHours, savedNoticeHours, initialized]);
 
   // Block navigation when there are unsaved changes
   const blocker = useBlocker(dirty);
@@ -352,12 +360,16 @@ export function SchedulePage() {
           aria-label={t('schedule.cancellationPolicy.title')}
           value={String(noticeHours)}
           onChange={(e) => setNoticeHours(Number(e.target.value))}
-          options={[
-            { value: '0', label: t('schedule.cancellationPolicy.none') },
-            { value: '24', label: t('schedule.cancellationPolicy.hours24') },
-            { value: '48', label: t('schedule.cancellationPolicy.hours48') },
-            { value: '168', label: t('schedule.cancellationPolicy.week1') },
-          ]}
+          options={CANCELLATION_NOTICE_PRESETS.map((h) => ({
+            value: String(h),
+            label: t(
+              h === 0
+                ? 'schedule.cancellationPolicy.none'
+                : h === 168
+                  ? 'schedule.cancellationPolicy.week1'
+                  : `schedule.cancellationPolicy.hours${h}`,
+            ),
+          }))}
         />
         {policyError && <p className="mb-4 text-sm text-brand-600">{policyError}</p>}
         <Button type="button" onClick={handleSavePolicy} disabled={policySaving} className="mt-4 mb-6">

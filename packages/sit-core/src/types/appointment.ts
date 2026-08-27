@@ -32,10 +32,6 @@ export interface SearchDoc {
   address: string;
   latLng: LatLng;
   offeredRate?: number;
-  // Notice-window snapshot taken at creation + the allow-but-flag cancel
-  // marker (issue #237; study's session contract mirrored).
-  cancellationNoticeHours?: number;
-  lateCancellation?: boolean;
   additionalInfo?: string;
   filters: {
     minAge?: number;
@@ -82,6 +78,10 @@ export interface AppointmentDoc {
   address: string | null;
   latLng: LatLng | null;
   offeredRate?: number;
+  // Notice-window snapshot taken at creation + the allow-but-flag cancel
+  // marker (issue #237; study's session contract mirrored).
+  cancellationNoticeHours?: number;
+  lateCancellation?: boolean;
   message?: string;
   additionalInfo?: string;
 

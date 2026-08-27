@@ -105,6 +105,11 @@ export const resubmitAppointment = onCall(
       : data.additionalNotes.trim();
 
     // Use a batch to atomically create the new appointment AND mark the original
+    const sitterDoc = await db.collection('users').doc(original.babysitterUserId as string).get();
+    const resubmitNoticeHours =
+      (sitterDoc.data()?.profiles as { babysitter?: { cancellationNoticeHours?: number } } | undefined)
+        ?.babysitter?.cancellationNoticeHours ?? 0;
+
     const newAppointmentRef = db.collection('appointments').doc();
     const batch = db.batch();
 
@@ -114,6 +119,11 @@ export const resubmitAppointment = onCall(
       familyId: original.familyId,
       familyName: original.familyName || '',
       familyPhotoUrl: familyPhotoUrl || null,
+      // Third create path (PR #248 review): a resubmission is a NEW ask, so
+      // it snapshots the sitter's CURRENT policy -- the same at-creation
+      // semantics as sendContactRequest/contactPublishedSearch, not a carry
+      // of the original's possibly-stale snapshot.
+      cancellationNoticeHours: resubmitNoticeHours,
       babysitterUserId: original.babysitterUserId,
       createdByUserId: uid,
       type: original.type,

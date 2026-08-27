@@ -2143,6 +2143,69 @@ describe('users update — tutor numeric bounds (issue #123 hardening)', () => {
 // territory (Admin SDK bypasses rules).
 // ---------------------------------------------------------------------------
 
+describe('users update — cancellation notice window bounds (issue #237)', () => {
+  // The window is user-editable by design on BOTH profiles (enforcement
+  // reads per-booking snapshots), but bounded to [0, 168] int because it
+  // classifies OTHER users' cancellations as late.
+  const sitterUid = 'notice-sitter-1';
+  const tutorUid = 'notice-tutor-1';
+
+  beforeEach(async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.firestore().doc(`users/${sitterUid}`).set({
+        uid: sitterUid,
+        email: 'notice-sitter@ejm-test.org',
+        status: 'active',
+        profiles: { babysitter: { ejemEmail: 'notice-sitter@ejm-test.org', approvedFamilies: [] } },
+      });
+      await ctx.firestore().doc(`users/${tutorUid}`).set({
+        uid: tutorUid,
+        email: 'notice-tutor@ejm-test.org',
+        status: 'active',
+        profiles: { tutor: { enrollmentComplete: true, ejemEmail: 'notice-tutor@ejm-test.org', paddingMin: 15 } },
+      });
+    });
+  });
+
+  it('babysitter owner may set a preset window', async () => {
+    const db = testEnv.authenticatedContext(sitterUid).firestore();
+    await assertSucceeds(
+      updateDoc(doc(db, 'users', sitterUid), { 'profiles.babysitter.cancellationNoticeHours': 48 }),
+    );
+  });
+
+  it('rejects an absurd babysitter window (would flag every family cancellation)', async () => {
+    const db = testEnv.authenticatedContext(sitterUid).firestore();
+    await assertFails(
+      updateDoc(doc(db, 'users', sitterUid), { 'profiles.babysitter.cancellationNoticeHours': 1000000000 }),
+    );
+  });
+
+  it('rejects a negative babysitter window', async () => {
+    const db = testEnv.authenticatedContext(sitterUid).firestore();
+    await assertFails(
+      updateDoc(doc(db, 'users', sitterUid), { 'profiles.babysitter.cancellationNoticeHours': -1 }),
+    );
+  });
+
+  it('rejects a non-integer babysitter window', async () => {
+    const db = testEnv.authenticatedContext(sitterUid).firestore();
+    await assertFails(
+      updateDoc(doc(db, 'users', sitterUid), { 'profiles.babysitter.cancellationNoticeHours': '48' }),
+    );
+  });
+
+  it('tutor window is bounded by the same rule', async () => {
+    const db = testEnv.authenticatedContext(tutorUid).firestore();
+    await assertSucceeds(
+      updateDoc(doc(db, 'users', tutorUid), { 'profiles.tutor.cancellationNoticeHours': 168 }),
+    );
+    await assertFails(
+      updateDoc(doc(db, 'users', tutorUid), { 'profiles.tutor.cancellationNoticeHours': 169 }),
+    );
+  });
+});
+
 describe('users update — root identity set-once (issue #144)', () => {
   async function seed(id: string, data: Record<string, unknown>) {
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
