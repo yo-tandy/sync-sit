@@ -1274,7 +1274,7 @@ export default {
       'You consent, on the child\'s behalf, to the Terms of Service and Privacy Policy, and to the processing of the child\'s data needed to run this service.',
     seeTitle: 'What you can see',
     seeBody:
-      'Supervision is full visibility: your family\'s parents see the child\'s sessions and appointments, schedules, incoming and outgoing requests with their messages, and all session notes. The child is informed that supervision is active.',
+      'Supervision is full visibility: your family\'s parents see the child\'s sessions and appointments, schedules, incoming and outgoing requests with their messages, and all session and appointment notes. The child is informed that supervision is active.',
     doTitle: 'What you can do',
     doBody:
       'You can hide the child from search, cancel their sessions or appointments (with a reason), and decline requests on their behalf. You can never accept or commit on their behalf — the child always makes their own commitments.',
@@ -1310,7 +1310,7 @@ export default {
         'When your account is supervised, the parents of your family follow your activity. Here is exactly what that covers — nothing they can see is hidden from you.',
       seeTitle: 'What they see',
       seeBody:
-        'Your sessions and appointments, your schedule, your incoming and outgoing requests with their messages, and all session notes.',
+        'Your sessions and appointments, your schedule, your incoming and outgoing requests with their messages, and all session and appointment notes.',
       doTitle: 'What they can do',
       doBody:
         'They can hide you from search, cancel your sessions or appointments (with a reason), and decline requests on your behalf. They can never accept for you — you always make your own commitments.',

@@ -25,7 +25,7 @@ describe('SupervisionInfoPage (sit)', () => {
     renderPage();
 
     expect(screen.getByText('What they see')).toBeInTheDocument();
-    expect(screen.getByText(/all session notes/i)).toBeInTheDocument();
+    expect(screen.getByText(/all session and appointment notes/i)).toBeInTheDocument();
     expect(screen.getByText('What they can do')).toBeInTheDocument();
     expect(screen.getByText(/they can never accept for you/i)).toBeInTheDocument();
     expect(screen.getByText('Who holds these rights')).toBeInTheDocument();

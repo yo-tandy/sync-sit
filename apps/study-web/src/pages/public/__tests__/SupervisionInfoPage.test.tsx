@@ -9,7 +9,7 @@ describe('SupervisionInfoPage', () => {
 
     expect(screen.getByText(/what supervision means/i)).toBeInTheDocument();
     // Ruling 8, stated to the kid without euphemism.
-    expect(screen.getByText(/session notes/i)).toBeInTheDocument();
+    expect(screen.getByText(/session and appointment notes/i)).toBeInTheDocument();
     expect(screen.getByText(/messages/i)).toBeInTheDocument();
     // Decline-only guardian powers.
     expect(screen.getByText(/never accept/i)).toBeInTheDocument();

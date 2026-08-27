@@ -323,12 +323,19 @@ export function GovernedChildPage() {
         <p className="mt-2 rounded-lg bg-gray-50 p-2 text-xs text-gray-600">{a.additionalInfo}</p>
       )}
       {/* Ruling 8: appointment notes are guardian-visible, exactly like
-          study's session notes below (issue #238 — twin parity). */}
-      {sessionTransparency({
-        message: null,
-        preSessionNote: a.preAppointmentNote,
-        postSessionNote: a.postAppointmentNote,
-      })}
+          study's session notes below (issue #238 — twin parity). Sitting
+          labels, not "session" — both kinds render on this page. */}
+      {sessionTransparency(
+        {
+          message: null,
+          preSessionNote: a.preAppointmentNote,
+          postSessionNote: a.postAppointmentNote,
+        },
+        {
+          pre: t('governance.child.noteAppointmentPre'),
+          post: t('governance.child.noteAppointmentPost'),
+        },
+      )}
     </>
   );
 
@@ -356,25 +363,30 @@ export function GovernedChildPage() {
     </>
   );
 
-  // Ruling 8: message + notes are always rendered when present.
-  const sessionTransparency = (s: {
-    message: string | null;
-    preSessionNote: string | null;
-    postSessionNote: string | null;
-  }) => (
+  // Ruling 8: message + notes are always rendered when present. Labels are
+  // overridable because this page shows study sessions AND sit appointments
+  // side by side — an appointment note must not be headed "session".
+  const sessionTransparency = (
+    s: {
+      message: string | null;
+      preSessionNote: string | null;
+      postSessionNote: string | null;
+    },
+    labels?: { pre: string; post: string },
+  ) => (
     <>
       {s.message && (
         <p className="mt-2 rounded-lg bg-gray-50 p-2 text-xs italic text-gray-600">{s.message}</p>
       )}
       {s.preSessionNote && (
         <p className="mt-2 rounded-lg bg-gray-50 p-2 text-xs text-gray-600">
-          <span className="font-semibold">{t('governance.child.notePre')}: </span>
+          <span className="font-semibold">{labels?.pre ?? t('governance.child.notePre')}: </span>
           {s.preSessionNote}
         </p>
       )}
       {s.postSessionNote && (
         <p className="mt-2 rounded-lg bg-gray-50 p-2 text-xs text-gray-600">
-          <span className="font-semibold">{t('governance.child.notePost')}: </span>
+          <span className="font-semibold">{labels?.post ?? t('governance.child.notePost')}: </span>
           {s.postSessionNote}
         </p>
       )}

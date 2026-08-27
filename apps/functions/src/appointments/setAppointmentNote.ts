@@ -21,9 +21,11 @@ import { getParentProfile, type User } from '@ejm/shared-core';
  *              appointment's babysitter may write it.
  *
  * VISIBILITY mirrors study exactly: both notes live on the appointment doc,
- * which is already readable by precisely {the family's parents, the
- * babysitter, admin} and client-write-denied — no rules change, no new
- * readers.
+ * whose read rule covers {the family's parents, the babysitter, admin} and
+ * which stays client-write-denied (no rules change). Like study's session
+ * notes, they are ALSO projected to a supervised babysitter's guardians via
+ * the getGovernedChildDetail whitelist (governance ruling 8: supervising
+ * parents see everything) — the family-facing dialog copy discloses this.
  *
  * STRUCTURAL ADAPTATIONS from study (see the plan doc):
  *   • Sit has no per-occurrence instance docs, so there is no `instanceId`;
@@ -116,10 +118,12 @@ export const setAppointmentNote = onCall(
       );
     }
 
-    // ── Timing gate (DST-safe, Paris wall-clock) — one_time only ──
-    // A confirmed recurring arrangement keeps both windows open (no single
-    // start instant; see the docstring).
-    if (apt.type === 'one_time') {
+    // ── Timing gate (DST-safe, Paris wall-clock) ──
+    // Only an explicit recurring doc gets the both-windows-open exemption
+    // (no single start instant; see the docstring). Everything else —
+    // one_time, and defensively any absent/unknown type — fails CLOSED into
+    // the strict windows.
+    if (apt.type !== 'recurring') {
       if (!apt.date || !apt.startTime) {
         // A confirmed one_time appointment always carries these; defensive only.
         throw new HttpsError('failed-precondition', 'Appointment has no scheduled date');

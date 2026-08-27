@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
+import { FieldValue } from 'firebase-admin/firestore';
 import { clearAll, callFunction, getIdToken, getDb } from '../../setup/emulator.js';
 import { seedTestData, seedAppointment, type SeedData } from '../../setup/seed.js';
 
@@ -234,6 +235,18 @@ describe('setAppointmentNote', () => {
     await callFunction('setAppointmentNote',
       { appointmentId: id, kind: 'post', text: 'Mondays are going great.' }, babysitter1Token);
     expect((await aptData(id)).postAppointmentNote).toBe('Mondays are going great.');
+  });
+
+  it('an absent/unknown type fails CLOSED into the strict one_time windows', async () => {
+    // Only an explicit 'recurring' doc earns the both-windows-open exemption:
+    // a doc with no type at all gets the timing gates, so a started target
+    // still rejects the pre-note.
+    const id = 'ot-notype';
+    await seedOneTime(id, { date: YESTERDAY() });
+    await aptRef(id).update({ type: FieldValue.delete() });
+    await expect(
+      callFunction('setAppointmentNote', { appointmentId: id, kind: 'pre', text: 'x' }, parent1Token),
+    ).rejects.toMatchObject({ code: 'FAILED_PRECONDITION' });
   });
 
   it('role gates still apply on recurring: stranger family denied', async () => {
