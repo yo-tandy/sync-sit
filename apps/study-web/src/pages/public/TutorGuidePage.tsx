@@ -86,8 +86,8 @@ export function TutorGuidePage() {
         <Step number={6} title={fr ? 'Recevoir des demandes de contact' : 'Receive contact requests'}>
           <p>
             {fr
-              ? 'Avant toute séance, une demande de contact doit être acceptée. En général, une famille vous en envoie une pour une matière et un niveau, avec un message optionnel — vous recevez une notification push et un email, et la demande apparaît sur votre tableau de bord. Vous pouvez aussi faire le premier pas en répondant à une recherche publiée par une famille ("Annonces des familles" sur votre tableau de bord — jusqu\'à 5 annonces par 24 heures).'
-              : 'Before any sessions, a contact request has to be accepted. Usually a family sends you one for a subject and class level, with an optional message — you\'ll receive a push notification and an email, and the request appears on your dashboard. You can also make the first move by answering a family\'s published search (the "Posts from families" board on your dashboard — up to 5 posts per 24 hours).'}
+              ? 'Avant toute séance, une demande de contact doit être acceptée. En général, une famille vous en envoie une pour une matière et un niveau, avec un message optionnel — vous recevez une notification push et un email, et la demande apparaît sur votre tableau de bord. Vous pouvez aussi faire le premier pas en répondant à une recherche publiée par une famille ("Annonces des familles" sur votre tableau de bord) ; vous pouvez répondre à 5 annonces au maximum par 24 heures.'
+              : 'Before any sessions, a contact request has to be accepted. Usually a family sends you one for a subject and class level, with an optional message — you\'ll receive a push notification and an email, and the request appears on your dashboard. You can also make the first move by answering a family\'s published search (the "Posts from families" board on your dashboard); you can answer up to 5 posts per 24 hours.'}
           </p>
         </Step>
 
