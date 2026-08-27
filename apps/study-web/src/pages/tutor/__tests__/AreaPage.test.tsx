@@ -252,6 +252,45 @@ describe('tutor AreaPage', () => {
     expect(screen.queryByText(/pick at least one area/i)).not.toBeInTheDocument();
   });
 
+  it('no flash timer outlives the component, even across a re-save (PR #221)', async () => {
+    // Pins the fix for the CI flake where the 3s success-flash timer fired
+    // after jsdom teardown ('window is not defined' as an unhandled error,
+    // with every test passing). Two properties, both mutation-relevant:
+    //  - saving twice inside the window must not orphan the first timer
+    //    (clear-before-reschedule), so pending timers never exceed one;
+    //  - unmount must cancel what is pending (the cleanup effect), so the
+    //    count returns to baseline and nothing can fire post-teardown.
+    // Render on real timers -- the page needs them to mount -- then fake them
+    // so the save flow's flash timer is countable and cannot actually elapse.
+    seed({ areaMode: 'arrondissement', arrondissements: ['5e'], areaAddress: null, areaLatLng: null, areaRadiusKm: null, locationPrefs: ['online'] });
+    const { unmount } = renderWithProviders(<AreaPage />);
+    await screen.findByRole('button', { name: /^save/i });
+    vi.useFakeTimers();
+    try {
+      const baseline = vi.getTimerCount();
+
+      fireEvent.click(screen.getByRole('button', { name: /^save/i }));
+      // The button reads "Saving..." until the save chain flushes; its label
+      // coming back is the signal the first save fully completed (and thus
+      // armed its flash timer) -- polling the mock alone returns too early
+      // under fake timers.
+      await vi.waitFor(() => expect(h.updateDoc).toHaveBeenCalledTimes(1));
+      await vi.waitFor(() => screen.getByRole('button', { name: /^save/i }));
+      fireEvent.click(screen.getByRole('button', { name: /^save/i }));
+      await vi.waitFor(() => expect(h.updateDoc).toHaveBeenCalledTimes(2));
+      await vi.waitFor(() => screen.getByRole('button', { name: /^save/i }));
+
+      // One pending flash timer, not two: the re-save cleared its predecessor.
+      expect(vi.getTimerCount()).toBe(baseline + 1);
+
+      unmount();
+      // Nothing left to fire into a torn-down environment.
+      expect(vi.getTimerCount()).toBe(baseline);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('unblocks the family_home tutor once an area is checked', async () => {
     seed({ areaMode: 'arrondissement', arrondissements: [], areaAddress: null, areaLatLng: null, areaRadiusKm: null, locationPrefs: ['family_home'] });
     renderWithProviders(<AreaPage />);

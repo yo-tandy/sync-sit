@@ -41,6 +41,12 @@ describe('study notificationRouting', () => {
   it.each([
     ['study_contact_request', '/tutor/requests'],
     ['study_contact_request_cancelled', '/tutor/requests'],
+    // Since the inversion (issue #207 PR4) a tutor receives these too, when the
+    // family answers a request the tutor opened. The parent branch was pinned
+    // from the start; the tutor branch was not (issue #214), and an unrouted
+    // type still counts in the bell -- a badge whose tap goes nowhere.
+    ['study_request_accepted', '/tutor/requests'],
+    ['study_request_declined', '/tutor/requests'],
     ['study_session_request', '/tutor/sessions'],
     ['study_session_confirmed', '/tutor/sessions'],
     ['study_session_declined', '/tutor/sessions'],
