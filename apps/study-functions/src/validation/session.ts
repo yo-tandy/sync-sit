@@ -288,7 +288,13 @@ export const modifySessionSchema = z.object({
       errorMap: () => ({ message: 'Location must be one of the supported location preferences' }),
     })
     .optional(),
-  studentIds: z.array(z.string().min(1)).min(1, 'At least one student must be specified').optional(),
+  studentIds: z
+    .array(z.string().min(1))
+    .min(1, 'At least one student must be specified')
+    // Serial kid lookups follow; an unbounded array is a free fan-out
+    // (PR #244 round 6). Ten is far above any real roster.
+    .max(10, 'Too many students')
+    .optional(),
   message: z.string().trim().max(2000).optional(),
 });
 

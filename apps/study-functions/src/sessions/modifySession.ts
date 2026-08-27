@@ -65,6 +65,12 @@ function applyRestore(tx: Transaction, ref: DocumentReference, result: RestoreRe
  * transaction the old claim is restored (buildRestoredOverride), the new time
  * is re-checked against current availability, and the new claim merged in —
  * so two racing modifies, or a modify racing a booking, cannot double-claim.
+ * Foreign/tutor-authored override caveat (shared-engine semantics, not this
+ * file's): on a doc this app's provenance does not own, restore is
+ * CONSERVATIVE — ledger entries are removed but slots are never flipped back
+ * to true, so a move OFF a tutor-hand-edited day may leave its old slots
+ * blocked until the tutor edits that day again. Claiming ONTO such a doc
+ * only ANDs slots false, which is always safe.
  */
 export const modifySession = onCall(
   { region: 'europe-west1', cors: getCorsOrigin() },
@@ -279,7 +285,6 @@ export const modifySession = onCall(
 
       const oldDate = session.date as string;
       const oldStart = session.startTime as string;
-      const oldEnd = session.endTime as string;
       const oldLocation = session.location as LocationPref;
       const oldLength = session.sessionLengthMinutes as number;
 

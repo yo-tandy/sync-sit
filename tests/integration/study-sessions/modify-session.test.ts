@@ -181,7 +181,10 @@ describe('modifySession', () => {
 
   it('moves the claim on a same-date time change: old slots restored, new slots claimed', async () => {
     const id = await seedSession({ status: 'confirmed' });
-    await seedClaim(FUTURE_MON, id, 40, 44); // 16:00-17:00 claimed
+    // 16:00-17:00 = slots 64..68 -- MUST match the session's own time, or the
+    // 'old slots restored' half below is vacuously true (the round-6 catch:
+    // an earlier revision seeded 40..44 and the assertion could never fail).
+    await seedClaim(FUTURE_MON, id, 64, 68);
     await callFunction('modifySession', { sessionId: id, startTime: '18:00' }, parent1Token);
 
     const ov = (await overrideRef(FUTURE_MON).get()).data()!;
@@ -416,6 +419,33 @@ describe('modifySession', () => {
     expect((await sessionData(id)).reminderSent).toBe(false);
   });
 
+  it('claims ONTO a tutor-authored override day by ANDing slots, preserving its provenance', async () => {
+    // The shared engine's foreign-doc contract: claiming onto a doc our
+    // provenance does not own only ANDs slots false -- always safe -- and
+    // must not clobber the tutor's own day shape (PR #244 round 6).
+    const id = await seedSession({ status: 'confirmed' });
+    await seedClaim(FUTURE_MON, id, 64, 68);
+    // Tutor hand-edited FUTURE_MON_2: afternoon off, evening open.
+    const manualSlots = weeklyMonGrid();
+    for (let i = 64; i < 72; i++) manualSlots[i] = false; // 16:00-18:00 off
+    await overrideRef(FUTURE_MON_2).set({
+      date: FUTURE_MON_2, type: 'custom', slots: manualSlots,
+      reason: 'manual', createdAt: new Date(), updatedAt: new Date(),
+    });
+    await callFunction(
+      'modifySession',
+      { sessionId: id, date: FUTURE_MON_2, startTime: '18:00' },
+      parent1Token,
+    );
+    const ov = (await overrideRef(FUTURE_MON_2).get()).data()!;
+    const slots = ov.slots as boolean[];
+    // The tutor's hand-edit survives...
+    for (let i = 64; i < 72; i++) expect(slots[i]).toBe(false);
+    // ...and our claim ANDed the new block (18:00-19:00 = 72..76) false.
+    for (let i = 72; i < 76; i++) expect(slots[i]).toBe(false);
+    expect(ov.sessionBlocks).toEqual([{ sessionId: id, startIdx: 72, endIdx: 76 }]);
+  });
+
   it('NEVER sets lateCancellation -- a modify is not a cancel', async () => {
     const id = await seedSession({ status: 'confirmed', cancellationNoticeHours: 48 });
     await seedClaim(FUTURE_MON, id, 64, 68);
@@ -434,7 +464,12 @@ describe('modifySession', () => {
       .where('type', '==', 'study_session_modified')
       .get();
     expect(snap.size).toBe(1);
-    expect(snap.docs[0].data().data.sessionId).toBe(id);
+    const n = snap.docs[0].data();
+    expect(n.data.sessionId).toBe(id);
+    // Human labels in the body, never internal identifiers (round 3's fix,
+    // pinned server-side per round 6).
+    expect(n.body).toContain('start time');
+    expect(n.body).not.toContain('startTime');
   });
 });
 
