@@ -200,6 +200,81 @@ describe('reviewVerification', () => {
       expect(verification.communityApprovedBy).toBe(seed.parent1.uid);
     });
 
+    it('a PRE-GRANT rejection does not revoke the grant on a later approval', async () => {
+      // The bug this pins (PR #220 review): approveCommunityCode superseded
+      // only `pending` docs, so a doc an admin had already REJECTED before the
+      // family routed around it via the community code stayed live. The next
+      // time an admin approved anything for that family, the recompute read
+      // that stale rejection and silently un-verified a community-approved
+      // family — through an APPROVAL. Reachable with no unusual steps.
+      const staleReject = await seedVerification({
+        familyId: seed.family2Id,
+        uploadedByUserId: seed.parent3.uid,
+        type: 'identity',
+      });
+      await callFunction(
+        'reviewVerification',
+        { verificationId: staleReject, decision: 'rejected', rejectionReason: 'Blurry' },
+        adminToken,
+      );
+
+      // The family gives up on documents and asks a friend to vouch. The
+      // grant must close the rejected doc, not just pending ones.
+      await grantCommunityApproval();
+      const rejectedDoc = (await getDb().collection('verifications').doc(staleReject).get()).data()!;
+      expect(rejectedDoc.status).toBe('superseded');
+      expect(rejectedDoc.supersededBy).toBe('community');
+
+      // Next school year's certificate, approved.
+      const enrollVerification = await seedVerification({
+        familyId: seed.family2Id,
+        uploadedByUserId: seed.parent3.uid,
+        type: 'ejm_enrollment',
+      });
+      const result = await callFunction<{ isFullyVerified: boolean }>(
+        'reviewVerification',
+        { verificationId: enrollVerification, decision: 'approved' },
+        adminToken,
+      );
+
+      expect(result.isFullyVerified).toBe(true);
+      const verification = (await getDb().collection('families').doc(seed.family2Id).get())
+        .data()!.verification;
+      expect(verification.identityStatus).toBe('approved');
+      expect(verification.isFullyVerified).toBe(true);
+    });
+
+    it('a live PENDING doc of the other type does not drop the grant mid-review', async () => {
+      // `pending` is not a decision. A family that uploads both documents
+      // after being community-verified used to fall to isFullyVerified: false
+      // (and lose isEjmFamily) for the whole window between the first
+      // approval and the second review — an outcome no admin chose.
+      await grantCommunityApproval();
+      await seedVerification({
+        familyId: seed.family2Id,
+        uploadedByUserId: seed.parent3.uid,
+        type: 'ejm_enrollment',
+      });
+      const idVerification = await seedVerification({
+        familyId: seed.family2Id,
+        uploadedByUserId: seed.parent3.uid,
+        type: 'identity',
+      });
+
+      await callFunction(
+        'reviewVerification',
+        { verificationId: idVerification, decision: 'approved' },
+        adminToken,
+      );
+
+      const verification = (await getDb().collection('families').doc(seed.family2Id).get())
+        .data()!.verification;
+      expect(verification.identityStatus).toBe('approved');
+      expect(verification.enrollmentStatus).toBe('approved');
+      expect(verification.isFullyVerified).toBe(true);
+      expect(verification.isEjmFamily).toBe(true);
+    });
+
     it('leaves a document-verified family untouched (no grant, no baseline)', async () => {
       const idVerification = await seedVerification({
         familyId: seed.family2Id,

@@ -34,9 +34,10 @@ export interface VerificationDoc {
   reviewedAt?: FirestoreTimestamp;
   rejectionReason?: string;
 
-  // Set when the community route verified the family before an admin got to
-  // this document (#218). Only that route supersedes — see
-  // supersedePendingVerifications.
+  // Set when the community route verified the family, closing a document
+  // request the grant made moot — either one an admin had not reached yet, or
+  // one they had already rejected and the family routed around (#218). Only
+  // that route supersedes — see supersedeOpenVerifications.
   supersededAt?: FirestoreTimestamp;
   supersededBy?: 'community';
 

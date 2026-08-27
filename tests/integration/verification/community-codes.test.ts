@@ -260,7 +260,33 @@ describe('community verification code flow', () => {
       expect(verifications.filter((v) => v.familyId === seed.family2Id)).toHaveLength(0);
     });
 
-    it('leaves already-reviewed documents alone', async () => {
+    it('closes a REJECTED document too — the family routed around it', async () => {
+      // A rejected doc is as moot as a pending one once the community route
+      // has vouched, and leaving it live was a real bug: reviewVerification
+      // recomputes from documents, so a stale rejection would un-verify the
+      // family on the next approval (PR #220 review).
+      const db = getDb();
+      const rejectedId = await seedVerification({
+        familyId: seed.family2Id,
+        uploadedByUserId: seed.parent3.uid,
+        type: 'identity',
+        status: 'rejected',
+      });
+      const code = await seedCommunityCode({
+        familyId: seed.family2Id,
+        requestedByUserId: seed.parent3.uid,
+      });
+
+      await callFunction('approveCommunityCode', { code }, verifiedEjmParentToken);
+
+      const doc = await db.collection('verifications').doc(rejectedId).get();
+      expect(doc.data()!.status).toBe('superseded');
+      expect(doc.data()!.supersededBy).toBe('community');
+      // The file reference survives here too — superseding must not orphan it.
+      expect(doc.data()!.fileUrl).toBeTruthy();
+    });
+
+    it('leaves APPROVED documents alone — an approval is not made moot', async () => {
       const db = getDb();
       const approvedId = await seedVerification({
         familyId: seed.family2Id,

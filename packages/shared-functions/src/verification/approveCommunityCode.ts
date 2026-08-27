@@ -3,7 +3,7 @@ import { getParentProfile, type User } from '@ejm/shared-core';
 import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
-import { supersedePendingVerifications } from './supersedePendingVerifications.js';
+import { supersedeOpenVerifications } from './supersedeOpenVerifications.js';
 
 export const approveCommunityCode = onCall(
   { region: 'europe-west1', cors: getCorsOrigin() },
@@ -101,7 +101,7 @@ export const approveCommunityCode = onCall(
     // recoverable by the next approval or by an admin.
     let supersededIds: string[] = [];
     try {
-      supersededIds = await supersedePendingVerifications(codeData.familyId, now);
+      supersededIds = await supersedeOpenVerifications(codeData.familyId, now);
     } catch (err) {
       console.error('approveCommunityCode: failed to supersede pending verifications', {
         familyId: codeData.familyId,

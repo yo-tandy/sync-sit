@@ -96,15 +96,30 @@ export const reviewVerification = onCall(
     // it, and their identity standing silently reverts to not_submitted.
     //
     // So the grant is the baseline, and documents only move a type off it when
-    // an admin actually decided that type. An explicit rejection still wins —
-    // that is a real decision about a real document (#218 review).
+    // an admin actually DECIDED that type after the grant. Two consequences,
+    // both of which cost a bug to learn (PR #220 review):
+    //
+    // - `pending` is not a decision. A live pending doc of the OTHER type used
+    //   to skip the baseline, dropping a community-verified family to
+    //   isFullyVerified: false (and clearing isEjmFamily) for the whole window
+    //   between upload and review — an outcome no admin chose.
+    // - `rejected` is a decision, but only a POST-grant one counts. A
+    //   rejection that predates the grant was already overridden by it, and
+    //   this recompute has no notion of ordering. supersedeOpenVerifications
+    //   supplies that ordering by closing pre-grant pending AND rejected docs
+    //   at grant time, so anything still `rejected` here is necessarily a
+    //   decision the family earned after they were already verified — and it
+    //   still wins, as it should.
     const familyRef = db.collection('families').doc(familyId);
     const priorVerification = (await familyRef.get()).data()?.verification;
     const communityApprovedBy = priorVerification?.communityApprovedBy;
 
+    // Statuses that represent "no post-grant admin decision for this type".
+    const undecided = (s: string) => s === 'not_submitted' || s === 'pending';
+
     if (communityApprovedBy) {
-      if (identityStatus === 'not_submitted') identityStatus = 'approved';
-      if (enrollmentStatus === 'not_submitted') {
+      if (undecided(identityStatus)) identityStatus = 'approved';
+      if (undecided(enrollmentStatus)) {
         enrollmentStatus = 'approved';
         isEjmFamily = true;
       }
