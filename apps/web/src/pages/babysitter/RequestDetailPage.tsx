@@ -484,7 +484,9 @@ export function RequestDetailPage() {
 
       {/* Remove-note confirmation (erasure path) — shared Dialog, same error
           copy as the save path. */}
-      <Dialog open={noteRemoveOpen} onClose={() => setNoteRemoveOpen(false)}>
+      {/* onClose gated on noteSaving: dismissing mid-flight would unmount
+          the only thing that can render the error (non-optimistic call). */}
+      <Dialog open={noteRemoveOpen} onClose={() => { if (!noteSaving) setNoteRemoveOpen(false); }}>
         <h3 className="mb-2 text-lg font-bold">{t('request.notes.removeTitle')}</h3>
         <p className="mb-3 text-sm text-gray-600">{t('request.notes.removeDesc')}</p>
         {noteError && <p className="mb-3 text-sm text-brand-600">{noteError}</p>}
@@ -511,7 +513,7 @@ export function RequestDetailPage() {
         submitting={noteSaving}
         error={noteError}
         onSave={saveNote}
-        onClose={() => setNoteOpen(false)}
+        onClose={() => { if (!noteSaving) setNoteOpen(false); }}
       />
 
       {/* Withdraw dialog (own-initiated pending, issue #207 PR3) */}

@@ -265,6 +265,18 @@ describe('runCleanupOldData', () => {
       createdAt: daysAgo(10),
       preAppointmentNote: 'unreachable code',
     });
+    // Out of reach: MALFORMED status -> redacted. Neither dashboard renders
+    // an unknown status (they bucket on the closed four-value set), so the
+    // sweep fails closed by structure, not enumeration (round-9 review).
+    const badStatusRef = await db.collection('appointments').add({
+      familyId: seed.family1Id,
+      babysitterUserId: seed.babysitter1.uid,
+      status: 'archived',
+      date: daysAgo(2).toISOString().split('T')[0],
+      createdAt: daysAgo(10),
+      updatedAt: daysAgo(2),
+      preAppointmentNote: 'orphaned note',
+    });
     // Always reachable: confirmed RECURRING (no date) -> notes kept forever.
     const recurringRef = await db.collection('appointments').add({
       familyId: seed.family1Id,
@@ -277,7 +289,7 @@ describe('runCleanupOldData', () => {
     });
 
     const stats = await runCleanupOldData(db, now);
-    expect(stats.appointmentNotesRedacted).toBe(4); // stale pre+post, cancelled pre, missing-updatedAt pre
+    expect(stats.appointmentNotesRedacted).toBe(5); // stale pre+post, cancelled pre, missing-updatedAt pre, malformed-status pre
 
     const stale = (await staleRef.get()).data()!;
     expect(stale.status).toBe('confirmed'); // doc itself survives
@@ -285,6 +297,7 @@ describe('runCleanupOldData', () => {
     expect('postAppointmentNote' in stale).toBe(false);
     expect('preAppointmentNote' in (await cancelledRef.get()).data()!).toBe(false);
     expect('preAppointmentNote' in (await noUpdatedAtRef.get()).data()!).toBe(false);
+    expect('preAppointmentNote' in (await badStatusRef.get()).data()!).toBe(false);
     expect((await recentRef.get()).data()!.preAppointmentNote).toBe('still visible');
     expect((await recurringRef.get()).data()!.preAppointmentNote).toBe('door code for Mondays');
   });

@@ -460,7 +460,10 @@ export function ExpandableBabysitterCard({
 
       {/* Remove-note confirmation (erasure path) — shared Dialog, same error
           copy as the save path. */}
-      <Dialog open={noteRemoveOpen} onClose={() => setNoteRemoveOpen(false)}>
+      {/* onClose gated on noteSaving: the shared Dialog closes on backdrop
+          click, and dismissing mid-flight would unmount the only thing that
+          can render the error of a non-optimistic (erasure!) call. */}
+      <Dialog open={noteRemoveOpen} onClose={() => { if (!noteSaving) setNoteRemoveOpen(false); }}>
         <h3 className="mb-2 text-lg font-bold">{t('familyDashboard.notes.removeTitle')}</h3>
         <p className="mb-3 text-sm text-gray-600">{t('familyDashboard.notes.removeDesc')}</p>
         {noteError && <p className="mb-3 text-sm text-brand-600">{noteError}</p>}
@@ -486,7 +489,7 @@ export function ExpandableBabysitterCard({
         submitting={noteSaving}
         error={noteError}
         onSave={saveNote}
-        onClose={() => setNoteOpen(false)}
+        onClose={() => { if (!noteSaving) setNoteOpen(false); }}
       />
     </Card>
   );

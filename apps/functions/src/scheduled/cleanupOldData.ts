@@ -237,6 +237,12 @@ export async function runCleanupOldData(
     const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     const sevenDaysAgoStr = sevenDaysAgo.toISOString().split('T')[0];
     const outOfReach = (data: FirebaseFirestore.DocumentData): boolean => {
+      // pending: never redacted -- a DELIBERATE, unbounded retention
+      // exception. Pending cards render forever, so the author permanently
+      // keeps the remove affordance instead of the cron; nothing else in
+      // this file deletes a pending doc either, so an odd-history note on
+      // one lives until its author removes it.
+      if (data.status === 'pending') return false;
       if (data.status === 'confirmed') {
         // Dateless (recurring) arrangements stay on the dashboard forever.
         // <= not <: the dashboards compare a timestamped cutoff against the
@@ -253,12 +259,12 @@ export async function runCleanupOldData(
         const updatedAt = data.updatedAt?.toDate?.() ?? new Date(0);
         return updatedAt < sevenDaysAgo;
       }
-      // pending: never redacted -- a DELIBERATE, unbounded retention
-      // exception. Pending cards render forever, so the author permanently
-      // keeps the remove affordance instead of the cron; nothing else in
-      // this file deletes a pending doc either, so an odd-history note on
-      // one lives until its author removes it.
-      return false;
+      // Anything else -- absent or malformed status -- is OUT of reach:
+      // both dashboards bucket on the closed four-value status set and
+      // silently drop unknowns, so no card renders and nobody can reach the
+      // remove affordance. Fail closed by structure, not by enumeration
+      // (round-9 review).
+      return true;
     };
 
     // Cursor-paginated drain, not a single capped pass: the range query
