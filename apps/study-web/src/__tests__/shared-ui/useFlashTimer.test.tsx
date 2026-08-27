@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, renderHook, screen } from '@testing-library/react';
 import { StrictMode, useState } from 'react';
 import { useFlashTimer } from '@ejm/shared-ui';
 
@@ -103,14 +103,10 @@ describe('useFlashTimer', () => {
     // the handler resumes on the dead component and calls flashAfter. Arming
     // there would create a timer nothing owns -- the exact failure mode the
     // hook exists to close (PR #223 review).
-    let captured: ((fn: () => void, delayMs: number) => void) | null = null;
-    function Capture() {
-      captured = useFlashTimer();
-      return null;
-    }
-    const { unmount } = render(<Capture />);
+    const { result, unmount } = renderHook(() => useFlashTimer());
+    const flashAfter = result.current;
     unmount();
-    captured!(() => {}, 3000);
+    flashAfter(() => {}, 3000);
     expect(vi.getTimerCount()).toBe(0);
   });
 });
