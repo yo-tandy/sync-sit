@@ -368,6 +368,39 @@ describe('setAppointmentNote', () => {
     expect('preAppointmentNote' in (await aptData(id))).toBe(false);
   });
 
+  it('a clear does NOT bump updatedAt (a settled card must not resurface); a content write does', async () => {
+    // Dashboards bucket cancelled/rejected docs by `updatedAt >= cutoff`, so
+    // an updatedAt bump on clear would resurface the card for another 7 days
+    // and push back the redaction cron's clock (round-6 review).
+    const id = await seedOneTime('ot-clear-noresurface', {
+      status: 'cancelled',
+      preAppointmentNote: 'Door code 1234B',
+    });
+    const before = (await aptData(id)).updatedAt;
+    await callFunction('setAppointmentNote', { appointmentId: id, kind: 'pre', text: '' }, parent1Token);
+    const afterClear = await aptData(id);
+    expect('preAppointmentNote' in afterClear).toBe(false);
+    expect(afterClear.updatedAt.toDate().getTime()).toBe(before.toDate().getTime());
+
+    // A content write (confirmed, in-window) still bumps updatedAt.
+    const id2 = await seedOneTime('ot-write-bumps');
+    const before2 = (await aptData(id2)).updatedAt;
+    await callFunction('setAppointmentNote', { appointmentId: id2, kind: 'pre', text: 'hello' }, parent1Token);
+    expect((await aptData(id2)).updatedAt.toDate().getTime()).toBeGreaterThan(
+      before2.toDate().getTime(),
+    );
+  });
+
+  it('a no-op clear (nothing stored) succeeds without touching the doc', async () => {
+    const id = await seedOneTime('ot-noop-clear', { status: 'cancelled' });
+    const before = (await aptData(id)).updatedAt;
+    const res = await callFunction('setAppointmentNote', { appointmentId: id, kind: 'pre', text: '' }, parent1Token);
+    expect(res).toMatchObject({ success: true });
+    const after = await aptData(id);
+    expect('preAppointmentNote' in after).toBe(false);
+    expect(after.updatedAt.toDate().getTime()).toBe(before.toDate().getTime());
+  });
+
   it('a clear is still author-only: a stranger cannot clear (permission-denied)', async () => {
     const id = await seedOneTime('ot-clear-stranger', {
       date: YESTERDAY(),

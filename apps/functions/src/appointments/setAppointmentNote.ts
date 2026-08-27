@@ -157,11 +157,26 @@ export const setAppointmentNote = onCall(
     }
 
     // ── Write the note (or clear it) ──
+    // A CLEAR deliberately does NOT bump updatedAt: both dashboards bucket
+    // settled (cancelled/rejected) appointments by `updatedAt >= cutoff`,
+    // so bumping it would resurface a long-settled card on both parties'
+    // dashboards for another PAST_VISIBILITY_DAYS — an act of erasure
+    // re-surfacing the thing it erases from — and push back the redaction
+    // cron's clock for the other party's note. updatedAt keeps meaning
+    // "last real change the counterparty should see"; content writes still
+    // bump it (they only happen on confirmed docs, which bucket by date).
     const field = kind === 'pre' ? 'preAppointmentNote' : 'postAppointmentNote';
-    await aptRef.update({
-      [field]: cleared ? FieldValue.delete() : text,
-      updatedAt: new Date(),
-    });
+    if (cleared) {
+      if (apt[field] === undefined) {
+        // No-op clear: nothing stored, nothing to erase. Succeed without
+        // touching the doc at all (even a bare delete-write has no effect
+        // worth an updatedAt-free write or an audit entry).
+        return { success: true };
+      }
+      await aptRef.update({ [field]: FieldValue.delete() });
+    } else {
+      await aptRef.update({ [field]: text, updatedAt: new Date() });
+    }
 
     await writeUserActivity(uid, 'appointment_note_set', {
       appointmentId,
