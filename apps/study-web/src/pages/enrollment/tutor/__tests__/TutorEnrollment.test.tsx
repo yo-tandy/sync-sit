@@ -8,10 +8,15 @@ const h = vi.hoisted(() => ({
   // Controllable authStore state — default is signed out so existing tests
   // keep their original (unauthenticated) behavior.
   auth: { firebaseUser: null as unknown, userDoc: null as unknown, loading: false },
+  // Post-signup session state, SEPARATE from userDoc: deriving firebaseUser
+  // from the doc made "signed in but doc null" unrepresentable (round-2
+  // catch -- the doc-blip pin silently re-tested the failure path).
+  signedIn: false,
   refreshUserDoc: () => Promise.resolve(),
   // A successful sign-in settles the store with the freshly-written tutor
   // doc (models the real store); the navigate gate reads it via getState.
   signIn: vi.fn(() => {
+    h.signedIn = true;
     h.auth.userDoc = { profiles: { tutor: {} } };
     return Promise.resolve();
   }),
@@ -77,7 +82,7 @@ vi.mock('@/stores/authStore', () => {
     subscribe: (fn: (s: unknown) => void) => () => void;
   };
   // Statics used by the post-signup auto-login wait.
-  useAuthStore.getState = () => ({ loading: false, firebaseUser: h.auth.userDoc ? { uid: 'new' } : null, userDoc: h.auth.userDoc });
+  useAuthStore.getState = () => ({ loading: false, firebaseUser: h.signedIn || h.auth.firebaseUser ? { uid: 'new' } : null, userDoc: h.auth.userDoc });
   useAuthStore.subscribe = () => () => {};
   return { useAuthStore, markNextSignInFresh: () => {} };
 });
@@ -192,6 +197,7 @@ function renderFlow() {
 
 beforeEach(() => {
   h.calls.length = 0;
+  h.signedIn = false;
   h.navigate = vi.fn();
   h.auth = { firebaseUser: null, userDoc: null, loading: false };
   h.refreshUserDoc = vi.fn().mockResolvedValue(undefined);
@@ -287,20 +293,31 @@ describe('TutorEnrollment orchestrator', () => {
   });
 
   it('a user-doc read blip after a SUCCESSFUL sign-in also shows the login state (guard would bounce to /signup)', async () => {
-    // firebaseUser present but userDoc null satisfies the old wait; the
-    // guard then resolves no role and redirects to /signup — the second
-    // stranding path from PR #257 round 1.
-    h.signIn.mockImplementationOnce(() => Promise.resolve()); // does NOT settle userDoc
+    // firebaseUser present but userDoc null: signIn marks the session live
+    // WITHOUT settling the doc (the mock keeps these separate -- round-2
+    // catch). The guard predicate never passes, the 5s backstop fires
+    // (fake timers -- no real 5s burn), the recovery refresh still finds
+    // no doc, and the wizard latches the login state.
+    h.signIn.mockImplementationOnce(() => {
+      h.signedIn = true;
+      return Promise.resolve();
+    });
     renderFlow();
     fireEvent.click(screen.getByText('email-submit'));
     fireEvent.click(await screen.findByText('verify-submit'));
     fireEvent.click(await screen.findByText('password-submit'));
     fireEvent.click(await screen.findByText('profile-next'));
-    fireEvent.click(await screen.findByText('subjects-next'));
-
-    expect(await screen.findByText('Your tutor account is ready', {}, { timeout: 7000 })).toBeInTheDocument();
+    const finalNext = await screen.findByText('subjects-next');
+    vi.useFakeTimers();
+    try {
+      fireEvent.click(finalNext);
+      await vi.advanceTimersByTimeAsync(5200);
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(await screen.findByText('Your tutor account is ready')).toBeInTheDocument();
     expect(h.navigate).not.toHaveBeenCalledWith('/tutor');
-  }, 10000);
+  });
 
   it('authed without a tutor profile: consent-only StepPassword, enrollTutor omits password, refreshes doc', async () => {
     h.auth = { firebaseUser: { uid: 'p1' }, userDoc: { profiles: { parent: {} } }, loading: false };

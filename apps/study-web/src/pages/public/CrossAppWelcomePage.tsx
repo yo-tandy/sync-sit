@@ -3,7 +3,7 @@ import { Link, Navigate, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { httpsCallable } from 'firebase/functions';
 import { isBabysitter } from '@ejm/shared-core';
-import { getStudyRole, type SubjectOffering } from '@ejm/study-core';
+import { getStudyRole, getTutorProfile, type SubjectOffering } from '@ejm/study-core';
 import { Button, Card, Input, Select, Spinner, enrollmentErrorReason, ageGateErrorCode } from '@ejm/shared-ui';
 import { functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
@@ -96,7 +96,13 @@ export function CrossAppWelcomePage() {
         ...(Object.keys(supplement).length > 0 ? { enrollment: supplement } : {}),
       });
       await refreshUserDoc();
-      // Straight to the dashboard (issue #242, parity Q5=b).
+      // refreshUserDoc is a single getDoc that silently no-ops on a cache
+      // miss; one retry keeps a blip from bouncing this authenticated user
+      // off AuthGuard to /signup (PR #257 round 2). Straight to the
+      // dashboard (issue #242, parity Q5=b).
+      if (!getTutorProfile(useAuthStore.getState().userDoc)) {
+        await refreshUserDoc().catch(() => {});
+      }
       navigate('/tutor');
     } catch (err: unknown) {
       if (enrollmentErrorReason(err) === 'profile-exists') {

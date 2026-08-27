@@ -1216,7 +1216,7 @@ export default {
       stepPassword: 'Créez votre mot de passe',
       stepProfile: 'Votre profil',
       readyLoginTitle: 'Votre compte tuteur est prêt',
-      readyLoginDesc: 'Nous n\'avons pas pu vous connecter automatiquement. Connectez-vous avec votre email EJM et le mot de passe que vous venez de choisir.',
+      readyLoginDesc: "Nous n'avons pas pu vous confirmer la connexion automatiquement. Connectez-vous avec votre email EJM et le mot de passe que vous venez de choisir.",
       readyLoginCta: 'Se connecter',
     },
     verifySchool: 'Vérifiez votre école',

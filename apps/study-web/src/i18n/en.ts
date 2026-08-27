@@ -1216,7 +1216,7 @@ export default {
       stepPassword: 'Create your password',
       stepProfile: 'Your profile',
       readyLoginTitle: 'Your tutor account is ready',
-      readyLoginDesc: 'We could not sign you in automatically. Log in with your EJM email and the password you just chose.',
+      readyLoginDesc: 'We could not confirm your automatic sign-in. Log in with your EJM email and the password you just chose.',
       readyLoginCta: 'Log in',
     },
     verifySchool: 'Verify your school',

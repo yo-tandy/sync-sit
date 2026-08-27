@@ -79,6 +79,17 @@ export function TutorEnrollment() {
   // navigating into a guard that would bounce them to /login or /signup
   // with no confirmation (PR #257 round 1).
   const [signedOutSuccess, setSignedOutSuccess] = useState(false);
+  // While the fallback state shows, keep listening: the store's snapshot
+  // listener is still live, so a slow doc read typically lands moments
+  // later -- auto-advance the moment the guard's predicate passes instead
+  // of leaving a signed-in tutor parked on a login CTA (PR #257 round 2).
+  useEffect(() => {
+    if (!signedOutSuccess) return;
+    return useAuthStore.subscribe((s: { firebaseUser: unknown; userDoc: unknown }) => {
+      if (s.firebaseUser && getTutorProfile(s.userDoc as never)) navigate('/tutor');
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [signedOutSuccess]);
 
   // Already-enrolled tutors have nothing to add here — send them home. Guard on
   // step === 0 so this only fires before the flow starts: after an add-profile
@@ -183,8 +194,15 @@ export function TutorEnrollment() {
       });
       if (isAddProfile) {
         // Already signed in (add-profile runs authenticated); refresh pulls
-        // the fresh tutor profile so AuthGuard resolves the role.
+        // the fresh tutor profile so AuthGuard resolves the role. refresh
+        // is a single getDoc that silently no-ops on a cache miss, so give
+        // it one retry before navigating (PR #257 round 2); the server just
+        // wrote the profile, so two failed reads means the guard bounce is
+        // the least of the problems.
         await refreshUserDoc();
+        if (!getTutorProfile(useAuthStore.getState().userDoc as never)) {
+          await refreshUserDoc().catch(() => {});
+        }
         navigate('/tutor');
         return;
       }
@@ -220,7 +238,14 @@ export function TutorEnrollment() {
       } catch {
         // Swallowed by design — see above.
       }
-      const settled = useAuthStore.getState() as { firebaseUser: unknown; userDoc: unknown };
+      let settled = useAuthStore.getState() as { firebaseUser: unknown; userDoc: unknown };
+      if (settled.firebaseUser && !getTutorProfile(settled.userDoc as never)) {
+        // Timed out with a live session but no doc yet: one explicit
+        // recovery read before telling the user anything (PR #257 round 2
+        // -- a slow first server snapshot can exceed the 5s budget).
+        await refreshUserDoc().catch(() => {});
+        settled = useAuthStore.getState() as { firebaseUser: unknown; userDoc: unknown };
+      }
       if (settled.firebaseUser && getTutorProfile(settled.userDoc as never)) {
         // Straight to the dashboard (issue #242, parity Q5=b) -- its
         // greeting knows the name and its activation banner carries the

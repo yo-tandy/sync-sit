@@ -145,7 +145,12 @@ describe('tutor DashboardPage', () => {
     });
     renderWithProviders(<DashboardPage />);
     expect(await screen.findByRole('button', { name: 'Inactive' })).toBeInTheDocument();
-    expect((await screen.findAllByText(/set your weekly availability/i)).length).toBeGreaterThan(0);
+    // The FULL gate sentence -- 'Set your weekly availability' alone also
+    // matches the always-rendered availability card (round-2 catch: the
+    // loose regex could never fail).
+    expect(
+      await screen.findByText('Set your weekly availability before you can appear in search.'),
+    ).toBeInTheDocument();
   });
 
   it('no subjects: pill is inert (no dialog) and the amber hint explains why', async () => {

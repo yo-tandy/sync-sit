@@ -68,8 +68,9 @@ export const router = createBrowserRouter([
         path: '/enroll/tutor/success',
         // The success interstitial was dropped (issue #242, parity Q5=b):
         // enrollment routes straight to the dashboard, whose activation
-        // banner already carries the next-steps guidance. The redirect keeps
-        // stale links/bookmarks from 404ing.
+        // banner already carries the next-steps guidance. The catch-all
+        // below would have sent stale links to '/' -- this redirect sends
+        // them somewhere better (the dashboard, or its login gate).
         element: <Navigate to="/tutor" replace />,
       },
       { path: '/about', element: <AboutPage /> },
