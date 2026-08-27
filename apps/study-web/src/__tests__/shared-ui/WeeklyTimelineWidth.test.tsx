@@ -1,25 +1,27 @@
 import { describe, it, expect } from 'vitest';
-import { render } from '@testing-library/react';
+import { screen } from '@testing-library/react';
+import { renderWithProviders } from '@/__tests__/test-utils';
 import { WeeklyTimeline } from '@ejm/shared-ui';
 
 /**
  * Pins the grid's width floor (issue #227). jsdom has no layout engine, so
- * the pinnable surface is the class contract: the floor must stay BELOW the
- * ~350px of content a 390px phone offers after page padding, or the grid
- * overflows by a sliver and clips the Sunday column with no visible scroll
- * affordance -- in both apps, since this is one shared component.
+ * the pinnable surface is the class contract. The bound is set by the
+ * NARROWEST of the component's two render sites: not the page-level grid
+ * (px-5 padding, ~350px of content at 390px) but the holiday-period grid
+ * nested in a Card (px-5 + the Card's p-4 + border = ~316px). A floor above
+ * 316 re-clips the Sunday column there with no visible scroll affordance --
+ * in both apps, since this is one shared component.
  */
 describe('WeeklyTimeline width floor', () => {
-  it('keeps the min-width under a 390px phone content width', () => {
+  it('keeps the min-width within the Card-nested render site (~316px at a 390px phone)', () => {
     const empty = () => new Array(96).fill(false);
     const weekly = { mon: empty(), tue: empty(), wed: empty(), thu: empty(), fri: empty(), sat: empty(), sun: empty() };
-    const { container } = render(
+    renderWithProviders(
       <WeeklyTimeline weekly={weekly} onChange={() => {}} onDayHeaderClick={() => {}} />,
     );
-    const floor = container.querySelector('[class*="min-w-["]');
-    expect(floor).not.toBeNull();
-    const m = floor!.className.match(/min-w-\[(\d+)px\]/);
+    const floor = screen.getByTestId('timeline-width-floor');
+    const m = floor.className.match(/min-w-\[(\d+)px\]/);
     expect(m).not.toBeNull();
-    expect(Number(m![1])).toBeLessThanOrEqual(350);
+    expect(Number(m![1])).toBeLessThanOrEqual(316);
   });
 });
