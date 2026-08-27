@@ -162,7 +162,7 @@ packages/
 Not because the other one lacks the ingredients — it does not. An earlier draft
 said `apps/study-functions` "has none of the family-verification surface", and
 that is false: it checks `verification.isFullyVerified` and reads `families`
-in most of its callables, and uses `resolveAreaLabel`, `writeUserActivity` and
+in roughly half its files (8 of 17 check the flag; 10 read `families`), and uses `resolveAreaLabel`, `writeUserActivity` and
 the guardian helpers throughout. §11.1 of this same document cites
 `publishTutorSearch.ts:54` as proof that *both* codebases read the verification
 field, so the two sections contradicted each other and §11.1 was the correct
@@ -230,7 +230,17 @@ export interface DoerProfile extends ProfileBase {   // ProfileBase = { enrollme
    * `new_task_matching` digest.
    */
   notifyNewTasks: boolean;
-  /** Categories the student wants to see and be notified about. Empty = all. */
+  /**
+   * Categories the student wants digests about. ALWAYS EXPLICIT — there is
+   * deliberately no "empty means all" convention. The digest's recipient
+   * query is an `array-contains` on this field (§7.3), and an empty array
+   * matches no `array-contains` predicate, so "empty = all" would silently
+   * deliver the exact inverse: zero digests for the students who opted into
+   * everything (PR #243 round 9). Instead `doEnrollDoer` preselects ALL
+   * categories (the modal intent, stated as data), and an empty array means
+   * what the query makes it mean: no digests — the account page copy says so
+   * next to the field, equivalent to notifyNewTasks: false.
+   */
   categories: TaskCategory[];
   /** Free-text blurb shown to a family alongside an offer. */
   bio?: string;
@@ -733,10 +743,23 @@ with an "awaiting your parent" badge.
 
 | Timing | `expiresAt` |
 |---|---|
-| `fixed` | `min(now + 14d, end of the task's day, Paris wall clock)` |
-| `deadline` | `min(now + 14d, end of dueDate)` |
-| `recurring` | `min(now + 14d, end of startDate)` — the board offer window closes when the series starts |
-| `ongoing` | `now + 14d` |
+| `fixed` | `end of the task's day, Paris wall clock` — dated tasks live until their date |
+| `deadline` | `end of dueDate` |
+| `recurring` | `end of startDate` — the board offer window closes when the series starts |
+| `ongoing` | `now + 14d`, renewable (below) |
+
+Dated tasks are **not** capped at a TTL. An earlier draft applied
+`min(now + 14d, …)` across the board, which hard-deleted a far-out task
+*before its own date*: a family posting "help me move on 15 October" in late
+August would have watched the post silently vanish five weeks before the move
+— swept, offers cascaded, no notification, no renewal path (PR #243 round 9).
+The TTL exists to keep *undated* demand from going stale, so it applies only
+to `ongoing`; a `fixed`/`deadline`/`recurring` task's own date IS its
+staleness bound.
+
+For `ongoing`, renewal is `doUpdateTask`: any owner edit of an open task
+recomputes `expiresAt` server-side (`now + 14d` again), so keeping a standing
+post alive is one tap on its own page — no dedicated renew callable.
 
 14 days rather than `publishedSearches`' 7: a task board with an offer cycle
 needs longer to attract bids than a one-shot broadcast. `parisWallTimeToUtc`
@@ -1141,8 +1164,14 @@ match /do-photos/{uid}/{photoId} {
 // strips EXIF, republishes into do-photos/{uid}/, deletes the original.
 match /do-uploads/{uid}/{uploadId} {
   allow read: if false;
+  // Bounded: this block is copy-ready for PR10, so what it omits ships.
+  // Without the size/type caps, ANY authenticated platform user (sit- and
+  // study-only accounts included) could write unbounded objects of any type,
+  // each one firing the stripper trigger (round 9).
   allow write: if request.auth != null
-               && request.auth.uid == uid;
+               && request.auth.uid == uid
+               && request.resource.size < 10 * 1024 * 1024
+               && request.resource.contentType.matches('image/.*');
 }
 ```
 
@@ -1182,7 +1211,7 @@ All in `apps/functions/src/do/**`, codebase `default`, region `europe-west1`,
 | `doEnrollDoer` | Auth | Creates `profiles.doer` — full or abbreviated depending on existing profiles. **Refuses an ungoverned under-15 caller** (`!isGoverned` guarding `checkEnrollmentAge`, the `enrollTutor` shape — §11.1); a governed caller passes at any age |
 | `doUpdateDoerProfile` | Auth | Categories, bio, transport, `notifyNewTasks` |
 | `doPostTask` | Auth (verified family) | Validates, scrubs, computes `areaLabel` + `expiresAt`, enforces `DO_TASK_MAX_ACTIVE` |
-| `doUpdateTask` | Auth (owner family) | `open` tasks only; description/photos/budget/timing. Notifies students with pending offers that terms changed |
+| `doUpdateTask` | Auth (owner family) | `open` tasks only; description/photos/budget/timing. **Runs the same caller-prefix check as `doPostTask` on any `photoIds` change** (§7.4 — it is the second write path for photos, and an unguarded one would void the anti-hijack guarantee). Recomputes `expiresAt` server-side, which is how an `ongoing` task renews (§6.3). Notifies students with pending offers that terms changed |
 | `doCancelTask` | Auth (family or assigned doer — §6.5 says either side may cancel an `assigned` task, and `cancelledBy: 'doer'` must be reachable; on an `open` task, family only) | Task → `cancelled`, all live offers → `expired` (zeroing `offerCount` per §4.1's invariant), notify. On an `assigned` task there are no live offers left (step 7 cleared them); the ACCEPTED offer keeps `accepted` — it is the record of who was engaged at what price, the contact block it carries was already revealed to both parties (wiping it un-reveals nothing), and the 30-day cancelled-task sweep bounds its retention |
 | `doSubmitOffer` | Auth (active doer) | Enforces the ceiling, resolves the guardian gate, writes `pending` or `pending_guardian` |
 | `doUpdateOffer` | Auth (offering student) | Price/message/helper while `pending` |
@@ -1330,11 +1359,18 @@ recipient-affinity routing is the place that unification belongs, and this plan
 should not pre-empt it.
 
 **The board digest is the one genuinely new notification.** Demand-first means a
-student who never opens the app sees nothing. `new_task_matching` fires on task
-creation to students whose `profiles.doer.categories` include the task's
-category and who have `notifyNewTasks` on. Rate-limit: at most one digest per student
-per 6 hours, batching whatever accumulated. Without this the board is dead; with
-it unbounded, it is spam.
+student who never opens the app sees nothing. `new_task_matching` is delivered
+by **`doSendTaskDigest`** (§8) — a *scheduled batcher*, not an on-create
+fan-out: each run selects students with `notifyNewTasks` on whose
+`profiles.doer.categories` match tasks created since their last digest, and
+sends at most one digest per student per 6 hours, batching whatever
+accumulated. The batcher shape is deliberate, for the reason §8 records: the
+rate limit is per-*recipient*, so an on-create trigger would need per-student
+dedupe state anyway, and the batcher IS that state. (An earlier draft said the
+notification "fires on task creation", which §8 had already contradicted —
+this section is the one a notifications implementer reads first at PR9, so it
+now names the job.) Without the digest the board is dead; with it unbounded,
+it is spam.
 
 ---
 
@@ -1621,9 +1657,10 @@ see §12 for why the scaffold, not the family UI, is where they are needed.
   running) — post→offer→accept end-to-end; **concurrent accepts of two
   different offers, exactly one wins**; guardian approve and deny; **a
   `pending_guardian` sibling flipped by acceptance lands in `expired`**
-  (§6.4 step 7); **`doPostTask` refuses a `photoId` that lives under another
-  uploader's `do-photos` prefix** (the round-7 anti-hijack check — without a
-  pin it is one refactor away from becoming a lookup that trusts the id); **an
+  (§6.4 step 7); **`doPostTask` AND `doUpdateTask` refuse a `photoId` that lives under
+  another uploader's `do-photos` prefix** (the round-7 anti-hijack check on
+  both write paths — without a pin either is one refactor away from becoming
+  a lookup that trusts the id); **an
   UNGOVERNED under-15 caller is refused by `doEnrollDoer`, and a GOVERNED
   under-15 caller is not** (both halves of §11.1's floor — the unconditional
   version of this test would have locked supervised students out and
@@ -1797,6 +1834,17 @@ nothing between them and the task. Today they can.
   platform's decline cooldowns exist to prevent. The gentler alternative is a
   7-day cooldown mirroring `DECLINE_COOLDOWN_MS`, after which the doc may be
   resurrected. Owner's call; the hard-no default ships unless overridden.
+- **Q8 — Should completed tasks keep the family's address forever?** §11.4
+  matches the platform default (completed engagements retained indefinitely,
+  GDPR hard-delete only), and that is a defensible inheritance — but it
+  deserves an explicit yes here rather than a note in a subsection, because a
+  completed task under §4.2's stored-block form is a **live-forever copy of a
+  member's home address created by a new feature**, alongside the free-text
+  description and photos. The alternatives: a finite retention for completed
+  tasks (new sweep work, a `(status, completedAt)` index), or Q6's callable
+  option, which stores no second copy of the address at all — making Q6 and
+  Q8 partially the same decision. Default if unanswered: inherit the platform
+  behaviour, as written.
 
 ### Risks
 
