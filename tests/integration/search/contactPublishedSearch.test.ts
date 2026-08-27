@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { clearAll, callFunction, getIdToken, getDb } from '../../setup/emulator.js';
-import { seedTestData, type SeedData } from '../../setup/seed.js';
+import { seedTestData, seedAppointment, type SeedData } from '../../setup/seed.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -246,6 +246,44 @@ describe('contactPublishedSearch (sit)', () => {
     const apt = (await getDb().collection('appointments').doc(res.appointmentId).get()).data()!;
     expect(apt.babysitterUserId).toBe(seed.babysitter4.uid);
     expect(apt.status).toBe('pending');
+  });
+
+  it('caps board contacts CREATED in 24h -- withdrawing does not free a slot, aging out does', async () => {
+    // A pending-only ceiling was sitter-bypassable: withdraw a pending
+    // (deliberately cooldown-free) and the slot came straight back, so the
+    // notify-every-family sweep survived (PR #232 review). Creation spends
+    // the slot: status is irrelevant, and slots return only by clock.
+    for (let i = 0; i < 5; i++) {
+      await seedAppointment({
+        babysitterUserId: seed.babysitter1.uid,
+        familyId: seed.family1Id,
+        createdByUserId: seed.babysitter1.uid,
+        initiatedBy: 'babysitter',
+        publishedSearchId: `ps-cap-${i}`,
+        // Two of the five already withdrawn: they still count.
+        status: i < 2 ? 'cancelled' : 'pending',
+        ...(i < 2 ? { statusReason: 'cancelled_by_babysitter' } : {}),
+      });
+    }
+    const id = await publish();
+    await expect(
+      callFunction('contactPublishedSearch', { publishedSearchId: id }, sitterToken),
+    ).rejects.toMatchObject({ code: 'RESOURCE_EXHAUSTED', details: { reason: 'board_contact_cap' } });
+
+    // A creation older than the window no longer counts.
+    const snap = await getDb()
+      .collection('appointments')
+      .where('publishedSearchId', '==', 'ps-cap-0')
+      .get();
+    await snap.docs[0].ref.update({
+      createdAt: Timestamp.fromMillis(Date.now() - 25 * 60 * 60 * 1000),
+    });
+    const res = await callFunction<{ appointmentId: string }>(
+      'contactPublishedSearch',
+      { publishedSearchId: id },
+      sitterToken,
+    );
+    expect(res.appointmentId).toBeTruthy();
   });
 
   it('rejects when the family lost verification after publishing', async () => {

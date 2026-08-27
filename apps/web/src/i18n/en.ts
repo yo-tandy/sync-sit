@@ -505,6 +505,7 @@ export default {
     contactSending: 'Sending...',
     contactError: 'Could not send your request. This search may have expired or been withdrawn.',
     contactCooldown: 'This family declined your last request for this search. You can try again in a week.',
+    contactCap: 'You have contacted several families in the last 24 hours. You can send more requests tomorrow.',
     empty: 'No published searches right now. Check back later — new ones appear here.',
     error: 'Could not load published searches. Please try again later.',
   },

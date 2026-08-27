@@ -53,21 +53,29 @@ export function PublishedSearchesPage() {
   const [contactTarget, setContactTarget] = useState<BoardSearch | null>(null);
   const [contactMessage, setContactMessage] = useState('');
   const [sending, setSending] = useState(false);
-  // false = no error; 'generic' | 'cooldown' picks the copy.
-  const [sendError, setSendError] = useState<false | 'generic' | 'cooldown'>(false);
+  // false = no error; 'generic' | 'cooldown' | 'cap' picks the copy.
+  const [sendError, setSendError] = useState<false | 'generic' | 'cooldown' | 'cap'>(false);
 
   // Which searches this sitter has already answered. Equality-only query on
-  // the sitter's own appointments (rules: babysitterUserId == uid), filtered in
-  // code so no composite index is needed; rejected/cancelled ones do not count.
+  // the sitter's own appointments (rules: babysitterUserId == uid); the status
+  // bound keeps the listener off the sitter's entire appointment HISTORY --
+  // only live rows can mark a search as contacted, and 'in' counts as equality
+  // so no composite index is needed (issue #225 item 4).
   useEffect(() => {
     if (!uid) return;
     return onSnapshot(
-      query(collection(db, 'appointments'), where('babysitterUserId', '==', uid)),
+      query(
+        collection(db, 'appointments'),
+        where('babysitterUserId', '==', uid),
+        where('status', 'in', ['pending', 'confirmed']),
+      ),
       (snap) => {
         const ids = new Set<string>();
         snap.docs.forEach((d) => {
-          const apt = d.data() as { publishedSearchId?: string | null; status?: string };
-          if (apt.publishedSearchId && (apt.status === 'pending' || apt.status === 'confirmed')) {
+          // The query already bounds status to pending/confirmed; only the
+          // board linkage needs checking here.
+          const apt = d.data() as { publishedSearchId?: string | null };
+          if (apt.publishedSearchId) {
             ids.add(apt.publishedSearchId);
           }
         });
@@ -95,7 +103,9 @@ export function PublishedSearchesPage() {
       // declined this search recently — so it does not read as "the search
       // disappeared" (PR #212 review).
       const reason = (err as { details?: { reason?: string } })?.details?.reason;
-      setSendError(reason === 'decline_cooldown' ? 'cooldown' : 'generic');
+      setSendError(
+        reason === 'decline_cooldown' ? 'cooldown' : reason === 'board_contact_cap' ? 'cap' : 'generic',
+      );
     } finally {
       setSending(false);
     }
@@ -166,7 +176,13 @@ export function PublishedSearchesPage() {
         />
         {sendError && (
           <p className="mt-2 text-sm text-brand-600">
-            {t(sendError === 'cooldown' ? 'publishedBoard.contactCooldown' : 'publishedBoard.contactError')}
+            {t(
+              sendError === 'cooldown'
+                ? 'publishedBoard.contactCooldown'
+                : sendError === 'cap'
+                  ? 'publishedBoard.contactCap'
+                  : 'publishedBoard.contactError',
+            )}
           </p>
         )}
         <div className="mt-4 flex gap-2">

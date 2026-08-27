@@ -491,6 +491,7 @@ export default {
     contactSending: 'Envoi...',
     contactError: 'Impossible d’envoyer votre demande. Cette recherche a peut-être expiré ou été retirée.',
     contactCooldown: 'Cette famille a refusé votre dernière demande pour cette recherche. Vous pourrez réessayer dans une semaine.',
+    contactCap: 'Vous avez contacté plusieurs familles ces dernières 24 heures. Vous pourrez envoyer de nouvelles demandes demain.',
     empty: 'Aucune recherche publiée pour le moment. Repassez plus tard — les nouvelles apparaissent ici.',
     error: 'Impossible de charger les recherches publiées. Veuillez réessayer plus tard.',
   },

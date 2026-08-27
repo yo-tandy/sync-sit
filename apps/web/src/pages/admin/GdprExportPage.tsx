@@ -73,7 +73,7 @@ export function AdminGdprExportPage() {
               <Button
                 variant="primary"
                 size="sm"
-                className="w-auto"
+                fullWidth={false}
                 onClick={handleExport}
                 disabled={exporting}
               >
