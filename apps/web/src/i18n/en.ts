@@ -136,6 +136,12 @@ export default {
     sendCapReached: 'Too many verification emails requested. Please wait up to an hour and try again.',
     verifyNoCodeHint: "Didn't get a code? If you already have an account, <loginLink>log in</loginLink> instead.",
     alreadyInFamily: 'You already belong to a family.',
+    // Enrollment succeeded but the fresh session cannot pass AuthGuard
+    // (sign-in failure or doc-read blip) — confirm and hand off to login
+    // (issue #262).
+    readyLoginTitle: 'Your family account is ready',
+    readyLoginDesc: 'We could not sign you in automatically. Log in with your email and the password you just chose.',
+    readyLoginCta: 'Log in',
     roleExclusiveJoin: "Student accounts (babysitter or tutor) can't join a family as a parent — this invite needs the parent's own account.",
     joinFamilyConfirm: 'Join the {{familyName}} family',
     babysitterTitle: 'Babysitter Sign Up',
