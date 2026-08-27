@@ -423,7 +423,7 @@ export function SearchPage() {
                           })}
                         </p>
                       </div>
-                      <Button size="sm" variant="outline" className="w-auto shrink-0" onClick={() => setWithdrawTarget(p)}>
+                      <Button size="sm" variant="outline" fullWidth={false} className="shrink-0" onClick={() => setWithdrawTarget(p)}>
                         {t('publish.withdraw')}
                       </Button>
                     </div>

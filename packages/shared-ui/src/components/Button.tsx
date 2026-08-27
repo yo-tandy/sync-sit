@@ -6,6 +6,16 @@ type ButtonSize = 'default' | 'sm' | 'icon';
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
   size?: ButtonSize;
+  /**
+   * Buttons are full-width by default (the app's mobile-first idiom). Pass
+   * false for an intrinsic-width button. This is a PROP, not a className
+   * override, because a caller's `w-auto` cannot reliably beat the base
+   * `w-full` -- conflicting Tailwind utilities resolve by generated-stylesheet
+   * order, not by position in the class attribute, and `w-full` wins that
+   * order. Four call sites had written `w-auto` believing it worked; the
+   * result was a full-width button painted over its row (issue #226).
+   */
+  fullWidth?: boolean;
 }
 
 const variantClasses: Record<ButtonVariant, string> = {
@@ -25,11 +35,11 @@ const sizeClasses: Record<ButtonSize, string> = {
 };
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ variant = 'primary', size = 'default', className = '', children, ...props }, ref) => {
+  ({ variant = 'primary', size = 'default', fullWidth = true, className = '', children, ...props }, ref) => {
     return (
       <button
         ref={ref}
-        className={`inline-flex w-full items-center justify-center gap-2 font-semibold transition-all cursor-pointer disabled:cursor-not-allowed ${variantClasses[variant]} ${sizeClasses[size]} ${className}`}
+        className={`inline-flex ${fullWidth ? 'w-full' : 'w-auto'} items-center justify-center gap-2 font-semibold transition-all cursor-pointer disabled:cursor-not-allowed ${variantClasses[variant]} ${sizeClasses[size]} ${className}`}
         {...props}
       >
         {children}
