@@ -47,3 +47,23 @@ export interface TutorSearchResult {
   contactPhone?: string;
   whatsapp?: string;
 }
+
+/**
+ * Wire contract of the `lookupTutor` callable (issue #235): the display-only
+ * shape a family sees when resolving a tutor they already know by name or
+ * exact email. Deliberately NO contact fields and no aboutMe -- resolving
+ * never bypasses the two-stage model; contact reveal stays behind an
+ * ACCEPTED request. `requestStatus` uses searchTutors' idiom, including
+ * `'incoming'` (tutor-initiated pending) and `'declined'` (latest request
+ * declined -- the CTA offers "request again" with the cooldown hint).
+ */
+export interface TutorLookupResult {
+  uid: string;
+  firstName: string;
+  lastName: string;
+  photoUrl: string | null;
+  classLevel: string;
+  languages: string[];
+  subjects: { subject: string; levels: string[] }[];
+  requestStatus: 'none' | 'pending' | 'accepted' | 'incoming' | 'declined';
+}

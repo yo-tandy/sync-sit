@@ -36,17 +36,23 @@ paths are cancel-and-rebook (`cancelSession` / `cancelSessionInstance` / `bookSe
   flag + acknowledge callable, UI on both sessions pages, notification type + routing rows.
 - **Interacts with:** the late-cancellation flag (a modify must not count as a cancel).
 
-### A2 · Study: direct tutor lookup by personal code — **opened as #235**
-Sit families can add a babysitter they already know via `lookupBabysitter` (personal
-code, searchable-gated). Study has no equivalent — verified (`lookupTutor` /
-`personalCode`: zero hits in study). A family whose tutor was found offline cannot
-connect without the tutor appearing in search.
+### A2 · Study: direct tutor lookup by name/email — **opened as #235, shipped in PR #254**
+**CORRECTION (found during implementation):** this entry originally claimed sit's
+mechanism is a "personal code" — it is not. `apps/functions/src/family/lookupBabysitter.ts`
+is a NAME-substring / exact-email lookup with no code anywhere, so there is no
+tutor-account-page "code display" deliverable. The port mirrors what actually shipped.
 
-- **Direction:** adopt Sit. Same gate: code resolves only if the tutor is `searchable`;
-  resolving a code mints the normal contact request, never a bypass of the
-  `approvedFamilies` unlock.
-- **Scope:** `lookupTutor` callable, code display on tutor account page, entry point on
-  family search page.
+- **Direction (as built):** adopt Sit. `lookupTutor` callable — parent-only, resolves
+  only `searchable` AND `enrollmentComplete` tutors, name substring or exact
+  email/ejemEmail, display-only payload (no contact fields), per-pair request status
+  with searchTutors' idiom (incl. `incoming` and `declined`). Resolving mints the
+  normal contact request via `sendTutorContactRequest`, never a bypass.
+- **Entry point:** family SearchPage ("Already know your tutor?") — study has no
+  preferred-tutors page by decision C.Q2=a, so the lookup lives on the search surface
+  rather than sit's PreferredBabysittersPage placement.
+- **Accepted risk (sit parity):** no family-verification gate on lookup — an
+  authenticated unverified parent can resolve display fields; the send step enforces
+  `isFullyVerified`, and every lookup writes an audit entry.
 
 ### A3 · Study: role guides — **opened as #236**
 Sit ships `/guide/babysitters` and `/guide/parents`. Study has **no guide routes** —

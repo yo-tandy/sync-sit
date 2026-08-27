@@ -47,3 +47,18 @@ export const searchTutorsSchema = z.object({
 });
 
 export type SearchTutorsInput = z.infer<typeof searchTutorsSchema>;
+
+/**
+ * Input for lookupTutor (issue #235): a free-text name fragment or exact
+ * email. Trimmed; 2 chars minimum (sit's threshold); bounded so a hostile
+ * payload cannot make the in-memory scan compare megabyte strings.
+ */
+export const lookupTutorSchema = z.object({
+  query: z
+    .string()
+    .trim()
+    .min(2, 'Search query must be at least 2 characters')
+    .max(200, 'Search query must be at most 200 characters'),
+});
+
+export type LookupTutorInput = z.infer<typeof lookupTutorSchema>;

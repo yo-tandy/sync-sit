@@ -694,6 +694,7 @@ export default {
       searching: 'Searching...',
       noResults: 'No tutors found',
       connected: 'Connected',
+      errorVerify: 'Your family needs to be verified before you can contact tutors.',
     },
     search: {
       subjectLabel: 'Subject',

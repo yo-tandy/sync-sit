@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '@/config/firebase';
 import { Input, Card, Badge, Button, Avatar, Dialog, Textarea, Select } from '@ejm/shared-ui';
+import type { TutorLookupResult } from '@ejm/study-core';
 
 /**
  * "Already know your tutor?" lookup (issue #235, parity A2) — sit's
@@ -15,17 +16,7 @@ import { Input, Card, Badge, Button, Avatar, Dialog, Textarea, Select } from '@e
  * subject and level chosen HERE (unlike TutorCard, there is no matched
  * subject to inherit), constrained to what the tutor actually offers.
  */
-export interface TutorLookupResult {
-  uid: string;
-  firstName: string;
-  lastName: string;
-  photoUrl: string | null;
-  classLevel: string;
-  languages: string[];
-  subjects: { subject: string; levels: string[] }[];
-  aboutMe: string | null;
-  requestStatus: 'none' | 'pending' | 'accepted' | 'incoming';
-}
+export type { TutorLookupResult };
 
 export function TutorLookup() {
   const { t } = useTranslation();
@@ -34,6 +25,10 @@ export function TutorLookup() {
   const [searching, setSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
   const [requestTarget, setRequestTarget] = useState<TutorLookupResult | null>(null);
+  const [lookupError, setLookupError] = useState(false);
+  // Monotonic sequence guarding against BOTH the pre-debounce cancel and a
+  // stale in-flight response overwriting a newer query (PR #254 round 1).
+  const seq = useRef(0);
   // uids whose request was sent through THIS dialog — render 'pending'
   // immediately without refetching (sit's optimistic idiom).
   const [sentTo, setSentTo] = useState<Set<string>>(new Set());
@@ -42,11 +37,19 @@ export function TutorLookup() {
   useEffect(() => {
     const q = query.trim();
     if (q.length < 2) {
+      // Invalidate any in-flight call AND clear the spinner -- returning
+      // early without setSearching(false) left "Searching..." stuck when a
+      // keystroke dropped the query under 2 chars mid-debounce (PR #254
+      // round 1).
+      seq.current += 1;
       setResults([]);
       setHasSearched(false);
+      setSearching(false);
+      setLookupError(false);
       return;
     }
     setSearching(true);
+    const mySeq = ++seq.current;
     const timer = setTimeout(async () => {
       try {
         const fn = httpsCallable<{ query: string }, { results?: TutorLookupResult[] }>(
@@ -54,12 +57,19 @@ export function TutorLookup() {
           'lookupTutor',
         );
         const res = await fn({ query: q });
+        if (seq.current !== mySeq) return; // stale response, newer query owns the UI
         setResults(res.data.results || []);
         setHasSearched(true);
+        setLookupError(false);
       } catch {
-        // silent — the section is an optional shortcut, not a primary flow
+        if (seq.current !== mySeq) return;
+        // A failed lookup must not leave the PREVIOUS query's rows standing
+        // as though they answered this one (PR #254 round 1).
+        setResults([]);
+        setHasSearched(false);
+        setLookupError(true);
       } finally {
-        setSearching(false);
+        if (seq.current === mySeq) setSearching(false);
       }
     }, 400);
     return () => clearTimeout(timer);
@@ -81,6 +91,9 @@ export function TutorLookup() {
       {searching && <p className="mt-2 text-xs text-gray-500">{t('family.lookup.searching')}</p>}
       {!searching && hasSearched && results.length === 0 && (
         <p className="mt-2 text-xs text-gray-500">{t('family.lookup.noResults')}</p>
+      )}
+      {!searching && lookupError && (
+        <p className="mt-2 text-xs text-brand-600">{t('family.search.error')}</p>
       )}
       {results.length > 0 && (
         <div className="mt-3 space-y-2">
@@ -123,8 +136,19 @@ export function TutorLookup() {
                     {status === 'accepted' && (
                       <Badge variant="green">{t('family.lookup.connected')}</Badge>
                     )}
+                    {status === 'declined' && (
+                      // searchTutors surfaces declined pairs the same way:
+                      // the CTA promises a RETRY (cooldown may reject it),
+                      // never a clean first send.
+                      <Button size="sm" variant="outline" onClick={() => setRequestTarget(r)}>
+                        {t('family.search.card.requestAgain')}
+                      </Button>
+                    )}
                   </div>
                 </div>
+                {status === 'declined' && (
+                  <p className="mt-2 text-xs text-gray-500">{t('family.search.card.declinedHint')}</p>
+                )}
               </Card>
             );
           })}
@@ -234,6 +258,12 @@ function LookupRequestDialog({
 /** Same mapping as TutorCard's errorKeyForCode (kept local — not exported there). */
 function lookupErrorKey(code: string | undefined): string {
   switch (code) {
+    // Unlike TutorCard (only reachable AFTER a verified search), the lookup
+    // renders for unverified families too -- the callable deliberately has
+    // no verification gate -- so the denied path needs its own copy instead
+    // of the generic error (PR #254 round 1).
+    case 'functions/permission-denied':
+      return 'family.lookup.errorVerify';
     case 'functions/already-exists':
       return 'family.search.contactDialog.errorAlreadyExists';
     case 'functions/resource-exhausted':

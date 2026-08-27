@@ -694,6 +694,7 @@ export default {
       searching: 'Recherche...',
       noResults: 'Aucun tuteur trouvé',
       connected: 'Connecté',
+      errorVerify: 'Votre famille doit être vérifiée avant de pouvoir contacter des tuteurs.',
     },
     search: {
       subjectLabel: 'Matière',

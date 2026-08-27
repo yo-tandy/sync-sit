@@ -115,6 +115,51 @@ describe('TutorLookup', () => {
     expect(screen.queryByRole('button', { name: 'Request contact' })).not.toBeInTheDocument();
   });
 
+  it('clears the Searching indicator when the query drops under 2 chars mid-debounce', async () => {
+    // PR #254 round 1: the early return skipped setSearching(false), so
+    // "Searching..." stuck permanently after ya -> backspace within 400ms.
+    renderWithProviders(<TutorLookup />);
+    const input = screen.getByRole('textbox');
+    fireEvent.change(input, { target: { value: 'ya' } });
+    expect(screen.getByText('Searching...')).toBeInTheDocument();
+    fireEvent.change(input, { target: { value: 'y' } });
+    expect(screen.queryByText('Searching...')).not.toBeInTheDocument();
+    await new Promise((r) => setTimeout(r, 500));
+    expect(screen.queryByText('Searching...')).not.toBeInTheDocument();
+    expect(h.callable).not.toHaveBeenCalled();
+  });
+
+  it('a failed lookup clears the previous rows and shows the error line', async () => {
+    // PR #254 round 1: the bare catch left the PREVIOUS query's rows
+    // standing as though they answered the new one.
+    await typeAndResolve([tutor()]);
+    await waitFor(() => expect(screen.getByText('Yael Cohen')).toBeInTheDocument());
+    h.callable.mockRejectedValue(new Error('offline'));
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'yael xyz' } });
+    await waitFor(() => expect(screen.queryByText('Yael Cohen')).not.toBeInTheDocument());
+    expect(screen.getByText('Something went wrong. Please try again.')).toBeInTheDocument();
+  });
+
+  it('renders a declined pair as Request again with the cooldown hint', async () => {
+    await typeAndResolve([tutor({ requestStatus: 'declined' })]);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Request again' })).toBeInTheDocument());
+    expect(screen.getByText(/recently declined/)).toBeInTheDocument();
+    // The retry CTA opens the same dialog.
+    fireEvent.click(screen.getByRole('button', { name: 'Request again' }));
+    expect(screen.getByRole('button', { name: 'Send request' })).toBeInTheDocument();
+  });
+
+  it('maps permission-denied to the verification copy (unverified families reach this dialog)', async () => {
+    await typeAndResolve([tutor()]);
+    await waitFor(() => expect(screen.getByText('Yael Cohen')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: 'Request contact' }));
+    h.callable.mockRejectedValueOnce({ code: 'functions/permission-denied' });
+    fireEvent.click(screen.getByRole('button', { name: 'Send request' }));
+    await waitFor(() =>
+      expect(screen.getByText(/needs to be verified/)).toBeInTheDocument(),
+    );
+  });
+
   it('surfaces the already-exists error copy instead of closing the dialog', async () => {
     await typeAndResolve([tutor()]);
     await waitFor(() => expect(screen.getByText('Yael Cohen')).toBeInTheDocument());

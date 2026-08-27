@@ -7,7 +7,7 @@ interface LookupResult {
   uid: string;
   firstName: string;
   lastName: string;
-  requestStatus: 'none' | 'pending' | 'accepted' | 'incoming';
+  requestStatus: 'none' | 'pending' | 'accepted' | 'incoming' | 'declined';
   subjects: { subject: string; levels: string[] }[];
 }
 
@@ -142,7 +142,7 @@ describe('lookupTutor', () => {
     expect(res.results.find((r) => r.uid === seed.tutor2.uid)!.requestStatus).toBe('incoming');
   });
 
-  it('maps an accepted request to accepted, and a declined one back to none', async () => {
+  it('maps accepted to accepted, and a declined pair to declined (searchTutors parity)', async () => {
     const ref = await getDb().collection('studyContactRequests').add({
       familyId: seed.family1Id, tutorUserId: seed.tutor2.uid,
       status: 'accepted', initiatedBy: 'family', subject: 'math', level: '6e',
@@ -157,9 +157,29 @@ describe('lookupTutor', () => {
     res = await callFunction<{ results: LookupResult[] }>(
       'lookupTutor', { query: 'yael' }, parentToken,
     );
-    // Declined pairs read as 'none': the family may ask again (cooldown is
-    // sendTutorContactRequest's concern, not lookup's).
-    expect(res.results.find((r) => r.uid === seed.tutor2.uid)!.requestStatus).toBe('none');
+    // 'declined', not 'none' -- the CTA must promise a RETRY (the cooldown
+    // may reject it), exactly as searchTutors surfaces the same pair.
+    expect(res.results.find((r) => r.uid === seed.tutor2.uid)!.requestStatus).toBe('declined');
+  });
+
+  it('resolves multiple requests per pair by createdAt: the LATEST wins', async () => {
+    const db = getDb();
+    // Older declined, newer pending -> pending (a rank-based map would need
+    // pending to unconditionally outrank; recency is the searchTutors rule).
+    await db.collection('studyContactRequests').add({
+      familyId: seed.family1Id, tutorUserId: seed.tutor2.uid,
+      status: 'declined', initiatedBy: 'family', subject: 'math', level: '6e',
+      createdAt: new Date(Date.now() - 60 * 60 * 1000),
+    });
+    await db.collection('studyContactRequests').add({
+      familyId: seed.family1Id, tutorUserId: seed.tutor2.uid,
+      status: 'pending', initiatedBy: 'family', subject: 'math', level: '6e',
+      createdAt: new Date(),
+    });
+    const res = await callFunction<{ results: LookupResult[] }>(
+      'lookupTutor', { query: 'yael' }, parentToken,
+    );
+    expect(res.results.find((r) => r.uid === seed.tutor2.uid)!.requestStatus).toBe('pending');
   });
 
   it('another family sees requestStatus none for the same tutor', async () => {
@@ -174,6 +194,52 @@ describe('lookupTutor', () => {
       'lookupTutor', { query: 'yael' }, parent3Token,
     );
     expect(res.results.find((r) => r.uid === seed.tutor2.uid)!.requestStatus).toBe('none');
+  });
+
+  it('an UNVERIFIED family still gets results -- accepted risk, sit parity (no verification gate)', async () => {
+    // parent3's family (Martin) is NOT fully verified. searchTutors rejects
+    // it; lookup deliberately does not -- the payload is display-only and
+    // sendTutorContactRequest enforces isFullyVerified itself. This pin
+    // makes the intent legible: if someone later adds a gate here, they are
+    // reversing a stated decision, not fixing an oversight.
+    const parent3Token = await getIdToken(seed.parent3.uid);
+    const res = await callFunction<{ results: LookupResult[] }>(
+      'lookupTutor', { query: 'yael' }, parent3Token,
+    );
+    expect(res.results.map((r) => r.uid)).toContain(seed.tutor2.uid);
+  });
+
+  it('never resolves an enrollmentComplete=false tutor, even searchable by exact email', async () => {
+    const db = getDb();
+    const ref = db.collection('users').doc('lookup-unenrolled-1');
+    await ref.set({
+      uid: ref.id, email: 'unenrolled@ejm-test.org', status: 'active',
+      firstName: 'Una', lastName: 'Enrolled',
+      profiles: { tutor: {
+        enrollmentComplete: false, ejemEmail: 'unenrolled@ejm-test.org',
+        searchable: true, classLevel: 'L1', languages: ['French'],
+        subjects: [{ subject: 'math', levels: ['6e'], rate: 20 }],
+      } },
+    });
+    try {
+      const res = await callFunction<{ results: LookupResult[] }>(
+        'lookupTutor', { query: 'unenrolled@ejm-test.org' }, parentToken,
+      );
+      expect(res.results).toHaveLength(0);
+    } finally {
+      await ref.delete();
+    }
+  });
+
+  it('writes a lookup_tutor audit entry with counts, never the query text', async () => {
+    await callFunction('lookupTutor', { query: 'yael' }, parentToken);
+    const logs = await getDb().collection('auditLogs')
+      .where('action', '==', 'lookup_tutor').get();
+    expect(logs.empty).toBe(false);
+    const entries = logs.docs.map((d) => d.data());
+    expect(entries.some((e) => (e.details as { queryLength?: number })?.queryLength === 4)).toBe(true);
+    // No entry ever carries the raw query -- it may be an email address.
+    expect(JSON.stringify(entries)).not.toContain('yael');
   });
 
   it('caps results at 10', async () => {

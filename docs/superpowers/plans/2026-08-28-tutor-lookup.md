@@ -8,14 +8,22 @@
 
 **Architecture:**
 - `lookupTutor` callable (`apps/study-functions/src/search/lookupTutor.ts`):
-  parent-only; `profiles.tutor.searchable == true` gate (a hidden tutor stays
-  hidden — the #213 reasoning); name-substring OR exact email/ejemEmail
+  parent-only; zod-validated input (`lookupTutorSchema`, 2..200 chars);
+  `searchable == true` AND `enrollmentComplete == true` gates (searchTutors'
+  filter set — a hidden tutor stays hidden, the #213 reasoning; legacy
+  dev/test docs never resolve); name-substring OR exact email/ejemEmail
   (`getEjemEmail` on the RAW doc, root-first per issue #203); per-pair
-  request status with searchTutors' `'incoming'` idiom (tutor-initiated
-  pending is never `'pending'`); <= 10 results. NO family-verification gate,
-  mirroring sit: results are display-only and `sendTutorContactRequest`
-  (the only next step) enforces `isFullyVerified` itself. No contact fields
-  in the payload, ever — resolving never bypasses the two-stage model.
+  request status resolved EXACTLY like searchTutors (latest request wins by
+  createdAt; tutor-initiated pending is `'incoming'`; family-initiated
+  declined surfaces as `'declined'` with the request-again CTA + cooldown
+  hint); <= 10 results; `writeUserActivity('lookup_tutor')` audit on every
+  call (query length + hit count, never the query itself — it may be an
+  email). **Accepted risk, stated:** NO family-verification gate, mirroring
+  sit — an authenticated unverified parent can resolve display fields two
+  characters at a time; the payload is display-only (no contact fields, no
+  aboutMe), `sendTutorContactRequest` (the only next step) enforces
+  `isFullyVerified` itself, and the audit entry makes scraping visible.
+  The wire type `TutorLookupResult` lives once in `@ejm/study-core`.
 - `TutorLookup` component on the family SearchPage (below the subject
   search; study has no preferred-tutors page by decision C.Q2=a, so the
   lookup lives on the search surface): debounced 400ms input, compact result
