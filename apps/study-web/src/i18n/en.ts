@@ -547,6 +547,14 @@ export default {
       },
       areaLink: 'Edit area you cover',
       areaLinkDesc: 'Where you work — arrondissements, or your address and a radius. Your address is what search uses to show families your distance.',
+      personalCode: {
+        title: 'Your personal code',
+        desc: 'Give this code to families you already know — they enter it on their tutor search page to find you directly and send you the usual contact request.',
+        copy: 'Copy',
+        copied: 'Copied!',
+        error: 'Could not load your code. Please try again later.',
+        hiddenHint: 'Your profile is hidden from search, so your code will not work right now. Turn on search visibility from your dashboard to activate it.',
+      },
     },
     area: {
       title: 'Area you cover',
@@ -745,6 +753,17 @@ export default {
       success: {
         title: 'Request sent',
         desc: 'We\'ve let {{name}} know. They\'ll need to accept before you can see their contact details.',
+      },
+      lookup: {
+        title: 'Already know a tutor?',
+        desc: 'If a tutor gave you their personal code, enter it here to find them directly.',
+        codeLabel: 'Tutor code',
+        placeholder: 'e.g. 4F7A2C9B',
+        submit: 'Find tutor',
+        looking: 'Looking…',
+        notFound: 'No tutor found for this code. Check it with your tutor — a code only works while their profile is visible in search.',
+        invalid: 'That doesn\'t look like a tutor code — it has 8 letters and digits.',
+        noSubjects: 'This tutor has no subjects listed at the moment.',
       },
     },
     publish: {

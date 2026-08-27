@@ -4,7 +4,8 @@ import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
-import { db, storage } from '@/config/firebase';
+import { httpsCallable } from 'firebase/functions';
+import { db, storage, functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { getTutorProfile } from '@ejm/study-core';
 import { DEFAULT_NOTIF_PREFS, isRunningAsPWA, getEjemEmail, getContact } from '@ejm/shared-core';
@@ -97,6 +98,13 @@ export function AccountPage() {
 
   const [error, setError] = useState<string | null>(null);
 
+  // Personal code (issue #235): server-minted, mint-on-first-read. When the
+  // userDoc already carries it we render straight from the doc; the callable
+  // only runs for a tutor who has never had one (it mints and returns).
+  const [personalCode, setPersonalCode] = useState<string | null>(null);
+  const [codeError, setCodeError] = useState(false);
+  const [codeCopied, setCodeCopied] = useState(false);
+
   // Push notifications only function when the app is installed as a PWA.
   const pwaMode = isRunningAsPWA();
 
@@ -137,6 +145,46 @@ export function AccountPage() {
   useEffect(() => {
     if (userDoc?.photoUrl) setPhotoPreview(userDoc.photoUrl);
   }, [userDoc]);
+
+  // Personal code: doc-first, mint only when absent. Cancellation-guarded
+  // like the family-doc loads elsewhere — a mint resolving after unmount (or
+  // after a userDoc refresh already delivered the code) must not set state.
+  const tutorPersonalCode = tutor?.personalCode ?? null;
+  const tutorEnrolled = tutor?.enrollmentComplete === true;
+  useEffect(() => {
+    if (!tutorEnrolled) return;
+    if (tutorPersonalCode) {
+      setPersonalCode(tutorPersonalCode);
+      return;
+    }
+    let cancelled = false;
+    const fn = httpsCallable<Record<string, never>, { code: string }>(
+      functions,
+      'getTutorPersonalCode',
+    );
+    fn({})
+      .then((res) => {
+        if (!cancelled) setPersonalCode(res.data.code);
+      })
+      .catch(() => {
+        if (!cancelled) setCodeError(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [tutorEnrolled, tutorPersonalCode]);
+
+  const handleCopyCode = async () => {
+    if (!personalCode) return;
+    try {
+      await navigator.clipboard.writeText(personalCode);
+      setCodeCopied(true);
+      flashAfter(() => setCodeCopied(false), 2000);
+    } catch {
+      // Clipboard can be denied (permissions, non-secure context) — the code
+      // is on screen either way, so a silent no-op beats an error banner.
+    }
+  };
 
   // Format DOB for display (User.dateOfBirth is a Firestore Timestamp, but may
   // be a plain string on older records — handle both).
@@ -575,6 +623,55 @@ export function AccountPage() {
         </Link>
 
         <hr className="my-6 border-gray-200" />
+
+        {/* 4-bis. Personal code (issue #235): the offline-referral handle.
+            Families who already know this tutor type it on their search page
+            (lookupTutor) instead of hunting through results. The code only
+            RESOLVES while the profile is searchable — the server re-checks at
+            lookup time — so a hidden tutor gets the dormant warning, not a
+            silently dead code. */}
+        {tutorEnrolled && (
+          <>
+            <h3 className="mb-1 text-sm font-semibold text-gray-700">
+              {t('tutor.account.personalCode.title')}
+            </h3>
+            <p className="mb-3 text-xs text-gray-500">{t('tutor.account.personalCode.desc')}</p>
+            {codeError && (
+              <p className="mb-6 text-sm text-brand-600">{t('tutor.account.personalCode.error')}</p>
+            )}
+            {!codeError && !personalCode && (
+              <p className="mb-6 text-sm text-gray-500">{t('common.loading')}</p>
+            )}
+            {!codeError && personalCode && (
+              <div className="mb-3 flex items-center gap-3">
+                <p
+                  data-testid="personal-code"
+                  className="rounded-lg border border-gray-300 bg-gray-50 px-4 py-2 font-mono text-lg font-semibold tracking-widest text-gray-900"
+                >
+                  {personalCode}
+                </p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  fullWidth={false}
+                  onClick={handleCopyCode}
+                  className="shrink-0"
+                >
+                  {codeCopied
+                    ? t('tutor.account.personalCode.copied')
+                    : t('tutor.account.personalCode.copy')}
+                </Button>
+              </div>
+            )}
+            {!codeError && personalCode && tutor?.searchable !== true && (
+              <p className="mb-6 text-xs text-amber-600">
+                {t('tutor.account.personalCode.hiddenHint')}
+              </p>
+            )}
+
+            <hr className="my-6 border-gray-200" />
+          </>
+        )}
 
         {/* 5. Change Password */}
         <h3 className="mb-3 text-sm font-semibold text-gray-700">{t('account.changePassword')}</h3>

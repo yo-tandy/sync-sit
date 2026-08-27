@@ -28,6 +28,7 @@ import {
   type AddressResult,
 } from '@ejm/shared-ui';
 import { TutorCard } from '@/components/family/TutorCard';
+import { TutorLookup } from '@/components/family/TutorLookup';
 
 /**
  * The family's own active published searches (issue #207) — the subset of the
@@ -336,6 +337,11 @@ export function SearchPage() {
             ))}
           </div>
         )}
+
+        {/* Direct lookup by personal code (issue #235): the entry point for a
+            tutor the family already knows — sits above the search form, which
+            cannot surface a tutor the family cannot describe by subject. */}
+        <TutorLookup />
 
         <form onSubmit={handleSubmit}>
           <Select

@@ -547,6 +547,14 @@ export default {
       },
       areaLink: 'Modifier la zone couverte',
       areaLinkDesc: 'Là où vous travaillez — arrondissements, ou votre adresse et un rayon. Votre adresse sert à afficher votre distance aux familles dans la recherche.',
+      personalCode: {
+        title: 'Votre code personnel',
+        desc: 'Donnez ce code aux familles que vous connaissez déjà — elles le saisissent sur leur page de recherche pour vous trouver directement et vous envoyer la demande de contact habituelle.',
+        copy: 'Copier',
+        copied: 'Copié !',
+        error: 'Impossible de charger votre code. Veuillez réessayer plus tard.',
+        hiddenHint: 'Votre profil est masqué dans la recherche, votre code ne fonctionne donc pas pour le moment. Activez la visibilité dans la recherche depuis votre tableau de bord pour le réactiver.',
+      },
     },
     area: {
       title: 'Zone couverte',
@@ -745,6 +753,17 @@ export default {
       success: {
         title: 'Demande envoyée',
         desc: 'Nous avons prévenu {{name}}. Il devra accepter avant que vous puissiez voir ses coordonnées.',
+      },
+      lookup: {
+        title: 'Vous connaissez déjà un professeur ?',
+        desc: 'Si un professeur vous a donné son code personnel, saisissez-le ici pour le trouver directement.',
+        codeLabel: 'Code du professeur',
+        placeholder: 'ex. 4F7A2C9B',
+        submit: 'Trouver le professeur',
+        looking: 'Recherche…',
+        notFound: 'Aucun professeur trouvé pour ce code. Vérifiez-le avec votre professeur — un code ne fonctionne que lorsque son profil est visible dans la recherche.',
+        invalid: 'Cela ne ressemble pas à un code de professeur — il comporte 8 lettres et chiffres.',
+        noSubjects: 'Ce professeur n\'a aucune matière renseignée pour le moment.',
       },
     },
     publish: {

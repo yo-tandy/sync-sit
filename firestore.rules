@@ -101,7 +101,12 @@ service cloud.firestore {
              && tutorField(request.resource.data, 'approvedFamilies', [])
                == tutorField(resource.data, 'approvedFamilies', [])
              && tutorField(request.resource.data, 'endorsementCount', 0)
-               == tutorField(resource.data, 'endorsementCount', 0);
+               == tutorField(resource.data, 'endorsementCount', 0)
+             // personalCode (issue #235): minted only by getTutorPersonalCode;
+             // a client choosing its own code could squat a memorable one or
+             // collide with another tutor's and hijack their offline referrals.
+             && tutorField(request.resource.data, 'personalCode', '')
+               == tutorField(resource.data, 'personalCode', '');
     }
 
     // Helper: the owner-editable tutor numerics must stay in enrollment's

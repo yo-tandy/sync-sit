@@ -437,6 +437,53 @@ describe('users collection — Plan D owner-update guards', () => {
     );
   });
 
+  // personalCode is server-minted (getTutorPersonalCode, issue #235): a client
+  // choosing its own code could squat a memorable one or collide with another
+  // tutor's and hijack their offline referrals. Both directions are pinned:
+  // a tutor may neither set a code they never minted nor rewrite one they have.
+  it('tutor may NOT set or change profiles.tutor.personalCode', async () => {
+    await seed('tu9', {
+      status: 'active', email: 't@ejm.org',
+      profiles: {
+        tutor: {
+          ejemEmail: 't@ejm.org',
+          enrollmentComplete: true,
+          searchable: true,
+          subjects: ['math'],
+          verification: { identityStatus: 'not_submitted' },
+        },
+      },
+    });
+    const authed = testEnv.authenticatedContext('tu9');
+    // Set-from-absent...
+    await assertFails(
+      updateDoc(doc(authed.firestore(), 'users', 'tu9'), { 'profiles.tutor.personalCode': 'AAAAAAAA' })
+    );
+    // ...and rewrite-of-existing.
+    await seed('tu10', {
+      status: 'active', email: 't2@ejm.org',
+      profiles: {
+        tutor: {
+          ejemEmail: 't2@ejm.org',
+          enrollmentComplete: true,
+          searchable: true,
+          subjects: ['math'],
+          personalCode: '0F0F0F0F',
+          verification: { identityStatus: 'not_submitted' },
+        },
+      },
+    });
+    const authed2 = testEnv.authenticatedContext('tu10');
+    await assertFails(
+      updateDoc(doc(authed2.firestore(), 'users', 'tu10'), { 'profiles.tutor.personalCode': 'BBBBBBBB' })
+    );
+    // The pin must not break the neighbouring owner-editable field: the same
+    // tutor toggling searchable (with personalCode untouched) still passes.
+    await assertSucceeds(
+      updateDoc(doc(authed2.firestore(), 'users', 'tu10'), { 'profiles.tutor.searchable': false })
+    );
+  });
+
   // Tutor self-service editing (issue #123): the four enrollment-frozen fields
   // are owner-editable. Seeds mirror enrollTutor's stored shape (absent-mode
   // fields explicit null, arrondissements []) with the server-owned siblings

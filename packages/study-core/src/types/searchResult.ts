@@ -1,4 +1,4 @@
-import type { LocationPref } from './subject.js';
+import type { LocationPref, SubjectOffering } from './subject.js';
 import type { StudyContactRequestStatus } from './contactRequest.js';
 
 /**
@@ -40,6 +40,41 @@ export interface TutorSearchResult {
    * it, so the card must not read "request sent" — but it must not read
    * "none" either, or the send CTA it offers is rejected as already-exists.
    */
+  requestStatus: 'none' | 'incoming' | StudyContactRequestStatus;
+
+  // Contact fields — projected only when the caller's family is approved.
+  contactEmail?: string;
+  contactPhone?: string;
+  whatsapp?: string;
+}
+
+/**
+ * The tutor card returned by the lookupTutor callable (issue #235, parity
+ * A2). Same projection discipline as TutorSearchResult — contact fields only
+ * for an approved family, locationPrefs already coverage-projected — but
+ * with the FULL `subjects` offerings instead of one matched subject/level:
+ * the family arrived via a personal code, not a subject query, so the client
+ * picks the offering before minting the normal contact request.
+ */
+export interface TutorLookupResult {
+  uid: string;
+  firstName: string;
+  lastName: string;
+  photoUrl?: string;
+  languages: string[];
+  aboutMe?: string;
+  classLevel: string;
+
+  /** Every subject the tutor offers, with per-subject rates and levels. */
+  subjects: SubjectOffering[];
+  sessionLengthsMin: number[];
+  locationPrefs: LocationPref[];
+
+  /** Haversine distance in km from the family's saved address, or null. */
+  distance: number | null;
+  endorsementCount: number;
+  cancellationNoticeHours: number;
+  /** Same semantics as TutorSearchResult.requestStatus. */
   requestStatus: 'none' | 'incoming' | StudyContactRequestStatus;
 
   // Contact fields — projected only when the caller's family is approved.
