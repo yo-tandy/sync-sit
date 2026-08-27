@@ -51,16 +51,16 @@ export function ParentGuidePage() {
         <Step number={2} title={fr ? 'Configurer votre famille' : 'Set up your family'}>
           <p>
             {fr
-              ? 'Dans "Paramètres de la famille", ajoutez vos enfants et votre adresse — elle sert à trouver des tuteurs à proximité. Vous pouvez aussi inviter un co-parent pour qu\'il puisse gérer les demandes.'
-              : 'In "Family Settings", add your children and your home address — it\'s used to find nearby tutors. You can also invite a co-parent so they can manage requests too.'}
+              ? 'Dans "Paramètres de la famille", ajoutez vos enfants et votre adresse — elle sert à trouver des tuteurs à proximité. Votre famille est partagée avec Sync/Sit : les enfants et l\'adresse renseignés ici valent pour les deux applications.'
+              : 'In "Family Settings", add your children and your home address — it\'s used to find nearby tutors. Your family is shared with Sync/Sit: the children and address you enter here apply in both apps.'}
           </p>
         </Step>
 
         <Step number={3} title={fr ? 'Vérifier votre famille' : 'Verify your family'}>
           <p>
             {fr
-              ? 'La recherche de tuteurs est bloquée tant que votre famille n\'est pas vérifiée. Allez dans le menu et sélectionnez "Vérification". Vous pouvez vérifier par email EJM ou par parrainage d\'une famille déjà vérifiée.'
-              : 'Tutor search is blocked until your family is verified. Go to the menu and select "Verification". You can verify via your EJM email or through a referral from an already-verified family.'}
+              ? 'La recherche de tuteurs est bloquée tant que votre famille n\'est pas vérifiée. Allez dans le menu et sélectionnez "Vérification". Vous pouvez vous vérifier via des documents (pièce d\'identité et certificat de scolarité EJM, examinés par un administrateur) ou demander à un parent EJM déjà vérifié de se porter garant pour vous via la vérification communautaire. La vérification est partagée avec Sync/Sit : la compléter dans l\'une des applications débloque les deux.'
+              : 'Tutor search is blocked until your family is verified. Go to the menu and select "Verification". You can verify through documents (an identity document and your child\'s EJM enrollment document, reviewed by an admin), or ask an already-verified EJM parent to vouch for you using community verification. Verification is shared with Sync/Sit: completing it in either app unlocks both.'}
           </p>
         </Step>
 
@@ -129,8 +129,8 @@ export function ParentGuidePage() {
         <Step number={11} title={fr ? 'Modifier ou annuler' : 'Modify or cancel'}>
           <p>
             {fr
-              ? 'Vous pouvez modifier une séance ponctuelle ou l\'annuler avec une courte raison — le tuteur est notifié. Chaque tuteur affiche un délai de préavis d\'annulation ; les annulations tardives sont signalées, alors annulez le plus tôt possible. Une demande encore en attente peut être retirée à tout moment.'
-              : 'You can modify a one-time session or cancel it with a short reason — the tutor is notified. Each tutor shows a cancellation notice window; late cancellations are flagged, so cancel as early as you can. A request that is still pending can be withdrawn at any time.'}
+              ? 'Vous pouvez modifier une séance ponctuelle confirmée : le tuteur est informé des changements et devra les confirmer, et votre séance reste réservée. Pour annuler, donnez une courte raison — le tuteur est notifié. Chaque tuteur affiche un délai de préavis d\'annulation ; les annulations tardives sont signalées, alors annulez le plus tôt possible. Une demande encore en attente peut être retirée à tout moment.'
+              : 'You can modify a confirmed one-time session: the tutor is notified of the changes and asked to acknowledge them, and your session stays booked. To cancel, give a short reason — the tutor is notified. Each tutor shows a cancellation notice window; late cancellations are flagged, so cancel as early as you can. A request that is still pending can be withdrawn at any time.'}
           </p>
         </Step>
 

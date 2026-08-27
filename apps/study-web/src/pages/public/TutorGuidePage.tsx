@@ -86,8 +86,8 @@ export function TutorGuidePage() {
         <Step number={6} title={fr ? 'Recevoir des demandes de contact' : 'Receive contact requests'}>
           <p>
             {fr
-              ? 'Avant toute séance, une demande de contact doit être acceptée. En général, une famille vous en envoie une pour une matière et un niveau, avec un message optionnel — vous recevez une notification push et un email, et la demande apparaît sur votre tableau de bord. Vous pouvez aussi faire le premier pas en répondant à une recherche publiée par une famille ("Annonces des familles" sur votre tableau de bord).'
-              : 'Before any sessions, a contact request has to be accepted. Usually a family sends you one for a subject and class level, with an optional message — you\'ll receive a push notification and an email, and the request appears on your dashboard. You can also make the first move by answering a family\'s published search (the "Posts from families" board on your dashboard).'}
+              ? 'Avant toute séance, une demande de contact doit être acceptée. En général, une famille vous en envoie une pour une matière et un niveau, avec un message optionnel — vous recevez une notification push et un email, et la demande apparaît sur votre tableau de bord. Vous pouvez aussi faire le premier pas en répondant à une recherche publiée par une famille ("Annonces des familles" sur votre tableau de bord — jusqu\'à 5 annonces par 24 heures).'
+              : 'Before any sessions, a contact request has to be accepted. Usually a family sends you one for a subject and class level, with an optional message — you\'ll receive a push notification and an email, and the request appears on your dashboard. You can also make the first move by answering a family\'s published search (the "Posts from families" board on your dashboard — up to 5 posts per 24 hours).'}
           </p>
         </Step>
 
@@ -134,11 +134,11 @@ export function TutorGuidePage() {
           </p>
         </Step>
 
-        <Step number={12} title={fr ? 'Annuler une séance' : 'Cancel a session'}>
+        <Step number={12} title={fr ? 'Modifications et annulations' : 'Changes and cancellations'}>
           <p>
             {fr
-              ? 'Si une séance confirmée doit être annulée, appuyez sur sa carte et donnez une courte raison — l\'autre partie est notifiée. Votre délai de préavis (défini sur votre page "Disponibilités") indique aux familles le préavis attendu ; les annulations tardives sont signalées. Annulez le plus tôt possible.'
-              : 'If a confirmed session must be cancelled, tap its card and give a short reason — the other side is notified. Your notice window (set on your "Schedule" page) tells families how much notice you expect; late cancellations are flagged. Cancel as early as you can.'}
+              ? 'Une famille peut modifier une séance ponctuelle confirmée : la séance reste réservée et vous serez invité(e) à confirmer la prise en compte des changements ("Bien reçu"). Si une séance confirmée doit être annulée, appuyez sur sa carte et donnez une courte raison — l\'autre partie est notifiée. Votre délai de préavis (défini sur votre page "Disponibilités") indique aux familles le préavis attendu ; les annulations tardives sont signalées. Annulez le plus tôt possible.'
+              : 'A family can modify a confirmed one-time session: the session stays booked, and you\'ll be asked to acknowledge the changes ("Got it"). If a confirmed session must be cancelled, tap its card and give a short reason — the other side is notified. Your notice window (set on your "Schedule" page) tells families how much notice you expect; late cancellations are flagged. Cancel as early as you can.'}
           </p>
         </Step>
 
@@ -148,8 +148,8 @@ export function TutorGuidePage() {
         <Step number={13} title={fr ? 'Recommandations' : 'Endorsements'}>
           <p>
             {fr
-              ? 'Dans le menu, allez dans "Recommandations" pour gérer vos recommandations. Les familles EJM peuvent en soumettre après vos séances. Chaque recommandation est privée par défaut — vous choisissez lesquelles publier pour qu\'elles soient visibles par les autres familles.'
-              : 'From the menu, go to "Endorsements" to manage your endorsements. EJM families can submit them after your sessions. Each endorsement is private by default — you choose which ones to publish so they\'re visible to other families.'}
+              ? 'Dans le menu, allez dans "Recommandations" pour gérer vos recommandations. Une famille peut en soumettre une (une seule par famille) dès que vous avez accepté sa demande de contact. Chaque recommandation est privée par défaut — vous choisissez lesquelles publier pour qu\'elles soient visibles par les autres familles.'
+              : 'From the menu, go to "Endorsements" to manage your endorsements. A family can submit one (one per family) as soon as you\'ve accepted their contact request. Each endorsement is private by default — you choose which ones to publish so they\'re visible to other families.'}
           </p>
         </Step>
 
