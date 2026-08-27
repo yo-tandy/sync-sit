@@ -25,6 +25,7 @@ const CONTACT_ERROR_KEY: Record<string, string> = {
   subject_mismatch: 'contactSubject',
   already_approved: 'contactApproved',
   own_family: 'contactOwnFamily',
+  board_contact_cap: 'contactCap',
 };
 
 /**

@@ -317,6 +317,7 @@ export default {
       contactSubject: 'You don\'t currently teach this subject and level. Add it to your subjects to answer this post.',
       contactApproved: 'This family already has your contact details — no request needed.',
       contactOwnFamily: 'This is your own family\'s search.',
+      contactCap: 'You have contacted several families in the last 24 hours. You can send more requests tomorrow.',
       empty: 'No published searches right now. Check back later — new ones appear here.',
       error: 'Could not load published searches. Please try again later.',
     },

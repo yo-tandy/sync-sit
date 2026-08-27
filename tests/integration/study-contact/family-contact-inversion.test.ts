@@ -342,6 +342,82 @@ describe('study contact inversion', () => {
     expect(res.requestId).toBeTruthy();
   });
 
+  it('caps board contacts CREATED in 24h — withdrawing does not free a slot, aging out does', async () => {
+    // The twin of sit's ceiling (issue #233, PR #232 review). The per-pair
+    // guards bound ONE conversation; nothing bounded this tutor across
+    // DIFFERENT families, and each contact emails + pushes every parent of
+    // the family it lands on.
+    //
+    // The five prior contacts are to OTHER families on purpose: five to
+    // family1 would trip the per-pair pending guard first, and the point of
+    // this pin is the CROSS-family ceiling.
+    for (let i = 0; i < 5; i++) {
+      await seedStudyContactRequest({
+        tutorUserId: seed.tutor2.uid,
+        familyId: `cap-family-${i}`,
+        createdByUserId: seed.tutor2.uid,
+        initiatedBy: 'tutor',
+        publishedSearchId: `ps-cap-${i}`,
+        // Two of the five already withdrawn: a pending-only count would hand
+        // those slots straight back (cancelContactRequest is deliberately
+        // cooldown-free). Creation spent them, so they still count.
+        status: i < 2 ? 'cancelled' : 'pending',
+      });
+    }
+    const searchId = await publish();
+    await expect(
+      callFunction('sendFamilyContactRequest', { publishedSearchId: searchId }, tutorToken),
+    ).rejects.toMatchObject({
+      code: 'RESOURCE_EXHAUSTED',
+      details: { reason: 'board_contact_cap' },
+    });
+
+    // Slots return by clock, not by anyone's action: age one creation past
+    // the window and the sixth contact goes through.
+    const db = getDb();
+    const stale = await db.collection('studyContactRequests')
+      .where('publishedSearchId', '==', 'ps-cap-0')
+      .get();
+    await stale.docs[0].ref.update({
+      createdAt: Timestamp.fromMillis(Date.now() - 25 * 60 * 60 * 1000),
+    });
+    const res = await callFunction<{ requestId: string }>(
+      'sendFamilyContactRequest',
+      { publishedSearchId: searchId },
+      tutorToken,
+    );
+    expect(res.requestId).toBeTruthy();
+  });
+
+  it('the ceiling yields to the more specific per-pair refusals', async () => {
+    // Ordering pin (PR #232 review): a capped tutor who ALSO has a pending
+    // with this family must hear about the pending, not the cap — the cap is
+    // the least actionable of the two, and it runs last for that reason.
+    for (let i = 0; i < 5; i++) {
+      await seedStudyContactRequest({
+        tutorUserId: seed.tutor2.uid,
+        familyId: `cap-family-${i}`,
+        createdByUserId: seed.tutor2.uid,
+        initiatedBy: 'tutor',
+        status: 'pending',
+      });
+    }
+    await seedStudyContactRequest({
+      tutorUserId: seed.tutor2.uid,
+      familyId: seed.family1Id,
+      createdByUserId: seed.tutor2.uid,
+      initiatedBy: 'tutor',
+      status: 'pending',
+    });
+    const searchId = await publish();
+    await expect(
+      callFunction('sendFamilyContactRequest', { publishedSearchId: searchId }, tutorToken),
+    ).rejects.toMatchObject({
+      code: 'ALREADY_EXISTS',
+      details: { reason: 'pending_sent' },
+    });
+  });
+
   // ── respondToFamilyContactRequest ─────────────────────────────────────
 
   async function tutorContacts(): Promise<string> {
