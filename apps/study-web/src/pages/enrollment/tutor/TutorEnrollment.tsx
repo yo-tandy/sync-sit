@@ -209,9 +209,9 @@ export function TutorEnrollment() {
           // Swallowed by design — see above.
         }
       }
-      navigate('/enroll/tutor/success', {
-        state: { firstName: profileData.firstName ?? identityOnFile?.firstName },
-      });
+      // Straight to the dashboard (issue #242, parity Q5=b) -- its greeting
+      // knows the name and its activation banner carries the next steps.
+      navigate('/tutor');
 
     } catch (err: unknown) {
       if (!applyEnrollmentError(err)) {

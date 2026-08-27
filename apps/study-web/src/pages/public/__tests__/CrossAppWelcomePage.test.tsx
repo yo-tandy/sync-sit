@@ -137,9 +137,7 @@ describe('CrossAppWelcomePage (study)', () => {
     fireEvent.click(screen.getByText('subjects-next'));
 
     await vi.waitFor(() =>
-      expect(h.navigate).toHaveBeenCalledWith('/enroll/tutor/success', {
-        state: { firstName: 'Sacha' },
-      }),
+      expect(h.navigate).toHaveBeenCalledWith('/tutor'),
     );
     const call = h.calls.find((c) => c.name === 'enrollTutor')!;
     expect(call).toBeTruthy();

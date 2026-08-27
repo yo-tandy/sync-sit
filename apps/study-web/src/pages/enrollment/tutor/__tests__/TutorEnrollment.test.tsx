@@ -251,7 +251,7 @@ describe('TutorEnrollment orchestrator', () => {
       expect(payload.enrollment).not.toHaveProperty(key);
     }
     await vi.waitFor(() =>
-      expect(h.navigate).toHaveBeenCalledWith('/enroll/tutor/success', { state: { firstName: 'Flow' } }),
+      expect(h.navigate).toHaveBeenCalledWith('/tutor'),
     );
     // New-account path signs the tutor in — the success CTA must land in
     // the portal, not bounce to login.
@@ -271,7 +271,7 @@ describe('TutorEnrollment orchestrator', () => {
     fireEvent.click(await screen.findByText('subjects-next'));
 
     await vi.waitFor(() =>
-      expect(h.navigate).toHaveBeenCalledWith('/enroll/tutor/success', { state: { firstName: 'Flow' } }),
+      expect(h.navigate).toHaveBeenCalledWith('/tutor'),
     );
     expect(screen.queryByText(/network-request-failed/)).toBeNull();
   });
@@ -307,7 +307,7 @@ describe('TutorEnrollment orchestrator', () => {
     expect(h.signIn).not.toHaveBeenCalled();
     // refreshUserDoc must be awaited before the success navigation.
     await vi.waitFor(() =>
-      expect(h.navigate).toHaveBeenCalledWith('/enroll/tutor/success', { state: { firstName: 'Flow' } }),
+      expect(h.navigate).toHaveBeenCalledWith('/tutor'),
     );
     expect(h.refreshUserDoc).toHaveBeenCalled();
     // The now-present tutor profile must not divert the success navigation home.
@@ -347,7 +347,7 @@ describe('TutorEnrollment orchestrator', () => {
     }
     expect(payload.enrollment).toMatchObject({ classLevel: 'Terminale' });
     await vi.waitFor(() =>
-      expect(h.navigate).toHaveBeenCalledWith('/enroll/tutor/success', { state: { firstName: 'Iris' } }),
+      expect(h.navigate).toHaveBeenCalledWith('/tutor'),
     );
   });
 
@@ -391,7 +391,7 @@ describe('TutorEnrollment orchestrator', () => {
     expect(await screen.findByText('An account with this email already exists')).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: i18n.t('auth.login') })).toBeNull();
     // No success navigation on failure.
-    expect(h.navigate).not.toHaveBeenCalledWith('/enroll/tutor/success', expect.anything());
+    expect(h.navigate).not.toHaveBeenCalledWith('/tutor');
   });
 
   it("verifyEjmEmail 'send-cap' rejection (issue #155 bypass allowance) renders the translated copy and stays on the email step", async () => {
@@ -426,7 +426,7 @@ describe('TutorEnrollment orchestrator', () => {
     // Distinct from the mismatch message and from the login CTA.
     expect(screen.queryByText(i18n.t('enrollment.age.mismatch'))).toBeNull();
     expect(screen.queryByRole('link', { name: i18n.t('auth.login') })).toBeNull();
-    expect(h.navigate).not.toHaveBeenCalledWith('/enroll/tutor/success', expect.anything());
+    expect(h.navigate).not.toHaveBeenCalledWith('/tutor');
   });
 
   it("enrollTutor 'age/mismatch' rejection renders the contact-admin message", async () => {
@@ -436,6 +436,6 @@ describe('TutorEnrollment orchestrator', () => {
     const msg = i18n.t('enrollment.age.mismatch');
     expect(await screen.findByText(msg)).toBeInTheDocument();
     expect(screen.queryByText(i18n.t('enrollment.age.under15'))).toBeNull();
-    expect(h.navigate).not.toHaveBeenCalledWith('/enroll/tutor/success', expect.anything());
+    expect(h.navigate).not.toHaveBeenCalledWith('/tutor');
   });
 });

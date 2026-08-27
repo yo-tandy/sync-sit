@@ -96,9 +96,8 @@ export function CrossAppWelcomePage() {
         ...(Object.keys(supplement).length > 0 ? { enrollment: supplement } : {}),
       });
       await refreshUserDoc();
-      navigate('/enroll/tutor/success', {
-        state: { firstName: userDoc?.firstName ?? (firstName.trim() || undefined) },
-      });
+      // Straight to the dashboard (issue #242, parity Q5=b).
+      navigate('/tutor');
     } catch (err: unknown) {
       if (enrollmentErrorReason(err) === 'profile-exists') {
         navigate('/tutor');
