@@ -13,6 +13,7 @@ export default {
     optional: 'Optional',
     signOut: 'Sign out',
     hello: 'Hello,',
+    helloNoName: 'Hello',
     add: 'Add',
     date: 'Date',
     remove: 'Remove',

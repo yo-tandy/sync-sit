@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { screen, act } from '@testing-library/react';
+import { screen, act, waitFor } from '@testing-library/react';
 import { renderWithProviders } from '@/__tests__/test-utils';
 
 // Hoisted, test-controllable state. The family dashboard reads the auth store
@@ -100,6 +100,24 @@ describe('family DashboardPage', () => {
   it('greets the parent by first name', () => {
     renderWithProviders(<DashboardPage />);
     expect(screen.getByText(/Dana/)).toBeInTheDocument();
+  });
+
+  it('greets in the shared idiom, with the family context line (parity D1, #239)', async () => {
+    // This page had neither comma, wave nor context line before #239, and the
+    // context line is new state read off the families snapshot the
+    // verification gate already fetches — so it is worth pinning that the
+    // read actually reaches the header.
+    h.familyData = { familyName: 'Cohen', verification: { isFullyVerified: true } };
+    renderWithProviders(<DashboardPage />);
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Hello, Dana 👋');
+    expect(await screen.findByText('COHEN family')).toBeInTheDocument();
+  });
+
+  it('omits the context line when the family doc carries no name', async () => {
+    h.familyData = { verification: { isFullyVerified: true } };
+    renderWithProviders(<DashboardPage />);
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Hello, Dana 👋');
+    await waitFor(() => expect(screen.queryByText(/family$/)).not.toBeInTheDocument());
   });
 
   it('shows the verification banner when the family is not fully verified', async () => {

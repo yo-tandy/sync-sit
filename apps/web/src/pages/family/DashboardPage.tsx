@@ -353,7 +353,6 @@ export function FamilyDashboard() {
       {/* Header — the shared idiom (parity D1, issue #239) */}
       <DashboardGreeting
         firstName={userDoc?.firstName}
-        fallbackName="there"
         contextLine={`${formatFamilyTitle(familyName)} ${t('familyDashboard.family')}`}
       />
 

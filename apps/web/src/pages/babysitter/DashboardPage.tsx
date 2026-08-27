@@ -200,7 +200,6 @@ export function BabysitterDashboard() {
           greeting. ── */}
       <DashboardGreeting
         firstName={babysitter?.firstName}
-        fallbackName="Babysitter"
         action={
           /* Active/Inactive toggle */
           <button

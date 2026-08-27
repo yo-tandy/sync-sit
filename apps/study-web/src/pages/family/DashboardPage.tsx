@@ -326,7 +326,6 @@ export function DashboardPage() {
           greeting for a doc with no firstName. */}
       <DashboardGreeting
         firstName={userDoc?.firstName}
-        fallbackName="there"
         contextLine={familyName ? `${familyName.toUpperCase()} ${t('family.dashboard.family')}` : undefined}
       />
 

@@ -325,7 +325,6 @@ export function DashboardPage() {
           card below carrying the explanation. ── */}
       <DashboardGreeting
         firstName={userDoc?.firstName}
-        fallbackName={t('tutor.dashboardTitle')}
         contextLine={t('tutor.dashboard.greeting')}
         action={
           enrollmentComplete && (
