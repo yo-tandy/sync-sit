@@ -428,7 +428,12 @@ export function WeeklyTimeline({ weekly, onChange, onDayHeaderClick, locationTag
 
   return (
     <div className="overflow-x-auto select-none touch-none">
-      <div className="min-w-[360px]">
+      {/* min-w-[320px], not 360: page padding (px-5) leaves ~350px of content
+          at a 390px viewport, so a 360px floor forced a ~10px overflow with no
+          visible affordance -- clipping exactly the Sunday column in both apps
+          (issue #227). The 1fr columns compress fine; 320 keeps slots
+          grabbable on the narrowest phones while seven days fit at 390px. */}
+      <div className="min-w-[320px]">
         {/* Header row */}
         <div className="mb-1 grid grid-cols-[32px_repeat(7,1fr)] gap-x-[2px]">
           <div />
