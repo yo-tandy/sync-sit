@@ -12,8 +12,8 @@ import { Button, Badge, Card, Spinner, Input, Dialog, Textarea, InstallAppBanner
 import { CalendarIcon, PlusIcon, SearchIcon } from '@/components/ui/Icons';
 import type { AppointmentDoc, BabysitterSummary, RecurringSlot, User } from '@ejm/sit-core';
 import { getBabysitterProfile, getParentProfile } from '@ejm/sit-core';
-import { useRefetchOnFocus } from '@ejm/shared-ui';
-import { formatBabysitterName, capitalize, formatFamilyTitle } from '@/lib/formatName';
+import { useRefetchOnFocus, DashboardGreeting } from '@ejm/shared-ui';
+import { formatBabysitterName, formatFamilyTitle } from '@/lib/formatName';
 import { debouncedTogglePreferred } from '@/lib/debouncedPreferred';
 import { EndorsementDialog } from '@/components/endorsements/EndorsementDialog';
 import { CrossAppWelcomeCard } from '@/components/family/CrossAppWelcomeCard';
@@ -350,11 +350,12 @@ export function FamilyDashboard() {
 
   return (
     <div className="px-5 pt-4 pb-8">
-      {/* Header */}
-      <div className="mb-6">
-        <h2 className="text-lg font-bold">{t('babysitterDashboard.hello')} {capitalize(userDoc?.firstName) || 'there'} 👋</h2>
-        <p className="text-xs text-gray-500">{formatFamilyTitle(familyName)} {t('familyDashboard.family')}</p>
-      </div>
+      {/* Header — the shared idiom (parity D1, issue #239) */}
+      <DashboardGreeting
+        firstName={userDoc?.firstName}
+        fallbackName="there"
+        contextLine={`${formatFamilyTitle(familyName)} ${t('familyDashboard.family')}`}
+      />
 
       {/* One-time cross-app welcome (issue #144) */}
       <CrossAppWelcomeCard />

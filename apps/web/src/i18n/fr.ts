@@ -20,6 +20,7 @@ export default {
     done: 'Termin\u00e9',
     search: 'Rechercher',
     signOut: 'Se d\u00e9connecter',
+    hello: 'Bonjour,',
     yes: 'Oui',
     no: 'Non',
     or: 'ou',
@@ -219,7 +220,6 @@ export default {
   },
 
   babysitterDashboard: {
-    hello: 'Bonjour,',
     active: 'Actif',
     inactive: 'Inactif',
     myAvailability: 'Mes disponibilit\u00e9s',

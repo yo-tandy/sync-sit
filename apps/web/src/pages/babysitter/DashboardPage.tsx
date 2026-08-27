@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useFlashTimer } from '@ejm/shared-ui';
+import { useFlashTimer, DashboardGreeting } from '@ejm/shared-ui';
 import { Link, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { doc, updateDoc, serverTimestamp, collection, query, where, getDocs } from 'firebase/firestore';
@@ -194,30 +194,30 @@ export function BabysitterDashboard() {
 
   return (
     <div className="px-5 pt-4 pb-8">
-      {/* ── Header ── */}
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <div>
-            <p className="text-sm text-gray-500">{t('babysitterDashboard.hello')}</p>
-            <h2 className="text-lg font-bold">{babysitter?.firstName || 'Babysitter'} 👋</h2>
-          </div>
-        </div>
-
-        {/* Active/Inactive toggle */}
-        <button
-          onClick={() => { if (!isSearchable && !profileComplete) return; setToggleDialog(true); }}
-          className={`flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
-            isSearchable
-              ? 'bg-green-100 text-green-700'
-              : profileComplete
-                ? 'bg-gray-100 text-gray-500'
-                : 'bg-gray-100 text-gray-400 opacity-50'
-          }`}
-        >
-          <div className={`h-2 w-2 rounded-full ${isSearchable ? 'bg-green-500' : 'bg-gray-400'}`} />
-          {isSearchable ? t('babysitterDashboard.active') : t('babysitterDashboard.inactive')}
-        </button>
-      </div>
+      {/* ── Header — the shared idiom (parity D1, issue #239). The greeting
+          was inverted here: a muted "Hello" label above the name, which is
+          the one form of the four that read as a caption rather than a
+          greeting. ── */}
+      <DashboardGreeting
+        firstName={babysitter?.firstName}
+        fallbackName="Babysitter"
+        action={
+          /* Active/Inactive toggle */
+          <button
+            onClick={() => { if (!isSearchable && !profileComplete) return; setToggleDialog(true); }}
+            className={`flex shrink-0 items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
+              isSearchable
+                ? 'bg-green-100 text-green-700'
+                : profileComplete
+                  ? 'bg-gray-100 text-gray-500'
+                  : 'bg-gray-100 text-gray-400 opacity-50'
+            }`}
+          >
+            <div className={`h-2 w-2 rounded-full ${isSearchable ? 'bg-green-500' : 'bg-gray-400'}`} />
+            {isSearchable ? t('babysitterDashboard.active') : t('babysitterDashboard.inactive')}
+          </button>
+        }
+      />
 
       {/* Install-as-PWA banner (only when running in a regular browser tab) */}
       <InstallAppBanner />
