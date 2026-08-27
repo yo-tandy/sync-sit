@@ -53,6 +53,12 @@ export interface ParentFormData {
 // wait budgets from this value.
 const SESSION_SETTLE_TIMEOUT_MS = 5000;
 
+// AuthGuard role="parent"'s own predicate, in one place: the post-signup
+// wait, the settled-store gate, the CTA re-check, and the late-settle
+// auto-advance all evaluate exactly this (issue #262).
+const passesParentGuard = (s: ReturnType<typeof useAuthStore.getState>) =>
+  !s.loading && !!s.firebaseUser && getSitRole(s.userDoc) === 'parent';
+
 const INITIAL_DATA: ParentFormData = {
   email: '',
   verificationCode: '',
@@ -102,6 +108,20 @@ export function ParentEnrollment() {
       setStep(3);
     }
   }, [step, authLoading, firebaseUser, userDoc, navigate]);
+
+  // The account-ready screen treats "merely slow" as the expected case: if
+  // the session settles into a guard-passing state while it is shown, advance
+  // to the portal without requiring the click (issue #262 round 3).
+  useEffect(() => {
+    if (!signedOutSuccess) return;
+    if (passesParentGuard(useAuthStore.getState())) {
+      navigate('/family');
+      return;
+    }
+    return useAuthStore.subscribe((s) => {
+      if (passesParentGuard(s)) navigate('/family');
+    });
+  }, [signedOutSuccess, navigate]);
 
   const updateData = (partial: Partial<ParentFormData>) => {
     setFormData((prev) => ({ ...prev, ...partial }));
@@ -205,7 +225,7 @@ export function ParentEnrollment() {
           // that never settles or a doc read that keeps blipping.
           const timer = setTimeout(() => { unsub(); resolve(); }, SESSION_SETTLE_TIMEOUT_MS);
           const check = (state: ReturnType<typeof useAuthStore.getState>) => {
-            if (!state.loading && state.firebaseUser && getSitRole(state.userDoc) === 'parent') {
+            if (passesParentGuard(state)) {
               clearTimeout(timer);
               unsub();
               resolve();
@@ -218,8 +238,7 @@ export function ParentEnrollment() {
         // Swallowed by design — see above.
       }
 
-      const settled = useAuthStore.getState();
-      if (!settled.loading && settled.firebaseUser && getSitRole(settled.userDoc) === 'parent') {
+      if (passesParentGuard(useAuthStore.getState())) {
         navigate('/family');
       } else {
         setSignedOutSuccess(true);
@@ -290,8 +309,7 @@ export function ParentEnrollment() {
             // A merely-slow session may have settled after the backstop
             // fired: re-check the guard's predicate at click time and route
             // straight to the portal instead of a needless re-login.
-            const now = useAuthStore.getState();
-            if (!now.loading && now.firebaseUser && getSitRole(now.userDoc) === 'parent') {
+            if (passesParentGuard(useAuthStore.getState())) {
               navigate('/family');
             } else {
               navigate('/login');

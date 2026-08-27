@@ -367,6 +367,36 @@ describe('ParentEnrollment post-enrollment session gate (issue #262)', () => {
     expect(h.navigate).not.toHaveBeenCalledWith('/login');
   });
 
+  it('the account-ready screen auto-advances when the session settles late (no click needed)', async () => {
+    // Once the backstop has fired, the screen keeps listening: a session
+    // that settles moments later advances to the portal on its own.
+    h.signIn.mockImplementationOnce(() => {
+      h.auth.firebaseUser = { uid: 'new' };
+      return Promise.resolve(); // doc blips
+    });
+    renderFlow();
+    await reachFamilyStep();
+    fireEvent.click(screen.getByText('family-fill'));
+
+    vi.useFakeTimers();
+    fireEvent.click(screen.getByText('family-submit'));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5001); // SESSION_SETTLE_TIMEOUT_MS + 1
+    });
+    vi.useRealTimers();
+
+    expect(await screen.findByText('Your family account is ready')).toBeInTheDocument();
+    // The screen subscribed for a late settle (the wait's own listener
+    // already unsubscribed itself at timeout).
+    await vi.waitFor(() => expect(h.subscribers.length).toBe(1));
+
+    h.auth.userDoc = { profiles: { parent: {} } };
+    await act(async () => {
+      h.subscribers[0]({ loading: false, firebaseUser: h.auth.firebaseUser, userDoc: h.auth.userDoc });
+    });
+    await vi.waitFor(() => expect(h.navigate).toHaveBeenCalledWith('/family'));
+  });
+
   it('resolves through the store SUBSCRIPTION when the doc settles after sign-in (production path, no backstop stall)', async () => {
     // Production ordering: signInWithEmailAndPassword resolves before the
     // user-doc snapshot lands, so the wait's immediate check fails and
