@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { RouterProvider } from 'react-router';
-import { ToastProvider } from '@ejm/shared-ui';
+import { ToastProvider, useFlashTimer } from '@ejm/shared-ui';
 import { router } from './router';
 import { ForcedSignOutWatcher } from '@/components/ui/ForcedSignOutWatcher';
 import { PushPrompt } from '@/components/ui/PushPrompt';
@@ -9,27 +9,28 @@ import { setupForegroundMessages } from '@/lib/pushNotifications';
 export default function App() {
   const [toast, setToast] = useState<{ title: string; body: string } | null>(null);
 
+  // Dismiss-timer lifecycle (clear on re-toast, clear on unmount) lives in
+  // the shared hook now (issue #222); flashAfter is referentially stable.
+  const flashAfter = useFlashTimer();
+
   useEffect(() => {
     // setupForegroundMessages resolves async: if the effect is cleaned up
     // first (StrictMode double-invoke), the late-resolving listener must be
-    // detached immediately or it leaks. Same for the dismiss timer.
+    // detached immediately or it leaks.
     let unsub: (() => void) | undefined;
     let cancelled = false;
-    let timer: ReturnType<typeof setTimeout> | undefined;
     setupForegroundMessages((title, body) => {
       setToast({ title, body });
-      clearTimeout(timer);
-      timer = setTimeout(() => setToast(null), 5000);
+      flashAfter(() => setToast(null), 5000);
     }).then((fn) => {
       if (cancelled) fn?.();
       else unsub = fn;
     });
     return () => {
       cancelled = true;
-      clearTimeout(timer);
       unsub?.();
     };
-  }, []);
+  }, [flashAfter]);
 
   return (
     <ToastProvider>

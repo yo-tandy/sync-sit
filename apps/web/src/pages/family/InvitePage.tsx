@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useFlashTimer } from '@ejm/shared-ui';
 import { useTranslation } from 'react-i18next';
 import { doc, getDoc } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
@@ -23,6 +24,7 @@ export function InvitePage() {
   const [inviteLink, setInviteLink] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
   const [copied, setCopied] = useState(false);
+  const flashAfter = useFlashTimer();
   const [error, setError] = useState<string | null>(null);
   const [removeTarget, setRemoveTarget] = useState<{ uid: string; name: string } | null>(null);
   const [removing, setRemoving] = useState(false);
@@ -83,7 +85,7 @@ export function InvitePage() {
       document.body.removeChild(input);
     }
     setCopied(true);
-    setTimeout(() => setCopied(false), 3000);
+    flashAfter(() => setCopied(false), 3000);
     toast(t('invite.linkCopied'));
   };
 

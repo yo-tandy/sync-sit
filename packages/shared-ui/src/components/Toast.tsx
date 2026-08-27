@@ -2,11 +2,11 @@ import {
   createContext,
   useCallback,
   useContext,
-  useEffect,
   useRef,
   useState,
   type ReactNode,
 } from 'react';
+import { useFlashTimer } from '../hooks/useFlashTimer.js';
 
 /**
  * Toast — THE feedback idiom for transient confirmations (UX F7, issue #121).
@@ -44,25 +44,18 @@ const ToastContext = createContext<ToastFn | null>(null);
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [current, setCurrent] = useState<ToastState | null>(null);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const keyRef = useRef(0);
+  // Dismiss-timer lifecycle (replace on re-toast, clear on unmount) is the
+  // shared hook's contract -- this provider used to inline the identical
+  // logic, and was on its way to becoming the eleventh drifted copy
+  // (issue #222 review).
+  const flashAfter = useFlashTimer();
 
   const toast = useCallback<ToastFn>((message, options) => {
-    if (timerRef.current) clearTimeout(timerRef.current);
     keyRef.current += 1;
     setCurrent({ message, tone: options?.tone ?? 'success', key: keyRef.current });
-    timerRef.current = setTimeout(() => {
-      timerRef.current = null;
-      setCurrent(null);
-    }, TOAST_DURATION_MS);
-  }, []);
-
-  useEffect(
-    () => () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
-    },
-    [],
-  );
+    flashAfter(() => setCurrent(null), TOAST_DURATION_MS);
+  }, [flashAfter]);
 
   return (
     <ToastContext.Provider value={toast}>

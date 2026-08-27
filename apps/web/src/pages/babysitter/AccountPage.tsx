@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useFlashTimer } from '@ejm/shared-ui';
 import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
@@ -120,6 +121,7 @@ export function BabysitterAccountPage() {
 
   // Password reset
   const [passwordResetSent, setPasswordResetSent] = useState(false);
+  const flashAfter = useFlashTimer();
   const [passwordResetting, setPasswordResetting] = useState(false);
 
   // Notification prefs
@@ -341,7 +343,7 @@ export function BabysitterAccountPage() {
     try {
       await resetPassword(babysitter.email);
       setPasswordResetSent(true);
-      setTimeout(() => setPasswordResetSent(false), 5000);
+      flashAfter(() => setPasswordResetSent(false), 5000);
     } catch {
       setError(t('account.passwordResetFailed'));
     } finally {

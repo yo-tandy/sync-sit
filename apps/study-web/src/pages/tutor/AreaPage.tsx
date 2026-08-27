@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
+import { useFlashTimer } from '@ejm/shared-ui';
 import { useTranslation } from 'react-i18next';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/config/firebase';
@@ -54,17 +55,10 @@ export function AreaPage() {
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // The success flash auto-clears after 3s. Held in a ref and cleared on
-  // unmount: a leaked timer fires into a torn-down environment -- in tests
-  // that is a hard "window is not defined" unhandled error after every test
-  // has passed, which fails the CI job on timing alone.
-  const successTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(
-    () => () => {
-      if (successTimer.current) clearTimeout(successTimer.current);
-    },
-    [],
-  );
+  // The success flash auto-clears after 3s. Timer lifecycle (replace on
+  // re-save, clear on unmount) lives in the shared hook -- this page's
+  // hand-rolled version (PR #221, the CI flake) was the hook's prototype.
+  const flashAfter = useFlashTimer();
 
   useEffect(() => {
     if (!tutor) return;
@@ -199,11 +193,7 @@ export function AreaPage() {
       });
       await refreshUserDoc();
       setSuccess(true);
-      // Clear before rescheduling: a second save inside the window would
-      // otherwise orphan the first timer -- unreachable by the unmount
-      // cleanup, and clipping the fresh flash short (App.tsx does the same).
-      if (successTimer.current) clearTimeout(successTimer.current);
-      successTimer.current = setTimeout(() => setSuccess(false), 3000);
+      flashAfter(() => setSuccess(false), 3000);
     } catch {
       setError(t('common.error'));
     } finally {

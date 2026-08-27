@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useFlashTimer } from '@ejm/shared-ui';
 import { useTranslation } from 'react-i18next';
 import { doc, getDoc, getDocs, updateDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/config/firebase';
@@ -45,6 +46,9 @@ export function EndorsementDialog({
 
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  // Owns the delayed-close timer: firing onClose into an unmounted dialog
+  // is the same post-teardown class as issue #222.
+  const flashAfter = useFlashTimer();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Load family data for pre-population
@@ -126,7 +130,7 @@ export function EndorsementDialog({
       }
       setSaved(true);
       onSaved?.();
-      setTimeout(() => onClose(), 1500);
+      flashAfter(() => onClose(), 1500);
     } catch (err: unknown) {
       console.error('Failed to save reference:', err);
       const message =

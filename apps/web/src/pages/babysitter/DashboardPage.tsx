@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useFlashTimer } from '@ejm/shared-ui';
 import { Link, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { doc, updateDoc, serverTimestamp, collection, query, where, getDocs } from 'firebase/firestore';
@@ -118,6 +119,8 @@ export function BabysitterDashboard() {
   const [showWelcome, setShowWelcome] = useState(false);
   const [showActivate, setShowActivate] = useState(false);
   const [showReferences, setShowReferences] = useState(false);
+  // Owns the delayed-reveal timer (issue #222 class).
+  const flashAfter = useFlashTimer();
 
   const isSearchable = babysitter?.searchable ?? false;
 
@@ -178,7 +181,7 @@ export function BabysitterDashboard() {
       if (!isSearchable) {
         setToggleDialog(false);
         dismissOnboarding('activate');
-        setTimeout(() => setShowReferences(true), 300);
+        flashAfter(() => setShowReferences(true), 300);
         return;
       }
     } finally {

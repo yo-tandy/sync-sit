@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
+import { useFlashTimer } from '@ejm/shared-ui';
 import { Link, useBlocker } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
@@ -216,6 +217,7 @@ export function SchedulePage() {
   const [paddingMin, setPaddingMin] = useState(0);
   const [prefsSaving, setPrefsSaving] = useState(false);
   const [prefsSuccess, setPrefsSuccess] = useState(false);
+  const flashAfter = useFlashTimer();
   const [prefsError, setPrefsError] = useState<string | null>(null);
 
   // Seed the moved form fields from userDoc exactly once per mount (same
@@ -322,7 +324,7 @@ export function SchedulePage() {
       });
       await refreshUserDoc();
       setPrefsSuccess(true);
-      setTimeout(() => setPrefsSuccess(false), 3000);
+      flashAfter(() => setPrefsSuccess(false), 3000);
     } catch {
       setPrefsError(t('common.error'));
     } finally {
