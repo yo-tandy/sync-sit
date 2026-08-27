@@ -49,8 +49,10 @@ vi.mock('react-router', async (orig) => ({
 vi.mock('@/stores/authStore', () => {
   // Mirrors the study-web mock: the hook reads the mutable h.auth (so tests
   // drive signed-out vs add-profile), while the getState/subscribe statics
-  // model the store AFTER the fresh sign-in has settled — sit's post-signup
-  // wait requires a loaded userDoc, so navigation is pinnable.
+  // model the store AFTER the fresh sign-in has settled. Sit's post-signup
+  // wait is thereby STUBBED SATISFIED (the immediate getState check resolves
+  // it; the subscribe path is not exercised) — enough to let tests assert the
+  // navigation that follows, not a pin on the wait logic itself.
   const useAuthStore = (() => ({
     firebaseUser: h.auth.firebaseUser,
     userDoc: h.auth.userDoc,

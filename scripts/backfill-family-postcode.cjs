@@ -3,7 +3,8 @@
  * stored `address` string (issue #167).
  *
  * STATUS: DEFERRED — do NOT run against prod as a release step; the owner
- * runs it if/when study gets real parent traffic (issue #176, details below).
+ * runs it if/when study gets real parent traffic. Trigger tracked in open
+ * issue #261 (deferral recorded on #176, closed; details below).
  *
  * Family docs created before #167 hold only the display address + latLng, so
  * study search cannot resolve their coverage-area label and arrondissement-mode
