@@ -175,6 +175,19 @@ describe('CrossAppWelcomePage (study)', () => {
     expect(screen.queryByText('subjects-next')).toBeNull();
   });
 
+  it('profile-exists rejection with a doc that never loads shows the load error, not a blind navigate (round-5 pin)', async () => {
+    h.refreshUserDoc = vi.fn().mockResolvedValue(undefined); // never settles
+    h.error = { details: { reason: 'profile-exists' } };
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: /continue/i }));
+    fireEvent.click(await screen.findByText('subjects-next'));
+    await waitFor(
+      () => expect(screen.getByText(/could not load it yet/i)).toBeInTheDocument(),
+      { timeout: 3000 },
+    );
+    expect(h.navigate).not.toHaveBeenCalledWith('/tutor');
+  });
+
   it('refuses to navigate blind when BOTH refreshes miss: retries once, shows the load error (round-3 pin)', async () => {
     // refreshUserDoc silently no-ops on a cache miss; if the tutor profile
     // never lands, navigating would bounce this authenticated user off

@@ -57,3 +57,11 @@ doc-aware recovery instead of navigating unconditionally; the
 profileLoadError copy names the button that actually exists ("Complete
 sign-up"); the redundant unknown/never casts are gone (the store is fully
 typed).
+
+**Round 5:** the last unguarded `refreshUserDoc` (CrossAppWelcomePage's
+main path) is swallowed -- its rejection reported a SUCCESSFUL enrollment
+as genericError; the account-ready state is branch-specific: the
+add-profile variant says the PROFILE could not load yet (the enrollee is
+authenticated and never chose a password) and its CTA retries the read
+instead of pointing at /login; the useless `\"` escape is gone; the
+profile-exists both-miss branch got its pin.

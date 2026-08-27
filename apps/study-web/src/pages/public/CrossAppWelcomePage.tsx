@@ -95,7 +95,10 @@ export function CrossAppWelcomePage() {
         consentVersion: CONSENT_VERSION,
         ...(Object.keys(supplement).length > 0 ? { enrollment: supplement } : {}),
       });
-      await refreshUserDoc();
+      // Swallowed: refreshUserDoc rejects on an offline/permission blip and
+      // enrollment has ALREADY succeeded -- an escaping rejection here
+      // reported success as welcomeCross.genericError (PR #257 round 5).
+      await refreshUserDoc().catch(() => {});
       // refreshUserDoc is a single getDoc that silently no-ops on a cache
       // miss; one retry (short backoff -- an immediate identical read would
       // return the same miss) keeps a blip from bouncing this authenticated

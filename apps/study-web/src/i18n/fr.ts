@@ -1221,6 +1221,8 @@ export default {
       readyLoginTitle: 'Votre compte tuteur est prêt',
       readyLoginDesc: "Nous n'avons pas pu vous confirmer la connexion automatiquement. Connectez-vous avec votre email EJM et le mot de passe que vous venez de choisir.",
       readyLoginCta: 'Se connecter',
+      readyAddProfileDesc: "Votre profil tuteur a été ajouté, mais nous n'avons pas encore pu le charger. Il apparaît généralement en quelques instants et cet écran continuera tout seul.",
+      readyAddProfileCta: 'Réessayer',
     },
     verifySchool: 'Vérifiez votre école',
     verifySchoolDesc: 'Entrez votre adresse email EJM. Nous vous enverrons un code pour vérifier que vous êtes élève.',

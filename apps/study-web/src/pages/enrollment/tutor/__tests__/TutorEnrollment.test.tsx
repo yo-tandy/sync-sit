@@ -405,6 +405,17 @@ describe('TutorEnrollment orchestrator', () => {
     expect(await screen.findByText('Your tutor account is ready', {}, { timeout: 3000 })).toBeInTheDocument();
     expect(h.refreshUserDoc).toHaveBeenCalledTimes(2);
     expect(h.navigate).not.toHaveBeenCalledWith('/tutor');
+    // Branch-specific copy (round 5): an authenticated add-profile enrollee
+    // never chose a password and must not be sent to /login -- the CTA
+    // retries the profile read and navigates once it lands.
+    expect(screen.getByText(/could not load it yet/)).toBeInTheDocument();
+    expect(screen.queryByText(/password you just chose/)).not.toBeInTheDocument();
+    h.refreshUserDoc.mockImplementationOnce(() => {
+      h.auth.userDoc = { profiles: { parent: {}, tutor: {} } };
+      return Promise.resolve();
+    });
+    fireEvent.click(screen.getByText('Try again'));
+    await vi.waitFor(() => expect(h.navigate).toHaveBeenCalledWith('/tutor'));
   });
 
   it('authed without a tutor profile: consent-only StepPassword, enrollTutor omits password, refreshes doc', async () => {

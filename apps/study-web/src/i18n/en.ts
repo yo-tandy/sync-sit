@@ -1195,7 +1195,7 @@ export default {
     },
     alreadyInFamily: 'You already belong to a family.',
     crossApp: {
-      profileLoadError: 'Your tutor profile was created, but we could not load it yet. Tap \"Complete sign-up\" to try again.',
+      profileLoadError: 'Your tutor profile was created, but we could not load it yet. Tap "Complete sign-up" to try again.',
     },
     joinFamilyConfirm: 'Join the {{familyName}} family',
     tutorTitle: 'Tutor Sign Up',
@@ -1221,6 +1221,8 @@ export default {
       readyLoginTitle: 'Your tutor account is ready',
       readyLoginDesc: 'We could not confirm your automatic sign-in. Log in with your EJM email and the password you just chose.',
       readyLoginCta: 'Log in',
+      readyAddProfileDesc: 'Your tutor profile was added, but we could not load it yet. It usually appears within a moment and this screen will continue on its own.',
+      readyAddProfileCta: 'Try again',
     },
     verifySchool: 'Verify your school',
     verifySchoolDesc: "Enter your EJM email address. We'll send a code to verify you're a current student.",

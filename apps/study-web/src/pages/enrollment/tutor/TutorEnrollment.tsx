@@ -78,7 +78,7 @@ export function TutorEnrollment() {
   // confirm success in-wizard and hand the tutor to login instead of
   // navigating into a guard that would bounce them to /login or /signup
   // with no confirmation (PR #257 round 1).
-  const [signedOutSuccess, setSignedOutSuccess] = useState(false);
+  const [signedOutSuccess, setSignedOutSuccess] = useState<false | 'newAccount' | 'addProfile'>(false);
   // While the fallback state shows, keep listening: the store's snapshot
   // listener is still live, so a slow doc read typically lands moments
   // later -- auto-advance the moment the guard's predicate passes instead
@@ -215,7 +215,7 @@ export function TutorEnrollment() {
         if (getTutorProfile(useAuthStore.getState().userDoc)) {
           navigate('/tutor');
         } else {
-          setSignedOutSuccess(true);
+          setSignedOutSuccess('addProfile');
         }
         return;
       }
@@ -268,7 +268,7 @@ export function TutorEnrollment() {
         // next steps.
         navigate('/tutor');
       } else {
-        setSignedOutSuccess(true);
+        setSignedOutSuccess('newAccount');
       }
 
     } catch (err: unknown) {
@@ -361,22 +361,31 @@ export function TutorEnrollment() {
   if (authLoading) return null;
 
   if (signedOutSuccess) {
-    // Enrollment succeeded but the session cannot pass AuthGuard: confirm
-    // the account exists and point at login -- never a silent bounce.
+    // Enrollment succeeded but the session cannot (yet) pass AuthGuard:
+    // confirm the account exists -- never a silent bounce. The copy and CTA
+    // are branch-specific (PR #257 round 5): a NEW account may genuinely
+    // need a manual login, while an add-profile enrollee is already
+    // authenticated and never chose a password -- their CTA retries the
+    // profile read (the auto-advance also resolves this hands-free).
+    const isAddProfileFallback = signedOutSuccess === 'addProfile';
+    const retryProfileLoad = async () => {
+      await refreshUserDoc().catch(() => {});
+      if (getTutorProfile(useAuthStore.getState().userDoc)) navigate('/tutor');
+    };
     return (
       <div className="flex min-h-[100dvh] flex-col items-center justify-center px-6 text-center">
         <h1 className="mb-3 text-2xl font-bold text-gray-950">
           {t('enrollment.tutor.readyLoginTitle')}
         </h1>
         <p className="mb-8 max-w-[300px] text-sm leading-relaxed text-gray-500">
-          {t('enrollment.tutor.readyLoginDesc')}
+          {t(isAddProfileFallback ? 'enrollment.tutor.readyAddProfileDesc' : 'enrollment.tutor.readyLoginDesc')}
         </p>
         <button
           type="button"
-          onClick={() => navigate('/login')}
+          onClick={() => (isAddProfileFallback ? retryProfileLoad() : navigate('/login'))}
           className="flex h-12 w-full max-w-xs items-center justify-center rounded-xl bg-brand-600 text-base font-semibold text-white transition-colors hover:bg-brand-600/90"
         >
-          {t('enrollment.tutor.readyLoginCta')}
+          {t(isAddProfileFallback ? 'enrollment.tutor.readyAddProfileCta' : 'enrollment.tutor.readyLoginCta')}
         </button>
       </div>
     );
