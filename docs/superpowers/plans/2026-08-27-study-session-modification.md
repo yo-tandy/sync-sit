@@ -61,3 +61,20 @@ sweep, same copy), notify the tutor (`study_session_modified`).
    overlapping-pending auto-decline; ack clears; lateCancellation never set;
    notification doc shape.
 8. Suites + mutation checks on the load-bearing pins.
+
+## Round-2 amendments (PR #244 review)
+
+- **Offering-length gate:** a CHANGED `sessionLengthMinutes` must be in the
+  tutor's `sessionLengthsMin` (bookSession's second offering gate); the stored
+  length is grandfathered so legacy docs stay modifiable in other fields.
+  `reason: 'length_not_offered'`.
+- **Cancellation-policy interaction (decision):** modify was an unguarded
+  escape hatch — move a 48h-notice session away, then cancel clean. Taken as
+  a GUARD, not a trade-off: a claim-affecting modify on a confirmed session is
+  refused (`reason: 'inside_notice_window'`) whenever cancelling NOW would be
+  late by the session's own `cancellationNoticeHours` snapshot — you cannot
+  move what you could not cleanly cancel. Symmetric with cancelSession's
+  lateness predicate; message/students edits remain allowed inside the window.
+- **modifiedFields union:** a second modify before acknowledgement unions
+  field lists — the badge describes everything unseen.
+- **Edits-only client payload:** the dialog omits untouched when-fields.

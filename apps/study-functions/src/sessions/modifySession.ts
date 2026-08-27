@@ -198,8 +198,24 @@ export const modifySession = onCall(
       }
       const tutorProfileDoc = await db.collection('users').doc(tutorUserId).get();
       const tutorProfile = (tutorProfileDoc.data()?.profiles as
-        | { tutor?: { locationPrefs?: LocationPref[] } }
+        | { tutor?: { locationPrefs?: LocationPref[]; sessionLengthsMin?: number[] } }
         | undefined)?.tutor;
+      // bookSession gates on TWO offering fields at this boundary; a length
+      // the tutor never sells must not be reachable through modify either.
+      // The stored length is grandfathered (a legacy doc must stay
+      // modifiable in its other fields), only a CHANGED length is gated
+      // (PR #244 round 2's blocker).
+      if (
+        data.sessionLengthMinutes !== undefined &&
+        data.sessionLengthMinutes !== peek.sessionLengthMinutes &&
+        !(tutorProfile?.sessionLengthsMin ?? []).includes(data.sessionLengthMinutes)
+      ) {
+        throw new HttpsError(
+          'invalid-argument',
+          'Tutor does not offer sessions of this length',
+          { reason: 'length_not_offered' },
+        );
+      }
       const single = await computeSingleDateAvailability(tutorUserId, newDatePeek, paddingMinutes);
       const effective = resolveEffectiveLocations(
         single.locationCells,
@@ -293,6 +309,23 @@ export const modifySession = onCall(
         if (currentStart.getTime() < now.getTime()) {
           throw new HttpsError('failed-precondition', 'This session has already started');
         }
+        // The tutor's cancellation-policy snapshot binds the MOVE too: without
+        // this, modify-to-next-month-then-cancel-clean was an unguarded escape
+        // from the notice window (PR #244 round 2). Symmetry with
+        // cancelSession's lateness predicate: if cancelling NOW would be late,
+        // moving the time away is refused the same way.
+        const noticeHours = (session.cancellationNoticeHours as number) ?? 0;
+        if (
+          session.status === 'confirmed' &&
+          noticeHours > 0 &&
+          currentStart.getTime() < now.getTime() + noticeHours * 60 * 60 * 1000
+        ) {
+          throw new HttpsError(
+            'failed-precondition',
+            "This session is inside the tutor's cancellation notice window and can no longer be moved",
+            { reason: 'inside_notice_window' },
+          );
+        }
         const sessionStart = parisWallTimeToUtc(newDate, newStart);
         if (sessionStart.getTime() < now.getTime() + NOTICE_HOURS * 60 * 60 * 1000) {
           throw new HttpsError(
@@ -306,7 +339,15 @@ export const modifySession = onCall(
       const updates: Record<string, unknown> = {
         modified: true,
         modifiedAt: now,
-        modifiedFields,
+        // A second modify before the tutor acknowledges must not discard the
+        // first one's field list -- the badge describes EVERYTHING unseen
+        // (PR #244 round 2).
+        modifiedFields: Array.from(
+          new Set([
+            ...((session.modified ? (session.modifiedFields as string[] | undefined) : undefined) ?? []),
+            ...modifiedFields,
+          ]),
+        ),
         updatedAt: now,
       };
       if (modifiedFields.includes('date')) updates.date = newDate;

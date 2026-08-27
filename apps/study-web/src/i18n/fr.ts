@@ -972,6 +972,8 @@ export default {
       modifyTimeUnavailable: 'Ce créneau n’est pas disponible pour ce tuteur. Choisissez un autre horaire.',
       modifyRecurringUnsupported: 'Une série récurrente ne peut pas être modifiée — annulez-la et réservez le nouveau créneau.',
       modifyLocationUnavailable: 'Le tuteur ne propose pas ce lieu pour ce créneau.',
+      modifyLengthUnavailable: 'Le tuteur ne propose pas de séances de cette durée.',
+      modifyInsideNotice: 'Cette séance est dans le délai d’annulation du tuteur et ne peut plus être déplacée.',
       cancelSeries: 'Annuler la série',
       cancelInstance: 'Annuler cette date',
       cancelTitle: 'Annuler ce cours ?',

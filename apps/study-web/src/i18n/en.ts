@@ -972,6 +972,8 @@ export default {
       modifyTimeUnavailable: 'That time is not available for this tutor. Pick another slot.',
       modifyRecurringUnsupported: 'A recurring series can’t be modified in place — cancel it and book the new schedule.',
       modifyLocationUnavailable: 'The tutor doesn’t offer that location for this time slot.',
+      modifyLengthUnavailable: 'The tutor doesn’t offer sessions of that length.',
+      modifyInsideNotice: 'This session is inside the tutor’s cancellation notice window and can no longer be moved.',
       cancelSeries: 'Cancel series',
       cancelInstance: 'Cancel this date',
       cancelTitle: 'Cancel this session?',

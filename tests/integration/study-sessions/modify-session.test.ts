@@ -300,6 +300,63 @@ describe('modifySession', () => {
     });
   });
 
+  it('refuses a PENDING move onto an occupied slot (pre-check negative)', async () => {
+    // Round 1 added the pending availability pre-check; this is its negative
+    // pin -- stubbing the check out must fail here (PR #244 round 2). The
+    // single-date grid subtracts CONFIRMED sessions, so seed one at 18:00.
+    await seedSession({ status: 'confirmed', startTime: '18:00', endTime: '19:00' });
+    const id = await seedSession(); // pending, 16:00
+    await expect(
+      callFunction('modifySession', { sessionId: id, startTime: '18:00' }, parent1Token),
+    ).rejects.toMatchObject({
+      code: 'FAILED_PRECONDITION',
+      details: { reason: 'time_unavailable' },
+    });
+    expect((await sessionData(id)).startTime).toBe('16:00');
+  });
+
+  it('refuses a length the tutor does not offer, grandfathering the stored one', async () => {
+    // tutor2 offers [45, 60]; 75 is globally valid but not THEIR offering.
+    const id = await seedSession();
+    await expect(
+      callFunction('modifySession', { sessionId: id, sessionLengthMinutes: 75 }, parent1Token),
+    ).rejects.toMatchObject({
+      code: 'INVALID_ARGUMENT',
+      details: { reason: 'length_not_offered' },
+    });
+    // The stored length rides along untouched when other fields change.
+    await callFunction('modifySession', { sessionId: id, startTime: '17:00' }, parent1Token);
+    expect((await sessionData(id)).sessionLengthMinutes).toBe(60);
+  });
+
+  it("refuses moving a confirmed session inside the tutor's cancellation notice window", async () => {
+    // 48h policy, session ~24h+ out: a cancel now would be LATE, so the move
+    // is refused the same way -- modify must not be an escape hatch from the
+    // policy (PR #244 round 2's decision point, taken as a guard).
+    const soon = new Date(Date.now() + 30 * 60 * 60 * 1000); // ~30h out
+    const soonDate = soon.toISOString().slice(0, 10);
+    const id = await seedSession({
+      status: 'confirmed',
+      date: soonDate,
+      cancellationNoticeHours: 48,
+    });
+    await expect(
+      callFunction('modifySession', { sessionId: id, date: FUTURE_MON_2 }, parent1Token),
+    ).rejects.toMatchObject({
+      code: 'FAILED_PRECONDITION',
+      details: { reason: 'inside_notice_window' },
+    });
+  });
+
+  it('a second modify before acknowledgement UNIONS the field lists', async () => {
+    const id = await seedSession({ status: 'confirmed' });
+    await seedClaim(FUTURE_MON, id, 64, 68);
+    await callFunction('modifySession', { sessionId: id, startTime: '18:00' }, parent1Token);
+    await callFunction('modifySession', { sessionId: id, message: 'also, side entrance' }, parent1Token);
+    const s = await sessionData(id);
+    expect([...s.modifiedFields].sort()).toEqual(['message', 'startTime']);
+  });
+
   it('NEVER sets lateCancellation -- a modify is not a cancel', async () => {
     const id = await seedSession({ status: 'confirmed', cancellationNoticeHours: 48 });
     await seedClaim(FUTURE_MON, id, 64, 68);

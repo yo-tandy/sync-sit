@@ -200,12 +200,12 @@ describe('family SessionsPage — modify', () => {
     fireEvent.change(time, { target: { value: '18:00' } });
     fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
 
+    // Edits-only contract (PR #244 round 2): untouched date/length are
+    // OMITTED so the server's when/where boundary only runs for real changes.
     await waitFor(() =>
       expect(h.callable).toHaveBeenCalledWith('modifySession', {
         sessionId: 'sM',
-        date: '2027-06-07',
         startTime: '18:00',
-        sessionLengthMinutes: 60,
         message: undefined,
       }),
     );
