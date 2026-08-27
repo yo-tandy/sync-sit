@@ -100,6 +100,15 @@ describe('resubmitAppointment', () => {
       statusReason: 'declined_by_family',
       address: null,
       latLng: null,
+      familyPhotoUrl: null,
+      message: 'Hi, I am available that evening and love board games',
+    });
+
+    // The shared seed's family has no photo; give it one so the photo
+    // re-derivation has something to find (same field sendContactRequest
+    // denormalizes from).
+    await getDb().collection('families').doc(seed.family1Id).update({
+      photoUrl: 'https://cdn.example/dupont.png',
     });
 
     const result = await callFunction<{ appointmentId: string }>(
@@ -111,6 +120,13 @@ describe('resubmitAppointment', () => {
     const apt = (await getDb().collection('appointments').doc(result.appointmentId).get()).data()!;
     expect(apt.address).toBe('15 Rue de Passy, 75016 Paris');
     expect(apt.latLng).toEqual({ lat: 48.8566, lng: 2.2769 });
+    // The photo was withheld along with the address; a family-authored
+    // resubmission restores it from the family doc (issue #225 item 1).
+    expect(apt.familyPhotoUrl).toBe('https://cdn.example/dupont.png');
+    // The original's message was the SITTER'S introduction; a resubmission is
+    // family-authored, so carrying it would put the sitter's words in the
+    // family's mouth (issue #225 item 2).
+    expect(apt.message).toBeNull();
     // The resubmission is a plain family-initiated request again.
     expect(apt.initiatedBy).toBeUndefined();
     expect(apt.createdByUserId).toBe(seed.parent1.uid);

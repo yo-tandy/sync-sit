@@ -289,3 +289,12 @@ No emoji; no Co-Authored-By; conventional commits; `feature/*` branches; i18n en
 - Spec coverage: publish CTA at search time (PR1 T7/T8) ✓; visibility copy (T7 dialog) ✓; larger-group read incl. hidden providers (D2 rules, pinned in PR1 T4 and PR3 T1) ✓; ≤7d lifetime and ≤babysitting date (D3, PR1 T2) ✓; provider section + New tag + per-provider viewed marking (PR2) ✓; standard request/response continuation (PR3 sit appointments machinery, PR4 study contact-request machinery) ✓.
 - Types used across PRs: `initiatedBy: 'babysitter' | 'tutor'`, `publishedSearchId`, `publishedSearchesSeenAt`, `PUBLISHED_SEARCH_MAX_ACTIVE` — consistent throughout.
 - Known simplifications (deliberate): no schedule auto-block on sit family accept (sitter blocks via existing tools; the accept-time `blockSchedule` choice belongs to the sitter and they aren't the responder here); no rules-level expiry proof (D3 rationale); no Firestore TTL *policy* (repo uses sweep precedent, and a policy can't express min(7d, date) — actually it can, since expiresAt is precomputed, but the sweep keeps parity with every other collection and works in the emulator).
+
+
+---
+
+**Amendment (issue #225, PR #232):** in addition to the per-pair pending guard
+and 7-day decline cooldown, each provider has a cross-search ceiling on the
+sit side: at most 5 board contacts CREATED per rolling 24h, regardless of the
+contacts' later status (creation spends the slot -- a pending-only count was
+withdraw-bypassable). Study's twin mirrors this via issue #233.

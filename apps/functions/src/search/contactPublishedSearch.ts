@@ -22,6 +22,18 @@ interface ContactPublishedSearchData {
  * should not be re-notified on a tap.
  */
 const DECLINE_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
+// Cross-search ceiling (issue #225 item 3): per-search dedupe + cooldown bound
+// one pair, but nothing bounded one sitter across DIFFERENT searches -- each
+// successful contact emails + pushes every parent of that family. The ceiling
+// counts board contacts CREATED in a rolling 24h window, REGARDLESS of their
+// later status: a pending-only count was sitter-bypassable (withdraw a
+// pending -- deliberately cooldown-free -- and the slot came straight back,
+// PR #232 review), and it let five never-answering families hold a sitter's
+// board access forever. Creation spending the slot closes both: at most
+// MAX_BOARD_CONTACTS_PER_DAY families can be notified per day, and slots
+// return by clock, not by anyone's action.
+const MAX_BOARD_CONTACTS_PER_DAY = 5;
+const BOARD_CONTACT_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 /**
  * contactPublishedSearch (issue #207 PR3, sit side): the CONTACT INVERSION.
@@ -210,6 +222,7 @@ export const contactPublishedSearch = onCall(
           .where('babysitterUserId', '==', uid)
           .where('publishedSearchId', '==', data.publishedSearchId),
       );
+
       const live = priorSnap.docs.some((d) => {
         const status = d.data().status;
         return status === 'pending' || status === 'confirmed';
@@ -234,6 +247,37 @@ export const contactPublishedSearch = onCall(
           // The client distinguishes this from the generic "search is gone"
           // failure on the reason, not on the message text.
           { reason: 'decline_cooldown' },
+        );
+      }
+      // Cross-search ceiling -- inside the transaction so concurrent taps on
+      // different searches cannot each pass the count, and AFTER the dedupe +
+      // cooldown checks so a capped sitter still gets the more specific error
+      // for those cases (PR #232 review). The orderBy+limit bounds the read to
+      // the newest MAX docs (composite index in firestore.indexes.json);
+      // status is deliberately not filtered -- creation spent the slot.
+      const recentBoardSnap = await tx.get(
+        db.collection('appointments')
+          .where('babysitterUserId', '==', uid)
+          .where('initiatedBy', '==', 'babysitter')
+          .orderBy('createdAt', 'desc')
+          .limit(MAX_BOARD_CONTACTS_PER_DAY),
+      );
+      const windowFrom = Date.now() - BOARD_CONTACT_WINDOW_MS;
+      const recentCount = recentBoardSnap.docs.filter((d) => {
+        const createdMs = d.data().createdAt?.toMillis?.();
+        // A present-but-unreadable createdAt counts as recent (fail closed).
+        // A doc MISSING the field entirely never reaches this filter at all:
+        // orderBy excludes it from the query, so that case is invisible to
+        // the cap -- fail OPEN, acceptable only because this callable is the
+        // sole writer of initiatedBy: 'babysitter' and always stamps
+        // createdAt (PR #232 review).
+        return typeof createdMs !== 'number' || createdMs > windowFrom;
+      }).length;
+      if (recentCount >= MAX_BOARD_CONTACTS_PER_DAY) {
+        throw new HttpsError(
+          'resource-exhausted',
+          'You have contacted several families in the last 24 hours. You can send more requests tomorrow.',
+          { reason: 'board_contact_cap' },
         );
       }
       tx.set(appointmentRef, appointment);

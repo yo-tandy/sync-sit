@@ -70,6 +70,7 @@ export const resubmitAppointment = onCall(
     let latLng = original.latLng;
     let pets = original.pets;
     let familyNote = original.familyNote;
+    let familyPhotoUrl = original.familyPhotoUrl;
     if (address == null || latLng == null) {
       const familySnap = await db.collection('families').doc(original.familyId).get();
       const familyData = familySnap.data();
@@ -77,6 +78,10 @@ export const resubmitAppointment = onCall(
       latLng = latLng ?? familyData?.latLng ?? null;
       pets = pets ?? familyData?.pets ?? null;
       familyNote = familyNote ?? familyData?.note ?? null;
+      // The photo was withheld along with the address (contactPublishedSearch
+      // mints it null); a family-authored resubmission restores it too
+      // (issue #225 item 1).
+      familyPhotoUrl = familyPhotoUrl ?? familyData?.photoUrl ?? null;
     }
 
     // Re-denormalize kids if kidIds changed
@@ -108,7 +113,7 @@ export const resubmitAppointment = onCall(
       searchId: original.searchId || null,
       familyId: original.familyId,
       familyName: original.familyName || '',
-      familyPhotoUrl: original.familyPhotoUrl || null,
+      familyPhotoUrl: familyPhotoUrl || null,
       babysitterUserId: original.babysitterUserId,
       createdByUserId: uid,
       type: original.type,
@@ -123,7 +128,14 @@ export const resubmitAppointment = onCall(
       address,
       latLng,
       offeredRate: data.offeredRate !== undefined ? data.offeredRate : (original.offeredRate || null),
-      message: original.message || null,
+      // On a family-initiated original, message is the family's note to the
+      // sitter and carries over. On a babysitter-initiated one it is the
+      // SITTER'S own introduction (contactPublishedSearch), and a resubmission
+      // is family-authored -- carrying it would present the sitter's words as
+      // the family's (issue #225 item 2). initiatedBy is the explicit marker
+      // contactPublishedSearch writes; legacy family-initiated docs lack it,
+      // which correctly falls through to the carry.
+      message: original.initiatedBy === 'babysitter' ? null : (original.message || null),
       additionalInfo: newAdditionalInfo,
       pets: pets || null,
       familyNote: familyNote || null,

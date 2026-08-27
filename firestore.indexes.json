@@ -14,6 +14,15 @@
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "babysitterUserId", "order": "ASCENDING" },
+        { "fieldPath": "initiatedBy", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "appointments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "babysitterUserId", "order": "ASCENDING" },
         { "fieldPath": "status", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "DESCENDING" }
       ]
