@@ -15,13 +15,22 @@ import { useCallback, useEffect, useRef } from 'react';
  *
  * The returned function is stable (useCallback with no deps), so it can sit
  * in effect dependency arrays or be closed over by long-lived callbacks --
- * the App.tsx toast handlers do exactly that.
+ * the App.tsx toast handlers do exactly that. Calls after unmount are
+ * ignored: an async handler that resumes on a dead component (await, then
+ * flash) must not arm a timer nothing owns any more.
+ *
+ * Each instance owns exactly ONE timer slot -- scheduling again replaces the
+ * pending callback. A component with two independent flashes needs two
+ * useFlashTimer() calls; sharing one would silently cancel the first flash
+ * when the second fires.
  */
 export function useFlashTimer(): (fn: () => void, delayMs: number) => void {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mounted = useRef(true);
 
   useEffect(
     () => () => {
+      mounted.current = false;
       if (timer.current) clearTimeout(timer.current);
     },
     [],
@@ -29,6 +38,7 @@ export function useFlashTimer(): (fn: () => void, delayMs: number) => void {
 
   return useCallback((fn: () => void, delayMs: number) => {
     if (timer.current) clearTimeout(timer.current);
+    if (!mounted.current) return;
     timer.current = setTimeout(() => {
       timer.current = null;
       fn();

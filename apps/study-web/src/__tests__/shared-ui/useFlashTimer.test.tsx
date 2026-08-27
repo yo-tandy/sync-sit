@@ -77,4 +77,20 @@ describe('useFlashTimer', () => {
     unmount();
     expect(vi.getTimerCount()).toBe(0);
   });
+
+  it('ignores a schedule call made after unmount', () => {
+    // The reachable shape: an async handler awaits, the user navigates away,
+    // the handler resumes on the dead component and calls flashAfter. Arming
+    // there would create a timer nothing owns -- the exact failure mode the
+    // hook exists to close (PR #223 review).
+    let captured: ((fn: () => void, delayMs: number) => void) | null = null;
+    function Capture() {
+      captured = useFlashTimer();
+      return null;
+    }
+    const { unmount } = render(<Capture />);
+    unmount();
+    captured!(() => {}, 3000);
+    expect(vi.getTimerCount()).toBe(0);
+  });
 });
