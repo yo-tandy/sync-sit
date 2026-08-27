@@ -58,6 +58,19 @@ export interface TutorProfile extends ProfileBase {
   searchable?: boolean;
 
   /**
+   * Stable personal code for direct lookup (issue #235, parity A2): 8
+   * uppercase hex chars a tutor hands to families they already know, resolved
+   * by the lookupTutor callable. Server-owned: minted ONLY by
+   * getTutorPersonalCode (mint-on-first-read) and pinned immutable against
+   * owner writes by security rules — a client choosing its own code could
+   * squat a memorable one or collide with another tutor's. Resolving the code
+   * additionally requires `searchable === true` AT LOOKUP TIME (the gate
+   * lives in lookupTutor, not here), so the code goes dormant with the
+   * visibility toggle rather than bypassing it.
+   */
+  personalCode?: string;
+
+  /**
    * When this tutor last visited the published-searches board (issue #207).
    * Owner-written from the client on section visit (deliberately not
    * rules-pinned — it only drives the owner's own "New" tagging/badge):

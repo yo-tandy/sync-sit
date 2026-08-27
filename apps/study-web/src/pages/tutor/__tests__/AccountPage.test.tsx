@@ -16,9 +16,16 @@ const h = vi.hoisted(() => ({
   uploadBytes: vi.fn(() => Promise.resolve()),
   getDownloadURL: vi.fn(() => Promise.resolve('https://cdn.example/photo.png')),
   deleteObject: vi.fn(() => Promise.resolve()),
+  // Personal-code mint (issue #235). Default: resolves a code, so the many
+  // tests whose seeded doc predates personalCode render the section quietly.
+  callable: vi.fn(() => Promise.resolve({ data: { code: 'A1B2C3D4' } })),
 }));
 
-vi.mock('@/config/firebase', () => ({ db: {}, storage: {} }));
+vi.mock('@/config/firebase', () => ({ db: {}, storage: {}, functions: {} }));
+
+vi.mock('firebase/functions', () => ({
+  httpsCallable: (_fns: unknown, name: string) => (payload: unknown) => h.callable(name, payload),
+}));
 
 vi.mock('firebase/firestore', () => ({
   doc: (_db: unknown, ...path: string[]) => ({ path: path.join('/') }),
@@ -74,6 +81,8 @@ function reset() {
   h.uploadBytes.mockClear();
   h.getDownloadURL.mockClear();
   h.deleteObject.mockClear();
+  h.callable.mockClear();
+  h.callable.mockImplementation(() => Promise.resolve({ data: { code: 'A1B2C3D4' } }));
 }
 
 describe('tutor AccountPage', () => {
@@ -490,6 +499,62 @@ describe('tutor AccountPage', () => {
   it('shows no supervised-account indicator without governedBy', () => {
     renderWithProviders(<AccountPage />);
     expect(screen.queryByText(/supervised account/i)).not.toBeInTheDocument();
+  });
+
+  // ── Personal code (issue #235, parity A2) ──
+
+  it('renders the stored code from the doc WITHOUT calling the mint callable', async () => {
+    const doc = makeUserDoc();
+    (doc.profiles.tutor as Record<string, unknown>).personalCode = 'DEADBEE0';
+    (doc.profiles.tutor as Record<string, unknown>).searchable = true;
+    h.auth.userDoc = doc;
+    renderWithProviders(<AccountPage />);
+
+    expect(await screen.findByText('DEADBEE0')).toBeInTheDocument();
+    expect(h.callable).not.toHaveBeenCalled();
+    // Searchable tutor: no dormant-code warning.
+    expect(screen.queryByText(/code will not work/i)).not.toBeInTheDocument();
+  });
+
+  it('mints via getTutorPersonalCode when the doc has no code yet', async () => {
+    renderWithProviders(<AccountPage />);
+    expect(await screen.findByText('A1B2C3D4')).toBeInTheDocument();
+    expect(h.callable).toHaveBeenCalledWith('getTutorPersonalCode', {});
+  });
+
+  it('warns that the code is dormant while the profile is hidden from search', async () => {
+    // makeUserDoc has no searchable flag — absent reads as hidden, matching
+    // enrollTutor's searchable:false default and the server's === true gate.
+    renderWithProviders(<AccountPage />);
+    expect(await screen.findByText('A1B2C3D4')).toBeInTheDocument();
+    expect(screen.getByText(/code will not work/i)).toBeInTheDocument();
+  });
+
+  it('shows the error copy when the mint fails (never a phantom code)', async () => {
+    h.callable.mockImplementation(() => Promise.reject(new Error('offline')));
+    renderWithProviders(<AccountPage />);
+    expect(await screen.findByText(/could not load your code/i)).toBeInTheDocument();
+    expect(screen.queryByTestId('personal-code')).not.toBeInTheDocument();
+  });
+
+  it('renders no personal-code section for an unenrolled tutor', () => {
+    const doc = makeUserDoc();
+    (doc.profiles.tutor as Record<string, unknown>).enrollmentComplete = false;
+    h.auth.userDoc = doc;
+    renderWithProviders(<AccountPage />);
+    expect(screen.queryByText(/your personal code/i)).not.toBeInTheDocument();
+    expect(h.callable).not.toHaveBeenCalled();
+  });
+
+  it('copies the code to the clipboard', async () => {
+    const writeText = vi.fn(() => Promise.resolve());
+    Object.assign(navigator, { clipboard: { writeText } });
+    renderWithProviders(<AccountPage />);
+    expect(await screen.findByText('A1B2C3D4')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Copy' }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith('A1B2C3D4'));
+    expect(await screen.findByRole('button', { name: 'Copied!' })).toBeInTheDocument();
   });
 
 });

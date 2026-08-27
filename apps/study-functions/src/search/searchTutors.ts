@@ -9,6 +9,7 @@ import { haversineDistance, getParentProfile, postcodeToArrondissement, getConta
 import type { User } from '@ejm/shared-core';
 import type { StudyUser, TutorProfile, SubjectOffering, TutorSearchResult } from '@ejm/study-core';
 import { searchTutorsSchema } from '../validation/search.js';
+import { latestRequestStatusByTutor, resolveRequestStatus } from './requestStatus.js';
 
 export const searchTutors = onCall(
   { region: 'europe-west1', cors: getCorsOrigin() },
@@ -68,38 +69,13 @@ export const searchTutors = onCall(
     // references collection.
 
     // ── This family's request status per tutor (latest wins) ──
+    // The projection rules (tutor-initiated pending => 'incoming', closed
+    // tutor-initiated requests excluded) live in requestStatus.ts, shared
+    // with lookupTutor (issue #235) so both family-facing cards agree.
     const requestsSnap = await db.collection('studyContactRequests')
       .where('familyId', '==', callerFamilyId)
       .get();
-    const latestRequest = new Map<string, { status: string; createdAtMs: number }>();
-    requestsSnap.docs.forEach((d) => {
-      const data = d.data();
-      const tutorId = data.tutorUserId as string | undefined;
-      if (!tutorId) return;
-      // A TUTOR-initiated request that is still pending is not something this
-      // family sent, so it must not render the tutor's card as "request sent"
-      // (issue #207 PR4). It cannot read as a fresh 'none' either: the send
-      // CTA that offers would be rejected as already-exists, contradicting
-      // the card the family just clicked (PR #213 review). It gets its own
-      // status, and the card points at the page where Accept lives. Once
-      // ACCEPTED the direction stops mattering -- contact is unlocked either
-      // way -- and a closed one (declined/cancelled) is not this family's
-      // history at all, so it stays out.
-      const tutorInitiated = data.initiatedBy === 'tutor';
-      if (tutorInitiated && data.status !== 'accepted' && data.status !== 'pending') return;
-      const createdAtMs = data.createdAt?.toMillis
-        ? data.createdAt.toMillis()
-        : data.createdAt?.toDate
-          ? data.createdAt.toDate().getTime()
-          : 0;
-      const prev = latestRequest.get(tutorId);
-      if (!prev || createdAtMs >= prev.createdAtMs) {
-        const status = tutorInitiated && data.status === 'pending'
-          ? 'incoming'
-          : (data.status as string);
-        latestRequest.set(tutorId, { status, createdAtMs });
-      }
-    });
+    const latestRequest = latestRequestStatusByTutor(requestsSnap.docs);
 
     // ── Match, filter, score ──
     const results: TutorSearchResult[] = [];
@@ -228,18 +204,9 @@ export const searchTutors = onCall(
         continue;
       }
 
-      // Whitelist the ACTIONABLE lifecycle statuses; anything else falls back to
-      // 'none'. 'cancelled' is deliberately excluded here: a family that
-      // withdrew its request is free to re-send, so search must surface the
-      // tutor as 'none' (fresh) rather than echoing the withdrawn state. Any
-      // other unrecognized stored value likewise can't leak into the payload.
-      // 'incoming' is this map's own value for a tutor-initiated pending.
-      const KNOWN_REQUEST_STATUSES = ['pending', 'accepted', 'declined', 'incoming'] as const;
-      const latest = latestRequest.get(uid);
-      const requestStatus: TutorSearchResult['requestStatus'] =
-        latest && (KNOWN_REQUEST_STATUSES as readonly string[]).includes(latest.status)
-          ? (latest.status as TutorSearchResult['requestStatus'])
-          : 'none';
+      // Actionable-status whitelist (shared, see requestStatus.ts): anything
+      // unrecognized — including 'cancelled' — falls back to 'none'.
+      const requestStatus = resolveRequestStatus(latestRequest.get(uid));
 
       const result: TutorSearchResult = {
         uid,
