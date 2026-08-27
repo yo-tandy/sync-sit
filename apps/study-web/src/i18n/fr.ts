@@ -491,7 +491,7 @@ export default {
         add: 'Ajouter des notes',
         edit: 'Modifier les notes',
         dialogTitle: 'Notes de séance',
-        dialogDesc: 'Qu\'avez-vous abordé ? Indiquez les devoirs ou points à revoir — la famille les verra.',
+        dialogDesc: 'Qu\'avez-vous abordé ? Indiquez les devoirs ou points à revoir — la famille les verra ; si vous êtes supervisé, vos parents peuvent aussi les voir.',
         placeholder: 'ex. Fractions abordées ; devoirs p.42. Prévoir une calculatrice la prochaine fois.',
         save: 'Enregistrer',
         error: 'Impossible d\'enregistrer votre note. Veuillez réessayer.',
@@ -1013,7 +1013,7 @@ export default {
         add: 'Ajouter une note',
         edit: 'Modifier la note',
         dialogTitle: 'Note pour le professeur',
-        dialogDesc: 'Indiquez sur quoi vous concentrer cette séance — le professeur la verra avant votre rencontre.',
+        dialogDesc: 'Indiquez sur quoi vous concentrer cette séance — le professeur la verra avant votre rencontre ; si le professeur est supervisé, ses parents peuvent aussi la voir.',
         placeholder: 'ex. Merci de travailler les fractions cette semaine.',
         save: 'Enregistrer',
         error: 'Impossible d\'enregistrer votre note. Veuillez réessayer.',
@@ -1295,7 +1295,7 @@ export default {
       'Vous consentez, au nom de l\'enfant, aux Conditions générales et à la Politique de confidentialité, ainsi qu\'au traitement des données de l\'enfant nécessaires au fonctionnement de ce service.',
     seeTitle: 'Ce que vous pouvez voir',
     seeBody:
-      'La supervision est une visibilité totale : les parents de votre famille voient les sessions et les gardes de l\'enfant, ses plannings, ses demandes entrantes et sortantes avec leurs messages, et toutes les notes de session. L\'enfant est informé que la supervision est active.',
+      'La supervision est une visibilité totale : les parents de votre famille voient les sessions et les gardes de l\'enfant, ses plannings, ses demandes entrantes et sortantes avec leurs messages, et toutes les notes de session et de garde. L\'enfant est informé que la supervision est active.',
     doTitle: 'Ce que vous pouvez faire',
     doBody:
       'Vous pouvez masquer l\'enfant de la recherche, annuler ses sessions ou ses gardes (avec une raison) et refuser des demandes en son nom. Vous ne pouvez jamais accepter ni vous engager à sa place — l\'enfant prend toujours ses propres engagements.',
@@ -1332,7 +1332,7 @@ export default {
         'Quand votre compte est supervisé, les parents de votre famille suivent votre activité. Voici exactement ce que cela couvre — rien de ce qu\'ils peuvent voir ne vous est caché.',
       seeTitle: 'Ce qu\'ils voient',
       seeBody:
-        'Vos sessions et vos gardes, votre planning, vos demandes entrantes et sortantes avec leurs messages, et toutes les notes de session.',
+        'Vos sessions et vos gardes, votre planning, vos demandes entrantes et sortantes avec leurs messages, et toutes les notes de session et de garde.',
       doTitle: 'Ce qu\'ils peuvent faire',
       doBody:
         'Ils peuvent vous masquer de la recherche, annuler vos sessions ou vos gardes (avec une raison), et refuser des demandes en votre nom. Ils ne peuvent jamais accepter à votre place — vous prenez toujours vos propres engagements.',

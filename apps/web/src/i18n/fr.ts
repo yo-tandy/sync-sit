@@ -548,6 +548,20 @@ export default {
     badgeDeclined: 'Refusée',
     addKidsTitle: 'Ajoutez vos enfants',
     addKidsDesc: 'Vous devez ajouter au moins un enfant pour rechercher des babysitters.',
+    notes: {
+      fromFamily: 'De la famille',
+      fromBabysitter: 'Du babysitter',
+      add: 'Ajouter une note',
+      edit: 'Modifier la note',
+      remove: 'Supprimer la note',
+      removeTitle: 'Supprimer cette note ?',
+      removeDesc: 'Le babysitter ne la verra plus.',
+      dialogTitle: 'Note pour le babysitter',
+      dialogDesc: 'Partagez les détails pratiques — code de la porte, heure du coucher, allergies. Le babysitter la verra avant la garde ; si le babysitter est supervisé, ses parents peuvent aussi la voir.',
+      placeholder: 'ex. Code 1234B. Coucher à 20h30. Léa est allergique aux cacahuètes.',
+      save: 'Enregistrer la note',
+      error: 'Impossible d’enregistrer votre note. Veuillez réessayer.',
+    },
   },
 
   request: {
@@ -591,6 +605,21 @@ export default {
     cancelled: 'Annulé',
     cancelledByFamilyBanner: 'Cette demande a été annulée par la famille.',
     recurringLabel: 'Récurrent',
+    notes: {
+      title: 'Notes de garde',
+      fromFamily: 'De la famille',
+      fromBabysitter: 'Du babysitter',
+      add: 'Ajouter des notes de garde',
+      edit: 'Modifier les notes de garde',
+      remove: 'Supprimer la note',
+      removeTitle: 'Supprimer cette note ?',
+      removeDesc: 'La famille ne la verra plus.',
+      dialogTitle: 'Notes de garde',
+      dialogDesc: 'Comment ça s’est passé ? Notez ce que la famille doit savoir — elle le verra ; si vous êtes supervisé, vos parents peuvent aussi la voir.',
+      placeholder: 'ex. Tout s’est bien passé ; enfants couchés à 21h00. Devoirs terminés.',
+      save: 'Enregistrer la note',
+      error: 'Impossible d’enregistrer votre note. Veuillez réessayer.',
+    },
   },
 
   profile: {
@@ -1108,7 +1137,7 @@ export default {
       'Vous consentez, au nom de l\'enfant, aux Conditions générales et à la Politique de confidentialité, ainsi qu\'au traitement des données de l\'enfant nécessaires au fonctionnement de ce service.',
     seeTitle: 'Ce que vous pouvez voir',
     seeBody:
-      'La supervision est une visibilité totale : les parents de votre famille voient les sessions et les gardes de l\'enfant, ses plannings, ses demandes entrantes et sortantes avec leurs messages, et toutes les notes de session. L\'enfant est informé que la supervision est active.',
+      'La supervision est une visibilité totale : les parents de votre famille voient les sessions et les gardes de l\'enfant, ses plannings, ses demandes entrantes et sortantes avec leurs messages, et toutes les notes de session et de garde. L\'enfant est informé que la supervision est active.',
     doTitle: 'Ce que vous pouvez faire',
     doBody:
       'Vous pouvez masquer l\'enfant de la recherche, annuler ses sessions ou ses gardes (avec une raison) et refuser des demandes en son nom. Vous ne pouvez jamais accepter ni vous engager à sa place — l\'enfant prend toujours ses propres engagements.',
@@ -1147,7 +1176,7 @@ export default {
         'Quand votre compte est supervisé, les parents de votre famille suivent votre activité. Voici exactement ce que cela couvre — rien de ce qu\'ils peuvent voir ne vous est caché.',
       seeTitle: 'Ce qu\'ils voient',
       seeBody:
-        'Vos sessions et vos gardes, votre planning, vos demandes entrantes et sortantes avec leurs messages, et toutes les notes de session.',
+        'Vos sessions et vos gardes, votre planning, vos demandes entrantes et sortantes avec leurs messages, et toutes les notes de session et de garde.',
       doTitle: 'Ce qu\'ils peuvent faire',
       doBody:
         'Ils peuvent vous masquer de la recherche, annuler vos sessions ou vos gardes (avec une raison), et refuser des demandes en votre nom. Ils ne peuvent jamais accepter à votre place — vous prenez toujours vos propres engagements.',
@@ -1300,6 +1329,8 @@ export default {
       hideDates: 'Masquer les dates',
       notePre: 'Note avant session',
       notePost: 'Note après session',
+      noteAppointmentPre: 'Note avant garde',
+      noteAppointmentPost: 'Note après garde',
       status: {
         pending: 'En attente',
         confirmed: 'Confirmée',

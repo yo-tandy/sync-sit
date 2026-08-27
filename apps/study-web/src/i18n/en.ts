@@ -491,7 +491,7 @@ export default {
         add: 'Add session notes',
         edit: 'Edit session notes',
         dialogTitle: 'Session notes',
-        dialogDesc: 'What did you cover? Note any homework or things for next time — the family will see this.',
+        dialogDesc: 'What did you cover? Note any homework or things for next time — the family will see this; if you are supervised, your parents can see it too.',
         placeholder: 'e.g. Covered fractions; homework p.42. Bring a calculator next time.',
         save: 'Save note',
         error: 'Couldn\'t save your note. Please try again.',
@@ -1013,7 +1013,7 @@ export default {
         add: 'Add a note',
         edit: 'Edit note',
         dialogTitle: 'Note for the tutor',
-        dialogDesc: 'Share what to focus on this session — the tutor will see this before you meet.',
+        dialogDesc: 'Share what to focus on this session — the tutor will see this before you meet; if the tutor is supervised, their parents can see it too.',
         placeholder: 'e.g. Please focus on fractions this week.',
         save: 'Save note',
         error: 'Couldn\'t save your note. Please try again.',
@@ -1295,7 +1295,7 @@ export default {
       'You consent, on the child\'s behalf, to the Terms of Service and Privacy Policy, and to the processing of the child\'s data needed to run this service.',
     seeTitle: 'What you can see',
     seeBody:
-      'Supervision is full visibility: your family\'s parents see the child\'s sessions and appointments, schedules, incoming and outgoing requests with their messages, and all session notes. The child is informed that supervision is active.',
+      'Supervision is full visibility: your family\'s parents see the child\'s sessions and appointments, schedules, incoming and outgoing requests with their messages, and all session and appointment notes. The child is informed that supervision is active.',
     doTitle: 'What you can do',
     doBody:
       'You can hide the child from search, cancel their sessions or appointments (with a reason), and decline requests on their behalf. You can never accept or commit on their behalf — the child always makes their own commitments.',
@@ -1331,7 +1331,7 @@ export default {
         'When your account is supervised, the parents of your family follow your activity. Here is exactly what that covers — nothing they can see is hidden from you.',
       seeTitle: 'What they see',
       seeBody:
-        'Your sessions and appointments, your schedule, your incoming and outgoing requests with their messages, and all session notes.',
+        'Your sessions and appointments, your schedule, your incoming and outgoing requests with their messages, and all session and appointment notes.',
       doTitle: 'What they can do',
       doBody:
         'They can hide you from search, cancel your sessions or appointments (with a reason), and decline requests on your behalf. They can never accept for you — you always make your own commitments.',

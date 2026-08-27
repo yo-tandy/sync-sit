@@ -1,8 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { collection, getDocs, query as fsQuery, where as fsWhere, limit as fsLimit } from 'firebase/firestore';
-import { db } from '@/config/firebase';
-import { Button, Badge, Card } from '@/components/ui';
+import { httpsCallable } from 'firebase/functions';
+import { db, functions } from '@/config/firebase';
+import { Button, Badge, Card, Dialog } from '@/components/ui';
+import { AppointmentNotes } from './AppointmentNotes';
+import { AppointmentNoteDialog } from './AppointmentNoteDialog';
+import { hasStarted } from '@/lib/appointmentTime';
 import { ChevronRightIcon } from '@/components/ui/Icons';
 import { Avatar } from '@/components/ui';
 import type { AppointmentDoc, ReferenceDoc, BabysitterSummary } from '@ejm/sit-core';
@@ -92,6 +96,68 @@ export function ExpandableBabysitterCard({
   const [refs, setRefs] = useState<RefInfo[]>([]);
   const [expandedRefIds, setExpandedRefIds] = useState<Set<string>>(new Set());
 
+  // Appointment notes (issue #238, parity B2 — study's session notes adopted
+  // into sit). The FAMILY authors the pre-note here; the babysitter's
+  // post-note is read-only. The card owns the dialog + callable (it already
+  // owns its own reference reads); the dashboard's live onSnapshot refreshes
+  // the note after a save, so the save is non-optimistic and there is no
+  // local patching.
+  const [noteOpen, setNoteOpen] = useState(false);
+  const [noteRemoveOpen, setNoteRemoveOpen] = useState(false);
+  const [noteSaving, setNoteSaving] = useState(false);
+  const [noteError, setNoteError] = useState<string | null>(null);
+
+  // The pre-note window mirrors the callable's gate (UX only, and fails
+  // CLOSED like the server): a confirmed recurring arrangement always (there
+  // is always a next occurrence); anything else needs a date + startTime
+  // whose Paris wall-clock start has not passed — a doc missing them would
+  // only earn a guaranteed failed-precondition.
+  const canEditPre =
+    variant === 'confirmed' &&
+    (appointment.type === 'recurring'
+      ? true
+      : Boolean(appointment.date && appointment.startTime) &&
+        !hasStarted(appointment.date, appointment.startTime));
+
+  const callSetNote = (text: string) => {
+    const fn = httpsCallable<
+      { appointmentId: string; kind: 'pre'; text: string },
+      { success: boolean }
+    >(functions, 'setAppointmentNote');
+    return fn({ appointmentId: appointment.appointmentId, kind: 'pre', text });
+  };
+
+  const saveNote = async (text: string) => {
+    setNoteError(null);
+    setNoteSaving(true);
+    try {
+      await callSetNote(text);
+      setNoteOpen(false);
+    } catch {
+      setNoteError(t('familyDashboard.notes.error'));
+    } finally {
+      setNoteSaving(false);
+    }
+  };
+
+  // Erasure path (issue #255 carve-out): the callable lets the AUTHOR clear
+  // their own note at any time, so once the edit window closes the card
+  // swaps the add/edit affordance for a remove one. Confirmation and errors
+  // go through the shared Dialog + notes.error copy, like every other flow
+  // (native confirm/alert render OS chrome and can be suppressed entirely).
+  const removeNote = async () => {
+    setNoteError(null);
+    setNoteSaving(true);
+    try {
+      await callSetNote('');
+      setNoteRemoveOpen(false);
+    } catch {
+      setNoteError(t('familyDashboard.notes.error'));
+    } finally {
+      setNoteSaving(false);
+    }
+  };
+
   useEffect(() => {
     if (!expanded || !appointment.babysitterUserId) return;
     getDocs(fsQuery(
@@ -167,8 +233,15 @@ export function ExpandableBabysitterCard({
         </div>
       </button>
 
-      {expanded && info && (
+      {/* The notes block deliberately does NOT sit behind `info &&`: `info`
+          comes from a per-uid profile getDoc that silently swallows a
+          missing doc (e.g. the sitter was hard-deleted and babysitterUserId
+          is 'deleted') or a permission error, and the round-4 erasure
+          affordance must not vanish with an unrelated profile fetch
+          (round-8 review). The rest of the expanded view degrades fine. */}
+      {expanded && (
         <div className="mt-3 border-t border-gray-100 pt-3 space-y-2">
+          {info && (<>
           {info.classLevel && (
             <p className="text-xs text-gray-600">{t('familyDashboard.classLabel')} {info.classLevel}</p>
           )}
@@ -362,8 +435,67 @@ export function ExpandableBabysitterCard({
               </Button>
             </div>
           )}
+          </>)}
+
+          {/* Appointment notes: the family's pre-note (editable within its
+              window) + the babysitter's post-note (read-only). Rendered on
+              EVERY variant when notes exist (the component returns null
+              otherwise): past/rejected cards keep notes visible read-only,
+              and even a pending card shows an odd-history note — pending
+              cards render forever and the cron's redaction sweep skips
+              them, so this is the one place its author can still see and
+              remove it (round-6 review coherence note). */}
+          <AppointmentNotes
+            pre={appointment.preAppointmentNote}
+            post={appointment.postAppointmentNote}
+            editKind="pre"
+            canEdit={canEditPre}
+            onEdit={() => { setNoteError(null); setNoteOpen(true); }}
+            onRemove={() => { setNoteError(null); setNoteRemoveOpen(true); }}
+            copy={{
+              fromFamily: t('familyDashboard.notes.fromFamily'),
+              fromBabysitter: t('familyDashboard.notes.fromBabysitter'),
+              add: t('familyDashboard.notes.add'),
+              edit: t('familyDashboard.notes.edit'),
+              remove: t('familyDashboard.notes.remove'),
+            }}
+          />
         </div>
       )}
+
+      {/* Remove-note confirmation (erasure path) — shared Dialog, same error
+          copy as the save path. */}
+      {/* onClose gated on noteSaving: the shared Dialog closes on backdrop
+          click, and dismissing mid-flight would unmount the only thing that
+          can render the error of a non-optimistic (erasure!) call. */}
+      <Dialog open={noteRemoveOpen} onClose={() => { if (!noteSaving) setNoteRemoveOpen(false); }}>
+        <h3 className="mb-2 text-lg font-bold">{t('familyDashboard.notes.removeTitle')}</h3>
+        <p className="mb-3 text-sm text-gray-600">{t('familyDashboard.notes.removeDesc')}</p>
+        {noteError && <p className="mb-3 text-sm text-brand-600">{noteError}</p>}
+        <div className="flex gap-2">
+          <Button variant="outline" className="flex-1" disabled={noteSaving} onClick={removeNote}>
+            {t('familyDashboard.notes.remove')}
+          </Button>
+          <Button variant="ghost" className="flex-1" disabled={noteSaving} onClick={() => setNoteRemoveOpen(false)}>
+            {t('common.cancel')}
+          </Button>
+        </div>
+      </Dialog>
+
+      <AppointmentNoteDialog
+        open={noteOpen}
+        title={t('familyDashboard.notes.dialogTitle')}
+        description={t('familyDashboard.notes.dialogDesc')}
+        placeholder={t('familyDashboard.notes.placeholder')}
+        initialText={appointment.preAppointmentNote ?? ''}
+        saveLabel={t('familyDashboard.notes.save')}
+        cancelLabel={t('common.cancel')}
+        maxLength={2000}
+        submitting={noteSaving}
+        error={noteError}
+        onSave={saveNote}
+        onClose={() => { if (!noteSaving) setNoteOpen(false); }}
+      />
     </Card>
   );
 }

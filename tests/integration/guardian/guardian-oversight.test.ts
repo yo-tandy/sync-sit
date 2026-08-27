@@ -464,6 +464,18 @@ describe('guardian oversight callables', () => {
         date: dateFromToday(4),
         message: 'Saturday evening please',
       });
+      // Confirmed appointment carrying BOTH appointment notes (issue #238):
+      // ruling 8 puts them in the guardian projection like session notes.
+      await seedAppointment({
+        appointmentId: 'gdApt2',
+        babysitterUserId: 'gdKid4',
+        familyId: seed.family2Id,
+        createdByUserId: seed.parent3.uid,
+        status: 'confirmed',
+        date: dateFromToday(2),
+        preAppointmentNote: 'Door code 1234B',
+        postAppointmentNote: 'Kids asleep by 21:00',
+      });
       await getDb().collection('studyContactRequests').doc('gdScr1').set({
         requestId: 'gdScr1',
         tutorUserId: 'gdKid4',
@@ -544,6 +556,16 @@ describe('guardian oversight callables', () => {
       });
       const apt = detail.sit.appointments.find((a: any) => a.appointmentId === 'gdApt1');
       expect(apt).toMatchObject({ status: 'pending', message: 'Saturday evening please' });
+      // Ruling 8: appointment notes surface to the guardian exactly like
+      // study's session notes (issue #238 -- twin parity on note visibility).
+      const apt2 = detail.sit.appointments.find((a: any) => a.appointmentId === 'gdApt2');
+      expect(apt2).toMatchObject({
+        status: 'confirmed',
+        preAppointmentNote: 'Door code 1234B',
+        postAppointmentNote: 'Kids asleep by 21:00',
+      });
+      // ...and a doc without notes projects explicit nulls, not absence.
+      expect(apt).toMatchObject({ preAppointmentNote: null, postAppointmentNote: null });
       expect(detail.sit.contactSharingRequests).toHaveLength(1);
       expect(detail.sit.contactSharingRequests[0]).toMatchObject({
         parentName: 'Sophie Martin',

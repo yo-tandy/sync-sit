@@ -74,6 +74,8 @@ function appointment(overrides: Record<string, unknown> = {}) {
     offeredRate: 12,
     message: 'Saturday evening please',
     additionalInfo: null,
+    preAppointmentNote: 'Door code 1234B',
+    postAppointmentNote: 'Kids asleep by nine',
     cancellationReason: null,
     createdAt: '2026-08-01T10:00:00.000Z',
     ...overrides,
@@ -192,6 +194,13 @@ describe('GovernedChildPage (sit)', () => {
     expect(screen.getByText(/Bring the workbook/)).toBeInTheDocument();
     expect(screen.getByText(/Great progress today/)).toBeInTheDocument();
     expect(screen.getByText(/Could you help our son\?/)).toBeInTheDocument();
+    // Appointment notes render too (issue #238), under SITTING labels — this
+    // page shows both apps' notes side by side and they must be tellable
+    // apart from the study "session" blocks above.
+    expect(screen.getByText(/Door code 1234B/)).toBeInTheDocument();
+    expect(screen.getByText(/Kids asleep by nine/)).toBeInTheDocument();
+    expect(screen.getByText(/Pre-sitting note/)).toBeInTheDocument();
+    expect(screen.getByText(/Post-sitting note/)).toBeInTheDocument();
   });
 
   // ── The no-accept pin: guardian surfaces NEVER render accept affordances. ──

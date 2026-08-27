@@ -563,6 +563,20 @@ export default {
     badgeDeclined: 'Declined',
     addKidsTitle: 'Add your children',
     addKidsDesc: 'You need to add at least one child to search for babysitters.',
+    notes: {
+      fromFamily: 'From the family',
+      fromBabysitter: 'From the babysitter',
+      add: 'Add a note',
+      edit: 'Edit note',
+      remove: 'Remove note',
+      removeTitle: 'Remove this note?',
+      removeDesc: 'The babysitter will no longer see it.',
+      dialogTitle: 'Note for the babysitter',
+      dialogDesc: 'Share the practical details — door code, bedtime, allergies. The babysitter will see this before the sitting; if the babysitter is supervised, their parents can see it too.',
+      placeholder: 'e.g. Door code 1234B. Bedtime at 20:30. Léa is allergic to peanuts.',
+      save: 'Save note',
+      error: 'Couldn\'t save your note. Please try again.',
+    },
   },
 
   // Request Detail
@@ -612,6 +626,21 @@ export default {
     cancelledByFamilyBanner: 'This request has been cancelled by the family.',
     recurring: 'Recurring',
     recurringLabel: 'Recurring',
+    notes: {
+      title: 'Sitting notes',
+      fromFamily: 'From the family',
+      fromBabysitter: 'From the babysitter',
+      add: 'Add sitting notes',
+      edit: 'Edit sitting notes',
+      remove: 'Remove note',
+      removeTitle: 'Remove this note?',
+      removeDesc: 'The family will no longer see it.',
+      dialogTitle: 'Sitting notes',
+      dialogDesc: 'How did it go? Note anything the family should know — they will see this; if you are supervised, your parents can see it too.',
+      placeholder: 'e.g. All went well; kids asleep by 21:00. We finished the homework.',
+      save: 'Save note',
+      error: 'Couldn\'t save your note. Please try again.',
+    },
   },
 
   // Profile
@@ -1136,7 +1165,7 @@ export default {
       'You consent, on the child\'s behalf, to the Terms of Service and Privacy Policy, and to the processing of the child\'s data needed to run this service.',
     seeTitle: 'What you can see',
     seeBody:
-      'Supervision is full visibility: your family\'s parents see the child\'s sessions and appointments, schedules, incoming and outgoing requests with their messages, and all session notes. The child is informed that supervision is active.',
+      'Supervision is full visibility: your family\'s parents see the child\'s sessions and appointments, schedules, incoming and outgoing requests with their messages, and all session and appointment notes. The child is informed that supervision is active.',
     doTitle: 'What you can do',
     doBody:
       'You can hide the child from search, cancel their sessions or appointments (with a reason), and decline requests on their behalf. You can never accept or commit on their behalf — the child always makes their own commitments.',
@@ -1174,7 +1203,7 @@ export default {
         'When your account is supervised, the parents of your family follow your activity. Here is exactly what that covers — nothing they can see is hidden from you.',
       seeTitle: 'What they see',
       seeBody:
-        'Your sessions and appointments, your schedule, your incoming and outgoing requests with their messages, and all session notes.',
+        'Your sessions and appointments, your schedule, your incoming and outgoing requests with their messages, and all session and appointment notes.',
       doTitle: 'What they can do',
       doBody:
         'They can hide you from search, cancel your sessions or appointments (with a reason), and decline requests on your behalf. They can never accept for you — you always make your own commitments.',
@@ -1326,6 +1355,8 @@ export default {
       hideDates: 'Hide dates',
       notePre: 'Pre-session note',
       notePost: 'Post-session note',
+      noteAppointmentPre: 'Pre-sitting note',
+      noteAppointmentPost: 'Post-sitting note',
       status: {
         pending: 'Pending',
         confirmed: 'Confirmed',

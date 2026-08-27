@@ -377,6 +377,9 @@ export interface AppointmentSeed {
   isResubmission?: boolean;
   cancelledFromStatus?: string;
   cancellationReason?: string;
+  /** Appointment notes (issue #238): family pre / babysitter post. */
+  preAppointmentNote?: string;
+  postAppointmentNote?: string;
 }
 
 export async function seedAppointment(data: AppointmentSeed): Promise<string> {
@@ -425,6 +428,8 @@ export async function seedAppointment(data: AppointmentSeed): Promise<string> {
   if (data.isResubmission !== undefined) doc.isResubmission = data.isResubmission;
   if (data.cancelledFromStatus !== undefined) doc.cancelledFromStatus = data.cancelledFromStatus;
   if (data.cancellationReason !== undefined) doc.cancellationReason = data.cancellationReason;
+  if (data.preAppointmentNote !== undefined) doc.preAppointmentNote = data.preAppointmentNote;
+  if (data.postAppointmentNote !== undefined) doc.postAppointmentNote = data.postAppointmentNote;
 
   await db.collection('appointments').doc(appointmentId).set(doc);
   return appointmentId;

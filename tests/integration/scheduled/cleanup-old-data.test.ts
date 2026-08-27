@@ -210,6 +210,98 @@ describe('runCleanupOldData', () => {
     expect(remaining.docs[0].id).toBe(recentRef.id);
   });
 
+  it('redacts appointment notes once the appointment leaves the UI window (issue #238)', async () => {
+    const db = getDb();
+    const now = new Date();
+
+    // Four note-carrying docs exercise the cursor-paginated drain trivially
+    // (one pass) -- same rationale as the issue-#148 pin above: seeding 501+
+    // docs would blow up integration runtime, and the `size < 500 -> break`
+    // boundary is the same code path either way. What this pin adds over the
+    // siblings is the in-memory window filter: in-window docs must SURVIVE a
+    // sweep that redacts their out-of-window neighbors.
+
+    // Out of reach: confirmed, sitting was 8 days ago -> BOTH notes redacted,
+    // doc kept.
+    const staleRef = await db.collection('appointments').add({
+      familyId: seed.family1Id,
+      babysitterUserId: seed.babysitter1.uid,
+      status: 'confirmed',
+      date: daysAgo(8).toISOString().split('T')[0],
+      createdAt: daysAgo(20),
+      updatedAt: daysAgo(8),
+      preAppointmentNote: 'Door code 1234B',
+      postAppointmentNote: 'Kids asleep by 21:00',
+    });
+    // Out of reach: cancelled 8 days ago (updatedAt bound) -> redacted.
+    const cancelledRef = await db.collection('appointments').add({
+      familyId: seed.family1Id,
+      babysitterUserId: seed.babysitter1.uid,
+      status: 'cancelled',
+      date: daysFromNow(3).toISOString().split('T')[0],
+      createdAt: daysAgo(10),
+      updatedAt: daysAgo(8),
+      preAppointmentNote: 'stale code',
+    });
+    // Still reachable: confirmed, sitting only 6 days ago -> notes kept.
+    const recentRef = await db.collection('appointments').add({
+      familyId: seed.family1Id,
+      babysitterUserId: seed.babysitter1.uid,
+      status: 'confirmed',
+      date: daysAgo(6).toISOString().split('T')[0],
+      createdAt: daysAgo(10),
+      updatedAt: daysAgo(6),
+      preAppointmentNote: 'still visible',
+    });
+    // Out of reach: cancelled with a MISSING updatedAt -> redacted. The
+    // dashboards coalesce absent updatedAt to epoch and hide the card
+    // immediately, so the cron must fail CLOSED and erase what nobody can
+    // reach (round-7 review).
+    const noUpdatedAtRef = await db.collection('appointments').add({
+      familyId: seed.family1Id,
+      babysitterUserId: seed.babysitter1.uid,
+      status: 'cancelled',
+      date: daysAgo(2).toISOString().split('T')[0],
+      createdAt: daysAgo(10),
+      preAppointmentNote: 'unreachable code',
+    });
+    // Out of reach: MALFORMED status -> redacted. Neither dashboard renders
+    // an unknown status (they bucket on the closed four-value set), so the
+    // sweep fails closed by structure, not enumeration (round-9 review).
+    const badStatusRef = await db.collection('appointments').add({
+      familyId: seed.family1Id,
+      babysitterUserId: seed.babysitter1.uid,
+      status: 'archived',
+      date: daysAgo(2).toISOString().split('T')[0],
+      createdAt: daysAgo(10),
+      updatedAt: daysAgo(2),
+      preAppointmentNote: 'orphaned note',
+    });
+    // Always reachable: confirmed RECURRING (no date) -> notes kept forever.
+    const recurringRef = await db.collection('appointments').add({
+      familyId: seed.family1Id,
+      babysitterUserId: seed.babysitter1.uid,
+      status: 'confirmed',
+      type: 'recurring',
+      createdAt: daysAgo(300),
+      updatedAt: daysAgo(300),
+      preAppointmentNote: 'door code for Mondays',
+    });
+
+    const stats = await runCleanupOldData(db, now);
+    expect(stats.appointmentNotesRedacted).toBe(5); // stale pre+post, cancelled pre, missing-updatedAt pre, malformed-status pre
+
+    const stale = (await staleRef.get()).data()!;
+    expect(stale.status).toBe('confirmed'); // doc itself survives
+    expect('preAppointmentNote' in stale).toBe(false);
+    expect('postAppointmentNote' in stale).toBe(false);
+    expect('preAppointmentNote' in (await cancelledRef.get()).data()!).toBe(false);
+    expect('preAppointmentNote' in (await noUpdatedAtRef.get()).data()!).toBe(false);
+    expect('preAppointmentNote' in (await badStatusRef.get()).data()!).toBe(false);
+    expect((await recentRef.get()).data()!.preAppointmentNote).toBe('still visible');
+    expect((await recurringRef.get()).data()!.preAppointmentNote).toBe('door code for Mondays');
+  });
+
   it('deletes expired published searches and keeps active ones (issue #207)', async () => {
     const db = getDb();
     const now = new Date();

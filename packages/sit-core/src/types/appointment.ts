@@ -99,4 +99,15 @@ export interface AppointmentDoc {
   // Resubmission tracking
   isResubmission?: boolean;
   resubmittedFromAppointmentId?: string;
+
+  // Appointment notes (issue #238, parity B2 — adopted from study's session
+  // notes). Readable by the appointment's own read rule (family parents +
+  // babysitter + admin) AND, for a supervised babysitter, by their guardians
+  // via the getGovernedChildDetail projection (ruling 8 — same as study's
+  // session notes). Written via setAppointmentNote only (rules stay
+  // deny-all).
+  /** FAMILY-authored logistics note (door codes, bedtime, allergies). */
+  preAppointmentNote?: string;
+  /** BABYSITTER-authored debrief note (how the sitting went). */
+  postAppointmentNote?: string;
 }
