@@ -161,9 +161,9 @@ packages/
 
 Not because the other one lacks the ingredients — it does not. An earlier draft
 said `apps/study-functions` "has none of the family-verification surface", and
-that is false: it checks `verification.isFullyVerified` in nine files, reads
-`families` in eleven, and uses `resolveAreaLabel`, `writeUserActivity` and the
-guardian helpers throughout. §11.1 of this same document cites
+that is false: it checks `verification.isFullyVerified` and reads `families`
+in most of its callables, and uses `resolveAreaLabel`, `writeUserActivity` and
+the guardian helpers throughout. §11.1 of this same document cites
 `publishTutorSearch.ts:54` as proof that *both* codebases read the verification
 field, so the two sections contradicted each other and §11.1 was the correct
 one. Both codebases could host this.
@@ -447,10 +447,29 @@ export interface OfferDoc {
 ```
 
 **``offerId == `${taskId}_${doerUserId}` ``** is deliberate. It makes "one offer
-per student per task" a *structural* invariant enforced by Firestore's
-create-if-absent semantics, not a query the callable has to remember to run. A
-student who wants to change their price withdraws and re-offers, or edits in
-place (`updateOffer`, allowed while `pending`).
+per student per task" a *structural* invariant: at most one document can ever
+exist for the pair. A student who wants to change their price edits in place
+(`updateOffer`, allowed while `pending`) — or withdraws and re-offers, and
+**re-offering is a resurrection, not a create.** After `doWithdrawOffer` the
+document still exists in `withdrawn`, so `doSubmitOffer` finding an existing
+doc must handle it by status, and each branch is pinned here rather than
+discovered at PR6:
+
+- **`withdrawn` or `expired` → resurrect**, running the FULL submit path
+  again: re-check `DO_OFFER_MAX_PER_TASK` and `DO_OFFER_MAX_ACTIVE`,
+  re-increment the live `offerCount`, and **re-run the guardian gate** — a
+  student must not be able to launder a flagged-category offer past their
+  parent by withdrawing an approved one and re-submitting. Resurrection
+  resets `price`/`message`/`helper` from the new submission.
+- **`declined` with `declinedReason: 'family_declined'` → refused**
+  (`reason: 'family_declined_no_reoffer'`). The family said no to this
+  student for this task; letting a tap re-open that is the re-notification
+  problem the platform's decline cooldowns exist to prevent. Recorded as the
+  default; §17 Q7 gives the owner the override.
+- **`declined` with `'sibling_accepted'` or `'task_closed'` → refused** — the
+  task is no longer open, and `doSubmitOffer`'s task-status check catches it
+  before the offer doc is even consulted.
+- **`pending` / `pending_guardian` / `accepted` → refused** as already-exists.
 
 **Top-level collection, not a subcollection.** `taskOffers/{offerId}` rather
 than `tasks/{taskId}/offers/{offerId}`. The student's "my offers" view is a
@@ -860,7 +879,16 @@ match /taskOffers/{offerId} {
     // the references-rule precedent from PR #210 review). Inspecting an
     // offer whose family was deleted is exactly what admin access is for.
     || isAdmin()
-    || (resource.data.status != 'pending_guardian'
+    // ALLOW-LIST, not a != exclusion. An earlier draft granted the family
+    // everything except pending_guardian — which leaked guardian-DENIED
+    // offers: §8 moves a denial to `withdrawn`, so the moment a supervising
+    // parent refused, the offer (doer name, photo, bio, price, message, the
+    // helper's name and age) became family-readable. The family's UI would
+    // never show it, but the rule is the trust boundary, not the query.
+    // The allow-list also keeps a student's own withdrawal invisible to the
+    // family, which makes guardian denial and self-withdrawal
+    // indistinguishable from the family's side — deliberately.
+    || (resource.data.status in ['pending', 'accepted', 'declined']
         && isFamilyMember(resource.data.familyId))
     || (resource.data.status == 'pending_guardian'
         && resource.data.get('guardian', {}).get('familyId', null) != null
@@ -1036,13 +1064,31 @@ Three options, named here so PR10 does not have to invent one under deadline:
 garden, a front door or a flat interior; option 2 hands that to a wider
 audience than the board itself has.
 
-**Writes need bounding too, and this is bigger than it looks.** §11.2 requires
-photos to be EXIF-stripped server-side, which means the client must *not* be
-able to write final objects under `doTasks/{taskId}/` at all — otherwise a
-geotagged original lands straight past the stripper. That implies a quarantine
-prefix the client writes to, plus a storage-trigger or callable that strips and
-republishes. PR10's one-line "EXIF stripping on upload" bullet understates it;
-budget the trigger.
+**Option 1 is a TWO-path shape, or the client cannot upload at all.** `allow
+read, write: if false` on the final prefix plus the EXIF requirement (§11.2)
+means the client never writes final objects — a geotagged original must not be
+able to land past the stripper. Spelled out so PR10 ships it whole rather than
+shipping the locked rule, discovering uploads are dead, and "temporarily"
+relaxing to option 2:
+
+```
+// Final objects: written only by the stripper, read only via the callable.
+match /doTasks/{taskId}/{photoId} {
+  allow read, write: if false;
+}
+// Quarantine: the client's only upload path. Owner-scoped; a storage trigger
+// strips EXIF, republishes into doTasks/{taskId}/, and deletes the original.
+match /do-uploads/{uid}/{uploadId} {
+  allow read: if false;
+  allow write: if request.auth != null
+               && request.auth.uid == uid;
+}
+```
+
+`doPostTask` references photos by the ids the trigger reported back; a
+quarantine object that never gets claimed is swept with the dailies. PR10's
+one-line "EXIF stripping on upload" bullet understates all of this — budget
+the trigger, the sweep line, and the two rules blocks.
 
 Deployment gotcha from the README: **storage rules are not auto-deployed** by
 the merge workflow and must be shipped manually.
@@ -1056,7 +1102,7 @@ All in `apps/functions/src/do/**`, codebase `default`, region `europe-west1`,
 
 | Callable | Auth | Does |
 |---|---|---|
-| `doEnrollDoer` | Auth | Creates `profiles.doer` — full or abbreviated depending on existing profiles. **Runs `checkEnrollmentAge` first**: it is a self-enrollment path, and the under-15 floor is non-waivable (§11.1) |
+| `doEnrollDoer` | Auth | Creates `profiles.doer` — full or abbreviated depending on existing profiles. **Refuses an ungoverned under-15 caller** (`!isGoverned` guarding `checkEnrollmentAge`, the `enrollTutor` shape — §11.1); a governed caller passes at any age |
 | `doUpdateDoerProfile` | Auth | Categories, bio, transport, `notifyNewTasks` |
 | `doPostTask` | Auth (verified family) | Validates, scrubs, computes `areaLabel` + `expiresAt`, enforces `DO_TASK_MAX_ACTIVE` |
 | `doUpdateTask` | Auth (owner family) | `open` tasks only; description/photos/budget/timing. Notifies students with pending offers that terms changed |
@@ -1122,7 +1168,7 @@ chrome, enrollment steps, forms and theme.
 
     **The `status` constraint is not optional.** The H2-hardened `references`
     rule grants an unrelated caller only the *public-status* disjunct
-    (`firestore.rules:386-400`), which is provable only when the query
+    (`firestore.rules:377-385`), which is provable only when the query
     constrains `status` — every family-facing reference query already in the
     repo carries it. Drop it and the query is denied.
 
@@ -1231,16 +1277,34 @@ it unbounded, it is spam.
 - **Adult presence** is declared on every task and shown as a badge on the
   board. Sub-categories flagged `recommendAdultPresent` nudge the family at
   posting time. It is a declaration, not a verified fact; the copy says so.
-- **The platform's under-15 self-enrollment floor applies, and it is not
-  sync-do's to waive.** `checkEnrollmentAge`
+- **The platform's under-15 self-enrollment floor applies, with the governed
+  carve-out the platform itself uses — and neither half is sync-do's to
+  change.** The normative statement, precise enough to write the test from:
+  **`doEnrollDoer` refuses an ungoverned caller under 15
+  (`if (!isGoverned && …)` guarding `checkEnrollmentAge`); a governed caller
+  passes at any age, because supervision is their protection.**
+
+  That mirrors the platform's one enrollment-time precedent exactly:
+  `enrollTutor` guards its gate with `!isGoverned`
+  (`apps/study-functions/src/enrollment/enrollTutor.ts:263`) and its refusal
+  reads "at least 15 to enroll *on your own*. Your parents can create an
+  account and enroll you from theirs." Sit has no enrollment-time check at
+  all — `enrollBabysitter` runs none, and the floor is enforced at *search*
+  time instead (`searchBabysitters.ts:211-224`, with the same `!isGoverned`
+  bypass and the comment "a supervised account … is deliberately searchable
+  at any age — supervision is its protection"). So `enrollTutor` is a single
+  precedent, not a universal one — but it is the right one, because sync-do
+  has no search-time chokepoint to fall back on: the board is a client read.
+
+  `checkEnrollmentAge` itself
   (`packages/shared-core/src/utils/agePolicy.ts:47-63`) returns `'under_15'`
-  below 15 and its docstring is explicit that this floor "is checked FIRST and
-  is never waivable" — only the ±1-class consistency check is
-  admin-exemptable. `MIN_BABYSITTER_AGE = 15` says the same thing from the
-  constants side. **`doEnrollDoer` is a new self-enrollment path, so it must
-  run `checkEnrollmentAge` like every other one**; §14 pins it. A governed
-  account can stand the floor down through supervision — that is what the
-  guardian work added — but nothing in sync-do may lower it.
+  below 15, and "never waivable" describes that *verdict* — no admin
+  exemption exists for it, unlike the ±1-class check. The carve-out is not a
+  waiver: a governed account never reaches the check, exactly as at
+  `enrollTutor`'s call site. An earlier draft stated the floor
+  unconditionally, which would have locked governed students out of sync-do
+  entirely — the §17 Q2 discussion presupposes governed under-15 doers exist,
+  so the plan would have contradicted itself.
 - **No *per-sub-category* age gate**, which is what decision 7 actually
   settled. Above the platform floor, sync-do does not ask how old a student is
   for a given kind of work; the guardian gate is the mechanism instead. For a
@@ -1358,9 +1422,9 @@ What sync-do reuses as-is:
 | From | What |
 |---|---|
 | `shared-core` | `User`, `ProfileBase`, `ParentProfile`, `FirestoreTimestamp`, `NotifPrefs`, `NotificationDoc`, `GuardianLink`, `GuardianConsent`, `AccountStatus`, `resolveAreaLabel` |
-| `shared-functions` | `guardian/*` (the whole consent surface), `handoff/appHandoff.ts`, `scheduled/parisTime.ts`, `config/*`, verification helpers |
+| `shared-functions` | `guardian/*` (the whole consent surface), `handoff/appHandoff.ts`, `scheduled/parisTime.ts`, `config/*`, verification helpers, `admin/writeAuditLog.ts` (`writeUserActivity` — imported by both codebases, not tied to either) |
 | `shared-ui` | enrollment steps, forms, theme tokens, `AppBar`/layouts (as they land per roadmap Plan E), account-page shell |
-| `apps/functions` | `writeUserActivity` audit writer, family-verification gate, `families`/kids reads, Resend + FCM senders |
+| `apps/functions` | family-verification gate, `families`/kids reads, Resend + FCM senders |
 
 What sync-do **adds** to shared packages (small, deliberate):
 
@@ -1434,7 +1498,11 @@ see §12 for why the scaffold, not the family UI, is where they are needed.
 - **Rules** (`tests/rules/`) — mutation-verified in an isolated stripped-copy
   env per `feedback_rules_mutation_verify`. Cases: a non-doer cannot read the
   board; a blocked doer cannot; the hiring family cannot read a
-  `pending_guardian` offer; the supervising family can; no client write path
+  `pending_guardian` offer; **nor a `withdrawn` one — including one withdrawn
+  by guardian denial** (the post-decision half of §6.2's invisibility promise;
+  an earlier draft's `!= 'pending_guardian'` rule leaked exactly this, and the
+  pre-decision test alone would have passed with the leak in place); the
+  supervising family can read `pending_guardian`; no client write path
   exists on either collection; **a doer cannot client-write
   `profiles.doer.enrollmentComplete`** (the §7.2 escalation — the one case
   that lives on `users`, not on the two new collections); and list-query
@@ -1449,8 +1517,10 @@ see §12 for why the scaffold, not the family UI, is where they are needed.
 - **Integration** (`tests/integration/`, emulator lane 2 so the dev stack keeps
   running) — post→offer→accept end-to-end; **concurrent accepts of two
   different offers, exactly one wins**; guardian approve and deny; **an
-  under-15 caller is refused by `doEnrollDoer`** (the non-waivable floor,
-  §11.1); ceiling enforcement, including that a withdrawn or declined offer
+  UNGOVERNED under-15 caller is refused by `doEnrollDoer`, and a GOVERNED
+  under-15 caller is not** (both halves of §11.1's floor — the unconditional
+  version of this test would have locked supervised students out and
+  diverged from `enrollTutor`); ceiling enforcement, including that a withdrawn or declined offer
   returns its slot so a task does not seal shut; sweep deleting expired tasks
   and cascading their offers; contact-reveal boundary asserted from both
   sides.
@@ -1613,6 +1683,13 @@ nothing between them and the task. Today they can.
   from a `doGetAssignedContact` callable (no second copy, one more callable
   and a load state). Implementer's call at PR6 unless the owner has a
   preference; the plan's `OfferDoc` currently shows the stored-block form.
+- **Q7 — May a family-declined student re-offer on the same task?** The
+  deterministic `offerId` forces an answer either way (§4.2). The plan's
+  default is **no** — the family said no to this student for this task, and a
+  tap that re-opens it re-notifies every parent, which is the problem the
+  platform's decline cooldowns exist to prevent. The gentler alternative is a
+  7-day cooldown mirroring `DECLINE_COOLDOWN_MS`, after which the doc may be
+  resurrected. Owner's call; the hard-no default ships unless overridden.
 
 ### Risks
 
