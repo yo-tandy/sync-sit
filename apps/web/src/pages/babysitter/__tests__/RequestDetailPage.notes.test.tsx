@@ -194,6 +194,26 @@ describe('RequestDetailPage — appointment notes (post)', () => {
     await waitFor(() => expect(screen.queryByText('request.notes.removeTitle')).toBeNull());
   });
 
+  it('a backdrop click cannot dismiss the remove dialog mid-flight', async () => {
+    let resolveCall!: (v: { data: { success: boolean } }) => void;
+    renderWithApt({ status: 'cancelled', date: YESTERDAY, postAppointmentNote: 'old debrief' });
+    // Only the note callable hangs; getParentContacts (fired on load) keeps
+    // resolving through the default implementation.
+    h.callable.mockImplementation((name: string) =>
+      name === 'getParentContacts'
+        ? Promise.resolve({ data: { contacts: [] } })
+        : new Promise((resolve) => { resolveCall = resolve; }),
+    );
+    fireEvent.click(screen.getByText('request.notes.remove'));
+    const buttons = screen.getAllByText('request.notes.remove');
+    fireEvent.click(buttons[buttons.length - 1]);
+    // Backdrop click while the erasure is in flight: dialog must survive.
+    fireEvent.click(document.querySelector('.fixed.inset-0.z-50')!);
+    expect(screen.getByText('request.notes.removeTitle')).toBeTruthy();
+    resolveCall({ data: { success: true } });
+    await waitFor(() => expect(screen.queryByText('request.notes.removeTitle')).toBeNull());
+  });
+
   it('a confirmed recurring arrangement offers the post affordance (no timing gate)', () => {
     renderWithApt({
       type: 'recurring',
