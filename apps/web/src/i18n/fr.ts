@@ -133,7 +133,7 @@ export default {
     verifyNoCodeHint: "Vous n'avez pas reçu de code ? Si vous avez déjà un compte, <loginLink>connectez-vous</loginLink> plutôt.",
     alreadyInFamily: 'Vous appartenez déjà à une famille.',
     readyLoginTitle: 'Votre compte famille est prêt',
-    readyLoginDesc: "Nous n'avons pas pu vous connecter automatiquement. Connectez-vous avec votre email et le mot de passe que vous venez de choisir.",
+    readyLoginDesc: "Nous n'avons pas pu finaliser votre session. Connectez-vous avec votre email et le mot de passe que vous venez de choisir.",
     readyLoginCta: 'Se connecter',
     roleExclusiveJoin: "Un compte élève (babysitter ou tuteur) ne peut pas rejoindre une famille comme parent — cette invitation doit être utilisée avec le compte du parent.",
     joinFamilyConfirm: 'Rejoindre la famille {{familyName}}',

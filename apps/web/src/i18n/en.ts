@@ -140,7 +140,7 @@ export default {
     // (sign-in failure or doc-read blip) — confirm and hand off to login
     // (issue #262).
     readyLoginTitle: 'Your family account is ready',
-    readyLoginDesc: 'We could not sign you in automatically. Log in with your email and the password you just chose.',
+    readyLoginDesc: "We couldn't finish setting up your session. Log in with your email and the password you just chose.",
     readyLoginCta: 'Log in',
     roleExclusiveJoin: "Student accounts (babysitter or tutor) can't join a family as a parent — this invite needs the parent's own account.",
     joinFamilyConfirm: 'Join the {{familyName}} family',

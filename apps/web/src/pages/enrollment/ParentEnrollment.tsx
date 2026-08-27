@@ -219,7 +219,7 @@ export function ParentEnrollment() {
       }
 
       const settled = useAuthStore.getState();
-      if (settled.firebaseUser && getSitRole(settled.userDoc) === 'parent') {
+      if (!settled.loading && settled.firebaseUser && getSitRole(settled.userDoc) === 'parent') {
         navigate('/family');
       } else {
         setSignedOutSuccess(true);
@@ -291,7 +291,7 @@ export function ParentEnrollment() {
             // fired: re-check the guard's predicate at click time and route
             // straight to the portal instead of a needless re-login.
             const now = useAuthStore.getState();
-            if (now.firebaseUser && getSitRole(now.userDoc) === 'parent') {
+            if (!now.loading && now.firebaseUser && getSitRole(now.userDoc) === 'parent') {
               navigate('/family');
             } else {
               navigate('/login');
