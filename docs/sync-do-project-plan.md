@@ -158,13 +158,31 @@ packages/
 ```
 
 **Which codebase hosts the callables:** `apps/functions` (codebase `default`).
-Rationale — sync-do's callables need the family-verification gate, the
-`families`/kids reads, `resolveAreaLabel`, the audit-log writer and the
-guardian helpers. `apps/functions` already imports all of them and already
-hosts `publishSearch`, the nearest analogue. `apps/study-functions` has none of
-the family-verification surface. New code goes in `apps/functions/src/do/**`
-with a `do` prefix on every exported callable name (`doPostTask`,
-`doSubmitOffer`, …) so the two domains never collide in one deploy unit.
+
+Not because the other one lacks the ingredients — it does not. An earlier draft
+said `apps/study-functions` "has none of the family-verification surface", and
+that is false: it checks `verification.isFullyVerified` in nine files, reads
+`families` in eleven, and uses `resolveAreaLabel`, `writeUserActivity` and the
+guardian helpers throughout. §11.1 of this same document cites
+`publishTutorSearch.ts:54` as proof that *both* codebases read the verification
+field, so the two sections contradicted each other and §11.1 was the correct
+one. Both codebases could host this.
+
+The actual reasons, which are about fit rather than capability:
+
+- **`publishSearch` is the nearest analogue and lives here.** sync-do's board
+  is `publishedSearches` promoted to a product; building its successor beside
+  its ancestor keeps the PII stance, the expiry maths and the sweep in one
+  place to read.
+- **The guardian *callables* are registered here** — enrollment, oversight,
+  `redeemKidInvite` — and the guardian consent gate (§6.2) is the one piece of
+  sync-do that leans hardest on them.
+- **Decision 11 asked for an existing codebase**, and between two viable ones
+  the tie-break is where the closest prior art sits.
+
+New code goes in `apps/functions/src/do/**` with a `do` prefix on every
+exported callable name (`doPostTask`, `doSubmitOffer`, …) so the two domains
+never collide in one deploy unit.
 
 **Consequence to accept:** every sync-do deploy redeploys the sync-sit
 functions codebase. That is already true of sync-sit's own changes, and the
@@ -179,10 +197,19 @@ merge workflow deploys both codebases on every merge to `main` regardless
 profiles: {
   babysitter?: ProfileBase;
   tutor?: ProfileBase;
-  doer?: DoerProfile;        // ◀ new
+  doer?: ProfileBase;        // ◀ new — see the note below on why not DoerProfile
   parent?: ParentProfile;
 }
 ```
+
+**Why `ProfileBase` and not `DoerProfile` in that slot.** `shared-core` must
+never import from a leaf package — `user.ts:10-12` states the rule, and today
+both `babysitter` and `tutor` are typed as the generic `ProfileBase` for
+exactly that reason, with `BabysitterProfile` living in `@ejm/sit-core` and
+`TutorProfile` in `@ejm/study-core`. Since `do-core` imports `User` and
+`ProfileBase` *from* shared-core, typing the slot as `DoerProfile` would close
+a dependency cycle. `doer` follows its siblings: generic in the shared type,
+narrowed to `DoerProfile` at the do-core read sites.
 
 ```ts
 // packages/do-core/src/types/doerProfile.ts
@@ -300,8 +327,13 @@ export interface TaskDoc {
   status: TaskStatus;
   /**
    * LIVE offers — those in `pending` or `pending_guardian`. Incremented by
-   * `doSubmitOffer`; decremented by withdraw, by decline, and by §6.4 step 7's
-   * sibling auto-decline. Maintained transactionally.
+   * `doSubmitOffer`; **decremented whenever an offer leaves `pending` or
+   * `pending_guardian` by any path.** Stated as an invariant rather than a
+   * list, because an enumeration is what goes stale: an earlier draft named
+   * withdraw, decline and the step-7 sibling auto-decline, and silently
+   * omitted the winner's own `pending → accepted` transition (§6.4 step 6)
+   * and `doCancelTask`'s sweep to `expired`. An assigned task's card would
+   * then have read "1 offer" forever. Maintained transactionally.
    *
    * Live, not lifetime, because of what the count is FOR: it bounds §6.4's
    * write set, and that write set is exactly the set of live offers the
@@ -923,8 +955,25 @@ taskOffers: (familyId ASC, taskId ASC, status ASC, createdAt ASC)
                                                             — offers on a task, family side
 taskOffers: (taskId ASC, status ASC, createdAt ASC)         — offers on a task, admin side
 taskOffers: (doerUserId ASC, status ASC, createdAt DESC)    — "my offers"
-taskOffers: (guardian.familyId ASC, status ASC)             — guardian queue
+taskOffers: (guardian.familyId ASC, status ASC)             — guardian queue (server-side, see below)
+references: (babysitterUserId ASC, status ASC)              — offer-card endorsements, sit side
+references: (tutorUserId ASC, status ASC)                   — offer-card endorsements, study side
 ```
+
+The two `references` indexes serve §9.1's offer-card queries, which **must**
+carry their `status in ['approved','published']` constraint to be provable
+against the H2-hardened rule — see §9.1.
+
+The guardian-queue index is for a **server-side** query. §9.3 puts the
+guardian's approval surface in the existing supervised-child view, which is
+served by callables using the Admin SDK
+(`packages/shared-functions/src/guardian/oversight.ts`) — rules are bypassed
+there, so only the index matters and there is no client list query to prove.
+That is worth stating rather than leaving to inference: the index line
+otherwise reads as a client query, §7.1 does grant the supervising parent a
+rules-level read, and whether Firestore's analyzer maps
+`resource.data.get('guardian', {}).get('familyId', null)` back to the
+`guardian.familyId` field path is not something to assume.
 
 The family-side offer index leads with `familyId` because the read rule's
 family disjunct is only provable when the query filters on it (§7.2) — the
@@ -1011,7 +1060,7 @@ All in `apps/functions/src/do/**`, codebase `default`, region `europe-west1`,
 | `doUpdateDoerProfile` | Auth | Categories, bio, transport, `notifyNewTasks` |
 | `doPostTask` | Auth (verified family) | Validates, scrubs, computes `areaLabel` + `expiresAt`, enforces `DO_TASK_MAX_ACTIVE` |
 | `doUpdateTask` | Auth (owner family) | `open` tasks only; description/photos/budget/timing. Notifies students with pending offers that terms changed |
-| `doCancelTask` | Auth (owner family) | Task → `cancelled`, all live offers → `expired`, notify |
+| `doCancelTask` | Auth (owner family) | Task → `cancelled`, all live offers → `expired` (zeroing `offerCount` per §4.1's invariant), notify |
 | `doSubmitOffer` | Auth (active doer) | Enforces the ceiling, resolves the guardian gate, writes `pending` or `pending_guardian` |
 | `doUpdateOffer` | Auth (offering student) | Price/message/helper while `pending` |
 | `doWithdrawOffer` | Auth (offering student) | → `withdrawn`, decrements the live `offerCount` (§4.1) |
@@ -1064,10 +1113,25 @@ chrome, enrollment steps, forms and theme.
     `tutorUserId` (`packages/study-core/src/types/endorsement.ts:16-19`);
     sit's equivalent is `ReferenceDoc`, keyed on `babysitterUserId`. Surfacing
     "existing endorsements" therefore means **two queries against the shared
-    `references` collection** — `where('tutorUserId','==',uid)` and
-    `where('babysitterUserId','==',uid)`. No rules change is needed: the
-    `references` read rule allows `status in ['approved','published']` to any
-    authenticated caller (`firestore.rules:376-385`), so both are provable.
+    `references` collection**, and their exact shape is load-bearing:
+
+    ```
+    where('babysitterUserId','==',uid).where('status','in',['approved','published'])
+    where('tutorUserId','==',uid).where('status','in',['approved','published'])
+    ```
+
+    **The `status` constraint is not optional.** The H2-hardened `references`
+    rule grants an unrelated caller only the *public-status* disjunct
+    (`firestore.rules:386-400`), which is provable only when the query
+    constrains `status` — every family-facing reference query already in the
+    repo carries it. Drop it and the query is denied.
+
+    An earlier draft of this section said "no rules change is needed … so both
+    are provable" while showing the unconstrained queries. That combination is
+    the dangerous one: at PR7 the symptom is `PERMISSION_DENIED`, and the
+    nearest-looking fix is widening the `references` read rule — undoing the
+    H2 hardening whose comment block this plan quotes approvingly elsewhere.
+    The real fix is two words of query shape plus the index in §7.3.
   - **A doer-only student has none.** That is the modal case for a new sync-do
     enrollee — precisely the moment a family most needs signal. With ratings
     and task counts both ruled out, the offer card for a new student shows
@@ -1230,8 +1294,22 @@ discovered in an incident.
 
 - `doTasks` and `taskOffers` join `exportUserData` and the hard-delete path.
 - Retention: expired and cancelled tasks and their offers are deleted by the
-  daily sweep; completed tasks follow the existing 30-day retention rule for
-  finished engagements.
+  daily sweep.
+
+  **Completed tasks are retained indefinitely, matching the platform** — and
+  that is a deliberate statement, not a deferral. An earlier draft said they
+  "follow the existing 30-day retention rule for finished engagements"; there
+  is no such rule. `cleanupOldData.ts:181-186` deletes only
+  `status in ['cancelled','rejected']` appointments older than 30 days (and
+  more than 7 days past their booking date). **Completed appointments are
+  never deleted.**
+
+  Worth being explicit because a completed sync-do task carries more than a
+  completed appointment does: the free-text description, the photos, the
+  agreed price, and — under §4.2's stored-block form — the family's address on
+  the accepted offer. Those go only through the GDPR hard-delete path. If the
+  owner wants a finite retention for completed tasks, that is **new** work for
+  PR10's sweep, not an existing rule to inherit.
 - Consent: the abbreviated cross-app enrollment still records `consentAt` /
   `consentVersion` for the sync-do terms, and a governed student's guardian
   consent uses the existing `GuardianConsent` record shape.
@@ -1360,9 +1438,14 @@ see §12 for why the scaffold, not the family UI, is where they are needed.
   exists on either collection; **a doer cannot client-write
   `profiles.doer.enrollmentComplete`** (the §7.2 escalation — the one case
   that lives on `users`, not on the two new collections); and list-query
-  provability for every rule disjunct, specifically including the family's
-  offer query in the exact `(familyId, taskId, status)` shape §7.2 requires —
-  a `status in […]` form does not satisfy the rule and must fail this test.
+  provability for every rule disjunct — enumerated, not asserted in the
+  abstract: the family's offer query in the exact `(familyId, taskId, status)`
+  shape §7.2 requires (a `status in […]` form does not satisfy the rule and
+  must **fail** this test); the doer's board read; the doer's own-offers query;
+  and §9.1's two `references` queries, which must carry
+  `status in ['approved','published']` or be denied. The guardian queue is
+  **not** in this list because it has no client query — it is served by the
+  Admin SDK (§7.3).
 - **Integration** (`tests/integration/`, emulator lane 2 so the dev stack keeps
   running) — post→offer→accept end-to-end; **concurrent accepts of two
   different offers, exactly one wins**; guardian approve and deny; **an
