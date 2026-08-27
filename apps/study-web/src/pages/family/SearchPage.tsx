@@ -28,6 +28,7 @@ import {
   type AddressResult,
 } from '@ejm/shared-ui';
 import { TutorCard } from '@/components/family/TutorCard';
+import { TutorLookup } from '@/components/family/TutorLookup';
 
 /**
  * The family's own active published searches (issue #207) — the subset of the
@@ -511,6 +512,10 @@ export function SearchPage() {
             </div>
           )}
         </div>
+
+        {/* Direct lookup (issue #235): the shortcut for families who already
+            know their tutor -- below the subject search, always offered. */}
+        <TutorLookup />
       </div>
 
       {/* Publish Confirmation Dialog (issue #207) */}

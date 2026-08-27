@@ -1,5 +1,6 @@
 export { enrollTutor } from './enrollment/enrollTutor.js';
 export { searchTutors } from './search/searchTutors.js';
+export { lookupTutor } from './search/lookupTutor.js';
 export { publishTutorSearch } from './search/publishTutorSearch.js';
 export { sendTutorContactRequest } from './contact/sendTutorContactRequest.js';
 export { getTutorAvailability } from './availability/getTutorAvailability.js';

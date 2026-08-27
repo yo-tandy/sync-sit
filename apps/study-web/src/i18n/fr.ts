@@ -687,6 +687,14 @@ export default {
       kidNotePlaceholder: 'Tout ce qu\'un professeur devrait savoir sur cet enfant...',
       save: 'Enregistrer',
     },
+    lookup: {
+      title: 'Vous connaissez déjà votre tuteur ?',
+      hint: 'Retrouvez un tuteur avec qui vous travaillez déjà par son nom ou son email — sans recherche par matière.',
+      placeholder: 'Rechercher par nom ou email...',
+      searching: 'Recherche...',
+      noResults: 'Aucun tuteur trouvé',
+      connected: 'Connecté',
+    },
     search: {
       subjectLabel: 'Matière',
       selectSubject: 'Choisir une matière',

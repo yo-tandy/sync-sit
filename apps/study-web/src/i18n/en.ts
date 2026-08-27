@@ -687,6 +687,14 @@ export default {
       kidNotePlaceholder: 'Anything a tutor should know about this child...',
       save: 'Save',
     },
+    lookup: {
+      title: 'Already know your tutor?',
+      hint: 'Find a tutor you already work with by name or email — no subject search needed.',
+      placeholder: 'Search by name or email...',
+      searching: 'Searching...',
+      noResults: 'No tutors found',
+      connected: 'Connected',
+    },
     search: {
       subjectLabel: 'Subject',
       selectSubject: 'Select a subject',
