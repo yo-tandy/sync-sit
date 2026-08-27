@@ -43,6 +43,10 @@ export interface StudySessionDoc {
   // instance (see StudySessionInstanceDoc).
   preSessionNote?: string;
   postSessionNote?: string;
+  sessionLengthMinutes?: number;
+  // Family modification awaiting the tutor's acknowledgement (issue #234).
+  modified?: boolean;
+  modifiedFields?: string[];
   status: 'pending' | 'confirmed' | 'declined' | 'cancelled' | 'modified' | 'completed';
   statusReason?: string;
   // ── Cancellation policy (V2 feature 7) ──

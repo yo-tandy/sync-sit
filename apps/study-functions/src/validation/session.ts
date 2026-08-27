@@ -245,3 +245,62 @@ export const setSessionNoteSchema = z.object({
 });
 
 export type SetSessionNoteInput = z.infer<typeof setSessionNoteSchema>;
+
+/**
+ * Input for the modifySession callable (issue #234, parity A1: sit's
+ * modifyAppointment adapted to study). Everything but sessionId is optional --
+ * the callable diffs against the stored doc and refuses a no-op. one_time
+ * sessions only (a recurring series is regenerated instances + per-occurrence
+ * ledger claims; mutating it in place is its own feature).
+ *
+ * Deliberate deltas from sit's contract, decided in the plan doc:
+ *  - `date` IS modifiable (moving the day is THE reschedule);
+ *  - `rate` is NOT (study's rate is the tutor's locked-in offering, not a
+ *    family-set offer like sit's offeredRate).
+ */
+export const modifySessionSchema = z.object({
+  sessionId: z.string().min(1, 'Session ID is required'),
+  date: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format')
+    .optional(),
+  startTime: z
+    .string()
+    .regex(/^\d{2}:\d{2}$/, 'Start time must be in HH:MM format')
+    .optional(),
+  sessionLengthMinutes: z
+    .union(
+      [
+        z.literal(SESSION_LENGTHS[0]),
+        z.literal(SESSION_LENGTHS[1]),
+        z.literal(SESSION_LENGTHS[2]),
+        z.literal(SESSION_LENGTHS[3]),
+      ],
+      {
+        errorMap: () => ({
+          message: `Session length must be one of: ${SESSION_LENGTHS.join(', ')} minutes`,
+        }),
+      },
+    )
+    .optional(),
+  location: z
+    .enum(LOCATION_PREFS, {
+      errorMap: () => ({ message: 'Location must be one of the supported location preferences' }),
+    })
+    .optional(),
+  studentIds: z
+    .array(z.string().min(1))
+    .min(1, 'At least one student must be specified')
+    // Serial kid lookups follow; an unbounded array is a free fan-out
+    // (PR #244 round 6). Ten is far above any real roster.
+    .max(10, 'Too many students')
+    .optional(),
+  message: z.string().trim().max(2000).optional(),
+});
+
+export type ModifySessionInput = z.infer<typeof modifySessionSchema>;
+
+/** Input for acknowledgeSessionModification (tutor-only; sit's acknowledgeModification twin). */
+export const acknowledgeSessionModificationSchema = z.object({
+  sessionId: z.string().min(1, 'Session ID is required'),
+});

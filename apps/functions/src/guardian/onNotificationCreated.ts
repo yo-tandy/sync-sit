@@ -33,6 +33,11 @@ const EMAIL_PREF_CATEGORY: Record<string, 'newRequest' | 'confirmed' | 'cancelle
   contact_sharing_request: 'newRequest',
   study_contact_request: 'newRequest',
   request_accepted: 'confirmed',
+  // A family's modification of a supervised tutor's session: same urgency
+  // class as a new request -- the guardian should see schedule changes
+  // (issue #234 review; study_session_request remains a pre-existing gap
+  // documented below).
+  study_session_modified: 'newRequest',
   study_session_confirmed: 'confirmed',
   study_request_accepted: 'confirmed',
   request_cancelled: 'cancelled',

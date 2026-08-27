@@ -17,6 +17,7 @@ describe('study notificationRouting', () => {
         'study_session_confirmed',
         'study_session_declined',
         'study_session_cancelled',
+        'study_session_modified',
         'study_session_reminder',
         'tutor_endorsement_received',
         'tutor_endorsement_declined',
@@ -52,6 +53,9 @@ describe('study notificationRouting', () => {
     ['study_session_declined', '/tutor/sessions'],
     ['study_session_cancelled', '/tutor/sessions'],
     ['study_session_reminder', '/tutor/sessions'],
+    // The tutor is the RECIPIENT of a modification (issue #234); the tap must
+    // land where the Acknowledge control lives.
+    ['study_session_modified', '/tutor/sessions'],
     ['tutor_endorsement_received', '/tutor/endorsements'],
     ['supervision_request', '/tutor'],
     ['guardian_action', null],
@@ -73,6 +77,9 @@ describe('study notificationRouting', () => {
     ['study_session_declined', '/family/sessions'],
     ['study_session_cancelled', '/family/sessions'],
     ['study_session_reminder', '/family/sessions'],
+    // Parents never receive study_session_modified today (their own change
+    // needs no echo), but the row must not dead-end if that ever changes.
+    ['study_session_modified', '/family/sessions'],
     ['tutor_endorsement_declined', '/family/endorsements'],
     ['tutor_endorsement_published', '/family/endorsements'],
     ['supervision_confirmed', '/family/governance'],

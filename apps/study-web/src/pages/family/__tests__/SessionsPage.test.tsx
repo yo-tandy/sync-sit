@@ -185,6 +185,78 @@ describe('family SessionsPage', () => {
   });
 });
 
+// ── Modify (issue #234) ──
+describe('family SessionsPage — modify', () => {
+  beforeEach(reset);
+
+  it('modifies a pending request → modifySession with the dialog values', async () => {
+    h.sessions = [oneTime({ sessionId: 'sM', date: '2027-06-07', startTime: '16:00', sessionLengthMinutes: 60 })];
+    renderWithProviders(<SessionsPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /^modify$/i }));
+    const dialog = await screen.findByText(/modify this session/i);
+    expect(dialog).toBeInTheDocument();
+    const time = document.querySelector('input[type="time"]') as HTMLInputElement;
+    fireEvent.change(time, { target: { value: '18:00' } });
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+
+    // Edits-only contract (PR #244 round 2): untouched date/length are
+    // OMITTED so the server's when/where boundary only runs for real changes.
+    await waitFor(() =>
+      expect(h.callable).toHaveBeenCalledWith('modifySession', {
+        sessionId: 'sM',
+        startTime: '18:00',
+        message: undefined,
+      }),
+    );
+  });
+
+  it('sends a changed location under the edits-only contract', async () => {
+    h.sessions = [oneTime({ sessionId: 'sL', location: 'online' })];
+    renderWithProviders(<SessionsPage />);
+    fireEvent.click(await screen.findByRole('button', { name: /^modify$/i }));
+    const locSelect = screen.getByLabelText(/^location$/i);
+    fireEvent.change(locSelect, { target: { value: 'family_home' } });
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+    await waitFor(() =>
+      expect(h.callable).toHaveBeenCalledWith('modifySession', {
+        sessionId: 'sL',
+        location: 'family_home',
+        message: undefined,
+      }),
+    );
+  });
+
+  it('maps reason location_not_offered to its dedicated copy', async () => {
+    h.sessions = [oneTime({ sessionId: 'sL', location: 'online' })];
+    h.callable.mockRejectedValueOnce(
+      Object.assign(new Error('invalid-argument'), { details: { reason: 'location_not_offered' } }),
+    );
+    renderWithProviders(<SessionsPage />);
+    fireEvent.click(await screen.findByRole('button', { name: /^modify$/i }));
+    fireEvent.change(screen.getByLabelText(/^location$/i), { target: { value: 'family_home' } });
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+    await waitFor(() =>
+      expect(screen.getByText(/doesn’t offer that location|doesn't offer that location/i)).toBeInTheDocument(),
+    );
+  });
+
+  it('maps reason time_unavailable to its dedicated copy and keeps the dialog open', async () => {
+    h.sessions = [oneTime({ sessionId: 'sM' })];
+    h.callable.mockRejectedValueOnce(
+      Object.assign(new Error('failed-precondition'), { details: { reason: 'time_unavailable' } }),
+    );
+    renderWithProviders(<SessionsPage />);
+    fireEvent.click(await screen.findByRole('button', { name: /^modify$/i }));
+    const time = document.querySelector('input[type="time"]') as HTMLInputElement;
+    fireEvent.change(time, { target: { value: '18:00' } });
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+    await waitFor(() =>
+      expect(screen.getByText(/not available for this tutor/i)).toBeInTheDocument(),
+    );
+  });
+});
+
 // ── Upcoming / history / cancellation (pinned "today") ──
 describe('family SessionsPage — management', () => {
   beforeEach(() => {
