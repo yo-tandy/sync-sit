@@ -245,25 +245,40 @@ export async function runCleanupOldData(
       return false; // pending cards are always rendered
     };
 
+    // Cursor-paginated drain, not a single capped pass: the range query
+    // matches EVERY note-carrying doc (in-window ones included), so a plain
+    // limit(500) sweep would let a large in-window population starve the
+    // out-of-window backlog — the scale-dependence the PR #210 review
+    // ledgered as unacceptable for the sibling sweeps in this file. The
+    // cursor walks the whole index per run; the pass ceiling (40 = 20k
+    // note-carrying docs) is a runaway backstop far above real volume.
     for (const field of ['preAppointmentNote', 'postAppointmentNote'] as const) {
-      const noted = await firestoreDb
-        .collection('appointments')
-        .where(field, '>', '')
-        .limit(500)
-        .get();
-      if (noted.empty) continue;
-      const batch = firestoreDb.batch();
-      let count = 0;
-      for (const doc of noted.docs) {
-        if (outOfReach(doc.data())) {
-          batch.update(doc.ref, { [field]: FieldValue.delete() });
-          count++;
+      let cursor: FirebaseFirestore.QueryDocumentSnapshot | null = null;
+      for (let pass = 0; pass < 40; pass++) {
+        let query = firestoreDb
+          .collection('appointments')
+          .where(field, '>', '')
+          .orderBy(field)
+          .limit(500);
+        if (cursor) query = query.startAfter(cursor);
+        const noted = await query.get();
+        if (noted.empty) break;
+
+        const batch = firestoreDb.batch();
+        let count = 0;
+        for (const doc of noted.docs) {
+          if (outOfReach(doc.data())) {
+            batch.update(doc.ref, { [field]: FieldValue.delete() });
+            count++;
+          }
         }
-      }
-      if (count > 0) {
-        await batch.commit();
-        stats.appointmentNotesRedacted += count;
-        console.log(`Redacted ${count} out-of-reach ${field} values`);
+        if (count > 0) {
+          await batch.commit();
+          stats.appointmentNotesRedacted += count;
+          console.log(`Redacted ${count} out-of-reach ${field} values`);
+        }
+        cursor = noted.docs[noted.docs.length - 1];
+        if (noted.size < 500) break;
       }
     }
   }

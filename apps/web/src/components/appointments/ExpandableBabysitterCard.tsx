@@ -118,7 +118,6 @@ export function ExpandableBabysitterCard({
       ? true
       : Boolean(appointment.date && appointment.startTime) &&
         !hasStarted(appointment.date, appointment.startTime));
-  const showNotes = variant === 'confirmed' || variant === 'past' || variant === 'rejected';
 
   const callSetNote = (text: string) => {
     const fn = httpsCallable<
@@ -426,25 +425,28 @@ export function ExpandableBabysitterCard({
           )}
 
           {/* Appointment notes: the family's pre-note (editable within its
-              window) + the babysitter's post-note (read-only). Past/rejected
-              cards keep existing notes visible read-only. */}
-          {showNotes && (
-            <AppointmentNotes
-              pre={appointment.preAppointmentNote}
-              post={appointment.postAppointmentNote}
-              editKind="pre"
-              canEdit={canEditPre}
-              onEdit={() => { setNoteError(null); setNoteOpen(true); }}
-              onRemove={() => { setNoteError(null); setNoteRemoveOpen(true); }}
-              copy={{
-                fromFamily: t('familyDashboard.notes.fromFamily'),
-                fromBabysitter: t('familyDashboard.notes.fromBabysitter'),
-                add: t('familyDashboard.notes.add'),
-                edit: t('familyDashboard.notes.edit'),
-                remove: t('familyDashboard.notes.remove'),
-              }}
-            />
-          )}
+              window) + the babysitter's post-note (read-only). Rendered on
+              EVERY variant when notes exist (the component returns null
+              otherwise): past/rejected cards keep notes visible read-only,
+              and even a pending card shows an odd-history note — pending
+              cards render forever and the cron's redaction sweep skips
+              them, so this is the one place its author can still see and
+              remove it (round-6 review coherence note). */}
+          <AppointmentNotes
+            pre={appointment.preAppointmentNote}
+            post={appointment.postAppointmentNote}
+            editKind="pre"
+            canEdit={canEditPre}
+            onEdit={() => { setNoteError(null); setNoteOpen(true); }}
+            onRemove={() => { setNoteError(null); setNoteRemoveOpen(true); }}
+            copy={{
+              fromFamily: t('familyDashboard.notes.fromFamily'),
+              fromBabysitter: t('familyDashboard.notes.fromBabysitter'),
+              add: t('familyDashboard.notes.add'),
+              edit: t('familyDashboard.notes.edit'),
+              remove: t('familyDashboard.notes.remove'),
+            }}
+          />
         </div>
       )}
 

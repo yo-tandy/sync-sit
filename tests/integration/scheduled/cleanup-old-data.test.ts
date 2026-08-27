@@ -214,6 +214,13 @@ describe('runCleanupOldData', () => {
     const db = getDb();
     const now = new Date();
 
+    // Four note-carrying docs exercise the cursor-paginated drain trivially
+    // (one pass) -- same rationale as the issue-#148 pin above: seeding 501+
+    // docs would blow up integration runtime, and the `size < 500 -> break`
+    // boundary is the same code path either way. What this pin adds over the
+    // siblings is the in-memory window filter: in-window docs must SURVIVE a
+    // sweep that redacts their out-of-window neighbors.
+
     // Out of reach: confirmed, sitting was 8 days ago -> BOTH notes redacted,
     // doc kept.
     const staleRef = await db.collection('appointments').add({

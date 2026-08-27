@@ -283,6 +283,23 @@ describe('ExpandableBabysitterCard — appointment notes (pre)', () => {
     expect(screen.getByText('familyDashboard.notes.removeTitle')).toBeTruthy();
   });
 
+  it('a pending card with an odd-history own note shows it and offers REMOVE (never stranded)', () => {
+    // A note cannot be AUTHORED while pending (canEditPre requires
+    // confirmed), but pending cards render forever and the cron redaction
+    // skips them — so an existing note must stay visible and removable here.
+    render(
+      <ExpandableBabysitterCard
+        appointment={apt({ preAppointmentNote: 'odd history note' })}
+        info={info}
+        variant="pending"
+      />,
+    );
+    expandCard();
+    expect(screen.getByText('odd history note')).toBeTruthy();
+    expect(screen.queryByText('familyDashboard.notes.add')).toBeNull();
+    expect(screen.getByText('familyDashboard.notes.remove')).toBeTruthy();
+  });
+
   it('the OTHER party\'s note alone offers NO remove (the affordance is author-only)', () => {
     // Only a babysitter post-note exists; the family authors pre — nothing
     // of theirs to remove, so no affordance of any kind.
