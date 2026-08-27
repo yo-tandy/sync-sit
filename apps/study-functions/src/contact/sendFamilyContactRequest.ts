@@ -6,7 +6,11 @@ import { notifyAllParents } from '@ejm/shared-functions/config/notifyParents.js'
 import { escapeHtml, STUDY_APP_URL } from '@ejm/shared-functions/config/email.js';
 import type { StudyUser, TutorProfile, SubjectOffering } from '@ejm/study-core';
 import { sendFamilyContactRequestSchema } from '../validation/contact.js';
-import { DECLINE_COOLDOWN_MS, latestDeclineMs } from './declineCooldown.js';
+import {
+  DECLINE_COOLDOWN_MS,
+  latestDeclineMs,
+  repairTimestamplessDeclines,
+} from './declineCooldown.js';
 
 /**
  * sendFamilyContactRequest (issue #207 PR4, study side): the CONTACT
@@ -168,6 +172,9 @@ export const sendFamilyContactRequest = onCall(
     // one notifies every parent of that family (sit's PR #212 review, same
     // rule, same window). A decline of a FAMILY-initiated request is the
     // tutor's own "no" and does not silence the tutor here.
+    // Anchor any timestampless decline before reading the window, so failing
+    // closed lasts a week rather than forever (issue #214).
+    await repairTimestamplessDeclines(existingSnap.docs, 'tutor');
     const declinedMs = latestDeclineMs(existingSnap.docs.map((d) => d.data()), 'tutor');
     if (declinedMs !== null && Date.now() - declinedMs < DECLINE_COOLDOWN_MS) {
       throw new HttpsError(
