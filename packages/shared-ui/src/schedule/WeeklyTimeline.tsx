@@ -428,7 +428,20 @@ export function WeeklyTimeline({ weekly, onChange, onDayHeaderClick, locationTag
 
   return (
     <div className="overflow-x-auto select-none touch-none">
-      <div className="min-w-[360px]">
+      {/* min-w-[286px]: the binding constraint is the NARROWEST render site
+          on the NARROWEST mainstream device. The grid renders twice per
+          schedule page -- at page level (px-5 padding = 40px) and nested in a
+          Card per holiday period (px-5 + the Card's p-4 + 1px borders = 74px
+          of chrome). The floor must fit the Card site on 360px-wide phones
+          (Galaxy A/S class): 360 - 74 = 286. The old 360px floor clipped the
+          Sunday column even at 390px (issue #227; 44px over in the Card).
+          At the floor, columns are (286-32-14)/7 = ~34px -- still grabbable.
+          Honest limit: the wrapper above is touch-none (drags select slots
+          instead of panning), so overflow-x-auto only helps mouse users; the
+          Card-nested grid still clips with no touch escape below 360px
+          viewports (page-level below 326px). Accepted: fitting 320px devices
+          would need a ~246px floor and ~28px columns. */}
+      <div data-testid="timeline-width-floor" className="min-w-[286px]">
         {/* Header row */}
         <div className="mb-1 grid grid-cols-[32px_repeat(7,1fr)] gap-x-[2px]">
           <div />
