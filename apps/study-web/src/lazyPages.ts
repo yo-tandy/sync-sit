@@ -37,6 +37,12 @@ export const SharePage = lazy(() =>
 export const AddToHomescreenPage = lazy(() =>
   import('@/pages/public/AddToHomescreenPage').then((m) => ({ default: m.AddToHomescreenPage })),
 );
+export const TutorGuidePage = lazy(() =>
+  import('@/pages/public/TutorGuidePage').then((m) => ({ default: m.TutorGuidePage })),
+);
+export const ParentGuidePage = lazy(() =>
+  import('@/pages/public/ParentGuidePage').then((m) => ({ default: m.ParentGuidePage })),
+);
 
 // Enrollment (wizard — heavy)
 export const TutorEnrollment = lazy(() =>

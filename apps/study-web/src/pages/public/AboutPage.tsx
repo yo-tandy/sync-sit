@@ -126,6 +126,35 @@ export function AboutPage() {
           </li>
         </ul>
 
+        {/* How-to Guides — same section and placement as sit's AboutPage
+            (issue #236, parity A3); the install card lives inside it, as in sit. */}
+        <h2 className="mb-3 text-lg font-bold text-gray-900">
+          {isFr ? 'Guides d\'utilisation' : 'How-to Guides'}
+        </h2>
+        <div className="mb-6 space-y-2">
+          <Link to="/guide/parents" className="flex items-center gap-3 rounded-lg bg-gray-50 p-3 active:bg-gray-100">
+            <UsersIcon className="h-5 w-5 shrink-0 text-brand-500" />
+            <div>
+              <p className="text-sm font-semibold text-brand-600">{isFr ? 'Guide Parents' : 'Parent Guide'}</p>
+              <p className="text-xs text-gray-500">{isFr ? 'Comment trouver un tuteur et réserver des séances' : 'How to find a tutor and book sessions'}</p>
+            </div>
+          </Link>
+          <Link to="/guide/tutors" className="flex items-center gap-3 rounded-lg bg-gray-50 p-3 active:bg-gray-100">
+            <SearchIcon className="h-5 w-5 shrink-0 text-brand-500" />
+            <div>
+              <p className="text-sm font-semibold text-brand-600">{isFr ? 'Guide Tuteurs' : 'Tutor Guide'}</p>
+              <p className="text-xs text-gray-500">{isFr ? 'Comment recevoir des demandes et gérer vos séances' : 'How to receive requests and manage your sessions'}</p>
+            </div>
+          </Link>
+          <Link to="/install" className="flex items-center gap-3 rounded-lg bg-gray-50 p-3 active:bg-gray-100">
+            <DownloadIcon className="h-5 w-5 shrink-0 text-brand-500" />
+            <div>
+              <p className="text-sm font-semibold text-brand-600">{t('pwaInstall.aboutLink')}</p>
+              <p className="text-xs text-gray-500">{t('pwaInstall.aboutLinkDesc')}</p>
+            </div>
+          </Link>
+        </div>
+
         {/* Sibling app */}
         <h2 className="mb-3 text-lg font-bold text-gray-900">
           {isFr ? 'Également de Sync' : 'Also from Sync'}
@@ -146,18 +175,6 @@ export function AboutPage() {
             </p>
           </div>
         </a>
-
-        {/* Install link — same placement as sit's AboutPage (issue #162) */}
-        <Link
-          to="/install"
-          className="mb-6 flex items-center gap-3 rounded-lg bg-gray-50 p-3 active:bg-gray-100"
-        >
-          <DownloadIcon className="h-5 w-5 shrink-0 text-brand-500" />
-          <div>
-            <p className="text-sm font-semibold text-brand-600">{t('pwaInstall.aboutLink')}</p>
-            <p className="text-xs text-gray-500">{t('pwaInstall.aboutLinkDesc')}</p>
-          </div>
-        </Link>
 
         {/* Disclaimer */}
         <div className="mb-6 rounded-lg border border-gray-200 bg-gray-50 p-4">

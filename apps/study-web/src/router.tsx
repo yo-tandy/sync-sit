@@ -20,6 +20,8 @@ import {
   ReportProblemPage,
   SharePage,
   AddToHomescreenPage,
+  TutorGuidePage,
+  ParentGuidePage,
   TutorEnrollment,
   TutorSuccessPage,
   ParentEnrollment,
@@ -73,6 +75,9 @@ export const router = createBrowserRouter([
       { path: '/enroll/parent', element: <ParentEnrollment /> },
       { path: '/share', element: <SharePage /> },
       { path: '/install', element: <AddToHomescreenPage /> },
+      // Role guides — public like sit's /guide/* routes (issue #236, parity A3).
+      { path: '/guide/tutors', element: <TutorGuidePage /> },
+      { path: '/guide/parents', element: <ParentGuidePage /> },
       { path: '/forgot-password', element: <ForgotPasswordPage /> },
       { path: '/supervision-agreement', element: <SupervisionAgreementPage /> },
       { path: '/admin', element: <AdminInfoPage /> },

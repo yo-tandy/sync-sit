@@ -29,6 +29,25 @@ describe('AboutPage (study)', () => {
     );
   });
 
+  it('links both role guides from the How-to Guides section (mirrors sit, issue #236)', () => {
+    renderWithProviders(<AboutPage />);
+
+    expect(screen.getByRole('heading', { name: 'How-to Guides' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Parent Guide/ })).toHaveAttribute(
+      'href',
+      '/guide/parents',
+    );
+    expect(screen.getByRole('link', { name: /Tutor Guide/ })).toHaveAttribute(
+      'href',
+      '/guide/tutors',
+    );
+    // The install card lives inside the guides section, as in sit.
+    expect(screen.getByRole('link', { name: /Install the App/ })).toHaveAttribute(
+      'href',
+      '/install',
+    );
+  });
+
   it('speaks about tutoring, not babysitting', () => {
     renderWithProviders(<AboutPage />);
     expect(screen.getAllByText(/tutor/i).length).toBeGreaterThan(0);
