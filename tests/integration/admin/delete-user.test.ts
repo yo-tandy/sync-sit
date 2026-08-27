@@ -42,6 +42,10 @@ describe('deleteUser', () => {
         familyId: seed.family1Id,
         createdByUserId: seed.parent1.uid,
         status: 'confirmed',
+        // Issue #238: the hard delete must erase the SITTER's authored note
+        // immediately, while the family's own note stays theirs to manage.
+        postAppointmentNote: 'sitter debrief',
+        preAppointmentNote: 'family door code',
       });
       const apptOldRejected = await seedAppointment({
         babysitterUserId: seed.babysitter1.uid,
@@ -76,6 +80,11 @@ describe('deleteUser', () => {
 
       const confirmedDoc = await db.collection('appointments').doc(apptConfirmed).get();
       expect(confirmedDoc.data()!.status).toBe('cancelled');
+      // Issue #238: the deleted sitter's post-note is hard-erased with the
+      // account; the family's pre-note survives (the family still exists and
+      // manages its own note).
+      expect('postAppointmentNote' in confirmedDoc.data()!).toBe(false);
+      expect(confirmedDoc.data()!.preAppointmentNote).toBe('family door code');
 
       // Rejected appointments only get anonymized, not re-statused
       const rejectedDoc = await db.collection('appointments').doc(apptOldRejected).get();
@@ -112,6 +121,9 @@ describe('deleteUser', () => {
         familyId: seed.family2Id,
         createdByUserId: seed.parent3.uid,
         status: 'pending',
+        // Issue #238: when the LAST parent goes, the family's authored
+        // pre-note goes with it (hard erasure, not the 7-day cron trail).
+        preAppointmentNote: 'Door code 1234B',
       });
 
       const result = await callFunction<{ success: boolean; cancelledAppointments: number }>(
@@ -132,6 +144,7 @@ describe('deleteUser', () => {
       // because this appt matches BOTH babysitter and family filters)
       const apptDoc = await db.collection('appointments').doc(apptPending).get();
       expect(apptDoc.data()!.status).toBe('cancelled');
+      expect('preAppointmentNote' in apptDoc.data()!).toBe(false);
 
       // User + auth gone
       expect((await db.collection('users').doc(seed.parent3.uid).get()).exists).toBe(false);

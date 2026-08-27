@@ -233,8 +233,15 @@ export function ExpandableBabysitterCard({
         </div>
       </button>
 
-      {expanded && info && (
+      {/* The notes block deliberately does NOT sit behind `info &&`: `info`
+          comes from a per-uid profile getDoc that silently swallows a
+          missing doc (e.g. the sitter was hard-deleted and babysitterUserId
+          is 'deleted') or a permission error, and the round-4 erasure
+          affordance must not vanish with an unrelated profile fetch
+          (round-8 review). The rest of the expanded view degrades fine. */}
+      {expanded && (
         <div className="mt-3 border-t border-gray-100 pt-3 space-y-2">
+          {info && (<>
           {info.classLevel && (
             <p className="text-xs text-gray-600">{t('familyDashboard.classLabel')} {info.classLevel}</p>
           )}
@@ -423,6 +430,7 @@ export function ExpandableBabysitterCard({
               </Button>
             </div>
           )}
+          </>)}
 
           {/* Appointment notes: the family's pre-note (editable within its
               window) + the babysitter's post-note (read-only). Rendered on

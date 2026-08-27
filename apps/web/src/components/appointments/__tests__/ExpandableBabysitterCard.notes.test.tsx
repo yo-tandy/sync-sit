@@ -283,6 +283,22 @@ describe('ExpandableBabysitterCard — appointment notes (pre)', () => {
     expect(screen.getByText('familyDashboard.notes.removeTitle')).toBeTruthy();
   });
 
+  it('notes and REMOVE survive a missing babysitter profile (info undefined)', () => {
+    // info comes from a profile getDoc that silently swallows a missing doc
+    // (hard-deleted sitter) or permission error; the erasure affordance must
+    // not vanish with it (round-8 review).
+    render(
+      <ExpandableBabysitterCard
+        appointment={apt({ date: YESTERDAY, preAppointmentNote: 'Door code 1234B' })}
+        info={undefined}
+        variant="confirmed"
+      />,
+    );
+    expandCard();
+    expect(screen.getByText('Door code 1234B')).toBeTruthy();
+    expect(screen.getByText('familyDashboard.notes.remove')).toBeTruthy();
+  });
+
   it('a pending card with an odd-history own note shows it and offers REMOVE (never stranded)', () => {
     // A note cannot be AUTHORED while pending (canEditPre requires
     // confirmed), but pending cards render forever and the cron redaction

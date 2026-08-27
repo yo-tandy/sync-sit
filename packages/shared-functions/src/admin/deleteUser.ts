@@ -63,6 +63,11 @@ export const deleteUser = onCall(
       const data = appt.data();
       const updates: Record<string, any> = {
         babysitterUserId: 'deleted',
+        // The deleted sitter AUTHORED the post-appointment note (issue
+        // #238); the hard delete erases it immediately rather than leaving
+        // their free text to the redaction cron's 7-day trail (or forever,
+        // on a dateless recurring doc).
+        postAppointmentNote: FieldValue.delete(),
       };
       if (data.status === 'pending' || data.status === 'confirmed') {
         updates.status = 'cancelled';
@@ -97,6 +102,13 @@ export const deleteUser = onCall(
           updates.status = 'cancelled';
           updates.statusReason = 'account_deleted';
           cancelledCount++;
+        }
+        if (isLastParent && data.preAppointmentNote !== undefined) {
+          // The FAMILY authored the pre-appointment note (issue #238; it is
+          // family-level data, not per-parent — any parent may write it).
+          // While a co-parent survives, the note stays theirs to manage;
+          // when the LAST parent goes, the family's free text goes with it.
+          updates.preAppointmentNote = FieldValue.delete();
         }
         if (Object.keys(updates).length > 0) {
           batch1.update(appt.ref, updates);

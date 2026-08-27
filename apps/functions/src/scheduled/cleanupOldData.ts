@@ -239,7 +239,11 @@ export async function runCleanupOldData(
     const outOfReach = (data: FirebaseFirestore.DocumentData): boolean => {
       if (data.status === 'confirmed') {
         // Dateless (recurring) arrangements stay on the dashboard forever.
-        return typeof data.date === 'string' && data.date !== '' && data.date < sevenDaysAgoStr;
+        // <= not <: the dashboards compare a timestamped cutoff against the
+        // date's UTC midnight, so a card dated exactly seven days ago is
+        // already hidden by the time the cron fires -- a strict < would
+        // retain its note one extra day past reachability (round-8 review).
+        return typeof data.date === 'string' && data.date !== '' && data.date <= sevenDaysAgoStr;
       }
       if (data.status === 'cancelled' || data.status === 'rejected') {
         // Absent/malformed updatedAt counts as OUT of reach: the dashboards
