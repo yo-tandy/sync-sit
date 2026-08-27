@@ -1,6 +1,11 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
 import { clearAll, callFunction, getIdToken, getDb } from '../../setup/emulator.js';
-import { seedTestData, seedVerification, type SeedData } from '../../setup/seed.js';
+import {
+  seedTestData,
+  seedVerification,
+  seedCommunityCode,
+  type SeedData,
+} from '../../setup/seed.js';
 
 describe('reviewVerification', () => {
   let seed: SeedData;
@@ -207,6 +212,11 @@ describe('reviewVerification', () => {
       // time an admin approved anything for that family, the recompute read
       // that stale rejection and silently un-verified a community-approved
       // family — through an APPROVAL. Reachable with no unusual steps.
+      //
+      // This one drives the REAL approveCommunityCode rather than
+      // grantCommunityApproval(), which stubs the grant by writing the family
+      // doc directly and so never runs the supersede — the whole mechanism
+      // under test here.
       const staleReject = await seedVerification({
         familyId: seed.family2Id,
         uploadedByUserId: seed.parent3.uid,
@@ -220,7 +230,12 @@ describe('reviewVerification', () => {
 
       // The family gives up on documents and asks a friend to vouch. The
       // grant must close the rejected doc, not just pending ones.
-      await grantCommunityApproval();
+      const code = await seedCommunityCode({
+        familyId: seed.family2Id,
+        requestedByUserId: seed.parent3.uid,
+      });
+      await callFunction('approveCommunityCode', { code }, parentToken);
+
       const rejectedDoc = (await getDb().collection('verifications').doc(staleReject).get()).data()!;
       expect(rejectedDoc.status).toBe('superseded');
       expect(rejectedDoc.supersededBy).toBe('community');
