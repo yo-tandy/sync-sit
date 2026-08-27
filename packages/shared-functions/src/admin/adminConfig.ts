@@ -56,10 +56,13 @@ export const updateAdminConfig = onCall(
     const clean: Record<string, number | FieldValue> = {};
     const auditTo: Record<string, number | null> = {};
     for (const [key, raw] of Object.entries(updates)) {
-      const def = ADMIN_CONFIG_DEFS[key as AdminConfigKey];
-      if (!def) {
+      // Object.hasOwn: a plain-object index would resolve prototype names
+      // ('constructor' -> Object, truthy) and slip past the unknown-key
+      // throw into the bounds check against undefined (round-3 review).
+      if (!Object.hasOwn(ADMIN_CONFIG_DEFS, key)) {
         throw new HttpsError('invalid-argument', `Unknown config key: ${key}`);
       }
+      const def = ADMIN_CONFIG_DEFS[key as AdminConfigKey];
       if (raw === null) {
         clean[key] = FieldValue.delete();
         auditTo[key] = null;

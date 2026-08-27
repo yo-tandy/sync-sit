@@ -33,7 +33,9 @@ let cache: { values: Record<string, unknown>; fetchedAt: number } | null = null;
 /** Read one configured value, falling back to the code default (see above). */
 export async function getConfigValue(key: AdminConfigKey): Promise<number> {
   const now = Date.now();
-  if (!cache || now - cache.fetchedAt > ttlMs()) {
+  // >=: with ADMIN_CONFIG_TTL_MS=0 every call must refetch -- `>` served a
+  // same-millisecond second call from the stale cache (round-3 review).
+  if (!cache || now - cache.fetchedAt >= ttlMs()) {
     try {
       const snap = await db.doc(ADMIN_CONFIG_DOC).get();
       cache = { values: snap.data() ?? {}, fetchedAt: now };
@@ -42,8 +44,16 @@ export async function getConfigValue(key: AdminConfigKey): Promise<number> {
       cache = { values: {}, fetchedAt: now };
     }
   }
+  return resolveConfigValue(cache.values[key], key);
+}
+
+/**
+ * Pure bounds/fallback resolution -- shared by getConfigValue and callers
+ * that must read through an INJECTED db handle (the cleanup cron's
+ * testability contract, round-3 review) instead of the module-level one.
+ */
+export function resolveConfigValue(v: unknown, key: AdminConfigKey): number {
   const def = ADMIN_CONFIG_DEFS[key];
-  const v = cache.values[key];
   return typeof v === 'number' && Number.isInteger(v) && v >= def.min && v <= def.max
     ? v
     : def.default;

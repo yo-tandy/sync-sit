@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { ADMIN_CONFIG_DEFS } from '@ejm/shared-core';
 import { Timestamp } from 'firebase-admin/firestore';
 import {
   nextSendCounter,
@@ -97,13 +98,15 @@ describe('nextSendCounter', () => {
     }
   });
 
-  it('bypass constants pin the issue #155 allowance: 6 sends per uid per hour', () => {
-    expect(BYPASS_SEND_CAP).toBe(6);
+  it('bypass DEFAULTS pin the issue #155 allowance: 6 sends per uid per hour (table-linked since #250)', () => {
+    expect(ADMIN_CONFIG_DEFS.bypassSendCap.default).toBe(6);
+    expect(BYPASS_SEND_CAP).toBe(ADMIN_CONFIG_DEFS.bypassSendCap.default);
     expect(BYPASS_SEND_WINDOW_MS).toBe(60 * 60 * 1000);
   });
 
-  it('daily constants pin the issue #155 cap: 10 sends per address per 24h', () => {
-    expect(DAILY_SEND_CAP).toBe(10);
+  it('daily DEFAULTS pin the issue #155 cap: 10 sends per address per 24h (table-linked since #250)', () => {
+    expect(ADMIN_CONFIG_DEFS.dailySendCap.default).toBe(10);
+    expect(DAILY_SEND_CAP).toBe(ADMIN_CONFIG_DEFS.dailySendCap.default);
     expect(DAILY_SEND_WINDOW_MS).toBe(24 * 60 * 60 * 1000);
   });
 });

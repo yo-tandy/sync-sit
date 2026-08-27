@@ -90,3 +90,18 @@ first paint; still covers the quiet dashboard). Cooldown error copy
 interpolates the configured days; ~14 orphaned constants and unused
 imports swept; the rules block re-homed below inviteLinks (brace-counted
 this time).
+
+**Round 3 (PR #266):** availabilityMaxRangeDays' floor raised to 28 --
+BookSessionPage ships fixed 14-day pages and a 28-day weekly window, so
+the sanctioned range itself must not include client-breaking values (the
+verificationCodeCooldownS precedent); unknown-key rejection is
+prototype-safe (Object.hasOwn -- 'constructor' resolved truthy through a
+plain index) at the callable AND the panel; the client reader is ONE
+factory in shared-ui instantiated per app (six-case matrix tested once);
+the cron reads through its injected db via the pure resolveConfigValue;
+TTL comparison is >= so ADMIN_CONFIG_TTL_MS=0 truly always refetches;
+board-cap copy interpolates the configured window; the panel help text no
+longer hardcodes 60s; surviving legacy constants (send caps,
+PAST_VISIBILITY_DAYS, KID_INVITE_VALIDITY_DAYS) are LINKED to the table
+(= ADMIN_CONFIG_DEFS.*.default) and their exact-value pins repointed;
+dead DECLINE_COOLDOWN_MS / PUBLISHED_SEARCH_* removed.

@@ -1,5 +1,5 @@
 import { onSchedule } from 'firebase-functions/v2/scheduler';
-import { getConfigValue } from '@ejm/shared-functions/config/adminConfig.js';
+import { resolveConfigValue } from '@ejm/shared-functions/config/adminConfig.js';
 import { FieldValue } from 'firebase-admin/firestore';
 import type { Firestore } from 'firebase-admin/firestore';
 import { db } from '../config/firebase.js';
@@ -239,7 +239,14 @@ export async function runCleanupOldData(
   // note field (docs missing the field never match), window filtering in
   // memory; the doc itself is kept.
   {
-    const visibilityDays = await getConfigValue('pastVisibilityDays');
+    // Read through the INJECTED handle (this function's testability
+    // contract) and resolve bounds/fallback with the shared pure helper --
+    // getConfigValue would reach for the module-level db (round-3 review).
+    const configSnap = await firestoreDb.doc('adminConfig/values').get().catch(() => null);
+    const visibilityDays = resolveConfigValue(
+      configSnap?.data()?.pastVisibilityDays,
+      'pastVisibilityDays',
+    );
     const redactionCutoff = new Date(now.getTime() - visibilityDays * 24 * 60 * 60 * 1000);
     const redactionCutoffStr = redactionCutoff.toISOString().split('T')[0];
     const outOfReach = (data: FirebaseFirestore.DocumentData): boolean => {

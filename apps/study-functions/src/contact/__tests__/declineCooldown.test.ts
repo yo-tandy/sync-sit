@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
+import { ADMIN_CONFIG_DEFS } from '@ejm/shared-core';
 import {
-  DECLINE_COOLDOWN_MS,
   latestDeclineMs,
   repairTimestamplessDeclines,
 } from '../declineCooldown.js';
@@ -107,11 +107,11 @@ describe('latestDeclineMs', () => {
     const before = Date.now();
     const got = latestDeclineMs([{ status: 'declined', initiatedBy: 'tutor' }], 'tutor')!;
     expect(got).toBeGreaterThanOrEqual(before);
-    expect(Date.now() - got).toBeLessThan(DECLINE_COOLDOWN_MS);
+    expect(Date.now() - got).toBeLessThan(ADMIN_CONFIG_DEFS.declineCooldownDays.default * 86400_000);
   });
 
   it('exports a seven-day window', () => {
-    expect(DECLINE_COOLDOWN_MS).toBe(7 * 24 * 60 * 60 * 1000);
+    expect(ADMIN_CONFIG_DEFS.declineCooldownDays.default).toBe(7);
   });
 });
 
@@ -174,6 +174,6 @@ describe('repairTimestamplessDeclines', () => {
     expect(latestDeclineMs([backing], 'tutor')).toBe(AT.getTime());
     // AT is far in the past, so the anchored decline is already outside the
     // window: the pair is no longer silenced, which is the whole point.
-    expect(Date.now() - latestDeclineMs([backing], 'tutor')!).toBeGreaterThan(DECLINE_COOLDOWN_MS);
+    expect(Date.now() - latestDeclineMs([backing], 'tutor')!).toBeGreaterThan(ADMIN_CONFIG_DEFS.declineCooldownDays.default * 86400_000);
   });
 });

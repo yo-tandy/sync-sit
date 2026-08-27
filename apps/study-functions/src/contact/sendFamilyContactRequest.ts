@@ -263,7 +263,7 @@ export const sendFamilyContactRequest = onCall(
       if (recentCount >= boardCap) {
         throw new HttpsError(
           'resource-exhausted',
-          'You have contacted several families in the last 24 hours. You can send more requests tomorrow.',
+          `You have contacted several families in the last ${boardWindowHours} hours. You can send more requests once the window passes.`,
           { reason: 'board_contact_cap' },
         );
       }

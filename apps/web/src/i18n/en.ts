@@ -882,7 +882,7 @@ export default {
     config: {
       title: 'Configuration',
       navDesc: 'Operational parameters — caps, windows, cooldowns',
-      help: 'Values apply within about a minute (server caches for 60s). An empty field means the code default is used. All changes are audit-logged.',
+      help: 'Values apply shortly after saving (the server refreshes its cache periodically). An empty field means the code default is used. All changes are audit-logged.',
       bounds: 'default {{def}} · allowed {{min}}–{{max}}',
       usingDefault: 'using default',
       outOfBounds: 'Must be an integer between {{min}} and {{max}}',

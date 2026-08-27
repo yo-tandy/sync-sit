@@ -851,7 +851,7 @@ export default {
     config: {
       title: 'Configuration',
       navDesc: 'Paramètres opérationnels — plafonds, fenêtres, délais',
-      help: 'Les valeurs s\'appliquent en une minute environ (cache serveur de 60 s). Un champ vide signifie que la valeur par défaut du code est utilisée. Toutes les modifications sont journalisées.',
+      help: "Les valeurs s'appliquent peu après l'enregistrement (le serveur rafraîchit son cache périodiquement). Un champ vide signifie que la valeur par défaut du code est utilisée. Toutes les modifications sont journalisées.",
       bounds: 'défaut {{def}} · autorisé {{min}}–{{max}}',
       usingDefault: 'valeur par défaut',
       outOfBounds: 'Doit être un entier entre {{min}} et {{max}}',

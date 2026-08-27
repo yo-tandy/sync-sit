@@ -82,6 +82,10 @@ describe('adminConfig', () => {
     it('rejects unknown keys, non-integers, and out-of-bounds values', async () => {
       for (const updates of [
         { notAKey: 5 },
+        // Prototype-chain names must not slip past the unknown-key throw
+        // (round-3 catch: a plain index resolved 'constructor' to Object).
+        { constructor: 5 },
+        { hasOwnProperty: 5 },
         { publishedSearchMaxActive: 2.5 },
         { publishedSearchMaxActive: '3' },
         { publishedSearchMaxActive: 0 },

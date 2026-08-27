@@ -35,7 +35,7 @@ export function useAppointments() {
     // quiet dashboard whose only snapshot fired before the config resolved
     // (the round-1 defect).
     let cancelled = false;
-    let pastVisibilityDays = PAST_VISIBILITY_DAYS;
+    let pastVisibilityDays: number = PAST_VISIBILITY_DAYS;
     let latestSnap: QuerySnapshot | null = null;
     void getClientConfigValue(
       'pastVisibilityDays',

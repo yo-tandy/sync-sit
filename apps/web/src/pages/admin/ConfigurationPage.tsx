@@ -54,7 +54,7 @@ export function AdminConfigurationPage() {
         setDrafts(
           Object.fromEntries(
             Object.entries(res.data.values ?? {})
-              .filter(([k]) => k in res.data.defs)
+              .filter(([k]) => Object.hasOwn(res.data.defs, k))
               .map(([k, v]) => [k, String(v)]),
           ),
         );
@@ -82,7 +82,7 @@ export function AdminConfigurationPage() {
     if (!defs) return;
     const updates: Record<string, number | null> = {};
     for (const [k, raw] of Object.entries(drafts)) {
-      if (!(k in defs)) continue;
+      if (!Object.hasOwn(defs, k)) continue;
       if (raw.trim() === '') {
         // Clearing an OVERRIDDEN key reverts it to the code default -- the
         // help text promises exactly this (round-1 review: there was no

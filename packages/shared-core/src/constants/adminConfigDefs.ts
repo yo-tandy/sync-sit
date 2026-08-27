@@ -70,7 +70,11 @@ export const ADMIN_CONFIG_DEFS = {
     description: 'How long (days) past appointments stay on dashboards.',
   },
   availabilityMaxRangeDays: {
-    default: 28, min: 7, max: 90,
+    // min = today's value: BookSessionPage requests fixed 14-day pages and
+    // a fixed 28-day weekly window, so any smaller sanctioned value would
+    // break the shipped client (round-3 review -- same floor precedent as
+    // verificationCodeCooldownS).
+    default: 28, min: 28, max: 90,
     description: 'Widest availability range (days) a client may query.',
   },
 } as const satisfies Record<string, AdminConfigDef>;

@@ -23,10 +23,7 @@ import type { RecurringSlot } from './appointment.js';
  * callables (PR3/PR4) re-check server-side.
  */
 
-export const PUBLISHED_SEARCH_TTL_DAYS = 7;
 
-/** Max simultaneously-active published searches per family per app (anti-spam). */
-export const PUBLISHED_SEARCH_MAX_ACTIVE = 3;
 
 interface PublishedSearchBase {
   id: string; // == doc id

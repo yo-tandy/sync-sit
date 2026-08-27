@@ -1,5 +1,6 @@
 import { Timestamp } from 'firebase-admin/firestore';
 import { db } from '../config/firebase.js';
+import { ADMIN_CONFIG_DEFS } from '@ejm/shared-core';
 import { getConfigValue } from '../config/adminConfig.js';
 
 /**
@@ -31,9 +32,11 @@ import { getConfigValue } from '../config/adminConfig.js';
  * write (no sliding lockout), so the budget always frees up windowMs after
  * the window's first send.
  */
-export const DAILY_SEND_CAP = 10;
+// Linked to the one table (issue #250): the DEFAULT lives in
+// ADMIN_CONFIG_DEFS; registerVerificationSend reads the CONFIGURED value.
+export const DAILY_SEND_CAP = ADMIN_CONFIG_DEFS.dailySendCap.default;
 export const DAILY_SEND_WINDOW_MS = 24 * 60 * 60 * 1000;
-export const BYPASS_SEND_CAP = 6;
+export const BYPASS_SEND_CAP = ADMIN_CONFIG_DEFS.bypassSendCap.default;
 export const BYPASS_SEND_WINDOW_MS = 60 * 60 * 1000;
 
 export const SEND_COUNTERS_COLLECTION = 'verificationSendCounters';

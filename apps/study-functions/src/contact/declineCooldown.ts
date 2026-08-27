@@ -11,7 +11,6 @@
  * initiator whose declines should silence the caller keeps the two callables
  * from drifting apart on it.
  */
-export const DECLINE_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
 
 // Reads every timestamp shape a decline doc could plausibly carry, not just
 // live Timestamps. The extra shapes -- epoch number, parseable string, raw
