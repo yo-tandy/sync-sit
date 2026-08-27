@@ -162,7 +162,7 @@ packages/
 Not because the other one lacks the ingredients — it does not. An earlier draft
 said `apps/study-functions` "has none of the family-verification surface", and
 that is false: it checks `verification.isFullyVerified` and reads `families`
-in roughly half its files (8 of 17 check the flag; 10 read `families`), and uses `resolveAreaLabel`, `writeUserActivity` and
+in 8 of the 20 files that register a callable or job (10 of those 20 read `families`), and uses `resolveAreaLabel`, `writeUserActivity` and
 the guardian helpers throughout. §11.1 of this same document cites
 `publishTutorSearch.ts:54` as proof that *both* codebases read the verification
 field, so the two sections contradicted each other and §11.1 was the correct
@@ -236,12 +236,22 @@ export interface DoerProfile extends ProfileBase {   // ProfileBase = { enrollme
    * query is an `array-contains` on this field (§7.3), and an empty array
    * matches no `array-contains` predicate, so "empty = all" would silently
    * deliver the exact inverse: zero digests for the students who opted into
-   * everything (PR #243 round 9). Instead `doEnrollDoer` preselects ALL
+   * everything. Instead `doEnrollDoer` preselects ALL
    * categories (the modal intent, stated as data), and an empty array means
    * what the query makes it mean: no digests — the account page copy says so
    * next to the field, equivalent to notifyNewTasks: false.
    */
   categories: TaskCategory[];
+  /**
+   * When doSendTaskDigest last sent this student a digest — the per-recipient
+   * dedupe state §8's batcher rationale calls load-bearing ("the batcher IS
+   * that state"): "tasks created since their last digest" and the 6h rate
+   * limit are both computed against it. Server-owned (the batcher writes it);
+   * an in-memory filter in the job, NOT part of the §7.3 composite — absent
+   * means never digested, which the batcher treats as "everything since the
+   * profile was created".
+   */
+  lastDigestAt?: FirestoreTimestamp;
   /** Free-text blurb shown to a family alongside an offer. */
   bio?: string;
   /** Optional: a default flat price hint, purely to pre-fill the offer form. */
@@ -354,7 +364,22 @@ export interface TaskDoc {
    * lifetime and attributed that failure to the live reading; it is the other
    * way round.)
    *
-   * §9.1's live-offer badge is therefore this field, read directly.
+   * BOUND-FACING ONLY — family UIs must NOT render this field. It counts
+   * pending_guardian offers, which the family cannot read (§7.2), so a task
+   * with 1 pending and 2 pending_guardian would badge "3" against a list
+   * showing 1. §9.1's badge counts the family's own fetched offer list
+   * instead.
+   *
+   * Known, accepted side channel: the field lives on a family-readable doc,
+   * and Firestore rules cannot hide one field, so a family inspecting raw
+   * data can infer the CARDINALITY of hidden offers (a decrement with no
+   * visible change implies a guardian-gated offer existed). Deliberate
+   * trade: what §7.2 protects is the identity, message, price and helper of
+   * an unapproved offer — none of which this number carries — and the
+   * alternative (no counter, cap enforced by a transaction-time aggregate
+   * query) buys cardinality secrecy at the cost of the §6.4 bound being
+   * maintained nowhere the UI or ops can see. Recorded so the leak is a
+   * decision, not a discovery.
    */
   offerCount: number;                // live offers; maintained transactionally
   assignedUserId: string | null;
@@ -420,6 +445,18 @@ export interface OfferDoc {
   doerPhotoUrl: string | null;
   doerBio: string | null;
 
+  /** The SYMMETRIC denormalization, for the student's side. §7.2 scopes the
+   *  doer's task read to open-or-own-assignment (the enumeration fix), which
+   *  strands the "My offers" list for terminal offers: a declined, expired or
+   *  withdrawn offer points at a task the student can no longer read. These
+   *  three fields let the list render every offer from the offer doc alone —
+   *  a dead offer shows its summary line rather than a broken link. Board-
+   *  visible facts only: title, category, timing — never the area label or
+   *  anything added post-assignment. */
+  taskTitle: string;
+  taskCategory: TaskCategory;
+  taskTiming: TaskTiming;
+
   price: number;                 // the student's quote, EUR
   priceBasis: 'flat' | 'hourly';
   message: string;               // ≤ 1000 chars, free text
@@ -439,7 +476,7 @@ export interface OfferDoc {
    * substitutes the default only for an ABSENT key, not for one present with
    * value null, so §7.2's `resource.data.get('guardian', {})` reads `{}` only
    * if non-flagged offers omit the field. A present-but-null `guardian` would
-   * make that expression return null and error the disjunct (PR #243 round 8).
+   * make that expression return null and error the disjunct.
    */
   guardian?: {
     required: boolean;
@@ -449,15 +486,18 @@ export interface OfferDoc {
   };
 
   /** Written by doAcceptOffer inside the §6.4 transaction, on the ACCEPTED
-   *  offer only — the two-way reveal. Absent on every other offer, which is
-   *  what makes "an un-accepted offer leaks nothing" true by construction. */
-  contact: {
+   *  offer only — the two-way reveal. ABSENT (optional, not null) on every
+   *  other offer, matching the prose and `guardian`'s convention above: no
+   *  rule reads `contact` today, but typing absence as `| null` is exactly
+   *  the shape that bit `guardian`, and consistency is what keeps the
+   *  distinction legible. */
+  contact?: {
     familyAddress: string;
     familyPhone: string | null;
     doerContactEmail: string | null;
     doerContactPhone: string | null;
     doerWhatsapp: string | null;
-  } | null;
+  };
 
   declinedReason: 'family_declined' | 'sibling_accepted' | 'task_closed' | null;
   createdAt: FirestoreTimestamp;
@@ -752,7 +792,7 @@ Dated tasks are **not** capped at a TTL. An earlier draft applied
 `min(now + 14d, …)` across the board, which hard-deleted a far-out task
 *before its own date*: a family posting "help me move on 15 October" in late
 August would have watched the post silently vanish five weeks before the move
-— swept, offers cascaded, no notification, no renewal path (PR #243 round 9).
+— swept, offers cascaded, no notification, no renewal path.
 The TTL exists to keep *undated* demand from going stale, so it applies only
 to `ongoing`; a `fixed`/`deadline`/`recurring` task's own date IS its
 staleness bound.
@@ -1184,7 +1224,18 @@ republish into another family's task) or the trigger to wait on a doc that
 does not exist yet. Keying by uploader instead makes ownership structural:
 
 - the trigger republishes `do-uploads/{uid}/{uploadId}` →
-  `do-photos/{uid}/{photoId}` (server-generated id) and deletes the original;
+  `do-photos/{uid}/{photoId}` **with `photoId == uploadId`** and deletes the
+  original. The id is CLIENT-chosen (a UUID minted by the wizard) — safe
+  because both prefixes are keyed by the caller's own uid, so a colliding or
+  hostile id can only clobber the caller's own objects. This is the return
+  leg: an earlier draft had the trigger mint a server-side id, which left the
+  client required to hand `doPostTask` identifiers it had no way to learn —
+  the locked final prefix cannot be read *or listed* — and no way to render
+  wizard thumbnails. Reusing the upload id means the client already knows it;
+- `doGetOwnPhotoUrl` (Auth) signs a URL for a photo under the **caller's
+  own** `do-photos/{uid}/` prefix — no task needed. This is what the wizard's
+  thumbnails and the "not yet stripped" retry state render from
+  pre-`doPostTask`; it exposes only the caller's own uploads, post-strip;
 - `doPostTask` accepts `photoIds` and verifies each exists under the
   *caller's* `do-photos/{uid}/` prefix before writing them to the task —
   nobody can attach someone else's photo;
@@ -1223,6 +1274,7 @@ All in `apps/functions/src/do/**`, codebase `default`, region `europe-west1`,
 | `doListBoard` | — | **Not a callable.** The board is a direct Firestore query under the §7.2 read rule, like `usePublishedSearches`. |
 | `doAdminListTasks` | Admin | Search/filter for the admin panel |
 | `doAdminDeleteTask` | Admin | Hard delete + audit |
+| `doGetOwnPhotoUrl` | Auth | Signs a URL for a photo under the CALLER'S OWN `do-photos/{uid}/` prefix — the wizard's pre-task thumbnail path (§7.4's return leg) |
 | `doGetTaskPhotoUrl` | Auth | Asserts the §7.2 board audience (or family membership) and returns a short-lived signed URL for a task photo — the §7.4 option-1 read path; final objects are `allow read: if false` |
 | `doStripTaskPhoto` | Storage trigger | Fires on `do-uploads/{uid}/*`: strips EXIF, republishes into the task-independent `do-photos/{uid}/` (no `taskId` exists at upload time — §7.4), deletes the quarantine original. Not a callable |
 | `doSendTaskDigest` | Scheduled | The §10 board digest: batches `new_task_matching` for students whose `profiles.doer.categories` match tasks created since their last digest, at most one per student per 6h. A scheduled batcher rather than an on-create fan-out, because the rate limit is per-RECIPIENT — an on-create trigger would need per-student dedupe state anyway, and the batcher IS that state. Uses the §7.3 `users` composite |
@@ -1258,9 +1310,10 @@ chrome, enrollment steps, forms and theme.
   tools/transport → optional suggested budget → review + publish. The review
   step warns that the description and photos are visible to every enrolled
   student, mirroring the `publishedSearches` publish-dialog warning.
-- **My tasks** — open (with a live offer-count badge, read straight off
-  `offerCount`, which is live by construction — §4.1), assigned, completed,
-  cancelled.
+- **My tasks** — open (with an offer-count badge computed from the family's
+  own fetched offer list — deliberately NOT from `offerCount`, which counts
+  `pending_guardian` offers the family cannot see and would contradict the
+  visible list; §4.1), assigned, completed, cancelled.
 - **Task detail with offers** — the offer list is the heart of the product:
   student name, photo, bio, price, basis, message, declared helper, and their
   **existing platform endorsements** (decision 12; deliberately **no
@@ -1403,7 +1456,16 @@ it is spam.
   change.** The normative statement, precise enough to write the test from:
   **`doEnrollDoer` refuses an ungoverned caller under 15
   (`if (!isGoverned && …)` guarding `checkEnrollmentAge`); a governed caller
-  passes at any age, because supervision is their protection.**
+  passes at any age, because supervision is their protection. An ungoverned
+  caller with a MISSING or unparseable `dateOfBirth` is refused
+  `invalid-argument` and the flow collects it** — the `enrollTutor.ts:256-260`
+  precedent, whose comment says why: "never let a security gate no-op
+  silently." The two existing precedents split here (sit's *search-time*
+  check deliberately tolerates legacy DOB-less profiles), and sync-do takes
+  `enrollTutor`'s side because this is an enrollment gate on a new profile,
+  not a filter over legacy data — and the modal enrollee is a cross-app
+  babysitter whose sit profile may well lack a DOB, so the abbreviated §3.3
+  flow must be able to ask for it.
 
   That mirrors the platform's one enrollment-time precedent exactly:
   `enrollTutor` guards its gate with `!isGoverned`
@@ -1661,8 +1723,10 @@ see §12 for why the scaffold, not the family UI, is where they are needed.
   another uploader's `do-photos` prefix** (the round-7 anti-hijack check on
   both write paths — without a pin either is one refactor away from becoming
   a lookup that trusts the id); **an
-  UNGOVERNED under-15 caller is refused by `doEnrollDoer`, and a GOVERNED
-  under-15 caller is not** (both halves of §11.1's floor — the unconditional
+  UNGOVERNED under-15 caller is refused by `doEnrollDoer`, a GOVERNED
+  under-15 caller is not, and an ungoverned caller with a missing or
+  unparseable `dateOfBirth` is refused `invalid-argument`** (the gate must
+  never no-op silently — `enrollTutor.ts:256-260`) (both halves of §11.1's floor — the unconditional
   version of this test would have locked supervised students out and
   diverged from `enrollTutor`); ceiling enforcement, including that a withdrawn or declined offer
   returns its slot so a task does not seal shut; sweep deleting expired tasks
