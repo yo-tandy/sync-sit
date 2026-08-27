@@ -272,8 +272,7 @@ describe('ParentEnrollment enrollFamily payload (issue #176)', () => {
     await act(async () => {});
     expect(h.navigate).not.toHaveBeenCalledWith('/family', { replace: true });
     // Exactly the success navigation — nothing before (no premature redirect)
-    // and nothing after the flushed re-render (no hijack), so the pin cannot
-    // go vacuous if the re-render mechanism ever changes.
+    // and nothing after the flushed re-render (no extra navigation).
     expect(h.navigate).toHaveBeenCalledTimes(1);
   });
 });
