@@ -428,19 +428,20 @@ export function WeeklyTimeline({ weekly, onChange, onDayHeaderClick, locationTag
 
   return (
     <div className="overflow-x-auto select-none touch-none">
-      {/* min-w-[300px]: the binding constraint is the NARROWEST render site.
-          This grid renders twice per schedule page -- at page level (px-5
-          padding: ~350px of content at a 390px viewport) and nested in a Card
-          for each holiday period (px-5 + the Card's p-4 + border: ~316px).
-          The old 360px floor overflowed BOTH, clipping the Sunday column
-          (issue #227; 44px over in the Card). 300 <= 316 fits everywhere at
-          390px; at the floor, columns are (300-32-14)/7 = ~36px -- thin but
-          grabbable. Honest limit: the wrapper above is touch-none (so drags
-          select slots instead of panning), which means overflow-x-auto only
-          helps mouse users -- on a phone NARROWER than ~340px the grid clips
-          with no touch escape. Accepted for now: that class of device is
-          rare, and fitting it would push columns below ~29px. */}
-      <div data-testid="timeline-width-floor" className="min-w-[300px]">
+      {/* min-w-[286px]: the binding constraint is the NARROWEST render site
+          on the NARROWEST mainstream device. The grid renders twice per
+          schedule page -- at page level (px-5 padding = 40px) and nested in a
+          Card per holiday period (px-5 + the Card's p-4 + 1px borders = 74px
+          of chrome). The floor must fit the Card site on 360px-wide phones
+          (Galaxy A/S class): 360 - 74 = 286. The old 360px floor clipped the
+          Sunday column even at 390px (issue #227; 44px over in the Card).
+          At the floor, columns are (286-32-14)/7 = ~34px -- still grabbable.
+          Honest limit: the wrapper above is touch-none (drags select slots
+          instead of panning), so overflow-x-auto only helps mouse users; the
+          Card-nested grid still clips with no touch escape below 360px
+          viewports (page-level below 326px). Accepted: fitting 320px devices
+          would need a ~246px floor and ~28px columns. */}
+      <div data-testid="timeline-width-floor" className="min-w-[286px]">
         {/* Header row */}
         <div className="mb-1 grid grid-cols-[32px_repeat(7,1fr)] gap-x-[2px]">
           <div />
