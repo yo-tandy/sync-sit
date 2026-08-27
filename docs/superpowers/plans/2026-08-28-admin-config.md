@@ -1,0 +1,64 @@
+# Admin-Panel Configuration (issue #250, owner-approved proposal)
+
+> **For agentic workers:** implemented on this branch; plan recorded for review context.
+
+**Goal:** Operational parameters move from code constants to an
+admin-editable Firestore doc, read by the server through a cached getter
+with code defaults as fallback -- the panel can never brick a callable.
+
+**Owner decision (issue thread):** the proposal's main table is approved.
+The flagged rows stay in code: RETENTION_DAYS (GDPR commitment),
+MIN_BABYSITTER_AGE (legal), support/from emails (env concern).
+INVITE_LINK_EXPIRY_MINUTES was dropped during implementation: the constant
+has zero consumers (dead code) -- moving it would create a knob wired to
+nothing.
+
+**Architecture:**
+- `adminConfig/values` -- one flat Firestore doc, fields = config keys.
+- `packages/shared-functions/src/config/adminConfig.ts`:
+  `ADMIN_CONFIG_DEFS` (key -> {default, min, max, description}) and
+  `getConfigValue(key)` -- in-memory cache (TTL `ADMIN_CONFIG_TTL_MS` env,
+  default 60s; tests set 0), fail-open: read errors, absent doc, absent
+  key, non-integer or OUT-OF-BOUNDS stored values all resolve to the code
+  default (a console-edited rogue value cannot escape the bounds).
+- `updateAdminConfig` callable (verifyAdmin + writeAuditLog): partial
+  updates, every provided key validated (known, integer, within bounds);
+  merge-writes the doc. `getAdminConfig` (verifyAdmin) returns defs +
+  stored values for the panel.
+- `firestore.rules`: `adminConfig/{doc}` readable by any SIGNED-IN user
+  (pastVisibilityDays is consumed client-side; the values are caps and
+  windows, not secrets), writes denied (callable-only).
+- Client: `useAdminConfig` hook in apps/web (one read, default fallback)
+  feeding the two dashboard hooks that consume pastVisibilityDays.
+- `availabilityMaxRangeDays`: the zod schema keeps an ABSOLUTE ceiling
+  (90); the configured value is enforced dynamically in
+  getTutorAvailability (schemas are built at module load and must not
+  capture a mutable config read).
+
+**Keys (13):** boardContactsPerDay(5,1..50), boardContactWindowHours
+(24,1..168), declineCooldownDays(7,0..90), publishedSearchTtlDays(7,1..60),
+publishedSearchMaxActive(3,1..20), bookingNoticeHours(24,0..168),
+recurringHorizonWeeks(8,1..52), kidInviteValidityDays(7,1..90),
+verificationCodeCooldownS(60,30..600), dailySendCap(10,1..100),
+bypassSendCap(6,1..100), verifyCodeMaxAttempts(5,3..10),
+pastVisibilityDays(7,1..90), availabilityMaxRangeDays(28,7..90).
+
+**Wired sites:** sit contactPublishedSearch (cooldown + board cap/window),
+study sendFamilyContactRequest (board cap/window), study declineCooldown,
+sit publishSearch + study publishTutorSearch (TTL + max active), study
+NOTICE_HOURS sites (getTutorAvailability, singleDateAvailability,
+bookSession, modifySession, proposeSession, respondToSession,
+recurringWindow), RECURRING_HORIZON_WEEKS sites (bookSession,
+respondToSession, extendRecurring), shared guardian kid invites (create +
+manage), shared auth sendCooldown / sendRateLimit / verifyCode, sit web
+dashboards (pastVisibilityDays via hook).
+
+**Tests:** unit-style integration for the getter fallback matrix; callable
+pins (admin gate, unknown key, non-integer, out-of-bounds, partial merge,
+audit entry); one END-TO-END effect pin per app (board cap lowered to 1 ->
+second contact rejected) under ADMIN_CONFIG_TTL_MS=0; panel component
+tests (render defs, save payload, bounds hint).
+
+**Admin panel:** ConfigurationPage in apps/web admin section -- one row
+per key (description, default, bounds, current input), save via
+updateAdminConfig, i18n en/fr.

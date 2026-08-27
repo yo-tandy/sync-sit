@@ -3,6 +3,7 @@ import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { PAST_VISIBILITY_DAYS } from '@ejm/sit-core';
+import { getClientConfigValue } from '@/lib/adminConfigClient';
 import type { AppointmentDoc } from '@ejm/sit-core';
 
 export function useAppointments() {
@@ -25,10 +26,17 @@ export function useAppointments() {
       where('babysitterUserId', '==', uid)
     );
 
+    // Admin-configurable since issue #250; the code constant stays the
+    // fallback and the pre-fetch value, so the first snapshot renders with
+    // the default and re-buckets only if the configured value differs.
+    let pastVisibilityDays = PAST_VISIBILITY_DAYS;
+    void getClientConfigValue('pastVisibilityDays', PAST_VISIBILITY_DAYS, { min: 1, max: 90 }).then(
+      (v) => { pastVisibilityDays = v; },
+    );
     const unsub = onSnapshot(q, (snap) => {
       const now = new Date();
       const cutoff = new Date();
-      cutoff.setDate(cutoff.getDate() - PAST_VISIBILITY_DAYS);
+      cutoff.setDate(cutoff.getDate() - pastVisibilityDays);
 
       const _pending: AppointmentDoc[] = [];
       const _confirmed: AppointmentDoc[] = [];

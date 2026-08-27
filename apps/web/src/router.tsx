@@ -60,6 +60,7 @@ import { AdminEnrollmentAccessPage } from '@/pages/admin/EnrollmentAccessPage';
 import { AdminFamiliesPage } from '@/pages/admin/FamiliesPage';
 import { AdminAppointmentsPage } from '@/pages/admin/AppointmentsPage';
 import { AdminHolidaysPage } from '@/pages/admin/HolidaysPage';
+import { AdminConfigurationPage } from '@/pages/admin/ConfigurationPage';
 import { AdminAuditLogPage } from '@/pages/admin/AuditLogPage';
 import { AdminGdprExportPage } from '@/pages/admin/GdprExportPage';
 import { AdminVerificationsPage } from '@/pages/admin/VerificationsPage';
@@ -146,6 +147,7 @@ export const router = createBrowserRouter([
       { path: '/admin/families', element: <AdminFamiliesPage /> },
       { path: '/admin/appointments', element: <AdminAppointmentsPage /> },
       { path: '/admin/holidays', element: <AdminHolidaysPage /> },
+      { path: '/admin/configuration', element: <AdminConfigurationPage /> },
       { path: '/admin/audit-log', element: <AdminAuditLogPage /> },
       { path: '/admin/gdpr-export', element: <AdminGdprExportPage /> },
       { path: '/admin/verifications', element: <AdminVerificationsPage /> },

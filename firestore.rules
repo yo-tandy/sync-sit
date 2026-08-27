@@ -468,6 +468,17 @@ service cloud.firestore {
     }
 
     // Notifications: own only, can mark as read
+    // Admin-panel configuration (issue #250): operational caps and windows,
+    // not secrets -- readable by any signed-in user (pastVisibilityDays is
+    // consumed by the sit dashboards client-side). Writes are denied here:
+    // updateAdminConfig (verifyAdmin + bounds validation + audit) is the
+    // only write path, and getConfigValue re-checks bounds at read time so
+    // even a console-edited doc cannot push a value past them.
+    match /adminConfig/{docId} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+
     match /notifications/{notifId} {
       allow read: if isAuth() && request.auth.uid == resource.data.recipientUserId;
       allow update: if isAuth()

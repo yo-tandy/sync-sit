@@ -1,5 +1,6 @@
 import { Timestamp } from 'firebase-admin/firestore';
 import { db } from '../config/firebase.js';
+import { getConfigValue } from '../config/adminConfig.js';
 
 /**
  * Per-address resend cooldown for the signup verification callables (issue
@@ -10,6 +11,8 @@ import { db } from '../config/firebase.js';
  * so short-window repeats do identical work on both paths and stay
  * timing-symmetric. Legitimate "resend code" clicks after 60s still work.
  */
+// Admin-configurable since issue #250 (verificationCodeCooldownS); this
+// export remains the code DEFAULT and the fallback.
 export const SEND_COOLDOWN_MS = 60 * 1000;
 
 /** True when a verificationCodes/{email} doc exists and was created less than
@@ -23,5 +26,6 @@ export async function isInSendCooldown(email: string): Promise<boolean> {
       : createdAt instanceof Date
         ? createdAt.getTime()
         : 0;
-  return Date.now() - createdMs < SEND_COOLDOWN_MS;
+  const cooldownMs = (await getConfigValue('verificationCodeCooldownS')) * 1000;
+  return Date.now() - createdMs < cooldownMs;
 }

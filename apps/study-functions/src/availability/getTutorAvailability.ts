@@ -1,4 +1,5 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { getConfigValue } from '@ejm/shared-functions/config/adminConfig.js';
 import { FieldPath } from 'firebase-admin/firestore';
 import { db } from '@ejm/shared-functions/config/firebase.js';
 import { getCorsOrigin } from '@ejm/shared-functions/config/cors.js';
@@ -14,7 +15,7 @@ import {
   type ConfirmedBlock,
   type DayOverride,
 } from '@ejm/study-core';
-import { getTutorAvailabilitySchema } from '../validation/availability.js';
+import { getTutorAvailabilitySchema, rangeDays } from '../validation/availability.js';
 import {
   computeDateAvailability,
   resolveDateLocationCells,
@@ -64,6 +65,16 @@ export const getTutorAvailability = onCall(
       );
     }
     const { tutorUserId, startDate, endDate } = parsed.data;
+
+    // Operational range limit (issue #250): the schema holds the ABSOLUTE
+    // ceiling; the configured value is enforced here at call time.
+    const maxRangeDays = await getConfigValue('availabilityMaxRangeDays');
+    if (rangeDays(startDate, endDate) > maxRangeDays) {
+      throw new HttpsError(
+        'invalid-argument',
+        `Date range must not exceed ${maxRangeDays} days`,
+      );
+    }
 
     // ── Caller gate: parent with a fully-verified family ──
     const callerDoc = await db.collection('users').doc(uid).get();
@@ -200,6 +211,7 @@ export const getTutorAvailability = onCall(
     // boolean grids are unchanged. ──
     const locationDefaults = tutor.locationPrefs ?? [];
     const nowParis = parisWallClockPosition(new Date());
+    const noticeHours = await getConfigValue('bookingNoticeHours').catch(() => NOTICE_HOURS);
     const dates = eachDateInRange(startDate, endDate).map((date) => {
       const inputs = {
         weekly,
@@ -211,7 +223,7 @@ export const getTutorAvailability = onCall(
         confirmedBlocks: blocksByDate.get(date) ?? [],
         paddingMin,
       };
-      const slots = computeDateAvailability(date, inputs, nowParis, NOTICE_HOURS);
+      const slots = computeDateAvailability(date, inputs, nowParis, noticeHours);
       return {
         date,
         slots,

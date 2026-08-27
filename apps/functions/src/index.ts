@@ -59,6 +59,9 @@ export {
   addPreapprovedEmail,
   removePreapprovedEmail,
   listPreapprovedEmails,
+  // Admin-panel configuration (issue #250)
+  getAdminConfig,
+  updateAdminConfig,
 } from '@ejm/shared-functions';
 
 // Sync-sit-specific — stay in apps/functions

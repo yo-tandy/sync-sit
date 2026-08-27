@@ -72,6 +72,12 @@ export function AdminDashboard() {
           description: t('admin.holidaysDesc'),
         },
         {
+          to: '/admin/configuration',
+          icon: <ClipboardListIcon className="h-6 w-6 text-brand-600" />,
+          title: t('admin.config.title'),
+          description: t('admin.config.navDesc'),
+        },
+        {
           to: '/admin/audit-log',
           icon: <ClipboardListIcon className="h-6 w-6 text-brand-600" />,
           title: t('admin.auditLog'),

@@ -2287,6 +2287,30 @@ describe('users update — cancellation notice window bounds (issue #237)', () =
   });
 });
 
+describe('adminConfig (issue #250)', () => {
+  beforeEach(async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.firestore().doc('adminConfig/values').set({ pastVisibilityDays: 14 });
+    });
+  });
+
+  it('any signed-in user may read (client-consumed keys are not secrets)', async () => {
+    const db = testEnv.authenticatedContext('any-user-1').firestore();
+    await assertSucceeds(getDoc(doc(db, 'adminConfig', 'values')));
+  });
+
+  it('unauthenticated read is denied', async () => {
+    const db = testEnv.unauthenticatedContext().firestore();
+    await assertFails(getDoc(doc(db, 'adminConfig', 'values')));
+  });
+
+  it('no client write, even signed in -- updateAdminConfig is the only write path', async () => {
+    const db = testEnv.authenticatedContext('any-user-1').firestore();
+    await assertFails(setDoc(doc(db, 'adminConfig', 'values'), { pastVisibilityDays: 30 }));
+    await assertFails(updateDoc(doc(db, 'adminConfig', 'values'), { pastVisibilityDays: 30 }));
+  });
+});
+
 describe('users update — root identity set-once (issue #144)', () => {
   async function seed(id: string, data: Record<string, unknown>) {
     await testEnv.withSecurityRulesDisabled(async (ctx) => {

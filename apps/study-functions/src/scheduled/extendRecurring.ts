@@ -1,4 +1,5 @@
 import { onSchedule } from 'firebase-functions/v2/scheduler';
+import { getConfigValue } from '@ejm/shared-functions/config/adminConfig.js';
 import type { Firestore } from 'firebase-admin/firestore';
 import { db } from '@ejm/shared-functions/config/firebase.js';
 import { notifyAllParents } from '@ejm/shared-functions/config/notifyParents.js';
@@ -107,7 +108,7 @@ async function extendOne(
   // PR 4's completion cron — keeping this cron purely additive.
   const fromDate = parisDateString(now);
   let horizonEnd = fromDate;
-  for (let i = 0; i < HORIZON_WEEKS * 7; i++) horizonEnd = incrementDate(horizonEnd);
+  for (let i = 0; i < (await getConfigValue('recurringHorizonWeeks').catch(() => HORIZON_WEEKS)) * 7; i++) horizonEnd = incrementDate(horizonEnd);
   const rangeEnd = endDate !== undefined && endDate < horizonEnd ? endDate : horizonEnd;
 
   // Static availability config (per-tutor) + school-holiday periods across range.
@@ -132,7 +133,7 @@ async function extendOne(
   }
 
   const candidates = dropWithinNotice(
-    expandRecurringDates(slot, fromDate, HORIZON_WEEKS, endDate, schoolWeeksOnly, holidayPeriods),
+    expandRecurringDates(slot, fromDate, (await getConfigValue('recurringHorizonWeeks').catch(() => HORIZON_WEEKS)), endDate, schoolWeeksOnly, holidayPeriods),
     slot.startTime,
     now,
   );

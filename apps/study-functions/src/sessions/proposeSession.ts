@@ -1,4 +1,5 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { getConfigValue } from '@ejm/shared-functions/config/adminConfig.js';
 import { clampNoticeWindow } from '@ejm/shared-functions/schedule/lateCancellation.js';
 import { db } from '@ejm/shared-functions/config/firebase.js';
 import { getCorsOrigin } from '@ejm/shared-functions/config/cors.js';
@@ -110,7 +111,7 @@ export const proposeSession = onCall(
 
     // ── 24h minimum notice (Paris wall clock, DST-safe) ──
     const sessionStart = parisWallTimeToUtc(date, startTime);
-    if (sessionStart.getTime() < now.getTime() + NOTICE_HOURS * 60 * 60 * 1000) {
+    if (sessionStart.getTime() < now.getTime() + (await getConfigValue('bookingNoticeHours').catch(() => NOTICE_HOURS)) * 60 * 60 * 1000) {
       throw new HttpsError(
         'failed-precondition',
         'Sessions must be proposed at least 24 hours in advance',

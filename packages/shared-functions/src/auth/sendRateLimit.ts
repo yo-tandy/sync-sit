@@ -1,5 +1,6 @@
 import { Timestamp } from 'firebase-admin/firestore';
 import { db } from '../config/firebase.js';
+import { getConfigValue } from '../config/adminConfig.js';
 
 /**
  * Send-volume caps for the signup verification callables (issue #155). Two
@@ -111,12 +112,16 @@ async function registerSend(
   });
 }
 
-/** Per-address daily budget (verifyEjmEmail + verifyParentEmail combined). */
-export function registerVerificationSend(email: string): Promise<boolean> {
-  return registerSend(email, 'address', DAILY_SEND_CAP, DAILY_SEND_WINDOW_MS);
+/** Per-address daily budget (verifyEjmEmail + verifyParentEmail combined).
+ * Cap admin-configurable since issue #250 (dailySendCap); the exported
+ * constant remains the code default and fallback. */
+export async function registerVerificationSend(email: string): Promise<boolean> {
+  const cap = await getConfigValue('dailySendCap');
+  return registerSend(email, 'address', cap, DAILY_SEND_WINDOW_MS);
 }
 
-/** Per-uid hourly budget for the authed own-email bypass. */
-export function registerBypassSend(uid: string): Promise<boolean> {
-  return registerSend(uid, 'bypass', BYPASS_SEND_CAP, BYPASS_SEND_WINDOW_MS);
+/** Per-uid hourly budget for the authed own-email bypass (bypassSendCap). */
+export async function registerBypassSend(uid: string): Promise<boolean> {
+  const cap = await getConfigValue('bypassSendCap');
+  return registerSend(uid, 'bypass', cap, BYPASS_SEND_WINDOW_MS);
 }

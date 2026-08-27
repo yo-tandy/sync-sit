@@ -1,4 +1,5 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { getConfigValue } from '@ejm/shared-functions/config/adminConfig.js';
 import { db } from '@ejm/shared-functions/config/firebase.js';
 import { getCorsOrigin } from '@ejm/shared-functions/config/cors.js';
 import { writeUserActivity } from '@ejm/shared-functions/admin/writeAuditLog.js';
@@ -195,7 +196,8 @@ export const sendFamilyContactRequest = onCall(
     // closed lasts a week rather than forever (issue #214).
     await repairTimestamplessDeclines(existingSnap.docs, 'tutor');
     const declinedMs = latestDeclineMs(existingSnap.docs.map((d) => d.data()), 'tutor');
-    if (declinedMs !== null && Date.now() - declinedMs < DECLINE_COOLDOWN_MS) {
+    const declineCooldownMs = (await getConfigValue('declineCooldownDays').catch(() => DECLINE_COOLDOWN_MS / 86400_000)) * 86400_000;
+    if (declinedMs !== null && Date.now() - declinedMs < declineCooldownMs) {
       throw new HttpsError(
         'failed-precondition',
         'This family declined your last request. You can try again in a week.',
@@ -242,14 +244,16 @@ export const sendFamilyContactRequest = onCall(
     // the doc refs directly, which a transaction cannot carry, and the pair
     // dedupe's non-atomicity is pre-existing and unchanged by this PR.
     await db.runTransaction(async (tx) => {
+      const boardCap = await getConfigValue('boardContactsPerDay').catch(() => MAX_BOARD_CONTACTS_PER_DAY);
+      const boardWindowHours = await getConfigValue('boardContactWindowHours').catch(() => BOARD_CONTACT_WINDOW_MS / 3600_000);
       const recentSnap = await tx.get(
         db.collection('studyContactRequests')
           .where('tutorUserId', '==', uid)
           .where('initiatedBy', '==', 'tutor')
           .orderBy('createdAt', 'desc')
-          .limit(MAX_BOARD_CONTACTS_PER_DAY),
+          .limit(boardCap),
       );
-      const windowFrom = Date.now() - BOARD_CONTACT_WINDOW_MS;
+      const windowFrom = Date.now() - boardWindowHours * 3600_000;
       const recentCount = recentSnap.docs.filter((d) => {
         const createdMs = d.data().createdAt?.toMillis?.();
         // A present-but-unreadable createdAt counts as recent (fail closed).
@@ -259,7 +263,7 @@ export const sendFamilyContactRequest = onCall(
         // initiatedBy: 'tutor' and always stamps createdAt (PR #232 review).
         return typeof createdMs !== 'number' || createdMs > windowFrom;
       }).length;
-      if (recentCount >= MAX_BOARD_CONTACTS_PER_DAY) {
+      if (recentCount >= boardCap) {
         throw new HttpsError(
           'resource-exhausted',
           'You have contacted several families in the last 24 hours. You can send more requests tomorrow.',

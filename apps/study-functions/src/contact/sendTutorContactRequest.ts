@@ -1,4 +1,5 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { getConfigValue } from '@ejm/shared-functions/config/adminConfig.js';
 import { db } from '@ejm/shared-functions/config/firebase.js';
 import { getCorsOrigin } from '@ejm/shared-functions/config/cors.js';
 import { writeUserActivity } from '@ejm/shared-functions/admin/writeAuditLog.js';
@@ -97,7 +98,8 @@ export const sendTutorContactRequest = onCall(
     // closed lasts a week rather than forever (issue #214).
     await repairTimestamplessDeclines(existingSnap.docs, 'family');
     const declinedMs = latestDeclineMs(existingSnap.docs.map((d) => d.data()), 'family');
-    if (declinedMs !== null && Date.now() - declinedMs < DECLINE_COOLDOWN_MS) {
+    const declineCooldownMs = (await getConfigValue('declineCooldownDays').catch(() => DECLINE_COOLDOWN_MS / 86400_000)) * 86400_000;
+    if (declinedMs !== null && Date.now() - declinedMs < declineCooldownMs) {
       throw new HttpsError(
         'resource-exhausted',
         'This tutor recently declined a request; please wait 7 days before requesting again',

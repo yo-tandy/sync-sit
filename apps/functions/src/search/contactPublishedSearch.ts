@@ -1,4 +1,5 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { getConfigValue } from '@ejm/shared-functions/config/adminConfig.js';
 import { clampNoticeWindow } from '@ejm/shared-functions/schedule/lateCancellation.js';
 import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
@@ -22,6 +23,8 @@ interface ContactPublishedSearchData {
  * matches the study side's spec). Not a punishment — a family that declined
  * should not be re-notified on a tap.
  */
+// Code defaults; admin-configurable since issue #250 (declineCooldownDays,
+// boardContactsPerDay, boardContactWindowHours) -- read per call below.
 const DECLINE_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
 // Cross-search ceiling (issue #225 item 3): per-search dedupe + cooldown bound
 // one pair, but nothing bounded one sitter across DIFFERENT searches -- each
@@ -233,7 +236,10 @@ export const contactPublishedSearch = onCall(
       if (live) {
         throw new HttpsError('already-exists', 'You have already contacted this family about this search');
       }
-      const cooldownFrom = Date.now() - DECLINE_COOLDOWN_MS;
+      const cooldownDays = await getConfigValue('declineCooldownDays').catch(() => DECLINE_COOLDOWN_MS / 86400_000);
+      const cooldownFrom = Date.now() - cooldownDays * 86400_000;
+      const boardCap = await getConfigValue('boardContactsPerDay').catch(() => MAX_BOARD_CONTACTS_PER_DAY);
+      const boardWindowHours = await getConfigValue('boardContactWindowHours').catch(() => BOARD_CONTACT_WINDOW_MS / 3600_000);
       const recentlyDeclined = priorSnap.docs.some((d) => {
         const apt = d.data();
         if (apt.statusReason !== 'declined_by_family') return false;
@@ -263,9 +269,9 @@ export const contactPublishedSearch = onCall(
           .where('babysitterUserId', '==', uid)
           .where('initiatedBy', '==', 'babysitter')
           .orderBy('createdAt', 'desc')
-          .limit(MAX_BOARD_CONTACTS_PER_DAY),
+          .limit(boardCap),
       );
-      const windowFrom = Date.now() - BOARD_CONTACT_WINDOW_MS;
+      const windowFrom = Date.now() - boardWindowHours * 3600_000;
       const recentCount = recentBoardSnap.docs.filter((d) => {
         const createdMs = d.data().createdAt?.toMillis?.();
         // A present-but-unreadable createdAt counts as recent (fail closed).
@@ -276,7 +282,7 @@ export const contactPublishedSearch = onCall(
         // createdAt (PR #232 review).
         return typeof createdMs !== 'number' || createdMs > windowFrom;
       }).length;
-      if (recentCount >= MAX_BOARD_CONTACTS_PER_DAY) {
+      if (recentCount >= boardCap) {
         throw new HttpsError(
           'resource-exhausted',
           'You have contacted several families in the last 24 hours. You can send more requests tomorrow.',

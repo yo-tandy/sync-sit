@@ -1,4 +1,5 @@
 import { db } from '@ejm/shared-functions/config/firebase.js';
+import { getConfigValue } from '@ejm/shared-functions/config/adminConfig.js';
 import { parisWallClockPosition } from '@ejm/shared-functions/scheduled/parisTime.js';
 import { getSchoolYearsInRange, type DayOverride } from '@ejm/study-core';
 import type { LocationPref, SlotLocationCells } from '@ejm/study-core';
@@ -138,7 +139,7 @@ export async function computeSingleDateAvailability(
       date,
       inputs,
       parisWallClockPosition(new Date()),
-      NOTICE_HOURS,
+      (await getConfigValue('bookingNoticeHours').catch(() => NOTICE_HOURS)),
     ),
     locationCells: resolveDateLocationCells(date, inputs),
   };

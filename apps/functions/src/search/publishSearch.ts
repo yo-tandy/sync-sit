@@ -1,4 +1,5 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { getConfigValue } from '@ejm/shared-functions/config/adminConfig.js';
 import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
@@ -123,7 +124,7 @@ export const publishSearch = onCall(
 
     // ── Expiry: min(now + 7d, end of the babysitting day) for one_time;
     // 7d flat for recurring. Already-past one_time searches are rejected. ──
-    const ttlMs = PUBLISHED_SEARCH_TTL_DAYS * 24 * 60 * 60 * 1000;
+    const ttlMs = (await getConfigValue('publishedSearchTtlDays').catch(() => PUBLISHED_SEARCH_TTL_DAYS)) * 24 * 60 * 60 * 1000;
     let expiresAt = new Date(now.getTime() + ttlMs);
     if (data.type === 'one_time') {
       // End times at/after midnight (the picker's 00:00-02:00 "following
@@ -206,7 +207,8 @@ export const publishSearch = onCall(
         const expMs = exp?.toMillis ? exp.toMillis() : exp?.toDate ? exp.toDate().getTime() : 0;
         return expMs > now.getTime();
       }).length;
-      if (activeCount >= PUBLISHED_SEARCH_MAX_ACTIVE) {
+      const maxActive = await getConfigValue('publishedSearchMaxActive').catch(() => PUBLISHED_SEARCH_MAX_ACTIVE);
+      if (activeCount >= maxActive) {
         throw new HttpsError('resource-exhausted', 'Too many active published searches for this family');
       }
       tx.set(ref, docBody);

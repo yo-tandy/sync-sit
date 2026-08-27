@@ -1,4 +1,5 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { getConfigValue } from '../config/adminConfig.js';
 import {
   ageFromDob,
   kidIdentitySchema,
@@ -103,7 +104,7 @@ export const createKidInvite = onCall(
       const pending = existing.docs.find((d) => d.data().status === 'pending');
 
       const rawToken = newInviteToken();
-      const expiresAt = new Date(now.getTime() + KID_INVITE_VALIDITY_DAYS * 86400_000);
+      const expiresAt = new Date(now.getTime() + (await getConfigValue('kidInviteValidityDays')) * 86400_000);
 
       if (pending) {
         await pending.ref.update({

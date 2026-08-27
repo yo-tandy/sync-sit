@@ -1,4 +1,5 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { getConfigValue } from '@ejm/shared-functions/config/adminConfig.js';
 import type { Transaction, DocumentReference } from 'firebase-admin/firestore';
 import { db } from '@ejm/shared-functions/config/firebase.js';
 import { getCorsOrigin } from '@ejm/shared-functions/config/cors.js';
@@ -353,7 +354,7 @@ export const modifySession = onCall(
           );
         }
         const sessionStart = parisWallTimeToUtc(newDate, newStart);
-        if (sessionStart.getTime() < now.getTime() + NOTICE_HOURS * 60 * 60 * 1000) {
+        if (sessionStart.getTime() < now.getTime() + (await getConfigValue('bookingNoticeHours').catch(() => NOTICE_HOURS)) * 60 * 60 * 1000) {
           throw new HttpsError(
             'failed-precondition',
             'The new time is too close — sessions need 24 hours notice',
@@ -497,7 +498,7 @@ export const modifySession = onCall(
           paddingMin: paddingMinutes,
         },
         parisWallClockPosition(now),
-        NOTICE_HOURS,
+        (await getConfigValue('bookingNoticeHours').catch(() => NOTICE_HOURS)),
       );
       for (let i = startIdx; i < endIdx; i++) {
         if (!grid[i]) {
