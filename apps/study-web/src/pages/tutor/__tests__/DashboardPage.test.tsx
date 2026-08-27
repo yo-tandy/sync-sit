@@ -133,6 +133,21 @@ describe('tutor DashboardPage', () => {
   // ── Activation gating (subjects + availability only), presented as sit's
   // top-right Active/Inactive pill + confirm dialog (owner request, PR #194) ──
 
+  it('subjects but NO slots: the amber hint shows the availability guidance (fresh-enrollment state)', async () => {
+    // The state a tutor lands in straight from enrollment (issue #242
+    // dropped the success interstitial: the wizard collects subjects, not
+    // availability) -- this banner IS the migrated next-steps guidance, so
+    // it gets its own pin (PR #257 round 1).
+    h.scheduleData = { weekly: {} };
+    h.auth.userDoc = tutor({
+      subjects: [{ subject: 'math', levels: ['6e'], rate: 25 }],
+      searchable: false,
+    });
+    renderWithProviders(<DashboardPage />);
+    expect(await screen.findByRole('button', { name: 'Inactive' })).toBeInTheDocument();
+    expect((await screen.findAllByText(/set your weekly availability/i)).length).toBeGreaterThan(0);
+  });
+
   it('no subjects: pill is inert (no dialog) and the amber hint explains why', async () => {
     h.scheduleData = { weekly: { tue: [true] } };
     h.auth.userDoc = tutor({

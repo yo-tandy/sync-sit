@@ -20,3 +20,15 @@ enrollment.
 
 **Tests:** the enrollment + cross-app pins now assert `/tutor`; new router
 pins assert the redirect exists and the page is gone.
+
+**Round 1 (PR #257):** the interstitial was PUBLIC; `/tutor` is behind
+`AuthGuard role="tutor"`, and the new-account sign-in is best-effort by
+design -- so a sign-in failure (or a user-doc read blip) would have bounced
+a successfully-enrolled tutor to /login or /signup with no confirmation.
+The navigate is now gated on the settled session actually carrying the
+tutor profile (the guard's own predicate); anything less renders an
+in-wizard "account ready -- log in" state (sit's idiom: never point a
+signed-out user at a guarded route). The post-signin wait resolves on the
+same predicate. Both stranding paths pinned; the vacuous router pin was
+replaced with an export-absence assertion; the gateNoSlots banner (the
+state a fresh enrollee actually lands in) got its own pin.

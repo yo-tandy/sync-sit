@@ -22,8 +22,16 @@ describe('dropped success interstitial (issue #242)', () => {
     expect(el.props.replace).toBe(true);
   });
 
-  it('has no TutorSuccessPage route or page anymore', () => {
-    const flat = JSON.stringify(router.routes, (_k, v) => (typeof v === 'function' ? v.name : v));
-    expect(flat).not.toContain('TutorSuccessPage');
+  it('has no TutorSuccessPage export anymore (the lazy entry is gone)', async () => {
+    // JSON.stringify of router.routes can never see a lazy component's name
+    // (PR #257 round 1: that assertion passed for ANY component) -- assert
+    // the observable instead: the lazyPages module no longer exports it.
+    const lazyPages = await import('@/lazyPages');
+    expect('TutorSuccessPage' in lazyPages).toBe(false);
+    // And the only route on the old path is the redirect itself.
+    const routes = router.routes[0]?.children ?? router.routes;
+    const matches = routes.filter((r) => r.path === '/enroll/tutor/success');
+    expect(matches).toHaveLength(1);
+    expect((matches[0].element as React.ReactElement).type).toBe(Navigate);
   });
 });

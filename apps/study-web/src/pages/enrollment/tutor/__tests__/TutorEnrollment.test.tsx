@@ -9,7 +9,12 @@ const h = vi.hoisted(() => ({
   // keep their original (unauthenticated) behavior.
   auth: { firebaseUser: null as unknown, userDoc: null as unknown, loading: false },
   refreshUserDoc: () => Promise.resolve(),
-  signIn: vi.fn(() => Promise.resolve()),
+  // A successful sign-in settles the store with the freshly-written tutor
+  // doc (models the real store); the navigate gate reads it via getState.
+  signIn: vi.fn(() => {
+    h.auth.userDoc = { profiles: { tutor: {} } };
+    return Promise.resolve();
+  }),
   // Controllable error reason so tests can drive the profile-exists notice.
   // Default null = plain-error behavior. There is no account-exists reason
   // anymore (issue #148: silent existing-account flow).
@@ -72,7 +77,7 @@ vi.mock('@/stores/authStore', () => {
     subscribe: (fn: (s: unknown) => void) => () => void;
   };
   // Statics used by the post-signup auto-login wait.
-  useAuthStore.getState = () => ({ loading: false, firebaseUser: { uid: 'new' }, userDoc: h.auth.userDoc });
+  useAuthStore.getState = () => ({ loading: false, firebaseUser: h.auth.userDoc ? { uid: 'new' } : null, userDoc: h.auth.userDoc });
   useAuthStore.subscribe = () => () => {};
   return { useAuthStore, markNextSignInFresh: () => {} };
 });
@@ -258,10 +263,13 @@ describe('TutorEnrollment orchestrator', () => {
     expect(h.signIn).toHaveBeenCalledWith(expect.anything(), 'flow.tutor28@ejm.org', 'Pw123456!');
   });
 
-  it('a sign-in failure after successful enrollment still reaches the success page', async () => {
+  it('a sign-in failure after successful enrollment shows the account-ready login state, never a guarded bounce', async () => {
     // Enrollment fully succeeded (account/doc/schedule written, code doc
-    // consumed) — an auth hiccup must not read as an enrollment error or
-    // strand the user mid-wizard.
+    // consumed) — an auth hiccup must not read as an enrollment error. But
+    // /tutor sits behind AuthGuard role="tutor" (the public success page is
+    // gone, issue #242), so a signed-out navigate would bounce to /login
+    // with no confirmation: the wizard confirms in place instead (PR #257
+    // round 1).
     h.signIn.mockRejectedValueOnce(new Error('auth/network-request-failed'));
     renderFlow();
     fireEvent.click(screen.getByText('email-submit'));
@@ -270,11 +278,29 @@ describe('TutorEnrollment orchestrator', () => {
     fireEvent.click(await screen.findByText('profile-next'));
     fireEvent.click(await screen.findByText('subjects-next'));
 
-    await vi.waitFor(() =>
-      expect(h.navigate).toHaveBeenCalledWith('/tutor'),
-    );
+    expect(await screen.findByText('Your tutor account is ready')).toBeInTheDocument();
+    expect(h.navigate).not.toHaveBeenCalledWith('/tutor');
     expect(screen.queryByText(/network-request-failed/)).toBeNull();
+    // The CTA hands the tutor to login.
+    fireEvent.click(screen.getByText('Log in'));
+    expect(h.navigate).toHaveBeenCalledWith('/login');
   });
+
+  it('a user-doc read blip after a SUCCESSFUL sign-in also shows the login state (guard would bounce to /signup)', async () => {
+    // firebaseUser present but userDoc null satisfies the old wait; the
+    // guard then resolves no role and redirects to /signup — the second
+    // stranding path from PR #257 round 1.
+    h.signIn.mockImplementationOnce(() => Promise.resolve()); // does NOT settle userDoc
+    renderFlow();
+    fireEvent.click(screen.getByText('email-submit'));
+    fireEvent.click(await screen.findByText('verify-submit'));
+    fireEvent.click(await screen.findByText('password-submit'));
+    fireEvent.click(await screen.findByText('profile-next'));
+    fireEvent.click(await screen.findByText('subjects-next'));
+
+    expect(await screen.findByText('Your tutor account is ready', {}, { timeout: 7000 })).toBeInTheDocument();
+    expect(h.navigate).not.toHaveBeenCalledWith('/tutor');
+  }, 10000);
 
   it('authed without a tutor profile: consent-only StepPassword, enrollTutor omits password, refreshes doc', async () => {
     h.auth = { firebaseUser: { uid: 'p1' }, userDoc: { profiles: { parent: {} } }, loading: false };
