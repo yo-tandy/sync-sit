@@ -299,19 +299,22 @@ export interface TaskDoc {
   // ── Lifecycle
   status: TaskStatus;
   /**
-   * OFFERS EVER — a monotonic lifetime counter, never decremented, by
-   * withdraw or by decline. This is the reading that actually bounds §6.4's
-   * transaction: a live count would let a churning student submit/withdraw
-   * indefinitely, and decrementing on decline would let a family that
-   * declines offers as they arrive permanently close their own task (25
-   * declines, `offerCount == 25`, every later student refused on a task
-   * showing zero live offers — the opposite of the intent).
+   * LIVE offers — those in `pending` or `pending_guardian`. Incremented by
+   * `doSubmitOffer`; decremented by withdraw, by decline, and by §6.4 step 7's
+   * sibling auto-decline. Maintained transactionally.
    *
-   * Consequence: §9.1's "live offer count" badge is NOT this field. The
-   * family's offer list is already fetched to render the page; the badge
-   * counts that.
+   * Live, not lifetime, because of what the count is FOR: it bounds §6.4's
+   * write set, and that write set is exactly the set of live offers the
+   * acceptance transaction has to decline. A lifetime counter would bound the
+   * transaction too, but it would also refuse a task's 26th offer after 25
+   * withdrawn or declined ones — permanently closing a task that has zero live
+   * offers and most needs a new one. (An earlier draft of this plan chose
+   * lifetime and attributed that failure to the live reading; it is the other
+   * way round.)
+   *
+   * §9.1's live-offer badge is therefore this field, read directly.
    */
-  offerCount: number;                // denormalized; maintained transactionally
+  offerCount: number;                // live offers; maintained transactionally
   assignedUserId: string | null;
   assignedOfferId: string | null;
   assignedAt: FirestoreTimestamp | null;
@@ -411,7 +414,7 @@ export interface OfferDoc {
 }
 ```
 
-**`offerId == \`${taskId}_${doerUserId}\`** is deliberate. It makes "one offer
+**``offerId == `${taskId}_${doerUserId}` ``** is deliberate. It makes "one offer
 per student per task" a *structural* invariant enforced by Firestore's
 create-if-absent semantics, not a query the callable has to remember to run. A
 student who wants to change their price withdraws and re-offers, or edits in
@@ -712,10 +715,14 @@ offers *per student*, and `DO_TASK_MAX_ACTIVE` caps open tasks *per family*.
 Neither limits how many distinct students pile onto one popular task, so the
 sibling-decline set in step 7 is bounded by cohort size, not by either
 constant. At EJM scale that stays far below Firestore's hard 500-writes-per-
-transaction limit, but "very likely fine" is not a bound. `DO_OFFER_MAX_PER_TASK
-= 25`, enforced in `doSubmitOffer` against the transactionally-maintained
-`offerCount`, makes it one — and doubles as reasonable product behaviour, since
-a task carrying 25 offers does not need a 26th. The refusal is its own error
+transaction limit, but "very likely fine" is not a bound.
+
+`DO_OFFER_MAX_PER_TASK = 25`, enforced in `doSubmitOffer` against the
+transactionally-maintained **live** `offerCount` (§4.1), makes it one: step 7
+declines exactly the live offers, so a ceiling on live offers is a ceiling on
+the write set. Because the count is live rather than lifetime, withdrawn and
+declined offers give their slot back — a task does not seal itself shut after
+25 people have passed through it. The refusal is its own error
 (`reason: 'task_offer_cap'`) so the student is told the task is oversubscribed
 rather than that something broke.
 
@@ -824,8 +831,8 @@ match /taskOffers/{offerId} {
     || (resource.data.status != 'pending_guardian'
         && isFamilyMember(resource.data.familyId))
     || (resource.data.status == 'pending_guardian'
-        && resource.data.guardian.familyId != null
-        && isFamilyMember(resource.data.guardian.familyId))
+        && resource.data.get('guardian', {}).get('familyId', null) != null
+        && isFamilyMember(resource.data.get('guardian', {}).get('familyId', null)))
   );
   allow create, update, delete: if false;               // callables only
 }
@@ -834,7 +841,7 @@ match /taskOffers/{offerId} {
 **`profiles.doer.enrollmentComplete` must be pinned server-owned — this is a
 third rules change, not just the two blocks above.** The board read rule makes
 that field load-bearing, and §11.1 makes it the offering gate too. Walk the
-existing `users` update rule (`firestore.rules:288-302`) with a `doer` slot
+existing `users` update rule (`firestore.rules:286-299`) with a `doer` slot
 added and it is *client-writable*: the `affectedKeys().hasAny([...])` deny-list
 is top-level only and does not include `profiles`; `profileRolesUnchanged()`
 (`firestore.rules:44-49`) pins only the *set* of role-slot keys, so editing a
@@ -889,13 +896,13 @@ Three further things worth flagging for the rules review:
   `where('familyId','==',f).where('taskId','==',t).where('status','==',s)`,
   ordered by `createdAt` — with the matching index in §7.3. The
   `(taskId, status, createdAt)` index alone would not serve it.
-- **The guardian disjunct reads through `.get()` defaults.** `OfferDoc.guardian`
-  is `{…} | null` (§4.2), so `resource.data.guardian.familyId` relies on `&&`
-  short-circuiting for safety. That works as ordered, but it is a footgun for
-  whoever reorders the disjuncts later, and it diverges from the house style
-  the references rule uses for exactly this hazard
-  (`firestore.rules:369-371`). Write it
-  `resource.data.get('guardian', {}).get('familyId', null)` — it costs nothing.
+- **The guardian disjunct reads through `.get()` defaults** — as the sketch
+  above now does. `OfferDoc.guardian` is `{…} | null` (§4.2), so direct field
+  access would rely on `&&` short-circuiting to stay safe. That works as
+  ordered, but it is a footgun for whoever reorders the disjuncts later, and it
+  diverges from the house style the references rule uses for exactly this
+  hazard (`firestore.rules:369-375`). The defaulted form costs nothing and
+  removes the ordering dependency.
 - **Expiry is not rules-enforced**, identically to `publishedSearches` and for
   the same reason (unprovable against a client-supplied bound). An
   expired-but-unswept task leaks nothing its readers could not already see.
@@ -1000,17 +1007,17 @@ All in `apps/functions/src/do/**`, codebase `default`, region `europe-west1`,
 
 | Callable | Auth | Does |
 |---|---|---|
-| `doEnrollDoer` | Auth | Creates `profiles.doer` — full or abbreviated depending on existing profiles |
+| `doEnrollDoer` | Auth | Creates `profiles.doer` — full or abbreviated depending on existing profiles. **Runs `checkEnrollmentAge` first**: it is a self-enrollment path, and the under-15 floor is non-waivable (§11.1) |
 | `doUpdateDoerProfile` | Auth | Categories, bio, transport, `notifyNewTasks` |
 | `doPostTask` | Auth (verified family) | Validates, scrubs, computes `areaLabel` + `expiresAt`, enforces `DO_TASK_MAX_ACTIVE` |
 | `doUpdateTask` | Auth (owner family) | `open` tasks only; description/photos/budget/timing. Notifies students with pending offers that terms changed |
 | `doCancelTask` | Auth (owner family) | Task → `cancelled`, all live offers → `expired`, notify |
 | `doSubmitOffer` | Auth (active doer) | Enforces the ceiling, resolves the guardian gate, writes `pending` or `pending_guardian` |
 | `doUpdateOffer` | Auth (offering student) | Price/message/helper while `pending` |
-| `doWithdrawOffer` | Auth (offering student) | → `withdrawn`. Does **not** touch `offerCount` — it counts offers ever (§4.1) |
+| `doWithdrawOffer` | Auth (offering student) | → `withdrawn`, decrements the live `offerCount` (§4.1) |
 | `doDecideOfferAsGuardian` | Auth (supervising parent) | `pending_guardian` → `pending` or `withdrawn` |
 | `doAcceptOffer` | Auth (owner family) | The §6.4 transaction |
-| `doDeclineOffer` | Auth (owner family) | Single offer → `declined` |
+| `doDeclineOffer` | Auth (owner family) | Single offer → `declined`, decrements the live `offerCount` |
 | `doMarkTaskDone` | Auth (family or assigned doer) | §6.5 |
 | `doListBoard` | — | **Not a callable.** The board is a direct Firestore query under the §7.2 read rule, like `usePublishedSearches`. |
 | `doAdminListTasks` | Admin | Search/filter for the admin panel |
@@ -1042,9 +1049,8 @@ chrome, enrollment steps, forms and theme.
   tools/transport → optional suggested budget → review + publish. The review
   step warns that the description and photos are visible to every enrolled
   student, mirroring the `publishedSearches` publish-dialog warning.
-- **My tasks** — open (with a live offer count badge, computed from the offer
-  list the page already fetches — *not* from `offerCount`, which counts offers
-  ever), assigned, completed,
+- **My tasks** — open (with a live offer-count badge, read straight off
+  `offerCount`, which is live by construction — §4.1), assigned, completed,
   cancelled.
 - **Task detail with offers** — the offer list is the heart of the product:
   student name, photo, bio, price, basis, message, declared helper, and their
@@ -1161,11 +1167,26 @@ it unbounded, it is spam.
 - **Adult presence** is declared on every task and shown as a badge on the
   board. Sub-categories flagged `recommendAdultPresent` nudge the family at
   posting time. It is a declaration, not a verified fact; the copy says so.
-- **No minimum age.** Per decision 7, sync-do does not gate sub-categories on
-  the student's date of birth. The guardian gate is the mechanism instead: for a
-  supervised student, a parent decides. For an unsupervised student — typically
-  an older one — no gate applies. Recorded here because it is the decision most
-  likely to be revisited (§17 Q2).
+- **The platform's under-15 self-enrollment floor applies, and it is not
+  sync-do's to waive.** `checkEnrollmentAge`
+  (`packages/shared-core/src/utils/agePolicy.ts:47-63`) returns `'under_15'`
+  below 15 and its docstring is explicit that this floor "is checked FIRST and
+  is never waivable" — only the ±1-class consistency check is
+  admin-exemptable. `MIN_BABYSITTER_AGE = 15` says the same thing from the
+  constants side. **`doEnrollDoer` is a new self-enrollment path, so it must
+  run `checkEnrollmentAge` like every other one**; §14 pins it. A governed
+  account can stand the floor down through supervision — that is what the
+  guardian work added — but nothing in sync-do may lower it.
+- **No *per-sub-category* age gate**, which is what decision 7 actually
+  settled. Above the platform floor, sync-do does not ask how old a student is
+  for a given kind of work; the guardian gate is the mechanism instead. For a
+  supervised student a parent decides; for an unsupervised one — necessarily
+  15 or over — no further gate applies. Recorded here because it is the
+  decision most likely to be revisited (§17 Q2).
+
+  An earlier draft of this section said "No minimum age" flat out. That was
+  wrong about the platform, not just imprecise: it would have licensed
+  `doEnrollDoer` to skip a gate the repo pins as non-waivable.
 
 ### 11.2 PII on the board
 
@@ -1344,9 +1365,12 @@ see §12 for why the scaffold, not the family UI, is where they are needed.
   a `status in […]` form does not satisfy the rule and must fail this test.
 - **Integration** (`tests/integration/`, emulator lane 2 so the dev stack keeps
   running) — post→offer→accept end-to-end; **concurrent accepts of two
-  different offers, exactly one wins**; guardian approve and deny; ceiling
-  enforcement; sweep deleting expired tasks and cascading their offers;
-  contact-reveal boundary asserted from both sides.
+  different offers, exactly one wins**; guardian approve and deny; **an
+  under-15 caller is refused by `doEnrollDoer`** (the non-waivable floor,
+  §11.1); ceiling enforcement, including that a withdrawn or declined offer
+  returns its slot so a task does not seal shut; sweep deleting expired tasks
+  and cascading their offers; contact-reveal boundary asserted from both
+  sides.
 - **E2E** (`tests-e2e/`, Playwright) — the happy path in the browser, plus
   screenshots attached natively to the UI PRs per `feedback_pr_ui_screenshots`.
 - **Regression** — full `pnpm test:unit` + `pnpm test:integration` on every PR;
@@ -1442,39 +1466,57 @@ and rejects with `failed-precondition` when it falls short; the board also hides
 tasks the student cannot take, so the rejection is a backstop rather than the
 first time they hear about it.
 
-**Proposed values.** Four tiers — 13 as the platform baseline (matching the
-governed-provider age already assumed by the parental-governance work), 14 for
-ordinary indoor and manual work, 15 for tasks carrying real responsibility for
-a person, an animal or someone else's money, and 16 for power tools, heavy
-loads, transport, and prescriptions.
+**The floor is 15, not 13.** An earlier draft of this section proposed 13/14
+tiers on the claim that 13 was "the platform baseline, matching the
+parental-governance work". There is no 13 anywhere in the governance code:
+`checkEnrollmentAge` returns `'under_15'` below 15
+(`packages/shared-core/src/utils/agePolicy.ts:59`), `MIN_BABYSITTER_AGE = 15`,
+and what supervision adds is the ability for a governed account to stand that
+floor *down* — not a lower baseline. So a self-enrolled doer is 15 or over by
+construction, and any 13/14 tier would bind **only governed accounts**, which
+are exactly the accounts decision 7's guardian gate already covers.
+
+**Proposed values.** Two tiers above the platform floor:
 
 | Age | Sub-categories |
 |---|---|
-| **13** | vacation indoor plant care · garden & terrace watering · planting & potting · feeding and litter · every IT sub-category, including teaching a person |
-| **14** | packing · unpacking · IKEA assembly · disassembly · fixing existing furniture · party setup & decoration · music/photo/tech · clean-up after · baking & food prep · grocery shopping · parcels and post · dry cleaning · drop-in checks on an empty flat |
-| **15** | weeding & pruning · kids' entertainment at a party · serving & catering · returns and exchanges · dog walking |
+| **15** (the floor — no extra gate) | vacation plant care · garden & terrace watering · planting & potting · feeding and litter · every IT sub-category · packing · unpacking · IKEA assembly · disassembly · fixing existing furniture · party setup & decoration · music/photo/tech · clean-up after · baking & food prep · grocery shopping · parcels and post · dry cleaning · drop-in checks · weeding & pruning · kids' entertainment · serving & catering · returns and exchanges · dog walking |
 | **16** | lawn mowing & edging · green-waste runs · van loading/unloading · cellar/attic clear-outs · moving furniture · dump and donation runs · wall mounting & anchoring · store pick-up · pharmacy pick-up · vet and grooming trips |
+
+That is a much smaller proposal than the first draft, and honestly a weaker
+one: with the floor at 15, the only question left is *which work needs 16*.
+If the owner wants finer gradation for **governed** students — a parent
+approving "my kid may assemble IKEA furniture" is a different question from
+"my kid may run a petrol mower" — that is a coherent separate feature, and it
+would be `minAge` applied only where `governedBy` is set.
 
 **Plus one cross-cutting rule that is not a category at all:** any `fixed`-timing
 task whose `endTime` is after **22:00** requires 16+, whatever the category. A
-14-year-old clearing up after a party at midnight is a transport-home problem
+15-year-old clearing up after a party at midnight is a transport-home problem
 that no per-category value catches.
 
 **Two details that make this less free than it looks:**
 
-- `dateOfBirth` is **optional** on `User`. A student without one would be
-  ineligible for anything above the baseline; the enrollment flow would need to
-  make it required for `profiles.doer`, and existing users would need a prompt.
+- `dateOfBirth` is **optional** on `User`
+  (`packages/shared-core/src/types/user.ts:20`). A student without one would be
+  ineligible for 16+ work; note that `doEnrollDoer` needs it regardless, since
+  §11.1's non-waivable floor cannot be checked without it — so making it
+  required for `profiles.doer` is not contingent on this proposal.
 - Age is checked at **offer time**, not at assignment. A student who turns 16
   between offering and starting is fine; one who offers at 15 for 16+ work is
   refused up front. That is the right boundary, but it is worth stating.
 
 **How this interacts with what was already decided:** age gating and the
 guardian gate solve different halves of the problem. The guardian gate covers a
-*supervised* student of any age — a parent decides. Age gating is what covers an
-**unsupervised 15-year-old**, who today has no gate at all. Kept as-is, the
-riskiest combination in the product is an unsupervised young student offering on
-petrol-mower or wall-drilling work with nothing between them and the task.
+*supervised* student — a parent decides. A 16+ tier is what would cover an
+**unsupervised 15-year-old**, who today has no gate at all beyond the platform
+floor they just cleared.
+
+That is the crispest form of the case, and it is stronger than the first draft
+made it sound: 15 is not an illustrative age, it is the *youngest possible
+unsupervised doer*. So the question is exactly whether a newly-15, unsupervised
+student should be able to answer a petrol-mower or wall-drilling post with
+nothing between them and the task. Today they can.
 
 ### Still open
 
