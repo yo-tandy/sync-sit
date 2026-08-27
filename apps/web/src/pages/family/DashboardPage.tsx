@@ -144,8 +144,15 @@ export function FamilyDashboard() {
       });
       setEditTarget(null);
     } catch (err: unknown) {
+      // inside_notice_window (issue #237): the time move is blocked because
+      // the appointment is already inside the sitter's notice window --
+      // surface the policy copy, not the raw error code.
       const message = err instanceof Error ? err.message : 'Failed to modify';
-      alert(message);
+      alert(
+        message.includes('inside_notice_window')
+          ? t('appointment.modifyInsideWindow')
+          : message,
+      );
     } finally {
       setEditing(false);
     }

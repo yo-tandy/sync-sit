@@ -29,6 +29,18 @@ window are allowed but flagged.
   never flagged. Study never reaches that case (its completed-sweep cron
   makes past sessions uncancellable); sit has no sweep, so stale confirmed
   appointments stay cancellable as cleanup and must not mint badges.
+- **Inside-window modify guard (round 3):** `modifyAppointment` blocks
+  startTime moves on a confirmed one_time appointment inside its window --
+  study's "cannot move what you could not cleanly cancel" contract. The
+  round-2 claim that same-day moves cannot escape was WRONG: a 24h window
+  with the start 23h away moves to 37h away and cancels clean. Message and
+  additionalInfo edits stay allowed; pending appointments are unguarded (no
+  claim to escape).
+- **Snapshot clamp (round 3):** every snapshot site (sit's three create
+  paths + study's bookSession/proposeSession) normalizes the profile value
+  through `clampNoticeWindow` -- legacy pre-rules values are grandfathered
+  by the rules diff-gate, so the snapshot rounds DOWN to the nearest preset,
+  never flagging more than a real preset would.
 - `searchBabysitters` returns `cancellationNoticeHours`; the family
   `SearchPage` result card renders the humanized window (sit-local
   `cancellationPolicy.ts` util mirroring study's, noted as twin).

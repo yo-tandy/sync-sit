@@ -1,4 +1,6 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { isLateCancellation } from '@ejm/shared-functions/schedule/lateCancellation.js';
+import { parisWallTimeToUtc } from '@ejm/shared-functions/scheduled/parisTime.js';
 import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
@@ -54,22 +56,35 @@ export const modifyAppointment = onCall(
       throw new HttpsError('permission-denied', 'You are not part of this appointment');
     }
 
-    // No notice-window guard here, deliberately (PR #248 review): study's
-    // modifySession blocks inside-window date moves because moving a session
-    // to next month and then cancelling cleanly was an unguarded escape from
-    // the window. Sit's modify cannot change `date` -- only startTime/endTime
-    // on the SAME day -- and every offered nonzero window is >= 24h (the
-    // preset set, enforced by noticeWindowBoundsValid in firestore.rules,
-    // not merely offered by the editor), so a same-day
-    // move can never exit a window the appointment is already inside
-    // (max same-day distance < 24h). If a date field is ever added here, the
-    // inside-window guard must come with it.
     // Build update object and track changed fields
     const updates: Record<string, any> = {};
     const modifiedFields: string[] = [];
     const now = new Date();
 
     if (data.startTime !== undefined && data.startTime !== apt.startTime) {
+      // Inside-window guard, study's modify contract ported (PR #248 round
+      // 3): you cannot move what you could not cleanly cancel. Even a
+      // same-day startTime move escapes the flag -- e.g. a 24h window with
+      // the start 23h away moves to 37h away and then cancels clean -- the
+      // exact modify-then-cancel hole study closed in PR #244 round 2 for
+      // date moves. Confirmed one_time with a positive snapshot only; an
+      // already-started appointment is cleanup territory (the flag never
+      // applies there, so neither does the guard).
+      const noticeSnapshot = (apt.cancellationNoticeHours as number | undefined) ?? 0;
+      const guardApplies =
+        apt.status === 'confirmed' &&
+        apt.type === 'one_time' &&
+        noticeSnapshot > 0 &&
+        typeof apt.date === 'string' &&
+        typeof apt.startTime === 'string' &&
+        parisWallTimeToUtc(apt.date as string, apt.startTime as string).getTime() >= now.getTime() &&
+        isLateCancellation(apt.date as string, apt.startTime as string, noticeSnapshot, now);
+      if (guardApplies) {
+        throw new HttpsError(
+          'failed-precondition',
+          'inside_notice_window',
+        );
+      }
       updates.startTime = data.startTime;
       modifiedFields.push('startTime');
     }

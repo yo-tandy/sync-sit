@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { isLateCancellation } from '../lateCancellation.js';
+import { clampNoticeWindow } from '@ejm/shared-functions/schedule/lateCancellation.js';
 
 // Paris is UTC+2 on 2026-07-30 (CEST): 10:00 wall = 08:00Z.
 const now = new Date('2026-07-29T08:00:00Z'); // exactly 24h before start
@@ -30,5 +31,27 @@ describe('isLateCancellation', () => {
     expect(isLateCancellation('2026-10-26', '09:00', 48, new Date('2026-10-24T07:00:00Z'))).toBe(
       false,
     );
+  });
+});
+
+describe('clampNoticeWindow', () => {
+  it('passes presets through unchanged', () => {
+    expect(clampNoticeWindow(0)).toBe(0);
+    expect(clampNoticeWindow(24)).toBe(24);
+    expect(clampNoticeWindow(48)).toBe(48);
+    expect(clampNoticeWindow(168)).toBe(168);
+  });
+  it('rounds a grandfathered out-of-set value DOWN to the nearest preset', () => {
+    // Pre-rules legacy values survive via the rules diff-gate; the snapshot
+    // normalizes them, never flagging more than a real preset would.
+    expect(clampNoticeWindow(100)).toBe(48);
+    expect(clampNoticeWindow(12)).toBe(0);
+    expect(clampNoticeWindow(999)).toBe(168);
+  });
+  it('treats garbage as no policy', () => {
+    expect(clampNoticeWindow(undefined)).toBe(0);
+    expect(clampNoticeWindow(-5)).toBe(0);
+    expect(clampNoticeWindow(NaN)).toBe(0);
+    expect(clampNoticeWindow('48')).toBe(0);
   });
 });

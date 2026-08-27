@@ -138,6 +138,40 @@ describe('cancelAppointment', () => {
         });
       }
     });
+
+    it('clamps a grandfathered out-of-set profile value to the preset set at snapshot time', async () => {
+      // The rules diff-gate grandfathers pre-rules values forever (PR #248
+      // round 3 residual); the admin write below simulates such legacy data,
+      // and the snapshot must round DOWN to the nearest preset (100 -> 48).
+      const db = getDb();
+      await db.collection('users').doc(seed.babysitter1.uid).update({
+        'profiles.babysitter.cancellationNoticeHours': 100,
+      });
+      try {
+        const date = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+        const res = await callFunction<{ appointmentId: string }>(
+          'sendContactRequest',
+          {
+            babysitterUserId: seed.babysitter1.uid,
+            searchType: 'one_time',
+            date,
+            startTime: '18:00',
+            endTime: '21:00',
+            kidIds: ['kid1'],
+            address: '15 Rue de Passy, 75016 Paris',
+            latLng: { lat: 48.8566, lng: 2.2769 },
+            familyId: seed.family1Id,
+          },
+          parentToken,
+        );
+        const apt = (await db.collection('appointments').doc(res.appointmentId).get()).data()!;
+        expect(apt.cancellationNoticeHours).toBe(48);
+      } finally {
+        await db.collection('users').doc(seed.babysitter1.uid).update({
+          'profiles.babysitter.cancellationNoticeHours': 0,
+        });
+      }
+    });
   });
 
   // ── Cancellation policy: allow-but-flag (issue #237, study's contract) ──

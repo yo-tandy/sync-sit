@@ -1070,6 +1070,7 @@ export default {
     withdrawnBySitter: 'La babysitter a retiré cette demande.',
     cancelledLateBadge: 'Annulée tardivement',
     lateCancelWarning: 'Cette annulation intervient dans le délai de préavis de {{window}} et sera enregistrée.',
+    modifyInsideWindow: 'Ce rendez-vous est dans le délai de préavis d\'annulation : son horaire ne peut plus être modifié. Vous pouvez toujours l\'annuler (enregistré comme tardif) ou écrire à la babysitter.',
     resubmit: 'Renvoyer',
     resubmitTitle: 'Renvoyer la demande',
     resubmitDesc: 'Modifiez les détails et ajoutez une note explicative. Le/la babysitter sera notifié(e).',

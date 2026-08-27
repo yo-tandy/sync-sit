@@ -1,4 +1,5 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { clampNoticeWindow } from '@ejm/shared-functions/schedule/lateCancellation.js';
 import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
@@ -181,7 +182,7 @@ export const contactPublishedSearch = onCall(
       type: search.type,
       status: 'pending',
       // Notice-window snapshot (issue #237) -- same as sendContactRequest's.
-      cancellationNoticeHours: sitter.cancellationNoticeHours ?? 0,
+      cancellationNoticeHours: clampNoticeWindow(sitter.cancellationNoticeHours),
       date: search.date ?? null,
       startTime: search.startTime ?? null,
       endTime: search.endTime ?? null,

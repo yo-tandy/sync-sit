@@ -1098,6 +1098,7 @@ export default {
     withdrawnBySitter: 'The babysitter withdrew this request.',
     cancelledLateBadge: 'Cancelled late',
     lateCancelWarning: 'This cancellation is inside the {{window}} notice window and will be recorded.',
+    modifyInsideWindow: 'This appointment is inside the cancellation notice window, so its time can no longer be changed. You can still cancel it (recorded as late) or message the babysitter.',
     resubmit: 'Resubmit',
     resubmitTitle: 'Resubmit Request',
     resubmitDesc: 'Edit the details and add a note explaining the changes. The babysitter will be notified.',

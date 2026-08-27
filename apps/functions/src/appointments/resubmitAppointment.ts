@@ -1,4 +1,5 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { clampNoticeWindow } from '@ejm/shared-functions/schedule/lateCancellation.js';
 import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
@@ -106,9 +107,10 @@ export const resubmitAppointment = onCall(
 
     // Use a batch to atomically create the new appointment AND mark the original
     const sitterDoc = await db.collection('users').doc(original.babysitterUserId as string).get();
-    const resubmitNoticeHours =
+    const resubmitNoticeHours = clampNoticeWindow(
       (sitterDoc.data()?.profiles as { babysitter?: { cancellationNoticeHours?: number } } | undefined)
-        ?.babysitter?.cancellationNoticeHours ?? 0;
+        ?.babysitter?.cancellationNoticeHours,
+    );
 
     const newAppointmentRef = db.collection('appointments').doc();
     const batch = db.batch();

@@ -1,3 +1,4 @@
+import { CANCELLATION_NOTICE_PRESETS } from '@ejm/shared-core';
 import { parisWallTimeToUtc } from '../scheduled/parisTime.js';
 
 /**
@@ -17,4 +18,20 @@ export function isLateCancellation(
   if (noticeHours <= 0) return false;
   const start = parisWallTimeToUtc(date, startTime);
   return start.getTime() < now.getTime() + noticeHours * 60 * 60 * 1000;
+}
+
+/**
+ * Clamp a stored notice window to the preset set at SNAPSHOT time (PR #248
+ * round 3 residual): profile values written before the rules constrained the
+ * field to the presets are grandfathered forever by the diff-gate, so every
+ * snapshot site normalizes here -- rounding DOWN to the nearest preset, never
+ * classifying more cancellations late than a real preset would.
+ */
+export function clampNoticeWindow(v: unknown): number {
+  if (typeof v !== 'number' || !Number.isFinite(v) || v <= 0) return 0;
+  let best = 0;
+  for (const p of CANCELLATION_NOTICE_PRESETS) {
+    if (p <= v && p > best) best = p;
+  }
+  return best;
 }

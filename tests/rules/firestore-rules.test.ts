@@ -2145,8 +2145,9 @@ describe('users update — tutor numeric bounds (issue #123 hardening)', () => {
 
 describe('users update — cancellation notice window bounds (issue #237)', () => {
   // The window is user-editable by design on BOTH profiles (enforcement
-  // reads per-booking snapshots), but bounded to [0, 168] int because it
-  // classifies OTHER users' cancellations as late.
+  // reads per-booking snapshots), but constrained to the PRESET SET
+  // ([0, 24, 48, 168], diff-gated for legacy values) because it classifies
+  // OTHER users' cancellations as late.
   const sitterUid = 'notice-sitter-1';
   const tutorUid = 'notice-tutor-1';
 
