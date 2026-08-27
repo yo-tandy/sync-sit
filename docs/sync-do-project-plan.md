@@ -755,8 +755,19 @@ UI can pre-empt the error rather than surfacing it:
 5. Task → `assigned`; write `assignedUserId`, `assignedOfferId`, `assignedAt`,
    `agreedPrice`.
 6. Accepted offer → `accepted`.
-7. **Every other `pending` and `pending_guardian` offer on the task →
-   `declined`, `declinedReason: 'sibling_accepted'`.**
+7. **Every other `pending` offer on the task → `declined`,
+   `declinedReason: 'sibling_accepted'`. Every `pending_guardian` offer →
+   `expired`** — NOT `declined`, because `declined` is in the family's §7.2
+   allow-list. Routing an undecided guardian-gated offer to `declined` would
+   let the family read it (doer name, photo, bio, price, message, the
+   helper's name and age) the moment they accepted anyone — an action
+   entirely under their control, so a family could accept-then-read
+   specifically to flush offers a parent never approved. `expired` is the
+   status `doCancelTask` already uses for "the task went away underneath
+   you," the allow-list already excludes it, and it is the truthful
+   description: nobody declined this offer, its moment passed. §6.2's
+   invisibility promise thus holds through BOTH exits — guardian denial
+   (round 5) and sibling acceptance.
 8. Write notifications: winner, each loser, the winner's guardian if there is
    an active link.
 9. Audit-log the assignment via `writeUserActivity`.
@@ -846,7 +857,7 @@ choose at all, and nothing that locates either party.
 
 | Collection | Written by | Read by |
 |---|---|---|
-| `doTasks/{taskId}` | callables only (Admin SDK) | owning family · any active enrolled doer · admin |
+| `doTasks/{taskId}` | callables only (Admin SDK) | owning family · any active enrolled doer for OPEN tasks, plus their own assignments (§7.2 — not the whole collection) · admin |
 | `taskOffers/{offerId}` | callables only (Admin SDK) | the offering student · the task's family (when status is `pending`, `accepted` or `declined` — an ALLOW-list, see §7.2; a withdrawn offer, whether by the student or by guardian denial, is invisible to them) · the student's supervising parent (when `pending_guardian`) · admin |
 
 Both are prefixed `do*` / `task*` rather than reusing generic names, because the
@@ -863,7 +874,17 @@ clients except the owner's withdraw.
 ```
 match /doTasks/{taskId} {
   allow read: if isAuth() && (
-       (callerData().get('profiles', {}).get('doer', null) != null
+       // The doer grant is scoped to OPEN tasks plus the doer's own
+       // assignments — not the whole collection. An unscoped caller-only
+       // disjunct let any enrolled student read completed and cancelled
+       // tasks (descriptions, photos, familyName, agreedPrice) and, via the
+       // (assignedUserId, status, updatedAt) index, enumerate ANOTHER
+       // student's assignments and what they were paid (round 7). Both
+       // halves stay provable: the board query filters status == 'open',
+       // and "my assignments" filters assignedUserId == own uid.
+       ((resource.data.status == 'open'
+         || request.auth.uid == resource.data.assignedUserId)
+        && callerData().get('profiles', {}).get('doer', null) != null
         && doerField(callerData(), 'enrollmentComplete', false) == true
         && callerData().get('status', '') == 'active')
     || isAdmin()
@@ -944,21 +965,27 @@ Three further things worth flagging for the rules review:
   (`doCancelTask`) that does both.
 - **The `pending_guardian` read split** is what keeps an unapproved offer
   invisible to the hiring family — and making it *provable* constrains the
-  query, not just the rule. Two constraints, both easy to get wrong:
-  - `where('status','in',[…])` does not satisfy a `!=` condition in the rule.
-    Firestore's analyzer matching `in` against `!=` is not something to rely
-    on; the family's list issues a **per-status equality** query
-    (`where('status','==','pending')`, and separately for `accepted` /
-    `declined`).
+  query, not just the rule. Two constraints:
+  - The family's query must constrain `status` to (a subset of) the
+    allow-list. Against `resource.data.status in ['pending','accepted',
+    'declined']`, both a **per-status equality**
+    (`where('status','==','pending')`) and an **`in` over a subset**
+    (`where('status','in',['pending','accepted','declined'])`) are provable —
+    the same subset-membership mechanism §9.1's `references` queries rely on
+    against `firestore.rules:378`. An UNCONSTRAINED query is what fails.
+    (An earlier draft claimed the `in` form "does not satisfy the rule"; that
+    was true of the `!=` exclusion the draft's rule then used, and stopped
+    being true when round 5 replaced it with the allow-list. §14's negative
+    test is the unconstrained query, not the `in` form.)
   - The same disjunct's other half, `isFamilyMember(resource.data.familyId)`,
     needs a matching **query constraint on `familyId`** — a list query is
     evaluated against its potential result set, so a rule that reads
     `resource.data.familyId` is unprovable unless the query filters on it.
 
   So the family's offer query is
-  `where('familyId','==',f).where('taskId','==',t).where('status','==',s)`,
-  ordered by `createdAt` — with the matching index in §7.3. The
-  `(taskId, status, createdAt)` index alone would not serve it.
+  `where('familyId','==',f).where('taskId','==',t).where('status','==',s)`
+  (or the `in`-subset form), ordered by `createdAt` — with the matching index
+  in §7.3. The `(taskId, status, createdAt)` index alone would not serve it.
 - **The guardian disjunct reads through `.get()` defaults** — as the sketch
   above now does. `OfferDoc.guardian` is `{…} | null` (§4.2), so direct field
   access would rely on `&&` short-circuiting to stay safe. That works as
@@ -989,7 +1016,16 @@ taskOffers: (taskId ASC, status ASC, createdAt ASC)         — offers on a task
 taskOffers: (doerUserId ASC, status ASC, createdAt DESC)    — "my offers"
 taskOffers: (guardian.familyId ASC, status ASC)             — guardian queue (server-side, see below)
 references: (tutorUserId ASC, status ASC)                   — offer-card endorsements, study side (NEW)
+users:      (status ASC, profiles.doer.notifyNewTasks ASC,
+             profiles.doer.categories ARRAY)                — the §10 digest's recipient query (server-side)
 ```
+
+The digest index is server-side-only, like the guardian queue — but the Admin
+SDK does not exempt it: composite indexes are a query-planner requirement, not
+a rules one, and an `array-contains` on `categories` combined with the two
+equalities needs one. Called out because its absence surfaces as a
+`FAILED_PRECONDITION` inside a scheduled job at PR9, where nobody is watching
+a browser console.
 
 The sit-side offer-card query needs `(babysitterUserId, status)`, which
 **already exists** in `firestore.indexes.json:22-27` — it is what serves
@@ -1082,11 +1118,12 @@ relaxing to option 2:
 
 ```
 // Final objects: written only by the stripper, read only via the callable.
-match /doTasks/{taskId}/{photoId} {
+// TASK-INDEPENDENT prefix, keyed by uploader — see below for why.
+match /do-photos/{uid}/{photoId} {
   allow read, write: if false;
 }
 // Quarantine: the client's only upload path. Owner-scoped; a storage trigger
-// strips EXIF, republishes into doTasks/{taskId}/, and deletes the original.
+// strips EXIF, republishes into do-photos/{uid}/, deletes the original.
 match /do-uploads/{uid}/{uploadId} {
   allow read: if false;
   allow write: if request.auth != null
@@ -1094,10 +1131,26 @@ match /do-uploads/{uid}/{uploadId} {
 }
 ```
 
-`doPostTask` references photos by the ids the trigger reported back; a
-quarantine object that never gets claimed is swept with the dailies. PR10's
+**Why the final prefix is task-independent:** at upload time there is no
+`taskId`. §9.1's wizard collects photos *before* the review step, and
+`doPostTask` — which creates the task and mints its id — runs after the
+trigger has already stripped and republished. A `doTasks/{taskId}/…` final
+path would need the client to supply the id (letting a malicious client
+republish into another family's task) or the trigger to wait on a doc that
+does not exist yet. Keying by uploader instead makes ownership structural:
+
+- the trigger republishes `do-uploads/{uid}/{uploadId}` →
+  `do-photos/{uid}/{photoId}` (server-generated id) and deletes the original;
+- `doPostTask` accepts `photoIds` and verifies each exists under the
+  *caller's* `do-photos/{uid}/` prefix before writing them to the task —
+  nobody can attach someone else's photo;
+- `doGetTaskPhotoUrl` asserts the §7.2 audience via the TASK (the photo id
+  must be in the task's `photoIds`), then signs the URL for the stored object.
+
+A quarantine object that never gets claimed is swept with the dailies, and so
+is a `do-photos` object no task references after the same window. PR10's
 one-line "EXIF stripping on upload" bullet understates all of this — budget
-the trigger, the sweep line, and the two rules blocks.
+the trigger, the two sweep lines, and the two rules blocks.
 
 Deployment gotcha from the README: **storage rules are not auto-deployed** by
 the merge workflow and must be shipped manually.
@@ -1115,7 +1168,7 @@ All in `apps/functions/src/do/**`, codebase `default`, region `europe-west1`,
 | `doUpdateDoerProfile` | Auth | Categories, bio, transport, `notifyNewTasks` |
 | `doPostTask` | Auth (verified family) | Validates, scrubs, computes `areaLabel` + `expiresAt`, enforces `DO_TASK_MAX_ACTIVE` |
 | `doUpdateTask` | Auth (owner family) | `open` tasks only; description/photos/budget/timing. Notifies students with pending offers that terms changed |
-| `doCancelTask` | Auth (owner family) | Task → `cancelled`, all live offers → `expired` (zeroing `offerCount` per §4.1's invariant), notify |
+| `doCancelTask` | Auth (family or assigned doer — §6.5 says either side may cancel an `assigned` task, and `cancelledBy: 'doer'` must be reachable; on an `open` task, family only) | Task → `cancelled`, all live offers → `expired` (zeroing `offerCount` per §4.1's invariant), notify. On an `assigned` task there are no live offers left (step 7 cleared them); the ACCEPTED offer keeps `accepted` — it is the record of who was engaged at what price, the contact block it carries was already revealed to both parties (wiping it un-reveals nothing), and the 30-day cancelled-task sweep bounds its retention |
 | `doSubmitOffer` | Auth (active doer) | Enforces the ceiling, resolves the guardian gate, writes `pending` or `pending_guardian` |
 | `doUpdateOffer` | Auth (offering student) | Price/message/helper while `pending` |
 | `doWithdrawOffer` | Auth (offering student) | → `withdrawn`, decrements the live `offerCount` (§4.1) |
@@ -1127,7 +1180,7 @@ All in `apps/functions/src/do/**`, codebase `default`, region `europe-west1`,
 | `doAdminListTasks` | Admin | Search/filter for the admin panel |
 | `doAdminDeleteTask` | Admin | Hard delete + audit |
 | `doGetTaskPhotoUrl` | Auth | Asserts the §7.2 board audience (or family membership) and returns a short-lived signed URL for a task photo — the §7.4 option-1 read path; final objects are `allow read: if false` |
-| `doStripTaskPhoto` | Storage trigger | Fires on `do-uploads/{uid}/*`: strips EXIF, republishes into `doTasks/{taskId}/`, deletes the quarantine original (§7.4). Not a callable |
+| `doStripTaskPhoto` | Storage trigger | Fires on `do-uploads/{uid}/*`: strips EXIF, republishes into the task-independent `do-photos/{uid}/` (no `taskId` exists at upload time — §7.4), deletes the quarantine original. Not a callable |
 | `doSweepTasks` | Scheduled | Daily: delete expired `open` tasks and their offers; delete `cancelled` tasks (and their offers) older than 30 days — mirroring `cleanupOldData`'s cancelled/rejected appointment rule; auto-complete stale `doerMarkedDoneAt` tasks; delete unclaimed `do-uploads` quarantine objects (§7.4). Extends the existing `cleanupOldData` schedule rather than adding a second job |
 
 Validation follows the sit house style visible in `publishSearch.ts` — manual
@@ -1172,7 +1225,7 @@ chrome, enrollment steps, forms and theme.
 
   - **There is no doer endorsement shape, and there will not be one.**
     `TutorEndorsementDoc` has `appSource: 'study'` as a literal and keys on
-    `tutorUserId` (`packages/study-core/src/types/endorsement.ts:16-19`);
+    `tutorUserId` (`packages/study-core/src/types/endorsement.ts:15-19`);
     sit's equivalent is `ReferenceDoc`, keyed on `babysitterUserId`. Surfacing
     "existing endorsements" therefore means **two queries against the shared
     `references` collection**, and their exact shape is load-bearing:
@@ -1526,9 +1579,13 @@ see §12 for why the scaffold, not the family UI, is where they are needed.
   `profiles.doer.enrollmentComplete`** (the §7.2 escalation — the one case
   that lives on `users`, not on the two new collections); and list-query
   provability for every rule disjunct — enumerated, not asserted in the
-  abstract: the family's offer query in the exact `(familyId, taskId, status)`
-  shape §7.2 requires (a `status in […]` form does not satisfy the rule and
-  must **fail** this test); the doer's board read; the doer's own-offers query;
+  abstract: the family's offer query in the `(familyId, taskId, status)`
+  shape §7.2 requires — both the equality and the `in`-subset forms must
+  **pass**, and the *unconstrained* query (no `status` filter) must **fail**;
+  **a `pending_guardian` sibling flipped by an acceptance is `expired`, not
+  `declined`, and stays family-unreadable** (the §6.4 step-7 leak — the
+  pre-decision and guardian-denial cases alone would pass with it open); the
+  doer's board read; the doer's own-offers query;
   the family's own-tasks query (`where('familyId','==',f)` — the same
   reasoning that gives the offer-side family disjunct its `familyId`
   constraint applies to `doTasks`' `isFamilyMember` disjunct, and §7.3's
