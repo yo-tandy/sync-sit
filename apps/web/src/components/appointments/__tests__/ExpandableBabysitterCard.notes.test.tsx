@@ -1,0 +1,190 @@
+/**
+ * Family-side appointment-note pins (issue #238, parity B2) — mirrors study's
+ * "family SessionsPage — session notes (pre)" suite, adapted to sit's card:
+ * - an upcoming confirmed one_time offers an add-note (pre) affordance;
+ * - saving calls setAppointmentNote with {appointmentId, kind:'pre', text};
+ * - a past card shows both notes with author labels and no family edit;
+ * - editing an existing pre-note seeds the textarea and clearing it sends
+ *   empty text;
+ * - a confirmed RECURRING arrangement offers the affordance too (no date —
+ *   sit's structural adaptation: the window never closes while confirmed);
+ * - a confirmed one_time that already STARTED offers no affordance (window
+ *   closed, UX mirror of the callable's gate).
+ *
+ * i18n is mocked to echo keys, so assertions match on the keys the card
+ * renders (familyDashboard.notes.*).
+ */
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import type { AppointmentDoc, BabysitterSummary } from '@ejm/sit-core';
+
+const h = vi.hoisted(() => ({
+  callable: vi.fn(() => Promise.resolve({ data: { success: true } })),
+}));
+
+// Echo translation keys so we can assert on them directly.
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    t: (key: string) => key,
+    i18n: { language: 'en' },
+  }),
+}));
+
+vi.mock('@/config/firebase', () => ({ db: {}, auth: {}, functions: {}, storage: {} }));
+vi.mock('@/hooks/useHolidays', () => ({ useHolidays: () => ({ periods: [] }) }));
+vi.mock('firebase/auth', () => ({ onAuthStateChanged: vi.fn() }));
+vi.mock('firebase/functions', () => ({
+  httpsCallable: (_fns: unknown, name: string) => (payload: unknown) => h.callable(name, payload),
+}));
+vi.mock('firebase/firestore', () => ({
+  collection: vi.fn(),
+  query: vi.fn(),
+  where: vi.fn(),
+  limit: vi.fn(),
+  doc: vi.fn(),
+  onSnapshot: vi.fn(),
+  getDoc: vi.fn().mockResolvedValue({ exists: () => false }),
+  getDocs: vi.fn().mockResolvedValue({ docs: [] }),
+}));
+
+import { ExpandableBabysitterCard } from '../ExpandableBabysitterCard';
+
+// Dynamic Paris-safe fixtures: a ±1-day date is unambiguously past/future in
+// any timezone the test runs in.
+function parisDateOf(instant: Date): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(instant);
+}
+const DAY = 24 * 60 * 60 * 1000;
+const TOMORROW = parisDateOf(new Date(Date.now() + DAY));
+const YESTERDAY = parisDateOf(new Date(Date.now() - DAY));
+
+const info: BabysitterSummary = {
+  uid: 'bs-1',
+  firstName: 'Marie',
+  lastName: 'Dupont',
+  name: 'Marie Dupont',
+  age: 22,
+  classLevel: 'L3',
+};
+
+function apt(overrides: Partial<AppointmentDoc> = {}): AppointmentDoc {
+  return {
+    appointmentId: 'apt-1',
+    babysitterUserId: 'bs-1',
+    type: 'one_time',
+    date: TOMORROW,
+    startTime: '18:00',
+    endTime: '22:00',
+    ...overrides,
+  } as AppointmentDoc;
+}
+
+function expandCard() {
+  fireEvent.click(screen.getAllByRole('button')[0]);
+}
+
+afterEach(() => {
+  cleanup();
+  h.callable.mockClear();
+});
+
+describe('ExpandableBabysitterCard — appointment notes (pre)', () => {
+  it('an upcoming confirmed one_time offers an add-note (pre) affordance', () => {
+    render(<ExpandableBabysitterCard appointment={apt()} info={info} variant="confirmed" />);
+    expandCard();
+    expect(screen.getByText('familyDashboard.notes.add')).toBeTruthy();
+  });
+
+  it('saving a pre-note calls setAppointmentNote with {appointmentId, kind:pre, text}', async () => {
+    render(<ExpandableBabysitterCard appointment={apt()} info={info} variant="confirmed" />);
+    expandCard();
+    fireEvent.click(screen.getByText('familyDashboard.notes.add'));
+    fireEvent.change(screen.getByPlaceholderText('familyDashboard.notes.placeholder'), {
+      target: { value: 'Door code 1234B' },
+    });
+    fireEvent.click(screen.getByText('familyDashboard.notes.save'));
+    await waitFor(() =>
+      expect(h.callable).toHaveBeenCalledWith('setAppointmentNote', {
+        appointmentId: 'apt-1',
+        kind: 'pre',
+        text: 'Door code 1234B',
+      }),
+    );
+    // Non-optimistic close: the dialog goes away once the callable resolves.
+    await waitFor(() =>
+      expect(screen.queryByText('familyDashboard.notes.dialogTitle')).toBeNull(),
+    );
+  });
+
+  it('a past card shows both notes with author labels and no family edit', () => {
+    render(
+      <ExpandableBabysitterCard
+        appointment={apt({
+          date: YESTERDAY,
+          preAppointmentNote: 'the pre note',
+          postAppointmentNote: 'the post note',
+        })}
+        info={info}
+        variant="past"
+      />,
+    );
+    expandCard();
+    expect(screen.getByText('familyDashboard.notes.fromFamily')).toBeTruthy();
+    expect(screen.getByText('the pre note')).toBeTruthy();
+    expect(screen.getByText('familyDashboard.notes.fromBabysitter')).toBeTruthy();
+    expect(screen.getByText('the post note')).toBeTruthy();
+    expect(screen.queryByText('familyDashboard.notes.add')).toBeNull();
+    expect(screen.queryByText('familyDashboard.notes.edit')).toBeNull();
+  });
+
+  it('editing an existing pre-note seeds the textarea and clearing it sends empty text', async () => {
+    render(
+      <ExpandableBabysitterCard
+        appointment={apt({ preAppointmentNote: 'old note' })}
+        info={info}
+        variant="confirmed"
+      />,
+    );
+    expandCard();
+    fireEvent.click(screen.getByText('familyDashboard.notes.edit'));
+    const textarea = screen.getByPlaceholderText(
+      'familyDashboard.notes.placeholder',
+    ) as HTMLTextAreaElement;
+    expect(textarea.value).toBe('old note');
+    fireEvent.change(textarea, { target: { value: '' } });
+    fireEvent.click(screen.getByText('familyDashboard.notes.save'));
+    await waitFor(() =>
+      expect(h.callable).toHaveBeenCalledWith('setAppointmentNote', {
+        appointmentId: 'apt-1',
+        kind: 'pre',
+        text: '',
+      }),
+    );
+  });
+
+  it('a confirmed recurring arrangement (no date) offers the affordance', () => {
+    render(
+      <ExpandableBabysitterCard
+        appointment={apt({ type: 'recurring', date: undefined, startTime: undefined, endTime: undefined })}
+        info={info}
+        variant="confirmed"
+      />,
+    );
+    expandCard();
+    expect(screen.getByText('familyDashboard.notes.add')).toBeTruthy();
+  });
+
+  it('a confirmed one_time that already started offers NO pre affordance', () => {
+    render(
+      <ExpandableBabysitterCard
+        appointment={apt({ date: YESTERDAY })}
+        info={info}
+        variant="confirmed"
+      />,
+    );
+    expandCard();
+    expect(screen.queryByText('familyDashboard.notes.add')).toBeNull();
+  });
+});

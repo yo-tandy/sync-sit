@@ -550,6 +550,17 @@ export default {
     badgeDeclined: 'Declined',
     addKidsTitle: 'Add your children',
     addKidsDesc: 'You need to add at least one child to search for babysitters.',
+    notes: {
+      fromFamily: 'From the family',
+      fromBabysitter: 'From the babysitter',
+      add: 'Add a note',
+      edit: 'Edit note',
+      dialogTitle: 'Note for the babysitter',
+      dialogDesc: 'Share the practical details — door code, bedtime, allergies. The babysitter will see this before the sitting.',
+      placeholder: 'e.g. Door code 1234B. Bedtime at 20:30. Léa is allergic to peanuts.',
+      save: 'Save note',
+      error: 'Couldn\'t save your note. Please try again.',
+    },
   },
 
   // Request Detail
@@ -599,6 +610,18 @@ export default {
     cancelledByFamilyBanner: 'This request has been cancelled by the family.',
     recurring: 'Recurring',
     recurringLabel: 'Recurring',
+    notes: {
+      title: 'Sitting notes',
+      fromFamily: 'From the family',
+      fromBabysitter: 'From the babysitter',
+      add: 'Add sitting notes',
+      edit: 'Edit sitting notes',
+      dialogTitle: 'Sitting notes',
+      dialogDesc: 'How did it go? Note anything the family should know — they will see this.',
+      placeholder: 'e.g. All went well; kids asleep by 21:00. We finished the homework.',
+      save: 'Save note',
+      error: 'Couldn\'t save your note. Please try again.',
+    },
   },
 
   // Profile

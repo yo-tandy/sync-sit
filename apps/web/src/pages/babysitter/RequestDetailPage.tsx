@@ -7,6 +7,9 @@ import { db, functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { haversineDistance } from '@ejm/sit-core';
 import { Button, Card, Badge, Dialog, TopNav, Spinner } from '@/components/ui';
+import { AppointmentNotes } from '@/components/appointments/AppointmentNotes';
+import { AppointmentNoteDialog } from '@/components/appointments/AppointmentNoteDialog';
+import { hasStarted } from '@/lib/appointmentTime';
 import { PhotoLightbox } from '@/components/ui/PhotoLightbox';
 import { CalendarIcon, CheckIcon } from '@/components/ui/Icons';
 import { useHolidays } from '@/hooks/useHolidays';
@@ -55,6 +58,13 @@ export function RequestDetailPage() {
   const [isReturningFamily, setIsReturningFamily] = useState(false);
   const [acknowledging, setAcknowledging] = useState(false);
   const [parentContacts, setParentContacts] = useState<{ firstName: string; lastName: string; email: string; phone?: string; whatsapp?: string }[]>([]);
+  // Appointment notes (issue #238, parity B2 — study's session notes adopted
+  // into sit). The BABYSITTER authors the post-note here; the family's
+  // pre-note is read-only. Non-optimistic save: the page holds a live
+  // onSnapshot, which refreshes the note once the callable resolves.
+  const [noteOpen, setNoteOpen] = useState(false);
+  const [noteSaving, setNoteSaving] = useState(false);
+  const [noteError, setNoteError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!appointmentId) return;
@@ -141,6 +151,24 @@ export function RequestDetailPage() {
     }
   };
 
+  const saveNote = async (text: string) => {
+    if (!appointmentId) return;
+    setNoteError(null);
+    setNoteSaving(true);
+    try {
+      const fn = httpsCallable<
+        { appointmentId: string; kind: 'post'; text: string },
+        { success: boolean }
+      >(functions, 'setAppointmentNote');
+      await fn({ appointmentId, kind: 'post', text });
+      setNoteOpen(false);
+    } catch {
+      setNoteError(t('request.notes.error'));
+    } finally {
+      setNoteSaving(false);
+    }
+  };
+
   const handleRespond = async (action: 'accept' | 'decline') => {
     if (!appointmentId) return;
     setResponding(true);
@@ -194,6 +222,15 @@ export function RequestDetailPage() {
   const familyName = t('familyDashboard.familyTitle', { name: rawFamilyName.toUpperCase() });
   const kids: { age: number; languages?: string[] }[] = apt.kids || [];
   // parentContacts loaded dynamically from family doc (useEffect above)
+
+  // The post-note window mirrors the callable's gate (UX only): a confirmed
+  // one_time once its Paris wall-clock start passes; a confirmed recurring
+  // arrangement always (no single start instant).
+  const canEditPost =
+    apt.status === 'confirmed' &&
+    (apt.type === 'recurring' || hasStarted(apt.date, apt.startTime));
+  const showNotes =
+    canEditPost || apt.preAppointmentNote != null || apt.postAppointmentNote != null;
 
   // Distance
   let distance: string | null = null;
@@ -361,6 +398,27 @@ export function RequestDetailPage() {
           </Card>
         )}
 
+        {/* Appointment notes (issue #238): the family's pre-note read-only +
+            this babysitter's own post-note, editable within its window. */}
+        {showNotes && (
+          <Card className="mb-3">
+            <p className="text-xs font-medium text-gray-500">{t('request.notes.title')}</p>
+            <AppointmentNotes
+              pre={apt.preAppointmentNote}
+              post={apt.postAppointmentNote}
+              editKind="post"
+              canEdit={canEditPost}
+              onEdit={() => { setNoteError(null); setNoteOpen(true); }}
+              copy={{
+                fromFamily: t('request.notes.fromFamily'),
+                fromBabysitter: t('request.notes.fromBabysitter'),
+                add: t('request.notes.add'),
+                edit: t('request.notes.edit'),
+              }}
+            />
+          </Card>
+        )}
+
         {/* Parent contact details */}
         {parentContacts.length > 0 && (
           <Card className="mb-3 bg-gray-50">
@@ -398,6 +456,22 @@ export function RequestDetailPage() {
           </div>
         )}
       </div>
+
+      {/* Post-note dialog (issue #238) */}
+      <AppointmentNoteDialog
+        open={noteOpen}
+        title={t('request.notes.dialogTitle')}
+        description={t('request.notes.dialogDesc')}
+        placeholder={t('request.notes.placeholder')}
+        initialText={apt.postAppointmentNote ?? ''}
+        saveLabel={t('request.notes.save')}
+        cancelLabel={t('common.cancel')}
+        maxLength={2000}
+        submitting={noteSaving}
+        error={noteError}
+        onSave={saveNote}
+        onClose={() => setNoteOpen(false)}
+      />
 
       {/* Withdraw dialog (own-initiated pending, issue #207 PR3) */}
       <Dialog open={withdrawDialog} onClose={() => setWithdrawDialog(false)}>

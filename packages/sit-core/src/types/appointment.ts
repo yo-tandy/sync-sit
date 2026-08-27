@@ -95,4 +95,13 @@ export interface AppointmentDoc {
   // Resubmission tracking
   isResubmission?: boolean;
   resubmittedFromAppointmentId?: string;
+
+  // Appointment notes (issue #238, parity B2 — adopted from study's session
+  // notes). Both live on the doc both parties already read, so visibility is
+  // exactly the appointment's own read rule. Written via setAppointmentNote
+  // only (rules stay deny-all).
+  /** FAMILY-authored logistics note (door codes, bedtime, allergies). */
+  preAppointmentNote?: string;
+  /** BABYSITTER-authored debrief note (how the sitting went). */
+  postAppointmentNote?: string;
 }

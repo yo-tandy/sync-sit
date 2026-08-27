@@ -77,6 +77,7 @@ export { modifyAppointment } from './appointments/modifyAppointment.js';
 export { acknowledgeModification } from './appointments/acknowledgeModification.js';
 export { getParentContacts } from './appointments/getParentContacts.js';
 export { resubmitAppointment } from './appointments/resubmitAppointment.js';
+export { setAppointmentNote } from './appointments/setAppointmentNote.js';
 export { submitFamilyEndorsement } from './references/submitFamilyEndorsement.js';
 export { acceptFamilyEndorsement } from './references/acceptFamilyEndorsement.js';
 export { publishManualReference } from './references/publishManualReference.js';

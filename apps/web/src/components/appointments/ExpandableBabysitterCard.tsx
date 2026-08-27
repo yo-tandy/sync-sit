@@ -1,8 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { collection, getDocs, query as fsQuery, where as fsWhere, limit as fsLimit } from 'firebase/firestore';
-import { db } from '@/config/firebase';
+import { httpsCallable } from 'firebase/functions';
+import { db, functions } from '@/config/firebase';
 import { Button, Badge, Card } from '@/components/ui';
+import { AppointmentNotes } from './AppointmentNotes';
+import { AppointmentNoteDialog } from './AppointmentNoteDialog';
+import { hasStarted } from '@/lib/appointmentTime';
 import { ChevronRightIcon } from '@/components/ui/Icons';
 import { Avatar } from '@/components/ui';
 import type { AppointmentDoc, ReferenceDoc, BabysitterSummary } from '@ejm/sit-core';
@@ -91,6 +95,41 @@ export function ExpandableBabysitterCard({
   // References for this babysitter
   const [refs, setRefs] = useState<RefInfo[]>([]);
   const [expandedRefIds, setExpandedRefIds] = useState<Set<string>>(new Set());
+
+  // Appointment notes (issue #238, parity B2 — study's session notes adopted
+  // into sit). The FAMILY authors the pre-note here; the babysitter's
+  // post-note is read-only. The card owns the dialog + callable (it already
+  // owns its own reference reads); the dashboard's live onSnapshot refreshes
+  // the note after a save, so the save is non-optimistic and there is no
+  // local patching.
+  const [noteOpen, setNoteOpen] = useState(false);
+  const [noteSaving, setNoteSaving] = useState(false);
+  const [noteError, setNoteError] = useState<string | null>(null);
+
+  // The pre-note window mirrors the callable's gate (UX only): a confirmed
+  // one_time until its Paris wall-clock start; a confirmed recurring
+  // arrangement always (there is always a next occurrence).
+  const canEditPre =
+    variant === 'confirmed' &&
+    (appointment.type === 'recurring' || !hasStarted(appointment.date, appointment.startTime));
+  const showNotes = variant === 'confirmed' || variant === 'past' || variant === 'rejected';
+
+  const saveNote = async (text: string) => {
+    setNoteError(null);
+    setNoteSaving(true);
+    try {
+      const fn = httpsCallable<
+        { appointmentId: string; kind: 'pre'; text: string },
+        { success: boolean }
+      >(functions, 'setAppointmentNote');
+      await fn({ appointmentId: appointment.appointmentId, kind: 'pre', text });
+      setNoteOpen(false);
+    } catch {
+      setNoteError(t('familyDashboard.notes.error'));
+    } finally {
+      setNoteSaving(false);
+    }
+  };
 
   useEffect(() => {
     if (!expanded || !appointment.babysitterUserId) return;
@@ -357,8 +396,42 @@ export function ExpandableBabysitterCard({
               </Button>
             </div>
           )}
+
+          {/* Appointment notes: the family's pre-note (editable within its
+              window) + the babysitter's post-note (read-only). Past/rejected
+              cards keep existing notes visible read-only. */}
+          {showNotes && (
+            <AppointmentNotes
+              pre={appointment.preAppointmentNote}
+              post={appointment.postAppointmentNote}
+              editKind="pre"
+              canEdit={canEditPre}
+              onEdit={() => { setNoteError(null); setNoteOpen(true); }}
+              copy={{
+                fromFamily: t('familyDashboard.notes.fromFamily'),
+                fromBabysitter: t('familyDashboard.notes.fromBabysitter'),
+                add: t('familyDashboard.notes.add'),
+                edit: t('familyDashboard.notes.edit'),
+              }}
+            />
+          )}
         </div>
       )}
+
+      <AppointmentNoteDialog
+        open={noteOpen}
+        title={t('familyDashboard.notes.dialogTitle')}
+        description={t('familyDashboard.notes.dialogDesc')}
+        placeholder={t('familyDashboard.notes.placeholder')}
+        initialText={appointment.preAppointmentNote ?? ''}
+        saveLabel={t('familyDashboard.notes.save')}
+        cancelLabel={t('common.cancel')}
+        maxLength={2000}
+        submitting={noteSaving}
+        error={noteError}
+        onSave={saveNote}
+        onClose={() => setNoteOpen(false)}
+      />
     </Card>
   );
 }

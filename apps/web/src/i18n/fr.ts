@@ -535,6 +535,17 @@ export default {
     badgeDeclined: 'Refusée',
     addKidsTitle: 'Ajoutez vos enfants',
     addKidsDesc: 'Vous devez ajouter au moins un enfant pour rechercher des babysitters.',
+    notes: {
+      fromFamily: 'De la famille',
+      fromBabysitter: 'Du babysitter',
+      add: 'Ajouter une note',
+      edit: 'Modifier la note',
+      dialogTitle: 'Note pour le babysitter',
+      dialogDesc: 'Partagez les détails pratiques — code de la porte, heure du coucher, allergies. Le babysitter la verra avant la garde.',
+      placeholder: 'ex. Code 1234B. Coucher à 20h30. Léa est allergique aux cacahuètes.',
+      save: 'Enregistrer la note',
+      error: 'Impossible d’enregistrer votre note. Veuillez réessayer.',
+    },
   },
 
   request: {
@@ -578,6 +589,18 @@ export default {
     cancelled: 'Annulé',
     cancelledByFamilyBanner: 'Cette demande a été annulée par la famille.',
     recurringLabel: 'Récurrent',
+    notes: {
+      title: 'Notes de garde',
+      fromFamily: 'De la famille',
+      fromBabysitter: 'Du babysitter',
+      add: 'Ajouter des notes de garde',
+      edit: 'Modifier les notes de garde',
+      dialogTitle: 'Notes de garde',
+      dialogDesc: 'Comment ça s’est passé ? Notez ce que la famille doit savoir — elle le verra.',
+      placeholder: 'ex. Tout s’est bien passé ; enfants couchés à 21h00. Devoirs terminés.',
+      save: 'Enregistrer la note',
+      error: 'Impossible d’enregistrer votre note. Veuillez réessayer.',
+    },
   },
 
   profile: {
