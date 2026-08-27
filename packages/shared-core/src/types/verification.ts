@@ -34,10 +34,11 @@ export interface VerificationDoc {
   reviewedAt?: FirestoreTimestamp;
   rejectionReason?: string;
 
-  // Set when the family was verified by another route before an admin got to
-  // this document (#218).
+  // Set when the community route verified the family before an admin got to
+  // this document (#218). Only that route supersedes — see
+  // supersedePendingVerifications.
   supersededAt?: FirestoreTimestamp;
-  supersededBy?: 'community' | 'admin';
+  supersededBy?: 'community';
 
   createdAt: FirestoreTimestamp;
 }

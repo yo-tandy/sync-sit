@@ -131,6 +131,97 @@ describe('reviewVerification', () => {
     });
   });
 
+  // Issue #218 — a community approval vouches for BOTH types. Re-approving one
+  // document later must not silently revoke the other.
+  describe('community-granted families', () => {
+    async function grantCommunityApproval() {
+      await getDb().collection('families').doc(seed.family2Id).update({
+        verification: {
+          identityStatus: 'approved',
+          enrollmentStatus: 'approved',
+          isFullyVerified: true,
+          isEjmFamily: true,
+          communityApprovedBy: seed.parent1.uid,
+        },
+      });
+    }
+
+    it('approving a new enrollment doc keeps the community identity approval', async () => {
+      await grantCommunityApproval();
+      // The identity doc that was pending when the community vouched.
+      await seedVerification({
+        familyId: seed.family2Id,
+        uploadedByUserId: seed.parent3.uid,
+        type: 'identity',
+        status: 'superseded',
+      });
+      // Next school year's certificate.
+      const enrollVerification = await seedVerification({
+        familyId: seed.family2Id,
+        uploadedByUserId: seed.parent3.uid,
+        type: 'ejm_enrollment',
+      });
+
+      const result = await callFunction<{ isFullyVerified: boolean }>(
+        'reviewVerification',
+        { verificationId: enrollVerification, decision: 'approved' },
+        adminToken,
+      );
+
+      expect(result.isFullyVerified).toBe(true);
+
+      const verification = (await getDb().collection('families').doc(seed.family2Id).get())
+        .data()!.verification;
+      expect(verification.identityStatus).toBe('approved');
+      expect(verification.isFullyVerified).toBe(true);
+      expect(verification.communityApprovedBy).toBe(seed.parent1.uid);
+    });
+
+    it('an explicit rejection still wins over the grant for that type', async () => {
+      await grantCommunityApproval();
+      const idVerification = await seedVerification({
+        familyId: seed.family2Id,
+        uploadedByUserId: seed.parent3.uid,
+        type: 'identity',
+      });
+
+      await callFunction(
+        'reviewVerification',
+        { verificationId: idVerification, decision: 'rejected', rejectionReason: 'Expired ID' },
+        adminToken,
+      );
+
+      const verification = (await getDb().collection('families').doc(seed.family2Id).get())
+        .data()!.verification;
+      expect(verification.identityStatus).toBe('rejected');
+      expect(verification.isFullyVerified).toBe(false);
+      // Enrollment had no document of its own, so the grant still covers it.
+      expect(verification.enrollmentStatus).toBe('approved');
+      expect(verification.communityApprovedBy).toBe(seed.parent1.uid);
+    });
+
+    it('leaves a document-verified family untouched (no grant, no baseline)', async () => {
+      const idVerification = await seedVerification({
+        familyId: seed.family2Id,
+        uploadedByUserId: seed.parent3.uid,
+        type: 'identity',
+      });
+
+      await callFunction(
+        'reviewVerification',
+        { verificationId: idVerification, decision: 'approved' },
+        adminToken,
+      );
+
+      const verification = (await getDb().collection('families').doc(seed.family2Id).get())
+        .data()!.verification;
+      expect(verification.identityStatus).toBe('approved');
+      expect(verification.enrollmentStatus).toBe('not_submitted');
+      expect(verification.isFullyVerified).toBe(false);
+      expect(verification.communityApprovedBy).toBeUndefined();
+    });
+  });
+
   describe('errors', () => {
     it('rejects unauthenticated callers', async () => {
       await expect(

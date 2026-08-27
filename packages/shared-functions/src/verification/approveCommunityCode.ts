@@ -93,11 +93,21 @@ export const approveCommunityCode = onCall(
 
     // Document requests still queued for this family decide nothing now that
     // the community route has verified them — close them out (#218).
-    const supersededIds = await supersedePendingVerifications(
-      codeData.familyId,
-      'community',
-      now,
-    );
+    //
+    // Deliberately non-fatal: the approval has already landed above. Throwing
+    // here would tell the approver "Approval failed" about an approval that
+    // succeeded, and a retry would hit the already_verified guard — leaving no
+    // route back. A stale queue entry is the lesser failure, and it is
+    // recoverable by the next approval or by an admin.
+    let supersededIds: string[] = [];
+    try {
+      supersededIds = await supersedePendingVerifications(codeData.familyId, now);
+    } catch (err) {
+      console.error('approveCommunityCode: failed to supersede pending verifications', {
+        familyId: codeData.familyId,
+        err,
+      });
+    }
 
     await writeUserActivity(uid, 'community_approval_given', {
       approvedFamilyId: codeData.familyId,
