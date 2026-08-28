@@ -46,6 +46,21 @@
   --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
 }
 
+/* WCAG 2.4.7 Focus Visible (issue #325): ONE shared keyboard-focus
+   treatment for every interactive control, all three apps. Two layers so
+   the ring reads on ANY ground: a 2px white backing fills the offset gap
+   (visible on brand-colored surfaces like the AppBar, where a brand ring
+   alone would vanish) and the brand outline carries it on white. Brand
+   token means sit rings red, study blue, do green. :where() keeps
+   specificity at zero so an explicit utility (e.g. the Dialog panel's
+   outline-none, or a component's own focus-visible styling) still wins.
+   Text fields keep their focus border treatment and are not matched. */
+:where(a, button, [role="button"], select, summary, [tabindex]:not([tabindex="-1"])):focus-visible {
+  outline: 2px solid var(--color-brand-600);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 2px var(--color-white);
+}
+
 /* Base reset */
 html {
   -webkit-font-smoothing: antialiased;
