@@ -195,14 +195,14 @@ describe('RequestDetailPage — appointment notes (post)', () => {
   });
 
   it('a backdrop click cannot dismiss the remove dialog mid-flight', async () => {
-    let resolveCall!: (v: { data: { success: boolean } }) => void;
+    let rejectCall!: (e: Error) => void;
     renderWithApt({ status: 'cancelled', date: YESTERDAY, postAppointmentNote: 'old debrief' });
     // Only the note callable hangs; getParentContacts (fired on load) keeps
     // resolving through the default implementation.
     h.callable.mockImplementation((name: string) =>
       name === 'getParentContacts'
         ? Promise.resolve({ data: { contacts: [] } })
-        : new Promise((resolve) => { resolveCall = resolve; }),
+        : new Promise((_resolve, reject) => { rejectCall = reject; }),
     );
     fireEvent.click(screen.getByText('request.notes.remove'));
     const buttons = screen.getAllByText('request.notes.remove');
@@ -210,8 +210,13 @@ describe('RequestDetailPage — appointment notes (post)', () => {
     // Backdrop click while the erasure is in flight: dialog must survive.
     fireEvent.click(document.querySelector('.fixed.inset-0.z-50')!);
     expect(screen.getByText('request.notes.removeTitle')).toBeTruthy();
-    resolveCall({ data: { success: true } });
-    await waitFor(() => expect(screen.queryByText('request.notes.removeTitle')).toBeNull());
+    // Settle with a FAILURE (a success closes the dialog itself, which
+    // would make this half vacuous -- PR #274 review): the error renders,
+    // the dialog stays, and the backdrop is functional again.
+    rejectCall(new Error('boom'));
+    await waitFor(() => expect(screen.getByText('request.notes.error')).toBeTruthy());
+    fireEvent.click(document.querySelector('.fixed.inset-0.z-50')!);
+    expect(screen.queryByText('request.notes.removeTitle')).toBeNull();
   });
 
   it('a confirmed recurring arrangement offers the post affordance (no timing gate)', () => {

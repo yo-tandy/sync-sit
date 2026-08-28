@@ -288,9 +288,9 @@ describe('ExpandableBabysitterCard — appointment notes (pre)', () => {
     // backdrop is clicked. Dialog closes on backdrop click unconditionally,
     // so an ungated onClose would unmount NoteForm -- the only element that
     // can render noteError -- and a failed save would turn silent.
-    let resolveCall!: (v: { data: { success: boolean } }) => void;
+    let rejectCall!: (e: Error) => void;
     h.callable.mockImplementationOnce(
-      () => new Promise((resolve) => { resolveCall = resolve; }),
+      () => new Promise((_resolve, reject) => { rejectCall = reject; }),
     );
     render(<ExpandableBabysitterCard appointment={apt()} info={info} variant="confirmed" />);
     expandCard();
@@ -302,11 +302,15 @@ describe('ExpandableBabysitterCard — appointment notes (pre)', () => {
     // The dialog overlay (outermost fixed container) IS the backdrop target.
     fireEvent.click(document.querySelector('.fixed.inset-0.z-50')!);
     expect(screen.getByText('familyDashboard.notes.dialogTitle')).toBeTruthy();
-    // After the call settles, dismissal works again.
-    resolveCall({ data: { success: true } });
-    await waitFor(() =>
-      expect(screen.queryByText('familyDashboard.notes.dialogTitle')).toBeNull(),
-    );
+    // Settle the call with a FAILURE: the dialog must stay open showing the
+    // error (a success would close it via saveNote itself, which would make
+    // this half vacuous -- PR #274 review), and NOW the backdrop works
+    // again because noteSaving is false.
+    rejectCall(new Error('boom'));
+    await waitFor(() => expect(screen.getByText('familyDashboard.notes.error')).toBeTruthy());
+    expect(screen.getByText('familyDashboard.notes.dialogTitle')).toBeTruthy();
+    fireEvent.click(document.querySelector('.fixed.inset-0.z-50')!);
+    expect(screen.queryByText('familyDashboard.notes.dialogTitle')).toBeNull();
   });
 
   it('notes and REMOVE survive a missing babysitter profile (info undefined)', () => {

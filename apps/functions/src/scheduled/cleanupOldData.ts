@@ -293,13 +293,31 @@ export async function runCleanupOldData(
     // stopped and the next run RESUMES there; an exhausted walk resets the
     // cursor so the next run starts from the head. Ties on the note text
     // are broken by document id so resume never skips a doc.
+    //
+    // The persisted cursor stores ONLY the doc id — never the note text
+    // (persisting the orderBy value verbatim would copy a door code into a
+    // doc nothing sweeps; PR #274 review). Resume re-reads the doc and
+    // startAfter(snapshot) takes its position from the LIVE field values;
+    // if the doc lost its note meanwhile (cleared, redacted, deleted), the
+    // walk safely restarts from the head — re-examining is idempotent,
+    // skipping is not.
+    //
+    // cronState has no firestore.rules block on purpose: it is server-only
+    // state, covered by the deny-all catch-all.
     const cursorStateRef = firestoreDb.collection('cronState').doc('appointmentNoteRedaction');
     const cursorState = (await cursorStateRef.get()).data() ?? {};
-    const nextCursorState: Record<string, { value: string; id: string } | null> = {};
+    const nextCursorState: Record<string, string | null> = {};
 
     for (const field of ['preAppointmentNote', 'postAppointmentNote'] as const) {
-      const stored = cursorState[`${field}Cursor`] as { value: string; id: string } | null | undefined;
-      let cursor: { value: string; id: string } | null = stored ?? null;
+      const storedId = cursorState[`${field}Cursor`] as string | null | undefined;
+      let cursorSnap: FirebaseFirestore.DocumentSnapshot | null = null;
+      if (storedId) {
+        const resumeSnap = await firestoreDb.collection('appointments').doc(storedId).get();
+        if (resumeSnap.exists && resumeSnap.get(field) !== undefined) {
+          cursorSnap = resumeSnap;
+        }
+      }
+      let lastId: string | null = storedId ?? null;
       let exhausted = false;
       for (let pass = 0; pass < 40; pass++) {
         let query = firestoreDb
@@ -308,7 +326,7 @@ export async function runCleanupOldData(
           .orderBy(field)
           .orderBy(FieldPath.documentId())
           .limit(500);
-        if (cursor) query = query.startAfter(cursor.value, cursor.id);
+        if (cursorSnap) query = query.startAfter(cursorSnap);
         const noted = await query.get();
         if (noted.empty) {
           exhausted = true;
@@ -328,8 +346,8 @@ export async function runCleanupOldData(
           stats.appointmentNotesRedacted += count;
           console.log(`Redacted ${count} out-of-reach ${field} values`);
         }
-        const last = noted.docs[noted.docs.length - 1];
-        cursor = { value: last.get(field) as string, id: last.id };
+        cursorSnap = noted.docs[noted.docs.length - 1];
+        lastId = cursorSnap.id;
         if (noted.size < 500) {
           exhausted = true;
           break;
@@ -343,8 +361,10 @@ export async function runCleanupOldData(
           );
         }
       }
-      // Exhausted -> wrap to the head next run; truncated -> resume.
-      nextCursorState[`${field}Cursor`] = exhausted ? null : cursor;
+      // Exhausted -> wrap to the head next run; truncated -> resume. A
+      // resume cursor whose doc was redacted mid-run is fine: the note
+      // field is gone, so the next run's guard above falls back to head.
+      nextCursorState[`${field}Cursor`] = exhausted ? null : lastId;
     }
     await cursorStateRef.set(nextCursorState, { merge: true });
   }
