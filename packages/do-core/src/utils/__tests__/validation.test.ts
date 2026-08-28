@@ -137,6 +137,61 @@ describe('validateTaskTiming — the discriminant (§4.1)', () => {
       }),
     ).not.toBeNull();
   });
+
+  it('treats OMITTED fields as absent, equivalently to explicit null (callable JSON drops undefined)', () => {
+    // A web form posting a fixed task naturally omits the other groups'
+    // fields rather than null-filling all seven.
+    expect(
+      validateTaskTiming({
+        timing: 'fixed',
+        date: '2026-09-12',
+        startTime: '14:00',
+        endTime: '18:00',
+      }),
+    ).toBeNull();
+    expect(
+      validateTaskTiming({ timing: 'deadline', dueDate: '2026-09-30' }),
+    ).toBeNull();
+    expect(
+      validateTaskTiming({
+        timing: 'ongoing',
+        startDate: '2026-09-01',
+        cadence: { kind: 'daily' },
+      }),
+    ).toBeNull();
+    // ...and a required field that is omitted fails as "need", not as a
+    // TypeError or a "must not set".
+    expect(
+      validateTaskTiming({ timing: 'fixed', date: '2026-09-12' }),
+    ).toMatch(/need startTime/);
+    expect(validateTaskTiming({ timing: 'deadline' })).toMatch(/need dueDate/);
+  });
+
+  it('type-guards every field itself: junk reaches the error message, never a TypeError', () => {
+    // A non-string startTime must come back invalid-argument-shaped, not
+    // throw from inside isClockTime.
+    expect(validateTaskTiming({ ...FIXED, startTime: 1400 })).toMatch(
+      /startTime/,
+    );
+    expect(validateTaskTiming({ ...FIXED, date: 20260912 })).toMatch(/date/);
+    expect(
+      validateTaskTiming({ ...RECURRING, endDate: ['2026-10-31'] }),
+    ).toMatch(/endDate/);
+    expect(validateTaskTiming({ ...DEADLINE, dueDate: {} })).toMatch(/dueDate/);
+    // Non-object inputs are errors, not throws.
+    expect(validateTaskTiming(null)).not.toBeNull();
+    expect(validateTaskTiming(undefined)).not.toBeNull();
+    expect(validateTaskTiming('fixed')).not.toBeNull();
+  });
+
+  it('accepts a fixed task crossing midnight (endTime <= startTime — the publishSearch precedent)', () => {
+    expect(
+      validateTaskTiming({ ...FIXED, startTime: '20:00', endTime: '01:00' }),
+    ).toBeNull();
+    expect(
+      validateTaskTiming({ ...FIXED, startTime: '22:00', endTime: '22:00' }),
+    ).toBeNull();
+  });
 });
 
 describe('validateTaskCadence', () => {

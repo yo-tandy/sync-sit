@@ -225,17 +225,42 @@ export interface TaskTimingFields {
   cadence: TaskCadence | null;
 }
 
+const TIMING_FIELD_KEYS = [
+  'date',
+  'startTime',
+  'endTime',
+  'dueDate',
+  'startDate',
+  'endDate',
+  'cadence',
+] as const;
+
 /**
  * Validates that exactly the fields of the `timing` model's group are
- * non-null and well-formed, and every other group's fields are null:
+ * present and well-formed, and every other group's fields are absent:
  *
- * - `fixed`     → date + startTime + endTime; all else null
- * - `deadline`  → dueDate; all else null
- * - `recurring` → startDate + endDate + cadence; all else null
- * - `ongoing`   → startDate + cadence, endDate null (§4.1: "endDate:
- *                 recurring (null for ongoing)"); all else null
+ * - `fixed`     → date + startTime + endTime; all else absent
+ * - `deadline`  → dueDate; all else absent
+ * - `recurring` → startDate + endDate + cadence; all else absent
+ * - `ongoing`   → startDate + cadence, endDate absent (§4.1: "endDate:
+ *                 recurring (null for ongoing)"); all else absent
+ *
+ * "Absent" means `null` OR omitted, equivalently, on both sides of the
+ * check: callable payloads are JSON and JSON has no `undefined`, so a web
+ * form posting a `fixed` task naturally omits `startDate`/`endDate`/
+ * `cadence` rather than null-filling all seven fields. The stored TaskDoc
+ * still writes explicit nulls (§4.1) — the callable normalizes.
+ *
+ * Takes `unknown` like the other validators and type-guards every field
+ * itself: a non-string `startTime` must come back as this function's error
+ * message (→ `invalid-argument`), never as a TypeError from deeper in
+ * (→ `internal`).
  */
-export function validateTaskTiming(fields: TaskTimingFields): string | null {
+export function validateTaskTiming(input: unknown): string | null {
+  if (typeof input !== 'object' || input === null) {
+    return 'timing fields must be an object';
+  }
+  const fields = input as Record<string, unknown>;
   const t = fields.timing;
   if (
     t !== 'fixed' &&
@@ -246,8 +271,8 @@ export function validateTaskTiming(fields: TaskTimingFields): string | null {
     return 'timing must be fixed, deadline, recurring or ongoing';
   }
 
-  // Which fields the model requires; everything else must be null.
-  const required: (keyof Omit<TaskTimingFields, 'timing'>)[] =
+  // Which fields the model requires; everything else must be absent.
+  const required: readonly (typeof TIMING_FIELD_KEYS)[number][] =
     t === 'fixed'
       ? ['date', 'startTime', 'endTime']
       : t === 'deadline'
@@ -256,44 +281,44 @@ export function validateTaskTiming(fields: TaskTimingFields): string | null {
           ? ['startDate', 'endDate', 'cadence']
           : ['startDate', 'cadence'];
 
-  const all: (keyof Omit<TaskTimingFields, 'timing'>)[] = [
-    'date',
-    'startTime',
-    'endTime',
-    'dueDate',
-    'startDate',
-    'endDate',
-    'cadence',
-  ];
-  for (const key of all) {
+  for (const key of TIMING_FIELD_KEYS) {
     const value = fields[key];
     if (required.includes(key)) {
       if (value === null || value === undefined) {
         return `${t} tasks need ${key}`;
       }
-    } else if (value !== null) {
+    } else if (value !== null && value !== undefined) {
       return `${t} tasks must not set ${key}`;
     }
   }
 
-  // Well-formedness of the group's own fields.
+  // Well-formedness of the group's own fields. The typeof guards double as
+  // the type check: a number where a string belongs gets the same message
+  // as a junk string.
+  const isDate = (v: unknown) => typeof v === 'string' && isCalendarDate(v);
+  const isTime = (v: unknown) => typeof v === 'string' && isClockTime(v);
   if (t === 'fixed') {
-    if (!isCalendarDate(fields.date!)) return 'date is not a calendar date';
-    if (!isClockTime(fields.startTime!)) return 'startTime is not a valid time';
-    if (!isClockTime(fields.endTime!)) return 'endTime is not a valid time';
+    if (!isDate(fields.date)) return 'date is not a calendar date';
+    if (!isTime(fields.startTime)) return 'startTime is not a valid time';
+    if (!isTime(fields.endTime)) return 'endTime is not a valid time';
+    // endTime <= startTime is LEGAL and means the task crosses midnight
+    // (a 20:00–01:00 party clean-up) — the platform precedent is
+    // publishSearch's one_time handling (PR #210 review), where an end at
+    // or before the start belongs to the next calendar day. Deliberately
+    // not the recurring range-order check's sibling.
   }
-  if (t === 'deadline' && !isCalendarDate(fields.dueDate!)) {
+  if (t === 'deadline' && !isDate(fields.dueDate)) {
     return 'dueDate is not a calendar date';
   }
   if (t === 'recurring' || t === 'ongoing') {
-    if (!isCalendarDate(fields.startDate!)) {
+    if (!isDate(fields.startDate)) {
       return 'startDate is not a calendar date';
     }
     if (t === 'recurring') {
-      if (!isCalendarDate(fields.endDate!)) {
+      if (!isDate(fields.endDate)) {
         return 'endDate is not a calendar date';
       }
-      if (fields.endDate! < fields.startDate!) {
+      if ((fields.endDate as string) < (fields.startDate as string)) {
         return 'endDate must not be before startDate';
       }
     }
