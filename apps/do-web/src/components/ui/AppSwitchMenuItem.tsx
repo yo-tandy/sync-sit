@@ -3,20 +3,29 @@ import { useTranslation } from 'react-i18next';
 import { httpsCallable } from 'firebase/functions';
 import { Spinner } from '@ejm/shared-ui';
 import sitBrandMark from '@ejm/shared-ui/brand-marks/sync-sit.png';
+import studyBrandMark from '@ejm/shared-ui/brand-marks/sync-study.png';
 import { functions } from '@/config/firebase';
-import { SIT_APP_URL } from '@/utils/appSwitch';
+import { SIT_APP_URL, STUDY_APP_URL } from '@/utils/appSwitch';
 
 /**
- * Burger-menu entry that jumps to sync-sit without re-login: mints a
- * one-time handoff code, then navigates with the code in the URL FRAGMENT
- * (#code=… — fragments never reach servers or logs). Non-optimistic: the
- * entry disables with a spinner until the mint resolves; nothing navigates
- * on failure. Shared by the tutor AppBar and the FamilyAppBar.
+ * Menu entry that jumps to a sibling app without re-login: mints a one-time
+ * handoff code, then navigates with the code in the URL FRAGMENT (#code=… —
+ * fragments never reach servers or logs). Non-optimistic: the entry disables
+ * with a spinner until the mint resolves; nothing navigates on failure.
+ *
+ * Unlike the two-way siblings, do-web's switcher chooses between TWO
+ * targets, so the target is a prop. Both directions here are OUT-links,
+ * which decision 20 permits (plan §9.5) — the gated direction is sit/study
+ * linking here, and that lives in their code, not this component.
  */
-export function AppSwitchMenuItem() {
+export function AppSwitchMenuItem({ target }: { target: 'sit' | 'study' }) {
   const { t, i18n } = useTranslation();
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
+
+  const appUrl = target === 'sit' ? SIT_APP_URL : STUDY_APP_URL;
+  const mark = target === 'sit' ? sitBrandMark : studyBrandMark;
+  const label = target === 'sit' ? t('appSwitch.toSit') : t('appSwitch.toStudy');
 
   const handleClick = async () => {
     if (busy) return;
@@ -34,7 +43,7 @@ export function AppSwitchMenuItem() {
       // i18n.language originates from localStorage/navigator via the detector.
       const lang = i18n.language?.startsWith('fr') ? 'fr' : 'en';
       window.location.assign(
-        `${SIT_APP_URL}/handoff#code=${encodeURIComponent(res.data.code)}&lang=${encodeURIComponent(lang)}`,
+        `${appUrl}/handoff#code=${encodeURIComponent(res.data.code)}&lang=${encodeURIComponent(lang)}`,
       );
       // Stay busy: the browser is navigating away.
     } catch {
@@ -50,12 +59,12 @@ export function AppSwitchMenuItem() {
           {busy ? (
             <Spinner className="h-5 w-5" />
           ) : (
-            <img src={sitBrandMark} alt="" className="h-5 w-5 rounded object-contain" />
+            <img src={mark} alt="" className="h-5 w-5 rounded object-contain" />
           )}
         </span>
-        <span>{t('appSwitch.toSit')}</span>
+        <span>{label}</span>
       </div>
-      {failed && <p className="px-4 pb-2 text-xs text-brand-600">{t('appSwitch.error')}</p>}
+      {failed && <p className="px-4 pb-2 text-xs text-error-600">{t('appSwitch.error')}</p>}
     </button>
   );
 }

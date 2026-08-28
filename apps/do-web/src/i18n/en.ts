@@ -1,0 +1,103 @@
+export default {
+  common: {
+    back: 'Back',
+    email: 'Email',
+    password: 'Password',
+    loading: 'Loading...',
+    error: 'An error occurred',
+    signOut: 'Sign out',
+    language: 'Language',
+  },
+
+  auth: {
+    login: 'Log in',
+    loginTitle: 'Welcome back',
+    loginSubtitle: 'Sign in to your Sync/Do account',
+    signedOutEverywhere: 'You have been signed out on another device.',
+    forgotPassword: 'Forgot password?',
+    forgotPasswordTitle: 'Reset Password',
+    forgotPasswordHeading: 'Forgot your password?',
+    forgotPasswordDesc: "Enter your email and we'll send you a link to reset it.",
+    forgotPasswordSubmit: 'Send reset link',
+    checkEmailHeading: 'Check your email',
+    checkEmailDesc: 'We sent a password reset link to',
+    checkEmailHint: "Check your inbox for a link to reset your password. If you don't see it, check your spam folder.",
+    noAccount: "Don't have an account?",
+    signUp: 'Sign up',
+    signingIn: 'Signing in...',
+    errorInvalidCredentials: 'Incorrect email or password.',
+    errorTooManyAttempts: 'Too many attempts. Please try again later.',
+    errorLoginFailed: 'Something went wrong. Please try again.',
+    errorResetFailed: 'Could not send the reset email. Please try again.',
+  },
+
+  welcome: {
+    title: 'Sync/Do',
+    subtitle: 'Connecting EJM families with student helpers for everyday tasks',
+    signUp: 'Sign up',
+    logIn: 'Log in',
+    signUpRole: 'Sign up as...',
+    signUpDoer: 'Doer',
+    signUpDoerDesc: 'For EJM high school students. Offer a hand with gardening, moving boxes, furniture assembly, and more.',
+    signUpParent: 'Parent',
+    signUpParentDesc: 'For EJM families. Post a task and pick from student offers.',
+    alreadyHaveAccount: 'Already have an account?',
+    about: 'About',
+    privacy: 'Privacy',
+    terms: 'Terms',
+    help: 'Help',
+  },
+
+  menu: {
+    about: 'About',
+    home: 'Home',
+    reportProblem: 'Report a Problem',
+    privacyPolicy: 'Privacy Policy',
+    terms: 'Terms & Conditions',
+  },
+
+  appSwitch: {
+    toSit: 'Open sync-sit',
+    toStudy: 'Open sync-study',
+    error: 'Could not switch apps. Please try again.',
+  },
+
+  home: {
+    title: 'Home',
+    comingSoonTitle: 'Sync/Do is on its way',
+    comingSoonBody: 'The task board is being built. Soon, families will post everyday tasks here — gardening, moving boxes, furniture assembly and more — and EJM students will offer to help.',
+    switchHint: 'Your account already works across the Sync apps:',
+  },
+
+  comingSoon: {
+    title: 'Coming soon',
+    body: 'Sign-up for Sync/Do is not open yet — enrollment is being built. If you already have a Sync/Sit or Sync/Study account, it will work here as-is once Sync/Do opens.',
+    backHome: 'Back to home',
+  },
+
+  about: {
+    title: 'About',
+    tagline: 'Connecting families with student helpers for everyday tasks',
+    story: 'Sync/Do is the third app of the Sync family, built for the École Jeannine Manuel community in Paris. Families post everyday tasks — gardening, moving boxes, assembling furniture, running errands — and EJM high school students offer to help.',
+    siblingsTitle: 'One account, three apps',
+    siblingsBody: 'Sync/Do shares its accounts with Sync/Sit (babysitting) and Sync/Study (tutoring). One verified family account and one student identity work across all three.',
+    contactTitle: 'Contact',
+    contactBody: 'Questions or feedback? Reach us at',
+  },
+
+  report: {
+    title: 'Report a Problem',
+    desc: "If you're experiencing an issue, tap the button below to send us an email. We'll pre-fill some diagnostic info to help us investigate.",
+    whatIncluded: 'WHAT WILL BE INCLUDED',
+    userId: 'User ID',
+    time: 'Time',
+    version: 'Version',
+    platform: 'Platform',
+    recentErrors: 'Recent errors',
+    none: 'None',
+    errorsFound: 'error(s) captured',
+    privacyNote: 'Only your user ID is included to help us investigate. No personal data is sent automatically.',
+    openEmail: 'Open email to support',
+    notLoggedIn: 'Not logged in',
+  },
+} as const;

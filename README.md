@@ -158,14 +158,16 @@ VITE_FIREBASE_MESSAGING_SENDER_ID=123456789
 VITE_FIREBASE_APP_ID=1:123456789:web:abc123
 ```
 
-The cross-app switch target is configurable (defaults to the production URLs baked into the code): `VITE_STUDY_APP_URL` in `apps/web`, `VITE_SIT_APP_URL` in `apps/study-web`. Both apps ship a committed `.env.development` pointing these at the sibling dev ports; note that `.env.*` is gitignored, so a git checkout will silently overwrite any untracked local copy of these files.
+The cross-app switch target is configurable (defaults to the production URLs baked into the code): `VITE_STUDY_APP_URL` in `apps/web`, `VITE_SIT_APP_URL` in `apps/study-web`, and BOTH (`VITE_SIT_APP_URL` + `VITE_STUDY_APP_URL`) in `apps/do-web`, whose switcher links out to both siblings (the reverse links are owner-gated — plan decision 20, issue #304). All three apps ship a committed `.env.development` pointing these at the sibling dev ports; note that `.env.*` is gitignored, so a git checkout will silently overwrite any untracked local copy of these files.
 
 ## Scripts
 
 | Command | Description |
 |---------|------------|
-| `pnpm dev` | Start web dev server |
-| `pnpm build` | Build web app for production |
+| `pnpm dev` | Start sit web dev server |
+| `pnpm dev:study` / `pnpm dev:do` | Start the study / do web dev servers |
+| `pnpm build` | Build sit web app for production |
+| `pnpm build:study` / `pnpm build:do` | Build the study / do web apps |
 | `pnpm build:functions` | Compile Cloud Functions |
 | `pnpm emulators` | Start Firebase emulators |
 | `pnpm seed:admin` | Create admin user in emulator |
@@ -215,7 +217,7 @@ The cross-app switch target is configurable (defaults to the production URLs bak
 
 Merges to `main` auto-deploy to production via GitHub Actions
 (`firebase-hosting-merge.yml`): Firestore rules + indexes, Storage rules,
-hosting (both sites), and functions (both codebases). Manual full deploy, if
+hosting (all three sites — sit, study, do), and functions (both codebases). Manual full deploy, if
 ever needed:
 
 ```bash

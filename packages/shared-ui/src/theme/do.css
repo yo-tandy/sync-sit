@@ -1,0 +1,27 @@
+/* ═══════════════════════════════════════════
+   @ejm/shared-ui — sync-do BRAND OVERRIDE
+   Green palette taken from the owner-supplied sync/do icon
+   (docs/assets/sync-do-icon.png; §9.0 of the sync-do plan).
+
+   brand-* is the canonical palette for components. 500 is the
+   icon's background/wordmark green (accents, active states);
+   600 is deliberately darker — white-on-#16ad05 measures 2.99:1,
+   below WCAG AA for the button/link roles brand-600 plays in the
+   sibling apps, while #0d8204 measures 4.99:1. 800 is the forest
+   green of the figures' clothing. 50–400 and 700 interpolate the
+   ramp between white and the icon greens.
+   red-* is deliberately NOT remapped (as in study.css): any
+   red-* usage in do renders Tailwind's real red and means red.
+   ═══════════════════════════════════════════ */
+
+@theme {
+  --color-brand-50: #eefbe9;
+  --color-brand-100: #d8f5cd;
+  --color-brand-200: #b4ea9f;
+  --color-brand-300: #86da68;
+  --color-brand-400: #4cc72e;
+  --color-brand-500: #16ad05; /* icon green */
+  --color-brand-600: #0d8204; /* primary buttons/links (AA 4.99:1 on white) */
+  --color-brand-700: #085c1c;
+  --color-brand-800: #043f12; /* icon forest green */
+}

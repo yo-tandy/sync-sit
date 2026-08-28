@@ -1,9 +1,9 @@
 import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { AboutPageShell } from '@ejm/shared-ui';
+import studyBrandMark from '@ejm/shared-ui/brand-marks/sync-study.png';
 import { ShieldIcon, SearchIcon, UsersIcon, CalendarIcon, DownloadIcon } from '@/components/ui/Icons';
 import { STUDY_APP_URL } from '@/lib/appSwitch';
-import studyLogo from '@/assets/sync-study-logo.png';
 
 export function AboutPage() {
   const { t, i18n } = useTranslation();
@@ -158,7 +158,7 @@ export function AboutPage() {
           href={STUDY_APP_URL}
           className="mb-6 flex items-center gap-3 rounded-lg bg-gray-50 p-3 active:bg-gray-100"
         >
-          <img src={studyLogo} alt="" className="h-8 w-8 shrink-0 rounded-lg object-contain" />
+          <img src={studyBrandMark} alt="" className="h-8 w-8 shrink-0 rounded-lg object-contain" />
           <div>
             <p className="text-sm font-semibold text-brand-600">Sync/Study</p>
             <p className="text-xs text-gray-500">
