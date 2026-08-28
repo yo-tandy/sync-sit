@@ -133,8 +133,21 @@ export function ExpandableBabysitterCard({
     try {
       await callSetNote(text);
       setNoteOpen(false);
-    } catch {
-      setNoteError(t('familyDashboard.notes.error'));
+    } catch (err) {
+      // A failed-precondition save is a dead-end, not a transient failure:
+      // the window closed mid-edit (the sitting started, or the appointment
+      // left 'confirmed' in another tab) and retrying can never work — say so
+      // instead of 'try again' (issue #255 follow-up). The copy deliberately
+      // does NOT point at the remove affordance: on a first-note save nothing
+      // is stored, so no Remove button will render (PR #278 review). Clears
+      // never hit this code (the erasure carve-out is status/timing-blind),
+      // so the remove path keeps its erasure-specific copy.
+      const code = (err as { code?: string })?.code ?? '';
+      setNoteError(
+        code.includes('failed-precondition')
+          ? t('familyDashboard.notes.errorClosed')
+          : t('familyDashboard.notes.error'),
+      );
     } finally {
       setNoteSaving(false);
     }

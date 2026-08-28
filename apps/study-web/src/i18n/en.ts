@@ -502,6 +502,7 @@ export default {
         placeholder: 'e.g. Covered fractions; homework p.42. Bring a calculator next time.',
         save: 'Save note',
         error: 'Couldn\'t save your note. Please try again.',
+        errorClosed: 'This note can\'t be edited in the session\'s current state.',
       },
       instanceStatus: {
         completed: 'Completed',
@@ -1032,6 +1033,7 @@ export default {
         placeholder: 'e.g. Please focus on fractions this week.',
         save: 'Save note',
         error: 'Couldn\'t save your note. Please try again.',
+        errorClosed: 'This note can no longer be edited.',
       },
       actionError: 'Something went wrong. Please try again.',
       location: {

@@ -370,8 +370,22 @@ export function SessionsPage() {
       });
       patchLocalNote(session, instance, trimmed.length ? trimmed : undefined);
       setNoteTarget(null);
-    } catch {
-      setNoteError(t('tutor.sessions.notes.error'));
+    } catch (err) {
+      // A failed-precondition save is not a transient failure: the session
+      // changed state in another tab (e.g. got cancelled), or — rarely, via a
+      // family modification — its start moved so the post window is not open
+      // yet. Blind retrying never helps, so say so instead of 'try again'
+      // (issue #255 follow-up). The copy is deliberately STATE-based, not
+      // 'no longer editable': on this post surface the code also covers
+      // not-started-yet, where 'no longer' would invert the truth (PR #278
+      // review). Clears never hit it (the erasure carve-out is
+      // status/timing-blind), so removeNote keeps its erasure-specific copy.
+      const code = (err as { code?: string })?.code ?? '';
+      setNoteError(
+        code.includes('failed-precondition')
+          ? t('tutor.sessions.notes.errorClosed')
+          : t('tutor.sessions.notes.error'),
+      );
     } finally {
       setNoteSaving(false);
     }

@@ -176,6 +176,26 @@ describe('RequestDetailPage — appointment notes (post)', () => {
     ).toBe(false);
   });
 
+  it('a failed-precondition save shows the dead-end message instead of try-again (issue #255)', async () => {
+    // The window closed mid-edit (e.g. the appointment got cancelled in
+    // another tab) — retrying can never work, so the dialog says so.
+    h.callable.mockImplementation((name: string) =>
+      name === 'getParentContacts'
+        ? Promise.resolve({ data: { contacts: [] } })
+        : Promise.reject(
+            Object.assign(new Error('closed'), { code: 'functions/failed-precondition' }),
+          ),
+    );
+    renderWithApt({ date: YESTERDAY });
+    fireEvent.click(screen.getByText('request.notes.add'));
+    fireEvent.change(screen.getByPlaceholderText('request.notes.placeholder'), {
+      target: { value: 'x' },
+    });
+    fireEvent.click(screen.getByText('request.notes.save'));
+    await waitFor(() => expect(screen.getByText('request.notes.errorClosed')).toBeTruthy());
+    expect(screen.queryByText('request.notes.error')).toBeNull();
+  });
+
   it('a cancelled appointment with an own post-note offers REMOVE, confirmed via the shared Dialog', async () => {
     renderWithApt({ status: 'cancelled', date: YESTERDAY, postAppointmentNote: 'old debrief' });
     expect(screen.queryByText('request.notes.add')).toBeNull();
