@@ -317,7 +317,15 @@ export async function runCleanupOldData(
           cursorSnap = resumeSnap;
         }
       }
-      let lastId: string | null = storedId ?? null;
+      // The persisted resume point is the last SURVIVING (non-redacted)
+      // doc seen: the boundary doc of a truncated pass is usually redacted
+      // (it is redacted exactly when out-of-reach), and a redacted doc's
+      // note is gone, so resuming from it would fall back to the head and
+      // throw the run's progress away (PR #274 round 2). A survivor keeps
+      // its note, so resume always lands; if EVERY examined doc was
+      // redacted, the examined prefix left the index entirely and a head
+      // restart re-examines nothing.
+      let lastSurvivorId: string | null = storedId ?? null;
       let exhausted = false;
       for (let pass = 0; pass < 40; pass++) {
         let query = firestoreDb
@@ -339,6 +347,8 @@ export async function runCleanupOldData(
           if (outOfReach(doc.data())) {
             batch.update(doc.ref, { [field]: FieldValue.delete() });
             count++;
+          } else {
+            lastSurvivorId = doc.id;
           }
         }
         if (count > 0) {
@@ -347,7 +357,6 @@ export async function runCleanupOldData(
           console.log(`Redacted ${count} out-of-reach ${field} values`);
         }
         cursorSnap = noted.docs[noted.docs.length - 1];
-        lastId = cursorSnap.id;
         if (noted.size < 500) {
           exhausted = true;
           break;
@@ -361,10 +370,9 @@ export async function runCleanupOldData(
           );
         }
       }
-      // Exhausted -> wrap to the head next run; truncated -> resume. A
-      // resume cursor whose doc was redacted mid-run is fine: the note
-      // field is gone, so the next run's guard above falls back to head.
-      nextCursorState[`${field}Cursor`] = exhausted ? null : lastId;
+      // Exhausted -> wrap to the head next run; truncated -> resume from
+      // the last surviving doc (see above).
+      nextCursorState[`${field}Cursor`] = exhausted ? null : lastSurvivorId;
     }
     await cursorStateRef.set(nextCursorState, { merge: true });
   }

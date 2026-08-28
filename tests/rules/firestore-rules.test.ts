@@ -790,6 +790,30 @@ describe('accountExistsNotices collection', () => {
   });
 });
 
+describe('cronState collection', () => {
+  // Scheduled-job bookkeeping (issue #238 / PR #274): the appointment-note
+  // redaction cursor lives here. Server-only via the default-deny
+  // catch-all -- the cursor is an appointment doc id, so a readable
+  // cronState would leak which appointment the sweep stopped at, and a
+  // writable one would let a client steer the sweep past (or repeatedly
+  // over) chosen docs.
+  it('denies all client access', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'cronState', 'appointmentNoteRedaction'), {
+        preAppointmentNoteCursor: 'apt-1',
+      });
+    });
+
+    const authed = testEnv.authenticatedContext('anyuser');
+    await assertFails(getDoc(doc(authed.firestore(), 'cronState', 'appointmentNoteRedaction')));
+    await assertFails(
+      setDoc(doc(authed.firestore(), 'cronState', 'appointmentNoteRedaction'), {
+        preAppointmentNoteCursor: 'attacker-chosen',
+      }),
+    );
+  });
+});
+
 describe('verificationSendCounters collection', () => {
   // The issue #155 send caps depend on this collection being server-only via
   // the default-deny catch-all: a readable counter would be a per-address

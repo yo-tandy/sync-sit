@@ -389,6 +389,32 @@ describe('runCleanupOldData', () => {
     expect('preAppointmentNote' in (await db.collection('appointments').doc('resume-m').get()).data()!).toBe(false);
   });
 
+  it('a stale cursor (doc deleted or note gone) falls back to the head instead of crashing (PR #274)', async () => {
+    const db = getDb();
+    const now = new Date();
+
+    await db.collection('appointments').doc('stale-a').set({
+      familyId: seed.family1Id,
+      babysitterUserId: seed.babysitter1.uid,
+      status: 'confirmed',
+      date: daysAgo(9).toISOString().split('T')[0],
+      createdAt: daysAgo(20),
+      updatedAt: daysAgo(9),
+      preAppointmentNote: 'a-note',
+    });
+    // The stored cursor points at a doc that no longer exists -- the guard
+    // must fall back to the head (re-examining is idempotent; a naive
+    // startAfter on a dead snapshot would skip or crash).
+    await db.collection('cronState').doc('appointmentNoteRedaction').set({
+      preAppointmentNoteCursor: 'no-such-doc',
+      postAppointmentNoteCursor: null,
+    });
+
+    const stats = await runCleanupOldData(db, now);
+    expect(stats.appointmentNotesRedacted).toBe(1);
+    expect('preAppointmentNote' in (await db.collection('appointments').doc('stale-a').get()).data()!).toBe(false);
+  });
+
   it('deletes expired published searches and keeps active ones (issue #207)', async () => {
     const db = getDb();
     const now = new Date();
