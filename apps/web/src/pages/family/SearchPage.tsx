@@ -216,7 +216,7 @@ export function SearchPage() {
       // Load returning babysitter IDs
       try {
         const confirmedSnap = await getDocs(
-          query(collection(db, 'appointments'), where('familyId', '==', parent!.familyId), where('status', '==', 'confirmed'))
+          query(collection(db, 'appointments'), where('familyId', '==', familyId), where('status', '==', 'confirmed'))
         );
         const ids = new Set(confirmedSnap.docs.map((d) => d.data().babysitterUserId as string));
         setReturningIds(ids);

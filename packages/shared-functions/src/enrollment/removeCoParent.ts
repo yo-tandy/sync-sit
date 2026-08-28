@@ -45,11 +45,6 @@ export const removeCoParent = onCall(
       throw new HttpsError('not-found', 'User is not in your family');
     }
 
-    // Remove from family parentIds
-    await db.collection('families').doc(callerFamilyId).update({
-      parentIds: FieldValue.arrayRemove(targetUserId),
-    });
-
     // Clear the target's family membership where membership actually
     // LIVES: profiles.parent.familyId (Plan D) -- the field this callable's
     // own gate just read, and the one storage.rules and
@@ -64,6 +59,17 @@ export const removeCoParent = onCall(
       'profiles.parent.familyId': FieldValue.delete(),
       familyId: FieldValue.delete(),
     });
+
+    // Remove from family parentIds -- AFTER the pointer delete (round-2
+    // review): the two writes are not atomic, and this order makes the
+    // failure window harmless. Pointer-first means a mid-failure leaves a
+    // stale parentIds entry (retry cleans it up) instead of the #279 state
+    // (out of parentIds but still holding the membership pointer that
+    // storage.rules and getVerificationDocument key off).
+    await db.collection('families').doc(callerFamilyId).update({
+      parentIds: FieldValue.arrayRemove(targetUserId),
+    });
+
 
     await writeUserActivity(uid, 'remove_co_parent', { targetUserId, familyId: callerFamilyId });
 

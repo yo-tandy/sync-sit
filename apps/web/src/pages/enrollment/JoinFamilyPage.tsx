@@ -219,8 +219,12 @@ export function JoinFamilyPage() {
     );
   }
 
-  // Authed with a parent profile already: nothing to join here.
-  if (firebaseUser && getParentProfile(userDoc)) {
+  // Authed AND already in a family: nothing to join here. Membership, not
+  // profile presence, is the predicate (PR #284 review round 2): an ORPHAN
+  // parent profile -- familyId cleared by removeCoParent, profile retained
+  // -- must fall through to the confirm-join branch below, which is the
+  // only client path to the re-attach carve-out.
+  if (firebaseUser && getParentProfile(userDoc)?.familyId) {
     return (
       <div>
         <TopNav title="Join Family" backTo="/" />

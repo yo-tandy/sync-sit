@@ -89,3 +89,49 @@ describe('addProfileToUser base-field maps', () => {
     expect(Object.keys(h.update!).sort()).toEqual(['profiles.tutor', 'updatedAt']);
   });
 });
+
+// Issue #279 / PR #284: the orphan-parent re-attach carve-out in
+// assertAddable, pinned at the unit level (the emulator suite covers it
+// end-to-end; this holds whoever refactors the gate).
+describe('assertAddable orphan-parent carve-out (issue #279)', () => {
+  it('re-attaches a parent profile WITHOUT a familyId, merging field-by-field', async () => {
+    h.existing = {
+      status: 'active',
+      profiles: { parent: { enrollmentComplete: true, phone: '+33 611111111' } },
+    };
+    await call({ profileKey: 'parent', profileData: { enrollmentComplete: true, familyId: 'fam-new' } });
+    // Field-by-field merge: dotted paths, so the surviving phone is untouched.
+    expect(h.update!['profiles.parent.familyId']).toBe('fam-new');
+    expect(h.update!['profiles.parent']).toBeUndefined();
+  });
+
+  it('still rejects a parent profile WITH a familyId', async () => {
+    h.existing = {
+      status: 'active',
+      profiles: { parent: { enrollmentComplete: true, familyId: 'fam-old' } },
+    };
+    await expect(
+      call({ profileKey: 'parent', profileData: { enrollmentComplete: true, familyId: 'fam-new' } }),
+    ).rejects.toMatchObject({ code: 'already-exists' });
+  });
+
+  it('a legacy Plan C doc (ROOT familyId, none on the profile) is NOT an orphan', async () => {
+    // Reading it as one would let an active member of family X accept an
+    // invite to family Y and hold both memberships (round-2 review).
+    h.existing = {
+      status: 'active',
+      familyId: 'fam-legacy',
+      profiles: { parent: { enrollmentComplete: true } },
+    };
+    await expect(
+      call({ profileKey: 'parent', profileData: { enrollmentComplete: true, familyId: 'fam-new' } }),
+    ).rejects.toMatchObject({ code: 'already-exists' });
+  });
+
+  it('provider profiles keep the strict check (no orphan state exists for them)', async () => {
+    h.existing = { status: 'active', profiles: { tutor: { enrollmentComplete: true } } };
+    await expect(
+      call({ profileKey: 'tutor' }),
+    ).rejects.toMatchObject({ code: 'already-exists' });
+  });
+});

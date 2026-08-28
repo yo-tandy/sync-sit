@@ -9,6 +9,8 @@ import { screen, fireEvent, render, cleanup, act } from '@testing-library/react'
 const h = vi.hoisted(() => ({
   calls: [] as { name: string; payload: unknown }[],
   navigate: () => {},
+  // Controllable auth for the orphan-parent pins (issue #279).
+  auth: { firebaseUser: null as unknown, userDoc: null as Record<string, unknown> | null },
 }));
 
 vi.mock('@/config/firebase', () => ({ auth: {}, functions: {}, db: {} }));
@@ -31,8 +33,8 @@ vi.mock('react-router', async (orig) => ({
 }));
 vi.mock('@/stores/authStore', () => {
   const storeState = () => ({
-    firebaseUser: null,
-    userDoc: null,
+    firebaseUser: h.auth.firebaseUser,
+    userDoc: h.auth.userDoc,
     loading: false,
     refreshUserDoc: () => Promise.resolve(),
   });
@@ -86,6 +88,7 @@ beforeEach(() => {
   cleanup();
   h.calls.length = 0;
   h.navigate = vi.fn();
+  h.auth = { firebaseUser: null, userDoc: null };
 });
 
 afterEach(() => {
@@ -135,5 +138,44 @@ describe('JoinFamilyPage verify payloads (issue #148)', () => {
     const resendCalls = h.calls.filter((c) => c.name === 'verifyParentEmail');
     expect(resendCalls).toHaveLength(2);
     expect(resendCalls[1].payload).toMatchObject({ email: 'invitee@test.com', app: 'sit' });
+  });
+});
+
+// Issue #279 / PR #284 round 2: the "already in family" guard must key on
+// MEMBERSHIP, not profile presence -- an orphan parent profile (familyId
+// cleared by removeCoParent, profile retained) must reach the confirm-join
+// branch, which is the only client path into the server's re-attach
+// carve-out. Before the guard fix, the orphan saw the dead end and no UI
+// could ever repair the account.
+describe('JoinFamilyPage orphan-parent re-attach (issue #279)', () => {
+  function renderAuthed() {
+    return render(
+      <I18nextProvider i18n={i18n}>
+        <MemoryRouter>
+          <JoinFamilyPage />
+        </MemoryRouter>
+      </I18nextProvider>,
+    );
+  }
+
+  it('an ORPHAN parent profile reaches the confirm-join branch', async () => {
+    h.auth = {
+      firebaseUser: { uid: 'orphan-1' },
+      userDoc: { profiles: { parent: { enrollmentComplete: true } } },
+    };
+    renderAuthed();
+    const headings = await screen.findAllByText(/Join the Testers family/);
+    expect(headings.length).toBeGreaterThan(0);
+    expect(screen.queryByText(i18n.t('enrollment.alreadyInFamily'))).toBeNull();
+  });
+
+  it('a MEMBERED parent profile still sees the already-in-family dead end', async () => {
+    h.auth = {
+      firebaseUser: { uid: 'member-1' },
+      userDoc: { profiles: { parent: { enrollmentComplete: true, familyId: 'fam-1' } } },
+    };
+    renderAuthed();
+    expect(await screen.findByText(i18n.t('enrollment.alreadyInFamily'))).toBeTruthy();
+    expect(screen.queryAllByText(/Join the Testers family/)).toHaveLength(0);
   });
 });

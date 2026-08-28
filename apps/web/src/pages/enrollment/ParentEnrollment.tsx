@@ -101,7 +101,9 @@ export function ParentEnrollment() {
   // Steps 0-2 are all credentials (email/verify/password), so add-profile jumps
   // straight to FamilyInfo (step 3) via the mount effect below and never sends
   // credential keys to the callable.
-  const isAddProfile = !!firebaseUser && !getParentProfile(userDoc);
+  // Orphan parent profiles (familyId absent) also take the add-profile
+  // path: the server's re-attach carve-out merges membership onto them.
+  const isAddProfile = !!firebaseUser && !getParentProfile(userDoc)?.familyId;
 
   // For a signed-in user, resolve where the flow starts. Guard on step === 0 so
   // this only fires before the flow begins: after an add-profile success,
@@ -109,8 +111,11 @@ export function ParentEnrollment() {
   // success navigation to /family.
   useEffect(() => {
     if (step !== 0 || authLoading || !firebaseUser) return;
-    if (getParentProfile(userDoc)) {
-      // Already a parent — nothing to add here.
+    if (getParentProfile(userDoc)?.familyId) {
+      // Already in a family — nothing to add here. Membership, not profile
+      // presence (PR #284 review round 2): an orphan parent profile may
+      // enroll a NEW family through the add-profile path, mirroring the
+      // invite re-attach.
       navigate('/family', { replace: true });
     } else {
       // Skip the credential steps and go straight to family info.

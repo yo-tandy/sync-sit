@@ -48,9 +48,16 @@ function assertAddable(snap: DocumentSnapshot, profileKey: ProfileKey): void {
     // a parent profile WITH a familyId still rejects, as ever. Provider
     // profiles keep the strict check -- they have no equivalent orphan
     // state or re-attach flow.
+    // Truthiness on BOTH membership fields (round-2 review): a legacy
+    // Plan C doc carries membership at the ROOT familyId with none on the
+    // profile -- reading it as an orphan would let an active member of
+    // family X accept an invite to family Y and hold both. And '' / null,
+    // while unreachable today (removeCoParent deletes the field), must not
+    // count as membership.
     const isOrphanParent =
       profileKey === 'parent' &&
-      (data.profiles.parent as { familyId?: string } | undefined)?.familyId === undefined;
+      !(data.profiles.parent as { familyId?: string } | undefined)?.familyId &&
+      !data.familyId;
     if (!isOrphanParent) {
       throw new HttpsError(
         'already-exists',
