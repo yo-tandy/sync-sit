@@ -102,6 +102,13 @@ describe('family DashboardPage', () => {
     expect(screen.getByText(/Dana/)).toBeInTheDocument();
   });
 
+  it('opts into the wide desktop tier on its root (issue #119)', () => {
+    // The tile grid wants the 5xl cap; the shell's PageContainer selects on
+    // this attribute sitting on the page ROOT (direct-child :has()).
+    renderWithProviders(<DashboardPage />);
+    expect(screen.getByText(/Dana/).closest('[data-page-width="wide"]')).not.toBeNull();
+  });
+
   it('greets in the shared idiom, with the family context line (parity D1, #239)', async () => {
     // This page had neither comma, wave nor context line before #239, and the
     // context line is new state read off the families snapshot the

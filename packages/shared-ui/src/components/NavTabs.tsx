@@ -14,9 +14,12 @@ export interface NavTabItem {
  * Desktop-only persistent primary nav (issue #119, UX F5). Renders the same
  * primary link list the portal's burger menu holds as a tab row that sticks
  * directly under the h-12 app bar at `md+`; hidden below `md` so the phone
- * shell is untouched. The row's content shares the wide `max-w-5xl` cap so
- * tabs align with capped page content; `overflow-x-auto` keeps long lists
- * (sit family has 8 destinations) usable at exactly-`md` widths.
+ * shell is untouched. The row's content is capped at the wide `max-w-5xl`
+ * tier — chrome deliberately sits at the widest content tier, so on
+ * reading-tier (2xl) pages the tabs run wider than the text column (the
+ * standard app-chrome treatment; do not "fix" this to track the page tier).
+ * `overflow-x-auto` keeps long lists (sit family has 8 destinations) usable
+ * at exactly-`md` widths.
  */
 export function NavTabs({ items, ariaLabel }: { items: NavTabItem[]; ariaLabel: string }) {
   return (
