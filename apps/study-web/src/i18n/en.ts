@@ -505,6 +505,7 @@ export default {
         cancelled: 'Cancelled',
       },
       status: {
+        confirmed: 'Confirmed',
         declined: 'Declined',
         cancelled: 'Cancelled',
         completed: 'Completed',
@@ -1039,6 +1040,7 @@ export default {
         cancelled: 'Cancelled',
       },
       status: {
+        confirmed: 'Confirmed',
         declined: 'Declined',
         cancelled: 'Cancelled',
         completed: 'Completed',

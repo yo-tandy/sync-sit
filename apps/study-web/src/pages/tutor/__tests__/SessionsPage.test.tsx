@@ -891,6 +891,9 @@ describe('tutor SessionsPage — session notes (post)', () => {
 
     expect(await screen.findByText('limbo recap')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /edit session notes/i })).toBeInTheDocument();
+    // The badge must render a LABEL, not a raw i18n path (round 3).
+    expect(screen.getByText('Confirmed')).toBeInTheDocument();
+    expect(screen.queryByText(/tutor\.sessions\.status\./)).not.toBeInTheDocument();
   });
 
   it("the family's pre-note alone offers NO remove (author-only affordance)", async () => {

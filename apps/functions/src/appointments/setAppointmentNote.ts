@@ -44,11 +44,11 @@ import { getParentProfile, type User } from '@ejm/shared-core';
  *
  * Empty `text` clears the note (FieldValue.delete() — the field goes absent,
  * not blank). The author may overwrite their own note freely within its
- * window — and may CLEAR it at ANY time regardless of timing or status (a
- * deliberate divergence from study, tracked for back-porting in issue #255:
- * sit's notes solicit door codes/allergies and reach the supervised sitter's
- * guardians, so the author keeps an erasure path for as long as the
- * appointment is reachable in the UI). The UI stops rendering a card
+ * window — and may CLEAR it at ANY time regardless of timing or status
+ * (issue #255 — landed here first, then ported to study's setSessionNote, so
+ * the twins agree again: sit's notes solicit door codes/allergies and reach
+ * the supervised sitter's guardians, so the author keeps an erasure path for
+ * as long as the appointment is reachable in the UI). The UI stops rendering a card
  * PAST_VISIBILITY_DAYS after the engagement, so past that point the
  * cleanupOldData cron redacts both notes — erasure by the system once the
  * author can no longer do it themselves.
@@ -114,9 +114,9 @@ export const setAppointmentNote = onCall(
       }
     }
 
-    // ── Erasure carve-out (a DELIBERATE divergence from study — see issue
-    // #255 for porting it back): a CLEAR (empty text) passes only the role
-    // gate above. Sit's pre-note copy solicits door codes and a child's
+    // ── Erasure carve-out (issue #255 — landed here first; study's
+    // setSessionNote carries the same carve-out): a CLEAR (empty text)
+    // passes only the role gate above. Sit's pre-note copy solicits door codes and a child's
     // allergies, and since round 1 the note is also projected to the
     // supervised sitter's guardians — so the author must always be able to
     // erase their own note, even after the sitting starts or the appointment

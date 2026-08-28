@@ -947,6 +947,23 @@ describe('family SessionsPage — session notes (pre)', () => {
 
     expect(await screen.findByText('limbo ask')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /remove note/i })).toBeInTheDocument();
+    // The badge must render a LABEL, not a raw i18n path — the status key
+    // must exist for every status the history bucket admits (round 3).
+    expect(screen.getByText('Confirmed')).toBeInTheDocument();
+    expect(screen.queryByText(/family\.sessions\.status\./)).not.toBeInTheDocument();
+  });
+
+  it('a completed series with completed work shows the endorse prompt in history (instances now load)', async () => {
+    // Deliberate side effect of loading instances for ALL series (round 3):
+    // hasCompletedWork can now see a terminal series' completed occurrences,
+    // so the endorse affordance appears exactly where the completed work is.
+    h.sessions = [recurring({ sessionId: 'sE', status: 'completed', tutorUserId: 'tut-9', tutorName: 'Nina Levy' })];
+    h.instances = {
+      sE: [instanceDoc({ instanceId: '2026-07-08', date: '2026-07-08', status: 'completed' })],
+    };
+    renderWithProviders(<SessionsPage />);
+
+    expect(await screen.findByRole('button', { name: /endorse/i })).toBeInTheDocument();
   });
 
   it('a CANCELLED one_time in history still shows the own note and offers REMOVE (never stranded)', async () => {

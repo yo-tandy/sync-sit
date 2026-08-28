@@ -25,8 +25,8 @@ must not disagree on note privacy.
 - Timing is Paris wall-clock (`parisWallTimeToUtc` — DST-safe).
 - Empty `text` clears the note (`FieldValue.delete()` — field goes absent).
   The author overwrites their own note freely within its window.
-  DELIBERATE divergence from study (review round 4; back-port tracked in
-  issue #255): in sit a CLEAR passes only the role gate — the author can
+  Issue #255 (landed here first in review round 4, since ported to study's
+  setSessionNote — the twins agree again): a CLEAR passes only the role gate — the author can
   always erase their own note even after the window closes or the
   appointment leaves `confirmed`, because sit's pre-note solicits door
   codes/allergies and reaches the supervised sitter's guardians. Authoring
