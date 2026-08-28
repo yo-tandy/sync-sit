@@ -55,5 +55,5 @@ for (const sourceDir of [functionsDir, studyFunctionsDir]) {
 }
 
 console.log(
-  '✔ Restored workspace:* references and cleaned up shared-core-bundle + sit-core-bundle + study-core-bundle + shared-functions-bundle',
+  '✔ Restored workspace:* references and cleaned up shared-core-bundle + sit-core-bundle + study-core-bundle + do-core-bundle + shared-functions-bundle',
 );

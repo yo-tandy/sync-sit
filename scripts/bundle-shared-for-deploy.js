@@ -178,12 +178,13 @@ updateSourcePackageJson(studyFunctionsDir, {
 
 console.log('✔ Shared packages bundled for deploy');
 console.log(
-  '  → shared-core-bundle/ + sit-core-bundle/ + study-core-bundle/ + shared-functions-bundle/ created in apps/functions/',
+  '  → shared-core-bundle/ + sit-core-bundle/ + study-core-bundle/ + do-core-bundle/ + shared-functions-bundle/ created in apps/functions/',
 );
 console.log('  → sit-core-bundle/package.json rewrites @ejm/shared-core → file:../shared-core-bundle');
 console.log('  → study-core-bundle/package.json rewrites @ejm/shared-core → file:../shared-core-bundle');
+console.log('  → do-core-bundle/package.json rewrites @ejm/shared-core → file:../shared-core-bundle');
 console.log('  → shared-functions-bundle/package.json rewrites @ejm/shared-core + @ejm/sit-core to file: refs');
-console.log('  → apps/functions/package.json updated with file: references for @ejm/sit-core + @ejm/shared-functions');
+console.log('  → apps/functions/package.json updated with file: references for @ejm/sit-core + @ejm/do-core + @ejm/shared-functions');
 console.log(
   '  → apps/study-functions/package.json updated with file: references for @ejm/shared-core + @ejm/sit-core + @ejm/study-core + @ejm/shared-functions',
 );
