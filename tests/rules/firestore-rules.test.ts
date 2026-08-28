@@ -3161,3 +3161,135 @@ describe('taskOffers collection (sync-do plan §7.2)', () => {
     await assertFails(deleteDoc(doc(admin.firestore(), 'taskOffers', 'o-pending')));
   });
 });
+
+// The §7.2 escalation fix (issue #299) — the one sync-do case that lives on
+// `users`, not on the two new collections. Without doerIdentityUnchanged(),
+// an owner could abandon enrollment, flip the flag from the client SDK, and
+// satisfy the doTasks board read rule above.
+describe('users update — profiles.doer.enrollmentComplete pin (issue #299)', () => {
+  async function seedDoer(id: string, enrollmentComplete: boolean) {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'users', id), {
+        uid: id, status: 'active', email: `${id}@ejm.org`,
+        profiles: { doer: { enrollmentComplete, notifyNewTasks: true, categories: ['ikea'], bio: 'old' } },
+      });
+    });
+  }
+
+  it('owner canNOT flip profiles.doer.enrollmentComplete to true (the board-gate escalation)', async () => {
+    await seedDoer('doerHalf', false);
+    const authed = testEnv.authenticatedContext('doerHalf');
+    await assertFails(
+      updateDoc(doc(authed.firestore(), 'users', 'doerHalf'), { 'profiles.doer.enrollmentComplete': true })
+    );
+  });
+
+  it('owner canNOT smuggle the flip inside a whole-map profiles.doer write', async () => {
+    await seedDoer('doerHalf2', false);
+    const authed = testEnv.authenticatedContext('doerHalf2');
+    await assertFails(
+      updateDoc(doc(authed.firestore(), 'users', 'doerHalf2'), {
+        'profiles.doer': { enrollmentComplete: true, notifyNewTasks: true, categories: ['ikea'], bio: 'old' },
+      })
+    );
+  });
+
+  it('owner canNOT clear enrollmentComplete on an enrolled doc either (server-owned both ways)', async () => {
+    await seedDoer('doerDone', true);
+    const authed = testEnv.authenticatedContext('doerDone');
+    await assertFails(
+      updateDoc(doc(authed.firestore(), 'users', 'doerDone'), { 'profiles.doer.enrollmentComplete': false })
+    );
+  });
+
+  it('owner CAN edit the mutable doer fields (bio, notifyNewTasks, categories) with the flag untouched', async () => {
+    await seedDoer('doerEdit', true);
+    const authed = testEnv.authenticatedContext('doerEdit');
+    await assertSucceeds(
+      updateDoc(doc(authed.firestore(), 'users', 'doerEdit'), {
+        'profiles.doer.bio': 'new bio',
+        'profiles.doer.notifyNewTasks': false,
+        'profiles.doer.categories': ['green_thumb', 'ikea'],
+      })
+    );
+  });
+
+  it('a user WITHOUT a doer profile is untouched by the guard (defaults keep it trivially true)', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'users', 'noDoer'), {
+        uid: 'noDoer', status: 'active', email: 'nd@ejm.org',
+        profiles: { babysitter: { enrollmentComplete: true, ejemEmail: 'nd@ejm.org' } },
+      });
+    });
+    const authed = testEnv.authenticatedContext('noDoer');
+    await assertSucceeds(
+      updateDoc(doc(authed.firestore(), 'users', 'noDoer'), { 'profiles.babysitter.hourlyRate': 15 })
+    );
+  });
+});
+
+// §9.1's three offer-card endorsement queries against the shared references
+// collection. No rules change here — the point is that the H2-hardened rule
+// makes the `status in ['approved','published']` constraint LOAD-BEARING:
+// drop it and the whole query is denied (the PR7 trap §9.1 documents; the
+// nearest-looking "fix" would be widening the references read rule).
+describe('references collection — §9.1 offer-card queries (sync-do)', () => {
+  async function seedEndorsements() {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const fs = ctx.firestore();
+      await setDoc(doc(fs, 'references', 'do-appr'), {
+        doerUserId: 'doerOk', appSource: 'do', type: 'family_submitted', status: 'approved',
+        referenceText: 'Great shelf assembly',
+      });
+      await setDoc(doc(fs, 'references', 'do-priv'), {
+        doerUserId: 'doerOk', appSource: 'do', type: 'family_submitted', status: 'private',
+        referenceText: 'Not yet accepted',
+      });
+      await setDoc(doc(fs, 'references', 'sit-appr'), {
+        babysitterUserId: 'doerOk', type: 'family_submitted', status: 'approved',
+        referenceText: 'Great sitter',
+      });
+      await setDoc(doc(fs, 'references', 'study-pub'), {
+        tutorUserId: 'doerOk', appSource: 'study', type: 'family_submitted', status: 'published',
+        referenceText: 'Great tutor',
+      });
+    });
+  }
+
+  it('allows all three provider-keyed queries WITH the status in [approved, published] constraint', async () => {
+    await seedEndorsements();
+    const viewer = testEnv.authenticatedContext('someFamilyParent');
+    await assertSucceeds(getDocs(query(
+      collection(viewer.firestore(), 'references'),
+      where('doerUserId', '==', 'doerOk'),
+      where('status', 'in', ['approved', 'published']),
+    )));
+    await assertSucceeds(getDocs(query(
+      collection(viewer.firestore(), 'references'),
+      where('babysitterUserId', '==', 'doerOk'),
+      where('status', 'in', ['approved', 'published']),
+    )));
+    await assertSucceeds(getDocs(query(
+      collection(viewer.firestore(), 'references'),
+      where('tutorUserId', '==', 'doerOk'),
+      where('status', 'in', ['approved', 'published']),
+    )));
+  });
+
+  it('denies each of the three queries WITHOUT the status constraint', async () => {
+    await seedEndorsements();
+    const viewer = testEnv.authenticatedContext('someFamilyParent');
+    await assertFails(getDocs(query(
+      collection(viewer.firestore(), 'references'),
+      where('doerUserId', '==', 'doerOk'),
+    )));
+    await assertFails(getDocs(query(
+      collection(viewer.firestore(), 'references'),
+      where('babysitterUserId', '==', 'doerOk'),
+    )));
+    await assertFails(getDocs(query(
+      collection(viewer.firestore(), 'references'),
+      where('tutorUserId', '==', 'doerOk'),
+    )));
+  });
+});
