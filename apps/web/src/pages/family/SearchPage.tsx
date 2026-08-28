@@ -190,9 +190,13 @@ export function SearchPage() {
 
   // Load family + kids + returning babysitters
   useEffect(() => {
-    if (!parent?.familyId) return;
+    // Bound AFTER the guard so the string type survives into the hoisted
+    // async closure (familyId is optional on ParentProfile since #279).
+    const rawFamilyId = parent?.familyId;
+    if (!rawFamilyId) return;
+    const familyId: string = rawFamilyId;
     async function load() {
-      const fSnap = await getDoc(doc(db, 'families', parent!.familyId));
+      const fSnap = await getDoc(doc(db, 'families', familyId));
       if (fSnap.exists()) {
         const f = fSnap.data() as FamilyDoc;
         setFamily(f);
@@ -206,13 +210,13 @@ export function SearchPage() {
           if (f.searchDefaults.requireReferences) setFilterRequireRefs(true);
         }
       }
-      const kSnap = await getDocs(collection(db, 'families', parent!.familyId, 'kids'));
+      const kSnap = await getDocs(collection(db, 'families', familyId, 'kids'));
       setKids(kSnap.docs.map((d) => ({ ...(d.data() as KidDoc), kidId: d.id, selected: true })));
 
       // Load returning babysitter IDs
       try {
         const confirmedSnap = await getDocs(
-          query(collection(db, 'appointments'), where('familyId', '==', parent!.familyId), where('status', '==', 'confirmed'))
+          query(collection(db, 'appointments'), where('familyId', '==', familyId), where('status', '==', 'confirmed'))
         );
         const ids = new Set(confirmedSnap.docs.map((d) => d.data().babysitterUserId as string));
         setReturningIds(ids);
@@ -230,10 +234,14 @@ export function SearchPage() {
   // filters (no composite index needed); newest-first sort and the expiry
   // filter run client-side. A failed subscription just hides the section.
   useEffect(() => {
-    if (!parent?.familyId) return;
+    // Bound AFTER the guard so the string type survives into the hoisted
+    // async closure (familyId is optional on ParentProfile since #279).
+    const rawFamilyId = parent?.familyId;
+    if (!rawFamilyId) return;
+    const familyId: string = rawFamilyId;
     const q = query(
       collection(db, 'publishedSearches'),
-      where('familyId', '==', parent.familyId),
+      where('familyId', '==', familyId),
       where('app', '==', 'sit'),
     );
     return onSnapshot(

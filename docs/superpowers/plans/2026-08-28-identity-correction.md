@@ -47,7 +47,8 @@ Sit appointment docs carry `familyName`, not user names; the names in sit
 appointment/search flows (`sitterName`, `babysitterName`) are interpolated
 into one-shot notification/email bodies, not stored.
 
-**Persisted copies (STALE after a correction — known limitation, #273):**
+**Persisted copies (STALE after a correction — known limitation, #273;
+SUPERSEDED: the fan-out shipped, see 2026-08-28-identity-fanout.md):**
 
 - `study-sessions` docs store `tutorName` (bookSession, proposeSession) and
   `parentName` (bookSession; respondToSession fills it on provider-proposal
@@ -86,7 +87,8 @@ from BOTH correction callables.
 
 Conclusion: mirror `correctChildIdentity` exactly — write the users doc, no
 fan-out — with the study-side display-name staleness documented above and
-tracked in #273.
+tracked in #273 (since resolved: the fan-out shipped, see
+2026-08-28-identity-fanout.md).
 
 ## Changes
 

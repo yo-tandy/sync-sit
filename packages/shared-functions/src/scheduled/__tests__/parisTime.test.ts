@@ -90,3 +90,16 @@ describe('parisWallClockPosition', () => {
     });
   });
 });
+
+// ── Agreement test (issue #309) ──────────────────────────────────────────────
+// The implementation was hoisted into @ejm/shared-core; this module is now a
+// re-export shim. Pin the import identity so a future edit that reintroduces
+// a local copy (silently forking the DST behavior) fails loudly here.
+describe('shared-core agreement (#309)', () => {
+  it('re-exports the exact shared-core functions, not a copy', async () => {
+    const sharedCore = await import('@ejm/shared-core/utils/parisTime.js');
+    expect(parisWallTimeToUtc).toBe(sharedCore.parisWallTimeToUtc);
+    expect(parisDateString).toBe(sharedCore.parisDateString);
+    expect(parisWallClockPosition).toBe(sharedCore.parisWallClockPosition);
+  });
+});

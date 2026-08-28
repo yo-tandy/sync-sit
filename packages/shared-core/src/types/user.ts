@@ -97,7 +97,14 @@ export interface ProfileBase {
 }
 
 export interface ParentProfile extends ProfileBase {
-  familyId: string;
+  /**
+   * Absent = the orphan state removeCoParent leaves behind (membership
+   * cleared, profile retained); re-attachable via a fresh invite through
+   * addProfileToUser's orphan-parent carve-out (issue #279). Every
+   * consumer must guard -- and did already, which is why this was typed
+   * required for so long without incident.
+   */
+  familyId?: string;
   /** Parent contact (optional — collected during family enrollment). */
   phone?: string;
   whatsapp?: string;

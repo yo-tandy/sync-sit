@@ -120,6 +120,10 @@ export const sendTutorContactRequest = onCall(
       familyId,
       familyName,
       parentName,
+      // parentName's owner, for the identity-correction fan-out (issue #273).
+      // Duplicates createdByUserId on this parent-initiated shape; the
+      // tutor-initiated shape fills it at accept instead.
+      parentUserId: uid,
       tutorName,
       createdByUserId: uid,
       subject,

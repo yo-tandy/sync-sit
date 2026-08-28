@@ -46,6 +46,9 @@ describe('sendTutorContactRequest', () => {
     expect(doc.familyId).toBe(seed.family1Id);
     expect(doc.familyName).toBe('Dupont');
     expect(doc.parentName).toBe('Marie Dupont');
+    // parentName's owner, so the identity-correction fan-out can reach the
+    // snapshot (issue #273).
+    expect(doc.parentUserId).toBe(seed.parent1.uid);
     expect(doc.tutorName).toBe('Yael Cohen');
     expect(doc.createdByUserId).toBe(seed.parent1.uid);
     expect(doc.subject).toBe('math');

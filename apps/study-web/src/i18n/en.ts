@@ -248,6 +248,8 @@ export default {
     about: 'About',
     openMenu: 'Open menu',
     openMenuPending: 'Open menu (items awaiting your attention)',
+    primaryNav: 'Primary navigation',
+    appMenu: 'Menu',
     home: 'Home',
     reportProblem: 'Report a Problem',
     privacyPolicy: 'Privacy Policy',

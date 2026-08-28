@@ -66,7 +66,9 @@ function reset() {
   );
 }
 
-const endorsementsLink = () => screen.getByRole('link', { name: /endorsements/i });
+// #119 renders the same list as md+ tabs too — scope to the burger dialog.
+const endorsementsLink = () =>
+  within(screen.getByRole('dialog')).getByRole('link', { name: /endorsements/i });
 const triggerDot = (button: HTMLElement) => button.querySelector('.bg-amber-400');
 
 /**

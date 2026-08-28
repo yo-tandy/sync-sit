@@ -294,6 +294,24 @@ describe('users collection — Plan D owner-update guards', () => {
     );
   });
 
+  // Root familyId is server-owned (PR #284 round 4): legacy Plan C
+  // membership. Client-deleting it turned a hybrid doc into an "orphan" by
+  // addProfileToUser's carve-out predicate -- accept an invite to family B
+  // while family A's parentIds still lists you: dual membership.
+  it('owner may NOT delete their root familyId (legacy membership is server-owned)', async () => {
+    await seed('legacy1', {
+      status: 'active', email: 'p@test.com', familyId: 'fam-A',
+      profiles: { parent: { enrollmentComplete: true } },
+    });
+    const authed = testEnv.authenticatedContext('legacy1');
+    await assertFails(
+      updateDoc(doc(authed.firestore(), 'users', 'legacy1'), { familyId: deleteField() })
+    );
+    await assertFails(
+      updateDoc(doc(authed.firestore(), 'users', 'legacy1'), { familyId: 'fam-B' })
+    );
+  });
+
   // sessionEpoch is server-owned (signOutEverywhere callable, issue #181):
   // the cross-app force-sign-out signal must not be client-forgeable.
   it('owner may NOT write sessionEpoch (lone field)', async () => {
@@ -2671,5 +2689,625 @@ describe('users publishedSearchesSeenAt owner writes (issue #207)', () => {
     await assertFails(updateDoc(doc(other.firestore(), 'users', 'seenBs2'), {
       'profiles.babysitter.publishedSearchesSeenAt': new Date(),
     }));
+  });
+});
+
+// ─── sync-do (plan §7.2 / §14): doTasks, taskOffers, and the users doer pin ───
+
+// Shared seed for the sync-do suites. famD is the hiring family, famG the
+// SUPERVISING family of doerOk (the student's own family), famX an unrelated
+// family. 'famGone' deliberately has NO family doc (the deleted-family
+// ordering pin).
+async function seedDoWorld() {
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    const fs = ctx.firestore();
+    await setDoc(doc(fs, 'users', 'doerOk'), {
+      uid: 'doerOk', status: 'active', email: 'd@ejm.org',
+      profiles: { doer: { enrollmentComplete: true, notifyNewTasks: true, categories: ['ikea'] } },
+    });
+    await setDoc(doc(fs, 'users', 'doerPeer'), {
+      uid: 'doerPeer', status: 'active', email: 'p@ejm.org',
+      profiles: { doer: { enrollmentComplete: true, notifyNewTasks: false, categories: [] } },
+    });
+    await setDoc(doc(fs, 'users', 'doerBlocked'), {
+      uid: 'doerBlocked', status: 'blocked', email: 'b@ejm.org',
+      profiles: { doer: { enrollmentComplete: true, notifyNewTasks: true, categories: ['ikea'] } },
+    });
+    await setDoc(doc(fs, 'users', 'doerLegacy'), {
+      uid: 'doerLegacy', status: 'active', email: 'l@ejm.org',
+      profiles: { doer: { enrollmentComplete: false, notifyNewTasks: true, categories: ['ikea'] } },
+    });
+    await setDoc(doc(fs, 'users', 'parentD'), {
+      uid: 'parentD', status: 'active', email: 'pd@x.com',
+      profiles: { parent: { familyId: 'famD' } },
+    });
+    await setDoc(doc(fs, 'users', 'parentG'), {
+      uid: 'parentG', status: 'active', email: 'pg@x.com',
+      profiles: { parent: { familyId: 'famG' } },
+    });
+    await setDoc(doc(fs, 'users', 'parentX'), {
+      uid: 'parentX', status: 'active', email: 'px@x.com',
+      profiles: { parent: { familyId: 'famX' } },
+    });
+    await setDoc(doc(fs, 'users', 'adminDo'), {
+      uid: 'adminDo', status: 'active', email: 'a@x.com', isAdmin: true, profiles: {},
+    });
+    await setDoc(doc(fs, 'families', 'famD'), { familyId: 'famD', parentIds: ['parentD'] });
+    await setDoc(doc(fs, 'families', 'famG'), { familyId: 'famG', parentIds: ['parentG'] });
+    await setDoc(doc(fs, 'families', 'famX'), { familyId: 'famX', parentIds: ['parentX'] });
+
+    const base = { category: 'ikea', familyName: 'Famille D', areaLabel: '16e', createdAt: new Date(), updatedAt: new Date() };
+    await setDoc(doc(fs, 'doTasks', 'taskOpen'), {
+      taskId: 'taskOpen', familyId: 'famD', status: 'open', assignedUserId: null, ...base,
+    });
+    await setDoc(doc(fs, 'doTasks', 'taskAssignedOwn'), {
+      taskId: 'taskAssignedOwn', familyId: 'famD', status: 'assigned', assignedUserId: 'doerOk', ...base,
+    });
+    await setDoc(doc(fs, 'doTasks', 'taskAssignedPeer'), {
+      taskId: 'taskAssignedPeer', familyId: 'famD', status: 'assigned', assignedUserId: 'doerPeer', ...base,
+    });
+    await setDoc(doc(fs, 'doTasks', 'taskCompletedPeer'), {
+      taskId: 'taskCompletedPeer', familyId: 'famD', status: 'completed', assignedUserId: 'doerPeer', agreedPrice: 40, ...base,
+    });
+    await setDoc(doc(fs, 'doTasks', 'taskCancelled'), {
+      taskId: 'taskCancelled', familyId: 'famD', status: 'cancelled', assignedUserId: null, ...base,
+    });
+    await setDoc(doc(fs, 'doTasks', 'taskOrphan'), {
+      taskId: 'taskOrphan', familyId: 'famGone', status: 'assigned', assignedUserId: 'doerPeer', ...base,
+    });
+  });
+}
+
+describe('doTasks collection (sync-do plan §7.2)', () => {
+  it('allows an enrolled active doer to read an OPEN task', async () => {
+    await seedDoWorld();
+    const authed = testEnv.authenticatedContext('doerOk');
+    await assertSucceeds(getDoc(doc(authed.firestore(), 'doTasks', 'taskOpen')));
+  });
+
+  it('allows the assigned doer to read their OWN assigned task', async () => {
+    await seedDoWorld();
+    const authed = testEnv.authenticatedContext('doerOk');
+    await assertSucceeds(getDoc(doc(authed.firestore(), 'doTasks', 'taskAssignedOwn')));
+  });
+
+  it('denies a non-doer (parent of an unrelated family) reading an open task', async () => {
+    await seedDoWorld();
+    const authed = testEnv.authenticatedContext('parentX');
+    await assertFails(getDoc(doc(authed.firestore(), 'doTasks', 'taskOpen')));
+  });
+
+  it('denies a BLOCKED doer (status stays the hard ban gate)', async () => {
+    await seedDoWorld();
+    const authed = testEnv.authenticatedContext('doerBlocked');
+    await assertFails(getDoc(doc(authed.firestore(), 'doTasks', 'taskOpen')));
+  });
+
+  it('denies a doer without enrollmentComplete (the #299 board gate)', async () => {
+    await seedDoWorld();
+    const authed = testEnv.authenticatedContext('doerLegacy');
+    await assertFails(getDoc(doc(authed.firestore(), 'doTasks', 'taskOpen')));
+  });
+
+  // The round-7 board-scoping fix, negative half (§14): the open-or-own scope
+  // is what stops an enrolled student enumerating a peer's assignments and
+  // what they were paid.
+  it("denies an enrolled active doer reading ANOTHER student's assigned task", async () => {
+    await seedDoWorld();
+    const authed = testEnv.authenticatedContext('doerOk');
+    await assertFails(getDoc(doc(authed.firestore(), 'doTasks', 'taskAssignedPeer')));
+  });
+
+  it("denies an enrolled active doer reading ANOTHER student's completed task (agreedPrice)", async () => {
+    await seedDoWorld();
+    const authed = testEnv.authenticatedContext('doerOk');
+    await assertFails(getDoc(doc(authed.firestore(), 'doTasks', 'taskCompletedPeer')));
+  });
+
+  it('denies an enrolled active doer reading a cancelled task (not open, not own)', async () => {
+    await seedDoWorld();
+    const authed = testEnv.authenticatedContext('doerOk');
+    await assertFails(getDoc(doc(authed.firestore(), 'doTasks', 'taskCancelled')));
+  });
+
+  it('allows the owning family to read its tasks in every status', async () => {
+    await seedDoWorld();
+    const authed = testEnv.authenticatedContext('parentD');
+    await assertSucceeds(getDoc(doc(authed.firestore(), 'doTasks', 'taskOpen')));
+    await assertSucceeds(getDoc(doc(authed.firestore(), 'doTasks', 'taskCompletedPeer')));
+    await assertSucceeds(getDoc(doc(authed.firestore(), 'doTasks', 'taskCancelled')));
+  });
+
+  it("denies another family's parent reading a non-open task", async () => {
+    await seedDoWorld();
+    const authed = testEnv.authenticatedContext('parentX');
+    await assertFails(getDoc(doc(authed.firestore(), 'doTasks', 'taskCancelled')));
+  });
+
+  it('denies unauthenticated reads', async () => {
+    await seedDoWorld();
+    const unauthed = testEnv.unauthenticatedContext();
+    await assertFails(getDoc(doc(unauthed.firestore(), 'doTasks', 'taskOpen')));
+  });
+
+  it('allows admin reads', async () => {
+    await seedDoWorld();
+    const authed = testEnv.authenticatedContext('adminDo');
+    await assertSucceeds(getDoc(doc(authed.firestore(), 'doTasks', 'taskOpen')));
+  });
+
+  // isAdmin BEFORE isFamilyMember (the PR #210 ordering lesson): a task whose
+  // family doc was deleted must still be admin-readable — the family get()
+  // erroring must not poison the || chain before isAdmin is reached.
+  it('allows admin to read a task whose family doc no longer exists (ordering pin)', async () => {
+    await seedDoWorld();
+    const authed = testEnv.authenticatedContext('adminDo');
+    await assertSucceeds(getDoc(doc(authed.firestore(), 'doTasks', 'taskOrphan')));
+  });
+
+  // ── List provability (§14, enumerated) ──
+
+  it('allows the doer BOARD query (status == open, newest first)', async () => {
+    await seedDoWorld();
+    const authed = testEnv.authenticatedContext('doerOk');
+    await assertSucceeds(getDocs(query(
+      collection(authed.firestore(), 'doTasks'),
+      where('status', '==', 'open'),
+      orderBy('createdAt', 'desc'),
+      limit(50),
+    )));
+    // With the optional category filter too (the other §7.3 board index).
+    await assertSucceeds(getDocs(query(
+      collection(authed.firestore(), 'doTasks'),
+      where('status', '==', 'open'),
+      where('category', '==', 'ikea'),
+      orderBy('createdAt', 'desc'),
+      limit(50),
+    )));
+  });
+
+  it('denies an UNCONSTRAINED doTasks list even for an enrolled active doer', async () => {
+    await seedDoWorld();
+    const authed = testEnv.authenticatedContext('doerOk');
+    await assertFails(getDocs(query(collection(authed.firestore(), 'doTasks'), limit(50))));
+  });
+
+  it('denies the board query to a non-doer', async () => {
+    await seedDoWorld();
+    const authed = testEnv.authenticatedContext('parentX');
+    await assertFails(getDocs(query(
+      collection(authed.firestore(), 'doTasks'),
+      where('status', '==', 'open'),
+      orderBy('createdAt', 'desc'),
+    )));
+  });
+
+  it("allows the doer's my-assignments query (assignedUserId == own uid)", async () => {
+    await seedDoWorld();
+    const authed = testEnv.authenticatedContext('doerOk');
+    await assertSucceeds(getDocs(query(
+      collection(authed.firestore(), 'doTasks'),
+      where('assignedUserId', '==', 'doerOk'),
+      where('status', 'in', ['assigned', 'completed']),
+      orderBy('updatedAt', 'desc'),
+    )));
+  });
+
+  it("denies a my-assignments query aimed at ANOTHER doer's uid", async () => {
+    await seedDoWorld();
+    const authed = testEnv.authenticatedContext('doerOk');
+    await assertFails(getDocs(query(
+      collection(authed.firestore(), 'doTasks'),
+      where('assignedUserId', '==', 'doerPeer'),
+      where('status', 'in', ['assigned', 'completed']),
+      orderBy('updatedAt', 'desc'),
+    )));
+  });
+
+  it("allows the family's own-tasks query (familyId equality)", async () => {
+    await seedDoWorld();
+    const authed = testEnv.authenticatedContext('parentD');
+    await assertSucceeds(getDocs(query(
+      collection(authed.firestore(), 'doTasks'),
+      where('familyId', '==', 'famD'),
+      orderBy('createdAt', 'desc'),
+    )));
+  });
+
+  // ── No client write path (§7.2: callables only; delete is doCancelTask) ──
+
+  it('denies client create, update, and delete for every role', async () => {
+    await seedDoWorld();
+    const family = testEnv.authenticatedContext('parentD');
+    await assertFails(setDoc(doc(family.firestore(), 'doTasks', 'taskNew'), {
+      taskId: 'taskNew', familyId: 'famD', status: 'open', assignedUserId: null, createdAt: new Date(),
+    }));
+    await assertFails(updateDoc(doc(family.firestore(), 'doTasks', 'taskOpen'), { suggestedBudget: 1 }));
+    await assertFails(deleteDoc(doc(family.firestore(), 'doTasks', 'taskOpen')));
+
+    const doer = testEnv.authenticatedContext('doerOk');
+    await assertFails(updateDoc(doc(doer.firestore(), 'doTasks', 'taskOpen'), { assignedUserId: 'doerOk', status: 'assigned' }));
+    await assertFails(deleteDoc(doc(doer.firestore(), 'doTasks', 'taskAssignedOwn')));
+
+    const admin = testEnv.authenticatedContext('adminDo');
+    await assertFails(updateDoc(doc(admin.firestore(), 'doTasks', 'taskOpen'), { status: 'cancelled' }));
+    await assertFails(deleteDoc(doc(admin.firestore(), 'doTasks', 'taskOpen')));
+  });
+});
+
+describe('taskOffers collection (sync-do plan §7.2)', () => {
+  // Offers by doerOk on famD's tasks. `guardian` is ABSENT (never null) on
+  // non-flagged offers (§4.2) — the seeds preserve that invariant. famG is
+  // doerOk's supervising family.
+  async function seedOffers() {
+    await seedDoWorld();
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const fs = ctx.firestore();
+      const base = { doerUserId: 'doerOk', familyId: 'famD', price: 20, message: 'hi', createdAt: new Date() };
+      await setDoc(doc(fs, 'taskOffers', 'o-pending'), { offerId: 'o-pending', taskId: 'taskOpen', status: 'pending', ...base });
+      await setDoc(doc(fs, 'taskOffers', 'o-accepted'), { offerId: 'o-accepted', taskId: 'taskAssignedOwn', status: 'accepted', ...base });
+      await setDoc(doc(fs, 'taskOffers', 'o-declined'), { offerId: 'o-declined', taskId: 'taskCompletedPeer', status: 'declined', ...base });
+      // Awaiting the supervising parent — invisible to the hiring family.
+      await setDoc(doc(fs, 'taskOffers', 'o-pg'), {
+        offerId: 'o-pg', taskId: 'taskOpen', status: 'pending_guardian',
+        guardian: { familyId: 'famG' }, ...base,
+      });
+      // Self-withdrawn (no guardian involvement).
+      await setDoc(doc(fs, 'taskOffers', 'o-withdrawn'), { offerId: 'o-withdrawn', taskId: 'taskOpen', status: 'withdrawn', ...base });
+      // Withdrawn by GUARDIAN DENIAL (§8 moves a denial to `withdrawn`) —
+      // the doc still carries its guardian map. The §14 leak case: a
+      // `!= pending_guardian` rule would have made this family-readable the
+      // moment the supervising parent refused.
+      await setDoc(doc(fs, 'taskOffers', 'o-withdrawn-gd'), {
+        offerId: 'o-withdrawn-gd', taskId: 'taskOpen', status: 'withdrawn',
+        guardian: { familyId: 'famG' }, ...base,
+      });
+      // A pending_guardian sibling flipped by an acceptance lands in
+      // `expired`, not `declined` (§6.4) — and must STAY family-unreadable.
+      await setDoc(doc(fs, 'taskOffers', 'o-expired-pg'), {
+        offerId: 'o-expired-pg', taskId: 'taskAssignedOwn', status: 'expired',
+        guardian: { familyId: 'famG' }, ...base,
+      });
+      // Family doc deleted underneath a live offer (the admin ordering pin).
+      await setDoc(doc(fs, 'taskOffers', 'o-orphan'), {
+        offerId: 'o-orphan', taskId: 'taskOrphan', doerUserId: 'doerPeer',
+        familyId: 'famGone', status: 'pending', price: 10, createdAt: new Date(),
+      });
+    });
+  }
+
+  // ── The family ALLOW-list: pending / accepted / declined only ──
+
+  it('allows the hiring family to read pending, accepted, and declined offers', async () => {
+    await seedOffers();
+    const authed = testEnv.authenticatedContext('parentD');
+    await assertSucceeds(getDoc(doc(authed.firestore(), 'taskOffers', 'o-pending')));
+    await assertSucceeds(getDoc(doc(authed.firestore(), 'taskOffers', 'o-accepted')));
+    await assertSucceeds(getDoc(doc(authed.firestore(), 'taskOffers', 'o-declined')));
+  });
+
+  it('denies the hiring family a pending_guardian offer', async () => {
+    await seedOffers();
+    const authed = testEnv.authenticatedContext('parentD');
+    await assertFails(getDoc(doc(authed.firestore(), 'taskOffers', 'o-pg')));
+  });
+
+  it('denies the hiring family a self-withdrawn offer', async () => {
+    await seedOffers();
+    const authed = testEnv.authenticatedContext('parentD');
+    await assertFails(getDoc(doc(authed.firestore(), 'taskOffers', 'o-withdrawn')));
+  });
+
+  it('denies the hiring family an offer withdrawn by GUARDIAN DENIAL (the §6.2 invisibility promise, post-decision half)', async () => {
+    await seedOffers();
+    const authed = testEnv.authenticatedContext('parentD');
+    await assertFails(getDoc(doc(authed.firestore(), 'taskOffers', 'o-withdrawn-gd')));
+  });
+
+  it('denies the hiring family a pending_guardian sibling flipped to EXPIRED by an acceptance (§6.4 sibling-flip leak)', async () => {
+    await seedOffers();
+    const authed = testEnv.authenticatedContext('parentD');
+    await assertFails(getDoc(doc(authed.firestore(), 'taskOffers', 'o-expired-pg')));
+  });
+
+  // ── The supervising-parent disjunct ──
+
+  it('allows the SUPERVISING family to read a pending_guardian offer', async () => {
+    await seedOffers();
+    const authed = testEnv.authenticatedContext('parentG');
+    await assertSucceeds(getDoc(doc(authed.firestore(), 'taskOffers', 'o-pg')));
+  });
+
+  it('denies the supervising family the expired ex-pending_guardian sibling (status half of the disjunct)', async () => {
+    await seedOffers();
+    const authed = testEnv.authenticatedContext('parentG');
+    await assertFails(getDoc(doc(authed.firestore(), 'taskOffers', 'o-expired-pg')));
+  });
+
+  it("denies the supervising family the student's PENDING offer (their window closes at approval)", async () => {
+    await seedOffers();
+    const authed = testEnv.authenticatedContext('parentG');
+    await assertFails(getDoc(doc(authed.firestore(), 'taskOffers', 'o-pending')));
+  });
+
+  // ── The offering student, strangers, admin ──
+
+  it('allows the offering doer to read their own offer in EVERY status', async () => {
+    await seedOffers();
+    const authed = testEnv.authenticatedContext('doerOk');
+    await assertSucceeds(getDoc(doc(authed.firestore(), 'taskOffers', 'o-pending')));
+    await assertSucceeds(getDoc(doc(authed.firestore(), 'taskOffers', 'o-pg')));
+    await assertSucceeds(getDoc(doc(authed.firestore(), 'taskOffers', 'o-withdrawn-gd')));
+  });
+
+  it("denies another doer reading someone else's offer", async () => {
+    await seedOffers();
+    const authed = testEnv.authenticatedContext('doerPeer');
+    await assertFails(getDoc(doc(authed.firestore(), 'taskOffers', 'o-pending')));
+  });
+
+  it('denies an unrelated family any offer', async () => {
+    await seedOffers();
+    const authed = testEnv.authenticatedContext('parentX');
+    await assertFails(getDoc(doc(authed.firestore(), 'taskOffers', 'o-pending')));
+  });
+
+  it('denies unauthenticated reads', async () => {
+    await seedOffers();
+    const unauthed = testEnv.unauthenticatedContext();
+    await assertFails(getDoc(doc(unauthed.firestore(), 'taskOffers', 'o-pending')));
+  });
+
+  it('allows admin to read any offer, including pending_guardian', async () => {
+    await seedOffers();
+    const authed = testEnv.authenticatedContext('adminDo');
+    await assertSucceeds(getDoc(doc(authed.firestore(), 'taskOffers', 'o-pg')));
+  });
+
+  // isAdmin BEFORE either isFamilyMember() (PR #210 ordering lesson):
+  // inspecting an offer whose family was deleted is exactly what admin
+  // access is for — the family get() must not error the chain first.
+  it('allows admin to read an offer whose family doc no longer exists (ordering pin)', async () => {
+    await seedOffers();
+    const authed = testEnv.authenticatedContext('adminDo');
+    await assertSucceeds(getDoc(doc(authed.firestore(), 'taskOffers', 'o-orphan')));
+  });
+
+  // ── List provability (§14: the family query in the (familyId, taskId,
+  // status) shape; equality AND in-subset pass, unconstrained fails) ──
+
+  it('allows the family offer query with a per-status EQUALITY', async () => {
+    await seedOffers();
+    const authed = testEnv.authenticatedContext('parentD');
+    await assertSucceeds(getDocs(query(
+      collection(authed.firestore(), 'taskOffers'),
+      where('familyId', '==', 'famD'),
+      where('taskId', '==', 'taskOpen'),
+      where('status', '==', 'pending'),
+      orderBy('createdAt'),
+    )));
+  });
+
+  it('allows the family offer query with an IN over the allow-list subset', async () => {
+    await seedOffers();
+    const authed = testEnv.authenticatedContext('parentD');
+    await assertSucceeds(getDocs(query(
+      collection(authed.firestore(), 'taskOffers'),
+      where('familyId', '==', 'famD'),
+      where('taskId', '==', 'taskOpen'),
+      where('status', 'in', ['pending', 'accepted', 'declined']),
+      orderBy('createdAt'),
+    )));
+  });
+
+  it('denies the family offer query WITHOUT a status constraint (§14 negative)', async () => {
+    await seedOffers();
+    const authed = testEnv.authenticatedContext('parentD');
+    await assertFails(getDocs(query(
+      collection(authed.firestore(), 'taskOffers'),
+      where('familyId', '==', 'famD'),
+      where('taskId', '==', 'taskOpen'),
+      orderBy('createdAt'),
+    )));
+  });
+
+  it('denies a family status-in query that reaches OUTSIDE the allow-list', async () => {
+    await seedOffers();
+    const authed = testEnv.authenticatedContext('parentD');
+    await assertFails(getDocs(query(
+      collection(authed.firestore(), 'taskOffers'),
+      where('familyId', '==', 'famD'),
+      where('taskId', '==', 'taskOpen'),
+      where('status', 'in', ['pending', 'pending_guardian']),
+      orderBy('createdAt'),
+    )));
+  });
+
+  it('allows the §9.1 list-wide badge query (familyId + status, no taskId)', async () => {
+    await seedOffers();
+    const authed = testEnv.authenticatedContext('parentD');
+    await assertSucceeds(getDocs(query(
+      collection(authed.firestore(), 'taskOffers'),
+      where('familyId', '==', 'famD'),
+      where('status', '==', 'pending'),
+      orderBy('createdAt'),
+    )));
+  });
+
+  it("allows the doer's own-offers query (doerUserId equality, no status filter)", async () => {
+    await seedOffers();
+    const authed = testEnv.authenticatedContext('doerOk');
+    await assertSucceeds(getDocs(query(
+      collection(authed.firestore(), 'taskOffers'),
+      where('doerUserId', '==', 'doerOk'),
+      orderBy('createdAt', 'desc'),
+    )));
+  });
+
+  it("denies an own-offers query aimed at ANOTHER doer's uid", async () => {
+    await seedOffers();
+    const authed = testEnv.authenticatedContext('doerOk');
+    await assertFails(getDocs(query(
+      collection(authed.firestore(), 'taskOffers'),
+      where('doerUserId', '==', 'doerPeer'),
+      orderBy('createdAt', 'desc'),
+    )));
+  });
+
+  // ── No client write path — not even the student's own withdraw (§7.2:
+  // doWithdrawOffer owns the offerCount decrement) ──
+
+  it('denies client create, update, and delete for every role', async () => {
+    await seedOffers();
+    const doer = testEnv.authenticatedContext('doerOk');
+    await assertFails(setDoc(doc(doer.firestore(), 'taskOffers', 'taskCancelled_doerOk'), {
+      offerId: 'taskCancelled_doerOk', taskId: 'taskCancelled', doerUserId: 'doerOk',
+      familyId: 'famD', status: 'pending', price: 15, createdAt: new Date(),
+    }));
+    await assertFails(updateDoc(doc(doer.firestore(), 'taskOffers', 'o-pending'), { status: 'withdrawn' }));
+    await assertFails(deleteDoc(doc(doer.firestore(), 'taskOffers', 'o-pending')));
+
+    const family = testEnv.authenticatedContext('parentD');
+    await assertFails(updateDoc(doc(family.firestore(), 'taskOffers', 'o-pending'), { status: 'accepted' }));
+    await assertFails(deleteDoc(doc(family.firestore(), 'taskOffers', 'o-pending')));
+
+    const guardian = testEnv.authenticatedContext('parentG');
+    await assertFails(updateDoc(doc(guardian.firestore(), 'taskOffers', 'o-pg'), { status: 'pending' }));
+
+    const admin = testEnv.authenticatedContext('adminDo');
+    await assertFails(updateDoc(doc(admin.firestore(), 'taskOffers', 'o-pending'), { status: 'expired' }));
+    await assertFails(deleteDoc(doc(admin.firestore(), 'taskOffers', 'o-pending')));
+  });
+});
+
+// The §7.2 escalation fix (issue #299) — the one sync-do case that lives on
+// `users`, not on the two new collections. Without doerIdentityUnchanged(),
+// an owner could abandon enrollment, flip the flag from the client SDK, and
+// satisfy the doTasks board read rule above.
+describe('users update — profiles.doer.enrollmentComplete pin (issue #299)', () => {
+  async function seedDoer(id: string, enrollmentComplete: boolean) {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'users', id), {
+        uid: id, status: 'active', email: `${id}@ejm.org`,
+        profiles: { doer: { enrollmentComplete, notifyNewTasks: true, categories: ['ikea'], bio: 'old' } },
+      });
+    });
+  }
+
+  it('owner canNOT flip profiles.doer.enrollmentComplete to true (the board-gate escalation)', async () => {
+    await seedDoer('doerHalf', false);
+    const authed = testEnv.authenticatedContext('doerHalf');
+    await assertFails(
+      updateDoc(doc(authed.firestore(), 'users', 'doerHalf'), { 'profiles.doer.enrollmentComplete': true })
+    );
+  });
+
+  it('owner canNOT smuggle the flip inside a whole-map profiles.doer write', async () => {
+    await seedDoer('doerHalf2', false);
+    const authed = testEnv.authenticatedContext('doerHalf2');
+    await assertFails(
+      updateDoc(doc(authed.firestore(), 'users', 'doerHalf2'), {
+        'profiles.doer': { enrollmentComplete: true, notifyNewTasks: true, categories: ['ikea'], bio: 'old' },
+      })
+    );
+  });
+
+  it('owner canNOT clear enrollmentComplete on an enrolled doc either (server-owned both ways)', async () => {
+    await seedDoer('doerDone', true);
+    const authed = testEnv.authenticatedContext('doerDone');
+    await assertFails(
+      updateDoc(doc(authed.firestore(), 'users', 'doerDone'), { 'profiles.doer.enrollmentComplete': false })
+    );
+  });
+
+  it('owner CAN edit the mutable doer fields (bio, notifyNewTasks, categories) with the flag untouched', async () => {
+    await seedDoer('doerEdit', true);
+    const authed = testEnv.authenticatedContext('doerEdit');
+    await assertSucceeds(
+      updateDoc(doc(authed.firestore(), 'users', 'doerEdit'), {
+        'profiles.doer.bio': 'new bio',
+        'profiles.doer.notifyNewTasks': false,
+        'profiles.doer.categories': ['green_thumb', 'ikea'],
+      })
+    );
+  });
+
+  it('a user WITHOUT a doer profile is untouched by the guard (defaults keep it trivially true)', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'users', 'noDoer'), {
+        uid: 'noDoer', status: 'active', email: 'nd@ejm.org',
+        profiles: { babysitter: { enrollmentComplete: true, ejemEmail: 'nd@ejm.org' } },
+      });
+    });
+    const authed = testEnv.authenticatedContext('noDoer');
+    await assertSucceeds(
+      updateDoc(doc(authed.firestore(), 'users', 'noDoer'), { 'profiles.babysitter.hourlyRate': 15 })
+    );
+  });
+});
+
+// §9.1's three offer-card endorsement queries against the shared references
+// collection. No rules change here — the point is that the H2-hardened rule
+// makes the `status in ['approved','published']` constraint LOAD-BEARING:
+// drop it and the whole query is denied (the PR7 trap §9.1 documents; the
+// nearest-looking "fix" would be widening the references read rule).
+describe('references collection — §9.1 offer-card queries (sync-do)', () => {
+  async function seedEndorsements() {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const fs = ctx.firestore();
+      await setDoc(doc(fs, 'references', 'do-appr'), {
+        doerUserId: 'doerOk', appSource: 'do', type: 'family_submitted', status: 'approved',
+        referenceText: 'Great shelf assembly',
+      });
+      await setDoc(doc(fs, 'references', 'do-priv'), {
+        doerUserId: 'doerOk', appSource: 'do', type: 'family_submitted', status: 'private',
+        referenceText: 'Not yet accepted',
+      });
+      await setDoc(doc(fs, 'references', 'sit-appr'), {
+        babysitterUserId: 'doerOk', type: 'family_submitted', status: 'approved',
+        referenceText: 'Great sitter',
+      });
+      await setDoc(doc(fs, 'references', 'study-pub'), {
+        tutorUserId: 'doerOk', appSource: 'study', type: 'family_submitted', status: 'published',
+        referenceText: 'Great tutor',
+      });
+    });
+  }
+
+  it('allows all three provider-keyed queries WITH the status in [approved, published] constraint', async () => {
+    await seedEndorsements();
+    const viewer = testEnv.authenticatedContext('someFamilyParent');
+    await assertSucceeds(getDocs(query(
+      collection(viewer.firestore(), 'references'),
+      where('doerUserId', '==', 'doerOk'),
+      where('status', 'in', ['approved', 'published']),
+    )));
+    await assertSucceeds(getDocs(query(
+      collection(viewer.firestore(), 'references'),
+      where('babysitterUserId', '==', 'doerOk'),
+      where('status', 'in', ['approved', 'published']),
+    )));
+    await assertSucceeds(getDocs(query(
+      collection(viewer.firestore(), 'references'),
+      where('tutorUserId', '==', 'doerOk'),
+      where('status', 'in', ['approved', 'published']),
+    )));
+  });
+
+  it('denies each of the three queries WITHOUT the status constraint', async () => {
+    await seedEndorsements();
+    const viewer = testEnv.authenticatedContext('someFamilyParent');
+    await assertFails(getDocs(query(
+      collection(viewer.firestore(), 'references'),
+      where('doerUserId', '==', 'doerOk'),
+    )));
+    await assertFails(getDocs(query(
+      collection(viewer.firestore(), 'references'),
+      where('babysitterUserId', '==', 'doerOk'),
+    )));
+    await assertFails(getDocs(query(
+      collection(viewer.firestore(), 'references'),
+      where('tutorUserId', '==', 'doerOk'),
+    )));
   });
 });

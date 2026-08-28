@@ -4,6 +4,7 @@ import { kidIdentitySchema } from '@ejm/shared-core';
 import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { writeAuditLog } from '../admin/writeAuditLog.js';
+import { fanOutNameCorrections, type NameFanOutSummary } from '../identity/nameFanOut.js';
 import { GUARDIAN_SUCCESS, resolveGuardianCaller } from './shared.js';
 
 interface CorrectData {
@@ -104,12 +105,35 @@ export const correctChildIdentity = onCall(
     }
     await childRef.update(updates);
 
-    await writeAuditLog({
+    // Audit BEFORE the fan-out, so a timeout mid-sweep cannot leave the
+    // committed correction unaudited (PR #291 review) — then patch the
+    // summary in. Same ordering as admin correctUserIdentity.
+    const auditRef = await writeAuditLog({
       adminUserId: callerUid,
       action: 'guardian.correct_child_identity',
       targetUserId: data.childUid,
       details: { before, after, byAdmin: isAdminCaller },
     });
+
+    // Fan the corrected name out into the denormalized copies (issue #273) —
+    // for a governed kid that is chiefly `tutorName` on their study docs.
+    // AFTER the root update commits; a failed sweep is recorded in the audit
+    // entry, never thrown. Same helper as admin correctUserIdentity.
+    if (fields.firstName || fields.lastName) {
+      const fanOut: NameFanOutSummary = await fanOutNameCorrections(
+        data.childUid,
+        fields.firstName ?? (child.firstName as string) ?? '',
+        fields.lastName ?? (child.lastName as string) ?? '',
+      );
+      try {
+        await auditRef.update({ 'details.fanOut': fanOut });
+      } catch (err) {
+        console.error('correctChildIdentity: failed to record fanOut summary', {
+          childUid: data.childUid,
+          err,
+        });
+      }
+    }
     return GUARDIAN_SUCCESS;
   },
 );
