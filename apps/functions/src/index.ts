@@ -101,4 +101,4 @@ export {
 // 11: an existing functions codebase, tie-broken to the one holding the
 // nearest prior art). Domain code lives under src/do/**.
 export { doEnrollDoer } from './do/enrollDoer.js';
-
+export { doUpdateDoerProfile } from './do/updateDoerProfile.js';
