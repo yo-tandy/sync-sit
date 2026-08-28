@@ -85,30 +85,6 @@ jobs:
       - name: Deploy Firestore rules and indexes
         run: pnpm exec firebase deploy --only firestore --project sync-sit --non-interactive
 
-      # Storage rules ride the same reasoning (issue #282): #108 closed this
-      # exact stale-rules gap for Firestore, but storage stayed manual -- a
-      # merged storage.rules security fix (e.g. #276's verification-documents
-      # write tightening) sat inert in prod until someone remembered
-      # `firebase deploy --only storage`.
-      - name: Deploy Storage rules
-        id: storage_rules
-        # continue-on-error is a FIRST-RUN training wheel (PR #283 review):
-        # this step sits upstream of the hosting and functions deploys, and
-        # the WIF service account's firebaserules grant for the STORAGE
-        # service is expected (same Rules API the Firestore step exercises)
-        # but not verifiable from CI ahead of time. A hard failure here
-        # would strand a merge half-deployed (Firestore rules live, hosting
-        # and functions not). The step below turns any failure into a LOUD
-        # workflow warning instead of a silent skip; the tracking issue on
-        # #282 removes the training wheel once the first post-merge run is
-        # green.
-        continue-on-error: true
-        run: pnpm exec firebase deploy --only storage --project sync-sit --non-interactive
-
-      - name: Storage rules deploy outcome
-        if: steps.storage_rules.outcome == 'failure'
-        run: |
-          echo "::warning title=Storage rules NOT deployed::The storage-rules deploy step failed (likely the service account's storage rules grant). Prod storage.rules are STALE until this is fixed -- see the tracking issue on #282."
 
       # Deploy hosting (uses ADC from auth step)
       - name: Deploy Hosting
@@ -132,6 +108,26 @@ jobs:
             sleep 120
             pnpm exec firebase deploy --only functions --project sync-sit --non-interactive --force
           fi
+
+      # Storage rules auto-deploy (issue #282): #108 closed this exact
+      # stale-rules gap for Firestore, but storage stayed manual -- a merged
+      # storage.rules security fix (e.g. #276's verification-documents write
+      # tightening) sat inert in prod until someone remembered the manual
+      # `firebase deploy --only storage`.
+      #
+      # Deliberately LAST, and a hard failure (PR #283 review, round 2): the
+      # WIF service account's storage-side firebaserules grant is expected
+      # (same Rules API the Firestore step exercises) but was not verifiable
+      # from CI ahead of the first run. Running last means a grant failure
+      # turns the run RED -- which GitHub notifies on -- without stranding
+      # the merge half-deployed (rules, hosting and functions have already
+      # shipped). The earlier continue-on-error draft produced a GREEN run
+      # with a buried warning: the same silent-staleness failure this step
+      # exists to close. Once the first post-merge run is green, issue #286
+      # moves this step up beside the Firestore rules deploy to restore the
+      # rules-before-dependent-UI ordering.
+      - name: Deploy Storage rules
+        run: pnpm exec firebase deploy --only storage --project sync-sit --non-interactive
 
       # Unbundle shared
       - run: node scripts/unbundle-shared-after-deploy.js
