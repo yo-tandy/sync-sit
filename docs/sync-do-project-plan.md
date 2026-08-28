@@ -108,7 +108,7 @@ Settled in plan review, same day:
 
 | # | Question | Decision |
 |---|---|---|
-| 12 | Choosing between offers | **Existing endorsements on the offer card. No completed-task count**, and no new rating system. |
+| 12 | Choosing between offers | **Full doer endorsements, modeled on sit/study** (owner, PR #243 review): families endorse a doer after a completed task and the doer manages them in-app, exactly like a sitter's references and a tutor's endorsements. The offer card shows endorsements from **all three apps — sync-do's first, then sit's and study's, each labeled with its origin app**. Still **no completed-task count** and no new rating system. |
 | 13 | Overnight house-sitting | **Cut.** Not relevant to the product; removed from the taxonomy entirely. |
 | 14 | Family verification | **Mandatory to post**, and **portable across all three apps** — the same approval that unlocks sync-sit and sync-study unlocks sync-do. Never re-verify per app. |
 | 15 | Liability & insurance | **The family's responsibility. The platform performs the handshake only.** Insurance, accidents, and damage disputes (including a doer breaking what they assembled) are between the family and the student — stated in the terms and in-product, and true of sync-sit today as much as sync-do. |
@@ -1115,6 +1115,7 @@ taskOffers: (taskId ASC, status ASC, createdAt ASC)         — offers on a task
 taskOffers: (doerUserId ASC, createdAt DESC)                — "my offers" (status tabs narrow client-side, per the split above)
 taskOffers: (guardian.familyId ASC, status ASC)             — guardian queue (server-side, see below)
 references: (tutorUserId ASC, status ASC)                   — offer-card endorsements, study side (NEW)
+references: (doerUserId ASC, status ASC)                    — offer-card endorsements, do side (NEW)
 users:      (status ASC, profiles.doer.notifyNewTasks ASC,
              profiles.doer.categories ARRAY)                — the §10 digest's recipient query (server-side)
 ```
@@ -1340,19 +1341,37 @@ chrome, enrollment steps, forms and theme.
   visible list; §4.1), assigned, completed, cancelled.
 - **Task detail with offers** — the offer list is the heart of the product:
   student name, photo, bio, price, basis, message, declared helper, and their
-  **existing platform endorsements** (decision 12; deliberately **no
-  completed-task count** and no sync-do-specific rating).
+  **endorsements from all three apps** (decision 12 as revised by the owner
+  in PR #243 review; deliberately **no completed-task count** and no
+  sync-do-specific rating).
 
-  Three things that decision carries, which are easy to miss:
+  What that decision carries:
 
-  - **There is no doer endorsement shape, and there will not be one.**
-    `TutorEndorsementDoc` has `appSource: 'study'` as a literal and keys on
-    `tutorUserId` (`packages/study-core/src/types/endorsement.ts:15-19`);
-    sit's equivalent is `ReferenceDoc`, keyed on `babysitterUserId`. Surfacing
-    "existing endorsements" therefore means **two queries against the shared
+  - **sync-do gets its own doer endorsement shape, mirrored from study's.**
+    `DoerEndorsementDoc` lives in the shared `references` collection like its
+    siblings, keyed on `doerUserId` with `appSource: 'do'` as a literal —
+    study's `TutorEndorsementDoc` (`packages/study-core/src/types/
+    endorsement.ts:15-19`, keyed on `tutorUserId`) is the template, sit's
+    `ReferenceDoc` (keyed on `babysitterUserId`) the elder sibling. Same
+    lifecycle as study: the family submits after a completed task
+    (`doSubmitEndorsement`), the doer accepts or declines
+    (`doRespondToEndorsement`), and only accepted endorsements ever render.
+    The doer manages the whole set in-app (§9.2) — full management parity
+    with a sitter's references and a tutor's endorsements, per the owner's
+    call.
+  - **Ordering and labeling on the offer card**: sync-do's own endorsements
+    render FIRST, then sit's and study's, each labeled with its origin app
+    ("From Sync/Sit", "From Sync/Study"). A sit reference vouches for
+    babysitting, not wall-mounting — the label keeps cross-app signal honest
+    instead of presenting it as generic reputation. The same
+    current-app-first, origin-labeled treatment applies to sit and study's
+    own search surfaces — tracked as its own sit/study issue, opened from
+    this review round, since it touches those apps rather than sync-do.
+  - Surfacing the cross-app half means **three queries against the shared
     `references` collection**, and their exact shape is load-bearing:
 
     ```
+    where('doerUserId','==',uid).where('status','in',['approved','published'])
     where('babysitterUserId','==',uid).where('status','in',['approved','published'])
     where('tutorUserId','==',uid).where('status','in',['approved','published'])
     ```
@@ -1368,17 +1387,13 @@ chrome, enrollment steps, forms and theme.
     the dangerous one: at PR7 the symptom is `PERMISSION_DENIED`, and the
     nearest-looking fix is widening the `references` read rule — undoing the
     H2 hardening whose comment block this plan quotes approvingly elsewhere.
-    The real fix is two words of query shape plus the index in §7.3.
-  - **A doer-only student has none.** That is the modal case for a new sync-do
-    enrollee — precisely the moment a family most needs signal. With ratings
-    and task counts both ruled out, the offer card for a new student shows
-    price, message and bio and nothing else. Stated here as a consequence of
-    decision 12 rather than discovered at PR7; §16 item 1 is where it gets
-    revisited if families struggle.
-  - **A sit reference vouches for babysitting; a study endorsement vouches for
-    tutoring.** Neither is evidence about wall-mounting or a dump run. The
-    card should label them by their origin app rather than presenting them as
-    generic reputation — a small product judgement, made here deliberately.
+    The real fix is two words of query shape plus the indexes in §7.3.
+  - **A brand-new doer still has none** — no sync-do endorsements yet, and
+    possibly no sit/study history either. That stays the modal case at
+    enrollment; the difference from the earlier draft is that completed tasks
+    now EARN endorsements, so the empty card is a starting state rather than
+    a permanent one. §16 item 1 is where richer profile signal gets
+    revisited if families still struggle.
 
   Accept / decline per offer.
 - **Assigned task** — contact details revealed, considerations rendered as a
@@ -1396,6 +1411,10 @@ chrome, enrollment steps, forms and theme.
   sub-category is flagged, so the wait is expected rather than mysterious.
 - **My offers** — pending, awaiting-parent, accepted, declined, withdrawn.
 - **My tasks** — assigned work, contact details, checklist, mark-done.
+- **My endorsements** — the doer-side management surface (decision 12 as
+  revised): pending endorsements from families to accept or decline, the
+  accepted set as it renders on offer cards, mirroring the tutor's
+  endorsement management in study.
 
 ### 9.3 Guardian
 
@@ -1526,8 +1545,9 @@ it is spam.
   settled. Above the platform floor, sync-do does not ask how old a student is
   for a given kind of work; the guardian gate is the mechanism instead. For a
   supervised student a parent decides; for an unsupervised one — necessarily
-  15 or over — no further gate applies. Recorded here because it is the
-  decision most likely to be revisited (§17 Q2).
+  15 or over — no further gate applies. Owner-confirmed in PR #243 review
+  ("we will let the parents decide who they're working with"); the §17 Q2
+  worked example stays on file for any future revisit.
 
   An earlier draft of this section said "No minimum age" flat out. That was
   wrong about the platform, not just imprecise: it would have licensed
@@ -1670,11 +1690,12 @@ What sync-do **adds** to shared packages (small, deliberate):
   (owner-scoped quarantine) blocks (§7.4), shipped manually since the merge
   workflow does not deploy it.
 
-One dependency edge §3.2 does not otherwise imply: surfacing existing
-endorsements on the offer card (§9.1) means `do-web` reading both study's
-`TutorEndorsementDoc` and sit's `ReferenceDoc` shapes, so `do-core` or
-`do-web` takes a dependency on `@ejm/study-core` and `@ejm/sit-core`. Small,
-but it contradicts a flat reading of "everything else lives in `do-core`".
+One dependency edge §3.2 does not otherwise imply: the offer card's
+cross-app half (§9.1) means `do-web` reading study's `TutorEndorsementDoc`
+and sit's `ReferenceDoc` shapes alongside its own `DoerEndorsementDoc`, so
+`do-core` or `do-web` takes a dependency on `@ejm/study-core` and
+`@ejm/sit-core`. Small, but it contradicts a flat reading of "everything
+else lives in `do-core`".
 
 Everything else lives in `do-core`. The roadmap's Tier-1 extractions (Plans A–C)
 would each save sync-do a duplicated tree; where one is still `[ ]` at build
@@ -1712,7 +1733,7 @@ the repo has been using.
 | **8** | Doer UI: board with filters, task detail, offer form, my offers, my assignments. | 12 |
 | **9** | Notifications: nine types, email templates EN+FR, `fcmTokensDo` push, the rate-limited board digest. | 8 |
 | **10** | Admin tasks tab, audit coverage, GDPR export + hard-delete coverage, EXIF stripping on upload, storage rules (**manual deploy**), and the decision-15 liability copy in the ToS + posting review + acceptance dialog. | 9 |
-| **11** | Completion + cancellation flows, FR i18n pass, Playwright e2e for post→offer→accept→complete, screenshots on the PR. | 8 |
+| **11** | Completion + cancellation flows; **doer endorsements** (`DoerEndorsementDoc` in `references` with the rules amendment, `doSubmitEndorsement` / `doRespondToEndorsement` mirroring study's pair, the family prompt after completion, the §9.2 "My endorsements" surface, and the offer card's three-source ordering); FR i18n pass, Playwright e2e for post→offer→accept→complete→endorse, screenshots on the PR. | 12 |
 
 Dependencies: 1 → 2 → {3, 4} → 5 → 6 → {7, 8} → 9 → 10 → 11. PRs 7 and 8 can run
 in parallel once 6 lands. Roadmap Plans B and C should land **before PR2** —
@@ -1803,10 +1824,10 @@ actually ran on each.
 | In-app payment | **No** | Decision 8. |
 | Multi-student tasks | **No** | Decision 9 — one assignee, optional declared helper. |
 | Availability blocking | **No** | Decision 10. Conflict *hint* proposed in §17 R2. |
-| Per-category age floors | **No** | Decision 7 — but a worked proposal is on the table in §17 Q2, pending a call. |
+| Per-category age floors | **No** | Decision 7, owner-confirmed in PR #243 review (parents decide); the §17 Q2 worked example is retained for the record only. |
 | Overnight house-sitting | **No** | Decision 13 — removed from the taxonomy, not deferred. |
 | Damage / dispute handling | **No** | Decision 15 — building one would imply a responsibility the platform declines. |
-| Endorsements on the offer card | **Yes** | Decision 12 — reuse what exists. |
+| Endorsements on the offer card | **Yes** | Decision 12 as revised — native doer endorsements (full sit/study-style management) plus sit/study's, current-app first, labeled by origin. |
 | Ratings, reviews, completed-task counts | **No** | Decision 12, explicitly. No new reputation primitive. |
 | In-app messaging | **No** | Consistent with both other apps. |
 | Per-visit tracking on recurring tasks | **No** | No availability blocking ⇒ no instance documents needed. |
@@ -1819,10 +1840,11 @@ actually ran on each.
 
 **Near-term (V1.1)**
 
-1. **Better signal for choosing between offers** — decision 12 keeps V1 to
-   existing endorsements only. If families still struggle to choose between five
-   similar bids, the next lever is richer doer profiles (photos of past work,
-   a skills blurb per category), *not* a rating system.
+1. **Better signal for choosing between offers** — decision 12 gives V1
+   native doer endorsements plus labeled cross-app ones. If families still
+   struggle to choose between five similar bids, the next lever is richer
+   doer profiles (photos of past work, a skills blurb per category), *not*
+   a rating system.
 2. **Saved/favourite doers and direct invitations** — a family that liked a
    student invites them to a task directly, optionally keeping it private to
    invitees. Pairs with the existing favourites work.
@@ -1854,8 +1876,14 @@ analytics — which categories go unfilled, where the supply gaps are.
 
 ### Resolved in review
 
-- **Q1 — choosing between offers** → decision 12. Endorsements yes, completed-
-  task count no.
+- **Q1 — choosing between offers** → decision 12 as revised by the owner
+  (PR #243 review): native doer endorsements with full in-app management,
+  plus cross-app endorsements labeled by origin, current app first.
+  Completed-task count still no.
+- **Q2 — per-sub-category minimum ages** → **declined by the owner**
+  (PR #243 review): "No need at this point. We will let the parents decide
+  who they're working with." The worked example below is retained for the
+  record only.
 - **Q3 — overnight house-sitting** → decision 13. Cut.
 - **Q5 — verification gate** → decision 14. Mandatory, and portable across all
   three apps (§11.1).
@@ -1864,9 +1892,10 @@ analytics — which categories go unfilled, where the supply gaps are.
 
 ### Q2 — per-sub-category minimum ages: a worked example
 
-**Still open.** Decision 7 declined age gating; this section exists so the
-decision is made against something concrete rather than in the abstract. Nothing
-below is built unless the owner says so.
+**Decided — no.** Decision 7 declined age gating and the owner confirmed in
+PR #243 review: "No need at this point. We will let the parents decide who
+they're working with." The section is retained for the record so any future
+revisit starts from something concrete; nothing below is built.
 
 **The mechanism** would be one optional field, `minAge`, on `SubCategoryDef`
 (§4.3). `doSubmitOffer` computes the student's age from `users/{uid}.dateOfBirth`
@@ -1922,9 +1951,11 @@ floor they just cleared.
 
 That is the crispest form of the case, and it is stronger than the first draft
 made it sound: 15 is not an illustrative age, it is the *youngest possible
-unsupervised doer*. So the question is exactly whether a newly-15, unsupervised
+unsupervised doer*. So the question was exactly whether a newly-15, unsupervised
 student should be able to answer a petrol-mower or wall-drilling post with
-nothing between them and the task. Today they can.
+nothing between them and the task. The owner's answer (PR #243 review) is yes —
+the family reviewing offers decides who they work with, which is also where
+decision 1 already puts the judgement call.
 
 ### Still open
 
