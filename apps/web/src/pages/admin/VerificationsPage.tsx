@@ -247,7 +247,10 @@ export function AdminVerificationsPage() {
       </div>
 
       {/* Approve confirmation dialog */}
-      <Dialog open={confirmDialog.open} onClose={() => setConfirmDialog({ ...confirmDialog, open: false })} ariaLabel={confirmDialog.title}>
+      {/* `|| undefined` — a blank title (the initial state) must fall back to
+          the legacy plain-div path rather than ship an EMPTY accessible name
+          (axe aria-dialog-name); every opener sets a title today. */}
+      <Dialog open={confirmDialog.open} onClose={() => setConfirmDialog({ ...confirmDialog, open: false })} ariaLabel={confirmDialog.title || undefined}>
         <h3 className="mb-2 text-lg font-semibold">{confirmDialog.title}</h3>
         <p className="mb-4 text-sm text-gray-600">{confirmDialog.message}</p>
         <div className="flex justify-end gap-2">
