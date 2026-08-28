@@ -76,9 +76,9 @@ export function PublishedSearchesPage() {
   const [sending, setSending] = useState(false);
   // false = no error; otherwise the i18n key under tutor.publishedBoard.
   const [sendError, setSendError] = useState<false | string>(false);
-  const [sendErrorVals, setSendErrorVals] = useState<{ days: number; hours: number }>({
-    days: ADMIN_CONFIG_DEFS.declineCooldownDays.default,
-    hours: ADMIN_CONFIG_DEFS.boardContactWindowHours.default,
+  // count drives i18next pluralization (_one/_other) in the reason copy.
+  const [sendErrorVals, setSendErrorVals] = useState<{ count: number }>({
+    count: ADMIN_CONFIG_DEFS.boardContactWindowHours.default,
   });
 
   // Which searches this tutor has already answered. Equality-only query on
@@ -131,8 +131,10 @@ export function PublishedSearchesPage() {
       // server sends the live values in details so the copy can state them;
       // the table defaults cover a response from an older deploy.
       setSendErrorVals({
-        days: e?.details?.cooldownDays ?? ADMIN_CONFIG_DEFS.declineCooldownDays.default,
-        hours: e?.details?.windowHours ?? ADMIN_CONFIG_DEFS.boardContactWindowHours.default,
+        count:
+          reason === 'decline_cooldown'
+            ? (e?.details?.cooldownDays ?? ADMIN_CONFIG_DEFS.declineCooldownDays.default)
+            : (e?.details?.windowHours ?? ADMIN_CONFIG_DEFS.boardContactWindowHours.default),
       });
       setSendError(
         CONTACT_ERROR_KEY[reason]

@@ -234,7 +234,7 @@ export const contactPublishedSearch = onCall(
       if (recentlyDeclined) {
         throw new HttpsError(
           'failed-precondition',
-          `This family declined your last request for this search. You can try again in ${cooldownDays} days.`,
+          `This family declined your last request for this search. You can try again in ${cooldownDays} day${cooldownDays === 1 ? '' : 's'}.`,
           // The client distinguishes this from the generic "search is gone"
           // failure on the reason, not on the message text -- and renders
           // its own i18n copy, so the configured window rides along in
@@ -279,7 +279,7 @@ export const contactPublishedSearch = onCall(
       if (recentCount >= boardCap) {
         throw new HttpsError(
           'resource-exhausted',
-          `You have contacted several families in the last ${boardWindowHours} hours. You can send more requests once the window passes.`,
+          `You have contacted several families in the last ${boardWindowHours} hour${boardWindowHours === 1 ? '' : 's'}. You can send more requests once the window passes.`,
           // windowHours rides along for the client's interpolated copy.
           { reason: 'board_contact_cap', windowHours: boardWindowHours },
         );

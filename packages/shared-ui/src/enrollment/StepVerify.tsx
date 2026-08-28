@@ -50,15 +50,12 @@ export function StepVerify({
   // floor guarantees configured >= default, and a shorter timer would
   // re-enable the decoy-success resend early).
   useEffect(() => {
-    setResendCooldown((c) => {
-      if (c <= 0) {
-        armedWithRef.current = resendCooldownS;
-        return c;
-      }
-      const elapsed = armedWithRef.current - c;
-      armedWithRef.current = resendCooldownS;
-      return Math.max(c, resendCooldownS - elapsed);
-    });
+    // Ref read/write stays OUT of the updater: StrictMode double-invokes
+    // updaters, and a ref mutated inside one makes the second invocation
+    // compute a bogus elapsed and drop the extension (round-6 review).
+    const armedWith = armedWithRef.current;
+    armedWithRef.current = resendCooldownS;
+    setResendCooldown((c) => (c <= 0 ? c : Math.max(c, resendCooldownS - (armedWith - c))));
   }, [resendCooldownS]);
 
   const handleCodeComplete = async (code: string) => {

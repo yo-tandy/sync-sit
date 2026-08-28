@@ -481,7 +481,6 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-
     // Admin-panel configuration (issue #250): operational caps and windows,
     // not secrets -- readable by any signed-in user (pastVisibilityDays is
     // consumed by the sit dashboards client-side). Writes are denied here:
@@ -492,6 +491,16 @@ service cloud.firestore {
     // inherit signed-in readability by accident.
     match /adminConfig/values {
       allow read: if request.auth != null;
+      allow write: if false;
+    }
+
+    // World-readable mirror of the CLIENT-EXPOSED config keys only
+    // (round-6 review): enrollment wizards read the resend cooldown BEFORE
+    // an account exists, so the authed gate above silently served them the
+    // code default. updateAdminConfig maintains this doc; the abuse levers
+    // (send caps, attempt limits) never appear here.
+    match /adminConfig/client {
+      allow read: if true;
       allow write: if false;
     }
 

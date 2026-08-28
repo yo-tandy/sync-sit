@@ -17,6 +17,8 @@ export type { AdminConfigKey, AdminConfigDef } from '@ejm/shared-core';
  */
 
 export const ADMIN_CONFIG_DOC = 'adminConfig/values';
+/** World-readable mirror of the client-exposed keys (round-6 review). */
+export const ADMIN_CONFIG_CLIENT_DOC = 'adminConfig/client';
 
 /**
  * Cache TTL. Env-tunable so integration tests (and an emergency prod

@@ -7,9 +7,11 @@ import { writeAuditLog } from './writeAuditLog.js';
 import {
   ADMIN_CONFIG_DEFS,
   ADMIN_CONFIG_DOC,
+  ADMIN_CONFIG_CLIENT_DOC,
   invalidateAdminConfigCache,
   type AdminConfigKey,
 } from '../config/adminConfig.js';
+import { CLIENT_EXPOSED_CONFIG_KEYS } from '@ejm/shared-core';
 
 /**
  * Admin-panel configuration callables (issue #250).
@@ -84,6 +86,18 @@ export const updateAdminConfig = onCall(
     const ref = db.doc(ADMIN_CONFIG_DOC);
     const before = (await ref.get()).data() ?? {};
     await ref.set(clean, { merge: true });
+
+    // Mirror the client-exposed subset into the world-readable client doc
+    // (round-6 review): enrollment wizards read verificationCodeCooldownS
+    // BEFORE the account exists, so the authed-only values doc silently
+    // served them the default. Rewritten as a full snapshot (no merge) so
+    // reverted keys disappear; the abuse levers never leave the values doc.
+    const after = (await ref.get()).data() ?? {};
+    const clientMirror: Record<string, unknown> = {};
+    for (const key of CLIENT_EXPOSED_CONFIG_KEYS) {
+      if (Object.hasOwn(after, key)) clientMirror[key] = (after as Record<string, unknown>)[key];
+    }
+    await db.doc(ADMIN_CONFIG_CLIENT_DOC).set(clientMirror);
     invalidateAdminConfigCache();
 
     await writeAuditLog({

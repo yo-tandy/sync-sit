@@ -83,7 +83,7 @@ sync-sit/
 - **Appointment Management** — search, filter, delete
 - **Verification Review** — approve/reject identity and enrollment documents, view registered family data
 - **School Holiday Calendar** — manage Zone C holiday periods
-- **Configuration** — admin-tunable operational parameters (caps, windows, cooldowns; issue #250)
+- **Configuration** — admin-tunable operational parameters (caps, windows, cooldowns; issue #250). Values live in `adminConfig/values` (signed-in read; client-exposed keys mirrored to the world-readable `adminConfig/client`); servers cache reads for 60s — operators can tune or disable the cache with the `ADMIN_CONFIG_TTL_MS` env var on the functions runtime (integer ms; `0` disables caching; blank/unset keeps the default).
 - **Audit Log** — searchable admin action log with user resolution
 - **GDPR Data Export** — export all user data as JSON
 

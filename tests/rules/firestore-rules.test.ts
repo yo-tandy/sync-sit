@@ -2309,6 +2309,25 @@ describe('adminConfig (issue #250)', () => {
     await assertFails(setDoc(doc(db, 'adminConfig', 'values'), { pastVisibilityDays: 30 }));
     await assertFails(updateDoc(doc(db, 'adminConfig', 'values'), { pastVisibilityDays: 30 }));
   });
+
+  // Round-6 review: the client mirror MUST be readable before sign-in --
+  // enrollment wizards read the resend cooldown while request.auth is null,
+  // and an authed-only doc silently served them the 60s default (the exact
+  // decoy-success dead end the knob exists to prevent).
+  it('adminConfig/client is readable UNAUTHENTICATED (pre-auth enrollment reads)', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.firestore().doc('adminConfig/client').set({ verificationCodeCooldownS: 120 });
+    });
+    const db = testEnv.unauthenticatedContext().firestore();
+    await assertSucceeds(getDoc(doc(db, 'adminConfig', 'client')));
+  });
+
+  it('adminConfig/client rejects all client writes (updateAdminConfig maintains it)', async () => {
+    const anon = testEnv.unauthenticatedContext().firestore();
+    const authed = testEnv.authenticatedContext('any-user-1').firestore();
+    await assertFails(setDoc(doc(anon, 'adminConfig', 'client'), { verificationCodeCooldownS: 60 }));
+    await assertFails(setDoc(doc(authed, 'adminConfig', 'client'), { verificationCodeCooldownS: 60 }));
+  });
 });
 
 describe('users update — root identity set-once (issue #144)', () => {

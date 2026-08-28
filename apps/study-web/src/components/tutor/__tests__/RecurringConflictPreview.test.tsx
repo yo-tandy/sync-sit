@@ -96,7 +96,7 @@ function reset() {
     if (path === 'schedules/t1') {
       return Promise.resolve({ exists: () => true, data: () => ({ weekly: h.weekly }) });
     }
-    if (path === 'adminConfig/values') {
+    if (path === 'adminConfig/client') {
       // The preview's config reads (issue #250) -- default empty, tests
       // override h.adminConfig to model a configured value.
       return Promise.resolve({ exists: () => true, data: () => h.adminConfig });

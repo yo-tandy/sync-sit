@@ -118,3 +118,36 @@ filter options; a DECLARED-but-blank ADMIN_CONFIG_TTL_MS reads as unset
 redaction-deferral invariant and the preview's configured-horizon read
 are pinned; README's admin list gains Configuration; the plan's
 Architecture section now describes the round-3 designs.
+
+**Round 5 (PR #266):** StepParentVerify (the one resend UI still hardcoded
+at 60s) takes the configured resendCooldownS; both it and StepVerify gain
+a sync effect extending a running countdown when the configured value
+resolves after mount (never shortening); the round-4 behaviour is pinned
+(timer pins in the shared-ui suite, page-wiring pins in both sit wizard
+suites via an h.configValues reader stub); the dead demand-board error
+copy is fixed on the client -- the server sends cooldownDays/windowHours
+in details and en+fr strings interpolate them; pastVisibilityDays'
+description discloses the note-redaction retention coupling; stranded
+notice-window/ceiling docstrings re-homed onto their getConfigValue call
+sites; merged-statement artifacts split; VERIFICATION_CODE_COOLDOWN_S
+deleted (zero consumers); RECURRING_NOTICE_HOURS linked to the table;
+the min:0 asymmetry (policy levers vs shipped-client floors) stated in
+the defs table; the Keys list floors above corrected to 60..600 / 28..90.
+
+**Round 6 (PR #266):** the auth gate on adminConfig/values silently
+defeated rounds 4-5 for fresh signups -- enrollment wizards read the
+resend cooldown BEFORE the account exists, the denied read fell back to
+the 60s default, and every suite stubbed the reader so nothing caught it.
+Fix: a world-readable `adminConfig/client` mirror holding ONLY the
+clientExposed keys (verificationCodeCooldownS, pastVisibilityDays,
+recurringHorizonWeeks, bookingNoticeHours -- the abuse levers never leave
+the authed values doc), maintained by updateAdminConfig as a full
+snapshot on every save, with the client reader factories re-bound to it;
+rules pins cover unauthenticated read of the mirror and continued denial
+on values. Also: the countdown sync effects made StrictMode-safe (ref
+mutation hoisted out of the state updater, which React double-invokes);
+StrictMode renders added to those pins; reason-mapped board copy
+pluralized via i18next _one/_other with count (en+fr, both apps) and the
+server template strings' unit words made count-aware; stale fixed-window
+docstrings in cleanupOldData/extendRecurring updated; ADMIN_CONFIG_TTL_MS
+documented for operators in the README.

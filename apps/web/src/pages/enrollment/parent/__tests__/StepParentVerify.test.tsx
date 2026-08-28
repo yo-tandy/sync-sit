@@ -1,3 +1,4 @@
+import { StrictMode } from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
 import { I18nextProvider } from 'react-i18next';
@@ -62,21 +63,25 @@ describe('StepParentVerify configured resend cooldown (issue #250)', () => {
     vi.useRealTimers();
   });
 
+  // StrictMode is deliberate (round-6 review): it double-invokes state
+  // updaters, which is what exposed the impure-updater extension drop.
   function renderStep(resendCooldownS?: number) {
     return render(
-      <I18nextProvider i18n={i18n}>
-        <MemoryRouter>
-          <StepParentVerify
-            data={{ email: 'parent@test.com', verificationCode: '' } as ParentFormData}
-            onChange={() => {}}
-            onNext={() => {}}
-            onResend={() => {}}
-            loading={false}
-            error={null}
-            resendCooldownS={resendCooldownS}
-          />
-        </MemoryRouter>
-      </I18nextProvider>,
+      <StrictMode>
+        <I18nextProvider i18n={i18n}>
+          <MemoryRouter>
+            <StepParentVerify
+              data={{ email: 'parent@test.com', verificationCode: '' } as ParentFormData}
+              onChange={() => {}}
+              onNext={() => {}}
+              onResend={() => {}}
+              loading={false}
+              error={null}
+              resendCooldownS={resendCooldownS}
+            />
+          </MemoryRouter>
+        </I18nextProvider>
+      </StrictMode>,
     );
   }
 
@@ -92,19 +97,21 @@ describe('StepParentVerify configured resend cooldown (issue #250)', () => {
     });
     expect(screen.getByText('Resend in 50s')).toBeInTheDocument();
     view.rerender(
-      <I18nextProvider i18n={i18n}>
-        <MemoryRouter>
-          <StepParentVerify
-            data={{ email: 'parent@test.com', verificationCode: '' } as ParentFormData}
-            onChange={() => {}}
-            onNext={() => {}}
-            onResend={() => {}}
-            loading={false}
-            error={null}
-            resendCooldownS={600}
-          />
-        </MemoryRouter>
-      </I18nextProvider>,
+      <StrictMode>
+        <I18nextProvider i18n={i18n}>
+          <MemoryRouter>
+            <StepParentVerify
+              data={{ email: 'parent@test.com', verificationCode: '' } as ParentFormData}
+              onChange={() => {}}
+              onNext={() => {}}
+              onResend={() => {}}
+              loading={false}
+              error={null}
+              resendCooldownS={600}
+            />
+          </MemoryRouter>
+        </I18nextProvider>
+      </StrictMode>,
     );
     expect(screen.getByText('Resend in 590s')).toBeInTheDocument();
   });

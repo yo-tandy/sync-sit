@@ -14,6 +14,15 @@ export interface AdminConfigDef {
   min: number;
   max: number;
   description: string;
+  /**
+   * True for keys a client UI reads directly from Firestore. updateAdminConfig
+   * mirrors ONLY these keys into `adminConfig/client`, which rules leave
+   * world-readable -- enrollment wizards read the resend cooldown BEFORE the
+   * account exists, so an authed-only doc silently serves them the default
+   * (round-6 review). Everything else (the abuse levers in particular) stays
+   * in `adminConfig/values`, readable only to signed-in users.
+   */
+  clientExposed?: boolean;
 }
 
 export const ADMIN_CONFIG_DEFS = {
@@ -43,10 +52,12 @@ export const ADMIN_CONFIG_DEFS = {
   },
   bookingNoticeHours: {
     default: 24, min: 0, max: 168,
+    clientExposed: true,
     description: 'Minimum lead time (hours) for study bookings and moves.',
   },
   recurringHorizonWeeks: {
     default: 8, min: 1, max: 52,
+    clientExposed: true,
     description: 'How far ahead (weeks) recurring study sessions are materialized.',
   },
   kidInviteValidityDays: {
@@ -55,6 +66,7 @@ export const ADMIN_CONFIG_DEFS = {
   },
   verificationCodeCooldownS: {
     default: 60, min: 60, max: 600,
+    clientExposed: true,
     description: 'Resend cooldown (seconds) per email address for verification codes.',
   },
   dailySendCap: {
@@ -71,6 +83,7 @@ export const ADMIN_CONFIG_DEFS = {
   },
   pastVisibilityDays: {
     default: 7, min: 1, max: 90,
+    clientExposed: true,
     description:
       'How long (days) past appointments stay on dashboards. Also defers redaction of appointment notes (door codes, allergy details) by the same window -- raising it extends retention of that data.',
   },
@@ -83,5 +96,10 @@ export const ADMIN_CONFIG_DEFS = {
     description: 'Widest availability range (days) a client may query.',
   },
 } as const satisfies Record<string, AdminConfigDef>;
+
+/** The keys mirrored into the world-readable `adminConfig/client` doc. */
+export const CLIENT_EXPOSED_CONFIG_KEYS = (
+  Object.keys(ADMIN_CONFIG_DEFS) as AdminConfigKey[]
+).filter((k) => (ADMIN_CONFIG_DEFS[k] as AdminConfigDef).clientExposed === true);
 
 export type AdminConfigKey = keyof typeof ADMIN_CONFIG_DEFS;

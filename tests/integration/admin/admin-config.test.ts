@@ -43,6 +43,7 @@ describe('adminConfig', () => {
   beforeEach(async () => {
     const db = getDb();
     await db.doc('adminConfig/values').delete().catch(() => {});
+    await db.doc('adminConfig/client').delete().catch(() => {});
     const pub = await db.collection('publishedSearches').get();
     await Promise.all(pub.docs.map((d) => d.ref.delete()));
   });
@@ -118,6 +119,29 @@ describe('adminConfig', () => {
           ?.changes?.publishedSearchMaxActive?.to === 5,
       )).toBe(true);
     });
+  });
+
+  // Round-6 review: updateAdminConfig maintains the world-readable client
+  // mirror -- clientExposed keys only, rewritten as a full snapshot so
+  // reverts disappear and the abuse levers never leave the values doc.
+  it('mirrors clientExposed keys into adminConfig/client and keeps abuse levers out', async () => {
+    await callFunction(
+      'updateAdminConfig',
+      { updates: { verificationCodeCooldownS: 120, dailySendCap: 5 } },
+      adminToken,
+    );
+    const client = (await getDb().doc('adminConfig/client').get()).data()!;
+    expect(client.verificationCodeCooldownS).toBe(120);
+    expect('dailySendCap' in client).toBe(false);
+
+    // Revert: the mirror snapshot drops the key too.
+    await callFunction(
+      'updateAdminConfig',
+      { updates: { verificationCodeCooldownS: null } },
+      adminToken,
+    );
+    const after = (await getDb().doc('adminConfig/client').get()).data()!;
+    expect('verificationCodeCooldownS' in after).toBe(false);
   });
 
   it('null reverts a key: the field is DELETED and the audit records to: null', async () => {

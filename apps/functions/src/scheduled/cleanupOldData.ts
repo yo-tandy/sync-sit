@@ -34,11 +34,13 @@ export interface CleanupStats {
  * - Published searches: immediate (past expiresAt — the server-computed
  *   min(publish + 7d, babysitting date) lifetime; issue #207)
  * - Appointment notes (issue #238): redacted once the appointment leaves
- *   every UI surface (PAST_VISIBILITY_DAYS = 7). The notes solicit door
- *   codes and a child's allergies, and setAppointmentNote guarantees the
- *   author an erasure path — but the remove affordance lives on cards the
- *   dashboards stop rendering after 7 days, so past that point the system
- *   erases for them. Confirmed recurring arrangements (no date) stay
+ *   every UI surface (the configured pastVisibilityDays window, default
+ *   7 days -- issue #250; both the dashboards and this redaction read the
+ *   same key, so the remove affordance stays reachable for the note's
+ *   whole visible life). The notes solicit door codes and a child's
+ *   allergies, and setAppointmentNote guarantees the author an erasure
+ *   path — but the remove affordance lives on cards the dashboards stop
+ *   rendering past that window, so beyond it the system erases for them. Confirmed recurring arrangements (no date) stay
  *   visible, so their notes are never redacted here. DELIBERATE exception:
  *   notes on PENDING docs are retained indefinitely -- pending cards render
  *   forever, so the author permanently keeps the remove affordance instead

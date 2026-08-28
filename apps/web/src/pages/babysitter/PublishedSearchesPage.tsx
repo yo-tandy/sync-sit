@@ -56,7 +56,7 @@ export function PublishedSearchesPage() {
   const [sending, setSending] = useState(false);
   // false = no error; 'generic' | 'cooldown' | 'cap' picks the copy.
   const [sendError, setSendError] = useState<
-    false | { key: 'generic' | 'cooldown' | 'cap'; days?: number; hours?: number }
+    false | { key: 'generic' | 'cooldown' | 'cap'; count?: number }
   >(false);
 
   // Which searches this sitter has already answered. Equality-only query on
@@ -112,9 +112,9 @@ export function PublishedSearchesPage() {
       // covers a response from an older deploy that predates the payload.
       setSendError(
         details?.reason === 'decline_cooldown'
-          ? { key: 'cooldown', days: details.cooldownDays ?? ADMIN_CONFIG_DEFS.declineCooldownDays.default }
+          ? { key: 'cooldown', count: details.cooldownDays ?? ADMIN_CONFIG_DEFS.declineCooldownDays.default }
           : details?.reason === 'board_contact_cap'
-            ? { key: 'cap', hours: details.windowHours ?? ADMIN_CONFIG_DEFS.boardContactWindowHours.default }
+            ? { key: 'cap', count: details.windowHours ?? ADMIN_CONFIG_DEFS.boardContactWindowHours.default }
             : { key: 'generic' },
       );
     } finally {
@@ -193,7 +193,9 @@ export function PublishedSearchesPage() {
                 : sendError.key === 'cap'
                   ? 'publishedBoard.contactCap'
                   : 'publishedBoard.contactError',
-              { days: sendError.days, hours: sendError.hours },
+              // count drives i18next pluralization (_one/_other) so a
+              // 1-day cooldown or 1-hour window reads grammatically.
+              { count: sendError.count },
             )}
           </p>
         )}

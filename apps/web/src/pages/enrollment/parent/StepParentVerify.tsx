@@ -53,15 +53,11 @@ export function StepParentVerify({
   // countdown when the configured value lands after useState captured
   // the default. Mirrors shared-ui StepVerify.
   useEffect(() => {
-    setResendCooldown((c) => {
-      if (c <= 0) {
-        armedWithRef.current = resendCooldownS;
-        return c;
-      }
-      const elapsed = armedWithRef.current - c;
-      armedWithRef.current = resendCooldownS;
-      return Math.max(c, resendCooldownS - elapsed);
-    });
+    // Ref read/write stays OUT of the updater (StrictMode double-invokes
+    // updaters -- mirrors shared-ui StepVerify, round-6 review).
+    const armedWith = armedWithRef.current;
+    armedWithRef.current = resendCooldownS;
+    setResendCooldown((c) => (c <= 0 ? c : Math.max(c, resendCooldownS - (armedWith - c))));
   }, [resendCooldownS]);
 
   const handleCodeComplete = async (code: string) => {

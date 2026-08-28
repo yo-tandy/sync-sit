@@ -194,17 +194,18 @@ export const sendFamilyContactRequest = onCall(
     // closed lasts a week rather than forever (issue #214).
     await repairTimestamplessDeclines(existingSnap.docs, 'tutor');
     const declinedMs = latestDeclineMs(existingSnap.docs.map((d) => d.data()), 'tutor');
-    const declineCooldownMs = (await getConfigValue('declineCooldownDays')) * 86400_000;
+    const cooldownDays = await getConfigValue('declineCooldownDays');
+    const declineCooldownMs = cooldownDays * 86400_000;
     if (declinedMs !== null && Date.now() - declinedMs < declineCooldownMs) {
       throw new HttpsError(
         'failed-precondition',
-        `This family declined your last request. You can try again in ${Math.round(declineCooldownMs / 86400_000)} days.`,
+        `This family declined your last request. You can try again in ${cooldownDays} day${cooldownDays === 1 ? '' : 's'}.`,
         // The client distinguishes this from the generic "the search is gone"
         // failure on the reason, not on the message text -- and renders its
         // own i18n copy, so the configured window rides along in details
         // for interpolation (this message string only reaches raw-callable
         // readers).
-        { reason: 'decline_cooldown', cooldownDays: Math.round(declineCooldownMs / 86400_000) },
+        { reason: 'decline_cooldown', cooldownDays },
       );
     }
 
@@ -267,7 +268,7 @@ export const sendFamilyContactRequest = onCall(
       if (recentCount >= boardCap) {
         throw new HttpsError(
           'resource-exhausted',
-          `You have contacted several families in the last ${boardWindowHours} hours. You can send more requests once the window passes.`,
+          `You have contacted several families in the last ${boardWindowHours} hour${boardWindowHours === 1 ? '' : 's'}. You can send more requests once the window passes.`,
           // windowHours rides along for the client's interpolated copy.
           { reason: 'board_contact_cap', windowHours: boardWindowHours },
         );

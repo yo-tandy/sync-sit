@@ -1,3 +1,4 @@
+import { StrictMode } from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { I18nextProvider } from 'react-i18next';
@@ -110,19 +111,24 @@ describe('StepVerify configured resend cooldown (issue #250)', () => {
     vi.useRealTimers();
   });
 
+  // StrictMode is deliberate (round-6 review): both apps render under it,
+  // and it double-invokes state updaters -- an impure updater dropped the
+  // mid-countdown extension only under StrictMode, which plain renders miss.
   function renderWithCooldown(resendCooldownS?: number) {
     return render(
-      <I18nextProvider i18n={i18n}>
-        <MemoryRouter>
-          <StepVerify
-            ejemEmail="someone28@ejm.org"
-            onVerify={async () => {}}
-            onResend={async () => {}}
-            error={null}
-            resendCooldownS={resendCooldownS}
-          />
-        </MemoryRouter>
-      </I18nextProvider>,
+      <StrictMode>
+        <I18nextProvider i18n={i18n}>
+          <MemoryRouter>
+            <StepVerify
+              ejemEmail="someone28@ejm.org"
+              onVerify={async () => {}}
+              onResend={async () => {}}
+              error={null}
+              resendCooldownS={resendCooldownS}
+            />
+          </MemoryRouter>
+        </I18nextProvider>
+      </StrictMode>,
     );
   }
 
@@ -139,17 +145,19 @@ describe('StepVerify configured resend cooldown (issue #250)', () => {
     expect(screen.getByText(i18n.t('auth.resendIn', { seconds: 50 }))).toBeInTheDocument();
     // The config read resolves to 600 mid-countdown: 10s elapsed, 590 remain.
     view.rerender(
-      <I18nextProvider i18n={i18n}>
-        <MemoryRouter>
-          <StepVerify
-            ejemEmail="someone28@ejm.org"
-            onVerify={async () => {}}
-            onResend={async () => {}}
-            error={null}
-            resendCooldownS={600}
-          />
-        </MemoryRouter>
-      </I18nextProvider>,
+      <StrictMode>
+        <I18nextProvider i18n={i18n}>
+          <MemoryRouter>
+            <StepVerify
+              ejemEmail="someone28@ejm.org"
+              onVerify={async () => {}}
+              onResend={async () => {}}
+              error={null}
+              resendCooldownS={600}
+            />
+          </MemoryRouter>
+        </I18nextProvider>
+      </StrictMode>,
     );
     expect(screen.getByText(i18n.t('auth.resendIn', { seconds: 590 }))).toBeInTheDocument();
   });
