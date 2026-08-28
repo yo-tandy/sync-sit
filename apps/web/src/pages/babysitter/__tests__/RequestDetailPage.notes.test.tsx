@@ -205,11 +205,16 @@ describe('RequestDetailPage — appointment notes (post)', () => {
         : new Promise((_resolve, reject) => { rejectCall = reject; }),
     );
     fireEvent.click(screen.getByText('request.notes.remove'));
-    // Dialog is open BEFORE the confirm click -- pins that the confirm
-    // lookup below really targets the dialog's button.
+    // Dialog is open BEFORE the confirm click -- pins that the click below
+    // really targets the dialog's button.
     expect(screen.getByText('request.notes.removeTitle')).toBeTruthy();
-    const buttons = screen.getAllByText('request.notes.remove');
-    fireEvent.click(buttons[buttons.length - 1]);
+    // The dialog confirm carries its own erasure-specific label (#269's
+    // both-twins copy round) -- the old getAllByText('request.notes.remove')
+    // last-button idiom silently re-clicked the PAGE affordance once that
+    // key landed, so the callable never fired and the pin's backdrop click
+    // legitimately closed the dialog (the CI failure this fixes; local runs
+    // predated the #269 merge in the branch base).
+    fireEvent.click(screen.getByText('request.notes.removeConfirm'));
     // Synchronize on the callable actually being IN FLIGHT before the
     // backdrop click: the hanging mock assigns rejectCall when invoked.
     // Without this the pin raced the async click handler under CI load --
@@ -223,7 +228,9 @@ describe('RequestDetailPage — appointment notes (post)', () => {
     // would make this half vacuous -- PR #274 review): the error renders,
     // the dialog stays, and the backdrop is functional again.
     rejectCall(new Error('boom'));
-    await waitFor(() => expect(screen.getByText('request.notes.error')).toBeTruthy());
+    // The failed CLEAR renders the erasure-specific copy (#269 twin round),
+    // not the generic save error.
+    await waitFor(() => expect(screen.getByText('request.notes.removeError')).toBeTruthy());
     fireEvent.click(document.querySelector('.fixed.inset-0.z-50')!);
     expect(screen.queryByText('request.notes.removeTitle')).toBeNull();
   });
