@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
-import { getParentProfile } from '@ejm/shared-core';
+import { getParentProfile, hasFamilyMembership } from '@ejm/shared-core';
 import { CrossAppWelcomeCard } from '@/components/family/CrossAppWelcomeCard';
 import { InstallAppBanner } from '@/components/ui/InstallAppBanner';
 import {
@@ -235,6 +235,31 @@ export function DashboardPage() {
     loadRequestCounts();
     loadSessionData();
   });
+
+  // ── Family-less parent (issue #293): after removeCoParent (performed in
+  // the Sync/Sit app — the two apps share the same user doc) the removed
+  // co-parent keeps their parent profile, so the guard still routes them
+  // here, but familyId is gone: every load above no-ops and the dashboard
+  // renders empty with no explanation. Say what the state is and point at
+  // the recovery paths — a fresh invite link (accepted in Sync/Sit, where
+  // the join flow lives) or enrolling a new family here. Membership, not
+  // profile presence: a legacy Plan C doc (root familyId) is an active
+  // member and must never see this. ──
+  if (!hasFamilyMembership(userDoc)) {
+    return (
+      <div className="px-5 pt-4 pb-8" data-page-width="wide">
+        <DashboardGreeting firstName={userDoc?.firstName} />
+        <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-800">
+          <p className="mb-1 text-sm font-semibold">{t('family.dashboard.noFamilyTitle')}</p>
+          <p className="mb-2 text-xs text-amber-700">{t('family.dashboard.noFamilyDesc')}</p>
+          <p className="mb-3 text-xs text-amber-700">{t('family.dashboard.noFamilyInviteHint')}</p>
+          <Link to="/enroll/parent" className="text-xs font-semibold text-amber-900 underline">
+            {t('family.dashboard.noFamilyEnrollCta')}
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   // ── Hero (first match wins). The data-driven states need both snapshots;
   // the search fallback deliberately does NOT — a failed requests read must
