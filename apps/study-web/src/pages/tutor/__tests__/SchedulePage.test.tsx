@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
 import { I18nextProvider } from 'react-i18next';
 import { createMemoryRouter, RouterProvider } from 'react-router';
 import { DAYS_OF_WEEK, createEmptySlots } from '@ejm/shared-core';
@@ -103,6 +103,17 @@ describe('tutor SchedulePage', () => {
     h.schedule.loading = true;
     renderSchedule();
     expect(screen.queryByText('Regular Availability')).not.toBeInTheDocument();
+  });
+
+  it('opts into the wide desktop tier on both return branches (issue #119)', () => {
+    // The weekly timeline grid wants the 5xl cap; the shell's PageContainer
+    // selects on this attribute sitting on the page ROOT (direct-child :has()).
+    renderSchedule();
+    expect(screen.getByText('Regular Availability').closest('[data-page-width="wide"]')).not.toBeNull();
+    cleanup();
+    h.schedule.loading = true;
+    renderSchedule();
+    expect(document.querySelector('[data-page-width="wide"]')).not.toBeNull();
   });
 
   it('renders the moved session-prefs and cancellation-policy sections (issue #169)', () => {
