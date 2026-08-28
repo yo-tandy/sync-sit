@@ -1,0 +1,439 @@
+import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { FieldValue, Timestamp } from 'firebase-admin/firestore';
+import { strongPasswordSchema } from '@ejm/sit-core';
+import {
+  validateEjmEmail,
+  checkEnrollmentAge,
+  getEjemEmail,
+  getContact,
+  type User,
+} from '@ejm/shared-core';
+import {
+  TASK_CATEGORIES,
+  isCalendarDate,
+  validateDoerBio,
+  validateDoerCategories,
+  validateDoerDefaultRate,
+  type TaskCategory,
+} from '@ejm/do-core';
+import { db, adminAuth } from '../config/firebase.js';
+import { getCorsOrigin } from '../config/cors.js';
+import { writeUserActivity } from '../admin/writeAuditLog.js';
+import {
+  addProfileToUser,
+  assertCanAddProfile,
+} from '@ejm/shared-functions/enrollment/addProfileToUser.js';
+import { calculateAge } from '../search/ageBackstop.js';
+import { toDobDate } from './dob.js';
+
+interface DoerEnrollmentInput {
+  // Identity is absent when already on file (issue #144 set-once rule) —
+  // EXCEPT dateOfBirth, which the §11.1 age gate makes mandatory when the
+  // doc lacks one (the modal enrollee is a cross-app babysitter whose sit
+  // profile may well lack a DOB, so the abbreviated flow must be able to
+  // ask for it).
+  firstName?: string;
+  lastName?: string;
+  /** "YYYY-MM-DD" */
+  dateOfBirth?: string;
+  contactEmail?: string;
+  contactPhone?: string;
+  whatsapp?: string;
+  /** Absent → ALL seven (the modal intent stated as data, §3.3). */
+  categories?: TaskCategory[];
+  bio?: string;
+  defaultRate?: number | null;
+  hasCar?: boolean;
+  hasBike?: boolean;
+  notifyNewTasks?: boolean;
+}
+
+interface EnrollDoerData {
+  ejemEmail?: string;
+  verificationCode?: string;
+  password?: string;
+  consentVersion: string;
+  /**
+   * Cross-app switch (§3.3, the sit↔study Plan D pattern): a signed-in
+   * caller whose account already holds a COMPLETED babysitter, tutor or
+   * parent profile adds `profiles.doer` without re-proving mailbox
+   * ownership — that identity was verified when the profile was made
+   * (plan §8's abbreviated half of the identity gate).
+   */
+  crossApp?: boolean;
+  enrollment?: DoerEnrollmentInput;
+}
+
+const NAME_MAX = 100;
+const CONTACT_MAX = 200;
+
+/** Manual guards in the publishSearch house style (plan §8). */
+function validateEnrollmentInput(input: unknown): DoerEnrollmentInput {
+  if (input === undefined || input === null) return {};
+  if (typeof input !== 'object' || Array.isArray(input)) {
+    throw new HttpsError('invalid-argument', 'enrollment must be an object');
+  }
+  const e = input as Record<string, unknown>;
+
+  for (const key of ['firstName', 'lastName'] as const) {
+    const v = e[key];
+    if (v === undefined) continue;
+    if (typeof v !== 'string' || v.trim().length === 0 || v.length > NAME_MAX) {
+      throw new HttpsError(
+        'invalid-argument',
+        `${key} must be a non-empty string of at most ${NAME_MAX} characters`,
+      );
+    }
+  }
+  if (e.dateOfBirth !== undefined) {
+    if (typeof e.dateOfBirth !== 'string' || !isCalendarDate(e.dateOfBirth)) {
+      throw new HttpsError('invalid-argument', 'Date of birth is invalid');
+    }
+  }
+  for (const key of ['contactEmail', 'contactPhone', 'whatsapp'] as const) {
+    const v = e[key];
+    if (v === undefined) continue;
+    if (typeof v !== 'string' || v.length > CONTACT_MAX) {
+      throw new HttpsError(
+        'invalid-argument',
+        `${key} must be a string of at most ${CONTACT_MAX} characters`,
+      );
+    }
+  }
+  if (e.categories !== undefined) {
+    const err = validateDoerCategories(e.categories);
+    if (err) throw new HttpsError('invalid-argument', err);
+  }
+  if (e.bio !== undefined) {
+    const err = validateDoerBio(e.bio);
+    if (err) throw new HttpsError('invalid-argument', err);
+  }
+  if (e.defaultRate !== undefined) {
+    const err = validateDoerDefaultRate(e.defaultRate);
+    if (err) throw new HttpsError('invalid-argument', err);
+  }
+  for (const key of ['hasCar', 'hasBike', 'notifyNewTasks'] as const) {
+    if (e[key] !== undefined && typeof e[key] !== 'boolean') {
+      throw new HttpsError('invalid-argument', `${key} must be a boolean`);
+    }
+  }
+  return e as DoerEnrollmentInput;
+}
+
+/**
+ * `doEnrollDoer` — creates `profiles.doer` (plan §8, §3.3, §11.1).
+ *
+ * Identity gate first: `enrollmentComplete` is set only for a caller with a
+ * VERIFIED EJM identity — either an account already holding a completed
+ * sit/study provider or parent profile (the abbreviated crossApp path), or
+ * the `enrollTutor`-shape emailed-code verification. Without it the §7.2
+ * board read rule would be satisfiable by any authenticated account.
+ *
+ * Then the age gate, exactly as §11.1 states it: every caller must present
+ * a parseable dateOfBirth (missing/NaN → invalid-argument, checked before
+ * any governance branch); an UNGOVERNED caller under 15 is refused on a
+ * bare age-from-DOB check — deliberately NOT enrollTutor's email-guarded
+ * floor shape, whose floor stands down when the EJM email doesn't parse
+ * (`enrollTutor.ts:263`); a governed caller passes the floor at any age
+ * (supervision is their protection). `checkEnrollmentAge` runs only for
+ * the ±1-class `age_mismatch` half, only when the email yields a
+ * graduation year.
+ */
+export const doEnrollDoer = onCall(
+  { region: 'europe-west1', cors: getCorsOrigin() },
+  async (request) => {
+    const data = request.data as EnrollDoerData;
+    const isAddProfile = !!request.auth;
+    const isCrossApp = isAddProfile && data.crossApp === true;
+
+    // 1. Validate password (only for the new-account path)
+    if (!isAddProfile) {
+      const passwordResult = strongPasswordSchema.safeParse(data.password);
+      if (!passwordResult.success) {
+        throw new HttpsError(
+          'invalid-argument',
+          passwordResult.error.issues[0]?.message || 'Password does not meet requirements',
+        );
+      }
+    }
+
+    // 2. Require consent
+    if (!data.consentVersion) {
+      throw new HttpsError('invalid-argument', 'Consent is required');
+    }
+
+    // The caller doc feeds the later checks (crossApp identity, governance
+    // bypass, stored DOB/identity presence) — fetch it once, up front.
+    let callerData: Record<string, unknown> = {};
+    if (isAddProfile) {
+      const callerSnap = await db.collection('users').doc(request.auth!.uid).get();
+      callerData = callerSnap.data() ?? {};
+    }
+
+    // 3. Establish the verified EJM identity (the §11.1 identity gate).
+    // Cross-app: the caller's existing COMPLETED profile is the proof — that
+    // identity was verified by a real enrollment (sit/study provider via the
+    // emailed EJM code, parent via verifyParentEmail + family enrollment).
+    // Note `enrollmentComplete === true`: sit creates its babysitter profile
+    // incomplete and completes it later, and an abandoned half-enrollment
+    // proves nothing.
+    // Classic (new account, or an authed account with no completed profile,
+    // e.g. a governed kid): verify the emailed code — the enrollTutor shape.
+    let ejemEmailLower: string;
+    let codeDoc: FirebaseFirestore.DocumentSnapshot | null = null;
+    if (isCrossApp) {
+      const profiles = (callerData.profiles ?? {}) as Record<string, Record<string, unknown> | undefined>;
+      const hasCompletedProfile = (['babysitter', 'tutor', 'parent'] as const).some(
+        (key) => profiles[key]?.enrollmentComplete === true,
+      );
+      if (!hasCompletedProfile) {
+        throw new HttpsError('failed-precondition', 'No verified EJM identity on this account');
+      }
+      // May be absent (a parent has no EJM email): the doer profile stores
+      // no email copy (root identity is canonical, issue #203), so it is
+      // only consulted for the age_mismatch half below.
+      ejemEmailLower = getEjemEmail(callerData as unknown as User)?.toLowerCase() ?? '';
+    } else {
+      if (!data.ejemEmail) {
+        throw new HttpsError('invalid-argument', 'EJM email is required');
+      }
+      ejemEmailLower = data.ejemEmail.toLowerCase();
+      codeDoc = await db.collection('verificationCodes').doc(ejemEmailLower).get();
+
+      if (!codeDoc.exists) {
+        throw new HttpsError('not-found', 'No verification code found. Please request a new one.');
+      }
+
+      const codeData = codeDoc.data()!;
+
+      if (codeData.expiresAt.toDate() < new Date()) {
+        throw new HttpsError(
+          'deadline-exceeded',
+          'Verification code has expired. Please request a new one.',
+        );
+      }
+
+      if ((codeData.attempts || 0) >= 5) {
+        throw new HttpsError(
+          'resource-exhausted',
+          'Too many failed attempts. Please request a new verification code.',
+        );
+      }
+
+      if (codeData.code !== data.verificationCode) {
+        await codeDoc.ref.update({ attempts: FieldValue.increment(1) });
+        throw new HttpsError('invalid-argument', 'Invalid verification code');
+      }
+    }
+
+    // 4. Validate the enrollment payload (manual guards, do-core bounds).
+    const enrollment = validateEnrollmentInput(data.enrollment);
+
+    // Identity coherence (issue #144): root identity is set-once. A new
+    // account must supply both names; an add-profile caller may omit any
+    // field the doc already holds, but the merged result must be complete.
+    const hasFirstName = !!enrollment.firstName || !!callerData.firstName;
+    const hasLastName = !!enrollment.lastName || !!callerData.lastName;
+    if (!hasFirstName || !hasLastName) {
+      throw new HttpsError('invalid-argument', 'First name and last name are required');
+    }
+
+    // At least one contact channel, so doGetAssignedContact (decision 16)
+    // always has something to reveal. Checked on the code-verified paths
+    // where the wizard collects contact; the abbreviated crossApp flow
+    // skips the step (§3.3) and keeps the account's existing channels.
+    if (!isCrossApp) {
+      const canonical = getContact(callerData as unknown as User);
+      const hasContact =
+        !!enrollment.contactEmail?.trim() || !!enrollment.contactPhone?.trim() ||
+        !!enrollment.whatsapp?.trim() || !!canonical.contactEmail ||
+        !!canonical.contactPhone || !!canonical.whatsapp;
+      if (!hasContact) {
+        throw new HttpsError('invalid-argument', 'At least one contact field is required');
+      }
+    }
+
+    // 5. The §11.1 age gate — every clause deliberate, see the docstring.
+    // The gate runs against the doc's DOB when one is on file (the set-once,
+    // trusted value) and the payload DOB otherwise.
+    const storedDob = toDobDate(callerData.dateOfBirth);
+    const gateDob = storedDob
+      ?? (enrollment.dateOfBirth ? new Date(enrollment.dateOfBirth) : null);
+    // Unconditional parseable-DOB requirement, BEFORE any governance branch
+    // (§11.1 takes enrollTutor.ts:256-260's side against sit's legacy
+    // tolerance: this is an enrollment gate on a new profile, and the flow
+    // collects the DOB — "never let a security gate no-op silently").
+    if (!gateDob) {
+      throw new HttpsError('invalid-argument', 'Date of birth is required');
+    }
+    if (Number.isNaN(gateDob.getTime())) {
+      throw new HttpsError('invalid-argument', 'Date of birth is invalid');
+    }
+    // GOVERNED bypass: an ACTIVE guardianLinks doc carries the server-owned
+    // governedBy mirror and a parent-attested DOB — supervision, not gating,
+    // is its protection, so the floor stands down. Only the add-profile path
+    // can be governed (a governed kid always has an account).
+    const isGoverned = !!callerData.governedBy;
+    // The under-15 floor, computed from the DOB ALONE — sit's bare shape
+    // (searchBabysitters.ts:212-213) at enrollTutor's timing. Deliberately
+    // NOT gated on the EJM email parsing: the modal enrollee is a legacy
+    // cross-app account whose stored email may not parse, and enrollTutor's
+    // email-guarded floor stands down exactly there (§11.1's deviation).
+    if (!isGoverned && calculateAge(gateDob) < 15) {
+      throw new HttpsError(
+        'failed-precondition',
+        'You need to be at least 15 to enroll on your own. Your parents can create an account and enroll you from theirs.',
+        // `reason` is the plan-normative field (§8); `code` feeds the
+        // shared-ui ageGateErrorCode mapper the wizards already use.
+        { reason: 'under_15', code: 'age/under-15' },
+      );
+    }
+    // checkEnrollmentAge is consulted ONLY for the ±1-class age_mismatch
+    // half, only when the email yields a graduation year (§11.1).
+    const emailCheck = validateEjmEmail(ejemEmailLower);
+    if (!isGoverned && emailCheck.valid && emailCheck.graduationYear !== undefined) {
+      const verdict = checkEnrollmentAge({
+        dateOfBirth: gateDob,
+        graduationYear: emailCheck.graduationYear,
+      });
+      if (verdict === 'age_mismatch') {
+        const exemption = await db.collection('enrollmentExemptions').doc(ejemEmailLower).get();
+        if (!exemption.exists) {
+          throw new HttpsError(
+            'failed-precondition',
+            "Your date of birth doesn't match your school year. Please contact the EJM administrator.",
+            { reason: 'age_mismatch', code: 'age/mismatch' },
+          );
+        }
+      }
+    }
+
+    // 6. Build the doer profile — enrollmentComplete only here, at the end,
+    // after both gates (§8). Categories default to ALL seven: the modal
+    // intent stated as data (§3.3 — an empty array means "no digests", so
+    // "empty = all" would silently invert the digest query).
+    const now = new Date();
+    const doerProfile = {
+      enrollmentComplete: true,
+      notifyNewTasks: enrollment.notifyNewTasks ?? true,
+      categories: enrollment.categories ?? [...TASK_CATEGORIES],
+      bio: enrollment.bio?.trim() || null,
+      defaultRate: enrollment.defaultRate ?? null,
+      hasCar: enrollment.hasCar ?? false,
+      hasBike: enrollment.hasBike ?? false,
+    };
+
+    const dobTimestamp = enrollment.dateOfBirth
+      ? Timestamp.fromDate(new Date(enrollment.dateOfBirth))
+      : undefined;
+
+    // 6a. Add-profile path — an authenticated existing user gains the doer
+    // profile. NO schedule doc: sync-do never touches schedules/{uid}
+    // (decision 10), which is also why there is no preflight-then-create
+    // dance here — addProfileToUser's transaction is the only write.
+    if (isAddProfile) {
+      const uid = request.auth!.uid;
+      await assertCanAddProfile(uid, 'doer');
+      await addProfileToUser({
+        uid,
+        profileKey: 'doer',
+        profileData: doerProfile,
+        // Root shared-identity fields (issue #203): set-once, empty-only —
+        // an existing value always wins. The DOB the wizard collected for a
+        // doc that lacked one is persisted here (§11.1: the abbreviated
+        // flow must be able to ask for it).
+        fillBaseFields: {
+          firstName: enrollment.firstName,
+          lastName: enrollment.lastName,
+          dateOfBirth: dobTimestamp,
+          ...(ejemEmailLower ? { ejemEmail: ejemEmailLower } : {}),
+        },
+        // Contact the user just typed wins over an older root copy (the
+        // PR #206 rule); empty/absent means "leave it alone", never "clear".
+        // consentAt/consentVersion: §11.4's bullet — the abbreviated
+        // enrollment still records consent for the SYNC-DO terms. The root
+        // pair moves to the newest accepted version (prior acceptances stay
+        // in the audit trail, and this callable never runs without a fresh
+        // consent tick), which is why these ride setBaseFields rather than
+        // the audit-only convention addProfileToUser defaults to.
+        setBaseFields: {
+          ...(enrollment.contactEmail?.trim() ? { contactEmail: enrollment.contactEmail.trim() } : {}),
+          ...(enrollment.contactPhone?.trim() ? { contactPhone: enrollment.contactPhone.trim() } : {}),
+          ...(enrollment.whatsapp?.trim() ? { whatsapp: enrollment.whatsapp.trim() } : {}),
+          consentAt: now,
+          consentVersion: data.consentVersion,
+        },
+        auditAction: 'doer.profile_added',
+        auditDetails: {
+          ...(ejemEmailLower ? { ejemEmail: ejemEmailLower } : {}),
+          consentVersion: data.consentVersion,
+          categories: doerProfile.categories,
+          ...(isCrossApp ? { crossApp: true } : {}),
+        },
+      });
+      if (codeDoc) await codeDoc.ref.delete();
+      return { uid };
+    }
+
+    // 6b. New-account path — the presence checks above guarantee the payload
+    // carries the full identity (callerData is empty here).
+    let uid: string;
+    try {
+      const userRecord = await adminAuth.createUser({
+        email: ejemEmailLower,
+        password: data.password,
+      });
+      uid = userRecord.uid;
+    } catch (err: unknown) {
+      const fbErr = err as { code?: string };
+      if (fbErr.code === 'auth/email-already-exists') {
+        // Race backstop only: reaching here requires a valid emailed code,
+        // so this is not an enumeration oracle (the caller owns the mailbox).
+        throw new HttpsError('already-exists', 'An account with this email already exists');
+      }
+      throw new HttpsError('internal', 'Failed to create account');
+    }
+
+    // Plan D user doc with profiles.doer. Contact channels the user never
+    // supplied are OMITTED, not written as null: root presence means "the
+    // user set or cleared this" (PR #206). No schedules/{uid} (decision 10).
+    await db.collection('users').doc(uid).set({
+      uid,
+      email: ejemEmailLower,
+      firstName: enrollment.firstName!,
+      lastName: enrollment.lastName!,
+      dateOfBirth: dobTimestamp!,
+      ejemEmail: ejemEmailLower,
+      ...(enrollment.contactEmail?.trim() ? { contactEmail: enrollment.contactEmail.trim() } : {}),
+      ...(enrollment.contactPhone?.trim() ? { contactPhone: enrollment.contactPhone.trim() } : {}),
+      ...(enrollment.whatsapp?.trim() ? { whatsapp: enrollment.whatsapp.trim() } : {}),
+      status: 'active',
+      language: 'en',
+      notifPrefs: {
+        newRequest: { push: true, email: true },
+        confirmed: { push: true, email: true },
+        cancelled: { push: true, email: true },
+        reminders: { push: true, email: false },
+      },
+      fcmTokens: [],
+      profiles: {
+        doer: doerProfile,
+      },
+      consentAt: now,
+      consentVersion: data.consentVersion,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    await writeUserActivity(uid, 'doer.enroll', {
+      uid,
+      ejemEmail: ejemEmailLower,
+      categories: doerProfile.categories,
+    });
+
+    // Delete the consumed verification code (always present on this path).
+    if (codeDoc) await codeDoc.ref.delete();
+
+    return { uid };
+  },
+);

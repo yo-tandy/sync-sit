@@ -11,6 +11,7 @@
     "count:underage-providers": "node count-underage-providers.cjs"
   },
   "dependencies": {
+    "@ejm/do-core": "workspace:*",
     "@ejm/sit-core": "workspace:*",
     "@ejm/shared-core": "workspace:*",
     "@ejm/shared-functions": "workspace:*",
