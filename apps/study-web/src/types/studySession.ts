@@ -25,6 +25,9 @@ export interface StudySessionDoc {
   students: { firstName: string; age: number }[];
   familyName: string;
   parentName: string;
+  // users/{uid} owning parentName (issue #273 identity-correction fan-out);
+  // absent on pre-#273 docs and on pending provider proposals.
+  parentUserId?: string;
   tutorName: string;
   type: 'one_time' | 'recurring';
   date?: string;

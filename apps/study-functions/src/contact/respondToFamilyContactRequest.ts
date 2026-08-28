@@ -131,7 +131,11 @@ export const respondToFamilyContactRequest = onCall(
         status: accepted ? 'accepted' : 'declined',
         respondedAt: now,
         updatedAt: now,
-        ...(accepted ? { parentName } : {}),
+        // parentUserId: the responding parent owns the name landing here —
+        // createdByUserId is the TUTOR on this inverted shape, so without it
+        // the name is unattributable to the identity-correction fan-out
+        // (issue #273).
+        ...(accepted ? { parentName, parentUserId: uid } : {}),
       });
 
       if (accepted) {
