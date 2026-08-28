@@ -1,0 +1,79 @@
+# Delete a PR's hosting preview channels when the PR closes (issue #316).
+#
+# The preview workflow creates a pr-N channel per hosting site with a 7-day
+# expiry; on busy weeks the accumulated channels for merged PRs hit the
+# per-site channel quota and EVERY new PR's preview fails with 429 "channel
+# quota reached" (PR #315 was the first casualty; ~94 stale channels were
+# pruned by hand on 2026-08-29). Deleting on close keeps the site's channel
+# count proportional to OPEN PRs instead of the week's merge volume.
+#
+# Deletion is best-effort per site (a channel may not exist if the preview
+# job never ran or already expired) but the job FAILS if any existing
+# channel's deletion errors -- a silent auth breakage here would just
+# rebuild the quota problem.
+name: Cleanup PR preview channels
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  cleanup:
+    if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Enable pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.13.1 --activate
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: sync-sit
+          workload_identity_provider: projects/652129443234/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+          service_account: github-action-1196270164@sync-sit.iam.gserviceaccount.com
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: Delete the PR's preview channels
+        run: |
+          CHANNEL="pr-${{ github.event.pull_request.number }}"
+          # Sites derived from .firebaserc (the preview deploy mints a
+          # channel on EVERY hosting target there, so a hardcoded list
+          # would silently miss any future fourth site).
+          SITES=$(node -p "Object.values(JSON.parse(require('fs').readFileSync('./.firebaserc','utf8')).targets['sync-sit'].hosting).flat().join(' ')")
+          echo "sites: $SITES"
+          FAILED=0
+          for SITE in $SITES; do
+            LIST=$(pnpm exec firebase hosting:channel:list --site "$SITE" --project sync-sit --json 2>/dev/null) || true
+            # Exit-code contract of scripts/has-preview-channel.js:
+            # 0 present -> delete; 1 absent -> skip; 2 invalid list -> FAIL
+            # (a broken list must not masquerade as "nothing to clean").
+            set +e
+            printf '%s' "$LIST" | node scripts/has-preview-channel.js "$CHANNEL"
+            CODE=$?
+            set -e
+            if [ "$CODE" = "0" ]; then
+              echo "deleting $SITE/$CHANNEL"
+              pnpm exec firebase hosting:channel:delete "$CHANNEL" --site "$SITE" --project sync-sit --force || FAILED=1
+            elif [ "$CODE" = "1" ]; then
+              echo "no $CHANNEL on $SITE (never created or already expired) -- skipping"
+            else
+              echo "::error::channel list FAILED for $SITE -- refusing to treat as 'nothing to clean'"
+              FAILED=1
+            fi
+          done
+          exit $FAILED
