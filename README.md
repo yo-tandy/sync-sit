@@ -214,9 +214,8 @@ The cross-app switch target is configurable (defaults to the production URLs bak
 ## Deployment
 
 Merges to `main` auto-deploy to production via GitHub Actions
-(`firebase-hosting-merge.yml`): Firestore rules + indexes, hosting (both
-sites), functions (both codebases), and Storage rules (last, so a
-storage-permission failure can't block the rest). Manual full deploy, if
+(`firebase-hosting-merge.yml`): Firestore rules + indexes, Storage rules,
+hosting (both sites), and functions (both codebases). Manual full deploy, if
 ever needed:
 
 ```bash
