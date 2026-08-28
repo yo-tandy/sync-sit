@@ -10,8 +10,8 @@
 
 ## Tier 1 — pure UI refactors (low risk, no schema)
 
-### A. Shared enrollment-flow steps `[~]`
-**Plan:** `docs/superpowers/plans/2026-06-10-shared-auth-flow.md`
+### A. Shared enrollment-flow steps `[x]`
+**Plan:** `docs/superpowers/plans/2026-06-10-shared-auth-flow.md` — merged in PR #58.
 **Scope:** lift `StepEmail`, `StepVerify`, `StepPassword` from both apps' enrollment trees into `@ejm/shared-ui/enrollment/*`. Orchestrators in each app wrap the callable invocations and pass handlers as props.
 **Why now:** these three are line-for-line duplicates after PR #57's hand-aligned fixes; first PR that pays back the duplication tax.
 **Files moved:** 3 components into `packages/shared-ui/src/enrollment/`; 6 deleted from `apps/*/src/pages/enrollment/*`. Orchestrators updated.
@@ -21,23 +21,25 @@
 
 ---
 
-### B. Shared static / legal pages `[ ]`
-**Plan slug (to write):** `2026-XX-XX-shared-static-pages.md`
+### B. Shared static / legal pages `[x]`
+**Plan:** `docs/superpowers/plans/2026-06-11-shared-static-pages.md` — merged in PR #59.
 **Scope:** `PrivacyPage`, `TermsPage`, `AboutPage`, `ReportProblemPage` — currently full-content in sync-sit, "Coming soon" stubs in sync-study (added in PR #57 to make the welcome page footer links resolve). Move the page shell into `@ejm/shared-ui`. Move the legal copy into a shared content module (likely `@ejm/shared-core/content/`) since it's plain Markdown / structured text, not React.
 **Why now:** quickest win after Plan A; eliminates the placeholder pages PR #57 left and removes another whole class of "the two apps drift."
 **Files:** ~4 new shared page components, ~4 content modules (en + fr), 4 deleted from `apps/web/src/pages/public/`, 4 deleted from `apps/study-web/src/pages/public/`. Both routers updated.
-**Open design question:** does each app inject a brand-specific intro paragraph (e.g. "Sync/Sit is operated by Tandy SARL...") via prop, or is the legal copy identical across both apps? (Tandy SARL operates both, so probably identical with a brand-name interpolation.)
+**Design question — resolved (PR #59):** legal copy is identical across apps with `{{brand}}` / `{{supportEmail}}` interpolated as props; the copy lives as `Section[]` arrays inside the shared components (not `@ejm/shared-core/content/` — too dense for flat i18n keys, and no renderer needed). `AboutPage` deliberately stays per-app: each app composes its own content over the shared `AboutPageShell` (the About copy is product marketing, not shared legal text).
+**Residual — tracked as issue #308:** the shared Privacy/Terms copy is still babysitting-specific — sync-study renders "student babysitters", "Children's data" etc. with only the brand name swapped. PR #59 deferred a rewrite describing the combined Tandy suite (owner/counsel review required); that follow-up never landed. A third consumer (sync-do, #296) would inherit the same wrong copy. Issue #308 carries the rewrite, alongside the platform-wide liability/ToS reconciliation the sync-do plan records as its decision 15 (`docs/sync-do-project-plan.md` §11.5, landing via PR #243 — the platform "performs the handshake only" stance needs counsel-reviewed wording once, across all three apps).
 **Estimate:** 5 commits / 1 PR.
 **Depends on:** A (just the order; technically independent).
 
 ---
 
-### C. Shared public auth pages `[ ]`
-**Plan slug (to write):** `2026-XX-XX-shared-public-auth-pages.md`
+### C. Shared public auth pages `[x]`
+**Plan:** `docs/superpowers/plans/2026-06-12-shared-public-auth-pages.md` — merged in PR #60.
 **Scope:** `WelcomePage`, `LoginPage`, `SignUpRolePage`, `ForgotPasswordPage`. PR #57 hand-aligned them on the sync-study side but they're still hand-duplicated in two trees — the exact "drift class" the user wants to close.
 **Approach:** extract reusable shells. `WelcomeHero` takes `logoSrc`, `title`, `subtitle`, `ctaSignUpHref`, `ctaLoginHref`, optional `languageSelector`. `LoginPage` takes `postLoginRouter(role) => path`. `SignUpRolePage` takes a `roles: { value, labelKey, descKey, icon, href }[]` array.
 **Why now:** the LoginPage already routes by role; after we have shared shells, Plan D (portable user entity) can change the role lookup in one place.
 **Files:** 4 new components in `@ejm/shared-ui`; 4 deleted in each of the two apps; router entries updated.
+**As merged (PR #60):** each app keeps a thin (~10–25 line) wrapper per page in `src/pages/public/` — the wrapper binds its own `useAuthStore`, role lookup (`getSitRole`/`getStudyRole`) and `postLoginRouter` to the shared component's props. That indirection is the Plan D seam: the schema change updates only the wrappers, never the shared shells.
 **Estimate:** 6 commits / 1 PR.
 **Depends on:** A merged (so the shared step imports show the consumption pattern this PR mirrors).
 
@@ -45,11 +47,12 @@
 
 ## Tier 2 — architectural change (medium risk, touches schema + callables)
 
-### D. Portable user entity `[ ]`
-**Plan slug (to write):** `2026-XX-XX-portable-user-entity.md`
-**Scope:** replace top-level `role` on `users/{uid}` with `profiles.{sit?,study?}: { role, enrollmentComplete, ... }`. Update `enrollBabysitter` + `enrollFamily` + `enrollTutor` callables to write under `profiles.sit` / `profiles.study`. Cross-app skip: when a sync-sit user logs in to sync-study and has no `profiles.study`, route them into the tutor- or parent-side enrollment WITHOUT re-doing Email/Verify/Password. Migration: one-time script that lifts each existing user's top-level `role` into `profiles.sit.role` (sync-sit is the source of pre-existing data).
+### D. Portable user entity `[x]`
+**Plan:** `docs/superpowers/plans/2026-06-13-portable-user-entity.md` — merged across PR #61 (package rename prep), PR #63 (Tier B: profiles schema, types only) and PR #72 (Tier D: writers/queries/rules flipped to `profiles.*`, plus a one-shot `migrateUsersToProfiles` callable that was deliberately removed after the prod run — added 86547e25, deleted 9d8ac521).
+**As merged — the sections below are the ORIGINAL PROPOSAL, kept for history; the shipped design differs in one load-bearing way:** profiles are keyed by ROLE, not by app — `profiles: { babysitter?, tutor?, parent? }` with no nested `role` field (`packages/shared-core/src/types/user.ts:73-91`, mirrored in `firestore.rules:31-53`). One `parent` profile serves both apps (that IS the cross-app skip), and `getSitRole`/`getStudyRole` derive an app's role from which slots exist. The transitional top-level-`role` fallback below shipped and was later removed as planned. sync-do adds `profiles.doer` to the same map (#297).
+**Scope (original proposal):** replace top-level `role` on `users/{uid}` with `profiles.{sit?,study?}: { role, enrollmentComplete, ... }`. Update `enrollBabysitter` + `enrollFamily` + `enrollTutor` callables to write under `profiles.sit` / `profiles.study`. Cross-app skip: when a sync-sit user logs in to sync-study and has no `profiles.study`, route them into the tutor- or parent-side enrollment WITHOUT re-doing Email/Verify/Password. Migration: one-time script that lifts each existing user's top-level `role` into `profiles.sit.role` (sync-sit is the source of pre-existing data).
 **Why now:** unlocks every cross-app experience. Has to come before any Tier 4 work that touches per-app role-driven UI.
-**Schema preview:**
+**Schema preview (original proposal — superseded by the role-keyed shape above):**
 ```typescript
 interface UserBase {
   uid: string;
