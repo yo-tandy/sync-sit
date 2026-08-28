@@ -74,6 +74,7 @@ export default {
     about: 'À propos',
     home: 'Accueil',
     openMenu: 'Ouvrir le menu',
+    appMenu: 'Menu',
     reportProblem: 'Signaler un problème',
     privacyPolicy: 'Politique de confidentialité',
     terms: 'Conditions générales',

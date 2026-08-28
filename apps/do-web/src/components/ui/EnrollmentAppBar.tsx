@@ -54,7 +54,7 @@ export function EnrollmentAppBar() {
         </button>
       </div>
 
-      <Dialog open={menuOpen} onClose={() => setMenuOpen(false)}>
+      <Dialog open={menuOpen} onClose={() => setMenuOpen(false)} ariaLabel={t('menu.appMenu')}>
         <div className="-m-6 overflow-hidden rounded-xl">
           <MenuItem icon={<InfoIcon className="h-5 w-5" />} label={t('menu.about')} to="/about" onNavigate={() => setMenuOpen(false)} />
           <MenuItem icon={<MailIcon className="h-5 w-5" />} label={t('menu.reportProblem')} to="/report" onNavigate={() => setMenuOpen(false)} />
