@@ -205,8 +205,17 @@ describe('RequestDetailPage — appointment notes (post)', () => {
         : new Promise((_resolve, reject) => { rejectCall = reject; }),
     );
     fireEvent.click(screen.getByText('request.notes.remove'));
+    // Dialog is open BEFORE the confirm click -- pins that the confirm
+    // lookup below really targets the dialog's button.
+    expect(screen.getByText('request.notes.removeTitle')).toBeTruthy();
     const buttons = screen.getAllByText('request.notes.remove');
     fireEvent.click(buttons[buttons.length - 1]);
+    // Synchronize on the callable actually being IN FLIGHT before the
+    // backdrop click: the hanging mock assigns rejectCall when invoked.
+    // Without this the pin raced the async click handler under CI load --
+    // the backdrop landed before setSaving, and the dialog legitimately
+    // closed (the exact pass-locally/fail-in-CI flake this run hit).
+    await waitFor(() => expect(rejectCall).toBeDefined());
     // Backdrop click while the erasure is in flight: dialog must survive.
     fireEvent.click(document.querySelector('.fixed.inset-0.z-50')!);
     expect(screen.getByText('request.notes.removeTitle')).toBeTruthy();
