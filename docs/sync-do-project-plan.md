@@ -1,7 +1,7 @@
 # Sync-Do Project Plan
 
 > **Status:** planning draft, 2026-08-27; revised 2026-08-28 with the owner's
-> review-round decisions (12–19, §2). Owner decisions in §2 are settled;
+> review-round decisions (12–20, §2). Owner decisions in §2 are settled;
 > everything marked **OPEN** in §17 is not.
 >
 > Companion docs: `docs/sync-study-project-plan.md` (the template this plan
@@ -763,11 +763,16 @@ The guardian flag is what does the gating.
   │  open  │ ───────▶ │ open (N offers) │ ────────▶ │ assigned │ ─────────▶ │ completed │
   └────────┘          └─────────────────┘           └──────────┘            └───────────┘
        │                      │                          │
-       │  expiresAt / withdraw│                          │ cancel (either side)
+       │  cancel (family)     │ cancel (family)          │ cancel (either side)
        ▼                      ▼                          ▼
-  ┌───────────┐                                    ┌───────────┐
-  │ cancelled │◀───────────────────────────────────│ cancelled │
-  └───────────┘                                    └───────────┘
+  ┌───────────────────────────────────────────────────────────┐
+  │                        cancelled                          │
+  └───────────────────────────────────────────────────────────┘
+
+  (expiry is NOT a transition: an open task with expiresAt <= now is
+   filtered client-side and HARD-DELETED with its offers by the daily
+   sweep — §6.3, §8, §11.4. It never becomes `cancelled`, never gets a
+   `cancelledBy`, and never enters the 30-day cancelled-retention window.)
 ```
 
 Task status is a closed set of four: `open`, `assigned`, `completed`,
@@ -1164,6 +1169,7 @@ doTasks:    (status ASC, cancelledAt ASC)                   — the sweep, cance
 doTasks:    (status ASC, completedAt ASC)                   — the sweep, completed-retention half (decision 19, §11.4)
 taskOffers: (familyId ASC, taskId ASC, status ASC, createdAt ASC)
                                                             — offers on a task, family side
+taskOffers: (familyId ASC, status ASC, createdAt ASC)       — the §9.1 my-tasks badge (one list-wide pending query; taskId-in-the-middle makes the index above unusable for it)
 taskOffers: (taskId ASC, status ASC, createdAt ASC)         — offers on a task, admin side
 taskOffers: (doerUserId ASC, createdAt DESC)                — "my offers" (status tabs narrow client-side, per the split above)
 taskOffers: (guardian.familyId ASC, status ASC)             — guardian queue (server-side, see below)
@@ -1355,7 +1361,7 @@ All in `apps/functions/src/do/**`, codebase `default`, region `europe-west1`,
 
 | Callable | Auth | Does |
 |---|---|---|
-| `doEnrollDoer` | Auth | Creates `profiles.doer` — full or abbreviated depending on existing profiles. **Requires a parseable `dateOfBirth` from every caller, then refuses an ungoverned caller under 15 on a bare age-from-DOB check — deliberately NOT the `enrollTutor` email-guarded shape, whose floor stands down when the EJM email doesn't parse (§11.1)**; a governed caller passes the floor at any age; `checkEnrollmentAge` runs only for the `age_mismatch` half when the email yields a graduation year |
+| `doEnrollDoer` | Auth | Creates `profiles.doer` — full or abbreviated depending on existing profiles. **Identity gate first: `profiles.doer.enrollmentComplete` is set only for a caller with a VERIFIED EJM identity** — either an account that already holds a completed sit/study provider or parent profile (the abbreviated §3.3 path — that identity was verified when it was made), or, for a brand-new account, the `enrollTutor` verification shape (`enrollTutor.ts:126` verified identity, `:164-193` emailed code). Without this clause the §7.2 board read rule is open to any authenticated platform account (§11.1). **Then the age gate: a parseable `dateOfBirth` from every caller, and an ungoverned caller under 15 is refused on a bare age-from-DOB check — deliberately NOT the `enrollTutor` email-guarded floor shape, whose floor stands down when the EJM email doesn't parse (§11.1)**; a governed caller passes the floor at any age; `checkEnrollmentAge` runs only for the `age_mismatch` half when the email yields a graduation year |
 | `doUpdateDoerProfile` | Auth | Categories, bio, transport, `notifyNewTasks` |
 | `doPostTask` | Auth (verified family) | Validates, scrubs, computes `areaLabel` + `expiresAt`, enforces `DO_TASK_MAX_ACTIVE`. **Refuses (`failed-precondition`, `reason: 'address_required'`) when the family's postcode/city resolves no area label** — decision 17 makes `areaLabel` required, and the wizard routes the parent to complete their address first |
 | `doUpdateTask` | Auth (owner family) | `open` tasks only; description/photos/budget/timing. **Runs the caller-prefix check on any photo ADDED** — existing `{uid, photoId}` entries pass through untouched, since they were verified at their own add time and may belong to the OTHER parent of the family; re-checking them against the current caller's prefix would wrongly strip a co-parent's photos (§7.4). Recomputes `expiresAt` server-side, which is how an `ongoing` task renews (§6.3). Notifies students with pending offers that terms changed |
@@ -1449,7 +1455,14 @@ checked-in icon at PR2 (sizes per sit's #197 manifest work).
 - **My tasks** — open (with an offer-count badge computed from the family's
   own fetched offer list — deliberately NOT from `offerCount`, which counts
   `pending_guardian` offers the family cannot see and would contradict the
-  visible list; §4.1), assigned, completed, cancelled.
+  visible list; §4.1), assigned, completed, cancelled. **The badge's query
+  shape is one list-wide query, not one per task:**
+  `where('familyId','==',f).where('status','==','pending').orderBy('createdAt')`
+  over `taskOffers`, grouped client-side by `taskId` — provable under
+  §7.2's family disjunct (it constrains `familyId` and `status`), and
+  served by the `(familyId, status, createdAt)` composite added to §7.3
+  for exactly this: the four-field `(familyId, taskId, status, createdAt)`
+  index cannot serve it, because `taskId` sits unconstrained in the middle.
 - **Task detail with offers** — the offer list is the heart of the product:
   student name, photo, bio, price, basis, message, declared helper, and their
   **endorsements from all three apps** (decision 12 as revised by the owner
@@ -1573,7 +1586,13 @@ the decision-12 endorsement lifecycle needs, mirroring study's trio
 total.** All twelve land in `shared-core` at PR9 (one edit to the shared
 union rather than reopening it at PR11); PR9 wires templates and senders for
 the nine task/offer types, and PR11 wires the endorsement three alongside
-the surface that emits them (§13).
+the surface that emits them (§13). One honesty note about the precedent:
+the shared `NotificationType` union holds only sit's eight values today —
+study's ~13 types are written as bare strings into an untyped `.add()`
+(`submitTutorEndorsement.ts:121`), so "additive to the shared union" is a
+*better* practice than the study precedent, not a continuation of it.
+Typing study's strings retroactively is worth doing but is a study-side
+change — recorded on issue #298's scope rather than smuggled into PR9.
 
 **Push tokens.** The user doc already has `fcmTokens` (sit, legacy flat array)
 and `fcmTokensStudy`. sync-do adds `fcmTokensDo`, following the established
@@ -1615,6 +1634,17 @@ it is spam.
   second upload and no per-app status. The rule to preserve through review:
   **never introduce a `verification.do` or any per-app verification state.**
   One family, one approval, three apps.
+- **Enrolling** requires a verified EJM identity — the gate that makes
+  `enrollmentComplete` mean something. `doEnrollDoer` sets it only for a
+  caller who either already holds a completed sit/study profile (the
+  abbreviated §3.3 path: that identity was verified when it was made) or
+  completes the `enrollTutor`-shape verification (`enrollTutor.ts:126`
+  verified EJM identity, `:164-193` emailed code) on the full path. Stated
+  here because §7.2 pins `enrollmentComplete` server-owned *for the board
+  read rule's sake* — a server-owned flag any authenticated account could
+  earn without an identity check would protect nothing: the read rule is
+  the trust boundary, and this is the clause that decides who can ever
+  satisfy it.
 - **Offering** requires `status == 'active'`, `profiles.doer.enrollmentComplete`,
   and — for flagged sub-categories — an approving guardian when the student is
   supervised.
@@ -1743,6 +1773,14 @@ discovered in an incident.
   listing), and the export enumerates the photo paths referenced from the
   user's tasks. Without this the documents would leave and the images — a
   garden, a front door, a flat interior, §11.2's own premise — would stay.
+  **Dangling-reference sweep on the same delete:** a family task's
+  `photos[]` may hold pairs from EITHER parent (§8's `doUpdateTask` row),
+  so erasing parent A's prefix can orphan entries a still-live task points
+  at — broken thumbnails, `doGetTaskPhotoUrl` signing URLs for deleted
+  objects. The hard-delete therefore also removes the deleted uid's
+  `{uid, photoId}` entries from the `photos[]` arrays of their family's
+  live tasks (a `where('familyId','==',…)` pass over `doTasks`), so the
+  documents never reference objects the erasure removed.
   `DoerEndorsementDoc` (decision 12) is family-authored text about a named
   student and belongs in both lists too; the `references` collection is
   absent from `exportUserData`/`deleteUser` entirely today — a pre-existing
@@ -1944,7 +1982,11 @@ see §12 for why the scaffold, not the family UI, is where they are needed.
   the family's own-tasks query (`where('familyId','==',f)` — the same
   reasoning that gives the offer-side family disjunct its `familyId`
   constraint applies to `doTasks`' `isFamilyMember` disjunct, and §7.3's
-  `(familyId, createdAt)` index exists for it); §9.1's three `references`
+  `(familyId, createdAt)` index exists for it); **an enrolled, active doer
+  CANNOT read another student's `assigned` or `completed` task** (the
+  negative half of the round-7 board-scoping fix — the open-or-own read
+  is pinned positively elsewhere, but only this case proves an enrolled
+  student can't enumerate a peer's assignments and pay); §9.1's three `references`
   queries (`doerUserId` / `babysitterUserId` / `tutorUserId`), which must
   carry `status in ['approved','published']` or be denied; and — once PR11's
   `references` amendment lands — **a doer can read their own `private`
@@ -1975,7 +2017,12 @@ see §12 for why the scaffold, not the family UI, is where they are needed.
   with a VALID DOB but a missing/unparseable EJM email is still refused
   `under_15`** (the floor must hold on the DOB alone; a test written only
   with a valid email would pass over the email-guard hole, and the gate
-  must never no-op silently — `enrollTutor.ts:256-260`); **a doer whose
+  must never no-op silently — `enrollTutor.ts:256-260`); **an authenticated
+  account with NO verified EJM identity — no completed sit/study profile
+  and no completed email verification — never reaches
+  `enrollmentComplete: true` through `doEnrollDoer`** (the §11.1 identity
+  gate: without this pin the §7.2 board read rule is satisfiable by any
+  platform account); **a doer whose
   supervision was revoked and who is still under 15 is refused by
   `doSubmitOffer`** (the durability half — enrollment-only floors do not
   survive `revokeSupervision`, §11.1) (both halves of §11.1's floor — the unconditional
