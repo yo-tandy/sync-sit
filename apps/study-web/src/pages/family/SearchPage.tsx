@@ -19,7 +19,7 @@ import {
   Chip,
   Card,
   TopNav,
-  Spinner,
+  SkeletonCard,
   AddressAutocomplete,
   EmptyState,
   SearchIcon,
@@ -456,9 +456,13 @@ export function SearchPage() {
 
         {/* ── Results / states ── */}
         <div className="mt-6">
+          {/* Skeletons sized like the loaded TutorCard rows (avatar + text),
+              so results keep their footprint while loading (UX F12, #126) */}
           {loading && (
-            <div className="flex justify-center py-10">
-              <Spinner />
+            <div className="space-y-3">
+              <SkeletonCard avatar />
+              <SkeletonCard avatar />
+              <SkeletonCard avatar />
             </div>
           )}
 

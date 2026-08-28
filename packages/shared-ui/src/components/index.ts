@@ -21,3 +21,4 @@ export { Dialog } from './Dialog.js';
 export { StepIndicator } from './StepIndicator.js';
 export { ToastProvider, useToast } from './Toast.js';
 export { EmptyState } from './EmptyState.js';
+export { SkeletonCard } from './SkeletonCard.js';

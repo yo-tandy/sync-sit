@@ -11,7 +11,7 @@ import {
   Button,
   Badge,
   TopNav,
-  Spinner,
+  SkeletonCard,
   Dialog,
   useToast,
   EmptyState,
@@ -169,9 +169,12 @@ export function RequestsPage() {
           <p className="py-10 text-center text-sm text-red-600">{t('tutor.requests.loadError')}</p>
         )}
 
+        {/* Skeletons sized like the loaded request cards, so the list keeps
+            its footprint while loading (UX F12, issue #126) */}
         {!loadError && requests === null && (
-          <div className="flex justify-center py-20">
-            <Spinner />
+          <div className="space-y-3">
+            <SkeletonCard />
+            <SkeletonCard />
           </div>
         )}
 

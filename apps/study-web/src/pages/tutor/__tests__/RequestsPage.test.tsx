@@ -153,6 +153,25 @@ describe('tutor RequestsPage', () => {
     expect(action).toHaveAttribute('href', '/tutor/subjects');
   });
 
+  it('shows skeleton cards (no spinner) before the first snapshot, gone once it lands (UX F12)', async () => {
+    // Capture the listener WITHOUT delivering an initial snapshot.
+    h.onSnapshot.mockImplementation(
+      (query: unknown, next: (snap: Snapshot) => void, error: (err: unknown) => void) => {
+        h.listeners.push({ query: query as { query: { path: string }[] }, next, error });
+        return h.unsubscribe;
+      },
+    );
+    renderWithProviders(<RequestsPage />);
+
+    expect(screen.getAllByTestId('skeleton-card').length).toBeGreaterThanOrEqual(2);
+    expect(document.querySelector('.animate-spin')).toBeNull();
+    expect(screen.queryByText(/no requests yet/i)).not.toBeInTheDocument();
+
+    act(() => h.listeners[0].next(snapOf([reqDoc()])));
+    expect(await screen.findByText(/Cohen/)).toBeInTheDocument();
+    expect(screen.queryByTestId('skeleton-card')).toBeNull();
+  });
+
   it('surfaces a load error when the subscription errors — not an empty list', async () => {
     h.requests = [];
     // Deliver an error instead of a first snapshot (e.g. PERMISSION_DENIED).

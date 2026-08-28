@@ -299,6 +299,22 @@ describe('tutor SessionsPage', () => {
     renderWithProviders(<SessionsPage />);
     expect(await screen.findByText(/no session requests|no sessions/i)).toBeInTheDocument();
   });
+
+  it('shows skeleton cards (no spinner) while sessions load, gone once data lands (UX F12)', async () => {
+    // First getDocs call is the sessions read — hold it open.
+    const gate = deferred<unknown>();
+    h.sessions = [oneTime()];
+    h.getDocs.mockImplementationOnce(() => gate.promise);
+    renderWithProviders(<SessionsPage />);
+
+    expect(screen.getAllByTestId('skeleton-card').length).toBeGreaterThanOrEqual(2);
+    expect(document.querySelector('.animate-spin')).toBeNull();
+    expect(screen.queryByText(/no session requests|no sessions/i)).not.toBeInTheDocument();
+
+    gate.resolve({ docs: h.sessions.map((s) => ({ id: s.sessionId, data: () => s })) });
+    expect(await screen.findByText(/Dana Weiss/)).toBeInTheDocument();
+    expect(screen.queryByTestId('skeleton-card')).toBeNull();
+  });
 });
 
 // ── Upcoming / history / cancellation (Task 3) ──

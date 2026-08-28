@@ -13,7 +13,7 @@ import { useAppointments } from '@/hooks/useAppointments';
 import { useSchedule } from '@/hooks/useSchedule';
 import { AppointmentCard } from '@/components/appointments/AppointmentCard';
 import { SupervisionRequestCard } from '@/components/babysitter/SupervisionRequestCard';
-import { Card, Badge, Dialog, Button, Spinner, Textarea, InstallAppBanner } from '@/components/ui';
+import { Card, Badge, Dialog, Button, SkeletonCard, Textarea, InstallAppBanner } from '@/components/ui';
 import {
   CalendarIcon,
   ChevronRightIcon,
@@ -248,10 +248,13 @@ export function BabysitterDashboard() {
         </Card>
       </Link>
 
-      {/* ── Appointments ── */}
+      {/* ── Appointments — skeletons sized like the loaded cards, so the
+          list keeps its footprint while loading (UX F12, issue #126) ── */}
       {loading ? (
-        <div className="flex justify-center py-12">
-          <Spinner className="h-8 w-8 text-brand-600" />
+        <div className="space-y-3">
+          <SkeletonCard />
+          <SkeletonCard />
+          <SkeletonCard />
         </div>
       ) : hasAny ? (
         <>
