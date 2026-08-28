@@ -129,6 +129,40 @@ service cloud.firestore {
           == doerField(resource.data, 'enrollmentComplete', false);
     }
 
+    // Helper: owner-editable doer fields that are READ BACK by other
+    // surfaces must stay in do-core's validated bounds (PR #320 round 3 —
+    // the aboutMe precedent below: the callables and the wizard are the
+    // shared write path, not the only one, and rules are the trust
+    // boundary). Post-state checks with in-range defaults, so docs without
+    // a doer profile pass. Literals because rules cannot import constants —
+    // keep in sync with do-core:
+    // - bio: family-visible on the offer card (the taskOffers read rule's
+    //   §6.2 comment names it) — 1000 = DO_DOER_BIO_MAX.
+    // - defaultRate: null or 0..1000 = DO_PRICE_MIN..DO_PRICE_MAX.
+    // - categories: read back by the §10 digest's array-contains recipient
+    //   query — list of at most 7 (the seven §5 categories). Rules cannot
+    //   type-check list ELEMENTS (the tutorAreaShapeValid caveat); the
+    //   callables' per-element isTaskCategory guard is that defense.
+    // Split shape: the post-state doer map is resolved ONCE and passed down,
+    // with an early exit for docs without a doer profile — the naive
+    // doerField-per-clause form re-walked profiles.doer ~30 times and
+    // pushed the heaviest legitimate tutor writes (areaLatLng map saves)
+    // over the rules expression budget, denying them spuriously.
+    function doerBoundsValid() {
+      return request.resource.data.get('profiles', {}).get('doer', null) == null
+             || doerMapBoundsOk(request.resource.data.get('profiles', {}).get('doer', {}));
+    }
+    function doerMapBoundsOk(m) {
+      return (m.get('bio', null) == null
+              || (m.get('bio', null) is string && m.get('bio', null).size() <= 1000))
+             && (m.get('defaultRate', null) == null
+                 || (m.get('defaultRate', null) is number
+                     && m.get('defaultRate', null) >= 0
+                     && m.get('defaultRate', null) <= 1000))
+             && m.get('categories', []) is list
+             && m.get('categories', []).size() <= 7;
+    }
+
     // Helper: the owner-editable tutor numerics must stay in enrollment's
     // validated ranges (paddingMin int 0-60; areaRadiusKm null or 0-50) —
     // client-side guards are UX only; THIS is the trust boundary. Post-state
@@ -355,6 +389,7 @@ service cloud.firestore {
                     && tutorNumericBoundsValid()
                     && noticeWindowBoundsValid()
                     && tutorAreaShapeValid()
+                    && doerBoundsValid()
                     && photoUrlValid();
     }
 
