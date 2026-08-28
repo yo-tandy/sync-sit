@@ -1,0 +1,166 @@
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { screen, waitFor, fireEvent } from '@testing-library/react';
+import { renderWithProviders } from '@/__tests__/test-utils';
+import type { OfferDoc } from '@ejm/do-core';
+
+/**
+ * Offer-card pins (plan §9.1 "the heart of the product"):
+ * - renders the §4.2 denormalized doer fields, price+basis, message, and
+ *   the §11.3 helper WITH its disclosure copy;
+ * - endorsements: THE three status-constrained queries against the shared
+ *   references collection (shape asserted verbatim — the status-in
+ *   constraint is what makes them provable under the H2-hardened rule);
+ * - ordering do-first, then sit/study labeled with their origin app;
+ * - a doer with none renders the graceful starting-state line;
+ * - accept/decline only on pending offers.
+ */
+
+const h = vi.hoisted(() => ({
+  queries: [] as unknown[][],
+  results: new Map<string, Record<string, unknown>[]>(),
+  fail: false,
+}));
+
+vi.mock('@/config/firebase', () => ({ db: {}, functions: {} }));
+vi.mock('firebase/firestore', () => ({
+  collection: (_db: unknown, ...path: string[]) => ({ path: path.join('/') }),
+  query: (...args: unknown[]) => ({ query: args }),
+  where: (...args: unknown[]) => ({ where: args }),
+  limit: (n: number) => ({ limit: n }),
+  getDocs: (q: { query: unknown[] }) => {
+    h.queries.push(q.query);
+    if (h.fail) return Promise.reject(new Error('denied'));
+    const field = (q.query[1] as { where: [string] }).where[0];
+    const rows = h.results.get(field) ?? [];
+    return Promise.resolve({ docs: rows.map((r, i) => ({ id: `${field}-${i}`, data: () => r })) });
+  },
+}));
+
+import { OfferCard } from '../OfferCard';
+
+function offer(overrides: Partial<OfferDoc> = {}): OfferDoc {
+  return {
+    offerId: 'task1_doer1',
+    taskId: 'task1',
+    doerUserId: 'doer1',
+    familyId: 'fam1',
+    doerFirstName: 'Emma',
+    doerPhotoUrl: null,
+    doerBio: 'Handy with furniture',
+    taskTitle: 'Assemble PAX',
+    taskCategory: 'ikea',
+    taskTiming: 'deadline',
+    price: 45,
+    priceBasis: 'flat',
+    message: 'I can do this on Saturday.',
+    helper: null,
+    availabilityNote: null,
+    status: 'pending',
+    declinedReason: null,
+    createdAt: {} as OfferDoc['createdAt'],
+    updatedAt: {} as OfferDoc['updatedAt'],
+    ...overrides,
+  };
+}
+
+beforeEach(() => {
+  h.queries = [];
+  h.results = new Map();
+  h.fail = false;
+});
+
+describe('OfferCard endorsements', () => {
+  it('issues EXACTLY the three status-constrained references queries (§9.1 load-bearing shape)', async () => {
+    renderWithProviders(<OfferCard offer={offer()} />);
+    await waitFor(() => expect(h.queries).toHaveLength(3));
+    for (const field of ['doerUserId', 'babysitterUserId', 'tutorUserId']) {
+      expect(h.queries).toContainEqual([
+        { path: 'references' },
+        { where: [field, '==', 'doer1'] },
+        // NOT optional: the H2-hardened rule grants an unrelated caller only
+        // the public-status disjunct — drop this and the read is denied.
+        { where: ['status', 'in', ['approved', 'published']] },
+        { limit: 10 },
+      ]);
+    }
+  });
+
+  it('renders do-first, then sit/study labeled with their origin app', async () => {
+    h.results.set('doerUserId', [
+      { referenceText: 'Built our shelves perfectly', submittedByName: 'Famille A' },
+    ]);
+    h.results.set('babysitterUserId', [
+      { referenceText: 'Great with our kids', refName: 'Famille B' },
+    ]);
+    h.results.set('tutorUserId', [
+      { referenceText: 'Patient maths tutor', submittedByName: 'Famille C' },
+    ]);
+    renderWithProviders(<OfferCard offer={offer()} />);
+    await waitFor(() => expect(screen.getByText(/Built our shelves/)).toBeInTheDocument());
+
+    const texts = screen.getAllByText(/“/).map((el) => el.textContent);
+    expect(texts[0]).toContain('Built our shelves');
+
+    expect(screen.getByText('From Sync/Sit')).toBeInTheDocument();
+    expect(screen.getByText('From Sync/Study')).toBeInTheDocument();
+    // The sync-do endorsement carries NO origin label — it is the current
+    // app's own signal.
+    const doLine = screen.getByText(/Built our shelves/).closest('li')!;
+    expect(doLine.textContent).not.toContain('From Sync/');
+  });
+
+  it('renders the starting-state line for a doer with no endorsements anywhere', async () => {
+    renderWithProviders(<OfferCard offer={offer()} />);
+    await waitFor(() =>
+      expect(screen.getByText(/No endorsements yet/)).toBeInTheDocument(),
+    );
+  });
+
+  it('degrades to the error line when the queries fail, card intact', async () => {
+    h.fail = true;
+    renderWithProviders(<OfferCard offer={offer()} />);
+    await waitFor(() =>
+      expect(screen.getByText(/Endorsements could not be loaded/)).toBeInTheDocument(),
+    );
+    expect(screen.getByText('Emma')).toBeInTheDocument();
+  });
+});
+
+describe('OfferCard rendering', () => {
+  it('shows the denormalized doer fields, price+basis and message', () => {
+    renderWithProviders(<OfferCard offer={offer({ priceBasis: 'hourly' })} />);
+    expect(screen.getByText('Emma')).toBeInTheDocument();
+    expect(screen.getByText('Handy with furniture')).toBeInTheDocument();
+    expect(screen.getByText(/45 €/)).toBeInTheDocument();
+    expect(screen.getByText('per hour')).toBeInTheDocument();
+    expect(screen.getByText('I can do this on Saturday.')).toBeInTheDocument();
+  });
+
+  it('shows the §11.3 helper block with the disclosure copy', () => {
+    renderWithProviders(
+      <OfferCard offer={offer({ helper: { firstName: 'Léo', lastName: 'Petit', age: 16 } })} />,
+    );
+    expect(screen.getByText('Brings a helper: Léo Petit, 16')).toBeInTheDocument();
+    expect(screen.getByText(/not a verified Sync member/)).toBeInTheDocument();
+    expect(screen.getByText(/remains responsible/)).toBeInTheDocument();
+  });
+
+  it('wires accept/decline for pending offers and hides them on declined ones', () => {
+    const onAccept = vi.fn();
+    const onDecline = vi.fn();
+    const pending = offer();
+    const { unmount } = renderWithProviders(
+      <OfferCard offer={pending} onAccept={onAccept} onDecline={onDecline} />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Accept offer' }));
+    expect(onAccept).toHaveBeenCalledWith(pending);
+    fireEvent.click(screen.getByRole('button', { name: 'Decline' }));
+    expect(onDecline).toHaveBeenCalledWith(pending);
+    unmount();
+
+    renderWithProviders(
+      <OfferCard offer={offer({ status: 'declined' })} onAccept={onAccept} onDecline={onDecline} />,
+    );
+    expect(screen.queryByRole('button', { name: 'Accept offer' })).toBeNull();
+  });
+});
