@@ -12,7 +12,7 @@ import {
   enrollmentErrorReason,
   ageGateErrorCode,
 } from '@ejm/shared-ui';
-import { ADMIN_CONFIG_DEFS, type User } from '@ejm/shared-core';
+import { ADMIN_CONFIG_DEFS, hasAnyContact, type User } from '@ejm/shared-core';
 import { getDoerProfile, type TaskCategory } from '@ejm/do-core';
 import { auth, functions } from '@/config/firebase';
 import { markNextSignInFresh, useAuthStore } from '@/stores/authStore';
@@ -51,15 +51,17 @@ interface EnrollDoerInput {
   };
 }
 
-/** A completed sit/study provider or parent profile — the §11.1 abbreviated
- * identity: verified when it was made, so the wizard skips email
- * verification and password entirely (§3.3). */
+/** A completed sit/study PROVIDER profile — the §11.1 abbreviated identity:
+ * EJM-email-verified when it was made, so the wizard skips email
+ * verification and password entirely (§3.3). A parent profile deliberately
+ * does NOT count (any-domain self-signup — §11.1 as corrected in PR #320):
+ * a parent-only account gets the code-verified sequence, which requires a
+ * genuine EJM address. */
 function hasVerifiedCrossAppProfile(userDoc: User | null): boolean {
   const profiles = userDoc?.profiles;
   return !!(
     profiles?.babysitter?.enrollmentComplete === true ||
-    profiles?.tutor?.enrollmentComplete === true ||
-    profiles?.parent?.enrollmentComplete === true
+    profiles?.tutor?.enrollmentComplete === true
   );
 }
 
@@ -70,12 +72,15 @@ function hasVerifiedCrossAppProfile(userDoc: User | null): boolean {
  *
  * - signed out (classic): email → verify → password+consent → profile →
  *   details (submitting step).
- * - signed in WITHOUT a completed cross-app profile (e.g. a governed kid):
+ * - signed in WITHOUT a completed provider profile (a governed kid, or a
+ *   parent — parent profiles don't satisfy the identity gate, PR #320):
  *   same, minus the password inputs (consent only).
- * - signed in WITH a completed sit/study/parent profile (cross-app,
+ * - signed in WITH a completed sit/study PROVIDER profile (cross-app,
  *   §3.3): consent → [profile, only when identity fields are missing —
- *   typically a sit doc without a DOB, which the §11.1 gate requires] →
- *   details. No email step, no code, no password, no contact re-entry.
+ *   typically a sit doc without a DOB, which the §11.1 gate requires — or
+ *   when the account has NO contact channel, which the callable requires
+ *   on every path (PR #320)] → details. No email step, no code, no
+ *   password; contact is re-collected only when the account has none.
  */
 export function DoerEnrollment() {
   const { t } = useTranslation();
@@ -98,13 +103,21 @@ export function DoerEnrollment() {
   const identityComplete = !!(
     identityOnFile?.firstName && identityOnFile?.lastName && identityOnFile?.dateOfBirth
   );
+  // The callable requires ≥1 contact channel on EVERY path (the enrollTutor
+  // precedent — decision 16's reveal must have something to serve), and
+  // sit's enrollment makes contact skippable, so a cross-app account can
+  // genuinely carry none. hasAnyContact runs the canonical root ?? nested
+  // resolution the server uses.
+  const accountHasContact = isAddProfile && hasAnyContact(userDoc);
 
   // The step SEQUENCE for this caller. Cross-app skips email/verify (the
-  // identity was verified when the other profile was made) and skips the
+  // identity was verified when the provider profile was made) and skips the
   // profile step when nothing is missing — §3.3: "collect only categories,
-  // transport, bio, consent".
+  // transport, bio, consent". "Missing" covers identity AND a zero-channel
+  // account: the profile step is the per-field collector for both.
+  const crossAppNeedsProfileStep = !identityComplete || !accountHasContact;
   const steps: StepId[] = isCrossApp
-    ? ['consent', ...(identityComplete ? [] : ['profile' as StepId]), 'details']
+    ? ['consent', ...(crossAppNeedsProfileStep ? ['profile' as StepId] : []), 'details']
     : ['email', 'verify', 'consent', 'profile', 'details'];
   // The visible indicator covers only the pre-account-creation steps
   // (matching sit and study); cross-app has none of them.
@@ -355,7 +368,10 @@ export function DoerEnrollment() {
             serverError={error}
             identityOnFile={identityOnFile}
             governed={governed}
-            collectContact={!isCrossApp}
+            // Contact is skipped on the abbreviated path ONLY when the
+            // account already has a channel — the callable requires ≥1 on
+            // every path (PR #320 round 1).
+            collectContact={!isCrossApp || !accountHasContact}
           />
         );
       case 'details':

@@ -39,8 +39,10 @@ interface StepProfileProps {
    */
   governed?: boolean;
   /**
-   * Abbreviated cross-app flow (§3.3): contact is not collected — the
-   * account's existing channels stand; only missing identity is asked for.
+   * Abbreviated cross-app flow (§3.3): contact is not re-collected when the
+   * account already has a channel — but the callable requires at least one
+   * on EVERY path (PR #320), so the orchestrator flips this back on for a
+   * zero-channel cross-app account and this step collects it.
    */
   collectContact?: boolean;
 }
