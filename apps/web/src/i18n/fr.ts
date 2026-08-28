@@ -259,6 +259,8 @@ export default {
 
   menu: {
     openMenu: 'Ouvrir le menu',
+    primaryNav: 'Navigation principale',
+    appMenu: 'Menu',
     home: 'Accueil',
     editProfile: 'Modifier le profil',
     babysittingOptions: 'Options de babysitting',
@@ -554,6 +556,12 @@ export default {
     badgeDeclined: 'Refusée',
     addKidsTitle: 'Ajoutez vos enfants',
     addKidsDesc: 'Vous devez ajouter au moins un enfant pour rechercher des babysitters.',
+    noFamilyTitle: 'Vous ne faites actuellement partie d’aucune famille',
+    noFamilyDesc:
+      'Votre compte n’est plus rattaché à une famille — c’est ce qui se produit lorsqu’un co-parent vous retire de la sienne.',
+    noFamilyInviteHint:
+      'Pour rejoindre une famille, demandez à un parent de cette famille de vous envoyer un nouveau lien d’invitation, puis ouvrez-le en étant connecté(e) à ce compte. Ou créez une nouvelle famille ci-dessous.',
+    noFamilyEnrollCta: 'Créer une nouvelle famille',
     notes: {
       fromFamily: 'De la famille',
       fromBabysitter: 'Du babysitter',

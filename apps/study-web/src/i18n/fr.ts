@@ -691,6 +691,12 @@ export default {
       },
       settingsCard: 'Paramètres de la famille',
       accountCard: 'Compte',
+      noFamilyTitle: 'Vous ne faites actuellement partie d’aucune famille',
+      noFamilyDesc:
+        'Votre compte n’est plus rattaché à une famille — c’est ce qui se produit lorsqu’un co-parent vous retire de la sienne.',
+      noFamilyInviteHint:
+        'Pour rejoindre une famille, demandez à un parent de cette famille de vous envoyer un nouveau lien d’invitation depuis l’application Sync/Sit, puis ouvrez-le en étant connecté(e) à ce compte — les deux applications partagent votre famille. Ou créez une nouvelle famille ci-dessous.',
+      noFamilyEnrollCta: 'Créer une nouvelle famille',
     },
     settings: {
       saved: 'Détails de la famille enregistrés !',

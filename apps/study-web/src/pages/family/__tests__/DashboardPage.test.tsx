@@ -429,3 +429,50 @@ describe('family DashboardPage', () => {
     ).not.toBeInTheDocument();
   });
 });
+
+// ── Issue #293: a removed co-parent (parent profile retained, familyId
+// deleted by removeCoParent in the Sync/Sit app, #284 — same shared user
+// doc) used to land on a silently empty dashboard here too. The family-less
+// branch must explain the state and point at the recovery paths; a membered
+// doc (either membership field) must never see it. ──
+describe('family DashboardPage — family-less parent recovery state (issue #293)', () => {
+  beforeEach(() => reset());
+
+  it('an ORPHAN parent doc sees the explanation and recovery paths, not the tile grid', () => {
+    h.auth.userDoc = {
+      uid: 'p1',
+      firstName: 'Dana',
+      profiles: { parent: { enrollmentComplete: true } },
+    };
+    renderWithProviders(<DashboardPage />);
+    expect(screen.getByText('You are not currently part of a family')).toBeInTheDocument();
+    // Recovery path 1: the fresh-invite-link hint (accepted in Sync/Sit).
+    expect(screen.getByText(/new invite link/)).toBeInTheDocument();
+    // Recovery path 2: the enroll CTA targets the add-profile enrollment.
+    expect(screen.getByRole('link', { name: 'Start a new family' })).toHaveAttribute(
+      'href',
+      '/enroll/parent',
+    );
+    // None of the normal dashboard tiles render underneath.
+    expect(screen.queryByText('Your requests')).not.toBeInTheDocument();
+    expect(screen.queryByText('Your sessions')).not.toBeInTheDocument();
+  });
+
+  it('a MEMBERED parent (profile familyId) never sees the family-less state', () => {
+    renderWithProviders(<DashboardPage />); // reset() doc carries familyId fam1
+    expect(screen.queryByText('You are not currently part of a family')).not.toBeInTheDocument();
+    expect(screen.getByText('Your requests')).toBeInTheDocument();
+  });
+
+  it('a LEGACY Plan C doc (root familyId only) is a member, not an orphan', () => {
+    h.auth.userDoc = {
+      uid: 'p1',
+      firstName: 'Dana',
+      familyId: 'fam-legacy',
+      profiles: { parent: { enrollmentComplete: true } },
+    };
+    renderWithProviders(<DashboardPage />);
+    expect(screen.queryByText('You are not currently part of a family')).not.toBeInTheDocument();
+    expect(screen.getByText('Your requests')).toBeInTheDocument();
+  });
+});

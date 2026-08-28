@@ -339,7 +339,8 @@ export function AdminUsersPage() {
   ];
 
   return (
-    <div>
+    // Wide desktop tier (issue #119): the DataTable wants the 5xl cap.
+    <div data-page-width="wide">
       <TopNav title={t('admin.manageUsers')} backTo="/admin" />
 
       <div className="px-5 pb-8">

@@ -691,6 +691,12 @@ export default {
       },
       settingsCard: 'Family settings',
       accountCard: 'Account',
+      noFamilyTitle: 'You are not currently part of a family',
+      noFamilyDesc:
+        'Your account is no longer linked to a family — this happens when a co-parent removes you from theirs.',
+      noFamilyInviteHint:
+        'To rejoin a family, ask a parent in that family to send you a new invite link from the Sync/Sit app, then open it while signed in to this account — the two apps share your family. Or start a fresh family below.',
+      noFamilyEnrollCta: 'Start a new family',
     },
     settings: {
       saved: 'Family details saved!',
