@@ -23,13 +23,30 @@ service firebase.storage {
              || d.get('profiles', {}).get('parent', {}).get('familyId', null) == familyId;
     }
 
+    // Helper: is this contentType a browser-renderable/scriptable document?
+    // Narrow DENYLIST (issue #281), deliberately not an allowlist: browsers
+    // report File.type inconsistently (empty or application/octet-stream for
+    // valid PDFs on some OS/browser combos), so an allowlist would reject
+    // legitimate uploads. text/html and image/svg+xml are the two types the
+    // clients could pass through (accept="image/*,.pdf" technically admits
+    // SVG) that would render live — with script — on storage.googleapis.com;
+    // no legitimate verification flow produces SVG identity documents
+    // (phones/scanners emit JPEG/PNG/PDF), so denying it costs nothing.
+    // lower() + prefix match: a raw-SDK caller must not bypass an exact-string
+    // check with 'Text/HTML' or 'text/html; charset=utf-8'. The null guard
+    // keeps type-less uploads working (GCS serves those as octet-stream,
+    // which downloads rather than renders).
+    function isRenderableDocType(t) {
+      return t != null && t.lower().matches('(text/html|image/svg\\+xml).*');
+    }
+
     // Verification documents — writes only by members of the owning family or
     // admins (issue #153). profiles.parent.familyId is server-controlled
     // (enrollFamily; firestore.rules blocks client edits), so matching it here
     // cannot be spoofed from a client. Size is capped at the 10MB both web
-    // clients already enforce. Content type is deliberately NOT restricted:
-    // browsers report File.type inconsistently (empty or octet-stream for some
-    // PDFs), and the clients send whatever the browser detected.
+    // clients already enforce. Content type: narrow denylist only — see
+    // isRenderableDocType above (defense-in-depth behind the read side's
+    // responseDisposition: 'attachment', issue #281).
     // Deletes fall through to the implicit deny below — no client deletes
     // these; server-side cleanup uses the Admin SDK, which bypasses rules.
     // Reads go through getVerificationDocument cloud function (checks family ownership)
@@ -37,6 +54,7 @@ service firebase.storage {
       allow read: if false;
       allow create, update: if request.auth != null
                    && request.resource.size <= 10 * 1024 * 1024
+                   && !isRenderableDocType(request.resource.contentType)
                    && canWriteFamilyDocs(callerData(), familyId);
     }
 

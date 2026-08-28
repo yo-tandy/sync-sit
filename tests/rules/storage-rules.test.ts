@@ -149,14 +149,88 @@ describe('verification-documents', () => {
     await assertSucceeds(uploadString(fileRef, 'updated', 'raw'));
   });
 
-  it('allows an upload with an explicit content type (rule does not restrict type)', async () => {
+  it('allows an upload with a normal explicit content type (application/pdf)', async () => {
     // Clients pass the browser-detected File.type through uploadBytes; the
-    // rule deliberately leaves content type open (File.type is unreliable).
+    // rule only denies the narrow renderable-type denylist (issue #281).
     await seedUser('sr-parent1', { profiles: { parent: { familyId: 'sr-family1' } } });
     const authed = testEnv.authenticatedContext('sr-parent1');
     const fileRef = ref(authed.storage(), 'verification-documents/sr-family1/1724700000000-scan.pdf');
     await assertSucceeds(
       uploadBytes(fileRef, new Uint8Array([1, 2, 3]), { contentType: 'application/pdf' }),
+    );
+  });
+
+  it('allows image and octet-stream content types (denylist must not become an allowlist)', async () => {
+    // application/octet-stream is what browsers report for valid PDFs on some
+    // OS/browser combos — the reason issue #281 rejects an allowlist. It must
+    // keep passing, along with ordinary image uploads.
+    await seedUser('sr-parent1', { profiles: { parent: { familyId: 'sr-family1' } } });
+    const authed = testEnv.authenticatedContext('sr-parent1');
+    await assertSucceeds(
+      uploadBytes(
+        ref(authed.storage(), 'verification-documents/sr-family1/id.jpg'),
+        new Uint8Array([1, 2, 3]),
+        { contentType: 'image/jpeg' },
+      ),
+    );
+    await assertSucceeds(
+      uploadBytes(
+        ref(authed.storage(), 'verification-documents/sr-family1/blob.pdf'),
+        new Uint8Array([1, 2, 3]),
+        { contentType: 'application/octet-stream' },
+      ),
+    );
+  });
+
+  it('denies a text/html upload even from the owning family (admin-phishing surface, issue #281)', async () => {
+    await seedUser('sr-parent1', { profiles: { parent: { familyId: 'sr-family1' } } });
+    const authed = testEnv.authenticatedContext('sr-parent1');
+    const fileRef = ref(authed.storage(), 'verification-documents/sr-family1/evil.html');
+    await assertFails(
+      uploadBytes(fileRef, new TextEncoder().encode('<script>phish()</script>'), {
+        contentType: 'text/html',
+      }),
+    );
+  });
+
+  it('denies an image/svg+xml upload (scriptable, renders live like HTML)', async () => {
+    await seedUser('sr-parent1', { profiles: { parent: { familyId: 'sr-family1' } } });
+    const authed = testEnv.authenticatedContext('sr-parent1');
+    const fileRef = ref(authed.storage(), 'verification-documents/sr-family1/evil.svg');
+    await assertFails(
+      uploadBytes(fileRef, new TextEncoder().encode('<svg/>'), {
+        contentType: 'image/svg+xml',
+      }),
+    );
+  });
+
+  it('denies case/parameter variants of the denylisted types (no exact-string bypass)', async () => {
+    // A raw-SDK attacker controls the contentType string byte-for-byte;
+    // browsers treat media types case-insensitively and honor parameters,
+    // so 'Text/HTML' and 'text/html; charset=utf-8' render exactly like
+    // the canonical spelling.
+    await seedUser('sr-parent1', { profiles: { parent: { familyId: 'sr-family1' } } });
+    const authed = testEnv.authenticatedContext('sr-parent1');
+    await assertFails(
+      uploadBytes(
+        ref(authed.storage(), 'verification-documents/sr-family1/evil2.html'),
+        new Uint8Array([1]),
+        { contentType: 'Text/HTML' },
+      ),
+    );
+    await assertFails(
+      uploadBytes(
+        ref(authed.storage(), 'verification-documents/sr-family1/evil3.html'),
+        new Uint8Array([1]),
+        { contentType: 'text/html; charset=utf-8' },
+      ),
+    );
+    await assertFails(
+      uploadBytes(
+        ref(authed.storage(), 'verification-documents/sr-family1/evil4.svg'),
+        new Uint8Array([1]),
+        { contentType: 'IMAGE/SVG+XML' },
+      ),
     );
   });
 

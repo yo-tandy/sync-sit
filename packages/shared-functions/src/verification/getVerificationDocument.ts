@@ -65,6 +65,12 @@ export const getVerificationDocument = onCall(
       const [signedUrl] = await file.getSignedUrl({
         action: 'read',
         expires: Date.now() + 15 * 60 * 1000, // 15 minutes
+        // Force download: uploads carry an attacker-controllable contentType
+        // (the client passes browser File.type through), so without this a
+        // text/html upload would render as a live page on
+        // storage.googleapis.com when an admin opens it from the review
+        // queue (issue #281).
+        responseDisposition: 'attachment',
       });
 
       return { url: signedUrl };
