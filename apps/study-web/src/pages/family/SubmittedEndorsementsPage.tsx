@@ -204,7 +204,7 @@ export function SubmittedEndorsementsPage() {
       </div>
 
       {editTarget && (
-        <Dialog open onClose={() => setEditTarget(null)}>
+        <Dialog open onClose={() => setEditTarget(null)} ariaLabel={t('family.endorsements.editTitle')}>
           <h3 className="mb-3 text-lg font-bold">{t('family.endorsements.editTitle')}</h3>
           <label htmlFor="endorsement-text" className="mb-1 block text-sm font-medium text-gray-700">
             {t('family.endorsements.textLabel')}
@@ -240,7 +240,7 @@ export function SubmittedEndorsementsPage() {
       )}
 
       {withdrawTarget && (
-        <Dialog open onClose={() => setWithdrawTarget(null)}>
+        <Dialog open onClose={() => setWithdrawTarget(null)} ariaLabel={t('family.endorsements.confirmTitle')}>
           <h3 className="mb-2 text-lg font-bold">{t('family.endorsements.confirmTitle')}</h3>
           <p className="mb-4 text-sm text-gray-600">
             {t('family.endorsements.confirmWithdraw', {

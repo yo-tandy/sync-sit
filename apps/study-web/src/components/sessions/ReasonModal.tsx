@@ -31,7 +31,7 @@ export interface ReasonModalProps {
 
 export function ReasonModal({ open, onClose, ...rest }: ReasonModalProps) {
   return (
-    <Dialog open={open} onClose={onClose}>
+    <Dialog open={open} onClose={onClose} ariaLabel={rest.title}>
       <ReasonForm onClose={onClose} {...rest} />
     </Dialog>
   );

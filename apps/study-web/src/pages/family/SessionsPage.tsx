@@ -1022,7 +1022,7 @@ export function SessionsPage() {
       )}
 
       {/* ── Accept a proposal: pick the attending students ── */}
-      <Dialog open={acceptTarget !== null} onClose={() => setAcceptTarget(null)}>
+      <Dialog open={acceptTarget !== null} onClose={() => setAcceptTarget(null)} ariaLabel={t('family.sessions.proposalAcceptTitle')}>
         <h3 className="mb-2 text-lg font-bold">{t('family.sessions.proposalAcceptTitle')}</h3>
         <p className="mb-4 text-sm text-gray-600">{t('family.sessions.proposalAcceptDesc')}</p>
         {kids.length === 0 ? (
@@ -1057,7 +1057,7 @@ export function SessionsPage() {
       </Dialog>
 
       {/* ── Decline a proposal (no reason) ── */}
-      <Dialog open={declineTarget !== null} onClose={() => setDeclineTarget(null)}>
+      <Dialog open={declineTarget !== null} onClose={() => setDeclineTarget(null)} ariaLabel={t('family.sessions.proposalDeclineTitle')}>
         <h3 className="mb-2 text-lg font-bold">{t('family.sessions.proposalDeclineTitle')}</h3>
         <p className="mb-5 text-sm text-gray-600">{t('family.sessions.proposalDeclineDesc')}</p>
         {respondError && <p className="mb-2 text-sm text-brand-600">{respondError}</p>}
@@ -1077,7 +1077,7 @@ export function SessionsPage() {
       </Dialog>
 
       {modifyTarget && (
-        <Dialog open onClose={() => setModifyTarget(null)}>
+        <Dialog open onClose={() => setModifyTarget(null)} ariaLabel={t('family.sessions.modifyTitle')}>
           <h3 className="text-lg font-bold">{t('family.sessions.modifyTitle')}</h3>
           <p className="mt-1 text-sm text-gray-500">{t('family.sessions.modifyDesc')}</p>
           <label className="mt-3 block text-sm font-medium text-gray-700">
@@ -1174,7 +1174,7 @@ export function SessionsPage() {
           Dialog closes on backdrop click, and dismissing mid-flight would
           unmount the only thing that can render the error of a
           non-optimistic (erasure!) call. */}
-      <Dialog open={noteRemoveTarget !== null} onClose={() => { if (!noteSaving) setNoteRemoveTarget(null); }}>
+      <Dialog open={noteRemoveTarget !== null} onClose={() => { if (!noteSaving) setNoteRemoveTarget(null); }} ariaLabel={t('family.sessions.notes.removeTitle')}>
         <h3 className="mb-2 text-lg font-bold">{t('family.sessions.notes.removeTitle')}</h3>
         <p className="mb-3 text-sm text-gray-600">{t('family.sessions.notes.removeDesc')}</p>
         {noteError && <p className="mb-3 text-sm text-brand-600">{noteError}</p>}

@@ -107,7 +107,7 @@ export function SupervisionRequestCard() {
         </div>
       </div>
 
-      <Dialog open={declineOpen} onClose={() => setDeclineOpen(false)}>
+      <Dialog open={declineOpen} onClose={() => setDeclineOpen(false)} ariaLabel={t('supervision.confirmDeclineTitle')}>
         <h3 className="mb-2 text-lg font-bold">{t('supervision.confirmDeclineTitle')}</h3>
         <p className="mb-5 text-sm text-gray-600">{t('supervision.confirmDeclineDesc')}</p>
         <div className="flex gap-2">

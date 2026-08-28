@@ -223,8 +223,12 @@ describe('tutor RequestsPage', () => {
     renderWithProviders(<RequestsPage />);
     fireEvent.click(await screen.findByRole('button', { name: /^decline$/i }));
 
-    // Confirm dialog — nothing sent until confirmed.
+    // Confirm dialog — nothing sent until confirmed. Naming sweep (issue
+    // #305): the labelled dialog carries modal semantics.
     expect(h.callable).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole('dialog', { name: 'Decline this request?' }),
+    ).toHaveAttribute('aria-modal', 'true');
     fireEvent.click(await screen.findByRole('button', { name: /yes, decline/i }));
 
     await waitFor(() =>

@@ -328,7 +328,7 @@ export function RequestsPage() {
       </div>
 
       {/* ── Decline confirmation ── */}
-      <Dialog open={declineTarget !== null} onClose={() => setDeclineTarget(null)}>
+      <Dialog open={declineTarget !== null} onClose={() => setDeclineTarget(null)} ariaLabel={t('tutor.requests.confirmDeclineTitle')}>
         <h3 className="mb-2 text-lg font-bold">{t('tutor.requests.confirmDeclineTitle')}</h3>
         <p className="mb-5 text-sm text-gray-600">{t('tutor.requests.confirmDeclineDesc')}</p>
         <div className="flex gap-2">
@@ -350,7 +350,7 @@ export function RequestsPage() {
         </div>
       </Dialog>
 
-      <Dialog open={withdrawTarget !== null} onClose={() => setWithdrawTarget(null)}>
+      <Dialog open={withdrawTarget !== null} onClose={() => setWithdrawTarget(null)} ariaLabel={t('tutor.requests.confirmWithdrawTitle')}>
         <h3 className="mb-2 text-lg font-bold">{t('tutor.requests.confirmWithdrawTitle')}</h3>
         <p className="mb-5 text-sm text-gray-600">{t('tutor.requests.confirmWithdrawDesc')}</p>
         <div className="flex gap-2">

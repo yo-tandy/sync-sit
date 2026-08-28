@@ -717,7 +717,7 @@ export function SchedulePage() {
 
       {/* Unsaved changes dialog */}
       {blocker.state === 'blocked' && (
-        <Dialog open onClose={() => blocker.reset()}>
+        <Dialog open onClose={() => blocker.reset()} ariaLabel={t('schedule.unsavedChanges')}>
           <h3 className="mb-2 text-lg font-bold">{t('schedule.unsavedChanges')}</h3>
           <p className="mb-5 text-sm text-gray-600">
             {t('schedule.unsavedDesc')}
