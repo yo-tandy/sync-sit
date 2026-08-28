@@ -525,7 +525,7 @@ export function SearchPage() {
 
       {/* Publish Confirmation Dialog (issue #207) */}
       {publishOpen && (
-        <Dialog open onClose={() => { setPublishOpen(false); setPublishError(null); }}>
+        <Dialog open onClose={() => { setPublishOpen(false); setPublishError(null); }} ariaLabel={t('family.publish.confirmTitle')}>
           <h3 className="mb-2 text-lg font-bold">{t('family.publish.confirmTitle')}</h3>
           <p className="mb-2 text-sm text-gray-600">{t('family.publish.confirmDesc')}</p>
           <p className="mb-2 text-sm text-gray-600">{t('family.publish.duration')}</p>
@@ -547,7 +547,7 @@ export function SearchPage() {
 
       {/* Withdraw Published Search Dialog (issue #207) */}
       {withdrawTarget && (
-        <Dialog open onClose={() => setWithdrawTarget(null)}>
+        <Dialog open onClose={() => setWithdrawTarget(null)} ariaLabel={t('family.publish.withdrawTitle')}>
           <h3 className="mb-2 text-lg font-bold">{t('family.publish.withdrawTitle')}</h3>
           <p className="mb-4 text-sm text-gray-600">{t('family.publish.withdrawDesc')}</p>
           <div className="flex gap-2">

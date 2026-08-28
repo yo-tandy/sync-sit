@@ -326,7 +326,7 @@ export function RequestsPage() {
       )}
 
       {/* ── Cancel confirmation ── */}
-      <Dialog open={cancelTarget !== null} onClose={() => setCancelTarget(null)}>
+      <Dialog open={cancelTarget !== null} onClose={() => setCancelTarget(null)} ariaLabel={t('family.requests.confirmCancelTitle')}>
         <h3 className="mb-2 text-lg font-bold">{t('family.requests.confirmCancelTitle')}</h3>
         <p className="mb-5 text-sm text-gray-600">{t('family.requests.confirmCancelDesc')}</p>
         <div className="flex gap-2">

@@ -30,7 +30,7 @@ export interface SessionNoteDialogProps {
 
 export function SessionNoteDialog({ open, onClose, ...rest }: SessionNoteDialogProps) {
   return (
-    <Dialog open={open} onClose={onClose}>
+    <Dialog open={open} onClose={onClose} ariaLabel={rest.title}>
       <NoteForm onClose={onClose} {...rest} />
     </Dialog>
   );

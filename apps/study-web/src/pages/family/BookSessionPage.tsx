@@ -864,7 +864,7 @@ export function BookSessionPage() {
       </div>
 
       {/* ── Success ── */}
-      <Dialog open={successOpen} onClose={() => navigate('/family')}>
+      <Dialog open={successOpen} onClose={() => navigate('/family')} ariaLabel={t('family.book.success.title')}>
         <h3 className="mb-2 text-lg font-bold">{t('family.book.success.title')}</h3>
         <p className="mb-5 text-sm text-gray-600">
           {mode === 'weekly' && weeklySlot

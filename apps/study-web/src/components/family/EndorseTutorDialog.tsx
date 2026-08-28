@@ -81,7 +81,7 @@ export function EndorseTutorDialog({
   };
 
   return (
-    <Dialog open onClose={onClose}>
+    <Dialog open onClose={onClose} ariaLabel={done ? t('family.endorse.successTitle') : t('family.endorse.title', { name: tutorName })}>
       {done ? (
         <>
           <h3 className="mb-2 text-lg font-bold">{t('family.endorse.successTitle')}</h3>

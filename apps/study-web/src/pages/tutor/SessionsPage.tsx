@@ -891,7 +891,7 @@ export function SessionsPage() {
       </div>
 
       {/* ── Decline confirmation (no reason — a decline carries none) ── */}
-      <Dialog open={declineTarget !== null} onClose={() => setDeclineTarget(null)}>
+      <Dialog open={declineTarget !== null} onClose={() => setDeclineTarget(null)} ariaLabel={t('tutor.sessions.confirmDeclineTitle')}>
         <h3 className="mb-2 text-lg font-bold">{t('tutor.sessions.confirmDeclineTitle')}</h3>
         <p className="mb-5 text-sm text-gray-600">{t('tutor.sessions.confirmDeclineDesc')}</p>
         <div className="flex gap-2">
@@ -940,7 +940,7 @@ export function SessionsPage() {
           Dialog closes on backdrop click, and dismissing mid-flight would
           unmount the only thing that can render the error of a
           non-optimistic (erasure!) call. */}
-      <Dialog open={noteRemoveTarget !== null} onClose={() => { if (!noteSaving) setNoteRemoveTarget(null); }}>
+      <Dialog open={noteRemoveTarget !== null} onClose={() => { if (!noteSaving) setNoteRemoveTarget(null); }} ariaLabel={t('tutor.sessions.notes.removeTitle')}>
         <h3 className="mb-2 text-lg font-bold">{t('tutor.sessions.notes.removeTitle')}</h3>
         <p className="mb-3 text-sm text-gray-600">{t('tutor.sessions.notes.removeDesc')}</p>
         {noteError && <p className="mb-3 text-sm text-brand-600">{noteError}</p>}
@@ -970,7 +970,7 @@ export function SessionsPage() {
       />
 
       {/* ── Recurring confirm result ── */}
-      <Dialog open={recurringResult !== null} onClose={() => setRecurringResult(null)}>
+      <Dialog open={recurringResult !== null} onClose={() => setRecurringResult(null)} ariaLabel={t('tutor.sessions.result.title')}>
         {recurringResult && (
           <>
             <h3 className="mb-2 text-lg font-bold">{t('tutor.sessions.result.title')}</h3>
