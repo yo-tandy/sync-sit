@@ -18,6 +18,7 @@ export function AdminUsersPage() {
     usersLoading,
     fetchUsers,
     blockUser,
+    correctUserIdentity,
     deactivateUser,
     deleteUser,
     resetUserPassword,
@@ -100,6 +101,87 @@ export function AdminUsersPage() {
         await resetUserPassword(uid);
       },
     });
+  };
+
+  // Identity-correction dialog: root identity is set-once client-side
+  // (issue #144), so typo fixes go through the admin correctUserIdentity
+  // callable (issue #158). Prefilled with current values; only changed
+  // fields are sent.
+  const [identityDialog, setIdentityDialog] = useState<{
+    open: boolean;
+    user: AdminUserListItem | null;
+  }>({ open: false, user: null });
+  const [identityForm, setIdentityForm] = useState({ firstName: '', lastName: '', dateOfBirth: '' });
+  const [identitySaving, setIdentitySaving] = useState(false);
+  const [identityError, setIdentityError] = useState('');
+
+  const formatDob = (u: AdminUserListItem) => {
+    const ms = wireTimestampToMillis(u.dateOfBirth);
+    return ms === null ? '' : new Date(ms).toISOString().slice(0, 10);
+  };
+
+  const handleCorrectIdentity = (u: AdminUserListItem) => {
+    setIdentityForm({
+      firstName: u.firstName || '',
+      lastName: u.lastName || '',
+      dateOfBirth: formatDob(u),
+    });
+    setIdentityError('');
+    setIdentityDialog({ open: true, user: u });
+  };
+
+  // Blanking a populated field is not a valid correction (root identity
+  // cannot be cleared; the backend rejects empty names) — surface it instead
+  // of silently dropping the field from the payload.
+  const identityBlanked = () => {
+    const u = identityDialog.user;
+    if (!u) return false;
+    return (
+      (!identityForm.firstName.trim() && !!u.firstName) ||
+      (!identityForm.lastName.trim() && !!u.lastName) ||
+      (!identityForm.dateOfBirth.trim() && !!formatDob(u))
+    );
+  };
+
+  const identityChanges = () => {
+    const u = identityDialog.user;
+    if (!u) return null;
+    const changes: { firstName?: string; lastName?: string; dateOfBirth?: string } = {};
+    const firstName = identityForm.firstName.trim();
+    const lastName = identityForm.lastName.trim();
+    const dateOfBirth = identityForm.dateOfBirth.trim();
+    if (firstName && firstName !== u.firstName) changes.firstName = firstName;
+    if (lastName && lastName !== u.lastName) changes.lastName = lastName;
+    if (dateOfBirth && dateOfBirth !== formatDob(u)) changes.dateOfBirth = dateOfBirth;
+    return Object.keys(changes).length > 0 ? changes : null;
+  };
+
+  const closeIdentityDialog = () => setIdentityDialog((prev) => ({ ...prev, open: false }));
+
+  const handleIdentitySave = async () => {
+    const u = identityDialog.user;
+    const changes = identityChanges();
+    if (!u || !changes || identityBlanked() || identitySaving) return;
+    setIdentitySaving(true);
+    setIdentityError('');
+    try {
+      await correctUserIdentity({ targetUserId: u.uid, ...changes });
+      closeIdentityDialog();
+      loadUsers();
+    } catch (err: unknown) {
+      // Callable rejections are always Error instances, so the localized
+      // string leads and the (English) server detail follows — otherwise the
+      // fallback would be dead code and a French admin would see only the
+      // raw HttpsError message.
+      const detail = err instanceof Error ? err.message : '';
+      setIdentityError(
+        detail
+          ? `${t('admin.identityCorrectionFailed')}: ${detail}`
+          : t('admin.identityCorrectionFailed'),
+      );
+    } finally {
+      setIdentitySaving(false);
+    }
   };
 
   const handleExport = async (uid: string) => {
@@ -244,6 +326,9 @@ export function AdminUsersPage() {
           <Button variant="outline" size="sm" onClick={() => handleResetPassword(u.uid)}>
             {t('admin.resetPwd')}
           </Button>
+          <Button variant="outline" size="sm" onClick={() => handleCorrectIdentity(u)}>
+            {t('admin.correctIdentity')}
+          </Button>
           <Button variant="outline" size="sm" onClick={() => handleExport(u.uid)}>
             <DownloadIcon className="h-4 w-4" />
             {t('admin.exportData')}
@@ -307,6 +392,45 @@ export function AdminUsersPage() {
           </Button>
           <Button variant="primary" size="sm" onClick={handleConfirm}>
             {t('common.confirm')}
+          </Button>
+        </div>
+      </Dialog>
+
+      {/* Identity-correction dialog */}
+      <Dialog open={identityDialog.open} onClose={closeIdentityDialog}>
+        <h3 className="mb-2 text-lg font-semibold">{t('admin.correctIdentityTitle')}</h3>
+        <p className="mb-4 text-sm text-gray-600">{t('admin.correctIdentityHint')}</p>
+        <Input
+          label={t('admin.identityFirstName')}
+          value={identityForm.firstName}
+          onChange={(e) => setIdentityForm((prev) => ({ ...prev, firstName: e.target.value }))}
+        />
+        <Input
+          label={t('admin.identityLastName')}
+          value={identityForm.lastName}
+          onChange={(e) => setIdentityForm((prev) => ({ ...prev, lastName: e.target.value }))}
+        />
+        <Input
+          label={t('admin.identityDob')}
+          type="date"
+          value={identityForm.dateOfBirth}
+          onChange={(e) => setIdentityForm((prev) => ({ ...prev, dateOfBirth: e.target.value }))}
+        />
+        {identityBlanked() && (
+          <p className="mb-4 text-sm text-red-600">{t('admin.identityCannotBeEmpty')}</p>
+        )}
+        {identityError && <p className="mb-4 text-sm text-red-600">{identityError}</p>}
+        <div className="flex gap-3">
+          <Button variant="secondary" size="sm" onClick={closeIdentityDialog}>
+            {t('common.cancel')}
+          </Button>
+          <Button
+            variant="primary"
+            size="sm"
+            disabled={identitySaving || !identityChanges() || identityBlanked()}
+            onClick={handleIdentitySave}
+          >
+            {t('common.save')}
           </Button>
         </div>
       </Dialog>

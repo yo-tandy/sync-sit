@@ -17,6 +17,21 @@ export interface AdminUserListItem {
   status: string;
   searchable?: boolean;
   createdAt: FirestoreTimestamp | null;
+  /** Present on the wire (listUsers spreads the whole users doc); used to
+   *  prefill the identity-correction dialog. */
+  dateOfBirth?: WireTimestamp | null;
+}
+
+/**
+ * Input of the admin `correctUserIdentity` callable — only the fields to
+ * change are sent (the backend rejects unknown fields and empty payloads).
+ */
+export interface CorrectUserIdentityPayload {
+  targetUserId: string;
+  firstName?: string;
+  lastName?: string;
+  /** YYYY-MM-DD */
+  dateOfBirth?: string;
 }
 
 /**
@@ -199,6 +214,7 @@ interface AdminState {
   usersLoading: boolean;
   fetchUsers: (params: { search?: string; role?: string; status?: string }) => Promise<void>;
   blockUser: (uid: string) => Promise<void>;
+  correctUserIdentity: (payload: CorrectUserIdentityPayload) => Promise<void>;
   deactivateUser: (uid: string) => Promise<void>;
   deleteUser: (uid: string) => Promise<void>;
   resetUserPassword: (uid: string) => Promise<void>;
@@ -302,6 +318,16 @@ export const useAdminStore = create<AdminState>((set, get) => ({
   blockUser: async (uid) => {
     const fn = httpsCallable(functions, 'blockUser');
     await fn({ targetUserId: uid });
+  },
+  correctUserIdentity: async (payload) => {
+    const fn = httpsCallable(functions, 'correctUserIdentity');
+    // Omit empty fields entirely: the callable client serializes undefined
+    // as null, which the backend's zod .optional() rejects.
+    const body: CorrectUserIdentityPayload = { targetUserId: payload.targetUserId };
+    if (payload.firstName) body.firstName = payload.firstName;
+    if (payload.lastName) body.lastName = payload.lastName;
+    if (payload.dateOfBirth) body.dateOfBirth = payload.dateOfBirth;
+    await fn(body);
   },
   deactivateUser: async (uid) => {
     const fn = httpsCallable(functions, 'deactivateUser');

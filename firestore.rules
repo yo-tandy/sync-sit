@@ -222,10 +222,11 @@ service cloud.firestore {
     // identity set by the other app). Absent -> set stays allowed (a babysitter
     // stub completes its identity step). Applies to ALL accounts, not just
     // identityLocked ones — see identityUnlockedOrUnchanged above.
-    // CORRECTIONS: governed kids go through correctChildIdentity; for
-    // self-managed accounts NO correction path currently exists short of
-    // direct Admin-SDK/console intervention — a deliberate gap (typo-fix
-    // callable is a tracked follow-up), not an accident.
+    // CORRECTIONS: identity-locked governed kids go through the guardian
+    // correctChildIdentity callable; everyone else (self-managed accounts,
+    // claim-origin governed kids) through the admin-only, audited
+    // correctUserIdentity callable (issue #158). Both run on the Admin SDK —
+    // these rules only ever bind clients.
     // "Empty" (absent, null, '') is fillable; a POPULATED value is frozen.
     // One definition shared with fillBaseFields and the wizards' truthiness
     // checks — three layers, one semantics. Clearing a populated value

@@ -50,6 +50,7 @@ export {
   listUsers,
   listFamilies,
   blockUser,
+  correctUserIdentity,
   deleteUser,
   resetUserPassword,
   updateHolidays,

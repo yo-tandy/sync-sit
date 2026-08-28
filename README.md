@@ -196,6 +196,7 @@ The cross-app switch target is configurable (defaults to the production URLs bak
 | `getAdminDashboard` | Admin | Dashboard statistics |
 | `listUsers` | Admin | List/search users |
 | `blockUser` | Admin | Block/unblock user |
+| `correctUserIdentity` | Admin | Correct set-once root identity (audited) |
 | `deactivateUser` | Admin | Toggle babysitter searchable flag |
 | `deleteUser` | Admin | GDPR-compliant hard delete |
 | `resetUserPassword` | Admin | Send password reset email |
