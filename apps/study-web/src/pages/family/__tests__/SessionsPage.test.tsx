@@ -890,8 +890,7 @@ describe('family SessionsPage — session notes (pre)', () => {
     expect(screen.queryByRole('button', { name: /add a note|edit note/i })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /remove note/i }));
     expect(screen.getByText(/remove this note\?/i)).toBeInTheDocument();
-    const removeButtons = screen.getAllByRole('button', { name: /remove note/i });
-    fireEvent.click(removeButtons[removeButtons.length - 1]);
+    fireEvent.click(screen.getByRole('button', { name: /remove it/i }));
 
     await waitFor(() =>
       expect(h.callable).toHaveBeenCalledWith('setSessionNote', {
@@ -927,10 +926,9 @@ describe('family SessionsPage — session notes (pre)', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: /remove note/i }));
     h.callable.mockRejectedValueOnce(new Error('boom'));
-    const removeButtons = screen.getAllByRole('button', { name: /remove note/i });
-    fireEvent.click(removeButtons[removeButtons.length - 1]);
+    fireEvent.click(screen.getByRole('button', { name: /remove it/i }));
 
-    expect(await screen.findByText(/couldn't save your note/i)).toBeInTheDocument();
+    expect(await screen.findByText(/couldn't remove your note/i)).toBeInTheDocument();
     expect(screen.getByText(/remove this note\?/i)).toBeInTheDocument();
     // Local state untouched: the note is still there behind the dialog.
     expect(screen.getByText('stale ask')).toBeInTheDocument();
@@ -996,8 +994,7 @@ describe('family SessionsPage — session notes (pre)', () => {
 
     expect(await screen.findByText('stranded ask')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /remove note/i }));
-    const removeButtons = screen.getAllByRole('button', { name: /remove note/i });
-    fireEvent.click(removeButtons[removeButtons.length - 1]);
+    fireEvent.click(screen.getByRole('button', { name: /remove it/i }));
 
     await waitFor(() =>
       expect(h.callable).toHaveBeenCalledWith('setSessionNote', {
@@ -1018,8 +1015,7 @@ describe('family SessionsPage — session notes (pre)', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: /view dates/i }));
     fireEvent.click(await screen.findByRole('button', { name: /remove note/i }));
-    const removeButtons = screen.getAllByRole('button', { name: /remove note/i });
-    fireEvent.click(removeButtons[removeButtons.length - 1]);
+    fireEvent.click(screen.getByRole('button', { name: /remove it/i }));
 
     await waitFor(() =>
       expect(h.callable).toHaveBeenCalledWith('setSessionNote', {

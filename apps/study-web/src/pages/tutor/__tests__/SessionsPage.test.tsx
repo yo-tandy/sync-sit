@@ -820,8 +820,7 @@ describe('tutor SessionsPage — session notes (post)', () => {
     ).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /remove note/i }));
     expect(screen.getByText(/remove this note\?/i)).toBeInTheDocument();
-    const removeButtons = screen.getAllByRole('button', { name: /remove note/i });
-    fireEvent.click(removeButtons[removeButtons.length - 1]);
+    fireEvent.click(screen.getByRole('button', { name: /remove it/i }));
 
     await waitFor(() =>
       expect(h.callable).toHaveBeenCalledWith('setSessionNote', {
@@ -844,8 +843,7 @@ describe('tutor SessionsPage — session notes (post)', () => {
 
     expect(await screen.findByText('stranded recap')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /remove note/i }));
-    const removeButtons = screen.getAllByRole('button', { name: /remove note/i });
-    fireEvent.click(removeButtons[removeButtons.length - 1]);
+    fireEvent.click(screen.getByRole('button', { name: /remove it/i }));
 
     await waitFor(() =>
       expect(h.callable).toHaveBeenCalledWith('setSessionNote', {
@@ -873,10 +871,9 @@ describe('tutor SessionsPage — session notes (post)', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: /remove note/i }));
     h.callable.mockRejectedValueOnce(new Error('boom'));
-    const removeButtons = screen.getAllByRole('button', { name: /remove note/i });
-    fireEvent.click(removeButtons[removeButtons.length - 1]);
+    fireEvent.click(screen.getByRole('button', { name: /remove it/i }));
 
-    expect(await screen.findByText(/couldn't save your note/i)).toBeInTheDocument();
+    expect(await screen.findByText(/couldn't remove your note/i)).toBeInTheDocument();
     expect(screen.getByText(/remove this note\?/i)).toBeInTheDocument();
     expect(screen.getByText('stale debrief')).toBeInTheDocument();
   });

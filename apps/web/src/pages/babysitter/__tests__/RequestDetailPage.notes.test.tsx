@@ -182,8 +182,8 @@ describe('RequestDetailPage — appointment notes (post)', () => {
     expect(screen.queryByText('request.notes.edit')).toBeNull();
     fireEvent.click(screen.getByText('request.notes.remove'));
     expect(screen.getByText('request.notes.removeTitle')).toBeTruthy();
-    const buttons = screen.getAllByText('request.notes.remove');
-    fireEvent.click(buttons[buttons.length - 1]);
+    // Distinct destructive-confirm label (round 4 of the study port, PR #269).
+    fireEvent.click(screen.getByText('request.notes.removeConfirm'));
     await waitFor(() =>
       expect(h.callable).toHaveBeenCalledWith('setAppointmentNote', {
         appointmentId: 'apt-1',

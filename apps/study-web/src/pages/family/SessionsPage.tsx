@@ -561,7 +561,9 @@ export function SessionsPage() {
       patchLocalNote(session, instance, undefined);
       setNoteRemoveTarget(null);
     } catch {
-      setNoteError(t('family.sessions.notes.error'));
+      // Erasure-specific copy: the author's question here is "is the note
+      // gone?" — "couldn't save" would answer the wrong one (round 4).
+      setNoteError(t('family.sessions.notes.removeError'));
     } finally {
       setNoteSaving(false);
     }
@@ -1161,7 +1163,7 @@ export function SessionsPage() {
         {noteError && <p className="mb-3 text-sm text-brand-600">{noteError}</p>}
         <div className="flex gap-2">
           <Button variant="outline" className="flex-1" disabled={noteSaving} onClick={removeNote}>
-            {t('family.sessions.notes.remove')}
+            {t('family.sessions.notes.removeConfirm')}
           </Button>
           <Button variant="ghost" className="flex-1" disabled={noteSaving} onClick={() => setNoteRemoveTarget(null)}>
             {t('common.cancel')}

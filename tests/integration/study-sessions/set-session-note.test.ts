@@ -380,6 +380,26 @@ describe('setSessionNote', () => {
     expect((await sessionData(id)).preSessionNote).toBe('Focus on fractions');
   });
 
+  it('a clear is role-gated by KIND: the family cannot clear the tutor note and vice versa', async () => {
+    // Wrong-role pins above use non-empty text, so they exercise only the
+    // content branch — these keep the role gate in front of the carve-out
+    // (a refactor moving it inside `if (!cleared)` must go red here).
+    const id = await seedOneTime('ot-clear-crossrole', {
+      date: YESTERDAY(),
+      preSessionNote: 'family ask',
+      postSessionNote: 'tutor recap',
+    });
+    await expect(
+      callFunction('setSessionNote', { sessionId: id, kind: 'post', text: '' }, parent1Token),
+    ).rejects.toMatchObject({ code: 'PERMISSION_DENIED' });
+    await expect(
+      callFunction('setSessionNote', { sessionId: id, kind: 'pre', text: '' }, tutor2Token),
+    ).rejects.toMatchObject({ code: 'PERMISSION_DENIED' });
+    const after = await sessionData(id);
+    expect(after.preSessionNote).toBe('family ask');
+    expect(after.postSessionNote).toBe('tutor recap');
+  });
+
   it('whitespace-only text also clears (input is trimmed)', async () => {
     const id = await seedOneTime('ot-trim');
     await callFunction('setSessionNote', { sessionId: id, kind: 'pre', text: '  padded  ' }, parent1Token);
