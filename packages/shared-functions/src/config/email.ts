@@ -15,67 +15,65 @@ function getResend(): any {
 }
 
 const FROM_EMAIL = 'Sync/Sit <noreply@sync-sit.com>';
-const FROM_EMAIL_FALLBACK = 'Sync/Sit <onboarding@resend.dev>';
 
 /**
- * Send a verification code email.
+ * Verification-code email, branded per app (issue #156): a Sync/Study
+ * enrollee must not receive a Sync/Sit-branded code from a Sync/Sit
+ * sender. `app` is the callables' untrusted display-only hint, normalized
+ * by the caller; the sender display name rides the SAME verified domain
+ * (Resend validates the domain, not the RFC 5322 display name). Builder
+ * exported for unit pins.
  */
-export async function sendVerificationEmail(to: string, code: string): Promise<void> {
+export function buildVerificationEmail(code: string, app: NotificationApp = 'sit'): {
+  subject: string;
+  html: string;
+} {
+  const { appName, color, tagline } = NOTIFICATION_BRANDING[app];
+  return {
+    subject: `Your ${appName} verification code: ${code}`,
+    html: `
+      <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
+        <h2 style="color: ${color}; margin-bottom: 16px;">${appName}</h2>
+        <p>Your verification code is:</p>
+        <div style="background: #F3F4F6; border-radius: 8px; padding: 20px; text-align: center; margin: 24px 0;">
+          <span style="font-size: 32px; font-weight: bold; letter-spacing: 8px; color: #111827;">${code}</span>
+        </div>
+        <p style="color: #6B7280; font-size: 14px;">This code expires in 10 minutes.</p>
+        <p style="color: #6B7280; font-size: 14px;">If you didn't request this code, you can safely ignore this email.</p>
+        <hr style="border: none; border-top: 1px solid #E5E7EB; margin: 24px 0;" />
+        <p style="color: #9CA3AF; font-size: 12px;">${appName} — ${tagline}</p>
+      </div>
+    `,
+  };
+}
+
+export async function sendVerificationEmail(
+  to: string,
+  code: string,
+  app: NotificationApp = 'sit',
+): Promise<void> {
   // In emulator, just log
   if (process.env.FUNCTIONS_EMULATOR === 'true') {
-    console.log(`[DEV] Code for ${to}: ${code}`);
+    console.log(`[DEV] Code for ${to} (app: ${app}): ${code}`);
     return;
   }
 
   const resend = getResend();
 
   if (!resend) {
-    console.log(`[NO-RESEND] Code for ${to}: ${code}`);
+    console.log(`[NO-RESEND] Code for ${to} (app: ${app}): ${code}`);
     return;
   }
 
+  const { subject, html } = buildVerificationEmail(code, app);
+  const { from, fromFallback } = NOTIFICATION_BRANDING[app];
   try {
-    await resend.emails.send({
-      from: FROM_EMAIL,
-      to,
-      subject: `Your Sync/Sit verification code: ${code}`,
-      html: `
-        <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
-          <h2 style="color: #DC2626; margin-bottom: 16px;">Sync/Sit</h2>
-          <p>Your verification code is:</p>
-          <div style="background: #F3F4F6; border-radius: 8px; padding: 20px; text-align: center; margin: 24px 0;">
-            <span style="font-size: 32px; font-weight: bold; letter-spacing: 8px; color: #111827;">${code}</span>
-          </div>
-          <p style="color: #6B7280; font-size: 14px;">This code expires in 10 minutes.</p>
-          <p style="color: #6B7280; font-size: 14px;">If you didn't request this code, you can safely ignore this email.</p>
-          <hr style="border: none; border-top: 1px solid #E5E7EB; margin: 24px 0;" />
-          <p style="color: #9CA3AF; font-size: 12px;">Sync/Sit — Connecting EJM families with trusted student babysitters</p>
-        </div>
-      `,
-    });
+    await resend.emails.send({ from, to, subject, html });
   } catch (err: any) {
     // If domain not verified yet, try fallback sender
     if (err.statusCode === 403 || err.message?.includes('domain')) {
-      await resend.emails.send({
-        from: FROM_EMAIL_FALLBACK,
-        to,
-        subject: `Your Sync/Sit verification code: ${code}`,
-        html: `
-          <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
-            <h2 style="color: #DC2626; margin-bottom: 16px;">Sync/Sit</h2>
-            <p>Your verification code is:</p>
-            <div style="background: #F3F4F6; border-radius: 8px; padding: 20px; text-align: center; margin: 24px 0;">
-              <span style="font-size: 32px; font-weight: bold; letter-spacing: 8px; color: #111827;">${code}</span>
-            </div>
-            <p style="color: #6B7280; font-size: 14px;">This code expires in 10 minutes.</p>
-            <p style="color: #6B7280; font-size: 14px;">If you didn't request this code, you can safely ignore this email.</p>
-            <hr style="border: none; border-top: 1px solid #E5E7EB; margin: 24px 0;" />
-            <p style="color: #9CA3AF; font-size: 12px;">Sync/Sit — Connecting EJM families with trusted student babysitters</p>
-          </div>
-        `,
-      });
+      await resend.emails.send({ from: fromFallback, to, subject, html });
     } else {
-      console.error('Failed to send email:', err);
       throw err;
     }
   }
@@ -157,11 +155,14 @@ export async function sendAccountExistsEmail(to: string, app: AccountExistsApp):
   }
 
   try {
-    await resend.emails.send({ from: FROM_EMAIL, to, subject, html });
+    // Per-app sender (issue #156): this notice is security-relevant -- a
+    // Sync/Study-only user receiving it from an unknown Sync/Sit brand
+    // reads it as phishing and ignores it.
+    await resend.emails.send({ from: NOTIFICATION_BRANDING[app].from, to, subject, html });
   } catch (err: any) {
     // If domain not verified yet, try fallback sender
     if (err.statusCode === 403 || err.message?.includes('domain')) {
-      await resend.emails.send({ from: FROM_EMAIL_FALLBACK, to, subject, html });
+      await resend.emails.send({ from: NOTIFICATION_BRANDING[app].fromFallback, to, subject, html });
     } else {
       console.error('Failed to send email:', err);
       throw err;
@@ -230,9 +231,9 @@ export const STUDY_APP_URL = 'https://sync-study-app.web.app';
 // only the display name varies (Resend validates the domain of the from
 // address, not the RFC 5322 display name, so a different display name on the
 // same verified domain is accepted).
-const NOTIFICATION_BRANDING: Record<
+export const NOTIFICATION_BRANDING: Record<
   NotificationApp,
-  { appName: string; color: string; appUrl: string; from: string; fromFallback: string }
+  { appName: string; color: string; appUrl: string; from: string; fromFallback: string; tagline: string }
 > = {
   sit: {
     appName: 'Sync/Sit',
@@ -240,6 +241,7 @@ const NOTIFICATION_BRANDING: Record<
     appUrl: 'https://sync-sit.com',
     from: 'Sync/Sit <noreply@sync-sit.com>',
     fromFallback: 'Sync/Sit <onboarding@resend.dev>',
+    tagline: 'Connecting EJM families with trusted student babysitters',
   },
   study: {
     appName: 'Sync/Study',
@@ -247,6 +249,7 @@ const NOTIFICATION_BRANDING: Record<
     appUrl: STUDY_APP_URL,
     from: 'Sync/Study <noreply@sync-sit.com>',
     fromFallback: 'Sync/Study <onboarding@resend.dev>',
+    tagline: 'Connecting EJM families with trusted student tutors',
   },
 };
 
