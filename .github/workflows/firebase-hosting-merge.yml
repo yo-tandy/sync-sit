@@ -85,6 +85,14 @@ jobs:
       - name: Deploy Firestore rules and indexes
         run: pnpm exec firebase deploy --only firestore --project sync-sit --non-interactive
 
+      # Storage rules ride the same reasoning (issue #282): #108 closed this
+      # exact stale-rules gap for Firestore, but storage stayed manual -- a
+      # merged storage.rules security fix (e.g. #276's verification-documents
+      # write tightening) sat inert in prod until someone remembered
+      # `firebase deploy --only storage`.
+      - name: Deploy Storage rules
+        run: pnpm exec firebase deploy --only storage --project sync-sit --non-interactive
+
       # Deploy hosting (uses ADC from auth step)
       - name: Deploy Hosting
         run: pnpm exec firebase deploy --only hosting --project sync-sit --non-interactive
