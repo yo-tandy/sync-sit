@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { httpsCallable } from 'firebase/functions';
 import { TopNav, StepIndicator, StepVerify, StepPassword, enrollmentErrorReason } from '@ejm/shared-ui';
 import { getParentProfile } from '@ejm/shared-core';
+import { getStudyRole } from '@ejm/study-core';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth, functions } from '@/config/firebase';
 import { markNextSignInFresh, useAuthStore } from '@/stores/authStore';
@@ -41,6 +42,37 @@ interface EnrollFamilyInput {
   // Consent-document version the consent step presented (issue #178) — study
   // sends its own '2025-12-01' so the record matches the terms actually shown.
   consentVersion?: string;
+}
+
+// How long the post-signup wait gives the auth store to settle into a state
+// that passes AuthGuard's predicate before falling back to the in-wizard
+// account-ready login state (issue #264, porting sit's issue-#262 fix). The
+// stranding tests derive their wait budgets from this value.
+const SESSION_SETTLE_TIMEOUT_MS = 5000;
+
+// An immediate identical getDoc after a cache miss returns the same miss —
+// the recovery pass below waits this long between its two refresh attempts
+// (mirrors PR #257's tutor-side recovery).
+const PROFILE_RETRY_BACKOFF_MS = 400;
+
+// AuthGuard role="parent"'s own predicate, in one place: the post-signup
+// wait, the settled-store gate, the recovery re-checks, and the late-settle
+// auto-advance all evaluate exactly this (issue #264).
+const passesParentGuard = (s: ReturnType<typeof useAuthStore.getState>) =>
+  !s.loading && !!s.firebaseUser && getStudyRole(s.userDoc) === 'parent';
+
+// One recovery pass to make the store prove the parent role is readable:
+// swallow a refresh (it rejects on an offline blip and no-ops on a cache
+// miss — enrollment has already succeeded, so neither may surface as
+// failure), re-check, back off, refresh once more, re-check. Runs before
+// latching the account-ready state — a slow first server snapshot can
+// exceed the settle budget (ports PR #257's ensureTutorProfileLoaded).
+async function ensureParentRoleLoaded(refreshUserDoc: () => Promise<void>): Promise<boolean> {
+  await refreshUserDoc().catch(() => {});
+  if (passesParentGuard(useAuthStore.getState())) return true;
+  await new Promise((r) => setTimeout(r, PROFILE_RETRY_BACKOFF_MS));
+  await refreshUserDoc().catch(() => {});
+  return passesParentGuard(useAuthStore.getState());
 }
 
 const INITIAL_FAMILY: FamilyFormData = {
@@ -79,6 +111,28 @@ export function ParentEnrollment() {
   const [family, setFamily] = useState<FamilyFormData>(INITIAL_FAMILY);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Enrollment succeeded but the fresh session cannot pass AuthGuard
+  // role="parent" (sign-in failed, or the doc read never settled): confirm
+  // the account in place and hand off to login (issue #264).
+  const [signedOutSuccess, setSignedOutSuccess] = useState(false);
+
+  // The account-ready screen treats "merely slow" as the expected case: if
+  // the session settles into a guard-passing state while it is shown, advance
+  // to the portal without requiring the click (issue #264). This effect owns
+  // late-settle recovery ENTIRELY — the immediate check covers the
+  // flip-to-mounted gap (zustand's subscribe only fires on subsequent
+  // changes) and the subscription covers everything after, so the login CTA
+  // stays a plain navigate('/login').
+  useEffect(() => {
+    if (!signedOutSuccess) return;
+    if (passesParentGuard(useAuthStore.getState())) {
+      navigate('/family');
+      return;
+    }
+    return useAuthStore.subscribe((s) => {
+      if (passesParentGuard(s)) navigate('/family');
+    });
+  }, [signedOutSuccess, navigate]);
 
   const updateFamily = (partial: Partial<FamilyFormData>) => {
     setFamily((prev) => ({ ...prev, ...partial }));
@@ -205,24 +259,27 @@ export function ParentEnrollment() {
       await enrollFamilyFn({ email, verificationCode, password, ...family });
 
       // The account was created server-side (adminAuth) — sign the new
-      // parent in NOW so the navigation lands in their portal instead of
-      // bouncing to login (mirrors the tutor flow). BEST-EFFORT: enrollment
-      // has already fully succeeded (account, family doc, user doc all
-      // written; the verification code consumed), so a sign-in/doc-read
-      // hiccup must NEVER read as an enrollment failure — worst case the
-      // /family guard asks the parent to log in with the credentials they
-      // just chose.
+      // parent in NOW so completion lands in their portal (mirrors the tutor
+      // flow). BEST-EFFORT for the ENROLLMENT: it has already fully
+      // succeeded (account, family doc, user doc all written; the
+      // verification code consumed), so a sign-in/doc-read hiccup must
+      // NEVER read as an enrollment failure. But /family sits behind
+      // AuthGuard role="parent", so navigating requires the settled session
+      // to pass the guard's own predicate — anything less renders the
+      // in-wizard "account ready — log in" state instead of a silent guard
+      // bounce to /login or /signup (issue #264, porting sit issue #262 /
+      // tutor PR #257).
       try {
         // Fresh, deliberate sign-in: capture the session epoch anew (issue #181).
         markNextSignInFresh();
         await signInWithEmailAndPassword(auth, email, password);
         await new Promise<void>((resolve) => {
-          // Resolve on auth settling (firebaseUser + !loading) — userDoc
-          // can legitimately stay null when the doc read blips, and the
-          // timeout backstops a store that never settles.
-          const timer = setTimeout(() => { unsub(); resolve(); }, 5000);
-          const check = (state: { loading: boolean; firebaseUser: unknown }) => {
-            if (!state.loading && state.firebaseUser) {
+          // Resolve when the guard's predicate would pass (signed in AND the
+          // parent role resolved from the doc); the timeout backstops a store
+          // that never settles or a doc read that keeps blipping.
+          const timer = setTimeout(() => { unsub(); resolve(); }, SESSION_SETTLE_TIMEOUT_MS);
+          const check = (state: ReturnType<typeof useAuthStore.getState>) => {
+            if (passesParentGuard(state)) {
               clearTimeout(timer);
               unsub();
               resolve();
@@ -231,11 +288,25 @@ export function ParentEnrollment() {
           const unsub = useAuthStore.subscribe(check);
           check(useAuthStore.getState());
         });
-      } catch {
-        // Swallowed by design — see above.
+      } catch (err) {
+        // Swallowed by design — see above. Logged so a stranded enrollee
+        // leaves a trace: this branch is invisible from the UI.
+        console.warn('post-enrollment sign-in did not settle; showing account-ready state', err);
       }
 
-      navigate('/family');
+      let settled = useAuthStore.getState();
+      if (settled.firebaseUser && !passesParentGuard(settled)) {
+        // Timed out with a live session but no parent role yet: one explicit
+        // recovery pass before telling the user anything — a slow first
+        // server snapshot can exceed the settle budget.
+        await ensureParentRoleLoaded(refreshUserDoc);
+        settled = useAuthStore.getState();
+      }
+      if (passesParentGuard(settled)) {
+        navigate('/family');
+      } else {
+        setSignedOutSuccess(true);
+      }
     } catch (err: unknown) {
       if (!applyEnrollmentError(err)) {
         setError(err instanceof Error ? err.message : 'Failed to create account');
@@ -310,6 +381,30 @@ export function ParentEnrollment() {
   // add-profile decision (jump to step 2 vs. redirect to /family) and the
   // collectPassword choice from being made against a not-yet-known auth state.
   if (authLoading) return null;
+
+  if (signedOutSuccess) {
+    // Enrollment succeeded but the session cannot (yet) pass AuthGuard:
+    // confirm the account exists and point at login — never a silent
+    // bounce. Path-neutral copy: on the doc-blip path the sign-in itself
+    // SUCCEEDED, so the message must not claim it failed (issue #264).
+    return (
+      <div className="flex min-h-[100dvh] flex-col items-center justify-center px-6 text-center">
+        <h1 className="mb-3 text-2xl font-bold text-gray-950">
+          {t('enrollment.parent.readyLoginTitle')}
+        </h1>
+        <p className="mb-8 max-w-[300px] text-sm leading-relaxed text-gray-500">
+          {t('enrollment.parent.readyLoginDesc')}
+        </p>
+        <button
+          type="button"
+          onClick={() => navigate('/login')}
+          className="flex h-12 w-full max-w-xs items-center justify-center rounded-xl bg-brand-600 text-base font-semibold text-white transition-colors hover:bg-brand-600/90"
+        >
+          {t('enrollment.parent.readyLoginCta')}
+        </button>
+      </div>
+    );
+  }
 
   const isPostAuthStep = step >= AUTH_STEPS;
 

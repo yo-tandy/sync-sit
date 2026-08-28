@@ -1246,6 +1246,11 @@ export default {
     pets: 'Animaux',
     petsHint: 'ex. Chat, petit chien',
     notesForTutors: 'Notes pour les tuteurs',
+    parent: {
+      readyLoginTitle: 'Votre compte famille est prêt',
+      readyLoginDesc: "Nous n'avons pas pu finaliser votre session. Connectez-vous avec votre email et le mot de passe que vous venez de choisir.",
+      readyLoginCta: 'Se connecter',
+    },
     tutor: {
       title: 'Inscription tuteur',
       stepEmail: 'Vérifiez votre email EJM',
