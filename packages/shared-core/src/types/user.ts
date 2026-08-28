@@ -8,8 +8,9 @@ import type { AccountStatus, Language } from '../constants/index.js';
 // Generic User entity that supports a single person being both a babysitter
 // (sync-sit side) and a tutor (sync-study side), or any combination of roles.
 // Each app's concrete profile shape lives in its respective package:
-// BabysitterProfile in @ejm/sit-core, TutorProfile in @ejm/study-core.
-// ParentProfile is shared across both apps (one familyId per person).
+// BabysitterProfile in @ejm/sit-core, TutorProfile in @ejm/study-core,
+// DoerProfile in @ejm/do-core.
+// ParentProfile is shared across the apps (one familyId per person).
 
 export interface User {
   uid: string;
@@ -22,9 +23,12 @@ export interface User {
   language: Language;
   notifPrefs: NotifPrefs;
   /** Sit push registrations. The legacy flat array predates study push and
-   * stays sit's; study registrations live in the sibling `fcmTokensStudy`. */
+   * stays sit's; study registrations live in the sibling `fcmTokensStudy`,
+   * do registrations in `fcmTokensDo` (issue #297 — wired to push at
+   * sync-do plan §13 PR9). */
   fcmTokens: string[];
   fcmTokensStudy?: string[];
+  fcmTokensDo?: string[];
   createdAt: FirestoreTimestamp;
   updatedAt: FirestoreTimestamp;
   lastLoginAt?: FirestoreTimestamp;
@@ -32,6 +36,7 @@ export interface User {
   consentVersion?: string;
   dismissedPwaInstallBanner?: boolean;
   dismissedPwaInstallBannerStudy?: boolean;
+  dismissedPwaInstallBannerDo?: boolean;
 
   /**
    * Shared identity fields, canonical at the ROOT (owner decisions on issue
@@ -73,6 +78,14 @@ export interface User {
   profiles: {
     babysitter?: ProfileBase;
     tutor?: ProfileBase;
+    /**
+     * sync-do doer slot (issue #297). Generic ProfileBase like its provider
+     * siblings — shared-core must never import from a leaf package, so the
+     * concrete DoerProfile lives in @ejm/do-core and is narrowed at do-core's
+     * read sites (getDoerProfile), exactly as BabysitterProfile/TutorProfile
+     * narrow theirs (plan §3.3).
+     */
+    doer?: ProfileBase;
     parent?: ParentProfile;
   };
 
