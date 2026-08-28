@@ -282,7 +282,7 @@ export function BabysitterDashboard() {
       <PublishedSearchesPreview />
 
       {/* ── Toggle Confirmation Dialog ── */}
-      <Dialog open={toggleDialog} onClose={() => setToggleDialog(false)}>
+      <Dialog open={toggleDialog} onClose={() => setToggleDialog(false)} ariaLabel={isSearchable ? t('babysitterDashboard.deactivateTitle') : t('babysitterDashboard.activateTitle')}>
         <h3 className="mb-2 text-lg font-bold">
           {isSearchable ? t('babysitterDashboard.deactivateTitle') : t('babysitterDashboard.activateTitle')}
         </h3>
@@ -305,7 +305,7 @@ export function BabysitterDashboard() {
       {/* ── Onboarding Dialogs ── */}
       {/* Step 1: Welcome — first session after enrollment only */}
       {showWelcome && (
-        <Dialog open onClose={() => { setShowWelcome(false); dismissOnboarding('welcome'); }}>
+        <Dialog open onClose={() => { setShowWelcome(false); dismissOnboarding('welcome'); }} ariaLabel={t('onboarding.welcomeTitle')}>
           <div className="text-center">
             <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-brand-50 text-2xl">📅</div>
             <h3 className="mb-2 text-lg font-bold">{t('onboarding.welcomeTitle')}</h3>
@@ -331,7 +331,7 @@ export function BabysitterDashboard() {
 
       {/* Step 2: Activate — after schedule set, only if not yet active */}
       {showActivate && (
-        <Dialog open onClose={() => { setShowActivate(false); dismissOnboarding('activate'); }}>
+        <Dialog open onClose={() => { setShowActivate(false); dismissOnboarding('activate'); }} ariaLabel={t('onboarding.availabilitySetTitle')}>
           <div className="text-center">
             <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-green-50 text-2xl">✅</div>
             <h3 className="mb-2 text-lg font-bold">{t('onboarding.availabilitySetTitle')}</h3>
@@ -357,7 +357,7 @@ export function BabysitterDashboard() {
 
       {/* Step 3: References — after activation */}
       {showReferences && (
-        <Dialog open onClose={() => { setShowReferences(false); dismissOnboarding('references'); }}>
+        <Dialog open onClose={() => { setShowReferences(false); dismissOnboarding('references'); }} ariaLabel={t('onboarding.allSetTitle')}>
           <div className="text-center">
             <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-blue-50 text-2xl">🌟</div>
             <h3 className="mb-2 text-lg font-bold">{t('onboarding.allSetTitle')}</h3>
@@ -382,7 +382,7 @@ export function BabysitterDashboard() {
       )}
 
       {/* ── Cancel Appointment Dialog ── */}
-      <Dialog open={!!cancelTarget} onClose={() => { setCancelTarget(null); setCancelReason(''); }}>
+      <Dialog open={!!cancelTarget} onClose={() => { setCancelTarget(null); setCancelReason(''); }} ariaLabel={t('appointment.cancelTitle')}>
         <h3 className="mb-2 text-lg font-semibold">{t('appointment.cancelTitle')}</h3>
         <p className="mb-4 text-sm text-gray-500">{t('appointment.cancelDesc')}</p>
         {(() => {

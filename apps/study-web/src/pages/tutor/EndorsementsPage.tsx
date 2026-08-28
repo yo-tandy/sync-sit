@@ -189,7 +189,7 @@ export function EndorsementsPage() {
       </div>
 
       {/* ── Dismiss confirmation (permanent) ── */}
-      <Dialog open={dismissTarget !== null} onClose={() => setDismissTarget(null)}>
+      <Dialog open={dismissTarget !== null} onClose={() => setDismissTarget(null)} ariaLabel={t('tutor.endorsements.confirmDismissTitle')}>
         <h3 className="mb-2 text-lg font-bold">{t('tutor.endorsements.confirmDismissTitle')}</h3>
         <p className="mb-5 text-sm text-gray-600">{t('tutor.endorsements.confirmDismissDesc')}</p>
         <div className="flex gap-2">

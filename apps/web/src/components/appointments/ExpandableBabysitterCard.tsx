@@ -483,7 +483,7 @@ export function ExpandableBabysitterCard({
       {/* onClose gated on noteSaving: the shared Dialog closes on backdrop
           click, and dismissing mid-flight would unmount the only thing that
           can render the error of a non-optimistic (erasure!) call. */}
-      <Dialog open={noteRemoveOpen} onClose={() => { if (!noteSaving) setNoteRemoveOpen(false); }}>
+      <Dialog open={noteRemoveOpen} onClose={() => { if (!noteSaving) setNoteRemoveOpen(false); }} ariaLabel={t('familyDashboard.notes.removeTitle')}>
         <h3 className="mb-2 text-lg font-bold">{t('familyDashboard.notes.removeTitle')}</h3>
         <p className="mb-3 text-sm text-gray-600">{t('familyDashboard.notes.removeDesc')}</p>
         {noteError && <p className="mb-3 text-sm text-brand-600">{noteError}</p>}

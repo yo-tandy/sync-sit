@@ -323,7 +323,7 @@ export function ProposeSessionPage() {
       </div>
 
       {/* ── Success ── */}
-      <Dialog open={successOpen} onClose={() => navigate('/tutor/sessions')}>
+      <Dialog open={successOpen} onClose={() => navigate('/tutor/sessions')} ariaLabel={t('tutor.sessions.propose.success.title')}>
         <h3 className="mb-2 text-lg font-bold">{t('tutor.sessions.propose.success.title')}</h3>
         <p className="mb-5 text-sm text-gray-600">
           {t('tutor.sessions.propose.success.desc', { family: familyName })}

@@ -380,7 +380,10 @@ export function AdminUsersPage() {
       </div>
 
       {/* Confirmation dialog */}
-      <Dialog open={confirmDialog.open} onClose={() => setConfirmDialog((prev) => ({ ...prev, open: false }))}>
+      {/* `|| undefined` — a blank title (the initial state) must fall back to
+          the legacy plain-div path rather than ship an EMPTY accessible name
+          (axe aria-dialog-name); every opener sets a title today. */}
+      <Dialog open={confirmDialog.open} onClose={() => setConfirmDialog((prev) => ({ ...prev, open: false }))} ariaLabel={confirmDialog.title || undefined}>
         <h3 className="mb-2 text-lg font-semibold">{confirmDialog.title}</h3>
         <p className="mb-6 text-sm text-gray-600">{confirmDialog.message}</p>
         <div className="flex gap-3">
@@ -398,7 +401,7 @@ export function AdminUsersPage() {
       </Dialog>
 
       {/* Identity-correction dialog */}
-      <Dialog open={identityDialog.open} onClose={closeIdentityDialog}>
+      <Dialog open={identityDialog.open} onClose={closeIdentityDialog} ariaLabel={t('admin.correctIdentityTitle')}>
         <h3 className="mb-2 text-lg font-semibold">{t('admin.correctIdentityTitle')}</h3>
         <p className="mb-4 text-sm text-gray-600">{t('admin.correctIdentityHint')}</p>
         <Input

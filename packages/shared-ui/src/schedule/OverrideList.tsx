@@ -277,7 +277,13 @@ export function OverrideList({ overrides, onAdd, onRemove }: OverrideListProps) 
 
       {/* Edit override dialog */}
       {editingOverride && (
-        <Dialog open onClose={() => setEditingOverride(null)}>
+        <Dialog
+          open
+          onClose={() => setEditingOverride(null)}
+          // The visible title is just the date; prefix the (localized) action
+          // so the accessible name says what the dialog does (issue #305).
+          ariaLabel={`${t('schedule.editAvailability')} — ${formatOverrideDate(editingOverride.date, i18n.language)}`}
+        >
           <h3 className="mb-2 text-lg font-bold">
             {formatOverrideDate(editingOverride.date, i18n.language)}
           </h3>

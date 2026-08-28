@@ -222,7 +222,7 @@ export function TutorCard({ result }: { result: TutorSearchResult }) {
       )}
 
       {successOpen && (
-        <Dialog open onClose={() => setSuccessOpen(false)}>
+        <Dialog open onClose={() => setSuccessOpen(false)} ariaLabel={t('family.search.success.title')}>
           <h3 className="mb-2 text-lg font-bold">{t('family.search.success.title')}</h3>
           <p className="mb-5 text-sm text-gray-600">
             {t('family.search.success.desc', { name: result.firstName })}
@@ -316,7 +316,7 @@ export function ContactRequestDialog({
   };
 
   return (
-    <Dialog open onClose={onClose}>
+    <Dialog open onClose={onClose} ariaLabel={t('family.search.contactDialog.title', { name: tutor.firstName })}>
       <h3 className="mb-1 text-lg font-bold">
         {t('family.search.contactDialog.title', { name: tutor.firstName })}
       </h3>

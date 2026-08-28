@@ -503,7 +503,7 @@ export function DashboardPage() {
       <PublishedSearchesPreview />
 
       {/* ── Search-visibility confirm dialog (sit's babysitter pattern) ── */}
-      <Dialog open={toggleDialog} onClose={() => setToggleDialog(false)}>
+      <Dialog open={toggleDialog} onClose={() => setToggleDialog(false)} ariaLabel={isSearchable ? t('tutor.dashboard.deactivateTitle') : t('tutor.dashboard.activateTitle')}>
         <h3 className="mb-2 text-lg font-bold">
           {isSearchable
             ? t('tutor.dashboard.deactivateTitle')

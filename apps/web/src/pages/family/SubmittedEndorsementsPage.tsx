@@ -188,8 +188,8 @@ export function SubmittedEndorsementsPage() {
 
       {/* Delete confirmation */}
       {deleteTarget && (
-        <Dialog open onClose={() => setDeleteTarget(null)}>
-          <h3 className="mb-2 text-lg font-bold">{t('common.confirm')}</h3>
+        <Dialog open onClose={() => setDeleteTarget(null)} ariaLabel={t('submittedReferences.confirmDeleteTitle')}>
+          <h3 className="mb-2 text-lg font-bold">{t('submittedReferences.confirmDeleteTitle')}</h3>
           <p className="mb-5 text-sm text-gray-600">
             {t('submittedReferences.confirmDelete', { name: babysitterNames[deleteTarget.babysitterUserId] || '' })}
           </p>
@@ -213,7 +213,7 @@ export function SubmittedEndorsementsPage() {
 
       {/* Add reference: search for babysitter */}
       {showAddDialog && !selectedBabysitter && (
-        <Dialog open onClose={() => { setShowAddDialog(false); setSearchQuery(''); setSearchResults([]); }}>
+        <Dialog open onClose={() => { setShowAddDialog(false); setSearchQuery(''); setSearchResults([]); }} ariaLabel={t('references.addReference')}>
           <h3 className="mb-1 text-lg font-bold">{t('references.addReference')}</h3>
           <p className="mb-3 text-sm text-gray-500">{t('references.addReferenceDesc')}</p>
           <div className="relative mb-3">

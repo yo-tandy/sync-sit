@@ -253,7 +253,7 @@ export function GovernancePage() {
       </div>
 
       {/* ── Cancel-invitation confirmation ── */}
-      <Dialog open={cancelTarget !== null} onClose={() => setCancelTarget(null)}>
+      <Dialog open={cancelTarget !== null} onClose={() => setCancelTarget(null)} ariaLabel={t('governance.confirmCancelInviteTitle')}>
         <h3 className="mb-2 text-lg font-bold">{t('governance.confirmCancelInviteTitle')}</h3>
         <p className="mb-5 text-sm text-gray-600">
           {t('governance.confirmCancelInviteDesc', {

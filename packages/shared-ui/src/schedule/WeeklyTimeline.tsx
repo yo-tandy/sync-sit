@@ -160,7 +160,7 @@ function RangeEditDialog({
   );
 
   return (
-    <Dialog open={open} onClose={onClose}>
+    <Dialog open={open} onClose={onClose} ariaLabel={`${t('schedule.editAvailability')} — ${fullDayLabels[day]}`}>
       <h3 className="mb-4 text-lg font-bold">
         {t('schedule.editAvailability')} — {fullDayLabels[day]}
       </h3>

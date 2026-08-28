@@ -808,6 +808,7 @@ export default {
     noReferences: 'No endorsements yet',
     noReferencesDesc: "After a babysitting appointment, you'll be able to leave an endorsement for the babysitter.",
     referenceForBabysitter: 'Endorsement for {{name}}',
+    confirmDeleteTitle: 'Remove this endorsement?',
     confirmDelete: 'Are you sure you want to remove your endorsement for {{name}}?',
     statusApproved: 'Approved',
     statusPending: 'Pending',

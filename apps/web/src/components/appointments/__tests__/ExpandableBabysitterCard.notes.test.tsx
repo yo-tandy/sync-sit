@@ -188,6 +188,10 @@ describe('ExpandableBabysitterCard — appointment notes (pre)', () => {
     await waitFor(() => expect(screen.getByText('familyDashboard.notes.error')).toBeTruthy());
     // Dialog stays open (non-optimistic) and the save button is re-enabled.
     expect(screen.getByText('familyDashboard.notes.dialogTitle')).toBeTruthy();
+    // Naming sweep (issue #305): the labelled dialog carries modal semantics.
+    expect(
+      screen.getByRole('dialog', { name: 'familyDashboard.notes.dialogTitle' }),
+    ).toHaveAttribute('aria-modal', 'true');
     expect(
       (screen.getByText('familyDashboard.notes.save') as HTMLButtonElement).closest('button')!
         .disabled,

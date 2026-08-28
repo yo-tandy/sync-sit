@@ -197,7 +197,7 @@ export function PublishedSearchesPage() {
         ))}
       </div>
 
-      <Dialog open={!!contactTarget} onClose={() => setContactTarget(null)}>
+      <Dialog open={!!contactTarget} onClose={() => setContactTarget(null)} ariaLabel={t('tutor.publishedBoard.contactTitle', { name: contactTarget?.familyName ?? '' })}>
         <h3 className="mb-2 text-lg font-bold">
           {t('tutor.publishedBoard.contactTitle', { name: contactTarget?.familyName ?? '' })}
         </h3>
