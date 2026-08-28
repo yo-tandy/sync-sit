@@ -20,7 +20,7 @@ export interface AdminConfigDef {
    * world-readable -- enrollment wizards read the resend cooldown BEFORE the
    * account exists, so an authed-only doc silently serves them the default
    * (round-6 review). Everything else (the abuse levers in particular) stays
-   * in `adminConfig/values`, readable only to signed-in users.
+   * in `adminConfig/values`, which no client can read.
    */
   clientExposed?: boolean;
 }

@@ -25,9 +25,11 @@ nothing.
   updates, every provided key validated (known, integer, within bounds);
   merge-writes the doc. `getAdminConfig` (verifyAdmin) returns defs +
   stored values for the panel.
-- `firestore.rules`: `adminConfig/{doc}` readable by any SIGNED-IN user
-  (pastVisibilityDays is consumed client-side; the values are caps and
-  windows, not secrets), writes denied (callable-only).
+- `firestore.rules`: `adminConfig/values` denies ALL client access
+  (round 7 -- the panel reads via getAdminConfig, servers bypass rules);
+  the client-exposed keys are mirrored to the world-readable
+  `adminConfig/client` (round 6), maintained by updateAdminConfig; all
+  writes denied everywhere (callable-only).
 - Client: `createAdminConfigReader` (shared-ui; ONE factory, six-case
   fallback matrix tested once) instantiated per app; the dashboard hooks
   subscribe immediately and RE-BUCKET the remembered snapshot when the
@@ -171,3 +173,16 @@ consolidated onto the factory (the per-app files had byte-identical
 twins); INVITE_LINK_EXPIRY_MS deleted (zero consumers, the
 VERIFICATION_CODE_COOLDOWN_S standard); four stale
 PUBLISHED_SEARCH_MAX_ACTIVE comment mentions updated.
+
+**Round 8 (PR #266, comment verdict):** the four doc spots the round-7
+rules change left stale now state the shipped posture (README security
+boundary + runbook line "the panel is the ONLY supported edit path" --
+a console write to values is bounds-safe server-side but does not
+update the client mirror; config module docstring; defs clientExposed
+docstring; plan Architecture section); updateAdminConfig upgraded from
+batch to TRANSACTION -- `before` is read inside the atomic scope, so
+two concurrent admin saves can no longer derive the mirror from stale
+state and drop each other's client-exposed keys (the round-6 divergence
+class); ttlMs exported and given its pure matrix in tests/unit
+(unset / blank / whitespace / '0' / integer / garbage / negative);
+StepVerify's stale "60s cooldown" comment updated.

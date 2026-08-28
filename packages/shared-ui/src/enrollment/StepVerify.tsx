@@ -85,7 +85,7 @@ export function StepVerify({
         // surface it — this is the one resend failure the user can act on,
         // and it is only ever thrown to an authenticated caller for their
         // OWN address, so showing it distinguishes nothing (unauthenticated
-        // paths stay silent by design). Keep the 60s cooldown ticking:
+        // paths stay silent by design). Keep the configured cooldown ticking:
         // an immediate retry cannot succeed within the hour anyway.
         setCodeError(t('enrollment.sendCapReached'));
         return;

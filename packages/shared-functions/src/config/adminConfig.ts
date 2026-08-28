@@ -11,9 +11,11 @@ export type { AdminConfigKey, AdminConfigDef } from '@ejm/shared-core';
  * a non-integer or an out-of-bounds stored value all resolve to today's
  * hardcoded behavior, so the panel (or a rogue console edit) can never
  * brick a callable. Writes go through updateAdminConfig only (bounds
- * validated there too); firestore.rules denies client writes and allows
- * signed-in reads (pastVisibilityDays is consumed client-side, and the
- * values are caps and windows, not secrets).
+ * validated there too); firestore.rules denies ALL client access to this
+ * doc (round-7 review) -- clients read the world-readable
+ * ADMIN_CONFIG_CLIENT_DOC mirror below, the panel reads through the
+ * getAdminConfig callable, and this module reads via the admin SDK,
+ * which bypasses rules.
  */
 
 export const ADMIN_CONFIG_DOC = 'adminConfig/values';
@@ -25,7 +27,7 @@ export const ADMIN_CONFIG_CLIENT_DOC = 'adminConfig/client';
  * override) can shorten it; the default keeps steady-state reads to one
  * Firestore get per instance per minute.
  */
-function ttlMs(): number {
+export function ttlMs(): number {
   const rawStr = process.env.ADMIN_CONFIG_TTL_MS;
   // A DECLARED-but-blank env var must read as unset: Number('') is 0,
   // which would silently disable caching in prod (round-4 review).
