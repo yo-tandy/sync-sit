@@ -71,6 +71,7 @@ describe('study desktop nav tabs', () => {
   });
 
   it('family FamilyAppBar promotes every primary burger destination to the md+ tabs', () => {
+    h.rows = []; // FamilyAppBar has no subscription today; keep the case order-independent anyway.
     renderWithProviders(<FamilyAppBar />);
     const hrefs = within(tabsNav())
       .getAllByRole('link')
