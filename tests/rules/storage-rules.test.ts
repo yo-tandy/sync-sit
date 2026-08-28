@@ -478,6 +478,144 @@ describe('family-photos', () => {
   });
 });
 
+describe('do-photos (sync-do final objects, plan §7.4)', () => {
+  // allow read, write: if false — written only by the stripper (Admin SDK),
+  // read only via the signing callables. No Firestore lookup involved, so
+  // no user docs to seed.
+  it('denies reading a photo under the caller\'s OWN prefix (reads go through doGetOwnPhotoUrl)', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await uploadString(ref(ctx.storage(), 'do-photos/user1/photo-1'), 'stripped', 'raw');
+    });
+    const authed = testEnv.authenticatedContext('user1');
+    await assertFails(getBytes(ref(authed.storage(), 'do-photos/user1/photo-1')));
+  });
+
+  it('denies reading another user\'s photo', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await uploadString(ref(ctx.storage(), 'do-photos/user1/photo-1'), 'stripped', 'raw');
+    });
+    const authed = testEnv.authenticatedContext('user2');
+    await assertFails(getBytes(ref(authed.storage(), 'do-photos/user1/photo-1')));
+  });
+
+  it('denies writes even under the caller\'s own prefix — only the stripper writes final objects', async () => {
+    const authed = testEnv.authenticatedContext('user1');
+    await assertFails(
+      uploadBytes(ref(authed.storage(), 'do-photos/user1/photo-1'), new Uint8Array([1]), {
+        contentType: 'image/jpeg',
+      }),
+    );
+  });
+
+  it('denies deletes', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await uploadString(ref(ctx.storage(), 'do-photos/user1/photo-2'), 'stripped', 'raw');
+    });
+    const authed = testEnv.authenticatedContext('user1');
+    await assertFails(deleteObject(ref(authed.storage(), 'do-photos/user1/photo-2')));
+  });
+});
+
+describe('do-uploads (sync-do quarantine, plan §7.4)', () => {
+  const IMG = new Uint8Array([0xff, 0xd8, 0xff, 0xdb, 1, 2, 3]);
+
+  it('allows the owner to write an image/* object under their own prefix', async () => {
+    const authed = testEnv.authenticatedContext('user1');
+    await assertSucceeds(
+      uploadBytes(ref(authed.storage(), 'do-uploads/user1/upload-1'), IMG, {
+        contentType: 'image/jpeg',
+      }),
+    );
+    await assertSucceeds(
+      uploadBytes(ref(authed.storage(), 'do-uploads/user1/upload-2'), IMG, {
+        contentType: 'image/png',
+      }),
+    );
+  });
+
+  it('denies writing under ANOTHER user\'s prefix — §7.4\'s "ownership is structural" basis', async () => {
+    const authed = testEnv.authenticatedContext('user2');
+    await assertFails(
+      uploadBytes(ref(authed.storage(), 'do-uploads/user1/upload-x'), IMG, {
+        contentType: 'image/jpeg',
+      }),
+    );
+  });
+
+  it('denies unauthenticated writes', async () => {
+    const unauthed = testEnv.unauthenticatedContext();
+    await assertFails(
+      uploadBytes(ref(unauthed.storage(), 'do-uploads/user1/upload-x'), IMG, {
+        contentType: 'image/jpeg',
+      }),
+    );
+  });
+
+  it('denies reads, even by the owner — thumbnails render from the POST-strip object', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await uploadString(ref(ctx.storage(), 'do-uploads/user1/upload-r'), 'raw-with-exif', 'raw');
+    });
+    const authed = testEnv.authenticatedContext('user1');
+    await assertFails(getBytes(ref(authed.storage(), 'do-uploads/user1/upload-r')));
+  });
+
+  it('enforces the size bound: 10MB exactly is refused (strict <), just under passes', async () => {
+    const authed = testEnv.authenticatedContext('user1');
+    await assertFails(
+      uploadBytes(ref(authed.storage(), 'do-uploads/user1/too-big'), new Uint8Array(10 * 1024 * 1024), {
+        contentType: 'image/jpeg',
+      }),
+    );
+    await assertSucceeds(
+      uploadBytes(ref(authed.storage(), 'do-uploads/user1/just-fits'), new Uint8Array(10 * 1024 * 1024 - 1), {
+        contentType: 'image/jpeg',
+      }),
+    );
+  });
+
+  it('enforces the content-type bound: non-image and absent types are refused', async () => {
+    const authed = testEnv.authenticatedContext('user1');
+    await assertFails(
+      uploadBytes(ref(authed.storage(), 'do-uploads/user1/not-img-1'), IMG, {
+        contentType: 'application/pdf',
+      }),
+    );
+    await assertFails(
+      uploadBytes(ref(authed.storage(), 'do-uploads/user1/not-img-2'), IMG, {
+        contentType: 'text/html',
+      }),
+    );
+    await assertFails(
+      uploadBytes(ref(authed.storage(), 'do-uploads/user1/not-img-3'), IMG, {
+        contentType: 'application/octet-stream',
+      }),
+    );
+  });
+
+  it('denies flipping contentType off image/* via updateMetadata (update path bounded too)', async () => {
+    const authed = testEnv.authenticatedContext('user1');
+    const fileRef = ref(authed.storage(), 'do-uploads/user1/meta-flip');
+    await assertSucceeds(uploadBytes(fileRef, IMG, { contentType: 'image/jpeg' }));
+    await assertFails(updateMetadata(fileRef, { contentType: 'text/html' }));
+  });
+
+  it('denies deletes (cleanup is the stripper\'s and the sweep\'s job, via the Admin SDK)', async () => {
+    const authed = testEnv.authenticatedContext('user1');
+    const fileRef = ref(authed.storage(), 'do-uploads/user1/upload-del');
+    await assertSucceeds(uploadBytes(fileRef, IMG, { contentType: 'image/jpeg' }));
+    await assertFails(deleteObject(fileRef));
+  });
+
+  it('denies nested paths (single {uploadId} segment only — the trigger\'s path parse relies on it)', async () => {
+    const authed = testEnv.authenticatedContext('user1');
+    await assertFails(
+      uploadBytes(ref(authed.storage(), 'do-uploads/user1/a/b'), IMG, {
+        contentType: 'image/jpeg',
+      }),
+    );
+  });
+});
+
 describe('default deny', () => {
   it('denies writes outside known buckets even when authenticated', async () => {
     const authed = testEnv.authenticatedContext('user1');
