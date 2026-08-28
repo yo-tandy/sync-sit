@@ -20,6 +20,7 @@ import {
   ShareIcon,
 } from './Icons';
 import { LanguageSelector } from './LanguageSelector';
+import { NavTabs } from './NavTabs';
 import { NotificationBell } from './NotificationBell';
 import { SupervisionChip } from './SupervisionChip';
 import { AppSwitchMenuItem } from './AppSwitchMenuItem';
@@ -52,6 +53,31 @@ export function AppBar({ role }: { role: UserRole }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const homePath = role === 'babysitter' ? '/babysitter' : role === 'admin' ? '/admin' : '/family';
 
+  // The portal's primary destinations — one list, two renderings (issue
+  // #119): the burger dialog below and the md+ NavTabs row. Dashboard stays
+  // on the home icon, mirroring the burger. Admin gets no tab row: its
+  // desktop nav is the grouped sidebar in AdminLayout.
+  const primaryNav =
+    role === 'babysitter'
+      ? [
+          { to: '/babysitter/account', icon: <UserIcon className="h-5 w-5" />, label: t('menu.myAccount') },
+          { to: '/babysitter/options', icon: <SettingsIcon className="h-5 w-5" />, label: t('menu.babysittingOptions') },
+          { to: '/babysitter/endorsements', icon: <UsersIcon className="h-5 w-5" />, label: t('menu.references') },
+          { to: '/babysitter/families', icon: <UsersIcon className="h-5 w-5" />, label: t('menu.myFamilies') },
+        ]
+      : role === 'parent'
+        ? [
+            { to: '/family/appointments', icon: <CalendarIcon className="h-5 w-5" />, label: t('menu.myAppointments') },
+            { to: '/family/verification', icon: <ShieldIcon className="h-5 w-5" />, label: t('verification.menuTitle') },
+            { to: '/family/account', icon: <UserIcon className="h-5 w-5" />, label: t('menu.myAccount') },
+            { to: '/family/settings', icon: <SettingsIcon className="h-5 w-5" />, label: t('menu.myFamily') },
+            { to: '/family/preferred', icon: <UsersIcon className="h-5 w-5" />, label: t('menu.preferredBabysitters') },
+            { to: '/family/invite', icon: <UserPlusIcon className="h-5 w-5" />, label: t('menu.coParent') },
+            { to: '/family/governance', icon: <ShieldIcon className="h-5 w-5" />, label: t('governance.menuTitle') },
+            { to: '/family/endorsements', icon: <FileTextIcon className="h-5 w-5" />, label: t('menu.myReferences') },
+          ]
+        : [];
+
   return (
     <>
       <div className="sticky top-0 z-40 flex h-12 items-center justify-between bg-brand-600 px-4">
@@ -78,34 +104,25 @@ export function AppBar({ role }: { role: UserRole }) {
         </div>
       </div>
 
-      <Dialog open={menuOpen} onClose={() => setMenuOpen(false)}>
+      {/* Persistent primary nav at md+ (issue #119); the burger stays the
+          phone entry point and, at desktop, the home of the secondary items. */}
+      {primaryNav.length > 0 && (
+        <NavTabs
+          items={primaryNav.map(({ to, label }) => ({ to, label }))}
+          ariaLabel={t('menu.primaryNav')}
+        />
+      )}
+
+      <Dialog open={menuOpen} onClose={() => setMenuOpen(false)} ariaLabel={t('menu.appMenu')}>
         <div className="-m-6 overflow-hidden rounded-xl">
           <div className="border-b border-gray-100 px-4 py-3">
             <p className="text-base font-bold text-gray-900">{userDoc?.firstName} {userDoc?.lastName}</p>
             <p className="text-xs text-gray-500">{userDoc?.email}</p>
           </div>
 
-          {role === 'babysitter' && (
-            <>
-              <MenuItem icon={<UserIcon className="h-5 w-5" />} label={t('menu.myAccount')} to="/babysitter/account" onNavigate={() => setMenuOpen(false)} />
-              <MenuItem icon={<SettingsIcon className="h-5 w-5" />} label={t('menu.babysittingOptions')} to="/babysitter/options" onNavigate={() => setMenuOpen(false)} />
-              <MenuItem icon={<UsersIcon className="h-5 w-5" />} label={t('menu.references')} to="/babysitter/endorsements" onNavigate={() => setMenuOpen(false)} />
-              <MenuItem icon={<UsersIcon className="h-5 w-5" />} label={t('menu.myFamilies')} to="/babysitter/families" onNavigate={() => setMenuOpen(false)} />
-            </>
-          )}
-
-          {role === 'parent' && (
-            <>
-              <MenuItem icon={<CalendarIcon className="h-5 w-5" />} label={t('menu.myAppointments')} to="/family/appointments" onNavigate={() => setMenuOpen(false)} />
-              <MenuItem icon={<ShieldIcon className="h-5 w-5" />} label={t('verification.menuTitle')} to="/family/verification" onNavigate={() => setMenuOpen(false)} />
-              <MenuItem icon={<UserIcon className="h-5 w-5" />} label={t('menu.myAccount')} to="/family/account" onNavigate={() => setMenuOpen(false)} />
-              <MenuItem icon={<SettingsIcon className="h-5 w-5" />} label={t('menu.myFamily')} to="/family/settings" onNavigate={() => setMenuOpen(false)} />
-              <MenuItem icon={<UsersIcon className="h-5 w-5" />} label={t('menu.preferredBabysitters')} to="/family/preferred" onNavigate={() => setMenuOpen(false)} />
-              <MenuItem icon={<UserPlusIcon className="h-5 w-5" />} label={t('menu.coParent')} to="/family/invite" onNavigate={() => setMenuOpen(false)} />
-              <MenuItem icon={<ShieldIcon className="h-5 w-5" />} label={t('governance.menuTitle')} to="/family/governance" onNavigate={() => setMenuOpen(false)} />
-              <MenuItem icon={<FileTextIcon className="h-5 w-5" />} label={t('menu.myReferences')} to="/family/endorsements" onNavigate={() => setMenuOpen(false)} />
-            </>
-          )}
+          {primaryNav.map((item) => (
+            <MenuItem key={item.to} icon={item.icon} label={item.label} to={item.to} onNavigate={() => setMenuOpen(false)} />
+          ))}
 
           {role === 'admin' && (
             <>
