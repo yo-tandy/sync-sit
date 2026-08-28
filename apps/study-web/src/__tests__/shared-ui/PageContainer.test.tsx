@@ -36,4 +36,20 @@ describe('PageContainer (shared-ui)', () => {
     const page = screen.getByText('wide page');
     expect(page.parentElement!.className).toContain('has-[>[data-page-width=wide]]:max-w-5xl');
   });
+
+  it('a nested (non-root) wide marker is not a direct child of the capped div — the > scope makes it a no-op', () => {
+    // The failure mode the direct-child scoping creates: wrap a page root in
+    // an extra element (ErrorBoundary div, layout fragment) and the wide
+    // opt-in silently stops matching. This pin documents that contract; the
+    // real widening is CSS, which jsdom cannot execute.
+    render(
+      <PageContainer>
+        <div>
+          <div data-page-width="wide">nested wide</div>
+        </div>
+      </PageContainer>,
+    );
+    const marker = screen.getByText('nested wide');
+    expect(marker.parentElement!.className).not.toContain('has-[>[data-page-width=wide]]:max-w-5xl');
+  });
 });
