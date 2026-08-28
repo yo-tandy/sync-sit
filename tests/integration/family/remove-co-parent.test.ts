@@ -26,6 +26,11 @@ describe('removeCoParent', () => {
 
   describe('happy paths', () => {
     it('parent removes their co-parent: parentIds trimmed, target user familyId cleared', async () => {
+      // Pre-state: the membership field is POPULATED, so the post-call
+      // undefined below is the callable's doing, not the seed's shape.
+      const preDoc = await getDb().collection('users').doc(seed.parent2.uid).get();
+      expect(preDoc.data()!.profiles?.parent?.familyId).toBe(seed.family1Id);
+
       const result = await callFunction<{ success: boolean }>(
         'removeCoParent',
         { targetUserId: seed.parent2.uid },
@@ -41,8 +46,16 @@ describe('removeCoParent', () => {
       const targetDoc = await db.collection('users').doc(seed.parent2.uid).get();
       // User doc still exists (NOT deleted)
       expect(targetDoc.exists).toBe(true);
-      // familyId field unset
+      // Membership is cleared where it LIVES (Plan D): the old pin on the
+      // root field passed vacuously -- Plan D never populates it, so it was
+      // undefined before the call too (issue #279). Pin the field the
+      // callable's own gate reads, and prove it was populated pre-call by
+      // the seed (a delete of an absent field would pass just as vacuously).
+      expect(targetDoc.data()!.profiles?.parent?.familyId).toBeUndefined();
       expect(targetDoc.data()!.familyId).toBeUndefined();
+      // The removed co-parent keeps their parent PROFILE (they can re-join
+      // a family by invite); only the membership pointer goes.
+      expect(targetDoc.data()!.profiles?.parent).toBeDefined();
 
       // Audit log written
       const logs = await db

@@ -50,8 +50,15 @@ export const removeCoParent = onCall(
       parentIds: FieldValue.arrayRemove(targetUserId),
     });
 
-    // Clear familyId on the target user
+    // Clear the target's family membership where membership actually
+    // LIVES: profiles.parent.familyId (Plan D) -- the field this callable's
+    // own gate just read, and the one storage.rules and
+    // getVerificationDocument key off. The bare root familyId is a Plan C
+    // leftover Plan D never populates; clearing only it left a removed
+    // co-parent with full membership everywhere the user doc is consulted
+    // (issue #279). Root field still cleared for legacy docs that carry it.
     await db.collection('users').doc(targetUserId).update({
+      'profiles.parent.familyId': FieldValue.delete(),
       familyId: FieldValue.delete(),
     });
 
