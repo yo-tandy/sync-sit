@@ -320,7 +320,8 @@ export function DashboardPage() {
         : t('family.dashboard.tiles.sessionsEmpty');
 
   return (
-    <div className="px-5 pt-4 pb-8">
+    // Wide desktop tier (issue #119): the tile grid wants the 5xl cap.
+    <div className="px-5 pt-4 pb-8" data-page-width="wide">
       {/* Header — the shared idiom (parity D1, issue #239). This one had
           neither comma, wave, nor context line, and rendered an empty
           greeting for a doc with no firstName. */}

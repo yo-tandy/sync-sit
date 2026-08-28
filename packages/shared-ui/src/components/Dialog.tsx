@@ -27,6 +27,8 @@ export function Dialog({ open, onClose, children }: DialogProps) {
     >
       <div className="fixed inset-0 bg-black/50" />
       <div
+        role="dialog"
+        aria-modal="true"
         className="relative my-auto w-full max-w-sm rounded-xl bg-white p-6"
         onClick={(e) => e.stopPropagation()}
       >

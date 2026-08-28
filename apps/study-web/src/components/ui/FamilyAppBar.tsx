@@ -17,6 +17,7 @@ import {
   CalendarIcon,
   LogOutIcon,
   ShareIcon,
+  NavTabs,
 } from '@ejm/shared-ui';
 import { AppSwitchMenuItem } from './AppSwitchMenuItem';
 import { NotificationBell } from './NotificationBell';
@@ -58,6 +59,22 @@ export function FamilyAppBar() {
   const { userDoc, logout } = useAuthStore();
   const [menuOpen, setMenuOpen] = useState(false);
 
+  // The family portal's primary destinations — one list, two renderings
+  // (issue #119): the burger dialog below and the md+ NavTabs row. Dashboard
+  // stays on the home icon, mirroring the burger.
+  const primaryNav = [
+    { to: '/family/sessions', icon: <CalendarIcon className="h-5 w-5" />, label: t('family.sessions.title') },
+    { to: '/family/requests', icon: <BellIcon className="h-5 w-5" />, label: t('family.requestsTitle') },
+    { to: '/family/endorsements', icon: <CheckIcon className="h-5 w-5" />, label: t('family.endorsements.menuTitle') },
+    { to: '/family/governance', icon: <ShieldIcon className="h-5 w-5" />, label: t('family.governance.navTitle') },
+    // Verification lives in-app (issue #129). The menu entry is how a
+    // VERIFIED family reaches the approve-a-friend flow — the dashboard
+    // banner only shows while unverified. Mirrors sit's AppBar entry.
+    { to: '/family/verification', icon: <FileTextIcon className="h-5 w-5" />, label: t('family.verification.menuTitle') },
+    { to: '/family/account', icon: <UserIcon className="h-5 w-5" />, label: t('family.accountTitle') },
+    { to: '/family/settings', icon: <SettingsIcon className="h-5 w-5" />, label: t('family.settingsTitle') },
+  ];
+
   return (
     <>
       <div className="sticky top-0 z-40 flex h-12 items-center justify-between bg-brand-600 px-4">
@@ -77,6 +94,13 @@ export function FamilyAppBar() {
         </div>
       </div>
 
+      {/* Persistent primary nav at md+ (issue #119); the burger stays the
+          phone entry point and, at desktop, the home of the secondary items. */}
+      <NavTabs
+        items={primaryNav.map(({ to, label }) => ({ to, label }))}
+        ariaLabel={t('menu.primaryNav')}
+      />
+
       <Dialog open={menuOpen} onClose={() => setMenuOpen(false)}>
         <div className="-m-6 overflow-hidden rounded-xl">
           <div className="border-b border-gray-100 px-4 py-3">
@@ -84,16 +108,9 @@ export function FamilyAppBar() {
             <p className="text-xs text-gray-500">{userDoc?.email}</p>
           </div>
 
-          <MenuItem icon={<CalendarIcon className="h-5 w-5" />} label={t('family.sessions.title')} to="/family/sessions" onNavigate={() => setMenuOpen(false)} />
-          <MenuItem icon={<BellIcon className="h-5 w-5" />} label={t('family.requestsTitle')} to="/family/requests" onNavigate={() => setMenuOpen(false)} />
-          <MenuItem icon={<CheckIcon className="h-5 w-5" />} label={t('family.endorsements.menuTitle')} to="/family/endorsements" onNavigate={() => setMenuOpen(false)} />
-          <MenuItem icon={<ShieldIcon className="h-5 w-5" />} label={t('family.governance.navTitle')} to="/family/governance" onNavigate={() => setMenuOpen(false)} />
-          {/* Verification lives in-app (issue #129). The menu entry is how a
-              VERIFIED family reaches the approve-a-friend flow — the dashboard
-              banner only shows while unverified. Mirrors sit's AppBar entry. */}
-          <MenuItem icon={<FileTextIcon className="h-5 w-5" />} label={t('family.verification.menuTitle')} to="/family/verification" onNavigate={() => setMenuOpen(false)} />
-          <MenuItem icon={<UserIcon className="h-5 w-5" />} label={t('family.accountTitle')} to="/family/account" onNavigate={() => setMenuOpen(false)} />
-          <MenuItem icon={<SettingsIcon className="h-5 w-5" />} label={t('family.settingsTitle')} to="/family/settings" onNavigate={() => setMenuOpen(false)} />
+          {primaryNav.map((item) => (
+            <MenuItem key={item.to} icon={item.icon} label={item.label} to={item.to} onNavigate={() => setMenuOpen(false)} />
+          ))}
 
           <div className="border-t border-gray-100" />
 

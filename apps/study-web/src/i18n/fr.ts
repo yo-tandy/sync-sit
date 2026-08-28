@@ -248,6 +248,7 @@ export default {
     about: 'À propos',
     openMenu: 'Ouvrir le menu',
     openMenuPending: 'Ouvrir le menu (éléments en attente de votre attention)',
+    primaryNav: 'Navigation principale',
     home: 'Accueil',
     reportProblem: 'Signaler un problème',
     privacyPolicy: 'Politique de confidentialité',
