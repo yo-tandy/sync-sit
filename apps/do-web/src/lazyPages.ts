@@ -45,3 +45,6 @@ export const HomePage = lazy(() =>
 export const MyTasksPage = lazy(() =>
   import('@/pages/family/MyTasksPage').then((m) => ({ default: m.MyTasksPage })),
 );
+export const PostTaskPage = lazy(() =>
+  import('@/pages/family/post/PostTaskPage').then((m) => ({ default: m.PostTaskPage })),
+);

@@ -20,6 +20,7 @@ import {
   DoerEnrollment,
   HomePage,
   MyTasksPage,
+  PostTaskPage,
 } from '@/lazyPages';
 import { BRAND, SUPPORT_EMAIL } from '@/constants/brand';
 
@@ -54,6 +55,7 @@ export const router = createBrowserRouter([
     element: <FamilyLayout />,
     children: [
       { path: '/family', element: <MyTasksPage /> },
+      { path: '/family/post', element: <PostTaskPage /> },
     ],
   },
 ]);
