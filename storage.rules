@@ -9,6 +9,16 @@ service firebase.storage {
       return firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data;
     }
 
+    // Helper: may the holder of user-doc data `d` write into family `familyId`'s
+    // verification path? Takes the data map as an argument (firestore.rules
+    // idiom — parentFamilyId(d), bsField(d, ...)) so callerData() is invoked
+    // exactly once per evaluation: cross-service lookups are billed as
+    // Firestore reads, and we don't rely on the engine deduping them.
+    function canWriteFamilyDocs(d, familyId) {
+      return d.get('isAdmin', false) == true
+             || d.get('profiles', {}).get('parent', {}).get('familyId', null) == familyId;
+    }
+
     // Verification documents — writes only by members of the owning family or
     // admins (issue #153). profiles.parent.familyId is server-controlled
     // (enrollFamily; firestore.rules blocks client edits), so matching it here
@@ -23,8 +33,7 @@ service firebase.storage {
       allow read: if false;
       allow create, update: if request.auth != null
                    && request.resource.size <= 10 * 1024 * 1024
-                   && (callerData().get('isAdmin', false) == true
-                       || callerData().get('profiles', {}).get('parent', {}).get('familyId', null) == familyId);
+                   && canWriteFamilyDocs(callerData(), familyId);
     }
 
     // Profile photos — only the owner can write their own photo
