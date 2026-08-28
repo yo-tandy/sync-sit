@@ -268,7 +268,7 @@ export function AdminVerificationsPage() {
         <h3 className="mb-2 text-lg font-semibold">{t('verification.rejectTitle')}</h3>
         <p className="mb-3 text-sm text-gray-600">{t('verification.rejectDesc')}</p>
         <textarea
-          className="mb-4 w-full rounded-lg border border-gray-300 p-3 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+          className="mb-4 w-full rounded-lg border border-gray-300 p-3 text-sm focus:border-brand-500 focus:outline-none focus:ring-1"
           rows={3}
           placeholder={t('verification.rejectionReasonPlaceholder')}
           value={rejectionReason}

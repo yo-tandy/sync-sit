@@ -63,8 +63,9 @@
    arguments, :focus-visible outside it still counts.
 
    Text-LIKE fields keep their focus border treatment and are unmatched;
-   checkbox/radio inputs ARE matched -- they had no visible treatment at
-   all (focus:ring-brand-500 sets only a ring color, painting nothing).
+   checkbox/radio inputs ARE matched -- they had no BRANDED treatment,
+   only the browser default (their focus:ring-brand-500 set a ring color
+   with no width and painted nothing).
    The Dialog panel's tabindex=-1 is excluded. */
 @layer base {
   :where(a, button, [role="button"], select, summary, [tabindex]:not([tabindex="-1"])):focus-visible,

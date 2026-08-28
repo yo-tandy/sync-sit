@@ -207,7 +207,7 @@ export function EndorsementDialog({
                   if (e.target.checked) setRefWhatsapp(refPhone);
                   else setRefWhatsapp('');
                 }}
-                className="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+                className="h-4 w-4 rounded border-gray-300 text-brand-600"
               />
               {t('account.whatsappSameAsPhone')}
             </label>
