@@ -1361,7 +1361,7 @@ All in `apps/functions/src/do/**`, codebase `default`, region `europe-west1`,
 
 | Callable | Auth | Does |
 |---|---|---|
-| `doEnrollDoer` | Auth | Creates `profiles.doer` — full or abbreviated depending on existing profiles. **Identity gate first: `profiles.doer.enrollmentComplete` is set only for a caller with a VERIFIED EJM identity** — either an account that already holds a completed sit/study PROVIDER profile (babysitter/tutor — EJM-verified identities; the abbreviated §3.3 path — that identity was verified when it was made; **a parent profile does not qualify**: open self-signup, any email domain — §7.2's board audience must stay EJM students; corrected in PR #320 review), or, for a brand-new account, the `enrollTutor` verification shape (`enrollTutor.ts:126` verified identity, `:164-193` emailed code). Without this clause the §7.2 board read rule is open to any authenticated platform account (§11.1). **Then the age gate: a parseable `dateOfBirth` from every caller, and an ungoverned caller under 15 is refused on a bare age-from-DOB check — deliberately NOT the `enrollTutor` email-guarded floor shape, whose floor stands down when the EJM email doesn't parse (§11.1)**; a governed caller passes the floor at any age; `checkEnrollmentAge` runs only for the `age_mismatch` half when the email yields a graduation year |
+| `doEnrollDoer` | Auth | Creates `profiles.doer` — full or abbreviated depending on existing profiles. **Identity gate first: `profiles.doer.enrollmentComplete` is set only for a caller with a VERIFIED EJM identity** — either an account that already holds a completed sit/study PROVIDER profile (babysitter/tutor — EJM-verified identities; the abbreviated §3.3 path — that identity was verified when it was made; **a parent profile does not qualify**: open self-signup, any email domain — §7.2's board audience must stay EJM students; corrected in PR #320 review), or, for a brand-new account, the `enrollTutor` verification shape (`enrollTutor.ts:126` verified identity, `:164-193` emailed code) **plus a do-side domain assertion the precedent lacks: the address must be EJM-valid or admin-preapproved BEFORE the code is consulted** — the `verificationCodes` namespace is shared with the any-domain `verifyParentEmail`, so a code alone proves only mailbox ownership (issue #322; §11.1). Without this clause the §7.2 board read rule is open to any authenticated platform account (§11.1). **Then the age gate: a parseable `dateOfBirth` from every caller, and an ungoverned caller under 15 is refused on a bare age-from-DOB check — deliberately NOT the `enrollTutor` email-guarded floor shape, whose floor stands down when the EJM email doesn't parse (§11.1)**; a governed caller passes the floor at any age; `checkEnrollmentAge` runs only for the `age_mismatch` half when the email yields a graduation year |
 | `doUpdateDoerProfile` | Auth | Categories, bio, transport, `notifyNewTasks` |
 | `doPostTask` | Auth (verified family) | Validates, scrubs, computes `areaLabel` + `expiresAt`, enforces `DO_TASK_MAX_ACTIVE`. **Refuses (`failed-precondition`, `reason: 'address_required'`) when the family's postcode/city resolves no area label** — decision 17 makes `areaLabel` required, and the wizard routes the parent to complete their address first |
 | `doUpdateTask` | Auth (owner family) | `open` tasks only; description/photos/budget/timing. **Runs the caller-prefix check on any photo ADDED** — existing `{uid, photoId}` entries pass through untouched, since they were verified at their own add time and may belong to the OTHER parent of the family; re-checking them against the current caller's prefix would wrongly strip a co-parent's photos (§7.4). Recomputes `expiresAt` server-side, which is how an `ongoing` task renews (§6.3). Notifies students with pending offers that terms changed |
@@ -1640,14 +1640,20 @@ it is spam.
   (babysitter/tutor — EJM-verified identities; the abbreviated §3.3 path:
   that identity was verified when it was made) or completes the
   `enrollTutor`-shape verification (`enrollTutor.ts:126` verified EJM
-  identity, `:164-193` emailed code) on the full path. **A parent profile
-  does not qualify** (corrected in PR #320 review): `verifyParentEmail`
-  accepts any domain and `enrollFamily` completes on open self-signup, so
-  accepting it would widen §7.2's board audience from EJM students to
-  anyone with a mailbox. A parent-only account can therefore become a doer
-  only by passing EJM email verification — effectively excluded in V1,
-  which matches §1's definition of doers as EJM students (and stays a
-  cheap, owner-flippable line if that ever changes). Stated
+  identity, `:164-193` emailed code) on the full path — where, unlike
+  `enrollTutor`, the address itself is asserted EJM-valid or
+  admin-preapproved BEFORE the code is consulted: the `verificationCodes`
+  namespace is shared with the any-domain `verifyParentEmail`, so a valid
+  code alone proves only mailbox ownership (the platform-wide collision is
+  issue #322; sync-do carries its own domain check regardless of how #322
+  resolves). **A parent profile does not qualify** (corrected in PR #320
+  review): `verifyParentEmail` accepts any domain and `enrollFamily`
+  completes on open self-signup, so accepting it would widen §7.2's board
+  audience from EJM students to anyone with a mailbox. A parent-only
+  account can therefore become a doer only through the code path's
+  EJM/preapproved acceptance set — effectively excluded in V1, which
+  matches §1's definition of doers as EJM students (and stays a cheap,
+  owner-flippable line if that ever changes). Stated
   here because §7.2 pins `enrollmentComplete` server-owned *for the board
   read rule's sake* — a server-owned flag any authenticated account could
   earn without an identity check would protect nothing: the read rule is

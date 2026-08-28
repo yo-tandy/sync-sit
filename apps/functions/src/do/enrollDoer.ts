@@ -1,5 +1,6 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
+import { z } from 'zod';
 import { strongPasswordSchema } from '@ejm/sit-core';
 import {
   validateEjmEmail,
@@ -67,6 +68,9 @@ interface EnrollDoerData {
 
 const NAME_MAX = 100;
 const CONTACT_MAX = 200;
+/** The platform's contact-email validator — study's tutor enrollment schema
+ *  uses the same zod shape (`tutor.ts:88`). */
+const contactEmailShape = z.string().email();
 
 /** Manual guards in the publishSearch house style (plan §8). */
 function validateEnrollmentInput(input: unknown): DoerEnrollmentInput {
@@ -101,6 +105,15 @@ function validateEnrollmentInput(input: unknown): DoerEnrollmentInput {
       );
     }
   }
+  // contactEmail also gets a SHAPE check (PR #320 round 2): it can satisfy
+  // the ≥1-contact requirement and lands at the canonical root, so junk like
+  // 'x' must not count as "something for decision 16's reveal to serve".
+  // Same validator as study's tutor schema (z.string().email()).
+  if (typeof e.contactEmail === 'string' && e.contactEmail.trim()) {
+    if (!contactEmailShape.safeParse(e.contactEmail.trim()).success) {
+      throw new HttpsError('invalid-argument', 'Invalid contact email');
+    }
+  }
   if (e.categories !== undefined) {
     const err = validateDoerCategories(e.categories);
     if (err) throw new HttpsError('invalid-argument', err);
@@ -128,13 +141,17 @@ function validateEnrollmentInput(input: unknown): DoerEnrollmentInput {
  * VERIFIED EJM identity — either an account already holding a completed
  * sit/study PROVIDER profile (babysitter/tutor, the abbreviated crossApp
  * path — both are EJM-email-verified at their own enrollment), or the
- * `enrollTutor`-shape emailed-code verification. A PARENT profile does NOT
- * qualify (§11.1 as corrected in PR #320): `verifyParentEmail` accepts any
- * domain and `enrollFamily` completes on open self-signup, so accepting it
- * would make §7.2's board audience "anyone with a mailbox". A parent-only
- * account can still enroll as a doer, but only through EJM email
- * verification — which in V1 effectively excludes parents (§1's doers are
- * EJM students; a one-line change here if the owner ever wants otherwise).
+ * `enrollTutor`-shape emailed-code verification, which here also asserts
+ * the address itself is EJM-valid or admin-preapproved BEFORE consulting
+ * the code (issue #322: the verificationCodes namespace is shared with the
+ * any-domain verifyParentEmail, so a code alone proves only mailbox
+ * ownership). A PARENT profile does NOT qualify (§11.1 as corrected in PR
+ * #320): `verifyParentEmail` accepts any domain and `enrollFamily`
+ * completes on open self-signup, so accepting it would make §7.2's board
+ * audience "anyone with a mailbox". A parent-only account can still enroll
+ * as a doer, but only through the code path's EJM/preapproved acceptance
+ * set — which in V1 effectively excludes parents (§1's doers are EJM
+ * students; a one-line change here if the owner ever wants otherwise).
  * Without this gate the §7.2 board read rule would be satisfiable by any
  * authenticated account.
  *
@@ -216,6 +233,31 @@ export const doEnrollDoer = onCall(
         throw new HttpsError('invalid-argument', 'EJM email is required');
       }
       ejemEmailLower = data.ejemEmail.toLowerCase();
+      // "A code exists" does NOT prove an EJM mailbox (PR #320 round 2 /
+      // issue #322): verifyParentEmail is public, accepts ANY domain, and
+      // writes the SAME verificationCodes/{email} namespace this branch
+      // reads — so without a domain check, anyone with any mailbox could
+      // mint a code there and satisfy the identity gate. Assert the address
+      // is one verifyEjmEmail would have issued to, mirroring its exact
+      // acceptance set (verifyEjmEmail.ts:34-46): admin-preapproved
+      // (`preapprovedEmails/{email}` with used === false — test/invite
+      // accounts), else EJM-valid per validateEjmEmail (domain + in-window
+      // graduation year). The shared-namespace collision is platform-wide
+      // (enrollTutor/enrollBabysitter inherit the same shape) and tracked
+      // as issue #322; this local check is sync-do's defense regardless of
+      // how #322 resolves.
+      const preapprovedDoc = await db.collection('preapprovedEmails').doc(ejemEmailLower).get();
+      const isPreapproved = preapprovedDoc.exists && preapprovedDoc.data()?.used === false;
+      if (!isPreapproved) {
+        const domainCheck = validateEjmEmail(ejemEmailLower);
+        if (!domainCheck.valid) {
+          throw new HttpsError(
+            'failed-precondition',
+            'An EJM email address is required to enroll as a doer.',
+            { reason: 'not_ejm_email' },
+          );
+        }
+      }
       codeDoc = await db.collection('verificationCodes').doc(ejemEmailLower).get();
 
       if (!codeDoc.exists) {
@@ -377,6 +419,13 @@ export const doEnrollDoer = onCall(
         // in the audit trail, and this callable never runs without a fresh
         // consent tick), which is why these ride setBaseFields rather than
         // the audit-only convention addProfileToUser defaults to.
+        // Consequence, stated plainly (PR #320 round 2): the root pair is a
+        // single latest-wins slot with no app label — after this write, the
+        // account's root-level consent record is sync-do's version string,
+        // and the earlier sit/study acceptance survives only in
+        // userActivity. Nothing gates on the root pair today; if a
+        // re-consent check ever keys on it, per-app consent needs its own
+        // ledger (future work — a per-app consent map).
         setBaseFields: {
           ...(enrollment.contactEmail?.trim() ? { contactEmail: enrollment.contactEmail.trim() } : {}),
           ...(enrollment.contactPhone?.trim() ? { contactPhone: enrollment.contactPhone.trim() } : {}),
