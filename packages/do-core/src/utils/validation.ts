@@ -3,6 +3,7 @@ import {
   DO_AVAILABILITY_NOTE_MAX,
   DO_CADENCE_NOTE_MAX,
   DO_CADENCE_TIME_HINT_MAX,
+  DO_DOER_BIO_MAX,
   DO_OFFER_MESSAGE_MAX,
   DO_PRICE_MAX,
   DO_PRICE_MIN,
@@ -11,6 +12,7 @@ import {
   DO_TASK_TITLE_MAX,
 } from '../constants/bounds.js';
 import { computeTaskExpiresAt, type ExpiryTimingFields } from './expiry.js';
+import { isTaskCategory } from './taxonomy.js';
 
 /**
  * Pure validators for sync-do input (plan §8: "manual guards … with the
@@ -398,4 +400,46 @@ export function validateTaskTimingNotPast(
     return 'the task date is already past';
   }
   return null;
+}
+
+// ── Doer profile (§3.3 — doEnrollDoer / doUpdateDoerProfile) ──
+
+/**
+ * The digest category list: an array of DISTINCT sync-do categories.
+ * Empty is valid — it means "no digests" by §3.3's always-explicit rule
+ * (never "all"; `doEnrollDoer` states the all-categories default as data,
+ * not as an empty-array convention).
+ */
+export function validateDoerCategories(categories: unknown): string | null {
+  if (!Array.isArray(categories)) {
+    return 'categories must be an array';
+  }
+  if (categories.some((c) => !isTaskCategory(c))) {
+    return 'categories may only contain sync-do categories';
+  }
+  if (new Set(categories).size !== categories.length) {
+    return 'categories may not repeat';
+  }
+  return null;
+}
+
+/** Free-text blurb shown to a family alongside an offer — null clears it. */
+export function validateDoerBio(bio: unknown): string | null {
+  if (bio === null) return null;
+  if (typeof bio !== 'string' || bio.length > DO_DOER_BIO_MAX) {
+    return `bio must be a string of at most ${DO_DOER_BIO_MAX} characters`;
+  }
+  return null;
+}
+
+/**
+ * The optional default flat price hint (pre-fills the offer form) — null
+ * clears it; a number obeys the shared price bounds.
+ */
+export function validateDoerDefaultRate(rate: unknown): string | null {
+  if (rate === null) return null;
+  const err = validatePrice(rate);
+  return err === null
+    ? null
+    : `defaultRate must be null or a number between ${DO_PRICE_MIN} and ${DO_PRICE_MAX}`;
 }
