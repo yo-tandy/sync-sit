@@ -45,6 +45,15 @@ async function seedCode(email: string) {
     });
 }
 
+/** An admin-preapproved address (test/invite accounts) — the shape
+ *  addPreapprovedEmail writes and the round-2 domain gate reads. */
+async function seedPreapproved(email: string) {
+  await getDb()
+    .collection('preapprovedEmails')
+    .doc(email.toLowerCase())
+    .set({ email: email.toLowerCase(), used: false, createdAt: new Date() });
+}
+
 function doerEnrollment(dateOfBirth: string | undefined, overrides: Record<string, unknown> = {}) {
   return {
     firstName: 'Gate',
@@ -122,15 +131,46 @@ describe('doEnrollDoer — classic path, identity + age gates (§8, §11.1)', ()
     });
   });
 
-  it('the §11.1 deviation pin: ungoverned under-15 with a VALID DOB and an UNPARSEABLE EJM email is still refused under_15', async () => {
+  it('the §11.1 deviation pin: ungoverned under-15 with a VALID DOB and a code-accepted email that yields NO graduation year is still refused under_15', async () => {
     // enrollTutor.ts:263 guards its floor on the email parsing — copied
-    // verbatim, a 14-year-old with a legacy no-grad-year address would walk
-    // straight through. The floor must hold on the DOB alone.
+    // verbatim, a 14-year-old whose accepted address yields no grad year
+    // would walk straight through. The floor must hold on the DOB alone.
+    // Since round 2's domain gate, the classic path's only no-grad-year
+    // acceptances are admin-preapproved addresses — so the fixture is one
+    // (the crossApp variant of this pin covers legacy stored emails).
     const email = 'legacy.doer@ejm.org'; // no trailing grad-year digits
+    await seedPreapproved(email);
     await seedCode(email);
     await expect(enroll(email, doerEnrollment(dobWithAge(14)))).rejects.toMatchObject({
       code: 'FAILED_PRECONDITION',
       details: { reason: 'under_15' },
+    });
+  });
+
+  it('issue #322 pin: a NON-EJM address with a VALID minted code is refused BEFORE the code is consulted (not_ejm_email)', async () => {
+    // verifyParentEmail (public, any-domain) writes the SAME
+    // verificationCodes/{email} namespace — seed exactly the doc it would
+    // mint. Without the domain gate this payload would land an active
+    // account with profiles.doer.enrollmentComplete: true, i.e. the §7.2
+    // board audience would be "anyone with a mailbox".
+    const email = 'attacker@gmail.com';
+    await seedCode(email);
+    await expect(enroll(email, doerEnrollment(dobWithAge(30)))).rejects.toMatchObject({
+      code: 'FAILED_PRECONDITION',
+      details: { reason: 'not_ejm_email' },
+    });
+    // No account was created for the address.
+    const users = await getDb().collection('users').where('email', '==', email).get();
+    expect(users.empty).toBe(true);
+  });
+
+  it('issue #322 pin, used-up carve-out: a preapproved address with used: true is refused too (the exact verifyEjmEmail acceptance set)', async () => {
+    const email = 'spent.invite@gmail.com';
+    await getDb().collection('preapprovedEmails').doc(email).set({ email, used: true });
+    await seedCode(email);
+    await expect(enroll(email, doerEnrollment(dobWithAge(30)))).rejects.toMatchObject({
+      code: 'FAILED_PRECONDITION',
+      details: { reason: 'not_ejm_email' },
     });
   });
 
@@ -265,7 +305,11 @@ describe('doEnrollDoer — classic path, identity + age gates (§8, §11.1)', ()
     }
 
     it('a GOVERNED 13-year-old passes the floor (supervision is their protection)', async () => {
-      const email = 'gate.kid13@ejm.org'; // unparseable — irrelevant: governed skips both halves
+      // Window-valid grad-year email (round 2's domain gate applies to
+      // everyone; the governed-age-gate suite uses the same idiom). Its
+      // cohort says 15 while the DOB says 13 — a mismatch the governed
+      // bypass deliberately skips along with the floor.
+      const email = `gate.kid${GRAD_15}@ejm.org`;
       await seedGovernedKid('governed-kid-13', email, 13);
       await seedCode(email);
       const token = await getIdToken('governed-kid-13');
@@ -319,7 +363,7 @@ describe('doEnrollDoer — classic path, identity + age gates (§8, §11.1)', ()
       // with an ACTIVE under-15 account today, but the mirror is the only
       // thing doEnrollDoer may trust — the enrollment floor must hold the
       // moment it is absent, however it got that way.
-      const email = 'gate.kid14@ejm.org';
+      const email = `revoked.kid${GRAD_15}@ejm.org`; // window-valid — past the domain gate, into the floor
       const uid = 'revoked-kid-14';
       await getAdminAuth().createUser({ uid, email });
       await getDb().collection('users').doc(uid).set({

@@ -132,13 +132,13 @@ describe('doEnrollDoer — abbreviated cross-app path (§3.3)', () => {
     expect(user.profiles.doer).toBeUndefined();
   });
 
-  it('a parent-only account CAN still enroll through EJM email verification — the owner-flippable V1 boundary', async () => {
-    // In production verifyEjmEmail only issues codes to @ejm.org addresses,
-    // so a parent without one never reaches this; the test seeds the code
-    // directly to pin that the code-verified path itself accepts a
-    // parent-profile holder (the plan's "only by passing EJM email
-    // verification" clause).
-    const email = 'parent.doer@ejm.org'; // no grad-year digits — no mismatch half
+  it('a parent-only account CAN still enroll through the code path\'s acceptance set — here the admin-preapproved carve-out (the owner-flippable V1 boundary)', async () => {
+    // Round 2's domain gate admits exactly what verifyEjmEmail would issue
+    // to: an EJM-valid address, or an admin-preapproved one. A parent
+    // rarely holds the former, so the sanctioned route is preapproval —
+    // seeded here the way addPreapprovedEmail writes it, plus the code doc.
+    const email = 'parent.doer@invited.example.com';
+    await getDb().collection('preapprovedEmails').doc(email).set({ email, used: false, createdAt: new Date() });
     await seedCode(email);
     const token = await getIdToken(seed.parent2.uid);
 
