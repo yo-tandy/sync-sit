@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react';
+import { useClientConfigValue } from '@/lib/adminConfigClient';
+import { ADMIN_CONFIG_DEFS } from '@ejm/shared-core';
 import { useNavigate, useSearchParams } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { httpsCallable } from 'firebase/functions';
@@ -26,6 +28,12 @@ export function BabysitterEnrollment() {
   const isAddProfile = !!firebaseUser && !getBabysitterProfile(userDoc);
 
   // Steps: 0=Email, 1=Verify code, 2=Password+consent, 3=Immutable profile, 4=Mutable prefs
+  const resendCooldownS = useClientConfigValue(
+    'verificationCodeCooldownS',
+    ADMIN_CONFIG_DEFS.verificationCodeCooldownS.default,
+    ADMIN_CONFIG_DEFS.verificationCodeCooldownS,
+  );
+
   const [step, setStep] = useState(0);
   const [ejemEmail, setEjemEmail] = useState('');
   const [verificationCode, setVerificationCode] = useState('');
@@ -183,6 +191,7 @@ export function BabysitterEnrollment() {
       case 1:
         return (
           <StepVerify
+            resendCooldownS={resendCooldownS}
             ejemEmail={ejemEmail}
             onVerify={async (code) => {
               const verifyFn = httpsCallable(functions, 'verifyCode');

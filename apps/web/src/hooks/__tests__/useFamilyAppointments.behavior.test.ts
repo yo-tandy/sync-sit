@@ -24,6 +24,7 @@
  * as a Gate 2 FAIL.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { __resetAdminConfigClientCacheForTests } from '@/lib/adminConfigClient';
 import { act, renderHook } from '@testing-library/react';
 import { diffFrames } from './_helpers/replayHook';
 
@@ -56,6 +57,9 @@ vi.mock('@/stores/authStore', () => ({
 vi.mock('@/config/firebase', () => ({ db: {} }));
 
 vi.mock('firebase/firestore', () => ({
+  // pastVisibilityDays config read (issue #250): resolve empty -> default.
+  getDoc: vi.fn().mockResolvedValue({ exists: () => false, data: () => undefined }),
+  doc: (_db: unknown, ...path: string[]) => ({ __doc: path.join('/') }),
   collection: (_db: unknown, name: string) => ({ __collection: name }),
   query: (c: unknown, ...rest: unknown[]) => ({ __query: { c, rest } }),
   where: (field: string, op: string, val: unknown) => ({
@@ -121,6 +125,7 @@ beforeEach(() => {
   authState.userDoc = null;
   snapState.cb = null;
   snapState.unsubCount = 0;
+  __resetAdminConfigClientCacheForTests();
 });
 
 afterEach(() => {

@@ -3,15 +3,21 @@ import { z } from 'zod';
 /** Matches a calendar date "YYYY-MM-DD" (shape only; value sanity via refines). */
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
-/** Maximum span a single availability request may cover. */
-const MAX_RANGE_DAYS = 28;
+/**
+ * ABSOLUTE ceiling on the span a single availability request may cover.
+ * The OPERATIONAL limit is admin-configurable (availabilityMaxRangeDays,
+ * issue #250) and enforced dynamically in getTutorAvailability -- zod
+ * schemas are built at module load, so a mutable config value must not be
+ * captured here. This ceiling equals the config key's max bound.
+ */
+const MAX_RANGE_DAYS = 90;
 
 /**
  * Whole-day difference between two "YYYY-MM-DD" strings. Uses Date.UTC (never a
  * local-zone parse) so the count is exact and DST-immune — this is a plain
  * subtraction of two UTC midnights, not calendar day-stepping.
  */
-function rangeDays(startDate: string, endDate: string): number {
+export function rangeDays(startDate: string, endDate: string): number {
   const [sy, sm, sd] = startDate.split('-').map(Number);
   const [ey, em, ed] = endDate.split('-').map(Number);
   const startMs = Date.UTC(sy, sm - 1, sd);

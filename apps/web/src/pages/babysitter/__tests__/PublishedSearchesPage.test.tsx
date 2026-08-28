@@ -281,7 +281,11 @@ describe('PublishedSearchesPage (sit board)', () => {
     // a typo in the reason string would silently fall through to the generic
     // copy (PR #232 review).
     h.callable.mockRejectedValueOnce(
-      Object.assign(new Error('failed-precondition'), { details: { reason: 'decline_cooldown' } }),
+      Object.assign(new Error('failed-precondition'), {
+        // cooldownDays rides in details (issue #250) so the copy states the
+        // CONFIGURED window; a non-default value pins the interpolation.
+        details: { reason: 'decline_cooldown', cooldownDays: 3 },
+      }),
     );
     renderPage();
     push([boardDoc('ps-1', SEEN_AT + 1)]);
@@ -289,13 +293,15 @@ describe('PublishedSearchesPage (sit board)', () => {
     fireEvent.click(screen.getByText('Contact family'));
     fireEvent.click(screen.getByText('Send request'));
     await waitFor(() =>
-      expect(screen.getByText(/declined your last request/)).toBeInTheDocument(),
+      expect(screen.getByText(/declined your last request .* in 3 days/)).toBeInTheDocument(),
     );
   });
 
   it('shows the daily-cap copy when the refusal carries reason board_contact_cap', async () => {
     h.callable.mockRejectedValueOnce(
-      Object.assign(new Error('resource-exhausted'), { details: { reason: 'board_contact_cap' } }),
+      Object.assign(new Error('resource-exhausted'), {
+        details: { reason: 'board_contact_cap', windowHours: 72 },
+      }),
     );
     renderPage();
     push([boardDoc('ps-1', SEEN_AT + 1)]);
@@ -303,7 +309,7 @@ describe('PublishedSearchesPage (sit board)', () => {
     fireEvent.click(screen.getByText('Contact family'));
     fireEvent.click(screen.getByText('Send request'));
     await waitFor(() =>
-      expect(screen.getByText(/more requests tomorrow/)).toBeInTheDocument(),
+      expect(screen.getByText(/in the last 72 hours/)).toBeInTheDocument(),
     );
   });
 

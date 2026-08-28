@@ -1,9 +1,9 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { getConfigValue } from '../config/adminConfig.js';
 import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { FieldValue } from 'firebase-admin/firestore';
 
-const MAX_ATTEMPTS = 5;
 
 export const verifyCode = onCall(
   { region: 'europe-west1', cors: getCorsOrigin() },
@@ -29,7 +29,8 @@ export const verifyCode = onCall(
 
     // Rate limiting: check attempt count
     const attempts = codeData.attempts || 0;
-    if (attempts >= MAX_ATTEMPTS) {
+    const maxAttempts = await getConfigValue('verifyCodeMaxAttempts');
+    if (attempts >= maxAttempts) {
       throw new HttpsError(
         'resource-exhausted',
         'Too many failed attempts. Please request a new verification code.'

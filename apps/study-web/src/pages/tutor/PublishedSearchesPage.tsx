@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { collection, doc, onSnapshot, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '@/config/firebase';
+import { ADMIN_CONFIG_DEFS } from '@ejm/shared-core';
 import { useAuthStore } from '@/stores/authStore';
 import { Badge, Button, Card, Dialog, Textarea, TopNav, EmptyState, SearchIcon } from '@ejm/shared-ui';
 import type { BoardSearch } from '@/components/published/usePublishedSearches';
@@ -75,6 +76,10 @@ export function PublishedSearchesPage() {
   const [sending, setSending] = useState(false);
   // false = no error; otherwise the i18n key under tutor.publishedBoard.
   const [sendError, setSendError] = useState<false | string>(false);
+  // count drives i18next pluralization (_one/_other) in the reason copy.
+  const [sendErrorVals, setSendErrorVals] = useState<{ count: number }>({
+    count: ADMIN_CONFIG_DEFS.boardContactWindowHours.default,
+  });
 
   // Which searches this tutor has already answered. Equality-only query on
   // the tutor's own requests (rules: tutorUserId == uid), filtered in code so
@@ -113,12 +118,24 @@ export function PublishedSearchesPage() {
     } catch (err) {
       // The server's guards are keyed by the (tutor, FAMILY) pair while
       // `contactedIds` is keyed by search, and a family may keep three live
-      // searches on the board (PUBLISHED_SEARCH_MAX_ACTIVE) — so a card can
+      // searches on the board (publishedSearchMaxActive) — so a card can
       // legitimately still show its CTA while the pair already has an open
       // request. Each failure a tutor can act on gets its own copy; only a
       // genuinely gone search falls through to the generic line.
-      const e = err as { code?: string; details?: { reason?: string } };
+      const e = err as {
+        code?: string;
+        details?: { reason?: string; cooldownDays?: number; windowHours?: number };
+      };
       const reason = e?.details?.reason ?? '';
+      // The cooldown/cap windows are admin-configurable (issue #250): the
+      // server sends the live values in details so the copy can state them;
+      // the table defaults cover a response from an older deploy.
+      setSendErrorVals({
+        count:
+          reason === 'decline_cooldown'
+            ? (e?.details?.cooldownDays ?? ADMIN_CONFIG_DEFS.declineCooldownDays.default)
+            : (e?.details?.windowHours ?? ADMIN_CONFIG_DEFS.boardContactWindowHours.default),
+      });
       setSendError(
         CONTACT_ERROR_KEY[reason]
           // A pre-reason already-exists (older deploy) is still a duplicate.
@@ -193,7 +210,7 @@ export function PublishedSearchesPage() {
           maxLength={1000}
         />
         {sendError && (
-          <p className="mt-2 text-sm text-brand-600">{t(`tutor.publishedBoard.${sendError}`)}</p>
+          <p className="mt-2 text-sm text-brand-600">{t(`tutor.publishedBoard.${sendError}`, sendErrorVals)}</p>
         )}
         <div className="mt-4 flex gap-2">
           <Button onClick={handleContact} disabled={sending} className="flex-1">

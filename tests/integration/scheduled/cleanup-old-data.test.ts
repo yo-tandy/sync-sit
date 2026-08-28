@@ -210,6 +210,42 @@ describe('runCleanupOldData', () => {
     expect(remaining.docs[0].id).toBe(recentRef.id);
   });
 
+  it('a raised pastVisibilityDays DEFERS redaction (issue #250 invariant: notes outlive their visible card, never the reverse)', async () => {
+    const db = getDb();
+    const now = new Date();
+    const daysAgo = (n: number) => {
+      const d = new Date(now.getTime() - n * 86400_000);
+      return d.toISOString().slice(0, 10);
+    };
+    // Configure a 30-day window: a 10-day-old note (visible on a 30-day
+    // dashboard, gone from a 7-day one) must SURVIVE; a 40-day-old one is
+    // out of reach either way and is redacted.
+    await db.doc('adminConfig/values').set({ pastVisibilityDays: 30 });
+    await db.collection('appointments').doc('cfg-note-visible').set({
+      appointmentId: 'cfg-note-visible', status: 'confirmed', type: 'one_time',
+      date: daysAgo(10), startTime: '18:00', endTime: '20:00',
+      familyId: 'f-cfg', babysitterUserId: 'b-cfg',
+      preAppointmentNote: 'Door code 1111', createdAt: now, updatedAt: now,
+    });
+    await db.collection('appointments').doc('cfg-note-aged').set({
+      appointmentId: 'cfg-note-aged', status: 'confirmed', type: 'one_time',
+      date: daysAgo(40), startTime: '18:00', endTime: '20:00',
+      familyId: 'f-cfg', babysitterUserId: 'b-cfg',
+      preAppointmentNote: 'Door code 2222', createdAt: now, updatedAt: now,
+    });
+    try {
+      await runCleanupOldData(db, now);
+      const visible = (await db.collection('appointments').doc('cfg-note-visible').get()).data()!;
+      const aged = (await db.collection('appointments').doc('cfg-note-aged').get()).data()!;
+      expect(visible.preAppointmentNote).toBe('Door code 1111');
+      expect('preAppointmentNote' in aged).toBe(false);
+    } finally {
+      await db.doc('adminConfig/values').delete();
+      await db.collection('appointments').doc('cfg-note-visible').delete();
+      await db.collection('appointments').doc('cfg-note-aged').delete();
+    }
+  });
+
   it('redacts appointment notes once the appointment leaves the UI window (issue #238)', async () => {
     const db = getDb();
     const now = new Date();

@@ -1,4 +1,5 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { getConfigValue } from '@ejm/shared-functions/config/adminConfig.js';
 import type { Transaction, DocumentReference } from 'firebase-admin/firestore';
 import { db } from '@ejm/shared-functions/config/firebase.js';
 import { getCorsOrigin } from '@ejm/shared-functions/config/cors.js';
@@ -32,7 +33,6 @@ import {
   type RestoreResult,
 } from './sessionOverride.js';
 
-const NOTICE_HOURS = 24;
 
 /** Apply a restoration result to an override ref inside the transaction (cancelSession idiom). */
 function applyRestore(tx: Transaction, ref: DocumentReference, result: RestoreResult): void {
@@ -353,10 +353,11 @@ export const modifySession = onCall(
           );
         }
         const sessionStart = parisWallTimeToUtc(newDate, newStart);
-        if (sessionStart.getTime() < now.getTime() + NOTICE_HOURS * 60 * 60 * 1000) {
+        const bookingNoticeHours = await getConfigValue('bookingNoticeHours');
+        if (sessionStart.getTime() < now.getTime() + bookingNoticeHours * 60 * 60 * 1000) {
           throw new HttpsError(
             'failed-precondition',
-            'The new time is too close — sessions need 24 hours notice',
+            `The new time is too close — sessions need ${bookingNoticeHours} hours notice`,
             { reason: 'time_unavailable' },
           );
         }
@@ -497,7 +498,7 @@ export const modifySession = onCall(
           paddingMin: paddingMinutes,
         },
         parisWallClockPosition(now),
-        NOTICE_HOURS,
+        (await getConfigValue('bookingNoticeHours')),
       );
       for (let i = startIdx; i < endIdx; i++) {
         if (!grid[i]) {

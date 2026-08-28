@@ -49,6 +49,14 @@ vi.mock('@ejm/sit-core', () => ({
     userDoc?.profiles?.parent ?? null,
 }));
 vi.mock('@ejm/shared-ui', () => ({
+  // The app's adminConfigClient wrapper instantiates this at import time
+  // (issue #250) -- stub returns the caller's fallback (code default).
+  createAdminConfigReader: () => ({
+    getClientConfigValue: (_k: string, fallback: number) => Promise.resolve(fallback),
+    // The hook lives on the factory too (round-7 consolidation).
+    useClientConfigValue: (_k: string, fallback: number) => fallback,
+    __resetAdminConfigClientCacheForTests: () => {},
+  }),
   enrollmentErrorReason: () => null,
 }));
 vi.mock('@/components/ui', () => ({

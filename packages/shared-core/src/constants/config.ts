@@ -1,3 +1,5 @@
+import { ADMIN_CONFIG_DEFS } from './adminConfigDefs.js';
+
 /** EJM email domain */
 export const EJM_DOMAIN = 'ejm.org';
 
@@ -6,9 +8,6 @@ export const MIN_BABYSITTER_AGE = 15;
 
 /** Max photo upload size in bytes (5 MB) */
 export const MAX_PHOTO_SIZE = 5 * 1024 * 1024;
-
-/** Invite link expiry in milliseconds (1 hour) */
-export const INVITE_LINK_EXPIRY_MS = 60 * 60 * 1000;
 
 /**
  * Current consent-document versions. The guardian callables require callers
@@ -23,16 +22,13 @@ export const PRIVACY_POLICY_VERSION = '1.0';
 export const SUPERVISION_AGREEMENT_VERSION = '1.0';
 
 /** Kid-invite validity window in days (resend resets the clock) */
-export const KID_INVITE_VALIDITY_DAYS = 7;
+export const KID_INVITE_VALIDITY_DAYS = ADMIN_CONFIG_DEFS.kidInviteValidityDays.default;
 
 /** Verification code length */
 export const VERIFICATION_CODE_LENGTH = 6;
 
-/** Verification code cooldown in seconds */
-export const VERIFICATION_CODE_COOLDOWN_S = 60;
-
 /** Past/rejected appointment visibility in days */
-export const PAST_VISIBILITY_DAYS = 7;
+export const PAST_VISIBILITY_DAYS = ADMIN_CONFIG_DEFS.pastVisibilityDays.default;
 
 /** Data retention before soft delete in days */
 export const RETENTION_DAYS = 30;

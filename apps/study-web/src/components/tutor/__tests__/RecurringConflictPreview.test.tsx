@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { __resetAdminConfigClientCacheForTests } from '@/lib/adminConfigClient';
 import { screen } from '@testing-library/react';
 import { renderWithProviders } from '@/__tests__/test-utils';
 import { expandRecurringDates } from '@ejm/study-core';
@@ -7,6 +8,7 @@ import { expandRecurringDates } from '@ejm/study-core';
 // weekly grid, the per-date override docs, and their confirmed one_time sessions,
 // then classifies each candidate date available / conflict / holiday.
 const h = vi.hoisted(() => ({
+  adminConfig: {} as Record<string, number>,
   uid: 't1' as string | null,
   // schedules/{uid} weekly grid.
   weekly: {} as Record<string, boolean[]>,
@@ -87,10 +89,17 @@ function reset() {
   h.holidaysLoading = false;
   h.where.mockClear();
   h.getDoc.mockReset();
+  h.adminConfig = {};
+  __resetAdminConfigClientCacheForTests();
   h.getDoc.mockImplementation((ref: { path: string }) => {
     const path = ref.path;
     if (path === 'schedules/t1') {
       return Promise.resolve({ exists: () => true, data: () => ({ weekly: h.weekly }) });
+    }
+    if (path === 'adminConfig/client') {
+      // The preview's config reads (issue #250) -- default empty, tests
+      // override h.adminConfig to model a configured value.
+      return Promise.resolve({ exists: () => true, data: () => h.adminConfig });
     }
     // schedules/t1/overrides/{date}
     const date = path.split('/')[3];
@@ -149,6 +158,15 @@ describe('RecurringConflictPreview', () => {
     expect(screen.getByText(/school holiday/i)).toBeInTheDocument();
     // Disclaimer — the callable is authoritative, conflicts skipped on accept.
     expect(screen.getByText(/skipped automatically/i)).toBeInTheDocument();
+  });
+
+  it('reads the CONFIGURED horizon: 2 weeks yields "2 of 2", not the default 8 (issue #250)', async () => {
+    h.adminConfig = { recurringHorizonWeeks: 2 };
+    renderWithProviders(<RecurringConflictPreview session={recurringSession()} />);
+    // Weekly slot, 2-week horizon -> 2 candidates, both available -- the
+    // preview predicts exactly what respondToSession will materialize
+    // under the same key.
+    expect(await screen.findByText(/2 of 2/)).toBeInTheDocument();
   });
 
   it('truncates the candidate window at the series end date', async () => {

@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
-import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, type QuerySnapshot } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { PAST_VISIBILITY_DAYS } from '@ejm/sit-core';
+import { getClientConfigValue } from '@/lib/adminConfigClient';
+import { ADMIN_CONFIG_DEFS } from '@ejm/shared-core';
 import type { AppointmentDoc } from '@ejm/sit-core';
 import { getParentProfile } from '@ejm/sit-core';
 
@@ -27,10 +29,35 @@ export function useFamilyAppointments() {
       where('familyId', '==', familyId)
     );
 
+    // Admin-configurable since issue #250, applied WITHOUT gating first
+    // paint (round-2 review: resolve-before-subscribe added a serial round
+    // trip in front of the cache-served snapshot): subscribe immediately
+    // with the code default, remember the latest snapshot, and re-bucket
+    // it the moment the configured value arrives -- which also covers the
+    // quiet dashboard whose only snapshot fired before the config resolved
+    // (the round-1 defect).
+    let cancelled = false;
+    let pastVisibilityDays: number = PAST_VISIBILITY_DAYS;
+    let latestSnap: QuerySnapshot | null = null;
+    void getClientConfigValue(
+      'pastVisibilityDays',
+      PAST_VISIBILITY_DAYS,
+      ADMIN_CONFIG_DEFS.pastVisibilityDays,
+    )
+      .then((v) => {
+        if (cancelled || v === pastVisibilityDays) return;
+        pastVisibilityDays = v;
+        if (latestSnap) bucket(latestSnap);
+      })
+      .catch(() => {});
     const unsub = onSnapshot(q, (snap) => {
+      latestSnap = snap;
+      bucket(snap);
+    });
+    function bucket(snap: QuerySnapshot) {
       const now = new Date();
       const cutoff = new Date();
-      cutoff.setDate(cutoff.getDate() - PAST_VISIBILITY_DAYS);
+      cutoff.setDate(cutoff.getDate() - pastVisibilityDays);
 
       const _pending: AppointmentDoc[] = [];
       const _confirmed: AppointmentDoc[] = [];
@@ -69,9 +96,12 @@ export function useFamilyAppointments() {
       setPastRecent(_past);
       setRejectedRecent(_rejected);
       setLoading(false);
-    });
+    }
 
-    return unsub;
+    return () => {
+      cancelled = true;
+      unsub();
+    };
   }, [familyId]);
 
   return { pending, confirmed, pastRecent, rejectedRecent, loading };

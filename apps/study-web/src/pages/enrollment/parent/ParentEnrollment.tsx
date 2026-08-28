@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import { useClientConfigValue } from '@/lib/adminConfigClient';
+import { ADMIN_CONFIG_DEFS } from '@ejm/shared-core';
 import { useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { httpsCallable } from 'firebase/functions';
@@ -59,6 +61,12 @@ export function ParentEnrollment() {
   // yet (e.g. a signed-in study user adding the family role). Credentials are
   // already established, so the flow starts at the consent-only password step.
   const isAddProfile = !!firebaseUser && !getParentProfile(userDoc);
+
+  const resendCooldownS = useClientConfigValue(
+    'verificationCodeCooldownS',
+    ADMIN_CONFIG_DEFS.verificationCodeCooldownS.default,
+    ADMIN_CONFIG_DEFS.verificationCodeCooldownS,
+  );
 
   const [step, setStep] = useState(0);
   const [email, setEmail] = useState('');
@@ -256,6 +264,7 @@ export function ParentEnrollment() {
       case 1:
         return (
           <StepVerify
+            resendCooldownS={resendCooldownS}
             ejemEmail={email}
             onVerify={async (code) => {
               const verifyFn = httpsCallable(functions, 'verifyCode');

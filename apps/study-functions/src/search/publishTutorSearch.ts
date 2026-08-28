@@ -1,12 +1,11 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { getConfigValue } from '@ejm/shared-functions/config/adminConfig.js';
 import { db } from '@ejm/shared-functions/config/firebase.js';
 import { getCorsOrigin } from '@ejm/shared-functions/config/cors.js';
 import { writeUserActivity } from '@ejm/shared-functions/admin/writeAuditLog.js';
 import {
   getParentProfile,
   resolveAreaLabel,
-  PUBLISHED_SEARCH_MAX_ACTIVE,
-  PUBLISHED_SEARCH_TTL_DAYS,
 } from '@ejm/shared-core';
 import type { User } from '@ejm/shared-core';
 import { publishTutorSearchSchema } from '../validation/publishSearch.js';
@@ -56,9 +55,9 @@ export const publishTutorSearch = onCall(
     }
 
     const now = new Date();
-    const expiresAt = new Date(now.getTime() + PUBLISHED_SEARCH_TTL_DAYS * 24 * 60 * 60 * 1000);
+    const expiresAt = new Date(now.getTime() + (await getConfigValue('publishedSearchTtlDays')) * 24 * 60 * 60 * 1000);
 
-    // ── Cap: at most PUBLISHED_SEARCH_MAX_ACTIVE active docs per family per
+    // ── Cap: at most publishedSearchMaxActive (admin-configurable) active docs per family per
     // app; expiry filtered in code so expired-but-unswept docs don't count. ──
     const activeSnap = await db.collection('publishedSearches')
       .where('familyId', '==', familyId)
@@ -69,7 +68,8 @@ export const publishTutorSearch = onCall(
       const expMs = exp?.toMillis ? exp.toMillis() : exp?.toDate ? exp.toDate().getTime() : 0;
       return expMs > now.getTime();
     }).length;
-    if (activeCount >= PUBLISHED_SEARCH_MAX_ACTIVE) {
+    const maxActive = await getConfigValue('publishedSearchMaxActive');
+    if (activeCount >= maxActive) {
       throw new HttpsError('resource-exhausted', 'Too many active published searches for this family');
     }
 

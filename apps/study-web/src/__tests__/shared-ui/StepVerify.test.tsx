@@ -1,3 +1,4 @@
+import { StrictMode } from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { I18nextProvider } from 'react-i18next';
@@ -95,5 +96,80 @@ describe('StepVerify resend error surfacing (issue #155)', () => {
     expect(screen.queryByText(i18n.t('enrollment.sendCapReached'))).toBeNull();
     // Cooldown reset to 0 — the resend button is immediately available.
     expect(screen.getByRole('button', { name: i18n.t('auth.resendCode') })).toBeInTheDocument();
+  });
+});
+
+// Issue #250 round 5: the countdown itself must follow the resendCooldownS
+// prop -- start value, post-resend re-arm, and the mount race where the
+// configured value resolves only after useState captured the default (the
+// sync effect extends, never shortens, a running countdown).
+describe('StepVerify configured resend cooldown (issue #250)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  // StrictMode is deliberate (round-6 review): both apps render under it,
+  // and it double-invokes state updaters -- an impure updater dropped the
+  // mid-countdown extension only under StrictMode, which plain renders miss.
+  function renderWithCooldown(resendCooldownS?: number) {
+    return render(
+      <StrictMode>
+        <I18nextProvider i18n={i18n}>
+          <MemoryRouter>
+            <StepVerify
+              ejemEmail="someone28@ejm.org"
+              onVerify={async () => {}}
+              onResend={async () => {}}
+              error={null}
+              resendCooldownS={resendCooldownS}
+            />
+          </MemoryRouter>
+        </I18nextProvider>
+      </StrictMode>,
+    );
+  }
+
+  it('starts the countdown at the configured value, not the code default', () => {
+    renderWithCooldown(600);
+    expect(screen.getByText(i18n.t('auth.resendIn', { seconds: 600 }))).toBeInTheDocument();
+  });
+
+  it('extends a running countdown when the configured value arrives after mount', async () => {
+    const view = renderWithCooldown(undefined); // config unresolved: default 60
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10_000);
+    });
+    expect(screen.getByText(i18n.t('auth.resendIn', { seconds: 50 }))).toBeInTheDocument();
+    // The config read resolves to 600 mid-countdown: 10s elapsed, 590 remain.
+    view.rerender(
+      <StrictMode>
+        <I18nextProvider i18n={i18n}>
+          <MemoryRouter>
+            <StepVerify
+              ejemEmail="someone28@ejm.org"
+              onVerify={async () => {}}
+              onResend={async () => {}}
+              error={null}
+              resendCooldownS={600}
+            />
+          </MemoryRouter>
+        </I18nextProvider>
+      </StrictMode>,
+    );
+    expect(screen.getByText(i18n.t('auth.resendIn', { seconds: 590 }))).toBeInTheDocument();
+  });
+
+  it('re-arms the post-resend cooldown at the configured value', async () => {
+    renderWithCooldown(90);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(91_000);
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: i18n.t('auth.resendCode') }));
+    });
+    expect(screen.getByText(i18n.t('auth.resendIn', { seconds: 90 }))).toBeInTheDocument();
   });
 });

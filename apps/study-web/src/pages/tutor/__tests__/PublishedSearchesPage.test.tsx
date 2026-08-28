@@ -278,14 +278,16 @@ describe('PublishedSearchesPage (study board)', () => {
     // (issue #233).
     h.callable.mockRejectedValue({
       code: 'functions/resource-exhausted',
-      details: { reason: 'board_contact_cap' },
+      // windowHours rides in details (issue #250) so the copy states the
+      // CONFIGURED window; a non-default value pins the interpolation.
+      details: { reason: 'board_contact_cap', windowHours: 72 },
     });
     renderWithProviders(<PublishedSearchesPage />);
     push([boardDoc('a', SEEN_AT + 1)]);
     fireEvent.click(await screen.findByRole('button', { name: 'Contact family' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Send request' }));
 
-    expect(await screen.findByText(/send more requests tomorrow/i)).toBeInTheDocument();
+    expect(await screen.findByText(/in the last 72 hours/i)).toBeInTheDocument();
   });
 
   it('a DECLINED prior request leaves the CTA available (the server owns the cooldown)', async () => {

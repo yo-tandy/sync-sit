@@ -1,4 +1,5 @@
 import { onSchedule } from 'firebase-functions/v2/scheduler';
+import { resolveConfigValue } from '@ejm/shared-functions/config/adminConfig.js';
 import { FieldValue } from 'firebase-admin/firestore';
 import type { Firestore } from 'firebase-admin/firestore';
 import { db } from '../config/firebase.js';
@@ -33,11 +34,13 @@ export interface CleanupStats {
  * - Published searches: immediate (past expiresAt — the server-computed
  *   min(publish + 7d, babysitting date) lifetime; issue #207)
  * - Appointment notes (issue #238): redacted once the appointment leaves
- *   every UI surface (PAST_VISIBILITY_DAYS = 7). The notes solicit door
- *   codes and a child's allergies, and setAppointmentNote guarantees the
- *   author an erasure path — but the remove affordance lives on cards the
- *   dashboards stop rendering after 7 days, so past that point the system
- *   erases for them. Confirmed recurring arrangements (no date) stay
+ *   every UI surface (the configured pastVisibilityDays window, default
+ *   7 days -- issue #250; both the dashboards and this redaction read the
+ *   same key, so the remove affordance stays reachable for the note's
+ *   whole visible life). The notes solicit door codes and a child's
+ *   allergies, and setAppointmentNote guarantees the author an erasure
+ *   path — but the remove affordance lives on cards the dashboards stop
+ *   rendering past that window, so beyond it the system erases for them. Confirmed recurring arrangements (no date) stay
  *   visible, so their notes are never redacted here. DELIBERATE exception:
  *   notes on PENDING docs are retained indefinitely -- pending cards render
  *   forever, so the author permanently keeps the remove affordance instead
@@ -224,9 +227,13 @@ export async function runCleanupOldData(
   }
 
   // 7b. Redact appointment notes once the appointment has left every UI
-  // surface (issue #238). Both dashboards bound their lists by
-  // PAST_VISIBILITY_DAYS = 7 (past confirmed by `date`, cancelled/rejected
-  // by `updatedAt`), and sit has no per-appointment route beyond them — so
+  // surface (issue #238). Both dashboards bound their lists by the
+  // admin-configurable pastVisibilityDays (issue #250; past confirmed by
+  // `date`, cancelled/rejected by `updatedAt`), so the redaction window
+  // READS THE SAME KEY -- raising the dashboard window automatically
+  // defers redaction, keeping the remove affordance reachable for the
+  // note's whole visible life. Sit has no per-appointment route beyond
+  // the dashboards — so
   // once a card ages out, the note's author can no longer reach the remove
   // affordance that setAppointmentNote's erasure carve-out feeds. The cron
   // erases for them: door codes and allergy details are operational data
@@ -234,8 +241,16 @@ export async function runCleanupOldData(
   // note field (docs missing the field never match), window filtering in
   // memory; the doc itself is kept.
   {
-    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-    const sevenDaysAgoStr = sevenDaysAgo.toISOString().split('T')[0];
+    // Read through the INJECTED handle (this function's testability
+    // contract) and resolve bounds/fallback with the shared pure helper --
+    // getConfigValue would reach for the module-level db (round-3 review).
+    const configSnap = await firestoreDb.doc('adminConfig/values').get().catch(() => null);
+    const visibilityDays = resolveConfigValue(
+      configSnap?.data()?.pastVisibilityDays,
+      'pastVisibilityDays',
+    );
+    const redactionCutoff = new Date(now.getTime() - visibilityDays * 24 * 60 * 60 * 1000);
+    const redactionCutoffStr = redactionCutoff.toISOString().split('T')[0];
     const outOfReach = (data: FirebaseFirestore.DocumentData): boolean => {
       // pending: never redacted -- a DELIBERATE, unbounded retention
       // exception. Pending cards render forever, so the author permanently
@@ -249,7 +264,7 @@ export async function runCleanupOldData(
         // date's UTC midnight, so a card dated exactly seven days ago is
         // already hidden by the time the cron fires -- a strict < would
         // retain its note one extra day past reachability (round-8 review).
-        return typeof data.date === 'string' && data.date !== '' && data.date <= sevenDaysAgoStr;
+        return typeof data.date === 'string' && data.date !== '' && data.date <= redactionCutoffStr;
       }
       if (data.status === 'cancelled' || data.status === 'rejected') {
         // Absent/malformed updatedAt counts as OUT of reach: the dashboards
@@ -257,7 +272,7 @@ export async function runCleanupOldData(
         // the card immediately -- so the cron must erase what nobody can
         // reach, not fail open and retain it (round-7 review).
         const updatedAt = data.updatedAt?.toDate?.() ?? new Date(0);
-        return updatedAt < sevenDaysAgo;
+        return updatedAt < redactionCutoff;
       }
       // Anything else -- absent or malformed status -- is OUT of reach:
       // both dashboards bucket on the closed four-value status set and

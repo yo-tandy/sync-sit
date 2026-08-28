@@ -1,4 +1,5 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { getConfigValue } from '@ejm/shared-functions/config/adminConfig.js';
 import { db } from '@ejm/shared-functions/config/firebase.js';
 import { getCorsOrigin } from '@ejm/shared-functions/config/cors.js';
 import { writeUserActivity } from '@ejm/shared-functions/admin/writeAuditLog.js';
@@ -35,12 +36,6 @@ import {
 import { paddedBlock, overlaps, buildMergedOverride } from './sessionOverride.js';
 import { generateInstances, type PerDateClaimInputs } from './generateInstances.js';
 import { dropWithinNotice } from './recurringWindow.js';
-
-/** How many weeks of occurrences a recurring confirm materializes up front. */
-const RECURRING_HORIZON_WEEKS = 8;
-
-/** Notice window: a session cannot be confirmed within this many hours of "now". */
-const NOTICE_HOURS = 24;
 
 /**
  * respondToSession — the tutor confirms or declines a pending session request.
@@ -197,10 +192,11 @@ export const respondToSession = onCall(
         // first-occurrence notice logic. (A Task-1 review finding about
         // hour-granularity on this date-anchored window, if it lands, fixes both.)
         const fromDate = parisDateString(
-          new Date(now.getTime() + NOTICE_HOURS * 60 * 60 * 1000),
+          new Date(now.getTime() + (await getConfigValue('bookingNoticeHours')) * 60 * 60 * 1000),
         );
         let horizonEnd = fromDate;
-        for (let i = 0; i < RECURRING_HORIZON_WEEKS * 7; i++) horizonEnd = incrementDate(horizonEnd);
+        const horizonWeeks = await getConfigValue('recurringHorizonWeeks');
+        for (let i = 0; i < horizonWeeks * 7; i++) horizonEnd = incrementDate(horizonEnd);
         const rangeEnd = endDate !== undefined && endDate < horizonEnd ? endDate : horizonEnd;
 
         // School-holiday periods across the window — drives schoolWeeksOnly AND
@@ -220,7 +216,7 @@ export const respondToSession = onCall(
           const rawCandidates = expandRecurringDates(
             slot,
             fromDate,
-            RECURRING_HORIZON_WEEKS,
+            horizonWeeks,
             endDate,
             schoolWeeksOnly,
             holidayPeriods,
@@ -228,7 +224,7 @@ export const respondToSession = onCall(
           // Drop occurrences inside the precise 24h notice window ENTIRELY (no
           // instance), so the date-granular anchor never yields a spurious
           // conflict_skip for the first occurrence — it simply rolls to next week.
-          const candidates = dropWithinNotice(rawCandidates, slot.startTime, now, NOTICE_HOURS);
+          const candidates = dropWithinNotice(rawCandidates, slot.startTime, now, (await getConfigValue('bookingNoticeHours')));
           recurringPlan = { slot, candidates };
         }
       } else {
@@ -431,7 +427,7 @@ export const respondToSession = onCall(
 
       // Re-check the 24h notice — a pending request can go stale.
       const sessionStart = parisWallTimeToUtc(date, startTime);
-      if (sessionStart.getTime() < now.getTime() + NOTICE_HOURS * 60 * 60 * 1000) {
+      if (sessionStart.getTime() < now.getTime() + (await getConfigValue('bookingNoticeHours')) * 60 * 60 * 1000) {
         throw new HttpsError(
           'failed-precondition',
           'This request is too close to the session time',
@@ -490,7 +486,7 @@ export const respondToSession = onCall(
           paddingMin: paddingMinutes,
         },
         parisWallClockPosition(now),
-        NOTICE_HOURS,
+        (await getConfigValue('bookingNoticeHours')),
       );
 
       // The raw session slots must all still be free.

@@ -1,5 +1,5 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
-import { KID_INVITE_VALIDITY_DAYS } from '@ejm/shared-core';
+import { getConfigValue } from '../config/adminConfig.js';
 import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
@@ -74,7 +74,7 @@ export const resendKidInvite = onCall(
     const rawToken = newInviteToken();
     await ref.update({
       tokenHash: hashInviteToken(rawToken),
-      expiresAt: new Date(now.getTime() + KID_INVITE_VALIDITY_DAYS * 86400_000),
+      expiresAt: new Date(now.getTime() + (await getConfigValue('kidInviteValidityDays')) * 86400_000),
       resentAt: now,
     });
 

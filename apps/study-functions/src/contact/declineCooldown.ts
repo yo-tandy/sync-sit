@@ -1,6 +1,7 @@
 /**
  * The decline cooldown shared by both directions of study contact
- * (issue #207 PR4). A "no" silences the other side for a week: without it the
+ * (issue #207 PR4). A "no" silences the other side for the configured
+ * declineCooldownDays window (issue #250; default a week): without it the
  * refused party can re-mint a request on every tap, and each one notifies the
  * recipient by email, push and in-app.
  *
@@ -11,7 +12,6 @@
  * initiator whose declines should silence the caller keeps the two callables
  * from drifting apart on it.
  */
-export const DECLINE_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
 
 // Reads every timestamp shape a decline doc could plausibly carry, not just
 // live Timestamps. The extra shapes -- epoch number, parseable string, raw

@@ -1,4 +1,5 @@
 import { onSchedule } from 'firebase-functions/v2/scheduler';
+import { getConfigValue } from '@ejm/shared-functions/config/adminConfig.js';
 import type { Firestore } from 'firebase-admin/firestore';
 import { db } from '@ejm/shared-functions/config/firebase.js';
 import { notifyAllParents } from '@ejm/shared-functions/config/notifyParents.js';
@@ -24,9 +25,6 @@ import {
 import { generateInstances, type PerDateClaimInputs } from '../sessions/generateInstances.js';
 import { dropWithinNotice } from '../sessions/recurringWindow.js';
 
-/** The rolling horizon extendRecurring maintains ahead of "now". */
-const HORIZON_WEEKS = 8;
-
 export interface ExtendRecurringStats {
   seriesProcessed: number;
   instancesScheduled: number;
@@ -35,11 +33,12 @@ export interface ExtendRecurringStats {
 }
 
 /**
- * Extend every confirmed recurring series so it always has ~8 weeks of instances
- * ahead. As time passes the front occurrences fall into the past and this cron
+ * Extend every confirmed recurring series so it always has the configured
+ * recurringHorizonWeeks (issue #250; default 8 weeks) of instances ahead.
+ * As time passes the front occurrences fall into the past and this cron
  * materializes new ones at the back — a rolling window.
  *
- * IDEMPOTENT and SELF-HEALING: each run regenerates the FULL 8-week horizon and
+ * IDEMPOTENT and SELF-HEALING: each run regenerates the FULL horizon and
  * creates instances create-if-absent (date-keyed IDs), so a re-run creates
  * nothing, and a missed run is caught up by the next. Every series runs in its
  * OWN transaction wrapped in try/catch — a single poisoned doc can never block
@@ -107,7 +106,12 @@ async function extendOne(
   // PR 4's completion cron — keeping this cron purely additive.
   const fromDate = parisDateString(now);
   let horizonEnd = fromDate;
-  for (let i = 0; i < HORIZON_WEEKS * 7; i++) horizonEnd = incrementDate(horizonEnd);
+  const horizonWeeks = await getConfigValue('recurringHorizonWeeks');
+  // The recurring notice window follows the same configured value the
+  // booking/confirm paths use (issue #250 review round 1 -- this site was
+  // the one enforcing the hardcoded 24h while its siblings were config-fed).
+  const noticeHours = await getConfigValue('bookingNoticeHours');
+  for (let i = 0; i < horizonWeeks * 7; i++) horizonEnd = incrementDate(horizonEnd);
   const rangeEnd = endDate !== undefined && endDate < horizonEnd ? endDate : horizonEnd;
 
   // Static availability config (per-tutor) + school-holiday periods across range.
@@ -132,9 +136,10 @@ async function extendOne(
   }
 
   const candidates = dropWithinNotice(
-    expandRecurringDates(slot, fromDate, HORIZON_WEEKS, endDate, schoolWeeksOnly, holidayPeriods),
+    expandRecurringDates(slot, fromDate, horizonWeeks, endDate, schoolWeeksOnly, holidayPeriods),
     slot.startTime,
     now,
+    noticeHours,
   );
   if (candidates.length === 0) {
     return { scheduledDates: [], skippedDates: [] };
@@ -275,7 +280,7 @@ async function extendOne(
 export const extendRecurring = onSchedule(
   {
     // Weekly, Monday 04:00 Europe/Paris — a quiet hour, well before the day's
-    // booking traffic. The horizon is 8 weeks so a weekly cadence keeps ~7 weeks
+    // booking traffic. At the default 8-week horizon a weekly cadence keeps ~7 weeks
     // of slack even if a run is missed.
     schedule: '0 4 * * 1',
     region: 'europe-west1',

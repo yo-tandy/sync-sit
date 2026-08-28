@@ -1,29 +1,62 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTranslation, Trans } from 'react-i18next';
 import { Link } from 'react-router';
 import { MailIcon } from '../components/Icons.js';
 import { CodeInput } from '../forms/CodeInput.js';
 import { enrollmentErrorReason } from '../utils/callableErrors.js';
+import { ADMIN_CONFIG_DEFS } from '@ejm/shared-core';
 
 interface StepVerifyProps {
   ejemEmail: string;
   onVerify: (code: string) => Promise<void>;
   onResend: () => Promise<void>;
   error: string | null;
+  /**
+   * Resend-cooldown seconds. Admin-configurable (issue #250,
+   * verificationCodeCooldownS): pages pass the CONFIGURED value read via
+   * their app's config reader -- the server's cooldown path answers
+   * repeats with a decoy success (anti-enumeration), so a timer shorter
+   * than the real window would re-enable a button that silently does
+   * nothing. Defaults to the table's default.
+   */
+  resendCooldownS?: number;
 }
 
-export function StepVerify({ ejemEmail, onVerify, onResend, error }: StepVerifyProps) {
+export function StepVerify({
+  ejemEmail,
+  onVerify,
+  onResend,
+  error,
+  resendCooldownS = ADMIN_CONFIG_DEFS.verificationCodeCooldownS.default,
+}: StepVerifyProps) {
   const { t } = useTranslation();
   const [codeError, setCodeError] = useState<string | null>(null);
-  const [resendCooldown, setResendCooldown] = useState(60);
+  const [resendCooldown, setResendCooldown] = useState(resendCooldownS);
   const [resendCount, setResendCount] = useState(0);
   const [verifying, setVerifying] = useState(false);
+  // Value the running countdown was armed with -- lets the sync effect
+  // below compute elapsed time without a wall clock.
+  const armedWithRef = useRef(resendCooldownS);
 
   useEffect(() => {
     if (resendCooldown <= 0) return;
     const timer = setInterval(() => setResendCooldown((c) => c - 1), 1000);
     return () => clearInterval(timer);
   }, [resendCooldown]);
+
+  // The config read races mount: useState captures whatever value had
+  // resolved by then. When the configured value lands mid-countdown,
+  // extend the running timer by the difference (never shorten -- the
+  // floor guarantees configured >= default, and a shorter timer would
+  // re-enable the decoy-success resend early).
+  useEffect(() => {
+    // Ref read/write stays OUT of the updater: StrictMode double-invokes
+    // updaters, and a ref mutated inside one makes the second invocation
+    // compute a bogus elapsed and drop the extension (round-6 review).
+    const armedWith = armedWithRef.current;
+    armedWithRef.current = resendCooldownS;
+    setResendCooldown((c) => (c <= 0 ? c : Math.max(c, resendCooldownS - (armedWith - c))));
+  }, [resendCooldownS]);
 
   const handleCodeComplete = async (code: string) => {
     if (verifying) return;
@@ -40,7 +73,8 @@ export function StepVerify({ ejemEmail, onVerify, onResend, error }: StepVerifyP
   };
 
   const handleResend = async () => {
-    setResendCooldown(60);
+    armedWithRef.current = resendCooldownS;
+    setResendCooldown(resendCooldownS);
     setResendCount((c) => c + 1);
     setCodeError(null);
     try {
@@ -51,7 +85,7 @@ export function StepVerify({ ejemEmail, onVerify, onResend, error }: StepVerifyP
         // surface it — this is the one resend failure the user can act on,
         // and it is only ever thrown to an authenticated caller for their
         // OWN address, so showing it distinguishes nothing (unauthenticated
-        // paths stay silent by design). Keep the 60s cooldown ticking:
+        // paths stay silent by design). Keep the configured cooldown ticking:
         // an immediate retry cannot succeed within the hour anyway.
         setCodeError(t('enrollment.sendCapReached'));
         return;

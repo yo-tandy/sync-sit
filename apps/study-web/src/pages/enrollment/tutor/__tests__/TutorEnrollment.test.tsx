@@ -94,6 +94,11 @@ vi.mock('@/stores/authStore', () => {
   };
   return { useAuthStore, markNextSignInFresh: () => {} };
 });
+vi.mock('@ejm/shared-core', () => ({
+  ADMIN_CONFIG_DEFS: {
+    verificationCodeCooldownS: { default: 60, min: 60, max: 600, description: '' },
+  },
+}));
 vi.mock('@ejm/study-core', () => ({
   getTutorProfile: (userDoc: { profiles?: { tutor?: unknown } } | null) =>
     userDoc?.profiles?.tutor ?? null,
@@ -102,6 +107,14 @@ vi.mock('@ejm/study-core', () => ({
 // Lightweight stand-ins for the child step components: each exposes a button
 // that fires its callback so we can drive the orchestrator deterministically.
 vi.mock('@ejm/shared-ui', () => ({
+  // The app's adminConfigClient wrapper instantiates this at import time
+  // (issue #250) -- stub returns the caller's fallback (code default).
+  createAdminConfigReader: () => ({
+    getClientConfigValue: (_k: string, fallback: number) => Promise.resolve(fallback),
+    // The hook lives on the factory too (round-7 consolidation).
+    useClientConfigValue: (_k: string, fallback: number) => fallback,
+    __resetAdminConfigClientCacheForTests: () => {},
+  }),
   // Mirrors the real helper: read details.reason off the rejected value.
   enrollmentErrorReason: (err: { details?: { reason?: unknown } } | null) => {
     const reason = err?.details?.reason;

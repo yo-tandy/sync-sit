@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Trans } from 'react-i18next';
 import { Link } from 'react-router';
 import { httpsCallable } from 'firebase/functions';
@@ -6,6 +6,7 @@ import { functions } from '@/config/firebase';
 import {} from '@/components/ui';
 import { MailIcon } from '@/components/ui/Icons';
 import { CodeInput } from '@/components/forms/CodeInput';
+import { ADMIN_CONFIG_DEFS } from '@ejm/shared-core';
 import type { ParentFormData } from '../ParentEnrollment';
 
 interface StepParentVerifyProps {
@@ -15,20 +16,49 @@ interface StepParentVerifyProps {
   onResend: () => void;
   loading: boolean;
   error: string | null;
+  /**
+   * Resend-cooldown seconds. Admin-configurable (issue #250,
+   * verificationCodeCooldownS): the page passes the CONFIGURED value --
+   * verifyParentEmail answers cooldown repeats with a decoy success
+   * (anti-enumeration), so a timer shorter than the real window would
+   * re-enable a button that silently does nothing.
+   */
+  resendCooldownS?: number;
 }
 
-export function StepParentVerify({ data, onChange, onNext, onResend, error }: StepParentVerifyProps) {
-  const [resendCooldown, setResendCooldown] = useState(60);
+export function StepParentVerify({
+  data,
+  onChange,
+  onNext,
+  onResend,
+  error,
+  resendCooldownS = ADMIN_CONFIG_DEFS.verificationCodeCooldownS.default,
+}: StepParentVerifyProps) {
+  const [resendCooldown, setResendCooldown] = useState(resendCooldownS);
   const [resendCount, setResendCount] = useState(0);
   const [codeVerified, setCodeVerified] = useState(false);
   const [codeError, setCodeError] = useState<string | null>(null);
   const [verifying, setVerifying] = useState(false);
+  // Value the running countdown was armed with -- lets the sync effect
+  // below compute elapsed time without a wall clock.
+  const armedWithRef = useRef(resendCooldownS);
 
   useEffect(() => {
     if (resendCooldown <= 0) return;
     const timer = setInterval(() => setResendCooldown((c) => c - 1), 1000);
     return () => clearInterval(timer);
   }, [resendCooldown]);
+
+  // The config read races mount: extend (never shorten) a running
+  // countdown when the configured value lands after useState captured
+  // the default. Mirrors shared-ui StepVerify.
+  useEffect(() => {
+    // Ref read/write stays OUT of the updater (StrictMode double-invokes
+    // updaters -- mirrors shared-ui StepVerify, round-6 review).
+    const armedWith = armedWithRef.current;
+    armedWithRef.current = resendCooldownS;
+    setResendCooldown((c) => (c <= 0 ? c : Math.max(c, resendCooldownS - (armedWith - c))));
+  }, [resendCooldownS]);
 
   const handleCodeComplete = async (code: string) => {
     onChange({ verificationCode: code });
@@ -88,7 +118,7 @@ export function StepParentVerify({ data, onChange, onNext, onResend, error }: St
           ) : (
             <button
               type="button"
-              onClick={() => { setResendCooldown(60); setResendCount((c) => c + 1); setCodeVerified(false); setCodeError(null); onChange({ verificationCode: '' }); onResend(); }}
+              onClick={() => { armedWithRef.current = resendCooldownS; setResendCooldown(resendCooldownS); setResendCount((c) => c + 1); setCodeVerified(false); setCodeError(null); onChange({ verificationCode: '' }); onResend(); }}
               className="font-medium text-brand-600 hover:underline"
             >
               Resend code

@@ -60,6 +60,7 @@ export function AdminAuditLogPage() {
     { value: 'reset_password', label: 'reset_password' },
     { value: 'delete_appointment', label: 'delete_appointment' },
     { value: 'update_holidays', label: 'update_holidays' },
+    { value: 'admin_config_updated', label: t('admin.config.title') },
     { value: 'export_user_data', label: 'export_user_data' },
   ];
 

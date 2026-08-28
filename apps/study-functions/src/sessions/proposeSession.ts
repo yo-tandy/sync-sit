@@ -1,4 +1,5 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { getConfigValue } from '@ejm/shared-functions/config/adminConfig.js';
 import { clampNoticeWindow } from '@ejm/shared-functions/schedule/lateCancellation.js';
 import { db } from '@ejm/shared-functions/config/firebase.js';
 import { getCorsOrigin } from '@ejm/shared-functions/config/cors.js';
@@ -12,8 +13,6 @@ import type { StudyUser, TutorProfile, SubjectOffering } from '@ejm/study-core';
 import { proposeSessionInputSchema } from '../validation/session.js';
 import { computeSingleDateAvailability } from '../availability/singleDateAvailability.js';
 
-/** Notice window: a proposal's session cannot start within this many hours. */
-const NOTICE_HOURS = 24;
 const SLOT_MINUTES = 15;
 
 /**
@@ -108,12 +107,14 @@ export const proposeSession = onCall(
     const now = new Date();
     const paddingMinutes = tutor.paddingMin ?? 0;
 
-    // ── 24h minimum notice (Paris wall clock, DST-safe) ──
+    // ── Minimum booking notice (bookingNoticeHours, Paris wall clock, DST-safe) ──
     const sessionStart = parisWallTimeToUtc(date, startTime);
-    if (sessionStart.getTime() < now.getTime() + NOTICE_HOURS * 60 * 60 * 1000) {
+    const noticeHours = await getConfigValue('bookingNoticeHours');
+
+    if (sessionStart.getTime() < now.getTime() + noticeHours * 60 * 60 * 1000) {
       throw new HttpsError(
         'failed-precondition',
-        'Sessions must be proposed at least 24 hours in advance',
+        `Sessions must be proposed at least ${noticeHours} hours in advance`,
       );
     }
 

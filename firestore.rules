@@ -481,6 +481,29 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Admin-panel configuration (issue #250). No client reads ANY more
+    // (round-7 review): every client surface reads the /client mirror
+    // below, the panel reads through the getAdminConfig callable, and the
+    // server reads bypass rules entirely -- so a signed-in read grant here
+    // would only serve an attacker enumerating the abuse levers (send
+    // caps, attempt limits). Writes are denied too: updateAdminConfig
+    // (verifyAdmin + bounds validation + audit) is the only write path,
+    // and getConfigValue re-checks bounds at read time so even a
+    // console-edited doc cannot push a value past them.
+    match /adminConfig/values {
+      allow read, write: if false;
+    }
+
+    // World-readable mirror of the CLIENT-EXPOSED config keys only
+    // (round-6 review): enrollment wizards read the resend cooldown BEFORE
+    // an account exists, so the authed gate above silently served them the
+    // code default. updateAdminConfig maintains this doc; the abuse levers
+    // (send caps, attempt limits) never appear here.
+    match /adminConfig/client {
+      allow read: if true;
+      allow write: if false;
+    }
+
     // Verification codes: no client access
     match /verificationCodes/{email} {
       allow read, write: if false;

@@ -2287,6 +2287,53 @@ describe('users update — cancellation notice window bounds (issue #237)', () =
   });
 });
 
+describe('adminConfig (issue #250)', () => {
+  beforeEach(async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.firestore().doc('adminConfig/values').set({ pastVisibilityDays: 14 });
+    });
+  });
+
+  // Round-7 review: no client surface reads the values doc any more (all
+  // client reads go through the /client mirror; the panel uses the
+  // getAdminConfig callable; server reads bypass rules), so the signed-in
+  // grant only served an attacker enumerating the abuse levers.
+  it('values doc is unreadable even signed in (least privilege)', async () => {
+    const db = testEnv.authenticatedContext('any-user-1').firestore();
+    await assertFails(getDoc(doc(db, 'adminConfig', 'values')));
+  });
+
+  it('unauthenticated read is denied', async () => {
+    const db = testEnv.unauthenticatedContext().firestore();
+    await assertFails(getDoc(doc(db, 'adminConfig', 'values')));
+  });
+
+  it('no client write, even signed in -- updateAdminConfig is the only write path', async () => {
+    const db = testEnv.authenticatedContext('any-user-1').firestore();
+    await assertFails(setDoc(doc(db, 'adminConfig', 'values'), { pastVisibilityDays: 30 }));
+    await assertFails(updateDoc(doc(db, 'adminConfig', 'values'), { pastVisibilityDays: 30 }));
+  });
+
+  // Round-6 review: the client mirror MUST be readable before sign-in --
+  // enrollment wizards read the resend cooldown while request.auth is null,
+  // and an authed-only doc silently served them the 60s default (the exact
+  // decoy-success dead end the knob exists to prevent).
+  it('adminConfig/client is readable UNAUTHENTICATED (pre-auth enrollment reads)', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.firestore().doc('adminConfig/client').set({ verificationCodeCooldownS: 120 });
+    });
+    const db = testEnv.unauthenticatedContext().firestore();
+    await assertSucceeds(getDoc(doc(db, 'adminConfig', 'client')));
+  });
+
+  it('adminConfig/client rejects all client writes (updateAdminConfig maintains it)', async () => {
+    const anon = testEnv.unauthenticatedContext().firestore();
+    const authed = testEnv.authenticatedContext('any-user-1').firestore();
+    await assertFails(setDoc(doc(anon, 'adminConfig', 'client'), { verificationCodeCooldownS: 60 }));
+    await assertFails(setDoc(doc(authed, 'adminConfig', 'client'), { verificationCodeCooldownS: 60 }));
+  });
+});
+
 describe('users update — root identity set-once (issue #144)', () => {
   async function seed(id: string, data: Record<string, unknown>) {
     await testEnv.withSecurityRulesDisabled(async (ctx) => {

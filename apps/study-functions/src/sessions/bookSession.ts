@@ -1,4 +1,5 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { getConfigValue } from '@ejm/shared-functions/config/adminConfig.js';
 import { clampNoticeWindow } from '@ejm/shared-functions/schedule/lateCancellation.js';
 import { db } from '@ejm/shared-functions/config/firebase.js';
 import { getCorsOrigin } from '@ejm/shared-functions/config/cors.js';
@@ -29,12 +30,8 @@ import { bookSessionInputSchema } from '../validation/session.js';
 import { computeSingleDateAvailability } from '../availability/singleDateAvailability.js';
 import type { HolidayPeriod } from '../availability/computeDateAvailability.js';
 
-/** Notice window: families cannot book within this many hours of "now". */
-const NOTICE_HOURS = 24;
 const SLOT_MINUTES = 15;
 const SLOTS_PER_DAY = 96;
-/** How many weeks of candidate occurrences a recurring request is expanded over. */
-const RECURRING_HORIZON_WEEKS = 8;
 
 /** Human-readable weekday for notification copy. */
 const DAY_LABELS: Record<DayOfWeek, string> = {
@@ -192,12 +189,13 @@ export const bookSession = onCall(
       // is skipped and the first occurrence rolls to next week. This is how the
       // 24h notice applies to a recurring series' FIRST occurrence.
       const fromDate = parisDateString(
-        new Date(now.getTime() + NOTICE_HOURS * 60 * 60 * 1000),
+        new Date(now.getTime() + (await getConfigValue('bookingNoticeHours')) * 60 * 60 * 1000),
       );
       // Upper bound of the window (for the holiday-year lookup); endDate only
       // truncates WITHIN it, so we still load holidays across the full horizon.
       let horizonEnd = fromDate;
-      for (let i = 0; i < RECURRING_HORIZON_WEEKS * 7; i++) horizonEnd = incrementDate(horizonEnd);
+      const horizonWeeks = await getConfigValue('recurringHorizonWeeks');
+      for (let i = 0; i < horizonWeeks * 7; i++) horizonEnd = incrementDate(horizonEnd);
       const rangeEnd = endDate !== undefined && endDate < horizonEnd ? endDate : horizonEnd;
 
       // French school-holiday periods across the window — drives schoolWeeksOnly.
@@ -216,7 +214,7 @@ export const bookSession = onCall(
       const candidates = expandRecurringDates(
         slotWithEnd,
         fromDate,
-        RECURRING_HORIZON_WEEKS,
+        horizonWeeks,
         endDate,
         schoolWeeksOnly,
         holidayPeriods,
@@ -357,12 +355,14 @@ export const bookSession = onCall(
       const bookingDate = date!;
       const bookingStart = startTime!;
 
-      // ── 24h minimum notice (Paris wall clock, DST-safe) ──
+      // ── Minimum booking notice (bookingNoticeHours, Paris wall clock, DST-safe) ──
       const sessionStart = parisWallTimeToUtc(bookingDate, bookingStart);
-      if (sessionStart.getTime() < now.getTime() + NOTICE_HOURS * 60 * 60 * 1000) {
+      const noticeHours = await getConfigValue('bookingNoticeHours');
+
+      if (sessionStart.getTime() < now.getTime() + noticeHours * 60 * 60 * 1000) {
         throw new HttpsError(
           'failed-precondition',
-          'Sessions must be booked at least 24 hours in advance',
+          `Sessions must be booked at least ${noticeHours} hours in advance`,
         );
       }
 

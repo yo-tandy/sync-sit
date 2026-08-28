@@ -13,12 +13,16 @@ import {
 import { db } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { useHolidays } from '@/hooks/useHolidays';
+import { getClientConfigValue } from '@/lib/adminConfigClient';
+import { ADMIN_CONFIG_DEFS } from '@ejm/shared-core';
 import { Spinner, Badge } from '@ejm/shared-ui';
 import type { StudySessionDoc } from '@/types/studySession';
 
-/** Weeks of occurrences the accept flow materializes — mirror the callable. */
+// Code DEFAULTS for the two admin-configurable values the accept flow
+// uses (issue #250): the preview must predict exactly what
+// respondToSession materializes, so both are read from the same config
+// the callable reads, with these as the shared fallback.
 const HORIZON_WEEKS = 8;
-/** A session cannot be confirmed within this many hours of "now". */
 const NOTICE_HOURS = 24;
 
 type DateStatus = 'available' | 'conflict' | 'holiday';
@@ -103,14 +107,18 @@ export function RecurringConflictPreview({ session }: { session: StudySessionDoc
 
       const now = new Date();
       const nowParis = parisNow(now);
-      const fromDate = parisDate(new Date(now.getTime() + NOTICE_HOURS * 60 * 60 * 1000));
+      const [horizonWeeks, noticeHours] = await Promise.all([
+        getClientConfigValue('recurringHorizonWeeks', HORIZON_WEEKS, ADMIN_CONFIG_DEFS.recurringHorizonWeeks),
+        getClientConfigValue('bookingNoticeHours', NOTICE_HOURS, ADMIN_CONFIG_DEFS.bookingNoticeHours),
+      ]);
+      const fromDate = parisDate(new Date(now.getTime() + noticeHours * 60 * 60 * 1000));
       const schoolWeeksOnly = session.schoolWeeksOnly !== false; // default true
 
       // Expand ALL weekly occurrences (schoolWeeksOnly=false, no periods) so
       // holiday dates still appear as explicit skip rows rather than vanishing;
       // the holiday classification happens per-row below. endDate truncation is
       // handled inside expandRecurringDates.
-      const dates = expandRecurringDates(slot, fromDate, HORIZON_WEEKS, session.endDate, false, []);
+      const dates = expandRecurringDates(slot, fromDate, horizonWeeks, session.endDate, false, []);
       if (dates.length === 0) {
         if (!cancelled) setResult({ rows: [], availableCount: 0 });
         return;
@@ -165,7 +173,7 @@ export function RecurringConflictPreview({ session }: { session: StudySessionDoc
             confirmedBlocks: confirmedByDate.get(date) ?? [],
             paddingMin: 0,
             nowParis,
-            noticeHours: NOTICE_HOURS,
+            noticeHours,
           });
 
           let free = true;

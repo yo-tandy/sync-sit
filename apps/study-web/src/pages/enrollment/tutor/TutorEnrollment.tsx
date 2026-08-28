@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import { useClientConfigValue } from '@/lib/adminConfigClient';
+import { ADMIN_CONFIG_DEFS } from '@ejm/shared-core';
 import { useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { httpsCallable } from 'firebase/functions';
@@ -64,6 +66,12 @@ export function TutorEnrollment() {
         dateOfBirth: userDoc?.dateOfBirth || undefined,
       }
     : null;
+
+  const resendCooldownS = useClientConfigValue(
+    'verificationCodeCooldownS',
+    ADMIN_CONFIG_DEFS.verificationCodeCooldownS.default,
+    ADMIN_CONFIG_DEFS.verificationCodeCooldownS,
+  );
 
   const [step, setStep] = useState(0);
   const [ejemEmail, setEjemEmail] = useState('');
@@ -318,6 +326,7 @@ export function TutorEnrollment() {
       case 1:
         return (
           <StepVerify
+            resendCooldownS={resendCooldownS}
             ejemEmail={ejemEmail}
             onVerify={async (code) => {
               const verifyFn = httpsCallable(functions, 'verifyCode');

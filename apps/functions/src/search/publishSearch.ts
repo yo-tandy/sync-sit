@@ -1,4 +1,5 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { getConfigValue } from '@ejm/shared-functions/config/adminConfig.js';
 import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
@@ -6,8 +7,6 @@ import { getParentProfile } from '@ejm/sit-core';
 import type { User } from '@ejm/sit-core';
 import {
   resolveAreaLabel,
-  PUBLISHED_SEARCH_MAX_ACTIVE,
-  PUBLISHED_SEARCH_TTL_DAYS,
 } from '@ejm/shared-core';
 import { parisWallTimeToUtc } from '@ejm/shared-functions/scheduled/parisTime.js';
 
@@ -123,7 +122,7 @@ export const publishSearch = onCall(
 
     // ── Expiry: min(now + 7d, end of the babysitting day) for one_time;
     // 7d flat for recurring. Already-past one_time searches are rejected. ──
-    const ttlMs = PUBLISHED_SEARCH_TTL_DAYS * 24 * 60 * 60 * 1000;
+    const ttlMs = (await getConfigValue('publishedSearchTtlDays')) * 24 * 60 * 60 * 1000;
     let expiresAt = new Date(now.getTime() + ttlMs);
     if (data.type === 'one_time') {
       // End times at/after midnight (the picker's 00:00-02:00 "following
@@ -144,7 +143,7 @@ export const publishSearch = onCall(
       }
     }
 
-    // ── Cap: at most PUBLISHED_SEARCH_MAX_ACTIVE active docs per family per
+    // ── Cap: at most publishedSearchMaxActive (admin-configurable) active docs per family per
     // app. Equality-only query (no composite needed beyond the familyId index);
     // expiry filtered in code — expired-but-unswept docs must not count. ──
 
@@ -206,7 +205,8 @@ export const publishSearch = onCall(
         const expMs = exp?.toMillis ? exp.toMillis() : exp?.toDate ? exp.toDate().getTime() : 0;
         return expMs > now.getTime();
       }).length;
-      if (activeCount >= PUBLISHED_SEARCH_MAX_ACTIVE) {
+      const maxActive = await getConfigValue('publishedSearchMaxActive');
+      if (activeCount >= maxActive) {
         throw new HttpsError('resource-exhausted', 'Too many active published searches for this family');
       }
       tx.set(ref, docBody);

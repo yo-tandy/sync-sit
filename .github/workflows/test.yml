@@ -48,4 +48,9 @@ jobs:
       - name: Run integration tests
         # --only: the hosting emulator would otherwise auto-start (hosting is
         # configured with named targets that don't resolve under demo-test).
+        # ADMIN_CONFIG_TTL_MS=0: the admin-config effect pins (issue #250)
+        # need writes visible to the next callable invocation; with the 60s
+        # default an earlier suite's cached read hides them.
         run: pnpm exec firebase emulators:exec --only auth,functions,firestore,storage --project demo-test 'pnpm test:integration'
+        env:
+          ADMIN_CONFIG_TTL_MS: '0'
