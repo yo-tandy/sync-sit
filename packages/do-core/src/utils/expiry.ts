@@ -23,9 +23,13 @@ import { DO_ONGOING_TTL_DAYS } from '../constants/bounds.js';
  * bound.
  *
  * The Paris wall-clock maths below reproduces
- * `@ejm/shared-functions/scheduled/parisTime.ts` — do-core cannot depend on
- * shared-functions (it is a leaf types/content package consumed by the
- * frontend too), so the DST-safe conversion is duplicated here as pure code.
+ * `@ejm/shared-functions/scheduled/parisTime.ts`. Known duplication,
+ * tracked as issue #309: `parisClock`/`parisWallTimeToUtc` are pure Intl
+ * code and belong hoisted into `@ejm/shared-core` (a leaf package do-core
+ * already depends on), with an agreement test pinning the two copies until
+ * both import the hoisted one. Shared-package changes ship as their own
+ * owner-approved PRs, so the hoist is deliberately NOT part of the do-core
+ * ladder — do not "fix" the duplication in passing here; see #309.
  */
 
 const PARIS_TZ = 'Europe/Paris';
@@ -94,18 +98,22 @@ export function parisWallTimeToUtc(date: string, time: string): Date {
  * expires at `2026-03-29T22:00:00Z`; a winter day ends at `23:00Z`.
  */
 export function endOfParisDay(date: string): Date {
-  // Next calendar day via UTC arithmetic (calendar-only, so DST-free), then
-  // the DST-safe wall-time conversion pins its midnight to Paris.
+  return parisWallTimeToUtc(nextCalendarDay(date), '00:00');
+}
+
+/** 'YYYY-MM-DD' + 1 day, via UTC arithmetic (calendar-only, so DST-free). */
+function nextCalendarDay(date: string): string {
   const next = new Date(new Date(`${date}T12:00:00Z`).getTime() + DAY_MS);
   const pad = (n: number) => String(n).padStart(2, '0');
-  const nextDate = `${next.getUTCFullYear()}-${pad(next.getUTCMonth() + 1)}-${pad(next.getUTCDate())}`;
-  return parisWallTimeToUtc(nextDate, '00:00');
+  return `${next.getUTCFullYear()}-${pad(next.getUTCMonth() + 1)}-${pad(next.getUTCDate())}`;
 }
 
 /** The timing fields expiry depends on — a subset of TaskDoc (§4.1). */
 export interface ExpiryTimingFields {
   timing: TaskTiming;
   date: string | null; // fixed
+  startTime: string | null; // fixed — midnight-crossing detection (below)
+  endTime: string | null; // fixed
   dueDate: string | null; // deadline
   startDate: string | null; // recurring | ongoing
 }
@@ -118,17 +126,31 @@ export interface ExpiryTimingFields {
  * union for the same reason, only worse: without it the switch falls off the
  * end and returns `undefined` into a `Date`-typed slot, and `doPostTask`
  * would write a task with no expiry that the §6.5 sweep never collects.
+ *
+ * A `fixed` task with `endTime <= startTime` crosses midnight and ENDS on
+ * the next calendar day (validateTaskTiming legalizes the shape; both
+ * halves of publishSearch's one_time precedent, PR #210 review, apply):
+ * "the task's day" for expiry purposes is the day the task actually ends,
+ * so a 20:00–01:00 clean-up dated the 12th expires at the end of the 13th —
+ * not one hour before it finishes.
  */
 export function computeTaskExpiresAt(
   fields: ExpiryTimingFields,
   now: Date,
 ): Date {
   switch (fields.timing) {
-    case 'fixed':
+    case 'fixed': {
       if (!fields.date) {
         throw new Error('fixed task has no date');
       }
-      return endOfParisDay(fields.date);
+      const crossesMidnight =
+        fields.startTime !== null &&
+        fields.endTime !== null &&
+        fields.endTime <= fields.startTime;
+      return endOfParisDay(
+        crossesMidnight ? nextCalendarDay(fields.date) : fields.date,
+      );
+    }
     case 'deadline':
       if (!fields.dueDate) {
         throw new Error('deadline task has no dueDate');

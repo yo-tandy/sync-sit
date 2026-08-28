@@ -72,7 +72,7 @@ describe('computeTaskExpiresAt (§6.3)', () => {
     // The §6.3 regression: a family posting "help me move on 15 October" in
     // late August keeps the post until the move date, not now + 14d.
     const expires = computeTaskExpiresAt(
-      { timing: 'fixed', date: '2026-10-15', dueDate: null, startDate: null },
+      { timing: 'fixed', date: '2026-10-15', startTime: null, endTime: null, dueDate: null, startDate: null },
       NOW,
     );
     expect(expires.toISOString()).toBe('2026-10-15T22:00:00.000Z');
@@ -81,11 +81,78 @@ describe('computeTaskExpiresAt (§6.3)', () => {
     );
   });
 
+  it('fixed crossing midnight (endTime <= startTime): expires at the end of the day it ENDS', () => {
+    // The other half of the publishSearch one_time precedent (PR #210
+    // review): a 20:00–01:00 clean-up dated the 12th ends on the 13th, so
+    // it must not expire an hour before it finishes.
+    const expires = computeTaskExpiresAt(
+      {
+        timing: 'fixed',
+        date: '2026-09-12',
+        startTime: '20:00',
+        endTime: '01:00',
+        dueDate: null,
+        startDate: null,
+      },
+      NOW,
+    );
+    expect(expires.toISOString()).toBe('2026-09-13T22:00:00.000Z');
+    // equal times count as crossing too (validateTaskTiming legalizes both)
+    expect(
+      computeTaskExpiresAt(
+        {
+          timing: 'fixed',
+          date: '2026-09-12',
+          startTime: '22:00',
+          endTime: '22:00',
+          dueDate: null,
+          startDate: null,
+        },
+        NOW,
+      ).toISOString(),
+    ).toBe('2026-09-13T22:00:00.000Z');
+    // a normal same-day task keeps the §6.3 end-of-its-own-day expiry
+    expect(
+      computeTaskExpiresAt(
+        {
+          timing: 'fixed',
+          date: '2026-09-12',
+          startTime: '14:00',
+          endTime: '18:00',
+          dueDate: null,
+          startDate: null,
+        },
+        NOW,
+      ).toISOString(),
+    ).toBe('2026-09-12T22:00:00.000Z');
+  });
+
+  it('fixed crossing midnight over the DST edge ends on the 23h day, DST-correctly', () => {
+    // Dated 2026-03-28 (CET), 22:00–02:00: ends on 2026-03-29, the
+    // spring-forward day, whose end is 22:00Z (CEST) — end-of-next-day via
+    // the calendar, not a naive +24h on the day-end instant (which would
+    // land at 23:00Z here).
+    const expires = computeTaskExpiresAt(
+      {
+        timing: 'fixed',
+        date: '2026-03-28',
+        startTime: '22:00',
+        endTime: '02:00',
+        dueDate: null,
+        startDate: null,
+      },
+      NOW,
+    );
+    expect(expires.toISOString()).toBe('2026-03-29T22:00:00.000Z');
+  });
+
   it('deadline: end of dueDate', () => {
     const expires = computeTaskExpiresAt(
       {
         timing: 'deadline',
         date: null,
+        startTime: null,
+        endTime: null,
         dueDate: '2026-09-04',
         startDate: null,
       },
@@ -99,6 +166,8 @@ describe('computeTaskExpiresAt (§6.3)', () => {
       {
         timing: 'recurring',
         date: null,
+        startTime: null,
+        endTime: null,
         dueDate: null,
         startDate: '2026-11-02',
       },
@@ -113,6 +182,8 @@ describe('computeTaskExpiresAt (§6.3)', () => {
       {
         timing: 'ongoing',
         date: null,
+        startTime: null,
+        endTime: null,
         dueDate: null,
         startDate: '2026-08-30',
       },
@@ -126,19 +197,19 @@ describe('computeTaskExpiresAt (§6.3)', () => {
   it('throws on a timing group missing its date instead of minting Invalid Date', () => {
     expect(() =>
       computeTaskExpiresAt(
-        { timing: 'fixed', date: null, dueDate: null, startDate: null },
+        { timing: 'fixed', date: null, startTime: null, endTime: null, dueDate: null, startDate: null },
         NOW,
       ),
     ).toThrow();
     expect(() =>
       computeTaskExpiresAt(
-        { timing: 'deadline', date: null, dueDate: null, startDate: null },
+        { timing: 'deadline', date: null, startTime: null, endTime: null, dueDate: null, startDate: null },
         NOW,
       ),
     ).toThrow();
     expect(() =>
       computeTaskExpiresAt(
-        { timing: 'recurring', date: null, dueDate: null, startDate: null },
+        { timing: 'recurring', date: null, startTime: null, endTime: null, dueDate: null, startDate: null },
         NOW,
       ),
     ).toThrow();
@@ -153,6 +224,8 @@ describe('computeTaskExpiresAt (§6.3)', () => {
         {
           timing: 'sometime' as 'fixed',
           date: '2026-09-12',
+          startTime: null,
+          endTime: null,
           dueDate: null,
           startDate: null,
         },
