@@ -16,7 +16,8 @@ import { getParentProfile } from '@ejm/shared-core';
  * community-verification path (ask for a code / approve a friend).
  *
  * Uploads write to verification-documents/{familyId}/ in the shared bucket —
- * storage.rules allows any authenticated write there, no rules change needed.
+ * storage.rules allows writes there only for members of the owning family
+ * (profiles.parent.familyId match) or admins, capped at 10MB (issue #153).
  */
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
