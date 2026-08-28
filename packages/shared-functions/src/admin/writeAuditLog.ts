@@ -1,4 +1,4 @@
-import { FieldValue } from 'firebase-admin/firestore';
+import { FieldValue, type DocumentReference } from 'firebase-admin/firestore';
 import { db } from '../config/firebase.js';
 
 interface AuditLogEntry {
@@ -12,9 +12,11 @@ interface AuditLogEntry {
 /**
  * Write an audit log entry to the auditLogs collection.
  * Used for both admin actions and user activity tracking.
+ * Returns the entry's ref so a caller can patch details in afterwards
+ * (identity corrections append their fan-out summary, issue #273).
  */
-export async function writeAuditLog(entry: AuditLogEntry): Promise<void> {
-  await db.collection('auditLogs').add({
+export async function writeAuditLog(entry: AuditLogEntry): Promise<DocumentReference> {
+  return db.collection('auditLogs').add({
     ...entry,
     timestamp: FieldValue.serverTimestamp(),
   });

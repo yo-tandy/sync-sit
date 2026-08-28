@@ -87,25 +87,39 @@ export const correctUserIdentity = onCall(
     }
     await userRef.update(updates);
 
+    // Audit BEFORE the fan-out: this entry is the compensating control for
+    // bypassing set-once, so it must exist the moment the root update has
+    // committed — the fan-out below is many round trips, and a timeout in
+    // there must not leave an unaudited correction (PR #291 review).
+    const auditRef = await writeAuditLog({
+      adminUserId: request.auth.uid,
+      action: 'user_identity_corrected',
+      targetUserId,
+      details: { before, after },
+    });
+
     // Fan the corrected name out into the denormalized copies (issue #273).
     // AFTER the root update commits: the users doc is the source of truth and
     // a failed sweep must not fail the correction — partial outcomes land in
     // the audit entry's fanOut summary instead. DOB is never denormalized.
-    let fanOut: NameFanOutSummary | undefined;
     if (fields.firstName || fields.lastName) {
-      fanOut = await fanOutNameCorrections(
+      const fanOut: NameFanOutSummary = await fanOutNameCorrections(
         targetUserId,
         fields.firstName ?? (user.firstName as string) ?? '',
         fields.lastName ?? (user.lastName as string) ?? '',
       );
+      try {
+        await auditRef.update({ 'details.fanOut': fanOut });
+      } catch (err) {
+        // The correction and its audit entry are already committed; failing
+        // the callable over the summary patch would misreport success as
+        // failure. Log and return.
+        console.error('correctUserIdentity: failed to record fanOut summary', {
+          targetUserId,
+          err,
+        });
+      }
     }
-
-    await writeAuditLog({
-      adminUserId: request.auth.uid,
-      action: 'user_identity_corrected',
-      targetUserId,
-      details: { before, after, ...(fanOut ? { fanOut } : {}) },
-    });
 
     return { success: true };
   },

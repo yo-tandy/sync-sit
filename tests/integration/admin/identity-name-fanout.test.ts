@@ -283,4 +283,61 @@ describe('identity-correction name fan-out', () => {
     });
     expect(mine[0].details.fanOut.errors).toEqual([]);
   });
+
+  it('paginates past a full page (305 docs) and reports the exhaustive count', async () => {
+    // PAGE_SIZE is 300, so 305 docs drive the startAfter cursor and the
+    // last-short-page break for real (PR #291 review: pagination was
+    // otherwise only ever exercised single-page).
+    const PT = 'fanPagTutor';
+    await seedUser(PT, 'Old', 'Paginated');
+    const batch = db().batch();
+    for (let i = 0; i < 305; i++) {
+      batch.set(db().collection('study-sessions').doc(`fanPag_${i}`), {
+        sessionId: `fanPag_${i}`,
+        familyId: seed.family1Id,
+        subject: 'math',
+        level: '6e',
+        rate: 25,
+        type: 'one_time',
+        date: '2027-04-01',
+        startTime: '16:00',
+        status: 'confirmed',
+        familyName: 'Dupont',
+        tutorUserId: PT,
+        createdByUserId: 'someParent',
+        parentName: 'Some Parent',
+        tutorName: 'Old Paginated',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+    }
+    await batch.commit();
+
+    await callFunction(
+      'correctUserIdentity',
+      { targetUserId: PT, lastName: 'Paged' },
+      adminToken,
+    );
+
+    // Every doc followed, including across the page boundary…
+    const followed = await db()
+      .collection('study-sessions')
+      .where('tutorUserId', '==', PT)
+      .where('tutorName', '==', 'Old Paged')
+      .get();
+    expect(followed.size).toBe(305);
+
+    // …and the audit summary counts them exhaustively, with no truncation.
+    const audits = await db()
+      .collection('auditLogs')
+      .where('action', '==', 'user_identity_corrected')
+      .get();
+    const mine = audits.docs.map((d) => d.data()).filter((a) => a.targetUserId === PT);
+    expect(mine.length).toBe(1);
+    expect(mine[0].details.fanOut.updated['study-sessions']).toEqual({
+      tutorName: 305,
+      parentName: 0,
+    });
+    expect(mine[0].details.fanOut.errors).toEqual([]);
+  });
 });

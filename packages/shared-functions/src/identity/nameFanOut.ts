@@ -4,6 +4,12 @@ import { db } from '../config/firebase.js';
 // Page per sweep query: bounds each read AND keeps the page's batched write
 // under Firestore's 500-op cap.
 const PAGE_SIZE = 300;
+// Per-sweep ceiling: the fan-out runs in the request path of a callable with
+// the default 60s timeout, so total work must be bounded too — 40 pages =
+// 12k docs per sweep, far beyond any realistic per-user history. Hitting the
+// cap records a truncation into `errors` (visible in the audit entry) instead
+// of silently scanning until the deadline kills the function mid-sweep.
+const MAX_SWEEP_PAGES = 40;
 
 interface Sweep {
   collection: string;
@@ -121,7 +127,13 @@ export async function fanOutNameCorrections(
     perCollection[sweep.field] ??= 0;
     try {
       let cursor: QueryDocumentSnapshot<DocumentData> | null = null;
-      for (;;) {
+      for (let pages = 0; ; pages++) {
+        if (pages >= MAX_SWEEP_PAGES) {
+          summary.errors.push(
+            `${sweep.collection}.${sweep.field}: page cap reached after ${pages} pages — remaining docs not updated`,
+          );
+          break;
+        }
         let page = sweep.query.limit(PAGE_SIZE);
         if (cursor) page = page.startAfter(cursor);
         const snap = await page.get();
@@ -141,6 +153,15 @@ export async function fanOutNameCorrections(
         cursor = snap.docs[snap.docs.length - 1];
       }
     } catch (err) {
+      // Swallowed best-effort failure → log it (approveCommunityCode
+      // precedent), so operators get a Cloud Logging signal beyond the
+      // audit doc's errors array.
+      console.error('fanOutNameCorrections: sweep failed', {
+        collection: sweep.collection,
+        field: sweep.field,
+        targetUserId,
+        err,
+      });
       summary.errors.push(
         `${sweep.collection}.${sweep.field}: ${err instanceof Error ? err.message : String(err)}`,
       );

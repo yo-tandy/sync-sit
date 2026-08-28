@@ -71,15 +71,29 @@ Swept and confirmed OUT of scope:
      studyContactRequests) and all pre-#273 `contactSharingRequests`. No
      backfill script (per scope decision — not trivial: the confirm-time uid
      is not recoverable from the doc).
-4. **Error semantics**: the root `users` update is the source of truth and
-   commits FIRST; each sweep runs independently in try/catch — one
-   collection's failure neither aborts the correction nor the remaining
-   sweeps. The audit entry (`details.fanOut`) records per-collection updated
-   counts (`{updated: {collection: {field: n}}, errors: [message...]}`), so a
-   partial fan-out is visible in the audit trail. The callable response shape
-   is unchanged.
+4. **Error semantics** (ordering hardened in PR #291 round 1): the root
+   `users` update commits FIRST, then the before/after audit entry is written
+   IMMEDIATELY — the audit is the compensating control for bypassing
+   set-once, so a timeout during the multi-round-trip fan-out must not leave
+   the committed correction unaudited. The fan-out runs last and its summary
+   (`{updated: {collection: {field: n}}, errors: [message...]}`) is patched
+   into the entry as `details.fanOut`; a failed patch is logged, never
+   thrown. Each sweep runs independently in try/catch — one collection's
+   failure neither aborts the correction nor the remaining sweeps, and is
+   both recorded in `errors` and logged to Cloud Logging
+   (approveCommunityCode precedent). Each sweep is additionally capped at
+   40 pages (12k docs) so a pathological history cannot run the callable
+   into its 60s deadline mid-sweep; hitting the cap records a truncation
+   message into `errors`. The callable response shape is unchanged.
 5. **updatedAt** is bumped on every fanned-out doc (repo convention; both
    session lists sort by `createdAt`, so no reordering side effects).
+6. **Deliberate disclosure** (flagged in PR #291 review): `parentUserId` is
+   readable by the doc's counterparty (e.g. the babysitter on
+   `contactSharingRequests`, which previously exposed only
+   familyId/familyName/parentName). Accepted: no rule grants anything based
+   on it, and it matches `createdByUserId` already visible to tutors on
+   `studyContactRequests` — a bare uid grants no read access under the
+   rules.
 
 ## Tests
 
