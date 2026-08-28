@@ -85,6 +85,18 @@ jobs:
       - name: Deploy Firestore rules and indexes
         run: pnpm exec firebase deploy --only firestore --project sync-sit --non-interactive
 
+      # Storage rules auto-deploy (issue #282), beside its Firestore sibling
+      # per issue #286: rules ship BEFORE the hosting/functions that depend on
+      # them. This step started life LAST as a hard-fail probe (PR #283 round
+      # 2) because the WIF SA's storage-side grant could not be verified from
+      # CI ahead of the first run -- and that caution was vindicated: the
+      # first runs failed 403 on `firebasestorage.defaultBucket.get`, a
+      # permission `roles/firebaserules.admin` does not carry. The SA now
+      # holds `roles/firebasestorage.admin` (granted 2026-08-28, issue #286),
+      # and main's rules were released by an owner-credential deploy the same
+      # day, so a failure here is a regression, not a first-contact surprise.
+      - name: Deploy Storage rules
+        run: pnpm exec firebase deploy --only storage --project sync-sit --non-interactive
 
       # Deploy hosting (uses ADC from auth step)
       - name: Deploy Hosting
@@ -108,26 +120,6 @@ jobs:
             sleep 120
             pnpm exec firebase deploy --only functions --project sync-sit --non-interactive --force
           fi
-
-      # Storage rules auto-deploy (issue #282): #108 closed this exact
-      # stale-rules gap for Firestore, but storage stayed manual -- a merged
-      # storage.rules security fix (e.g. #276's verification-documents write
-      # tightening) sat inert in prod until someone remembered the manual
-      # `firebase deploy --only storage`.
-      #
-      # Deliberately LAST, and a hard failure (PR #283 review, round 2): the
-      # WIF service account's storage-side firebaserules grant is expected
-      # (same Rules API the Firestore step exercises) but was not verifiable
-      # from CI ahead of the first run. Running last means a grant failure
-      # turns the run RED -- which GitHub notifies on -- without stranding
-      # the merge half-deployed (rules, hosting and functions have already
-      # shipped). The earlier continue-on-error draft produced a GREEN run
-      # with a buried warning: the same silent-staleness failure this step
-      # exists to close. Once the first post-merge run is green, issue #286
-      # moves this step up beside the Firestore rules deploy to restore the
-      # rules-before-dependent-UI ordering.
-      - name: Deploy Storage rules
-        run: pnpm exec firebase deploy --only storage --project sync-sit --non-interactive
 
       # Unbundle shared
       - run: node scripts/unbundle-shared-after-deploy.js
