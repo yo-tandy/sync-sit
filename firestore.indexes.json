@@ -322,6 +322,31 @@
         { "fieldPath": "guardian.familyId", "order": "ASCENDING" },
         { "fieldPath": "status", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "references",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "tutorUserId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "references",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "doerUserId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "users",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "profiles.doer.notifyNewTasks", "order": "ASCENDING" },
+        { "fieldPath": "profiles.doer.categories", "arrayConfig": "CONTAINS" }
+      ]
     }
   ],
   "fieldOverrides": []
