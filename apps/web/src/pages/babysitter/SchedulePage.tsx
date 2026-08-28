@@ -246,7 +246,7 @@ export function SchedulePage() {
 
   if (loading || holidaysLoading) {
     return (
-      <div>
+      <div data-page-width="wide">
         <TopNav title={t('schedule.title')} backTo="/babysitter" />
         <div className="flex justify-center py-20">
           <Spinner className="h-8 w-8 text-brand-600" />
@@ -256,7 +256,8 @@ export function SchedulePage() {
   }
 
   return (
-    <div>
+    // Wide desktop tier (issue #119): the weekly timeline grid wants the 5xl cap.
+    <div data-page-width="wide">
       <TopNav title={t('schedule.title')} backTo="/babysitter" />
 
       <div className="px-5 pt-4 pb-8">

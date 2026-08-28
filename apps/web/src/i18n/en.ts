@@ -273,6 +273,7 @@ export default {
   // Menu
   menu: {
     openMenu: 'Open menu',
+    primaryNav: 'Primary navigation',
     home: 'Home',
     editProfile: 'Edit Profile',
     babysittingOptions: 'Babysitting Options',

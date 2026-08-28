@@ -259,6 +259,7 @@ export default {
 
   menu: {
     openMenu: 'Ouvrir le menu',
+    primaryNav: 'Navigation principale',
     home: 'Accueil',
     editProfile: 'Modifier le profil',
     babysittingOptions: 'Options de babysitting',
