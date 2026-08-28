@@ -206,4 +206,23 @@ describe('removeCoParent', () => {
       ).rejects.toMatchObject({ code: 'INVALID_ARGUMENT' });
     });
   });
+  describe('caller defence-in-depth (PR #284 round 6)', () => {
+    it('a stale-pointer EX-member (pre-backfill state) cannot remove a genuine member', async () => {
+      // Simulate the pre-fix residue: parent2 keeps the pointer but is
+      // already out of parentIds. Their removal attempt against parent1
+      // must be denied by the family-doc authority, not served by their
+      // own stale pointer.
+      const FieldValue = (await import('firebase-admin/firestore')).FieldValue;
+      await getDb().collection('families').doc(seed.family1Id).update({
+        parentIds: FieldValue.arrayRemove(seed.parent2.uid),
+      });
+      const parent2Token = await getIdToken(seed.parent2.uid);
+      await expect(
+        callFunction('removeCoParent', { targetUserId: seed.parent1.uid }, parent2Token),
+      ).rejects.toMatchObject({ code: 'PERMISSION_DENIED' });
+      // parent1's membership is intact.
+      const fam = await getDb().collection('families').doc(seed.family1Id).get();
+      expect(fam.data()!.parentIds).toContain(seed.parent1.uid);
+    });
+  });
 });

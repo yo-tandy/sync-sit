@@ -41,6 +41,17 @@ export const removeCoParent = onCall(
       throw new HttpsError('failed-precondition', 'No family associated');
     }
 
+    // Defence-in-depth on the CALLER (round-6 review): the pointer and
+    // parentIds can diverge -- the pre-fix callable created exactly that in
+    // prod -- so caller authorization must not rest on the caller's own
+    // pointer alone. The family doc is the authority: a stale-pointer
+    // ex-member cannot remove a genuine remaining member.
+    const familySnap = await db.collection('families').doc(callerFamilyId).get();
+    const familyParentIds = (familySnap.data()?.parentIds ?? []) as string[];
+    if (!familySnap.exists || !familyParentIds.includes(uid)) {
+      throw new HttpsError('permission-denied', 'You are not a member of this family');
+    }
+
     // Verify target is in the same family (either membership field).
     const targetDoc = await db.collection('users').doc(targetUserId).get();
     const targetData = targetDoc.data() as (User & { familyId?: string }) | undefined;
