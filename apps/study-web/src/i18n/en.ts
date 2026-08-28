@@ -1229,6 +1229,15 @@ export default {
     pets: 'Pets',
     petsHint: 'e.g. Cat, small dog',
     notesForTutors: 'Notes for tutors',
+    // Enrollment succeeded but the fresh session cannot pass AuthGuard
+    // role="parent" (sign-in failure or doc-read blip) — confirm the account
+    // in place and hand off to login. Path-neutral copy: the sign-in may
+    // have SUCCEEDED on the blip path (issue #264, mirrors sit issue #262).
+    parent: {
+      readyLoginTitle: 'Your family account is ready',
+      readyLoginDesc: "We couldn't finish setting up your session. Log in with your email and the password you just chose.",
+      readyLoginCta: 'Log in',
+    },
     tutor: {
       title: 'Tutor enrollment',
       stepEmail: 'Verify your EJM email',
