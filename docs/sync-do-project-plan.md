@@ -1327,6 +1327,43 @@ forget and is called out as a checklist item in §13 PR10 (the admin/GDPR PR —
 Zustand + React Router v7 + react-i18next), consuming `@ejm/shared-ui` for
 chrome, enrollment steps, forms and theme.
 
+### 9.0 Brand & visual identity (owner-supplied, PR #243 review)
+
+The app mark is the owner-supplied **sync/do icon** (checked in at
+`docs/assets/sync-do-icon.png`, 512px; the 1254px original is on the PR
+[comment](https://github.com/yo-tandy/sync-sit/pull/243#issuecomment-5449870004)).
+It fixes two things:
+
+- **The brand color is green, taken from the icon**: the background and
+  wordmark green samples at **#16ad05**, the forest green in the figures'
+  clothing at **#043f12**. `shared-ui/src/theme/do.css` is the third
+  `@theme` override alongside `sit.css` (red) and `study.css` (blue),
+  same `--color-brand-*` contract:
+
+  ```
+  --color-brand-50:  #eefbe9;   --color-brand-400: #4cc72e;
+  --color-brand-100: #d8f5cd;   --color-brand-500: #16ad05;  /* icon green */
+  --color-brand-200: #b4ea9f;   --color-brand-600: #0d8204;  /* primary buttons */
+  --color-brand-300: #86da68;   --color-brand-700: #085c1c;
+                                --color-brand-800: #043f12;  /* icon forest green */
+  ```
+
+  600 is deliberately darker than the icon green: white-on-#16ad05 is 2.99:1,
+  below WCAG AA for the button/link roles brand-600 plays in both sibling
+  apps, while #0d8204 measures 4.99:1 (sit's #df1a30 sits at 4.85:1). The icon green itself lives at 500
+  (accents, active states), exactly how sit keeps its display red at 500/600
+  and study its blues at 500–800.
+- **Design and flow match sit/study as much as possible** (owner directive):
+  the same shared-ui chrome (TopNav/AppBar, Card, Dialog, Badge, wizard
+  StepIndicator), the same enrollment-wizard shape, the same
+  dashboard-list-detail idioms and i18n structure — the brand override and
+  the domain screens are the only intended deltas. Any flow that deviates
+  from its sibling-app equivalent needs a stated reason in its PR, the same
+  bar the parity sweep (#229–#242) applied across sit and study.
+
+Favicon, PWA manifest icons, and the switcher brand mark all derive from the
+checked-in icon at PR2 (sizes per sit's #197 manifest work).
+
 ### 9.1 Family
 
 - **Post a task** — a wizard: category → sub-category → timing (the four models
@@ -1724,7 +1761,7 @@ the repo has been using.
 | PR | Scope | Est. |
 |---|---|---|
 | **1** | `packages/do-core`: types (task, offer, doer profile), the seven categories with sub-categories, the considerations content EN+FR, validation bounds, unit tests. No UI, no schema. | 8 |
-| **2** | `apps/do-web` scaffold + third hosting target + three-way app switcher + brand-mark consolidation into `shared-ui`. Empty shell that builds and deploys. | 8 |
+| **2** | `apps/do-web` scaffold + third hosting target + three-way app switcher + brand-mark consolidation into `shared-ui`; `theme/do.css` (§9.0 palette) and the favicon/manifest/switcher derivations of the checked-in icon. Empty shell that builds and deploys, in brand. | 8 |
 | **3** | Firestore: `doTasks` + `taskOffers` rules and indexes, **plus the `users` update-rule amendment** (`doerIdentityUnchanged()`, §7.2) — without it the board gate is client-bypassable. Rules tests under the stripped-copy mutation-verify harness. | 8 |
 | **4** | `profiles.doer` + `doEnrollDoer` / `doUpdateDoerProfile`, abbreviated cross-app enrollment, enrollment UI. | 8 |
 | **5** | Task callables: `doPostTask`, `doUpdateTask`, `doCancelTask`, the sweep. Integration tests. | 8 |
@@ -1959,7 +1996,9 @@ decision 1 already puts the judgement call.
 
 ### Still open
 
-- **Q4 — Brand and domain.** `sync-do.com`? Hosting site id? The plan assumes
+- **Q4 — Brand and domain.** The BRAND half is now settled (owner, PR #243
+  review): the sync/do icon and its green palette, §9.0. Still open: the
+  domain (`sync-do.com`?) and hosting site id — the plan assumes
   `sync-do-app` as the Firebase site, matching `sync-study-app`.
 - **Q6 — Which post-acceptance reveal mechanism?** §6.4 settles that the
   *offer* is the carrier and rules out widening the `users` read rule, but
