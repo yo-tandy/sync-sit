@@ -4,6 +4,7 @@ import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { verifyAdmin } from './verifyAdmin.js';
 import { writeAuditLog } from './writeAuditLog.js';
+import { REFERENCE_PROVIDER_KEYS } from './referenceKeys.js';
 
 interface ExportUserDataInput {
   targetUserId: string;
@@ -11,7 +12,8 @@ interface ExportUserDataInput {
 
 /**
  * Export all data related to a user: profile, family, appointments,
- * notifications, and audit logs targeting them.
+ * notifications, audit logs targeting them, guardian links/invites, and
+ * references/endorsements (both sides: provider and submitter).
  */
 export const exportUserData = onCall(
   { region: 'europe-west1', cors: getCorsOrigin() },
@@ -124,6 +126,35 @@ export const exportUserData = onCall(
       ).values(),
     );
 
+    // References / endorsements (issue #295): a doc in the shared
+    // `references` collection is personal data of BOTH parties — the provider
+    // it names (babysitter/tutor/doer, see REFERENCE_PROVIDER_KEYS) and the
+    // family member who submitted it (submittedByUserId, plus family-level
+    // docs via submittedByFamilyId — endorsement text is family-authored, so
+    // a parent's export includes their family's endorsements the same way it
+    // includes family appointments).
+    const [providerRefSnaps, submittedRefsSnap, familyRefsSnap] = await Promise.all([
+      Promise.all(
+        REFERENCE_PROVIDER_KEYS.map((key) =>
+          db.collection('references').where(key, '==', targetUserId).get(),
+        ),
+      ),
+      db.collection('references').where('submittedByUserId', '==', targetUserId).get(),
+      familyId
+        ? db.collection('references').where('submittedByFamilyId', '==', familyId).get()
+        : Promise.resolve({ docs: [] } as any),
+    ]);
+
+    const references = Array.from(
+      new Map(
+        [
+          ...providerRefSnaps.flatMap((snap) => snap.docs),
+          ...submittedRefsSnap.docs,
+          ...familyRefsSnap.docs,
+        ].map((doc: any) => [doc.id, { id: doc.id, ...doc.data() }]),
+      ).values(),
+    );
+
     await writeAuditLog({
       adminUserId: request.auth.uid,
       action: 'export_user_data',
@@ -138,6 +169,7 @@ export const exportUserData = onCall(
       auditLogs,
       guardianLinks,
       kidInvites,
+      references,
     };
   }
 );
