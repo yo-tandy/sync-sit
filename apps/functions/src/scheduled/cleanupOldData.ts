@@ -2,7 +2,9 @@ import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { resolveConfigValue } from '@ejm/shared-functions/config/adminConfig.js';
 import { FieldPath, FieldValue } from 'firebase-admin/firestore';
 import type { Firestore } from 'firebase-admin/firestore';
+import { getStorage } from 'firebase-admin/storage';
 import { db } from '../config/firebase.js';
+import { runDoSweepTasks } from '../do/sweepTasks.js';
 
 export interface CleanupStats {
   totalDeleted: number;
@@ -413,6 +415,25 @@ export const cleanupOldData = onSchedule(
     timeZone: 'Europe/Paris',
   },
   async () => {
-    await runCleanupOldData(db, new Date());
+    const now = new Date();
+    // The sync-do sweep rides this schedule rather than adding a second job
+    // (plan §8's doSweepTasks row). The halves are independent: a failure in
+    // one must not starve the other, so each error is captured and the
+    // first is rethrown at the end (a thrown error is what surfaces the run
+    // as failed in Cloud Scheduler).
+    let firstError: unknown = null;
+    try {
+      await runCleanupOldData(db, now);
+    } catch (err) {
+      console.error('runCleanupOldData failed:', err);
+      firstError = err;
+    }
+    try {
+      await runDoSweepTasks(db, getStorage().bucket(), now);
+    } catch (err) {
+      console.error('runDoSweepTasks failed:', err);
+      firstError = firstError ?? err;
+    }
+    if (firstError) throw firstError;
   },
 );
