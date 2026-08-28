@@ -37,6 +37,8 @@ export interface DoSweepStats {
   taskPhotoObjectsDeleted: number;
   quarantineObjectsDeleted: number;
   orphanPhotoObjectsDeleted: number;
+  /** Cascades that failed and were skipped (poison-pill isolation). */
+  taskCascadeErrors: number;
 }
 
 /**
@@ -85,6 +87,7 @@ export async function runDoSweepTasks(
     taskPhotoObjectsDeleted: 0,
     quarantineObjectsDeleted: 0,
     orphanPhotoObjectsDeleted: 0,
+    taskCascadeErrors: 0,
   };
 
   /** Delete one task with its offers and photo objects (§11.4's cascade). */
@@ -95,18 +98,22 @@ export async function runDoSweepTasks(
     // Offers first: every offer on the task, regardless of status — the
     // task is the reason the offer exists, and admin inspection of a
     // deleted task's offers is not a supported surface (§11.4 retention).
+    // Chunked below Firestore's 500-writes-per-batch cap: nothing bounds
+    // offers-per-task in this PR's world (DO_OFFER_MAX_PER_TASK caps LIVE
+    // offers only, and PR6 adds the write path), and one oversized batch
+    // must not poison the cascade.
     const offers = await db
       .collection('taskOffers')
       .where('taskId', '==', taskRef.id)
       .get();
-    if (!offers.empty) {
+    for (let i = 0; i < offers.docs.length; i += 400) {
       const batch = db.batch();
-      for (const offer of offers.docs) {
+      for (const offer of offers.docs.slice(i, i + 400)) {
         batch.delete(offer.ref);
       }
       await batch.commit();
-      stats.offersDeleted += offers.size;
     }
+    stats.offersDeleted += offers.size;
     // Task doc BEFORE its photo objects, so the reference check below never
     // counts the task being deleted.
     await taskRef.delete();
@@ -174,12 +181,27 @@ export async function runDoSweepTasks(
         .limit(SWEEP_PAGE)
         .get();
       if (snap.empty) break;
+      // Per-task error isolation: one poisoned cascade (a persistent 5xx on
+      // an object delete, say) must log-and-continue, not kill the rest of
+      // this category, the remaining categories and both storage passes —
+      // a deterministic per-doc failure would otherwise wedge the sweep at
+      // the same document every day, forever.
+      let deleted = 0;
       for (const doc of snap.docs) {
-        await deleteTaskCascade(doc.ref, doc.data() as TaskDoc);
+        try {
+          await deleteTaskCascade(doc.ref, doc.data() as TaskDoc);
+          deleted += 1;
+        } catch (err) {
+          stats.taskCascadeErrors += 1;
+          console.error(`doSweepTasks: cascade failed for ${doc.ref.id}:`, err);
+        }
       }
-      stats[sweep.statKey] += snap.size;
-      console.log(`doSweepTasks: deleted ${snap.size} ${sweep.label} tasks`);
+      stats[sweep.statKey] += deleted;
+      console.log(`doSweepTasks: deleted ${deleted} ${sweep.label} tasks`);
       if (snap.size < SWEEP_PAGE) break;
+      // Every doc in a full page failed: re-querying returns the same page,
+      // so further passes only repeat the failures — stop this category.
+      if (deleted === 0) break;
     }
   }
 
@@ -223,35 +245,47 @@ export async function runDoSweepTasks(
   // Both listings are PAGED with a pass ceiling, mirroring the Firestore
   // sweeps: an autopaginated getFiles() pulls every object's metadata into
   // memory and its runtime scales with the whole prefix — on a shared
-  // 540s-bounded schedule the walk must be bounded per run, with the
-  // remainder picked up tomorrow (deletions shrink the prefix, so the
-  // backlog drains across runs by construction).
+  // 540s-bounded schedule the walk must be bounded per run.
   type StorageFile = ReturnType<StorageBucket['file']>;
+  interface ListPageResult {
+    /** Name of the last file examined (the resume point), or null. */
+    lastName: string | null;
+    /** True when the walk reached the end of the prefix within the ceiling. */
+    exhausted: boolean;
+  }
   const listPages = async (
     prefix: string,
+    startOffset: string | undefined,
     onFile: (file: StorageFile) => Promise<void>,
-  ): Promise<void> => {
+  ): Promise<ListPageResult> => {
     let pageToken: string | undefined;
+    let lastName: string | null = null;
     for (let pass = 0; pass < SWEEP_MAX_PASSES; pass++) {
       // getFiles' manual paging: autoPaginate off, explicit token.
+      // startOffset (lexicographic, inclusive) applies to the first page
+      // only — subsequent pages continue from the token.
       const [files, nextQuery] = (await bucket.getFiles({
         prefix,
         maxResults: 1000,
         autoPaginate: false,
-        pageToken,
+        ...(pageToken ? { pageToken } : startOffset ? { startOffset } : {}),
       })) as unknown as [StorageFile[], { pageToken?: string } | null];
       for (const file of files) {
         await onFile(file);
+        lastName = file.name;
       }
       pageToken = nextQuery?.pageToken;
-      if (!pageToken) break;
+      if (!pageToken) return { lastName, exhausted: true };
     }
+    return { lastName, exhausted: false };
   };
 
   // Quarantine originals the stripper never claimed (its fail-closed path
   // deletes hostile objects immediately; anything left is stripper outage
-  // residue or abandonment).
-  await listPages(DO_UPLOADS_PREFIX, async (file) => {
+  // residue or abandonment). No cursor needed: every stale object is
+  // deleted and fresh ones age in behind it, so THIS prefix genuinely
+  // drains across runs from a head start.
+  await listPages(DO_UPLOADS_PREFIX, undefined, async (file) => {
     if (isStale(file.metadata.timeCreated as string | undefined)) {
       await file.delete({ ignoreNotFound: true });
       stats.quarantineObjectsDeleted += 1;
@@ -264,21 +298,43 @@ export async function runDoSweepTasks(
   // NOTE: if TaskDoc's photo entries ever gain a third field, this exact
   // match (and deleteTaskCascade's) silently stops matching; keep the
   // stored pair shape and these queries in lockstep.
-  await listPages(DO_PHOTOS_PREFIX, async (file) => {
-    if (!isStale(file.metadata.timeCreated as string | undefined)) return;
-    const parts = file.name.split('/');
-    if (parts.length !== 3) return;
-    const [, uid, photoId] = parts;
-    const referencing = await db
-      .collection('doTasks')
-      .where('photos', 'array-contains', { uid, photoId })
-      .limit(1)
-      .get();
-    if (referencing.empty) {
-      await file.delete({ ignoreNotFound: true });
-      stats.orphanPhotoObjectsDeleted += 1;
-    }
-  });
+  //
+  // Unlike the quarantine pass, this walk does NOT drain from a head start:
+  // REFERENCED objects are kept, permanently occupying the front of the
+  // lexicographic listing, so a head-restarting capped walk would stop
+  // examining anything past the ceiling once the prefix outgrows it —
+  // orphans in the tail would be retained forever, silently voiding the
+  // §11.4 guarantee. The cursor (cronState/doPhotoOrphanSweep, the
+  // appointment-note-redaction precedent) makes successive runs ADVANCE
+  // through the prefix: a truncated run stores where it stopped and the
+  // next resumes there (startOffset is inclusive, so re-examining the
+  // boundary object is idempotent); an exhausted walk clears the cursor and
+  // the next run starts from the head.
+  const orphanCursorRef = db.collection('cronState').doc('doPhotoOrphanSweep');
+  const storedCursor = (await orphanCursorRef.get()).data()?.startOffset;
+  const orphanWalk = await listPages(
+    DO_PHOTOS_PREFIX,
+    typeof storedCursor === 'string' ? storedCursor : undefined,
+    async (file) => {
+      if (!isStale(file.metadata.timeCreated as string | undefined)) return;
+      const parts = file.name.split('/');
+      if (parts.length !== 3) return;
+      const [, uid, photoId] = parts;
+      const referencing = await db
+        .collection('doTasks')
+        .where('photos', 'array-contains', { uid, photoId })
+        .limit(1)
+        .get();
+      if (referencing.empty) {
+        await file.delete({ ignoreNotFound: true });
+        stats.orphanPhotoObjectsDeleted += 1;
+      }
+    },
+  );
+  await orphanCursorRef.set(
+    { startOffset: orphanWalk.exhausted ? null : orphanWalk.lastName },
+    { merge: true },
+  );
 
   console.log(
     `doSweepTasks complete: ${JSON.stringify(stats)}`,

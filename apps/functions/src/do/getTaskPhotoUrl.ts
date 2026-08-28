@@ -58,7 +58,14 @@ export const doGetTaskPhotoUrl = onCall(
     const isBoardDoer =
       isActiveEnrolledDoer(callerData) &&
       (task.status === 'open' || task.assignedUserId === uid);
-    if (!isFamilyMember && !isBoardDoer && !isAdmin(callerData as unknown as User)) {
+    // The admin disjunct requires `active` like its two siblings (both
+    // check it — isFamilyMember explicitly, isActiveEnrolledDoer
+    // internally): a blocked admin account must not keep a working signing
+    // endpoint, the same round-1 reasoning that gated doGetOwnPhotoUrl.
+    const isActiveAdmin =
+      isAdmin(callerData as unknown as User) &&
+      (callerData.status as string | undefined) === 'active';
+    if (!isFamilyMember && !isBoardDoer && !isActiveAdmin) {
       throw new HttpsError(
         'permission-denied',
         'You do not have access to this task photo',

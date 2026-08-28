@@ -50,12 +50,35 @@ import { DO_UPLOADS_PREFIX, photoObjectPath } from './taskAccess.js';
  */
 const MAX_INPUT_PIXELS = 50_000_000;
 
+/**
+ * Output raster bound (longest edge, px). Board photos never render larger;
+ * bounding the OUTPUT collapses the re-encode's time and memory profile so
+ * a legitimately huge input (a 45MP AVIF is an ordinary phone file) cannot
+ * ride the decode ceiling into a deadline kill.
+ */
+const MAX_OUTPUT_EDGE = 2048;
+
+/**
+ * Retry bailout: `retry: true` re-fires transport failures, but a failure
+ * that kills the PROCESS (deadline, OOM) never reaches the catch — so a
+ * deterministic one would ride the retry window indefinitely. An event
+ * older than this is therefore consumed fail-closed (delete + stop): any
+ * failure mode, including ones not yet imagined, self-terminates within
+ * the hour instead of crash-looping for Eventarc's full retry window.
+ */
+const EVENT_MAX_AGE_MS = 60 * 60 * 1000;
+
 export const doStripTaskPhoto = onObjectFinalized(
   {
     region: 'europe-west1',
-    // sharp holds the decoded raster in memory; 512MiB covers
-    // MAX_INPUT_PIXELS-bounded rasters with headroom.
+    // sharp holds the decoded raster in memory: MAX_INPUT_PIXELS × 4 bytes
+    // ≈ 200MB worst case, plus the (output-bounded) encode buffer.
     memory: '512MiB',
+    // Explicit, not the 60s gen-2 default: a worst-case decode at the
+    // pixel ceiling plus a bounded re-encode fits comfortably, and the
+    // deadline is what turns "slow" into a process kill that skips the
+    // fail-closed path.
+    timeoutSeconds: 120,
     retry: true, // see docstring — transport errors must re-fire
   },
   async (event) => {
@@ -65,6 +88,16 @@ export const doStripTaskPhoto = onObjectFinalized(
     }
     const bucket = getStorage().bucket(event.data.bucket);
     const file = bucket.file(name);
+
+    // Retry-window bailout (see EVENT_MAX_AGE_MS): an event still failing
+    // an hour after the upload is deterministically stuck — consume it
+    // fail-closed rather than paying for another lap.
+    const eventAgeMs = Date.now() - Date.parse(event.time ?? '');
+    if (Number.isFinite(eventAgeMs) && eventAgeMs > EVENT_MAX_AGE_MS) {
+      console.warn(`doStripTaskPhoto: consuming stuck event for ${name} (age ${Math.round(eventAgeMs / 60000)}m)`);
+      await file.delete({ ignoreNotFound: true });
+      return;
+    }
 
     /** The fail-closed exit: remove the quarantine object, never republish. */
     const rejectQuarantine = async (why: string): Promise<void> => {
@@ -124,23 +157,48 @@ export const doStripTaskPhoto = onObjectFinalized(
     }
 
     // Decode + re-encode. sharp writes NO metadata unless withMetadata()
-    // is called — the re-encode itself is the strip.
-    const REPUBLISHABLE = new Set(['jpeg', 'png', 'webp', 'gif', 'avif']);
+    // is called — the re-encode itself is the strip. Output codec is
+    // NORMALIZED, never round-tripped from the input: an AVIF input must
+    // not force an AVIF (libaom) encode, which at tens of megapixels
+    // routinely exceeds the function deadline — the deterministic-timeout
+    // crash-loop the fail-closed design rules out. jpeg/png/webp encode in
+    // their own (fast) codecs; avif lands as webp (keeps alpha), gif as
+    // png (first frame, keeps alpha — board photos, not animations). svg
+    // is deliberately ABSENT: prebuilt sharp decodes it, it is scriptable,
+    // and the read legs sign inline-rendering URLs — the §11.2 read-path
+    // safety rests on this map never emitting a scriptable type.
+    const OUTPUT_FORMAT: Record<string, 'jpeg' | 'png' | 'webp'> = {
+      jpeg: 'jpeg',
+      png: 'png',
+      webp: 'webp',
+      avif: 'webp',
+      gif: 'png',
+    };
     let stripped: Buffer;
-    let format: string;
+    let outFormat: 'jpeg' | 'png' | 'webp';
     try {
       const image = sharp(original, { limitInputPixels: MAX_INPUT_PIXELS });
       const meta = await image.metadata();
-      if (!meta.format || !REPUBLISHABLE.has(meta.format)) {
+      const mapped = meta.format ? OUTPUT_FORMAT[meta.format] : undefined;
+      if (!mapped) {
         // Decodable but not a format the pipeline republishes (svg is
         // scriptable, pdf/heif are not board photos): fail closed.
         await rejectQuarantine(`unsupported format ${meta.format ?? 'unknown'}`);
         return;
       }
-      format = meta.format;
-      // .rotate() bakes the EXIF orientation into the pixels; output format
-      // defaults to the input format.
-      stripped = await image.rotate().toBuffer();
+      outFormat = mapped;
+      // .rotate() bakes the EXIF orientation into the pixels; the resize
+      // bounds the OUTPUT raster (board photos never render larger), which
+      // collapses the encode's time and memory profile the same way
+      // limitInputPixels bounds the decode's.
+      stripped = await image
+        .rotate()
+        .resize(MAX_OUTPUT_EDGE, MAX_OUTPUT_EDGE, {
+          fit: 'inside',
+          withoutEnlargement: true,
+        })
+        .toFormat(outFormat)
+        .toBuffer();
     } catch (err) {
       // Deterministic decode failure — hostile or corrupt bytes labelled
       // image/*. Delete and stop; throwing would re-fire forever (§8).
@@ -151,14 +209,15 @@ export const doStripTaskPhoto = onObjectFinalized(
     }
 
     // Republish under the final prefix with a SERVER-set contentType (the
-    // sniffed format, not the client's claim), then delete the original.
+    // normalized output format, never the client's claim), then delete the
+    // original.
     await finalFile.save(stripped, {
       resumable: false,
-      metadata: { contentType: `image/${format}` },
+      metadata: { contentType: `image/${outFormat}` },
     });
     await file.delete({ ignoreNotFound: true });
     console.log(
-      `doStripTaskPhoto: republished ${name} -> ${photoObjectPath(uid, uploadId)} (${format}, ${stripped.length} bytes)`,
+      `doStripTaskPhoto: republished ${name} -> ${photoObjectPath(uid, uploadId)} (${outFormat}, ${stripped.length} bytes)`,
     );
   },
 );

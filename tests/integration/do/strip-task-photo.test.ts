@@ -94,6 +94,29 @@ describe('doStripTaskPhoto (storage trigger)', () => {
     expect(republished).toBe(false);
   });
 
+  it('rejects an SVG even under an image/* contentType — the allowlist pin the inline read path depends on', async () => {
+    // storage.rules' image/.* admits image/svg+xml, and prebuilt sharp CAN
+    // decode SVG — so the OUTPUT_FORMAT allowlist is the only thing keeping
+    // a scriptable document out of the inline-rendering signed-URL path
+    // (the §11.2 divergence from getVerificationDocument's attachment
+    // disposition rests on it). A decodable-but-unrepublishable input must
+    // exit via delete-and-stop like hostile bytes do.
+    const bucket = getBucket();
+    const svg = Buffer.from(
+      '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="48"><script>alert(1)</script><rect width="64" height="48" fill="red"/></svg>',
+    );
+    await bucket.file('do-uploads/strip-u6/sneaky-svg').save(svg, {
+      resumable: false,
+      metadata: { contentType: 'image/svg+xml' },
+    });
+    const deleted = await waitFor(async () =>
+      !(await bucket.file('do-uploads/strip-u6/sneaky-svg').exists())[0]);
+    expect(deleted).toBe(true);
+    await new Promise((r) => setTimeout(r, 1000));
+    const [republished] = await bucket.file('do-photos/strip-u6/sneaky-svg').exists();
+    expect(republished).toBe(false);
+  });
+
   it('rejects an uploadId outside the photo-id charset (could never be referenced by a task)', async () => {
     const bucket = getBucket();
     const original = readFileSync(FIXTURE);

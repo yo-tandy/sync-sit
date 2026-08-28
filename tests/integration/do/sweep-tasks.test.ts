@@ -63,7 +63,7 @@ describe('runDoSweepTasks (rides the cleanupOldData schedule)', () => {
 
   beforeEach(async () => {
     const db = getDb();
-    for (const col of ['doTasks', 'taskOffers']) {
+    for (const col of ['doTasks', 'taskOffers', 'cronState']) {
       const docs = await db.collection(col).get();
       await Promise.all(docs.docs.map((d) => d.ref.delete()));
     }
@@ -128,6 +128,44 @@ describe('runDoSweepTasks (rides the cleanupOldData schedule)', () => {
     stats = await runDoSweepTasks(getDb(), bucket, new Date());
     expect(stats.expiredTasksDeleted).toBe(1);
     expect((await bucket.file('do-photos/sweep-u5/shared-photo').exists())[0]).toBe(false);
+  });
+
+  it('a task with more offers than one Firestore batch holds (>400) still cascades cleanly', async () => {
+    // The cascade chunks its offer deletes below the 500-writes batch cap:
+    // one oversized task must not become a poison pill the sweep dies on
+    // every day (DO_OFFER_MAX_PER_TASK caps LIVE offers only).
+    const db = getDb();
+    await seedTask('sweep-many-offers', { expiresAt: daysAgo(1) });
+    const batch = db.batch();
+    for (let i = 0; i < 401; i++) {
+      const ref = db.collection('taskOffers').doc(`sweep-many-offers_o${i}`);
+      batch.set(ref, {
+        offerId: ref.id, taskId: 'sweep-many-offers', doerUserId: `d${i}`,
+        familyId: 'sweep-family', status: 'withdrawn',
+        createdAt: daysAgo(5), updatedAt: daysAgo(5),
+      });
+    }
+    await batch.commit();
+
+    const stats = await runDoSweepTasks(getDb(), getBucket(), new Date());
+    expect(stats.expiredTasksDeleted).toBe(1);
+    expect(stats.offersDeleted).toBe(401);
+    expect(stats.taskCascadeErrors).toBe(0);
+    expect(await taskExists('sweep-many-offers')).toBe(false);
+    const remaining = await db.collection('taskOffers')
+      .where('taskId', '==', 'sweep-many-offers').get();
+    expect(remaining.size).toBe(0);
+  });
+
+  it('the orphan pass persists its cursor wiring: an exhausted walk clears cronState/doPhotoOrphanSweep', async () => {
+    const bucket = getBucket('do-sweep-side-bucket');
+    // Seed a truncation cursor as a prior run would have left it; a full
+    // walk (tiny prefix — exhausted within the ceiling) must clear it so
+    // the next run starts from the head.
+    await getDb().collection('cronState').doc('doPhotoOrphanSweep').set({ startOffset: 'do-photos/aaa/zzz' });
+    await runDoSweepTasks(getDb(), bucket, new Date());
+    const cursor = (await getDb().collection('cronState').doc('doPhotoOrphanSweep').get()).data();
+    expect(cursor?.startOffset).toBeNull();
   });
 
   it('deletes cancelled tasks older than 30 days, keeps younger ones', async () => {

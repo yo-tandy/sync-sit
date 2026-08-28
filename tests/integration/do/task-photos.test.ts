@@ -307,5 +307,17 @@ describe('task photo pipeline — write-path pins and signing callables', () => 
         await db.collection('users').doc(DOER_UID).update({ status: 'active' });
       }
     });
+
+    it('a blocked ADMIN is refused too — every disjunct requires an active account', async () => {
+      const db = getDb();
+      await getAdminAuth().createUser({ uid: 'blocked-admin-photos', email: 'blocked.admin.photos@test.com' });
+      await db.collection('users').doc('blocked-admin-photos').set({
+        uid: 'blocked-admin-photos', isAdmin: true, status: 'blocked',
+        firstName: 'Bl', lastName: 'Ocked', createdAt: new Date(), updatedAt: new Date(),
+      });
+      const blockedAdminToken = await getIdToken('blocked-admin-photos');
+      await expect(callFunction('doGetTaskPhotoUrl', { taskId: openTaskId, photoId: 'p1-photo-1' }, blockedAdminToken))
+        .rejects.toMatchObject({ code: 'PERMISSION_DENIED' });
+    });
   });
 });
