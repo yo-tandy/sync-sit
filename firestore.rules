@@ -109,6 +109,26 @@ service cloud.firestore {
                == tutorField(resource.data, 'personalCode', '');
     }
 
+    // Helper: a doer-profile field on a user-doc data map (safe default).
+    function doerField(d, key, def) {
+      return d.get('profiles', {}).get('doer', {}).get(key, def);
+    }
+
+    // Helper: server-owned state inside profiles.doer that the client must
+    // never mutate directly (issue #299, sync-do plan §7.2). sync-do is in
+    // the TUTOR case, not the babysitter case: enrollmentComplete gates the
+    // doTasks board READ rule and the §11.1 offering gate, not just search
+    // visibility. Left client-writable, an owner could abandon enrollment,
+    // flip the flag from the client SDK, and read every open task on the
+    // board — free-text descriptions, photos, areaLabel, familyName; exactly
+    // the PII surface plan §11.2 governs.
+    // - enrollmentComplete: server-owned — doEnrollDoer sets it, nothing else.
+    // Defaults keep the guard trivially true for users WITHOUT a doer profile.
+    function doerIdentityUnchanged() {
+      return doerField(request.resource.data, 'enrollmentComplete', false)
+          == doerField(resource.data, 'enrollmentComplete', false);
+    }
+
     // Helper: the owner-editable tutor numerics must stay in enrollment's
     // validated ranges (paddingMin int 0-60; areaRadiusKm null or 0-50) —
     // client-side guards are UX only; THIS is the trust boundary. Post-state
@@ -297,8 +317,8 @@ service cloud.firestore {
       // - profileRolesUnchanged: the SET of role slots can't change — blocks a
       //   client granting itself a new role (e.g. injecting profiles.babysitter).
       // - babysitterIdentityUnchanged / tutorIdentityUnchanged /
-      //   parentFamilyIdUnchanged: server-owned fields nested inside a profile
-      //   the owner otherwise may edit.
+      //   doerIdentityUnchanged / parentFamilyIdUnchanged: server-owned
+      //   fields nested inside a profile the owner otherwise may edit.
       // NOTE: `profiles.babysitter.searchable` and `profiles.tutor.searchable`
       //   are intentionally editable — they are user-controlled by design
       //   (soft hide from search).
@@ -327,6 +347,7 @@ service cloud.firestore {
                     && profileRolesUnchanged()
                     && babysitterIdentityUnchanged()
                     && tutorIdentityUnchanged()
+                    && doerIdentityUnchanged()
                     && parentFamilyIdUnchanged()
                     && identityUnlockedOrUnchanged()
                     && rootIdentitySetOnce()
@@ -666,6 +687,78 @@ service cloud.firestore {
       );
       allow create, update: if false; // publish callables only
       allow delete: if isFamilyMember(resource.data.familyId); // withdraw
+    }
+
+    // sync-do tasks (plan §7.2): written exclusively by the do* callables
+    // (Admin SDK). Follows the house style established by publishedSearches —
+    // provider disjunct first so a doer's list query never evaluates a
+    // family-doc get() (the H2 ||-chain lesson above), and every write denied
+    // to clients.
+    match /doTasks/{taskId} {
+      allow read: if isAuth() && (
+           // The doer grant is scoped to OPEN tasks plus the doer's own
+           // assignments — not the whole collection. An unscoped caller-only
+           // disjunct let any enrolled student read completed and cancelled
+           // tasks (descriptions, photos, familyName, agreedPrice) and, via
+           // the (assignedUserId, status, updatedAt) index, enumerate ANOTHER
+           // student's assignments and what they were paid (plan review
+           // round 7). Both halves stay provable: the board query filters
+           // status == 'open', and "my assignments" filters
+           // assignedUserId == own uid.
+           ((resource.data.status == 'open'
+             || request.auth.uid == resource.data.assignedUserId)
+            && callerData().get('profiles', {}).get('doer', null) != null
+            && doerField(callerData(), 'enrollmentComplete', false) == true
+            && callerData().get('status', '') == 'active')
+        // isAdmin BEFORE isFamilyMember: both are get()s on a document that
+        // may not exist, and a deleted family would error the || chain and
+        // deny the read a later disjunct should grant (the references-rule
+        // precedent from PR #210 review; same ordering as taskOffers below).
+        || isAdmin()
+        || isFamilyMember(resource.data.familyId)
+      );
+      allow create, update: if false;                    // callables only
+      // Delete is false too, UNLIKE publishedSearches' rules-gated client
+      // withdraw: a task with offers attached cannot be deleted without also
+      // expiring those offers, so withdrawal is a callable (doCancelTask)
+      // that does both (plan §7.2).
+      allow delete: if false;
+    }
+
+    // sync-do offers (plan §7.2): written exclusively by the do* callables
+    // (Admin SDK) — no client write path, not even the student's own
+    // withdraw (doWithdrawOffer owns the offerCount decrement).
+    match /taskOffers/{offerId} {
+      allow read: if isAuth() && (
+           request.auth.uid == resource.data.doerUserId
+        // isAdmin BEFORE either isFamilyMember(): both are get()s on a
+        // document that may not exist, and a deleted family would error the
+        // || chain and deny the read a later disjunct should grant (the
+        // references-rule precedent from PR #210 review). Inspecting an
+        // offer whose family was deleted is exactly what admin access is for.
+        || isAdmin()
+        // ALLOW-LIST, not a != exclusion. An earlier draft granted the family
+        // everything except pending_guardian — which leaked guardian-DENIED
+        // offers: §8 moves a denial to `withdrawn`, so the moment a
+        // supervising parent refused, the offer (doer name, photo, bio,
+        // price, message, the helper's name and age) became family-readable.
+        // The family's UI would never show it, but the rule is the trust
+        // boundary, not the query. The allow-list also keeps a student's own
+        // withdrawal invisible to the family, which makes guardian denial
+        // and self-withdrawal indistinguishable from the family's side —
+        // deliberately.
+        || (resource.data.status in ['pending', 'accepted', 'declined']
+            && isFamilyMember(resource.data.familyId))
+        // Supervising-parent disjunct: the student's own family approves a
+        // pending_guardian offer. `guardian` is ABSENT (never null) on
+        // non-flagged offers (§4.2) — the .get() defaults handle the absent
+        // key; a present-but-null guardian would error this disjunct and,
+        // under the H2 ||-chain behaviour, deny the whole read.
+        || (resource.data.status == 'pending_guardian'
+            && resource.data.get('guardian', {}).get('familyId', null) != null
+            && isFamilyMember(resource.data.get('guardian', {}).get('familyId', null)))
+      );
+      allow create, update, delete: if false;            // callables only
     }
 
     // Deny everything else. Server-only collections deliberately covered
