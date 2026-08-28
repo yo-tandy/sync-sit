@@ -5,6 +5,7 @@ import { PrivacyPage, TermsPage } from '@ejm/shared-ui';
 // so deferring it would only put a spinner in front of itself.
 import { PublicLayout } from '@/layouts/PublicLayout';
 import { HomeLayout } from '@/layouts/HomeLayout';
+import { FamilyLayout } from '@/layouts/FamilyLayout';
 
 // Route pages are code-split — each is a lazy() dynamic import (its own
 // chunk, fetched on first visit). See lazyPages.ts.
@@ -18,6 +19,7 @@ import {
   ComingSoonPage,
   DoerEnrollment,
   HomePage,
+  MyTasksPage,
 } from '@/lazyPages';
 import { BRAND, SUPPORT_EMAIL } from '@/constants/brand';
 
@@ -47,5 +49,11 @@ export const router = createBrowserRouter([
   {
     element: <HomeLayout />,
     children: [{ path: '/home', element: <HomePage /> }],
+  },
+  {
+    element: <FamilyLayout />,
+    children: [
+      { path: '/family', element: <MyTasksPage /> },
+    ],
   },
 ]);
