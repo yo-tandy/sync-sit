@@ -37,10 +37,6 @@ import { paddedBlock, overlaps, buildMergedOverride } from './sessionOverride.js
 import { generateInstances, type PerDateClaimInputs } from './generateInstances.js';
 import { dropWithinNotice } from './recurringWindow.js';
 
-/** How many weeks of occurrences a recurring confirm materializes up front. */
-
-/** Notice window: a session cannot be confirmed within this many hours of "now". */
-
 /**
  * respondToSession — the tutor confirms or declines a pending session request.
  *

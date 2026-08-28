@@ -30,10 +30,8 @@ import { bookSessionInputSchema } from '../validation/session.js';
 import { computeSingleDateAvailability } from '../availability/singleDateAvailability.js';
 import type { HolidayPeriod } from '../availability/computeDateAvailability.js';
 
-/** Notice window: families cannot book within this many hours of "now". */
 const SLOT_MINUTES = 15;
 const SLOTS_PER_DAY = 96;
-/** How many weeks of candidate occurrences a recurring request is expanded over. */
 
 /** Human-readable weekday for notification copy. */
 const DAY_LABELS: Record<DayOfWeek, string> = {
@@ -357,8 +355,9 @@ export const bookSession = onCall(
       const bookingDate = date!;
       const bookingStart = startTime!;
 
-      // ── 24h minimum notice (Paris wall clock, DST-safe) ──
-      const sessionStart = parisWallTimeToUtc(bookingDate, bookingStart);      const noticeHours = await getConfigValue('bookingNoticeHours');
+      // ── Minimum booking notice (bookingNoticeHours, Paris wall clock, DST-safe) ──
+      const sessionStart = parisWallTimeToUtc(bookingDate, bookingStart);
+      const noticeHours = await getConfigValue('bookingNoticeHours');
 
       if (sessionStart.getTime() < now.getTime() + noticeHours * 60 * 60 * 1000) {
         throw new HttpsError(

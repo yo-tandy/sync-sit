@@ -14,6 +14,9 @@ import { act, screen, fireEvent, render, cleanup } from '@testing-library/react'
 const h = vi.hoisted(() => ({
   calls: [] as { name: string; payload: unknown }[],
   navigate: () => {},
+  // Admin-config values the reader stub serves (issue #250) -- empty means
+  // every key resolves to its caller-supplied fallback (code default).
+  configValues: {} as Record<string, number>,
   // Controllable authStore state — default is signed out (fresh signup);
   // add-profile tests set a firebaseUser. Mirrors the study-web mock shape.
   auth: { firebaseUser: null as unknown, userDoc: null as unknown, loading: false },
@@ -109,6 +112,13 @@ vi.mock('@ejm/sit-core', () => ({
 }));
 vi.mock('@ejm/shared-ui', () => ({
   enrollmentErrorReason: () => null,
+  // The app's adminConfigClient wrapper instantiates this at import time
+  // (issue #250) -- a missing stub is a sync throw through the mock.
+  createAdminConfigReader: () => ({
+    getClientConfigValue: (k: string, fallback: number) =>
+      Promise.resolve(h.configValues[k] ?? fallback),
+    __resetAdminConfigClientCacheForTests: () => {},
+  }),
 }));
 vi.mock('@/components/ui', () => ({
   TopNav: ({ title }: { title: string }) => <div>{title}</div>,
@@ -120,9 +130,10 @@ vi.mock('../parent/StepParentEmail', () => ({
   ),
 }));
 vi.mock('../parent/StepParentVerify', () => ({
-  StepParentVerify: ({ onNext }: { onNext: () => void }) => (
+  StepParentVerify: ({ onNext, resendCooldownS }: { onNext: () => void; resendCooldownS?: number }) => (
     <div>
       parent-verify-step
+      <span data-testid="resend-cooldown-s">{resendCooldownS}</span>
       <button onClick={onNext}>verify-submit</button>
     </div>
   ),
@@ -161,6 +172,7 @@ beforeEach(() => {
   cleanup();
   h.calls.length = 0;
   h.navigate = vi.fn();
+  h.configValues = {};
   h.auth = { firebaseUser: null, userDoc: null, loading: false };
   h.refreshUserDoc = vi.fn(() => Promise.resolve());
   h.signIn.mockClear();
@@ -451,5 +463,19 @@ describe('ParentEnrollment post-enrollment session gate (issue #262)', () => {
     await vi.waitFor(() => expect(h.navigate).toHaveBeenCalledWith('/family'));
     // The resolved wait unsubscribed itself (the unsub/clearTimeout handshake).
     expect(h.subscribers.length).toBe(0);
+  });
+});
+
+// Issue #250 round 5: the parent wizard passes the CONFIGURED
+// verificationCodeCooldownS to StepParentVerify (the one resend UI that was
+// left hardcoded at 60s -- see StepParentVerify.test.tsx for the timer pins).
+describe('ParentEnrollment resend cooldown wiring (issue #250)', () => {
+  it('passes the configured verificationCodeCooldownS to StepParentVerify', async () => {
+    h.configValues = { verificationCodeCooldownS: 600 };
+    renderFlow();
+    fireEvent.click(screen.getByText('parent-email-submit'));
+    await vi.waitFor(() => {
+      expect(screen.getByTestId('resend-cooldown-s')).toHaveTextContent(/^600$/);
+    });
   });
 });

@@ -12,22 +12,23 @@ import {
   repairTimestamplessDeclines,
 } from './declineCooldown.js';
 
-// Cross-search ceiling (issue #233), the twin of sit's
-// MAX_BOARD_CONTACTS_PER_DAY (contactPublishedSearch.ts). The per-pair guards
-// below -- one open request per pair, plus the 7-day decline cooldown -- bound
+// Cross-search ceiling (issue #233), the twin of sit's board-contact cap
+// (contactPublishedSearch.ts); both read the admin-configurable
+// boardContactsPerDay / boardContactWindowHours (issue #250). The per-pair
+// guards below -- one open request per pair, plus the decline cooldown -- bound
 // ONE (tutor, family) conversation and nothing else: a family may hold three
 // live searches (PUBLISHED_SEARCH_MAX_ACTIVE) and the board carries every
 // family's, so one tutor could answer all of them, each contact fanning out
 // email + push + in-app to every parent of that family via notifyAllParents.
 //
-// The ceiling counts contacts CREATED in a rolling 24h window, REGARDLESS of
+// The ceiling counts contacts CREATED in the rolling window, REGARDLESS of
 // their later status. A concurrent-pending count (what issue #233's text
 // proposed) was tutor-bypassable for the same reason it was on the sit side:
 // cancelContactRequest is deliberately cooldown-free, so withdrawing a pending
 // returned the slot immediately, and five never-answering families could pin a
 // tutor's board access shut forever. Creation spending the slot closes both --
-// at most MAX_BOARD_CONTACTS_PER_DAY families can be notified per day, and
-// slots return by clock, not by anyone's action (PR #232 review).
+// at most boardContactsPerDay families can be notified per window, and slots
+// return by clock, not by anyone's action (PR #232 review).
 
 /**
  * sendFamilyContactRequest (issue #207 PR4, study side): the CONTACT
@@ -199,8 +200,11 @@ export const sendFamilyContactRequest = onCall(
         'failed-precondition',
         `This family declined your last request. You can try again in ${Math.round(declineCooldownMs / 86400_000)} days.`,
         // The client distinguishes this from the generic "the search is gone"
-        // failure on the reason, not on the message text.
-        { reason: 'decline_cooldown' },
+        // failure on the reason, not on the message text -- and renders its
+        // own i18n copy, so the configured window rides along in details
+        // for interpolation (this message string only reaches raw-callable
+        // readers).
+        { reason: 'decline_cooldown', cooldownDays: Math.round(declineCooldownMs / 86400_000) },
       );
     }
 
@@ -264,7 +268,8 @@ export const sendFamilyContactRequest = onCall(
         throw new HttpsError(
           'resource-exhausted',
           `You have contacted several families in the last ${boardWindowHours} hours. You can send more requests once the window passes.`,
-          { reason: 'board_contact_cap' },
+          // windowHours rides along for the client's interpolated copy.
+          { reason: 'board_contact_cap', windowHours: boardWindowHours },
         );
       }
       tx.set(requestRef, doc);

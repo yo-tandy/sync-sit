@@ -14,6 +14,9 @@ const h = vi.hoisted(() => ({
   // Controllable verifyEjmEmail rejection so tests can drive the send-cap
   // (issue #155 bypass allowance) branch. Default null = send succeeds.
   verifyError: null as { code: string; details: { reason: string } } | null,
+  // Admin-config values the reader stub serves (issue #250) -- empty means
+  // every key resolves to its caller-supplied fallback (code default).
+  configValues: {} as Record<string, number>,
 }));
 
 vi.mock('@/config/firebase', () => ({ auth: {}, functions: {}, db: {} }));
@@ -70,7 +73,8 @@ vi.mock('@ejm/shared-ui', () => ({
   // The app's adminConfigClient wrapper instantiates this at import time
   // (issue #250) -- stub returns the caller's fallback (code default).
   createAdminConfigReader: () => ({
-    getClientConfigValue: (_k: string, fallback: number) => Promise.resolve(fallback),
+    getClientConfigValue: (k: string, fallback: number) =>
+      Promise.resolve(h.configValues[k] ?? fallback),
     __resetAdminConfigClientCacheForTests: () => {},
   }),
   // Mirrors the real helper: read details.reason off the rejected value.
@@ -86,8 +90,11 @@ vi.mock('@ejm/shared-ui', () => ({
       <button onClick={onSubmit}>email-submit</button>
     </div>
   ),
-  StepVerify: ({ onVerify }: { onVerify: (c: string) => void }) => (
-    <button onClick={() => onVerify('123456')}>verify-submit</button>
+  StepVerify: ({ onVerify, resendCooldownS }: { onVerify: (c: string) => void; resendCooldownS?: number }) => (
+    <div>
+      <span data-testid="resend-cooldown-s">{resendCooldownS}</span>
+      <button onClick={() => onVerify('123456')}>verify-submit</button>
+    </div>
   ),
   StepPassword: (props: { onSubmit: (pw: string, c: string) => void; collectPassword?: boolean }) => (
     <button
@@ -145,6 +152,7 @@ beforeEach(() => {
   h.auth = { firebaseUser: null, userDoc: null, loading: false };
   h.refreshUserDoc = vi.fn().mockResolvedValue(undefined);
   h.verifyError = null;
+  h.configValues = {};
   i18n.changeLanguage('en');
 });
 
@@ -271,6 +279,31 @@ describe('BabysitterEnrollment verify payload (issue #148)', () => {
       const call = h.calls.find((c) => c.name === 'verifyEjmEmail');
       expect(call).toBeTruthy();
       expect(call!.payload).toMatchObject({ app: 'sit' });
+    });
+  });
+});
+
+// Issue #250 round 5: the resend timer must follow the CONFIGURED
+// verificationCodeCooldownS, not the code default -- the server answers
+// cooldown repeats with a decoy success, so a shorter client timer
+// re-enables a button that silently does nothing. This pins the page-level
+// wiring (useClientConfigValue -> StepVerify prop); the timer behaviour
+// itself is pinned in the shared-ui StepVerify suite.
+describe('BabysitterEnrollment resend cooldown wiring (issue #250)', () => {
+  it('passes the configured verificationCodeCooldownS to StepVerify', async () => {
+    h.configValues = { verificationCodeCooldownS: 600 };
+    renderFlow();
+    fireEvent.click(screen.getByText('email-submit'));
+    await vi.waitFor(() => {
+      expect(screen.getByTestId('resend-cooldown-s')).toHaveTextContent(/^600$/);
+    });
+  });
+
+  it('falls back to the code default when no override is stored', async () => {
+    renderFlow();
+    fireEvent.click(screen.getByText('email-submit'));
+    await vi.waitFor(() => {
+      expect(screen.getByTestId('resend-cooldown-s')).toHaveTextContent(/^60$/);
     });
   });
 });

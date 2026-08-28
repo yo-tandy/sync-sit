@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTranslation, Trans } from 'react-i18next';
 import { Link } from 'react-router';
 import { MailIcon } from '../components/Icons.js';
 import { CodeInput } from '../forms/CodeInput.js';
 import { enrollmentErrorReason } from '../utils/callableErrors.js';
+import { ADMIN_CONFIG_DEFS } from '@ejm/shared-core';
 
 interface StepVerifyProps {
   ejemEmail: string;
@@ -21,18 +22,44 @@ interface StepVerifyProps {
   resendCooldownS?: number;
 }
 
-export function StepVerify({ ejemEmail, onVerify, onResend, error, resendCooldownS = 60 }: StepVerifyProps) {
+export function StepVerify({
+  ejemEmail,
+  onVerify,
+  onResend,
+  error,
+  resendCooldownS = ADMIN_CONFIG_DEFS.verificationCodeCooldownS.default,
+}: StepVerifyProps) {
   const { t } = useTranslation();
   const [codeError, setCodeError] = useState<string | null>(null);
   const [resendCooldown, setResendCooldown] = useState(resendCooldownS);
   const [resendCount, setResendCount] = useState(0);
   const [verifying, setVerifying] = useState(false);
+  // Value the running countdown was armed with -- lets the sync effect
+  // below compute elapsed time without a wall clock.
+  const armedWithRef = useRef(resendCooldownS);
 
   useEffect(() => {
     if (resendCooldown <= 0) return;
     const timer = setInterval(() => setResendCooldown((c) => c - 1), 1000);
     return () => clearInterval(timer);
   }, [resendCooldown]);
+
+  // The config read races mount: useState captures whatever value had
+  // resolved by then. When the configured value lands mid-countdown,
+  // extend the running timer by the difference (never shorten -- the
+  // floor guarantees configured >= default, and a shorter timer would
+  // re-enable the decoy-success resend early).
+  useEffect(() => {
+    setResendCooldown((c) => {
+      if (c <= 0) {
+        armedWithRef.current = resendCooldownS;
+        return c;
+      }
+      const elapsed = armedWithRef.current - c;
+      armedWithRef.current = resendCooldownS;
+      return Math.max(c, resendCooldownS - elapsed);
+    });
+  }, [resendCooldownS]);
 
   const handleCodeComplete = async (code: string) => {
     if (verifying) return;
@@ -49,6 +76,7 @@ export function StepVerify({ ejemEmail, onVerify, onResend, error, resendCooldow
   };
 
   const handleResend = async () => {
+    armedWithRef.current = resendCooldownS;
     setResendCooldown(resendCooldownS);
     setResendCount((c) => c + 1);
     setCodeError(null);

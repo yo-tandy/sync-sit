@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { collection, doc, onSnapshot, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '@/config/firebase';
+import { ADMIN_CONFIG_DEFS } from '@ejm/shared-core';
 import { useAuthStore } from '@/stores/authStore';
 import { Badge, Button, Dialog, Textarea, TopNav } from '@/components/ui';
 import { SearchIcon } from '@/components/ui/Icons';
@@ -54,7 +55,9 @@ export function PublishedSearchesPage() {
   const [contactMessage, setContactMessage] = useState('');
   const [sending, setSending] = useState(false);
   // false = no error; 'generic' | 'cooldown' | 'cap' picks the copy.
-  const [sendError, setSendError] = useState<false | 'generic' | 'cooldown' | 'cap'>(false);
+  const [sendError, setSendError] = useState<
+    false | { key: 'generic' | 'cooldown' | 'cap'; days?: number; hours?: number }
+  >(false);
 
   // Which searches this sitter has already answered. Equality-only query on
   // the sitter's own appointments (rules: babysitterUserId == uid); the status
@@ -102,9 +105,17 @@ export function PublishedSearchesPage() {
       // The server marks the one failure a sitter can act on — the family
       // declined this search recently — so it does not read as "the search
       // disappeared" (PR #212 review).
-      const reason = (err as { details?: { reason?: string } })?.details?.reason;
+      const details = (err as { details?: { reason?: string; cooldownDays?: number; windowHours?: number } })
+        ?.details;
+      // The windows are admin-configurable (issue #250): the server sends the
+      // live values in details so the copy can state them; the table default
+      // covers a response from an older deploy that predates the payload.
       setSendError(
-        reason === 'decline_cooldown' ? 'cooldown' : reason === 'board_contact_cap' ? 'cap' : 'generic',
+        details?.reason === 'decline_cooldown'
+          ? { key: 'cooldown', days: details.cooldownDays ?? ADMIN_CONFIG_DEFS.declineCooldownDays.default }
+          : details?.reason === 'board_contact_cap'
+            ? { key: 'cap', hours: details.windowHours ?? ADMIN_CONFIG_DEFS.boardContactWindowHours.default }
+            : { key: 'generic' },
       );
     } finally {
       setSending(false);
@@ -177,11 +188,12 @@ export function PublishedSearchesPage() {
         {sendError && (
           <p className="mt-2 text-sm text-brand-600">
             {t(
-              sendError === 'cooldown'
+              sendError.key === 'cooldown'
                 ? 'publishedBoard.contactCooldown'
-                : sendError === 'cap'
+                : sendError.key === 'cap'
                   ? 'publishedBoard.contactCap'
                   : 'publishedBoard.contactError',
+              { days: sendError.days, hours: sendError.hours },
             )}
           </p>
         )}

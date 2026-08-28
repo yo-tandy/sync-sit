@@ -1,6 +1,7 @@
 /**
  * The decline cooldown shared by both directions of study contact
- * (issue #207 PR4). A "no" silences the other side for a week: without it the
+ * (issue #207 PR4). A "no" silences the other side for the configured
+ * declineCooldownDays window (issue #250; default a week): without it the
  * refused party can re-mint a request on every tap, and each one notifies the
  * recipient by email, push and in-app.
  *

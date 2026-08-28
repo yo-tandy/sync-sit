@@ -1,7 +1,12 @@
 import { parisWallTimeToUtc } from '@ejm/shared-functions/scheduled/parisTime.js';
+import { ADMIN_CONFIG_DEFS } from '@ejm/shared-core';
 
-/** Minimum booking notice for a recurring occurrence (mirrors bookSession/confirm). */
-export const RECURRING_NOTICE_HOURS = 24;
+/**
+ * Default-parameter fallback only: every production call site passes the
+ * configured bookingNoticeHours (issue #250) explicitly, so this links to
+ * the table default rather than carrying its own copy.
+ */
+export const RECURRING_NOTICE_HOURS = ADMIN_CONFIG_DEFS.bookingNoticeHours.default;
 
 /**
  * Drop candidate dates whose occurrence START is within the notice window.

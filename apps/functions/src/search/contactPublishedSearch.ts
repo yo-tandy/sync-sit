@@ -18,23 +18,6 @@ interface ContactPublishedSearchData {
 }
 
 /**
- * How long a family's decline of a provider-initiated contact silences new
- * contacts from that provider for the SAME published search (PR #212 review;
- * matches the study side's spec). Not a punishment — a family that declined
- * should not be re-notified on a tap.
- */
-// Cross-search ceiling (issue #225 item 3): per-search dedupe + cooldown bound
-// one pair, but nothing bounded one sitter across DIFFERENT searches -- each
-// successful contact emails + pushes every parent of that family. The ceiling
-// counts board contacts CREATED in a rolling 24h window, REGARDLESS of their
-// later status: a pending-only count was sitter-bypassable (withdraw a
-// pending -- deliberately cooldown-free -- and the slot came straight back,
-// PR #232 review), and it let five never-answering families hold a sitter's
-// board access forever. Creation spending the slot closes both: at most
-// MAX_BOARD_CONTACTS_PER_DAY families can be notified per day, and slots
-// return by clock, not by anyone's action.
-
-/**
  * contactPublishedSearch (issue #207 PR3, sit side): the CONTACT INVERSION.
  * An active babysitter answers a family's published search, minting an
  * appointment in exactly the shape `sendContactRequest` produces
@@ -231,6 +214,10 @@ export const contactPublishedSearch = onCall(
       if (live) {
         throw new HttpsError('already-exists', 'You have already contacted this family about this search');
       }
+      // A family's decline of a provider-initiated contact silences new
+      // contacts from that provider for the SAME published search for this
+      // many days (PR #212 review; matches the study side). Not a punishment
+      // -- a family that declined should not be re-notified on a tap.
       const cooldownDays = await getConfigValue('declineCooldownDays');
       const cooldownFrom = Date.now() - cooldownDays * 86400_000;
       const boardCap = await getConfigValue('boardContactsPerDay');
@@ -249,11 +236,23 @@ export const contactPublishedSearch = onCall(
           'failed-precondition',
           `This family declined your last request for this search. You can try again in ${cooldownDays} days.`,
           // The client distinguishes this from the generic "search is gone"
-          // failure on the reason, not on the message text.
-          { reason: 'decline_cooldown' },
+          // failure on the reason, not on the message text -- and renders
+          // its own i18n copy, so the configured window rides along in
+          // details for interpolation (this message string only reaches
+          // raw-callable readers).
+          { reason: 'decline_cooldown', cooldownDays },
         );
       }
-      // Cross-search ceiling -- inside the transaction so concurrent taps on
+      // Cross-search ceiling (issue #225 item 3): per-search dedupe + cooldown
+      // bound one pair, but nothing bounds one sitter across DIFFERENT
+      // searches -- each successful contact emails + pushes every parent of
+      // that family. Counts contacts CREATED in the rolling window REGARDLESS
+      // of later status: a pending-only count was sitter-bypassable (withdraw
+      // a pending -- deliberately cooldown-free -- and the slot came straight
+      // back, PR #232 review). Creation spending the slot means at most
+      // boardContactsPerDay families can be notified per window, and slots
+      // return by clock, not by anyone's action.
+      // Runs inside the transaction so concurrent taps on
       // different searches cannot each pass the count, and AFTER the dedupe +
       // cooldown checks so a capped sitter still gets the more specific error
       // for those cases (PR #232 review). The orderBy+limit bounds the read to
@@ -281,7 +280,8 @@ export const contactPublishedSearch = onCall(
         throw new HttpsError(
           'resource-exhausted',
           `You have contacted several families in the last ${boardWindowHours} hours. You can send more requests once the window passes.`,
-          { reason: 'board_contact_cap' },
+          // windowHours rides along for the client's interpolated copy.
+          { reason: 'board_contact_cap', windowHours: boardWindowHours },
         );
       }
       tx.set(appointmentRef, appointment);

@@ -41,9 +41,9 @@ nothing.
 (24,1..168), declineCooldownDays(7,0..90), publishedSearchTtlDays(7,1..60),
 publishedSearchMaxActive(3,1..20), bookingNoticeHours(24,0..168),
 recurringHorizonWeeks(8,1..52), kidInviteValidityDays(7,1..90),
-verificationCodeCooldownS(60,30..600), dailySendCap(10,1..100),
+verificationCodeCooldownS(60,60..600), dailySendCap(10,1..100),
 bypassSendCap(6,1..100), verifyCodeMaxAttempts(5,3..10),
-pastVisibilityDays(7,1..90), availabilityMaxRangeDays(28,7..90).
+pastVisibilityDays(7,1..90), availabilityMaxRangeDays(28,28..90).
 
 **Wired sites:** sit contactPublishedSearch (cooldown + board cap/window),
 study sendFamilyContactRequest (board cap/window), study declineCooldown,

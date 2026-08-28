@@ -7,6 +7,8 @@ import { auth, functions } from '@/config/firebase';
 import { markNextSignInFresh, useAuthStore } from '@/stores/authStore';
 import { getParentProfile, getSitRole } from '@ejm/sit-core';
 import { enrollmentErrorReason } from '@ejm/shared-ui';
+import { ADMIN_CONFIG_DEFS } from '@ejm/shared-core';
+import { useClientConfigValue } from '@/lib/adminConfigClient';
 import { TopNav, StepIndicator } from '@/components/ui';
 import { StepParentEmail } from './parent/StepParentEmail';
 import { StepParentVerify } from './parent/StepParentVerify';
@@ -87,6 +89,13 @@ export function ParentEnrollment() {
   const [signedOutSuccess, setSignedOutSuccess] = useState(false);
   const navigate = useNavigate();
   const { firebaseUser, userDoc, loading: authLoading, refreshUserDoc } = useAuthStore();
+  // Admin-configurable resend window (issue #250) -- must match the
+  // server's, whose repeat path answers with a decoy success.
+  const resendCooldownS = useClientConfigValue(
+    'verificationCodeCooldownS',
+    ADMIN_CONFIG_DEFS.verificationCodeCooldownS.default,
+    ADMIN_CONFIG_DEFS.verificationCodeCooldownS,
+  );
 
   // Add-profile mode: an already-authenticated user with no parent profile yet.
   // Steps 0-2 are all credentials (email/verify/password), so add-profile jumps
@@ -274,6 +283,7 @@ export function ParentEnrollment() {
       onResend={handleSendCode}
       loading={loading}
       error={error}
+      resendCooldownS={resendCooldownS}
     />,
     <StepParentPassword
       key="password"

@@ -23,8 +23,6 @@ import {
   type HolidayPeriod,
 } from './computeDateAvailability.js';
 
-/** Notice window: families cannot book within this many hours of "now". */
-
 /**
  * Every "YYYY-MM-DD" date from startDate to endDate inclusive. Composes
  * study-core's pure incrementDate — no epoch-ms stepping, DST-safe.

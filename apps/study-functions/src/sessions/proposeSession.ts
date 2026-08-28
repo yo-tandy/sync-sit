@@ -13,7 +13,6 @@ import type { StudyUser, TutorProfile, SubjectOffering } from '@ejm/study-core';
 import { proposeSessionInputSchema } from '../validation/session.js';
 import { computeSingleDateAvailability } from '../availability/singleDateAvailability.js';
 
-/** Notice window: a proposal's session cannot start within this many hours. */
 const SLOT_MINUTES = 15;
 
 /**
@@ -108,8 +107,9 @@ export const proposeSession = onCall(
     const now = new Date();
     const paddingMinutes = tutor.paddingMin ?? 0;
 
-    // ── 24h minimum notice (Paris wall clock, DST-safe) ──
-    const sessionStart = parisWallTimeToUtc(date, startTime);    const noticeHours = await getConfigValue('bookingNoticeHours');
+    // ── Minimum booking notice (bookingNoticeHours, Paris wall clock, DST-safe) ──
+    const sessionStart = parisWallTimeToUtc(date, startTime);
+    const noticeHours = await getConfigValue('bookingNoticeHours');
 
     if (sessionStart.getTime() < now.getTime() + noticeHours * 60 * 60 * 1000) {
       throw new HttpsError(

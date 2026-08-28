@@ -97,3 +97,71 @@ describe('StepVerify resend error surfacing (issue #155)', () => {
     expect(screen.getByRole('button', { name: i18n.t('auth.resendCode') })).toBeInTheDocument();
   });
 });
+
+// Issue #250 round 5: the countdown itself must follow the resendCooldownS
+// prop -- start value, post-resend re-arm, and the mount race where the
+// configured value resolves only after useState captured the default (the
+// sync effect extends, never shortens, a running countdown).
+describe('StepVerify configured resend cooldown (issue #250)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  function renderWithCooldown(resendCooldownS?: number) {
+    return render(
+      <I18nextProvider i18n={i18n}>
+        <MemoryRouter>
+          <StepVerify
+            ejemEmail="someone28@ejm.org"
+            onVerify={async () => {}}
+            onResend={async () => {}}
+            error={null}
+            resendCooldownS={resendCooldownS}
+          />
+        </MemoryRouter>
+      </I18nextProvider>,
+    );
+  }
+
+  it('starts the countdown at the configured value, not the code default', () => {
+    renderWithCooldown(600);
+    expect(screen.getByText(i18n.t('auth.resendIn', { seconds: 600 }))).toBeInTheDocument();
+  });
+
+  it('extends a running countdown when the configured value arrives after mount', async () => {
+    const view = renderWithCooldown(undefined); // config unresolved: default 60
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10_000);
+    });
+    expect(screen.getByText(i18n.t('auth.resendIn', { seconds: 50 }))).toBeInTheDocument();
+    // The config read resolves to 600 mid-countdown: 10s elapsed, 590 remain.
+    view.rerender(
+      <I18nextProvider i18n={i18n}>
+        <MemoryRouter>
+          <StepVerify
+            ejemEmail="someone28@ejm.org"
+            onVerify={async () => {}}
+            onResend={async () => {}}
+            error={null}
+            resendCooldownS={600}
+          />
+        </MemoryRouter>
+      </I18nextProvider>,
+    );
+    expect(screen.getByText(i18n.t('auth.resendIn', { seconds: 590 }))).toBeInTheDocument();
+  });
+
+  it('re-arms the post-resend cooldown at the configured value', async () => {
+    renderWithCooldown(90);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(91_000);
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: i18n.t('auth.resendCode') }));
+    });
+    expect(screen.getByText(i18n.t('auth.resendIn', { seconds: 90 }))).toBeInTheDocument();
+  });
+});

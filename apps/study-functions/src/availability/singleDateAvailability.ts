@@ -12,8 +12,6 @@ import {
   type DateAvailabilityInputs,
 } from './computeDateAvailability.js';
 
-/** Notice window: sessions cannot be booked within this many hours of "now". */
-
 /**
  * Best-effort single-date availability grid for a tutor+date.
  *

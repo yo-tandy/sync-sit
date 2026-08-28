@@ -26,6 +26,10 @@ export const ADMIN_CONFIG_DEFS = {
     description: 'Window (hours) for the board-contact cap.',
   },
   declineCooldownDays: {
+    // min: 0 is deliberate -- unlike verificationCodeCooldownS and
+    // availabilityMaxRangeDays (whose floors protect shipped client
+    // behaviour), the decline cooldown and the booking notice are policy
+    // levers the owner may legitimately switch off.
     default: 7, min: 0, max: 90,
     description: 'Days a family/sitter pair is blocked from re-requesting after a decline (both apps).',
   },
@@ -67,7 +71,8 @@ export const ADMIN_CONFIG_DEFS = {
   },
   pastVisibilityDays: {
     default: 7, min: 1, max: 90,
-    description: 'How long (days) past appointments stay on dashboards.',
+    description:
+      'How long (days) past appointments stay on dashboards. Also defers redaction of appointment notes (door codes, allergy details) by the same window -- raising it extends retention of that data.',
   },
   availabilityMaxRangeDays: {
     // min = today's value: BookSessionPage requests fixed 14-day pages and
