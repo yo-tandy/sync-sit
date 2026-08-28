@@ -38,12 +38,36 @@ function assertAddable(snap: DocumentSnapshot, profileKey: ProfileKey): void {
   if (data.status !== 'active') {
     throw new HttpsError('permission-denied', 'Account is not active');
   }
-  if (data.profiles?.[profileKey] !== undefined) {
+  // A doc with LEGACY root membership and no parent profile is still a
+  // family member (round-7 review): serving it as a plain add-profile would
+  // write a second family's pointer beside a live root membership -- dual
+  // membership with no removal event. Mirrored by hasFamilyMembership.
+  if (profileKey === 'parent' && data.profiles?.parent === undefined && data.familyId) {
     throw new HttpsError(
-      'already-exists',
-      `This account already has a ${profileKey} profile`,
-      { reason: 'profile-exists', profile: profileKey },
+      'failed-precondition',
+      'This account already belongs to a family',
+      { reason: 'legacy-family-membership' },
     );
+  }
+  if (data.profiles?.[profileKey] !== undefined) {
+    // Orphan-parent re-attach carve-out (issue #279): a parent profile
+    // with NEITHER membership field set is removeCoParent's leftover --
+    // re-attachable through a fresh invite; without this the account was
+    // unrepairable (rules freeze both fields client-side). A profile with
+    // EITHER field set is an active member and still rejects; provider
+    // profiles have no orphan state and keep the strict check. Truthiness,
+    // not === undefined: ''/null must not count as membership.
+    const isOrphanParent =
+      profileKey === 'parent' &&
+      !(data.profiles.parent as { familyId?: string } | undefined)?.familyId &&
+      !data.familyId;
+    if (!isOrphanParent) {
+      throw new HttpsError(
+        'already-exists',
+        `This account already has a ${profileKey} profile`,
+        { reason: 'profile-exists', profile: profileKey },
+      );
+    }
   }
   // Providing (tutoring, babysitting) is for EJM students; parents are the
   // adults who hire them — provider and parent roles are mutually exclusive
@@ -100,9 +124,19 @@ export async function addProfileToUser(params: AddProfileParams): Promise<void> 
     assertAddable(snap, params.profileKey);
     const data = snap.data()!;
     const update: Record<string, unknown> = {
-      [`profiles.${params.profileKey}`]: params.profileData,
       updatedAt: new Date(),
     };
+    if (data.profiles?.[params.profileKey] !== undefined) {
+      // Orphan-parent re-attach (the only shape assertAddable lets through
+      // with an existing profile): merge field-by-field so whatever
+      // survived removal (phone, enrollmentComplete) is kept, not clobbered
+      // by a whole-map replace.
+      for (const [field, value] of Object.entries(params.profileData)) {
+        update[`profiles.${params.profileKey}.${field}`] = value;
+      }
+    } else {
+      update[`profiles.${params.profileKey}`] = params.profileData;
+    }
     for (const [field, value] of Object.entries(params.fillBaseFields ?? {})) {
       // Empty (absent/null/'') is fillable; populated always wins. Strict
       // undefined-only here disagreed with enrollTutor's truthiness presence

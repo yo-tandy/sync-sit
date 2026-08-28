@@ -5,9 +5,9 @@ import { httpsCallable } from 'firebase/functions';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth, functions } from '@/config/firebase';
 import { markNextSignInFresh, useAuthStore } from '@/stores/authStore';
-import { getParentProfile, getSitRole } from '@ejm/sit-core';
+import { getSitRole } from '@ejm/sit-core';
 import { enrollmentErrorReason } from '@ejm/shared-ui';
-import { ADMIN_CONFIG_DEFS } from '@ejm/shared-core';
+import { ADMIN_CONFIG_DEFS, hasFamilyMembership } from '@ejm/shared-core';
 import { useClientConfigValue } from '@/lib/adminConfigClient';
 import { TopNav, StepIndicator } from '@/components/ui';
 import { StepParentEmail } from './parent/StepParentEmail';
@@ -101,7 +101,9 @@ export function ParentEnrollment() {
   // Steps 0-2 are all credentials (email/verify/password), so add-profile jumps
   // straight to FamilyInfo (step 3) via the mount effect below and never sends
   // credential keys to the callable.
-  const isAddProfile = !!firebaseUser && !getParentProfile(userDoc);
+  // Orphan parent profiles (familyId absent) also take the add-profile
+  // path: the server's re-attach carve-out merges membership onto them.
+  const isAddProfile = !!firebaseUser && !hasFamilyMembership(userDoc);
 
   // For a signed-in user, resolve where the flow starts. Guard on step === 0 so
   // this only fires before the flow begins: after an add-profile success,
@@ -109,8 +111,9 @@ export function ParentEnrollment() {
   // success navigation to /family.
   useEffect(() => {
     if (step !== 0 || authLoading || !firebaseUser) return;
-    if (getParentProfile(userDoc)) {
-      // Already a parent — nothing to add here.
+    if (hasFamilyMembership(userDoc)) {
+      // Membership, not profile presence (issue #279): an orphan parent
+      // profile may enroll a NEW family through the add-profile path.
       navigate('/family', { replace: true });
     } else {
       // Skip the credential steps and go straight to family info.

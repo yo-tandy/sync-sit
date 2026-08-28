@@ -317,7 +317,13 @@ service cloud.firestore {
       allow update: if isOwner(userId)
                     && !request.resource.data.diff(resource.data).affectedKeys()
                         .hasAny(['uid', 'email', 'ejemEmail', 'status', 'createdAt', 'isAdmin',
-                                 'governedBy', 'identityLocked', 'sessionEpoch'])
+                                 'governedBy', 'identityLocked', 'sessionEpoch',
+                                 // Root familyId: legacy Plan C membership. Client-
+                                 // deleting it turned a hybrid doc into an "orphan"
+                                 // by addProfileToUser's carve-out predicate and
+                                 // opened dual membership (PR #284 round 4) --
+                                 // frozen like its Plan D twin (parentFamilyIdUnchanged).
+                                 'familyId'])
                     && profileRolesUnchanged()
                     && babysitterIdentityUnchanged()
                     && tutorIdentityUnchanged()

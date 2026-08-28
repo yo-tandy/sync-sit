@@ -53,10 +53,14 @@ export function EndorsementDialog({
 
   // Load family data for pre-population
   useEffect(() => {
-    if (!parent?.familyId) return;
+    // Bound AFTER the guard so the string type survives into the hoisted
+    // async closure (familyId is optional on ParentProfile since #279).
+    const rawFamilyId = parent?.familyId;
+    if (!rawFamilyId) return;
+    const familyId: string = rawFamilyId;
     async function loadFamily() {
       try {
-        const famSnap = await getDoc(doc(db, 'families', parent!.familyId));
+        const famSnap = await getDoc(doc(db, 'families', familyId));
         if (famSnap.exists()) {
           // Pre-populate name as "First LAST" if not editing
           if (!existingReference) {
@@ -69,7 +73,7 @@ export function EndorsementDialog({
           }
 
           // Load kids for count and ages
-          const kidsSnap = await getDocs(collection(db, 'families', parent!.familyId, 'kids'));
+          const kidsSnap = await getDocs(collection(db, 'families', familyId, 'kids'));
           if (!existingReference && kidsSnap.size > 0) {
             setNumberOfKids(kidsSnap.size);
             const ages = kidsSnap.docs.map((d) => d.data().age).filter(Boolean).sort((a: number, b: number) => a - b);

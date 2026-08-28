@@ -294,6 +294,24 @@ describe('users collection — Plan D owner-update guards', () => {
     );
   });
 
+  // Root familyId is server-owned (PR #284 round 4): legacy Plan C
+  // membership. Client-deleting it turned a hybrid doc into an "orphan" by
+  // addProfileToUser's carve-out predicate -- accept an invite to family B
+  // while family A's parentIds still lists you: dual membership.
+  it('owner may NOT delete their root familyId (legacy membership is server-owned)', async () => {
+    await seed('legacy1', {
+      status: 'active', email: 'p@test.com', familyId: 'fam-A',
+      profiles: { parent: { enrollmentComplete: true } },
+    });
+    const authed = testEnv.authenticatedContext('legacy1');
+    await assertFails(
+      updateDoc(doc(authed.firestore(), 'users', 'legacy1'), { familyId: deleteField() })
+    );
+    await assertFails(
+      updateDoc(doc(authed.firestore(), 'users', 'legacy1'), { familyId: 'fam-B' })
+    );
+  });
+
   // sessionEpoch is server-owned (signOutEverywhere callable, issue #181):
   // the cross-app force-sign-out signal must not be client-forgeable.
   it('owner may NOT write sessionEpoch (lone field)', async () => {
