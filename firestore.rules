@@ -109,6 +109,26 @@ service cloud.firestore {
                == tutorField(resource.data, 'personalCode', '');
     }
 
+    // Helper: a doer-profile field on a user-doc data map (safe default).
+    function doerField(d, key, def) {
+      return d.get('profiles', {}).get('doer', {}).get(key, def);
+    }
+
+    // Helper: server-owned state inside profiles.doer that the client must
+    // never mutate directly (issue #299, sync-do plan §7.2). sync-do is in
+    // the TUTOR case, not the babysitter case: enrollmentComplete gates the
+    // doTasks board READ rule and the §11.1 offering gate, not just search
+    // visibility. Left client-writable, an owner could abandon enrollment,
+    // flip the flag from the client SDK, and read every open task on the
+    // board — free-text descriptions, photos, areaLabel, familyName; exactly
+    // the PII surface plan §11.2 governs.
+    // - enrollmentComplete: server-owned — doEnrollDoer sets it, nothing else.
+    // Defaults keep the guard trivially true for users WITHOUT a doer profile.
+    function doerIdentityUnchanged() {
+      return doerField(request.resource.data, 'enrollmentComplete', false)
+          == doerField(resource.data, 'enrollmentComplete', false);
+    }
+
     // Helper: the owner-editable tutor numerics must stay in enrollment's
     // validated ranges (paddingMin int 0-60; areaRadiusKm null or 0-50) —
     // client-side guards are UX only; THIS is the trust boundary. Post-state
@@ -297,8 +317,8 @@ service cloud.firestore {
       // - profileRolesUnchanged: the SET of role slots can't change — blocks a
       //   client granting itself a new role (e.g. injecting profiles.babysitter).
       // - babysitterIdentityUnchanged / tutorIdentityUnchanged /
-      //   parentFamilyIdUnchanged: server-owned fields nested inside a profile
-      //   the owner otherwise may edit.
+      //   doerIdentityUnchanged / parentFamilyIdUnchanged: server-owned
+      //   fields nested inside a profile the owner otherwise may edit.
       // NOTE: `profiles.babysitter.searchable` and `profiles.tutor.searchable`
       //   are intentionally editable — they are user-controlled by design
       //   (soft hide from search).
@@ -321,6 +341,7 @@ service cloud.firestore {
                     && profileRolesUnchanged()
                     && babysitterIdentityUnchanged()
                     && tutorIdentityUnchanged()
+                    && doerIdentityUnchanged()
                     && parentFamilyIdUnchanged()
                     && identityUnlockedOrUnchanged()
                     && rootIdentitySetOnce()
