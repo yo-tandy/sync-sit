@@ -1,0 +1,103 @@
+export default {
+  common: {
+    back: 'Retour',
+    email: 'Email',
+    password: 'Mot de passe',
+    loading: 'Chargement...',
+    error: 'Une erreur est survenue',
+    signOut: 'Se déconnecter',
+    language: 'Langue',
+  },
+
+  auth: {
+    login: 'Se connecter',
+    loginTitle: 'Bon retour',
+    loginSubtitle: 'Connectez-vous à votre compte Sync/Do',
+    signedOutEverywhere: 'Vous avez été déconnecté sur un autre appareil.',
+    forgotPassword: 'Mot de passe oublié ?',
+    forgotPasswordTitle: 'Réinitialiser le mot de passe',
+    forgotPasswordHeading: 'Mot de passe oublié ?',
+    forgotPasswordDesc: "Saisissez votre email et nous vous enverrons un lien pour le réinitialiser.",
+    forgotPasswordSubmit: 'Envoyer le lien',
+    checkEmailHeading: 'Vérifiez votre email',
+    checkEmailDesc: 'Nous avons envoyé un lien de réinitialisation à',
+    checkEmailHint: "Consultez votre boîte de réception pour le lien. Si vous ne le voyez pas, vérifiez votre dossier spam.",
+    noAccount: 'Pas encore de compte ?',
+    signUp: "S'inscrire",
+    signingIn: 'Connexion...',
+    errorInvalidCredentials: 'Adresse e-mail ou mot de passe incorrect.',
+    errorTooManyAttempts: 'Trop de tentatives. Veuillez réessayer plus tard.',
+    errorLoginFailed: 'Une erreur est survenue. Veuillez réessayer.',
+    errorResetFailed: "Impossible d'envoyer l'e-mail de réinitialisation. Veuillez réessayer.",
+  },
+
+  welcome: {
+    title: 'Sync/Do',
+    subtitle: 'Connecter les familles EJM avec des élèves pour les tâches du quotidien',
+    signUp: "S'inscrire",
+    logIn: 'Se connecter',
+    signUpRole: "S'inscrire en tant que...",
+    signUpDoer: 'Doer',
+    signUpDoerDesc: "Pour les lycéens de l'EJM. Proposez un coup de main : jardinage, cartons, montage de meubles, et plus encore.",
+    signUpParent: 'Parent',
+    signUpParentDesc: 'Pour les familles EJM. Publiez une tâche et choisissez parmi les offres des élèves.',
+    alreadyHaveAccount: 'Vous avez déjà un compte ?',
+    about: 'À propos',
+    privacy: 'Confidentialité',
+    terms: 'Conditions',
+    help: 'Aide',
+  },
+
+  menu: {
+    about: 'À propos',
+    home: 'Accueil',
+    reportProblem: 'Signaler un problème',
+    privacyPolicy: 'Politique de confidentialité',
+    terms: 'Conditions générales',
+  },
+
+  appSwitch: {
+    toSit: 'Ouvrir sync-sit',
+    toStudy: 'Ouvrir sync-study',
+    error: "Impossible de changer d'application. Veuillez réessayer.",
+  },
+
+  home: {
+    title: 'Accueil',
+    comingSoonTitle: 'Sync/Do arrive bientôt',
+    comingSoonBody: "Le tableau des tâches est en cours de construction. Bientôt, les familles publieront ici leurs tâches du quotidien — jardinage, cartons, montage de meubles et plus encore — et les élèves de l'EJM proposeront leur aide.",
+    switchHint: 'Votre compte fonctionne déjà sur les apps Sync :',
+  },
+
+  comingSoon: {
+    title: 'Bientôt disponible',
+    body: "L'inscription à Sync/Do n'est pas encore ouverte — l'enrôlement est en cours de construction. Si vous avez déjà un compte Sync/Sit ou Sync/Study, il fonctionnera ici tel quel dès l'ouverture de Sync/Do.",
+    backHome: "Retour à l'accueil",
+  },
+
+  about: {
+    title: 'À propos',
+    tagline: 'Connecter les familles avec des élèves pour les tâches du quotidien',
+    story: "Sync/Do est la troisième app de la famille Sync, construite pour la communauté de l'École Jeannine Manuel à Paris. Les familles publient leurs tâches du quotidien — jardinage, cartons, montage de meubles, courses — et les lycéens de l'EJM proposent leur aide.",
+    siblingsTitle: 'Un compte, trois apps',
+    siblingsBody: 'Sync/Do partage ses comptes avec Sync/Sit (babysitting) et Sync/Study (tutorat). Un seul compte famille vérifié et une seule identité élève fonctionnent sur les trois.',
+    contactTitle: 'Contact',
+    contactBody: 'Des questions ou des retours ? Écrivez-nous à',
+  },
+
+  report: {
+    title: 'Signaler un problème',
+    desc: "Si vous rencontrez un problème, appuyez sur le bouton ci-dessous pour nous envoyer un email. Nous pré-remplirons des informations de diagnostic pour nous aider à enquêter.",
+    whatIncluded: 'CE QUI SERA INCLUS',
+    userId: 'ID utilisateur',
+    time: 'Heure',
+    version: 'Version',
+    platform: 'Plateforme',
+    recentErrors: 'Erreurs récentes',
+    none: 'Aucune',
+    errorsFound: 'erreur(s) capturée(s)',
+    privacyNote: "Seul votre identifiant utilisateur est inclus pour nous aider à enquêter. Aucune donnée personnelle n'est envoyée automatiquement.",
+    openEmail: "Ouvrir l'email au support",
+    notLoggedIn: 'Non connecté',
+  },
+} as const;

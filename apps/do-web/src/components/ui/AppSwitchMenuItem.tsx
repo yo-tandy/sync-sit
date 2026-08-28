@@ -1,0 +1,70 @@
+import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { httpsCallable } from 'firebase/functions';
+import { Spinner } from '@ejm/shared-ui';
+import sitBrandMark from '@ejm/shared-ui/brand-marks/sync-sit.png';
+import studyBrandMark from '@ejm/shared-ui/brand-marks/sync-study.png';
+import { functions } from '@/config/firebase';
+import { SIT_APP_URL, STUDY_APP_URL } from '@/utils/appSwitch';
+
+/**
+ * Menu entry that jumps to a sibling app without re-login: mints a one-time
+ * handoff code, then navigates with the code in the URL FRAGMENT (#code=… —
+ * fragments never reach servers or logs). Non-optimistic: the entry disables
+ * with a spinner until the mint resolves; nothing navigates on failure.
+ *
+ * Unlike the two-way siblings, do-web's switcher chooses between TWO
+ * targets, so the target is a prop. Both directions here are OUT-links,
+ * which decision 20 permits (plan §9.5) — the gated direction is sit/study
+ * linking here, and that lives in their code, not this component.
+ */
+export function AppSwitchMenuItem({ target }: { target: 'sit' | 'study' }) {
+  const { t, i18n } = useTranslation();
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
+
+  const appUrl = target === 'sit' ? SIT_APP_URL : STUDY_APP_URL;
+  const mark = target === 'sit' ? sitBrandMark : studyBrandMark;
+  const label = target === 'sit' ? t('appSwitch.toSit') : t('appSwitch.toStudy');
+
+  const handleClick = async () => {
+    if (busy) return;
+    setBusy(true);
+    setFailed(false);
+    try {
+      const mint = httpsCallable<Record<string, never>, { code: string }>(
+        functions,
+        'createAppHandoffCode',
+      );
+      const res = await mint({});
+      // Carry the CURRENT language across origins (i18n caches are
+      // per-origin localStorage): the handoff page applies it on arrival.
+      // Whitelisted at the source (mirrors the receiver's en|fr allowlist) —
+      // i18n.language originates from localStorage/navigator via the detector.
+      const lang = i18n.language?.startsWith('fr') ? 'fr' : 'en';
+      window.location.assign(
+        `${appUrl}/handoff#code=${encodeURIComponent(res.data.code)}&lang=${encodeURIComponent(lang)}`,
+      );
+      // Stay busy: the browser is navigating away.
+    } catch {
+      setFailed(true);
+      setBusy(false);
+    }
+  };
+
+  return (
+    <button type="button" onClick={handleClick} disabled={busy} className="w-full text-left">
+      <div className="flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 active:bg-gray-100">
+        <span className="text-gray-400">
+          {busy ? (
+            <Spinner className="h-5 w-5" />
+          ) : (
+            <img src={mark} alt="" className="h-5 w-5 rounded object-contain" />
+          )}
+        </span>
+        <span>{label}</span>
+      </div>
+      {failed && <p className="px-4 pb-2 text-xs text-error-600">{t('appSwitch.error')}</p>}
+    </button>
+  );
+}
