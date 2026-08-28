@@ -52,27 +52,37 @@ export const removeCoParent = onCall(
       throw new HttpsError('permission-denied', 'You are not a member of this family');
     }
 
-    // Verify target is in the same family (either membership field).
+    // Verify target is in the same family: any membership signal counts --
+    // either pointer field naming this family, or presence in parentIds
+    // (round-7 review: a parentIds-listed target with a divergent or absent
+    // pointer holds the WIDER rules-side grants and must stay removable).
     const targetDoc = await db.collection('users').doc(targetUserId).get();
     const targetData = targetDoc.data() as (User & { familyId?: string }) | undefined;
-    const targetMembership = getParentProfile(targetData)?.familyId ?? targetData?.familyId;
-    if (!targetDoc.exists || targetMembership !== callerFamilyId) {
+    const targetPointer = getParentProfile(targetData)?.familyId;
+    const targetRoot = targetData?.familyId;
+    const targetIsMember =
+      targetPointer === callerFamilyId ||
+      targetRoot === callerFamilyId ||
+      familyParentIds.includes(targetUserId);
+    if (!targetDoc.exists || !targetIsMember) {
       throw new HttpsError('not-found', 'User is not in your family');
     }
 
     // INVARIANTS (issue #279, PR #284): membership is cleared where access
-    // control reads it -- BOTH profiles.parent.familyId (storage.rules,
-    // getVerificationDocument, every getParentProfile consumer) and the
-    // legacy root familyId -- atomically with the parentIds trim (a batch
-    // is atomic across collections; a partial state either direction is an
-    // access-control hole). The family-less parent profile that remains is
-    // re-attachable through a fresh invite (addProfileToUser's
+    // control reads it, PER FIELD -- only pointer fields naming THIS family
+    // are deleted (round-7 review: an unconditional both-field delete could
+    // destroy a live membership in a different family, the same inverse-#279
+    // the backfill's per-field classification exists to avoid) -- atomically
+    // with the parentIds trim. The family-less parent profile that remains
+    // is re-attachable through a fresh invite (addProfileToUser's
     // orphan-parent carve-out).
+    const pointerDeletes: Record<string, FieldValue> = {};
+    if (targetPointer === callerFamilyId) pointerDeletes['profiles.parent.familyId'] = FieldValue.delete();
+    if (targetRoot === callerFamilyId) pointerDeletes['familyId'] = FieldValue.delete();
     const batch = db.batch();
-    batch.update(db.collection('users').doc(targetUserId), {
-      'profiles.parent.familyId': FieldValue.delete(),
-      familyId: FieldValue.delete(),
-    });
+    if (Object.keys(pointerDeletes).length > 0) {
+      batch.update(db.collection('users').doc(targetUserId), pointerDeletes);
+    }
     batch.update(db.collection('families').doc(callerFamilyId), {
       parentIds: FieldValue.arrayRemove(targetUserId),
     });

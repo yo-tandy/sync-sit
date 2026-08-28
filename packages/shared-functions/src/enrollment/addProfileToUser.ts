@@ -38,6 +38,17 @@ function assertAddable(snap: DocumentSnapshot, profileKey: ProfileKey): void {
   if (data.status !== 'active') {
     throw new HttpsError('permission-denied', 'Account is not active');
   }
+  // A doc with LEGACY root membership and no parent profile is still a
+  // family member (round-7 review): serving it as a plain add-profile would
+  // write a second family's pointer beside a live root membership -- dual
+  // membership with no removal event. Mirrored by hasFamilyMembership.
+  if (profileKey === 'parent' && data.profiles?.parent === undefined && data.familyId) {
+    throw new HttpsError(
+      'failed-precondition',
+      'This account already belongs to a family',
+      { reason: 'legacy-family-membership' },
+    );
+  }
   if (data.profiles?.[profileKey] !== undefined) {
     // Orphan-parent re-attach carve-out (issue #279): a parent profile
     // with NEITHER membership field set is removeCoParent's leftover --

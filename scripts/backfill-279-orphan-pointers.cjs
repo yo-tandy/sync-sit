@@ -96,21 +96,25 @@ async function main() {
     // Transactional re-read + re-classify: joinFamily writes the pointer
     // BEFORE the parentIds arrayUnion, so a mid-join user can look stale
     // for a moment. Fresh reads inside the transaction close that window.
-    await db.runTransaction(async (tx) => {
+    const didWrite = await db.runTransaction(async (tx) => {
       const freshUser = (await tx.get(snap.ref)).data();
-      if (!freshUser) return;
+      if (!freshUser) return false;
       const freshNamed = [freshUser.profiles?.parent?.familyId, freshUser.familyId].filter(Boolean);
       const freshFamilies = {};
       for (const id of freshNamed) {
         freshFamilies[id] = (await tx.get(db.collection('families').doc(id))).data() ?? null;
       }
       const freshStale = staleMembershipFields(freshUser, freshFamilies, snap.id);
-      if (freshStale.length === 0) return;
+      if (freshStale.length === 0) return false;
       const update = {};
       for (const f of freshStale) update[f] = FieldValue.delete();
       tx.update(snap.ref, update);
-      cleared++;
+      // Counted OUTSIDE the transaction (round-7 review): the callback
+      // re-runs on contention, and the cleared= line is the operator's
+      // evidence of how many docs actually changed.
+      return true;
     });
+    if (didWrite) cleared++;
   }
   console.log(`scanned=${scanned} flagged=${flagged} ${apply ? `cleared=${cleared}` : '(dry-run: nothing written)'}`);
 }

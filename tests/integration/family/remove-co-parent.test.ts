@@ -206,6 +206,40 @@ describe('removeCoParent', () => {
       ).rejects.toMatchObject({ code: 'INVALID_ARGUMENT' });
     });
   });
+  describe('round-7 membership-shape variants', () => {
+    it('a parentIds-listed target with an ABSENT pointer is still removable', async () => {
+      // The pre-backfill divergence in the other direction: pointer gone,
+      // parentIds entry left. parentIds holds the wider grants, so the
+      // remove affordance must reach it (round-7 review).
+      const FieldValue = (await import('firebase-admin/firestore')).FieldValue;
+      await getDb().collection('users').doc(seed.parent2.uid).update({
+        'profiles.parent.familyId': FieldValue.delete(),
+      });
+      await callFunction('removeCoParent', { targetUserId: seed.parent2.uid }, parent1Token);
+      const fam = await getDb().collection('families').doc(seed.family1Id).get();
+      expect(fam.data()!.parentIds).not.toContain(seed.parent2.uid);
+    });
+
+    it('a live root membership in ANOTHER family survives removal from this one', async () => {
+      // Per-field deletes (round-7): removal from family A must not destroy
+      // a live legacy membership in family C -- the inverse-#279 shape the
+      // backfill's classification also refuses to create.
+      await getDb().collection('families').doc('fam-other-C').set({
+        familyId: 'fam-other-C', familyName: 'C', parentIds: [seed.parent2.uid],
+        status: 'active', createdAt: new Date(), updatedAt: new Date(),
+      });
+      await getDb().collection('users').doc(seed.parent2.uid).update({ familyId: 'fam-other-C' });
+
+      await callFunction('removeCoParent', { targetUserId: seed.parent2.uid }, parent1Token);
+
+      const post = (await getDb().collection('users').doc(seed.parent2.uid).get()).data()!;
+      expect(post.profiles?.parent?.familyId).toBeUndefined();
+      expect(post.familyId).toBe('fam-other-C');
+      const famC = await getDb().collection('families').doc('fam-other-C').get();
+      expect(famC.data()!.parentIds).toContain(seed.parent2.uid);
+    });
+  });
+
   describe('caller defence-in-depth (PR #284 round 6)', () => {
     it('a stale-pointer EX-member (pre-backfill state) cannot remove a genuine member', async () => {
       // Simulate the pre-fix residue: parent2 keeps the pointer but is

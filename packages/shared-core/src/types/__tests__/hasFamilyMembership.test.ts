@@ -20,7 +20,11 @@ describe('hasFamilyMembership', () => {
     expect(hasFamilyMembership(u as unknown as User)).toBe(true);
   });
 
-  it('neither field (orphan profile), no profile, and null all -> not a member', () => {
+  it('legacy root familyId with NO parent profile -> member (server rejects that join too, round 7)', () => {
+    expect(hasFamilyMembership({ familyId: 'fam-legacy', profiles: {} } as unknown as User)).toBe(true);
+  });
+
+  it('neither field (orphan profile), no fields at all, and null all -> not a member', () => {
     expect(hasFamilyMembership({ profiles: { parent: { enrollmentComplete: true } } } as unknown as User)).toBe(false);
     expect(hasFamilyMembership({ profiles: {} } as unknown as User)).toBe(false);
     expect(hasFamilyMembership(null)).toBe(false);

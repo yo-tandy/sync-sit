@@ -112,12 +112,12 @@ vi.mock('@ejm/shared-core', () => ({
   },
   getParentProfile: (userDoc: { profiles?: { parent?: unknown } } | null) =>
     userDoc?.profiles?.parent ?? null,
-  // Mirrors the real helper (issue #279, round-5 shape): a parent PROFILE
-  // must exist, then either membership field counts. Drift guard:
+  // Mirrors the real helper (issue #279, round-7 shape): EITHER membership
+  // field counts. Drift guard:
   // packages/shared-core/.../hasFamilyMembership.test.ts pins the real one.
   hasFamilyMembership: (
     userDoc: { familyId?: string; profiles?: { parent?: { familyId?: string } } } | null,
-  ) => !!userDoc?.profiles?.parent && !!(userDoc.profiles.parent.familyId || userDoc.familyId),
+  ) => !!(userDoc?.profiles?.parent?.familyId || userDoc?.familyId),
 }));
 vi.mock('@ejm/study-core', () => ({
   // Same precedence as the real adapter: tutor wins over parent.

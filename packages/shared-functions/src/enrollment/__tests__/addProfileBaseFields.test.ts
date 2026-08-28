@@ -128,6 +128,15 @@ describe('assertAddable orphan-parent carve-out (issue #279)', () => {
     ).rejects.toMatchObject({ code: 'already-exists' });
   });
 
+  it('legacy ROOT membership with NO parent profile also rejects a parent add (round 7)', async () => {
+    // Serving it as a plain add would write a second family beside a live
+    // root membership -- dual membership with no removal event.
+    h.existing = { status: 'active', familyId: 'fam-legacy', profiles: {} };
+    await expect(
+      call({ profileKey: 'parent', profileData: { enrollmentComplete: true, familyId: 'fam-new' } }),
+    ).rejects.toMatchObject({ code: 'failed-precondition' });
+  });
+
   it('provider profiles keep the strict check (no orphan state exists for them)', async () => {
     h.existing = { status: 'active', profiles: { tutor: { enrollmentComplete: true } } };
     await expect(
