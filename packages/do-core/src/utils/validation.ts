@@ -1,5 +1,8 @@
 import type { TaskCadence, TaskTiming } from '../types/task.js';
 import {
+  DO_AVAILABILITY_NOTE_MAX,
+  DO_CADENCE_NOTE_MAX,
+  DO_CADENCE_TIME_HINT_MAX,
   DO_OFFER_MESSAGE_MAX,
   DO_PRICE_MAX,
   DO_PRICE_MIN,
@@ -7,6 +10,7 @@ import {
   DO_TASK_PHOTOS_MAX,
   DO_TASK_TITLE_MAX,
 } from '../constants/bounds.js';
+import { computeTaskExpiresAt, type ExpiryTimingFields } from './expiry.js';
 
 /**
  * Pure validators for sync-do input (plan §8: "manual guards … with the
@@ -77,10 +81,30 @@ export function validateOfferMessage(message: unknown): string | null {
 }
 
 /**
+ * `photoId` charset: the wizard mints UUIDs (§7.4's client-chosen return
+ * leg), so the structural bound is safe-charset segments only. `uid` gets
+ * the looser guard below — Firebase uids are opaque, but neither half may
+ * ever smuggle a path.
+ */
+export const DO_PHOTO_ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
+
+const isSafePathSegment = (v: string): boolean =>
+  v.length > 0 &&
+  v.length <= 128 &&
+  !v.includes('/') &&
+  !v.includes('..') &&
+  // eslint-disable-next-line no-control-regex
+  !/[\u0000-\u001f\u007f]/.test(v);
+
+/**
  * `photos` — ≤ DO_TASK_PHOTOS_MAX entries, each a `{uid, photoId}` pair
- * (both halves of the storage path `do-photos/{uid}/{photoId}`, §4.1). Shape
- * only: the caller-prefix ownership check is `doPostTask`'s (§7.4), since it
- * needs the caller's uid.
+ * (both halves of the storage path `do-photos/{uid}/{photoId}`, §4.1). The
+ * caller-prefix OWNERSHIP check is `doPostTask`'s (§7.4), since it needs
+ * the caller's uid — but the SHAPE is bounded here: `doGetTaskPhotoUrl`
+ * signs the object name from these two fields via the Admin SDK, which
+ * bypasses storage.rules entirely, so neither half may carry `/`, `..` or
+ * control characters that would let a stored pair address a different
+ * prefix than the one doPostTask verified.
  */
 export function validateTaskPhotos(photos: unknown): string | null {
   if (!Array.isArray(photos)) {
@@ -94,11 +118,15 @@ export function validateTaskPhotos(photos: unknown): string | null {
       typeof p !== 'object' ||
       p === null ||
       typeof (p as { uid?: unknown }).uid !== 'string' ||
-      ((p as { uid: string }).uid).length === 0 ||
-      typeof (p as { photoId?: unknown }).photoId !== 'string' ||
-      ((p as { photoId: string }).photoId).length === 0
+      typeof (p as { photoId?: unknown }).photoId !== 'string'
     ) {
       return 'each photo must be a {uid, photoId} pair';
+    }
+    if (!isSafePathSegment((p as { uid: string }).uid)) {
+      return 'photo uid is not a valid id';
+    }
+    if (!DO_PHOTO_ID_RE.test((p as { photoId: string }).photoId)) {
+      return 'photo photoId is not a valid id';
     }
   }
   return null;
@@ -197,15 +225,33 @@ export function validateTaskCadence(cadence: unknown): string | null {
   ) {
     return 'custom cadence needs a note';
   }
-  if (
-    c.timeHint !== undefined &&
-    c.timeHint !== null &&
-    typeof c.timeHint !== 'string'
-  ) {
-    return 'cadence.timeHint must be a string or null';
+  if (c.timeHint !== undefined && c.timeHint !== null) {
+    if (typeof c.timeHint !== 'string') {
+      return 'cadence.timeHint must be a string or null';
+    }
+    if (c.timeHint.length > DO_CADENCE_TIME_HINT_MAX) {
+      return `cadence.timeHint must be at most ${DO_CADENCE_TIME_HINT_MAX} characters`;
+    }
   }
-  if (c.note !== undefined && c.note !== null && typeof c.note !== 'string') {
-    return 'cadence.note must be a string or null';
+  if (c.note !== undefined && c.note !== null) {
+    if (typeof c.note !== 'string') {
+      return 'cadence.note must be a string or null';
+    }
+    if (c.note.length > DO_CADENCE_NOTE_MAX) {
+      return `cadence.note must be at most ${DO_CADENCE_NOTE_MAX} characters`;
+    }
+  }
+  return null;
+}
+
+/** The offer's optional availability note (§4.2) — null allowed. */
+export function validateAvailabilityNote(note: unknown): string | null {
+  if (note === null) return null;
+  if (typeof note !== 'string') {
+    return 'availabilityNote must be a string or null';
+  }
+  if (note.length > DO_AVAILABILITY_NOTE_MAX) {
+    return `availabilityNote must be at most ${DO_AVAILABILITY_NOTE_MAX} characters`;
   }
   return null;
 }
@@ -324,6 +370,32 @@ export function validateTaskTiming(input: unknown): string | null {
     }
     const cadenceErr = validateTaskCadence(fields.cadence);
     if (cadenceErr !== null) return cadenceErr;
+  }
+  return null;
+}
+
+/**
+ * Rejects a dated task that is already over: a task whose computed expiry
+ * (§6.3) is at or before `now` would publish, then vanish on the sweep's
+ * next run with no error ever surfaced — the publishSearch precedent
+ * ("The babysitting date is already past", `publishSearch.ts:138`) guards
+ * this at the same layer. `doPostTask`/`doUpdateTask` (PR5) call it
+ * server-side AFTER `validateTaskTiming` (the expiry computation throws on
+ * a malformed timing group, so shape-validate first); the wizard calls it
+ * with the client clock to pre-empt the round trip.
+ *
+ * Because expiry is end-of-day and midnight-crossing fixed tasks end on the
+ * next day, "past" means the task's whole window is over — a 20:00–01:00
+ * clean-up posted at 22:00 the same evening is still valid.
+ * `ongoing` is never past (its expiry is `now + TTL` by construction).
+ */
+export function validateTaskTimingNotPast(
+  fields: ExpiryTimingFields,
+  now: Date,
+): string | null {
+  if (fields.timing === 'ongoing') return null;
+  if (computeTaskExpiresAt(fields, now).getTime() <= now.getTime()) {
+    return 'the task date is already past';
   }
   return null;
 }

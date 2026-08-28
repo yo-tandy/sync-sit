@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   isCalendarDate,
   isClockTime,
+  validateAvailabilityNote,
   validateEstimatedHours,
   validateOfferHelper,
   validateOfferMessage,
@@ -12,10 +13,14 @@ import {
   validateTaskDescription,
   validateTaskPhotos,
   validateTaskTiming,
+  validateTaskTimingNotPast,
   validateTaskTitle,
   type TaskTimingFields,
 } from '../validation.js';
 import {
+  DO_AVAILABILITY_NOTE_MAX,
+  DO_CADENCE_NOTE_MAX,
+  DO_CADENCE_TIME_HINT_MAX,
   DO_OFFER_MESSAGE_MAX,
   DO_PRICE_MAX,
   DO_PRICE_MIN,
@@ -215,6 +220,53 @@ describe('validateTaskCadence', () => {
     expect(validateTaskCadence({ kind: 'never' })).not.toBeNull();
     expect(validateTaskCadence(null)).not.toBeNull();
   });
+
+  it('bounds note and timeHint lengths (round-2: every free-text field has a ceiling)', () => {
+    expect(
+      validateTaskCadence({ kind: 'custom', note: 'x'.repeat(DO_CADENCE_NOTE_MAX) }),
+    ).toBeNull();
+    expect(
+      validateTaskCadence({
+        kind: 'custom',
+        note: 'x'.repeat(DO_CADENCE_NOTE_MAX + 1),
+      }),
+    ).toMatch(/note/);
+    expect(
+      validateTaskCadence({
+        kind: 'daily',
+        timeHint: 'x'.repeat(DO_CADENCE_TIME_HINT_MAX),
+      }),
+    ).toBeNull();
+    expect(
+      validateTaskCadence({
+        kind: 'daily',
+        timeHint: 'x'.repeat(DO_CADENCE_TIME_HINT_MAX + 1),
+      }),
+    ).toMatch(/timeHint/);
+    // the ceiling also applies to an optional note on a non-custom cadence
+    expect(
+      validateTaskCadence({
+        kind: 'weekly',
+        days: ['mon'],
+        note: 'x'.repeat(DO_CADENCE_NOTE_MAX + 1),
+      }),
+    ).toMatch(/note/);
+  });
+});
+
+describe('validateAvailabilityNote (§4.2)', () => {
+  it('allows null and bounded strings, rejects oversize and non-strings', () => {
+    expect(validateAvailabilityNote(null)).toBeNull();
+    expect(validateAvailabilityNote('weekends work best')).toBeNull();
+    expect(
+      validateAvailabilityNote('x'.repeat(DO_AVAILABILITY_NOTE_MAX)),
+    ).toBeNull();
+    expect(
+      validateAvailabilityNote('x'.repeat(DO_AVAILABILITY_NOTE_MAX + 1)),
+    ).not.toBeNull();
+    expect(validateAvailabilityNote(42)).not.toBeNull();
+    expect(validateAvailabilityNote(undefined)).not.toBeNull();
+  });
 });
 
 describe('length bounds (§4.1, §4.2)', () => {
@@ -265,6 +317,168 @@ describe('length bounds (§4.1, §4.2)', () => {
     expect(validateTaskPhotos([{ uid: '', photoId: 'p1' }])).not.toBeNull();
     expect(validateTaskPhotos(['p1'])).not.toBeNull();
     expect(validateTaskPhotos('p1')).not.toBeNull();
+  });
+
+  it('photos: both halves are structurally bounded — no path smuggling (round 2)', () => {
+    // doGetTaskPhotoUrl signs `do-photos/{uid}/{photoId}` from the stored
+    // pair via the Admin SDK (bypassing storage.rules), so neither half may
+    // carry separators or traversal.
+    const ok = {
+      uid: 'AbC123xyz',
+      photoId: '550e8400-e29b-41d4-a716-446655440000',
+    };
+    expect(validateTaskPhotos([ok])).toBeNull();
+    // photoId: safe charset only
+    expect(
+      validateTaskPhotos([{ uid: ok.uid, photoId: 'a/b' }]),
+    ).toMatch(/photoId/);
+    expect(
+      validateTaskPhotos([{ uid: ok.uid, photoId: '..' }]),
+    ).toMatch(/photoId/);
+    expect(
+      validateTaskPhotos([{ uid: ok.uid, photoId: 'p 1' }]),
+    ).toMatch(/photoId/);
+    expect(
+      validateTaskPhotos([{ uid: ok.uid, photoId: 'a'.repeat(129) }]),
+    ).toMatch(/photoId/);
+    // uid: no separators, traversal, control chars, or oversize
+    expect(
+      validateTaskPhotos([{ uid: 'u/1', photoId: ok.photoId }]),
+    ).toMatch(/uid/);
+    expect(
+      validateTaskPhotos([{ uid: '..', photoId: ok.photoId }]),
+    ).toMatch(/uid/);
+    expect(
+      validateTaskPhotos([{ uid: 'u\n1', photoId: ok.photoId }]),
+    ).toMatch(/uid/);
+    expect(
+      validateTaskPhotos([{ uid: 'a'.repeat(129), photoId: ok.photoId }]),
+    ).toMatch(/uid/);
+  });
+});
+
+describe('validateTaskTimingNotPast (round 2 — the publishSearch already-past guard)', () => {
+  // 2026-09-12T20:00:00Z == 22:00 Paris (CEST) that evening.
+  const EVENING = new Date('2026-09-12T20:00:00Z');
+
+  it('refuses a dated task whose window is already over', () => {
+    expect(
+      validateTaskTimingNotPast(
+        {
+          timing: 'fixed',
+          date: '2026-09-10',
+          startTime: '14:00',
+          endTime: '18:00',
+          dueDate: null,
+          startDate: null,
+        },
+        EVENING,
+      ),
+    ).toMatch(/past/);
+    expect(
+      validateTaskTimingNotPast(
+        {
+          timing: 'deadline',
+          date: null,
+          startTime: null,
+          endTime: null,
+          dueDate: '2026-09-11',
+          startDate: null,
+        },
+        EVENING,
+      ),
+    ).toMatch(/past/);
+    expect(
+      validateTaskTimingNotPast(
+        {
+          timing: 'recurring',
+          date: null,
+          startTime: null,
+          endTime: null,
+          dueDate: null,
+          startDate: '2026-09-01',
+        },
+        EVENING,
+      ),
+    ).toMatch(/past/);
+  });
+
+  it('passes future dates, and a same-day task while its day still runs', () => {
+    expect(
+      validateTaskTimingNotPast(
+        {
+          timing: 'fixed',
+          date: '2026-09-20',
+          startTime: '14:00',
+          endTime: '18:00',
+          dueDate: null,
+          startDate: null,
+        },
+        EVENING,
+      ),
+    ).toBeNull();
+    // §6.3: a dated task lives until the END of its day — at 22:00 Paris the
+    // 12th is not past yet, even for an afternoon slot.
+    expect(
+      validateTaskTimingNotPast(
+        {
+          timing: 'fixed',
+          date: '2026-09-12',
+          startTime: '14:00',
+          endTime: '18:00',
+          dueDate: null,
+          startDate: null,
+        },
+        EVENING,
+      ),
+    ).toBeNull();
+  });
+
+  it('midnight-crossing interaction: 20:00–01:00 posted at 22:00 the same evening is still valid', () => {
+    expect(
+      validateTaskTimingNotPast(
+        {
+          timing: 'fixed',
+          date: '2026-09-12',
+          startTime: '20:00',
+          endTime: '01:00',
+          dueDate: null,
+          startDate: null,
+        },
+        EVENING,
+      ),
+    ).toBeNull();
+    // ...and even posted the NEXT morning it holds until the end of the day
+    // it ends on; two days later it is past.
+    expect(
+      validateTaskTimingNotPast(
+        {
+          timing: 'fixed',
+          date: '2026-09-12',
+          startTime: '20:00',
+          endTime: '01:00',
+          dueDate: null,
+          startDate: null,
+        },
+        new Date('2026-09-14T08:00:00Z'),
+      ),
+    ).toMatch(/past/);
+  });
+
+  it('ongoing is never past (expiry is now + TTL by construction)', () => {
+    expect(
+      validateTaskTimingNotPast(
+        {
+          timing: 'ongoing',
+          date: null,
+          startTime: null,
+          endTime: null,
+          dueDate: null,
+          startDate: '2020-01-01',
+        },
+        EVENING,
+      ),
+    ).toBeNull();
   });
 });
 

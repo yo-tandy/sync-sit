@@ -54,6 +54,19 @@ export const DO_OFFER_MESSAGE_MAX = 1000;
 export const DO_TASK_PHOTOS_MAX = 6;
 
 /**
+ * Free-text ceilings on the smaller fields (PR #306 review round 2): every
+ * user-controlled string gets a bound so oversize input fails as
+ * `invalid-argument` at the validator, never as `internal` at Firestore's
+ * document limit — and the frontend can pre-empt the round trip (§8).
+ * Values sit with their siblings: a cadence note and an availability note
+ * are half an offer message; a time hint ("around 18:00, after school") is
+ * title-sized.
+ */
+export const DO_CADENCE_NOTE_MAX = 500;
+export const DO_CADENCE_TIME_HINT_MAX = 80;
+export const DO_AVAILABILITY_NOTE_MAX = 500;
+
+/**
  * Price bounds, EUR — applied to the offer's `price` and the task's optional
  * `suggestedBudget`. The plan exports "price range" from do-core (§8)
  * without fixing numbers; these mirror the platform's existing precedent,
