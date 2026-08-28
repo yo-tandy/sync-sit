@@ -37,9 +37,7 @@ jobs:
           node-version: 20
           cache: pnpm
 
-      # Full install mirrors the preview workflow's idiom; --ignore-scripts
-      # keeps it light (no package builds needed for firebase-tools alone).
-      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - run: pnpm install --frozen-lockfile
 
       - id: auth
         uses: google-github-actions/auth@v2
@@ -53,14 +51,29 @@ jobs:
       - name: Delete the PR's preview channels
         run: |
           CHANNEL="pr-${{ github.event.pull_request.number }}"
+          # Sites derived from .firebaserc (the preview deploy mints a
+          # channel on EVERY hosting target there, so a hardcoded list
+          # would silently miss any future fourth site).
+          SITES=$(node -p "Object.values(JSON.parse(require('fs').readFileSync('./.firebaserc','utf8')).targets['sync-sit'].hosting).flat().join(' ')")
+          echo "sites: $SITES"
           FAILED=0
-          for SITE in sync-sit sync-study-app sync-do-app; do
-            if pnpm exec firebase hosting:channel:list --site "$SITE" --project sync-sit --json 2>/dev/null \
-               | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{const j=JSON.parse(d);const has=((j.result||{}).channels||[]).some(c=>(c.name||'').endsWith('/channels/'+process.argv[1]));process.exit(has?0:1)})" "$CHANNEL"; then
+          for SITE in $SITES; do
+            LIST=$(pnpm exec firebase hosting:channel:list --site "$SITE" --project sync-sit --json 2>/dev/null) || true
+            # Exit-code contract of scripts/has-preview-channel.js:
+            # 0 present -> delete; 1 absent -> skip; 2 invalid list -> FAIL
+            # (a broken list must not masquerade as "nothing to clean").
+            set +e
+            printf '%s' "$LIST" | node scripts/has-preview-channel.js "$CHANNEL"
+            CODE=$?
+            set -e
+            if [ "$CODE" = "0" ]; then
               echo "deleting $SITE/$CHANNEL"
               pnpm exec firebase hosting:channel:delete "$CHANNEL" --site "$SITE" --project sync-sit --force || FAILED=1
+            elif [ "$CODE" = "1" ]; then
+              echo "no $CHANNEL on $SITE (never created or already expired) -- skipping"
             else
-              echo "no $CHANNEL on $SITE (never created, expired, or site absent) -- skipping"
+              echo "::error::channel list FAILED for $SITE -- refusing to treat as 'nothing to clean'"
+              FAILED=1
             fi
           done
           exit $FAILED
