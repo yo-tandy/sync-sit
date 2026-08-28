@@ -111,7 +111,13 @@ export function PostTaskPage() {
       case 'describe':
         return <StepDescribe draft={draft} update={update} />;
       case 'photos':
-        return <StepPhotos draft={draft} update={update} />;
+        return (
+          <StepPhotos
+            draft={draft}
+            update={update}
+            updatePhotos={(mutate) => setDraft((d) => ({ ...d, photos: mutate(d.photos) }))}
+          />
+        );
       case 'adultPresent':
         return <StepAdultPresent draft={draft} update={update} />;
       case 'toolsTransport':

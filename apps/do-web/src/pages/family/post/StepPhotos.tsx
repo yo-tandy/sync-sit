@@ -4,7 +4,16 @@ import { DO_TASK_PHOTOS_MAX } from '@ejm/do-core';
 import { InfoBanner, PlusIcon, Spinner, XIcon } from '@ejm/shared-ui';
 import { useAuthStore } from '@/stores/authStore';
 import type { StepProps } from './steps';
+import type { PhotoItem } from './postTaskDraft';
 import { usePhotoUploads } from './usePhotoUploads';
+
+interface StepPhotosProps extends StepProps {
+  /** FUNCTIONAL photo updates: the upload/poll callbacks resolve long after
+   * the render that scheduled them, so they must mutate the LATEST list —
+   * a value-style `update({ photos: ... })` here would write through a
+   * stale closure and drop concurrent uploads. */
+  updatePhotos: (mutate: (prev: PhotoItem[]) => PhotoItem[]) => void;
+}
 
 /**
  * The §7.4 photos step: client-minted-UUID upload into the quarantine
@@ -12,7 +21,7 @@ import { usePhotoUploads } from './usePhotoUploads';
  * doGetOwnPhotoUrl, ≤6 with a remove control. The §11.2 visibility warning
  * shows here as well as at review — photos are board-visible.
  */
-export function StepPhotos({ draft, update }: StepProps) {
+export function StepPhotos({ draft, updatePhotos }: StepPhotosProps) {
   const { t } = useTranslation();
   const uid = useAuthStore((s) => s.firebaseUser)?.uid ?? null;
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -21,7 +30,7 @@ export function StepPhotos({ draft, update }: StepProps) {
   const { addPhoto, retryPhoto, removePhoto } = usePhotoUploads({
     uid,
     photos: draft.photos,
-    onChange: (mutate) => update({ photos: mutate(draft.photos) }),
+    onChange: updatePhotos,
     onLimitError: () => setNotice(t('family.post.photoTooMany', { max: DO_TASK_PHOTOS_MAX })),
     onUploadError: () => setNotice(t('family.post.photoUploadError')),
   });
@@ -42,7 +51,7 @@ export function StepPhotos({ draft, update }: StepProps) {
             className="relative aspect-square overflow-hidden rounded-xl border border-gray-200 bg-gray-50"
           >
             {photo.state === 'ready' && photo.url ? (
-              <img src={photo.url} alt="" className="h-full w-full object-cover" />
+              <img src={photo.url} alt="" data-testid="photo-thumb" className="h-full w-full object-cover" />
             ) : photo.state === 'error' ? (
               <div className="flex h-full flex-col items-center justify-center gap-1 p-2 text-center">
                 <span className="text-[10px] leading-tight text-error-600">
