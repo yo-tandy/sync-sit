@@ -181,7 +181,7 @@ function RefFormDialog({
   const hasErrors = !!phoneError || !!emailError;
 
   return (
-    <Dialog open={open} onClose={onClose}>
+    <Dialog open={open} onClose={onClose} ariaLabel={title}>
       <h3 className="mb-4 text-lg font-bold">{title}</h3>
 
       <Input

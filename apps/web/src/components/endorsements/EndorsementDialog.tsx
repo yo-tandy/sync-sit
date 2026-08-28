@@ -147,8 +147,20 @@ export function EndorsementDialog({
     }
   };
 
+  // Accessible dialog name (issue #305): mirrors the visible heading in each
+  // of the dialog's states — saved flash vs. edit vs. first submission.
+  const dialogTitle = saved
+    ? isEdit
+      ? t('references.referenceUpdated')
+      : t('references.referenceSubmitted')
+    : isEdit
+      ? t('references.editMyReference')
+      : appointmentId
+        ? t('references.referencePrompt', { name: babysitterName })
+        : t('references.referencePromptDesc', { name: babysitterName.split(' ')[0] || babysitterName });
+
   return (
-    <Dialog open onClose={onClose}>
+    <Dialog open onClose={onClose} ariaLabel={dialogTitle}>
       {saved ? (
         <div className="text-center py-4">
           <div className="mb-3 text-3xl">✅</div>

@@ -247,7 +247,7 @@ export function AdminVerificationsPage() {
       </div>
 
       {/* Approve confirmation dialog */}
-      <Dialog open={confirmDialog.open} onClose={() => setConfirmDialog({ ...confirmDialog, open: false })}>
+      <Dialog open={confirmDialog.open} onClose={() => setConfirmDialog({ ...confirmDialog, open: false })} ariaLabel={confirmDialog.title}>
         <h3 className="mb-2 text-lg font-semibold">{confirmDialog.title}</h3>
         <p className="mb-4 text-sm text-gray-600">{confirmDialog.message}</p>
         <div className="flex justify-end gap-2">
@@ -261,7 +261,7 @@ export function AdminVerificationsPage() {
       </Dialog>
 
       {/* Rejection dialog */}
-      <Dialog open={rejectDialog.open} onClose={() => setRejectDialog({ ...rejectDialog, open: false })}>
+      <Dialog open={rejectDialog.open} onClose={() => setRejectDialog({ ...rejectDialog, open: false })} ariaLabel={t('verification.rejectTitle')}>
         <h3 className="mb-2 text-lg font-semibold">{t('verification.rejectTitle')}</h3>
         <p className="mb-3 text-sm text-gray-600">{t('verification.rejectDesc')}</p>
         <textarea

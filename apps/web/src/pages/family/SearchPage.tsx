@@ -810,7 +810,7 @@ export function SearchPage() {
 
       {/* Publish Confirmation Dialog (issue #207) */}
       {publishOpen && (
-        <Dialog open onClose={() => { setPublishOpen(false); setPublishError(null); }}>
+        <Dialog open onClose={() => { setPublishOpen(false); setPublishError(null); }} ariaLabel={t('publish.confirmTitle')}>
           <h3 className="mb-2 text-lg font-bold">{t('publish.confirmTitle')}</h3>
           <p className="mb-2 text-sm text-gray-600">{t('publish.confirmDesc')}</p>
           <p className="mb-2 text-sm text-gray-600">
@@ -839,7 +839,7 @@ export function SearchPage() {
 
       {/* Withdraw Published Search Dialog (issue #207) */}
       {withdrawTarget && (
-        <Dialog open onClose={() => setWithdrawTarget(null)}>
+        <Dialog open onClose={() => setWithdrawTarget(null)} ariaLabel={t('publish.withdrawTitle')}>
           <h3 className="mb-2 text-lg font-bold">{t('publish.withdrawTitle')}</h3>
           <p className="mb-4 text-sm text-gray-600">{t('publish.withdrawDesc')}</p>
           <div className="flex gap-2">
@@ -855,7 +855,7 @@ export function SearchPage() {
 
       {/* Contact Confirmation Dialog */}
       {contactTarget && !sent && (
-        <Dialog open onClose={() => setContactTarget(null)}>
+        <Dialog open onClose={() => setContactTarget(null)} ariaLabel={t('search.contactConfirm', { name: contactTarget.firstName })}>
           <h3 className="mb-2 text-lg font-bold">{t('search.contactConfirm', { name: contactTarget.firstName })}</h3>
           <p className="mb-4 text-sm text-gray-600">
             {t('search.contactDesc', { name: contactTarget.firstName })}
@@ -891,7 +891,7 @@ export function SearchPage() {
 
       {/* Success Dialog */}
       {sent && (
-        <Dialog open onClose={() => { setSent(false); setContactTarget(null); }}>
+        <Dialog open onClose={() => { setSent(false); setContactTarget(null); }} ariaLabel={t('search.requestSent')}>
           <div className="text-center">
             <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-green-50">
               <CheckIcon className="h-7 w-7 text-green-600" />

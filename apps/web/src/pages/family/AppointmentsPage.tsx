@@ -439,7 +439,7 @@ export function FamilyAppointmentsPage() {
         )}
 
         {/* Accept / decline a babysitter-initiated request (issue #207 PR3) */}
-        <Dialog open={!!respondTarget} onClose={() => setRespondTarget(null)}>
+        <Dialog open={!!respondTarget} onClose={() => setRespondTarget(null)} ariaLabel={respondTarget?.action === 'accept' ? t('familyDashboard.acceptSitterTitle') : t('familyDashboard.declineSitterTitle')}>
           <h3 className="mb-2 text-lg font-semibold">
             {respondTarget?.action === 'accept' ? t('familyDashboard.acceptSitterTitle') : t('familyDashboard.declineSitterTitle')}
           </h3>
@@ -456,7 +456,7 @@ export function FamilyAppointmentsPage() {
           </div>
         </Dialog>
 
-        <Dialog open={!!cancelTarget} onClose={() => { setCancelTarget(null); setCancelReason(''); }}>
+        <Dialog open={!!cancelTarget} onClose={() => { setCancelTarget(null); setCancelReason(''); }} ariaLabel={pending.some((a) => a.appointmentId === cancelTarget) ? t('appointment.cancelRequestTitle') : t('appointment.cancelTitle')}>
           {(() => {
             const isCancellingPending = pending.some((a) => a.appointmentId === cancelTarget);
             // Cancel-time disclosure (issue #237, PR #248 round 2): warn when
@@ -506,7 +506,7 @@ export function FamilyAppointmentsPage() {
           })()}
         </Dialog>
 
-        <Dialog open={!!editTarget} onClose={() => setEditTarget(null)}>
+        <Dialog open={!!editTarget} onClose={() => setEditTarget(null)} ariaLabel={t('appointment.editTitle')}>
           <h3 className="mb-2 text-lg font-semibold">{t('appointment.editTitle')}</h3>
           <div className="space-y-3">
             <div className="flex gap-3">
@@ -526,7 +526,7 @@ export function FamilyAppointmentsPage() {
           </div>
         </Dialog>
 
-        <Dialog open={!!resubmitTarget} onClose={() => setResubmitTarget(null)}>
+        <Dialog open={!!resubmitTarget} onClose={() => setResubmitTarget(null)} ariaLabel={t('appointment.resubmitTitle')}>
           <h3 className="mb-2 text-lg font-semibold">{t('appointment.resubmitTitle')}</h3>
           <p className="mb-4 text-sm text-gray-500">{t('appointment.resubmitDesc')}</p>
           <div className="space-y-3">

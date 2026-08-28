@@ -753,7 +753,7 @@ export function GovernedChildPage() {
       </div>
 
       {/* ── Searchable-toggle confirmation ── */}
-      <Dialog open={searchTarget !== null} onClose={() => setSearchTarget(null)}>
+      <Dialog open={searchTarget !== null} onClose={() => setSearchTarget(null)} ariaLabel={searchTarget?.searchable ? t('governance.child.confirmShowTitle') : t('governance.child.confirmHideTitle')}>
         <h3 className="mb-2 text-lg font-bold">
           {searchTarget?.searchable
             ? t('governance.child.confirmShowTitle')
@@ -792,7 +792,7 @@ export function GovernedChildPage() {
       </Dialog>
 
       {/* ── Decline confirmation (decline-only — there is no accept) ── */}
-      <Dialog open={declineTarget !== null} onClose={() => setDeclineTarget(null)}>
+      <Dialog open={declineTarget !== null} onClose={() => setDeclineTarget(null)} ariaLabel={t(declineTarget?.kind === 'withdrawStudyContact' ? 'governance.child.confirmWithdrawContactTitle' : 'governance.child.confirmDeclineTitle')}>
         <h3 className="mb-2 text-lg font-bold">
           {t(declineTarget?.kind === 'withdrawStudyContact'
             ? 'governance.child.confirmWithdrawContactTitle'
@@ -822,6 +822,7 @@ export function GovernedChildPage() {
           setCancelTarget(null);
           setCancelReason('');
         }}
+        ariaLabel={cancelDialogTitle}
       >
         <h3 className="mb-2 text-lg font-bold">{cancelDialogTitle}</h3>
         <p className="mb-4 text-sm text-gray-600">

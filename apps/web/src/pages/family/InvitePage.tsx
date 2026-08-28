@@ -173,7 +173,7 @@ export function InvitePage() {
         )}
       </div>
 
-      <Dialog open={!!removeTarget} onClose={() => setRemoveTarget(null)}>
+      <Dialog open={!!removeTarget} onClose={() => setRemoveTarget(null)} ariaLabel={t('coParent.removeTitle')}>
         <h3 className="mb-2 text-lg font-semibold">{t('coParent.removeTitle')}</h3>
         <p className="mb-6 text-sm text-gray-600">
           {t('coParent.removeConfirm', { name: removeTarget?.name })}
