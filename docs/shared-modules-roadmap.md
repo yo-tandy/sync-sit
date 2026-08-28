@@ -10,8 +10,8 @@
 
 ## Tier 1 — pure UI refactors (low risk, no schema)
 
-### A. Shared enrollment-flow steps `[~]`
-**Plan:** `docs/superpowers/plans/2026-06-10-shared-auth-flow.md`
+### A. Shared enrollment-flow steps `[x]`
+**Plan:** `docs/superpowers/plans/2026-06-10-shared-auth-flow.md` — merged in PR #58.
 **Scope:** lift `StepEmail`, `StepVerify`, `StepPassword` from both apps' enrollment trees into `@ejm/shared-ui/enrollment/*`. Orchestrators in each app wrap the callable invocations and pass handlers as props.
 **Why now:** these three are line-for-line duplicates after PR #57's hand-aligned fixes; first PR that pays back the duplication tax.
 **Files moved:** 3 components into `packages/shared-ui/src/enrollment/`; 6 deleted from `apps/*/src/pages/enrollment/*`. Orchestrators updated.
@@ -21,23 +21,25 @@
 
 ---
 
-### B. Shared static / legal pages `[ ]`
-**Plan slug (to write):** `2026-XX-XX-shared-static-pages.md`
+### B. Shared static / legal pages `[x]`
+**Plan:** `docs/superpowers/plans/2026-06-11-shared-static-pages.md` — merged in PR #59.
 **Scope:** `PrivacyPage`, `TermsPage`, `AboutPage`, `ReportProblemPage` — currently full-content in sync-sit, "Coming soon" stubs in sync-study (added in PR #57 to make the welcome page footer links resolve). Move the page shell into `@ejm/shared-ui`. Move the legal copy into a shared content module (likely `@ejm/shared-core/content/`) since it's plain Markdown / structured text, not React.
 **Why now:** quickest win after Plan A; eliminates the placeholder pages PR #57 left and removes another whole class of "the two apps drift."
 **Files:** ~4 new shared page components, ~4 content modules (en + fr), 4 deleted from `apps/web/src/pages/public/`, 4 deleted from `apps/study-web/src/pages/public/`. Both routers updated.
-**Open design question:** does each app inject a brand-specific intro paragraph (e.g. "Sync/Sit is operated by Tandy SARL...") via prop, or is the legal copy identical across both apps? (Tandy SARL operates both, so probably identical with a brand-name interpolation.)
+**Design question — resolved (PR #59):** legal copy is identical across apps with `{{brand}}` / `{{supportEmail}}` interpolated as props; the copy lives as `Section[]` arrays inside the shared components (not `@ejm/shared-core/content/` — too dense for flat i18n keys, and no renderer needed). `AboutPage` deliberately stays per-app: each app composes its own content over the shared `AboutPageShell` (the About copy is product marketing, not shared legal text).
+**Residual (untracked when B was closed):** the shared Privacy/Terms copy is still babysitting-specific — sync-study renders "student babysitters", "Children's data" etc. with only the brand name swapped. PR #59 deferred a rewrite describing the combined Tandy suite (owner/counsel review required); that follow-up never landed. A third consumer (sync-do, #296) would inherit the same wrong copy.
 **Estimate:** 5 commits / 1 PR.
 **Depends on:** A (just the order; technically independent).
 
 ---
 
-### C. Shared public auth pages `[ ]`
-**Plan slug (to write):** `2026-XX-XX-shared-public-auth-pages.md`
+### C. Shared public auth pages `[x]`
+**Plan:** `docs/superpowers/plans/2026-06-12-shared-public-auth-pages.md` — merged in PR #60.
 **Scope:** `WelcomePage`, `LoginPage`, `SignUpRolePage`, `ForgotPasswordPage`. PR #57 hand-aligned them on the sync-study side but they're still hand-duplicated in two trees — the exact "drift class" the user wants to close.
 **Approach:** extract reusable shells. `WelcomeHero` takes `logoSrc`, `title`, `subtitle`, `ctaSignUpHref`, `ctaLoginHref`, optional `languageSelector`. `LoginPage` takes `postLoginRouter(role) => path`. `SignUpRolePage` takes a `roles: { value, labelKey, descKey, icon, href }[]` array.
 **Why now:** the LoginPage already routes by role; after we have shared shells, Plan D (portable user entity) can change the role lookup in one place.
 **Files:** 4 new components in `@ejm/shared-ui`; 4 deleted in each of the two apps; router entries updated.
+**As merged (PR #60):** each app keeps a thin (~10–25 line) wrapper per page in `src/pages/public/` — the wrapper binds its own `useAuthStore`, role lookup (`getSitRole`/`getStudyRole`) and `postLoginRouter` to the shared component's props. That indirection is the Plan D seam: the schema change updates only the wrappers, never the shared shells.
 **Estimate:** 6 commits / 1 PR.
 **Depends on:** A merged (so the shared step imports show the consumption pattern this PR mirrors).
 
