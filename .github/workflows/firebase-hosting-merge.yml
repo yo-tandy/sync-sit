@@ -81,12 +81,9 @@ jobs:
       # Deploy Firestore rules + indexes FIRST: new collections' rules must be
       # live before hosting ships UI that reads them. Historically this step
       # was missing — hosting+functions auto-deployed on merge while rules and
-      # indexes silently went stale in prod. Storage rules ride along for the
-      # same reason: until PR #285 they were the last rules artifact still in
-      # that manual-deploy gap (its content-type denylist would have sat inert
-      # in prod until someone remembered `firebase deploy --only storage`).
-      - name: Deploy Firestore and Storage rules (and Firestore indexes)
-        run: pnpm exec firebase deploy --only firestore,storage --project sync-sit --non-interactive
+      # indexes silently went stale in prod.
+      - name: Deploy Firestore rules and indexes
+        run: pnpm exec firebase deploy --only firestore --project sync-sit --non-interactive
 
       # Deploy hosting (uses ADC from auth step)
       - name: Deploy Hosting
@@ -113,3 +110,15 @@ jobs:
 
       # Unbundle shared
       - run: node scripts/unbundle-shared-after-deploy.js
+
+      # Deploy Storage rules LAST (PR #285): until then they were the last
+      # rules artifact still in the manual-deploy gap the firestore step's
+      # comment describes — the #281 content-type denylist would have sat
+      # inert in prod until someone remembered `firebase deploy --only
+      # storage`. Deliberately its own step AFTER hosting+functions: unlike
+      # firestore rules, nothing shipped above depends on storage rules being
+      # live first, and this WIF service account has never exercised the
+      # storage-release permissions — if it lacks them, only this step fails
+      # (visibly) instead of blocking the whole deploy. Watch the first run.
+      - name: Deploy Storage rules
+        run: pnpm exec firebase deploy --only storage --project sync-sit --non-interactive
