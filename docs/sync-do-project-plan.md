@@ -122,6 +122,7 @@ Settled in review, 2026-08-28 (the §17 open-questions round):
 | 17 | Area label on the task (Q6-related) | **Required, not best-effort.** "The neighborhood of the requesting family should appear in the original request. It is a necessary information for the doer before they accept." `areaLabel` becomes non-null on `TaskDoc`; `doPostTask` refuses to publish until the family's address resolves a label. §4.1. |
 | 18 | Re-offers after a family decline (Q7) | **Allowed.** "At this point, I don't want to block re-offers" — the `family_declined` branch resurrects like `withdrawn`, full submit path re-run. Revisitable if re-notification becomes a nuisance in practice. §4.2. |
 | 19 | Completed-task retention (Q8) | **6 months, platform-wide.** "There's no reason to retain completed engagement indefinitely — in any of the sync apps." sync-do builds it into `doSweepTasks` from day one; the sit/study half is issue #294, since it touches those apps. §11.4. |
+| 20 | Cross-app visibility at build time | **Gated on owner approval** (owner, 2026-08-28, build kickoff): sync-do must not be made reachable FROM sync-sit or sync-study — no switcher entries, links, or promos in the sibling apps — before the owner approves that change. `do-web` linking OUT to the siblings is fine. §9.5 records the asymmetric switcher shape this gives PR2; the sit/study-side flip is its own owner-approved PR. |
 
 Two decisions carry known trade-offs that the design mitigates rather than
 removes — see §11 (the +1 helper is an unvetted person on site) and §17 R2
@@ -172,7 +173,8 @@ packages/
 Not because the other one lacks the ingredients — it does not. An earlier draft
 said `apps/study-functions` "has none of the family-verification surface", and
 that is false: it checks `verification.isFullyVerified` and reads `families`
-in 8 of the 20 files that register a callable or job (10 of those 20 read `families`), and uses `resolveAreaLabel`, `writeUserActivity` and
+in 8 of the 20 files that register a callable or job (10 of those 20 read
+`families`), and uses `resolveAreaLabel`, `writeUserActivity` and
 the guardian helpers throughout. §11.1 of this same document cites
 `publishTutorSearch.ts:54` as proof that *both* codebases read the verification
 field, so the two sections contradicted each other and §11.1 was the correct
@@ -378,7 +380,7 @@ export interface TaskDoc {
    * `pending_guardian` by any path.** Stated as an invariant rather than a
    * list, because an enumeration is what goes stale: an earlier draft named
    * withdraw, decline and the sibling auto-decline at acceptance, and silently
-   * omitted the winner's own `pending → accepted` transition (§6.4 step 6)
+   * omitted the winner's own `pending → accepted` transition (§6.4 step 7)
    * and `doCancelTask`'s sweep to `expired`. An assigned task's card would
    * then have read "1 offer" forever. Maintained transactionally.
    *
@@ -863,7 +865,11 @@ are explicit rather than interleaved:
 *Write phase:*
 
 6. Task → `assigned`; write `assignedUserId`, `assignedOfferId`, `assignedAt`,
-   `agreedPrice`.
+   `agreedPrice` — **and `offerCount` → 0**: acceptance is the one path where
+   every live offer leaves the live set at once (winner → `accepted`,
+   siblings → `declined`/`expired`), so the §4.1 invariant must land at zero
+   inside this same transaction. §8 spells the decrement out for the other
+   three mutation paths; this is the fourth.
 7. Accepted offer → `accepted`.
 8. **Every other `pending` offer on the task (from the step-5 read) →
    `declined`,
@@ -954,6 +960,19 @@ to the two parties plus admin, which is exactly the audience a reveal needs:
    contact data: `doGetAssignedContact` proves the caller's standing against
    the accepted offer, exactly the two-party audience the rules already
    scope.
+
+   **Cancellation does not cut the line dead.** A consequence of serving
+   contact live instead of persisting it: the moment a task is cancelled,
+   there is no stored snapshot to fall back on — and §6.5 lets either side
+   cancel an `assigned` task, including the morning of. Two people
+   mid-arrangement losing each other's phone numbers at the instant one of
+   them cancels is not a boundary anyone intended, so the callable keeps
+   serving the pair for **`DO_CONTACT_GRACE_DAYS = 7`** after `cancelledAt`
+   (they already had each other's details; the grace only covers
+   coordinating the aftermath), then refuses; the 30-day cancelled-task
+   sweep deletes the offer doc and is the hard stop. Implementer's call
+   recorded here rather than discovered at PR6 — flagged for the owner, who
+   can shorten it to zero if a cancelled task should sever immediately.
 
 **Ruled out in writing:** adding a `profiles.doer` disjunct to the `users` read
 rule. It would expose every enrolled doer's user document to every
@@ -1209,7 +1228,9 @@ index Firestore creates automatically, but the sweep queries
 
 ### 7.4 Storage
 
-Task photos live under a task-independent, uploader-keyed prefix — `do-photos/{uid}/{photoId}` — in the existing bucket (see below for why the path carries no `taskId`).
+Task photos live under a task-independent, uploader-keyed prefix —
+`do-photos/{uid}/{photoId}` — in the existing bucket (see below for why the
+path carries no `taskId`).
 
 **Storage rules cannot mirror the `doTasks` read rule, and no wording makes
 them.** Firebase Storage rules have no way to read Firestore — there is no
@@ -1227,7 +1248,7 @@ match /verification-documents/{familyId}/{allPaths=**} {
 }
 ```
 
-Three options, named here so PR10 does not have to invent one under deadline:
+Three options, named here so PR5 does not have to invent one under deadline:
 
 1. **`allow read, write: if false` + a `doGetTaskPhotoUrl` callable** that
    asserts the §7.2 audience and returns a short-lived signed URL. The
@@ -1246,7 +1267,7 @@ audience than the board itself has.
 **Option 1 is a TWO-path shape, or the client cannot upload at all.** `allow
 read, write: if false` on the final prefix plus the EXIF requirement (§11.2)
 means the client never writes final objects — a geotagged original must not be
-able to land past the stripper. Spelled out so PR10 ships it whole rather than
+able to land past the stripper. Spelled out so PR5 ships it whole rather than
 shipping the locked rule, discovering uploads are dead, and "temporarily"
 relaxing to option 2:
 
@@ -1260,7 +1281,7 @@ match /do-photos/{uid}/{photoId} {
 // strips EXIF, republishes into do-photos/{uid}/, deletes the original.
 match /do-uploads/{uid}/{uploadId} {
   allow read: if false;
-  // Bounded: this block is copy-ready for PR10, so what it omits ships.
+  // Bounded: this block is copy-ready for PR5, so what it omits ships.
   // Without the size/type caps, ANY authenticated platform user (sit- and
   // study-only accounts included) could write unbounded objects of any type,
   // each one firing the stripper trigger (round 9).
@@ -1302,9 +1323,25 @@ does not exist yet. Keying by uploader instead makes ownership structural:
   uploaded.
 
 A quarantine object that never gets claimed is swept with the dailies, and so
-is a `do-photos` object no task references after the same window. PR10's
-one-line "EXIF stripping on upload" bullet understates all of this — budget
-the trigger, the two sweep lines, and the two rules blocks.
+is a `do-photos` object no task references after the same window. One line
+of a PR row understates all of this — PR5's estimate budgets the trigger,
+the two sweep lines, the two signing callables and the two rules blocks
+(§13).
+
+**Accepted residual — quarantine count and rate.** The rule bounds each
+object's size and declared type but not how MANY a caller writes: Storage
+rules cannot count prior objects or read Firestore, so any authenticated
+platform user — sit-only and study-only accounts included, exactly the
+population §7.2 keeps off the board — can loop ≤10 MB uploads under their
+own `do-uploads/{uid}/` prefix, each firing `doStripTaskPhoto`. That is a
+storage-cost and function-invocation vector, not a data exposure, and it is
+no worse than the platform's existing photo prefixes. Recorded as a
+decision like §4.1's cardinality side channel and §11.3's helper: the
+bounds are operational — the daily unclaimed-object sweep, the project's
+billing budget alert — and if it ever bites, the enforcement point is the
+stripper itself (count the caller's live quarantine objects before doing
+work, fail closed above a ceiling), which pairs with the fail-closed
+behaviour §8 already requires of it. Nothing to build in V1.
 
 Deployment gotcha from the README: **storage rules are not auto-deployed** by
 the merge workflow and must be shipped manually.
@@ -1318,19 +1355,19 @@ All in `apps/functions/src/do/**`, codebase `default`, region `europe-west1`,
 
 | Callable | Auth | Does |
 |---|---|---|
-| `doEnrollDoer` | Auth | Creates `profiles.doer` — full or abbreviated depending on existing profiles. **Refuses an ungoverned under-15 caller** (`!isGoverned` guarding `checkEnrollmentAge`, the `enrollTutor` shape — §11.1); a governed caller passes at any age |
+| `doEnrollDoer` | Auth | Creates `profiles.doer` — full or abbreviated depending on existing profiles. **Requires a parseable `dateOfBirth` from every caller, then refuses an ungoverned caller under 15 on a bare age-from-DOB check — deliberately NOT the `enrollTutor` email-guarded shape, whose floor stands down when the EJM email doesn't parse (§11.1)**; a governed caller passes the floor at any age; `checkEnrollmentAge` runs only for the `age_mismatch` half when the email yields a graduation year |
 | `doUpdateDoerProfile` | Auth | Categories, bio, transport, `notifyNewTasks` |
 | `doPostTask` | Auth (verified family) | Validates, scrubs, computes `areaLabel` + `expiresAt`, enforces `DO_TASK_MAX_ACTIVE`. **Refuses (`failed-precondition`, `reason: 'address_required'`) when the family's postcode/city resolves no area label** — decision 17 makes `areaLabel` required, and the wizard routes the parent to complete their address first |
 | `doUpdateTask` | Auth (owner family) | `open` tasks only; description/photos/budget/timing. **Runs the caller-prefix check on any photo ADDED** — existing `{uid, photoId}` entries pass through untouched, since they were verified at their own add time and may belong to the OTHER parent of the family; re-checking them against the current caller's prefix would wrongly strip a co-parent's photos (§7.4). Recomputes `expiresAt` server-side, which is how an `ongoing` task renews (§6.3). Notifies students with pending offers that terms changed |
-| `doCancelTask` | Auth (family or assigned doer — §6.5 says either side may cancel an `assigned` task, and `cancelledBy: 'doer'` must be reachable; on an `open` task, family only) | Task → `cancelled`, all live offers → `expired` (zeroing `offerCount` per §4.1's invariant), notify. On an `assigned` task there are no live offers left (the sibling flip cleared them); the ACCEPTED offer keeps `accepted` — it is the record of who was engaged at what price (it carries no contact data, decision 16 — `doGetAssignedContact` simply stops serving the pair once the task leaves `assigned`/`completed`), and the 30-day cancelled-task sweep bounds its retention |
-| `doSubmitOffer` | Auth (active doer) | Enforces the ceilings, **re-checks the under-15 floor for ungoverned callers** (supervision is revocable and the enrollment gate never re-runs — §11.1), resolves the guardian gate, writes `pending` or `pending_guardian` |
+| `doCancelTask` | Auth (family or assigned doer — §6.5 says either side may cancel an `assigned` task, and `cancelledBy: 'doer'` must be reachable; on an `open` task, family only) | Task → `cancelled`, all live offers → `expired` (zeroing `offerCount` per §4.1's invariant), notify. On an `assigned` task there are no live offers left (the sibling flip cleared them); the ACCEPTED offer keeps `accepted` — it is the record of who was engaged at what price (it carries no contact data, decision 16 — `doGetAssignedContact` keeps serving the pair for `DO_CONTACT_GRACE_DAYS = 7` after `cancelledAt` so the two sides can coordinate the aftermath, then refuses; §6.4), and the 30-day cancelled-task sweep bounds its retention |
+| `doSubmitOffer` | Auth (active doer) | Enforces the ceilings, **re-checks the under-15 floor for ungoverned callers** (bare age-from-DOB, same shape as `doEnrollDoer` — supervision is revocable and the enrollment gate never re-runs, §11.1), resolves the guardian gate, writes `pending` or `pending_guardian` |
 | `doUpdateOffer` | Auth (offering student) | Price/message/helper while `pending` |
 | `doWithdrawOffer` | Auth (offering student) | → `withdrawn`, decrements the live `offerCount` (§4.1) |
 | `doDecideOfferAsGuardian` | Auth (supervising parent) | `pending_guardian` → `pending` or `withdrawn` |
 | `doAcceptOffer` | Auth (owner family) | The §6.4 transaction |
 | `doDeclineOffer` | Auth (owner family) | Single offer → `declined`, decrements the live `offerCount` |
 | `doMarkTaskDone` | Auth (family or assigned doer) | §6.5 |
-| `doGetAssignedContact` | Auth (assigned doer or member of the task's family) | Decision 16, the §6.4 two-way reveal: asserts the caller's standing against the ACCEPTED offer and a task in `assigned`/`completed`, then returns both sides' contact details read **live** (family address/phone from the family doc, doer channels via `getContact`) — never persisted, so post-acceptance edits are always reflected |
+| `doGetAssignedContact` | Auth (assigned doer or member of the task's family) | Decision 16, the §6.4 two-way reveal: asserts the caller's standing against the ACCEPTED offer and a task in `assigned`/`completed` — or `cancelled` within `DO_CONTACT_GRACE_DAYS = 7` of `cancelledAt` (§6.4's aftermath grace) — then returns both sides' contact details read **live** (family address/phone from the family doc, doer channels via `getContact`) — never persisted, so post-acceptance edits are always reflected |
 | `doListBoard` | — | **Not a callable.** The board is a direct Firestore query under the §7.2 read rule, like `usePublishedSearches`. |
 | `doAdminListTasks` | Admin | Search/filter for the admin panel |
 | `doAdminDeleteTask` | Admin | Hard delete + audit |
@@ -1338,7 +1375,7 @@ All in `apps/functions/src/do/**`, codebase `default`, region `europe-west1`,
 | `doGetTaskPhotoUrl` | Auth | Asserts the §7.2 board audience (or family membership) and returns a short-lived signed URL for a task photo — the §7.4 option-1 read path; final objects are `allow read: if false` |
 | `doStripTaskPhoto` | Storage trigger | Fires on `do-uploads/{uid}/*`: strips EXIF, republishes into the task-independent `do-photos/{uid}/` (no `taskId` exists at upload time — §7.4), deletes the quarantine original. **Fails closed on non-image bytes**: the rule's `contentType` check is client-asserted metadata, so hostile bytes labelled `image/jpeg` WILL arrive — the stripper deletes the quarantine object and stops, rather than throwing and re-firing on every retry. Not a callable |
 | `doSendTaskDigest` | Scheduled | The §10 board digest: batches `new_task_matching` for students whose `profiles.doer.categories` match tasks created since their last digest, at most one per student per 6h. A scheduled batcher rather than an on-create fan-out, because the rate limit is per-RECIPIENT — an on-create trigger would need per-student dedupe state anyway, and the batcher IS that state. Uses the §7.3 `users` composite |
-| `doSweepTasks` | Scheduled | Daily: delete expired `open` tasks and their offers; delete `cancelled` tasks (and their offers) older than 30 days — mirroring `cleanupOldData`'s cancelled/rejected appointment rule; **delete `completed` tasks (and their offers) older than 180 days — decision 19's 6-month retention, via the `(status, completedAt)` index (§7.3, §11.4)**; auto-complete stale `doerMarkedDoneAt` tasks; delete unclaimed `do-uploads` quarantine objects (§7.4). Extends the existing `cleanupOldData` schedule rather than adding a second job |
+| `doSweepTasks` | Scheduled | Daily: delete expired `open` tasks and their offers; delete `cancelled` tasks (and their offers) older than 30 days — mirroring `cleanupOldData`'s cancelled/rejected appointment rule; **delete `completed` tasks (and their offers) older than 180 days — decision 19's 6-month retention, via the `(status, completedAt)` index (§7.3, §11.4)**; **whenever a task is deleted by any of those three paths, delete the `do-photos` objects its `photos[]` references — each entry carries `{uid, photoId}`, which IS the object path, so the documents and the images leave together (§11.4)**; auto-complete stale `doerMarkedDoneAt` tasks; delete unclaimed `do-uploads` quarantine objects (§7.4). Extends the existing `cleanupOldData` schedule rather than adding a second job |
 
 Validation follows the sit house style visible in `publishSearch.ts` — manual
 guards throwing `HttpsError('invalid-argument', …)`, with the shared bounds
@@ -1352,7 +1389,8 @@ in `apps/functions/src/admin/`, whose files are one-line re-export shims (the
 same shim shape §12 already notes for `writeAuditLog.ts`). That makes this a
 shared-surface edit for §12's list, though only `apps/functions` registers the
 two callables today, so there is no study-side deploy impact. This is easy to
-forget and is called out as a checklist item in §13 PR10 (the admin/GDPR PR — not the UI PRs, where it would have no natural home).
+forget and is called out as a checklist item in §13 PR10 (the admin/GDPR PR
+— not the UI PRs, where it would have no natural home).
 
 ---
 
@@ -1385,7 +1423,8 @@ It fixes two things:
 
   600 is deliberately darker than the icon green: white-on-#16ad05 is 2.99:1,
   below WCAG AA for the button/link roles brand-600 plays in both sibling
-  apps, while #0d8204 measures 4.99:1 (sit's #df1a30 sits at 4.85:1). The icon green itself lives at 500
+  apps, while #0d8204 measures 4.99:1 (sit's #df1a30 sits at 4.85:1). The
+  icon green itself lives at 500
   (accents, active states), exactly how sit keeps its display red at 500/600
   and study its blues at 500–800.
 - **Design and flow match sit/study as much as possible** (owner directive):
@@ -1506,10 +1545,16 @@ the admin dashboard, and sync-do actions flowing into the existing audit log.
 
 ### 9.5 Cross-app switch
 
-The switcher in all three apps becomes three-way. Each app ships brand marks for
-the other two; `docs/shared-modules-roadmap.md` already flags consolidating
-those marks into `shared-ui` as overdue — with a third app they become 6
-byte-copies, so do the consolidation as part of PR2 rather than after.
+The switcher in all three apps eventually becomes three-way — **but the
+sit/study side is gated: decision 20 forbids making sync-do reachable FROM
+sync-sit or sync-study until the owner approves it.** So PR2 ships the
+asymmetric shape: `do-web`'s own switcher links out to sit and study
+(nothing in the constraint stops that), the brand-mark consolidation into
+`shared-ui` still happens (with three apps the marks become 6 byte-copies;
+`docs/shared-modules-roadmap.md` already flags it as overdue), and the
+sync-do entry in sit's and study's switchers is NOT added. Flipping those
+two switchers three-way is its own one-line owner-approved PR, tracked as a
+labeled issue, after launch readiness.
 
 ---
 
@@ -1521,7 +1566,14 @@ Reuses `NotificationDoc` + the existing Resend and FCM plumbing. New
 
 `task_offer_received` · `task_offer_accepted` · `task_offer_declined` ·
 `task_assigned` · `task_cancelled` · `task_updated` · `task_guardian_approval` ·
-`task_marked_done` · `new_task_matching` (the board digest).
+`task_marked_done` · `new_task_matching` (the board digest) — plus the three
+the decision-12 endorsement lifecycle needs, mirroring study's trio
+(`submitTutorEndorsement.ts:121-127`): `doer_endorsement_received` ·
+`doer_endorsement_published` · `doer_endorsement_declined`. **Twelve values
+total.** All twelve land in `shared-core` at PR9 (one edit to the shared
+union rather than reopening it at PR11); PR9 wires templates and senders for
+the nine task/offer types, and PR11 wires the endorsement three alongside
+the surface that emits them (§13).
 
 **Push tokens.** The user doc already has `fcmTokens` (sit, legacy flat array)
 and `fcmTokensStudy`. sync-do adds `fcmTokensDo`, following the established
@@ -1572,29 +1624,45 @@ it is spam.
 - **The platform's under-15 self-enrollment floor applies, with the governed
   carve-out the platform itself uses — and neither half is sync-do's to
   change.** The normative statement, precise enough to write the test from:
-  **`doEnrollDoer` refuses an ungoverned caller under 15
-  (`if (!isGoverned && …)` guarding `checkEnrollmentAge`); a governed caller
-  passes at any age, because supervision is their protection. An ungoverned
-  caller with a MISSING or unparseable `dateOfBirth` is refused
-  `invalid-argument` and the flow collects it** — the `enrollTutor.ts:256-260`
-  precedent, whose comment says why: "never let a security gate no-op
-  silently." The two existing precedents split here (sit's *search-time*
-  check deliberately tolerates legacy DOB-less profiles), and sync-do takes
-  `enrollTutor`'s side because this is an enrollment gate on a new profile,
-  not a filter over legacy data — and the modal enrollee is a cross-app
-  babysitter whose sit profile may well lack a DOB, so the abbreviated §3.3
-  flow must be able to ask for it.
+  **every `doEnrollDoer` caller must present a parseable `dateOfBirth`
+  (missing or `NaN` → `invalid-argument`, checked unconditionally, before
+  any governance branch — the flow collects it); then an ungoverned caller
+  whose age from that DOB is under 15 is refused (`reason: 'under_15'`),
+  computed from the DOB alone — the floor does NOT depend on the EJM email
+  parsing. A governed caller passes the floor at any age, because
+  supervision is their protection.** `checkEnrollmentAge` is consulted only
+  for the ±1-class `age_mismatch` half, only when `validateEjmEmail` yields
+  a graduation year.
 
-  That mirrors the platform's one enrollment-time precedent exactly:
-  `enrollTutor` guards its gate with `!isGoverned`
-  (`apps/study-functions/src/enrollment/enrollTutor.ts:263`) and its refusal
-  reads "at least 15 to enroll *on your own*. Your parents can create an
-  account and enroll you from theirs." Sit has no enrollment-time check at
-  all — `enrollBabysitter` runs none, and the floor is enforced at *search*
-  time instead (`searchBabysitters.ts:211-224`, with the same `!isGoverned`
-  bypass and the comment "a supervised account … is deliberately searchable
-  at any age — supervision is its protection"). So `enrollTutor` is a single
-  precedent, not a universal one. sync-do takes it AND adds what sit's
+  That last clause is a **deliberate deviation from `enrollTutor`, not an
+  adoption of it** — spelled out because copying the precedent verbatim
+  re-opens a hole. `enrollTutor.ts:263` is
+  `if (!isGoverned && emailCheck.valid && emailCheck.graduationYear !== undefined)`,
+  so its under-15 floor silently stands down when the EJM email is missing,
+  unparseable, or outside the valid graduation-year window — and the modal
+  sync-do enrollee is exactly the at-risk population: a legacy cross-app
+  account whose stored email may not parse (`searchBabysitters.ts:205-206`
+  documents these exist). Sit's own floor does not have this hole —
+  `searchBabysitters.ts:212-213` runs `if (babysitterAge < 15) continue;`
+  standalone, before any email logic — so sync-do follows sit's *shape*
+  (bare age check from the DOB) at enrollTutor's *timing* (enrollment).
+  The DOB-presence rule takes `enrollTutor.ts:256-260`'s side against sit's
+  legacy tolerance because this is an enrollment gate on a new profile, not
+  a filter over legacy data — the modal enrollee is a cross-app babysitter
+  whose sit profile may well lack a DOB, so the abbreviated §3.3 flow must
+  be able to ask for it — and for the reason that file's comment states:
+  "never let a security gate no-op silently." `doSubmitOffer`'s re-check
+  (below) uses the same bare-age shape.
+
+  The governed carve-out itself does mirror the platform:
+  `enrollTutor`'s refusal reads "at least 15 to enroll *on your own*. Your
+  parents can create an account and enroll you from theirs," and sit has no
+  enrollment-time check at all — `enrollBabysitter` runs none, and the
+  floor is enforced at *search* time instead
+  (`searchBabysitters.ts:211-224`, with the same `!isGoverned` bypass and
+  the comment "a supervised account … is deliberately searchable at any age
+  — supervision is its protection"). So `enrollTutor` is a single
+  precedent, not a universal one. sync-do takes its timing AND adds what sit's
   search-time check provides and an enrollment-only gate cannot:
   **durability against revoked supervision**. `revokeSupervision` flips the
   link and drops the `governedBy` mirror without touching `profiles.*` — so a
@@ -1668,7 +1736,19 @@ discovered in an incident.
 
 ### 11.4 GDPR
 
-- `doTasks` and `taskOffers` join `exportUserData` and the hard-delete path.
+- `doTasks` and `taskOffers` join `exportUserData` and the hard-delete path —
+  and so do the **photo objects**: a GDPR hard-delete removes the caller's
+  entire `do-photos/{uid}/**` and `do-uploads/{uid}/**` prefixes (the
+  uid-keyed layout §7.4 chose makes "this user's images" exactly one prefix
+  listing), and the export enumerates the photo paths referenced from the
+  user's tasks. Without this the documents would leave and the images — a
+  garden, a front door, a flat interior, §11.2's own premise — would stay.
+  `DoerEndorsementDoc` (decision 12) is family-authored text about a named
+  student and belongs in both lists too; the `references` collection is
+  absent from `exportUserData`/`deleteUser` entirely today — a pre-existing
+  platform gap covering sit references and study endorsements as well,
+  tracked as **issue #295** (shared-functions change, so its own PR outside
+  this ladder).
 - Retention: expired `open` tasks are deleted by the daily sweep; `cancelled`
   tasks (and their offers) are deleted once older than 30 days — the same
   window `cleanupOldData` already applies to cancelled/rejected appointments.
@@ -1760,7 +1840,9 @@ What sync-do reuses as-is:
 
 What sync-do **adds** to shared packages (small, deliberate):
 
-- `shared-core/types/notification.ts` — the nine new `NotificationType` values.
+- `shared-core/types/notification.ts` — the twelve new `NotificationType`
+  values (nine task/offer + the three endorsement-lifecycle ones, §10), all
+  added in one PR9 edit.
 - `shared-core/types/user.ts` — `profiles.doer`, plus `fcmTokensDo` and
   `dismissedPwaInstallBannerDo` alongside their existing `*Study` siblings on
   `User`.
@@ -1768,6 +1850,17 @@ What sync-do **adds** to shared packages (small, deliberate):
   `users` **update** rule gains `doerIdentityUnchanged()` and a `doerField()`
   helper (§7.2). Without it `profiles.doer.enrollmentComplete` is
   client-writable and the board read gate is bypassable.
+- `firestore.rules`, second amendment (PR11): the `references` **read** rule
+  gains a `doerUserId` recipient disjunct —
+  `resource.data.get('doerUserId', '') == request.auth.uid`, `.get()`-defaulted
+  like its `babysitterUserId`/`tutorUserId` siblings because the collection
+  holds mixed shapes. The H2-hardened rule (`firestore.rules:377-385`) has no
+  such disjunct today, so without it a `DoerEndorsementDoc` in `private` is
+  unreadable by the doer it names and §9.2's "My endorsements → pending"
+  list renders empty. The offer-card queries are NOT affected — they ride
+  the public-status disjunct; the symptom without this amendment is
+  `PERMISSION_DENIED` on the doer's own pending docs at PR11, and the
+  nearest-looking wrong fix is widening the rule.
 - `storage.rules` — the `do-photos/{uid}/**` (locked) and `do-uploads/{uid}/**`
   (owner-scoped quarantine) blocks (§7.4), shipped manually since the merge
   workflow does not deploy it.
@@ -1806,15 +1899,15 @@ the repo has been using.
 | PR | Scope | Est. |
 |---|---|---|
 | **1** | `packages/do-core`: types (task, offer, doer profile), the seven categories with sub-categories, the considerations content EN+FR, validation bounds, unit tests. No UI, no schema. | 8 |
-| **2** | `apps/do-web` scaffold + third hosting target + three-way app switcher + brand-mark consolidation into `shared-ui`; `theme/do.css` (§9.0 palette) and the favicon/manifest/switcher derivations of the checked-in icon. Empty shell that builds and deploys, in brand. | 8 |
-| **3** | Firestore: `doTasks` + `taskOffers` rules and indexes, **plus the `users` update-rule amendment** (`doerIdentityUnchanged()`, §7.2) — without it the board gate is client-bypassable. Rules tests under the stripped-copy mutation-verify harness. | 8 |
+| **2** | `apps/do-web` scaffold + third hosting target + brand-mark consolidation into `shared-ui`; `theme/do.css` (§9.0 palette) and the favicon/manifest/switcher derivations of the checked-in icon. The switcher ships ASYMMETRIC per decision 20: do-web links out to sit/study, but NO sync-do entry is added to sit's or study's switchers (§9.5 — that flip is its own owner-approved PR later). Empty shell that builds and deploys, in brand. | 8 |
+| **3** | Firestore: `doTasks` + `taskOffers` rules and indexes, **plus the `users` update-rule amendment** (`doerIdentityUnchanged()`, §7.2) — without it the board gate is client-bypassable — **and the two `references` composites from §7.3** (inert until queried; PR7's offer card needs the tutor-side one, so they land with the rest of the index file rather than mid-UI-work). The `references` READ-rule amendment stays at PR11 with its surface (§12). Rules tests under the stripped-copy mutation-verify harness. | 8 |
 | **4** | `profiles.doer` + `doEnrollDoer` / `doUpdateDoerProfile`, abbreviated cross-app enrollment, enrollment UI. | 8 |
-| **5** | Task callables: `doPostTask`, `doUpdateTask`, `doCancelTask`, the sweep. Integration tests. | 8 |
+| **5** | Task callables: `doPostTask`, `doUpdateTask`, `doCancelTask`, the sweep — **plus the entire §7.4 photo pipeline: the `do-uploads`/`do-photos` storage-rules blocks (manual deploy), `doStripTaskPhoto`, `doGetOwnPhotoUrl`, `doGetTaskPhotoUrl`.** Sequencing is the point: `doPostTask`'s caller-prefix check, the sweep's two photo lines, and the §14 anti-hijack pin all depend on the pipeline existing, so it cannot trail them at PR10 (which keeps EXIF-quality/admin/GDPR follow-through only). Integration tests. | 10 |
 | **6** | Offer callables: submit / update / withdraw / guardian-decide / accept / decline, incl. the §6.4 transaction and its concurrency test, plus `doGetAssignedContact` (decision 16) with its standing-assertion tests. | 10 |
 | **7** | Family UI: post wizard, my tasks, offer review, assigned task, contact reveal. | 12 |
 | **8** | Doer UI: board with filters, task detail, offer form, my offers, my assignments. | 12 |
-| **9** | Notifications: nine types, email templates EN+FR, `fcmTokensDo` push, the rate-limited board digest. | 8 |
-| **10** | Admin tasks tab, audit coverage, GDPR export + hard-delete coverage, EXIF stripping on upload, storage rules (**manual deploy**), and the decision-15 liability copy in the ToS + posting review + acceptance dialog. | 9 |
+| **9** | Notifications: all twelve `NotificationType` values added to `shared-core` (§10), email templates EN+FR and senders for the nine task/offer types, `fcmTokensDo` push, the rate-limited board digest. The endorsement trio's templates/senders land at PR11 with their surface. | 8 |
+| **10** | Admin tasks tab, audit coverage, GDPR export + hard-delete coverage (documents AND the photo prefixes + the export's photo-path enumeration, §11.4), and the decision-15 liability copy in the ToS + posting review + acceptance dialog. (The photo pipeline itself moved to PR5 — its dependents live there.) | 8 |
 | **11** | Completion + cancellation flows; **doer endorsements** (`DoerEndorsementDoc` in `references` with the rules amendment, `doSubmitEndorsement` / `doRespondToEndorsement` mirroring study's pair, the family prompt after completion, the §9.2 "My endorsements" surface, and the offer card's three-source ordering); FR i18n pass, Playwright e2e for post→offer→accept→complete→endorse, screenshots on the PR. | 12 |
 
 Dependencies: 1 → 2 → {3, 4} → 5 → 6 → {7, 8} → 9 → 10 → 11. PRs 7 and 8 can run
@@ -1851,9 +1944,12 @@ see §12 for why the scaffold, not the family UI, is where they are needed.
   the family's own-tasks query (`where('familyId','==',f)` — the same
   reasoning that gives the offer-side family disjunct its `familyId`
   constraint applies to `doTasks`' `isFamilyMember` disjunct, and §7.3's
-  `(familyId, createdAt)` index exists for it); and §9.1's two `references`
-  queries, which must carry `status in ['approved','published']` or be
-  denied. The guardian queue is
+  `(familyId, createdAt)` index exists for it); §9.1's three `references`
+  queries (`doerUserId` / `babysitterUserId` / `tutorUserId`), which must
+  carry `status in ['approved','published']` or be denied; and — once PR11's
+  `references` amendment lands — **a doer can read their own `private`
+  `DoerEndorsementDoc` and an unrelated caller cannot** (the recipient
+  disjunct, pinned like its sit/study siblings). The guardian queue is
   **not** in this list because it has no client query — it is served by the
   Admin SDK (§7.3).
 - **Storage rules** (`tests/rules/storage-rules.test.ts` — the suite already
@@ -1864,16 +1960,22 @@ see §12 for why the scaffold, not the family UI, is where they are needed.
   the direct negative test.
 - **Integration** (`tests/integration/`, emulator lane 2 so the dev stack keeps
   running) — post→offer→accept end-to-end; **concurrent accepts of two
-  different offers, exactly one wins**; guardian approve and deny; **a
+  different offers, exactly one wins, and `offerCount` lands at 0 in the
+  winning transaction** (§6.4 step 6 — the fourth decrement path, the one
+  §4.1 records an earlier draft forgot); guardian approve and deny; **a
   `pending_guardian` sibling flipped by acceptance lands in `expired`**
   (§6.4's sibling flip); **`doPostTask` AND `doUpdateTask` refuse a `photoId` that lives under
   another uploader's `do-photos` prefix** (the round-7 anti-hijack check on
   both write paths — without a pin either is one refactor away from becoming
   a lookup that trusts the id); **an
   UNGOVERNED under-15 caller is refused by `doEnrollDoer`, a GOVERNED
-  under-15 caller is not, and an ungoverned caller with a missing or
-  unparseable `dateOfBirth` is refused `invalid-argument`** (the gate must
-  never no-op silently — `enrollTutor.ts:256-260`); **a doer whose
+  under-15 caller is not, ANY caller with a missing or unparseable
+  `dateOfBirth` is refused `invalid-argument`, and — the pin that guards
+  the §11.1 deviation from `enrollTutor` — an ungoverned under-15 caller
+  with a VALID DOB but a missing/unparseable EJM email is still refused
+  `under_15`** (the floor must hold on the DOB alone; a test written only
+  with a valid email would pass over the email-guard hole, and the gate
+  must never no-op silently — `enrollTutor.ts:256-260`); **a doer whose
   supervision was revoked and who is still under 15 is refused by
   `doSubmitOffer`** (the durability half — enrollment-only floors do not
   survive `revokeSupervision`, §11.1) (both halves of §11.1's floor — the unconditional
@@ -1889,7 +1991,10 @@ see §12 for why the scaffold, not the family UI, is where they are needed.
   19); contact-reveal boundary asserted from both sides via
   `doGetAssignedContact` — the assigned doer and a family member each get
   both halves, a non-party doer with a live offer on the SAME task is
-  refused, and the pair stops being served once the task is cancelled.
+  refused, the pair is STILL served inside `DO_CONTACT_GRACE_DAYS` of a
+  cancellation and refused after it elapses (fake timers — §6.4's aftermath
+  grace, pinned in both directions so neither a snapped line nor an
+  immortal one ships silently).
 - **E2E** (`tests-e2e/`, Playwright) — the happy path in the browser, plus
   screenshots attached natively to the UI PRs per `feedback_pr_ui_screenshots`.
 - **Regression** — full `pnpm test:unit` + `pnpm test:integration` on every PR;
@@ -2091,7 +2196,8 @@ decision 1 already puts the judgement call.
 - **R3 — Free-text descriptions carry PII to a wide audience.** Warned, not
   redacted (§11.2). Same posture as `publishedSearches`.
 - **R4 — Photos leak location.** Handled by server-side EXIF stripping, which is
-  new code with no precedent in the repo — do not let it slip past PR10.
+  new code with no precedent in the repo — it ships with the PR5 photo
+  pipeline, before any UI can upload.
 - **R5 — The +1 helper is unvetted.** Recorded and disclosed (§11.3); not
   solved.
 - **R6 — Deploy blast radius.** sync-do callables ship inside the sync-sit
