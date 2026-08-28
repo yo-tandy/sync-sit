@@ -1,6 +1,7 @@
 # Sync-Do Project Plan
 
-> **Status:** planning draft, 2026-08-27. Owner decisions in §2 are settled;
+> **Status:** planning draft, 2026-08-27; revised 2026-08-28 with the owner's
+> review-round decisions (12–19, §2). Owner decisions in §2 are settled;
 > everything marked **OPEN** in §17 is not.
 >
 > Companion docs: `docs/sync-study-project-plan.md` (the template this plan
@@ -112,6 +113,15 @@ Settled in plan review, same day:
 | 13 | Overnight house-sitting | **Cut.** Not relevant to the product; removed from the taxonomy entirely. |
 | 14 | Family verification | **Mandatory to post**, and **portable across all three apps** — the same approval that unlocks sync-sit and sync-study unlocks sync-do. Never re-verify per app. |
 | 15 | Liability & insurance | **The family's responsibility. The platform performs the handshake only.** Insurance, accidents, and damage disputes (including a doer breaking what they assembled) are between the family and the student — stated in the terms and in-product, and true of sync-sit today as much as sync-do. |
+
+Settled in review, 2026-08-28 (the §17 open-questions round):
+
+| # | Question | Decision |
+|---|---|---|
+| 16 | Post-acceptance contact reveal (Q6) | **Callable, not a stored copy.** `doGetAssignedContact` serves both sides' details on demand; nothing contact-shaped is ever persisted on the offer. The owner's reason is the deciding one: "If the parents update contact information after acceptance, it should be reflected" — a snapshot written at acceptance goes stale the moment either party edits their details. §6.4. |
+| 17 | Area label on the task (Q6-related) | **Required, not best-effort.** "The neighborhood of the requesting family should appear in the original request. It is a necessary information for the doer before they accept." `areaLabel` becomes non-null on `TaskDoc`; `doPostTask` refuses to publish until the family's address resolves a label. §4.1. |
+| 18 | Re-offers after a family decline (Q7) | **Allowed.** "At this point, I don't want to block re-offers" — the `family_declined` branch resurrects like `withdrawn`, full submit path re-run. Revisitable if re-notification becomes a nuisance in practice. §4.2. |
+| 19 | Completed-task retention (Q8) | **6 months, platform-wide.** "There's no reason to retain completed engagement indefinitely — in any of the sync apps." sync-do builds it into `doSweepTasks` from day one; the sit/study half is issue #294, since it touches those apps. §11.4. |
 
 Two decisions carry known trade-offs that the design mitigates rather than
 removes — see §11 (the +1 helper is an unvetted person on site) and §17 R2
@@ -317,7 +327,17 @@ export interface TaskDoc {
   // ── Board-visible identity. Mirrors the publishedSearches PII stance:
   //    area LABEL only, never address or latLng, pre-assignment.
   familyName: string;
-  areaLabel: string | null;          // resolveAreaLabel(family postcode/city)
+  /**
+   * resolveAreaLabel(family postcode/city). REQUIRED — decision 17: the
+   * owner calls the neighborhood "necessary information for the doer before
+   * they accept", so a task cannot exist without one. `doPostTask` refuses
+   * (`failed-precondition`, `reason: 'address_required'`) when the family's
+   * postcode/city cannot resolve a label, and the wizard routes the parent
+   * to complete their address first. Pre-#167 family docs hold null
+   * postcode/city until the #261 backfill runs — for sync-do that backfill
+   * is a launch prerequisite, not a nicety, or early posters hit the refusal.
+   */
+  areaLabel: string;
 
   // ── What
   category: TaskCategory;
@@ -492,19 +512,13 @@ export interface OfferDoc {
     decidedByUid: string | null;
   };
 
-  /** Written by doAcceptOffer inside the §6.4 transaction, on the ACCEPTED
-   *  offer only — the two-way reveal. ABSENT (optional, not null) on every
-   *  other offer, matching the prose and `guardian`'s convention above: no
-   *  rule reads `contact` today, but typing absence as `| null` is exactly
-   *  the shape that bit `guardian`, and consistency is what keeps the
-   *  distinction legible. */
-  contact?: {
-    familyAddress: string;
-    familyPhone: string | null;
-    doerContactEmail: string | null;
-    doerContactPhone: string | null;
-    doerWhatsapp: string | null;
-  };
+  // NO `contact` block — deliberately. Decision 16 (owner, PR #243 review):
+  // the post-acceptance reveal is served live by `doGetAssignedContact`
+  // (§6.4), never persisted here. An earlier draft wrote a contact snapshot
+  // onto the accepted offer inside the acceptance transaction; the owner
+  // chose the callable so post-acceptance contact edits are reflected, and
+  // it also means no second stored copy of the family's address exists
+  // anywhere in sync-do (§11.4).
 
   declinedReason: 'family_declined' | 'sibling_accepted' | 'task_closed' | null;
   createdAt: FirestoreTimestamp;
@@ -521,17 +535,22 @@ document still exists in `withdrawn`, so `doSubmitOffer` finding an existing
 doc must handle it by status, and each branch is pinned here rather than
 discovered at PR6:
 
-- **`withdrawn` or `expired` → resurrect**, running the FULL submit path
-  again: re-check `DO_OFFER_MAX_PER_TASK` and `DO_OFFER_MAX_ACTIVE`,
+- **`withdrawn`, `expired`, or `declined` with
+  `declinedReason: 'family_declined'` → resurrect**, running the FULL submit
+  path again: re-check `DO_OFFER_MAX_PER_TASK` and `DO_OFFER_MAX_ACTIVE`,
   re-increment the live `offerCount`, and **re-run the guardian gate** — a
   student must not be able to launder a flagged-category offer past their
   parent by withdrawing an approved one and re-submitting. Resurrection
   resets `price`/`message`/`helper` from the new submission.
-- **`declined` with `declinedReason: 'family_declined'` → refused**
-  (`reason: 'family_declined_no_reoffer'`). The family said no to this
-  student for this task; letting a tap re-open that is the re-notification
-  problem the platform's decline cooldowns exist to prevent. Recorded as the
-  default; §17 Q7 gives the owner the override.
+
+  The `family_declined` branch is decision 18 (owner, PR #243 review: "at
+  this point, I don't want to block re-offers"). The plan's original default
+  was a hard no, on the grounds that a tap re-opening a decline is the
+  re-notification problem the platform's decline cooldowns exist to prevent
+  — that concern is accepted, not refuted: `DO_OFFER_MAX_PER_TASK` still
+  bounds the pile-up, the family can always decline again, and "at this
+  point" marks the call as revisitable (a `DECLINE_COOLDOWN_MS`-style
+  cooldown is the ready fallback) if repeat offers become a nuisance.
 - **`declined` with `'sibling_accepted'` or `'task_closed'` → refused** — the
   task is no longer open, and `doSubmitOffer`'s task-status check catches it
   before the offer doc is even consulted.
@@ -915,19 +934,33 @@ to the two parties plus admin, which is exactly the audience a reveal needs:
    `doerFirstName`, `doerPhotoUrl` and `doerBio` onto the offer (§4.2). The
    family's offer list then renders under the existing offer read rule with no
    change to `users`.
-2. **Post-acceptance, for the two-way reveal:** `doAcceptOffer` writes a
-   `contact` block onto the **accepted offer** inside the §6.4 transaction —
-   the family's address and phone, and the student's channels from
-   `getContact`. A `doGetAssignedContact` callable (Admin SDK, asserts
-   assignment, returns both sides) is the equivalent alternative if we would
-   rather not persist a second copy of the address; §17 Q6 records the choice.
+2. **Post-acceptance, for the two-way reveal: the `doGetAssignedContact`
+   callable** (decision 16 — owner, PR #243 review). Admin SDK; asserts the
+   caller is a party to the assignment (the accepted offer's `doerUserId`, or
+   a member of its `familyId`, against a task in `assigned`/`completed`);
+   returns both sides — the family's address and phone from the family doc,
+   the student's channels via `getContact` — **read live at call time, never
+   persisted**. The owner's rationale is the deciding argument between the
+   two shapes this section previously left open: "if the parents update
+   contact information after acceptance, it should be reflected." A snapshot
+   written at acceptance is stale the moment either party edits their
+   details; the callable is always current, and as a side effect no second
+   copy of the family's address exists anywhere in sync-do — which also
+   resolves most of what §17 Q8 worried about (§11.4). The costs are one
+   more callable and a loading state on the assigned-task views (§9.1/§9.2),
+   and no offline access to the address — accepted.
+
+   The **offer remains the authorization anchor** even though it carries no
+   contact data: `doGetAssignedContact` proves the caller's standing against
+   the accepted offer, exactly the two-party audience the rules already
+   scope.
 
 **Ruled out in writing:** adding a `profiles.doer` disjunct to the `users` read
 rule. It would expose every enrolled doer's user document to every
 authenticated user — far wider than this feature needs, and the kind of change
 that gets made under deadline at PR7 if this section stays vague.
 
-Either mechanism keeps the promise that an **un-accepted offer leaks nothing**:
+The mechanism keeps the promise that an **un-accepted offer leaks nothing**:
 the pre-acceptance fields are name, photo and bio, which the family needs to
 choose at all, and nothing that locates either party.
 
@@ -1109,6 +1142,7 @@ doTasks:    (assignedUserId ASC, status ASC, updatedAt DESC)— "my assignments"
 doTasks:    (status ASC, expiresAt ASC)                     — the sweep, expiry half
 doTasks:    (status ASC, doerMarkedDoneAt ASC)              — the sweep, auto-complete half
 doTasks:    (status ASC, cancelledAt ASC)                   — the sweep, cancelled-retention half
+doTasks:    (status ASC, completedAt ASC)                   — the sweep, completed-retention half (decision 19, §11.4)
 taskOffers: (familyId ASC, taskId ASC, status ASC, createdAt ASC)
                                                             — offers on a task, family side
 taskOffers: (taskId ASC, status ASC, createdAt ASC)         — offers on a task, admin side
@@ -1286,9 +1320,9 @@ All in `apps/functions/src/do/**`, codebase `default`, region `europe-west1`,
 |---|---|---|
 | `doEnrollDoer` | Auth | Creates `profiles.doer` — full or abbreviated depending on existing profiles. **Refuses an ungoverned under-15 caller** (`!isGoverned` guarding `checkEnrollmentAge`, the `enrollTutor` shape — §11.1); a governed caller passes at any age |
 | `doUpdateDoerProfile` | Auth | Categories, bio, transport, `notifyNewTasks` |
-| `doPostTask` | Auth (verified family) | Validates, scrubs, computes `areaLabel` + `expiresAt`, enforces `DO_TASK_MAX_ACTIVE` |
+| `doPostTask` | Auth (verified family) | Validates, scrubs, computes `areaLabel` + `expiresAt`, enforces `DO_TASK_MAX_ACTIVE`. **Refuses (`failed-precondition`, `reason: 'address_required'`) when the family's postcode/city resolves no area label** — decision 17 makes `areaLabel` required, and the wizard routes the parent to complete their address first |
 | `doUpdateTask` | Auth (owner family) | `open` tasks only; description/photos/budget/timing. **Runs the caller-prefix check on any photo ADDED** — existing `{uid, photoId}` entries pass through untouched, since they were verified at their own add time and may belong to the OTHER parent of the family; re-checking them against the current caller's prefix would wrongly strip a co-parent's photos (§7.4). Recomputes `expiresAt` server-side, which is how an `ongoing` task renews (§6.3). Notifies students with pending offers that terms changed |
-| `doCancelTask` | Auth (family or assigned doer — §6.5 says either side may cancel an `assigned` task, and `cancelledBy: 'doer'` must be reachable; on an `open` task, family only) | Task → `cancelled`, all live offers → `expired` (zeroing `offerCount` per §4.1's invariant), notify. On an `assigned` task there are no live offers left (the sibling flip cleared them); the ACCEPTED offer keeps `accepted` — it is the record of who was engaged at what price, the contact block it carries was already revealed to both parties (wiping it un-reveals nothing), and the 30-day cancelled-task sweep bounds its retention |
+| `doCancelTask` | Auth (family or assigned doer — §6.5 says either side may cancel an `assigned` task, and `cancelledBy: 'doer'` must be reachable; on an `open` task, family only) | Task → `cancelled`, all live offers → `expired` (zeroing `offerCount` per §4.1's invariant), notify. On an `assigned` task there are no live offers left (the sibling flip cleared them); the ACCEPTED offer keeps `accepted` — it is the record of who was engaged at what price (it carries no contact data, decision 16 — `doGetAssignedContact` simply stops serving the pair once the task leaves `assigned`/`completed`), and the 30-day cancelled-task sweep bounds its retention |
 | `doSubmitOffer` | Auth (active doer) | Enforces the ceilings, **re-checks the under-15 floor for ungoverned callers** (supervision is revocable and the enrollment gate never re-runs — §11.1), resolves the guardian gate, writes `pending` or `pending_guardian` |
 | `doUpdateOffer` | Auth (offering student) | Price/message/helper while `pending` |
 | `doWithdrawOffer` | Auth (offering student) | → `withdrawn`, decrements the live `offerCount` (§4.1) |
@@ -1296,6 +1330,7 @@ All in `apps/functions/src/do/**`, codebase `default`, region `europe-west1`,
 | `doAcceptOffer` | Auth (owner family) | The §6.4 transaction |
 | `doDeclineOffer` | Auth (owner family) | Single offer → `declined`, decrements the live `offerCount` |
 | `doMarkTaskDone` | Auth (family or assigned doer) | §6.5 |
+| `doGetAssignedContact` | Auth (assigned doer or member of the task's family) | Decision 16, the §6.4 two-way reveal: asserts the caller's standing against the ACCEPTED offer and a task in `assigned`/`completed`, then returns both sides' contact details read **live** (family address/phone from the family doc, doer channels via `getContact`) — never persisted, so post-acceptance edits are always reflected |
 | `doListBoard` | — | **Not a callable.** The board is a direct Firestore query under the §7.2 read rule, like `usePublishedSearches`. |
 | `doAdminListTasks` | Admin | Search/filter for the admin panel |
 | `doAdminDeleteTask` | Admin | Hard delete + audit |
@@ -1303,7 +1338,7 @@ All in `apps/functions/src/do/**`, codebase `default`, region `europe-west1`,
 | `doGetTaskPhotoUrl` | Auth | Asserts the §7.2 board audience (or family membership) and returns a short-lived signed URL for a task photo — the §7.4 option-1 read path; final objects are `allow read: if false` |
 | `doStripTaskPhoto` | Storage trigger | Fires on `do-uploads/{uid}/*`: strips EXIF, republishes into the task-independent `do-photos/{uid}/` (no `taskId` exists at upload time — §7.4), deletes the quarantine original. **Fails closed on non-image bytes**: the rule's `contentType` check is client-asserted metadata, so hostile bytes labelled `image/jpeg` WILL arrive — the stripper deletes the quarantine object and stops, rather than throwing and re-firing on every retry. Not a callable |
 | `doSendTaskDigest` | Scheduled | The §10 board digest: batches `new_task_matching` for students whose `profiles.doer.categories` match tasks created since their last digest, at most one per student per 6h. A scheduled batcher rather than an on-create fan-out, because the rate limit is per-RECIPIENT — an on-create trigger would need per-student dedupe state anyway, and the batcher IS that state. Uses the §7.3 `users` composite |
-| `doSweepTasks` | Scheduled | Daily: delete expired `open` tasks and their offers; delete `cancelled` tasks (and their offers) older than 30 days — mirroring `cleanupOldData`'s cancelled/rejected appointment rule; auto-complete stale `doerMarkedDoneAt` tasks; delete unclaimed `do-uploads` quarantine objects (§7.4). Extends the existing `cleanupOldData` schedule rather than adding a second job |
+| `doSweepTasks` | Scheduled | Daily: delete expired `open` tasks and their offers; delete `cancelled` tasks (and their offers) older than 30 days — mirroring `cleanupOldData`'s cancelled/rejected appointment rule; **delete `completed` tasks (and their offers) older than 180 days — decision 19's 6-month retention, via the `(status, completedAt)` index (§7.3, §11.4)**; auto-complete stale `doerMarkedDoneAt` tasks; delete unclaimed `do-uploads` quarantine objects (§7.4). Extends the existing `cleanupOldData` schedule rather than adding a second job |
 
 Validation follows the sit house style visible in `publishSearch.ts` — manual
 guards throwing `HttpsError('invalid-argument', …)`, with the shared bounds
@@ -1433,8 +1468,10 @@ checked-in icon at PR2 (sizes per sit's #197 manifest work).
     revisited if families still struggle.
 
   Accept / decline per offer.
-- **Assigned task** — contact details revealed, considerations rendered as a
-  shared checklist, mark-done, cancel.
+- **Assigned task** — contact details fetched via `doGetAssignedContact`
+  (decision 16 — live on each view, with a loading state; nothing cached in
+  Firestore), considerations rendered as a shared checklist, mark-done,
+  cancel.
 
 ### 9.2 Doer (student)
 
@@ -1447,7 +1484,8 @@ checked-in icon at PR2 (sizes per sit's #197 manifest work).
   age), availability note. Shows the guardian gate up front when the
   sub-category is flagged, so the wait is expected rather than mysterious.
 - **My offers** — pending, awaiting-parent, accepted, declined, withdrawn.
-- **My tasks** — assigned work, contact details, checklist, mark-done.
+- **My tasks** — assigned work, contact details via `doGetAssignedContact`
+  (same treatment as the family side), checklist, mark-done.
 - **My endorsements** — the doer-side management surface (decision 12 as
   revised): pending endorsements from families to accept or decline, the
   accepted set as it renders on offer cards, mirroring the tutor's
@@ -1637,30 +1675,37 @@ discovered in an incident.
   Both halves are in `doSweepTasks`' §8 row, with the `(status, cancelledAt)`
   index in §7.3 that the second query needs.
 
-  **Completed tasks are retained indefinitely, matching the platform** — and
-  that is a deliberate statement, not a deferral. An earlier draft said they
-  "follow the existing 30-day retention rule for finished engagements"; there
-  is no such rule. `cleanupOldData.ts:181-186` deletes only
-  `status in ['cancelled','rejected']` appointments older than 30 days (and
-  more than 7 days past their booking date). **Completed appointments are
-  never deleted.**
+  **Completed tasks are retained 6 months, then deleted — decision 19.** The
+  owner's call in PR #243 review: "there's no reason to retain completed
+  engagement indefinitely — in any of the sync apps. Let's set a retention
+  period of 6 months." `doSweepTasks` deletes `completed` tasks (and their
+  offers) once `completedAt` is older than 180 days, via the
+  `(status, completedAt)` index in §7.3 — built into the sweep from day one
+  rather than retrofitted. Note what the platform does TODAY, because
+  sync-do is now ahead of it: `cleanupOldData.ts:181-186` deletes only
+  `status in ['cancelled','rejected']` appointments older than 30 days;
+  completed sit appointments and study sessions are never deleted. The
+  decision is explicitly platform-wide, so the sit/study half is tracked as
+  **issue #294** — it touches the live apps and is not this plan's to build.
 
-  Worth being explicit because a completed sync-do task carries more than a
-  completed appointment does: the free-text description, the photos, the
-  agreed price, — under §4.2's stored-block form — the family's address on
-  the accepted offer, **and the +1 helper's full name and age**. Those go
-  only through the GDPR hard-delete path — and the helper is the one data
-  subject for whom that path does not exist: §11.3 establishes they have no
-  account, no consent record and (per the age field) are frequently a minor,
-  and `exportUserData`/`deleteUser` key on uid, so a helper can be neither
-  exported nor erased by any mechanism in this plan. Their data leaves only
-  when the offer document does. That is a genuine GDPR exposure the ToS
-  cannot fully paper over (the assigned student attests they may share the
-  helper's details, but the helper never consented to indefinite retention);
-  Q8 now carries it, because a finite completed-task retention — or Q6's
-  no-stored-copy option — is also what bounds the helper's exposure. If the
-  owner wants a finite retention for completed tasks, that is **new** work for
-  PR10's sweep, not an existing rule to inherit.
+  Why retention matters more here than for an appointment: a completed
+  sync-do task carries the free-text description, the photos, the agreed
+  price, **and — on the accepted offer — the +1 helper's full name and
+  age**. The helper is the one data subject with no GDPR path of their own:
+  §11.3 establishes they have no account, no consent record and (per the age
+  field) are frequently a minor, and `exportUserData`/`deleteUser` key on
+  uid, so a helper can be neither exported nor erased by any mechanism in
+  this plan. Their data leaves only when the offer document does — which
+  decision 19 now bounds at 6 months past completion, and decision 16 keeps
+  the family's address out of the stored record entirely (nothing
+  contact-shaped is ever persisted on the offer). Together those two
+  decisions shrink the §17 Q8 exposure from "live-forever copy" to "six
+  months of what the family and student already knew".
+
+  Endorsements are unaffected by the deletion: `DoerEndorsementDoc` lives in
+  `references`, not on the task — the 6-month window simply becomes the
+  effective deadline for a family to submit one, which the post-completion
+  prompt (§9.1, PR11) makes moot in practice.
 - Consent: the abbreviated cross-app enrollment still records `consentAt` /
   `consentVersion` for the sync-do terms, and a governed student's guardian
   consent uses the existing `GuardianConsent` record shape.
@@ -1765,7 +1810,7 @@ the repo has been using.
 | **3** | Firestore: `doTasks` + `taskOffers` rules and indexes, **plus the `users` update-rule amendment** (`doerIdentityUnchanged()`, §7.2) — without it the board gate is client-bypassable. Rules tests under the stripped-copy mutation-verify harness. | 8 |
 | **4** | `profiles.doer` + `doEnrollDoer` / `doUpdateDoerProfile`, abbreviated cross-app enrollment, enrollment UI. | 8 |
 | **5** | Task callables: `doPostTask`, `doUpdateTask`, `doCancelTask`, the sweep. Integration tests. | 8 |
-| **6** | Offer callables: submit / update / withdraw / guardian-decide / accept / decline, incl. the §6.4 transaction and its concurrency test. | 10 |
+| **6** | Offer callables: submit / update / withdraw / guardian-decide / accept / decline, incl. the §6.4 transaction and its concurrency test, plus `doGetAssignedContact` (decision 16) with its standing-assertion tests. | 10 |
 | **7** | Family UI: post wizard, my tasks, offer review, assigned task, contact reveal. | 12 |
 | **8** | Doer UI: board with filters, task detail, offer form, my offers, my assignments. | 12 |
 | **9** | Notifications: nine types, email templates EN+FR, `fcmTokensDo` push, the rate-limited board digest. | 8 |
@@ -1834,9 +1879,17 @@ see §12 for why the scaffold, not the family UI, is where they are needed.
   survive `revokeSupervision`, §11.1) (both halves of §11.1's floor — the unconditional
   version of this test would have locked supervised students out and
   diverged from `enrollTutor`); ceiling enforcement, including that a withdrawn or declined offer
-  returns its slot so a task does not seal shut; sweep deleting expired tasks
-  and cascading their offers; contact-reveal boundary asserted from both
-  sides.
+  returns its slot so a task does not seal shut; **a `family_declined` offer
+  resurrects on re-submit and re-runs the guardian gate** (decision 18 — the
+  laundering pin applies to this branch exactly as to `withdrawn`);
+  **`doPostTask` refuses with `address_required` when the family's
+  postcode/city resolves no area label** (decision 17); sweep deleting
+  expired tasks and cascading their offers, **and deleting `completed` tasks
+  past the 180-day retention while leaving younger ones alone** (decision
+  19); contact-reveal boundary asserted from both sides via
+  `doGetAssignedContact` — the assigned doer and a family member each get
+  both halves, a non-party doer with a live offer on the SAME task is
+  refused, and the pair stops being served once the task is cancelled.
 - **E2E** (`tests-e2e/`, Playwright) — the happy path in the browser, plus
   screenshots attached natively to the UI PRs per `feedback_pr_ui_screenshots`.
 - **Regression** — full `pnpm test:unit` + `pnpm test:integration` on every PR;
@@ -1926,6 +1979,26 @@ analytics — which categories go unfilled, where the supply gaps are.
   three apps (§11.1).
 - **Liability** → decision 15. The family's responsibility; the platform does
   the handshake only (§11.5).
+- **Q4, hosting half** → `sync-do-app` as the Firebase site id,
+  owner-confirmed. The domain remains the open half, below.
+- **Q6 — post-acceptance reveal mechanism** → decision 16: the
+  `doGetAssignedContact` callable, owner-decided — "we should have the
+  address being callable, not in the accepted message. If the parents update
+  contact information after acceptance, it should be reflected." Nothing
+  contact-shaped is persisted on the offer (§4.2, §6.4).
+- **Q6-related — area label** → decision 17: the family's neighborhood is
+  required on every task — "necessary information for the doer before they
+  accept." `areaLabel` is non-null; `doPostTask` refuses without it (§4.1).
+- **Q7 — re-offer after family decline** → decision 18: allowed — "at this
+  point, I don't want to block re-offers." The `family_declined` branch
+  resurrects like `withdrawn`; revisitable if re-notification becomes a
+  nuisance (§4.2).
+- **Q8 — completed-task retention** → decision 19: **6 months,
+  platform-wide** — "there's no reason to retain completed engagement
+  indefinitely — in any of the sync apps." sync-do builds it into
+  `doSweepTasks` (§11.4); the sit/study half is issue #294. Combined with
+  Q6's no-stored-copy answer, the §11.3 helper exposure is bounded at 6
+  months and no second copy of the family's address ever exists.
 
 ### Q2 — per-sub-category minimum ages: a worked example
 
@@ -1996,37 +2069,11 @@ decision 1 already puts the judgement call.
 
 ### Still open
 
-- **Q4 — Brand and domain.** The BRAND half is now settled (owner, PR #243
-  review): the sync/do icon and its green palette, §9.0. Still open: the
-  domain (`sync-do.com`?) and hosting site id — the plan assumes
-  `sync-do-app` as the Firebase site, matching `sync-study-app`.
-- **Q6 — Which post-acceptance reveal mechanism?** §6.4 settles that the
-  *offer* is the carrier and rules out widening the `users` read rule, but
-  leaves two equivalent options: write a `contact` block onto the accepted
-  offer inside the acceptance transaction (one more stored copy of the
-  family's address, but no extra round trip and it works offline), or serve it
-  from a `doGetAssignedContact` callable (no second copy, one more callable
-  and a load state). Implementer's call at PR6 unless the owner has a
-  preference; the plan's `OfferDoc` currently shows the stored-block form.
-- **Q7 — May a family-declined student re-offer on the same task?** The
-  deterministic `offerId` forces an answer either way (§4.2). The plan's
-  default is **no** — the family said no to this student for this task, and a
-  tap that re-opens it re-notifies every parent, which is the problem the
-  platform's decline cooldowns exist to prevent. The gentler alternative is a
-  7-day cooldown mirroring `DECLINE_COOLDOWN_MS`, after which the doc may be
-  resurrected. Owner's call; the hard-no default ships unless overridden.
-- **Q8 — Should completed tasks keep the family's address forever?** §11.4
-  matches the platform default (completed engagements retained indefinitely,
-  GDPR hard-delete only), and that is a defensible inheritance — but it
-  deserves an explicit yes here rather than a note in a subsection, because a
-  completed task under §4.2's stored-block form is a **live-forever copy of a
-  member's home address created by a new feature**, alongside the free-text
-  description and photos. The alternatives: a finite retention for completed
-  tasks (new sweep work, a `(status, completedAt)` index), or Q6's callable
-  option, which stores no second copy of the address at all — making Q6 and
-  Q8 partially the same decision. The same choice also bounds the §11.4
-  helper exposure — the one data subject with no export or erasure path.
-  Default if unanswered: inherit the platform behaviour, as written.
+- **Q4 — Domain.** The brand half (icon + palette, §9.0) and the hosting
+  half (`sync-do-app`, owner-confirmed) are settled; the only open piece is
+  the custom domain (`sync-do.com`?) — TBD per the owner, and nothing in the
+  build depends on it (the same posture study shipped under: live on
+  `web.app`, domain later — cf. issue #115's tail).
 
 ### Risks
 
