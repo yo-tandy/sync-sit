@@ -7,18 +7,28 @@
 import { initializeApp, getApps, deleteApp, type App } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
+import { getStorage } from 'firebase-admin/storage';
 
 export const PROJECT_ID = 'demo-test';
 const FIRESTORE_PORT = process.env.TEST_FIRESTORE_PORT ?? '8080';
 const AUTH_PORT = process.env.TEST_AUTH_PORT ?? '9099';
 const FUNCTIONS_PORT = process.env.TEST_FUNCTIONS_PORT ?? '5001';
+const STORAGE_PORT = process.env.TEST_STORAGE_PORT ?? '9199';
 export const FUNCTIONS_URL = `http://127.0.0.1:${FUNCTIONS_PORT}/${PROJECT_ID}/europe-west1`;
 const FIRESTORE_URL = `http://127.0.0.1:${FIRESTORE_PORT}`;
 const AUTH_URL = `http://127.0.0.1:${AUTH_PORT}`;
 
+// The default bucket the FUNCTIONS emulator resolves for this project
+// (firebase-tools injects FIREBASE_CONFIG.storageBucket =
+// `${projectId}.appspot.com` into the functions runtime) — tests must use
+// the SAME name or the do* photo callables and the doStripTaskPhoto
+// trigger look at a different bucket than the one a test seeded.
+export const STORAGE_BUCKET = `${PROJECT_ID}.appspot.com`;
+
 // Set emulator env vars before any Firebase init
 process.env.FIRESTORE_EMULATOR_HOST = `127.0.0.1:${FIRESTORE_PORT}`;
 process.env.FIREBASE_AUTH_EMULATOR_HOST = `127.0.0.1:${AUTH_PORT}`;
+process.env.FIREBASE_STORAGE_EMULATOR_HOST = `127.0.0.1:${STORAGE_PORT}`;
 process.env.GCLOUD_PROJECT = PROJECT_ID;
 
 let app: App;
@@ -40,6 +50,25 @@ export function getDb() {
 
 export function getAdminAuth() {
   return getAuth(getApp());
+}
+
+/** A bucket via the Storage emulator (sync-do photo pipeline). Defaults to
+ * the functions emulator's default bucket; pass a side-bucket name to seed
+ * objects the doStripTaskPhoto trigger will NOT consume (it watches only
+ * the default bucket — the sweep tests use this to hold quarantine residue
+ * the trigger would otherwise eat). */
+export function getBucket(name: string = STORAGE_BUCKET) {
+  return getStorage(getApp()).bucket(name);
+}
+
+/**
+ * Delete every object under a prefix (`do-uploads/`, `do-photos/`) —
+ * per-suite cleanup; the Storage emulator has no clear-all REST endpoint
+ * the way Firestore/Auth do.
+ */
+export async function clearStoragePrefix(prefix: string) {
+  const [files] = await getBucket().getFiles({ prefix });
+  await Promise.all(files.map((f) => f.delete({ ignoreNotFound: true })));
 }
 
 /**
