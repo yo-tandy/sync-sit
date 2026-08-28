@@ -28,10 +28,25 @@ const CROSS_SERVICE_PROJECT = process.env.GCLOUD_PROJECT ?? 'demo-test';
 
 // Uids/familyIds are suite-prefixed: they land in the shared demo-test
 // Firestore namespace (fileParallelism is off, so no races, but leftovers must
-// never collide with other suites' seed data). Cleaned up in afterAll.
-const seededUids = new Set<string>();
+// never collide with other suites' seed data). Every uid a test may seed is
+// listed here so cleanup can run defensively in beforeAll (self-healing after
+// an aborted prior run) and unconditionally in afterAll. Add new uids here.
+const SUITE_UIDS = ['sr-parent1', 'sr-parent2', 'sr-admin1', 'sr-sitter1', 'sr-tutor1', 'sr-ghost1'];
 
 let testEnvs: RulesTestEnvironment[] = [];
+
+/** Delete this suite's user docs from BOTH namespaces seedUser writes to
+ * (deleteDoc on a missing doc is a no-op). NEVER clearFirestore() on
+ * crossServiceEnv — it shares the integration tests' project. */
+async function deleteSuiteDocs() {
+  for (const env of testEnvs) {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      for (const uid of SUITE_UIDS) {
+        await deleteDoc(doc(ctx.firestore(), 'users', uid));
+      }
+    });
+  }
+}
 
 beforeAll(async () => {
   const rulesPath = resolve(import.meta.dirname, '../../storage.rules');
@@ -44,29 +59,33 @@ beforeAll(async () => {
     // this, a lane-2 run connects to the DEV stack's storage on 9199 and
     // clearStorage() wipes it.
     storage: { rules, host: '127.0.0.1', port: Number(process.env.TEST_STORAGE_PORT ?? '9199') },
+    // Firestore config so seedUser can also seed this env's own namespace —
+    // a hedge against the emulator's cross-service project resolution (see
+    // seedUser). Lane-aware port, same as tests/rules/firestore-rules.test.ts.
+    firestore: { host: '127.0.0.1', port: Number(process.env.TEST_FIRESTORE_PORT ?? '8080') },
   });
 
   // Separate env purely for seeding the cross-service user docs (see above).
-  // Lane-aware port, same as tests/rules/firestore-rules.test.ts. NEVER call
-  // clearFirestore() on this env — it shares the integration tests' project.
   crossServiceEnv = await initializeTestEnvironment({
     projectId: CROSS_SERVICE_PROJECT,
     firestore: { host: '127.0.0.1', port: Number(process.env.TEST_FIRESTORE_PORT ?? '8080') },
   });
 
   testEnvs = [testEnv, crossServiceEnv];
+
+  // Self-heal: an aborted prior run (crash, Ctrl-C, timeout) never reached
+  // afterAll, so its sr-* docs may still sit in the shared namespace.
+  await deleteSuiteDocs();
 });
 
 afterAll(async () => {
-  // Remove only the docs this suite created; clearFirestore() would wipe the
-  // shared demo-test namespace other suites use.
-  await crossServiceEnv.withSecurityRulesDisabled(async (ctx) => {
-    for (const uid of seededUids) {
-      await deleteDoc(doc(ctx.firestore(), 'users', uid));
+  try {
+    await deleteSuiteDocs();
+  } finally {
+    // Cleanup must run even if the emulator is already gone.
+    for (const env of testEnvs) {
+      await env.cleanup();
     }
-  });
-  for (const env of testEnvs) {
-    await env.cleanup();
   }
 });
 
@@ -74,12 +93,22 @@ beforeEach(async () => {
   await testEnv.clearStorage();
 });
 
-/** Seed a users/{uid} doc (Plan D shape) with rules disabled. */
+/** Seed a users/{uid} doc (Plan D shape) with rules disabled — into BOTH
+ * Firestore namespaces. firebase-tools currently resolves the storage rules'
+ * firestore.get() against the emulator suite's startup project
+ * (CROSS_SERVICE_PROJECT); seeding this env's own project too means the suite
+ * keeps passing if a future firebase-tools resolves against the bucket's
+ * project instead. Negative pins stay meaningful either way: the docs exist in
+ * both namespaces, so a denial is a rules decision, not doc-not-found. */
 async function seedUser(uid: string, data: Record<string, unknown>) {
-  seededUids.add(uid);
-  await crossServiceEnv.withSecurityRulesDisabled(async (ctx) => {
-    await setDoc(doc(ctx.firestore(), 'users', uid), data);
-  });
+  if (!SUITE_UIDS.includes(uid)) {
+    throw new Error(`seedUser: add '${uid}' to SUITE_UIDS so cleanup covers it`);
+  }
+  for (const env of testEnvs) {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'users', uid), data);
+    });
+  }
 }
 
 describe('verification-documents', () => {

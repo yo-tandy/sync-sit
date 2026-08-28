@@ -14,6 +14,10 @@ service firebase.storage {
     // idiom — parentFamilyId(d), bsField(d, ...)) so callerData() is invoked
     // exactly once per evaluation: cross-service lookups are billed as
     // Firestore reads, and we don't rely on the engine deduping them.
+    // The isAdmin disjunct is intentional break-glass parity with the
+    // isAdmin() disjuncts throughout firestore.rules — no live client flow
+    // has admins uploading here (the admin UI only reads, via the
+    // getVerificationDocument callable).
     function canWriteFamilyDocs(d, familyId) {
       return d.get('isAdmin', false) == true
              || d.get('profiles', {}).get('parent', {}).get('familyId', null) == familyId;
