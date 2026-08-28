@@ -116,9 +116,25 @@ export function DoerEnrollment() {
   // transport, bio, consent". "Missing" covers identity AND a zero-channel
   // account: the profile step is the per-field collector for both.
   const crossAppNeedsProfileStep = !identityComplete || !accountHasContact;
-  const steps: StepId[] = isCrossApp
+  const computedSteps: StepId[] = isCrossApp
     ? ['consent', ...(crossAppNeedsProfileStep ? ['profile' as StepId] : []), 'details']
     : ['email', 'verify', 'consent', 'profile', 'details'];
+  // FROZEN once auth resolves (PR #320 round 2): the sequence derives from
+  // live userDoc state while `step` is a plain index into it, and mid-flow
+  // snapshot updates genuinely shrink it — the post-submit refresh persists
+  // the very DOB/contact whose absence put 'profile' in the array, flipping
+  // crossAppNeedsProfileStep false and making steps[2] undefined for the
+  // frames before navigate('/home'). The sibling wizards' sequences are
+  // static by construction; freezing at auth-resolution pins the same
+  // property for this derived one. (Not frozen at MOUNT: the wizard mounts
+  // during authLoading, when the shape would be computed against a
+  // not-yet-known auth state — the same reason renderStep waits below.)
+  const [frozenSteps, setFrozenSteps] = useState<StepId[] | null>(null);
+  useEffect(() => {
+    if (!authLoading && frozenSteps === null) setFrozenSteps(computedSteps);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authLoading]);
+  const steps = frozenSteps ?? computedSteps;
   // The visible indicator covers only the pre-account-creation steps
   // (matching sit and study); cross-app has none of them.
   const AUTH_STEPS = isCrossApp ? 0 : 3;

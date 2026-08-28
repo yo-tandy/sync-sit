@@ -105,8 +105,10 @@ export function StepProfile({
   // re-runs the whole gate regardless.
   const ageValid = age !== null && (governed || age >= 15);
   const showAgeError = dateOfBirth && !ageValid;
-  // Mirror the server-side strictness for emails so a rejection cannot
-  // strand the user on the submitting details step.
+  // Approximate the server's contactEmail shape check (doEnrollDoer runs
+  // zod's z.string().email(), PR #320 round 2) so a rejection cannot
+  // strand the user on the submitting details step; both reject the
+  // dot-less 'x@y' the native email input would let through.
   const emailFormatOk =
     !contactEmail.trim() || /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(contactEmail.trim());
   const hasContact = !collectContact || contactEmail.trim() || contactPhone.trim();
