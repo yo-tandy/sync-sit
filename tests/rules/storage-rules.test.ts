@@ -11,7 +11,14 @@ import {
 } from '@firebase/rules-unit-testing';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
-import { ref, uploadString, uploadBytes, getBytes, deleteObject } from 'firebase/storage';
+import {
+  ref,
+  uploadString,
+  uploadBytes,
+  getBytes,
+  deleteObject,
+  updateMetadata,
+} from 'firebase/storage';
 import { doc, setDoc, deleteDoc } from 'firebase/firestore';
 
 let testEnv: RulesTestEnvironment;
@@ -276,6 +283,23 @@ describe('verification-documents', () => {
         { contentType: 'text/html\nx' },
       ),
     );
+  });
+
+  it('denies flipping contentType to a renderable type via updateMetadata (update path)', async () => {
+    // Every other deny pin goes through uploadBytes (the create path); the
+    // cheapest bypass of a write-time type check would be uploading a clean
+    // PDF and then flipping the stored type with a metadata-only update.
+    // Metadata updates evaluate under `allow create, update` with
+    // request.resource.contentType carrying the INCOMING type, so the same
+    // denylist applies — this pins that a rules refactor can't quietly
+    // split the paths.
+    await seedUser('sr-parent1', { profiles: { parent: { familyId: 'sr-family1' } } });
+    const authed = testEnv.authenticatedContext('sr-parent1');
+    const fileRef = ref(authed.storage(), 'verification-documents/sr-family1/meta.pdf');
+    await assertSucceeds(
+      uploadBytes(fileRef, new Uint8Array([1, 2, 3]), { contentType: 'application/pdf' }),
+    );
+    await assertFails(updateMetadata(fileRef, { contentType: 'text/html' }));
   });
 
   it('denies arbitrary *+xml types via the suffix match (Firefox renders any *+xml as XML)', async () => {
