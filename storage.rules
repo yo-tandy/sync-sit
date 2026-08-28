@@ -1,11 +1,43 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-    // Verification documents — write-only for authenticated users
+    // Helper: the requester's user document (cross-service Firestore lookup).
+    // Mirrors firestore.rules callerData(); .get(key, default) avoids errors
+    // when a field is absent (e.g. admin docs have no `profiles`). If the doc
+    // does not exist the lookup errors, which evaluates as deny.
+    function callerData() {
+      return firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data;
+    }
+
+    // Helper: may the holder of user-doc data `d` write into family `familyId`'s
+    // verification path? Takes the data map as an argument (firestore.rules
+    // idiom — parentFamilyId(d), bsField(d, ...)) so callerData() is invoked
+    // exactly once per evaluation: cross-service lookups are billed as
+    // Firestore reads, and we don't rely on the engine deduping them.
+    // The isAdmin disjunct is intentional break-glass parity with the
+    // isAdmin() disjuncts throughout firestore.rules — no live client flow
+    // has admins uploading here (the admin UI only reads, via the
+    // getVerificationDocument callable).
+    function canWriteFamilyDocs(d, familyId) {
+      return d.get('isAdmin', false) == true
+             || d.get('profiles', {}).get('parent', {}).get('familyId', null) == familyId;
+    }
+
+    // Verification documents — writes only by members of the owning family or
+    // admins (issue #153). profiles.parent.familyId is server-controlled
+    // (enrollFamily; firestore.rules blocks client edits), so matching it here
+    // cannot be spoofed from a client. Size is capped at the 10MB both web
+    // clients already enforce. Content type is deliberately NOT restricted:
+    // browsers report File.type inconsistently (empty or octet-stream for some
+    // PDFs), and the clients send whatever the browser detected.
+    // Deletes fall through to the implicit deny below — no client deletes
+    // these; server-side cleanup uses the Admin SDK, which bypasses rules.
     // Reads go through getVerificationDocument cloud function (checks family ownership)
     match /verification-documents/{familyId}/{allPaths=**} {
       allow read: if false;
-      allow write: if request.auth != null;
+      allow create, update: if request.auth != null
+                   && request.resource.size <= 10 * 1024 * 1024
+                   && canWriteFamilyDocs(callerData(), familyId);
     }
 
     // Profile photos — only the owner can write their own photo

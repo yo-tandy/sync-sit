@@ -232,7 +232,7 @@ The post-deploy script runs automatically via `firebase.json` postdeploy hooks.
 ## Security
 
 - **Firestore rules** — document-level access control with role-based permissions
-- **Storage rules** — authenticated access for verification docs and photos
+- **Storage rules** — family-scoped writes (10MB cap) on verification docs, callable-only reads; owner-scoped profile photos; authenticated family photos
 - **Verification codes** — `crypto.randomInt()` with 5-attempt rate limiting, 10-minute expiry
 - **Input validation** — Zod schemas on all enrollment functions
 - **Immutable fields** — role, status, uid, email protected via Firestore rules
