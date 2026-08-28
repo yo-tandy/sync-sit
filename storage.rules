@@ -27,17 +27,22 @@ service firebase.storage {
     // Narrow DENYLIST (issue #281), deliberately not an allowlist: browsers
     // report File.type inconsistently (empty or application/octet-stream for
     // valid PDFs on some OS/browser combos), so an allowlist would reject
-    // legitimate uploads. text/html and image/svg+xml are the two types the
-    // clients could pass through (accept="image/*,.pdf" technically admits
-    // SVG) that would render live — with script — on storage.googleapis.com;
-    // no legitimate verification flow produces SVG identity documents
-    // (phones/scanners emit JPEG/PNG/PDF), so denying it costs nothing.
-    // lower() + prefix match: a raw-SDK caller must not bypass an exact-string
-    // check with 'Text/HTML' or 'text/html; charset=utf-8'. The null guard
-    // keeps type-less uploads working (GCS serves those as octet-stream,
-    // which downloads rather than renders).
+    // legitimate uploads. The denied types are the ones a browser renders as
+    // a live document — with script — on storage.googleapis.com: text/html
+    // and application/xhtml+xml directly, image/svg+xml via inline <script>,
+    // and text/xml / application/xml via an <?xml-stylesheet?> XSLT that can
+    // emit arbitrary HTML. No legitimate verification flow produces any of
+    // them — phones/scanners emit JPEG/PNG/PDF (accept="image/*" admits SVG
+    // only incidentally) — so denying them costs nothing.
+    // lower().trim() + prefix match: a raw-SDK caller controls the string
+    // byte-for-byte, and browsers honor 'Text/HTML', 'text/html; charset=x'
+    // and leading-whitespace spellings, so an exact-string check would be
+    // bypassable. The null guard keeps type-less uploads working (GCS serves
+    // those as octet-stream, which downloads rather than renders).
     function isRenderableDocType(t) {
-      return t != null && t.lower().matches('(text/html|image/svg\\+xml).*');
+      return t != null
+             && t.lower().trim()
+                 .matches('(text/html|application/xhtml\\+xml|image/svg\\+xml|text/xml|application/xml).*');
     }
 
     // Verification documents — writes only by members of the owning family or

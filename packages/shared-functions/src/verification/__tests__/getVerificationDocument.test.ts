@@ -61,17 +61,20 @@ beforeEach(() => {
 });
 
 describe('getVerificationDocument signed-URL options', () => {
-  it("passes responseDisposition: 'attachment' so documents download instead of rendering", async () => {
+  it("passes responseDisposition: 'attachment' AND version: 'v4' so the disposition is signature-bound", async () => {
     // Uploads carry an attacker-controllable contentType (client passes
     // browser File.type through); without the attachment disposition a
     // text/html upload renders as a live page on storage.googleapis.com
-    // when an admin opens it from the review queue.
+    // when an admin opens it from the review queue. v4 is load-bearing
+    // too: the SDK's default v2 signing leaves response-content-disposition
+    // as an UNSIGNED query param the URL holder can strip.
     const result = await call('verification-documents/family1/id.pdf');
     expect(result).toEqual({ url: 'https://storage.googleapis.com/signed?sig=abc' });
     expect(h.signedUrlCalls).toHaveLength(1);
     expect(h.signedUrlCalls[0]).toMatchObject({
       action: 'read',
       responseDisposition: 'attachment',
+      version: 'v4',
     });
   });
 

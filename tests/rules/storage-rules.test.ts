@@ -193,6 +193,32 @@ describe('verification-documents', () => {
     );
   });
 
+  it('denies application/xhtml+xml and XML types (render live via XHTML / XSLT)', async () => {
+    await seedUser('sr-parent1', { profiles: { parent: { familyId: 'sr-family1' } } });
+    const authed = testEnv.authenticatedContext('sr-parent1');
+    await assertFails(
+      uploadBytes(
+        ref(authed.storage(), 'verification-documents/sr-family1/evil.xhtml'),
+        new Uint8Array([1]),
+        { contentType: 'application/xhtml+xml' },
+      ),
+    );
+    await assertFails(
+      uploadBytes(
+        ref(authed.storage(), 'verification-documents/sr-family1/evil.xml'),
+        new Uint8Array([1]),
+        { contentType: 'text/xml' },
+      ),
+    );
+    await assertFails(
+      uploadBytes(
+        ref(authed.storage(), 'verification-documents/sr-family1/evil2.xml'),
+        new Uint8Array([1]),
+        { contentType: 'application/xml' },
+      ),
+    );
+  });
+
   it('denies an image/svg+xml upload (scriptable, renders live like HTML)', async () => {
     await seedUser('sr-parent1', { profiles: { parent: { familyId: 'sr-family1' } } });
     const authed = testEnv.authenticatedContext('sr-parent1');
@@ -230,6 +256,15 @@ describe('verification-documents', () => {
         ref(authed.storage(), 'verification-documents/sr-family1/evil4.svg'),
         new Uint8Array([1]),
         { contentType: 'IMAGE/SVG+XML' },
+      ),
+    );
+    // Leading whitespace: HTTP header parsing strips optional whitespace, so
+    // ' text/html' still renders — the rule trims before matching.
+    await assertFails(
+      uploadBytes(
+        ref(authed.storage(), 'verification-documents/sr-family1/evil5.html'),
+        new Uint8Array([1]),
+        { contentType: ' text/html' },
       ),
     );
   });

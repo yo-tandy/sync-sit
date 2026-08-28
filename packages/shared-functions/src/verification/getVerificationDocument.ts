@@ -71,6 +71,13 @@ export const getVerificationDocument = onCall(
         // storage.googleapis.com when an admin opens it from the review
         // queue (issue #281).
         responseDisposition: 'attachment',
+        // v4 signs the full query string. The SDK default (v2, as of
+        // @google-cloud/storage 7.19.0) signs only verb/MD5/type/expiry/
+        // resource, so response-content-disposition rides along UNSIGNED —
+        // the URL holder (which includes the uploader, via the isOwner /
+        // isFamilyMember branches above) could strip it and hand an admin
+        // a live-rendering link, defeating the line above.
+        version: 'v4',
       });
 
       return { url: signedUrl };
