@@ -267,6 +267,27 @@ describe('verification-documents', () => {
         { contentType: ' text/html' },
       ),
     );
+    // Embedded newline: RE2's '.' does not span '\n' without (?s), so this
+    // spelling would slip an un-flagged prefix match.
+    await assertFails(
+      uploadBytes(
+        ref(authed.storage(), 'verification-documents/sr-family1/evil6.html'),
+        new Uint8Array([1]),
+        { contentType: 'text/html\nx' },
+      ),
+    );
+  });
+
+  it('denies arbitrary *+xml types via the suffix match (Firefox renders any *+xml as XML)', async () => {
+    await seedUser('sr-parent1', { profiles: { parent: { familyId: 'sr-family1' } } });
+    const authed = testEnv.authenticatedContext('sr-parent1');
+    await assertFails(
+      uploadBytes(
+        ref(authed.storage(), 'verification-documents/sr-family1/feed.xml'),
+        new Uint8Array([1]),
+        { contentType: 'application/rss+xml' },
+      ),
+    );
   });
 
   it('allows an admin to write into any family path', async () => {
