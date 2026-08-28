@@ -143,4 +143,21 @@ describe('computeTaskExpiresAt (§6.3)', () => {
       ),
     ).toThrow();
   });
+
+  it('throws on a timing outside the union instead of returning undefined', () => {
+    // Without the default case the switch falls off the end and doPostTask
+    // would write expiresAt: undefined — a task the §6.5 sweep never
+    // collects.
+    expect(() =>
+      computeTaskExpiresAt(
+        {
+          timing: 'sometime' as 'fixed',
+          date: '2026-09-12',
+          dueDate: null,
+          startDate: null,
+        },
+        NOW,
+      ),
+    ).toThrow(/unknown task timing/);
+  });
 });

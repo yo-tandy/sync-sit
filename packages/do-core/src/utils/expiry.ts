@@ -114,7 +114,10 @@ export interface ExpiryTimingFields {
  * Compute `expiresAt` for a task per the §6.3 table. Throws on a task whose
  * timing group is missing its date — validate with `validateTaskTiming`
  * first; the throw here keeps a malformed task from silently getting an
- * `Invalid Date` expiry.
+ * `Invalid Date` expiry. The `default` throws on a discriminant outside the
+ * union for the same reason, only worse: without it the switch falls off the
+ * end and returns `undefined` into a `Date`-typed slot, and `doPostTask`
+ * would write a task with no expiry that the §6.5 sweep never collects.
  */
 export function computeTaskExpiresAt(
   fields: ExpiryTimingFields,
@@ -138,5 +141,12 @@ export function computeTaskExpiresAt(
       return endOfParisDay(fields.startDate);
     case 'ongoing':
       return new Date(now.getTime() + DO_ONGOING_TTL_DAYS * DAY_MS);
+    default: {
+      // Exhaustiveness pin: a fifth TaskTiming without a case here is a
+      // compile error, and a runtime value outside the union throws instead
+      // of silently minting an expiry-less task.
+      const exhaustive: never = fields.timing;
+      throw new Error(`unknown task timing: ${String(exhaustive)}`);
+    }
   }
 }
