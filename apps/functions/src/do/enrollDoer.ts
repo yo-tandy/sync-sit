@@ -55,10 +55,11 @@ interface EnrollDoerData {
   consentVersion: string;
   /**
    * Cross-app switch (§3.3, the sit↔study Plan D pattern): a signed-in
-   * caller whose account already holds a COMPLETED babysitter, tutor or
-   * parent profile adds `profiles.doer` without re-proving mailbox
-   * ownership — that identity was verified when the profile was made
-   * (plan §8's abbreviated half of the identity gate).
+   * caller whose account already holds a COMPLETED babysitter or tutor
+   * profile adds `profiles.doer` without re-proving mailbox ownership —
+   * that EJM identity was verified when the provider profile was made
+   * (plan §8's abbreviated half of the identity gate). A parent profile
+   * does NOT qualify — see the gate below (§11.1 as corrected in PR #320).
    */
   crossApp?: boolean;
   enrollment?: DoerEnrollmentInput;
@@ -125,9 +126,17 @@ function validateEnrollmentInput(input: unknown): DoerEnrollmentInput {
  *
  * Identity gate first: `enrollmentComplete` is set only for a caller with a
  * VERIFIED EJM identity — either an account already holding a completed
- * sit/study provider or parent profile (the abbreviated crossApp path), or
- * the `enrollTutor`-shape emailed-code verification. Without it the §7.2
- * board read rule would be satisfiable by any authenticated account.
+ * sit/study PROVIDER profile (babysitter/tutor, the abbreviated crossApp
+ * path — both are EJM-email-verified at their own enrollment), or the
+ * `enrollTutor`-shape emailed-code verification. A PARENT profile does NOT
+ * qualify (§11.1 as corrected in PR #320): `verifyParentEmail` accepts any
+ * domain and `enrollFamily` completes on open self-signup, so accepting it
+ * would make §7.2's board audience "anyone with a mailbox". A parent-only
+ * account can still enroll as a doer, but only through EJM email
+ * verification — which in V1 effectively excludes parents (§1's doers are
+ * EJM students; a one-line change here if the owner ever wants otherwise).
+ * Without this gate the §7.2 board read rule would be satisfiable by any
+ * authenticated account.
  *
  * Then the age gate, exactly as §11.1 states it: every caller must present
  * a parseable dateOfBirth (missing/NaN → invalid-argument, checked before
@@ -157,8 +166,15 @@ export const doEnrollDoer = onCall(
       }
     }
 
-    // 2. Require consent
-    if (!data.consentVersion) {
+    // 2. Require consent. Bounded, not just truthy: the value lands on the
+    // root consentVersion of an EXISTING account on the add-profile path
+    // (setBaseFields below), so an arbitrary client blob must not reach it
+    // (PR #320 round 1).
+    if (
+      !data.consentVersion ||
+      typeof data.consentVersion !== 'string' ||
+      data.consentVersion.length > 32
+    ) {
       throw new HttpsError('invalid-argument', 'Consent is required');
     }
 
@@ -171,27 +187,29 @@ export const doEnrollDoer = onCall(
     }
 
     // 3. Establish the verified EJM identity (the §11.1 identity gate).
-    // Cross-app: the caller's existing COMPLETED profile is the proof — that
-    // identity was verified by a real enrollment (sit/study provider via the
-    // emailed EJM code, parent via verifyParentEmail + family enrollment).
-    // Note `enrollmentComplete === true`: sit creates its babysitter profile
-    // incomplete and completes it later, and an abandoned half-enrollment
-    // proves nothing.
-    // Classic (new account, or an authed account with no completed profile,
-    // e.g. a governed kid): verify the emailed code — the enrollTutor shape.
+    // Cross-app: the caller's existing COMPLETED PROVIDER profile is the
+    // proof — that identity was verified by a real EJM-emailed-code
+    // enrollment. PARENT deliberately absent from this list (docstring):
+    // parent identity is any-domain self-signup and proves no EJM
+    // affiliation. Note `enrollmentComplete === true`: sit creates its
+    // babysitter profile incomplete and completes it later, and an
+    // abandoned half-enrollment proves nothing.
+    // Classic (new account, or an authed account with no completed provider
+    // profile — a governed kid, or a parent who genuinely holds an EJM
+    // address): verify the emailed code — the enrollTutor shape.
     let ejemEmailLower: string;
     let codeDoc: FirebaseFirestore.DocumentSnapshot | null = null;
     if (isCrossApp) {
       const profiles = (callerData.profiles ?? {}) as Record<string, Record<string, unknown> | undefined>;
-      const hasCompletedProfile = (['babysitter', 'tutor', 'parent'] as const).some(
+      const hasCompletedProviderProfile = (['babysitter', 'tutor'] as const).some(
         (key) => profiles[key]?.enrollmentComplete === true,
       );
-      if (!hasCompletedProfile) {
+      if (!hasCompletedProviderProfile) {
         throw new HttpsError('failed-precondition', 'No verified EJM identity on this account');
       }
-      // May be absent (a parent has no EJM email): the doer profile stores
-      // no email copy (root identity is canonical, issue #203), so it is
-      // only consulted for the age_mismatch half below.
+      // May be absent on legacy docs; the doer profile stores no email copy
+      // (root identity is canonical, issue #203), so it is only consulted
+      // for the age_mismatch half below.
       ejemEmailLower = getEjemEmail(callerData as unknown as User)?.toLowerCase() ?? '';
     } else {
       if (!data.ejemEmail) {
@@ -238,11 +256,14 @@ export const doEnrollDoer = onCall(
       throw new HttpsError('invalid-argument', 'First name and last name are required');
     }
 
-    // At least one contact channel, so doGetAssignedContact (decision 16)
-    // always has something to reveal. Checked on the code-verified paths
-    // where the wizard collects contact; the abbreviated crossApp flow
-    // skips the step (§3.3) and keeps the account's existing channels.
-    if (!isCrossApp) {
+    // At least one contact channel, on EVERY path — the enrollTutor
+    // precedent (enrollTutor.ts:212-214, enforced on its crossApp path
+    // too), so doGetAssignedContact (decision 16) always has something to
+    // reveal. Not guaranteed by the account alone: sit's enrollment makes
+    // contact skippable (issue #203), so a completed babysitter can carry
+    // zero channels — the wizard shows the contact fields on the
+    // abbreviated path exactly when the account has none (PR #320 round 1).
+    {
       const canonical = getContact(callerData as unknown as User);
       const hasContact =
         !!enrollment.contactEmail?.trim() || !!enrollment.contactPhone?.trim() ||
