@@ -178,3 +178,45 @@ describe('family DashboardPage — refetch on focus (issue #117 tier a)', () => 
     expect(kidsCalls()[1][0]).toEqual(kidsCalls()[0][0]);
   });
 });
+
+// ── Issue #293: a removed co-parent (parent profile retained, familyId
+// deleted by removeCoParent, #284) used to land on a silently empty
+// dashboard. The family-less branch must explain the state and point at
+// both recovery paths; a membered doc (either field) must never see it. ──
+describe('family DashboardPage — family-less parent recovery state (issue #293)', () => {
+  it('an ORPHAN parent doc sees the explanation and both recovery paths, not the empty dashboard', () => {
+    auth.userDoc = {
+      uid: 'p1',
+      firstName: 'Dana',
+      profiles: { parent: { enrollmentComplete: true } },
+    };
+    renderPage();
+    expect(screen.getByText('You are not currently part of a family')).toBeTruthy();
+    // Recovery path 1: the fresh-invite-link hint (the join page is the only
+    // client path into the server's re-attach carve-out).
+    expect(screen.getByText(/new invite link/)).toBeTruthy();
+    // Recovery path 2: the enroll CTA targets the add-profile enrollment.
+    const cta = screen.getByRole('link', { name: 'Start a new family' });
+    expect(cta.getAttribute('href')).toBe('/enroll/parent');
+    // The normal dashboard surfaces do NOT render underneath.
+    expect(screen.queryByRole('link', { name: 'View your appointments' })).toBeNull();
+  });
+
+  it('a MEMBERED parent (profile familyId) never sees the family-less state', () => {
+    renderPage(); // default beforeEach doc carries profiles.parent.familyId
+    expect(screen.queryByText('You are not currently part of a family')).toBeNull();
+    expect(screen.getByRole('link', { name: 'View your appointments' })).toBeTruthy();
+  });
+
+  it('a LEGACY Plan C doc (root familyId only) is a member, not an orphan', () => {
+    auth.userDoc = {
+      uid: 'p1',
+      firstName: 'Dana',
+      familyId: 'fam-legacy',
+      profiles: { parent: { enrollmentComplete: true } },
+    };
+    renderPage();
+    expect(screen.queryByText('You are not currently part of a family')).toBeNull();
+    expect(screen.getByRole('link', { name: 'View your appointments' })).toBeTruthy();
+  });
+});

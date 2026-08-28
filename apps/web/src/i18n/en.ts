@@ -572,6 +572,12 @@ export default {
     badgeDeclined: 'Declined',
     addKidsTitle: 'Add your children',
     addKidsDesc: 'You need to add at least one child to search for babysitters.',
+    noFamilyTitle: 'You are not currently part of a family',
+    noFamilyDesc:
+      'Your account is no longer linked to a family — this happens when a co-parent removes you from theirs.',
+    noFamilyInviteHint:
+      'To rejoin a family, ask a parent in that family to send you a new invite link, then open it while signed in to this account. Or start a fresh family below.',
+    noFamilyEnrollCta: 'Start a new family',
     notes: {
       fromFamily: 'From the family',
       fromBabysitter: 'From the babysitter',

@@ -10,6 +10,7 @@ import { Button, Badge, Card, Spinner, Input, InstallAppBanner } from '@/compone
 import { CalendarIcon, ChevronRightIcon, PlusIcon, SearchIcon } from '@/components/ui/Icons';
 import type { AppointmentDoc } from '@ejm/sit-core';
 import { getParentProfile } from '@ejm/sit-core';
+import { hasFamilyMembership } from '@ejm/shared-core';
 import { useRefetchOnFocus, DashboardGreeting } from '@ejm/shared-ui';
 import { formatFamilyTitle } from '@/lib/formatName';
 import { CrossAppWelcomeCard } from '@/components/family/CrossAppWelcomeCard';
@@ -88,6 +89,32 @@ export function FamilyDashboard() {
       fetchVerificationStatus();
     }
   });
+
+  // ── Family-less parent (issue #293): after removeCoParent the removed
+  // co-parent keeps their parent profile (so the guard still routes them
+  // here) but has no family membership — every load above no-ops and the
+  // normal dashboard renders empty with no explanation. Say what the state
+  // is and point at both recovery paths: a fresh invite link (JoinFamilyPage
+  // is the only client path into the server's re-attach carve-out, #284) or
+  // enrolling a new family. Membership, not profile presence: a legacy
+  // Plan C doc (root familyId) is an active member and must never see this. ──
+  if (!hasFamilyMembership(userDoc)) {
+    return (
+      <div className="px-5 pt-4 pb-8">
+        <DashboardGreeting firstName={userDoc?.firstName} />
+        <Card className="border-amber-200 bg-amber-50">
+          <h2 className="mb-2 text-base font-bold text-amber-900">
+            {t('familyDashboard.noFamilyTitle')}
+          </h2>
+          <p className="mb-2 text-sm text-amber-800">{t('familyDashboard.noFamilyDesc')}</p>
+          <p className="mb-4 text-sm text-amber-800">{t('familyDashboard.noFamilyInviteHint')}</p>
+          <Link to="/enroll/parent">
+            <Button size="sm">{t('familyDashboard.noFamilyEnrollCta')}</Button>
+          </Link>
+        </Card>
+      </div>
+    );
+  }
 
   // ── Appointments summary (issue #241): counts + the next upcoming
   // confirmed appointment; the card links to /family/appointments. ──
