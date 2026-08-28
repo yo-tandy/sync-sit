@@ -3,11 +3,13 @@ import { clearAll, callFunction, getIdToken, getDb, getAdminAuth } from '../../s
 import { seedTestData, type SeedData } from '../../setup/seed.js';
 
 // doEnrollDoer — the ABBREVIATED cross-app path (§3.3): a caller whose
-// account already holds a COMPLETED sit/study provider or parent profile
-// adds profiles.doer with no email step, no code, no password. The §11.1
-// age gate still runs in full — in particular the unconditional DOB
-// requirement, because the modal enrollee is a cross-app babysitter whose
-// sit profile may well lack one.
+// account already holds a COMPLETED sit/study PROVIDER profile adds
+// profiles.doer with no email step, no code, no password. A parent profile
+// does NOT qualify (§11.1 as corrected in PR #320 — any-domain
+// self-signup). The §11.1 age gate still runs in full — in particular the
+// unconditional DOB requirement, because the modal enrollee is a cross-app
+// babysitter whose sit profile may well lack one — and so does the
+// ≥1-contact-channel requirement (enrollTutor precedent, PR #320).
 
 function dobWithAge(age: number): string {
   const d = new Date();
@@ -27,6 +29,21 @@ function crossAppEnroll(token: string, enrollment: Record<string, unknown> = {},
     { crossApp: true, consentVersion, enrollment },
     token,
   );
+}
+
+const CODE = '123456';
+
+async function seedCode(email: string) {
+  await getDb()
+    .collection('verificationCodes')
+    .doc(email.toLowerCase())
+    .set({
+      code: CODE,
+      email: email.toLowerCase(),
+      expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+      attempts: 0,
+      createdAt: new Date(),
+    });
 }
 
 describe('doEnrollDoer — abbreviated cross-app path (§3.3)', () => {
@@ -101,24 +118,43 @@ describe('doEnrollDoer — abbreviated cross-app path (§3.3)', () => {
     expect(user.profiles.doer).toBeUndefined();
   });
 
-  it('a completed PARENT profile satisfies the identity gate (§8), but the DOB requirement still binds: refused without one, enrolls with one', async () => {
+  it('a PARENT profile does NOT satisfy the identity gate (§11.1 as corrected in PR #320): any-domain self-signup proves no EJM affiliation', async () => {
     const token = await getIdToken(seed.parent1.uid);
 
-    // Seed parents carry no dateOfBirth — the §11.1 unconditional DOB
-    // requirement fires as invalid-argument, not as a governance branch.
-    await expect(crossAppEnroll(token, {})).rejects.toMatchObject({
-      code: 'INVALID_ARGUMENT',
+    // Even a fully-formed payload is refused at the identity gate — before
+    // DOB, contact or any other check ever runs.
+    await expect(
+      crossAppEnroll(token, { dateOfBirth: dobWithAge(40), contactEmail: 'marie@test.com' }),
+    ).rejects.toMatchObject({
+      code: 'FAILED_PRECONDITION',
     });
-
-    const result = await crossAppEnroll(token, { dateOfBirth: dobWithAge(40) });
-    expect(result.uid).toBe(seed.parent1.uid);
     const user = (await getDb().collection('users').doc(seed.parent1.uid).get()).data()!;
+    expect(user.profiles.doer).toBeUndefined();
+  });
+
+  it('a parent-only account CAN still enroll through EJM email verification — the owner-flippable V1 boundary', async () => {
+    // In production verifyEjmEmail only issues codes to @ejm.org addresses,
+    // so a parent without one never reaches this; the test seeds the code
+    // directly to pin that the code-verified path itself accepts a
+    // parent-profile holder (the plan's "only by passing EJM email
+    // verification" clause).
+    const email = 'parent.doer@ejm.org'; // no grad-year digits — no mismatch half
+    await seedCode(email);
+    const token = await getIdToken(seed.parent2.uid);
+
+    const result = await callFunction<{ uid: string }>('doEnrollDoer', {
+      ejemEmail: email,
+      verificationCode: CODE,
+      consentVersion: '2026-08-28',
+      enrollment: { dateOfBirth: dobWithAge(40), contactEmail: 'pierre@test.com' },
+    }, token);
+    expect(result.uid).toBe(seed.parent2.uid);
+    const user = (await getDb().collection('users').doc(seed.parent2.uid).get()).data()!;
     expect(user.profiles.doer.enrollmentComplete).toBe(true);
     // The collected DOB is persisted to the root (the abbreviated flow must
-    // be able to ask for it — §11.1).
+    // be able to ask for it — §11.1); the parent profile is untouched.
     expect(user.dateOfBirth).toBeTruthy();
-    // The parent profile is untouched.
-    expect(user.profiles.parent.familyId).toBe(seed.parent1.familyId);
+    expect(user.profiles.parent.familyId).toBe(seed.parent2.familyId);
   });
 
   it('the under-15 floor holds on the DOB ALONE for a legacy cross-app account whose stored email cannot parse (§11.1 pin, crossApp variant)', async () => {
@@ -133,8 +169,10 @@ describe('doEnrollDoer — abbreviated cross-app path (§3.3)', () => {
       dateOfBirth: new Date(dobWithAge(14)),
       // No trailing grad-year digits — validateEjmEmail cannot parse it;
       // enrollTutor's email-guarded floor shape would stand down here.
+      // A nested contact channel keeps the ≥1-contact requirement satisfied
+      // so the AGE gate is what this case exercises.
       ejemEmail: 'legacy.sitter@ejm.org',
-      profiles: { babysitter: { enrollmentComplete: true, ejemEmail: 'legacy.sitter@ejm.org' } },
+      profiles: { babysitter: { enrollmentComplete: true, ejemEmail: 'legacy.sitter@ejm.org', contactEmail: 'legacy.sitter@ejm.org' } },
       notifPrefs: {},
       fcmTokens: [],
       createdAt: new Date(),
@@ -150,7 +188,7 @@ describe('doEnrollDoer — abbreviated cross-app path (§3.3)', () => {
     expect(user.profiles.doer).toBeUndefined();
   });
 
-  it('a doc whose sit profile lacks a DOB is asked for one: refused without, enrolled (and root-persisted) with', async () => {
+  it('a sit doc lacking BOTH a DOB and any contact channel is asked for each: DOB refusal, then contact refusal, then enrolls once supplied (root-persisted)', async () => {
     const uid = 'nodob-sitter';
     await getAdminAuth().createUser({ uid, email: 'nodob.sitter@ejm.org' });
     await getDb().collection('users').doc(uid).set({
@@ -160,7 +198,10 @@ describe('doEnrollDoer — abbreviated cross-app path (§3.3)', () => {
       firstName: 'NoDob',
       lastName: 'Sitter',
       // dateOfBirth deliberately absent — the pre-age-gate sit shape
-      // (searchBabysitters.ts:205-206 documents these exist).
+      // (searchBabysitters.ts:205-206 documents these exist) — and NO
+      // contact channel anywhere: sit's enrollment makes contact skippable
+      // (issue #203), so this account shape is real, and PR #320's blocker
+      // is exactly that it must not become a zero-channel doer.
       ejemEmail: 'nodob.sitter@ejm.org',
       profiles: { babysitter: { enrollmentComplete: true, ejemEmail: 'nodob.sitter@ejm.org' } },
       notifPrefs: {},
@@ -170,15 +211,33 @@ describe('doEnrollDoer — abbreviated cross-app path (§3.3)', () => {
     });
     const token = await getIdToken(uid);
 
-    await expect(crossAppEnroll(token, {})).rejects.toMatchObject({
+    // Contact requirement (checked before the age gate, the enrollTutor
+    // order): a zero-channel account with no supplied channel is refused.
+    await expect(crossAppEnroll(token, { dateOfBirth: dobWithAge(17) })).rejects.toMatchObject({
       code: 'INVALID_ARGUMENT',
+      message: 'At least one contact field is required',
     });
 
-    const result = await crossAppEnroll(token, { dateOfBirth: dobWithAge(17) });
+    // DOB requirement: contact supplied but no DOB anywhere is refused.
+    await expect(crossAppEnroll(token, { contactEmail: 'nodob@test.com' })).rejects.toMatchObject({
+      code: 'INVALID_ARGUMENT',
+      message: 'Date of birth is required',
+    });
+
+    // No doer profile leaked from the refusals.
+    let user = (await getDb().collection('users').doc(uid).get()).data()!;
+    expect(user.profiles.doer).toBeUndefined();
+
+    const result = await crossAppEnroll(token, {
+      dateOfBirth: dobWithAge(17),
+      contactEmail: 'nodob@test.com',
+    });
     expect(result.uid).toBe(uid);
-    const user = (await getDb().collection('users').doc(uid).get()).data()!;
+    user = (await getDb().collection('users').doc(uid).get()).data()!;
     expect(user.profiles.doer.enrollmentComplete).toBe(true);
+    // Both collected values persist at the canonical root.
     expect(user.dateOfBirth).toBeTruthy();
+    expect(user.contactEmail).toBe('nodob@test.com');
   });
 
   it('an INCOMPLETE provider profile proves nothing: refused, no doer profile written (the §14 no-verified-identity pin)', async () => {
