@@ -165,10 +165,12 @@ export const enrollFamily = onCall(
           language: 'en',
         },
         auditAction: 'family_profile_added',
-        // addProfileToUser deliberately never touches the root consent fields
-        // (they belong to the original enrollment) — the new app's consent
-        // acceptance is recorded here in the audit trail instead, mirroring
-        // enrollTutor's add-profile branch.
+        // The root consent fields are left to the original enrollment here —
+        // the new app's acceptance is recorded in the audit trail instead,
+        // mirroring enrollTutor's add-profile branch. (A per-caller
+        // convention, not a helper guarantee: doEnrollDoer takes the other
+        // side and refreshes the root pair via setBaseFields — see
+        // addProfileToUser's docstring.)
         auditDetails: { familyId, consentVersion: data.consentVersion || '1.0' },
       });
     } else {
