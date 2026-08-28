@@ -52,8 +52,14 @@ export interface DoerProfile extends ProfileBase {
    * profile was created".
    */
   lastDigestAt?: FirestoreTimestamp;
-  /** Free-text blurb shown to a family alongside an offer. */
-  bio?: string;
+  /**
+   * Free-text blurb shown to a family alongside an offer. `null` is the
+   * STORED empty state — the enrollment/update callables write `null` for
+   * "never set" and for an explicit clear, matching how the platform stores
+   * a tutor's aboutMe (`enrollTutor.ts` writes `?? null`) and this type's
+   * own `defaultRate` model. Absent only on docs predating the writer.
+   */
+  bio?: string | null;
   /** Optional: a default flat price hint, purely to pre-fill the offer form. */
   defaultRate?: number | null;
   hasCar?: boolean;
