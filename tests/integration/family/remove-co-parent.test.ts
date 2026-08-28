@@ -71,20 +71,28 @@ describe('removeCoParent', () => {
   });
 
   describe('happy-path variants (issue #279 / PR #284 review)', () => {
-    it('a legacy Plan C-shaped doc gets BOTH fields cleared (root + Plan D)', async () => {
-      // The root-familyId delete is kept for legacy docs; without this
-      // seeding it has zero coverage (Plan D seeds never write the root
-      // field, so asserting it undefined was vacuous).
-      await getDb().collection('users').doc(seed.parent2.uid)
-        .update({ familyId: seed.family1Id });
-      const pre = await getDb().collection('users').doc(seed.parent2.uid).get();
-      expect(pre.data()!.familyId).toBe(seed.family1Id);
+    it('a TRUE legacy Plan C doc (root-only membership) can be removed, both fields cleared', async () => {
+      // Round 4: the gate now accepts EITHER membership field, so a doc
+      // whose membership lives only at the root -- the exact shape the
+      // retained root delete exists for -- is removable. Seeded root-only:
+      // the Plan D pointer is deleted first, root set, so this pin covers
+      // the legacy shape rather than a hybrid.
+      const FieldValue = (await import('firebase-admin/firestore')).FieldValue;
+      await getDb().collection('users').doc(seed.parent2.uid).update({
+        familyId: seed.family1Id,
+        'profiles.parent.familyId': FieldValue.delete(),
+      });
+      const pre = (await getDb().collection('users').doc(seed.parent2.uid).get()).data()!;
+      expect(pre.familyId).toBe(seed.family1Id);
+      expect(pre.profiles?.parent?.familyId).toBeUndefined();
 
       await callFunction('removeCoParent', { targetUserId: seed.parent2.uid }, parent1Token);
 
-      const post = await getDb().collection('users').doc(seed.parent2.uid).get();
-      expect(post.data()!.familyId).toBeUndefined();
-      expect(post.data()!.profiles?.parent?.familyId).toBeUndefined();
+      const post = (await getDb().collection('users').doc(seed.parent2.uid).get()).data()!;
+      expect(post.familyId).toBeUndefined();
+      expect(post.profiles?.parent?.familyId).toBeUndefined();
+      const fam = await getDb().collection('families').doc(seed.family1Id).get();
+      expect(fam.data()!.parentIds).not.toContain(seed.parent2.uid);
     });
 
     it('the #279 consequence is closed: a removed co-parent is DENIED verification-document access', async () => {

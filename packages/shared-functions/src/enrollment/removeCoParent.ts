@@ -39,9 +39,15 @@ export const removeCoParent = onCall(
       throw new HttpsError('failed-precondition', 'No family associated');
     }
 
-    // Verify target is in the same family
+    // Verify target is in the same family. EITHER membership field counts
+    // (round-4 review): a true legacy doc carries membership only at the
+    // root familyId, and gating on the Plan D pointer alone made such a
+    // co-parent unremovable -- the exact docs the root-field delete below
+    // exists for. Mirrors hasFamilyMembership's classification.
     const targetDoc = await db.collection('users').doc(targetUserId).get();
-    if (!targetDoc.exists || getParentProfile(targetDoc.data() as User | undefined)?.familyId !== callerFamilyId) {
+    const targetData = targetDoc.data() as (User & { familyId?: string }) | undefined;
+    const targetMembership = getParentProfile(targetData)?.familyId ?? targetData?.familyId;
+    if (!targetDoc.exists || targetMembership !== callerFamilyId) {
       throw new HttpsError('not-found', 'User is not in your family');
     }
 

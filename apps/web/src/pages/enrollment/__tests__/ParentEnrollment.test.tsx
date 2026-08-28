@@ -481,3 +481,29 @@ describe('ParentEnrollment resend cooldown wiring (issue #250)', () => {
     });
   });
 });
+
+// Issue #279 / PR #284 round 4: the sit-side guard pins (mirror of the
+// study suite's) -- membership redirects, an ORPHAN profile enrolls.
+describe('ParentEnrollment orphan-parent guards (issue #279)', () => {
+  it('authed WITH membership: redirects to /family instead of enrolling', async () => {
+    h.auth = {
+      firebaseUser: { uid: 'member-1' },
+      userDoc: { profiles: { parent: { enrollmentComplete: true, familyId: 'fam-1' } } },
+      loading: false,
+    };
+    renderFlow();
+    await vi.waitFor(() => expect(h.navigate).toHaveBeenCalledWith('/family', { replace: true }));
+  });
+
+  it('authed with an ORPHAN parent profile: enrolls a new family (no redirect)', async () => {
+    h.auth = {
+      firebaseUser: { uid: 'orphan-1' },
+      userDoc: { profiles: { parent: { enrollmentComplete: true } } },
+      loading: false,
+    };
+    renderFlow();
+    // The mount effect must NOT bounce to /family; the wizard renders.
+    await new Promise((r) => setTimeout(r, 50));
+    expect(h.navigate).not.toHaveBeenCalledWith('/family', { replace: true });
+  });
+});
