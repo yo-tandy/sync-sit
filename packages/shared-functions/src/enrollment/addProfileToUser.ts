@@ -39,11 +39,25 @@ function assertAddable(snap: DocumentSnapshot, profileKey: ProfileKey): void {
     throw new HttpsError('permission-denied', 'Account is not active');
   }
   if (data.profiles?.[profileKey] !== undefined) {
-    throw new HttpsError(
-      'already-exists',
-      `This account already has a ${profileKey} profile`,
-      { reason: 'profile-exists', profile: profileKey },
-    );
+    // Re-attach carve-out (issue #279 / PR #284 review): a PARENT profile
+    // whose familyId is absent is the orphan state removeCoParent leaves
+    // behind -- membership cleared, profile retained. Rejecting it here
+    // bricked the account: no server path could ever put a familyId back
+    // (rules block the client via parentFamilyIdUnchanged). A family-LESS
+    // parent profile may therefore be re-attached through a fresh invite;
+    // a parent profile WITH a familyId still rejects, as ever. Provider
+    // profiles keep the strict check -- they have no equivalent orphan
+    // state or re-attach flow.
+    const isOrphanParent =
+      profileKey === 'parent' &&
+      (data.profiles.parent as { familyId?: string } | undefined)?.familyId === undefined;
+    if (!isOrphanParent) {
+      throw new HttpsError(
+        'already-exists',
+        `This account already has a ${profileKey} profile`,
+        { reason: 'profile-exists', profile: profileKey },
+      );
+    }
   }
   // Providing (tutoring, babysitting) is for EJM students; parents are the
   // adults who hire them — provider and parent roles are mutually exclusive
@@ -100,9 +114,19 @@ export async function addProfileToUser(params: AddProfileParams): Promise<void> 
     assertAddable(snap, params.profileKey);
     const data = snap.data()!;
     const update: Record<string, unknown> = {
-      [`profiles.${params.profileKey}`]: params.profileData,
       updatedAt: new Date(),
     };
+    if (data.profiles?.[params.profileKey] !== undefined) {
+      // Orphan-parent re-attach (the only shape assertAddable lets through
+      // with an existing profile): merge field-by-field so whatever
+      // survived removal (phone, enrollmentComplete) is kept, not clobbered
+      // by a whole-map replace.
+      for (const [field, value] of Object.entries(params.profileData)) {
+        update[`profiles.${params.profileKey}.${field}`] = value;
+      }
+    } else {
+      update[`profiles.${params.profileKey}`] = params.profileData;
+    }
     for (const [field, value] of Object.entries(params.fillBaseFields ?? {})) {
       // Empty (absent/null/'') is fillable; populated always wins. Strict
       // undefined-only here disagreed with enrollTutor's truthiness presence

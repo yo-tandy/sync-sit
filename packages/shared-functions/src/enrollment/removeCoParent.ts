@@ -57,6 +57,9 @@ export const removeCoParent = onCall(
     // leftover Plan D never populates; clearing only it left a removed
     // co-parent with full membership everywhere the user doc is consulted
     // (issue #279). Root field still cleared for legacy docs that carry it.
+    // The family-LESS parent profile that remains is re-attachable through
+    // a fresh invite: addProfileToUser's orphan-parent carve-out (same PR)
+    // lets joinFamily set a new familyId on it, so removal is recoverable.
     await db.collection('users').doc(targetUserId).update({
       'profiles.parent.familyId': FieldValue.delete(),
       familyId: FieldValue.delete(),

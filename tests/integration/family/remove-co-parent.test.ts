@@ -3,10 +3,13 @@ import { clearAll, callFunction, getIdToken, getDb } from '../../setup/emulator.
 import { seedTestData, type SeedData } from '../../setup/seed.js';
 
 /**
- * removeCoParent unsets the target's familyId and trims them from the
- * family.parentIds array. It does NOT delete the user doc or the auth
- * account (that's deleteUser's job). Tests re-seed each time because a
- * successful run mutates parent2's user doc and the family doc.
+ * removeCoParent clears the target's membership pointer
+ * (profiles.parent.familyId -- Plan D; plus the legacy root familyId) and
+ * trims them from the family.parentIds array. It does NOT delete the user
+ * doc or the auth account (that's deleteUser's job); the family-less
+ * parent profile that remains is re-attachable via a fresh invite. Tests
+ * re-seed each time because a successful run mutates parent2's user doc
+ * and the family doc.
  */
 describe('removeCoParent', () => {
   let seed: SeedData;
@@ -64,6 +67,81 @@ describe('removeCoParent', () => {
         .where('adminUserId', '==', seed.parent1.uid)
         .get();
       expect(logs.docs).toHaveLength(1);
+    });
+  });
+
+  describe('happy-path variants (issue #279 / PR #284 review)', () => {
+    it('a legacy Plan C-shaped doc gets BOTH fields cleared (root + Plan D)', async () => {
+      // The root-familyId delete is kept for legacy docs; without this
+      // seeding it has zero coverage (Plan D seeds never write the root
+      // field, so asserting it undefined was vacuous).
+      await getDb().collection('users').doc(seed.parent2.uid)
+        .update({ familyId: seed.family1Id });
+      const pre = await getDb().collection('users').doc(seed.parent2.uid).get();
+      expect(pre.data()!.familyId).toBe(seed.family1Id);
+
+      await callFunction('removeCoParent', { targetUserId: seed.parent2.uid }, parent1Token);
+
+      const post = await getDb().collection('users').doc(seed.parent2.uid).get();
+      expect(post.data()!.familyId).toBeUndefined();
+      expect(post.data()!.profiles?.parent?.familyId).toBeUndefined();
+    });
+
+    it('the #279 consequence is closed: a removed co-parent is DENIED verification-document access', async () => {
+      await callFunction('removeCoParent', { targetUserId: seed.parent2.uid }, parent1Token);
+      const parent2Token = await getIdToken(seed.parent2.uid);
+      // Membership is checked before any storage access, so no document
+      // needs to exist -- the denial is the pin.
+      await expect(
+        callFunction(
+          'getVerificationDocument',
+          { filePath: `verification-documents/${seed.family1Id}/id-card.png` },
+          parent2Token,
+        ),
+      ).rejects.toMatchObject({ code: 'PERMISSION_DENIED' });
+    });
+
+    it('removal is recoverable: a fresh invite re-attaches the orphan parent profile', async () => {
+      // Give the orphan profile a field that must SURVIVE the re-attach
+      // (the merge-write pin: a whole-map replace would drop it).
+      await getDb().collection('users').doc(seed.parent2.uid)
+        .update({ 'profiles.parent.phone': '+33 699999999' });
+      await callFunction('removeCoParent', { targetUserId: seed.parent2.uid }, parent1Token);
+
+      const token = 'token-rejoin-279';
+      await getDb().collection('inviteLinks').doc(token).set({
+        token, familyId: seed.family1Id, familyName: 'TestFamily',
+        createdByUserId: seed.parent1.uid,
+        expiresAt: new Date(Date.now() + 86400_000), used: false, createdAt: new Date(),
+      });
+      const parent2Token = await getIdToken(seed.parent2.uid);
+      const res = await callFunction<{ success: boolean }>('joinFamily', { token }, parent2Token);
+      expect(res.success).toBe(true);
+
+      const doc = await getDb().collection('users').doc(seed.parent2.uid).get();
+      expect(doc.data()!.profiles?.parent?.familyId).toBe(seed.family1Id);
+      expect(doc.data()!.profiles?.parent?.phone).toBe('+33 699999999');
+      const fam = await getDb().collection('families').doc(seed.family1Id).get();
+      expect(fam.data()!.parentIds).toContain(seed.parent2.uid);
+    });
+
+    it('a parent profile WITH a familyId still cannot join another family (carve-out is orphan-only)', async () => {
+      // The other family must EXIST so joinFamily reaches the profile gate
+      // rather than rejecting NOT_FOUND on the family doc.
+      await getDb().collection('families').doc('family-other-279').set({
+        familyId: 'family-other-279', familyName: 'Other', parentIds: [],
+        status: 'active', createdAt: new Date(), updatedAt: new Date(),
+      });
+      const token = 'token-still-member-279';
+      await getDb().collection('inviteLinks').doc(token).set({
+        token, familyId: 'family-other-279', familyName: 'Other',
+        createdByUserId: seed.parent1.uid,
+        expiresAt: new Date(Date.now() + 86400_000), used: false, createdAt: new Date(),
+      });
+      const parent2Token = await getIdToken(seed.parent2.uid);
+      await expect(
+        callFunction('joinFamily', { token }, parent2Token),
+      ).rejects.toMatchObject({ code: 'ALREADY_EXISTS' });
     });
   });
 

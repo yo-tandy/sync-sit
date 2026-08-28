@@ -634,6 +634,9 @@ Same pattern as Task 7 — write `profiles.parent: { enrollmentComplete: true, f
 - [ ] **Step 1: Update enrollFamily**
 - [ ] **Step 2: Update joinFamily**
 - [ ] **Step 3: Verify removeCoParent doesn't need changes (only manipulates familyId on the user, which moves to profiles.parent.familyId)**
+  *Post-hoc correction (issue #279): this verification was WRONG — the
+  callable kept clearing the root field and never followed the move, so
+  removed co-parents retained Plan D membership until PR #284 fixed it.*
 - [ ] **Step 4: Verify build**
 - [ ] **Step 5: Commit:**
 ```bash
