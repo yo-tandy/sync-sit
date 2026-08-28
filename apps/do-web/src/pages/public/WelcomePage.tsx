@@ -8,8 +8,8 @@ import { postLoginRouter } from '@/utils/postLoginRouter';
  * where that is (role-aware routing arrives with the portals, plan §13).
  */
 export function WelcomePage() {
-  const { firebaseUser, loading } = useAuthStore();
-  const redirectPath = firebaseUser ? postLoginRouter() : null;
+  const { firebaseUser, userDoc, loading } = useAuthStore();
+  const redirectPath = firebaseUser ? postLoginRouter(userDoc) : null;
   return (
     <SharedWelcomePage
       logoSrc="/logo.png"

@@ -58,10 +58,18 @@ describe('SignUpRolePage', () => {
     expect(screen.getByRole('link', { name: /parent/i })).toHaveAttribute('href', '/enroll/parent');
   });
 
-  it('redirects a signed-in account to the shell home', () => {
+  it('redirects a signed-in account WITH a sync-do role to its portal', () => {
     h.auth.firebaseUser = { uid: 'u1' };
+    h.auth.userDoc = { uid: 'u1', profiles: { doer: { enrollmentComplete: true } } };
     renderWithProviders(<SignUpRolePage />);
     expect(screen.queryByRole('link', { name: /doer/i })).toBeNull();
+  });
+
+  it('keeps a signed-in account with NO sync-do role here to add one (PR7 guard fallback)', () => {
+    h.auth.firebaseUser = { uid: 'u1' };
+    h.auth.userDoc = { uid: 'u1' };
+    renderWithProviders(<SignUpRolePage />);
+    expect(screen.getByRole('link', { name: /doer/i })).toHaveAttribute('href', '/enroll/doer');
   });
 });
 

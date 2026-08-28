@@ -2,6 +2,7 @@ import { Navigate } from 'react-router';
 import { SignUpRolePage as SharedSignUpRolePage, UserIcon, UsersIcon, type SignUpRoleOption } from '@ejm/shared-ui';
 import { useAuthStore } from '@/stores/authStore';
 import { postLoginRouter } from '@/utils/postLoginRouter';
+import { getDoRole } from '@/utils/doRole';
 
 const ROLES: SignUpRoleOption[] = [
   { key: 'doer', labelKey: 'welcome.signUpDoer', descKey: 'welcome.signUpDoerDesc', icon: UserIcon, href: '/enroll/doer' },
@@ -15,11 +16,14 @@ const ROLES: SignUpRoleOption[] = [
  * role model, so they arrive with it.
  */
 export function SignUpRolePage() {
-  const { firebaseUser } = useAuthStore();
-  // A signed-in account has nothing to sign up for in the shell — the
-  // authenticated home explains where sync-do stands.
-  if (firebaseUser) {
-    return <Navigate to={postLoginRouter()} replace />;
+  const { firebaseUser, userDoc, loading } = useAuthStore();
+  // A signed-in account WITH a sync-do role has nothing to sign up for —
+  // send it to its portal. An account with NO role (a sit/study parent or
+  // student arriving cross-app) stays: this page is where a role gets
+  // added, and the family AuthGuard's no-role fallback lands here for
+  // exactly that reason (plan §13 PR7).
+  if (firebaseUser && !loading && getDoRole(userDoc)) {
+    return <Navigate to={postLoginRouter(userDoc)} replace />;
   }
   return <SharedSignUpRolePage logoSrc="/logo.png" logoAlt="Sync/Do" roles={ROLES} />;
 }

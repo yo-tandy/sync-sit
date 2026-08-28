@@ -7,8 +7,8 @@ export function LoginPage() {
 
   const handleLogin = async (email: string, password: string): Promise<string | undefined> => {
     await login(email, password);
-    // No do-specific role model yet (plan §13 PR4): every signed-in account
-    // lands on the shell home, so the role result is unused.
+    // Role-aware landing (plan §13 PR7): the login just set userDoc on the
+    // store — read it fresh so parents land in the family portal.
     return undefined;
   };
 
@@ -17,7 +17,7 @@ export function LoginPage() {
       logoSrc="/logo.png"
       logoAlt="Sync/Do"
       onLogin={handleLogin}
-      postLoginRouter={() => postLoginRouter()}
+      postLoginRouter={() => postLoginRouter(useAuthStore.getState().userDoc)}
       loading={loading}
       error={error}
       clearError={clearError}
