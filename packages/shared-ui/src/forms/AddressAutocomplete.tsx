@@ -162,16 +162,15 @@ export function AddressAutocomplete({
 
         {/* Suggestions dropdown */}
         {showSuggestions && suggestions.length > 0 && (
-          <div className="absolute left-0 right-0 top-full z-20 mt-1 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg">
+          <div // overflow-hidden clips the shared outward focus ring; the container
+          // class draws it inset on the suggestion buttons instead (#327).
+          className="focus-ring-inset absolute left-0 right-0 top-full z-20 mt-1 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg">
             {suggestions.map((feature, i) => (
               <button
                 key={i}
                 type="button"
                 onClick={() => handleSelect(feature)}
-                // The dropdown wrapper is overflow-hidden (rounded corners), which
-                // clips the shared outward focus ring entirely -- inset the
-                // ring here instead (the @layer escape hatch, round 1).
-                className="flex w-full items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-brand-600 focus-visible:-outline-offset-2 focus-visible:shadow-none"
+                className="flex w-full items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-gray-50"
               >
                 <span className="mt-0.5 text-gray-400">📍</span>
                 <div>
