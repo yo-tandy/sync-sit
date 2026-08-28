@@ -272,6 +272,50 @@ describe('DoerEnrollment — step sequences', () => {
     });
   });
 
+  it('the flow shape is FROZEN at auth-resolution: a mid-flow userDoc update cannot shrink the steps under the live index (PR #320 round 2)', async () => {
+    // Cross-app zero-channel flow: steps = [consent, profile, details]. The
+    // submit persists the collected contact, and the store update that
+    // follows would flip crossAppNeedsProfileStep false — with a LIVE
+    // steps array, steps[2] becomes undefined and the wizard renders blank
+    // for the frames before navigation. Frozen steps keep index 2 on
+    // 'details'.
+    h.state.firebaseUser = { uid: 'sitter3' };
+    h.state.userDoc = {
+      uid: 'sitter3',
+      firstName: 'Ana',
+      lastName: 'Faure',
+      dateOfBirth: '2009-05-20',
+      profiles: { babysitter: { enrollmentComplete: true } },
+    };
+    h.invoke.mockImplementation(((name: string) => {
+      if (name === 'doEnrollDoer') {
+        // The post-submit refresh lands the contact AND the doer profile —
+        // both of which change the computed flow shape.
+        h.state.userDoc = {
+          ...(h.state.userDoc as Record<string, unknown>),
+          contactEmail: 'ana@test.com',
+          profiles: { babysitter: { enrollmentComplete: true }, doer: { enrollmentComplete: true } },
+        };
+        return Promise.resolve({ data: { uid: 'sitter3' } });
+      }
+      return Promise.resolve({ data: {} });
+    }) as never);
+    renderWithProviders(<DoerEnrollment />);
+
+    fireEvent.click(screen.getByRole('checkbox'));
+    fireEvent.click(screen.getByRole('button', { name: 'Agree & continue' }));
+    await waitFor(() => expect(screen.getByLabelText('Contact email')).toBeTruthy());
+    fireEvent.change(screen.getByLabelText('Contact email'), { target: { value: 'ana@test.com' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    await waitFor(() => expect(screen.getByText('What would you like to do?')).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: 'Complete sign-up' }));
+
+    await waitFor(() => expect(callsTo('doEnrollDoer')).toHaveLength(1));
+    // The re-render after the store update must still show the details
+    // step, not fall through renderStep's default to a blank page.
+    expect(screen.getByText('What would you like to do?')).toBeTruthy();
+  });
+
   it('an age-gate rejection maps to the under-15 copy (applyEnrollmentError)', async () => {
     h.state.firebaseUser = { uid: 'sitter1' };
     h.state.userDoc = {
