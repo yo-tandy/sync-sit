@@ -143,7 +143,7 @@ export const publishSearch = onCall(
       }
     }
 
-    // ── Cap: at most PUBLISHED_SEARCH_MAX_ACTIVE active docs per family per
+    // ── Cap: at most publishedSearchMaxActive (admin-configurable) active docs per family per
     // app. Equality-only query (no composite needed beyond the familyId index);
     // expiry filtered in code — expired-but-unswept docs must not count. ──
 

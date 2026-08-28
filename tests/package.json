@@ -5,6 +5,8 @@
   "type": "module",
   "dependencies": {
     "@ejm/sit-core": "workspace:*",
+    "@ejm/shared-core": "workspace:*",
+    "@ejm/shared-functions": "workspace:*",
     "@firebase/rules-unit-testing": "^4.0.0",
     "firebase": "^12.11.0",
     "firebase-admin": "^13.0.0"

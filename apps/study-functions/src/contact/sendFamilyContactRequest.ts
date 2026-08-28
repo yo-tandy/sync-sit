@@ -17,7 +17,7 @@ import {
 // boardContactsPerDay / boardContactWindowHours (issue #250). The per-pair
 // guards below -- one open request per pair, plus the decline cooldown -- bound
 // ONE (tutor, family) conversation and nothing else: a family may hold three
-// live searches (PUBLISHED_SEARCH_MAX_ACTIVE) and the board carries every
+// live searches (publishedSearchMaxActive) and the board carries every
 // family's, so one tutor could answer all of them, each contact fanning out
 // email + push + in-app to every parent of that family via notifyAllParents.
 //

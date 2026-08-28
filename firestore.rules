@@ -481,17 +481,17 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    // Admin-panel configuration (issue #250): operational caps and windows,
-    // not secrets -- readable by any signed-in user (pastVisibilityDays is
-    // consumed by the sit dashboards client-side). Writes are denied here:
-    // updateAdminConfig (verifyAdmin + bounds validation + audit) is the
-    // only write path, and getConfigValue re-checks bounds at read time so
-    // even a console-edited doc cannot push a value past them. Matched on
-    // the ONE doc that exists -- a future doc in this collection does not
-    // inherit signed-in readability by accident.
+    // Admin-panel configuration (issue #250). No client reads ANY more
+    // (round-7 review): every client surface reads the /client mirror
+    // below, the panel reads through the getAdminConfig callable, and the
+    // server reads bypass rules entirely -- so a signed-in read grant here
+    // would only serve an attacker enumerating the abuse levers (send
+    // caps, attempt limits). Writes are denied too: updateAdminConfig
+    // (verifyAdmin + bounds validation + audit) is the only write path,
+    // and getConfigValue re-checks bounds at read time so even a
+    // console-edited doc cannot push a value past them.
     match /adminConfig/values {
-      allow read: if request.auth != null;
-      allow write: if false;
+      allow read, write: if false;
     }
 
     // World-readable mirror of the CLIENT-EXPOSED config keys only

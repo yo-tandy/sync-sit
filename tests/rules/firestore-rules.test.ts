@@ -2294,9 +2294,13 @@ describe('adminConfig (issue #250)', () => {
     });
   });
 
-  it('any signed-in user may read (client-consumed keys are not secrets)', async () => {
+  // Round-7 review: no client surface reads the values doc any more (all
+  // client reads go through the /client mirror; the panel uses the
+  // getAdminConfig callable; server reads bypass rules), so the signed-in
+  // grant only served an attacker enumerating the abuse levers.
+  it('values doc is unreadable even signed in (least privilege)', async () => {
     const db = testEnv.authenticatedContext('any-user-1').firestore();
-    await assertSucceeds(getDoc(doc(db, 'adminConfig', 'values')));
+    await assertFails(getDoc(doc(db, 'adminConfig', 'values')));
   });
 
   it('unauthenticated read is denied', async () => {

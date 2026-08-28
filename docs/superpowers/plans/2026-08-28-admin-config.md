@@ -151,3 +151,23 @@ pluralized via i18next _one/_other with count (en+fr, both apps) and the
 server template strings' unit words made count-aware; stale fixed-window
 docstrings in cleanupOldData/extendRecurring updated; ADMIN_CONFIG_TTL_MS
 documented for operators in the README.
+
+**Round 7 (PR #266, comment verdict):** stale fixed-value copy reworded
+number-free (tutor decline-confirm "7 days", both apps' published-search
+"one week" duration lines, ParentGuidePage's "3 searches / one week" --
+all now admin-configurable ranges, per the review's rewording option);
+adminConfig/values locked to `allow read, write: if false` (no client
+reads it any more -- the signed-in grant only served abuse-lever
+enumeration; rules pin inverted); updateAdminConfig made atomic (one
+WriteBatch for values + mirror + audit, post-merge state computed
+locally -- a mirror failure can no longer leave a mutated values doc
+with no audit row); resolveConfigValue got its direct pure-unit matrix
+(tests/unit, incl. NaN/Infinity and an all-keys sweep) with
+@ejm/shared-functions added to the tests package; the sit reader suite
+pins the adminConfig/client BINDING (the round-6 regression shape);
+JoinFamilyPage got the same mount-race sync guard as the step
+components (its countdown arms at click time); useClientConfigValue
+consolidated onto the factory (the per-app files had byte-identical
+twins); INVITE_LINK_EXPIRY_MS deleted (zero consumers, the
+VERIFICATION_CODE_COOLDOWN_S standard); four stale
+PUBLISHED_SEARCH_MAX_ACTIVE comment mentions updated.

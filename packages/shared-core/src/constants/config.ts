@@ -9,9 +9,6 @@ export const MIN_BABYSITTER_AGE = 15;
 /** Max photo upload size in bytes (5 MB) */
 export const MAX_PHOTO_SIZE = 5 * 1024 * 1024;
 
-/** Invite link expiry in milliseconds (1 hour) */
-export const INVITE_LINK_EXPIRY_MS = 60 * 60 * 1000;
-
 /**
  * Current consent-document versions. The guardian callables require callers
  * to send versions EQUAL to these (stale consent → invalid-argument), so a

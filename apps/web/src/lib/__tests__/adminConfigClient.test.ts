@@ -59,3 +59,15 @@ describe('getClientConfigValue', () => {
     expect(h.getDoc).toHaveBeenCalledTimes(1);
   });
 });
+
+// Round-7 review: pin the BINDING, not just the fallback logic -- re-pointing
+// this file back at the authed values doc (the exact round-6 regression,
+// which silently served pre-auth enrollment reads the 60s default) would
+// otherwise leave every test here green.
+describe('doc binding', () => {
+  it('reads the WORLD-READABLE client mirror, not the authed values doc', async () => {
+    h.getDoc.mockResolvedValue({ data: () => ({}) });
+    await getClientConfigValue('pastVisibilityDays', 7, BOUNDS);
+    expect(h.getDoc).toHaveBeenCalledWith({ __doc: 'adminConfig/client' });
+  });
+});

@@ -57,7 +57,7 @@ export const publishTutorSearch = onCall(
     const now = new Date();
     const expiresAt = new Date(now.getTime() + (await getConfigValue('publishedSearchTtlDays')) * 24 * 60 * 60 * 1000);
 
-    // ── Cap: at most PUBLISHED_SEARCH_MAX_ACTIVE active docs per family per
+    // ── Cap: at most publishedSearchMaxActive (admin-configurable) active docs per family per
     // app; expiry filtered in code so expired-but-unswept docs don't count. ──
     const activeSnap = await db.collection('publishedSearches')
       .where('familyId', '==', familyId)

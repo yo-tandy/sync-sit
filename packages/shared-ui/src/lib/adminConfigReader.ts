@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 /**
  * Client-side reader for the admin-configurable parameters (issue #250) --
  * ONE implementation for both apps (round-3 review: the copy-per-app twins
@@ -14,6 +15,12 @@ export interface AdminConfigReader {
     fallback: number,
     bounds: { min: number; max: number },
   ): Promise<number>;
+  /** React convenience: the configured value as state (fallback until it resolves). */
+  useClientConfigValue(
+    key: string,
+    fallback: number,
+    bounds: { min: number; max: number },
+  ): number;
   __resetAdminConfigClientCacheForTests(): void;
 }
 
@@ -35,13 +42,40 @@ export function createAdminConfigReader(fetchDoc: GetDocFn): AdminConfigReader {
     return fetchPromise;
   }
 
+  async function getClientConfigValue(
+    key: string,
+    fallback: number,
+    bounds: { min: number; max: number },
+  ): Promise<number> {
+    const values = await fetchValues();
+    const v = values[key];
+    return typeof v === 'number' && Number.isInteger(v) && v >= bounds.min && v <= bounds.max
+      ? v
+      : fallback;
+  }
+
   return {
-    async getClientConfigValue(key, fallback, bounds) {
-      const values = await fetchValues();
-      const v = values[key];
-      return typeof v === 'number' && Number.isInteger(v) && v >= bounds.min && v <= bounds.max
-        ? v
-        : fallback;
+    getClientConfigValue,
+    // Lives on the factory so the hook exists ONCE (round-7 review: the
+    // per-app adminConfigClient files had drifted into byte-identical
+    // twins of it).
+    useClientConfigValue(key, fallback, bounds) {
+      const [value, setValue] = useState<number>(fallback);
+      useEffect(() => {
+        let cancelled = false;
+        void getClientConfigValue(key, fallback, bounds)
+          .then((v) => {
+            if (!cancelled) setValue(v);
+          })
+          .catch(() => {});
+        return () => {
+          cancelled = true;
+        };
+        // bounds is a fresh object literal at most call sites -- keying the
+        // effect on it would refetch every render.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+      }, [key, fallback]);
+      return value;
     },
     __resetAdminConfigClientCacheForTests() {
       fetchPromise = null;

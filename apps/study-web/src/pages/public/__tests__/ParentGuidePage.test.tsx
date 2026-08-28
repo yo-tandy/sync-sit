@@ -40,8 +40,8 @@ describe('ParentGuidePage (study)', () => {
     // The consent-relevant facts: wider visibility, what is shown, the caps.
     expect(screen.getByText(/visible to a larger group of tutors/)).toBeInTheDocument();
     expect(screen.getByText(/your address is never shown/)).toBeInTheDocument();
-    expect(screen.getByText(/up to 3 published searches at a time/)).toBeInTheDocument();
-    expect(screen.getByText(/stays up for one week/)).toBeInTheDocument();
+    expect(screen.getByText(/number of published searches you can have at a time is limited/)).toBeInTheDocument();
+    expect(screen.getByText(/expires automatically after a while/)).toBeInTheDocument();
   });
 
   it('renders fully in French', async () => {

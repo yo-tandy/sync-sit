@@ -97,6 +97,8 @@ vi.mock('@ejm/shared-ui', () => ({
   // (issue #250) -- stub returns the caller's fallback (code default).
   createAdminConfigReader: () => ({
     getClientConfigValue: (_k: string, fallback: number) => Promise.resolve(fallback),
+    // The hook lives on the factory too (round-7 consolidation).
+    useClientConfigValue: (_k: string, fallback: number) => fallback,
     __resetAdminConfigClientCacheForTests: () => {},
   }),
   // Mirrors the real helper: read details.reason off the rejected value.

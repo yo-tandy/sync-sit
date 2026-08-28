@@ -75,6 +75,8 @@ vi.mock('@ejm/shared-ui', () => ({
   createAdminConfigReader: () => ({
     getClientConfigValue: (k: string, fallback: number) =>
       Promise.resolve(h.configValues[k] ?? fallback),
+    // The hook lives on the factory too (round-7 consolidation).
+    useClientConfigValue: (k: string, fallback: number) => h.configValues[k] ?? fallback,
     __resetAdminConfigClientCacheForTests: () => {},
   }),
   // Mirrors the real helper: read details.reason off the rejected value.

@@ -3,7 +3,6 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { verifyAdmin } from './verifyAdmin.js';
-import { writeAuditLog } from './writeAuditLog.js';
 import {
   ADMIN_CONFIG_DEFS,
   ADMIN_CONFIG_DOC,
@@ -85,22 +84,31 @@ export const updateAdminConfig = onCall(
 
     const ref = db.doc(ADMIN_CONFIG_DOC);
     const before = (await ref.get()).data() ?? {};
-    await ref.set(clean, { merge: true });
 
+    // Post-merge state computed locally (no re-read): start from `before`,
+    // apply numbers, drop reverts.
+    const after: Record<string, unknown> = { ...before };
+    for (const [key, v] of Object.entries(auditTo)) {
+      if (v === null) delete after[key];
+      else after[key] = v;
+    }
     // Mirror the client-exposed subset into the world-readable client doc
     // (round-6 review): enrollment wizards read verificationCodeCooldownS
     // BEFORE the account exists, so the authed-only values doc silently
     // served them the default. Rewritten as a full snapshot (no merge) so
     // reverted keys disappear; the abuse levers never leave the values doc.
-    const after = (await ref.get()).data() ?? {};
     const clientMirror: Record<string, unknown> = {};
     for (const key of CLIENT_EXPOSED_CONFIG_KEYS) {
-      if (Object.hasOwn(after, key)) clientMirror[key] = (after as Record<string, unknown>)[key];
+      if (Object.hasOwn(after, key)) clientMirror[key] = after[key];
     }
-    await db.doc(ADMIN_CONFIG_CLIENT_DOC).set(clientMirror);
-    invalidateAdminConfigCache();
 
-    await writeAuditLog({
+    // One batch for values + mirror + audit (round-7 review): a mirror or
+    // audit failure must not leave the values doc mutated with no audit
+    // row -- the panel promises "all changes are audit-logged".
+    const batch = db.batch();
+    batch.set(ref, clean, { merge: true });
+    batch.set(db.doc(ADMIN_CONFIG_CLIENT_DOC), clientMirror);
+    batch.set(db.collection('auditLogs').doc(), {
       adminUserId: request.auth.uid,
       action: 'admin_config_updated',
       details: {
@@ -111,7 +119,10 @@ export const updateAdminConfig = onCall(
           ]),
         ),
       },
+      timestamp: FieldValue.serverTimestamp(),
     });
+    await batch.commit();
+    invalidateAdminConfigCache();
 
     return { success: true };
   },

@@ -358,7 +358,7 @@ export default {
       decline: 'Decline',
       confirmDeclineTitle: 'Decline this request?',
       confirmDeclineDesc:
-        'The family will be notified and won\'t be able to send you another request for 7 days.',
+        'The family will be notified and won\'t be able to send you another request for a few days.',
       confirmDeclineCta: 'Yes, decline',
       actionError: 'Couldn\'t update the request. Please try again.',
       loadError: 'Could not load your requests. Please refresh and try again.',
@@ -775,7 +775,7 @@ export default {
       ctaHint: 'Publish your search so tutors can contact you — it will be visible to a larger group, including tutors who do not match your search terms or are hidden from search results.',
       confirmTitle: 'Publish this search?',
       confirmDesc: 'Your search will be visible to a larger group of tutors — including ones who do not match your search terms or who do not otherwise appear in results. They will see your family name, your area and the subject and level you are looking for, and can contact you. Your address is never shown.',
-      duration: 'The published search stays up for one week.',
+      duration: 'The published search stays up for a limited time.',
       confirmCta: 'Publish',
       publishing: 'Publishing...',
       published: 'Search published',

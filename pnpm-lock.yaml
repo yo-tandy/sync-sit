@@ -383,6 +383,12 @@ importers:
 
   tests:
     dependencies:
+      '@ejm/shared-core':
+        specifier: workspace:*
+        version: link:../packages/shared-core
+      '@ejm/shared-functions':
+        specifier: workspace:*
+        version: link:../packages/shared-functions
       '@ejm/sit-core':
         specifier: workspace:*
         version: link:../packages/sit-core

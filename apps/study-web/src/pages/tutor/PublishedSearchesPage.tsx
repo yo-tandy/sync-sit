@@ -118,7 +118,7 @@ export function PublishedSearchesPage() {
     } catch (err) {
       // The server's guards are keyed by the (tutor, FAMILY) pair while
       // `contactedIds` is keyed by search, and a family may keep three live
-      // searches on the board (PUBLISHED_SEARCH_MAX_ACTIVE) — so a card can
+      // searches on the board (publishedSearchMaxActive) — so a card can
       // legitimately still show its CTA while the pair already has an open
       // request. Each failure a tutor can act on gets its own copy; only a
       // genuinely gone search falls through to the generic line.

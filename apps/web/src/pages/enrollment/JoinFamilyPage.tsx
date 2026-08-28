@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useClientConfigValue } from '@/lib/adminConfigClient';
 import { ADMIN_CONFIG_DEFS } from '@ejm/shared-core';
 import { useParams, useNavigate, Link } from 'react-router';
@@ -43,6 +43,19 @@ export function JoinFamilyPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [resendCooldown, setResendCooldown] = useState(0);
+  // Value the running countdown was armed with (round-7 review): the
+  // countdown here is armed at CLICK time from whatever resendCooldownS
+  // held, so a submit racing the config read arms at 60 against a longer
+  // server window. The sync effect below extends (never shortens) a
+  // running countdown when the configured value lands -- same guard as
+  // StepVerify / StepParentVerify.
+  const armedWithRef = useRef(resendCooldownS);
+
+  useEffect(() => {
+    const armedWith = armedWithRef.current;
+    armedWithRef.current = resendCooldownS;
+    setResendCooldown((c) => (c <= 0 ? c : Math.max(c, resendCooldownS - (armedWith - c))));
+  }, [resendCooldownS]);
   const [resendCount, setResendCount] = useState(0);
 
   // Validate invite token on mount
@@ -115,6 +128,7 @@ export function JoinFamilyPage() {
       const verifyEmail = httpsCallable(functions, 'verifyParentEmail');
       // `app` only selects the copy of the silent account-exists email.
       await verifyEmail({ email, app: 'sit' });
+      armedWithRef.current = resendCooldownS;
       setResendCooldown(resendCooldownS);
       setStep(1);
     } catch (err: unknown) {
@@ -126,6 +140,7 @@ export function JoinFamilyPage() {
   };
 
   const handleResend = async () => {
+    armedWithRef.current = resendCooldownS;
     setResendCooldown(resendCooldownS);
     setResendCount((c) => c + 1);
     setCodeVerified(false);

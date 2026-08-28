@@ -358,7 +358,7 @@ export default {
       decline: 'Refuser',
       confirmDeclineTitle: 'Refuser cette demande ?',
       confirmDeclineDesc:
-        'La famille sera notifiée et ne pourra pas vous envoyer une autre demande pendant 7 jours.',
+        'La famille sera notifiée et ne pourra pas vous envoyer une autre demande pendant quelques jours.',
       confirmDeclineCta: 'Oui, refuser',
       actionError: 'Impossible de mettre à jour la demande. Veuillez réessayer.',
       loadError: 'Impossible de charger vos demandes. Veuillez actualiser et réessayer.',
@@ -775,7 +775,7 @@ export default {
       ctaHint: 'Publiez votre recherche pour que les professeurs vous contactent — elle sera visible par un groupe plus large, y compris les professeurs qui ne correspondent pas à vos critères ou qui sont masqués des résultats de recherche.',
       confirmTitle: 'Publier cette recherche ?',
       confirmDesc: 'Votre recherche sera visible par un groupe plus large de professeurs — y compris ceux qui ne correspondent pas à vos critères ou qui n\'apparaissent pas dans les résultats. Ils verront votre nom de famille, votre quartier, ainsi que la matière et le niveau recherchés, et pourront vous contacter. Votre adresse n\'est jamais affichée.',
-      duration: 'La recherche publiée reste visible pendant une semaine.',
+      duration: 'La recherche publiée reste visible pendant une durée limitée.',
       confirmCta: 'Publier',
       publishing: 'Publication...',
       published: 'Recherche publiée',
