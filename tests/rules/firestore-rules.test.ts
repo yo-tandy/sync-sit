@@ -3246,6 +3246,109 @@ describe('users update — profiles.doer.enrollmentComplete pin (issue #299)', (
   });
 });
 
+// PR #320 round 3 — doerBoundsValid(): the owner-editable doer fields that
+// other surfaces read back must stay in do-core's bounds at the RULES
+// layer (the aboutMe precedent: the callables are the shared write path,
+// not the only one). Mirrors the tutor-bounds block above.
+describe('users update — doer field bounds (PR #320 round 3)', () => {
+  async function seedDoer(id: string) {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'users', id), {
+        uid: id, status: 'active', email: `${id}@ejm.org`,
+        profiles: { doer: {
+          enrollmentComplete: true, notifyNewTasks: true,
+          categories: ['ikea'], bio: 'old', defaultRate: 20,
+        } },
+      });
+    });
+  }
+
+  it('rejects an over-limit bio (owner write) — 1000 chars = DO_DOER_BIO_MAX, family-visible on the offer card', async () => {
+    await seedDoer('doerBio1');
+    const db = testEnv.authenticatedContext('doerBio1').firestore();
+    await assertFails(
+      updateDoc(doc(db, 'users', 'doerBio1'), { 'profiles.doer.bio': 'x'.repeat(1001) }),
+    );
+    // Non-string bio is refused the same way.
+    await assertFails(
+      updateDoc(doc(db, 'users', 'doerBio1'), { 'profiles.doer.bio': 42 }),
+    );
+  });
+
+  it('accepts an in-limit bio and an explicit null clear', async () => {
+    await seedDoer('doerBio2');
+    const db = testEnv.authenticatedContext('doerBio2').firestore();
+    await assertSucceeds(
+      updateDoc(doc(db, 'users', 'doerBio2'), { 'profiles.doer.bio': 'x'.repeat(1000) }),
+    );
+    await assertSucceeds(
+      updateDoc(doc(db, 'users', 'doerBio2'), { 'profiles.doer.bio': null }),
+    );
+  });
+
+  it('rejects an out-of-range defaultRate; accepts in-range and null (DO_PRICE_MIN..DO_PRICE_MAX)', async () => {
+    await seedDoer('doerRate');
+    const db = testEnv.authenticatedContext('doerRate').firestore();
+    await assertFails(
+      updateDoc(doc(db, 'users', 'doerRate'), { 'profiles.doer.defaultRate': 1001 }),
+    );
+    await assertFails(
+      updateDoc(doc(db, 'users', 'doerRate'), { 'profiles.doer.defaultRate': -1 }),
+    );
+    await assertSucceeds(
+      updateDoc(doc(db, 'users', 'doerRate'), { 'profiles.doer.defaultRate': 1000 }),
+    );
+    await assertSucceeds(
+      updateDoc(doc(db, 'users', 'doerRate'), { 'profiles.doer.defaultRate': null }),
+    );
+  });
+
+  it('rejects a non-list or oversized categories write; accepts the full seven and the explicit empty list', async () => {
+    await seedDoer('doerCats');
+    const db = testEnv.authenticatedContext('doerCats').firestore();
+    await assertFails(
+      updateDoc(doc(db, 'users', 'doerCats'), { 'profiles.doer.categories': 'ikea' }),
+    );
+    await assertFails(
+      updateDoc(doc(db, 'users', 'doerCats'), {
+        'profiles.doer.categories': ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'],
+      }),
+    );
+    await assertSucceeds(
+      updateDoc(doc(db, 'users', 'doerCats'), {
+        'profiles.doer.categories': ['green_thumb', 'boxes', 'ikea', 'party', 'it', 'errands', 'pet_house'],
+      }),
+    );
+    await assertSucceeds(
+      updateDoc(doc(db, 'users', 'doerCats'), { 'profiles.doer.categories': [] }),
+    );
+  });
+
+  it('the enrollmentComplete pin still holds alongside the bounds (an in-limit write cannot smuggle the flip)', async () => {
+    await seedDoer('doerBoth');
+    const db = testEnv.authenticatedContext('doerBoth').firestore();
+    await assertFails(
+      updateDoc(doc(db, 'users', 'doerBoth'), {
+        'profiles.doer.bio': 'short and fine',
+        'profiles.doer.enrollmentComplete': false,
+      }),
+    );
+  });
+
+  it('a user WITHOUT a doer profile is untouched by the bounds (defaults keep them trivially true)', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'users', 'noDoerBounds'), {
+        uid: 'noDoerBounds', status: 'active', email: 'ndb@ejm.org',
+        profiles: { tutor: { enrollmentComplete: true, ejemEmail: 'ndb@ejm.org', paddingMin: 15 } },
+      });
+    });
+    const db = testEnv.authenticatedContext('noDoerBounds').firestore();
+    await assertSucceeds(
+      updateDoc(doc(db, 'users', 'noDoerBounds'), { 'profiles.tutor.aboutMe': 'fine' }),
+    );
+  });
+});
+
 // §9.1's three offer-card endorsement queries against the shared references
 // collection. No rules change here — the point is that the H2-hardened rule
 // makes the `status in ['approved','published']` constraint LOAD-BEARING:

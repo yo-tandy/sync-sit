@@ -25,7 +25,12 @@ function restoreWorkspaceDeps(sourceDir, depNames) {
 }
 
 // 1. Restore workspace references.
-restoreWorkspaceDeps(functionsDir, ['@ejm/shared-core', '@ejm/sit-core', '@ejm/shared-functions']);
+restoreWorkspaceDeps(functionsDir, [
+  '@ejm/shared-core',
+  '@ejm/sit-core',
+  '@ejm/do-core',
+  '@ejm/shared-functions',
+]);
 restoreWorkspaceDeps(studyFunctionsDir, [
   '@ejm/shared-core',
   '@ejm/sit-core',
@@ -39,6 +44,7 @@ for (const sourceDir of [functionsDir, studyFunctionsDir]) {
     'shared-core-bundle',
     'sit-core-bundle',
     'study-core-bundle',
+    'do-core-bundle',
     'shared-functions-bundle',
   ]) {
     const bundleDir = path.join(sourceDir, bundleName);
@@ -49,5 +55,5 @@ for (const sourceDir of [functionsDir, studyFunctionsDir]) {
 }
 
 console.log(
-  '✔ Restored workspace:* references and cleaned up shared-core-bundle + sit-core-bundle + study-core-bundle + shared-functions-bundle',
+  '✔ Restored workspace:* references and cleaned up shared-core-bundle + sit-core-bundle + study-core-bundle + do-core-bundle + shared-functions-bundle',
 );

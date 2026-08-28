@@ -117,6 +117,9 @@ importers:
 
   apps/functions:
     dependencies:
+      '@ejm/do-core':
+        specifier: workspace:*
+        version: link:../../packages/do-core
       '@ejm/shared-core':
         specifier: workspace:*
         version: link:../../packages/shared-core

@@ -96,3 +96,9 @@ export {
   removeEnrollmentExemption,
   listEnrollmentExemptions,
 } from './admin/enrollmentExemptions.js';
+
+// Sync-do — do-prefixed callables in this codebase per plan §3.2 (decision
+// 11: an existing functions codebase, tie-broken to the one holding the
+// nearest prior art). Domain code lives under src/do/**.
+export { doEnrollDoer } from './do/enrollDoer.js';
+export { doUpdateDoerProfile } from './do/updateDoerProfile.js';

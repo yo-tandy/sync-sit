@@ -9,6 +9,7 @@
  *   - @ejm/shared-core      → apps/functions/shared-core-bundle/
  *   - @ejm/sit-core         → apps/functions/sit-core-bundle/
  *   - @ejm/study-core       → apps/functions/study-core-bundle/
+ *   - @ejm/do-core          → apps/functions/do-core-bundle/
  *   - @ejm/shared-functions → apps/functions/shared-functions-bundle/
  *
  * Within each bundle's package.json, any workspace:* deps on sibling packages
@@ -135,6 +136,14 @@ rewriteBundlePackageJson(studyCoreBundleDir, {
   '@ejm/shared-core': 'shared-core-bundle',
 });
 
+// 4-bis. Bundle @ejm/do-core (sync-do callables live in apps/functions,
+// plan §3.2) and rewrite its @ejm/shared-core dep.
+const doCoreDir = path.resolve(repoRoot, 'packages/do-core');
+const doCoreBundleDir = bundlePackage('@ejm/do-core', doCoreDir, 'do-core-bundle');
+rewriteBundlePackageJson(doCoreBundleDir, {
+  '@ejm/shared-core': 'shared-core-bundle',
+});
+
 // 5. Update apps/functions/package.json to use the bundled shared packages.
 //    @ejm/shared-core became a direct dependency of apps/functions in the
 //    Plan D backend-reader migration; without rewriting it here it stays as
@@ -142,6 +151,7 @@ rewriteBundlePackageJson(studyCoreBundleDir, {
 updateSourcePackageJson(functionsDir, {
   '@ejm/shared-core': 'file:./shared-core-bundle',
   '@ejm/sit-core': 'file:./sit-core-bundle',
+  '@ejm/do-core': 'file:./do-core-bundle',
   '@ejm/shared-functions': 'file:./shared-functions-bundle',
 });
 
@@ -168,12 +178,13 @@ updateSourcePackageJson(studyFunctionsDir, {
 
 console.log('✔ Shared packages bundled for deploy');
 console.log(
-  '  → shared-core-bundle/ + sit-core-bundle/ + study-core-bundle/ + shared-functions-bundle/ created in apps/functions/',
+  '  → shared-core-bundle/ + sit-core-bundle/ + study-core-bundle/ + do-core-bundle/ + shared-functions-bundle/ created in apps/functions/',
 );
 console.log('  → sit-core-bundle/package.json rewrites @ejm/shared-core → file:../shared-core-bundle');
 console.log('  → study-core-bundle/package.json rewrites @ejm/shared-core → file:../shared-core-bundle');
+console.log('  → do-core-bundle/package.json rewrites @ejm/shared-core → file:../shared-core-bundle');
 console.log('  → shared-functions-bundle/package.json rewrites @ejm/shared-core + @ejm/sit-core to file: refs');
-console.log('  → apps/functions/package.json updated with file: references for @ejm/sit-core + @ejm/shared-functions');
+console.log('  → apps/functions/package.json updated with file: references for @ejm/sit-core + @ejm/do-core + @ejm/shared-functions');
 console.log(
   '  → apps/study-functions/package.json updated with file: references for @ejm/shared-core + @ejm/sit-core + @ejm/study-core + @ejm/shared-functions',
 );

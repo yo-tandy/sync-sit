@@ -3,7 +3,7 @@ import type { DocumentSnapshot } from 'firebase-admin/firestore';
 import { db } from '../config/firebase.js';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
 
-export type ProfileKey = 'babysitter' | 'tutor' | 'parent';
+export type ProfileKey = 'babysitter' | 'tutor' | 'parent' | 'doer';
 
 export interface AddProfileParams {
   uid: string;
@@ -89,6 +89,13 @@ function assertAddable(snap: DocumentSnapshot, profileKey: ProfileKey): void {
       { reason: 'role-exclusive', profile: 'babysitter' },
     );
   }
+  // `doer` is deliberately NOT in the exclusivity matrix, in either
+  // direction. Unlike tutoring/babysitting there is no per-role identity
+  // ban to enforce here: doEnrollDoer's OWN identity gate decides who can
+  // enroll (completed sit/study provider profile, or EJM email
+  // verification — a parent profile does not qualify, PR #320), so a
+  // parent-held doer slot is reachable only through a genuine EJM-verified
+  // email, and blocking the combination structurally would add nothing.
   if (
     profileKey === 'parent' &&
     (data.profiles?.tutor !== undefined || data.profiles?.babysitter !== undefined)
@@ -114,8 +121,17 @@ export async function assertCanAddProfile(uid: string, profileKey: ProfileKey): 
 /**
  * Merge profiles.{key} into an existing users/{uid} doc. The existing doc
  * wins for base fields: entries in fillBaseFields are written only when the
- * field is absent. Consent is deliberately NOT touched — record the new
- * app's consent version in auditDetails instead.
+ * field is absent.
+ *
+ * CONSENT is the caller's choice, and the two conventions in use are both
+ * deliberate. The helper itself never touches the root consentAt/
+ * consentVersion; enrollTutor / enrollBabysitter / enrollFamily record the
+ * new app's acceptance in auditDetails only (the root pair keeps the
+ * original enrollment's record), while doEnrollDoer routes the pair through
+ * setBaseFields so the root reflects the NEWEST accepted terms (sync-do
+ * plan §11.4 requires the abbreviated enrollment to record consentAt/
+ * consentVersion; prior acceptances stay in the audit trail). New
+ * enrollment callables should pick one and say why.
  */
 export async function addProfileToUser(params: AddProfileParams): Promise<void> {
   const ref = db.collection('users').doc(params.uid);

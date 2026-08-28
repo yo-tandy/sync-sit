@@ -76,6 +76,12 @@ export const DO_PRICE_MIN = 0;
 export const DO_PRICE_MAX = 1000;
 
 /**
+ * Doer-profile bio length ceiling, chars (§3.3's free-text blurb). Sized to
+ * the platform precedent: a tutor's aboutMe caps at 1000.
+ */
+export const DO_DOER_BIO_MAX = 1000;
+
+/**
  * A task the student marked done but the family never confirmed
  * auto-completes after this many days via the daily sweep (§6.5).
  */

@@ -83,6 +83,10 @@ export async function sendVerificationEmail(
  * Which app a signup attempt came from. Untrusted display-only client input:
  * it selects between two literal copy sets and NOTHING else — never interpolate
  * the raw client value anywhere. Normalize with normalizeAccountExistsApp.
+ * NOTE: do-web already sends app:'do' (doer enrollment, sync-do plan §13
+ * PR4); it normalizes to 'sit' here until PR9 extends the branding tables
+ * (NotificationApp/NOTIFICATION_BRANDING/PUSH_BRANDING) with the third app —
+ * the copy is display-only, and the sit fallback stays functionally correct.
  */
 export type AccountExistsApp = 'sit' | 'study';
 
