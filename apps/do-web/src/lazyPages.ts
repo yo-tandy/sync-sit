@@ -48,3 +48,6 @@ export const MyTasksPage = lazy(() =>
 export const PostTaskPage = lazy(() =>
   import('@/pages/family/post/PostTaskPage').then((m) => ({ default: m.PostTaskPage })),
 );
+export const TaskDetailPage = lazy(() =>
+  import('@/pages/family/TaskDetailPage').then((m) => ({ default: m.TaskDetailPage })),
+);

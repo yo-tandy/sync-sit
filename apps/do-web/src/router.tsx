@@ -21,6 +21,7 @@ import {
   HomePage,
   MyTasksPage,
   PostTaskPage,
+  TaskDetailPage,
 } from '@/lazyPages';
 import { BRAND, SUPPORT_EMAIL } from '@/constants/brand';
 
@@ -56,6 +57,7 @@ export const router = createBrowserRouter([
     children: [
       { path: '/family', element: <MyTasksPage /> },
       { path: '/family/post', element: <PostTaskPage /> },
+      { path: '/family/tasks/:taskId', element: <TaskDetailPage /> },
     ],
   },
 ]);
