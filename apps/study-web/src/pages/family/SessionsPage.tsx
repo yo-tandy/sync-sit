@@ -512,9 +512,11 @@ export function SessionsPage() {
       // A failed-precondition save is a dead-end, not a transient failure:
       // the window closed mid-edit (the session started, or it changed state
       // in another tab) and retrying can never work — say so instead of 'try
-      // again' (issue #255 follow-up). Clears never hit it (the erasure
-      // carve-out is status/timing-blind), so removeNote keeps its
-      // erasure-specific copy.
+      // again' (issue #255 follow-up). The copy deliberately does NOT point
+      // at the remove affordance: on a first-note save nothing is stored, so
+      // no Remove button will render (PR #278 review). Clears never hit this
+      // code (the erasure carve-out is status/timing-blind), so removeNote
+      // keeps its erasure-specific copy.
       const code = (err as { code?: string })?.code ?? '';
       setNoteError(
         code.includes('failed-precondition')

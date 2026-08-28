@@ -569,7 +569,7 @@ export default {
       placeholder: 'ex. Code 1234B. Coucher à 20h30. Léa est allergique aux cacahuètes.',
       save: 'Enregistrer la note',
       error: 'Impossible d’enregistrer votre note. Veuillez réessayer.',
-      errorClosed: 'Cette note ne peut plus être modifiée — vous pouvez toujours la supprimer.',
+      errorClosed: 'Cette note ne peut plus être modifiée.',
     },
     appointmentsTitle: 'Rendez-vous',
     viewAppointments: 'Voir vos rendez-vous',
@@ -642,7 +642,7 @@ export default {
       placeholder: 'ex. Tout s’est bien passé ; enfants couchés à 21h00. Devoirs terminés.',
       save: 'Enregistrer la note',
       error: 'Impossible d’enregistrer votre note. Veuillez réessayer.',
-      errorClosed: 'Cette note ne peut plus être modifiée — vous pouvez toujours la supprimer.',
+      errorClosed: 'Cette note ne peut pas être modifiée dans l’état actuel de la garde.',
     },
   },
 

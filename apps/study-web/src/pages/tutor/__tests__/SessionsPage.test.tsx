@@ -894,9 +894,11 @@ describe('tutor SessionsPage — session notes (post)', () => {
     expect(screen.getByText('stale debrief')).toBeInTheDocument();
   });
 
-  it('a failed-precondition SAVE shows the dead-end message instead of try-again (issue #255)', async () => {
-    // The session changed state in another tab (e.g. got cancelled) —
-    // retrying can never work, so the dialog says so.
+  it('a failed-precondition SAVE shows the dead-end message, other failures the generic one (issue #255)', async () => {
+    // The session changed state in another tab (e.g. got cancelled) — blind
+    // retrying never helps, so the dialog says so. The copy is STATE-based
+    // ("current state"), not "no longer": on this post surface the code also
+    // covers not-started-yet, where "no longer" would invert the truth.
     h.sessions = [oneTime({ sessionId: 'sC', status: 'completed', date: '2026-07-20' })];
     h.callable.mockRejectedValueOnce(
       Object.assign(new Error('closed'), { code: 'functions/failed-precondition' }),
@@ -906,9 +908,16 @@ describe('tutor SessionsPage — session notes (post)', () => {
     fireEvent.click(await screen.findByRole('button', { name: /add session notes/i }));
     fireEvent.change(await screen.findByRole('textbox'), { target: { value: 'summary' } });
     fireEvent.click(screen.getByRole('button', { name: /save note/i }));
-    expect(await screen.findByText(/can no longer be edited/i)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/can't be edited in the session's current state/i),
+    ).toBeInTheDocument();
     // Dialog stays open (non-optimistic).
     expect(screen.getByRole('textbox')).toBeInTheDocument();
+
+    // A generic failure still says 'try again'.
+    h.callable.mockRejectedValueOnce(new Error('boom'));
+    fireEvent.click(screen.getByRole('button', { name: /save note/i }));
+    expect(await screen.findByText(/couldn't save your note/i)).toBeInTheDocument();
   });
 
   it('a stranded CONFIRMED past-dated one_time renders in history with the post window OPEN', async () => {
