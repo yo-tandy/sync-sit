@@ -779,6 +779,7 @@ export default {
     noReferences: 'Aucune recommandation',
     noReferencesDesc: 'Après un rendez-vous de babysitting, vous pourrez laisser une recommandation pour le/la babysitter.',
     referenceForBabysitter: 'Recommandation pour {{name}}',
+    confirmDeleteTitle: 'Supprimer cette recommandation ?',
     confirmDelete: 'Êtes-vous sûr de vouloir supprimer votre recommandation pour {{name}} ?',
     statusApproved: 'Approuvée',
     statusPending: 'En attente',
