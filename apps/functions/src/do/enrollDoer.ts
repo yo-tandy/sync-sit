@@ -71,6 +71,19 @@ const CONTACT_MAX = 200;
 /** The platform's contact-email validator — study's tutor enrollment schema
  *  uses the same zod shape (`tutor.ts:88`). */
 const contactEmailShape = z.string().email();
+/**
+ * Phone/WhatsApp shape (PR #320 round 3). NO platform precedent exists —
+ * sit and study both accept bare strings (`tutor.ts:89-90`,
+ * `sit-core/validation/enrollment.ts:57`) — so this is the new one, stated:
+ * a plausible phone is drawn from the phone charset (digits, spaces,
+ * parens, dots, dashes, optional leading +) and carries at least 6 digits.
+ * Deliberately loose (no country/format semantics): the point is only that
+ * junk like 'x' cannot be the channel that satisfies the ≥1-contact
+ * requirement — decision 16's reveal must serve something dialable.
+ */
+function isPlausiblePhone(v: string): boolean {
+  return /^\+?[0-9 ().\-]+$/.test(v) && v.replace(/\D/g, '').length >= 6;
+}
 
 /** Manual guards in the publishSearch house style (plan §8). */
 function validateEnrollmentInput(input: unknown): DoerEnrollmentInput {
@@ -105,13 +118,26 @@ function validateEnrollmentInput(input: unknown): DoerEnrollmentInput {
       );
     }
   }
-  // contactEmail also gets a SHAPE check (PR #320 round 2): it can satisfy
-  // the ≥1-contact requirement and lands at the canonical root, so junk like
-  // 'x' must not count as "something for decision 16's reveal to serve".
-  // Same validator as study's tutor schema (z.string().email()).
+  // Every channel also gets a SHAPE check (PR #320 rounds 2-3): any one of
+  // them can satisfy the ≥1-contact requirement and lands at the canonical
+  // root, so junk like 'x' must not count as "something for decision 16's
+  // reveal to serve" — and the guarantee is only as strong as the WEAKEST
+  // accepted channel. Email: study's tutor-schema validator
+  // (z.string().email()). Phone/WhatsApp: isPlausiblePhone above (the new
+  // precedent — the siblings have none).
   if (typeof e.contactEmail === 'string' && e.contactEmail.trim()) {
     if (!contactEmailShape.safeParse(e.contactEmail.trim()).success) {
       throw new HttpsError('invalid-argument', 'Invalid contact email');
+    }
+  }
+  if (typeof e.contactPhone === 'string' && e.contactPhone.trim()) {
+    if (!isPlausiblePhone(e.contactPhone.trim())) {
+      throw new HttpsError('invalid-argument', 'Invalid contact phone');
+    }
+  }
+  if (typeof e.whatsapp === 'string' && e.whatsapp.trim()) {
+    if (!isPlausiblePhone(e.whatsapp.trim())) {
+      throw new HttpsError('invalid-argument', 'Invalid WhatsApp number');
     }
   }
   if (e.categories !== undefined) {
@@ -229,10 +255,16 @@ export const doEnrollDoer = onCall(
       // for the age_mismatch half below.
       ejemEmailLower = getEjemEmail(callerData as unknown as User)?.toLowerCase() ?? '';
     } else {
-      if (!data.ejemEmail) {
+      if (!data.ejemEmail || typeof data.ejemEmail !== 'string') {
         throw new HttpsError('invalid-argument', 'EJM email is required');
       }
-      ejemEmailLower = data.ejemEmail.toLowerCase();
+      // Normalize ONCE and use everywhere — trim AND lowercase, the
+      // verifyEjmEmail.ts:31 rule (PR #320 round 3): both code writers key
+      // verificationCodes by the trimmed+lowered address, so an untrimmed
+      // key here could only miss (fail closed) — but a confusing not-found
+      // for a direct caller, and an untrimmed address handed to
+      // adminAuth.createUser, are both still wrong.
+      ejemEmailLower = data.ejemEmail.trim().toLowerCase();
       // "A code exists" does NOT prove an EJM mailbox (PR #320 round 2 /
       // issue #322): verifyParentEmail is public, accepts ANY domain, and
       // writes the SAME verificationCodes/{email} namespace this branch
