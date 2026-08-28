@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, dirname, resolve, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -12,7 +12,14 @@ import { fileURLToPath } from 'node:url';
  */
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../../../..');
-const SCAN_ROOTS = ['apps/web/src', 'apps/study-web/src', 'packages/shared-ui/src'];
+// Every app that exists (so a future app is covered the day it lands), plus
+// the package that owns the Dialog primitive and renders it itself.
+const SCAN_ROOTS = [
+  ...readdirSync(join(repoRoot, 'apps'))
+    .map((app) => join('apps', app, 'src'))
+    .filter((p) => existsSync(join(repoRoot, p))),
+  'packages/shared-ui/src',
+];
 
 function tsxFiles(dir: string): string[] {
   const out: string[] = [];
@@ -61,10 +68,10 @@ describe('Dialog call sites (repo-wide)', () => {
         }
       }
     }
-    // Sanity: the scan actually saw the fleet (72 app sites + 3 shared-ui at
-    // the time of the sweep) — guards against the walker silently matching
-    // nothing after a refactor.
-    expect(total).toBeGreaterThanOrEqual(75);
+    // Sanity floor: only guards against the walker silently matching nothing
+    // after a refactor (75 sites existed at sweep time) — deliberately loose
+    // so legitimately deleting dialogs doesn't trip it.
+    expect(total).toBeGreaterThanOrEqual(20);
     expect(unnamed, `unnamed <Dialog> call sites (add ariaLabel — see issue #305): ${unnamed.join(', ')}`).toEqual([]);
   });
 });

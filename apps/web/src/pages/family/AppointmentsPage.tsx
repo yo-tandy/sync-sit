@@ -316,6 +316,11 @@ export function FamilyAppointmentsPage() {
     });
   }, [pending, confirmed, pastRecent, rejectedRecent]);
 
+  // Whether the cancel dialog targets a still-pending request (vs. a
+  // confirmed appointment): single source for the dialog's accessible name
+  // AND its visible heading/copy, so they cannot drift (issue #305).
+  const isCancellingPending = pending.some((a) => a.appointmentId === cancelTarget);
+
   return (
     <div>
       <TopNav title={t('familyAppointments.title')} backTo="/family" />
@@ -456,9 +461,8 @@ export function FamilyAppointmentsPage() {
           </div>
         </Dialog>
 
-        <Dialog open={!!cancelTarget} onClose={() => { setCancelTarget(null); setCancelReason(''); }} ariaLabel={pending.some((a) => a.appointmentId === cancelTarget) ? t('appointment.cancelRequestTitle') : t('appointment.cancelTitle')}>
+        <Dialog open={!!cancelTarget} onClose={() => { setCancelTarget(null); setCancelReason(''); }} ariaLabel={isCancellingPending ? t('appointment.cancelRequestTitle') : t('appointment.cancelTitle')}>
           {(() => {
-            const isCancellingPending = pending.some((a) => a.appointmentId === cancelTarget);
             // Cancel-time disclosure (issue #237, PR #248 round 2): warn when
             // this cancel would be recorded as late, BEFORE it is submitted --
             // study's cancel dialogs do the same. Approximate; the server flag

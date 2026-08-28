@@ -5,9 +5,10 @@ import { Dialog } from '@ejm/shared-ui';
 /**
  * The Dialog primitive's modal semantics (issue #119 review): everything —
  * role/aria-modal, focus-in on open, focus-restore on close, Escape, Tab
- * trap — is opt-in via ariaLabel, so the ~70 unnamed call sites across both
- * apps keep their pre-#119 behavior byte-for-byte until the naming sweep
- * upgrades them.
+ * trap — is opt-in via ariaLabel. The #305 sweep named every call site, and
+ * DialogCallSites.test.ts keeps it that way; the unnamed legacy path below
+ * is pinned only so a missing name degrades to the plain-div behavior
+ * instead of shipping half-modal semantics.
  */
 describe('Dialog (shared-ui)', () => {
   it('with ariaLabel: names the dialog, sets aria-modal, and moves focus into the panel', () => {
