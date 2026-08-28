@@ -6,6 +6,7 @@ import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { verifyAdmin } from './verifyAdmin.js';
 import { writeAuditLog } from './writeAuditLog.js';
+import { fanOutNameCorrections, type NameFanOutSummary } from '../identity/nameFanOut.js';
 
 // Root identity (firstName/lastName/dateOfBirth) is SET-ONCE for client
 // writes (issue #144; rootIdentitySetOnce in firestore.rules), and the
@@ -13,12 +14,10 @@ import { writeAuditLog } from './writeAuditLog.js';
 // — claim-origin governed kids and self-managed accounts have no correction
 // path (issue #158). This admin-gated, audited callable is the designed
 // escape hatch: the rules bind clients, the Admin SDK write here is scoped
-// to exactly the three root fields — the users doc only. KNOWN LIMITATION
-// (shared with correctChildIdentity, tracked in issue #273): denormalized
-// display names persisted elsewhere (study-sessions tutorName/parentName,
-// studyContactRequests parentName/tutorName, contactSharingRequests
-// parentName) are NOT refreshed and keep the old name; see the audit in
-// docs/superpowers/plans/2026-08-28-identity-correction.md.
+// to exactly the three root fields on the users doc, plus the issue #273
+// fan-out that refreshes denormalized display-name COPIES of those fields
+// (study-sessions / studyContactRequests / contactSharingRequests /
+// study references — see identity/nameFanOut.ts for reach and limits).
 const inputSchema = z
   .object({ targetUserId: z.string().min(1, 'targetUserId is required') })
   .merge(kidIdentitySchema.partial())
@@ -88,11 +87,24 @@ export const correctUserIdentity = onCall(
     }
     await userRef.update(updates);
 
+    // Fan the corrected name out into the denormalized copies (issue #273).
+    // AFTER the root update commits: the users doc is the source of truth and
+    // a failed sweep must not fail the correction — partial outcomes land in
+    // the audit entry's fanOut summary instead. DOB is never denormalized.
+    let fanOut: NameFanOutSummary | undefined;
+    if (fields.firstName || fields.lastName) {
+      fanOut = await fanOutNameCorrections(
+        targetUserId,
+        fields.firstName ?? (user.firstName as string) ?? '',
+        fields.lastName ?? (user.lastName as string) ?? '',
+      );
+    }
+
     await writeAuditLog({
       adminUserId: request.auth.uid,
       action: 'user_identity_corrected',
       targetUserId,
-      details: { before, after },
+      details: { before, after, ...(fanOut ? { fanOut } : {}) },
     });
 
     return { success: true };

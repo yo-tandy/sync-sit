@@ -35,6 +35,10 @@ describe('addPreferredBabysitter', () => {
     const reqs = await db.collection('contactSharingRequests').where('babysitterUserId', '==', seed.babysitter1.uid).where('familyId', '==', seed.family1Id).get();
     expect(reqs.docs.length).toBe(1);
     expect(reqs.docs[0].data().status).toBe('pending');
+    // parentName's owner — familyId alone cannot attribute the denormalized
+    // name (a family has several parents), so the identity-correction
+    // fan-out needs the uid on the doc (issue #273).
+    expect(reqs.docs[0].data().parentUserId).toBe(seed.parent1.uid);
   });
 
   it('is idempotent on re-add', async () => {

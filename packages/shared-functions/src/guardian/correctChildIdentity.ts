@@ -4,6 +4,7 @@ import { kidIdentitySchema } from '@ejm/shared-core';
 import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { writeAuditLog } from '../admin/writeAuditLog.js';
+import { fanOutNameCorrections, type NameFanOutSummary } from '../identity/nameFanOut.js';
 import { GUARDIAN_SUCCESS, resolveGuardianCaller } from './shared.js';
 
 interface CorrectData {
@@ -104,11 +105,24 @@ export const correctChildIdentity = onCall(
     }
     await childRef.update(updates);
 
+    // Fan the corrected name out into the denormalized copies (issue #273) —
+    // for a governed kid that is chiefly `tutorName` on their study docs.
+    // AFTER the root update commits; a failed sweep is recorded in the audit
+    // entry, never thrown. Same helper as admin correctUserIdentity.
+    let fanOut: NameFanOutSummary | undefined;
+    if (fields.firstName || fields.lastName) {
+      fanOut = await fanOutNameCorrections(
+        data.childUid,
+        fields.firstName ?? (child.firstName as string) ?? '',
+        fields.lastName ?? (child.lastName as string) ?? '',
+      );
+    }
+
     await writeAuditLog({
       adminUserId: callerUid,
       action: 'guardian.correct_child_identity',
       targetUserId: data.childUid,
-      details: { before, after, byAdmin: isAdminCaller },
+      details: { before, after, byAdmin: isAdminCaller, ...(fanOut ? { fanOut } : {}) },
     });
     return GUARDIAN_SUCCESS;
   },

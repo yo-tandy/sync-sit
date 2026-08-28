@@ -90,8 +90,10 @@ describe('study contact inversion', () => {
     expect(doc.level).toBe('6e');
     expect(doc.status).toBe('pending');
     expect(doc.message).toBe('I teach math at that level.');
-    // The responding parent is unknown until they answer.
+    // The responding parent is unknown until they answer — name AND uid
+    // (parentUserId is stamped at accept, issue #273).
     expect(doc.parentName).toBe('');
+    expect(doc.parentUserId).toBeUndefined();
     // Denormalized so the FAMILY's list can render without reading the tutor
     // user doc (rules forbid it).
     expect(doc.tutorName).toBe('Yael Cohen');
@@ -438,6 +440,10 @@ describe('study contact inversion', () => {
     const doc = (await db.collection('studyContactRequests').doc(requestId).get()).data()!;
     expect(doc.status).toBe('accepted');
     expect(doc.parentName).toBe('Marie Dupont');
+    // The responder's uid rides along with their name — createdByUserId is
+    // the TUTOR on this shape, so without it the name is unattributable to
+    // the identity-correction fan-out (issue #273).
+    expect(doc.parentUserId).toBe(seed.parent1.uid);
     expect(doc.respondedAt).toBeTruthy();
 
     const tutor = (await db.collection('users').doc(seed.tutor2.uid).get()).data()!;

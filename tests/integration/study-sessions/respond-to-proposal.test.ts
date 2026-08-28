@@ -125,6 +125,10 @@ describe('respondToSession — provider proposals (family confirms the claim)', 
       { firstName: 'Emma', age: 4 },
     ]);
     expect(session.parentName).toBe('Marie Dupont');
+    // The confirming parent's uid rides along with their name — on a proposal
+    // createdByUserId is the TUTOR, so without this stamp the name would be
+    // unattributable to the identity-correction fan-out (issue #273).
+    expect(session.parentUserId).toBe(seed.parent1.uid);
 
     // Same claim as a tutor confirm: online → slots 64..67 blocked, ledger entry.
     const ov = (await overrideRef().get()).data()!;

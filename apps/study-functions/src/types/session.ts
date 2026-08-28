@@ -45,6 +45,13 @@ export interface SessionDoc {
   // name is snapshotted here at book time so the counterparty can render it.
   familyName: string;
   parentName: string;
+  /**
+   * users/{uid} owning `parentName`, so identity corrections can refresh the
+   * snapshot (issue #273). Absent on pre-#273 docs and on pending provider
+   * proposals (whose parentName is '' until the confirming parent stamps
+   * both at accept); the correction fan-out cannot reach docs without it.
+   */
+  parentUserId?: string;
   tutorName: string;
 
   // When

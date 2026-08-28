@@ -59,6 +59,10 @@ export const addPreferredBabysitter = onCall(
         familyId: caller.familyId,
         familyName,
         parentName,
+        // parentName's owner — a family has multiple parents, so familyId
+        // alone cannot attribute the name for the identity-correction
+        // fan-out (issue #273).
+        parentUserId: uid,
         status: 'pending',
         createdAt: now,
       });
