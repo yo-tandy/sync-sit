@@ -55,17 +55,23 @@ into one-shot notification/email bodies, not stored.
   family RequestsPage renders `tutorName` because parents cannot read the
   tutor's user doc under the rules — and `cancelSession` notifications reuse
   `session.tutorName`.
+- `studyContactRequests` docs store BOTH `parentName` and `tutorName`
+  (sendTutorContactRequest; the tutor-initiated sendFamilyContactRequest
+  stores `tutorName` and fills `parentName` at respond).
 - `contactSharingRequests` docs store `parentName`
   (addPreferredBabysitter; note it uppercases the last name).
 
 Neither correction path refreshes these: `correctChildIdentity` has had the
-same gap since #146, and this callable mirrors it. A clean fan-out is
-blocked by a schema gap — `tutorName` is attributable via `tutorUserId`,
-but `parentName`'s owner uid is never stored next to it (a provider-
-proposal confirm doesn't record the confirming parent, and
-`contactSharingRequests` records only `familyId`, which can hold several
-parents). Follow-up issue #273 tracks recording the name-owner uid and
-fanning out from BOTH correction callables.
+same gap since #146, and this callable mirrors it. Attribution for a
+fan-out is mixed: `tutorName` is always attributable via `tutorUserId`
+(sessions and both contact-request collections), and `studyContactRequests`
+also records the parent-initiated caller (`createdByUserId`) — but
+`parentName`'s owner uid is missing where the name arrives on a respond/
+confirm step (study-sessions provider-proposal confirm, tutor-initiated
+studyContactRequests) and in `contactSharingRequests`, which records only
+`familyId` (a family can hold several parents). Follow-up issue #273
+tracks recording the name-owner uid where it is missing and fanning out
+from BOTH correction callables.
 
 **Other derived copies:**
 

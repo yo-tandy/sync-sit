@@ -62,6 +62,7 @@ export function AdminAuditLogPage() {
     { value: 'update_holidays', label: 'update_holidays' },
     { value: 'admin_config_updated', label: t('admin.config.title') },
     { value: 'export_user_data', label: 'export_user_data' },
+    { value: 'user_identity_corrected', label: 'user_identity_corrected' },
   ];
 
   const formatTs = (ts: WireTimestamp | null | undefined) => {
@@ -79,7 +80,12 @@ export function AdminAuditLogPage() {
     if (!details || typeof details !== 'object') return '';
     const entries = Object.entries(details).filter(([, v]) => v != null && v !== '');
     if (entries.length === 0) return '';
-    return entries.map(([k, v]) => `${k}=${v}`).join(', ');
+    // Object values (e.g. the {before, after} payloads of identity
+    // corrections) would otherwise render as "[object Object]", hiding
+    // exactly the values the audit entry exists to show.
+    return entries
+      .map(([k, v]) => `${k}=${typeof v === 'object' ? JSON.stringify(v) : v}`)
+      .join(', ');
   };
 
   const columns: DataTableColumn<AdminAuditLogEntry>[] = [

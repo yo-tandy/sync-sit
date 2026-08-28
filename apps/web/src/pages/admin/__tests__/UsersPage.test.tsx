@@ -100,6 +100,17 @@ describe('AdminUsersPage — identity-correction dialog (issue #158)', () => {
   });
 
   it('opens prefilled with the current root identity; save disabled until a change', async () => {
+    // Server-written DOBs (redeemKidInvite, this callable's own writes) come
+    // through the callable serializer as an Admin-SDK envelope, not an ISO
+    // string — the prefill must handle that shape too.
+    h.users = [
+      user({
+        uid: 'u-i',
+        firstName: 'Typoed',
+        lastName: 'Name',
+        dateOfBirth: { _seconds: 1270080000, _nanoseconds: 0 }, // 2010-04-01T00:00:00Z
+      }),
+    ];
     renderPage();
     await screen.findByText('Typoed Name');
 

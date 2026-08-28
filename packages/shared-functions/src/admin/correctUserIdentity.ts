@@ -13,9 +13,12 @@ import { writeAuditLog } from './writeAuditLog.js';
 // — claim-origin governed kids and self-managed accounts have no correction
 // path (issue #158). This admin-gated, audited callable is the designed
 // escape hatch: the rules bind clients, the Admin SDK write here is scoped
-// to exactly the three root fields. No denormalization fan-out is needed —
-// every surface (search, listings, contacts, oversight) reads the users doc
-// live; see docs/superpowers/plans/2026-08-28-identity-correction.md.
+// to exactly the three root fields — the users doc only. KNOWN LIMITATION
+// (shared with correctChildIdentity, tracked in issue #273): denormalized
+// display names persisted elsewhere (study-sessions tutorName/parentName,
+// studyContactRequests parentName/tutorName, contactSharingRequests
+// parentName) are NOT refreshed and keep the old name; see the audit in
+// docs/superpowers/plans/2026-08-28-identity-correction.md.
 const inputSchema = z
   .object({ targetUserId: z.string().min(1, 'targetUserId is required') })
   .merge(kidIdentitySchema.partial())

@@ -169,7 +169,16 @@ export function AdminUsersPage() {
       closeIdentityDialog();
       loadUsers();
     } catch (err: unknown) {
-      setIdentityError(err instanceof Error ? err.message : t('admin.identityCorrectionFailed'));
+      // Callable rejections are always Error instances, so the localized
+      // string leads and the (English) server detail follows — otherwise the
+      // fallback would be dead code and a French admin would see only the
+      // raw HttpsError message.
+      const detail = err instanceof Error ? err.message : '';
+      setIdentityError(
+        detail
+          ? `${t('admin.identityCorrectionFailed')}: ${detail}`
+          : t('admin.identityCorrectionFailed'),
+      );
     } finally {
       setIdentitySaving(false);
     }
