@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
-import { clearAll, callFunction, getIdToken, getDb } from '../../setup/emulator.js';
+import { clearAll, callFunction, getIdToken, getDb, parisDateFromNow } from '../../setup/emulator.js';
 import { seedTestData, seedAppointment, type SeedData } from '../../setup/seed.js';
 
 describe('modifyAppointment', () => {
@@ -96,8 +96,11 @@ describe('modifyAppointment', () => {
     // startTime move can escape the flag (24h window, start 23h away, move
     // +14h -> clean cancel) -- the modify-then-cancel hole study closed in
     // PR #244 round 2.
-    const soonDate = () => new Date(Date.now() + 20 * 60 * 60 * 1000).toISOString().slice(0, 10);
-    const farDate = () => new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    // Paris wall date ~tomorrow with a 09:00 start: inside a 48h window at
+    // any hour, never already-started (see the flake-window note in
+    // setup/emulator.ts).
+    const soonDate = () => parisDateFromNow(1);
+    const farDate = () => parisDateFromNow(14);
 
     it('blocks a startTime move on a confirmed appointment inside its window', async () => {
       const apptId = await seedAppointment({
