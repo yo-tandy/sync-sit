@@ -283,6 +283,36 @@ describe('ExpandableBabysitterCard — appointment notes (pre)', () => {
     expect(screen.getByText('familyDashboard.notes.removeTitle')).toBeTruthy();
   });
 
+  it('a backdrop click cannot dismiss the dialog mid-flight (the error must have somewhere to render)', async () => {
+    // Hold the callable unresolved so the save is in flight when the
+    // backdrop is clicked. Dialog closes on backdrop click unconditionally,
+    // so an ungated onClose would unmount NoteForm -- the only element that
+    // can render noteError -- and a failed save would turn silent.
+    let rejectCall!: (e: Error) => void;
+    h.callable.mockImplementationOnce(
+      () => new Promise((_resolve, reject) => { rejectCall = reject; }),
+    );
+    render(<ExpandableBabysitterCard appointment={apt()} info={info} variant="confirmed" />);
+    expandCard();
+    fireEvent.click(screen.getByText('familyDashboard.notes.add'));
+    fireEvent.change(screen.getByPlaceholderText('familyDashboard.notes.placeholder'), {
+      target: { value: 'x' },
+    });
+    fireEvent.click(screen.getByText('familyDashboard.notes.save'));
+    // The dialog overlay (outermost fixed container) IS the backdrop target.
+    fireEvent.click(document.querySelector('.fixed.inset-0.z-50')!);
+    expect(screen.getByText('familyDashboard.notes.dialogTitle')).toBeTruthy();
+    // Settle the call with a FAILURE: the dialog must stay open showing the
+    // error (a success would close it via saveNote itself, which would make
+    // this half vacuous -- PR #274 review), and NOW the backdrop works
+    // again because noteSaving is false.
+    rejectCall(new Error('boom'));
+    await waitFor(() => expect(screen.getByText('familyDashboard.notes.error')).toBeTruthy());
+    expect(screen.getByText('familyDashboard.notes.dialogTitle')).toBeTruthy();
+    fireEvent.click(document.querySelector('.fixed.inset-0.z-50')!);
+    expect(screen.queryByText('familyDashboard.notes.dialogTitle')).toBeNull();
+  });
+
   it('notes and REMOVE survive a missing babysitter profile (info undefined)', () => {
     // info comes from a profile getDoc that silently swallows a missing doc
     // (hard-deleted sitter) or permission error; the erasure affordance must

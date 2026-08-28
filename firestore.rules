@@ -662,7 +662,10 @@ service cloud.firestore {
       allow delete: if isFamilyMember(resource.data.familyId); // withdraw
     }
 
-    // Deny everything else
+    // Deny everything else. Server-only collections deliberately covered
+    // here rather than by an explicit block: cronState (scheduled-job
+    // bookkeeping, e.g. the appointment-note redaction cursor -- issue
+    // #238 / PR #274).
     match /{document=**} {
       allow read, write: if false;
     }

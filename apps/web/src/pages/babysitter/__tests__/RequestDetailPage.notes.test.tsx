@@ -194,6 +194,47 @@ describe('RequestDetailPage — appointment notes (post)', () => {
     await waitFor(() => expect(screen.queryByText('request.notes.removeTitle')).toBeNull());
   });
 
+  it('a backdrop click cannot dismiss the remove dialog mid-flight', async () => {
+    let rejectCall!: (e: Error) => void;
+    renderWithApt({ status: 'cancelled', date: YESTERDAY, postAppointmentNote: 'old debrief' });
+    // Only the note callable hangs; getParentContacts (fired on load) keeps
+    // resolving through the default implementation.
+    h.callable.mockImplementation((name: string) =>
+      name === 'getParentContacts'
+        ? Promise.resolve({ data: { contacts: [] } })
+        : new Promise((_resolve, reject) => { rejectCall = reject; }),
+    );
+    fireEvent.click(screen.getByText('request.notes.remove'));
+    // Dialog is open BEFORE the confirm click -- pins that the click below
+    // really targets the dialog's button.
+    expect(screen.getByText('request.notes.removeTitle')).toBeTruthy();
+    // The dialog confirm carries its own erasure-specific label (#269's
+    // both-twins copy round) -- the old getAllByText('request.notes.remove')
+    // last-button idiom silently re-clicked the PAGE affordance once that
+    // key landed, so the callable never fired and the pin's backdrop click
+    // legitimately closed the dialog (the CI failure this fixes; local runs
+    // predated the #269 merge in the branch base).
+    fireEvent.click(screen.getByText('request.notes.removeConfirm'));
+    // Synchronize on the callable actually being IN FLIGHT before the
+    // backdrop click: the hanging mock assigns rejectCall when invoked.
+    // Without this the pin raced the async click handler under CI load --
+    // the backdrop landed before setSaving, and the dialog legitimately
+    // closed (the exact pass-locally/fail-in-CI flake this run hit).
+    await waitFor(() => expect(rejectCall).toBeDefined());
+    // Backdrop click while the erasure is in flight: dialog must survive.
+    fireEvent.click(document.querySelector('.fixed.inset-0.z-50')!);
+    expect(screen.getByText('request.notes.removeTitle')).toBeTruthy();
+    // Settle with a FAILURE (a success closes the dialog itself, which
+    // would make this half vacuous -- PR #274 review): the error renders,
+    // the dialog stays, and the backdrop is functional again.
+    rejectCall(new Error('boom'));
+    // The failed CLEAR renders the erasure-specific copy (#269 twin round),
+    // not the generic save error.
+    await waitFor(() => expect(screen.getByText('request.notes.removeError')).toBeTruthy());
+    fireEvent.click(document.querySelector('.fixed.inset-0.z-50')!);
+    expect(screen.queryByText('request.notes.removeTitle')).toBeNull();
+  });
+
   it('a confirmed recurring arrangement offers the post affordance (no timing gate)', () => {
     renderWithApt({
       type: 'recurring',

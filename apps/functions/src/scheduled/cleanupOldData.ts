@@ -1,6 +1,6 @@
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { resolveConfigValue } from '@ejm/shared-functions/config/adminConfig.js';
-import { FieldValue } from 'firebase-admin/firestore';
+import { FieldPath, FieldValue } from 'firebase-admin/firestore';
 import type { Firestore } from 'firebase-admin/firestore';
 import { db } from '../config/firebase.js';
 
@@ -282,24 +282,64 @@ export async function runCleanupOldData(
       return true;
     };
 
-    // Cursor-paginated drain, not a single capped pass: the range query
-    // matches EVERY note-carrying doc (in-window ones included), so a plain
-    // limit(500) sweep would let a large in-window population starve the
-    // out-of-window backlog — the scale-dependence the PR #210 review
-    // ledgered as unacceptable for the sibling sweeps in this file. The
-    // cursor walks the whole index per run; the pass ceiling (40 = 20k
-    // note-carrying docs) is a runaway backstop far above real volume.
+    // Cursor-paginated drain WITH a persisted cursor: the range query
+    // matches EVERY note-carrying doc (in-window ones included), so a
+    // capped in-run walk could permanently skip the index tail once
+    // note-carrying docs exceed 40 passes x 500 — unlike the sibling
+    // sweeps, whose queries match only deletable docs and therefore drain
+    // across runs by construction (round-10 review). Persisting the cursor
+    // (cronState/appointmentNoteRedaction) makes this sweep drain across
+    // runs the same way: a run that hits the pass ceiling stores where it
+    // stopped and the next run RESUMES there; an exhausted walk resets the
+    // cursor so the next run starts from the head. Ties on the note text
+    // are broken by document id so resume never skips a doc.
+    //
+    // The persisted cursor stores ONLY the doc id — never the note text
+    // (persisting the orderBy value verbatim would copy a door code into a
+    // doc nothing sweeps; PR #274 review). Resume re-reads the doc and
+    // startAfter(snapshot) takes its position from the LIVE field values;
+    // if the doc lost its note meanwhile (cleared, redacted, deleted), the
+    // walk safely restarts from the head — re-examining is idempotent,
+    // skipping is not.
+    //
+    // cronState has no firestore.rules block on purpose: it is server-only
+    // state, covered by the deny-all catch-all.
+    const cursorStateRef = firestoreDb.collection('cronState').doc('appointmentNoteRedaction');
+    const cursorState = (await cursorStateRef.get()).data() ?? {};
+    const nextCursorState: Record<string, string | null> = {};
+
     for (const field of ['preAppointmentNote', 'postAppointmentNote'] as const) {
-      let cursor: FirebaseFirestore.QueryDocumentSnapshot | null = null;
+      const storedId = cursorState[`${field}Cursor`] as string | null | undefined;
+      let cursorSnap: FirebaseFirestore.DocumentSnapshot | null = null;
+      if (storedId) {
+        const resumeSnap = await firestoreDb.collection('appointments').doc(storedId).get();
+        if (resumeSnap.exists && resumeSnap.get(field) !== undefined) {
+          cursorSnap = resumeSnap;
+        }
+      }
+      // The persisted resume point is the last SURVIVING (non-redacted)
+      // doc seen: the boundary doc of a truncated pass is usually redacted
+      // (it is redacted exactly when out-of-reach), and a redacted doc's
+      // note is gone, so resuming from it would fall back to the head and
+      // throw the run's progress away (PR #274 round 2). A survivor keeps
+      // its note, so resume always lands; if EVERY examined doc was
+      // redacted, the examined prefix left the index entirely and a head
+      // restart re-examines nothing.
+      let lastSurvivorId: string | null = storedId ?? null;
+      let exhausted = false;
       for (let pass = 0; pass < 40; pass++) {
         let query = firestoreDb
           .collection('appointments')
           .where(field, '>', '')
           .orderBy(field)
+          .orderBy(FieldPath.documentId())
           .limit(500);
-        if (cursor) query = query.startAfter(cursor);
+        if (cursorSnap) query = query.startAfter(cursorSnap);
         const noted = await query.get();
-        if (noted.empty) break;
+        if (noted.empty) {
+          exhausted = true;
+          break;
+        }
 
         const batch = firestoreDb.batch();
         let count = 0;
@@ -307,6 +347,8 @@ export async function runCleanupOldData(
           if (outOfReach(doc.data())) {
             batch.update(doc.ref, { [field]: FieldValue.delete() });
             count++;
+          } else {
+            lastSurvivorId = doc.id;
           }
         }
         if (count > 0) {
@@ -314,17 +356,25 @@ export async function runCleanupOldData(
           stats.appointmentNotesRedacted += count;
           console.log(`Redacted ${count} out-of-reach ${field} values`);
         }
-        cursor = noted.docs[noted.docs.length - 1];
-        if (noted.size < 500) break;
+        cursorSnap = noted.docs[noted.docs.length - 1];
+        if (noted.size < 500) {
+          exhausted = true;
+          break;
+        }
         if (pass === 39) {
-          // Exiting by pass exhaustion, not by draining -- without this a
-          // truncated sweep looks identical to a clean one (round-7 review).
+          // Deferred, not lost: the stored cursor makes the next run resume
+          // exactly here (round-7 asked for the truncation to be visible;
+          // round-10 made it recoverable).
           console.warn(
-            `Appointment-note redaction sweep hit its 40-pass ceiling for ${field}; backlog remains`,
+            `Appointment-note redaction sweep hit its 40-pass ceiling for ${field}; resuming from stored cursor next run`,
           );
         }
       }
+      // Exhausted -> wrap to the head next run; truncated -> resume from
+      // the last surviving doc (see above).
+      nextCursorState[`${field}Cursor`] = exhausted ? null : lastSurvivorId;
     }
+    await cursorStateRef.set(nextCursorState, { merge: true });
   }
 
   // 8. Delete expired published searches (issue #207). Client queries filter

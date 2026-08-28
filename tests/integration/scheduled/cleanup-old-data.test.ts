@@ -37,7 +37,7 @@ describe('runCleanupOldData', () => {
     const collections = [
       'notifications', 'auditLogs', 'inviteLinks', 'verificationCodes',
       'accountExistsNotices', 'verificationSendCounters', 'appointments',
-      'publishedSearches',
+      'publishedSearches', 'cronState',
     ];
     await Promise.all(
       collections.map(async (col) => {
@@ -336,6 +336,83 @@ describe('runCleanupOldData', () => {
     expect('preAppointmentNote' in (await badStatusRef.get()).data()!).toBe(false);
     expect((await recentRef.get()).data()!.preAppointmentNote).toBe('still visible');
     expect((await recurringRef.get()).data()!.preAppointmentNote).toBe('door code for Mondays');
+
+    // Persisted-cursor wiring (round-10): an exhausted walk resets both
+    // cursors to null so the next run starts from the head of the index; a
+    // pass-ceiling truncation would store a resume point here instead.
+    const cursorState = (await db.collection('cronState').doc('appointmentNoteRedaction').get()).data()!;
+    expect(cursorState.preAppointmentNoteCursor).toBeNull();
+    expect(cursorState.postAppointmentNoteCursor).toBeNull();
+  });
+
+  it('resumes the redaction walk from a persisted cursor, then wraps (issue #238, PR #274)', async () => {
+    const db = getDb();
+    const now = new Date();
+
+    // Three out-of-reach note-carrying docs whose notes sort a < m < z.
+    const mk = (id: string, note: string) =>
+      db.collection('appointments').doc(id).set({
+        familyId: seed.family1Id,
+        babysitterUserId: seed.babysitter1.uid,
+        status: 'confirmed',
+        date: daysAgo(9).toISOString().split('T')[0],
+        createdAt: daysAgo(20),
+        updatedAt: daysAgo(9),
+        preAppointmentNote: note,
+      });
+    await mk('resume-a', 'a-note');
+    await mk('resume-m', 'm-note');
+    await mk('resume-z', 'z-note');
+    // A prior run stored the MIDDLE doc's id as its truncation point. Only
+    // the id is stored -- never the note text (that would persist a door
+    // code into a doc nothing sweeps).
+    await db.collection('cronState').doc('appointmentNoteRedaction').set({
+      preAppointmentNoteCursor: 'resume-m',
+      postAppointmentNoteCursor: null,
+    });
+
+    // Run 1 RESUMES after 'resume-m': only 'z-note' is examined/redacted;
+    // the docs before the cursor are untouched this run.
+    const stats1 = await runCleanupOldData(db, now);
+    expect(stats1.appointmentNotesRedacted).toBe(1);
+    expect('preAppointmentNote' in (await db.collection('appointments').doc('resume-z').get()).data()!).toBe(false);
+    expect((await db.collection('appointments').doc('resume-a').get()).data()!.preAppointmentNote).toBe('a-note');
+    expect((await db.collection('appointments').doc('resume-m').get()).data()!.preAppointmentNote).toBe('m-note');
+    // The walk exhausted, so the cursor wrapped to the head...
+    const state = (await db.collection('cronState').doc('appointmentNoteRedaction').get()).data()!;
+    expect(state.preAppointmentNoteCursor).toBeNull();
+
+    // ...and run 2 catches the docs the resume skipped.
+    const stats2 = await runCleanupOldData(db, now);
+    expect(stats2.appointmentNotesRedacted).toBe(2);
+    expect('preAppointmentNote' in (await db.collection('appointments').doc('resume-a').get()).data()!).toBe(false);
+    expect('preAppointmentNote' in (await db.collection('appointments').doc('resume-m').get()).data()!).toBe(false);
+  });
+
+  it('a stale cursor (doc deleted or note gone) falls back to the head instead of crashing (PR #274)', async () => {
+    const db = getDb();
+    const now = new Date();
+
+    await db.collection('appointments').doc('stale-a').set({
+      familyId: seed.family1Id,
+      babysitterUserId: seed.babysitter1.uid,
+      status: 'confirmed',
+      date: daysAgo(9).toISOString().split('T')[0],
+      createdAt: daysAgo(20),
+      updatedAt: daysAgo(9),
+      preAppointmentNote: 'a-note',
+    });
+    // The stored cursor points at a doc that no longer exists -- the guard
+    // must fall back to the head (re-examining is idempotent; a naive
+    // startAfter on a dead snapshot would skip or crash).
+    await db.collection('cronState').doc('appointmentNoteRedaction').set({
+      preAppointmentNoteCursor: 'no-such-doc',
+      postAppointmentNoteCursor: null,
+    });
+
+    const stats = await runCleanupOldData(db, now);
+    expect(stats.appointmentNotesRedacted).toBe(1);
+    expect('preAppointmentNote' in (await db.collection('appointments').doc('stale-a').get()).data()!).toBe(false);
   });
 
   it('deletes expired published searches and keeps active ones (issue #207)', async () => {

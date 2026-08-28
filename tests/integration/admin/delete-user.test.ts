@@ -192,6 +192,10 @@ describe('deleteUser', () => {
         familyId: seed.family1Id,
         createdByUserId: seed.parent2.uid, // the parent being deleted
         status: 'confirmed',
+        // Issue #238: family-level data -- while a co-parent survives, the
+        // note stays theirs to manage, so a NON-sole-parent delete must NOT
+        // erase it (guards the isLastParent half of the deleteUser branch).
+        preAppointmentNote: 'family door code',
       });
       const apptByRemainingParent = await seedAppointment({
         babysitterUserId: seed.babysitter1.uid,
@@ -207,6 +211,8 @@ describe('deleteUser', () => {
       // Still active — co-parent path must not cancel
       expect(redacted.data()!.status).toBe('confirmed');
       expect(redacted.data()!.statusReason).toBeUndefined();
+      // Issue #238: the family's pre-note survives a co-parent delete.
+      expect(redacted.data()!.preAppointmentNote).toBe('family door code');
 
       // Untouched appointment created by the remaining parent
       const untouched = await db.collection('appointments').doc(apptByRemainingParent).get();
