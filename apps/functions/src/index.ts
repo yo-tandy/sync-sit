@@ -102,3 +102,13 @@ export {
 // nearest prior art). Domain code lives under src/do/**.
 export { doEnrollDoer } from './do/enrollDoer.js';
 export { doUpdateDoerProfile } from './do/updateDoerProfile.js';
+export { doPostTask } from './do/postTask.js';
+export { doUpdateTask } from './do/updateTask.js';
+export { doCancelTask } from './do/cancelTask.js';
+export { doMarkTaskDone } from './do/markTaskDone.js';
+export { doStripTaskPhoto } from './do/stripTaskPhoto.js';
+export { doGetOwnPhotoUrl } from './do/getOwnPhotoUrl.js';
+export { doGetTaskPhotoUrl } from './do/getTaskPhotoUrl.js';
+// doSweepTasks (plan §8) is NOT a separate scheduled export: it rides the
+// existing cleanupOldData schedule (runDoSweepTasks in ./do/sweepTasks.js),
+// per the §8 row — one daily job, not two.

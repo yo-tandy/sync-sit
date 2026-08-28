@@ -81,6 +81,44 @@ service firebase.storage {
       allow write: if request.auth != null;
     }
 
+    // ── sync-do task photos (plan §7.4) — the two-path pipeline ──
+    //
+    // Final objects: written only by the stripper (doStripTaskPhoto, Admin
+    // SDK — bypasses these rules), read only via the signing callables
+    // (doGetOwnPhotoUrl / doGetTaskPhotoUrl), which reproduce the §7.2
+    // board audience that Storage rules cannot express (no Firestore
+    // enrollment/status/family-membership checks here — the
+    // getVerificationDocument precedent; §7.4 option 1). TASK-INDEPENDENT
+    // prefix, keyed by uploader: at upload time no taskId exists yet, and
+    // keying by uid makes ownership structural (§7.4).
+    match /do-photos/{uid}/{photoId} {
+      allow read, write: if false;
+    }
+
+    // Quarantine: the client's only upload path. Owner-scoped; the
+    // doStripTaskPhoto storage trigger strips EXIF, republishes into
+    // do-photos/{uid}/ (photoId == uploadId — the client-chosen return leg,
+    // safe because both prefixes are keyed by the caller's own uid), then
+    // deletes the original. Reads denied even to the owner: the wizard's
+    // thumbnails render from the POST-strip object via doGetOwnPhotoUrl,
+    // never from the geotagged original.
+    match /do-uploads/{uid}/{uploadId} {
+      allow read: if false;
+      // Bounded: this block is copy-ready for PR5, so what it omits ships.
+      // Without the size/type caps, ANY authenticated platform user (sit- and
+      // study-only accounts included) could write unbounded objects of any
+      // type, each one firing the stripper trigger (round 9). The
+      // contentType check is client-asserted metadata, not proof of image
+      // bytes — the stripper fails closed on non-image bytes regardless
+      // (§8). Deletes fall through to the implicit deny (request.resource
+      // is null on delete): cleanup is the stripper's and the sweep's job,
+      // via the Admin SDK.
+      allow write: if request.auth != null
+                   && request.auth.uid == uid
+                   && request.resource.size < 10 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*');
+    }
+
     // Default: deny all other access
     match /{allPaths=**} {
       allow read, write: if false;

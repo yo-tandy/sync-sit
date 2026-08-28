@@ -1349,8 +1349,10 @@ stripper itself (count the caller's live quarantine objects before doing
 work, fail closed above a ceiling), which pairs with the fail-closed
 behaviour §8 already requires of it. Nothing to build in V1.
 
-Deployment gotcha from the README: **storage rules are not auto-deployed** by
-the merge workflow and must be shipped manually.
+Deployment note: **storage rules deploy automatically on merge** — the
+merge workflow has run `firebase deploy --only storage` since PR #283. (An
+earlier draft of this section, and the README line it quoted, predate that
+fix.)
 
 ---
 
@@ -1914,8 +1916,8 @@ What sync-do **adds** to shared packages (small, deliberate):
   `PERMISSION_DENIED` on the doer's own pending docs at PR11, and the
   nearest-looking wrong fix is widening the rule.
 - `storage.rules` — the `do-photos/{uid}/**` (locked) and `do-uploads/{uid}/**`
-  (owner-scoped quarantine) blocks (§7.4), shipped manually since the merge
-  workflow does not deploy it.
+  (owner-scoped quarantine) blocks (§7.4). Deploys automatically on merge:
+  the merge workflow has run `firebase deploy --only storage` since PR #283.
 
 One dependency edge §3.2 does not otherwise imply: the offer card's
 cross-app half (§9.1) means `do-web` reading study's `TutorEndorsementDoc`
