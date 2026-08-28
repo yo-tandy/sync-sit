@@ -69,7 +69,25 @@ jobs:
           # study-web push (issue #168 Phase 1) needs it at build time.
           VITE_FIREBASE_VAPID_KEY: BHhR2VRnGyiMruB55skkISGURA5MqVat0lzGRtzfnfHJ6IlgOs8sZDKy25k0nitxIlmLToaUWr1YfX5KBuxg1yo
 
-      # Deploy preview channel (both hosting targets)
+      # Build do-web (third hosting target: site sync-do-app, plan §3.1). Same
+      # project-level Firebase config; reuses the sit web-app id like study-web
+      # does — a dedicated app registration for sync-do is a follow-up. No
+      # VAPID key: the do shell ships no push (that arrives with sync-do's
+      # notifications PR).
+      - name: Build do-web
+        run: |
+          pnpm --filter @ejm/shared-core build
+          pnpm --filter @ejm/do-core build
+          pnpm --filter do-web build
+        env:
+          VITE_FIREBASE_API_KEY: AIzaSyDyYp2GQdH-8h16B6XNx3sdI8tdDcY1tEw
+          VITE_FIREBASE_AUTH_DOMAIN: sync-sit.firebaseapp.com
+          VITE_FIREBASE_PROJECT_ID: sync-sit
+          VITE_FIREBASE_STORAGE_BUCKET: sync-sit.firebasestorage.app
+          VITE_FIREBASE_MESSAGING_SENDER_ID: '652129443234'
+          VITE_FIREBASE_APP_ID: '1:652129443234:web:b1addb8ca9204154aba6fb'
+
+      # Deploy preview channel (all three hosting targets in firebase.json)
       - name: Deploy Preview
         run: |
           CHANNEL="pr-${{ github.event.pull_request.number }}"
