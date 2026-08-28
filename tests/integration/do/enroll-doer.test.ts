@@ -174,6 +174,17 @@ describe('doEnrollDoer — classic path, identity + age gates (§8, §11.1)', ()
     });
   });
 
+  it('contactEmail shape is enforced on the CLASSIC path too (the client regex is UX; this is the trust boundary)', async () => {
+    const email = `shape.h${GRAD_16}@ejm.org`;
+    await seedCode(email);
+    await expect(
+      enroll(email, doerEnrollment(dobWithAge(16), { contactEmail: 'x' })),
+    ).rejects.toMatchObject({ code: 'INVALID_ARGUMENT', message: 'Invalid contact email' });
+    // No account was created by the refusal.
+    const users = await getDb().collection('users').where('email', '==', email).get();
+    expect(users.empty).toBe(true);
+  });
+
   it('refuses ANY caller with a missing DOB: invalid-argument, before any governance branch', async () => {
     const email = `nodob.c${GRAD_16}@ejm.org`;
     await seedCode(email);

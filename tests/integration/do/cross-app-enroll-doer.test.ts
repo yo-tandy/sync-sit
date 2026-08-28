@@ -290,6 +290,41 @@ describe('doEnrollDoer — abbreviated cross-app path (§3.3)', () => {
     }
   });
 
+  it('contact-channel SHAPE is enforced at the callable (PR #320 round 3): junk email/phone/whatsapp refused, nothing written', async () => {
+    // babysitter3: completed sit profile, DOB and nested contact on file —
+    // every refusal below is purely the shape check, not the ≥1 requirement.
+    const token = await getIdToken(seed.babysitter3.uid);
+
+    await expect(
+      crossAppEnroll(token, { contactEmail: 'x' }),
+    ).rejects.toMatchObject({ code: 'INVALID_ARGUMENT', message: 'Invalid contact email' });
+
+    await expect(
+      crossAppEnroll(token, { contactPhone: 'call me maybe' }),
+    ).rejects.toMatchObject({ code: 'INVALID_ARGUMENT', message: 'Invalid contact phone' });
+    // Charset alone is not enough — too few digits is junk too.
+    await expect(
+      crossAppEnroll(token, { contactPhone: '+12' }),
+    ).rejects.toMatchObject({ code: 'INVALID_ARGUMENT', message: 'Invalid contact phone' });
+
+    await expect(
+      crossAppEnroll(token, { whatsapp: 'zzz' }),
+    ).rejects.toMatchObject({ code: 'INVALID_ARGUMENT', message: 'Invalid WhatsApp number' });
+
+    const user = (await getDb().collection('users').doc(seed.babysitter3.uid).get()).data()!;
+    expect(user.profiles.doer).toBeUndefined();
+    expect(user.contactEmail).toBeUndefined();
+  });
+
+  it('valid channel shapes are accepted per channel (whatsapp included)', async () => {
+    const token = await getIdToken(seed.babysitter3.uid);
+    const result = await crossAppEnroll(token, { whatsapp: '+33 6 11 22 33 44' });
+    expect(result.uid).toBe(seed.babysitter3.uid);
+    const user = (await getDb().collection('users').doc(seed.babysitter3.uid).get()).data()!;
+    expect(user.whatsapp).toBe('+33 6 11 22 33 44');
+    expect(user.profiles.doer.enrollmentComplete).toBe(true);
+  });
+
   it('a contact channel typed in the wizard is written to the canonical root', async () => {
     const token = await getIdToken(seed.babysitter2.uid);
     const result = await crossAppEnroll(token, { contactPhone: '+33 655555555' });
