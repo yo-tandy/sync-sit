@@ -3,7 +3,7 @@ import type { DocumentSnapshot } from 'firebase-admin/firestore';
 import { db } from '../config/firebase.js';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
 
-export type ProfileKey = 'babysitter' | 'tutor' | 'parent';
+export type ProfileKey = 'babysitter' | 'tutor' | 'parent' | 'doer';
 
 export interface AddProfileParams {
   uid: string;
@@ -65,6 +65,10 @@ function assertAddable(snap: DocumentSnapshot, profileKey: ProfileKey): void {
       { reason: 'role-exclusive', profile: 'babysitter' },
     );
   }
+  // `doer` is deliberately NOT in the exclusivity matrix, in either
+  // direction: sync-do plan §8 accepts a completed PARENT profile as a
+  // verified identity for doEnrollDoer's abbreviated path, so parent↔doer
+  // must stay addable — unlike tutor/babysitter, which stay provider-only.
   if (
     profileKey === 'parent' &&
     (data.profiles?.tutor !== undefined || data.profiles?.babysitter !== undefined)
