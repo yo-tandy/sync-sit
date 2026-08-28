@@ -92,9 +92,8 @@ export function ParentEnrollment() {
   // Add-profile mode: an already-authenticated user with no parent profile
   // yet (e.g. a signed-in study user adding the family role). Credentials are
   // already established, so the flow starts at the consent-only password step.
-  // Membership, not profile presence (PR #284 round 3, sit parity): an
-  // orphan parent profile -- removeCoParent's leftover on the SHARED user
-  // doc -- takes the add-profile path here too.
+  // Membership, not profile presence (issue #279): an orphan parent
+  // profile on the shared user doc takes the add-profile path here too.
   const isAddProfile = !!firebaseUser && !hasFamilyMembership(userDoc);
 
   const resendCooldownS = useClientConfigValue(

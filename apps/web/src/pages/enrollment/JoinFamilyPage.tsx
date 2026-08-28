@@ -218,15 +218,10 @@ export function JoinFamilyPage() {
     );
   }
 
-  // Authed AND already in a family: nothing to join here. Membership, not
-  // profile presence, is the predicate (PR #284 review round 2): an ORPHAN
-  // parent profile -- familyId cleared by removeCoParent, profile retained
-  // -- must fall through to the confirm-join branch below, which is the
-  // only client path to the re-attach carve-out.
-  // hasFamilyMembership mirrors the SERVER's orphan classification (both
-  // membership fields, incl. the legacy Plan C root familyId) so a legacy
-  // root-membership doc dead-ends here instead of round-tripping into an
-  // already-exists rejection (round-3 review).
+  // Membership, not profile presence (issue #279): an ORPHAN parent
+  // profile must fall through to the confirm-join branch -- the only
+  // client path to the server's re-attach carve-out -- while any
+  // membered doc (either field, incl. legacy root) dead-ends here.
   if (firebaseUser && hasFamilyMembership(userDoc)) {
     return (
       <div>

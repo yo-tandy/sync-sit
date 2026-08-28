@@ -19,6 +19,7 @@
     "test:integration:lane4": "TEST_FIRESTORE_PORT=38080 TEST_AUTH_PORT=39099 TEST_FUNCTIONS_PORT=35001 TEST_STORAGE_PORT=39199 firebase emulators:exec --config firebase.lane4.json --only auth,functions,firestore,storage --project demo-test 'pnpm test:integration'",
     "seed:admin": "node apps/functions/seed-admin.cjs",
     "backfill:endorsement-counts": "node apps/study-functions/backfill-endorsement-counts.cjs",
+    "backfill:279-orphan-pointers": "node scripts/backfill-279-orphan-pointers.cjs",
     "backfill:family-postcode": "node scripts/backfill-family-postcode.cjs",
     "backfill:shared-identity": "node scripts/backfill-shared-identity.cjs",
     "emulators": "firebase emulators:start --only auth,functions,firestore,storage --project demo-test",

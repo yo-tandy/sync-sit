@@ -502,8 +502,9 @@ describe('ParentEnrollment orphan-parent guards (issue #279)', () => {
       loading: false,
     };
     renderFlow();
-    // The mount effect must NOT bounce to /family; the wizard renders.
-    await new Promise((r) => setTimeout(r, 50));
+    // Positive pin (round-5 review): the orphan takes the else branch --
+    // family-info renders -- rather than a sleep-and-assert-absence.
+    expect(await screen.findByText('family-info-step')).toBeTruthy();
     expect(h.navigate).not.toHaveBeenCalledWith('/family', { replace: true });
   });
 });

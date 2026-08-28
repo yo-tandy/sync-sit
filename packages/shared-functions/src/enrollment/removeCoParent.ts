@@ -34,16 +34,14 @@ export const removeCoParent = onCall(
       throw new HttpsError('permission-denied', 'Only parents can remove co-parents');
     }
 
-    const callerFamilyId = caller.familyId;
+    // Either membership field counts, caller and target alike (issue #279):
+    // a fully-legacy Plan C family carries membership at the ROOT familyId.
+    const callerFamilyId = caller.familyId ?? (callerDoc.data() as { familyId?: string })?.familyId;
     if (!callerFamilyId) {
       throw new HttpsError('failed-precondition', 'No family associated');
     }
 
-    // Verify target is in the same family. EITHER membership field counts
-    // (round-4 review): a true legacy doc carries membership only at the
-    // root familyId, and gating on the Plan D pointer alone made such a
-    // co-parent unremovable -- the exact docs the root-field delete below
-    // exists for. Mirrors hasFamilyMembership's classification.
+    // Verify target is in the same family (either membership field).
     const targetDoc = await db.collection('users').doc(targetUserId).get();
     const targetData = targetDoc.data() as (User & { familyId?: string }) | undefined;
     const targetMembership = getParentProfile(targetData)?.familyId ?? targetData?.familyId;
@@ -51,24 +49,14 @@ export const removeCoParent = onCall(
       throw new HttpsError('not-found', 'User is not in your family');
     }
 
-    // Clear the target's family membership where membership actually
-    // LIVES: profiles.parent.familyId (Plan D) -- the field this callable's
-    // own gate just read, and the one storage.rules and
-    // getVerificationDocument key off. The bare root familyId is a Plan C
-    // leftover Plan D never populates; clearing only it left a removed
-    // co-parent with full membership everywhere the user doc is consulted
-    // (issue #279). Root field still cleared for legacy docs that carry it.
-    // The family-LESS parent profile that remains is re-attachable through
-    // a fresh invite: addProfileToUser's orphan-parent carve-out (same PR)
-    // lets joinFamily set a new familyId on it, so removal is recoverable.
-    // ONE batch for both writes (round-3 review): they are cross-collection
-    // but batched writes are atomic, which makes the ordering question moot.
-    // Round 2's pointer-first reorder was WRONG about its own failure mode:
-    // a retry after a partial failure hits this callable's membership gate,
-    // which reads the pointer just deleted, throws not-found, and the stale
-    // parentIds entry becomes permanent -- while parentIds gates MORE than
-    // the pointer does (isFamilyMember: family doc, kids, appointments,
-    // endorsements; generateInviteLink and sendContactRequest check it too).
+    // INVARIANTS (issue #279, PR #284): membership is cleared where access
+    // control reads it -- BOTH profiles.parent.familyId (storage.rules,
+    // getVerificationDocument, every getParentProfile consumer) and the
+    // legacy root familyId -- atomically with the parentIds trim (a batch
+    // is atomic across collections; a partial state either direction is an
+    // access-control hole). The family-less parent profile that remains is
+    // re-attachable through a fresh invite (addProfileToUser's
+    // orphan-parent carve-out).
     const batch = db.batch();
     batch.update(db.collection('users').doc(targetUserId), {
       'profiles.parent.familyId': FieldValue.delete(),

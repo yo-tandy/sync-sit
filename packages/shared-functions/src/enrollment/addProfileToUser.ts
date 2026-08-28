@@ -39,21 +39,13 @@ function assertAddable(snap: DocumentSnapshot, profileKey: ProfileKey): void {
     throw new HttpsError('permission-denied', 'Account is not active');
   }
   if (data.profiles?.[profileKey] !== undefined) {
-    // Re-attach carve-out (issue #279 / PR #284 review): a PARENT profile
-    // whose familyId is absent is the orphan state removeCoParent leaves
-    // behind -- membership cleared, profile retained. Rejecting it here
-    // bricked the account: no server path could ever put a familyId back
-    // (rules block the client via parentFamilyIdUnchanged). A family-LESS
-    // parent profile may therefore be re-attached through a fresh invite;
-    // a parent profile WITH a familyId still rejects, as ever. Provider
-    // profiles keep the strict check -- they have no equivalent orphan
-    // state or re-attach flow.
-    // Truthiness on BOTH membership fields (round-2 review): a legacy
-    // Plan C doc carries membership at the ROOT familyId with none on the
-    // profile -- reading it as an orphan would let an active member of
-    // family X accept an invite to family Y and hold both. And '' / null,
-    // while unreachable today (removeCoParent deletes the field), must not
-    // count as membership.
+    // Orphan-parent re-attach carve-out (issue #279): a parent profile
+    // with NEITHER membership field set is removeCoParent's leftover --
+    // re-attachable through a fresh invite; without this the account was
+    // unrepairable (rules freeze both fields client-side). A profile with
+    // EITHER field set is an active member and still rejects; provider
+    // profiles have no orphan state and keep the strict check. Truthiness,
+    // not === undefined: ''/null must not count as membership.
     const isOrphanParent =
       profileKey === 'parent' &&
       !(data.profiles.parent as { familyId?: string } | undefined)?.familyId &&

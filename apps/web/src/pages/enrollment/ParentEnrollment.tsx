@@ -112,10 +112,8 @@ export function ParentEnrollment() {
   useEffect(() => {
     if (step !== 0 || authLoading || !firebaseUser) return;
     if (hasFamilyMembership(userDoc)) {
-      // Already in a family — nothing to add here. Membership, not profile
-      // presence (PR #284 review round 2): an orphan parent profile may
-      // enroll a NEW family through the add-profile path, mirroring the
-      // invite re-attach.
+      // Membership, not profile presence (issue #279): an orphan parent
+      // profile may enroll a NEW family through the add-profile path.
       navigate('/family', { replace: true });
     } else {
       // Skip the credential steps and go straight to family info.
