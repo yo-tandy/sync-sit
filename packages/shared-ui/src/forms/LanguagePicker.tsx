@@ -109,7 +109,7 @@ export function LanguagePicker({ selected, onChange, label = 'Languages spoken *
             onChange={(e) => setCustomValue(e.target.value)}
             onKeyDown={handleCustomKeyDown}
             placeholder="Enter language..."
-            className="h-10 flex-1 rounded-lg border-[1.5px] border-gray-300 bg-white px-3 text-sm outline-none focus:border-brand-600"
+            className="h-10 flex-1 rounded-lg border-[1.5px] border-gray-300 bg-white px-3 text-sm focus:border-brand-600"
             autoFocus
           />
           <button

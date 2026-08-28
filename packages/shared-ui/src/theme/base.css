@@ -47,18 +47,32 @@
 }
 
 /* WCAG 2.4.7 Focus Visible (issue #325): ONE shared keyboard-focus
-   treatment for every interactive control, all three apps. Two layers so
-   the ring reads on ANY ground: a 2px white backing fills the offset gap
-   (visible on brand-colored surfaces like the AppBar, where a brand ring
-   alone would vanish) and the brand outline carries it on white. Brand
-   token means sit rings red, study blue, do green. :where() keeps
-   specificity at zero so an explicit utility (e.g. the Dialog panel's
-   outline-none, or a component's own focus-visible styling) still wins.
-   Text fields keep their focus border treatment and are not matched. */
-:where(a, button, [role="button"], select, summary, [tabindex]:not([tabindex="-1"])):focus-visible {
-  outline: 2px solid var(--color-brand-600);
-  outline-offset: 2px;
-  box-shadow: 0 0 0 2px var(--color-white);
+   treatment for interactive controls, all three apps. Two layers so the
+   ring reads on brand-colored AND white grounds: a 2px white box-shadow
+   backing fills the outline-offset gap (carries visibility on surfaces
+   like the AppBar, where a brand ring alone vanishes) and the 2px
+   brand-600 outline carries it on white. Brand token means sit rings
+   red, study blue, do green.
+
+   CASCADE (PR #327 round 1): this lives in @layer base, so every
+   Tailwind utility -- focus-visible:*, outline-none, shadow-*, ring-* --
+   overrides it; that IS the escape hatch, and it also means a control
+   carrying its own shadow-* keeps that shadow while focused (losing
+   only the white backing, which such light-ground controls don't need).
+   The selector's own specificity is (0,1,0): :where() zeroes its
+   arguments, :focus-visible outside it still counts.
+
+   Text-LIKE fields keep their focus border treatment and are unmatched;
+   checkbox/radio inputs ARE matched -- they had no visible treatment at
+   all (focus:ring-brand-500 sets only a ring color, painting nothing).
+   The Dialog panel's tabindex=-1 is excluded. */
+@layer base {
+  :where(a, button, [role="button"], select, summary, [tabindex]:not([tabindex="-1"])):focus-visible,
+  :where(input[type="checkbox"], input[type="radio"]):focus-visible {
+    outline: 2px solid var(--color-brand-600);
+    outline-offset: 2px;
+    box-shadow: 0 0 0 2px var(--color-white);
+  }
 }
 
 /* Base reset */

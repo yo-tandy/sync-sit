@@ -168,7 +168,10 @@ export function AddressAutocomplete({
                 key={i}
                 type="button"
                 onClick={() => handleSelect(feature)}
-                className="flex w-full items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-gray-50"
+                // The dropdown wrapper is overflow-hidden (rounded corners), which
+                // clips the shared outward focus ring entirely -- inset the
+                // ring here instead (the @layer escape hatch, round 1).
+                className="flex w-full items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-brand-600 focus-visible:-outline-offset-2 focus-visible:shadow-none"
               >
                 <span className="mt-0.5 text-gray-400">📍</span>
                 <div>
