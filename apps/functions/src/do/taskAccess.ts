@@ -127,14 +127,26 @@ export async function assertPhotosOwnedByCaller(
   }
 }
 
+/**
+ * Charset-bound a caller-supplied taskId BEFORE it reaches `.doc()`: the
+ * Admin SDK treats `/` in a document path as a segment separator, so a
+ * slashed id either throws synchronously (odd segment count → surfaces as
+ * `internal` instead of `invalid-argument`) or silently addresses a doc in
+ * an arbitrary subcollection under doTasks. Firestore auto-ids are
+ * `[A-Za-z0-9]{20}`, so the shared safe-id charset fits exactly.
+ */
+export function validTaskId(taskId: unknown): string {
+  if (typeof taskId !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(taskId)) {
+    throw new HttpsError('invalid-argument', 'taskId is required');
+  }
+  return taskId;
+}
+
 /** Read a task or throw not-found. */
 export async function getTaskOrThrow(
   taskId: unknown,
 ): Promise<{ ref: FirebaseFirestore.DocumentReference; data: TaskDoc }> {
-  if (typeof taskId !== 'string' || taskId.length === 0 || taskId.length > 128) {
-    throw new HttpsError('invalid-argument', 'taskId is required');
-  }
-  const ref = db.collection('doTasks').doc(taskId);
+  const ref = db.collection('doTasks').doc(validTaskId(taskId));
   const snap = await ref.get();
   if (!snap.exists) {
     throw new HttpsError('not-found', 'Task not found');

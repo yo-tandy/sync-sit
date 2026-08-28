@@ -108,6 +108,28 @@ describe('runDoSweepTasks (rides the cleanupOldData schedule)', () => {
     expect((await bucket.file('do-photos/sweep-u1/live-photo').exists())[0]).toBe(true);
   });
 
+  it('a photo pair SHARED with a still-live task survives the cascade (only the last reference deletes)', async () => {
+    const bucket = getBucket();
+    await bucket.file('do-photos/sweep-u5/shared-photo').save(Buffer.from([7, 8, 9]), {
+      resumable: false, metadata: { contentType: 'image/jpeg' },
+    });
+    const pair = { uid: 'sweep-u5', photoId: 'shared-photo' };
+    await seedTask('sweep-shared-expired', { expiresAt: daysAgo(1), photos: [pair] });
+    await seedTask('sweep-shared-live', { expiresAt: daysFromNow(5), photos: [pair] });
+
+    let stats = await runDoSweepTasks(getDb(), bucket, new Date());
+    expect(stats.expiredTasksDeleted).toBe(1);
+    expect(await taskExists('sweep-shared-expired')).toBe(false);
+    // The LIVE task still references the pair — the object must survive.
+    expect((await bucket.file('do-photos/sweep-u5/shared-photo').exists())[0]).toBe(true);
+
+    // Once the last referencing task goes, the cascade collects the object.
+    await getDb().collection('doTasks').doc('sweep-shared-live').update({ expiresAt: daysAgo(1) });
+    stats = await runDoSweepTasks(getDb(), bucket, new Date());
+    expect(stats.expiredTasksDeleted).toBe(1);
+    expect((await bucket.file('do-photos/sweep-u5/shared-photo').exists())[0]).toBe(false);
+  });
+
   it('deletes cancelled tasks older than 30 days, keeps younger ones', async () => {
     await seedTask('sweep-cancelled-old', {
       status: 'cancelled', cancelledAt: daysAgo(31), cancelledBy: 'family',

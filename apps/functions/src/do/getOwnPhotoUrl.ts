@@ -1,5 +1,6 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { DO_PHOTO_ID_RE } from '@ejm/do-core';
+import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { getDefaultBucket, photoObjectPath } from './taskAccess.js';
 
@@ -13,15 +14,21 @@ const SIGNED_URL_TTL_MS = 15 * 60 * 1000;
  * stripped photo before a task exists; `not-found` doubles as the "not yet
  * stripped" retry signal (the trigger republishes within seconds).
  *
- * No audience check beyond auth: the path is built from the caller's uid,
- * so the callable structurally exposes only the caller's own post-strip
- * uploads.
+ * Audience: the caller themselves, and only while ACTIVE — the path is
+ * built from the caller's uid, so the callable structurally exposes only
+ * the caller's own post-strip uploads, but a blocked account must not keep
+ * a working signing endpoint (its five sibling callables all gate on
+ * `status === 'active'`).
  */
 export const doGetOwnPhotoUrl = onCall(
   { region: 'europe-west1', cors: getCorsOrigin() },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Must be logged in');
+    }
+    const callerDoc = await db.collection('users').doc(request.auth.uid).get();
+    if ((callerDoc.data()?.status as string | undefined) !== 'active') {
+      throw new HttpsError('permission-denied', 'Account is not active');
     }
     const { photoId } = (request.data ?? {}) as { photoId?: unknown };
     if (typeof photoId !== 'string' || !DO_PHOTO_ID_RE.test(photoId)) {

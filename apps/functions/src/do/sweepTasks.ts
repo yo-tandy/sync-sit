@@ -60,6 +60,16 @@ export interface DoSweepStats {
  *    (§11.4).
  * 6. Delete unclaimed `do-uploads` quarantine objects, and `do-photos`
  *    objects no task references, past the 1-day window (§7.4).
+ *
+ * KNOWN RETENTION GAP, stated so the §11.4 bound is not overstated: an
+ * `assigned` task abandoned by BOTH sides — the doer never marks done, the
+ * family never confirms, neither cancels — matches no half above, so it
+ * (and its accepted offer, +1 helper included) is retained until someone
+ * acts. The plan's sweep rows (§8) name no assigned-staleness ceiling and
+ * inventing one is a policy call (auto-complete vs auto-cancel changes the
+ * §9.1 history and the PR11 endorsement prompt), so it is deferred to the
+ * owner — flagged in PR5's review; PR10's admin task view makes such tasks
+ * visible in the meantime.
  */
 export async function runDoSweepTasks(
   db: Firestore,
@@ -97,16 +107,30 @@ export async function runDoSweepTasks(
       await batch.commit();
       stats.offersDeleted += offers.size;
     }
-    // Photo objects: the stored pair IS the object path. ignoreNotFound —
-    // a re-run after a partial failure must not throw on the half that
-    // already succeeded.
+    // Task doc BEFORE its photo objects, so the reference check below never
+    // counts the task being deleted.
+    await taskRef.delete();
+    // Photo objects: the stored pair IS the object path — but NOT
+    // unconditionally: nothing dedupes pairs across tasks (both write paths
+    // accept the same own-prefix pair on two tasks), so deleting blindly
+    // would 404 a still-open sibling task's photo with no way to re-attach
+    // (only the stripper writes the final prefix). Same exact-map
+    // array-contains check the orphan sweep uses; a pair another task still
+    // references is left for the orphan pass to collect once the LAST
+    // referencing task is gone. ignoreNotFound — a re-run after a partial
+    // failure must not throw on the half that already succeeded.
     for (const pair of task.photos ?? []) {
+      const stillReferenced = await db
+        .collection('doTasks')
+        .where('photos', 'array-contains', { uid: pair.uid, photoId: pair.photoId })
+        .limit(1)
+        .get();
+      if (!stillReferenced.empty) continue;
       await bucket
         .file(photoObjectPath(pair.uid, pair.photoId))
         .delete({ ignoreNotFound: true });
       stats.taskPhotoObjectsDeleted += 1;
     }
-    await taskRef.delete();
   }
 
   // ── 1–3: the three deletion queries, each drained with a bounded pass
@@ -196,25 +220,54 @@ export async function runDoSweepTasks(
     return Number.isFinite(created) && created < unclaimedCutoffMs;
   };
 
+  // Both listings are PAGED with a pass ceiling, mirroring the Firestore
+  // sweeps: an autopaginated getFiles() pulls every object's metadata into
+  // memory and its runtime scales with the whole prefix — on a shared
+  // 540s-bounded schedule the walk must be bounded per run, with the
+  // remainder picked up tomorrow (deletions shrink the prefix, so the
+  // backlog drains across runs by construction).
+  type StorageFile = ReturnType<StorageBucket['file']>;
+  const listPages = async (
+    prefix: string,
+    onFile: (file: StorageFile) => Promise<void>,
+  ): Promise<void> => {
+    let pageToken: string | undefined;
+    for (let pass = 0; pass < SWEEP_MAX_PASSES; pass++) {
+      // getFiles' manual paging: autoPaginate off, explicit token.
+      const [files, nextQuery] = (await bucket.getFiles({
+        prefix,
+        maxResults: 1000,
+        autoPaginate: false,
+        pageToken,
+      })) as unknown as [StorageFile[], { pageToken?: string } | null];
+      for (const file of files) {
+        await onFile(file);
+      }
+      pageToken = nextQuery?.pageToken;
+      if (!pageToken) break;
+    }
+  };
+
   // Quarantine originals the stripper never claimed (its fail-closed path
   // deletes hostile objects immediately; anything left is stripper outage
   // residue or abandonment).
-  const [quarantineFiles] = await bucket.getFiles({ prefix: DO_UPLOADS_PREFIX });
-  for (const file of quarantineFiles) {
+  await listPages(DO_UPLOADS_PREFIX, async (file) => {
     if (isStale(file.metadata.timeCreated as string | undefined)) {
       await file.delete({ ignoreNotFound: true });
       stats.quarantineObjectsDeleted += 1;
     }
-  }
+  });
 
   // Final objects no task references — uploaded, stripped, but never
   // attached (abandoned wizard), or left dangling by a partial cascade.
-  // Exact-map array-contains matches the stored {uid, photoId} pair.
-  const [finalFiles] = await bucket.getFiles({ prefix: DO_PHOTOS_PREFIX });
-  for (const file of finalFiles) {
-    if (!isStale(file.metadata.timeCreated as string | undefined)) continue;
+  // Exact-map array-contains matches the stored {uid, photoId} pair —
+  // NOTE: if TaskDoc's photo entries ever gain a third field, this exact
+  // match (and deleteTaskCascade's) silently stops matching; keep the
+  // stored pair shape and these queries in lockstep.
+  await listPages(DO_PHOTOS_PREFIX, async (file) => {
+    if (!isStale(file.metadata.timeCreated as string | undefined)) return;
     const parts = file.name.split('/');
-    if (parts.length !== 3) continue;
+    if (parts.length !== 3) return;
     const [, uid, photoId] = parts;
     const referencing = await db
       .collection('doTasks')
@@ -225,7 +278,7 @@ export async function runDoSweepTasks(
       await file.delete({ ignoreNotFound: true });
       stats.orphanPhotoObjectsDeleted += 1;
     }
-  }
+  });
 
   console.log(
     `doSweepTasks complete: ${JSON.stringify(stats)}`,

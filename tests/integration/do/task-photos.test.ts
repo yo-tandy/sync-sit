@@ -231,6 +231,17 @@ describe('task photo pipeline — write-path pins and signing callables', () => 
       await expect(callFunction('doGetOwnPhotoUrl', { photoId: 'doer-photo-1' }, parent1Token))
         .rejects.toMatchObject({ code: 'NOT_FOUND' });
     });
+
+    it('a blocked account is refused — blocked must close the signing surface too', async () => {
+      const db = getDb();
+      await db.collection('users').doc(seed.parent1.uid).update({ status: 'blocked' });
+      try {
+        await expect(callFunction('doGetOwnPhotoUrl', { photoId: 'p1-photo-1' }, parent1Token))
+          .rejects.toMatchObject({ code: 'PERMISSION_DENIED' });
+      } finally {
+        await db.collection('users').doc(seed.parent1.uid).update({ status: 'active' });
+      }
+    });
   });
 
   describe('doGetTaskPhotoUrl (the §7.2 audience, reproduced)', () => {

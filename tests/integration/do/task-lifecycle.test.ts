@@ -296,6 +296,17 @@ describe('task lifecycle callables', () => {
       await db.collection('doTasks').doc(taskId).delete();
     });
 
+    it('a slashed taskId is invalid-argument, never a path traversal or an internal error', async () => {
+      await expect(callFunction('doCancelTask', { taskId: 'a/b' }, parent1Token))
+        .rejects.toMatchObject({ code: 'INVALID_ARGUMENT' });
+      await expect(callFunction('doMarkTaskDone', { taskId: 'a/b/c/d' }, parent1Token))
+        .rejects.toMatchObject({ code: 'INVALID_ARGUMENT' });
+      await expect(callFunction('doUpdateTask', { taskId: 'a/b' }, parent1Token))
+        .rejects.toMatchObject({ code: 'INVALID_ARGUMENT' });
+      await expect(callFunction('doGetTaskPhotoUrl', { taskId: 'a/b', photoId: 'p1' }, parent1Token))
+        .rejects.toMatchObject({ code: 'INVALID_ARGUMENT' });
+    });
+
     it('a doer cannot cancel an OPEN task (family only)', async () => {
       const { taskId } = await callFunction<{ taskId: string }>(
         'doPostTask', ongoingPayload({ title: 'Not yours to cancel' }), parent1Token,

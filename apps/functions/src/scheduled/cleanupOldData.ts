@@ -413,6 +413,14 @@ export const cleanupOldData = onSchedule(
     schedule: 'every day 03:00',
     region: 'europe-west1',
     timeZone: 'Europe/Paris',
+    // The job now runs BOTH sweeps in one invocation, and the sync-do half
+    // adds Storage listings and per-object Firestore queries — the 60s v2
+    // default was sized for runCleanupOldData alone and would truncate the
+    // second half silently on the first backlog day. 540s is the
+    // scheduled-function ceiling; memory raised alongside since the paged
+    // object listings hold up to a page of metadata each.
+    timeoutSeconds: 540,
+    memory: '512MiB',
   },
   async () => {
     const now = new Date();

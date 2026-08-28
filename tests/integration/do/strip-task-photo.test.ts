@@ -110,6 +110,34 @@ describe('doStripTaskPhoto (storage trigger)', () => {
     expect(republished).toBe(false);
   });
 
+  it('an already-published photoId is NOT replaced: first write wins, the re-upload is rejected', async () => {
+    const bucket = getBucket();
+    const original = readFileSync(FIXTURE);
+    await bucket.file('do-uploads/strip-u5/photo-once').save(original, {
+      resumable: false, metadata: { contentType: 'image/jpeg' },
+    });
+    const republished = await waitFor(async () =>
+      (await bucket.file('do-photos/strip-u5/photo-once').exists())[0]);
+    expect(republished).toBe(true);
+    const [firstBytes] = await bucket.file('do-photos/strip-u5/photo-once').download();
+
+    // Re-upload DIFFERENT bytes under the same id — the swap a doer who
+    // accepted on the first photos must never see.
+    const other = await (async () => {
+      // A second, visually different valid JPEG: reuse the fixture with a
+      // byte appended (still decodable — trailing junk is tolerated).
+      return Buffer.concat([original, Buffer.from([0x00])]);
+    })();
+    await bucket.file('do-uploads/strip-u5/photo-once').save(other, {
+      resumable: false, metadata: { contentType: 'image/jpeg' },
+    });
+    const quarantineCleared = await waitFor(async () =>
+      !(await bucket.file('do-uploads/strip-u5/photo-once').exists())[0]);
+    expect(quarantineCleared).toBe(true);
+    const [afterBytes] = await bucket.file('do-photos/strip-u5/photo-once').download();
+    expect(afterBytes.equals(firstBytes)).toBe(true);
+  });
+
   it('leaves other prefixes alone (profile photos are not quarantine)', async () => {
     const bucket = getBucket();
     await bucket.file('profile-photos/strip-u4.jpg').save(readFileSync(FIXTURE), {

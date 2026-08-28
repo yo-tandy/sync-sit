@@ -28,18 +28,35 @@ import { DO_UPLOADS_PREFIX, photoObjectPath } from './taskAccess.js';
  * so hostile bytes labelled `image/jpeg` WILL arrive — the stripper deletes
  * the quarantine object and STOPS (never throw-and-refire: a deterministic
  * decode failure would crash-loop on every retry). Genuine infra errors
- * (download/save transport failures) still throw, where a retry is
- * productive.
+ * (download/save transport failures) still throw — and `retry: true` is
+ * set so the re-fire actually happens: gen-2 event functions default to
+ * retry DISABLED, under which a transient GCS blip would strand the photo
+ * in quarantine forever ("still processing" in the wizard until the sweep
+ * eats it). Retry is safe here precisely because every deterministic
+ * failure is caught and deleted — only transport errors ever throw.
  *
  * Never a loop: its own output lands under `do-photos/`, which the prefix
  * guard ignores.
  */
+
+/**
+ * Decode ceiling in pixels (~50MP — beyond any phone camera). The rule's
+ * 10MB bound caps the COMPRESSED size only: a small PNG/WebP can declare
+ * enormous dimensions and decompress to a ~1GB raster that OOM-kills the
+ * instance mid-`toBuffer()` — skipping the catch, so `rejectQuarantine`
+ * never runs and the fail-closed property silently dies. With the ceiling,
+ * sharp throws a normal Error at decode time and the existing catch turns
+ * a decompression bomb into the documented delete-and-stop.
+ */
+const MAX_INPUT_PIXELS = 50_000_000;
+
 export const doStripTaskPhoto = onObjectFinalized(
   {
     region: 'europe-west1',
-    // sharp holds the decoded raster in memory; 512MiB covers a 10MB
-    // upload's decoded pixels with headroom.
+    // sharp holds the decoded raster in memory; 512MiB covers
+    // MAX_INPUT_PIXELS-bounded rasters with headroom.
     memory: '512MiB',
+    retry: true, // see docstring — transport errors must re-fire
   },
   async (event) => {
     const name = event.data.name;
@@ -79,6 +96,20 @@ export const doStripTaskPhoto = onObjectFinalized(
       return;
     }
 
+    // A photoId that already published must not be silently REPLACED: the
+    // id is client-chosen, so without this a parent could re-upload
+    // different bytes for an id already attached to a task — including an
+    // `assigned`/`completed` task doUpdateTask refuses to edit — and swap
+    // the photos a doer accepted on. First-write-wins; a client replacing
+    // a wizard photo mints a fresh UUID anyway. (On a RETRIED event whose
+    // save landed but whose original-delete didn't, this branch performs
+    // exactly the missing cleanup.)
+    const finalFile = bucket.file(photoObjectPath(uid, uploadId));
+    if ((await finalFile.exists())[0]) {
+      await rejectQuarantine('photoId already published (first write wins)');
+      return;
+    }
+
     let original: Buffer;
     try {
       [original] = await file.download();
@@ -98,7 +129,7 @@ export const doStripTaskPhoto = onObjectFinalized(
     let stripped: Buffer;
     let format: string;
     try {
-      const image = sharp(original);
+      const image = sharp(original, { limitInputPixels: MAX_INPUT_PIXELS });
       const meta = await image.metadata();
       if (!meta.format || !REPUBLISHABLE.has(meta.format)) {
         // Decodable but not a format the pipeline republishes (svg is
@@ -121,7 +152,7 @@ export const doStripTaskPhoto = onObjectFinalized(
 
     // Republish under the final prefix with a SERVER-set contentType (the
     // sniffed format, not the client's claim), then delete the original.
-    await bucket.file(photoObjectPath(uid, uploadId)).save(stripped, {
+    await finalFile.save(stripped, {
       resumable: false,
       metadata: { contentType: `image/${format}` },
     });

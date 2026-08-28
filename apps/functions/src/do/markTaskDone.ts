@@ -3,7 +3,7 @@ import type { TaskDoc } from '@ejm/do-core';
 import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
-import { callerFamilyId } from './taskAccess.js';
+import { callerFamilyId, validTaskId } from './taskAccess.js';
 
 /**
  * `doMarkTaskDone` (plan §8, §6.5): either side marks an ASSIGNED task done.
@@ -24,10 +24,7 @@ export const doMarkTaskDone = onCall(
     }
     const uid = request.auth.uid;
     const data = (request.data ?? {}) as Record<string, unknown>;
-    if (typeof data.taskId !== 'string' || data.taskId.length === 0) {
-      throw new HttpsError('invalid-argument', 'taskId is required');
-    }
-    const ref = db.collection('doTasks').doc(data.taskId);
+    const ref = db.collection('doTasks').doc(validTaskId(data.taskId));
     const now = new Date();
 
     const callerDoc = await db.collection('users').doc(uid).get();
