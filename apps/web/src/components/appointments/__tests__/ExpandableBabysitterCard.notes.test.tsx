@@ -236,8 +236,9 @@ describe('ExpandableBabysitterCard — appointment notes (pre)', () => {
     // button (same label, rendered second) fires the clear.
     fireEvent.click(screen.getByText('familyDashboard.notes.remove'));
     expect(screen.getByText('familyDashboard.notes.removeTitle')).toBeTruthy();
-    const buttons = screen.getAllByText('familyDashboard.notes.remove');
-    fireEvent.click(buttons[buttons.length - 1]);
+    // The dialog's destructive confirm carries its OWN label (round 4 of
+    // the study port, PR #269): no positional disambiguation needed.
+    fireEvent.click(screen.getByText('familyDashboard.notes.removeConfirm'));
     await waitFor(() =>
       expect(h.callable).toHaveBeenCalledWith('setAppointmentNote', {
         appointmentId: 'apt-1',
@@ -277,9 +278,8 @@ describe('ExpandableBabysitterCard — appointment notes (pre)', () => {
     );
     expandCard();
     fireEvent.click(screen.getByText('familyDashboard.notes.remove'));
-    const buttons = screen.getAllByText('familyDashboard.notes.remove');
-    fireEvent.click(buttons[buttons.length - 1]);
-    await waitFor(() => expect(screen.getByText('familyDashboard.notes.error')).toBeTruthy());
+    fireEvent.click(screen.getByText('familyDashboard.notes.removeConfirm'));
+    await waitFor(() => expect(screen.getByText('familyDashboard.notes.removeError')).toBeTruthy());
     expect(screen.getByText('familyDashboard.notes.removeTitle')).toBeTruthy();
   });
 

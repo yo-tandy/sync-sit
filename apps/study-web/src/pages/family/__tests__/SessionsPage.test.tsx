@@ -894,6 +894,157 @@ describe('family SessionsPage — session notes (pre)', () => {
     );
   });
 
+  // ── Erasure affordance (issue #255 carve-out — twin of sit's
+  // ExpandableBabysitterCard.notes remove pins): once the window closes the
+  // author's add/edit swaps for a REMOVE that clears via the callable. ──
+
+  it('a started one_time with an own pre-note offers REMOVE, confirmed via the dialog', async () => {
+    h.sessions = [
+      confirmedOneTime({ sessionId: 'sRm', date: '2026-08-01', startTime: '09:00', preSessionNote: 'stale ask' }),
+    ];
+    renderWithProviders(<SessionsPage />);
+
+    expect(await screen.findByText('stale ask')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /add a note|edit note/i })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /remove note/i }));
+    expect(screen.getByText(/remove this note\?/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /remove it/i }));
+
+    await waitFor(() =>
+      expect(h.callable).toHaveBeenCalledWith('setSessionNote', {
+        sessionId: 'sRm',
+        kind: 'pre',
+        text: '',
+      }),
+    );
+    // Non-optimistic close on success; the note left local state too.
+    await waitFor(() => expect(screen.queryByText(/remove this note\?/i)).not.toBeInTheDocument());
+    expect(screen.queryByText('stale ask')).not.toBeInTheDocument();
+  });
+
+  it('cancelling the remove dialog sends nothing', async () => {
+    h.sessions = [
+      confirmedOneTime({ sessionId: 'sRm', date: '2026-08-01', startTime: '09:00', preSessionNote: 'stale ask' }),
+    ];
+    renderWithProviders(<SessionsPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /remove note/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^cancel$/i }));
+    expect(h.callable).not.toHaveBeenCalledWith('setSessionNote', expect.anything());
+    expect(screen.queryByText(/remove this note\?/i)).not.toBeInTheDocument();
+  });
+
+  it('a failed remove surfaces the error, keeps the dialog open, and the note survives', async () => {
+    // The worst outcome for this feature is a silent failed erasure — the
+    // author believing the note is gone when it is not.
+    h.sessions = [
+      confirmedOneTime({ sessionId: 'sRm', date: '2026-08-01', startTime: '09:00', preSessionNote: 'stale ask' }),
+    ];
+    renderWithProviders(<SessionsPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /remove note/i }));
+    h.callable.mockRejectedValueOnce(new Error('boom'));
+    fireEvent.click(screen.getByRole('button', { name: /remove it/i }));
+
+    expect(await screen.findByText(/couldn't remove your note/i)).toBeInTheDocument();
+    expect(screen.getByText(/remove this note\?/i)).toBeInTheDocument();
+    // Local state untouched: the note is still there behind the dialog.
+    expect(screen.getByText('stale ask')).toBeInTheDocument();
+  });
+
+  it('a stranded CONFIRMED past-dated one_time renders in history with its note removable', async () => {
+    // The completion cron normally flips this doc within the hour, but a doc
+    // it never completes (no endTime / persistent throw) used to render in
+    // NO bucket — note unreachable (round 2).
+    h.sessions = [
+      oneTime({ sessionId: 'sZ', status: 'confirmed', date: '2026-07-01', startTime: '09:00', preSessionNote: 'limbo ask' }),
+    ];
+    renderWithProviders(<SessionsPage />);
+
+    expect(await screen.findByText('limbo ask')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /remove note/i })).toBeInTheDocument();
+    // The badge must render a LABEL, not a raw i18n path — the status key
+    // must exist for every status the history bucket admits (round 3).
+    expect(screen.getByText('Confirmed')).toBeInTheDocument();
+    expect(screen.queryByText(/family\.sessions\.status\./)).not.toBeInTheDocument();
+  });
+
+  it('a completed series with completed work shows the endorse prompt in history (instances now load)', async () => {
+    // Deliberate side effect of loading instances for ALL series (round 3):
+    // hasCompletedWork can now see a terminal series' completed occurrences,
+    // so the endorse affordance appears exactly where the completed work is.
+    h.sessions = [recurring({ sessionId: 'sE', status: 'completed', tutorUserId: 'tut-9', tutorName: 'Nina Levy' })];
+    h.instances = {
+      sE: [instanceDoc({ instanceId: '2026-07-08', date: '2026-07-08', status: 'completed' })],
+    };
+    renderWithProviders(<SessionsPage />);
+
+    expect(await screen.findByRole('button', { name: /endorse/i })).toBeInTheDocument();
+  });
+
+  it('a CANCELLED one_time in history still shows the own note and offers REMOVE (never stranded)', async () => {
+    // The history render used to be completed-only; a cancelled session's
+    // note is exactly the one the author must still see and erase.
+    h.sessions = [oneTime({ sessionId: 'sX', status: 'cancelled', preSessionNote: 'orphaned ask' })];
+    renderWithProviders(<SessionsPage />);
+
+    expect(await screen.findByText('orphaned ask')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /remove note/i })).toBeInTheDocument();
+  });
+
+  it("the tutor's note alone offers NO remove (author-only affordance)", async () => {
+    h.sessions = [oneTime({ sessionId: 'sO', status: 'completed', postSessionNote: 'their recap' })];
+    renderWithProviders(<SessionsPage />);
+
+    expect(await screen.findByText('their recap')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /remove note/i })).not.toBeInTheDocument();
+  });
+
+  it('a CANCELLED series keeps its per-occurrence notes visible and removable in HISTORY', async () => {
+    // Terminal series strand their instance notes otherwise (round 1): the
+    // fetch must load instances for non-confirmed series and the history
+    // card must render each noted occurrence with the erasure affordance.
+    h.sessions = [recurring({ sessionId: 'sT', status: 'cancelled' })];
+    h.instances = {
+      sT: [instanceDoc({ instanceId: '2026-07-01', date: '2026-07-01', status: 'cancelled', preSessionNote: 'stranded ask' })],
+    };
+    renderWithProviders(<SessionsPage />);
+
+    expect(await screen.findByText('stranded ask')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /remove note/i }));
+    fireEvent.click(screen.getByRole('button', { name: /remove it/i }));
+
+    await waitFor(() =>
+      expect(h.callable).toHaveBeenCalledWith('setSessionNote', {
+        sessionId: 'sT',
+        instanceId: '2026-07-01',
+        kind: 'pre',
+        text: '',
+      }),
+    );
+  });
+
+  it('removing a note on a cancelled series occurrence carries the instanceId', async () => {
+    h.sessions = [confirmedRecurring({ sessionId: 'sR2' })];
+    h.instances = {
+      sR2: [instanceDoc({ instanceId: '2026-07-15', date: '2026-07-15', status: 'cancelled', preSessionNote: 'per-occurrence ask' })],
+    };
+    renderWithProviders(<SessionsPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /view dates/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /remove note/i }));
+    fireEvent.click(screen.getByRole('button', { name: /remove it/i }));
+
+    await waitFor(() =>
+      expect(h.callable).toHaveBeenCalledWith('setSessionNote', {
+        sessionId: 'sR2',
+        instanceId: '2026-07-15',
+        kind: 'pre',
+        text: '',
+      }),
+    );
+  });
+
   it('adds a pre-note to a series occurrence → setSessionNote carries instanceId', async () => {
     h.sessions = [confirmedRecurring({ sessionId: 'sR' })];
     h.instances = {

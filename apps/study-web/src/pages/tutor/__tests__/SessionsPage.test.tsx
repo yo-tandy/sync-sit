@@ -822,6 +822,101 @@ describe('tutor SessionsPage — session notes (post)', () => {
     );
   });
 
+  // ── Erasure affordance (issue #255 carve-out — twin of sit's remove pins,
+  // post-note side): where the post window is closed but the tutor's own
+  // note exists, add/edit swaps for REMOVE which clears via the callable. ──
+
+  it('a CANCELLED one_time with an own post-note offers REMOVE and clears via the callable', async () => {
+    h.sessions = [oneTime({ sessionId: 'sRm', status: 'cancelled', date: '2026-07-20', postSessionNote: 'stale debrief' })];
+    renderWithProviders(<SessionsPage />);
+
+    expect(await screen.findByText('stale debrief')).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /add session notes|edit session notes/i }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /remove note/i }));
+    expect(screen.getByText(/remove this note\?/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /remove it/i }));
+
+    await waitFor(() =>
+      expect(h.callable).toHaveBeenCalledWith('setSessionNote', {
+        sessionId: 'sRm',
+        kind: 'post',
+        text: '',
+      }),
+    );
+    await waitFor(() => expect(screen.queryByText(/remove this note\?/i)).not.toBeInTheDocument());
+    expect(screen.queryByText('stale debrief')).not.toBeInTheDocument();
+  });
+
+  it('a COMPLETED series keeps its per-occurrence post-notes visible and removable in HISTORY', async () => {
+    // Terminal series strand their instance notes otherwise (round 1).
+    h.sessions = [recurring({ sessionId: 'sT', status: 'completed' })];
+    h.instances = {
+      sT: [instanceDoc({ instanceId: '2026-07-01', date: '2026-07-01', status: 'completed', postSessionNote: 'stranded recap' })],
+    };
+    renderWithProviders(<SessionsPage />);
+
+    expect(await screen.findByText('stranded recap')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /remove note/i }));
+    fireEvent.click(screen.getByRole('button', { name: /remove it/i }));
+
+    await waitFor(() =>
+      expect(h.callable).toHaveBeenCalledWith('setSessionNote', {
+        sessionId: 'sT',
+        instanceId: '2026-07-01',
+        kind: 'post',
+        text: '',
+      }),
+    );
+  });
+
+  it('cancelling the remove dialog sends nothing', async () => {
+    h.sessions = [oneTime({ sessionId: 'sRm', status: 'cancelled', date: '2026-07-20', postSessionNote: 'stale debrief' })];
+    renderWithProviders(<SessionsPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /remove note/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^cancel$/i }));
+    expect(h.callable).not.toHaveBeenCalledWith('setSessionNote', expect.anything());
+    expect(screen.queryByText(/remove this note\?/i)).not.toBeInTheDocument();
+  });
+
+  it('a failed remove surfaces the error and keeps the confirm dialog open', async () => {
+    h.sessions = [oneTime({ sessionId: 'sRm', status: 'cancelled', date: '2026-07-20', postSessionNote: 'stale debrief' })];
+    renderWithProviders(<SessionsPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /remove note/i }));
+    h.callable.mockRejectedValueOnce(new Error('boom'));
+    fireEvent.click(screen.getByRole('button', { name: /remove it/i }));
+
+    expect(await screen.findByText(/couldn't remove your note/i)).toBeInTheDocument();
+    expect(screen.getByText(/remove this note\?/i)).toBeInTheDocument();
+    expect(screen.getByText('stale debrief')).toBeInTheDocument();
+  });
+
+  it('a stranded CONFIRMED past-dated one_time renders in history with the post window OPEN', async () => {
+    // Confirmed + started keeps the post window open server-side, so the
+    // stranded shape gets the EDIT affordance (not just remove).
+    h.sessions = [
+      oneTime({ sessionId: 'sZ', status: 'confirmed', date: '2026-07-01', startTime: '09:00', postSessionNote: 'limbo recap' }),
+    ];
+    renderWithProviders(<SessionsPage />);
+
+    expect(await screen.findByText('limbo recap')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /edit session notes/i })).toBeInTheDocument();
+    // The badge must render a LABEL, not a raw i18n path (round 3).
+    expect(screen.getByText('Confirmed')).toBeInTheDocument();
+    expect(screen.queryByText(/tutor\.sessions\.status\./)).not.toBeInTheDocument();
+  });
+
+  it("the family's pre-note alone offers NO remove (author-only affordance)", async () => {
+    h.sessions = [oneTime({ sessionId: 'sO', status: 'cancelled', preSessionNote: 'their ask' })];
+    renderWithProviders(<SessionsPage />);
+
+    expect(await screen.findByText('their ask')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /remove note/i })).not.toBeInTheDocument();
+  });
+
   it('does NOT offer the post affordance on a future series occurrence (pre shows read-only)', async () => {
     h.sessions = [confirmedRecurring({ sessionId: 'sR' })];
     h.instances = {

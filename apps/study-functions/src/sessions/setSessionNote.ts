@@ -26,7 +26,14 @@ import { setSessionNoteSchema } from '../validation/session.js';
  * recurring series and forbidden for a one_time one).
  *
  * Empty `text` clears the note (FieldValue.delete() — the field goes absent, not
- * blank). The author may overwrite their own note freely within its window.
+ * blank). The author may overwrite their own note freely within its window —
+ * and may CLEAR it at ANY time regardless of timing or status (issue #255,
+ * mirroring sit's setAppointmentNote carve-out: a solicited note — the pre
+ * placeholder invites specifics about a child — must always be erasable by
+ * its author, because the reader keeps read access to the doc indefinitely;
+ * without the carve-out the note becomes a one-way door the moment the
+ * session starts or leaves its annotatable status). Authoring CONTENT stays
+ * window-bound.
  *
  * Writes are callable-only (rules stay deny-all). v1 is SILENT: writing a note
  * fires NO notification to the counterparty (ledgered decision — the note is
@@ -76,6 +83,7 @@ export const setSessionNote = onCall(
     }
 
     let targetRef = sessionRef;
+    let targetData = session;
     let targetStatus = session.status as string;
     let targetDate = session.date as string | undefined;
     let targetStartTime = session.startTime as string;
@@ -88,6 +96,7 @@ export const setSessionNote = onCall(
       }
       const instance = instanceSnap.data()!;
       targetRef = instanceRef;
+      targetData = instance;
       targetStatus = instance.status as string;
       targetDate = instance.date as string;
       targetStartTime = instance.startTime as string;
@@ -111,41 +120,60 @@ export const setSessionNote = onCall(
       }
     }
 
-    // ── Status gate ── the target must be a live/settled session to annotate.
-    // A one_time parent is annotatable when 'confirmed' or 'completed'; a
-    // recurring occurrence when 'scheduled' or 'completed'. declined / cancelled
-    // / pending / modified targets have no session to annotate.
-    const annotatable = instanceId
-      ? targetStatus === 'scheduled' || targetStatus === 'completed'
-      : targetStatus === 'confirmed' || targetStatus === 'completed';
-    if (!annotatable) {
-      throw new HttpsError(
-        'failed-precondition',
-        'This session cannot take notes in its current state',
-      );
-    }
+    // ── Erasure carve-out (issue #255 — ported from sit's setAppointmentNote,
+    // where it landed first in PR #253): a CLEAR (empty text) passes only the
+    // role gate above. The pre-note solicits specifics about a child and the
+    // counterparty keeps read access to the doc indefinitely — so the author
+    // must always be able to erase their own note, even after the session
+    // starts or the target leaves its annotatable status. Authoring CONTENT
+    // stays window-bound below.
+    const cleared = text.length === 0;
 
-    // ── Timing gate (DST-safe, Paris wall-clock) ──
-    if (!targetDate) {
-      // A confirmed one_time session always carries a date; defensive only.
-      throw new HttpsError('failed-precondition', 'Session has no scheduled date');
-    }
-    const start = parisWallTimeToUtc(targetDate, targetStartTime);
-    const started = Date.now() >= start.getTime();
-    if (kind === 'pre' && started) {
-      throw new HttpsError('failed-precondition', 'Session already started');
-    }
-    if (kind === 'post' && !started) {
-      throw new HttpsError('failed-precondition', 'Session has not started yet');
+    if (!cleared) {
+      // ── Status gate ── the target must be a live/settled session to annotate.
+      // A one_time parent is annotatable when 'confirmed' or 'completed'; a
+      // recurring occurrence when 'scheduled' or 'completed'. declined / cancelled
+      // / pending / modified targets have no session to annotate.
+      const annotatable = instanceId
+        ? targetStatus === 'scheduled' || targetStatus === 'completed'
+        : targetStatus === 'confirmed' || targetStatus === 'completed';
+      if (!annotatable) {
+        throw new HttpsError(
+          'failed-precondition',
+          'This session cannot take notes in its current state',
+        );
+      }
+
+      // ── Timing gate (DST-safe, Paris wall-clock) ──
+      if (!targetDate) {
+        // A confirmed one_time session always carries a date; defensive only.
+        throw new HttpsError('failed-precondition', 'Session has no scheduled date');
+      }
+      const start = parisWallTimeToUtc(targetDate, targetStartTime);
+      const started = Date.now() >= start.getTime();
+      if (kind === 'pre' && started) {
+        throw new HttpsError('failed-precondition', 'Session already started');
+      }
+      if (kind === 'post' && !started) {
+        throw new HttpsError('failed-precondition', 'Session has not started yet');
+      }
     }
 
     // ── Write the note (or clear it) on the correct doc ──
+    // A CLEAR deliberately does NOT bump updatedAt (mirrors sit): erasure is
+    // not a change the counterparty should be re-alerted to, and updatedAt
+    // keeps meaning "last real change". Content writes still bump it.
     const field = kind === 'pre' ? 'preSessionNote' : 'postSessionNote';
-    const cleared = text.length === 0;
-    await targetRef.update({
-      [field]: cleared ? FieldValue.delete() : text,
-      updatedAt: new Date(),
-    });
+    if (cleared) {
+      if (targetData[field] === undefined) {
+        // No-op clear: nothing stored, nothing to erase. Succeed without
+        // touching the doc at all.
+        return { success: true };
+      }
+      await targetRef.update({ [field]: FieldValue.delete() });
+    } else {
+      await targetRef.update({ [field]: text, updatedAt: new Date() });
+    }
 
     await writeUserActivity(uid, 'session_note_set', {
       sessionId,
