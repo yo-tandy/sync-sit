@@ -16,7 +16,7 @@ const h = vi.hoisted(() => ({
   },
   // Per-name callable dispatcher: httpsCallable(functions, name) returns a
   // fn that routes here, so tests can assert each callable's payload.
-  invoke: vi.fn((_name: string, _data?: unknown) => Promise.resolve({ data: {} })),
+  invoke: vi.fn(() => Promise.resolve({ data: {} })),
 }));
 
 vi.mock('@/config/firebase', () => ({ auth: {}, db: {}, functions: {} }));

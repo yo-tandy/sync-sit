@@ -35,6 +35,10 @@ export function MyTasksPage() {
   const [tasks, setTasks] = useState<TaskDoc[] | null>(null);
   const [pendingByTask, setPendingByTask] = useState<Record<string, number>>({});
   const [error, setError] = useState(false);
+  // Expiry is judged against the clock captured AT snapshot time (the
+  // usePublishedSearches idiom, and render-purity): fresh enough — every
+  // task change re-delivers the snapshot.
+  const [snapshotNow, setSnapshotNow] = useState(0);
 
   useEffect(() => {
     if (!familyId) return;
@@ -46,6 +50,7 @@ export function MyTasksPage() {
       ),
       (snap) => {
         setTasks(snap.docs.map((d) => ({ ...(d.data() as TaskDoc), taskId: d.id })));
+        setSnapshotNow(Date.now());
         setError(false);
       },
       () => setError(true),
@@ -101,7 +106,6 @@ export function MyTasksPage() {
     completed: 'family.myTasks.emptyCompleted',
     cancelled: 'family.myTasks.emptyCancelled',
   }[tab];
-  const now = Date.now();
 
   return (
     <div className="px-6 pt-4 pb-8">
@@ -146,7 +150,7 @@ export function MyTasksPage() {
       ) : (
         byTab[tab].map((task) => {
           const pending = pendingByTask[task.taskId] ?? 0;
-          const expired = task.status === 'open' && tsMillis(task.expiresAt) <= now;
+          const expired = task.status === 'open' && tsMillis(task.expiresAt) <= snapshotNow;
           return (
             <Link key={task.taskId} to={`/family/tasks/${task.taskId}`} className="block">
               <Card className="mb-3 transition-colors hover:border-brand-300">
