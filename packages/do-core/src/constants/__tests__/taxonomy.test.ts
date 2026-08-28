@@ -33,16 +33,24 @@ describe('taxonomy integrity (§5, §14)', () => {
   });
 
   it('every flagged sub-category (guardian-consent / adult-present / money / creature / transport) references a real category', () => {
-    for (const def of SUB_CATEGORIES) {
-      const anyFlag =
-        def.flags.guardianConsent ||
-        def.flags.recommendAdultPresent ||
-        def.flags.handlesFamilyMoney ||
-        def.flags.livingCreature ||
-        def.flags.transport;
-      if (anyFlag) {
-        expect(isTaskCategory(def.category)).toBe(true);
-        // and the def itself is reachable through the taxonomy lookups
+    // Asserted per flag FAMILY so the title's promise holds for each of the
+    // five independently — and each family is non-empty, so a refactor that
+    // strips a whole flag off the taxonomy fails here instead of passing
+    // vacuously.
+    const families = [
+      'guardianConsent',
+      'recommendAdultPresent',
+      'handlesFamilyMoney',
+      'livingCreature',
+      'transport',
+    ] as const;
+    for (const flag of families) {
+      const flagged = SUB_CATEGORIES.filter((s) => s.flags[flag] === true);
+      expect(flagged.length, `no sub-category carries ${flag}`).toBeGreaterThan(0);
+      for (const def of flagged) {
+        expect(isTaskCategory(def.category), `${def.key} (${flag})`).toBe(true);
+        // ...and is reachable through the lookups the consent gate and the
+        // posting wizard actually use.
         expect(getSubCategoryDef(def.key)).toBe(def);
         expect(getSubCategories(def.category)).toContain(def);
       }
@@ -66,18 +74,76 @@ describe('taxonomy integrity (§5, §14)', () => {
     }
   });
 
-  it('carries the §5 sub-category counts per category', () => {
-    const counts: Record<TaskCategory, number> = {
-      green_thumb: 7,
-      boxes: 7,
-      ikea: 6,
-      party: 7,
-      it: 7,
-      errands: 6,
-      pet_house: 5,
+  it('carries exactly the §5 sub-category keys per category', () => {
+    // Deliberately a change-detector: PR1's contract IS the §5 key list, in
+    // §5 order — these keys are what tasks persist in `subCategory`, what
+    // the i18n label namespace hangs off, and what the guardian flags key
+    // on. A legitimate taxonomy change updates this expectation in the same
+    // commit, and the diff names exactly which key moved (which a bare
+    // count never did).
+    const expected: Record<TaskCategory, string[]> = {
+      green_thumb: [
+        'green_thumb_vacation_plant_care',
+        'green_thumb_garden_watering',
+        'green_thumb_lawn_mowing',
+        'green_thumb_planting_potting',
+        'green_thumb_weeding_pruning',
+        'green_thumb_green_waste',
+        'green_thumb_other',
+      ],
+      boxes: [
+        'boxes_packing',
+        'boxes_unpacking',
+        'boxes_van_loading',
+        'boxes_clear_out',
+        'boxes_furniture_moving',
+        'boxes_dump_runs',
+        'boxes_other',
+      ],
+      ikea: [
+        'ikea_assembly',
+        'ikea_disassembly',
+        'ikea_wall_mounting',
+        'ikea_store_pickup',
+        'ikea_fixing',
+        'ikea_other',
+      ],
+      party: [
+        'party_setup',
+        'party_kids_entertainment',
+        'party_serving',
+        'party_music_tech',
+        'party_cleanup',
+        'party_baking',
+        'party_other',
+      ],
+      it: [
+        'it_device_setup',
+        'it_wifi_smart_home',
+        'it_data_transfer',
+        'it_troubleshooting',
+        'it_teaching',
+        'it_tv_audio',
+        'it_other',
+      ],
+      errands: [
+        'errands_grocery',
+        'errands_pharmacy',
+        'errands_parcels',
+        'errands_dry_cleaning',
+        'errands_returns',
+        'errands_other',
+      ],
+      pet_house: [
+        'pet_house_dog_walking',
+        'pet_house_feeding',
+        'pet_house_drop_in',
+        'pet_house_vet_trips',
+        'pet_house_other',
+      ],
     };
     for (const cat of TASK_CATEGORIES) {
-      expect(getSubCategories(cat)).toHaveLength(counts[cat]);
+      expect(getSubCategories(cat).map((s) => s.key)).toEqual(expected[cat]);
     }
   });
 

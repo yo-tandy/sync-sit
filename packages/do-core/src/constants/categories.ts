@@ -29,25 +29,33 @@ export const TASK_CATEGORIES: readonly TaskCategory[] = [
   'pet_house',
 ] as const;
 
+/**
+ * Deeply readonly on purpose: `flags.guardianConsent` is what
+ * `requiresGuardianConsent` reads to stand up the §6.2 consent gate, and the
+ * per-category consideration lists are SHARED array instances across a
+ * category's sub-categories — a mutable field would let one `push` rewrite
+ * every sibling. The readonly members make the trust boundary explicit at
+ * compile time, at no runtime cost.
+ */
 export interface SubCategoryDef {
-  key: string; // e.g. 'ikea_assembly'
-  category: TaskCategory;
+  readonly key: string; // e.g. 'ikea_assembly'
+  readonly category: TaskCategory;
   /** i18n keys for the "things to cover" list — EN + FR in do-core's content
    *  module (`content/considerations.{en,fr}.ts`), rendered in three places
    *  (§5): posting hints, task detail, assigned-task checklist. */
-  considerationKeys: string[];
-  flags: {
+  readonly considerationKeys: readonly string[];
+  readonly flags: {
     /** Sub-category is flagged: a governed student's supervising parent must
      *  approve the offer before the family sees it (decision 7). */
-    guardianConsent?: boolean;
+    readonly guardianConsent?: boolean;
     /** The posting form nudges the family toward adultPresent: 'yes'. */
-    recommendAdultPresent?: boolean;
+    readonly recommendAdultPresent?: boolean;
     /** Student would handle the family's money or card — the Errands policy. */
-    handlesFamilyMoney?: boolean;
+    readonly handlesFamilyMoney?: boolean;
     /** A living creature depends on this being done. */
-    livingCreature?: boolean;
+    readonly livingCreature?: boolean;
     /** Transport is usually required. */
-    transport?: boolean;
+    readonly transport?: boolean;
   };
 }
 
@@ -56,7 +64,7 @@ export interface SubCategoryDef {
 // carries the full category list (the per-sub-category field keeps future
 // divergence additive). Content strings live in content/considerations.*.ts.
 
-const GREEN_THUMB_CONSIDERATIONS = [
+const GREEN_THUMB_CONSIDERATIONS: readonly string[] = [
   'considerations.green_thumb.access',
   'considerations.green_thumb.absence_dates',
   'considerations.green_thumb.plants_water',
@@ -71,7 +79,7 @@ const GREEN_THUMB_CONSIDERATIONS = [
   'considerations.green_thumb.green_waste',
 ];
 
-const BOXES_CONSIDERATIONS = [
+const BOXES_CONSIDERATIONS: readonly string[] = [
   'considerations.boxes.lifting_floor',
   'considerations.boxes.volume',
   'considerations.boxes.supplies',
@@ -84,7 +92,7 @@ const BOXES_CONSIDERATIONS = [
   'considerations.boxes.gloves_clothing',
 ];
 
-const IKEA_CONSIDERATIONS = [
+const IKEA_CONSIDERATIONS: readonly string[] = [
   'considerations.ikea.items_models',
   'considerations.ikea.instructions_parts',
   'considerations.ikea.tools',
@@ -96,7 +104,7 @@ const IKEA_CONSIDERATIONS = [
   'considerations.ikea.ladder_ceiling',
 ];
 
-const PARTY_CONSIDERATIONS = [
+const PARTY_CONSIDERATIONS: readonly string[] = [
   'considerations.party.date_end_time',
   'considerations.party.guest_count_ages',
   'considerations.party.childcare_check',
@@ -110,7 +118,7 @@ const PARTY_CONSIDERATIONS = [
   'considerations.party.arrival_time',
 ];
 
-const IT_CONSIDERATIONS = [
+const IT_CONSIDERATIONS: readonly string[] = [
   'considerations.it.passwords',
   'considerations.it.personal_data',
   'considerations.it.backup_first',
@@ -123,7 +131,7 @@ const IT_CONSIDERATIONS = [
   'considerations.it.written_summary',
 ];
 
-const ERRANDS_CONSIDERATIONS = [
+const ERRANDS_CONSIDERATIONS: readonly string[] = [
   'considerations.errands.money_mechanism',
   'considerations.errands.keep_receipt',
   'considerations.errands.out_of_stock',
@@ -135,7 +143,7 @@ const ERRANDS_CONSIDERATIONS = [
   'considerations.errands.nobody_home',
 ];
 
-const PET_HOUSE_CONSIDERATIONS = [
+const PET_HOUSE_CONSIDERATIONS: readonly string[] = [
   'considerations.pet_house.animal_profile',
   'considerations.pet_house.feeding_routine',
   'considerations.pet_house.medication',
