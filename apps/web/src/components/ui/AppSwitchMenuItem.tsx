@@ -3,8 +3,8 @@ import { useTranslation } from 'react-i18next';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '@/config/firebase';
 import { STUDY_APP_URL } from '@/lib/appSwitch';
+import studyBrandMark from '@ejm/shared-ui/brand-marks/sync-study.png';
 import { Spinner } from './Spinner';
-import studyLogo from '@/assets/sync-study-logo.png';
 
 /**
  * Burger-menu entry that jumps to sync-study without re-login: mints a
@@ -50,7 +50,7 @@ export function AppSwitchMenuItem() {
           {busy ? (
             <Spinner className="h-5 w-5" />
           ) : (
-            <img src={studyLogo} alt="" className="h-5 w-5 rounded object-contain" />
+            <img src={studyBrandMark} alt="" className="h-5 w-5 rounded object-contain" />
           )}
         </span>
         <span>{t('appSwitch.toStudy')}</span>

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { httpsCallable } from 'firebase/functions';
 import { Spinner } from '@ejm/shared-ui';
-import sitLogo from '@/assets/sync-sit-logo.png';
+import sitBrandMark from '@ejm/shared-ui/brand-marks/sync-sit.png';
 import { functions } from '@/config/firebase';
 import { SIT_APP_URL } from '@/utils/appSwitch';
 
@@ -50,7 +50,7 @@ export function AppSwitchMenuItem() {
           {busy ? (
             <Spinner className="h-5 w-5" />
           ) : (
-            <img src={sitLogo} alt="" className="h-5 w-5 rounded object-contain" />
+            <img src={sitBrandMark} alt="" className="h-5 w-5 rounded object-contain" />
           )}
         </span>
         <span>{t('appSwitch.toSit')}</span>

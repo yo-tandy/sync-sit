@@ -8,8 +8,8 @@ import {
   CalendarIcon,
   DownloadIcon,
 } from '@ejm/shared-ui';
+import sitBrandMark from '@ejm/shared-ui/brand-marks/sync-sit.png';
 import { SIT_APP_URL } from '@/utils/appSwitch';
-import sitLogo from '@/assets/sync-sit-logo.png';
 
 export function AboutPage() {
   const { t, i18n } = useTranslation();
@@ -165,7 +165,7 @@ export function AboutPage() {
           href={SIT_APP_URL}
           className="mb-6 flex items-center gap-3 rounded-lg bg-gray-50 p-3 active:bg-gray-100"
         >
-          <img src={sitLogo} alt="" className="h-8 w-8 shrink-0 rounded-lg object-contain" />
+          <img src={sitBrandMark} alt="" className="h-8 w-8 shrink-0 rounded-lg object-contain" />
           <div>
             <p className="text-sm font-semibold text-brand-600">Sync/Sit</p>
             <p className="text-xs text-gray-500">
