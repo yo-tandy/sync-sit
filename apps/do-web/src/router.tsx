@@ -16,6 +16,7 @@ import {
   AboutPage,
   ReportProblemPage,
   ComingSoonPage,
+  DoerEnrollment,
   HomePage,
 } from '@/lazyPages';
 import { BRAND, SUPPORT_EMAIL } from '@/constants/brand';
@@ -31,8 +32,9 @@ export const router = createBrowserRouter([
       { path: '/', element: <WelcomePage /> },
       { path: '/login', element: <LoginPage /> },
       { path: '/signup', element: <SignUpRolePage /> },
-      // Enrollment placeholders until plan §13 PR4 (see ComingSoonPage).
-      { path: '/enroll/doer', element: <ComingSoonPage /> },
+      { path: '/enroll/doer', element: <DoerEnrollment /> },
+      // Parent enrollment stays a placeholder until the family UI PR
+      // (plan §13 PR7; see ComingSoonPage).
       { path: '/enroll/parent', element: <ComingSoonPage /> },
       { path: '/about', element: <AboutPage /> },
       { path: '/privacy', element: <PrivacyPage brand={BRAND} supportEmail={SUPPORT_EMAIL} /> },

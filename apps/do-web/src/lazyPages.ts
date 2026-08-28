@@ -31,6 +31,11 @@ export const ComingSoonPage = lazy(() =>
   import('@/pages/public/ComingSoonPage').then((m) => ({ default: m.ComingSoonPage })),
 );
 
+// Enrollment
+export const DoerEnrollment = lazy(() =>
+  import('@/pages/enrollment/doer/DoerEnrollment').then((m) => ({ default: m.DoerEnrollment })),
+);
+
 // Authenticated shell
 export const HomePage = lazy(() =>
   import('@/pages/home/HomePage').then((m) => ({ default: m.HomePage })),
