@@ -10,6 +10,9 @@
         ],
         "study": [
           "sync-study-app"
+        ],
+        "do": [
+          "sync-do-app"
         ]
       }
     }
