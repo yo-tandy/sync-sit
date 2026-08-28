@@ -324,7 +324,14 @@ export interface TaskDoc {
   subCategory: string;               // key within the category, or '<cat>_other'
   title: string;                     // ≤ 80 chars
   description: string;               // ≤ 2000 chars, free text, provider-visible
-  photoIds: string[];                // ≤ 6, GCS objects, EXIF-stripped (§11)
+  /**
+   * ≤ 6, EXIF-stripped (§11). Each entry carries BOTH halves of the storage
+   * path `do-photos/{uid}/{photoId}` — the uid is not derivable from the
+   * task: photos may be uploaded by either parent of the family, and
+   * `task.createdByUserId` is whichever parent hit publish, not necessarily
+   * the uploader. `doGetTaskPhotoUrl` signs from these two fields directly.
+   */
+  photos: { uid: string; photoId: string }[];
 
   // ── When (discriminated by `timing`; exactly one group is non-null)
   timing: TaskTiming;
@@ -350,7 +357,7 @@ export interface TaskDoc {
    * `doSubmitOffer`; **decremented whenever an offer leaves `pending` or
    * `pending_guardian` by any path.** Stated as an invariant rather than a
    * list, because an enumeration is what goes stale: an earlier draft named
-   * withdraw, decline and the step-7 sibling auto-decline, and silently
+   * withdraw, decline and the sibling auto-decline at acceptance, and silently
    * omitted the winner's own `pending → accepted` transition (§6.4 step 6)
    * and `doCancelTask`'s sweep to `expired`. An assigned task's card would
    * then have read "1 offer" forever. Maintained transactionally.
@@ -819,15 +826,28 @@ UI can pre-empt the error rather than surfacing it:
 
 `doAcceptOffer` runs a single Firestore transaction:
 
-1. Re-read the task. Assert `status == 'open'` and `expiresAt > now`.
-2. Re-read the offer. Assert `status == 'pending'` and `taskId` matches.
+**Reads first, then writes — Firestore transactions throw on a read after
+any write** (the Admin SDK's "all reads … before all writes"), so the phases
+are explicit rather than interleaved:
+
+*Read phase:*
+
+1. Read the task. Assert `status == 'open'` and `expiresAt > now`.
+2. Read the offer. Assert `status == 'pending'` and `taskId` matches.
 3. Assert the caller is a member of the task's family.
-4. Assert the offering student is still `status == 'active'` and still has
+4. Read the offering student's user doc. Assert `status == 'active'` and
    `profiles.doer.enrollmentComplete`.
-5. Task → `assigned`; write `assignedUserId`, `assignedOfferId`, `assignedAt`,
+5. Read the sibling offers (`tx.get` on `taskOffers` where `taskId == t` and
+   status is live) — hoisted here because step 8 needs them and no read may
+   follow step 6.
+
+*Write phase:*
+
+6. Task → `assigned`; write `assignedUserId`, `assignedOfferId`, `assignedAt`,
    `agreedPrice`.
-6. Accepted offer → `accepted`.
-7. **Every other `pending` offer on the task → `declined`,
+7. Accepted offer → `accepted`.
+8. **Every other `pending` offer on the task (from the step-5 read) →
+   `declined`,
    `declinedReason: 'sibling_accepted'`. Every `pending_guardian` offer →
    `expired`** — NOT `declined`, because `declined` is in the family's §7.2
    allow-list. Routing an undecided guardian-gated offer to `declined` would
@@ -839,23 +859,24 @@ UI can pre-empt the error rather than surfacing it:
    you," the allow-list already excludes it, and it is the truthful
    description: nobody declined this offer, its moment passed. §6.2's
    invisibility promise thus holds through BOTH exits — guardian denial
-   (round 5) and sibling acceptance.
-8. Write notifications: winner, each loser, the winner's guardian if there is
-   an active link.
-9. Audit-log the assignment via `writeUserActivity`.
+   and sibling acceptance.
+9. Write notifications: winner, each loser, the winner's guardian if there is
+   an active link (outside the transaction — notifications are not
+   transactional writes).
+10. Audit-log the assignment via `writeUserActivity`.
 
-Step 7 is why acceptance is transactional and not a sequence of writes: a
+Step 8 is why acceptance is transactional and not a sequence of writes: a
 second parent accepting a different offer concurrently must lose.
 
 **What bounds the write set.** Not `DO_OFFER_MAX_ACTIVE` — that caps pending
 offers *per student*, and `DO_TASK_MAX_ACTIVE` caps open tasks *per family*.
 Neither limits how many distinct students pile onto one popular task, so the
-sibling-decline set in step 7 is bounded by cohort size, not by either
+sibling-decline set in step 8 is bounded by cohort size, not by either
 constant. At EJM scale that stays far below Firestore's hard 500-writes-per-
 transaction limit, but "very likely fine" is not a bound.
 
 `DO_OFFER_MAX_PER_TASK = 25`, enforced in `doSubmitOffer` against the
-transactionally-maintained **live** `offerCount` (§4.1), makes it one: step 7
+transactionally-maintained **live** `offerCount` (§4.1), makes it one: step 8
 declines exactly the live offers, so a ceiling on live offers is a ceiling on
 the write set. Because the count is live rather than lifetime, withdrawn and
 declined offers give their slot back — a task does not seal itself shut after
@@ -1091,7 +1112,7 @@ doTasks:    (status ASC, cancelledAt ASC)                   — the sweep, cance
 taskOffers: (familyId ASC, taskId ASC, status ASC, createdAt ASC)
                                                             — offers on a task, family side
 taskOffers: (taskId ASC, status ASC, createdAt ASC)         — offers on a task, admin side
-taskOffers: (doerUserId ASC, status ASC, createdAt DESC)    — "my offers"
+taskOffers: (doerUserId ASC, createdAt DESC)                — "my offers" (status tabs narrow client-side, per the split above)
 taskOffers: (guardian.familyId ASC, status ASC)             — guardian queue (server-side, see below)
 references: (tutorUserId ASC, status ASC)                   — offer-card endorsements, study side (NEW)
 users:      (status ASC, profiles.doer.notifyNewTasks ASC,
@@ -1236,11 +1257,14 @@ does not exist yet. Keying by uploader instead makes ownership structural:
   own** `do-photos/{uid}/` prefix — no task needed. This is what the wizard's
   thumbnails and the "not yet stripped" retry state render from
   pre-`doPostTask`; it exposes only the caller's own uploads, post-strip;
-- `doPostTask` accepts `photoIds` and verifies each exists under the
-  *caller's* `do-photos/{uid}/` prefix before writing them to the task —
-  nobody can attach someone else's photo;
-- `doGetTaskPhotoUrl` asserts the §7.2 audience via the TASK (the photo id
-  must be in the task's `photoIds`), then signs the URL for the stored object.
+- `doPostTask` accepts photo ids and verifies each exists under the
+  *caller's* `do-photos/{uid}/` prefix before writing them to the task as
+  `{uid, photoId}` pairs (§4.1) — nobody can attach someone else's photo, and
+  the stored uid is what lets reads reconstruct the path later;
+- `doGetTaskPhotoUrl` asserts the §7.2 audience via the TASK (the photo must
+  be in the task's `photos` array), then signs `do-photos/{uid}/{photoId}`
+  from the stored pair — no reconstruction, no guessing which parent
+  uploaded.
 
 A quarantine object that never gets claimed is swept with the dailies, and so
 is a `do-photos` object no task references after the same window. PR10's
@@ -1262,9 +1286,9 @@ All in `apps/functions/src/do/**`, codebase `default`, region `europe-west1`,
 | `doEnrollDoer` | Auth | Creates `profiles.doer` — full or abbreviated depending on existing profiles. **Refuses an ungoverned under-15 caller** (`!isGoverned` guarding `checkEnrollmentAge`, the `enrollTutor` shape — §11.1); a governed caller passes at any age |
 | `doUpdateDoerProfile` | Auth | Categories, bio, transport, `notifyNewTasks` |
 | `doPostTask` | Auth (verified family) | Validates, scrubs, computes `areaLabel` + `expiresAt`, enforces `DO_TASK_MAX_ACTIVE` |
-| `doUpdateTask` | Auth (owner family) | `open` tasks only; description/photos/budget/timing. **Runs the same caller-prefix check as `doPostTask` on any `photoIds` change** (§7.4 — it is the second write path for photos, and an unguarded one would void the anti-hijack guarantee). Recomputes `expiresAt` server-side, which is how an `ongoing` task renews (§6.3). Notifies students with pending offers that terms changed |
-| `doCancelTask` | Auth (family or assigned doer — §6.5 says either side may cancel an `assigned` task, and `cancelledBy: 'doer'` must be reachable; on an `open` task, family only) | Task → `cancelled`, all live offers → `expired` (zeroing `offerCount` per §4.1's invariant), notify. On an `assigned` task there are no live offers left (step 7 cleared them); the ACCEPTED offer keeps `accepted` — it is the record of who was engaged at what price, the contact block it carries was already revealed to both parties (wiping it un-reveals nothing), and the 30-day cancelled-task sweep bounds its retention |
-| `doSubmitOffer` | Auth (active doer) | Enforces the ceiling, resolves the guardian gate, writes `pending` or `pending_guardian` |
+| `doUpdateTask` | Auth (owner family) | `open` tasks only; description/photos/budget/timing. **Runs the caller-prefix check on any photo ADDED** — existing `{uid, photoId}` entries pass through untouched, since they were verified at their own add time and may belong to the OTHER parent of the family; re-checking them against the current caller's prefix would wrongly strip a co-parent's photos (§7.4). Recomputes `expiresAt` server-side, which is how an `ongoing` task renews (§6.3). Notifies students with pending offers that terms changed |
+| `doCancelTask` | Auth (family or assigned doer — §6.5 says either side may cancel an `assigned` task, and `cancelledBy: 'doer'` must be reachable; on an `open` task, family only) | Task → `cancelled`, all live offers → `expired` (zeroing `offerCount` per §4.1's invariant), notify. On an `assigned` task there are no live offers left (the sibling flip cleared them); the ACCEPTED offer keeps `accepted` — it is the record of who was engaged at what price, the contact block it carries was already revealed to both parties (wiping it un-reveals nothing), and the 30-day cancelled-task sweep bounds its retention |
+| `doSubmitOffer` | Auth (active doer) | Enforces the ceilings, **re-checks the under-15 floor for ungoverned callers** (supervision is revocable and the enrollment gate never re-runs — §11.1), resolves the guardian gate, writes `pending` or `pending_guardian` |
 | `doUpdateOffer` | Auth (offering student) | Price/message/helper while `pending` |
 | `doWithdrawOffer` | Auth (offering student) | → `withdrawn`, decrements the live `offerCount` (§4.1) |
 | `doDecideOfferAsGuardian` | Auth (supervising parent) | `pending_guardian` → `pending` or `withdrawn` |
@@ -1276,7 +1300,7 @@ All in `apps/functions/src/do/**`, codebase `default`, region `europe-west1`,
 | `doAdminDeleteTask` | Admin | Hard delete + audit |
 | `doGetOwnPhotoUrl` | Auth | Signs a URL for a photo under the CALLER'S OWN `do-photos/{uid}/` prefix — the wizard's pre-task thumbnail path (§7.4's return leg) |
 | `doGetTaskPhotoUrl` | Auth | Asserts the §7.2 board audience (or family membership) and returns a short-lived signed URL for a task photo — the §7.4 option-1 read path; final objects are `allow read: if false` |
-| `doStripTaskPhoto` | Storage trigger | Fires on `do-uploads/{uid}/*`: strips EXIF, republishes into the task-independent `do-photos/{uid}/` (no `taskId` exists at upload time — §7.4), deletes the quarantine original. Not a callable |
+| `doStripTaskPhoto` | Storage trigger | Fires on `do-uploads/{uid}/*`: strips EXIF, republishes into the task-independent `do-photos/{uid}/` (no `taskId` exists at upload time — §7.4), deletes the quarantine original. **Fails closed on non-image bytes**: the rule's `contentType` check is client-asserted metadata, so hostile bytes labelled `image/jpeg` WILL arrive — the stripper deletes the quarantine object and stops, rather than throwing and re-firing on every retry. Not a callable |
 | `doSendTaskDigest` | Scheduled | The §10 board digest: batches `new_task_matching` for students whose `profiles.doer.categories` match tasks created since their last digest, at most one per student per 6h. A scheduled batcher rather than an on-create fan-out, because the rate limit is per-RECIPIENT — an on-create trigger would need per-student dedupe state anyway, and the batcher IS that state. Uses the §7.3 `users` composite |
 | `doSweepTasks` | Scheduled | Daily: delete expired `open` tasks and their offers; delete `cancelled` tasks (and their offers) older than 30 days — mirroring `cleanupOldData`'s cancelled/rejected appointment rule; auto-complete stale `doerMarkedDoneAt` tasks; delete unclaimed `do-uploads` quarantine objects (§7.4). Extends the existing `cleanupOldData` schedule rather than adding a second job |
 
@@ -1476,8 +1500,18 @@ it is spam.
   time instead (`searchBabysitters.ts:211-224`, with the same `!isGoverned`
   bypass and the comment "a supervised account … is deliberately searchable
   at any age — supervision is its protection"). So `enrollTutor` is a single
-  precedent, not a universal one — but it is the right one, because sync-do
-  has no search-time chokepoint to fall back on: the board is a client read.
+  precedent, not a universal one. sync-do takes it AND adds what sit's
+  search-time check provides and an enrollment-only gate cannot:
+  **durability against revoked supervision**. `revokeSupervision` flips the
+  link and drops the `governedBy` mirror without touching `profiles.*` — so a
+  13-year-old enrolled under supervision keeps `profiles.doer` after
+  revocation. Sit self-heals because its floor re-runs at search time;
+  an enrollment-only floor never re-runs. The board read is a client query
+  with no server chokepoint, but **offering is a callable** — so
+  `doSubmitOffer` re-checks the floor: an ungoverned caller under 15 is
+  refused there too (`reason: 'under_15'`), which restores the self-healing
+  property at the moment that matters. A formerly supervised young student
+  can still browse; they cannot offer.
 
   `checkEnrollmentAge` itself
   (`packages/shared-core/src/utils/agePolicy.ts:47-63`) returns `'under_15'`
@@ -1556,8 +1590,18 @@ discovered in an incident.
 
   Worth being explicit because a completed sync-do task carries more than a
   completed appointment does: the free-text description, the photos, the
-  agreed price, and — under §4.2's stored-block form — the family's address on
-  the accepted offer. Those go only through the GDPR hard-delete path. If the
+  agreed price, — under §4.2's stored-block form — the family's address on
+  the accepted offer, **and the +1 helper's full name and age**. Those go
+  only through the GDPR hard-delete path — and the helper is the one data
+  subject for whom that path does not exist: §11.3 establishes they have no
+  account, no consent record and (per the age field) are frequently a minor,
+  and `exportUserData`/`deleteUser` key on uid, so a helper can be neither
+  exported nor erased by any mechanism in this plan. Their data leaves only
+  when the offer document does. That is a genuine GDPR exposure the ToS
+  cannot fully paper over (the assigned student attests they may share the
+  helper's details, but the helper never consented to indefinite retention);
+  Q8 now carries it, because a finite completed-task retention — or Q6's
+  no-stored-copy option — is also what bounds the helper's exposure. If the
   owner wants a finite retention for completed tasks, that is **new** work for
   PR10's sweep, not an existing rule to inherit.
 - Consent: the abbreviated cross-app enrollment still records `consentAt` /
@@ -1698,7 +1742,7 @@ see §12 for why the scaffold, not the family UI, is where they are needed.
   shape §7.2 requires — both the equality and the `in`-subset forms must
   **pass**, and the *unconstrained* query (no `status` filter) must **fail**;
   **a `pending_guardian` sibling flipped by an acceptance is `expired`, not
-  `declined`, and stays family-unreadable** (the §6.4 step-7 leak — the
+  `declined`, and stays family-unreadable** (the §6.4 sibling-flip leak — the
   pre-decision and guardian-denial cases alone would pass with it open); the
   doer's board read; the doer's own-offers query;
   the family's own-tasks query (`where('familyId','==',f)` — the same
@@ -1719,14 +1763,17 @@ see §12 for why the scaffold, not the family UI, is where they are needed.
   running) — post→offer→accept end-to-end; **concurrent accepts of two
   different offers, exactly one wins**; guardian approve and deny; **a
   `pending_guardian` sibling flipped by acceptance lands in `expired`**
-  (§6.4 step 7); **`doPostTask` AND `doUpdateTask` refuse a `photoId` that lives under
+  (§6.4's sibling flip); **`doPostTask` AND `doUpdateTask` refuse a `photoId` that lives under
   another uploader's `do-photos` prefix** (the round-7 anti-hijack check on
   both write paths — without a pin either is one refactor away from becoming
   a lookup that trusts the id); **an
   UNGOVERNED under-15 caller is refused by `doEnrollDoer`, a GOVERNED
   under-15 caller is not, and an ungoverned caller with a missing or
   unparseable `dateOfBirth` is refused `invalid-argument`** (the gate must
-  never no-op silently — `enrollTutor.ts:256-260`) (both halves of §11.1's floor — the unconditional
+  never no-op silently — `enrollTutor.ts:256-260`); **a doer whose
+  supervision was revoked and who is still under 15 is refused by
+  `doSubmitOffer`** (the durability half — enrollment-only floors do not
+  survive `revokeSupervision`, §11.1) (both halves of §11.1's floor — the unconditional
   version of this test would have locked supervised students out and
   diverged from `enrollTutor`); ceiling enforcement, including that a withdrawn or declined offer
   returns its slot so a task does not seal shut; sweep deleting expired tasks
@@ -1907,8 +1954,9 @@ nothing between them and the task. Today they can.
   description and photos. The alternatives: a finite retention for completed
   tasks (new sweep work, a `(status, completedAt)` index), or Q6's callable
   option, which stores no second copy of the address at all — making Q6 and
-  Q8 partially the same decision. Default if unanswered: inherit the platform
-  behaviour, as written.
+  Q8 partially the same decision. The same choice also bounds the §11.4
+  helper exposure — the one data subject with no export or erasure path.
+  Default if unanswered: inherit the platform behaviour, as written.
 
 ### Risks
 
