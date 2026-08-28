@@ -112,9 +112,11 @@ PublicLayout / enrollment flows (already `max-w`-capped where it matters),
 
 ## Task list
 
-- [ ] PR A: PageContainer + NavTabs + SideNav + study adoption + tests
-- [ ] PR B: sit non-admin adoption + tests
-- [ ] PR C: sit admin adoption + tests
-- [ ] Gates per push: web+study-web+shared-ui `tsc -p tsconfig.app.json
+- [x] PR A (#288): PageContainer + NavTabs + study adoption + tests
+- [x] PR B (#289): sit non-admin adoption + tests
+- [x] PR C (#290): SideNav + sit admin adoption + tests
+- [x] Gates per push: web+study-web+shared-ui `tsc -p tsconfig.app.json
       --noEmit`; both apps' full vitest suites with honest exit codes
 - [ ] Screenshots: parent session captures (list in report)
+- [ ] Follow-up: name the remaining ~70 Dialog call sites (ariaLabel) to opt
+      them into the modal semantics the #288 review added
