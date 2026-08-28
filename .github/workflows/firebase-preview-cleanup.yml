@@ -1,0 +1,66 @@
+# Delete a PR's hosting preview channels when the PR closes (issue #316).
+#
+# The preview workflow creates a pr-N channel per hosting site with a 7-day
+# expiry; on busy weeks the accumulated channels for merged PRs hit the
+# per-site channel quota and EVERY new PR's preview fails with 429 "channel
+# quota reached" (PR #315 was the first casualty; ~94 stale channels were
+# pruned by hand on 2026-08-29). Deleting on close keeps the site's channel
+# count proportional to OPEN PRs instead of the week's merge volume.
+#
+# Deletion is best-effort per site (a channel may not exist if the preview
+# job never ran or already expired) but the job FAILS if any existing
+# channel's deletion errors -- a silent auth breakage here would just
+# rebuild the quota problem.
+name: Cleanup PR preview channels
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  cleanup:
+    if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Enable pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.13.1 --activate
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      # Full install mirrors the preview workflow's idiom; --ignore-scripts
+      # keeps it light (no package builds needed for firebase-tools alone).
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: sync-sit
+          workload_identity_provider: projects/652129443234/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+          service_account: github-action-1196270164@sync-sit.iam.gserviceaccount.com
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: Delete the PR's preview channels
+        run: |
+          CHANNEL="pr-${{ github.event.pull_request.number }}"
+          FAILED=0
+          for SITE in sync-sit sync-study-app sync-do-app; do
+            if pnpm exec firebase hosting:channel:list --site "$SITE" --project sync-sit --json 2>/dev/null \
+               | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{const j=JSON.parse(d);const has=((j.result||{}).channels||[]).some(c=>(c.name||'').endsWith('/channels/'+process.argv[1]));process.exit(has?0:1)})" "$CHANNEL"; then
+              echo "deleting $SITE/$CHANNEL"
+              pnpm exec firebase hosting:channel:delete "$CHANNEL" --site "$SITE" --project sync-sit --force || FAILED=1
+            else
+              echo "no $CHANNEL on $SITE (never created, expired, or site absent) -- skipping"
+            fi
+          done
+          exit $FAILED
