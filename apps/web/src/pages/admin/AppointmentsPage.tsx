@@ -159,7 +159,7 @@ export function AdminAppointmentsPage() {
       </div>
 
       {/* Delete confirmation */}
-      <Dialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)}>
+      <Dialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)} ariaLabel={t('admin.deleteAppointment')}>
         <h3 className="mb-2 text-lg font-semibold">{t('admin.deleteAppointment')}</h3>
         <p className="mb-6 text-sm text-gray-600">{t('admin.confirmDeleteAppointment')}</p>
         <div className="flex gap-3">

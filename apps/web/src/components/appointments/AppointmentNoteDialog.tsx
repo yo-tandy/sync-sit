@@ -31,7 +31,7 @@ export interface AppointmentNoteDialogProps {
 
 export function AppointmentNoteDialog({ open, onClose, ...rest }: AppointmentNoteDialogProps) {
   return (
-    <Dialog open={open} onClose={onClose}>
+    <Dialog open={open} onClose={onClose} ariaLabel={rest.title}>
       <NoteForm onClose={onClose} {...rest} />
     </Dialog>
   );

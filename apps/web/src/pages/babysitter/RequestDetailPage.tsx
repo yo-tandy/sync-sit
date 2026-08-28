@@ -508,7 +508,7 @@ export function RequestDetailPage() {
           copy as the save path. */}
       {/* onClose gated on noteSaving: dismissing mid-flight would unmount
           the only thing that can render the error (non-optimistic call). */}
-      <Dialog open={noteRemoveOpen} onClose={() => { if (!noteSaving) setNoteRemoveOpen(false); }}>
+      <Dialog open={noteRemoveOpen} onClose={() => { if (!noteSaving) setNoteRemoveOpen(false); }} ariaLabel={t('request.notes.removeTitle')}>
         <h3 className="mb-2 text-lg font-bold">{t('request.notes.removeTitle')}</h3>
         <p className="mb-3 text-sm text-gray-600">{t('request.notes.removeDesc')}</p>
         {noteError && <p className="mb-3 text-sm text-brand-600">{noteError}</p>}
@@ -539,7 +539,7 @@ export function RequestDetailPage() {
       />
 
       {/* Withdraw dialog (own-initiated pending, issue #207 PR3) */}
-      <Dialog open={withdrawDialog} onClose={() => setWithdrawDialog(false)}>
+      <Dialog open={withdrawDialog} onClose={() => setWithdrawDialog(false)} ariaLabel={t('request.withdrawTitle')}>
         <h3 className="mb-2 text-lg font-bold">{t('request.withdrawTitle')}</h3>
         <p className="mb-5 text-sm text-gray-600">{t('request.withdrawDesc')}</p>
         <div className="flex gap-2">
@@ -553,7 +553,7 @@ export function RequestDetailPage() {
       </Dialog>
 
       {/* Accept Dialog */}
-      <Dialog open={acceptDialog} onClose={() => setAcceptDialog(false)}>
+      <Dialog open={acceptDialog} onClose={() => setAcceptDialog(false)} ariaLabel={t('request.confirmAppointment')}>
         <h3 className="mb-2 text-lg font-bold">{t('request.confirmAppointment')}</h3>
         <p className="mb-4 text-sm text-gray-600">
           {t('request.confirmDesc')}
@@ -582,7 +582,7 @@ export function RequestDetailPage() {
       </Dialog>
 
       {/* Decline Dialog */}
-      <Dialog open={declineDialog} onClose={() => setDeclineDialog(false)}>
+      <Dialog open={declineDialog} onClose={() => setDeclineDialog(false)} ariaLabel={t('request.declineTitle')}>
         <h3 className="mb-2 text-lg font-bold">{t('request.declineTitle')}</h3>
         <p className="mb-5 text-sm text-gray-600">
           {t('request.declineDesc')}
@@ -599,7 +599,7 @@ export function RequestDetailPage() {
 
       {/* Success Dialog */}
       {success && (
-        <Dialog open onClose={() => navigate('/babysitter')}>
+        <Dialog open onClose={() => navigate('/babysitter')} ariaLabel={success === 'accepted' ? t('request.appointmentConfirmed') : t('request.requestDeclined')}>
           <div className="text-center">
             <div className={`mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full ${success === 'accepted' ? 'bg-green-50' : 'bg-gray-100'}`}>
               {success === 'accepted' ? (

@@ -265,6 +265,7 @@ export function AdminGovernancePage() {
           setRevokeTarget(null);
           setRevokeReason('');
         }}
+        ariaLabel={t('admin.governance.forceRevokeTitle')}
       >
         <h3 className="mb-2 text-lg font-bold">{t('admin.governance.forceRevokeTitle')}</h3>
         <p className="mb-3 text-sm text-gray-600">
