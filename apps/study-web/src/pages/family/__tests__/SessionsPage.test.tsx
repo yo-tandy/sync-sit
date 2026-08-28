@@ -952,6 +952,28 @@ describe('family SessionsPage — session notes (pre)', () => {
     expect(screen.getByText('stale ask')).toBeInTheDocument();
   });
 
+  it('a failed-precondition SAVE shows the dead-end message, other failures the generic one (issue #255)', async () => {
+    // The window closed mid-edit (the session started, or it changed state in
+    // another tab) — retrying can never work, so the dialog says so.
+    h.sessions = [confirmedOneTime({ sessionId: 'sN' })];
+    h.callable.mockRejectedValueOnce(
+      Object.assign(new Error('closed'), { code: 'functions/failed-precondition' }),
+    );
+    renderWithProviders(<SessionsPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /add a note/i }));
+    fireEvent.change(await screen.findByRole('textbox'), { target: { value: 'too late' } });
+    fireEvent.click(screen.getByRole('button', { name: /save note/i }));
+    expect(await screen.findByText(/can no longer be edited/i)).toBeInTheDocument();
+    // Dialog stays open (non-optimistic).
+    expect(screen.getByRole('textbox')).toBeInTheDocument();
+
+    // A generic failure still says 'try again'.
+    h.callable.mockRejectedValueOnce(new Error('boom'));
+    fireEvent.click(screen.getByRole('button', { name: /save note/i }));
+    expect(await screen.findByText(/couldn't save your note/i)).toBeInTheDocument();
+  });
+
   it('a stranded CONFIRMED past-dated one_time renders in history with its note removable', async () => {
     // The completion cron normally flips this doc within the hour, but a doc
     // it never completes (no endTime / persistent throw) used to render in

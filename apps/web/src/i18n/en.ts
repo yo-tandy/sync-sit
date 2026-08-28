@@ -587,6 +587,7 @@ export default {
       placeholder: 'e.g. Door code 1234B. Bedtime at 20:30. Léa is allergic to peanuts.',
       save: 'Save note',
       error: 'Couldn\'t save your note. Please try again.',
+      errorClosed: 'This note can no longer be edited — you can still remove it.',
     },
     appointmentsTitle: 'Appointments',
     viewAppointments: 'View your appointments',
@@ -665,6 +666,7 @@ export default {
       placeholder: 'e.g. All went well; kids asleep by 21:00. We finished the homework.',
       save: 'Save note',
       error: 'Couldn\'t save your note. Please try again.',
+      errorClosed: 'This note can no longer be edited — you can still remove it.',
     },
   },
 

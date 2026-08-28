@@ -508,8 +508,19 @@ export function SessionsPage() {
       });
       patchLocalNote(session, instance, trimmed.length ? trimmed : undefined);
       setNoteTarget(null);
-    } catch {
-      setNoteError(t('family.sessions.notes.error'));
+    } catch (err) {
+      // A failed-precondition save is a dead-end, not a transient failure:
+      // the window closed mid-edit (the session started, or it changed state
+      // in another tab) and retrying can never work — say so instead of 'try
+      // again' (issue #255 follow-up). Clears never hit it (the erasure
+      // carve-out is status/timing-blind), so removeNote keeps its
+      // erasure-specific copy.
+      const code = (err as { code?: string })?.code ?? '';
+      setNoteError(
+        code.includes('failed-precondition')
+          ? t('family.sessions.notes.errorClosed')
+          : t('family.sessions.notes.error'),
+      );
     } finally {
       setNoteSaving(false);
     }

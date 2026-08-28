@@ -194,6 +194,23 @@ describe('ExpandableBabysitterCard — appointment notes (pre)', () => {
     ).toBe(false);
   });
 
+  it('a failed-precondition save shows the dead-end message instead of try-again (issue #255)', async () => {
+    // The window closed mid-edit (e.g. the sitting started while the dialog
+    // was open) — retrying can never work, so the dialog says so.
+    h.callable.mockRejectedValueOnce(
+      Object.assign(new Error('closed'), { code: 'functions/failed-precondition' }),
+    );
+    render(<ExpandableBabysitterCard appointment={apt()} info={info} variant="confirmed" />);
+    expandCard();
+    fireEvent.click(screen.getByText('familyDashboard.notes.add'));
+    fireEvent.change(screen.getByPlaceholderText('familyDashboard.notes.placeholder'), {
+      target: { value: 'x' },
+    });
+    fireEvent.click(screen.getByText('familyDashboard.notes.save'));
+    await waitFor(() => expect(screen.getByText('familyDashboard.notes.errorClosed')).toBeTruthy());
+    expect(screen.queryByText('familyDashboard.notes.error')).toBeNull();
+  });
+
   it('a confirmed one_time that already started offers NO pre affordance', () => {
     render(
       <ExpandableBabysitterCard

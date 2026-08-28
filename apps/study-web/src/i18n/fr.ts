@@ -502,6 +502,7 @@ export default {
         placeholder: 'ex. Fractions abordées ; devoirs p.42. Prévoir une calculatrice la prochaine fois.',
         save: 'Enregistrer',
         error: 'Impossible d\'enregistrer votre note. Veuillez réessayer.',
+        errorClosed: 'Cette note ne peut plus être modifiée — vous pouvez toujours la supprimer.',
       },
       instanceStatus: {
         completed: 'Terminée',
@@ -1032,6 +1033,7 @@ export default {
         placeholder: 'ex. Merci de travailler les fractions cette semaine.',
         save: 'Enregistrer',
         error: 'Impossible d\'enregistrer votre note. Veuillez réessayer.',
+        errorClosed: 'Cette note ne peut plus être modifiée — vous pouvez toujours la supprimer.',
       },
       actionError: 'Une erreur est survenue. Veuillez réessayer.',
       location: {

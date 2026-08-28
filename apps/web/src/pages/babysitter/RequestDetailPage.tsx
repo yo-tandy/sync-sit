@@ -167,8 +167,19 @@ export function RequestDetailPage() {
     try {
       await callSetNote(text);
       setNoteOpen(false);
-    } catch {
-      setNoteError(t('request.notes.error'));
+    } catch (err) {
+      // A failed-precondition save is a dead-end, not a transient failure:
+      // the appointment changed state in another tab (e.g. got cancelled
+      // before it started) and retrying can never work — say so instead of
+      // 'try again' (issue #255 follow-up). Clears never hit it (the erasure
+      // carve-out is status/timing-blind), so the remove path keeps its
+      // erasure-specific copy.
+      const code = (err as { code?: string })?.code ?? '';
+      setNoteError(
+        code.includes('failed-precondition')
+          ? t('request.notes.errorClosed')
+          : t('request.notes.error'),
+      );
     } finally {
       setNoteSaving(false);
     }
