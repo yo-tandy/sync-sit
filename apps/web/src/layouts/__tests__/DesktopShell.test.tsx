@@ -28,7 +28,7 @@ function shellPin(pageText: string) {
   const container = screen.getByText(pageText).parentElement!;
   expect(container.className).toMatch(/\bmx-auto\b/);
   expect(container.className).toMatch(/\bmax-w-2xl\b/);
-  expect(container.className).toContain('has-[[data-page-width=wide]]:max-w-5xl');
+  expect(container.className).toContain('has-[>[data-page-width=wide]]:max-w-5xl');
 }
 
 describe('sit portal shells cap routed content (issue #119)', () => {

@@ -260,6 +260,7 @@ export default {
   menu: {
     openMenu: 'Ouvrir le menu',
     primaryNav: 'Navigation principale',
+    appMenu: 'Menu',
     home: 'Accueil',
     editProfile: 'Modifier le profil',
     babysittingOptions: 'Options de babysitting',
