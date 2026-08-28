@@ -31,6 +31,14 @@ export interface StudyContactRequestDoc {
   /** Denormalized display name of the parent who sent the request. */
   parentName: string;
   /**
+   * users/{uid} owning `parentName`, so identity corrections can refresh the
+   * snapshot (issue #273). On the parent-initiated shape it equals
+   * createdByUserId; on the tutor-initiated shape it is stamped with the
+   * responding parent at accept. Absent on pre-#273 docs (unreachable by the
+   * correction fan-out) and on tutor-initiated docs awaiting a response.
+   */
+  parentUserId?: string;
+  /**
    * Denormalized tutor display name so the FAMILY's requests list can render
    * without a users/{tutorUserId} read (rules do not let parents read tutor
    * user docs).

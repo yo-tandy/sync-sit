@@ -22,6 +22,7 @@ import {
   ShareIcon,
   UsersIcon,
   SupervisionChip,
+  NavTabs,
 } from '@ejm/shared-ui';
 import { AppSwitchMenuItem } from './AppSwitchMenuItem';
 import { NotificationBell } from './NotificationBell';
@@ -91,6 +92,20 @@ export function AppBar() {
 
   const menuHasBadge = pendingEndorsements > 0;
 
+  // The tutor portal's primary destinations — one list, two renderings
+  // (issue #119): the burger dialog below and the md+ NavTabs row. Dashboard
+  // stays on the home icon, mirroring the burger.
+  const primaryNav = [
+    { to: '/tutor/requests', icon: <BellIcon className="h-5 w-5" />, label: t('tutor.requestsTitle') },
+    // "My families" mirrors sync-sit's babysitter menu entry (UsersIcon → /babysitter/families).
+    { to: '/tutor/families', icon: <UsersIcon className="h-5 w-5" />, label: t('tutor.familiesTitle') },
+    { to: '/tutor/sessions', icon: <CalendarIcon className="h-5 w-5" />, label: t('tutor.sessionsTitle') },
+    { to: '/tutor/endorsements', icon: <CheckIcon className="h-5 w-5" />, label: t('tutor.endorsementsTitle'), badge: pendingEndorsements },
+    { to: '/tutor/account', icon: <UserIcon className="h-5 w-5" />, label: t('tutor.accountTitle') },
+    { to: '/tutor/subjects', icon: <ClipboardListIcon className="h-5 w-5" />, label: t('tutor.subjectsTitle') },
+    { to: '/tutor/schedule', icon: <CalendarIcon className="h-5 w-5" />, label: t('tutor.scheduleTitle') },
+  ];
+
   return (
     <>
       <div className="sticky top-0 z-40 flex h-12 items-center justify-between bg-brand-600 px-4">
@@ -122,21 +137,23 @@ export function AppBar() {
         </div>
       </div>
 
-      <Dialog open={menuOpen} onClose={() => setMenuOpen(false)}>
+      {/* Persistent primary nav at md+ (issue #119); the burger stays the
+          phone entry point and, at desktop, the home of the secondary items. */}
+      <NavTabs
+        items={primaryNav.map(({ to, label, badge }) => ({ to, label, badge }))}
+        ariaLabel={t('menu.primaryNav')}
+      />
+
+      <Dialog open={menuOpen} onClose={() => setMenuOpen(false)} ariaLabel={t('menu.appMenu')}>
         <div className="-m-6 overflow-hidden rounded-xl">
           <div className="border-b border-gray-100 px-4 py-3">
             <p className="text-base font-bold text-gray-900">{userDoc?.firstName} {userDoc?.lastName}</p>
             <p className="text-xs text-gray-500">{userDoc?.email}</p>
           </div>
 
-          <MenuItem icon={<BellIcon className="h-5 w-5" />} label={t('tutor.requestsTitle')} to="/tutor/requests" onNavigate={() => setMenuOpen(false)} />
-          {/* "My families" mirrors sync-sit's babysitter menu entry (UsersIcon → /babysitter/families). */}
-          <MenuItem icon={<UsersIcon className="h-5 w-5" />} label={t('tutor.familiesTitle')} to="/tutor/families" onNavigate={() => setMenuOpen(false)} />
-          <MenuItem icon={<CalendarIcon className="h-5 w-5" />} label={t('tutor.sessionsTitle')} to="/tutor/sessions" onNavigate={() => setMenuOpen(false)} />
-          <MenuItem icon={<CheckIcon className="h-5 w-5" />} label={t('tutor.endorsementsTitle')} badge={pendingEndorsements} to="/tutor/endorsements" onNavigate={() => setMenuOpen(false)} />
-          <MenuItem icon={<UserIcon className="h-5 w-5" />} label={t('tutor.accountTitle')} to="/tutor/account" onNavigate={() => setMenuOpen(false)} />
-          <MenuItem icon={<ClipboardListIcon className="h-5 w-5" />} label={t('tutor.subjectsTitle')} to="/tutor/subjects" onNavigate={() => setMenuOpen(false)} />
-          <MenuItem icon={<CalendarIcon className="h-5 w-5" />} label={t('tutor.scheduleTitle')} to="/tutor/schedule" onNavigate={() => setMenuOpen(false)} />
+          {primaryNav.map((item) => (
+            <MenuItem key={item.to} icon={item.icon} label={item.label} badge={item.badge} to={item.to} onNavigate={() => setMenuOpen(false)} />
+          ))}
 
           <div className="border-t border-gray-100" />
 

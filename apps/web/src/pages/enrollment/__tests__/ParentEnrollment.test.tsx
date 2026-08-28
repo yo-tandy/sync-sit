@@ -28,7 +28,7 @@ const h = vi.hoisted(() => ({
   // fails and the account-ready login state renders (issue #262).
   signIn: vi.fn(() => {
     h.auth.firebaseUser = { uid: 'new' };
-    h.auth.userDoc = { profiles: { parent: {} } };
+    h.auth.userDoc = { profiles: { parent: { familyId: 'fam-1' } } };
     return Promise.resolve();
   }),
   // Listeners registered through the mocked store subscription — tests fire
@@ -295,7 +295,7 @@ describe('ParentEnrollment enrollFamily payload (issue #176)', () => {
     // profile. The mount effect's step !== 0 guard must NOT hijack the
     // success navigation into a replace-redirect once this lands.
     h.refreshUserDoc = vi.fn().mockImplementation(() => {
-      h.auth.userDoc = { profiles: { parent: {} } };
+      h.auth.userDoc = { profiles: { parent: { familyId: 'fam-1' } } };
       return Promise.resolve();
     });
     renderFlow();
@@ -430,7 +430,7 @@ describe('ParentEnrollment post-enrollment session gate (issue #262)', () => {
     // already unsubscribed itself at timeout).
     await vi.waitFor(() => expect(h.subscribers.length).toBe(1));
 
-    h.auth.userDoc = { profiles: { parent: {} } };
+    h.auth.userDoc = { profiles: { parent: { familyId: 'fam-1' } } };
     await act(async () => {
       h.subscribers[0]({ loading: false, firebaseUser: h.auth.firebaseUser, userDoc: h.auth.userDoc });
     });
@@ -457,7 +457,7 @@ describe('ParentEnrollment post-enrollment session gate (issue #262)', () => {
     expect(h.navigate).not.toHaveBeenCalledWith('/family');
 
     // The snapshot lands: settle the store and notify the listener.
-    h.auth.userDoc = { profiles: { parent: {} } };
+    h.auth.userDoc = { profiles: { parent: { familyId: 'fam-1' } } };
     await act(async () => {
       h.subscribers[0]({ loading: false, firebaseUser: h.auth.firebaseUser, userDoc: h.auth.userDoc });
     });
@@ -479,5 +479,32 @@ describe('ParentEnrollment resend cooldown wiring (issue #250)', () => {
     await vi.waitFor(() => {
       expect(screen.getByTestId('resend-cooldown-s')).toHaveTextContent(/^600$/);
     });
+  });
+});
+
+// Issue #279 / PR #284 round 4: the sit-side guard pins (mirror of the
+// study suite's) -- membership redirects, an ORPHAN profile enrolls.
+describe('ParentEnrollment orphan-parent guards (issue #279)', () => {
+  it('authed WITH membership: redirects to /family instead of enrolling', async () => {
+    h.auth = {
+      firebaseUser: { uid: 'member-1' },
+      userDoc: { profiles: { parent: { enrollmentComplete: true, familyId: 'fam-1' } } },
+      loading: false,
+    };
+    renderFlow();
+    await vi.waitFor(() => expect(h.navigate).toHaveBeenCalledWith('/family', { replace: true }));
+  });
+
+  it('authed with an ORPHAN parent profile: enrolls a new family (no redirect)', async () => {
+    h.auth = {
+      firebaseUser: { uid: 'orphan-1' },
+      userDoc: { profiles: { parent: { enrollmentComplete: true } } },
+      loading: false,
+    };
+    renderFlow();
+    // Positive pin (round-5 review): the orphan takes the else branch --
+    // family-info renders -- rather than a sleep-and-assert-absence.
+    expect(await screen.findByText('family-info-step')).toBeTruthy();
+    expect(h.navigate).not.toHaveBeenCalledWith('/family', { replace: true });
   });
 });

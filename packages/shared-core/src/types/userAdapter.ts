@@ -23,6 +23,21 @@ export function isParent(user: User | null | undefined): boolean {
   return !!user?.profiles?.parent;
 }
 
+/**
+ * TRUE membership, mirroring the server's classification exactly
+ * (addProfileToUser, issue #279): EITHER membership field counts -- the
+ * Plan D pointer (profiles.parent.familyId) or the legacy Plan C root
+ * familyId, with or without a parent profile. The server rejects a parent
+ * add for both shapes (the orphan-parent carve-out serves only docs with
+ * NEITHER field), so the client guards match it 1:1 (PR #284 round 7
+ * closed the root-only-no-profile server gap that round 5 had mirrored).
+ */
+export function hasFamilyMembership(user: User | null | undefined): boolean {
+  return !!(
+    user?.profiles?.parent?.familyId || (user as { familyId?: string } | null | undefined)?.familyId
+  );
+}
+
 export function isBabysitter(user: User | null | undefined): boolean {
   return !!user?.profiles?.babysitter;
 }

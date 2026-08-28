@@ -246,6 +246,164 @@ describe('deleteUser', () => {
     });
   });
 
+  describe('references / endorsements (GDPR, issue #295)', () => {
+    it('deleting a babysitter (PROVIDER) deletes their references — family-submitted and manual — leaving other sitters\' references untouched', async () => {
+      const db = getDb();
+
+      const familyRef = await db.collection('references').add({
+        type: 'family_submitted',
+        status: 'approved',
+        babysitterUserId: seed.babysitter1.uid,
+        submittedByUserId: seed.parent1.uid,
+        submittedByFamilyId: seed.family1Id,
+        submittedByName: 'Claire Dupont',
+        refName: 'Claire Dupont',
+        referenceText: 'Wonderful with our kids.',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+      // Manual references carry third-party contact data the sitter entered.
+      const manualRef = await db.collection('references').add({
+        type: 'manual',
+        status: 'published',
+        babysitterUserId: seed.babysitter1.uid,
+        refName: 'Ancien employeur',
+        refPhone: '+33611111111',
+        refEmail: 'ref@example.test',
+        createdAt: new Date(),
+      });
+      const otherSitterRef = await db.collection('references').add({
+        type: 'family_submitted',
+        status: 'approved',
+        babysitterUserId: seed.babysitter2.uid,
+        submittedByUserId: seed.parent3.uid,
+        submittedByFamilyId: seed.family2Id,
+        submittedByName: 'Anna Martin',
+        refName: 'Anna Martin',
+        referenceText: 'Great sitter, always on time.',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+
+      await callFunction('deleteUser', { targetUserId: seed.babysitter1.uid }, adminToken);
+
+      expect((await familyRef.get()).exists).toBe(false);
+      expect((await manualRef.get()).exists).toBe(false);
+      // Unrelated user's reference untouched.
+      expect((await otherSitterRef.get()).exists).toBe(true);
+
+      // The audit log records how many reference docs were erased (count only).
+      const logs = await db
+        .collection('auditLogs')
+        .where('action', '==', 'delete_user')
+        .where('targetUserId', '==', seed.babysitter1.uid)
+        .get();
+      expect(logs.docs).toHaveLength(1);
+      // 3 = the two references seeded above + the manual reference
+      // seedTestData pre-seeds for babysitter1 ("Claire Dubois").
+      expect(logs.docs[0].data().details.deletedReferences).toBe(3);
+    });
+
+    it('deleting a tutor (PROVIDER) deletes the study endorsements about them', async () => {
+      const db = getDb();
+
+      const endorsement = await db.collection('references').add({
+        type: 'family_submitted',
+        appSource: 'study',
+        status: 'approved',
+        tutorUserId: seed.tutor1.uid,
+        submittedByUserId: seed.parent1.uid,
+        submittedByFamilyId: seed.family1Id,
+        submittedByName: 'Claire Dupont',
+        refName: 'Claire Dupont',
+        referenceText: 'Patient tutor, our daughter improved fast.',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+
+      await callFunction('deleteUser', { targetUserId: seed.tutor1.uid }, adminToken);
+
+      expect((await endorsement.get()).exists).toBe(false);
+    });
+
+    it('deleting a co-parent (SUBMITTER) deletes only the endorsements they personally submitted and decrements the tutor\'s endorsementCount', async () => {
+      const db = getDb();
+
+      // Two approved endorsements of tutor1 from family1: one by parent2 (the
+      // user being deleted), one by parent1 (the surviving co-parent).
+      const byDeletedParent = await db.collection('references').add({
+        type: 'family_submitted',
+        appSource: 'study',
+        status: 'approved',
+        tutorUserId: seed.tutor1.uid,
+        submittedByUserId: seed.parent2.uid,
+        submittedByFamilyId: seed.family1Id,
+        submittedByName: 'Marc Dupont',
+        refName: 'Marc Dupont',
+        referenceText: 'Free-form family prose naming our kids.',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+      const bySurvivingParent = await db.collection('references').add({
+        type: 'family_submitted',
+        appSource: 'study',
+        status: 'approved',
+        tutorUserId: seed.tutor1.uid,
+        submittedByUserId: seed.parent1.uid,
+        submittedByFamilyId: seed.family1Id,
+        submittedByName: 'Claire Dupont',
+        refName: 'Claire Dupont',
+        referenceText: 'Second endorsement from the other parent.',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+      await db.collection('users').doc(seed.tutor1.uid).update({
+        'profiles.tutor.endorsementCount': 2,
+      });
+
+      await callFunction('deleteUser', { targetUserId: seed.parent2.uid }, adminToken);
+
+      // The deleted submitter's endorsement is fully erased (the doc IS their
+      // personal data: name + free-form text); the co-parent's own endorsement
+      // survives — the family still exists and stands behind it.
+      expect((await byDeletedParent.get()).exists).toBe(false);
+      expect((await bySurvivingParent.get()).exists).toBe(true);
+
+      // The surviving tutor's denormalized counter tracks the deletion.
+      const tutorDoc = await db.collection('users').doc(seed.tutor1.uid).get();
+      expect(tutorDoc.data()!.profiles.tutor.endorsementCount).toBe(1);
+    });
+
+    it('deleting the LAST parent deletes the family\'s endorsements via submittedByFamilyId (even when submitted by a departed parent)', async () => {
+      const db = getDb();
+
+      // Submitter uid no longer resolvable (e.g. a parent who left earlier and
+      // was anonymized) — only the family key still ties the doc to family2.
+      const familyKeyedRef = await db.collection('references').add({
+        type: 'family_submitted',
+        appSource: 'study',
+        status: 'private',
+        tutorUserId: seed.tutor1.uid,
+        submittedByUserId: 'deleted',
+        submittedByFamilyId: seed.family2Id,
+        submittedByName: 'Ancien Parent',
+        refName: 'Ancien Parent',
+        referenceText: 'Endorsement from a family being fully erased.',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+
+      // parent3 is family2's sole parent.
+      await callFunction('deleteUser', { targetUserId: seed.parent3.uid }, adminToken);
+
+      expect((await familyKeyedRef.get()).exists).toBe(false);
+      // Private (never-approved) endorsement: the tutor's counter was never
+      // incremented, so the deletion must not create/decrement it.
+      const tutorDoc = await db.collection('users').doc(seed.tutor1.uid).get();
+      expect(tutorDoc.data()!.profiles.tutor.endorsementCount).toBeUndefined();
+    });
+  });
+
   describe('errors', () => {
     it('rejects unauthenticated callers', async () => {
       await expect(

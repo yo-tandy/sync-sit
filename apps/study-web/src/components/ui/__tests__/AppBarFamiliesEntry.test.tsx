@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { screen, fireEvent } from '@testing-library/react';
+import { screen, fireEvent, within } from '@testing-library/react';
 
 vi.mock('@/config/firebase', () => ({ auth: {}, db: {}, functions: {}, storage: {} }));
 vi.mock('firebase/functions', () => ({
@@ -30,7 +30,8 @@ describe('tutor "My families" entry points', () => {
   it('shows the families entry in the tutor menu, linking to /tutor/families', () => {
     renderWithProviders(<AppBar />);
     fireEvent.click(screen.getByRole('button', { name: /open menu/i }));
-    const link = screen.getByRole('link', { name: /my families/i });
+    // #119 renders the same list as md+ tabs too — scope to the burger dialog.
+    const link = within(screen.getByRole('dialog')).getByRole('link', { name: /my families/i });
     expect(link).toHaveAttribute('href', '/tutor/families');
   });
 

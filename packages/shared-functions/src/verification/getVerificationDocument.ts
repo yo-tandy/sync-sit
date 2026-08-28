@@ -65,6 +65,19 @@ export const getVerificationDocument = onCall(
       const [signedUrl] = await file.getSignedUrl({
         action: 'read',
         expires: Date.now() + 15 * 60 * 1000, // 15 minutes
+        // Force download: uploads carry an attacker-controllable contentType
+        // (the client passes browser File.type through), so without this a
+        // text/html upload would render as a live page on
+        // storage.googleapis.com when an admin opens it from the review
+        // queue (issue #281).
+        responseDisposition: 'attachment',
+        // v4 signs the full query string. The SDK default (v2, as of
+        // @google-cloud/storage 7.19.0) signs only verb/MD5/type/expiry/
+        // resource, so response-content-disposition rides along UNSIGNED —
+        // the URL holder (which includes the uploader, via the isOwner /
+        // isFamilyMember branches above) could strip it and hand an admin
+        // a live-rendering link, defeating the line above.
+        version: 'v4',
       });
 
       return { url: signedUrl };

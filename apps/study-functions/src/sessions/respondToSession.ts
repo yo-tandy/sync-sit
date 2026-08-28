@@ -124,7 +124,12 @@ export const respondToSession = onCall(
     // These are NON-CONTENDED reads (a family's own kids + the caller's own name),
     // so they belong OUTSIDE the claim transaction. Written into the doc at confirm.
     let providerConfirmDenorm:
-      | { studentIds: string[]; students: { firstName: string; age: number }[]; parentName: string }
+      | {
+          studentIds: string[];
+          students: { firstName: string; age: number }[];
+          parentName: string;
+          parentUserId: string;
+        }
       | null = null;
     if (action === 'confirm' && respondedByFamily) {
       if (!studentIds || studentIds.length === 0) {
@@ -149,7 +154,11 @@ export const respondToSession = onCall(
         students.push({ firstName: (kid.firstName as string) ?? '', age: (kid.age as number) ?? 0 });
       }
       const parentName = `${callerUser?.firstName || ''} ${callerUser?.lastName || ''}`.trim();
-      providerConfirmDenorm = { studentIds, students, parentName };
+      // parentUserId: the name-owner's uid, for the identity-correction
+      // fan-out (issue #273) — on a provider proposal createdByUserId is the
+      // TUTOR, so the confirming parent must be recorded here or the name is
+      // unattributable forever.
+      providerConfirmDenorm = { studentIds, students, parentName, parentUserId: uid };
     }
 
     // ── Pre-load static availability config OUTSIDE the transaction (confirm) ──
@@ -528,6 +537,7 @@ export const respondToSession = onCall(
         confirmUpdate.studentIds = providerConfirmDenorm.studentIds;
         confirmUpdate.students = providerConfirmDenorm.students;
         confirmUpdate.parentName = providerConfirmDenorm.parentName;
+        confirmUpdate.parentUserId = providerConfirmDenorm.parentUserId;
       }
       tx.update(sessionRef, confirmUpdate);
       tx.set(overrideRef, mergedOverride);

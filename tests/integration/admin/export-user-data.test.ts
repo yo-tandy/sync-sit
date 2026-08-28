@@ -8,12 +8,16 @@ interface ExportResponse {
   appointments: Array<{ id: string }>;
   notifications: Array<{ id: string }>;
   auditLogs: Array<{ id: string; action: string }>;
+  references: Array<{ id: string; referenceText?: string }>;
 }
 
 describe('exportUserData', () => {
   let seed: SeedData;
   let adminToken: string;
   let parentToken: string;
+  let sitRefId: string;
+  let studyRefId: string;
+  let unrelatedRefId: string;
 
   beforeAll(async () => {
     await clearAll();
@@ -40,6 +44,50 @@ describe('exportUserData', () => {
       targetUserId: seed.parent1.uid,
       timestamp: new Date(),
     });
+
+    // References / endorsements (issue #295): one sit reference submitted by
+    // parent1 about babysitter1, one study endorsement submitted by parent2
+    // (parent1's co-parent, same family) about tutor1, and one unrelated to
+    // any of them (family2 about babysitter2).
+    sitRefId = (await db.collection('references').add({
+      type: 'family_submitted',
+      status: 'approved',
+      babysitterUserId: seed.babysitter1.uid,
+      submittedByUserId: seed.parent1.uid,
+      submittedByFamilyId: seed.family1Id,
+      submittedByName: 'Claire Dupont',
+      refName: 'Claire Dupont',
+      refPhone: '+33600000001',
+      appointmentId: 'appt-export-ref',
+      referenceText: 'Wonderful with our kids, highly recommended.',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    })).id;
+    studyRefId = (await db.collection('references').add({
+      type: 'family_submitted',
+      appSource: 'study',
+      status: 'private',
+      tutorUserId: seed.tutor1.uid,
+      submittedByUserId: seed.parent2.uid,
+      submittedByFamilyId: seed.family1Id,
+      submittedByName: 'Marc Dupont',
+      refName: 'Marc Dupont',
+      referenceText: 'Patient tutor, our daughter improved fast.',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    })).id;
+    unrelatedRefId = (await db.collection('references').add({
+      type: 'family_submitted',
+      status: 'approved',
+      babysitterUserId: seed.babysitter2.uid,
+      submittedByUserId: seed.parent3.uid,
+      submittedByFamilyId: seed.family2Id,
+      submittedByName: 'Anna Martin',
+      refName: 'Anna Martin',
+      referenceText: 'Great sitter, always on time.',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    })).id;
   });
 
   afterAll(async () => {
@@ -89,6 +137,53 @@ describe('exportUserData', () => {
       );
 
       const ids = result.appointments.map((a) => a.id);
+      expect(new Set(ids).size).toBe(ids.length);
+    });
+
+    it('includes references where the user is the PROVIDER (sit babysitter)', async () => {
+      const result = await callFunction<ExportResponse>(
+        'exportUserData',
+        { targetUserId: seed.babysitter1.uid },
+        adminToken,
+      );
+
+      const ids = result.references.map((r) => r.id);
+      expect(ids).toContain(sitRefId);
+      // Another sitter's reference and a study endorsement of someone else
+      // must not leak into this export.
+      expect(ids).not.toContain(unrelatedRefId);
+      expect(ids).not.toContain(studyRefId);
+    });
+
+    it('includes endorsements where the user is the PROVIDER (study tutor)', async () => {
+      const result = await callFunction<ExportResponse>(
+        'exportUserData',
+        { targetUserId: seed.tutor1.uid },
+        adminToken,
+      );
+
+      const ids = result.references.map((r) => r.id);
+      expect(ids).toContain(studyRefId);
+      expect(ids).not.toContain(sitRefId);
+      expect(ids).not.toContain(unrelatedRefId);
+    });
+
+    it('includes references where the user is the SUBMITTER, plus family-keyed endorsements, deduplicated', async () => {
+      const result = await callFunction<ExportResponse>(
+        'exportUserData',
+        { targetUserId: seed.parent1.uid },
+        adminToken,
+      );
+
+      const ids = result.references.map((r) => r.id);
+      // Submitted personally (submittedByUserId == parent1)
+      expect(ids).toContain(sitRefId);
+      // Submitted by the co-parent from the same family — family-level data
+      // reachable via submittedByFamilyId, like family appointments.
+      expect(ids).toContain(studyRefId);
+      // Another family's reference stays out.
+      expect(ids).not.toContain(unrelatedRefId);
+      // sitRef matches both the submitter and the family key — exported once.
       expect(new Set(ids).size).toBe(ids.length);
     });
   });

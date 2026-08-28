@@ -323,6 +323,10 @@ export const bookSession = onCall(
         students,
         familyName,
         parentName,
+        // parentName's owner, for the identity-correction fan-out (issue
+        // #273). Duplicates createdByUserId here, but stays correct on docs
+        // whose parentName lands at a respond/confirm step instead.
+        parentUserId: uid,
         tutorName,
         type: 'recurring',
         startTime: slotStart, // constant weekly start (satisfies SessionDoc.startTime)
@@ -429,6 +433,7 @@ export const bookSession = onCall(
         students,
         familyName,
         parentName,
+        parentUserId: uid, // name-owner attribution (issue #273; see recurring shape)
         tutorName,
         type: 'one_time',
         date: bookingDate,

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { screen, fireEvent } from '@testing-library/react';
+import { screen, fireEvent, within } from '@testing-library/react';
 
 vi.mock('@/config/firebase', () => ({ auth: {}, db: {}, functions: {}, storage: {} }));
 vi.mock('firebase/functions', () => ({
@@ -39,7 +39,8 @@ describe('AppBar menu covers every surface removed from the dashboard', () => {
   it.each(entries)('menu entry %s links to %s', (name, href) => {
     renderWithProviders(<AppBar />);
     fireEvent.click(screen.getByRole('button', { name: /open menu/i }));
-    const link = screen.getByRole('link', { name });
+    // #119 renders the same list as md+ tabs too — scope to the burger dialog.
+    const link = within(screen.getByRole('dialog')).getByRole('link', { name });
     expect(link).toHaveAttribute('href', href);
   });
 });

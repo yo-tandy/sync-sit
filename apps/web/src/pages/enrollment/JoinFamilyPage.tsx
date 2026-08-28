@@ -1,11 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { useClientConfigValue } from '@/lib/adminConfigClient';
-import { ADMIN_CONFIG_DEFS } from '@ejm/shared-core';
+import { ADMIN_CONFIG_DEFS, hasFamilyMembership } from '@ejm/shared-core';
 import { useParams, useNavigate, Link } from 'react-router';
 import { useTranslation, Trans } from 'react-i18next';
 import { httpsCallable } from 'firebase/functions';
 import { signInWithEmailAndPassword } from 'firebase/auth';
-import { getParentProfile } from '@ejm/sit-core';
 import { enrollmentErrorReason } from '@ejm/shared-ui';
 import { auth, functions } from '@/config/firebase';
 import { markNextSignInFresh, useAuthStore } from '@/stores/authStore';
@@ -219,8 +218,11 @@ export function JoinFamilyPage() {
     );
   }
 
-  // Authed with a parent profile already: nothing to join here.
-  if (firebaseUser && getParentProfile(userDoc)) {
+  // Membership, not profile presence (issue #279): an ORPHAN parent
+  // profile must fall through to the confirm-join branch -- the only
+  // client path to the server's re-attach carve-out -- while any
+  // membered doc (either field, incl. legacy root) dead-ends here.
+  if (firebaseUser && hasFamilyMembership(userDoc)) {
     return (
       <div>
         <TopNav title="Join Family" backTo="/" />
@@ -237,8 +239,9 @@ export function JoinFamilyPage() {
     );
   }
 
-  // Authed without a parent profile: skip the credential steps and offer a
-  // single confirm button that joins with the token alone.
+  // Authed without family MEMBERSHIP (no parent profile, or an orphan one
+  // left by removeCoParent): skip the credential steps and offer a single
+  // confirm button that joins with the token alone.
   if (firebaseUser) {
     return (
       <div>

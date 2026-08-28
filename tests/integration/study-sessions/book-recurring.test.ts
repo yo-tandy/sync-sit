@@ -123,6 +123,9 @@ describe('bookSession — recurring', () => {
     ]);
     expect(doc.familyName).toBe('Dupont');
     expect(doc.parentName).toBe('Marie Dupont');
+    // parentName's owner for the identity-correction fan-out (issue #273) —
+    // pinned on the recurring shape too (separate doc literal in bookSession).
+    expect(doc.parentUserId).toBe(seed.parent1.uid);
     expect(doc.tutorName).toBe('Yael Cohen');
   });
 
