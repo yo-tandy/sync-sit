@@ -48,11 +48,6 @@ export const ParentGuidePage = lazy(() =>
 export const TutorEnrollment = lazy(() =>
   import('@/pages/enrollment/tutor/TutorEnrollment').then((m) => ({ default: m.TutorEnrollment })),
 );
-export const TutorSuccessPage = lazy(() =>
-  import('@/pages/enrollment/tutor/TutorSuccessPage').then((m) => ({
-    default: m.TutorSuccessPage,
-  })),
-);
 export const ParentEnrollment = lazy(() =>
   import('@/pages/enrollment/parent/ParentEnrollment').then((m) => ({
     default: m.ParentEnrollment,

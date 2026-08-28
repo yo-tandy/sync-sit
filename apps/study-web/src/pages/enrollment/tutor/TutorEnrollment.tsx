@@ -4,10 +4,11 @@ import { useTranslation } from 'react-i18next';
 import { httpsCallable } from 'firebase/functions';
 import { TopNav, StepIndicator, StepEmail, StepVerify, StepPassword, enrollmentErrorReason, ageGateErrorCode } from '@ejm/shared-ui';
 import { getTutorProfile } from '@ejm/study-core';
-import type { SubjectOffering } from '@ejm/study-core';
+import type { StudyUser, SubjectOffering } from '@ejm/study-core';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth, functions } from '@/config/firebase';
 import { markNextSignInFresh, useAuthStore } from '@/stores/authStore';
+import { ensureTutorProfileLoaded } from '@/lib/ensureTutorProfileLoaded';
 import { EnrollmentAppBar } from '@/components/ui/EnrollmentAppBar';
 import { StepSubjects } from './StepSubjects';
 import type { Row as SubjectRow } from './StepSubjects';
@@ -73,6 +74,51 @@ export function TutorEnrollment() {
   const [subjectsDraft, setSubjectsDraft] = useState<SubjectRow[] | undefined>(undefined);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Enrollment succeeded server-side but the settled session cannot pass
+  // AuthGuard role="tutor" (sign-in failed, or the user-doc read blipped):
+  // confirm success in-wizard and hand the tutor to login instead of
+  // navigating into a guard that would bounce them to /login or /signup
+  // with no confirmation (PR #257 round 1).
+  // Variant by CAUSE (PR #257 round 6): 'login' = the session is signed
+  // OUT (manual login is genuinely the next step); 'profileLoad' = signed
+  // IN but the doc has not surfaced (a /login pointer would bounce -- the
+  // CTA retries the read instead, and the auto-advance resolves it
+  // hands-free when the snapshot lands).
+  const [signedOutSuccess, setSignedOutSuccess] = useState<false | 'login' | 'profileLoad'>(false);
+  const [retrying, setRetrying] = useState(false);
+  const [retryMissed, setRetryMissed] = useState(false);
+  const retryProfileLoad = async () => {
+    // A retry that still misses must be VISIBLE (round 6): the button shows
+    // progress while running and a "still loading" line after a miss --
+    // silence read as a dead button.
+    setRetrying(true);
+    setRetryMissed(false);
+    try {
+      if (await ensureTutorProfileLoaded(refreshUserDoc)) {
+        navigate('/tutor');
+      } else {
+        setRetryMissed(true);
+      }
+    } finally {
+      setRetrying(false);
+    }
+  };
+  // While the fallback state shows, keep listening: the store's snapshot
+  // listener is still live, so a slow doc read typically lands moments
+  // later -- auto-advance the moment the guard's predicate passes instead
+  // of leaving a signed-in tutor parked on a login CTA (PR #257 round 2).
+  useEffect(() => {
+    if (!signedOutSuccess) return;
+    const check = (s: { firebaseUser: unknown; userDoc: StudyUser | null }) => {
+      if (s.firebaseUser && getTutorProfile(s.userDoc)) navigate('/tutor');
+    };
+    // Check the CURRENT state before subscribing -- zustand's subscribe only
+    // fires on subsequent changes, so a snapshot landing between the latch
+    // and this effect would otherwise be missed (PR #257 round 3).
+    check(useAuthStore.getState());
+    return useAuthStore.subscribe(check);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [signedOutSuccess]);
 
   // Already-enrolled tutors have nothing to add here — send them home. Guard on
   // step === 0 so this only fires before the flow starts: after an add-profile
@@ -176,42 +222,71 @@ export function TutorEnrollment() {
         enrollment,
       });
       if (isAddProfile) {
-        await refreshUserDoc();
-      } else {
-        // The account was created server-side (adminAuth) — sign the new
-        // tutor in NOW so the success page's CTA lands in their portal
-        // instead of bouncing to login (mirrors sit's babysitter flow).
-        // BEST-EFFORT: enrollment has already fully succeeded (account,
-        // user doc, schedule all written; the verification code consumed),
-        // so a sign-in/doc-read hiccup must NEVER read as an enrollment
-        // failure or block the success page — worst case the CTA asks the
-        // tutor to log in with the credentials they just chose.
-        try {
-          // Fresh, deliberate sign-in: capture the session epoch anew (issue #181).
-          markNextSignInFresh();
-          await signInWithEmailAndPassword(auth, ejemEmail, password);
-          await new Promise<void>((resolve) => {
-            // Resolve on auth settling (firebaseUser + !loading) — userDoc
-            // can legitimately stay null when the doc read blips, and the
-            // timeout backstops a store that never settles.
-            const timer = setTimeout(() => { unsub(); resolve(); }, 5000);
-            const check = (state: { loading: boolean; firebaseUser: unknown }) => {
-              if (!state.loading && state.firebaseUser) {
-                clearTimeout(timer);
-                unsub();
-                resolve();
-              }
-            };
-            const unsub = useAuthStore.subscribe(check);
-            check(useAuthStore.getState());
-          });
-        } catch {
-          // Swallowed by design — see above.
+        // Already signed in (add-profile runs authenticated); refresh pulls
+        // the fresh tutor profile so AuthGuard resolves the role. refresh
+        // is a single getDoc that silently no-ops on a cache miss AND can
+        // reject on a network blip -- either way enrollment has already
+        // succeeded, so both reads are swallowed (PR #257 round 4) and get
+        // one retry with backoff (rounds 2-3). If BOTH miss, the same
+        // account-ready state as the new-account path takes over instead of
+        // a blind navigate into the guard: the auto-advance effect delivers
+        // the tutor to /tutor the moment the doc lands.
+        if (await ensureTutorProfileLoaded(refreshUserDoc)) {
+          navigate('/tutor');
+        } else {
+          setSignedOutSuccess('profileLoad');
         }
+        return;
       }
-      navigate('/enroll/tutor/success', {
-        state: { firstName: profileData.firstName ?? identityOnFile?.firstName },
-      });
+      // The account was created server-side (adminAuth) — sign the new
+      // tutor in NOW so completion lands in their portal (mirrors sit's
+      // babysitter flow). BEST-EFFORT for the ENROLLMENT: it has already
+      // fully succeeded (account, user doc, schedule written; the code
+      // consumed), so a sign-in/doc-read hiccup must never read as an
+      // enrollment failure — but since the success interstitial was
+      // dropped (issue #242) the destination /tutor sits behind
+      // AuthGuard role="tutor", so navigation now REQUIRES the settled
+      // session to carry the tutor profile; anything less shows the
+      // in-wizard success-plus-login state instead (PR #257 round 1).
+      try {
+        // Fresh, deliberate sign-in: capture the session epoch anew (issue #181).
+        markNextSignInFresh();
+        await signInWithEmailAndPassword(auth, ejemEmail, password);
+        await new Promise<void>((resolve) => {
+          // Resolve when the guard's own predicate would pass (signed in
+          // AND the tutor profile loaded); the timeout backstops a store
+          // that never settles or a doc read that keeps blipping.
+          const timer = setTimeout(() => { unsub(); resolve(); }, 5000);
+          const check = (state: { loading: boolean; firebaseUser: unknown; userDoc: StudyUser | null }) => {
+            if (!state.loading && state.firebaseUser && getTutorProfile(state.userDoc)) {
+              clearTimeout(timer);
+              unsub();
+              resolve();
+            }
+          };
+          const unsub = useAuthStore.subscribe(check);
+          check(useAuthStore.getState());
+        });
+      } catch {
+        // Swallowed by design — see above.
+      }
+      let settled = useAuthStore.getState();
+      if (settled.firebaseUser && !getTutorProfile(settled.userDoc)) {
+        // Timed out with a live session but no doc yet: one explicit
+        // recovery pass before telling the user anything (PR #257 rounds
+        // 2-3, extracted round 6 -- a slow first server snapshot can
+        // exceed the 5s budget).
+        await ensureTutorProfileLoaded(refreshUserDoc);
+        settled = useAuthStore.getState();
+      }
+      if (settled.firebaseUser && getTutorProfile(settled.userDoc)) {
+        // Straight to the dashboard (issue #242, parity Q5=b) -- its
+        // greeting knows the name and its activation banner carries the
+        // next steps.
+        navigate('/tutor');
+      } else {
+        setSignedOutSuccess(settled.firebaseUser ? 'profileLoad' : 'login');
+      }
 
     } catch (err: unknown) {
       if (!applyEnrollmentError(err)) {
@@ -301,6 +376,39 @@ export function TutorEnrollment() {
   // collectPassword decision and the already-a-tutor redirect from being made
   // against a not-yet-known auth state (which would flicker step 2).
   if (authLoading) return null;
+
+  if (signedOutSuccess) {
+    // Enrollment succeeded but the session cannot (yet) pass AuthGuard:
+    // confirm the account exists -- never a silent bounce. The copy and CTA
+    // are branch-specific (PR #257 round 5): a NEW account may genuinely
+    // need a manual login, while an add-profile enrollee is already
+    // authenticated and never chose a password -- their CTA retries the
+    // profile read (the auto-advance also resolves this hands-free).
+    const isProfileLoadFallback = signedOutSuccess === 'profileLoad';
+    return (
+      <div className="flex min-h-[100dvh] flex-col items-center justify-center px-6 text-center">
+        <h1 className="mb-3 text-2xl font-bold text-gray-950">
+          {t('enrollment.tutor.readyLoginTitle')}
+        </h1>
+        <p className="mb-8 max-w-[300px] text-sm leading-relaxed text-gray-500">
+          {t(isProfileLoadFallback ? 'enrollment.tutor.readyAddProfileDesc' : 'enrollment.tutor.readyLoginDesc')}
+        </p>
+        <button
+          type="button"
+          disabled={retrying}
+          onClick={() => (isProfileLoadFallback ? retryProfileLoad() : navigate('/login'))}
+          className="flex h-12 w-full max-w-xs items-center justify-center rounded-xl bg-brand-600 text-base font-semibold text-white transition-colors hover:bg-brand-600/90 disabled:opacity-50"
+        >
+          {retrying
+            ? t('common.loading')
+            : t(isProfileLoadFallback ? 'enrollment.tutor.readyAddProfileCta' : 'enrollment.tutor.readyLoginCta')}
+        </button>
+        {retryMissed && !retrying && (
+          <p className="mt-3 text-xs text-gray-500">{t('enrollment.tutor.readyRetryMiss')}</p>
+        )}
+      </div>
+    );
+  }
 
   const isPostAuthStep = step >= AUTH_STEPS;
 

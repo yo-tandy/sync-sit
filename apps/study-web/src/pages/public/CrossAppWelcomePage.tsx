@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { httpsCallable } from 'firebase/functions';
 import { isBabysitter } from '@ejm/shared-core';
 import { getStudyRole, type SubjectOffering } from '@ejm/study-core';
+import { ensureTutorProfileLoaded } from '@/lib/ensureTutorProfileLoaded';
 import { Button, Card, Input, Select, Spinner, enrollmentErrorReason, ageGateErrorCode } from '@ejm/shared-ui';
 import { functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
@@ -95,13 +96,30 @@ export function CrossAppWelcomePage() {
         consentVersion: CONSENT_VERSION,
         ...(Object.keys(supplement).length > 0 ? { enrollment: supplement } : {}),
       });
-      await refreshUserDoc();
-      navigate('/enroll/tutor/success', {
-        state: { firstName: userDoc?.firstName ?? (firstName.trim() || undefined) },
-      });
+      // ensureTutorProfileLoaded swallows both reads (they reject on an
+      // offline blip and no-op on a cache miss -- enrollment has ALREADY
+      // succeeded, PR #257 rounds 2-5) and backs off between them. If BOTH
+      // miss, do not navigate blind into the guard: surface an error and
+      // leave the button usable -- a resubmit hits profile-exists, whose
+      // handler runs the same doc-aware recovery (round 4).
+      if (!(await ensureTutorProfileLoaded(refreshUserDoc))) {
+        setError(t('enrollment.crossApp.profileLoadError'));
+        setSubmitting(false);
+        return;
+      }
+      // Straight to the dashboard (issue #242, parity Q5=b).
+      navigate('/tutor');
     } catch (err: unknown) {
       if (enrollmentErrorReason(err) === 'profile-exists') {
-        navigate('/tutor');
+        // The profile exists server-side; make sure the STORE can prove it
+        // before entering the guard (round 4 -- this handler used to
+        // navigate unconditionally, the same blind-navigate class).
+        if (await ensureTutorProfileLoaded(refreshUserDoc)) {
+          navigate('/tutor');
+        } else {
+          setError(t('enrollment.crossApp.profileLoadError'));
+          setSubmitting(false);
+        }
         return;
       }
       setError(translateEnrollError(err));

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { screen, fireEvent, render, cleanup } from '@testing-library/react';
+import { screen, fireEvent, render, cleanup, waitFor } from '@testing-library/react';
 
 // Hoisted recorders for the callable and auth state.
 const h = vi.hoisted(() => ({
@@ -110,7 +110,13 @@ beforeEach(() => {
   h.calls.length = 0;
   h.navigate = vi.fn();
   h.auth = { firebaseUser: { uid: 'b1' }, userDoc: babysitterDoc, loading: false };
-  h.refreshUserDoc = vi.fn().mockResolvedValue(undefined);
+  // Models the real store: a successful refresh lands the freshly-written
+  // tutor profile -- the page now refuses to navigate blind without it
+  // (PR #257 round 3).
+  h.refreshUserDoc = vi.fn().mockImplementation(() => {
+    h.auth.userDoc = { ...babysitterDoc, profiles: { ...babysitterDoc.profiles, tutor: {} } };
+    return Promise.resolve();
+  });
   h.error = null;
   i18n.changeLanguage('en');
 });
@@ -137,9 +143,7 @@ describe('CrossAppWelcomePage (study)', () => {
     fireEvent.click(screen.getByText('subjects-next'));
 
     await vi.waitFor(() =>
-      expect(h.navigate).toHaveBeenCalledWith('/enroll/tutor/success', {
-        state: { firstName: 'Sacha' },
-      }),
+      expect(h.navigate).toHaveBeenCalledWith('/tutor'),
     );
     const call = h.calls.find((c) => c.name === 'enrollTutor')!;
     expect(call).toBeTruthy();
@@ -169,6 +173,35 @@ describe('CrossAppWelcomePage (study)', () => {
     expect(screen.queryByLabelText(i18n.t('enrollment.firstName'))).toBeNull();
     // Subjects not shown yet.
     expect(screen.queryByText('subjects-next')).toBeNull();
+  });
+
+  it('profile-exists rejection with a doc that never loads shows the load error, not a blind navigate (round-5 pin)', async () => {
+    h.refreshUserDoc = vi.fn().mockResolvedValue(undefined); // never settles
+    h.error = { details: { reason: 'profile-exists' } };
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: /continue/i }));
+    fireEvent.click(await screen.findByText('subjects-next'));
+    await waitFor(
+      () => expect(screen.getByText(/could not load it yet/i)).toBeInTheDocument(),
+      { timeout: 3000 },
+    );
+    expect(h.navigate).not.toHaveBeenCalledWith('/tutor');
+  });
+
+  it('refuses to navigate blind when BOTH refreshes miss: retries once, shows the load error (round-3 pin)', async () => {
+    // refreshUserDoc silently no-ops on a cache miss; if the tutor profile
+    // never lands, navigating would bounce this authenticated user off
+    // AuthGuard to /signup with no explanation.
+    h.refreshUserDoc = vi.fn().mockResolvedValue(undefined); // never settles the doc
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: /continue/i }));
+    fireEvent.click(await screen.findByText('subjects-next'));
+    await waitFor(
+      () => expect(screen.getByText(/could not load it yet/i)).toBeInTheDocument(),
+      { timeout: 3000 },
+    );
+    expect(h.refreshUserDoc).toHaveBeenCalledTimes(2);
+    expect(h.navigate).not.toHaveBeenCalledWith('/tutor');
   });
 
   it('the details continue stays disabled until a contact field is entered, then the supplement rides the payload', async () => {

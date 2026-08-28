@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { screen, fireEvent } from '@testing-library/react';
+import { screen, fireEvent, act } from '@testing-library/react';
 
 // Hoisted shared state the mocks record into.
 const h = vi.hoisted(() => ({
@@ -8,8 +8,19 @@ const h = vi.hoisted(() => ({
   // Controllable authStore state — default is signed out so existing tests
   // keep their original (unauthenticated) behavior.
   auth: { firebaseUser: null as unknown, userDoc: null as unknown, loading: false },
+  // Post-signup session state, SEPARATE from userDoc: deriving firebaseUser
+  // from the doc made "signed in but doc null" unrepresentable (round-2
+  // catch -- the doc-blip pin silently re-tested the failure path).
+  signedIn: false,
+  subs: [] as ((s: unknown) => void)[],
   refreshUserDoc: () => Promise.resolve(),
-  signIn: vi.fn(() => Promise.resolve()),
+  // A successful sign-in settles the store with the freshly-written tutor
+  // doc (models the real store); the navigate gate reads it via getState.
+  signIn: vi.fn(() => {
+    h.signedIn = true;
+    h.auth.userDoc = { profiles: { tutor: {} } };
+    return Promise.resolve();
+  }),
   // Controllable error reason so tests can drive the profile-exists notice.
   // Default null = plain-error behavior. There is no account-exists reason
   // anymore (issue #148: silent existing-account flow).
@@ -72,8 +83,15 @@ vi.mock('@/stores/authStore', () => {
     subscribe: (fn: (s: unknown) => void) => () => void;
   };
   // Statics used by the post-signup auto-login wait.
-  useAuthStore.getState = () => ({ loading: false, firebaseUser: { uid: 'new' }, userDoc: h.auth.userDoc });
-  useAuthStore.subscribe = () => () => {};
+  useAuthStore.getState = () => ({ loading: false, firebaseUser: h.signedIn || h.auth.firebaseUser ? { uid: 'new' } : null, userDoc: h.auth.userDoc });
+  // Capture listeners so tests can model the store settling late -- a no-op
+  // stub left the round-2 auto-advance with zero coverage (round-3 catch).
+  useAuthStore.subscribe = (fn: (s: unknown) => void) => {
+    h.subs.push(fn);
+    return () => {
+      h.subs = h.subs.filter((f) => f !== fn);
+    };
+  };
   return { useAuthStore, markNextSignInFresh: () => {} };
 });
 vi.mock('@ejm/study-core', () => ({
@@ -187,9 +205,18 @@ function renderFlow() {
 
 beforeEach(() => {
   h.calls.length = 0;
+  h.signedIn = false;
+  h.subs = [];
   h.navigate = vi.fn();
   h.auth = { firebaseUser: null, userDoc: null, loading: false };
-  h.refreshUserDoc = vi.fn().mockResolvedValue(undefined);
+  // Models the real store: a successful refresh lands the freshly-written
+  // tutor profile (round 4 -- the add-profile branch now refuses to
+  // navigate without it). Tests modeling misses override this.
+  h.refreshUserDoc = vi.fn().mockImplementation(() => {
+    const prev = (h.auth.userDoc ?? {}) as { profiles?: Record<string, unknown> };
+    h.auth.userDoc = { ...prev, profiles: { ...(prev.profiles ?? {}), tutor: {} } };
+    return Promise.resolve();
+  });
   h.signIn.mockClear();
   h.errorReason = null;
   h.rawError = null;
@@ -251,17 +278,20 @@ describe('TutorEnrollment orchestrator', () => {
       expect(payload.enrollment).not.toHaveProperty(key);
     }
     await vi.waitFor(() =>
-      expect(h.navigate).toHaveBeenCalledWith('/enroll/tutor/success', { state: { firstName: 'Flow' } }),
+      expect(h.navigate).toHaveBeenCalledWith('/tutor'),
     );
     // New-account path signs the tutor in — the success CTA must land in
     // the portal, not bounce to login.
     expect(h.signIn).toHaveBeenCalledWith(expect.anything(), 'flow.tutor28@ejm.org', 'Pw123456!');
   });
 
-  it('a sign-in failure after successful enrollment still reaches the success page', async () => {
+  it('a sign-in failure after successful enrollment shows the account-ready login state, never a guarded bounce', async () => {
     // Enrollment fully succeeded (account/doc/schedule written, code doc
-    // consumed) — an auth hiccup must not read as an enrollment error or
-    // strand the user mid-wizard.
+    // consumed) — an auth hiccup must not read as an enrollment error. But
+    // /tutor sits behind AuthGuard role="tutor" (the public success page is
+    // gone, issue #242), so a signed-out navigate would bounce to /login
+    // with no confirmation: the wizard confirms in place instead (PR #257
+    // round 1).
     h.signIn.mockRejectedValueOnce(new Error('auth/network-request-failed'));
     renderFlow();
     fireEvent.click(screen.getByText('email-submit'));
@@ -270,10 +300,132 @@ describe('TutorEnrollment orchestrator', () => {
     fireEvent.click(await screen.findByText('profile-next'));
     fireEvent.click(await screen.findByText('subjects-next'));
 
-    await vi.waitFor(() =>
-      expect(h.navigate).toHaveBeenCalledWith('/enroll/tutor/success', { state: { firstName: 'Flow' } }),
-    );
+    expect(await screen.findByText('Your tutor account is ready')).toBeInTheDocument();
+    expect(h.navigate).not.toHaveBeenCalledWith('/tutor');
     expect(screen.queryByText(/network-request-failed/)).toBeNull();
+    // The CTA hands the tutor to login.
+    fireEvent.click(screen.getByText('Log in'));
+    expect(h.navigate).toHaveBeenCalledWith('/login');
+  });
+
+  it('a user-doc read blip after a SUCCESSFUL sign-in also shows the login state (guard would bounce to /signup)', async () => {
+    // firebaseUser present but userDoc null: signIn marks the session live
+    // WITHOUT settling the doc (the mock keeps these separate -- round-2
+    // catch). The guard predicate never passes, the 5s backstop fires
+    // (fake timers -- no real 5s burn), the recovery refresh still finds
+    // no doc, and the wizard latches the login state.
+    h.signIn.mockImplementationOnce(() => {
+      h.signedIn = true;
+      return Promise.resolve();
+    });
+    // The doc read keeps missing: the recovery refresh must find nothing.
+    h.refreshUserDoc = vi.fn().mockResolvedValue(undefined);
+    renderFlow();
+    fireEvent.click(screen.getByText('email-submit'));
+    fireEvent.click(await screen.findByText('verify-submit'));
+    fireEvent.click(await screen.findByText('password-submit'));
+    fireEvent.click(await screen.findByText('profile-next'));
+    const finalNext = await screen.findByText('subjects-next');
+    vi.useFakeTimers();
+    try {
+      fireEvent.click(finalNext);
+      // 5s wait backstop + the 400ms recovery backoff added in round 3.
+      await vi.advanceTimersByTimeAsync(6000);
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(await screen.findByText('Your tutor account is ready')).toBeInTheDocument();
+    expect(h.navigate).not.toHaveBeenCalledWith('/tutor');
+    // Cause-true variant (round 6): the session IS signed in, so no /login
+    // pointer and no password sentence -- the CTA retries the profile read.
+    expect(screen.getByText(/could not load it yet/)).toBeInTheDocument();
+    expect(screen.queryByText(/password you just chose/)).not.toBeInTheDocument();
+    expect(screen.getByText('Try again')).toBeInTheDocument();
+  });
+
+  it('auto-advances off the account-ready state when the doc finally lands (round-3 pin)', async () => {
+    // Reach the login fallback via the doc-blip path, then model the store's
+    // still-live snapshot listener delivering the doc: the fallback effect
+    // must navigate without any user action.
+    h.signIn.mockImplementationOnce(() => {
+      h.signedIn = true;
+      return Promise.resolve();
+    });
+    // The doc read keeps missing: the recovery refresh must find nothing.
+    h.refreshUserDoc = vi.fn().mockResolvedValue(undefined);
+    renderFlow();
+    fireEvent.click(screen.getByText('email-submit'));
+    fireEvent.click(await screen.findByText('verify-submit'));
+    fireEvent.click(await screen.findByText('password-submit'));
+    fireEvent.click(await screen.findByText('profile-next'));
+    const finalNext = await screen.findByText('subjects-next');
+    vi.useFakeTimers();
+    try {
+      fireEvent.click(finalNext);
+      await vi.advanceTimersByTimeAsync(6000);
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(await screen.findByText('Your tutor account is ready')).toBeInTheDocument();
+    expect(h.navigate).not.toHaveBeenCalledWith('/tutor');
+
+    // The snapshot lands: every live listener sees the settled state.
+    h.auth.userDoc = { profiles: { tutor: {} } };
+    const settled = { loading: false, firebaseUser: { uid: 'new' }, userDoc: h.auth.userDoc };
+    await act(async () => {
+      h.subs.forEach((fn) => fn(settled));
+    });
+    expect(h.navigate).toHaveBeenCalledWith('/tutor');
+  });
+
+  it('add-profile retries the silently-no-op refresh once before navigating (round-3 pin)', async () => {
+    h.auth = { firebaseUser: { uid: 'p1' }, userDoc: { profiles: { parent: {} } }, loading: false };
+    // First refresh no-ops (cache miss); the second lands the profile.
+    let calls = 0;
+    h.refreshUserDoc = vi.fn().mockImplementation(() => {
+      calls += 1;
+      if (calls >= 2) h.auth.userDoc = { profiles: { parent: {}, tutor: {} } };
+      return Promise.resolve();
+    });
+    renderFlow();
+    fireEvent.click(screen.getByText('email-submit'));
+    fireEvent.click(await screen.findByText('verify-submit'));
+    fireEvent.click(await screen.findByTestId('step-password'));
+    fireEvent.click(await screen.findByText('profile-next'));
+    fireEvent.click(await screen.findByText('subjects-next'));
+    await vi.waitFor(() => expect(h.navigate).toHaveBeenCalledWith('/tutor'), { timeout: 3000 });
+    expect(h.refreshUserDoc).toHaveBeenCalledTimes(2);
+  });
+
+  it('add-profile BOTH-miss: never navigates blind into the guard; shows the account-ready state (round-4 pin)', async () => {
+    h.auth = { firebaseUser: { uid: 'p1' }, userDoc: { profiles: { parent: {} } }, loading: false };
+    // Both refreshes leave the doc without a tutor profile.
+    h.refreshUserDoc = vi.fn().mockResolvedValue(undefined);
+    renderFlow();
+    fireEvent.click(screen.getByText('email-submit'));
+    fireEvent.click(await screen.findByText('verify-submit'));
+    fireEvent.click(await screen.findByTestId('step-password'));
+    fireEvent.click(await screen.findByText('profile-next'));
+    fireEvent.click(await screen.findByText('subjects-next'));
+    expect(await screen.findByText('Your tutor account is ready', {}, { timeout: 3000 })).toBeInTheDocument();
+    expect(h.refreshUserDoc).toHaveBeenCalledTimes(2);
+    expect(h.navigate).not.toHaveBeenCalledWith('/tutor');
+    // Branch-specific copy (round 5): an authenticated add-profile enrollee
+    // never chose a password and must not be sent to /login -- the CTA
+    // retries the profile read and navigates once it lands.
+    expect(screen.getByText(/could not load it yet/)).toBeInTheDocument();
+    expect(screen.queryByText(/password you just chose/)).not.toBeInTheDocument();
+    // A retry that STILL misses is visible, not a dead button (round 6).
+    fireEvent.click(screen.getByText('Try again'));
+    expect(await screen.findByText(/Still loading/, {}, { timeout: 3000 })).toBeInTheDocument();
+    expect(h.navigate).not.toHaveBeenCalledWith('/tutor');
+    // The next retry lands the doc and navigates.
+    h.refreshUserDoc.mockImplementationOnce(() => {
+      h.auth.userDoc = { profiles: { parent: {}, tutor: {} } };
+      return Promise.resolve();
+    });
+    fireEvent.click(screen.getByText('Try again'));
+    await vi.waitFor(() => expect(h.navigate).toHaveBeenCalledWith('/tutor'), { timeout: 3000 });
   });
 
   it('authed without a tutor profile: consent-only StepPassword, enrollTutor omits password, refreshes doc', async () => {
@@ -307,7 +459,7 @@ describe('TutorEnrollment orchestrator', () => {
     expect(h.signIn).not.toHaveBeenCalled();
     // refreshUserDoc must be awaited before the success navigation.
     await vi.waitFor(() =>
-      expect(h.navigate).toHaveBeenCalledWith('/enroll/tutor/success', { state: { firstName: 'Flow' } }),
+      expect(h.navigate).toHaveBeenCalledWith('/tutor'),
     );
     expect(h.refreshUserDoc).toHaveBeenCalled();
     // The now-present tutor profile must not divert the success navigation home.
@@ -347,7 +499,7 @@ describe('TutorEnrollment orchestrator', () => {
     }
     expect(payload.enrollment).toMatchObject({ classLevel: 'Terminale' });
     await vi.waitFor(() =>
-      expect(h.navigate).toHaveBeenCalledWith('/enroll/tutor/success', { state: { firstName: 'Iris' } }),
+      expect(h.navigate).toHaveBeenCalledWith('/tutor'),
     );
   });
 
@@ -391,7 +543,7 @@ describe('TutorEnrollment orchestrator', () => {
     expect(await screen.findByText('An account with this email already exists')).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: i18n.t('auth.login') })).toBeNull();
     // No success navigation on failure.
-    expect(h.navigate).not.toHaveBeenCalledWith('/enroll/tutor/success', expect.anything());
+    expect(h.navigate).not.toHaveBeenCalledWith('/tutor');
   });
 
   it("verifyEjmEmail 'send-cap' rejection (issue #155 bypass allowance) renders the translated copy and stays on the email step", async () => {
@@ -426,7 +578,7 @@ describe('TutorEnrollment orchestrator', () => {
     // Distinct from the mismatch message and from the login CTA.
     expect(screen.queryByText(i18n.t('enrollment.age.mismatch'))).toBeNull();
     expect(screen.queryByRole('link', { name: i18n.t('auth.login') })).toBeNull();
-    expect(h.navigate).not.toHaveBeenCalledWith('/enroll/tutor/success', expect.anything());
+    expect(h.navigate).not.toHaveBeenCalledWith('/tutor');
   });
 
   it("enrollTutor 'age/mismatch' rejection renders the contact-admin message", async () => {
@@ -436,6 +588,6 @@ describe('TutorEnrollment orchestrator', () => {
     const msg = i18n.t('enrollment.age.mismatch');
     expect(await screen.findByText(msg)).toBeInTheDocument();
     expect(screen.queryByText(i18n.t('enrollment.age.under15'))).toBeNull();
-    expect(h.navigate).not.toHaveBeenCalledWith('/enroll/tutor/success', expect.anything());
+    expect(h.navigate).not.toHaveBeenCalledWith('/tutor');
   });
 });

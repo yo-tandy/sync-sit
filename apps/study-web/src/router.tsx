@@ -23,7 +23,6 @@ import {
   TutorGuidePage,
   ParentGuidePage,
   TutorEnrollment,
-  TutorSuccessPage,
   ParentEnrollment,
   TutorDashboardPage,
   TutorAccountPage,
@@ -67,7 +66,15 @@ export const router = createBrowserRouter([
       { path: '/login', element: <LoginPage /> },
       { path: '/signup', element: <SignUpRolePage /> },
       { path: '/enroll/tutor', element: <TutorEnrollment /> },
-      { path: '/enroll/tutor/success', element: <TutorSuccessPage /> },
+      {
+        path: '/enroll/tutor/success',
+        // The success interstitial was dropped (issue #242, parity Q5=b):
+        // enrollment routes straight to the dashboard, whose activation
+        // banner already carries the next-steps guidance. The catch-all
+        // below would have sent stale links to '/' -- this redirect sends
+        // them somewhere better (the dashboard, or its login gate).
+        element: <Navigate to="/tutor" replace />,
+      },
       { path: '/about', element: <AboutPage /> },
       { path: '/privacy', element: <PrivacyPage brand={BRAND} supportEmail={SUPPORT_EMAIL} /> },
       { path: '/terms', element: <TermsPage brand={BRAND} supportEmail={SUPPORT_EMAIL} /> },
