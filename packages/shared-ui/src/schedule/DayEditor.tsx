@@ -222,7 +222,7 @@ export function DayEditor({ day, slots: initialSlots, open, onClose, onSave, loc
   };
 
   return (
-    <Dialog open={open} onClose={onClose}>
+    <Dialog open={open} onClose={onClose} ariaLabel={t('schedule.setAvailability', { day: dayLabels[day] })}>
       <h3 className="mb-4 text-lg font-bold">{t('schedule.setAvailability', { day: dayLabels[day] })}</h3>
 
       {/* 1. Add time range inputs */}

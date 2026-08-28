@@ -147,8 +147,9 @@ export function EndorsementDialog({
     }
   };
 
-  // Accessible dialog name (issue #305): mirrors the visible heading in each
-  // of the dialog's states — saved flash vs. edit vs. first submission.
+  // Accessible dialog name (issue #305): the single source for the visible
+  // heading in each of the dialog's states — saved flash vs. edit vs. first
+  // submission — and for the Dialog's ariaLabel, so they cannot drift apart.
   const dialogTitle = saved
     ? isEdit
       ? t('references.referenceUpdated')
@@ -164,19 +165,11 @@ export function EndorsementDialog({
       {saved ? (
         <div className="text-center py-4">
           <div className="mb-3 text-3xl">✅</div>
-          <p className="text-sm font-semibold text-gray-900">
-            {isEdit ? t('references.referenceUpdated') : t('references.referenceSubmitted')}
-          </p>
+          <p className="text-sm font-semibold text-gray-900">{dialogTitle}</p>
         </div>
       ) : (
         <>
-          <h3 className="mb-1 text-lg font-bold">
-            {isEdit
-              ? t('references.editMyReference')
-              : appointmentId
-                ? t('references.referencePrompt', { name: babysitterName })
-                : t('references.referencePromptDesc', { name: babysitterName.split(' ')[0] || babysitterName })}
-          </h3>
+          <h3 className="mb-1 text-lg font-bold">{dialogTitle}</h3>
           {!isEdit && appointmentId && (
             <p className="mb-3 text-sm text-gray-500">
               {t('references.referencePromptDesc', { name: babysitterName.split(' ')[0] || babysitterName })}

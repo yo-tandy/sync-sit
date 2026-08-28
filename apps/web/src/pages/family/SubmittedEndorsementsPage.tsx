@@ -188,8 +188,8 @@ export function SubmittedEndorsementsPage() {
 
       {/* Delete confirmation */}
       {deleteTarget && (
-        <Dialog open onClose={() => setDeleteTarget(null)} ariaLabel={t('common.confirm')}>
-          <h3 className="mb-2 text-lg font-bold">{t('common.confirm')}</h3>
+        <Dialog open onClose={() => setDeleteTarget(null)} ariaLabel={t('submittedReferences.confirmDeleteTitle')}>
+          <h3 className="mb-2 text-lg font-bold">{t('submittedReferences.confirmDeleteTitle')}</h3>
           <p className="mb-5 text-sm text-gray-600">
             {t('submittedReferences.confirmDelete', { name: babysitterNames[deleteTarget.babysitterUserId] || '' })}
           </p>

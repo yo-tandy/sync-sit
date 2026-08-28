@@ -7,11 +7,12 @@ interface DialogProps {
    * Accessible name for the dialog. Passing it opts the dialog into full
    * modal semantics: role="dialog" + aria-modal, focus moved into the panel
    * on open and restored to the opener on close, Escape-to-close, and a Tab
-   * trap that keeps keyboard focus inside the panel. Call sites without a
-   * name keep the legacy plain-div behavior — shipping aria-modal on an
-   * unnamed dialog is an axe aria-dialog-name failure, and Escape/focus
-   * changes must not land untested on the ~70 existing call sites. Naming
-   * those sites (and thereby upgrading them) is a tracked follow-up sweep.
+   * trap that keeps keyboard focus inside the panel. Every existing call
+   * site is named (issue #305 sweep), so ariaLabel is the expected default
+   * for new dialogs — reuse the dialog's visible title key. The prop stays
+   * optional only because shipping aria-modal on an UNNAMED dialog is an
+   * axe aria-dialog-name failure; an unnamed call site keeps the legacy
+   * plain-div behavior rather than half-modal semantics.
    */
   ariaLabel?: string;
   children: ReactNode;
