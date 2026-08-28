@@ -55,21 +55,23 @@ export const removeCoParent = onCall(
     // The family-LESS parent profile that remains is re-attachable through
     // a fresh invite: addProfileToUser's orphan-parent carve-out (same PR)
     // lets joinFamily set a new familyId on it, so removal is recoverable.
-    await db.collection('users').doc(targetUserId).update({
+    // ONE batch for both writes (round-3 review): they are cross-collection
+    // but batched writes are atomic, which makes the ordering question moot.
+    // Round 2's pointer-first reorder was WRONG about its own failure mode:
+    // a retry after a partial failure hits this callable's membership gate,
+    // which reads the pointer just deleted, throws not-found, and the stale
+    // parentIds entry becomes permanent -- while parentIds gates MORE than
+    // the pointer does (isFamilyMember: family doc, kids, appointments,
+    // endorsements; generateInviteLink and sendContactRequest check it too).
+    const batch = db.batch();
+    batch.update(db.collection('users').doc(targetUserId), {
       'profiles.parent.familyId': FieldValue.delete(),
       familyId: FieldValue.delete(),
     });
-
-    // Remove from family parentIds -- AFTER the pointer delete (round-2
-    // review): the two writes are not atomic, and this order makes the
-    // failure window harmless. Pointer-first means a mid-failure leaves a
-    // stale parentIds entry (retry cleans it up) instead of the #279 state
-    // (out of parentIds but still holding the membership pointer that
-    // storage.rules and getVerificationDocument key off).
-    await db.collection('families').doc(callerFamilyId).update({
+    batch.update(db.collection('families').doc(callerFamilyId), {
       parentIds: FieldValue.arrayRemove(targetUserId),
     });
-
+    await batch.commit();
 
     await writeUserActivity(uid, 'remove_co_parent', { targetUserId, familyId: callerFamilyId });
 

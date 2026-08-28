@@ -1,11 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { useClientConfigValue } from '@/lib/adminConfigClient';
-import { ADMIN_CONFIG_DEFS } from '@ejm/shared-core';
+import { ADMIN_CONFIG_DEFS, hasFamilyMembership } from '@ejm/shared-core';
 import { useParams, useNavigate, Link } from 'react-router';
 import { useTranslation, Trans } from 'react-i18next';
 import { httpsCallable } from 'firebase/functions';
 import { signInWithEmailAndPassword } from 'firebase/auth';
-import { getParentProfile } from '@ejm/sit-core';
 import { enrollmentErrorReason } from '@ejm/shared-ui';
 import { auth, functions } from '@/config/firebase';
 import { markNextSignInFresh, useAuthStore } from '@/stores/authStore';
@@ -224,7 +223,11 @@ export function JoinFamilyPage() {
   // parent profile -- familyId cleared by removeCoParent, profile retained
   // -- must fall through to the confirm-join branch below, which is the
   // only client path to the re-attach carve-out.
-  if (firebaseUser && getParentProfile(userDoc)?.familyId) {
+  // hasFamilyMembership mirrors the SERVER's orphan classification (both
+  // membership fields, incl. the legacy Plan C root familyId) so a legacy
+  // root-membership doc dead-ends here instead of round-tripping into an
+  // already-exists rejection (round-3 review).
+  if (firebaseUser && hasFamilyMembership(userDoc)) {
     return (
       <div>
         <TopNav title="Join Family" backTo="/" />
@@ -241,8 +244,9 @@ export function JoinFamilyPage() {
     );
   }
 
-  // Authed without a parent profile: skip the credential steps and offer a
-  // single confirm button that joins with the token alone.
+  // Authed without family MEMBERSHIP (no parent profile, or an orphan one
+  // left by removeCoParent): skip the credential steps and offer a single
+  // confirm button that joins with the token alone.
   if (firebaseUser) {
     return (
       <div>

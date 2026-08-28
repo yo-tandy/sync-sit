@@ -179,3 +179,19 @@ describe('JoinFamilyPage orphan-parent re-attach (issue #279)', () => {
     expect(screen.queryAllByText(/Join the Testers family/)).toHaveLength(0);
   });
 });
+
+  it('a LEGACY Plan C doc (root familyId, none on the profile) still dead-ends (active member, not orphan)', async () => {
+    h.auth = {
+      firebaseUser: { uid: 'legacy-1' },
+      userDoc: { familyId: 'fam-legacy', profiles: { parent: { enrollmentComplete: true } } },
+    };
+    render(
+      <I18nextProvider i18n={i18n}>
+        <MemoryRouter>
+          <JoinFamilyPage />
+        </MemoryRouter>
+      </I18nextProvider>,
+    );
+    expect(await screen.findByText(i18n.t('enrollment.alreadyInFamily'))).toBeTruthy();
+    expect(screen.queryAllByText(/Join the Testers family/)).toHaveLength(0);
+  });

@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { httpsCallable } from 'firebase/functions';
 import { TopNav, StepIndicator, StepVerify, StepPassword, enrollmentErrorReason } from '@ejm/shared-ui';
-import { getParentProfile } from '@ejm/shared-core';
+import { hasFamilyMembership } from '@ejm/shared-core';
 import { getStudyRole } from '@ejm/study-core';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth, functions } from '@/config/firebase';
@@ -92,7 +92,10 @@ export function ParentEnrollment() {
   // Add-profile mode: an already-authenticated user with no parent profile
   // yet (e.g. a signed-in study user adding the family role). Credentials are
   // already established, so the flow starts at the consent-only password step.
-  const isAddProfile = !!firebaseUser && !getParentProfile(userDoc);
+  // Membership, not profile presence (PR #284 round 3, sit parity): an
+  // orphan parent profile -- removeCoParent's leftover on the SHARED user
+  // doc -- takes the add-profile path here too.
+  const isAddProfile = !!firebaseUser && !hasFamilyMembership(userDoc);
 
   const resendCooldownS = useClientConfigValue(
     'verificationCodeCooldownS',
@@ -145,7 +148,7 @@ export function ParentEnrollment() {
   // success navigation to /family.
   useEffect(() => {
     if (step !== 0 || authLoading || !firebaseUser) return;
-    if (getParentProfile(userDoc)) {
+    if (hasFamilyMembership(userDoc)) {
       // Already a parent — nothing to add here (covers sit parents too: their
       // shared parent profile works in study without any enrollment).
       navigate('/family', { replace: true });

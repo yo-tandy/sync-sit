@@ -23,6 +23,19 @@ export function isParent(user: User | null | undefined): boolean {
   return !!user?.profiles?.parent;
 }
 
+/**
+ * TRUE membership, mirroring the server's orphan classification
+ * (addProfileToUser's carve-out, issue #279): a parent belongs to a family
+ * when EITHER the Plan D pointer (profiles.parent.familyId) or the legacy
+ * Plan C root familyId is set. Client guards that key on this instead of
+ * profile presence let an orphan profile (removeCoParent's leftover) reach
+ * the re-attach flows, without misclassifying a legacy root-membership doc
+ * as an orphan.
+ */
+export function hasFamilyMembership(user: User | null | undefined): boolean {
+  return !!(user?.profiles?.parent?.familyId || (user as { familyId?: string } | null)?.familyId);
+}
+
 export function isBabysitter(user: User | null | undefined): boolean {
   return !!user?.profiles?.babysitter;
 }

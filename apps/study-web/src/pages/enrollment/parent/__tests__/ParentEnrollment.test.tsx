@@ -16,7 +16,7 @@ const h = vi.hoisted(() => ({
   // fails and the account-ready login state renders (issue #264).
   signIn: vi.fn(() => {
     h.auth.firebaseUser = { uid: 'new' };
-    h.auth.userDoc = { profiles: { parent: {} } };
+    h.auth.userDoc = { profiles: { parent: { familyId: 'fam-1' } } };
     return Promise.resolve();
   }),
   // Listeners registered through the mocked store subscription — tests fire
@@ -112,6 +112,10 @@ vi.mock('@ejm/shared-core', () => ({
   },
   getParentProfile: (userDoc: { profiles?: { parent?: unknown } } | null) =>
     userDoc?.profiles?.parent ?? null,
+  // Mirrors the real helper (issue #279): membership = either field set.
+  hasFamilyMembership: (
+    userDoc: { familyId?: string; profiles?: { parent?: { familyId?: string } } } | null,
+  ) => !!(userDoc?.profiles?.parent?.familyId || userDoc?.familyId),
 }));
 vi.mock('@ejm/study-core', () => ({
   // Same precedence as the real adapter: tutor wins over parent.
@@ -380,7 +384,7 @@ describe('ParentEnrollment orchestrator', () => {
   });
 
   it('authed WITH a parent profile: redirects to /family instead of enrolling', () => {
-    h.auth = { firebaseUser: { uid: 'p1' }, userDoc: { profiles: { parent: {} } }, loading: false };
+    h.auth = { firebaseUser: { uid: 'p1' }, userDoc: { profiles: { parent: { familyId: 'fam-1' } } }, loading: false };
     renderFlow();
     expect(h.navigate).toHaveBeenCalledWith('/family', { replace: true });
   });
@@ -391,7 +395,7 @@ describe('ParentEnrollment orchestrator', () => {
     // profile. The redirect effect must NOT hijack the success navigation
     // once this lands.
     h.refreshUserDoc = vi.fn().mockImplementation(() => {
-      h.auth.userDoc = { profiles: { parent: {} } };
+      h.auth.userDoc = { profiles: { parent: { familyId: 'fam-1' } } };
       return Promise.resolve();
     });
     renderFlow();
@@ -566,7 +570,7 @@ describe('ParentEnrollment post-enrollment session gate (issue #264)', () => {
     h.refreshUserDoc = vi.fn()
       .mockResolvedValueOnce(undefined) // first refresh: still a miss
       .mockImplementationOnce(() => {
-        h.auth.userDoc = { profiles: { parent: {} } };
+        h.auth.userDoc = { profiles: { parent: { familyId: 'fam-1' } } };
         return Promise.resolve();
       });
     await reachFamilyStep();
@@ -604,7 +608,7 @@ describe('ParentEnrollment post-enrollment session gate (issue #264)', () => {
     // already unsubscribed itself at timeout).
     await vi.waitFor(() => expect(h.subscribers.length).toBe(1));
 
-    h.auth.userDoc = { profiles: { parent: {} } };
+    h.auth.userDoc = { profiles: { parent: { familyId: 'fam-1' } } };
     await act(async () => {
       h.subscribers[0]({ loading: false, firebaseUser: h.auth.firebaseUser, userDoc: h.auth.userDoc });
     });
@@ -629,7 +633,7 @@ describe('ParentEnrollment post-enrollment session gate (issue #264)', () => {
     expect(h.navigate).not.toHaveBeenCalledWith('/family');
 
     // The snapshot lands: settle the store and notify the listener.
-    h.auth.userDoc = { profiles: { parent: {} } };
+    h.auth.userDoc = { profiles: { parent: { familyId: 'fam-1' } } };
     await act(async () => {
       h.subscribers[0]({ loading: false, firebaseUser: h.auth.firebaseUser, userDoc: h.auth.userDoc });
     });
