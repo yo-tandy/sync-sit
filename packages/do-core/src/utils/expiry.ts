@@ -1,3 +1,4 @@
+import { parisWallTimeToUtc } from '@ejm/shared-core/utils/parisTime.js';
 import type { TaskTiming } from '../types/task.js';
 import { DO_ONGOING_TTL_DAYS } from '../constants/bounds.js';
 
@@ -22,75 +23,17 @@ import { DO_ONGOING_TTL_DAYS } from '../constants/bounds.js';
  * so it applies only to `ongoing`; a dated task's own date IS its staleness
  * bound.
  *
- * The Paris wall-clock maths below reproduces
- * `@ejm/shared-functions/scheduled/parisTime.ts`. Known duplication,
- * tracked as issue #309: `parisClock`/`parisWallTimeToUtc` are pure Intl
- * code and belong hoisted into `@ejm/shared-core` (a leaf package do-core
- * already depends on), with an agreement test pinning the two copies until
- * both import the hoisted one. Shared-package changes ship as their own
- * owner-approved PRs, so the hoist is deliberately NOT part of the do-core
- * ladder — do not "fix" the duplication in passing here; see #309.
+ * The Paris wall-clock maths (`parisWallTimeToUtc`, DST-safe via the #74
+ * two-pass offset correction) is the shared implementation in
+ * `@ejm/shared-core/utils/parisTime.ts` — the hoist tracked as issue #309.
+ * Re-exported below so expiry's callers and tests keep one import site; the
+ * import-identity test in `__tests__/expiry.test.ts` pins do-core to the
+ * shared copy.
  */
 
-const PARIS_TZ = 'Europe/Paris';
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-interface WallClock {
-  year: number;
-  month: number;
-  day: number;
-  hour: number;
-  minute: number;
-  second: number;
-}
-
-function parisClock(instant: Date): WallClock {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: PARIS_TZ,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hourCycle: 'h23',
-  }).formatToParts(instant);
-  const get = (type: string) =>
-    Number(parts.find((p) => p.type === type)?.value);
-  return {
-    year: get('year'),
-    month: get('month'),
-    day: get('day'),
-    hour: get('hour'),
-    minute: get('minute'),
-    second: get('second'),
-  };
-}
-
-/**
- * Converts a Paris wall-clock date ('YYYY-MM-DD') + time ('HH:mm') to the
- * UTC instant it denotes. DST-safe: guesses by pretending the wall time is
- * UTC, then corrects by the observed Paris offset; the second iteration
- * handles guesses that land on the wrong side of a DST transition.
- */
-export function parisWallTimeToUtc(date: string, time: string): Date {
-  const wallAsUtcMs = new Date(`${date}T${time}:00Z`).getTime();
-  let instant = new Date(wallAsUtcMs);
-  for (let i = 0; i < 2; i++) {
-    const c = parisClock(instant);
-    const seenWallAsUtcMs = Date.UTC(
-      c.year,
-      c.month - 1,
-      c.day,
-      c.hour,
-      c.minute,
-      c.second,
-    );
-    const offsetMs = seenWallAsUtcMs - instant.getTime();
-    instant = new Date(wallAsUtcMs - offsetMs);
-  }
-  return instant;
-}
+export { parisWallTimeToUtc };
 
 /**
  * The instant a Paris calendar day ends: midnight at the start of the NEXT

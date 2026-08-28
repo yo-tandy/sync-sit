@@ -234,3 +234,17 @@ describe('computeTaskExpiresAt (§6.3)', () => {
     ).toThrow(/unknown task timing/);
   });
 });
+
+// ── Agreement test (issue #309) ──────────────────────────────────────────────
+// expiry.ts used to carry a documented verbatim copy of parisWallTimeToUtc
+// (it cannot depend on shared-functions); the copy is gone and both do-core
+// and shared-functions now import the one hoisted implementation from
+// @ejm/shared-core. Pin the import identity so a reintroduced local copy
+// (silently forking the DST behavior between the sit/study crons and do
+// expiry) fails loudly here.
+describe('shared-core agreement (#309)', () => {
+  it('re-exports the exact shared-core parisWallTimeToUtc, not a copy', async () => {
+    const sharedCore = await import('@ejm/shared-core/utils/parisTime.js');
+    expect(parisWallTimeToUtc).toBe(sharedCore.parisWallTimeToUtc);
+  });
+});
