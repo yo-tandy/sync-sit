@@ -20,6 +20,8 @@ export { TopNav } from './TopNav.js';
 export { PageContainer } from './PageContainer.js';
 export { NavTabs } from './NavTabs.js';
 export type { NavTabItem } from './NavTabs.js';
+export { SideNav } from './SideNav.js';
+export type { SideNavItem, SideNavSection } from './SideNav.js';
 export { Dialog } from './Dialog.js';
 export { StepIndicator } from './StepIndicator.js';
 export { ToastProvider, useToast } from './Toast.js';
