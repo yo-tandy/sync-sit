@@ -274,6 +274,7 @@ export default {
   menu: {
     openMenu: 'Open menu',
     primaryNav: 'Primary navigation',
+    appMenu: 'Menu',
     home: 'Home',
     editProfile: 'Edit Profile',
     babysittingOptions: 'Babysitting Options',

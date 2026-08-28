@@ -101,7 +101,7 @@ export function FamilyAppBar() {
         ariaLabel={t('menu.primaryNav')}
       />
 
-      <Dialog open={menuOpen} onClose={() => setMenuOpen(false)}>
+      <Dialog open={menuOpen} onClose={() => setMenuOpen(false)} ariaLabel={t('menu.appMenu')}>
         <div className="-m-6 overflow-hidden rounded-xl">
           <div className="border-b border-gray-100 px-4 py-3">
             <p className="text-base font-bold text-gray-900">{userDoc?.firstName} {userDoc?.lastName}</p>

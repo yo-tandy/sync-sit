@@ -72,13 +72,14 @@ mx-auto w-full max-w-2xl has-[[data-page-width=wide]]:max-w-5xl
 
 ### Wide-tier page pass
 
-Wide (`data-page-width="wide"`): admin DataTable pages (Users, Families,
-Appointments, Verifications, Governance, AuditLog, Holidays,
-EnrollmentAccess, Configuration, GdprExport), admin + portal dashboards
-(tile grids per #120/#142), tutor SchedulePage (grid), search pages with
-result grids (sit family SearchPage, study family SearchPage), sit babysitter
-SchedulePage. Everything else keeps the default reading cap — forms and
-prose are the surfaces the issue calls out as worst-hit.
+Wide (`data-page-width="wide"`), decided page-by-page against the actual
+markup (grid/table-shaped only): the admin DataTable pages (Users, Families,
+Appointments, AuditLog), the study family dashboard (the #142 2-col tile
+grid), and both schedule pages (weekly timeline grids). Pages examined and
+deliberately KEPT at the reading cap: both search pages (single-column
+result lists, no grid), the sit dashboards and admin dashboard (card
+columns, no tile grid), and every admin form/queue/config page —
+forms and prose are the surfaces the issue calls out as worst-hit.
 
 ## Parity
 
