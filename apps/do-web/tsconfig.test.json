@@ -25,13 +25,7 @@
     // / etc. Without it the matchers are unknown and every assertion using one
     // fails TS2339. Including it also type-checks the setup file itself,
     // which nothing did before.
-    "vitest.setup.ts",
-    // The config that decides which of the files above actually run was
-    // itself checked by nothing: tsconfig.node.json includes only
-    // vite.config.ts, tsconfig.app.json only src. It belongs in this pass
-    // rather than that one -- it imports vitest/config, and `node` is
-    // already declared here for import.meta.dirname (PR #411 review).
-    "vitest.config.ts"
+    "vitest.setup.ts"
   ],
   // `extends` does NOT merge `exclude`, so this line is load-bearing rather
   // than boilerplate: inherited, the app config's exclude would filter out

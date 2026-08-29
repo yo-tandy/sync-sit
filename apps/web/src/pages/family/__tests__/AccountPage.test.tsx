@@ -95,11 +95,11 @@ describe('family AccountPage', () => {
 
     await waitFor(() =>
       expect(
-        h.updateDoc.mock.calls.some((c) => (c[0] as { path: string }).path === 'users/p1'),
+        h.updateDoc.mock.calls.some((c) => c[0].path === 'users/p1'),
       ).toBe(true),
     );
     const userCall = h.updateDoc.mock.calls.find(
-      (c) => (c[0] as { path: string }).path === 'users/p1',
+      (c) => c[0].path === 'users/p1',
     )!;
     expect(userCall[1]).not.toHaveProperty('email');
     expect(userCall[1]).toHaveProperty('profiles.parent.phone');

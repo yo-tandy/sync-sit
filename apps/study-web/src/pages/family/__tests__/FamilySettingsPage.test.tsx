@@ -176,7 +176,7 @@ describe('family FamilySettingsPage', () => {
       ).toBe(true),
     );
     const kidCall = h.updateDoc.mock.calls.find(
-      (c) => (c[0] as { path: string }).path === 'families/fam1/kids/kid1',
+      (c) => c[0].path === 'families/fam1/kids/kid1',
     )!;
     expect(kidCall[1]).not.toHaveProperty('languages');
     expect(kidCall[1]).toMatchObject({ firstName: 'Existing', age: 5 });

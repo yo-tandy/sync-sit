@@ -79,8 +79,11 @@ jobs:
   # still do). Since #393/#411 the three web apps also run a SECOND pass —
   # `tsc --noEmit -p tsconfig.test.json`, the same two-pass form #373 gave the
   # functions packages — so the 246 test files their tsconfig.app.json excludes
-  # are covered here too, along with each web app's vitest.setup.ts and its
-  # vitest.config.ts. Two gaps remain, neither a regression here:
+  # are covered here too, along with each web app's vitest.setup.ts. Each web
+  # app's vitest.config.ts is now checked as well, but by the FIRST pass —
+  # tsconfig.node.json lists it beside vite.config.ts, which is the faithful
+  # environment for a file that runs in Node (no DOM lib). Two gaps remain,
+  # neither a regression here:
   #   - ALL the root-level TypeScript outside any workspace package, which no
   #     tsconfig covers and `pnpm -r` skips: scripts/__tests__/ (this
   #     workflow's own pins among them), tests-e2e/, and the root configs
@@ -91,8 +94,9 @@ jobs:
   #     (shared-ui has none). Being inside a package does not help — every base
   #     config includes only `src`, so nothing lists them. The three web apps
   #     closed this for themselves by naming vitest.config.ts in their
-  #     tsconfig.test.json (#411); the same one-line fix would work for the
-  #     rest.
+  #     tsconfig.node.json (#411). Those seven have no node-side config to
+  #     name it in, so closing them means picking a home deliberately rather
+  #     than copying this one line.
   # `scripts/__tests__/release-workflow.test.ts` pins the parts of this job
   # whose loss would be silent, including that every workspace package keeps a
   # `typecheck` script — the gap `tests` was in until now.
