@@ -183,26 +183,33 @@ describe('AdminVerificationsPage view-document error surfacing', () => {
     expect(openSpy).not.toHaveBeenCalled();
   });
 
-  it('leaves the admin page in place: the anchor is targetless and removed after the click', async () => {
+  it('leaves the admin page in place: the anchor is targetless, in the DOM at click time, and removed after', async () => {
     const { httpsCallable } = await import('firebase/functions');
     (httpsCallable as ReturnType<typeof vi.fn>).mockReturnValue(
       vi.fn().mockResolvedValue({ data: { url: 'https://signed.example/u' } }),
     );
-    let seenTarget: string | null = null;
+    // RECORD the clicks rather than sampling an attribute into a
+    // null-initialized variable: `toBe(null)` against a null sentinel
+    // cannot distinguish "clicked without a target" from "never clicked"
+    // (round-1 review caught exactly that vacuity here).
+    const clicks: { target: string | null; inDom: boolean }[] = [];
     vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (
       this: HTMLAnchorElement,
     ) {
-      // No target: the server's Content-Disposition: attachment (PR #285)
-      // makes this a download rather than a navigation, so the queue stays.
-      seenTarget = this.getAttribute('target');
+      clicks.push({ target: this.getAttribute('target'), inDom: document.body.contains(this) });
     });
 
     renderPage();
     const { fireEvent, waitFor } = await import('@testing-library/react');
     fireEvent.click(screen.getByText(i18n.t('verification.viewDocument')));
 
-    await waitFor(() => expect(seenTarget).toBe(null));
-    // Nothing is left in the DOM afterwards.
+    // Exactly one click happened; it carried NO target (so the server's
+    // Content-Disposition downloads it and the queue stays on screen) and
+    // the anchor was attached when clicked (a detached anchor is inert in
+    // some browsers).
+    await waitFor(() => expect(clicks).toHaveLength(1));
+    expect(clicks[0]).toEqual({ target: null, inDom: true });
+    // ...and nothing is left behind afterwards.
     expect(document.querySelectorAll('a[download]')).toHaveLength(0);
   });
 

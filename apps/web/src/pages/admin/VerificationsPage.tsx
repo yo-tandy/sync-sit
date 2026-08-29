@@ -217,9 +217,19 @@ export function AdminVerificationsPage() {
                         // COUPLING: without that server header a targetless
                         // click would navigate the admin panel away -- if the
                         // disposition ever changes, change this call site too.
-                        // The download attribute is advisory only here (the
-                        // URL is cross-origin, so browsers ignore it); the
-                        // header is what guarantees the download.
+                        // The download attribute is advisory only here: the
+                        // URL is cross-origin, so browsers drop it and the
+                        // server header is what guarantees the download. That
+                        // is also what makes fileName -- unvalidated uploader
+                        // input beyond a non-empty check -- harmless in this
+                        // position; if the signed URL ever moves behind a
+                        // same-origin proxy the attribute goes live and the
+                        // value must be sanitized first (round-1 review).
+                        // ERROR SCOPE: the banner below covers callable and
+                        // path-parse failures only. Once the URL is handed to
+                        // the browser, a 403/expired signature fails silently
+                        // -- inherent to download semantics (window.open at
+                        // least surfaced the storage error in its tab).
                         const a = document.createElement('a');
                         a.href = result.data.url;
                         a.download = v.fileName || '';
