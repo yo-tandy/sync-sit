@@ -50,6 +50,36 @@ const EMAIL_PREF_CATEGORY: Record<string, 'newRequest' | 'confirmed' | 'cancelle
   published_search_contact: 'newRequest',
   published_search_accepted: 'confirmed',
   published_search_declined: 'cancelled',
+  // sync-do (plan §10; PR #334 round-2 review). doAcceptOffer stopped writing
+  // an explicit guardian notice because this mirror already CCs the
+  // supervising parents — but without these entries that CC was push +
+  // in-app only, and a supervising parent with no push tokens was left with
+  // an in-app row no surface renders yet. Mapping restores the email leg
+  // through the SAME single mirror, with no duplication. Categories follow
+  // the platform's existing semantics above: an outcome the student was
+  // waiting for is `confirmed`, something falling through is `cancelled`,
+  // and a change to committed work is `newRequest` (the
+  // `study_session_modified` precedent).
+  task_offer_accepted: 'confirmed',
+  task_marked_done: 'confirmed',
+  task_offer_declined: 'cancelled',
+  task_cancelled: 'cancelled',
+  task_updated: 'newRequest',
+  // DELIBERATELY UNMAPPED do types (in-app + push only, per this map's
+  // conservative rule):
+  // - `task_guardian_approval`: on the child-facing half a parent of this
+  //   very family just made the decision, so emailing the family back is the
+  //   `supervision_request` kind of noise this trigger already skips; the
+  //   parent-facing approval REQUEST is a different write that submitOffer
+  //   emails directly (its recipients are parents, who carry no `governedBy`
+  //   and so never reach this trigger at all).
+  // - `new_task_matching`: the board digest is informational and runs up to
+  //   4x a day per student; mirroring it by email would make a parent's inbox
+  //   the busiest surface in sync-do. The push/in-app copy still reaches them.
+  // - `task_offer_received` / `task_assigned`: only ever addressed to hiring
+  //   parents (or, for `task_assigned`, to nobody — it has no sender since
+  //   the round-1 dedupe), and a parent carries no `governedBy`, so neither
+  //   can reach this map.
 };
 
 export const mirrorNotificationToGuardians = onDocumentCreated(

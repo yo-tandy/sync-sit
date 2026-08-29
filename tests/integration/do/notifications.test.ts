@@ -309,6 +309,14 @@ describe('sync-do call-site notifications (plan §10, §13 PR9)', () => {
       offerId: kidOfferId,
     });
     expect(guardianNotifs[0].title).toContain('First-doer-ntf-kid');
+    // ...and that ONE notice carries all three channels, not just push
+    // (round-2 review): the mirror emails only types present in its
+    // `EMAIL_PREF_CATEGORY` map, so without the do entries a supervising
+    // parent holding no push tokens would be left with an in-app row alone,
+    // on a child-safety oversight notice.
+    expect(guardianNotifs[0].channels).toContain('email');
+    expect(guardianNotifs[0].channels).toContain('push');
+    expect(guardianNotifs[0].emailSent).toBe(true);
     // The former explicit guardian write is gone for good.
     expect(await notifsFor(seed.parent3.uid, 'task_assigned')).toHaveLength(0);
 

@@ -29,8 +29,12 @@ import { resolveDoLang, type DoLang, type DoNotificationContent } from './notify
  * review). Every doc written here trips `mirrorNotificationToGuardians`
  * (../guardian/onNotificationCreated.ts): a `notifications/{id}` create
  * whose RECIPIENT carries `governedBy` is CC'd to every parent of the
- * supervising family as a `guardian_mirror` copy (in-app + push,
- * kid-prefixed title, `data.originalType` preserved). A supervised doer's
+ * supervising family as a `guardian_mirror` copy (in-app + push, kid-
+ * prefixed title, `data.originalType` preserved) — plus EMAIL for the do
+ * types carried in that trigger's `EMAIL_PREF_CATEGORY` map, which is what
+ * keeps the guardian's mail leg alive now that no call site writes a second
+ * notice (PR #334 round-2 review; a do type added later needs an entry
+ * there or its guardian copy is push + in-app only). A supervised doer's
  * notification therefore already reaches their parents, and a do call site
  * must NOT also notify the guardian family for the same event — that would
  * be two notices and two pushes for one thing. The rule for new call sites:

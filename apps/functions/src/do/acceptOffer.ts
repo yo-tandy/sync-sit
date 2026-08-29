@@ -245,12 +245,19 @@ export const doAcceptOffer = onCall(
       // (apps/functions/src/guardian/onNotificationCreated.ts) fires on every
       // `notifications/{id}` create whose recipient carries `governedBy` —
       // exactly the supervised winner above — and CCs a `guardian_mirror`
-      // copy (in-app + push, kid-prefixed title) to every parent of the
-      // supervising family. The winner's `task_offer_accepted` IS that
+      // copy (email + push + in-app, kid-prefixed title) to every parent of
+      // the supervising family. The winner's `task_offer_accepted` IS that
       // trigger, so notifying the guardian family here too would mean two
       // notices and two pushes for one acceptance. `governedBy` is still the
       // right authority for who is supervised — it is just read by the
       // trigger rather than here.
+      //
+      // ALL THREE channels, not just push (PR #334 round-2 review): the
+      // mirror emails only types it can map to a `notifPrefs` category, so
+      // `task_offer_accepted` — with the other do types a student receives —
+      // is now in that trigger's `EMAIL_PREF_CATEGORY` map. Without it, a
+      // supervising parent holding no push tokens would have been left with
+      // an in-app row alone, on a child-safety oversight notice.
       //
       // Whether do-world mirrors should surface in the sit/study bells at
       // all is an owner decision tracked on issue #336 (decision-20's
