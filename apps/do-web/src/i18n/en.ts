@@ -82,6 +82,13 @@ export default {
   },
 
   /** The seven §5 categories, in board display order. */
+  notifications: {
+    pushPromptTitle: 'Enable notifications',
+    pushPromptDesc: 'Get notified about offers, assignments and new tasks.',
+    enable: 'Enable',
+    notNow: 'Not now',
+  },
+
   categories: {
     green_thumb: 'Green thumb',
     boxes: 'Boxes & moving',

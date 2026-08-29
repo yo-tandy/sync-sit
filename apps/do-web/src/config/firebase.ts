@@ -3,11 +3,11 @@ import { getAuth, connectAuthEmulator } from 'firebase/auth';
 import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
 import { getFunctions, connectFunctionsEmulator } from 'firebase/functions';
 import { getStorage, connectStorageEmulator } from 'firebase/storage';
+import { getMessaging, isSupported } from 'firebase/messaging';
 
 // Same Firebase project as the sibling apps (one Auth instance = SSO across
-// all three, plan §3.1). Messaging is deliberately absent from the shell —
-// it arrives with the notifications PR (plan §13 PR9), lazily initialized
-// exactly like apps/study-web/src/config/firebase.ts does it.
+// all three, plan §3.1). Messaging is lazily initialized exactly like
+// apps/study-web/src/config/firebase.ts does it (plan §13 PR9).
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || 'demo-api-key',
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || 'localhost',
@@ -22,6 +22,27 @@ export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const functions = getFunctions(app, 'europe-west1');
 export const storage = getStorage(app);
+
+// Messaging — lazily initialized only when push permission is requested.
+// Calling getMessaging() eagerly registers the service worker and triggers
+// an Android system prompt ("wants to access other apps") before login.
+// Mirrors apps/study-web/src/config/firebase.ts.
+export let messaging: ReturnType<typeof getMessaging> | null = null;
+
+export async function initMessaging(): Promise<ReturnType<typeof getMessaging> | null> {
+  if (messaging) return messaging;
+  if (typeof window === 'undefined' || !('serviceWorker' in navigator) || !('Notification' in window)) return null;
+  try {
+    const supported = await isSupported();
+    if (supported) {
+      messaging = getMessaging(app);
+      return messaging;
+    }
+  } catch (err) {
+    console.warn('FCM initialization failed:', err);
+  }
+  return null;
+}
 
 // Connect to emulators in development
 if (import.meta.env.DEV) {

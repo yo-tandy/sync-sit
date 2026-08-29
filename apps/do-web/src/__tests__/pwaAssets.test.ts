@@ -41,7 +41,13 @@ describe('PWA static assets', () => {
     expect(html).toContain('content="#0d8204"');
   });
 
-  it('ships NO FCM service worker yet — push arrives with the notifications PR (plan §13 PR9)', () => {
-    expect(existsSync(resolve(root, 'public/firebase-messaging-sw.js'))).toBe(false);
+  it('ships the FCM service worker (plan §13 PR9), on the shared web-app registration like study', () => {
+    const sw = readFileSync(resolve(root, 'public/firebase-messaging-sw.js'), 'utf8');
+    // Same public registration values the siblings' SWs hardcode (Vite env
+    // is unavailable in a static SW) — the per-app token split lives in
+    // Firestore (fcmTokensDo), not in this registration.
+    expect(sw).toContain("projectId: 'sync-sit'");
+    expect(sw).toContain('onBackgroundMessage');
+    expect(sw).toContain('notificationclick');
   });
 });

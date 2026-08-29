@@ -82,6 +82,13 @@ export default {
   },
 
   /** Les sept catégories du §5, dans l'ordre d'affichage du tableau. */
+  notifications: {
+    pushPromptTitle: 'Activer les notifications',
+    pushPromptDesc: 'Recevez des notifications pour les offres, les missions et les nouvelles tâches.',
+    enable: 'Activer',
+    notNow: 'Plus tard',
+  },
+
   categories: {
     green_thumb: 'Main verte',
     boxes: 'Cartons & déménagement',

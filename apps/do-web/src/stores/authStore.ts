@@ -15,6 +15,7 @@ import {
 import { doc, getDoc, onSnapshot } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { auth, db, functions } from '@/config/firebase';
+import { removePushToken } from '@/lib/pushNotifications';
 import { loginErrorKey } from '@ejm/shared-core';
 import type { User } from '@ejm/shared-core';
 
@@ -52,9 +53,11 @@ interface AuthState {
 const SESSION_EPOCH_KEY = 'sessionEpoch:';
 
 // Logout must stay snappy even on a stalled-but-not-dead connection: the
-// callable's SDK default timeout is 70s. Best-effort — bound it and move on
-// to the local sign-out (the server-side token revocation is the backstop).
+// callable's SDK default timeout is 70s and removePushToken's updateDoc can
+// hang without erroring. Both are best-effort — bound them and move on to
+// the local sign-out (the server-side token revocation is the backstop).
 const SIGN_OUT_EVERYWHERE_TIMEOUT_MS = 5000;
+const PUSH_TOKEN_TIMEOUT_MS = 3000;
 
 /**
  * Race an operation against a deadline WITHOUT leaving the timer pending
@@ -191,6 +194,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     // Detach BEFORE bumping the epoch: our own signOutEverywhere must not
     // race the doc watcher into the forced-sign-out (toast) path.
     detachUserDocListener();
+    // Unregister this device's push token (fcmTokensDo) BEFORE the auth
+    // session ends — on a shared device the next sign-in would otherwise
+    // re-register the SAME token and route this user's pushes to the next
+    // user's screen (mirrors study's logout, same bound).
+    if (uid) {
+      await raceWithTimeout(removePushToken(uid).catch(() => {}), PUSH_TOKEN_TIMEOUT_MS);
+    }
     // Logout means logout EVERYWHERE (issue #181) — best-effort: offline,
     // failing or HANGING, the user still signs out locally within the bound
     // (never trap them); the server-side token revocation is the backstop
