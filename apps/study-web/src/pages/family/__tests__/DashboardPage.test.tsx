@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { screen, act, waitFor } from '@testing-library/react';
+import { screen, act, waitFor, fireEvent } from '@testing-library/react';
 import { renderWithProviders } from '@/__tests__/test-utils';
 
 // Hoisted, test-controllable state. The family dashboard reads the auth store
@@ -12,9 +12,9 @@ const h = vi.hoisted(() => ({
   },
   // What getDoc(families/{id}) resolves to. null => doc absent.
   familyData: null as { familyName?: string; verification?: { isFullyVerified?: boolean } } | null,
-  // studyContactRequests docs for the pending/accepted counts.
+  // studyContactRequests docs behind the "Your requests" section.
   requests: [] as Record<string, unknown>[],
-  // study-sessions docs for the sessions pending/upcoming counts.
+  // study-sessions docs behind the "Your sessions" section.
   sessions: [] as Record<string, unknown>[],
   getDoc: vi.fn(),
   where: vi.fn((field: string, op: string, val: unknown) => ({ where: [field, op, val] })),
@@ -39,7 +39,7 @@ vi.mock('@/stores/authStore', () => ({
 import { DashboardPage } from '../DashboardPage';
 
 /** Paris "YYYY-MM-DD" for today + N days — the same wall-clock the component
- * reads, so the Today/Tomorrow pins hold in any test-runner timezone. */
+ * reads, so the date floor holds in any test-runner timezone. */
 function parisDatePlus(days: number): string {
   const todayStr = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Europe/Paris',
@@ -56,11 +56,29 @@ function parisDatePlus(days: number): string {
 /** A confirmed one_time session doc unless overridden. */
 function session(overrides: Record<string, unknown> = {}) {
   return {
+    sessionId: 's1',
     familyId: 'fam1',
     status: 'confirmed',
     type: 'one_time',
     date: '2099-01-01',
     startTime: '17:00',
+    endTime: '18:00',
+    subject: 'math',
+    level: '3e',
+    tutorName: 'Leo',
+    ...overrides,
+  };
+}
+
+/** A pending family-initiated contact request unless overridden. */
+function request(overrides: Record<string, unknown> = {}) {
+  return {
+    requestId: 'r1',
+    familyId: 'fam1',
+    status: 'pending',
+    subject: 'math',
+    level: '3e',
+    tutorName: 'Sarah',
     ...overrides,
   };
 }
@@ -103,17 +121,11 @@ describe('family DashboardPage', () => {
   });
 
   it('opts into the wide desktop tier on its root (issue #119)', () => {
-    // The tile grid wants the 5xl cap; the shell's PageContainer selects on
-    // this attribute sitting on the page ROOT (direct-child :has()).
     renderWithProviders(<DashboardPage />);
     expect(screen.getByText(/Dana/).closest('[data-page-width="wide"]')).not.toBeNull();
   });
 
   it('greets in the shared idiom, with the family context line (parity D1, #239)', async () => {
-    // This page had neither comma, wave nor context line before #239, and the
-    // context line is new state read off the families snapshot the
-    // verification gate already fetches — so it is worth pinning that the
-    // read actually reaches the header.
     h.familyData = { familyName: 'Cohen', verification: { isFullyVerified: true } };
     renderWithProviders(<DashboardPage />);
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Hello, Dana 👋');
@@ -130,14 +142,12 @@ describe('family DashboardPage', () => {
   it('shows the verification banner when the family is not fully verified', async () => {
     h.familyData = { familyName: 'Cohen', verification: { isFullyVerified: false } };
     renderWithProviders(<DashboardPage />);
-    // Banner explains search is locked and opens the IN-APP verification page
-    // (issue #129: the flow is shared with sit but lives in the current app).
     expect(await screen.findByText(/verify your family/i)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /complete verification/i })).toHaveAttribute(
       'href',
       '/family/verification',
     );
-    // No active search CTA while unverified.
+    // No search button while unverified.
     expect(screen.queryByRole('link', { name: /find a tutor/i })).not.toBeInTheDocument();
   });
 
@@ -147,7 +157,9 @@ describe('family DashboardPage', () => {
     expect(await screen.findByText(/verify your family/i)).toBeInTheDocument();
   });
 
-  it('shows the find-a-tutor CTA (and hides the banner) when fully verified', async () => {
+  // ── Issue #338: one "Find a tutor" button over two sections ──
+
+  it('shows the find-a-tutor button (and hides the banner) when fully verified', async () => {
     h.familyData = { familyName: 'Cohen', verification: { isFullyVerified: true } };
     renderWithProviders(<DashboardPage />);
     const cta = await screen.findByRole('link', { name: /find a tutor/i });
@@ -155,79 +167,194 @@ describe('family DashboardPage', () => {
     expect(screen.queryByText(/verify your family/i)).not.toBeInTheDocument();
   });
 
-  it('renders live pending/accepted request counts linking to the requests page', async () => {
-    h.requests = [
-      { requestId: 'r1', familyId: 'fam1', status: 'pending' },
-      { requestId: 'r2', familyId: 'fam1', status: 'pending' },
-      { requestId: 'r3', familyId: 'fam1', status: 'accepted' },
-      { requestId: 'r4', familyId: 'fam1', status: 'declined' },
-    ];
-    renderWithProviders(<DashboardPage />);
-
-    const link = await screen.findByRole('link', { name: /view your requests/i });
-    expect(link).toHaveAttribute('href', '/family/requests');
-    expect(h.where).toHaveBeenCalledWith('familyId', '==', 'fam1');
-    // 2 pending, 1 accepted — inline on the compact tile.
-    expect(await screen.findByText('2 pending · 1 accepted')).toBeInTheDocument();
-  });
-
-  it('counts a TUTOR-initiated pending apart, and says the family is the one to answer', async () => {
-    // "You have 1 pending request / Tutors usually reply within a day or two"
-    // is backwards on both halves for a request a tutor sent us
-    // (issue #207 PR4, PR #213 review).
+  it('renders search exactly ONCE — it is a button now, never also a tile', async () => {
+    // The old layout duplicated search between the hero and the tile grid and
+    // needed a guard to suppress one of them; there is only one entry now.
     h.familyData = { familyName: 'Cohen', verification: { isFullyVerified: true } };
+    h.sessions = [session()];
+    renderWithProviders(<DashboardPage />);
+    await screen.findByText('Your sessions');
+    expect(screen.getAllByRole('link', { name: /find a tutor/i })).toHaveLength(1);
+  });
+
+  it('the search button survives a failed requests read (it is the only way into search)', async () => {
+    // FamilyAppBar has no /family/search item — this page is the only way in,
+    // so the button must not sit behind a snapshot that can fail.
+    h.familyData = { familyName: 'Cohen', verification: { isFullyVerified: true } };
+    h.getDocs.mockImplementation((q: { query?: { path: string }[] }) => {
+      const path = q?.query?.[0]?.path ?? '';
+      if (path === 'studyContactRequests') return Promise.reject(new Error('offline'));
+      return Promise.resolve({ docs: [] });
+    });
+    renderWithProviders(<DashboardPage />);
+    const links = await screen.findAllByRole('link', { name: /find a tutor/i });
+    expect(links).toHaveLength(1);
+    expect(links[0]).toHaveAttribute('href', '/family/search');
+  });
+
+  it('renders the two SECTIONS with rows, replacing the old summary tiles', async () => {
+    h.requests = [request({ requestId: 'r1', tutorName: 'Sarah' })];
+    h.sessions = [session({ sessionId: 's1', tutorName: 'Leo' })];
+    renderWithProviders(<DashboardPage />);
+
+    expect(await screen.findByRole('heading', { name: 'Your requests' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Your sessions' })).toBeInTheDocument();
+    // Real rows, not a count line: the tutor's name and the row's subject.
+    expect(screen.getByText('Sarah')).toBeInTheDocument();
+    expect(screen.getByText('Leo')).toBeInTheDocument();
+    expect(screen.getAllByText('Mathematics · 3e')).toHaveLength(2);
+    // The tile-era count lines are gone.
+    expect(screen.queryByText('1 pending · 0 accepted')).not.toBeInTheDocument();
+    expect(screen.queryByText(/0 pending · 1 upcoming/)).not.toBeInTheDocument();
+    expect(h.where).toHaveBeenCalledWith('familyId', '==', 'fam1');
+  });
+
+  it('rows navigate to the pages that own the actions', async () => {
+    h.requests = [request({ requestId: 'r1', tutorName: 'Sarah' })];
+    h.sessions = [session({ sessionId: 's1', tutorName: 'Leo' })];
+    renderWithProviders(<DashboardPage />);
+
+    expect((await screen.findByText('Sarah')).closest('a')).toHaveAttribute(
+      'href',
+      '/family/requests',
+    );
+    expect(screen.getByText('Leo').closest('a')).toHaveAttribute('href', '/family/sessions');
+  });
+
+  it('badges only what the FAMILY must answer: a tutor-initiated request counts, ours does not', async () => {
+    // Same rule as the tutor dashboard: the badge is a to-do count, so a
+    // request we sent renders (marked "waiting for the tutor") without
+    // inflating it (issue #207 PR4).
     h.requests = [
-      { requestId: 'r1', familyId: 'fam1', status: 'pending', initiatedBy: 'tutor' },
-      { requestId: 'r2', familyId: 'fam1', status: 'pending' },
+      request({ requestId: 'r1', initiatedBy: 'tutor', tutorName: 'Sarah' }),
+      request({ requestId: 'r2', tutorName: 'Marc' }),
     ];
     renderWithProviders(<DashboardPage />);
 
-    expect(await screen.findByText(/answered your published search/i)).toBeInTheDocument();
-    expect(screen.queryByText(/tutors usually reply/i)).not.toBeInTheDocument();
-    // The tile keeps them apart too: one to answer, one still waiting on a tutor.
-    expect(await screen.findByText('1 to answer · 1 pending · 0 accepted')).toBeInTheDocument();
+    await screen.findByRole('heading', { name: 'Your requests' });
+    // Both rows show...
+    expect(screen.getByText('Sarah')).toBeInTheDocument();
+    expect(screen.getByText('Marc')).toBeInTheDocument();
+    // ...but only the tutor-initiated one is a to-do.
+    expect(screen.getByText('1')).toBeInTheDocument();
+    expect(screen.getByText(/answered your published search/i)).toBeInTheDocument();
+    expect(screen.getByText(/waiting for the tutor to reply/i)).toBeInTheDocument();
   });
 
-  it('shows the empty requests message when the family has none', async () => {
-    h.requests = [];
+  it('renders a section whose rows are ALL waiting on the other side (no badge, still visible)', async () => {
+    // `total` gates the section, `count` only the badge — a family with one
+    // outgoing request must still see it.
+    h.requests = [request({ requestId: 'r1', tutorName: 'Marc' })];
     renderWithProviders(<DashboardPage />);
-    expect(await screen.findByText(/no requests yet/i)).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Your requests' })).toBeInTheDocument();
+    expect(screen.getByText('Marc')).toBeInTheDocument();
+    expect(screen.queryByText('1')).not.toBeInTheDocument();
   });
 
-  it('does not flash the no-requests message while counts are still loading', () => {
-    // getDocs never resolves → counts stay null → no empty message yet.
+  it('marks a tutor PROPOSAL as ours to answer and badges it', async () => {
+    h.sessions = [session({ sessionId: 's1', status: 'pending', proposedBy: 'provider' })];
+    renderWithProviders(<DashboardPage />);
+    await screen.findByRole('heading', { name: 'Your sessions' });
+    expect(screen.getByText('Proposed by Leo')).toBeInTheDocument();
+    expect(screen.getByText('1')).toBeInTheDocument();
+  });
+
+  it('marks a booking WE sent as awaiting the tutor, and does not badge it', async () => {
+    h.sessions = [session({ sessionId: 's1', status: 'pending' })];
+    renderWithProviders(<DashboardPage />);
+    await screen.findByRole('heading', { name: 'Your sessions' });
+    expect(screen.getByText(/waiting for the tutor to confirm/i)).toBeInTheDocument();
+    expect(screen.queryByText('1')).not.toBeInTheDocument();
+  });
+
+  it('sorts sessions soonest-first and renders a recurring series by its weekly slot', async () => {
+    h.sessions = [
+      session({ sessionId: 's1', date: '2099-02-01', startTime: '18:00', tutorName: 'Later' }),
+      session({
+        sessionId: 's2',
+        type: 'recurring',
+        date: undefined,
+        recurringSlots: [{ day: 'mon', startTime: '17:00', endTime: '18:00' }],
+        tutorName: 'Series',
+      }),
+      session({ sessionId: 's3', date: '2099-01-01', startTime: '09:00', tutorName: 'Sooner' }),
+    ];
+    renderWithProviders(<DashboardPage />);
+
+    await screen.findByRole('heading', { name: 'Your sessions' });
+    const names = screen.getAllByText(/^(Later|Series|Sooner)$/).map((n) => n.textContent);
+    // Concrete dates ascending; the series (no single date) sorts last.
+    expect(names).toEqual(['Sooner', 'Later', 'Series']);
+    expect(screen.getByText('Every Monday 17:00–18:00')).toBeInTheDocument();
+  });
+
+  it('drops a past one_time session from the sessions section', async () => {
+    // Nothing server-side expires an unanswered booking, so a date floor keeps
+    // last month's request out of the landing page.
+    h.sessions = [
+      session({ sessionId: 's1', date: parisDatePlus(-3), tutorName: 'Old' }),
+      session({ sessionId: 's2', date: parisDatePlus(3), tutorName: 'Soon' }),
+    ];
+    renderWithProviders(<DashboardPage />);
+    await screen.findByRole('heading', { name: 'Your sessions' });
+    expect(screen.getByText('Soon')).toBeInTheDocument();
+    expect(screen.queryByText('Old')).not.toBeInTheDocument();
+  });
+
+  it('keeps declined/cancelled request history off the landing page', async () => {
+    h.requests = [
+      request({ requestId: 'r1', status: 'declined', tutorName: 'Dora' }),
+      request({ requestId: 'r2', status: 'cancelled', tutorName: 'Cleo' }),
+      request({ requestId: 'r3', status: 'accepted', tutorName: 'Ada' }),
+    ];
+    renderWithProviders(<DashboardPage />);
+    await screen.findByRole('heading', { name: 'Your requests' });
+    expect(screen.getByText('Ada')).toBeInTheDocument();
+    expect(screen.queryByText('Dora')).not.toBeInTheDocument();
+    expect(screen.queryByText('Cleo')).not.toBeInTheDocument();
+  });
+
+  it('collapses a section when its header is clicked', async () => {
+    h.requests = [request({ requestId: 'r1', tutorName: 'Sarah' })];
+    renderWithProviders(<DashboardPage />);
+
+    await screen.findByText('Sarah');
+    const header = screen.getByRole('button', { name: /your requests/i });
+    expect(header).toHaveAttribute('aria-expanded', 'true');
+    fireEvent.click(header);
+    expect(header).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByText('Sarah')).not.toBeInTheDocument();
+  });
+
+  it('shows one empty state when the family has neither requests nor sessions', async () => {
+    renderWithProviders(<DashboardPage />);
+    expect(await screen.findByText('Nothing booked yet')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Your requests' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Your sessions' })).not.toBeInTheDocument();
+  });
+
+  it('does not flash the empty state while the snapshots are still loading', () => {
     h.getDocs.mockImplementation(() => new Promise(() => {}));
     renderWithProviders(<DashboardPage />);
-    expect(screen.queryByText(/no requests yet/i)).not.toBeInTheDocument();
+    expect(screen.queryByText('Nothing booked yet')).not.toBeInTheDocument();
   });
 
-  it('renders a sessions card with pending/upcoming counts linking to /family/sessions', async () => {
-    h.sessions = [
-      { sessionId: 's1', familyId: 'fam1', status: 'pending' },
-      { sessionId: 's2', familyId: 'fam1', status: 'confirmed' },
-      { sessionId: 's3', familyId: 'fam1', status: 'confirmed' },
-      { sessionId: 's4', familyId: 'fam1', status: 'completed' },
-    ];
+  it('says so when the FIRST read fails, instead of spinning forever', async () => {
+    h.getDocs.mockImplementation(() => Promise.reject(new Error('offline')));
     renderWithProviders(<DashboardPage />);
-
-    const link = await screen.findByRole('link', { name: /your sessions/i });
-    expect(link).toHaveAttribute('href', '/family/sessions');
-    expect(h.where).toHaveBeenCalledWith('familyId', '==', 'fam1');
-    // 1 pending, 2 upcoming (confirmed) — inline on the compact tile.
-    expect(await screen.findByText('1 pending · 2 upcoming')).toBeInTheDocument();
+    expect(
+      await screen.findByText(/could not load your requests and sessions/i),
+    ).toBeInTheDocument();
   });
 
-  it('a refetch blip keeps last-known-good: verified banner and counts survive failed reads', async () => {
+  it('a refetch blip keeps last-known-good rows and the verified state', async () => {
     h.familyData = { familyName: 'Cohen', verification: { isFullyVerified: true } };
-    h.requests = [{ status: 'pending' }, { status: 'pending' }, { status: 'accepted' }];
-    h.sessions = [{ status: 'pending' }, { status: 'confirmed', date: '2099-01-01' }];
+    h.requests = [request({ requestId: 'r1', tutorName: 'Sarah' })];
+    h.sessions = [session({ sessionId: 's1', tutorName: 'Leo' })];
     renderWithProviders(<DashboardPage />);
 
-    // Initial load: verified (search stays reachable — as the tile, since the
-    // 2099 session claims the hero) + real counts inline on the tiles.
-    expect(await screen.findByRole('link', { name: /find a tutor/i })).toBeInTheDocument();
-    expect(await screen.findByText('2 pending · 1 accepted')).toBeInTheDocument();
-    expect(await screen.findByText('1 pending · 1 upcoming')).toBeInTheDocument();
+    expect(await screen.findByText('Sarah')).toBeInTheDocument();
+    expect(screen.getByText('Leo')).toBeInTheDocument();
 
     // Network blip: every read now fails; the user returns to the tab.
     h.getDoc.mockImplementation(() => Promise.reject(new Error('unavailable')));
@@ -239,194 +366,27 @@ describe('family DashboardPage', () => {
       vi.useRealTimers();
     });
 
-    // Still verified, counts intact — no un-verify banner, nothing zeroed:
-    // both tiles keep their last-known-good count lines (zeroing sessionData
-    // would collapse the sessions tile to its empty line).
+    // Rows intact, still verified, and no error banner over rendered content.
+    expect(screen.getByText('Sarah')).toBeInTheDocument();
+    expect(screen.getByText('Leo')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /find a tutor/i })).toBeInTheDocument();
-    expect(screen.getByText('2 pending · 1 accepted')).toBeInTheDocument();
-    expect(screen.getByText('1 pending · 1 upcoming')).toBeInTheDocument();
-    expect(screen.queryByText(/not.*verified|verify/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/could not load/i)).not.toBeInTheDocument();
   });
 
-  it('renders a governance entry card linking to /family/governance', () => {
-    renderWithProviders(<DashboardPage />);
-    expect(screen.getByRole('link', { name: /supervised kids/i })).toHaveAttribute(
-      'href',
-      '/family/governance',
-    );
-  });
-
-  it('renders entry cards linking to settings and account', () => {
-    renderWithProviders(<DashboardPage />);
-    expect(screen.getByRole('link', { name: /family settings/i })).toHaveAttribute(
-      'href',
-      '/family/settings',
-    );
-    // Anchored: the governance card's description also contains "accounts".
-    expect(screen.getByRole('link', { name: /^account\b/i })).toHaveAttribute(
-      'href',
-      '/family/account',
-    );
-  });
-
-  // ── Hero priority (issue #120): first match wins ──
-
-  it('hero: a confirmed future session wins and links to /family/sessions', async () => {
+  it('has no standalone destination buttons left — the menu owns them (issue #338)', async () => {
+    // "Remove all of the buttons into the sections": governance, family
+    // settings and account were half-weight tiles here and are hamburger-menu
+    // entries (see FamilyAppBar), so the landing page no longer repeats them.
     h.familyData = { familyName: 'Cohen', verification: { isFullyVerified: true } };
-    h.requests = [{ requestId: 'r1', familyId: 'fam1', status: 'accepted' }];
-    h.sessions = [
-      {
-        sessionId: 's1',
-        familyId: 'fam1',
-        status: 'confirmed',
-        type: 'one_time',
-        date: '2099-01-02',
-        startTime: '18:00',
-        tutorName: 'Sarah',
-      },
-      {
-        sessionId: 's2',
-        familyId: 'fam1',
-        status: 'confirmed',
-        type: 'one_time',
-        date: '2099-01-01',
-        startTime: '17:00',
-        tutorName: 'Leo',
-      },
-    ];
+    h.sessions = [session()];
     renderWithProviders(<DashboardPage />);
 
-    const hero = await screen.findByRole('link', { name: /next session/i });
-    expect(hero).toHaveAttribute('href', '/family/sessions');
-    // The soonest session's details, not the later one's.
-    expect(screen.getByText(/17:00/)).toBeInTheDocument();
-    expect(screen.getByText(/Leo/)).toBeInTheDocument();
-    // The accepted-request hero lost the priority race.
-    expect(screen.queryByText(/accepted your request/i)).not.toBeInTheDocument();
-  });
-
-  it('hero: no session but an accepted request → accepted hero to /family/requests', async () => {
-    h.familyData = { familyName: 'Cohen', verification: { isFullyVerified: true } };
-    h.requests = [
-      { requestId: 'r1', familyId: 'fam1', status: 'accepted' },
-      { requestId: 'r2', familyId: 'fam1', status: 'pending' },
-    ];
-    renderWithProviders(<DashboardPage />);
-
-    const hero = await screen.findByRole('link', { name: /accepted your request/i });
-    expect(hero).toHaveAttribute('href', '/family/requests');
-    // Accepted beats pending: no pending-hero title anywhere.
-    expect(screen.queryByText(/you have 1 pending request/i)).not.toBeInTheDocument();
-  });
-
-  it('hero: only pending requests → pending hero to /family/requests', async () => {
-    h.familyData = { familyName: 'Cohen', verification: { isFullyVerified: true } };
-    h.requests = [
-      { requestId: 'r1', familyId: 'fam1', status: 'pending' },
-      { requestId: 'r2', familyId: 'fam1', status: 'pending' },
-    ];
-    renderWithProviders(<DashboardPage />);
-
-    const hero = await screen.findByRole('link', { name: /you have 2 pending requests/i });
-    expect(hero).toHaveAttribute('href', '/family/requests');
-  });
-
-  it('hero: all zero + verified → the search CTA is the hero, not duplicated as a tile', async () => {
-    h.familyData = { familyName: 'Cohen', verification: { isFullyVerified: true } };
-    renderWithProviders(<DashboardPage />);
-
-    const searchLinks = await screen.findAllByRole('link', { name: /find a tutor/i });
-    expect(searchLinks).toHaveLength(1);
-    expect(searchLinks[0]).toHaveAttribute('href', '/family/search');
-  });
-
-  it('hero: says Today (not a day count) for a session later today', async () => {
-    // Frozen clock: a wall-clock fixture ("today at 23:59") has a genuine
-    // one-minute-a-day flake window at 23:59 Paris. 11:00Z in March is 12:00
-    // Paris (UTC+1), so 18:00 the same day is unconditionally in the future.
-    vi.useFakeTimers({ shouldAdvanceTime: true });
-    vi.setSystemTime(new Date('2027-03-05T11:00:00Z'));
-    try {
-      h.familyData = { familyName: 'Cohen', verification: { isFullyVerified: true } };
-      h.sessions = [
-        session({ sessionId: 's1', date: '2027-03-05', startTime: '18:00', tutorName: 'Leo' }),
-      ];
-      renderWithProviders(<DashboardPage />);
-      expect(await screen.findByText(/today/i)).toBeInTheDocument();
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
-  it('hero: says Tomorrow (not a day count) for a session tomorrow', async () => {
-    h.familyData = { familyName: 'Cohen', verification: { isFullyVerified: true } };
-    h.sessions = [
-      session({ sessionId: 's2', date: parisDatePlus(1), startTime: '09:00', tutorName: 'Leo' }),
-    ];
-    renderWithProviders(<DashboardPage />);
-    expect(await screen.findByText(/tomorrow/i)).toBeInTheDocument();
-  });
-
-  it('hero: a recurring series never claims the hero but still counts as upcoming', async () => {
-    // The headline design call of this page: recurring dates live in the
-    // instances subcollection this page must not query, so the hero skips
-    // recurring docs and falls through to the next priority.
-    h.familyData = { familyName: 'Cohen', verification: { isFullyVerified: true } };
-    h.requests = [{ requestId: 'r1', familyId: 'fam1', status: 'accepted' }];
-    h.sessions = [
-      session({ sessionId: 's1', type: 'recurring', date: '2099-01-01', tutorName: 'Sarah' }),
-    ];
-    renderWithProviders(<DashboardPage />);
-
-    const hero = await screen.findByRole('link', { name: /accepted your request/i });
-    expect(hero).toHaveAttribute('href', '/family/requests');
+    await screen.findByRole('heading', { name: 'Your sessions' });
+    expect(screen.queryByRole('link', { name: /supervised kids/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /family settings/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /^account\b/i })).not.toBeInTheDocument();
+    // ...and no hero card either: the sections say it by showing the rows.
     expect(screen.queryByText(/next session/i)).not.toBeInTheDocument();
-    // ...while the sessions tile still counts the series as upcoming.
-    expect(screen.getByText(/1 upcoming/i)).toBeInTheDocument();
-  });
-
-  it('hero: a confirmed session that already started today does not claim the hero', async () => {
-    h.familyData = { familyName: 'Cohen', verification: { isFullyVerified: true } };
-    h.sessions = [
-      // 00:00 today: `${date}T00:00 > now` is false from midnight onward.
-      session({ sessionId: 's1', date: parisDatePlus(0), startTime: '00:00', tutorName: 'Leo' }),
-      session({ sessionId: 's2', date: '2001-01-01', startTime: '10:00', tutorName: 'Mia' }),
-    ];
-    renderWithProviders(<DashboardPage />);
-
-    // Falls through to the search hero — nothing upcoming to announce.
-    const searchLinks = await screen.findAllByRole('link', { name: /find a tutor/i });
-    expect(searchLinks).toHaveLength(1);
-    expect(screen.queryByText(/next session/i)).not.toBeInTheDocument();
-  });
-
-  it('a failed requests read never makes search unreachable for a verified family', async () => {
-    // The app bar has no /family/search item — this page is the only way in.
-    // A failed read is unknown, not zero: counts stays null forever, so the
-    // search fallback must not sit behind the snapshot guard.
-    h.familyData = { familyName: 'Cohen', verification: { isFullyVerified: true } };
-    h.getDocs.mockImplementation((q: { query?: { path: string }[] }) => {
-      const path = q?.query?.[0]?.path ?? '';
-      if (path === 'studyContactRequests') return Promise.reject(new Error('offline'));
-      return Promise.resolve({ docs: [] });
-    });
-    renderWithProviders(<DashboardPage />);
-
-    const searchLinks = await screen.findAllByRole('link', { name: /find a tutor/i });
-    expect(searchLinks).toHaveLength(1);
-    expect(searchLinks[0]).toHaveAttribute('href', '/family/search');
-  });
-
-  it('hero: unverified with nothing actionable → no hero, the banner leads', async () => {
-    h.familyData = { familyName: 'Cohen', verification: { isFullyVerified: false } };
-    renderWithProviders(<DashboardPage />);
-
-    expect(await screen.findByText(/verify your family/i)).toBeInTheDocument();
-    expect(
-      screen.queryByRole('link', {
-        name: /find a tutor|next session|pending request|accepted/i,
-      }),
-    ).not.toBeInTheDocument();
   });
 });
 
@@ -438,7 +398,7 @@ describe('family DashboardPage', () => {
 describe('family DashboardPage — family-less parent recovery state (issue #293)', () => {
   beforeEach(() => reset());
 
-  it('an ORPHAN parent doc sees the explanation and recovery paths, not the tile grid', () => {
+  it('an ORPHAN parent doc sees the explanation and recovery paths, not the sections', () => {
     h.auth.userDoc = {
       uid: 'p1',
       firstName: 'Dana',
@@ -453,18 +413,18 @@ describe('family DashboardPage — family-less parent recovery state (issue #293
       'href',
       '/enroll/parent',
     );
-    // None of the normal dashboard tiles render underneath.
-    expect(screen.queryByText('Your requests')).not.toBeInTheDocument();
-    expect(screen.queryByText('Your sessions')).not.toBeInTheDocument();
+    // None of the normal dashboard surfaces render underneath.
+    expect(screen.queryByText('Nothing booked yet')).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /find a tutor/i })).not.toBeInTheDocument();
   });
 
-  it('a MEMBERED parent (profile familyId) never sees the family-less state', () => {
+  it('a MEMBERED parent (profile familyId) never sees the family-less state', async () => {
     renderWithProviders(<DashboardPage />); // reset() doc carries familyId fam1
     expect(screen.queryByText('You are not currently part of a family')).not.toBeInTheDocument();
-    expect(screen.getByText('Your requests')).toBeInTheDocument();
+    expect(await screen.findByText('Nothing booked yet')).toBeInTheDocument();
   });
 
-  it('a LEGACY Plan C doc (root familyId only) is a member, not an orphan', () => {
+  it('a LEGACY Plan C doc (root familyId only) is a member, not an orphan', async () => {
     h.auth.userDoc = {
       uid: 'p1',
       firstName: 'Dana',
@@ -473,6 +433,6 @@ describe('family DashboardPage — family-less parent recovery state (issue #293
     };
     renderWithProviders(<DashboardPage />);
     expect(screen.queryByText('You are not currently part of a family')).not.toBeInTheDocument();
-    expect(screen.getByText('Your requests')).toBeInTheDocument();
+    expect(await screen.findByText('Nothing booked yet')).toBeInTheDocument();
   });
 });

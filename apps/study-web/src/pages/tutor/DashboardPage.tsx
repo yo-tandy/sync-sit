@@ -17,12 +17,12 @@ import {
   Button,
   Dialog,
   Spinner,
-  Badge,
   CalendarIcon,
   ChevronRightIcon,
   UsersIcon,
   useRefetchOnFocus,
   DashboardGreeting,
+  DashboardSection,
 } from '@ejm/shared-ui';
 
 /** Paris "YYYY-MM-DD" today (en-CA renders ISO order; tz-correct via runtime). */
@@ -58,48 +58,6 @@ const DAY_FULL: Record<RecurringSlot['day'], string> = {
   sat: 'saturday',
   sun: 'sunday',
 };
-
-// ── Collapsible dashboard section (sit's babysitter-dashboard Section) ──
-function Section({
-  title,
-  count,
-  total,
-  variant,
-  children,
-}: {
-  title: string;
-  count: number;
-  /** Rendered rows; gates the section. Defaults to `count` — pass it when the
-   * badge counts a SUBSET of the rows (New Requests excludes the tutor's own
-   * proposals from the to-do count but still shows them, PR #194 review). */
-  total?: number;
-  variant: 'pending' | 'confirmed';
-  children: React.ReactNode;
-}) {
-  const [open, setOpen] = useState(true);
-  if ((total ?? count) === 0) return null;
-
-  return (
-    <div className="mb-4">
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        className="mb-2 flex w-full items-center justify-between"
-      >
-        <div className="flex items-center gap-2">
-          <h3 className="text-sm font-semibold text-gray-700">{title}</h3>
-          {count > 0 && (
-            <Badge variant={variant === 'pending' ? 'amber' : 'green'}>{count}</Badge>
-          )}
-        </div>
-        <ChevronRightIcon
-          className={`h-4 w-4 text-gray-400 transition-transform ${open ? 'rotate-90' : ''}`}
-        />
-      </button>
-      {open && <div className="space-y-3">{children}</div>}
-    </div>
-  );
-}
 
 /**
  * Tutor dashboard, structured to match sync-sit's babysitter dashboard (issue
@@ -392,7 +350,7 @@ export function DashboardPage() {
         </div>
       ) : hasAny ? (
         <>
-          <Section
+          <DashboardSection
             title={t('tutor.dashboard.newRequests')}
             count={newCount}
             total={newTotal}
@@ -448,9 +406,9 @@ export function DashboardPage() {
                 </Card>
               </Link>
             ))}
-          </Section>
+          </DashboardSection>
 
-          <Section
+          <DashboardSection
             title={t('tutor.dashboard.confirmed')}
             count={confirmedUpcoming.length}
             variant="confirmed"
@@ -480,7 +438,7 @@ export function DashboardPage() {
                 </Card>
               </Link>
             ))}
-          </Section>
+          </DashboardSection>
         </>
       ) : (
         <div className="flex flex-col items-center justify-center py-16 text-center">

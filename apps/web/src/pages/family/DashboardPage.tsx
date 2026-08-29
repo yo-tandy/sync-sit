@@ -6,27 +6,22 @@ import { db } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { useVerificationStore } from '@/stores/verificationStore';
 import { useFamilyAppointments } from '@/hooks/useFamilyAppointments';
-import { Button, Badge, Card, Spinner, Input, InstallAppBanner } from '@/components/ui';
+import { Button, Badge, Card, SkeletonCard, Input, InstallAppBanner } from '@/components/ui';
 import { CalendarIcon, ChevronRightIcon, PlusIcon, SearchIcon } from '@/components/ui/Icons';
-import type { AppointmentDoc } from '@ejm/sit-core';
+import type { AppointmentDoc, RecurringSlot } from '@ejm/sit-core';
 import { getParentProfile } from '@ejm/sit-core';
 import { hasFamilyMembership } from '@ejm/shared-core';
-import { useRefetchOnFocus, DashboardGreeting } from '@ejm/shared-ui';
+import { useRefetchOnFocus, DashboardGreeting, DashboardSection } from '@ejm/shared-ui';
 import { formatFamilyTitle } from '@/lib/formatName';
 import { CrossAppWelcomeCard } from '@/components/family/CrossAppWelcomeCard';
 
-/** The next upcoming confirmed appointment (earliest date+startTime), or null.
- * Recurring appointments (no date) can't claim "next" — they have no single
- * upcoming instant. */
-function nextUpcoming(confirmed: AppointmentDoc[]): AppointmentDoc | null {
-  let next: AppointmentDoc | null = null;
-  for (const apt of confirmed) {
-    if (!apt.date) continue;
-    const key = `${apt.date}T${apt.startTime || '00:00'}`;
-    const nextKey = next ? `${next.date}T${next.startTime || '00:00'}` : null;
-    if (!nextKey || key < nextKey) next = apt;
-  }
-  return next;
+/** Soonest-first ordering for a section's rows. A recurring appointment has no
+ * single date (its occurrences are derived from `recurringSlots`), so it sorts
+ * last rather than pretending to a position in the calendar. */
+function bySoonest(a: AppointmentDoc, b: AppointmentDoc): number {
+  const ka = a.date ? `${a.date}T${a.startTime || '00:00'}` : '9999-12-31';
+  const kb = b.date ? `${b.date}T${b.startTime || '00:00'}` : '9999-12-31';
+  return ka < kb ? -1 : ka > kb ? 1 : 0;
 }
 
 export function FamilyDashboard() {
@@ -41,10 +36,10 @@ export function FamilyDashboard() {
   const [newKidAge, setNewKidAge] = useState('');
   const [addingKid, setAddingKid] = useState(false);
   const navigate = useNavigate();
-  // Summary counts only (issue #241): the full lists live on the dedicated
-  // /family/appointments page — the dashboard mirrors study's tile → page
-  // pattern (a summary card that links out) instead of duplicating the lists.
-  const { pending, confirmed, pastRecent, rejectedRecent, loading: aptsLoading } = useFamilyAppointments();
+  // Live via onSnapshot. The landing page shows the two sections the owner
+  // asked for (issue #338) — the pending requests and the confirmed
+  // appointments; past and declined history stays on /family/appointments.
+  const { pending, confirmed, loading: aptsLoading } = useFamilyAppointments();
 
   const familyId = getParentProfile(userDoc)?.familyId ?? null;
 
@@ -116,18 +111,72 @@ export function FamilyDashboard() {
     );
   }
 
-  // ── Appointments summary (issue #241): counts + the next upcoming
-  // confirmed appointment; the card links to /family/appointments. ──
-  const next = nextUpcoming(confirmed);
-  const hasAny = pending.length > 0 || confirmed.length > 0 || pastRecent.length > 0 || rejectedRecent.length > 0;
-  const nextLine = next?.date
-    ? [
-        new Date(next.date + 'T00:00:00').toLocaleDateString(locale, { weekday: 'short', month: 'short', day: 'numeric' }),
-        next.startTime && next.endTime ? `${next.startTime}–${next.endTime}` : next.startTime || null,
-      ]
-        .filter(Boolean)
-        .join(' · ')
-    : null;
+  // ── The two sections (issue #338). This SUPERSEDES the single summary card
+  // of issue #241 for the landing page only: the dedicated
+  // /family/appointments page (reached from the hamburger menu) still owns
+  // every action and the past/declined history, so nothing moved back here
+  // except the two live lists the owner asked to see. ──
+  const requestRows = [...pending].sort(bySoonest);
+  // The badge is a TO-DO count. A request the FAMILY sent is waiting on the
+  // babysitter; only one a babysitter opened by answering our published search
+  // asks something of us (issue #207 PR3), so only those count.
+  const requestsTodo = requestRows.filter((a) => a.initiatedBy === 'babysitter').length;
+  const appointmentRows = [...confirmed].sort(bySoonest);
+  const hasAny = requestRows.length > 0 || appointmentRows.length > 0;
+
+  /** The row's date/time line: a concrete date+time, or the weekly slots of a
+   * recurring appointment (whose occurrences have no single date). */
+  const whenLine = (apt: AppointmentDoc): string => {
+    if (apt.date) {
+      const day = new Date(apt.date + 'T00:00:00').toLocaleDateString(locale, {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+      });
+      const time =
+        apt.startTime && apt.endTime
+          ? `${apt.startTime}–${apt.endTime}`
+          : apt.startTime || null;
+      return [day, time].filter(Boolean).join(' · ');
+    }
+    if (apt.recurringSlots?.length) {
+      return apt.recurringSlots
+        .map((sl: RecurringSlot) => `${t(`days.${sl.day}`)} ${sl.startTime}–${sl.endTime}`)
+        .join(', ');
+    }
+    return t('request.recurring');
+  };
+
+  /** One section row. Navigates to /family/appointments, where the cancel /
+   * edit / accept-decline actions live — the same rule both provider
+   * dashboards follow (a landing page fires no callable). */
+  const row = (apt: AppointmentDoc, variant: 'pending' | 'confirmed') => (
+    <Link key={apt.appointmentId} to="/family/appointments" className="block">
+      <Card interactive>
+        <div className="flex items-center gap-3">
+          <CalendarIcon className="h-5 w-5 shrink-0 text-brand-600" />
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <p className="text-sm font-semibold text-gray-900">{whenLine(apt)}</p>
+              <Badge variant={variant === 'pending' ? 'amber' : 'green'}>
+                {variant === 'pending'
+                  ? t('familyDashboard.badgePending')
+                  : t('familyDashboard.badgeConfirmed')}
+              </Badge>
+            </div>
+            {variant === 'pending' && (
+              <p className="mt-1 text-xs text-amber-700">
+                {apt.initiatedBy === 'babysitter'
+                  ? t('familyDashboard.answeredPublishedSearch')
+                  : t('familyDashboard.awaitingBabysitter')}
+              </p>
+            )}
+          </div>
+          <ChevronRightIcon className="h-5 w-5 shrink-0 text-gray-500" />
+        </div>
+      </Card>
+    </Link>
+  );
 
   return (
     <div className="px-5 pt-4 pb-8">
@@ -214,44 +263,41 @@ export function FamilyDashboard() {
         </Button>
       )}
 
-      {/* Appointments summary → dedicated page (issue #241, parity Q1 = b) */}
+      {/* ── Requests & appointments, in the babysitter dashboard's section
+          idiom (issue #338). Skeletons sized like the loaded rows, so the
+          list keeps its footprint while loading (UX F12, issue #126). ── */}
       {aptsLoading ? (
-        <div className="flex justify-center py-12">
-          <Spinner className="h-8 w-8 text-brand-600" />
+        <div className="space-y-3">
+          <SkeletonCard />
+          <SkeletonCard />
+          <SkeletonCard />
         </div>
+      ) : hasAny ? (
+        <>
+          <DashboardSection
+            title={t('familyDashboard.yourRequests')}
+            count={requestsTodo}
+            total={requestRows.length}
+            variant="pending"
+          >
+            {requestRows.map((apt) => row(apt, 'pending'))}
+          </DashboardSection>
+          <DashboardSection
+            title={t('familyDashboard.yourAppointments')}
+            count={appointmentRows.length}
+            variant="confirmed"
+          >
+            {appointmentRows.map((apt) => row(apt, 'confirmed'))}
+          </DashboardSection>
+        </>
       ) : (
-        <Link
-          to="/family/appointments"
-          aria-label={t('familyDashboard.viewAppointments')}
-          className="block"
-        >
-          <Card interactive className="flex items-center gap-3 py-4">
-            <CalendarIcon className="h-6 w-6 shrink-0 text-brand-600" />
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <p className="text-base font-bold text-gray-900">{t('familyDashboard.appointmentsTitle')}</p>
-                {pending.length > 0 && <Badge variant="amber">{pending.length}</Badge>}
-                {confirmed.length > 0 && <Badge variant="green">{confirmed.length}</Badge>}
-              </div>
-              {hasAny ? (
-                <p className="text-sm text-gray-600">
-                  {[
-                    t('familyDashboard.appointmentsPending', { count: pending.length }),
-                    t('familyDashboard.appointmentsUpcoming', { count: confirmed.length }),
-                  ].join(' · ')}
-                </p>
-              ) : (
-                <p className="text-sm text-gray-500">{t('familyDashboard.noAppointments')}</p>
-              )}
-              {nextLine && (
-                <p className="text-xs text-gray-500">
-                  {t('familyDashboard.appointmentsNext', { when: nextLine })}
-                </p>
-              )}
-            </div>
-            <ChevronRightIcon className="h-5 w-5 shrink-0 text-gray-500" />
-          </Card>
-        </Link>
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gray-100 text-3xl">📅</div>
+          <h3 className="mb-2 text-lg font-semibold">{t('familyDashboard.noAppointments')}</h3>
+          <p className="max-w-[240px] text-sm text-gray-500">
+            {t('familyDashboard.noAppointmentsDesc')}
+          </p>
+        </div>
       )}
     </div>
   );

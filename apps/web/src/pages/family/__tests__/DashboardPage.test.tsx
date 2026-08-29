@@ -2,17 +2,17 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // Family dashboard tests.
 //
-// Since issue #241 the dashboard no longer renders the appointment lists
-// inline: it keeps a SUMMARY card (counts + next upcoming confirmed
-// appointment) that links to the dedicated /family/appointments page —
-// mirroring study's tile → page pattern. The submitted-references
-// subscription (and its H2 provability pin) moved to AppointmentsPage.test
-// along with the lists.
+// Issue #338 restores the two live lists to the landing page — as the
+// babysitter dashboard's collapsible SECTIONS ("Your requests" = pending,
+// "Your appointments" = confirmed), replacing the single summary card of
+// issue #241. The dedicated /family/appointments page still owns every action
+// and the past/declined history, so the rows here only navigate to it; the
+// submitted-references subscription stays on AppointmentsPage.test.
 
 const h = vi.hoisted(() => ({
   getDoc: vi.fn(),
   getDocs: vi.fn(),
-  // Controllable appointments hook (summary counts only, on this page).
+  // Controllable appointments hook (the two sections read pending/confirmed).
   apts: {
     pending: [] as unknown[],
     confirmed: [] as unknown[],
@@ -46,7 +46,7 @@ vi.mock('@/hooks/useFamilyAppointments', () => ({
 }));
 
 import i18n from '@/i18n';
-import { render, cleanup, screen, waitFor, act } from '@testing-library/react';
+import { render, cleanup, screen, waitFor, act, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { FamilyDashboard } from '../DashboardPage';
 
@@ -107,38 +107,104 @@ beforeEach(() => {
 
 afterEach(() => cleanup());
 
-// ── Issue #241: appointments summary card → dedicated page ──
-describe('family DashboardPage — appointments summary (issue #241)', () => {
-  it('links the summary card to /family/appointments', () => {
+// ── Issue #338: the landing page carries the provider-style sections ──
+describe('family DashboardPage — requests & appointments sections (issue #338)', () => {
+  it('renders the two section headers over real rows', () => {
+    h.apts.pending = [apt('a1', 'pending')];
+    h.apts.confirmed = [apt('a2', 'confirmed', { date: '2026-09-05', startTime: '10:00', endTime: '12:00' })];
     renderPage();
-    const link = screen.getByRole('link', { name: 'View your appointments' });
-    expect(link.getAttribute('href')).toBe('/family/appointments');
+    expect(screen.getByRole('heading', { name: 'Your requests' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Your appointments' })).toBeTruthy();
+    // Each row carries its own date/time line...
+    expect(screen.getByText(/Tue.*1 Sep.*· 18:00–21:00/)).toBeTruthy();
+    expect(screen.getByText(/Sat.*5 Sep.*· 10:00–12:00/)).toBeTruthy();
+    // ...and the tile-era summary line is gone.
+    expect(screen.queryByText('1 pending · 1 upcoming')).toBeNull();
   });
 
-  it('shows pending/upcoming counts and the next upcoming confirmed appointment', () => {
-    h.apts.pending = [apt('a1', 'pending')];
-    h.apts.confirmed = [
-      apt('a2', 'confirmed', { date: '2026-09-05', startTime: '10:00', endTime: '12:00' }),
-      apt('a3', 'confirmed', { date: '2026-09-01' }),
-    ];
-    renderPage();
-    expect(screen.getByText('1 pending · 2 upcoming')).toBeTruthy();
-    // The EARLIEST confirmed appointment claims the "Next" line (a3).
-    expect(screen.getByText(/Next: Tue.*Sep.*18:00–21:00/)).toBeTruthy();
-  });
-
-  it('does NOT render the appointment list sections inline (they live on the page)', () => {
-    h.apts.pending = [apt('a1', 'pending')];
+  it('has NO standalone summary button left — the rows are the entry point', () => {
     h.apts.confirmed = [apt('a2', 'confirmed')];
     renderPage();
-    expect(screen.queryByText('Pending Requests')).toBeNull();
-    expect(screen.queryByText('Confirmed')).toBeNull();
+    expect(screen.queryByRole('link', { name: 'View your appointments' })).toBeNull();
+    // The row itself navigates to the page that owns the actions.
+    expect(screen.getByText(/Tue.*1 Sep/).closest('a')?.getAttribute('href')).toBe(
+      '/family/appointments',
+    );
   });
 
-  it('keeps the summary card, with the empty copy, when there are no appointments', () => {
+  it('badges only what the FAMILY must answer on the requests section', () => {
+    // A request we sent is waiting on the babysitter; only one a babysitter
+    // opened by answering our published search is a to-do (issue #207 PR3).
+    h.apts.pending = [
+      apt('a1', 'pending', { initiatedBy: 'babysitter' }),
+      apt('a2', 'pending', { date: '2026-09-02' }),
+    ];
+    renderPage();
+    expect(screen.getByText('Answered your published search')).toBeTruthy();
+    expect(screen.getByText('Waiting for the babysitter to reply.')).toBeTruthy();
+    // Both rows render; the badge counts one.
+    expect(screen.getByText(/Tue.*1 Sep.*· 18:00–21:00/)).toBeTruthy();
+    expect(screen.getByText(/Wed.*2 Sep.*· 18:00–21:00/)).toBeTruthy();
+    expect(screen.getByText('1')).toBeTruthy();
+  });
+
+  it('renders an all-outgoing requests section with no badge at all', () => {
+    // `total` gates the section, `count` only the badge.
+    h.apts.pending = [apt('a1', 'pending')];
+    renderPage();
+    expect(screen.getByRole('heading', { name: 'Your requests' })).toBeTruthy();
+    expect(screen.queryByText('1')).toBeNull();
+  });
+
+  it('sorts rows soonest-first and renders a recurring appointment by its weekly slots', () => {
+    h.apts.confirmed = [
+      apt('a1', 'confirmed', { date: '2026-09-20', startTime: '09:00', endTime: '10:00' }),
+      apt('a2', 'confirmed', {
+        date: undefined,
+        recurringSlots: [{ day: 'mon', startTime: '17:00', endTime: '19:00' }],
+      }),
+      apt('a3', 'confirmed', { date: '2026-09-02', startTime: '08:00', endTime: '09:00' }),
+    ];
+    renderPage();
+    const lines = screen.getAllByText(/Sep|Mon 17:00/).map((n) => n.textContent);
+    // Concrete dates ascending; the recurring row (no single date) sorts last.
+    expect(lines).toHaveLength(3);
+    expect(lines[0]).toMatch(/Wed.*2 Sep.*· 08:00–09:00/);
+    expect(lines[1]).toMatch(/Sun.*20 Sep.*· 09:00–10:00/);
+    expect(lines[2]).toBe('Mon 17:00–19:00');
+  });
+
+  it('collapses a section when its header is clicked', () => {
+    h.apts.confirmed = [apt('a2', 'confirmed')];
+    renderPage();
+    const header = screen.getByRole('button', { name: /your appointments/i });
+    expect(header.getAttribute('aria-expanded')).toBe('true');
+    fireEvent.click(header);
+    expect(header.getAttribute('aria-expanded')).toBe('false');
+    expect(screen.queryByText(/Tue.*1 Sep/)).toBeNull();
+  });
+
+  it('shows one empty state, and no sections, when there is nothing booked', () => {
     renderPage();
     expect(screen.getByText('No appointments yet')).toBeTruthy();
-    expect(screen.getByRole('link', { name: 'View your appointments' })).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'Your requests' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Your appointments' })).toBeNull();
+  });
+
+  it('does not flash the empty state while the snapshot is still loading', () => {
+    h.apts.loading = true;
+    renderPage();
+    expect(screen.queryByText('No appointments yet')).toBeNull();
+  });
+
+  it('keeps past and declined history off the landing page', () => {
+    // pastRecent / rejectedRecent are deliberately not read here — they live
+    // on /family/appointments, reached from the hamburger menu.
+    h.apts.pastRecent = [apt('a4', 'completed', { date: '2020-01-01' })];
+    h.apts.rejectedRecent = [apt('a5', 'rejected', { date: '2020-01-02' })];
+    renderPage();
+    expect(screen.getByText('No appointments yet')).toBeTruthy();
+    expect(screen.queryByText(/2020/)).toBeNull();
   });
 });
 
@@ -199,13 +265,13 @@ describe('family DashboardPage — family-less parent recovery state (issue #293
     const cta = screen.getByRole('link', { name: 'Start a new family' });
     expect(cta.getAttribute('href')).toBe('/enroll/parent');
     // The normal dashboard surfaces do NOT render underneath.
-    expect(screen.queryByRole('link', { name: 'View your appointments' })).toBeNull();
+    expect(screen.queryByText('No appointments yet')).toBeNull();
   });
 
   it('a MEMBERED parent (profile familyId) never sees the family-less state', () => {
     renderPage(); // default beforeEach doc carries profiles.parent.familyId
     expect(screen.queryByText('You are not currently part of a family')).toBeNull();
-    expect(screen.getByRole('link', { name: 'View your appointments' })).toBeTruthy();
+    expect(screen.getByText('No appointments yet')).toBeTruthy();
   });
 
   it('a LEGACY Plan C doc (root familyId only) is a member, not an orphan', () => {
@@ -217,6 +283,6 @@ describe('family DashboardPage — family-less parent recovery state (issue #293
     };
     renderPage();
     expect(screen.queryByText('You are not currently part of a family')).toBeNull();
-    expect(screen.getByRole('link', { name: 'View your appointments' })).toBeTruthy();
+    expect(screen.getByText('No appointments yet')).toBeTruthy();
   });
 });
