@@ -1,10 +1,13 @@
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { resolveConfigValue } from '@ejm/shared-functions/config/adminConfig.js';
+import { COMPLETED_ENGAGEMENT_RETENTION_DAYS } from '@ejm/shared-core';
 import { FieldPath, FieldValue } from 'firebase-admin/firestore';
 import type { Firestore } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
 import { db } from '../config/firebase.js';
 import { runDoSweepTasks } from '../do/sweepTasks.js';
+import { runStudySweepSessions } from './sweepStudySessions.js';
+import { createClaimReleaser, DATE_RE, SIT_PROVENANCE } from './retentionClaims.js';
 
 export interface CleanupStats {
   totalDeleted: number;
@@ -15,6 +18,12 @@ export interface CleanupStats {
   accountExistsNoticesDeleted: number;
   verificationSendCountersDeleted: number;
   appointmentsDeleted: number;
+  /** Decision 19 / issue #294: confirmed appointments >180d past their date. */
+  completedAppointmentsDeleted: number;
+  /** Override `sessionBlocks` entries pruned alongside those deletions. */
+  appointmentClaimsReleased: number;
+  /** Retention cascades that failed and were skipped (poison-pill isolation). */
+  appointmentCascadeErrors: number;
   publishedSearchesDeleted: number;
   appointmentNotesRedacted: number;
 }
@@ -33,6 +42,11 @@ export interface CleanupStats {
  *   window — the daily address cap — is spent by then; stale counters only
  *   retain targeted addresses)
  * - Cancelled/rejected appointments: 30 days AND date > 7 days ago
+ * - COMPLETED appointments (issue #294, decision 19): 180 days past the
+ *   booking date. Sit has no `completed` status — a past sitting stays
+ *   `confirmed` — so the sweep keys on (status: confirmed, date) and skips
+ *   the dateless recurring arrangements, which are still live. The
+ *   babysitter's schedule claim for that date is released with the doc.
  * - Published searches: immediate (past expiresAt — the server-computed
  *   min(publish + 7d, babysitting date) lifetime; issue #207)
  * - Appointment notes (issue #238): redacted once the appointment leaves
@@ -63,6 +77,9 @@ export async function runCleanupOldData(
     accountExistsNoticesDeleted: 0,
     verificationSendCountersDeleted: 0,
     appointmentsDeleted: 0,
+    completedAppointmentsDeleted: 0,
+    appointmentClaimsReleased: 0,
+    appointmentCascadeErrors: 0,
     publishedSearchesDeleted: 0,
     appointmentNotesRedacted: 0,
   };
@@ -225,6 +242,97 @@ export async function runCleanupOldData(
       stats.appointmentsDeleted = count;
       stats.totalDeleted += count;
       console.log(`Deleted ${count} old cancelled/rejected appointments`);
+    }
+  }
+
+  // 7a. Delete COMPLETED sit engagements older than 180 days — decision 19
+  // ("there's no reason to retain completed engagement indefinitely — in any
+  // of the sync apps"; sync-do plan §2, §11.4; issue #294). sync-do shipped
+  // this from day one in `doSweepTasks`; this is the sit half.
+  //
+  // WHAT "COMPLETED" MEANS IN SIT. Sit has NO `completed` status — the
+  // AppointmentStatus vocabulary is pending | confirmed | rejected |
+  // cancelled, and a sitting that simply happened stays `confirmed` forever
+  // (setAppointmentNote.ts:40 states the same thing). So there is no
+  // `completedAt` to key on the way `doTasks` and `study-sessions` have one:
+  // the terminal sit engagement is a CONFIRMED appointment whose booking
+  // `date` is past, and the retention clock runs from that date. The query is
+  // (status, date) — the composite added with this sweep.
+  //
+  // TWO DOCUMENT SHAPES MUST SURVIVE, and both are excluded structurally
+  // rather than by luck:
+  //   • A confirmed RECURRING arrangement carries `recurringSlots` and no
+  //     `date`; a doc missing the field is absent from the (status, date)
+  //     index, so the range query never returns it.
+  //   • A doc with `date: ''` IS in the index, and '' sorts before every
+  //     cutoff — it would be swept by the raw query. The dashboards treat a
+  //     dateless confirmed doc as a live recurring arrangement (7b's
+  //     `outOfReach` reads it the same way), so an explicit shape guard below
+  //     keeps it. Deleting a live arrangement because its date field was
+  //     written empty is the one unrecoverable mistake available here.
+  // `pending` docs are untouched (they render forever — 7b's deliberate
+  // exception), and cancelled/rejected retention above is unchanged.
+  //
+  // CASCADE. The notes (`preAppointmentNote`, `postAppointmentNote`) are
+  // fields on the doc and leave with it. The one thing that does NOT leave
+  // with it is the babysitter's schedule claim: confirming AND-blocked
+  // `schedules/{babysitterUserId}/overrides/{date}` and appended a
+  // `sessionBlocks` ledger entry, and because sit never marks an appointment
+  // completed, NOTHING prunes that entry today. Deleting the appointment
+  // without releasing the claim would leave a ledger entry naming a document
+  // that no longer exists.
+  {
+    const retentionCutoff = new Date(
+      now.getTime() - COMPLETED_ENGAGEMENT_RETENTION_DAYS * 24 * 60 * 60 * 1000,
+    );
+    const retentionCutoffStr = retentionCutoff.toISOString().split('T')[0];
+    const releaseClaim = createClaimReleaser(firestoreDb, now);
+
+    for (let pass = 0; pass < 10; pass++) {
+      const pastConfirmed = await firestoreDb
+        .collection('appointments')
+        .where('status', '==', 'confirmed')
+        .where('date', '<', retentionCutoffStr)
+        .limit(200)
+        .get();
+      if (pastConfirmed.empty) break;
+
+      // Per-appointment isolation (doSweepTasks' pattern): one poisoned
+      // cascade logs and continues, so a deterministic per-doc failure can
+      // never wedge this category — or the blocks after it — every day.
+      let deleted = 0;
+      for (const doc of pastConfirmed.docs) {
+        const bookingDate = doc.get('date');
+        // Shape guard, not a redundant filter — see the '' case above.
+        if (typeof bookingDate !== 'string' || !DATE_RE.test(bookingDate)) continue;
+        try {
+          const babysitterUserId = (doc.get('babysitterUserId') as string) ?? '';
+          const released = await releaseClaim(
+            babysitterUserId,
+            bookingDate,
+            (b) => b.appointmentId === doc.id,
+            SIT_PROVENANCE,
+          );
+          if (released) stats.appointmentClaimsReleased += 1;
+          // Doc last: a claim release that throws leaves the appointment in
+          // place, so the whole cascade retries next run instead of leaving a
+          // ledger entry pointing at nothing.
+          await doc.ref.delete();
+          deleted += 1;
+        } catch (err) {
+          stats.appointmentCascadeErrors += 1;
+          console.error(`cleanupOldData: retention cascade failed for ${doc.id}:`, err);
+        }
+      }
+      stats.completedAppointmentsDeleted += deleted;
+      stats.totalDeleted += deleted;
+      console.log(
+        `Deleted ${deleted} completed appointments >${COMPLETED_ENGAGEMENT_RETENTION_DAYS}d past their date (decision 19)`,
+      );
+      if (pastConfirmed.size < 200) break;
+      // A full page that deleted nothing is either all-guarded or all-failing;
+      // re-querying returns the same page, so further passes repeat it.
+      if (deleted === 0) break;
     }
   }
 
@@ -424,11 +532,11 @@ export const cleanupOldData = onSchedule(
   },
   async () => {
     const now = new Date();
-    // The sync-do sweep rides this schedule rather than adding a second job
-    // (plan §8's doSweepTasks row). The halves are independent: a failure in
-    // one must not starve the other, so each error is captured and the
-    // first is rethrown at the end (a thrown error is what surfaces the run
-    // as failed in Cloud Scheduler).
+    // The sync-do sweep, and now the sync-study one (issue #294), ride this
+    // schedule rather than adding further jobs (plan §8's doSweepTasks row).
+    // The halves are independent: a failure in one must not starve the
+    // others, so each error is captured and the first is rethrown at the end
+    // (a thrown error is what surfaces the run as failed in Cloud Scheduler).
     let firstError: unknown = null;
     try {
       await runCleanupOldData(db, now);
@@ -440,6 +548,12 @@ export const cleanupOldData = onSchedule(
       await runDoSweepTasks(db, getStorage().bucket(), now);
     } catch (err) {
       console.error('runDoSweepTasks failed:', err);
+      firstError = firstError ?? err;
+    }
+    try {
+      await runStudySweepSessions(db, now);
+    } catch (err) {
+      console.error('runStudySweepSessions failed:', err);
       firstError = firstError ?? err;
     }
     if (firstError) throw firstError;
