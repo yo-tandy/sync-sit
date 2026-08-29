@@ -42,12 +42,14 @@ export function useTaskPhotoUrls(
     ).then((entries) => {
       if (cancelled) return;
       setUrls(Object.fromEntries(entries.filter((e): e is [string, string] => e !== null)));
-      setSettledKey(photoKey);
+      setSettledKey(`${taskId}|${photoKey}`);
     });
     return () => {
       cancelled = true;
     };
   }, [taskId, photoKey]);
 
-  return { urls, loading: photoKey !== '' && settledKey !== photoKey };
+  // Identity includes taskId: the effect keys on both, so a taskId change
+  // with an identical photoKey is still a refetch and must read as loading.
+  return { urls, loading: photoKey !== '' && settledKey !== `${taskId}|${photoKey}` };
 }

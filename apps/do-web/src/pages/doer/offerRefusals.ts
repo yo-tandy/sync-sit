@@ -1,6 +1,6 @@
 /**
  * `doSubmitOffer` / `doUpdateOffer` refusal → copy-key mapping (§13 PR8),
- * in one place so tests can pin it.
+ * in one place, so the mapping is stated once rather than inlined.
  *
  * Kept beside `OfferPage` rather than inside it so the page file exports
  * only its component — mixing a component export with plain constants

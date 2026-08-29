@@ -19,6 +19,9 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const h = vi.hoisted(() => ({
   calls: [] as unknown[][],
   docsQueue: [] as unknown[][],
+  // When set, the NEXT getDocs awaits this instead of the queue — lets a test
+  // hold a fetch open and inspect the in-flight window.
+  pending: null as Promise<unknown[]> | null,
 }));
 
 vi.mock('@/config/firebase', () => ({ db: {}, functions: {} }));
@@ -35,6 +38,11 @@ vi.mock('firebase/firestore', () => ({
   startAfter: (cursor: unknown) => ({ startAfter: cursor }),
   getDocs: (q: { query: unknown[] }) => {
     h.calls.push(q.query);
+    if (h.pending) {
+      const held = h.pending;
+      h.pending = null;
+      return held.then((docs) => ({ docs }));
+    }
     return Promise.resolve({ docs: h.docsQueue.shift() ?? [] });
   },
 }));
@@ -75,6 +83,7 @@ const asDocs = (rows: Row[]) => rows.map((r) => ({ id: r.taskId as string, data:
 beforeEach(() => {
   h.calls = [];
   h.docsQueue = [];
+  h.pending = null;
 });
 
 describe('BoardPage query shape (§7.3 pins)', () => {
@@ -164,6 +173,34 @@ describe('BoardPage client-side narrowing (§7.3 split)', () => {
     renderWithProviders(<BoardPage />);
     await screen.findByText('Task live');
     expect(screen.queryByText('Task stale')).toBeNull();
+  });
+});
+
+describe('BoardPage category-switch staleness', () => {
+  // Deriving the spinner from `loadedCategory` (rather than blanking `tasks`)
+  // must gate "Load more" as well: mid-switch the cursor is already reset, so
+  // a click there would page the NEW category and append it to the OLD rows.
+  it('hides Load more while a category switch is in flight, and never mixes categories', async () => {
+    // A FULL first page ⇒ not exhausted ⇒ Load more is on screen.
+    h.docsQueue.push(asDocs(Array.from({ length: BOARD_PAGE_SIZE }, (_, i) => taskDoc(`a${i}`))));
+    renderWithProviders(<BoardPage />);
+    await screen.findByText('Task a0');
+    expect(screen.getByText('Load more')).toBeInTheDocument();
+
+    // Switch category, holding the new page open.
+    let release!: (docs: unknown[]) => void;
+    h.pending = new Promise<unknown[]>((res) => {
+      release = res;
+    });
+    fireEvent.change(screen.getByLabelText('Category'), { target: { value: 'boxes' } });
+
+    // Mid-switch: Load more is GONE (the regression pin).
+    await waitFor(() => expect(screen.queryByText('Load more')).toBeNull());
+
+    release(asDocs([taskDoc('b0', { category: 'boxes' })]));
+    await screen.findByText('Task b0');
+    // The old category's rows are replaced, never appended to.
+    expect(screen.queryByText('Task a0')).toBeNull();
   });
 });
 

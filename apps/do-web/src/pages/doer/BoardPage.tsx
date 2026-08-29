@@ -69,6 +69,7 @@ export function BoardPage() {
   // from it rather than blanking `tasks` synchronously inside the effect,
   // which cascades renders; the spinner shows while it lags `category`.
   const [loadedCategory, setLoadedCategory] = useState<TaskCategory | '' | null>(null);
+  const generationRef = useRef(0);
   const [error, setError] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [exhausted, setExhausted] = useState(true);
@@ -86,12 +87,19 @@ export function BoardPage() {
 
   const fetchPage = useCallback(
     async (reset: boolean) => {
+      // Every fetch carries the generation it was issued under. A response
+      // that lands after a newer fetch was issued performs NO writes — the
+      // out-of-order case is real (a slow first query resolving after the
+      // second), and without this a superseded page would clobber the
+      // current one, including `cursorRef`.
+      const generation = ++generationRef.current;
       const parts = [where('status', '==', 'open')];
       if (category) parts.push(where('category', '==', category));
       const tail = [orderBy('createdAt', 'desc'), limit(BOARD_PAGE_SIZE)];
       const cursor = !reset && cursorRef.current ? [startAfter(cursorRef.current)] : [];
       try {
         const snap = await getDocs(query(collection(db, 'doTasks'), ...parts, ...tail, ...cursor));
+        if (generation !== generationRef.current) return;
         const rows = snap.docs.map((d) => ({ ...(d.data() as TaskDoc), taskId: d.id }));
         cursorRef.current = snap.docs.length > 0 ? snap.docs[snap.docs.length - 1] : cursorRef.current;
         setExhausted(snap.docs.length < BOARD_PAGE_SIZE);
@@ -100,6 +108,7 @@ export function BoardPage() {
         setLoadedCategory(category);
         setError(false);
       } catch {
+        if (generation !== generationRef.current) return;
         setError(true);
       }
     },
@@ -111,11 +120,13 @@ export function BoardPage() {
     // Deferred to a microtask so nothing this effect triggers can land a
     // setState in the same commit (react-hooks/set-state-in-effect): every
     // write inside `fetchPage` is already behind its `await getDocs`, but
-    // the rule analyses the call, not the await boundary. Staleness is
-    // derived from `loadedCategory`, so a superseded page is ignored on
-    // arrival rather than raced.
+    // the rule analyses the call, not the await boundary.
     void Promise.resolve().then(() => fetchPage(true));
   }, [fetchPage]);
+
+  // No rows yet, or the rows on screen belong to a category the user has
+  // since changed away from. Gates the spinner AND "Load more" (see below).
+  const stale = tasks === null || loadedCategory !== category;
 
   const areas = useMemo(
     () => [...new Set((tasks ?? []).map((task) => task.areaLabel).filter(Boolean))].sort(),
@@ -212,7 +223,7 @@ export function BoardPage() {
         />
       </div>
 
-      {tasks === null || loadedCategory !== category ? (
+      {stale ? (
         <div className="flex justify-center py-20">
           <Spinner />
         </div>
@@ -260,7 +271,12 @@ export function BoardPage() {
         ))
       )}
 
-      {tasks !== null && !exhausted && (
+      {/* `stale` gates this too, not just the list: while a category switch is
+          in flight the cursor has been reset, so a click here would page the
+          NEW category and append it to the OLD rows — a mixed-category list.
+          Blanking `tasks` used to hide the button; deriving staleness has to
+          cover both places. */}
+      {!stale && tasks !== null && !exhausted && (
         <Button
           variant="outline"
           disabled={loadingMore}
