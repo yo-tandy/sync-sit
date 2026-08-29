@@ -71,7 +71,7 @@ const sections: Section[] = [
       '- Must be a currently enrolled student at École Jeannine Manuel, unless we have specifically approved their email address in advance\n' +
       '- Must have a valid EJM school email address (@ejm.org) and verify their school affiliation through it\n' +
       '- Must be at least 15 years of age to sign up on their own; a younger student may take part only through a supervised account, created and governed by their parent from the parent\'s own account\n' +
-      '- On Sync/Sit and Sync/Study, must have a date of birth consistent with their EJM school year — in practice, aged 15 to 18 at enrollment; an administrator may grant an exemption. Sync/Do sets no upper age limit.\n\n' +
+      '- On Sync/Sit and Sync/Study, must have a date of birth that stays consistent with their EJM school year — in practice, aged 15 to 18 — for the account to be usable: Sync/Study refuses the enrollment outright, while Sync/Sit accepts it and stops showing the provider to families instead. An administrator may grant an exemption. Sync/Do sets no upper age limit.\n\n' +
       'In accordance with French law (Article 8 of the GDPR, as implemented in France), individuals aged 15 and over may consent to the processing of their personal data. A service provider aged 15 or over therefore creates their account with their own consent. For a supervised account, the supervising parent consents on the student\'s behalf, and supervision may be ended once the student is 15 or older.',
     contentFr:
       'Pour utiliser {{brand}}, vous devez remplir les conditions d\'éligibilité suivantes :\n\n' +
@@ -83,7 +83,7 @@ const sections: Section[] = [
       '- Être un(e) élève actuellement inscrit(e) à l\'École Jeannine Manuel, sauf si nous avons expressément approuvé son adresse e-mail au préalable\n' +
       '- Disposer d\'une adresse e-mail scolaire EJM valide (@ejm.org) et vérifier son affiliation scolaire par celle-ci\n' +
       '- Être âgé(e) d\'au moins 15 ans pour s\'inscrire de sa propre initiative ; un élève plus jeune ne peut participer que par l\'intermédiaire d\'un compte supervisé, créé et administré par son parent depuis le compte de ce dernier\n' +
-      '- Sur Sync/Sit et Sync/Study, avoir une date de naissance cohérente avec son année scolaire à l\'EJM — en pratique, être âgé(e) de 15 à 18 ans au moment de l\'inscription ; un administrateur peut accorder une dérogation. Sync/Do ne fixe aucune limite d\'âge supérieure.\n\n' +
+      '- Sur Sync/Sit et Sync/Study, avoir une date de naissance qui reste cohérente avec son année scolaire à l\'EJM — en pratique, être âgé(e) de 15 à 18 ans — pour que le compte soit utilisable : Sync/Study refuse purement et simplement l\'inscription, tandis que Sync/Sit l\'accepte mais cesse de présenter le prestataire aux familles. Un administrateur peut accorder une dérogation. Sync/Do ne fixe aucune limite d\'âge supérieure.\n\n' +
       'Conformément au droit français (article 8 du RGPD, tel que transposé en France), les personnes âgées de 15 ans et plus peuvent consentir au traitement de leurs données personnelles. Un prestataire de 15 ans ou plus crée donc son compte avec son propre consentement. Pour un compte supervisé, le parent superviseur consent pour le compte de l\'élève, et la supervision peut prendre fin dès que l\'élève a 15 ans ou plus.',
   },
   {
