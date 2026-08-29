@@ -17,9 +17,11 @@ export function BabysitterLayout() {
         <PageContainer>
           <Outlet />
         </PageContainer>
-        {/* The babysitter's account lives at a different path than the parent's;
-            the shared account hub (#367) is what collapses these to one. */}
-        <AppSwitchBarHost accountHref="/babysitter/account" homeHref="/babysitter" />
+        {/* The account tab now points at the SHARED hub (#367), not this
+            portal's own account page: the babysitter's and the parent's used
+            to be different paths, and collapsing them to one is the hub's
+            whole purpose. homeHref stays this portal's own root (#385). */}
+        <AppSwitchBarHost accountHref="/account" homeHref="/babysitter" />
       </div>
     </AuthGuard>
   );

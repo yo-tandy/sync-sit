@@ -6,3 +6,5 @@ export { WelcomePage } from './WelcomePage.js';
 export { SignUpRolePage, type SignUpRoleOption } from './SignUpRolePage.js';
 export { LoginPage } from './LoginPage.js';
 export { ForgotPasswordPage } from './ForgotPasswordPage.js';
+export { AccountHome } from './AccountHome.js';
+export type { AccountHomeProps, AccountSection, AccountRow } from './AccountHome.js';

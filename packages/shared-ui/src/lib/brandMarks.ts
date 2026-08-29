@@ -16,6 +16,26 @@ export const APP_NAME: Record<SyncApp, string> = {
 };
 
 /**
+ * Each app's accent as a LITERAL, not a token — deliberately.
+ *
+ * `--color-brand-600` resolves to whichever app is running: inside sit's
+ * build it is red and there is no way to reach study's blue through it. The
+ * shared account hub (#367) has to render a chip for every app on one neutral
+ * page, so it needs all three values regardless of host.
+ *
+ * These are each theme's `--color-brand-600` (see theme/{sit,study,do}.css),
+ * the stop chosen for AA contrast on white — do's is #0d8204 rather than its
+ * icon green #16ad05 for exactly that reason. Keep them in step with the
+ * themes; they are the same colour by intent, expressed twice because CSS
+ * custom properties cannot be read across apps.
+ */
+export const APP_ACCENT: Record<SyncApp, string> = {
+  sit: '#df1a30',
+  study: '#094ad4',
+  do: '#0d8204',
+};
+
+/**
  * THE one place bar-size brand marks are resolved.
  *
  * Every consumer goes through here rather than importing an asset directly,

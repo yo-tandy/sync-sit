@@ -7,7 +7,13 @@ import { isTutor } from '@ejm/shared-core';
 type SitRole = 'babysitter' | 'parent' | 'admin';
 
 interface AuthGuardProps {
-  role: SitRole;
+  /**
+   * The portal this subtree belongs to. OMIT IT for surfaces that belong to
+   * no portal -- the shared account hub (#367) is reached by a parent and a
+   * student alike, and routing one of them away from it would be wrong. With
+   * no role, this guards sign-in only.
+   */
+  role?: SitRole;
   children: React.ReactNode;
 }
 
@@ -33,6 +39,9 @@ export function AuthGuard({ role, children }: AuthGuardProps) {
       </div>
     );
   }
+
+  // Role-agnostic surface: signed in is the whole requirement.
+  if (!role) return <>{children}</>;
 
   const sitRole = getSitRole(userDoc);
 

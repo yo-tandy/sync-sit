@@ -4,6 +4,7 @@ import { createBrowserRouter, Navigate } from 'react-router';
 import { PublicLayout } from '@/layouts/PublicLayout';
 import { BabysitterLayout } from '@/layouts/BabysitterLayout';
 import { FamilyLayout } from '@/layouts/FamilyLayout';
+import { AccountLayout } from '@/layouts/AccountLayout';
 import { AdminLayout } from '@/layouts/AdminLayout';
 
 // Public pages
@@ -57,6 +58,7 @@ import { NotificationsPage } from '@/pages/NotificationsPage';
 import { AdminDashboard } from '@/pages/admin/DashboardPage';
 import { AdminUsersPage } from '@/pages/admin/UsersPage';
 import { AdminEnrollmentAccessPage } from '@/pages/admin/EnrollmentAccessPage';
+import { AccountHubPage } from '@/pages/AccountHubPage';
 import { AdminFamiliesPage } from '@/pages/admin/FamiliesPage';
 import { AdminAppointmentsPage } from '@/pages/admin/AppointmentsPage';
 import { AdminDoTasksPage } from '@/pages/admin/DoTasksPage';
@@ -143,6 +145,12 @@ export const router = createBrowserRouter([
   },
 
   // Admin portal (auth + role guard)
+  // The shared account hub (#367). Its OWN layout: neutral, no branded
+  // AppBar, no back button — it is not a subsection of either portal.
+  {
+    element: <AccountLayout />,
+    children: [{ path: '/account', element: <AccountHubPage /> }],
+  },
   {
     element: <AdminLayout />,
     children: [
