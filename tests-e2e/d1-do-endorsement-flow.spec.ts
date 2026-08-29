@@ -10,21 +10,27 @@ import { doLoginAs, doLogout } from './helpers/doLogin';
  * which is NOT what the repo's other specs assume (they target apps/web on
  * :5173). Three things must be true:
  *
- *   1. the emulator stack is up on the DEFAULT ports — `pnpm emulators`.
- *      `apps/do-web/src/config/firebase.ts` hardcodes 9099/8080/5001/9199
- *      under `import.meta.env.DEV`, so do-web's dev server can only reach
- *      lane 1. (Making those ports configurable would let this run in an
- *      ephemeral lane; that is an app-source change, not this spec's.)
- *   2. do-web's dev server is up — `pnpm --filter do-web dev` (:5175);
+ *   1. an emulator stack is up — `pnpm emulators` for lane 1, or any lane's
+ *      `firebase.laneN.json`. This spec POSTS and ENDORSES, so prefer a lane
+ *      of your own over the shared dev stack;
+ *   2. do-web's dev server is up and pointed at that stack. Lane 1:
+ *      `pnpm --filter do-web dev` (:5175). Lane 3:
+ *      `cd apps/do-web && VITE_EMULATOR_LANE=3 pnpm exec vite --port 5375
+ *      --strictPort` — the apps read their emulator endpoint from
+ *      `VITE_EMULATOR_*` since issue #358 (they used to hardcode lane 1,
+ *      which is why this spec originally could not run at all). See
+ *      docs/emulator-lanes.md, "Running a WEB APP in a lane";
  *   3. the two personas below exist in that stack: a parent in a
  *      FULLY-VERIFIED family (decision 14 — `doPostTask` refuses otherwise,
  *      and the family needs a postcode/city that resolves an area label per
  *      decision 17), and an enrolled, active doer whose
  *      `profiles.doer.enrollmentComplete` is true.
  *
- * Then:
- *   PLAYWRIGHT_BASE_URL=http://localhost:5175 \
- *     npx playwright test tests-e2e/d1-do-endorsement-flow.spec.ts
+ * Then, naming the same lane so Playwright targets that dev server:
+ *   E2E_APP=do E2E_LANE=3 \
+ *     pnpm exec playwright test tests-e2e/d1-do-endorsement-flow.spec.ts
+ * (`PLAYWRIGHT_BASE_URL=http://localhost:5175` still works and overrides
+ * both vars — that is the lane-1 form.)
  *
  * The credentials come from the env so the spec pins no particular seed:
  *   DO_E2E_PARENT_EMAIL / DO_E2E_DOER_EMAIL / DO_E2E_PASSWORD.

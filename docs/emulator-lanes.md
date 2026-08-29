@@ -18,3 +18,46 @@ Notes:
 - Lanes are fully isolated: same `demo-test` project id is fine, data never crosses lanes.
 - To run a subset of the suite against LANE 2 (lane 3: same shape, ports +10000), keep the env vars on the command: `cd tests && TEST_FIRESTORE_PORT=18080 TEST_AUTH_PORT=19099 TEST_FUNCTIONS_PORT=15001 TEST_STORAGE_PORT=19199 pnpm exec vitest run <path>` — without them the subset silently targets lane 1, where `clearStorage()` wipes the dev bucket (the exact footgun this lane exists to remove). Do NOT use `pnpm test -- <path>`: pnpm forwards the literal `--` and vitest silently discards everything after it, running the full suite while appearing to accept your filter.
 - The seed scripts (`pnpm seed:admin`, `seed-test-data.cjs`) are deliberately NOT lane-aware — they pin the default ports and seed the DEV stack. Lane 2 seeds itself per-test; there is nothing to seed there by hand.
+
+## Running a WEB APP in a lane (browser-driven e2e)
+
+Everything above is the Node-side test harness. The web apps needed the same dial, and until issue #358 they did not have it: `apps/{web,study-web,do-web}/src/config/firebase.ts` hardcoded lane 1, so a Playwright spec could only ever drive the shared dev stack — which at any moment may be serving a build that predates the feature under test. (That is exactly what stopped PR #352's e2e leg: lane 1 was on a pre-sync-do build and `doPostTask` came back "does not exist".)
+
+All three apps now resolve their emulator endpoint from env, through one shared helper (`packages/shared-core/src/utils/emulatorConfig.ts`), so the three cannot drift:
+
+| Var | Default | Effect |
+|---|---|---|
+| `VITE_EMULATOR_LANE` | `1` | Shifts all four ports by `(lane - 1) * 10000` — the same offset `firebase.lane{2,3,4}.json` use. Valid 1–6 (lane 7 would push storage past 65535). |
+| `VITE_EMULATOR_HOST` | `localhost` | Host for all four emulators. |
+| `VITE_EMULATOR_AUTH_PORT` | `9099` | Overrides the lane-derived auth port. |
+| `VITE_EMULATOR_FIRESTORE_PORT` | `8080` | " |
+| `VITE_EMULATOR_FUNCTIONS_PORT` | `5001` | " |
+| `VITE_EMULATOR_STORAGE_PORT` | `9199` | " |
+
+With none of them set the apps connect exactly where they always did, so `pnpm dev` is unchanged. A malformed value **throws** at startup instead of falling back — a silent fallback would point the run at lane 1 and let it WRITE to the shared dev stack, the precise accident these vars exist to prevent.
+
+The dev SERVER port has to move too: two Vite servers cannot share :5173, and Vite quietly takes the next free port instead of failing, so the spec would drive the wrong app. A lane owns a dev port per app, +100 per lane (`tests-e2e/lanes.ts`):
+
+| Lane | sit (`web`) | study | do |
+|---|---|---|---|
+| 1 (shared dev stack) | 5173 | 5174 | 5175 |
+| 2 | 5273 | 5274 | 5275 |
+| 3 | 5373 | 5374 | 5375 |
+
+Full recipe — do-web against a seeded lane 3:
+
+```bash
+# 1. the emulators for the lane (own terminal; seed it however the spec needs)
+pnpm exec firebase emulators:start --config firebase.lane3.json \
+  --only auth,functions,firestore,storage --project demo-test
+
+# 2. the app, pointed at that lane, on that lane's dev port (own terminal)
+cd apps/do-web && VITE_EMULATOR_LANE=3 pnpm exec vite --port 5375 --strictPort
+
+# 3. the spec
+E2E_APP=do E2E_LANE=3 pnpm exec playwright test tests-e2e/d1-do-endorsement-flow.spec.ts
+```
+
+`E2E_APP` (`sit`/`web`, `study`/`study-web`, `do`/`do-web`) and `E2E_LANE` only pick Playwright's `baseURL`; they do not configure the app — step 2's `VITE_EMULATOR_LANE` does that, and the two must name the same lane. `PLAYWRIGHT_BASE_URL` still overrides both, and with nothing set the base URL is `http://localhost:5173` as before.
+
+`--strictPort` is not optional: without it step 2 silently lands on 5376 when 5375 is taken and step 3 then drives whatever is on 5375.

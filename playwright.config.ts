@@ -1,4 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
+import { resolveE2eBaseUrl } from './tests-e2e/lanes';
 
 export default defineConfig({
   testDir: './tests-e2e',
@@ -11,7 +12,9 @@ export default defineConfig({
   retries: 0,
   reporter: [['list'], ['html', { outputFolder: 'playwright-report', open: 'never' }]],
   use: {
-    baseURL: process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:5173',
+    // PLAYWRIGHT_BASE_URL still wins; otherwise E2E_APP/E2E_LANE pick the
+    // dev server (issue #358), defaulting to lane-1 sit on :5173 as before.
+    baseURL: resolveE2eBaseUrl(),
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'off',

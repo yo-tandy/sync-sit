@@ -4,6 +4,7 @@ import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
 import { getFunctions, connectFunctionsEmulator } from 'firebase/functions';
 import { getStorage, connectStorageEmulator } from 'firebase/storage';
 import { getMessaging, isSupported } from 'firebase/messaging';
+import { resolveEmulatorConfig } from '@ejm/shared-core';
 
 // TODO: Replace with actual Firebase config after project creation
 const firebaseConfig = {
@@ -41,15 +42,26 @@ export async function initMessaging(): Promise<ReturnType<typeof getMessaging> |
   return null;
 }
 
-// Connect to emulators in development
+// Connect to emulators in development.
+//
+// The endpoint comes from VITE_EMULATOR_* env (issue #358) so a browser-driven
+// e2e run can select its own emulator lane instead of commandeering the shared
+// lane-1 dev stack. With none of those vars set the values are exactly the
+// lane-1 ones this block used to hardcode — see
+// packages/shared-core/src/utils/emulatorConfig.ts and docs/emulator-lanes.md.
+//
+// The resolve call sits OUTSIDE the try: a malformed var must fail loudly, not
+// be swallowed by the "already connected" catch and silently leave the app on
+// lane 1.
 if (import.meta.env.DEV) {
+  const emulator = resolveEmulatorConfig(import.meta.env);
   try {
-    connectAuthEmulator(auth, 'http://localhost:9099', {
+    connectAuthEmulator(auth, emulator.authUrl, {
       disableWarnings: true,
     });
-    connectFirestoreEmulator(db, 'localhost', 8080);
-    connectFunctionsEmulator(functions, 'localhost', 5001);
-    connectStorageEmulator(storage, 'localhost', 9199);
+    connectFirestoreEmulator(db, emulator.host, emulator.firestorePort);
+    connectFunctionsEmulator(functions, emulator.host, emulator.functionsPort);
+    connectStorageEmulator(storage, emulator.host, emulator.storagePort);
   } catch {
     // Already connected
   }
