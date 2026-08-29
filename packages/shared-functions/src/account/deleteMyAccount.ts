@@ -9,17 +9,25 @@ import {
   sendNotificationEmail,
 } from '../config/email.js';
 import { sendPushNotification } from '../config/push.js';
+import { effectiveAuthTimeSeconds } from '../auth/effectiveAuthTime.js';
 
 /**
- * Time within which the member must have authenticated for a self-delete to
- * be accepted.
+ * Time within which the member must have presented a CREDENTIAL for a
+ * self-delete to be accepted.
  *
  * This is irreversible and it is reachable from a signed-in session, so an
- * unattended or borrowed device should not be enough. Firebase puts the
- * original sign-in time in `auth_time`; a member who has been signed in for
- * longer is asked to re-authenticate and try again. Fifteen minutes is long
- * enough to read the confirmation copy and think about it, short enough that
- * a walked-away-from session has expired.
+ * unattended or borrowed device should not be enough. A member who has been
+ * signed in for longer is asked to re-authenticate and try again. Fifteen
+ * minutes is long enough to read the confirmation copy and think about it,
+ * short enough that a walked-away-from session has expired.
+ *
+ * The age comes from `effectiveAuthTimeSeconds`, NOT from `auth_time`
+ * directly. `auth_time` alone was bypassable: cross-app handoff mints a custom
+ * token for the session's uid, and signing in with it stamps a fresh
+ * `auth_time` without anyone typing a password — so a borrowed unlocked phone
+ * could switch apps and land back inside this window. The handoff now carries
+ * the originating session's credential age across, and the helper takes the
+ * older of the two. See `auth/effectiveAuthTime.ts` for the full rule.
  */
 const REAUTH_WINDOW_SECONDS = 15 * 60;
 
@@ -38,10 +46,10 @@ interface DeleteMyAccountInput {
  * member's account", and the Firestore wiring around them is only reachable
  * from the integration suite. Throws the same HttpsErrors the callable would.
  *
- * @param authTimeSeconds `auth_time` from the ID token — seconds since epoch,
- *   set at sign-in and refreshed by re-authentication. 0/NaN/absent means a
- *   token shape we did not expect, which is treated as stale rather than as
- *   permission.
+ * @param authTimeSeconds the session's effective credential age in seconds
+ *   since epoch — `effectiveAuthTimeSeconds(request.auth.token)`, not raw
+ *   `auth_time` (see REAUTH_WINDOW_SECONDS). 0/NaN/absent means a token shape
+ *   we did not expect, which is treated as stale rather than as permission.
  * @param nowMs current time in milliseconds.
  */
 export function assertSelfDeleteAllowed(
@@ -211,7 +219,11 @@ export const deleteMyAccount = onCall(
     // of the UI language -- a French member types the same word, and the
     // server does not have to know which locale sent the request.
     const { confirm } = (request.data ?? {}) as DeleteMyAccountInput;
-    assertSelfDeleteAllowed(Number(request.auth.token.auth_time ?? 0), Date.now(), confirm);
+    assertSelfDeleteAllowed(
+      effectiveAuthTimeSeconds(request.auth.token as Record<string, unknown>),
+      Date.now(),
+      confirm,
+    );
 
     // No pre-read of the user doc here. `eraseUserAccount`'s first act is to
     // read the same document and throw `not-found` before it writes anything,
