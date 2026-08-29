@@ -214,6 +214,39 @@ describe('SearchPage cross-app endorsements (issue #280)', () => {
     expect(screen.queryByText(/\+33100000000/)).not.toBeInTheDocument();
   });
 
+  it('retries on re-expand after a PARTIAL failure — degradation is not cached', async () => {
+    // Regression guard: allSettled always yields an array, so caching it as a
+    // complete answer would make a one-off sibling failure permanent for the
+    // session — a family who expands while the (tutorUserId, status) composite
+    // is still building would keep seeing the incomplete list after it lands.
+    h.refResults.set('babysitterUserId', [{ refName: 'Famille Garde', note: 'x' }]);
+    h.refResults.set('tutorUserId', [
+      { submittedByName: 'Famille Etude', referenceText: 'Patient maths tutor' },
+    ]);
+    h.refFailFields = new Set(['tutorUserId']);
+    await expandFirstResult();
+    await waitFor(() => expect(h.refQueries).toHaveLength(3));
+    expect(screen.queryByText(/Famille Etude/)).not.toBeInTheDocument();
+
+    // The sibling recovers; collapse and re-expand must refetch.
+    h.refFailFields = new Set();
+    fireEvent.click(screen.getByText('Marie DUPONT'));
+    fireEvent.click(screen.getByText('Marie DUPONT'));
+    await waitFor(() => expect(h.refQueries).toHaveLength(6));
+    expect(await screen.findByText(/Endorsement from Famille Etude/)).toBeInTheDocument();
+  });
+
+  it('does NOT refetch once a load has fully succeeded', async () => {
+    h.refResults.set('babysitterUserId', [{ refName: 'Famille Garde', note: 'x' }]);
+    await expandFirstResult();
+    await waitFor(() => expect(h.refQueries).toHaveLength(3));
+    fireEvent.click(screen.getByText('Marie DUPONT'));
+    fireEvent.click(screen.getByText('Marie DUPONT'));
+    // Still 3: a complete answer stays cached, so the cost is paid once.
+    await waitFor(() => expect(screen.getByText(/Famille Garde/)).toBeInTheDocument());
+    expect(h.refQueries).toHaveLength(3);
+  });
+
   it('leaves the card intact when the endorsement queries are denied', async () => {
     h.refFail = true;
     await expandFirstResult();

@@ -347,6 +347,39 @@ describe('TutorCard', () => {
     expect(screen.queryByText(/From Sync\//)).not.toBeInTheDocument();
   });
 
+  it('retries on re-expand after a PARTIAL failure — degradation is not cached', async () => {
+    h.results.set('tutorUserId', [
+      { submittedByName: 'Famille Etude', referenceText: 'Patient maths tutor' },
+    ]);
+    h.results.set('babysitterUserId', [
+      { refName: 'Famille Garde', referenceText: 'Great with our kids' },
+    ]);
+    h.failFields = new Set(['babysitterUserId']);
+    renderWithProviders(<TutorCard result={tutor()} />);
+    expand();
+    await waitFor(() => expect(h.queries).toHaveLength(3));
+    expect(screen.queryByText(/Great with our kids/)).not.toBeInTheDocument();
+
+    h.failFields = new Set();
+    expand(); // collapse
+    expand(); // re-expand must refetch, not serve the partial cache
+    await waitFor(() => expect(h.queries).toHaveLength(6));
+    expect(await screen.findByText(/Great with our kids/)).toBeInTheDocument();
+  });
+
+  it('does NOT refetch once a load has fully succeeded', async () => {
+    h.results.set('tutorUserId', [
+      { submittedByName: 'Famille Etude', referenceText: 'Patient maths tutor' },
+    ]);
+    renderWithProviders(<TutorCard result={tutor()} />);
+    expand();
+    await waitFor(() => expect(h.queries).toHaveLength(3));
+    expand();
+    expand();
+    await waitFor(() => expect(screen.getByText(/Patient maths tutor/)).toBeInTheDocument());
+    expect(h.queries).toHaveLength(3);
+  });
+
   it('keeps the card intact when the endorsement queries are denied', async () => {
     h.getDocs.mockRejectedValue(new Error('permission-denied'));
     renderWithProviders(<TutorCard result={tutor()} />);

@@ -47,6 +47,13 @@ export function OfferEndorsements({ doerUserId }: { doerUserId: string }) {
         // allSettled, not all: one failing source (an unbuilt sibling
         // composite, a transient error) must not take the other two down with
         // it. The error line below is now reserved for a TOTAL failure.
+        //
+        // Unlike sit's and study's cards there is no expand/collapse here, so
+        // there is no retry trigger to preserve: this effect is keyed on
+        // doerUserId and a partial result stands until the card remounts. That
+        // predates this PR (the surface was already one-shot Promise.all) and
+        // is not a regression — noting it so the next reader does not mistake
+        // the absence of a completeness flag for an oversight.
         const settled = await Promise.allSettled(
           sources.map(({ field }) =>
             getDocs(

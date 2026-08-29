@@ -32,6 +32,8 @@
  * doc→line mapping; each caller builds its own query.
  */
 
+import type { ReferenceStatus } from '../constants/index.js';
+
 /** The products that write endorsements into the shared collection. */
 export type EndorsementApp = 'sit' | 'study' | 'do';
 
@@ -39,7 +41,8 @@ export type EndorsementApp = 'sit' | 'study' | 'do';
  * Registry order — the order sibling apps appear in after the current one.
  * Chronological by product launch; stable so two surfaces never disagree.
  */
-export const ENDORSEMENT_APPS: readonly EndorsementApp[] = ['sit', 'study', 'do'];
+export const ENDORSEMENT_APPS = Object.freeze(['sit', 'study', 'do'] as const) satisfies
+  readonly EndorsementApp[];
 
 /**
  * The `references` field each app keys its endorsements by. Each has a
@@ -47,17 +50,26 @@ export const ENDORSEMENT_APPS: readonly EndorsementApp[] = ['sit', 'study', 'do'
  * `where(field,'==',uid) + where('status','in',PUBLIC_ENDORSEMENT_STATUSES)`
  * needs exactly that.
  */
-export const ENDORSEMENT_SUBJECT_FIELD: Record<EndorsementApp, string> = {
+export const ENDORSEMENT_SUBJECT_FIELD = Object.freeze({
   sit: 'babysitterUserId',
   study: 'tutorUserId',
   do: 'doerUserId',
-};
+} as const) satisfies Record<EndorsementApp, string>;
 
 /**
  * The statuses the read rule exposes to an unrelated caller. LOAD-BEARING as a
  * query constraint, not a display filter — see the module header.
+ *
+ * Frozen, not merely `readonly`: `readonly` is erased at runtime, so a
+ * consumer could `(x as string[]).push('private')` and turn every cross-app
+ * card into PERMISSION_DENIED across all four surfaces at once. Typed against
+ * `ReferenceStatus` so a typo like 'aproved' fails to compile rather than
+ * waiting for the unit test to catch it.
  */
-export const PUBLIC_ENDORSEMENT_STATUSES: readonly string[] = ['approved', 'published'];
+export const PUBLIC_ENDORSEMENT_STATUSES = Object.freeze([
+  'approved',
+  'published',
+] as const) satisfies readonly ReferenceStatus[];
 
 /**
  * Per-source cap every surface shares. A search/offer card is a summary, not

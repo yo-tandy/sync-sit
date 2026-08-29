@@ -42,6 +42,11 @@ export function TutorCard({ result }: { result: TutorSearchResult }) {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
   const [endorsements, setEndorsements] = useState<CrossAppEndorsement[] | null>(null);
+  // Whether that load had EVERY source succeed. allSettled always yields an
+  // array, so without this a partial failure would be cached as a complete
+  // answer and re-expanding could never retry — sticky degradation, the
+  // opposite of what allSettled is for.
+  const [endorsementsComplete, setEndorsementsComplete] = useState(false);
   // Local, optimistic view of this family's request status toward the tutor.
   const [status, setStatus] = useState<'none' | 'incoming' | StudyContactRequestStatus>(result.requestStatus);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -57,7 +62,15 @@ export function TutorCard({ result }: { result: TutorSearchResult }) {
     // result.endorsementCount: that count is the STUDY tally the search
     // callable projects, and a tutor with zero study endorsements can still
     // carry sit references worth showing.
-    if (next && endorsements === null) {
+    //
+    // Cost of dropping that gate, accepted deliberately: an expansion used to
+    // cost ZERO queries for a tutor with no study endorsements — likely the
+    // common case on a young marketplace — and now costs three
+    // unconditionally. The cheap mitigation, if read volume ever bites, is a
+    // server-side cross-app tally on TutorSearchResult (which would also close
+    // the badge/list divergence noted below), NOT reinstating a study-only
+    // gate that hides sit references by construction.
+    if (next && !endorsementsComplete) {
       try {
         const sources = endorsementSources('study');
         // allSettled, NOT all: with one query the failure mode was "this
@@ -91,6 +104,7 @@ export function TutorCard({ result }: { result: TutorSearchResult }) {
               : [],
           ),
         );
+        if (settled.every((r) => r.status === 'fulfilled')) setEndorsementsComplete(true);
       } catch {
         setEndorsements([]);
       }

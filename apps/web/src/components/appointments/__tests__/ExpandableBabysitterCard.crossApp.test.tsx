@@ -51,6 +51,8 @@ vi.mock('firebase/firestore', () => ({
 }));
 
 import { ExpandableBabysitterCard } from '../ExpandableBabysitterCard';
+import en from '@/i18n/en';
+import fr from '@/i18n/fr';
 
 const info: BabysitterSummary = {
   uid: 'bs-1',
@@ -85,6 +87,22 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('ExpandableBabysitterCard cross-app endorsements (issue #280)', () => {
+  // This file mocks `t` as an identity function, so the render assertions
+  // below pin the key the component COMPUTES, not that it resolves — deleting
+  // the locale entry would leave them green while users saw a raw dotted key.
+  // Pinned directly instead, in BOTH locales (apps/web has no en/fr parity
+  // test of its own). SearchPageCrossApp.test.tsx covers resolution end-to-end
+  // for the same prefix under real i18n.
+  it('has the origin-label copy for every app sit can label, in both locales', () => {
+    for (const locale of [en, fr]) {
+      const refs = locale.references as Record<string, string>;
+      for (const key of ['fromStudy', 'fromDo']) {
+        expect(typeof refs[key]).toBe('string');
+        expect(refs[key].length).toBeGreaterThan(0);
+      }
+    }
+  });
+
   it('issues one status-constrained query per product, sit first', async () => {
     renderCard();
     await waitFor(() => expect(h.queries).toHaveLength(3));

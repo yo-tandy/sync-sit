@@ -124,10 +124,17 @@ export function SearchPage() {
   // then the sibling products' (issue #280). One query per source against the
   // shared `references` collection, each keyed by that product's subject field.
   const [babysitterRefs, setBabysitterRefs] = useState<Record<string, CrossAppEndorsement[]>>({});
+  // uids whose load had EVERY source succeed. The cache guard consults this,
+  // not babysitterRefs: allSettled always yields an array, so a partial (or
+  // total) failure would otherwise be cached as a complete answer and the
+  // guard would suppress every retry for the rest of the session — making the
+  // graceful degradation permanently sticky, which is the opposite of the
+  // point. Re-expanding a card now refetches until one load is whole.
+  const [completeRefUids, setCompleteRefUids] = useState<Set<string>>(new Set());
   const [expandedRefIds, setExpandedRefIds] = useState<Set<string>>(new Set());
 
   const loadRefs = async (uid: string) => {
-    if (babysitterRefs[uid]) return; // already loaded
+    if (completeRefUids.has(uid)) return; // already loaded, in full
     try {
       const sources = endorsementSources('sit');
       // allSettled, NOT all: with one query the failure mode was "this card's
@@ -159,6 +166,9 @@ export function SearchPage() {
           : []
       );
       setBabysitterRefs((prev) => ({ ...prev, [uid]: refs }));
+      if (settled.every((r) => r.status === 'fulfilled')) {
+        setCompleteRefUids((prev) => new Set(prev).add(uid));
+      }
     } catch { /* silent */ }
   };
 
