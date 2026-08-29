@@ -2580,12 +2580,25 @@ about twenty times across twelve files under `apps/functions/src/**`
 a sit-domain move, it lands almost entirely on the half that was never
 centralised.
 
-Two smaller notes in the same area: the client apps' sit fallback is
+Two smaller notes in the same area. The client apps' sit fallback is
 `https://sync-sit.web.app` while the functions inline `https://sync-sit.com`, so
-two sit hosts are already in circulation; and `apps/web/src/constants/brand.ts`,
-`apps/do-web/src/constants/brand.ts` and `AboutPage.tsx` carry their own
-literals. In total, **21 files hold 46 literal host or address strings** outside
-tests.
+two sit hosts are already in circulation. And the surface splits in two halves
+that are in very different states:
+
+- **Support addresses are now centralised.** Each app's
+  `src/constants/brand.ts` holds one `SUPPORT_EMAIL`, every consumer reads it,
+  and `scripts/__tests__/support-addresses.test.ts` fails the build if an app
+  hardcodes one elsewhere or points at a domain that does not receive mail.
+  That happened because study-web and do-web were publishing
+  `support@sync-study.com` and `support@sync-do.com`, neither of which was ever
+  connected, on live sites. At the cutover this half is three constants.
+- **Host URLs are not.** Roughly twenty `https://sync-sit.com/...` literals sit
+  inline in email HTML across twelve files under `apps/functions/src/**`. This
+  is the half the work item below addresses.
+
+Together, **21 files carry 47 lines with a literal host or address** outside
+tests. The number moves as work lands; the ratio is the point — the address
+half is one constant per app, the host half is a sweep.
 
 **First work item, and it is cheap: give sit the constant the other two already
 have.** An exported `SIT_APP_URL` in `email.ts` alongside its siblings, and the
