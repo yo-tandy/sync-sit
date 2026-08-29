@@ -95,9 +95,9 @@ describe('AboutPage', () => {
 
   it('shows the do support address', () => {
     renderWithProviders(<AboutPage />);
-    expect(screen.getByRole('link', { name: 'support@sync-do.com' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'support@sync-sit.com' })).toHaveAttribute(
       'href',
-      'mailto:support@sync-do.com',
+      'mailto:support@sync-sit.com',
     );
   });
 });
