@@ -11,7 +11,7 @@ export function FamilyLayout() {
       {/* pb-16 on phones clears the fixed app-switch bar; the bar is md:hidden,
           so the padding lifts at the same breakpoint. Without it the last row
           of every scrolled page sits underneath the bar. */}
-      <div className="min-h-screen bg-white pb-16 md:pb-0">
+      <div className="min-h-screen bg-ground pb-16 md:pb-0">
         <ScrollToTop />
         <AppBar role="parent" />
         {/* Desktop width cap (issue #119); wide pages opt out via data-page-width. */}

@@ -27,7 +27,8 @@
     "lint": "eslint ."
   },
   "dependencies": {
-    "@ejm/shared-core": "workspace:*"
+    "@ejm/shared-core": "workspace:*",
+    "@fontsource-variable/nunito": "^5.3.0"
   },
   "peerDependencies": {
     "react": "^19.2.0",

@@ -16,6 +16,17 @@
 
 @source "../**/*.{ts,tsx}";
 
+/* Nunito, SELF-HOSTED (issue #366, the Recess direction).
+   Two reasons it is not a Google Fonts <link>:
+   1. GDPR. Loading fonts from fonts.gstatic.com sends every visitor's IP to
+      Google on every page. This is an EU product handling minors' data and
+      the rest of the codebase is careful about exactly this; a German court
+      has held the practice unlawful. Self-hosting removes the transfer.
+   2. These are PWAs. A third-party font request fails offline and the app
+      falls back mid-session; a bundled font does not.
+   Variable font, so one file covers every weight the design uses. */
+@import '@fontsource-variable/nunito';
+
 @theme {
   /* Semantic feedback colors (shared) — always the same hue regardless
      of which app's brand palette is active. Components use these for
@@ -33,17 +44,38 @@
   --color-error-600: #DC2626;
   --color-error-700: #B91C1C;
 
-  /* Radii */
-  --radius-sm: 0.5rem;
-  --radius-md: 0.75rem;
-  --radius-lg: 1rem;
-  --radius-xl: 1.25rem;
+  /* Radii — Recess (#366). Rounder across the board: the direction's
+     20-22px corners land on lg/xl, and sm/md rise with them so the ramp
+     stays proportional rather than leaving small controls looking sharp
+     next to round cards. */
+  --radius-sm: 0.625rem;  /* 10px */
+  --radius-md: 0.875rem;  /* 14px */
+  --radius-lg: 1.25rem;   /* 20px */
+  --radius-xl: 1.375rem;  /* 22px */
+  /* Pill badges and chips: a real pill, not a large radius that reads as
+     one only at some heights. */
+  --radius-pill: 9999px;
 
-  /* Shadows */
-  --shadow-card: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  /* Shadows — Recess wants weight UNDER a card rather than a soft halo
+     around it. The offset is vertical-only and the blur small, so cards
+     read as sitting on the ground rather than floating over it.
+     --shadow-card-brand is the tinted variant; each app's theme sets
+     --shadow-card-tint to its own hue (see sit.css). */
+  --shadow-card: 0 3px 0 rgba(17, 24, 39, 0.06), 0 4px 10px rgba(17, 24, 39, 0.05);
+  --shadow-card-brand: 0 3px 0 var(--shadow-card-tint), 0 4px 10px rgba(17, 24, 39, 0.05);
 
-  /* Font */
-  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  /* Admin is NEUTRAL (decision 25): its own gray ground and shadow tint, so
+     no app's brand reaches admin chrome. Defined in base rather than per app
+     because admin looks the same whichever app hosts it -- that is the point
+     of the decision. */
+  --color-ground-admin: #f6f7f9;
+  --shadow-card-tint-admin: rgb(226, 232, 240);
+
+  /* Font — Nunito, imported above. It is IMPORTED as well as named: the
+     previous token asked for 'Inter' and nothing ever loaded it, so all
+     three apps have been rendering in system-ui while claiming otherwise
+     (found while doing #366). Naming a font is not shipping it. */
+  --font-sans: 'Nunito Variable', 'Nunito', ui-sans-serif, system-ui, -apple-system, sans-serif;
 }
 
 /* WCAG 2.4.7 Focus Visible (issue #325): ONE shared keyboard-focus

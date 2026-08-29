@@ -15,12 +15,17 @@ export function Card({
   children,
   ...props
 }: CardProps) {
+  // `shadow-card`, not a hardcoded arbitrary value. The elevation used to be
+  // inlined here, which meant --shadow-card existed as a token but nothing
+  // read it — so the Recess pass (#366) would have changed the token and not
+  // a single card. Cards stay white ON the tinted ground, so they read as
+  // raised rather than flush.
   return (
     <div
       className={`rounded-lg border border-gray-200 bg-white p-4 ${
-        elevated ? 'shadow-[0_1px_3px_rgba(0,0,0,0.06),0_1px_2px_rgba(0,0,0,0.04)]' : ''
+        elevated ? 'shadow-card' : ''
       } ${
-        interactive ? 'cursor-pointer transition-all hover:shadow-md hover:-translate-y-px' : ''
+        interactive ? 'cursor-pointer transition-all hover:shadow-card-brand hover:-translate-y-px' : ''
       } ${className}`}
       style={borderColor ? { borderLeftWidth: 3, borderLeftColor: borderColor } : undefined}
       {...props}

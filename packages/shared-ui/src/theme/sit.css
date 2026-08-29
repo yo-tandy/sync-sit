@@ -25,4 +25,11 @@
   --color-red-500: rgb(233, 64, 83);
   --color-red-100: rgb(252, 214, 219);
   --color-red-50: rgb(254, 238, 240);
+
+  /* Recess ground + shadow tint (#366). --color-ground is the page surface
+     behind cards; --shadow-card-tint is the vertical shadow's colour, taken
+     from this app's own ramp rather than invented. sit's coral, warmed. */
+  --color-ground: #fdf6f4;
+  --color-ground-raised: #ffffff;
+  --shadow-card-tint: rgb(252, 214, 219);
 }
