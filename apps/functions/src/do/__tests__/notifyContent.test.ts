@@ -13,6 +13,7 @@ import {
   buildTaskOfferReceived,
   buildTaskUpdated,
   categoryLabel,
+  fallbackDoerName,
   formatPrice,
   resolveDoLang,
   type DoLang,
@@ -90,12 +91,19 @@ describe('every builder, both languages', () => {
   });
 
   it('every CTA href builds on the live web.app host — sync-do.com never appears', () => {
+    // The ONE non-web.app href allowed anywhere in do copy: the digest's
+    // opt-out address, on the VERIFIED sending domain (PR #334 round-3
+    // review). Named exactly, so a mailto: to any other address — or a
+    // sync-do.com one, which would bounce — still fails this pin.
+    const OPT_OUT_MAILTO = 'mailto:support@sync-sit.com';
     for (const lang of LANGS) {
       for (const c of allContents(lang)) {
         expect(c.emailBody).not.toContain('sync-do.com');
         const hrefs = [...c.emailBody.matchAll(/href="([^"]+)"/g)].map((m) => m[1]);
         for (const href of hrefs) {
-          expect(href.startsWith('https://sync-do-app.web.app')).toBe(true);
+          expect(
+            href.startsWith('https://sync-do-app.web.app') || href === OPT_OUT_MAILTO,
+          ).toBe(true);
         }
       }
     }
@@ -160,6 +168,20 @@ describe('buildNewTaskDigest (§10 board digest)', () => {
     expect(fr.body).toContain('Main verte');
   });
 
+  // The digest is the ONE recurring, batched message sync-do sends, and it
+  // bypasses NotifPrefs by design — so its footer must state both why the
+  // mail arrives and how to make it stop, without promising an in-app
+  // control that does not exist yet (PR #334 rounds 2 and 3).
+  it('footer states a REACHABLE exit in both locales, and promises no phantom control', () => {
+    for (const lang of ['en', 'fr'] as const) {
+      const body = buildNewTaskDigest(lang, tasks).emailBody;
+      expect(body).toContain('mailto:support@sync-sit.com');
+      expect(body).not.toMatch(/profile|profil/i);
+    }
+    expect(buildNewTaskDigest('en', tasks).emailBody).toContain('when you enrolled');
+    expect(buildNewTaskDigest('fr', tasks).emailBody).toContain('lors de votre inscription');
+  });
+
   it('escapes task titles (family free text landing in email HTML)', () => {
     const c = buildNewTaskDigest('en', [
       { taskId: 't9', title: XSS, category: 'errands', areaLabel: '15e', suggestedBudget: null },
@@ -172,5 +194,30 @@ describe('buildNewTaskDigest (§10 board digest)', () => {
     expect(categoryLabel('en', 'pet_house')).toBe('Pet & house-sitting');
     expect(categoryLabel('fr', 'pet_house')).toBe("Garde d'animaux & de maison");
     expect(categoryLabel('en', 'unknown_cat')).toBe('unknown_cat');
+  });
+});
+
+// A doer's `firstName` is mandatory at enrollment, so this only shows on a
+// corrupted doc — but the call sites used to hardcode an English literal,
+// which rendered « The student a annulé… » inside French mail (PR #334
+// round-3 review).
+describe('fallbackDoerName', () => {
+  it('is localized in both directions', () => {
+    expect(fallbackDoerName('en')).toBe('The student');
+    expect(fallbackDoerName('fr')).toBe("L'étudiant(e)");
+  });
+
+  it('keeps French copy French when the name is missing', () => {
+    const fr = buildTaskCancelledForFamily('fr', {
+      doerFirstName: fallbackDoerName('fr'),
+      taskTitle: 'Tondre la pelouse',
+      taskId: 't1',
+    });
+    expect(fr.emailBody).not.toContain('The student');
+    expect(fr.subject).not.toContain('The student');
+    // Escaped in the HTML body (the #188 convention applies to the fallback
+    // exactly as it does to a real name), raw in the plain-text push body.
+    expect(fr.emailBody).toContain('L&#39;étudiant(e)');
+    expect(fr.body).toContain("L'étudiant(e)");
   });
 });

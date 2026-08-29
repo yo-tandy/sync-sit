@@ -27,6 +27,7 @@ import { notifyDoFamilyParents, notifyDoSafely } from './notify.js';
 import {
   buildGuardianApprovalRequested,
   buildTaskOfferReceived,
+  fallbackDoerName,
 } from './notifyContent.js';
 
 /**
@@ -305,7 +306,10 @@ export const doSubmitOffer = onCall(
     // off the RECIPIENT's `governedBy`, and these recipients are parents, who
     // carry none. The offering student is deliberately sent nothing here, so
     // there is no student notification for the trigger to mirror either.
-    const doerFirstName = (callerData.firstName as string) || 'A student';
+    // Fallback resolved inside the content closures below, where the
+    // recipient's language is known — an English literal would render « A
+    // student vous propose… » in French mail (PR #334 round-3 review).
+    const doerFirstName = (callerData.firstName as string | undefined) || null;
     await notifyDoSafely('submitOffer', async () => {
       if (status === 'pending') {
         await notifyDoFamilyParents(taskFamilyId, {
@@ -313,7 +317,7 @@ export const doSubmitOffer = onCall(
           prefCategory: 'newRequest',
           content: (lang) =>
             buildTaskOfferReceived(lang, {
-              doerFirstName,
+              doerFirstName: doerFirstName ?? fallbackDoerName(lang),
               taskTitle,
               taskId,
               price: data.price as number,
@@ -336,7 +340,7 @@ export const doSubmitOffer = onCall(
           prefCategory: 'newRequest',
           content: (lang) =>
             buildGuardianApprovalRequested(lang, {
-              childFirstName: doerFirstName,
+              childFirstName: doerFirstName ?? fallbackDoerName(lang),
               taskTitle,
             }),
           data: { taskId, offerId: offerRef.id },

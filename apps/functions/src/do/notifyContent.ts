@@ -23,6 +23,22 @@ export function resolveDoLang(language: unknown): DoLang {
   return language === 'fr' ? 'fr' : 'en';
 }
 
+/**
+ * Localized stand-in for a doer whose user doc carries no `firstName`.
+ *
+ * Corrupted-doc defense only — enrollment makes `firstName` mandatory — but
+ * the call sites used to hardcode `'The student'` / `'A student'`, which
+ * rendered « The student a annulé la tâche » inside otherwise-French mail
+ * (PR #334 round-3 review). It belongs here, behind `lang`, because this is
+ * the only layer that knows the RECIPIENT's language: call sites resolve it
+ * inside their `content: (lang) => …` closure, which runs once per
+ * recipient. Capitalized — every builder that takes a name puts it
+ * sentence-initially.
+ */
+export function fallbackDoerName(lang: DoLang): string {
+  return lang === 'fr' ? "L'étudiant(e)" : 'The student';
+}
+
 export interface DoNotificationContent {
   /** Email subject (raw — RFC 5322 header context). */
   subject: string;
@@ -74,6 +90,24 @@ export function formatPrice(
 function cta(href: string, label: string): string {
   return `<p style="margin-top: 16px;"><a href="${href}" style="background: #0d8204; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">${label}</a></p>`;
 }
+
+/**
+ * Support address for the digest's opt-out line.
+ *
+ * `support@sync-sit.com`, NOT do-web's `support@sync-do.com`
+ * (`apps/do-web/src/constants/brand.ts`), for the same reason §10 / issue
+ * #156 keeps every CTA on the live web.app host: sync-do.com is not the
+ * platform's live mail domain — the verified sending domain is sync-sit.com,
+ * which is why even `Sync/Do` mail is sent from `noreply@sync-sit.com`. The
+ * copy suite pins that `sync-do.com` never appears in an email body, and an
+ * opt-out route that bounces would be worse than none. (Whether do-web
+ * should be publishing a sync-do.com address on its About/Privacy/Terms
+ * pages is a separate, pre-existing question — not this module's to answer.)
+ */
+const DO_SUPPORT_EMAIL = 'support@sync-sit.com';
+
+const supportLink = (label: string) =>
+  `<a href="mailto:${DO_SUPPORT_EMAIL}" style="color: #0d8204;">${label}</a>`;
 
 const FAMILY_TASK_URL = (taskId: string) => `${DO_APP_URL}/family/tasks/${taskId}`;
 const DOER_TASK_URL = (taskId: string) => `${DO_APP_URL}/tasks/${taskId}`;
@@ -499,6 +533,13 @@ export interface DigestTaskLine {
  * `NotifPrefs` (`prefCategory: null`), so this footer is the recipient's only
  * explanation of why the mail arrives. The control wording belongs to the PR
  * that ships the account page (§13's follow-up).
+ *
+ * ...and it now also states the EXIT (round-3 review). This is the one
+ * recurring, batched, non-event-driven message sync-do sends, and until the
+ * account page lands there is no in-app switch at all — so the footer says
+ * exactly that and names the support address do-web already publishes,
+ * rather than leaving a recipient with no way out. When the account page
+ * ships, this paragraph becomes a link to it.
  */
 export function buildNewTaskDigest(
   lang: DoLang,
@@ -526,7 +567,7 @@ export function buildNewTaskDigest(
         <p>${n === 1 ? 'Une nouvelle tâche correspond' : 'De nouvelles tâches correspondent'} aux catégories qui vous intéressent :</p>
         <ul style="padding-left: 20px;">${lines}</ul>
         ${cta(BOARD_URL, 'Voir le tableau')}
-        <p style="color: #6B7280; font-size: 13px;">Vous recevez ce résumé parce que vous avez choisi d'être informé(e) des nouvelles tâches lors de votre inscription.</p>
+        <p style="color: #6B7280; font-size: 13px;">Vous recevez ce résumé parce que vous avez choisi d'être informé(e) des nouvelles tâches lors de votre inscription. Il n'existe pas encore de réglage dans l'application : écrivez à ${supportLink(DO_SUPPORT_EMAIL)} et nous les désactiverons pour vous.</p>
       `,
       title: n === 1 ? '1 nouvelle tâche pour vous' : `${n} nouvelles tâches pour vous`,
       body:
@@ -544,7 +585,7 @@ export function buildNewTaskDigest(
       <p>${n === 1 ? 'A new task matches' : 'New tasks match'} the categories you're interested in:</p>
       <ul style="padding-left: 20px;">${lines}</ul>
       ${cta(BOARD_URL, 'Browse the board')}
-      <p style="color: #6B7280; font-size: 13px;">You get this digest because you opted into new-task updates when you enrolled.</p>
+      <p style="color: #6B7280; font-size: 13px;">You get this digest because you opted into new-task updates when you enrolled. There is no in-app setting for it yet — email ${supportLink(DO_SUPPORT_EMAIL)} and we'll switch them off for you.</p>
     `,
     title: n === 1 ? '1 new task for you' : `${n} new tasks for you`,
     body:

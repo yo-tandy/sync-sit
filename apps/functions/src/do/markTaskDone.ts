@@ -7,11 +7,12 @@ import { callerFamilyId, validTaskId } from './taskAccess.js';
 import {
   notifyDoFamilyParents,
   notifyDoSafely,
-  sendDoNotificationToUser,
+  sendDoNotificationSafely,
 } from './notify.js';
 import {
   buildTaskCompletedForDoer,
   buildTaskMarkedDoneForFamily,
+  fallbackDoerName,
 } from './notifyContent.js';
 
 /**
@@ -97,21 +98,22 @@ export const doMarkTaskDone = onCall(
     // (plan §10, §13 PR9) — post-commit, failures swallowed.
     await notifyDoSafely('markTaskDone', async () => {
       if (result === 'marked' && firstMark) {
-        const doerFirstName =
-          (callerData.firstName as string | undefined) || 'The student';
+        // Fallback resolved inside the closure, where the recipient's
+        // language is known (PR #334 round-3 review).
+        const doerFirstName = (callerData.firstName as string | undefined) || null;
         await notifyDoFamilyParents(taskFamilyId, {
           type: 'task_marked_done',
           prefCategory: 'confirmed',
           content: (lang) =>
             buildTaskMarkedDoneForFamily(lang, {
-              doerFirstName,
+              doerFirstName: doerFirstName ?? fallbackDoerName(lang),
               taskTitle,
               taskId: ref.id,
             }),
           data: { taskId: ref.id },
         });
       } else if (result === 'completed' && assignedUserId) {
-        await sendDoNotificationToUser({
+        await sendDoNotificationSafely({
           recipientUserId: assignedUserId,
           type: 'task_marked_done',
           prefCategory: 'confirmed',

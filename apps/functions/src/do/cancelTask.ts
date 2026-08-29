@@ -7,11 +7,13 @@ import { callerFamilyId, validTaskId } from './taskAccess.js';
 import {
   notifyDoFamilyParents,
   notifyDoSafely,
-  sendDoNotificationToUser,
+  sendDoNotificationSafely,
+  sendDoNotificationToEach,
 } from './notify.js';
 import {
   buildTaskCancelledForDoer,
   buildTaskCancelledForFamily,
+  fallbackDoerName,
 } from './notifyContent.js';
 
 /**
@@ -130,7 +132,7 @@ export const doCancelTask = onCall(
     // offerers are the only audience (the family cancelled their own post).
     await notifyDoSafely('cancelTask', async () => {
       if (wasAssigned && cancelledBy === 'family' && assignedUserId) {
-        await sendDoNotificationToUser({
+        await sendDoNotificationSafely({
           recipientUserId: assignedUserId,
           type: 'task_cancelled',
           prefCategory: 'cancelled',
@@ -139,30 +141,29 @@ export const doCancelTask = onCall(
           data: { taskId: ref.id },
         });
       } else if (wasAssigned && cancelledBy === 'doer') {
-        const doerFirstName =
-          (callerData.firstName as string | undefined) || 'The student';
+        // Fallback resolved INSIDE the content closure, where the recipient's
+        // language is known — an English literal here rendered « The student
+        // a annulé… » in French mail (PR #334 round-3 review).
+        const doerFirstName = (callerData.firstName as string | undefined) || null;
         await notifyDoFamilyParents(taskFamilyId, {
           type: 'task_cancelled',
           prefCategory: 'cancelled',
           content: (lang) =>
             buildTaskCancelledForFamily(lang, {
-              doerFirstName,
+              doerFirstName: doerFirstName ?? fallbackDoerName(lang),
               taskTitle,
               taskId: ref.id,
             }),
           data: { taskId: ref.id },
         });
       }
-      for (const offererUid of sweptOffererUids) {
-        await sendDoNotificationToUser({
-          recipientUserId: offererUid,
-          type: 'task_cancelled',
-          prefCategory: 'cancelled',
-          content: (lang) =>
-            buildTaskCancelledForDoer(lang, { taskTitle, assigned: false }),
-          data: { taskId: ref.id },
-        });
-      }
+      await sendDoNotificationToEach(sweptOffererUids, {
+        type: 'task_cancelled',
+        prefCategory: 'cancelled',
+        content: (lang) =>
+          buildTaskCancelledForDoer(lang, { taskTitle, assigned: false }),
+        data: { taskId: ref.id },
+      });
     });
 
     await writeUserActivity(uid, 'do.task_cancelled', {
