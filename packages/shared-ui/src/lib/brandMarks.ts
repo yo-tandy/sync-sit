@@ -33,6 +33,19 @@ export const APP_NAME: Record<SyncApp, string> = {
  * `AppSwitchMenuItem` (20px burger rows). The only remaining direct imports
  * of `@ejm/shared-ui/brand-marks/sync-*.png` are the three About pages,
  * which is what those exports are for.
+ *
+ * KNOWN COST, recorded rather than discovered later (#422). This module is
+ * the barrel that d50e3f80 (#302) deliberately avoided: because it imports
+ * all six variants statically, every app's dist gets every app's bar-weight
+ * mark whether it renders one or not -- verified, sit's build emits
+ * sync-do-mark-48/96 (~25 KB) and sit shows no do tab. #302 kept the 256px
+ * marks as direct subpath exports precisely so each app's graph held only
+ * what it used. That property does not survive an indexable
+ * `Record<SyncApp, ...>`; getting it back means giving up the single lookup
+ * this file exists to be. Accepted for now -- 25 KB against the ~294 KB the
+ * bar-weight variants save, and #386's purpose-drawn glyphs change the
+ * arithmetic again -- but it is a real reversal of a documented decision,
+ * not an oversight.
  */
 export const BRAND_MARKS: Record<SyncApp, { sm: string; md: string }> = {
   sit: { sm: sitSm, md: sitMd },
