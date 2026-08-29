@@ -49,11 +49,17 @@ export const ENDORSEMENT_APPS = Object.freeze(['sit', 'study', 'do'] as const) s
  * `(field ASC, status ASC)` composite in firestore.indexes.json — the shape
  * `where(field,'==',uid) + where('status','in',PUBLIC_ENDORSEMENT_STATUSES)`
  * needs exactly that.
- */
-/**
+ *
  * Also the source of `REFERENCE_PROVIDER_KEYS` in shared-functions, which
  * GDPR export/erasure iterate — so a new product is covered for erasure by the
  * same one-line entry that covers it for rendering. Do not restate this list.
+ *
+ * ADD-ONLY while docs carrying a key can still exist. The erasure coupling is
+ * directional: adding an entry extends erasure automatically, but REMOVING one
+ * (say, to tidy up after sunsetting a product — a rendering-motivated edit)
+ * would silently stop GDPR erasure and export from covering legacy
+ * `references` docs still keyed by that field. Retire a product's SURFACES
+ * without touching this map.
  */
 export const ENDORSEMENT_SUBJECT_FIELD = Object.freeze({
   sit: 'babysitterUserId',

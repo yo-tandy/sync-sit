@@ -80,10 +80,11 @@ const appointment = {
   status: 'confirmed',
 } as AppointmentDoc;
 
-function renderCard() {
-  render(<ExpandableBabysitterCard appointment={appointment} info={info} variant="confirmed" />);
+function renderCard(apt: AppointmentDoc = appointment) {
+  const r = render(<ExpandableBabysitterCard appointment={apt} info={info} variant="confirmed" />);
   // The header toggle is the first button; expanding triggers the load.
   fireEvent.click(screen.getAllByRole('button')[0]);
+  return r;
 }
 
 beforeEach(() => {
@@ -253,6 +254,33 @@ describe('ExpandableBabysitterCard cross-app endorsements (issue #280)', () => {
     toggle();
     await waitFor(() => expect(screen.getByText(/Famille Garde/)).toBeInTheDocument());
     expect(h.queries).toHaveLength(3);
+  });
+
+  it('never latches one babysitter\'s endorsements onto another (uid changes mid-load)', async () => {
+    // Defensive invariant, unreachable in the app today (cards are keyed by
+    // appointmentId and an appointment's babysitterUserId is frozen by the
+    // rules), but the cache comment claims it — so it is pinned rather than
+    // asserted. The requested uid is stamped BEFORE the in-flight early
+    // return, so a load started for A recognises itself as stale once the
+    // card has been pointed at B.
+    h.results.set('babysitterUserId', [{ refName: 'Famille A', note: 'for A' }]);
+    h.hold.set('babysitterUserId', () => {}); // A's load hangs
+    const { rerender } = renderCard();
+    await waitFor(() => expect(h.queries).toHaveLength(3));
+
+    // Point the same card at a different babysitter while A's load is open.
+    rerender(
+      <ExpandableBabysitterCard
+        appointment={{ ...appointment, babysitterUserId: 'bs-2' } as AppointmentDoc}
+        info={info}
+        variant="confirmed"
+      />,
+    );
+    h.hold.get('babysitterUserId')!(); // A's load lands late
+
+    await waitFor(() => expect(h.queries.length).toBeGreaterThanOrEqual(3));
+    // A's referee must never appear under B.
+    expect(screen.queryByText(/Famille A/)).not.toBeInTheDocument();
   });
 
   it('keeps the card intact when the endorsement queries are denied', async () => {

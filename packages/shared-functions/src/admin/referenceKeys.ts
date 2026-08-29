@@ -22,8 +22,15 @@ import { ENDORSEMENT_SUBJECT_FIELD } from '@ejm/shared-core';
  * precisely so admin-SDK code can consume it) and a fourth product becomes one
  * registry entry for erasure as well as for rendering.
  *
+ * Frozen, like its source: `Object.values` hands back a fresh MUTABLE array,
+ * and by the asymmetry above this is the list where a stray mutation fails
+ * silently — a deleted provider's endorsements simply survive. Compile-time
+ * `readonly` is erased and would not have stopped it.
+ *
  * Used by exportUserData (export references where the user is the provider)
  * and deleteUser (erase them). The submitter side is keyed separately by
  * `submittedByUserId` / `submittedByFamilyId`, which are shared across apps.
  */
-export const REFERENCE_PROVIDER_KEYS = Object.values(ENDORSEMENT_SUBJECT_FIELD);
+export const REFERENCE_PROVIDER_KEYS = Object.freeze(
+  Object.values(ENDORSEMENT_SUBJECT_FIELD),
+);

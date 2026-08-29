@@ -195,9 +195,13 @@ export function ExpandableBabysitterCard({
     const babysitterUserId = appointment.babysitterUserId;
     if (!expanded || !babysitterUserId) return;
     if (refsCompleteFor.current === babysitterUserId) return; // cached, in full
+    // Stamped BEFORE the in-flight early return, not after: if the uid changes
+    // mid-load, the running load must be able to recognise ITSELF as stale.
+    // Set it later and a load for the previous babysitter would still match on
+    // resolve and latch their endorsements onto the new one, permanently.
+    refsRequestedFor.current = babysitterUserId;
     if (refsInFlight.current) return; // a load is already running
     refsInFlight.current = true;
-    refsRequestedFor.current = babysitterUserId;
     const sources = endorsementSources('sit');
     // allSettled, NOT all: with one query the failure mode was "this card's
     // endorsements are missing"; with three, Promise.all would let a failure in
