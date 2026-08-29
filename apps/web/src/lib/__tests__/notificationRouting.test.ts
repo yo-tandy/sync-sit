@@ -28,6 +28,7 @@ describe('sit notificationRouting', () => {
         'guardian_mirror',
         'guardian_action',
         'guardian_searchable',
+        'supervised_account_deleted',
       ].sort(),
     );
   });
@@ -79,6 +80,10 @@ describe('sit notificationRouting', () => {
     ['guardian_invite_accepted', '/family/governance'],
     ['guardian_action', null],
     ['guardian_searchable', null],
+    // Issue #368: listed (so the guardian's durable copy renders) but
+    // deliberately unrouted — the child and their governance page are gone by
+    // the time this arrives.
+    ['supervised_account_deleted', null],
   ] as const)('parent: %s -> %s', (type, route) => {
     expect(notificationRoute(type, {}, 'parent')).toBe(route);
   });
