@@ -536,6 +536,27 @@ describe('GDPR coverage for sync-do data (§11.4)', () => {
       });
     });
 
+    // The 404 race the round-3 review named: the daily quarantine sweep (or
+    // an admin retrying after a partial failure) can remove an object
+    // between the erasure's listing and its deletes. Without
+    // `ignoreNotFound` that benign no-op aborts a GDPR hard-delete partway,
+    // leaving the user document and Auth account live. Simulated by deleting
+    // one object out from under the erasure before the callable runs.
+    it('tolerates an object vanishing between the listing and the delete', async () => {
+      await seedPhoto(seed.parent1.uid, 'racy-1');
+      await seedPhoto(seed.parent1.uid, 'racy-2', 'do-uploads');
+      // Gone already — the state a concurrent sweep leaves behind.
+      await getBucket().file(`do-uploads/${seed.parent1.uid}/racy-2`).delete();
+
+      await callFunction('deleteUser', { targetUserId: seed.parent1.uid }, adminToken);
+
+      // The erasure completed: the remaining object is gone AND the account
+      // was actually deleted, which is what a mid-way throw would have
+      // prevented.
+      expect(await objectExists(`do-photos/${seed.parent1.uid}/racy-1`)).toBe(false);
+      expect((await getDb().collection('users').doc(seed.parent1.uid).get()).exists).toBe(false);
+    });
+
     it("leaves an unrelated family's task and photos completely untouched", async () => {
       await seedPhoto(seed.parent1.uid, 'mine-1');
       await seedPhoto(seed.parent3.uid, 'theirs-1');

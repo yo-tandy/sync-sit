@@ -377,22 +377,38 @@ export async function eraseDoUserData(
   stats.assignmentsCleared = survivingAssignments.length;
 
   // ── 3. Photo objects: both prefixes, wholesale ──
-  // `deleteFiles({ force: true })` rather than an awaited per-object loop:
-  // this is the first Storage work `deleteUser` does at all, and a sequential
-  // loop over a large `do-uploads` backlog (quarantine objects are only swept
-  // daily) is the slowest step in the callable — a timeout or a Storage 5xx
-  // here throws BEFORE the user doc and Auth account are deleted, leaving
-  // tasks and objects gone but the account intact and no audit entry written.
-  // `force` parallelises and continues past individual failures, shortening
-  // that window. The count comes from the preceding listing, which is the
-  // same number the per-object loop produced.
+  // ONE listing, then bounded-concurrency deletes from it — deliberately not
+  // `bucket.deleteFiles()`.
+  //
+  // `deleteFiles` re-streams the same prefix internally, so pairing it with a
+  // `getFiles` for the count lists everything twice — the exact cost the
+  // parallelism was meant to save. Worse, its `query` is forwarded verbatim
+  // to each `file.delete(query)`, which is how an earlier revision of this
+  // block silently lost `ignoreNotFound: true`. That option is not
+  // decoration here: the daily quarantine sweep can remove a
+  // `do-uploads/{uid}/` object between the listing and the delete, and an
+  // admin re-running `deleteUser` after any partial failure hits the same
+  // race. Without it a benign 404 aborts a GDPR erasure.
+  //
+  // On aborting: a Storage failure SHOULD still throw. An earlier revision
+  // justified `force` as "shortening the abort window" before
+  // `userRef.delete()`; that was wrong twice over — `force` aggregates
+  // per-file errors and rejects anyway, and more importantly aborting is the
+  // behaviour we want. Every step here is re-runnable, so a throw leaves the
+  // account alive and the erasure retryable; swallowing the error would
+  // delete the account and report success over objects that are still there.
+  // A failed erasure that says so beats a partial one that doesn't.
   const bucket = getStorage().bucket();
+  const DELETE_CONCURRENCY = 20;
   for (const prefix of [DO_PHOTOS_PREFIX, DO_UPLOADS_PREFIX]) {
-    const scoped = `${prefix}${targetUserId}/`;
-    const [files] = await bucket.getFiles({ prefix: scoped });
-    if (files.length === 0) continue;
-    await bucket.deleteFiles({ prefix: scoped, force: true });
-    stats.photoObjectsDeleted += files.length;
+    const [files] = await bucket.getFiles({ prefix: `${prefix}${targetUserId}/` });
+    for (let i = 0; i < files.length; i += DELETE_CONCURRENCY) {
+      const chunk = files.slice(i, i + DELETE_CONCURRENCY);
+      await Promise.all(chunk.map((file) => file.delete({ ignoreNotFound: true })));
+      // Counted per settled delete, so the number is what this call actually
+      // removed rather than what a prior listing happened to see.
+      stats.photoObjectsDeleted += chunk.length;
+    }
   }
 
   // ── 4. Dangling-reference scrub on the family's SURVIVING tasks ──
