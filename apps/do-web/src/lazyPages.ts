@@ -36,8 +36,8 @@ export const DoerEnrollment = lazy(() =>
   import('@/pages/enrollment/doer/DoerEnrollment').then((m) => ({ default: m.DoerEnrollment })),
 );
 
-// Doer portal (plan §13 PR8) — the board at /home is the app's home
-// screen (§9.2).
+// Doer portal (plan §13 PR8, namespaced under /doer/* by issue #296) —
+// the board at /doer/board is the app's home screen (§9.2).
 export const BoardPage = lazy(() =>
   import('@/pages/doer/BoardPage').then((m) => ({ default: m.BoardPage })),
 );

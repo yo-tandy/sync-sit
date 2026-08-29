@@ -8,7 +8,7 @@ import { DoerAppBar } from '@/components/ui/DoerAppBar';
  * Doer portal shell (plan §13 PR8) — FamilyLayout's shape: guard on
  * role="doer" (admins pass through, see AuthGuard), the portal's own app
  * bar, and the desktop width cap around a Suspense'd Outlet. Replaces the
- * PR2 placeholder HomeLayout: the board at /home IS the app's home screen
+ * PR2 placeholder HomeLayout: the board at /doer/board IS the app's home screen
  * (plan §9.2).
  */
 export function DoerLayout() {

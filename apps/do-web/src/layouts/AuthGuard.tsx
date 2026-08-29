@@ -5,7 +5,7 @@ import { getDoRole, type DoRole } from '@/utils/doRole';
 interface AuthGuardProps {
   /** Portal role this route belongs to. Since PR8 every authenticated
    * route is role-guarded: 'parent' for the family portal, 'doer' for the
-   * doer portal (whose /home board replaced the PR2 placeholder shell). */
+   * doer portal (whose /doer/board replaced the PR2 placeholder shell). */
   role: DoRole;
   children: React.ReactNode;
 }
@@ -24,7 +24,7 @@ interface AuthGuardProps {
  * and the doer portal is the one whose reads work for them: §7.2's
  * `isAdmin()` disjuncts make `doTasks`/`taskOffers` admin-readable
  * (caller-based, so the board query stays provable), and the uid-scoped
- * lists simply come back empty. Bouncing admins off /home instead would
+ * lists simply come back empty. Bouncing admins off /doer instead would
  * loop the guard against its own mismatch fallback.
  */
 export function AuthGuard({ role, children }: AuthGuardProps) {
@@ -41,11 +41,11 @@ export function AuthGuard({ role, children }: AuthGuardProps) {
   if (doRole !== role && !(role === 'doer' && doRole === 'admin')) {
     // Role-mismatch fallback mirrors postLoginRouter so the guard and the
     // post-login router agree: parents to /family; doers (and admins, per
-    // the pass-through above) to the board at /home. An account with no
+    // the pass-through above) to the doer portal. An account with no
     // sync-do role falls through to /signup to add one rather than
     // dead-ending.
     if (doRole === 'parent') return <Navigate to="/family" replace />;
-    if (doRole === 'doer' || doRole === 'admin') return <Navigate to="/home" replace />;
+    if (doRole === 'doer' || doRole === 'admin') return <Navigate to="/doer" replace />;
     return <Navigate to="/signup" replace />;
   }
 
