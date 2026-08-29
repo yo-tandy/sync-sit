@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Link } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
-import { getParentProfile, hasFamilyMembership } from '@ejm/shared-core';
+import { getParentProfile, hasFamilyMembership, PAST_VISIBILITY_DAYS } from '@ejm/shared-core';
 import type { StudyContactRequestDoc } from '@ejm/study-core';
 import type { RecurringSlot } from '@ejm/shared-core';
 import type { StudySessionDoc } from '@/types/studySession';
@@ -90,6 +90,7 @@ const DAY_FULL: Record<RecurringSlot['day'], string> = {
  */
 export function DashboardPage() {
   const { t, i18n } = useTranslation();
+  const navigate = useNavigate();
   const { userDoc } = useAuthStore();
   const familyId = getParentProfile(userDoc)?.familyId ?? null;
 
@@ -149,7 +150,25 @@ export function DashboardPage() {
     getDocs(query(collection(db, 'studyContactRequests'), where('familyId', '==', familyId)))
       .then((snap) => {
         if (!mountedRef.current) return;
-        const rows = snap.docs.map((d) => d.data() as StudyContactRequestDoc);
+        // `accepted` is TERMINAL for a contact request -- nothing moves it
+        // onward and it carries no date -- so keeping every one of them would
+        // grow the requests section without bound: a family that has worked
+        // with eight tutors would open the app to eight permanent green rows
+        // above the sessions that matter (PR #345 review). Counting N and
+        // listing N are different costs. Bound them by the same visibility
+        // window sit bounds its past/rejected appointments with. Pending rows
+        // stay unbounded -- they are still actionable -- and a doc with
+        // neither timestamp (legacy) is kept rather than silently disappeared.
+        // Applied HERE rather than in render: the cutoff reads the clock, and
+        // render must stay pure.
+        const cutoff = Date.now() / 1000 - PAST_VISIBILITY_DAYS * 24 * 60 * 60;
+        const rows = snap.docs
+          .map((d) => d.data() as StudyContactRequestDoc)
+          .filter((r) => {
+            if (r.status !== 'accepted') return true;
+            const respondedSeconds = r.respondedAt?.seconds ?? r.updatedAt?.seconds;
+            return respondedSeconds === undefined || respondedSeconds >= cutoff;
+          });
         rows.sort((a, b) => (b.createdAt?.seconds ?? 0) - (a.createdAt?.seconds ?? 0));
         setRequests(rows);
         setRequestsError(false);
@@ -239,6 +258,9 @@ export function DashboardPage() {
 
   // ── Your requests: the rows still in play. Declined/cancelled history
   // stays on /family/requests — a landing page shows what is live. ──
+  // Declined/cancelled history stays on /family/requests — a landing page
+  // shows what is live. (Stale `accepted` rows were already dropped at load,
+  // where the clock read belongs.)
   const activeRequests = (requests ?? []).filter(
     (r) => r.status === 'pending' || r.status === 'accepted',
   );
@@ -260,7 +282,14 @@ export function DashboardPage() {
         (s.status === 'pending' || s.status === 'confirmed') &&
         (s.type === 'recurring' || (!!s.date && s.date >= today)),
     )
-    .map((s) => ({ s, sortDate: s.type === 'one_time' ? (s.date as string) : '9999-12-31' }))
+    // Key on date+time, not the bare date: sort() is stable, so two sessions
+    // on the same day would otherwise keep loadSessions' createdAt-DESCENDING
+    // order and render the later one first (PR #345 review). The sentinel
+    // still compares greater than any real key, so recurring sorts last.
+    .map((s) => ({
+      s,
+      sortDate: s.type === 'one_time' ? `${s.date}T${s.startTime ?? '00:00'}` : '9999-12-31',
+    }))
     .sort((a, b) => (a.sortDate < b.sortDate ? -1 : a.sortDate > b.sortDate ? 1 : 0))
     .map((e) => e.s);
   // A tutor PROPOSAL is ours to answer; a booking we sent awaits the tutor.
@@ -309,12 +338,10 @@ export function DashboardPage() {
           (FamilyAppBar has no /family/search entry) — so it never depends on
           a snapshot that can fail. Sit's family landing has the same one. ── */}
       {isVerified === true && (
-        <Link to="/family/search" className="mb-6 block">
-          <Button className="h-14 text-lg">
-            <SearchIcon className="h-5 w-5" />
-            {t('family.dashboard.searchCardTitle')}
-          </Button>
-        </Link>
+        <Button className="mb-6 h-14 text-lg" onClick={() => navigate('/family/search')}>
+          <SearchIcon className="h-5 w-5" />
+          {t('family.dashboard.searchCardTitle')}
+        </Button>
       )}
 
       {/* ── The two sections (issue #338) ── */}

@@ -104,6 +104,11 @@ Study gives families `/family/requests` and `/family/sessions` as first-class pa
 sit embedded appointments in the family dashboard until #256 added
 `/family/appointments` (the dashboard keeps a summary card). Sit's dashboard-centric layout is the production-verified one; study's
 dedicated pages scale better as volume grows.
+*Addendum (2026-08-29, #338):* the dedicated pages stand, but the summary card
+does not — the owner asked both parent landing pages to carry the PROVIDER
+dashboards' collapsible sections, so sit's summary card and study's tile hub
+were both replaced by live "requests"/"sessions" sections. The pages still own
+every action and the past/declined history.
 **Options:** (a) keep each app as-is and declare it deliberate · (b) add
 `/family/appointments` to sit mirroring study's page shape · (c) fold study's pages
 into its dashboard to match sit. My read: (b) if sit families ever have >3 concurrent
@@ -183,7 +188,9 @@ drift with no privacy rationale behind it (UI doc §4).
 ### Cross-references into existing items
 
 - **Q1 (dedicated family pages vs dashboard)** now has visual evidence: UI doc §2
-  shows sit content-first vs study tile-hub side by side.
+  shows sit content-first vs study tile-hub side by side. *(Superseded 2026-08-29
+  by #338: study's tile hub is gone — both landing pages are now content-first,
+  in the provider dashboards' section idiom.)*
 - The search **entry** difference (sit two-step wizard vs study single form, UI doc
   §3) is *not* proposed for convergence: the wizard exists because sit must choose
   one-time vs recurring before the form makes sense; study has no type split. Added

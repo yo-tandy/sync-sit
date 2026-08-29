@@ -13,6 +13,7 @@ import { getParentProfile } from '@ejm/sit-core';
 import { hasFamilyMembership } from '@ejm/shared-core';
 import { useRefetchOnFocus, DashboardGreeting, DashboardSection } from '@ejm/shared-ui';
 import { formatFamilyTitle } from '@/lib/formatName';
+import { parisNowStamp } from '@/lib/appointmentTime';
 import { CrossAppWelcomeCard } from '@/components/family/CrossAppWelcomeCard';
 
 /** Soonest-first ordering for a section's rows. A recurring appointment has no
@@ -116,11 +117,22 @@ export function FamilyDashboard() {
   // /family/appointments page (reached from the hamburger menu) still owns
   // every action and the past/declined history, so nothing moved back here
   // except the two live lists the owner asked to see. ──
-  const requestRows = [...pending].sort(bySoonest);
+  // Date floor, matching the study page's rule (PR #345 review): nothing
+  // server-side ever expires a pending appointment -- cleanupOldData
+  // documents pending retention as deliberately unbounded -- and
+  // useFamilyAppointments gives `pending` no date treatment at all (only
+  // CONFIRMED docs get bucketed into pastRecent once they end). Sorted
+  // soonest-first, a request for a date that has passed would pin itself to
+  // the very first row, forever, with nothing either side can do about it
+  // from here. A recurring request has no date and always stays.
+  const today = parisNowStamp().slice(0, 10);
+  const requestRows = pending.filter((a) => !a.date || a.date >= today).sort(bySoonest);
   // The badge is a TO-DO count. A request the FAMILY sent is waiting on the
   // babysitter; only one a babysitter opened by answering our published search
   // asks something of us (issue #207 PR3), so only those count.
   const requestsTodo = requestRows.filter((a) => a.initiatedBy === 'babysitter').length;
+  // No floor needed here: the hook already moves a confirmed appointment into
+  // pastRecent once date+endTime is behind us.
   const appointmentRows = [...confirmed].sort(bySoonest);
   const hasAny = requestRows.length > 0 || appointmentRows.length > 0;
 

@@ -73,6 +73,27 @@ function installLocalStorageStub() {
   Object.defineProperty(globalThis, 'localStorage', { value: ls, configurable: true });
 }
 
+/** Paris "YYYY-MM-DD" for today + N days — the same wall-clock the page reads,
+ * so the date floor holds in any test-runner timezone. */
+function parisDatePlus(days: number): string {
+  const todayStr = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Paris',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
+  const [y, m, d] = todayStr.split('-').map(Number);
+  const shifted = new Date(y, m - 1, d + days);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${shifted.getFullYear()}-${pad(shifted.getMonth() + 1)}-${pad(shifted.getDate())}`;
+}
+
+/** The "d MMM" fragment the row renders for a given ISO date. */
+function shortDate(iso: string): string {
+  const [y, m, d] = iso.split('-').map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString('en-GB', { month: 'short', day: 'numeric' });
+}
+
 function apt(id: string, status: string, extra: Record<string, unknown> = {}) {
   return {
     appointmentId: id,
@@ -172,6 +193,29 @@ describe('family DashboardPage — requests & appointments sections (issue #338)
     expect(lines[0]).toMatch(/Wed.*2 Sep.*· 08:00–09:00/);
     expect(lines[1]).toMatch(/Sun.*20 Sep.*· 09:00–10:00/);
     expect(lines[2]).toBe('Mon 17:00–19:00');
+  });
+
+  it('drops a past-dated pending request — nothing server-side expires one', () => {
+    // useFamilyAppointments gives `pending` no date treatment (only CONFIRMED
+    // docs get bucketed into pastRecent), and cleanupOldData documents pending
+    // retention as deliberately unbounded. Sorted soonest-first, a request for
+    // a date that has passed would otherwise pin itself to the FIRST row
+    // forever (PR #345 review). A recurring request has no date and stays.
+    h.apts.pending = [
+      apt('a-old', 'pending', { date: parisDatePlus(-5) }),
+      apt('a-soon', 'pending', { date: parisDatePlus(5) }),
+      apt('a-recurring', 'pending', {
+        date: undefined,
+        recurringSlots: [{ day: 'mon', startTime: '17:00', endTime: '19:00' }],
+      }),
+    ];
+    renderPage();
+    expect(screen.getByRole('heading', { name: 'Your requests' })).toBeTruthy();
+    // The future request and the dateless recurring one render...
+    expect(screen.getByText(new RegExp(shortDate(parisDatePlus(5))))).toBeTruthy();
+    expect(screen.getByText('Mon 17:00–19:00')).toBeTruthy();
+    // ...the past-dated one does not, so it cannot claim the first row.
+    expect(screen.queryByText(new RegExp(shortDate(parisDatePlus(-5))))).toBeNull();
   });
 
   it('collapses a section when its header is clicked', () => {

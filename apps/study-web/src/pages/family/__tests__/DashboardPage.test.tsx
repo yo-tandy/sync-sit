@@ -148,7 +148,7 @@ describe('family DashboardPage', () => {
       '/family/verification',
     );
     // No search button while unverified.
-    expect(screen.queryByRole('link', { name: /find a tutor/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /find a tutor/i })).not.toBeInTheDocument();
   });
 
   it('treats an absent verification field as not verified (banner shown)', async () => {
@@ -162,8 +162,11 @@ describe('family DashboardPage', () => {
   it('shows the find-a-tutor button (and hides the banner) when fully verified', async () => {
     h.familyData = { familyName: 'Cohen', verification: { isFullyVerified: true } };
     renderWithProviders(<DashboardPage />);
-    const cta = await screen.findByRole('link', { name: /find a tutor/i });
-    expect(cta).toHaveAttribute('href', '/family/search');
+    // A real <button>, not a <button> nested inside an <a> — invalid HTML and
+    // an ARIA nested-interactive violation (PR #345 review). Same markup as
+    // sit's search CTA, which is the layout this page is matching.
+    const cta = await screen.findByRole('button', { name: /find a tutor/i });
+    expect(cta.closest('a')).toBeNull();
     expect(screen.queryByText(/verify your family/i)).not.toBeInTheDocument();
   });
 
@@ -174,7 +177,7 @@ describe('family DashboardPage', () => {
     h.sessions = [session()];
     renderWithProviders(<DashboardPage />);
     await screen.findByText('Your sessions');
-    expect(screen.getAllByRole('link', { name: /find a tutor/i })).toHaveLength(1);
+    expect(screen.getAllByRole('button', { name: /find a tutor/i })).toHaveLength(1);
   });
 
   it('the search button survives a failed requests read (it is the only way into search)', async () => {
@@ -187,9 +190,7 @@ describe('family DashboardPage', () => {
       return Promise.resolve({ docs: [] });
     });
     renderWithProviders(<DashboardPage />);
-    const links = await screen.findAllByRole('link', { name: /find a tutor/i });
-    expect(links).toHaveLength(1);
-    expect(links[0]).toHaveAttribute('href', '/family/search');
+    expect(await screen.findAllByRole('button', { name: /find a tutor/i })).toHaveLength(1);
   });
 
   it('renders the two SECTIONS with rows, replacing the old summary tiles', async () => {
@@ -288,6 +289,74 @@ describe('family DashboardPage', () => {
     expect(screen.getByText('Every Monday 17:00–18:00')).toBeInTheDocument();
   });
 
+  it('orders same-day sessions by start time, not by when they were booked', async () => {
+    // sort() is stable, so a bare-date key would keep loadSessions'
+    // createdAt-DESCENDING order for two sessions on the same day (PR #345
+    // review). The later-booked 17:00 must still render after the 09:00.
+    h.sessions = [
+      session({
+        sessionId: 's-late',
+        date: '2099-03-10',
+        startTime: '17:00',
+        tutorName: 'Evening',
+        createdAt: { seconds: 2000 },
+      }),
+      session({
+        sessionId: 's-early',
+        date: '2099-03-10',
+        startTime: '09:00',
+        tutorName: 'Morning',
+        createdAt: { seconds: 1000 },
+      }),
+    ];
+    renderWithProviders(<DashboardPage />);
+    await screen.findByRole('heading', { name: 'Your sessions' });
+    const names = screen.getAllByText(/^(Evening|Morning)$/).map((n) => n.textContent);
+    expect(names).toEqual(['Morning', 'Evening']);
+  });
+
+  it('bounds the accepted requests by recency, and keeps a timestamp-less legacy doc', async () => {
+    // `accepted` is terminal and carries no date, so without a bound this
+    // section grows forever (PR #345 review). PAST_VISIBILITY_DAYS is 7.
+    const nowSeconds = Date.now() / 1000;
+    h.requests = [
+      request({
+        requestId: 'r-recent',
+        status: 'accepted',
+        tutorName: 'Recent',
+        respondedAt: { seconds: nowSeconds - 2 * 24 * 60 * 60 },
+      }),
+      request({
+        requestId: 'r-stale',
+        status: 'accepted',
+        tutorName: 'Stale',
+        respondedAt: { seconds: nowSeconds - 30 * 24 * 60 * 60 },
+      }),
+      // No respondedAt/updatedAt at all: kept rather than silently vanished.
+      request({ requestId: 'r-legacy', status: 'accepted', tutorName: 'Legacy' }),
+    ];
+    renderWithProviders(<DashboardPage />);
+    await screen.findByRole('heading', { name: 'Your requests' });
+    expect(screen.getByText('Recent')).toBeInTheDocument();
+    expect(screen.getByText('Legacy')).toBeInTheDocument();
+    expect(screen.queryByText('Stale')).not.toBeInTheDocument();
+  });
+
+  it('keeps an old PENDING request — only accepted rows are bounded', async () => {
+    // A pending request is still actionable, so the recency bound must not
+    // reach it.
+    h.requests = [
+      request({
+        requestId: 'r1',
+        tutorName: 'Waiting',
+        createdAt: { seconds: Date.now() / 1000 - 90 * 24 * 60 * 60 },
+      }),
+    ];
+    renderWithProviders(<DashboardPage />);
+    await screen.findByRole('heading', { name: 'Your requests' });
+    expect(screen.getByText('Waiting')).toBeInTheDocument();
+  });
+
   it('drops a past one_time session from the sessions section', async () => {
     // Nothing server-side expires an unanswered booking, so a date floor keeps
     // last month's request out of the landing page.
@@ -369,7 +438,7 @@ describe('family DashboardPage', () => {
     // Rows intact, still verified, and no error banner over rendered content.
     expect(screen.getByText('Sarah')).toBeInTheDocument();
     expect(screen.getByText('Leo')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /find a tutor/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /find a tutor/i })).toBeInTheDocument();
     expect(screen.queryByText(/could not load/i)).not.toBeInTheDocument();
   });
 
@@ -415,7 +484,7 @@ describe('family DashboardPage — family-less parent recovery state (issue #293
     );
     // None of the normal dashboard surfaces render underneath.
     expect(screen.queryByText('Nothing booked yet')).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: /find a tutor/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /find a tutor/i })).not.toBeInTheDocument();
   });
 
   it('a MEMBERED parent (profile familyId) never sees the family-less state', async () => {
