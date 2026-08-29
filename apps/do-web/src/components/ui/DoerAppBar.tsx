@@ -42,10 +42,9 @@ function MenuItem({ icon, label, to, onClick, onNavigate }: { icon: React.ReactN
 /**
  * Sync/Do doer portal app bar (plan §13 PR8) — FamilyAppBar's shape
  * (chrome intentionally duplicated per portal), with the doer's three
- * primary destinations: the board (§9.2), my
- * offers, and my tasks (assigned work). The burger carries the public
- * pages, the OUT-going app switch (plan §9.5's asymmetric shape) and
- * sign-out.
+ * primary destinations: the board (§9.2), my offers, and my tasks (assigned
+ * work). The burger carries the public pages, the OUT-going app switch (plan
+ * §9.5's asymmetric shape) and sign-out.
  *
  * "My endorsements" (§9.2, PR11) sits in the BURGER, not in the tab bar:
  * the three tabs are the app's daily loop (find work, track offers, do the
