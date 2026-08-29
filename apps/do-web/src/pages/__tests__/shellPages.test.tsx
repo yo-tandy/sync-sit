@@ -27,7 +27,6 @@ import { WelcomePage } from '@/pages/public/WelcomePage';
 import { SignUpRolePage } from '@/pages/public/SignUpRolePage';
 import { ComingSoonPage } from '@/pages/public/ComingSoonPage';
 import { AboutPage } from '@/pages/public/AboutPage';
-import { HomePage } from '@/pages/home/HomePage';
 
 beforeEach(() => {
   h.auth = { firebaseUser: null, userDoc: null, loading: false, logout: vi.fn() };
@@ -100,19 +99,5 @@ describe('AboutPage', () => {
       'href',
       'mailto:support@sync-do.com',
     );
-  });
-});
-
-describe('HomePage (authenticated shell placeholder)', () => {
-  it('renders the coming-soon card and both app-switch entries', () => {
-    renderWithProviders(<HomePage />);
-    expect(screen.getByText(/sync\/do is on its way/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /open sync-sit/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /open sync-study/i })).toBeInTheDocument();
-  });
-
-  it('offers sign-out', () => {
-    renderWithProviders(<HomePage />);
-    expect(screen.getByRole('button', { name: /sign out/i })).toBeInTheDocument();
   });
 });

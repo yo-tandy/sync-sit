@@ -4,7 +4,7 @@ import { PrivacyPage, TermsPage } from '@ejm/shared-ui';
 // Layouts stay EAGER — the shell (AuthGuard, chrome) renders on every route,
 // so deferring it would only put a spinner in front of itself.
 import { PublicLayout } from '@/layouts/PublicLayout';
-import { HomeLayout } from '@/layouts/HomeLayout';
+import { DoerLayout } from '@/layouts/DoerLayout';
 import { FamilyLayout } from '@/layouts/FamilyLayout';
 
 // Route pages are code-split — each is a lazy() dynamic import (its own
@@ -18,7 +18,11 @@ import {
   ReportProblemPage,
   ComingSoonPage,
   DoerEnrollment,
-  HomePage,
+  BoardPage,
+  DoerTaskDetailPage,
+  OfferPage,
+  MyOffersPage,
+  MyWorkPage,
   MyTasksPage,
   PostTaskPage,
   TaskDetailPage,
@@ -49,8 +53,16 @@ export const router = createBrowserRouter([
     ],
   },
   {
-    element: <HomeLayout />,
-    children: [{ path: '/home', element: <HomePage /> }],
+    // Doer portal (plan §13 PR8): the board at /home is the app's home
+    // screen (§9.2); routes sit behind the doer-role guard in DoerLayout.
+    element: <DoerLayout />,
+    children: [
+      { path: '/home', element: <BoardPage /> },
+      { path: '/tasks/:taskId', element: <DoerTaskDetailPage /> },
+      { path: '/tasks/:taskId/offer', element: <OfferPage /> },
+      { path: '/offers', element: <MyOffersPage /> },
+      { path: '/work', element: <MyWorkPage /> },
+    ],
   },
   {
     element: <FamilyLayout />,

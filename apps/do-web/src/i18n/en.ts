@@ -624,13 +624,6 @@ export default {
     error: 'Could not switch apps. Please try again.',
   },
 
-  home: {
-    title: 'Home',
-    comingSoonTitle: 'Sync/Do is on its way',
-    comingSoonBody: 'The task board is being built. Soon, families will post everyday tasks here — gardening, moving boxes, furniture assembly and more — and EJM students will offer to help.',
-    switchHint: 'Your account already works across the Sync apps:',
-  },
-
   comingSoon: {
     title: 'Coming soon',
     body: 'Sign-up for Sync/Do is not open yet — enrollment is being built. If you already have a Sync/Sit or Sync/Study account, it will work here as-is once Sync/Do opens.',

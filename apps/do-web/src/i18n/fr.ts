@@ -624,13 +624,6 @@ export default {
     error: "Impossible de changer d'application. Veuillez réessayer.",
   },
 
-  home: {
-    title: 'Accueil',
-    comingSoonTitle: 'Sync/Do arrive bientôt',
-    comingSoonBody: "Le tableau des tâches est en cours de construction. Bientôt, les familles publieront ici leurs tâches du quotidien — jardinage, cartons, montage de meubles et plus encore — et les élèves de l'EJM proposeront leur aide.",
-    switchHint: 'Votre compte fonctionne déjà sur les apps Sync :',
-  },
-
   comingSoon: {
     title: 'Bientôt disponible',
     body: "L'inscription à Sync/Do n'est pas encore ouverte — l'enrôlement est en cours de construction. Si vous avez déjà un compte Sync/Sit ou Sync/Study, il fonctionnera ici tel quel dès l'ouverture de Sync/Do.",
