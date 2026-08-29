@@ -162,6 +162,19 @@ describe('AppSwitchBar', () => {
     expect(h.assign).not.toHaveBeenCalled();
   });
 
+  it('omits the account tab entirely when there is nowhere for it to go', () => {
+    // sync-do ships no account page (plan §18.3) — the shared hub owns
+    // identity and do contributes only doer settings. Until #367 exists there
+    // is no route to point at, and a tab leading nowhere is worse than none.
+    render(
+      <I18nextProvider i18n={i18n}>
+        <AppSwitchBar current="do" siblings={SIBLINGS} mintHandoffCode={vi.fn()} />
+      </I18nextProvider>,
+    );
+    expect(screen.queryByRole('button', { name: /my account/i })).toBeNull();
+    expect(screen.getByRole('button', { name: /sync\/do/ })).toBeInTheDocument();
+  });
+
   it('the current app tab is inert unless a home target is given', () => {
     renderBar();
     expect(screen.getByRole('button', { name: /sync\/sit/ })).toBeDisabled();

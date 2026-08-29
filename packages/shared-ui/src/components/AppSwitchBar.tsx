@@ -20,12 +20,20 @@ export interface AppSwitchBarProps {
    * of its own; each app passes a thin wrapper over its own callable.
    */
   mintHandoffCode: () => Promise<string>;
-  /** Where the account tab goes within THIS app. */
-  accountHref: string;
+  /**
+   * Where the account tab goes within THIS app.
+   *
+   * OMIT IT AND THE TAB IS NOT RENDERED. sync-do has no account route by
+   * design (plan §18.3 -- do-web ships no account page; the shared hub owns
+   * identity and do contributes only a doer-settings screen), so until the hub
+   * exists (#367) there is nowhere for that tab to go. A tab pointing at a
+   * route that does not exist is worse than an absent one.
+   */
+  accountHref?: string;
   /** True when the account view is the one on screen. */
   accountActive?: boolean;
   /** Same-origin navigation for the account tab (router push). */
-  onNavigateAccount: (href: string) => void;
+  onNavigateAccount?: (href: string) => void;
   /** Where the current app's own tab goes when tapped. Omit to make it inert. */
   homeHref?: string;
   onNavigateHome?: (href: string) => void;
@@ -142,12 +150,13 @@ export function AppSwitchBar({
           );
         })}
 
+        {accountHref && (
         <li className="flex-1">
           <button
             type="button"
             aria-current={accountActive ? 'page' : undefined}
             disabled={busyApp !== null}
-            onClick={() => onNavigateAccount(accountHref)}
+            onClick={() => onNavigateAccount?.(accountHref)}
             className={`flex w-full flex-col items-center gap-1 px-1 py-2 text-[11px] font-semibold transition-colors ${
               // Neutral, not branded: the account is shared and app-agnostic
               // (decision 24), so it must not wear the host app's colour.
@@ -160,6 +169,7 @@ export function AppSwitchBar({
             <span className="truncate">{t('appSwitch.account')}</span>
           </button>
         </li>
+        )}
       </ul>
     </nav>
   );

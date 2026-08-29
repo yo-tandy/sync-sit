@@ -3,6 +3,7 @@ import { Outlet } from 'react-router';
 import { PageContainer, Spinner } from '@ejm/shared-ui';
 import { AuthGuard } from './AuthGuard';
 import { DoerAppBar } from '@/components/ui/DoerAppBar';
+import { AppSwitchBarHost } from '@/components/ui/AppSwitchBarHost';
 
 /**
  * Doer portal shell (plan §13 PR8) — FamilyLayout's shape: guard on
@@ -14,7 +15,9 @@ import { DoerAppBar } from '@/components/ui/DoerAppBar';
 export function DoerLayout() {
   return (
     <AuthGuard role="doer">
-      <div className="min-h-screen bg-white">
+      {/* pb-16 clears the fixed app-switch bar on phones; the bar is
+          md:hidden so the padding lifts at the same breakpoint. */}
+      <div className="min-h-screen bg-white pb-16 md:pb-0">
         <DoerAppBar />
         <PageContainer>
           <Suspense
@@ -27,6 +30,7 @@ export function DoerLayout() {
             <Outlet />
           </Suspense>
         </PageContainer>
+        <AppSwitchBarHost />
       </div>
     </AuthGuard>
   );
