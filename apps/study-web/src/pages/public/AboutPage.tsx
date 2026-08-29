@@ -11,7 +11,6 @@ import {
 import { SUPPORT_EMAIL } from '@/constants/brand';
 import sitBrandMark from '@ejm/shared-ui/brand-marks/sync-sit.png';
 import { SIT_APP_URL } from '@/utils/appSwitch';
-import { SUPPORT_EMAIL } from '@/constants/brand';
 
 export function AboutPage() {
   const { t, i18n } = useTranslation();
