@@ -17,7 +17,31 @@ Notes:
 - Each lane spawns its own Java Firestore emulator (~hundreds of MB); two concurrent lanes plus the dev stack is a sensible ceiling on a laptop. Lane 3 exists for exactly that second concurrent session, lane 4 for a third; for a fifth lane, copy the config with a different offset and add a matching script.
 - Lanes are fully isolated: same `demo-test` project id is fine, data never crosses lanes.
 - To run a subset of the suite against LANE 2 (lane 3: same shape, ports +10000), keep the env vars on the command: `cd tests && TEST_FIRESTORE_PORT=18080 TEST_AUTH_PORT=19099 TEST_FUNCTIONS_PORT=15001 TEST_STORAGE_PORT=19199 pnpm exec vitest run <path>` — without them the subset silently targets lane 1, where `clearStorage()` wipes the dev bucket (the exact footgun this lane exists to remove). Do NOT use `pnpm test -- <path>`: pnpm forwards the literal `--` and vitest silently discards everything after it, running the full suite while appearing to accept your filter.
-- The seed scripts (`pnpm seed:admin`, `seed-test-data.cjs`) are deliberately NOT lane-aware — they pin the default ports and seed the DEV stack. Lane 2 seeds itself per-test; there is nothing to seed there by hand.
+- The integration suite seeds itself per test, so a lane driven only by `pnpm test:integration:laneN` never needs hand-seeding. Hand-seeding is for the browser-driven case; the seed scripts take the same lane dial — see "Seeding a lane" below.
+
+## Seeding a lane
+
+A lane you start by hand comes up EMPTY. Until issue #376 the seed scripts pinned lane 1, so pointing an app at lane 3 gave you an app talking to an empty stack, and the standing workaround was a hand-patched copy of the seed script per lane (`seed-admin.lane3.cjs`) — one more thing to keep in sync with the real one, and one more way to write to the dev stack by accident.
+
+Both seed scripts now read the lane from env, through the **same resolver** the web apps use (`packages/shared-core/src/utils/emulatorConfig.ts`), so the browser and the seeder cannot disagree about where lane 3 is. The names are plain rather than `VITE_`-prefixed — these are Node scripts, and Vite only exposes `VITE_` vars to a browser bundle:
+
+| Var | Default | Effect |
+|---|---|---|
+| `EMULATOR_LANE` (also `LANE`, `E2E_LANE`) | `1` | Shifts all four ports by `(lane - 1) * 10000`, the same offsets as above. Valid 1–6. |
+| `EMULATOR_HOST` | per script — `localhost` for `seed-admin.cjs`, `127.0.0.1` for `seed-test-data.cjs` | Host for the emulators. |
+| `EMULATOR_{AUTH,FIRESTORE,FUNCTIONS,STORAGE}_PORT` | 9099/8080/5001/9199 | Overrides the lane-derived port. |
+
+Precedence is the browser side's: explicit port var → lane-derived → default. With none of them set each script targets exactly what it hardcoded before, so a plain `pnpm seed:admin` still seeds the shared dev stack. A malformed value throws; two lane vars naming *different* lanes throws too, rather than picking one.
+
+```bash
+LANE=3 pnpm seed:admin                  # or: pnpm seed:admin:lane3
+LANE=3 pnpm seed:test-data              # or: pnpm seed:test-data:lane3
+LANE=4 pnpm seed:admin me@ejm.org pw    # script args still pass through
+```
+
+`seed:admin:lane{2,3,4}` and `seed:test-data:lane{2,3,4}` exist for the three lanes that have configs, matching `test:integration:lane{2,3,4}`. Both scripts print the lane and the resolved host:port they are about to write to as their first line of output — read it before assuming.
+
+`pnpm seed:*` builds `@ejm/shared-core` first, because the resolver reaches a `.cjs` through that package's `dist/`. Running `node apps/functions/seed-test-data.cjs` directly skips that build; if `dist/` is missing the script says so and tells you the one command to run.
 
 ## Running a WEB APP in a lane (browser-driven e2e)
 
@@ -47,16 +71,22 @@ The dev SERVER port has to move too: two Vite servers cannot share :5173, and Vi
 Full recipe — do-web against a seeded lane 3:
 
 ```bash
-# 1. the emulators for the lane (own terminal; seed it however the spec needs)
+# 1. the emulators for the lane (own terminal)
 pnpm exec firebase emulators:start --config firebase.lane3.json \
   --only auth,functions,firestore,storage --project demo-test
 
-# 2. the app, pointed at that lane, on that lane's dev port (own terminal)
+# 2. seed THAT lane — it came up empty (see "Seeding a lane")
+pnpm seed:admin:lane3
+pnpm seed:test-data:lane3      # whatever the spec needs
+
+# 3. the app, pointed at that lane, on that lane's dev port (own terminal)
 cd apps/do-web && VITE_EMULATOR_LANE=3 pnpm exec vite --port 5375 --strictPort
 
-# 3. the spec
+# 4. the spec
 E2E_APP=do E2E_LANE=3 pnpm exec playwright test tests-e2e/d1-do-endorsement-flow.spec.ts
 ```
+
+The lane number appears four times and must be the same one every time. `E2E_LANE` is also accepted by the seed scripts, so `export E2E_LANE=3` once covers steps 2 and 4; step 3 still needs its own `VITE_EMULATOR_LANE` (Vite will not pass a non-`VITE_` var into the bundle).
 
 `E2E_APP` (`sit`/`web`, `study`/`study-web`, `do`/`do-web`) and `E2E_LANE` only pick Playwright's `baseURL`; they do not configure the app — step 2's `VITE_EMULATOR_LANE` does that, and the two must name the same lane. `PLAYWRIGHT_BASE_URL` still overrides both, and with nothing set the base URL is `http://localhost:5173` as before.
 
