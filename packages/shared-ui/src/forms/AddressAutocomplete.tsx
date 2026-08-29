@@ -162,9 +162,9 @@ export function AddressAutocomplete({
 
         {/* Suggestions dropdown */}
         {showSuggestions && suggestions.length > 0 && (
-          <div // overflow-hidden clips the shared outward focus ring; the container
-          // class draws it inset on the suggestion buttons instead (#327).
-          className="focus-ring-inset absolute left-0 right-0 top-full z-20 mt-1 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg">
+          // overflow-hidden clips the shared outward focus ring; the
+          // container class draws it inset on the suggestions instead (#327).
+          <div className="focus-ring-inset absolute left-0 right-0 top-full z-20 mt-1 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg">
             {suggestions.map((feature, i) => (
               <button
                 key={i}

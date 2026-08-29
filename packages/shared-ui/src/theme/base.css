@@ -80,7 +80,9 @@
      into .focus-ring-inset draws the ring INSIDE the child instead
      (PR #327 rounds 1+3: AddressAutocomplete's dropdown and the six
      AppBar/menu wrappers). Same layer, so utilities still win. */
-  .focus-ring-inset :where(a, button, [role="button"]):focus-visible {
+  .focus-ring-inset :where(a, button, [role="button"], select, summary,
+      [tabindex]:not([tabindex="-1"]),
+      input[type="checkbox"], input[type="radio"]):focus-visible {
     outline-offset: -2px;
     box-shadow: none;
   }
