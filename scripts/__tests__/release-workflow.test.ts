@@ -498,6 +498,62 @@ describe('unit test lane (issue #401)', () => {
   });
 });
 
+/**
+ * Contract pin for src-first type resolution (issue #406).
+ *
+ * Every shared package's `exports` maps `require` to `./dist/*.js` and `types`
+ * to `./src/*.ts`. TypeScript walks those condition KEYS IN ORDER, so with
+ * `types` listed after `require` a CJS consumer (apps/functions,
+ * apps/study-functions — both `moduleResolution: node16`) resolves its types
+ * out of `dist/*.d.ts` whenever a `dist` happens to exist, and out of `src`
+ * when it does not.
+ *
+ * That made local typechecks disagree with CI in both directions: a stale
+ * `dist` invented ten `TS2724 has no exported member 'SIT_APP_URL'` errors on
+ * a green main (the false escalation this issue was filed from), and equally
+ * hides real errors, since the consumer is checked against yesterday's
+ * declarations. CI never sees either, because CI always starts clean.
+ *
+ * Listing `types` first makes source the single answer regardless of what is
+ * on disk. Nothing at runtime changes: `types` is a TypeScript-only condition,
+ * so Node and Vite skip it and still match `require`/`import`.
+ */
+describe('src-first type resolution (issue #406)', () => {
+  it('every exports condition map lists `types` first', () => {
+    const offenders: string[] = [];
+    for (const pkg of workspaceManifests()) {
+      if (typeof pkg.exports !== 'object' || pkg.exports === null) continue;
+      for (const [subpath, target] of Object.entries(pkg.exports as Record<string, unknown>)) {
+        if (typeof target !== 'object' || target === null) continue;
+        const conditions = Object.keys(target as Record<string, unknown>);
+        if (!conditions.includes('types')) continue;
+        if (conditions[0] !== 'types') {
+          offenders.push(`${pkg.name} "${subpath}": ${conditions.join(', ')}`);
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it('the packages a CJS consumer resolves through actually declare `types`', () => {
+    // The assertion above is vacuously true for a map with no `types` key at
+    // all — which is the same bug wearing a different hat, since `require`
+    // would then be the only answer and `dist` the only source of types.
+    const needsTypes = ['@ejm/shared-core', '@ejm/sit-core', '@ejm/shared-functions'];
+    const byName = new Map(workspaceManifests().map((pkg) => [pkg.name, pkg]));
+    for (const name of needsTypes) {
+      const exports = byName.get(name)?.exports as Record<string, Record<string, string>>;
+      expect(exports, `${name} must keep an exports map`).toBeDefined();
+      for (const [subpath, target] of Object.entries(exports)) {
+        expect(target.types, `${name} "${subpath}" must map types to src`).toMatch(/^\.\/src\//);
+        expect(target.require, `${name} "${subpath}" must keep require on dist`).toMatch(
+          /^\.\/dist\//,
+        );
+      }
+    }
+  });
+});
+
 describe('no other workflow deploys to production on merge', () => {
   it('the merge-deploy workflow is gone, not merely renamed alongside a survivor', () => {
     // A leftover copy would keep main coupled to prod while release.yml looked

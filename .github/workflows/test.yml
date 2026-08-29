@@ -71,7 +71,17 @@ jobs:
   #
   # No build step: every packages/* manifest maps its `types` export condition
   # to `src/*.ts`, so `tsc` reads sources directly and a fresh checkout needs no
-  # `dist`. Verified by running `pnpm -r typecheck` green with no dist present.
+  # `dist`.
+  #
+  # That held here only by accident until #406. TypeScript matches export
+  # condition KEYS IN ORDER, and `types` used to be listed AFTER `require`, so
+  # a CJS consumer matched `require` → `dist/*.d.ts` and fell through to
+  # `types` → `src` ONLY because this job's checkout has no `dist` to match. A
+  # developer with one got the opposite answer — which is why local runs and
+  # this job could disagree in both directions, inventing errors that were not
+  # real and hiding ones that were. `types` is now listed first, so source is
+  # the answer regardless of what is on disk and this job no longer depends on
+  # being clean. `release-workflow.test.ts` pins the ordering.
   #
   # SCOPE, precisely: every workspace project now defines `typecheck` (`tests`
   # had no such script until this change, so `pnpm -r` silently skipped the
