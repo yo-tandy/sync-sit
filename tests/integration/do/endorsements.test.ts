@@ -217,9 +217,40 @@ describe('sync-do endorsements', () => {
       ).rejects.toMatchObject({ code: 'INVALID_ARGUMENT' });
     });
 
-    it('refuses an unknown or non-enrolled doer', async () => {
+    it('refuses an unknown user', async () => {
       await expect(
         callFunction('doSubmitEndorsement', { doerUserId: 'nobody-at-all', referenceText: GOOD_TEXT, refName: 'M' }, parent1Token),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    });
+
+    // "Enrolled" means `enrollmentComplete`, the same thing it means at
+    // §7.2's board read rule and §11.1's offering gate (round-2 review): a
+    // bare has-a-doer-profile read is satisfied by a half-finished
+    // enrollment, so both shapes are pinned — an account with a doer profile
+    // whose enrollment never completed, and one with no doer profile at all.
+    it('refuses a user whose doer enrollment is INCOMPLETE, even with a qualifying task', async () => {
+      const HALF = 'doer-half-enrolled';
+      await getAdminAuth().createUser({ uid: HALF, email: `${HALF}@ejm.org` });
+      await getDb().collection('users').doc(HALF).set({
+        uid: HALF, email: `${HALF}@ejm.org`, status: 'active',
+        firstName: 'Half', lastName: 'Enrolled', dateOfBirth: dobYearsAgo(17),
+        language: 'en',
+        profiles: { doer: { enrollmentComplete: false, notifyNewTasks: false, categories: [] } },
+        notifPrefs: {}, fcmTokens: [], createdAt: new Date(), updatedAt: new Date(),
+      });
+      // Give them a completed task, so ONLY the enrollment check can refuse.
+      await seedTask('t-half', seed.family1Id, { assignedUserId: HALF });
+      await expect(
+        callFunction('doSubmitEndorsement', { doerUserId: HALF, referenceText: GOOD_TEXT, refName: 'M' }, parent1Token),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+      await getDb().collection('users').doc(HALF).delete();
+      await getAdminAuth().deleteUser(HALF);
+    });
+
+    it('refuses a real user with NO doer profile at all', async () => {
+      await seedTask('t-parent', seed.family1Id, { assignedUserId: seed.parent2.uid });
+      await expect(
+        callFunction('doSubmitEndorsement', { doerUserId: seed.parent2.uid, referenceText: GOOD_TEXT, refName: 'M' }, parent1Token),
       ).rejects.toMatchObject({ code: 'NOT_FOUND' });
     });
 
@@ -232,6 +263,23 @@ describe('sync-do endorsements', () => {
         callFunction('doSubmitEndorsement', { doerUserId: DOER, referenceText: GOOD_TEXT, refName: 'Pierre' }, parent2Token),
       ).rejects.toMatchObject({ code: 'ALREADY_EXISTS', details: { reason: 'already_endorsed' } });
       expect((await getDb().collection('references').get()).size).toBe(1);
+    });
+
+    // The dedup is STATUS-BLIND, matching study's exactly
+    // (submitTutorEndorsement.ts:59-64 runs the same three equalities with no
+    // status filter). So a decline is permanent for that (family, doer) pair.
+    // Pinned as a DECISION rather than left to be discovered: changing it
+    // would be a platform behaviour change touching study too.
+    it('is status-blind like study — a family cannot re-endorse after a DECLINE', async () => {
+      const { referenceId } = await callFunction<{ referenceId: string }>(
+        'doSubmitEndorsement', { doerUserId: DOER, referenceText: GOOD_TEXT, refName: 'Marie' }, parent1Token,
+      );
+      await callFunction('doRespondToEndorsement', { referenceId, action: 'decline' }, doerToken);
+      expect((await getDb().collection('references').doc(referenceId).get()).data()!.status)
+        .toBe('removed');
+      await expect(
+        callFunction('doSubmitEndorsement', { doerUserId: DOER, referenceText: GOOD_TEXT, refName: 'Marie' }, parent1Token),
+      ).rejects.toMatchObject({ code: 'ALREADY_EXISTS', details: { reason: 'already_endorsed' } });
     });
   });
 

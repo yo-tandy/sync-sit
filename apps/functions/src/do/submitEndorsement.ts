@@ -77,10 +77,27 @@ export const doSubmitEndorsement = onCall(
       throw new HttpsError('invalid-argument', 'Cannot endorse yourself');
     }
 
-    // ── The doer must exist and be enrolled ──
+    // ── The doer must exist and be ENROLLED ──
+    // `enrollmentComplete`, not merely "has a doer profile" (PR #352 round-2
+    // review): a bare `getDoerProfile` read is satisfied by a half-finished
+    // enrollment, and `enrollmentComplete` is what "enrolled" means
+    // everywhere else in sync-do — §7.2's board read rule and §11.1's
+    // offering gate both key on it, and `isActiveEnrolledDoer` is the house
+    // predicate. An un-enrolled account cannot make offers, so it cannot be
+    // the subject of a completed task honestly; if one is named here, the
+    // request is malformed rather than merely unlucky.
+    //
+    // Deliberately NOT also gating on `status == 'active'`, which
+    // `isActiveEnrolledDoer` adds: refusing a family's endorsement because
+    // the student was banned AFTER the work was done is a different decision
+    // from the one this callable is making, and nothing a banned account
+    // could gain from it survives — `doRespondToEndorsement` runs the ban
+    // gate, so a suspended doer cannot publish the endorsement at all, and a
+    // `private` doc renders nowhere.
     const doerDoc = await db.collection('users').doc(doerUserId).get();
     const doerData = (doerDoc.data() ?? {}) as Record<string, unknown>;
-    if (!doerDoc.exists || !getDoerProfile(doerData as unknown as User)) {
+    const doerProfile = getDoerProfile(doerData as unknown as User);
+    if (!doerDoc.exists || doerProfile?.enrollmentComplete !== true) {
       throw new HttpsError('not-found', 'Doer not found');
     }
 
@@ -95,7 +112,23 @@ export const doSubmitEndorsement = onCall(
     }
 
     // ── Dedup: one endorsement per (family, doer), study's rule. Equality
-    //    filters only, so no composite index (see endorsementAccess). ──
+    //    filters only, so no composite index (see endorsementAccess).
+    //
+    //    STATUS-BLIND, matching study exactly (PR #352 round-2 review).
+    //    `submitTutorEndorsement.ts:59-64` runs the same three equalities
+    //    with no `status` filter, so in study a family that has been
+    //    declined cannot re-endorse that tutor either. The consequence is
+    //    worth stating rather than discovering: **declining is permanent for
+    //    that (family, doer) pair** — the doc stays `removed`, and the
+    //    family's next attempt is `already-exists`.
+    //
+    //    Kept because decision 12 says do's lifecycle mirrors study's, and a
+    //    do-only divergence here would mean the two apps answer "can I
+    //    endorse again?" differently for no reason a user could see.
+    //    Excluding `removed` from the dedup is defensible — it is the
+    //    recipient's own decline, not a platform judgement — but it is a
+    //    PLATFORM behaviour change touching study, so it belongs in an issue
+    //    against both apps rather than in one app's PR. ──
     const dup = await db
       .collection(REFERENCES)
       .where('appSource', '==', 'do')
