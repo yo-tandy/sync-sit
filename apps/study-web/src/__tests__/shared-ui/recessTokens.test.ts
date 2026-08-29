@@ -183,10 +183,20 @@ describe('Card reads the elevation tokens (#366)', () => {
     expect(card, 'Card must not inline an arbitrary shadow').not.toMatch(/shadow-\[/);
   });
 
-  it('takes its raised surface from the token, not a literal bg-white', () => {
-    expect(card).toMatch(/(?<![\w-])bg-ground-raised(?![\w-])/);
-    expect(card).not.toMatch(/(?<![\w-])bg-white(?![\w-])/);
-  });
+  /* BOTH components that render "the Card idiom" must resolve to the SAME
+     surface token (#395 review round 2). Scoping this to Card.tsx alone let
+     SkeletonCard keep a literal bg-white: identical today, since the token is
+     #ffffff in every brand, but a visible flash on data arrival the moment any
+     brand makes raised surfaces non-white — which is the entire reason the
+     token exists. Same bug this PR was opened to fix, one component over. */
+  it.each(['components/Card.tsx', 'components/SkeletonCard.tsx'])(
+    '%s takes its raised surface from the token, not a literal bg-white',
+    (rel) => {
+      const src = stripTs(readFileSync(join(SHARED_UI, 'src', rel), 'utf8'));
+      expect(src).toMatch(/(?<![\w-])bg-ground-raised(?![\w-])/);
+      expect(src).not.toMatch(/(?<![\w-])bg-white(?![\w-])/);
+    },
+  );
 });
 
 describe('authed shells sit on a ground (#366)', () => {
@@ -210,16 +220,28 @@ describe('authed shells sit on a ground (#366)', () => {
 
   it.each(shells.map(([file]) => file))('%s uses a ground token', (file) => {
     const src = markup.get(file)!;
-    const line = src.split('\n').find((l) => /min-h-screen/.test(l))!;
-    if (ALLOWED_WHITE.some((a) => file.endsWith(a))) {
-      expect(line, `${file} is allowlisted as deliberately white`).toMatch(
-        /(?<![\w-])bg-white(?![\w-])/,
-      );
-      return;
+    /* EVERY matching line, not the first (#395 review round 2). Grading only
+       `find()`'s first hit assumed one full-height element per layout. A
+       layout that grows a full-screen loading or error branch ABOVE its shell
+       — a very natural thing to add; AuthGuard already renders an h-screen
+       spinner in that spirit — would be graded on the wrong element, and if
+       that early branch carried a ground token the test would go GREEN on a
+       shell that had silently reverted to bg-white. That false green is the
+       exact failure this suite exists to prevent. Same lookaround form as the
+       discovery filter, so a future `min-h-screen-safe` can't split the two. */
+    const lines = src.split('\n').filter((l) => /(?<![\w-])min-h-screen(?![\w-])/.test(l));
+    expect(lines.length, `${file}: discovery matched but no line did`).toBeGreaterThan(0);
+    for (const line of lines) {
+      if (ALLOWED_WHITE.some((a) => file.endsWith(a))) {
+        expect(line, `${file} is allowlisted as deliberately white`).toMatch(
+          /(?<![\w-])bg-white(?![\w-])/,
+        );
+      } else {
+        expect(line, `${file} must sit on bg-ground / bg-ground-admin`).toMatch(
+          /(?<![\w-])bg-ground(-admin)?(?![\w-])/,
+        );
+      }
     }
-    expect(line, `${file} must sit on bg-ground / bg-ground-admin`).toMatch(
-      /(?<![\w-])bg-ground(-admin)?(?![\w-])/,
-    );
   });
 });
 
@@ -280,12 +302,37 @@ describe('the font is shipped, not just named (#366)', () => {
     expect(families, `--font-sans leads with "${first}", which no @font-face declares`).toContain(first);
   });
 
-  it('the OFL notice ships with the redistributed font', () => {
-    // SIL OFL 1.1 requires the copyright notice to accompany redistribution,
-    // and only the .woff2 files reach dist.
+  /* The OFL text must ship in the DEPLOYED artifact, not just the repo
+     (#395 review round 2). The first cut pinned only THIRD_PARTY_NOTICES.md,
+     which lives in a package that is "private": true with no build step — so
+     it never reaches an app bundle, and the thing actually redistributing the
+     font shipped with no notice at all. public/ is copied verbatim into dist
+     by Vite, so that is where it has to be. */
+  const APP_PUBLIC = [
+    'apps/web/public/licenses/Nunito-OFL.txt',
+    'apps/study-web/public/licenses/Nunito-OFL.txt',
+    'apps/do-web/public/licenses/Nunito-OFL.txt',
+  ];
+
+  it.each(APP_PUBLIC)('%s ships the full OFL text, not a link to it', (rel) => {
+    const text = readFileSync(join(ROOT, rel), 'utf8');
+    expect(text).toMatch(/Copyright 2014 The Nunito Project Authors/);
+    // OFL 1.1 §2 requires the PERMISSION NOTICE ITSELF to accompany every
+    // copy. A pin on the title alone would pass on a one-line stub.
+    expect(text).toMatch(/SIL OPEN FONT LICENSE Version 1\.1/);
+    expect(text).toMatch(/PERMISSION & CONDITIONS/);
+    expect(text).toMatch(/THE FONT SOFTWARE IS PROVIDED "AS IS"/);
+  });
+
+  it('the three served copies are identical', () => {
+    const [a, ...rest] = APP_PUBLIC.map((rel) => readFileSync(join(ROOT, rel), 'utf8'));
+    for (const other of rest) expect(other).toBe(a);
+  });
+
+  it('the repo-side index points at the served copies', () => {
     const notice = readFileSync(join(SHARED_UI, 'THIRD_PARTY_NOTICES.md'), 'utf8');
-    expect(notice).toMatch(/SIL Open Font License/);
     expect(notice).toMatch(/Copyright 2014 The Nunito Project Authors/);
+    for (const rel of APP_PUBLIC) expect(notice).toContain(rel);
   });
 });
 

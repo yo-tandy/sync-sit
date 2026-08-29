@@ -1,7 +1,14 @@
 # Third-party notices — `@ejm/shared-ui`
 
-Assets redistributed inside the built apps, and the notices their licences
-require to travel with them.
+Repo-side index of assets redistributed inside the built apps, and where the
+notice their licence requires actually ships.
+
+This file is **not** the compliance artifact, and the first cut of it wrongly
+implied otherwise (#395 review round 2). `packages/shared-ui` is
+`"private": true` with no `files` field and no build step, so nothing here
+reaches a deployed bundle. The notice has to travel with the artifact that is
+actually redistributed — the hosted app serving the font — so it is checked in
+under each app's `public/`, which Vite copies verbatim into `dist/`.
 
 ## Nunito
 
@@ -14,13 +21,22 @@ imported from `src/theme/base.css`.
 > Copyright 2014 The Nunito Project Authors (https://github.com/googlefonts/nunito)
 >
 > This Font Software is licensed under the SIL Open Font License, Version 1.1.
-> This license is available with a FAQ at: https://scripts.sil.org/OFL
 
-The OFL requires that the copyright notice and licence accompany any
-redistribution of the font software. The npm package ships its full `LICENSE`
-file, but only the `.woff2` binaries reach `dist`, so the notice lives here
-instead. The full licence text is at
-`node_modules/@fontsource-variable/nunito/LICENSE` and at the URL above.
+**Full licence text, served alongside the fonts.** OFL 1.1 §2 requires the
+copyright notice *and the permission notice itself* to be included in all
+copies of the Font Software — the text, not a link to it:
+
+| app | path in repo | served at |
+|---|---|---|
+| sync-sit | `apps/web/public/licenses/Nunito-OFL.txt` | `/licenses/Nunito-OFL.txt` |
+| sync-study | `apps/study-web/public/licenses/Nunito-OFL.txt` | `/licenses/Nunito-OFL.txt` |
+| sync-do | `apps/do-web/public/licenses/Nunito-OFL.txt` | `/licenses/Nunito-OFL.txt` |
+
+Those three files are byte-for-byte copies of the package's own `LICENSE`. If
+the font package is upgraded, re-copy them from
+`node_modules/@fontsource-variable/nunito/LICENSE`; `recessTokens.test.ts`
+pins that all three exist, carry the OFL permission notice, and match each
+other.
 
 Reserved Font Name: none is declared for Nunito, so the OFL's renaming clause
 does not apply. The font is used unmodified.

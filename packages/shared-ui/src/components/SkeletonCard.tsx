@@ -30,7 +30,7 @@ export function SkeletonCard({ lines = 3, avatar = false, className = '' }: Skel
     <div
       aria-hidden="true"
       data-testid="skeleton-card"
-      className={`motion-safe:animate-pulse rounded-lg border border-gray-200 bg-white p-4 ${className}`}
+      className={`motion-safe:animate-pulse rounded-lg border border-gray-200 bg-ground-raised p-4 ${className}`}
     >
       <div className="flex items-start gap-3">
         {avatar && <div className="h-12 w-12 flex-shrink-0 rounded-full bg-gray-200" />}
