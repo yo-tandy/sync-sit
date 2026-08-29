@@ -36,9 +36,22 @@ export const DoerEnrollment = lazy(() =>
   import('@/pages/enrollment/doer/DoerEnrollment').then((m) => ({ default: m.DoerEnrollment })),
 );
 
-// Authenticated shell
-export const HomePage = lazy(() =>
-  import('@/pages/home/HomePage').then((m) => ({ default: m.HomePage })),
+// Doer portal (plan §13 PR8) — the board at /home is the app's home
+// screen (§9.2).
+export const BoardPage = lazy(() =>
+  import('@/pages/doer/BoardPage').then((m) => ({ default: m.BoardPage })),
+);
+export const DoerTaskDetailPage = lazy(() =>
+  import('@/pages/doer/DoerTaskDetailPage').then((m) => ({ default: m.DoerTaskDetailPage })),
+);
+export const OfferPage = lazy(() =>
+  import('@/pages/doer/OfferPage').then((m) => ({ default: m.OfferPage })),
+);
+export const MyOffersPage = lazy(() =>
+  import('@/pages/doer/MyOffersPage').then((m) => ({ default: m.MyOffersPage })),
+);
+export const MyWorkPage = lazy(() =>
+  import('@/pages/doer/MyWorkPage').then((m) => ({ default: m.MyWorkPage })),
 );
 
 // Family portal (plan §13 PR7)

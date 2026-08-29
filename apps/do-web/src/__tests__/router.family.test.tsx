@@ -3,7 +3,7 @@ import { describe, it, expect, vi } from 'vitest';
 // Route TABLE test (the router.public.test idiom): layouts stubbed so no
 // auth store / Firebase init loads.
 vi.mock('@/layouts/PublicLayout', () => ({ PublicLayout: () => null }));
-vi.mock('@/layouts/HomeLayout', () => ({ HomeLayout: () => null }));
+vi.mock('@/layouts/DoerLayout', () => ({ DoerLayout: () => null }));
 vi.mock('@/layouts/FamilyLayout', () => ({ FamilyLayout: () => null }));
 
 import { router } from '@/router';

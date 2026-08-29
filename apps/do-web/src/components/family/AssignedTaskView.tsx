@@ -1,26 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { httpsCallable } from 'firebase/functions';
 import type { TaskDoc } from '@ejm/do-core';
 import { Button, Card, Checkbox, InfoBanner, Spinner } from '@ejm/shared-ui';
-import { functions } from '@/config/firebase';
 import { useConsiderations } from '@/lib/considerations';
+import { useAssignedContact } from '@/lib/useAssignedContact';
 
-export interface AssignedContact {
-  taskId: string;
-  family: {
-    familyName: string;
-    address: string;
-    parents: { firstName: string; lastName: string; email: string; phone?: string; whatsapp?: string }[];
-  };
-  doer: {
-    firstName: string;
-    lastName: string;
-    contactEmail?: string | null;
-    contactPhone?: string | null;
-    whatsapp?: string | null;
-  };
-}
+export type { AssignedContact } from '@/lib/useAssignedContact';
 
 interface AssignedTaskViewProps {
   task: TaskDoc;
@@ -37,10 +22,15 @@ interface AssignedTaskViewProps {
 /**
  * The family's assigned-task view (plan §9.1 last bullet):
  * - contact via `doGetAssignedContact`, fetched LIVE on each view with a
- *   loading state (decision 16 — nothing cached in Firestore). §6.4: the
- *   callable keeps serving for DO_CONTACT_GRACE_DAYS after a cancellation,
- *   so this view calls it for cancelled tasks too and maps `grace_elapsed`
- *   to its own copy rather than treating it as an error;
+ *   loading state (decision 16 — nothing cached in Firestore) through the
+ *   shared useAssignedContact hook. §6.4: the callable keeps serving for
+ *   DO_CONTACT_GRACE_DAYS after a cancellation, so this view calls it for
+ *   cancelled tasks too and maps `grace_elapsed` to its own copy rather
+ *   than treating it as an error;
+ * - a task cancelled while still OPEN never had a doer (`assignedOfferId`
+ *   stays null — the hook's never-assigned gate, PR #331 round 1), so it
+ *   gets the plain cancelled summary: banner only, no assignment/contact
+ *   cards, no grace note;
  * - the §5 considerations as a checklist (surface 3 of 3) — local ticks
  *   only, a conversation aid, nothing persisted;
  * - mark-done and cancel (the confirm dialogs live in the page).
@@ -49,44 +39,10 @@ export function AssignedTaskView({ task, doerFirstName, onMarkDone, onCancel, bu
   const { t } = useTranslation();
   const considerations = useConsiderations(task.subCategory);
   const [checked, setChecked] = useState<Record<number, boolean>>({});
-  const [contact, setContact] = useState<AssignedContact | null>(null);
-  const [contactState, setContactState] = useState<'loading' | 'ready' | 'grace_elapsed' | 'error'>('loading');
-  const [retryTick, setRetryTick] = useState(0);
+  const { contact, contactState, hasAssignment, retry } = useAssignedContact(task);
 
   const cancelled = task.status === 'cancelled';
   const completed = task.status === 'completed';
-  // A task cancelled while still OPEN never had a doer — doCancelTask
-  // leaves assignedOfferId null — so there is no counterparty to reveal:
-  // calling doGetAssignedContact would only earn its `not_assigned`
-  // refusal (PR #331 round 1). Such a task gets the plain cancelled
-  // summary: banner only, no assignment/contact cards, no grace note.
-  const hasAssignment = task.assignedOfferId !== null;
-
-  useEffect(() => {
-    if (!hasAssignment) return;
-    let stale = false;
-    // NOTE: contactState is set back to 'loading' by whoever schedules a
-    // refetch (initial state, or the Retry handler) — not synchronously
-    // here (react-hooks/set-state-in-effect).
-    const getContact = httpsCallable<{ taskId: string }, AssignedContact>(
-      functions,
-      'doGetAssignedContact',
-    );
-    getContact({ taskId: task.taskId })
-      .then((res) => {
-        if (stale) return;
-        setContact(res.data);
-        setContactState('ready');
-      })
-      .catch((err: unknown) => {
-        if (stale) return;
-        const reason = (err as { details?: { reason?: string } } | null)?.details?.reason;
-        setContactState(reason === 'grace_elapsed' ? 'grace_elapsed' : 'error');
-      });
-    return () => {
-      stale = true;
-    };
-  }, [task.taskId, retryTick, hasAssignment]);
 
   return (
     <div>
@@ -135,10 +91,7 @@ export function AssignedTaskView({ task, doerFirstName, onMarkDone, onCancel, bu
               size="sm"
               variant="outline"
               fullWidth={false}
-              onClick={() => {
-                setContactState('loading');
-                setRetryTick((n) => n + 1);
-              }}
+              onClick={retry}
             >
               {t('family.assigned.contactRetry')}
             </Button>

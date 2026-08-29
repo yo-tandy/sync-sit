@@ -5,7 +5,7 @@ import { describe, it, expect, vi } from 'vitest';
 // them for real would drag in the auth store / Firebase init, none of which
 // matters for asserting route grouping (mirrors study-web's router tests).
 vi.mock('@/layouts/PublicLayout', () => ({ PublicLayout: () => null }));
-vi.mock('@/layouts/HomeLayout', () => ({ HomeLayout: () => null }));
+vi.mock('@/layouts/DoerLayout', () => ({ DoerLayout: () => null }));
 
 import { Navigate } from 'react-router';
 import { router } from '@/router';
