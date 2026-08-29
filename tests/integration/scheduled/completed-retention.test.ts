@@ -223,24 +223,73 @@ describe('completed-engagement retention (decision 19 / issue #294)', () => {
         .toBe(true);
     });
 
-    it('never deletes a live recurring arrangement — no `date`, or an EMPTY `date`', async () => {
-      // Dateless: absent from the (status, date) index entirely.
+    it('never deletes a live recurring arrangement — `date: null` (what production writes), empty, or absent', async () => {
+      // THE PRODUCTION SHAPE. `AppointmentDoc.date` is typed `date?: string`,
+      // but every writer stores an explicit null (sendContactRequest.ts:83,118;
+      // contactPublishedSearch.ts:167; resubmitAppointment.ts:133), so this —
+      // not the absent-field case — is what the sweep meets in the live data.
+      await seedAppointment('sit-null-date', {
+        type: 'recurring', date: null,
+        recurringSlots: [{ day: 'mon', startTime: '18:00', endTime: '22:00' }],
+      });
+      // Empty string — the one non-conforming shape a bare upper bound would
+      // return, since it is string-typed and sorts below every cutoff.
+      await seedAppointment('sit-empty-date', { type: 'recurring', date: '' });
+      // Field genuinely absent — no writer produces it, but legacy docs may.
       await seedAppointment('sit-recurring', {
         type: 'recurring', date: undefined,
         recurringSlots: [{ day: 'mon', startTime: '18:00', endTime: '22:00' }],
       });
-      // Empty string: IS in the index and sorts before every cutoff — only the
-      // shape guard keeps it.
-      await seedAppointment('sit-empty-date', { type: 'recurring', date: '' });
 
       const stats = await runCleanupOldData(getDb(), new Date());
 
       expect(stats.completedAppointmentsDeleted).toBe(0);
       const db = getDb();
-      expect((await db.collection('appointments').doc('sit-recurring').get()).exists)
-        .toBe(true);
-      expect((await db.collection('appointments').doc('sit-empty-date').get()).exists)
-        .toBe(true);
+      for (const id of ['sit-null-date', 'sit-empty-date', 'sit-recurring']) {
+        expect((await db.collection('appointments').doc(id).get()).exists).toBe(true);
+      }
+    });
+
+    it('still drains when guarded documents outnumber a whole page', async () => {
+      // The property this pins: the query must match ONLY deletable documents,
+      // so a doc the sweep will never delete cannot hold the head of the page.
+      // `date: ''` is the shape that tests it — string-typed, therefore
+      // returned by a string range, and sorting below every cutoff. Seed more
+      // than one 200-doc page of them, all ahead of a single deletable doc.
+      //
+      // (`date: null` is NOT the shape for this test: a Firestore range filter
+      // constrains to its bound's type, so null-valued docs never enter a
+      // string range at all — measured, see cleanupOldData block 7a.)
+      const db = getDb();
+      for (let chunk = 0; chunk < 3; chunk++) {
+        const batch = db.batch();
+        for (let i = 0; i < 70; i++) {
+          const id = `sit-live-${chunk}-${i}`;
+          batch.set(db.collection('appointments').doc(id), {
+            appointmentId: id, searchId: null, familyId: 'retention-family',
+            babysitterUserId: BSITTER, createdByUserId: 'retention-parent',
+            type: 'recurring', status: 'confirmed', date: '',
+            recurringSlots: [{ day: 'mon', startTime: '18:00', endTime: '22:00' }],
+            kidIds: [], address: '1 rue Test', latLng: { lat: 48.85, lng: 2.35 },
+            createdAt: daysAgo(300), updatedAt: daysAgo(300),
+          });
+        }
+        await batch.commit();
+      }
+      await seedAppointment('sit-behind-the-crowd', { date: dateAgo(181) });
+
+      const stats = await runCleanupOldData(db, new Date());
+
+      expect(stats.completedAppointmentsDeleted).toBe(1);
+      // The stronger pin, and the one that holds independently of the cursor:
+      // the QUERY returned only deletable documents, so the guard never fired.
+      expect(stats.appointmentsSkippedMalformedDate).toBe(0);
+      expect((await db.collection('appointments').doc('sit-behind-the-crowd').get()).exists)
+        .toBe(false);
+      // …and all 210 live arrangements are still there.
+      const survivors = await db.collection('appointments')
+        .where('status', '==', 'confirmed').get();
+      expect(survivors.size).toBe(210);
     });
 
     it('leaves an ancient PENDING appointment alone (7b keeps pending reachable forever)', async () => {
@@ -274,6 +323,53 @@ describe('completed-engagement retention (decision 19 / issue #294)', () => {
       expect((await db.collection('appointments').doc('sit-cancelled-old').get()).exists)
         .toBe(false);
       expect((await db.collection('appointments').doc('sit-rejected-old').get()).exists)
+        .toBe(false);
+    });
+
+    it('refuses a malformed date the range bounds cannot exclude', async () => {
+      // The shape guard's own pin. '0002-1-1' is string-typed, sits inside
+      // [MIN_BOOKING_DATE, cutoff), and so IS returned by the query — but it
+      // is not a 'YYYY-MM-DD' date, so nothing may conclude it is 180 days
+      // past. Only the in-memory guard stops it being deleted.
+      await seedAppointment('sit-malformed-date', { date: '0002-1-1' });
+
+      const stats = await runCleanupOldData(getDb(), new Date());
+
+      expect(stats.completedAppointmentsDeleted).toBe(0);
+      expect(stats.appointmentsSkippedMalformedDate).toBe(1);
+      expect((await getDb().collection('appointments').doc('sit-malformed-date').get()).exists)
+        .toBe(true);
+    });
+
+    it('advances past a full page of failing cascades instead of re-reading it', async () => {
+      // The cursor's pin. 201 docs whose cascade fails deterministically, all
+      // sorting ahead of one healthy deletable doc. A head-restarting pass
+      // loop re-fetches the same first page on every pass and never reaches
+      // the healthy doc; a cursor walks past them.
+      const db = getDb();
+      for (let chunk = 0; chunk < 3; chunk++) {
+        const batch = db.batch();
+        for (let i = 0; i < 67; i++) {
+          const id = `sit-poison-${chunk}-${i}`;
+          batch.set(db.collection('appointments').doc(id), {
+            appointmentId: id, searchId: null, familyId: 'retention-family',
+            babysitterUserId: 'poison-provider', createdByUserId: 'retention-parent',
+            type: 'one_time', status: 'confirmed', date: dateAgo(300 + chunk * 70 + i),
+            kidIds: [], address: '1 rue Test', latLng: { lat: 48.85, lng: 2.35 },
+            createdAt: daysAgo(400), updatedAt: daysAgo(400),
+          });
+        }
+        await batch.commit();
+      }
+      await seedAppointment('sit-last-in-line', { date: dateAgo(181) });
+
+      const stats = await runCleanupOldData(
+        poisonSchedules(db, 'poison-provider'), new Date(),
+      );
+
+      expect(stats.appointmentCascadeErrors).toBe(201);
+      expect(stats.completedAppointmentsDeleted).toBe(1);
+      expect((await db.collection('appointments').doc('sit-last-in-line').get()).exists)
         .toBe(false);
     });
 
@@ -389,6 +485,39 @@ describe('completed-engagement retention (decision 19 / issue #294)', () => {
         .toBe(true);
       expect((await db.collection('study-sessions').doc('study-confirmed').get()).exists)
         .toBe(true);
+    });
+
+    it('advances past a full page of failing cascades instead of re-reading it', async () => {
+      // The study cursor's pin, same shape as the sit one: a full page (100)
+      // of sessions whose cascade fails deterministically, all sorting ahead
+      // of one healthy deletable session on `completedAt ASC`.
+      const db = getDb();
+      const batch = db.batch();
+      for (let i = 0; i < 100; i++) {
+        const id = `study-poison-${i}`;
+        batch.set(db.collection('study-sessions').doc(id), {
+          sessionId: id, familyId: 'retention-family', tutorUserId: 'poison-provider',
+          createdByUserId: 'retention-parent', subject: 'maths', level: '3e', rate: 30,
+          studentIds: [], students: [], familyName: 'F', parentName: 'P', tutorName: 'T',
+          type: 'one_time', date: dateAgo(300 + i), startTime: '17:00', endTime: '18:00',
+          sessionLengthMinutes: 60, paddingMinutes: 15, location: 'family_home',
+          status: 'completed', completedAt: daysAgo(300 + i),
+          createdAt: daysAgo(400), updatedAt: daysAgo(300 + i),
+        });
+      }
+      await batch.commit();
+      await seedSession('study-last-in-line', {
+        date: dateAgo(181), completedAt: daysAgo(181),
+      });
+
+      const stats = await runStudySweepSessions(
+        poisonSchedules(db, 'poison-provider'), new Date(),
+      );
+
+      expect(stats.sessionCascadeErrors).toBe(100);
+      expect(stats.completedSessionsDeleted).toBe(1);
+      expect((await db.collection('study-sessions').doc('study-last-in-line').get()).exists)
+        .toBe(false);
     });
 
     it('isolates a per-document failure: the poisoned session keeps its instances', async () => {
