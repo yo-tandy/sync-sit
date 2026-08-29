@@ -10,7 +10,7 @@ import {
   isActiveGuardianOf,
   notifyChildOfGuardianAction,
 } from '@ejm/shared-functions/guardian/guardianAccess.js';
-import { getParentProfile, type User } from '@ejm/shared-core';
+import { getParentProfile, resolveNotifPref, type User } from '@ejm/shared-core';
 import { dayOfWeek } from '@ejm/study-core';
 import type { WeeklyGrid } from '../availability/computeDateAvailability.js';
 import { cancelSessionInstanceSchema } from '../validation/session.js';
@@ -191,14 +191,14 @@ export const cancelSessionInstance = onCall(
       const tutorDoc = await db.collection('users').doc(tutorUserId).get();
       const tutorData = tutorDoc.data();
       const tutorEmail = tutorData?.email as string | undefined;
-      const cancelPrefs = tutorData?.notifPrefs?.cancelled;
+      const cancelPrefs = resolveNotifPref(tutorData?.notifPrefs, 'study', 'cancelled');
       const familyName = (session.familyName as string) || 'A family';
       const title = 'Session cancelled';
       const body = `${familyName} cancelled the session on ${whenInfo}. Reason: ${reason}${lateSuffix}`;
 
       // Record the actual send outcomes, not assumptions.
       let emailSent = false;
-      if (cancelPrefs?.email !== false && tutorEmail) {
+      if (cancelPrefs.email && tutorEmail) {
         emailSent = await sendNotificationEmail(
           tutorEmail,
           `Session cancelled by ${familyName}`,
@@ -212,7 +212,7 @@ export const cancelSessionInstance = onCall(
       }
       // Send push before the doc write so pushSent records the real outcome.
       let pushSent = false;
-      if (cancelPrefs?.push !== false) {
+      if (cancelPrefs.push) {
         pushSent = await sendPushNotification(tutorUserId, title, body, {
           sessionId,
           instanceId,

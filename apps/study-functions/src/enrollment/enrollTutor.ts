@@ -1,7 +1,7 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { strongPasswordSchema } from '@ejm/sit-core';
-import { validateEjmEmail, checkEnrollmentAge, getEjemEmail, getContact, type User } from '@ejm/shared-core';
+import { DEFAULT_NOTIF_PREFS, validateEjmEmail, checkEnrollmentAge, getEjemEmail, getContact, type User } from '@ejm/shared-core';
 import { db, adminAuth } from '@ejm/shared-functions/config/firebase.js';
 import { writeUserActivity } from '@ejm/shared-functions/admin/writeAuditLog.js';
 import { getCorsOrigin } from '@ejm/shared-functions/config/cors.js';
@@ -435,12 +435,11 @@ export const enrollTutor = onCall(
       ...(enrollment.contactPhone ? { contactPhone: enrollment.contactPhone } : {}),
       ...(enrollment.whatsapp ? { whatsapp: enrollment.whatsapp } : {}),
       status: 'active',
-      notifPrefs: {
-        newRequest: { push: true, email: true },
-        confirmed: { push: true, email: true },
-        cancelled: { push: true, email: true },
-        reminders: { push: true, email: false },
-      },
+      // App-scoped since issue #369; the shared constant is the single
+
+      // source for the product defaults.
+
+      notifPrefs: DEFAULT_NOTIF_PREFS,
       fcmTokens: [],
       profiles: {
         tutor: tutorProfile,

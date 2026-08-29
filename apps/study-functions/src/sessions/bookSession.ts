@@ -11,6 +11,7 @@ import {
   getParentProfile,
   timeToSlotIndex,
   slotIndexToTime,
+  resolveNotifPref,
 } from '@ejm/shared-core';
 import type { User, RecurringSlot, DayOfWeek } from '@ejm/shared-core';
 import type {
@@ -455,10 +456,10 @@ export const bookSession = onCall(
       whenLine = `${bookingDate} at ${bookingStart}–${endTime}`;
     }
 
-    // ── Notify the tutor (respecting notifPrefs.newRequest) ──
+    // ── Notify the tutor (respecting notifPrefs.study.newRequest) ──
     // trialFirstSession is recurring-only; ignore it on the one_time path.
     const isTrialRequest = type === 'recurring' && trialFirstSession === true;
-    const notifPrefs = tutorUser.notifPrefs?.newRequest;
+    const notifPrefs = resolveNotifPref(tutorUser.notifPrefs, 'study', 'newRequest');
     const title = 'New session request';
     const body = `${familyName || 'A family'} requested a tutoring session${isTrialRequest ? ' (first session as a trial)' : ''}.`;
     const emailBody = `
@@ -472,7 +473,7 @@ export const bookSession = onCall(
 
     // Record the actual send outcomes, not assumptions.
     let emailSent = false;
-    if (notifPrefs?.email !== false && tutorUser.email) {
+    if (notifPrefs.email && tutorUser.email) {
       emailSent = await sendNotificationEmail(
         tutorUser.email,
         `New session request from ${familyName || 'a family'}`,
@@ -481,7 +482,7 @@ export const bookSession = onCall(
       );
     }
     let pushSent = false;
-    if (notifPrefs?.push !== false) {
+    if (notifPrefs.push) {
       pushSent = await sendPushNotification(tutorUserId, title, body, {
         sessionId: sessionRef.id,
         type: 'study_session_request',

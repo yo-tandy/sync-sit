@@ -15,7 +15,7 @@ import {
   parisWallTimeToUtc,
   parisDateString,
 } from '@ejm/shared-functions/scheduled/parisTime.js';
-import { timeToSlotIndex, getParentProfile } from '@ejm/shared-core';
+import { timeToSlotIndex, getParentProfile, resolveNotifPref } from '@ejm/shared-core';
 import type { RecurringSlot, User } from '@ejm/shared-core';
 import type { LocationPref } from '@ejm/study-core';
 import {
@@ -626,7 +626,11 @@ export const respondToSession = onCall(
       const familyName = (peekSession.familyName as string) || 'A family';
       const tutorEmail = tutorUser?.email as string | undefined;
       const isConfirm = outcome.action === 'confirm';
-      const prefs = isConfirm ? tutorUser?.notifPrefs?.confirmed : tutorUser?.notifPrefs?.cancelled;
+      const prefs = resolveNotifPref(
+        tutorUser?.notifPrefs,
+        'study',
+        isConfirm ? 'confirmed' : 'cancelled',
+      );
       const notifType = isConfirm ? 'study_session_confirmed' : 'study_session_declined';
       const title = isConfirm ? 'Proposal accepted' : 'Proposal declined';
       const body = isConfirm
@@ -634,7 +638,7 @@ export const respondToSession = onCall(
         : `${familyName} declined your session proposal.`;
       // Record the actual send outcomes, not assumptions.
       let emailSent = false;
-      if (prefs?.email !== false && tutorEmail) {
+      if (prefs.email && tutorEmail) {
         emailSent = await sendNotificationEmail(
           tutorEmail,
           title,
@@ -645,7 +649,7 @@ export const respondToSession = onCall(
       }
       // Send push before the doc write so pushSent records the real outcome.
       let pushSent = false;
-      if (prefs?.push !== false) {
+      if (prefs.push) {
         pushSent = await sendPushNotification(outcome.tutorUserId, title, body, { sessionId, type: notifType }, 'study');
       }
       await db.collection('notifications').add({

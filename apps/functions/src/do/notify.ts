@@ -1,4 +1,9 @@
-import type { NotificationType } from '@ejm/shared-core';
+import {
+  resolveNotifPref,
+  type AppNotifCategory,
+  type NotificationType,
+  type StoredNotifPrefs,
+} from '@ejm/shared-core';
 import { db } from '../config/firebase.js';
 import { sendNotificationEmail } from '../config/email.js';
 import { sendPushNotification } from '../config/push.js';
@@ -11,11 +16,12 @@ import { resolveDoLang, type DoLang, type DoNotificationContent } from './notify
  *
  * - per-recipient LANGUAGE from the user doc (`language`, en|fr) — the EN+FR
  *   templates are selected here, not by the caller;
- * - existing NotifPrefs categories gate email/push per recipient
- *   (newRequest / confirmed / cancelled — the sit semantic mapping:
- *   respondToRequest uses confirmed for accepted, cancelled for declined).
- *   Deliberately NO per-app pref category is added: that is issue #168
- *   Phase-2 territory the plan tells this PR not to pre-empt (§10);
+ * - NotifPrefs categories gate email/push per recipient (newRequest /
+ *   confirmed / cancelled — the sit semantic mapping: respondToRequest uses
+ *   confirmed for accepted, cancelled for declined), resolved through
+ *   `resolveNotifPref` against do's OWN block (issue #369: those three
+ *   categories are per-app, so a doer muting sync/do's high-volume offer
+ *   feed no longer also mutes a sit request about their babysitting);
  * - email + push outcomes are recorded honestly on the NotificationDoc
  *   (emailSent/pushSent reflect what the transports reported);
  * - everything is branded app='do' — fcmTokensDo push routing and Sync/Do
@@ -53,7 +59,12 @@ import { resolveDoLang, type DoLang, type DoNotificationContent } from './notify
  * all is an owner decision tracked on issue #336 — untouched here.
  */
 
-export type DoPrefCategory = 'newRequest' | 'confirmed' | 'cancelled';
+/**
+ * The per-app categories — which, since issue #369, is exactly the set a do
+ * notification can be gated by: `reminders` and `references` live in the
+ * SHARED block and do sends neither.
+ */
+export type DoPrefCategory = AppNotifCategory;
 
 export interface DoUserNotification {
   recipientUserId: string;
@@ -86,14 +97,14 @@ export async function sendDoNotificationToUser(
 
   const lang = resolveDoLang(userData.language);
   const content = n.content(lang);
+  // `null` = NO pref gate at all (the digest, whose opt-in is
+  // `profiles.doer.notifyNewTasks`) -- distinct from "resolved to allow".
   const prefs = n.prefCategory
-    ? (userData.notifPrefs as Record<string, { email?: boolean; push?: boolean } | undefined> | undefined)?.[
-        n.prefCategory
-      ]
-    : undefined;
+    ? resolveNotifPref(userData.notifPrefs as StoredNotifPrefs | undefined, 'do', n.prefCategory)
+    : null;
 
   let emailSent = false;
-  if (prefs?.email !== false && typeof userData.email === 'string' && userData.email) {
+  if ((prefs === null || prefs.email) && typeof userData.email === 'string' && userData.email) {
     emailSent = await sendNotificationEmail(
       userData.email,
       content.subject,
@@ -103,7 +114,7 @@ export async function sendDoNotificationToUser(
   }
 
   let pushSent = false;
-  if (prefs?.push !== false) {
+  if (prefs === null || prefs.push) {
     pushSent = await sendPushNotification(
       n.recipientUserId,
       content.title,

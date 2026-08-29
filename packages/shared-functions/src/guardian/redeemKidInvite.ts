@@ -1,6 +1,7 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { Timestamp } from 'firebase-admin/firestore';
 import { strongPasswordSchema } from '@ejm/sit-core';
+import { DEFAULT_NOTIF_PREFS } from '@ejm/shared-core';
 import { db, adminAuth } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
@@ -109,12 +110,11 @@ export const redeemKidInvite = onCall(
       status: 'active',
       language: 'en',
       profiles: {},
-      notifPrefs: {
-        newRequest: { push: true, email: true },
-        confirmed: { push: true, email: true },
-        cancelled: { push: true, email: true },
-        reminders: { push: true, email: false },
-      },
+      // App-scoped since issue #369; the shared constant is the single
+
+      // source for the product defaults.
+
+      notifPrefs: DEFAULT_NOTIF_PREFS,
       fcmTokens: [],
       createdAt: now,
       updatedAt: now,

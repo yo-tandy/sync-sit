@@ -3,7 +3,7 @@ import { db, adminAuth } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { FieldValue } from 'firebase-admin/firestore';
 import { strongPasswordSchema } from '@ejm/sit-core';
-import { getEjemEmail, getContact, type User } from '@ejm/shared-core';
+import { DEFAULT_NOTIF_PREFS, getEjemEmail, getContact, type User } from '@ejm/shared-core';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
 import { assertCodeIdentityClass } from '@ejm/shared-functions/auth/verificationCodeClass.js';
 import {
@@ -234,12 +234,11 @@ export const enrollBabysitter = onCall(
         },
       },
       language: 'en',
-      notifPrefs: {
-        newRequest: { push: true, email: true },
-        confirmed: { push: true, email: true },
-        cancelled: { push: true, email: true },
-        reminders: { push: true, email: false },
-      },
+      // App-scoped since issue #369; the shared constant is the single
+
+      // source for the product defaults.
+
+      notifPrefs: DEFAULT_NOTIF_PREFS,
       fcmTokens: [],
       createdAt: now,
       updatedAt: now,

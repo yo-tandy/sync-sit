@@ -5,6 +5,7 @@ import { writeUserActivity } from '../admin/writeAuditLog.js';
 import { notifyAllParents } from '../config/notifyParents.js';
 import { escapeHtml, sendNotificationEmail } from '../config/email.js';
 import { sendPushNotification } from '../config/push.js';
+import { resolveNotifPref } from '@ejm/shared-core';
 import { buildMergedOverride } from '@ejm/shared-functions/schedule/sessionOverride.js';
 import {
   isActiveGuardianOf,
@@ -177,11 +178,12 @@ export const respondToRequest = onCall(
 
       // Record the actual send outcomes, not assumptions.
       let emailSent = false;
-      if (babysitterUser.notifPrefs?.[prefCategory]?.email !== false && babysitterUser.email) {
+      const babysitterPrefs = resolveNotifPref(babysitterUser.notifPrefs, 'sit', prefCategory);
+      if (babysitterPrefs.email && babysitterUser.email) {
         emailSent = await sendNotificationEmail(babysitterUser.email as string, title, emailBody);
       }
       let pushSent = false;
-      if (babysitterUser.notifPrefs?.[prefCategory]?.push !== false) {
+      if (babysitterPrefs.push) {
         pushSent = await sendPushNotification(
           appointment.babysitterUserId as string,
           title,

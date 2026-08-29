@@ -7,6 +7,7 @@ import { escapeHtml, sendNotificationEmail, STUDY_APP_URL } from '@ejm/shared-fu
 import { sendPushNotification } from '@ejm/shared-functions/config/push.js';
 import type { StudyUser } from '@ejm/study-core';
 import { respondFamilyContactRequestSchema } from '../validation/contact.js';
+import { resolveNotifPref } from '@ejm/shared-core';
 
 /**
  * respondToFamilyContactRequest (issue #207 PR4): a PARENT answers a
@@ -158,7 +159,11 @@ export const respondToFamilyContactRequest = onCall(
     const tutorDoc = await db.collection('users').doc(result.tutorUserId).get();
     const tutorUser = tutorDoc.data() as StudyUser | undefined;
     const accepted = action === 'accept';
-    const prefs = tutorUser?.notifPrefs?.[accepted ? 'confirmed' : 'cancelled'];
+    const prefs = resolveNotifPref(
+      tutorUser?.notifPrefs,
+      'study',
+      accepted ? 'confirmed' : 'cancelled',
+    );
     const familyLabel = result.familyName || 'The family';
     const title = accepted ? 'Your request was accepted' : 'Your request was declined';
     const body = accepted
@@ -177,11 +182,11 @@ export const respondToFamilyContactRequest = onCall(
       `;
 
     let emailSent = false;
-    if (prefs?.email !== false && tutorUser?.email) {
+    if (prefs.email && tutorUser?.email) {
       emailSent = await sendNotificationEmail(tutorUser.email, title, emailBody, 'study');
     }
     let pushSent = false;
-    if (prefs?.push !== false) {
+    if (prefs.push) {
       pushSent = await sendPushNotification(
         result.tutorUserId,
         title,

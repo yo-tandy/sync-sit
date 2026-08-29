@@ -5,7 +5,7 @@ import { getCorsOrigin } from '../config/cors.js';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
 import { escapeHtml, sendNotificationEmail } from '../config/email.js';
 import { sendPushNotification } from '../config/push.js';
-import { getParentProfile, type User } from '@ejm/shared-core';
+import { getParentProfile, resolveNotifPref, type User } from '@ejm/shared-core';
 import { SIT_APP_URL } from '@ejm/shared-functions';
 
 interface ResubmitInput {
@@ -187,7 +187,8 @@ export const resubmitAppointment = onCall(
     });
 
     // Email
-    if (babysitterData?.notifPrefs?.newRequest?.email !== false && babysitterData?.email) {
+    const babysitterPrefs = resolveNotifPref(babysitterData?.notifPrefs, 'sit', 'newRequest');
+    if (babysitterPrefs.email && babysitterData?.email) {
       await sendNotificationEmail(
         babysitterData.email,
         `Request resubmitted by ${familyName}`,
@@ -198,7 +199,7 @@ export const resubmitAppointment = onCall(
     }
 
     // Push
-    if (babysitterData?.notifPrefs?.newRequest?.push !== false) {
+    if (babysitterPrefs.push) {
       await sendPushNotification(
         original.babysitterUserId,
         'Request resubmitted',

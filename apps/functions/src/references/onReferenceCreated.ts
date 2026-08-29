@@ -2,6 +2,7 @@ import { onDocumentCreated } from 'firebase-functions/v2/firestore';
 import { db } from '../config/firebase.js';
 import { escapeHtml, sendNotificationEmail } from '../config/email.js';
 import { sendPushNotification } from '../config/push.js';
+import { resolveNotifPref } from '@ejm/shared-core';
 import { SIT_APP_URL } from '@ejm/shared-functions';
 
 /**
@@ -26,7 +27,7 @@ export const notifyOnNewReference = onDocumentCreated(
     if (!babysitter) return;
 
     // Check notification preferences
-    const refsPrefs = babysitter.notifPrefs?.references || { push: true, email: true };
+    const refsPrefs = resolveNotifPref(babysitter.notifPrefs, 'sit', 'references');
     const submitterName = data.submittedByName || data.refName || 'A family';
 
     // Send email — record the actual send outcomes, not assumptions.
