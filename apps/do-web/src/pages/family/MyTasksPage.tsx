@@ -127,7 +127,7 @@ export function MyTasksPage() {
         <h1 className="text-xl font-bold text-gray-950">{t('family.myTasks.title')}</h1>
         <Link
           to="/family/post"
-          className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-brand-600 px-4 text-sm font-semibold text-white transition-all hover:bg-brand-600/90"
+          className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-brand-600 px-4 text-sm font-semibold text-white transition-all hover:bg-brand-600/90"
         >
           <PlusIcon className="h-4 w-4" />
           {t('family.myTasks.postCta')}

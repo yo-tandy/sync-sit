@@ -15,7 +15,7 @@ export function FamilyLayout() {
     <AuthGuard role="parent">
       {/* pb-16 clears the fixed app-switch bar on phones; the bar is
           md:hidden so the padding lifts at the same breakpoint. */}
-      <div className="min-h-screen bg-white pb-16 md:pb-0">
+      <div className="min-h-screen bg-ground pb-16 md:pb-0">
         <FamilyAppBar />
         <PageContainer>
           <Suspense

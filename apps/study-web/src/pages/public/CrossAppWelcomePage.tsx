@@ -291,7 +291,10 @@ export function CrossAppWelcomePage() {
     <div className="px-5 pt-8 pb-8">
       {/* App branding: the user just crossed apps — say WHERE they landed. */}
       <div className="mb-6 flex flex-col items-center gap-2">
-        <img src="/logo.png" alt="Sync/Study" className="h-14 w-14 rounded-2xl" />
+        {/* rounded-xl, not rounded-2xl — see the note on the sit twin of this
+            page (#395 review round 2): 2xl is exactly half of h-14, so it would
+            round this mark into a perfect circle. */}
+        <img src="/logo.png" alt="Sync/Study" className="h-14 w-14 rounded-xl" />
         <p className="text-lg font-bold text-gray-900">Sync/Study</p>
       </div>
       <Card>

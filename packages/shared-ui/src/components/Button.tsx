@@ -30,7 +30,7 @@ const variantClasses: Record<ButtonVariant, string> = {
 
 const sizeClasses: Record<ButtonSize, string> = {
   default: 'h-[52px] px-6 text-base rounded-xl',
-  sm: 'h-10 px-4 text-sm rounded-lg',
+  sm: 'h-10 px-4 text-sm rounded-md',
   icon: 'h-10 w-10 rounded-full p-0',
 };
 
