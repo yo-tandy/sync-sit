@@ -8,10 +8,11 @@ import { MemoryRouter } from 'react-router';
 const h = vi.hoisted(() => ({
   calls: [] as { name: string; payload: unknown }[],
   // Responses for successive list calls; the last one repeats.
-  pages: [] as { tasks: Record<string, unknown>[]; hasMore: boolean }[],
+  pages: [] as { tasks: Record<string, unknown>[]; hasMore: boolean; truncated?: boolean }[],
   offers: [] as Record<string, unknown>[],
   failNext: false,
   failOffers: false,
+  failDelete: false,
 }));
 
 vi.mock('@/config/firebase', () => ({ functions: {}, auth: {}, db: {}, storage: {} }));
@@ -38,7 +39,13 @@ vi.mock('firebase/functions', () => ({
         return Promise.reject(new Error('internal'));
       }
       const page = h.pages.length > 1 ? h.pages.shift()! : h.pages[0];
-      return Promise.resolve({ data: { tasks: [...page.tasks], hasMore: page.hasMore } });
+      return Promise.resolve({
+        data: { tasks: [...page.tasks], hasMore: page.hasMore, truncated: page.truncated },
+      });
+    }
+    if (name === 'doAdminDeleteTask' && h.failDelete) {
+      h.failDelete = false;
+      return Promise.reject(new Error('internal'));
     }
     return Promise.resolve({ data: { success: true } });
   },
@@ -115,6 +122,7 @@ describe('AdminDoTasksPage', () => {
     h.offers = [];
     h.failNext = false;
     h.failOffers = false;
+    h.failDelete = false;
     // The zustand store is a module-level singleton — reset the slice.
     useAdminStore.setState({
       doTasks: [],
@@ -122,6 +130,7 @@ describe('AdminDoTasksPage', () => {
       doTasksLoadingMore: false,
       doTasksHasMore: false,
       doTasksError: false,
+      doTasksTruncated: false,
     });
   });
 
@@ -259,6 +268,35 @@ describe('AdminDoTasksPage', () => {
     h.pages = [{ tasks: [], hasMore: false }];
     renderPage();
     expect(await screen.findByText(/no tasks found/i)).toBeInTheDocument();
+  });
+
+  // Round-1 note: a failed delete used to close the dialog exactly as a
+  // success does, leaving the row in place with no message — on the one
+  // action in this panel that also deletes files.
+  it('keeps the delete dialog open and explains a failure', async () => {
+    h.failDelete = true;
+    renderPage();
+    await waitFor(() => expect(listCalls()).toHaveLength(1));
+
+    fireEvent.click(screen.getByRole('button', { name: /delete/i }));
+    fireEvent.click(screen.getByRole('button', { name: /confirm/i }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/could not delete the task/i);
+    // Still open, so the admin can retry or escalate rather than read the
+    // closed dialog as success.
+    expect(screen.getByRole('button', { name: /confirm/i })).toBeInTheDocument();
+    // And no refetch was issued — nothing changed.
+    expect(listCalls()).toHaveLength(1);
+  });
+
+  // A search that filled its server-side window must not present "no match"
+  // as a definitive answer.
+  it('warns when the search window truncated the results', async () => {
+    h.pages = [{ tasks: [], hasMore: false, truncated: true }];
+    renderPage();
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      /only the most recent tasks were searched/i,
+    );
   });
 
   it('renders a load-error banner distinguishable from the empty state', async () => {

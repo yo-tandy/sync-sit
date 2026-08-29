@@ -206,6 +206,77 @@ describe('GDPR coverage for sync-do data (§11.4)', () => {
       expect(res.doPhotoPaths).toEqual([]);
     });
 
+    // The round-1 blocker. A family's export must not hand them offers
+    // `firestore.rules` deliberately withholds: the allow-list is
+    // ['pending','accepted','declined'], and §6.2's invisibility promise
+    // depends on it — a guardian DENIAL moves an offer to `withdrawn`, and
+    // §6.4's sibling flip routes guardian-gated offers to `expired` rather
+    // than `declined` so a family cannot flush them into view by accepting
+    // someone. A data subject's export carries THEIR personal data, never
+    // third-party data the platform deliberately kept from them.
+    it("excludes offer statuses the family may not read, and the helper they name", async () => {
+      await seedTask('gdpr-task-1', seed.family1Id, seed.parent1.uid);
+      await seedOffer('gdpr-task-1', seed.babysitter1.uid, seed.family1Id, {
+        status: 'pending',
+      });
+      await seedOffer('gdpr-task-1', seed.babysitter2.uid, seed.family1Id, {
+        status: 'accepted',
+      });
+      await seedOffer('gdpr-task-1', seed.babysitter3.uid, seed.family1Id, {
+        status: 'declined',
+        declinedReason: 'family_declined',
+      });
+      // Guardian-denied: `withdrawn`, and it names a minor helper.
+      await seedOffer('gdpr-task-1', seed.tutor1.uid, seed.family1Id, {
+        status: 'withdrawn',
+        doerFirstName: 'Gwen',
+        message: 'SECRET-WITHDRAWN-MESSAGE',
+        helper: { firstName: 'Hidden', lastName: 'Helper', age: 13 },
+      });
+      // Awaiting a guardian decision: never family-readable.
+      await seedOffer('gdpr-task-1', seed.tutor2.uid, seed.family1Id, {
+        status: 'pending_guardian',
+        doerFirstName: 'Gus',
+        message: 'SECRET-GUARDIAN-MESSAGE',
+        helper: { firstName: 'Secret', lastName: 'Sidekick', age: 14 },
+      });
+
+      const res = await callFunction<ExportResponse>(
+        'exportUserData',
+        { targetUserId: seed.parent1.uid },
+        adminToken,
+      );
+
+      expect(res.taskOffers.map((o) => o.doerUserId).sort()).toEqual(
+        [seed.babysitter1.uid, seed.babysitter2.uid, seed.babysitter3.uid].sort(),
+      );
+      // Neither the withheld offers' text nor the minor helpers they name
+      // may appear anywhere in the payload.
+      const blob = JSON.stringify(res);
+      expect(blob).not.toContain('SECRET-WITHDRAWN-MESSAGE');
+      expect(blob).not.toContain('SECRET-GUARDIAN-MESSAGE');
+      expect(blob).not.toContain('Hidden');
+      expect(blob).not.toContain('Sidekick');
+    });
+
+    // The other side of the same rule: those offers ARE the doer's own
+    // personal data, so the doer-side query must stay unrestricted.
+    it('still exports a withdrawn offer to the DOER who made it', async () => {
+      await seedTask('gdpr-task-1', seed.family1Id, seed.parent1.uid);
+      await seedOffer('gdpr-task-1', seed.tutor1.uid, seed.family1Id, {
+        status: 'withdrawn',
+        message: 'SECRET-WITHDRAWN-MESSAGE',
+      });
+
+      const res = await callFunction<ExportResponse>(
+        'exportUserData',
+        { targetUserId: seed.tutor1.uid },
+        adminToken,
+      );
+      expect(res.taskOffers.map((o) => o.doerUserId)).toEqual([seed.tutor1.uid]);
+      expect(JSON.stringify(res)).toContain('SECRET-WITHDRAWN-MESSAGE');
+    });
+
     it('leaves an unrelated user with no sync-do data at all', async () => {
       await seedTask('gdpr-task-1', seed.family1Id, seed.parent1.uid, {
         photos: [{ uid: seed.parent1.uid, photoId: 'ph-1' }],
@@ -261,6 +332,68 @@ describe('GDPR coverage for sync-do data (§11.4)', () => {
       ).toBe(false);
       // The co-parent's task is family data with a surviving owner.
       expect((await db.collection('doTasks').doc('gdpr-task-coparent').get()).exists).toBe(true);
+    });
+
+    // The second round-1 blocker. Deleting the accepted offer without
+    // touching the task left the family holding an `assigned` task that
+    // named an erased uid, pointed at a deleted offer, and no retention path
+    // ever collects (the sweep reaches expired-open, cancelled >30d and
+    // completed >180d — never `assigned`).
+    it("cancels and anonymizes a surviving family's task assigned to the erased doer", async () => {
+      const offerId = await seedOffer(
+        'gdpr-task-assigned',
+        seed.babysitter1.uid,
+        seed.family1Id,
+        { status: 'accepted' },
+      );
+      await seedTask('gdpr-task-assigned', seed.family1Id, seed.parent2.uid, {
+        status: 'assigned',
+        assignedUserId: seed.babysitter1.uid,
+        assignedOfferId: offerId,
+        assignedAt: new Date(),
+        agreedPrice: 40,
+      });
+
+      await callFunction('deleteUser', { targetUserId: seed.babysitter1.uid }, adminToken);
+
+      const task = (await getDb().collection('doTasks').doc('gdpr-task-assigned').get()).data()!;
+      // The family is unstuck: a terminal state the 30-day sweep reaches.
+      expect(task.status).toBe('cancelled');
+      expect(task.cancelledBy).toBe('admin');
+      expect(task.cancelledAt).toBeTruthy();
+      // No erased identifier survives on the live document.
+      expect(task.assignedUserId).toBe('deleted');
+      expect(task.assignedOfferId).toBeNull();
+      // The price stays: it is the family's record of what was agreed, the
+      // same way an anonymized past appointment keeps its scheduling detail.
+      expect(task.agreedPrice).toBe(40);
+      // And the offer itself is gone, doer-side personal data and all.
+      expect((await getDb().collection('taskOffers').doc(offerId).get()).exists).toBe(false);
+
+      const audit = await getDb()
+        .collection('auditLogs')
+        .where('action', '==', 'delete_user')
+        .where('targetUserId', '==', seed.babysitter1.uid)
+        .get();
+      expect(audit.docs[0].data().details).toMatchObject({ clearedDoAssignments: 1 });
+    });
+
+    it('leaves a COMPLETED task as history, anonymized but not re-cancelled', async () => {
+      await seedTask('gdpr-task-done', seed.family1Id, seed.parent2.uid, {
+        status: 'completed',
+        completedAt: new Date(),
+        assignedUserId: seed.babysitter1.uid,
+        assignedOfferId: 'gdpr-task-done_x',
+        agreedPrice: 55,
+      });
+
+      await callFunction('deleteUser', { targetUserId: seed.babysitter1.uid }, adminToken);
+
+      const task = (await getDb().collection('doTasks').doc('gdpr-task-done').get()).data()!;
+      expect(task.status).toBe('completed');
+      expect(task.cancelledAt ?? null).toBeNull();
+      expect(task.assignedUserId).toBe('deleted');
+      expect(task.agreedPrice).toBe(55);
     });
 
     it("deletes the family's remaining tasks when the LAST parent goes", async () => {
