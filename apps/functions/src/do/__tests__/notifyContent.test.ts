@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
+  buildEndorsementOutcome,
+  buildEndorsementReceived,
   buildGuardianApprovalRequested,
   buildGuardianDecisionForChild,
   buildNewTaskDigest,
@@ -19,7 +21,8 @@ import {
   type DoLang,
 } from '../notifyContent.js';
 
-// Copy pins for the nine §10 task/offer types (plan §13 PR9): EN+FR present,
+// Copy pins for the §10 notification copy — the nine task/offer types
+// (plan §13 PR9) and the endorsement trio that joins them at PR11: EN+FR present,
 // user-controlled strings escaped in HTML bodies (raw in subjects — RFC 5322
 // headers are never HTML-decoded), and every CTA on the LIVE web.app host —
 // never sync-do.com (§10 / issue #156).
@@ -68,6 +71,10 @@ describe('every builder, both languages', () => {
         { taskId: 't1', title: 'Mow the lawn', category: 'green_thumb', areaLabel: '16e', suggestedBudget: 30 },
         { taskId: 't2', title: 'Fix the printer', category: 'it', areaLabel: 'Boulogne', suggestedBudget: null },
       ]),
+      // The §10 endorsement trio (PR11) — held to every pin above.
+      buildEndorsementReceived(lang, { submitterLabel: 'Marie Dupont', taskTitle: 'Mow the lawn' }),
+      buildEndorsementOutcome(lang, { action: 'accept', doerFirstName: 'Léa' }),
+      buildEndorsementOutcome(lang, { action: 'decline', doerFirstName: 'Léa' }),
     ];
   }
 
@@ -219,5 +226,81 @@ describe('fallbackDoerName', () => {
     // exactly as it does to a real name), raw in the plain-text push body.
     expect(fr.emailBody).toContain('L&#39;étudiant(e)');
     expect(fr.body).toContain("L'étudiant(e)");
+  });
+});
+
+describe('the §10 endorsement trio (decision 12, PR11)', () => {
+  it('escapes the submitter label and task title in the received body', () => {
+    const c = buildEndorsementReceived('en', { submitterLabel: XSS, taskTitle: XSS });
+    expect(c.emailBody).toContain(XSS_ESCAPED);
+    expect(c.emailBody).not.toContain('<img src=x>');
+    // Subject (RFC 5322) and push body (plain text) stay raw.
+    expect(c.subject).toContain(XSS);
+    expect(c.body).toContain(XSS);
+  });
+
+  it('names the task the endorsement came out of (what study cannot say)', () => {
+    for (const lang of LANGS) {
+      const c = buildEndorsementReceived(lang, {
+        submitterLabel: 'Marie Dupont',
+        taskTitle: 'Assemble the PAX',
+      });
+      expect(c.emailBody).toContain('Assemble the PAX');
+      expect(c.body).toContain('Assemble the PAX');
+    }
+  });
+
+  it('says the endorsement stays private until the student accepts', () => {
+    expect(buildEndorsementReceived('en', { submitterLabel: 'M', taskTitle: 't' }).emailBody)
+      .toMatch(/private until you accept/i);
+    expect(buildEndorsementReceived('fr', { submitterLabel: 'M', taskTitle: 't' }).emailBody)
+      .toMatch(/privée/i);
+  });
+
+  it('points the received CTA at the §9.2 management surface', () => {
+    for (const lang of LANGS) {
+      expect(
+        buildEndorsementReceived(lang, { submitterLabel: 'M', taskTitle: 't' }).emailBody,
+      ).toContain('https://sync-do-app.web.app/endorsements');
+    }
+  });
+
+  it('escapes the doer first name in the outcome body', () => {
+    for (const action of ['accept', 'decline'] as const) {
+      const c = buildEndorsementOutcome('en', { action, doerFirstName: XSS });
+      expect(c.emailBody).toContain(XSS_ESCAPED);
+      expect(c.emailBody).not.toContain('<img src=x>');
+    }
+  });
+
+  // The decline half must read as an OUTCOME, not as a rejection of the
+  // family — the notifyEndorsementOutcome precedent. Pinned because the
+  // obvious wording ("Léa rejected your endorsement") is the wrong one and
+  // nothing else in the suite would catch it.
+  it('keeps the decline copy neutral — never "rejected" / "refusé"', () => {
+    for (const lang of LANGS) {
+      const c = buildEndorsementOutcome(lang, { action: 'decline', doerFirstName: 'Léa' });
+      const all = `${c.subject} ${c.emailBody} ${c.title} ${c.body}`.toLowerCase();
+      expect(all).not.toMatch(/reject|refus|declin/);
+      expect(all).toMatch(/not published|pas été publiée/);
+    }
+  });
+
+  it('accept and decline copy differ, in both languages', () => {
+    for (const lang of LANGS) {
+      const yes = buildEndorsementOutcome(lang, { action: 'accept', doerFirstName: 'Léa' });
+      const no = buildEndorsementOutcome(lang, { action: 'decline', doerFirstName: 'Léa' });
+      expect(yes.emailBody).not.toBe(no.emailBody);
+      expect(yes.subject).not.toBe(no.subject);
+    }
+  });
+
+  // A corrupted doc with no firstName must not render "The student" inside
+  // otherwise-French mail (the PR #334 round-3 fix, applied to the new copy).
+  it('falls back to the LOCALIZED doer name when firstName is missing', () => {
+    expect(buildEndorsementOutcome('fr', { action: 'accept', doerFirstName: null }).body)
+      .toContain(fallbackDoerName('fr'));
+    expect(buildEndorsementOutcome('en', { action: 'accept', doerFirstName: null }).body)
+      .toContain(fallbackDoerName('en'));
   });
 });

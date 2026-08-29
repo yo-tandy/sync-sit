@@ -594,3 +594,101 @@ export function buildNewTaskDigest(
         : `${n} new tasks in your categories — take a look at the board.`,
   };
 }
+
+// ── The §10 endorsement trio (decision 12, §13 PR11). PR9 landed the nine
+//    task/offer templates and all twelve NotificationType values; these
+//    three land here, with the surface that emits them. ──────────────────
+
+/** Where the doer manages the set (§9.2). */
+const MY_ENDORSEMENTS_URL = `${DO_APP_URL}/endorsements`;
+
+/**
+ * `doer_endorsement_received` — to the endorsed STUDENT, on submit.
+ *
+ * Names the task the endorsement came out of, which study's equivalent
+ * cannot do (its relationship gate is a contact request, not a completed
+ * job): "the Dupont family endorsed you" is thinner than "…for assembling
+ * the PAX", and the student is being asked to decide whether to publish it.
+ * A supervised student's guardians receive this notice as an automatic
+ * mirror (`mirrorNotificationToGuardians`) — nothing here writes a second
+ * copy.
+ */
+export function buildEndorsementReceived(
+  lang: DoLang,
+  p: { submitterLabel: string; taskTitle: string },
+): DoNotificationContent {
+  if (lang === 'fr') {
+    return {
+      subject: `${p.submitterLabel} vous a recommandé(e)`,
+      emailBody: `
+        <p><strong>${escapeHtml(p.submitterLabel)}</strong> a écrit une recommandation pour vous après la tâche « ${escapeHtml(p.taskTitle)} ».</p>
+        <p>Elle reste privée tant que vous ne l'avez pas acceptée. Lisez-la et décidez si elle doit apparaître auprès des familles avec vos offres.</p>
+        ${cta(MY_ENDORSEMENTS_URL, 'Voir la recommandation')}
+      `,
+      title: 'Nouvelle recommandation',
+      body: `${p.submitterLabel} vous a recommandé(e) après « ${p.taskTitle} ».`,
+    };
+  }
+  return {
+    subject: `${p.submitterLabel} endorsed you`,
+    emailBody: `
+      <p><strong>${escapeHtml(p.submitterLabel)}</strong> wrote an endorsement for you after the task "${escapeHtml(p.taskTitle)}".</p>
+      <p>It stays private until you accept it. Read it and decide whether families should see it with your offers.</p>
+      ${cta(MY_ENDORSEMENTS_URL, 'View endorsement')}
+    `,
+    title: 'New endorsement',
+    body: `${p.submitterLabel} endorsed you after "${p.taskTitle}".`,
+  };
+}
+
+/**
+ * `doer_endorsement_published` / `doer_endorsement_declined` — to the
+ * SUBMITTING family's parents, once the student has responded.
+ *
+ * The decline half reads NEUTRALLY, the `notifyEndorsementOutcome`
+ * precedent: it says the endorsement was not published, never that the
+ * student rejected the family. The family learns the outcome either way —
+ * without this half they submit into silence.
+ */
+export function buildEndorsementOutcome(
+  lang: DoLang,
+  p: { action: 'accept' | 'decline'; doerFirstName: string | null },
+): DoNotificationContent {
+  const name = p.doerFirstName ?? fallbackDoerName(lang);
+  if (lang === 'fr') {
+    return p.action === 'accept'
+      ? {
+          subject: `Votre recommandation pour ${name} est publiée`,
+          emailBody: `
+            <p>Votre recommandation pour <strong>${escapeHtml(name)}</strong> est maintenant visible par les familles avec ses offres.</p>
+          `,
+          title: 'Recommandation publiée',
+          body: `Votre recommandation pour ${name} est publiée.`,
+        }
+      : {
+          subject: 'À propos de votre recommandation',
+          emailBody: `
+            <p>Votre recommandation pour <strong>${escapeHtml(name)}</strong> n'a pas été publiée.</p>
+          `,
+          title: 'Recommandation non publiée',
+          body: `Votre recommandation pour ${name} n'a pas été publiée.`,
+        };
+  }
+  return p.action === 'accept'
+    ? {
+        subject: `Your endorsement of ${name} is published`,
+        emailBody: `
+          <p>Your endorsement of <strong>${escapeHtml(name)}</strong> is now visible to families alongside their offers.</p>
+        `,
+        title: 'Endorsement published',
+        body: `Your endorsement of ${name} is published.`,
+      }
+    : {
+        subject: 'About your endorsement',
+        emailBody: `
+          <p>Your endorsement of <strong>${escapeHtml(name)}</strong> was not published.</p>
+        `,
+        title: 'Endorsement not published',
+        body: `Your endorsement of ${name} was not published.`,
+      };
+}
