@@ -8,8 +8,11 @@ import { defineConfig, globalIgnores } from 'eslint/config'
 // "type": "module", so a plain .js flat config would be reparsed as ESM.
 export default defineConfig([
   // `dist` is build output; `*-bundle` dirs are written and removed by
-  // scripts/bundle-shared-for-deploy.js during predeploy.
-  globalIgnores(['dist', '*-bundle']),
+  // scripts/bundle-shared-for-deploy.js during predeploy; `coverage` holds
+  // vitest reports, whose lcov-report/*.js are vendored third-party scripts
+  // the .cjs/.mjs blocks below would otherwise lint (ESLint does not read
+  // .gitignore).
+  globalIgnores(['dist', '*-bundle', 'build', '.output', 'coverage']),
   {
     files: ['**/*.ts'],
     extends: [js.configs.recommended, tseslint.configs.recommended],
@@ -19,10 +22,12 @@ export default defineConfig([
     },
   },
   {
-    // The committed operational scripts (seed / backfill / count). Plain
-    // CommonJS, so no typescript-eslint — but they ARE linted rather than
-    // scanned and silently matched by nothing (PR #377 review).
-    files: ['**/*.cjs'],
+    // The committed operational scripts (seed / backfill / count), plus any
+    // plain .js. Both are CommonJS here because neither package sets
+    // "type": "module" - and ESLint's per-extension default would wrongly
+    // treat a bare .js as ESM, so sourceType is set explicitly. .cjs alone
+    // left plain .js scanned and matched by nothing (PR #383 review).
+    files: ['**/*.{js,cjs}'],
     extends: [js.configs.recommended],
     languageOptions: {
       ecmaVersion: 2022,
