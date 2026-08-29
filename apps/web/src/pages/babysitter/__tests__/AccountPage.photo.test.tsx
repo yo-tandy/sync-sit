@@ -12,25 +12,32 @@ const h = vi.hoisted(() => ({
     firebaseUser: { uid: 'bs1' },
     refreshUserDoc: vi.fn(() => Promise.resolve()),
   },
-  updateDoc: vi.fn(() => Promise.resolve()),
-  uploadBytes: vi.fn(() => Promise.resolve()),
-  getDownloadURL: vi.fn(() => Promise.resolve('https://firebasestorage.example/new.jpg')),
-  deleteObject: vi.fn(() => Promise.resolve()),
+  updateDoc: vi.fn<(ref: { path: string }, data: Record<string, unknown>) => Promise<void>>(
+    () => Promise.resolve(),
+  ),
+  uploadBytes: vi.fn<(ref: { path: string }, data: unknown) => Promise<void>>(() =>
+    Promise.resolve(),
+  ),
+  getDownloadURL: vi.fn<(ref: { path: string }) => Promise<string>>(() =>
+    Promise.resolve('https://firebasestorage.example/new.jpg'),
+  ),
+  deleteObject: vi.fn<(ref: { path: string }) => Promise<void>>(() => Promise.resolve()),
 }));
 
 vi.mock('@/config/firebase', () => ({ functions: {}, auth: {}, db: {}, storage: {} }));
 
 vi.mock('firebase/firestore', () => ({
   doc: (_db: unknown, ...path: string[]) => ({ path: path.join('/') }),
-  updateDoc: (...args: unknown[]) => h.updateDoc(...args),
+  updateDoc: (...args: [ref: { path: string }, data: Record<string, unknown>]) =>
+    h.updateDoc(...args),
   serverTimestamp: () => 'ts',
 }));
 
 vi.mock('firebase/storage', () => ({
   ref: (_storage: unknown, path: string) => ({ path }),
-  uploadBytes: (...args: unknown[]) => h.uploadBytes(...args),
-  getDownloadURL: (...args: unknown[]) => h.getDownloadURL(...args),
-  deleteObject: (...args: unknown[]) => h.deleteObject(...args),
+  uploadBytes: (...args: [ref: { path: string }, data: unknown]) => h.uploadBytes(...args),
+  getDownloadURL: (...args: [ref: { path: string }]) => h.getDownloadURL(...args),
+  deleteObject: (...args: [ref: { path: string }]) => h.deleteObject(...args),
 }));
 
 vi.mock('@/lib/pushNotifications', () => ({
@@ -86,7 +93,7 @@ describe('BabysitterAccountPage photo lifecycle', () => {
     fireEvent.change(input, { target: { files: [file] } });
 
     await waitFor(() => expect(h.uploadBytes).toHaveBeenCalled());
-    expect((h.uploadBytes.mock.calls[0][0] as { path: string }).path).toBe(
+    expect(h.uploadBytes.mock.calls[0][0].path).toBe(
       'profile-photos/bs1.jpg',
     );
   });

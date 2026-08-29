@@ -12,14 +12,17 @@ const h = vi.hoisted(() => ({
     userDoc: null as unknown,
     refreshUserDoc: vi.fn(() => Promise.resolve()),
   },
-  updateDoc: vi.fn(() => Promise.resolve()),
+  updateDoc: vi.fn<(ref: { path: string }, data: Record<string, unknown>) => Promise<void>>(
+    () => Promise.resolve(),
+  ),
 }));
 
 vi.mock('@/config/firebase', () => ({ db: {} }));
 
 vi.mock('firebase/firestore', () => ({
   doc: (_db: unknown, ...path: string[]) => ({ path: path.join('/') }),
-  updateDoc: (...args: unknown[]) => h.updateDoc(...args),
+  updateDoc: (...args: [ref: { path: string }, data: Record<string, unknown>]) =>
+    h.updateDoc(...args),
   serverTimestamp: () => 'ts',
 }));
 
@@ -52,7 +55,7 @@ describe('InstallAppBanner', () => {
       expect.objectContaining({ path: 'users/u1' }),
       { dismissedPwaInstallBannerStudy: true, updatedAt: 'ts' },
     );
-    const payload = h.updateDoc.mock.calls[0][1] as Record<string, unknown>;
+    const payload = h.updateDoc.mock.calls[0][1];
     expect(payload).not.toHaveProperty('dismissedPwaInstallBanner');
     // Optimistically hidden regardless of the write outcome.
     expect(screen.queryByRole('link', { name: /install/i })).toBeNull();

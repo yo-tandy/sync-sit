@@ -7,7 +7,9 @@ import { MemoryRouter, Routes, Route } from 'react-router';
 // after account creation (signInWithEmailAndPassword + auth-store wait).
 const h = vi.hoisted(() => ({
   callable: vi.fn(),
-  signIn: vi.fn(() => Promise.resolve()),
+  signIn: vi.fn<(auth: unknown, email: string, password: string) => Promise<void>>(() =>
+    Promise.resolve(),
+  ),
   authState: {
     loading: false,
     userDoc: { uid: 'kid1' } as Record<string, unknown> | null,
@@ -22,7 +24,9 @@ vi.mock('firebase/functions', () => ({
 }));
 
 vi.mock('firebase/auth', () => ({
-  signInWithEmailAndPassword: (...args: unknown[]) => h.signIn(...args),
+  signInWithEmailAndPassword: (
+    ...args: [auth: unknown, email: string, password: string]
+  ) => h.signIn(...args),
 }));
 
 // Mirrors the zustand static API the enrollment sign-in wait uses.

@@ -19,8 +19,12 @@ const h = vi.hoisted(() => ({
   },
   // (name, payload) => Promise<{ data }>. Reassigned/inspected per test.
   callable: vi.fn(),
-  uploadBytes: vi.fn(() => Promise.resolve()),
-  getDownloadURL: vi.fn(() => Promise.resolve('https://should-never-be-called')),
+  uploadBytes: vi.fn<(ref: { path: string }, data: File) => Promise<void>>(() =>
+    Promise.resolve(),
+  ),
+  getDownloadURL: vi.fn<(ref: { path: string }) => Promise<string>>(() =>
+    Promise.resolve('https://should-never-be-called'),
+  ),
 }));
 
 vi.mock('@/config/firebase', () => ({
@@ -35,8 +39,8 @@ vi.mock('firebase/functions', () => ({
 
 vi.mock('firebase/storage', () => ({
   ref: (_storage: unknown, path: string) => ({ path }),
-  uploadBytes: (...args: unknown[]) => h.uploadBytes(...args),
-  getDownloadURL: (...args: unknown[]) => h.getDownloadURL(...args),
+  uploadBytes: (...args: [ref: { path: string }, data: File]) => h.uploadBytes(...args),
+  getDownloadURL: (...args: [ref: { path: string }]) => h.getDownloadURL(...args),
 }));
 
 vi.mock('@/stores/authStore', () => ({
@@ -152,7 +156,7 @@ describe('family VerificationPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Upload' }));
 
     await waitFor(() => expect(h.uploadBytes).toHaveBeenCalledTimes(1));
-    const [storageRef, uploaded] = h.uploadBytes.mock.calls[0] as [{ path: string }, File];
+    const [storageRef, uploaded] = h.uploadBytes.mock.calls[0];
     expect(storageRef.path).toMatch(/^verification-documents\/fam1\/\d+-id\.pdf$/);
     expect(uploaded).toBe(file);
 

@@ -6,29 +6,29 @@
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
+      "types": "./src/index.ts",
       "import": "./src/index.ts",
-      "require": "./dist/index.js",
-      "types": "./src/index.ts"
+      "require": "./dist/index.js"
     },
     "./types/*.js": {
+      "types": "./src/types/*.ts",
       "import": "./src/types/*.ts",
-      "require": "./dist/types/*.js",
-      "types": "./src/types/*.ts"
+      "require": "./dist/types/*.js"
     },
     "./constants/*.js": {
+      "types": "./src/constants/*.ts",
       "import": "./src/constants/*.ts",
-      "require": "./dist/constants/*.js",
-      "types": "./src/constants/*.ts"
+      "require": "./dist/constants/*.js"
     },
     "./utils/*.js": {
+      "types": "./src/utils/*.ts",
       "import": "./src/utils/*.ts",
-      "require": "./dist/utils/*.js",
-      "types": "./src/utils/*.ts"
+      "require": "./dist/utils/*.js"
     },
     "./validation/*.js": {
+      "types": "./src/validation/*.ts",
       "import": "./src/validation/*.ts",
-      "require": "./dist/validation/*.js",
-      "types": "./src/validation/*.ts"
+      "require": "./dist/validation/*.js"
     }
   },
   "scripts": {

@@ -71,19 +71,42 @@ jobs:
   #
   # No build step: every packages/* manifest maps its `types` export condition
   # to `src/*.ts`, so `tsc` reads sources directly and a fresh checkout needs no
-  # `dist`. Verified by running `pnpm -r typecheck` green with no dist present.
+  # `dist`.
+  #
+  # That held here only by accident until #406. TypeScript matches export
+  # condition KEYS IN ORDER, and `types` used to be listed AFTER `require`, so
+  # a CJS consumer matched `require` → `dist/*.d.ts` and fell through to
+  # `types` → `src` ONLY because this job's checkout has no `dist` to match. A
+  # developer with one got the opposite answer — which is why local runs and
+  # this job could disagree in both directions, inventing errors that were not
+  # real and hiding ones that were. `types` is now listed first, so source is
+  # the answer regardless of what is on disk and this job no longer depends on
+  # being clean. `release-workflow.test.ts` pins the ordering.
   #
   # SCOPE, precisely: every workspace project now defines `typecheck` (`tests`
   # had no such script until this change, so `pnpm -r` silently skipped the
   # integration suite entirely; release-workflow.test.ts pins that they all
-  # still do). Two gaps remain, neither a regression here:
-  #   - the ~250 test files under apps/{web,study-web,do-web}/src, which their
-  #     tsconfig.app.json excludes. Bringing them in needs ~424 bare `vi.fn()`
-  #     mocks across 145 files retyped first — issue #393.
+  # still do). Since #393/#411 the three web apps also run a SECOND pass —
+  # `tsc --noEmit -p tsconfig.test.json`, the same two-pass form #373 gave the
+  # functions packages — so the 246 test files their tsconfig.app.json excludes
+  # are covered here too, along with each web app's vitest.setup.ts. Each web
+  # app's vitest.config.ts is now checked as well, but by the FIRST pass —
+  # tsconfig.node.json lists it beside vite.config.ts, which is the faithful
+  # environment for a file that runs in Node (no DOM lib). Two gaps remain,
+  # neither a regression here:
   #   - ALL the root-level TypeScript outside any workspace package, which no
   #     tsconfig covers and `pnpm -r` skips: scripts/__tests__/ (this
   #     workflow's own pins among them), tests-e2e/, and the root configs
   #     playwright.config.ts and vitest.config.ts.
+  #   - the vitest.config.ts INSIDE each of the other seven workspace packages
+  #     that have one: apps/{functions,study-functions} and
+  #     packages/{shared-core,shared-functions,sit-core,study-core,do-core}
+  #     (shared-ui has none). Being inside a package does not help — every base
+  #     config includes only `src`, so nothing lists them. The three web apps
+  #     closed this for themselves by naming vitest.config.ts in their
+  #     tsconfig.node.json (#411). Those seven have no node-side config to
+  #     name it in, so closing them means picking a home deliberately rather
+  #     than copying this one line.
   # `scripts/__tests__/release-workflow.test.ts` pins the parts of this job
   # whose loss would be silent, including that every workspace package keeps a
   # `typecheck` script — the gap `tests` was in until now.

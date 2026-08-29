@@ -22,5 +22,10 @@
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true
   },
-  "include": ["vite.config.ts"]
+  // vite.config.ts and vitest.config.ts are the app's two Node-side build
+  // configs. vitest.config.ts was type-checked by nothing before #411 --
+  // tsconfig.app.json includes only `src` -- and this is its correct home
+  // rather than tsconfig.test.json: it runs in Node, so it wants this
+  // project's lib/types (no DOM) rather than the app's (PR #411 review).
+  "include": ["vite.config.ts", "vitest.config.ts"]
 }

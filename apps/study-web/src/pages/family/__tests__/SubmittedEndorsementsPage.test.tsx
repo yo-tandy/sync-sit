@@ -16,7 +16,9 @@ const h = vi.hoisted(() => ({
   endorsementDocs: [] as Record<string, unknown>[],
   requestDocs: [] as Record<string, unknown>[],
   wheres: [] as [string, string, unknown][],
-  updateDoc: vi.fn(() => Promise.resolve()),
+  updateDoc: vi.fn<(ref: { path: string }, data: Record<string, unknown>) => Promise<void>>(
+    () => Promise.resolve(),
+  ),
   unsubscribe: vi.fn(),
 }));
 
@@ -38,7 +40,8 @@ vi.mock('firebase/firestore', () => ({
     return h.unsubscribe;
   },
   doc: (_db: unknown, ...path: string[]) => ({ path: path.join('/') }),
-  updateDoc: (...args: unknown[]) => h.updateDoc(...args),
+  updateDoc: (...args: [ref: { path: string }, data: Record<string, unknown>]) =>
+    h.updateDoc(...args),
   serverTimestamp: () => 'SERVER_TS',
   deleteField: () => 'DELETE_FIELD',
 }));
@@ -115,10 +118,7 @@ describe('family SubmittedEndorsementsPage', () => {
     fireEvent.change(textarea, { target: { value: 'Updated endorsement text body.' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
-    const [ref, payload] = h.updateDoc.mock.calls[0] as [
-      { path: string },
-      Record<string, unknown>,
-    ];
+    const [ref, payload] = h.updateDoc.mock.calls[0];
     expect(ref.path).toBe('references/e1');
     expect(Object.keys(payload).sort()).toEqual(['refName', 'referenceText', 'updatedAt']);
     expect(payload.referenceText).toBe('Updated endorsement text body.');
@@ -133,10 +133,7 @@ describe('family SubmittedEndorsementsPage', () => {
     const buttons = screen.getAllByRole('button', { name: 'Withdraw' });
     fireEvent.click(buttons[buttons.length - 1]);
     await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
-    const [ref, payload] = h.updateDoc.mock.calls[0] as [
-      { path: string },
-      Record<string, unknown>,
-    ];
+    const [ref, payload] = h.updateDoc.mock.calls[0];
     expect(ref.path).toBe('references/e1');
     expect(Object.keys(payload).sort()).toEqual(['status', 'updatedAt']);
     expect(payload.status).toBe('removed');

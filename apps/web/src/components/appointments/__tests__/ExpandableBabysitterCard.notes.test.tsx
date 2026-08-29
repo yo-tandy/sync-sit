@@ -19,7 +19,9 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import type { AppointmentDoc, BabysitterSummary } from '@ejm/sit-core';
 
 const h = vi.hoisted(() => ({
-  callable: vi.fn(() => Promise.resolve({ data: { success: true } })),
+  callable: vi.fn<(name: string, payload?: unknown) => Promise<{ data: unknown }>>(() =>
+    Promise.resolve({ data: { success: true } }),
+  ),
 }));
 
 // Echo translation keys so we can assert on them directly.
@@ -311,7 +313,7 @@ describe('ExpandableBabysitterCard — appointment notes (pre)', () => {
     // can render noteError -- and a failed save would turn silent.
     let rejectCall!: (e: Error) => void;
     h.callable.mockImplementationOnce(
-      () => new Promise((_resolve, reject) => { rejectCall = reject; }),
+      () => new Promise<{ data: unknown }>((_resolve, reject) => { rejectCall = reject; }),
     );
     render(<ExpandableBabysitterCard appointment={apt()} info={info} variant="confirmed" />);
     expandCard();

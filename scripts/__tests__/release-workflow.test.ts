@@ -74,6 +74,31 @@ function workspacePackageDirs(): string[] {
   );
 }
 
+type Manifest = {
+  dir: string;
+  name: string;
+  scripts: Record<string, string>;
+  exports?: unknown;
+};
+
+/** Every workspace package's parsed manifest, keyed off the same membership. */
+function workspaceManifests(): Manifest[] {
+  return workspacePackageDirs().map((dir) => {
+    const pkg = JSON.parse(readFileSync(resolve(dir, 'package.json'), 'utf8')) as {
+      name: string;
+      scripts?: Record<string, string>;
+      exports?: unknown;
+    };
+    return { dir, name: pkg.name, scripts: pkg.scripts ?? {}, exports: pkg.exports };
+  });
+}
+
+/** The root manifest — the one that owns `test:unit` and `typecheck`. */
+const rootManifest = () =>
+  JSON.parse(readFileSync(resolve(__dirname, '../../package.json'), 'utf8')) as {
+    scripts: Record<string, string>;
+  };
+
 // `on:` parses to the boolean key `true` in YAML 1.1 — the Norway problem's
 // cousin. Read both so this doesn't hinge on the parser's version.
 const triggers = (doc: Record<string, unknown>) =>
@@ -315,15 +340,358 @@ describe('typecheck gate (issue #378)', () => {
     // a new top-level glob (`services/*`) would be skipped by the walk and the
     // floor would still pass, and dropping the `!apps/mobile` exclusion would
     // leave mobile exempt forever.
-    const dirs = workspacePackageDirs();
-    const missing = dirs.filter((dir) => {
-      const pkg = JSON.parse(readFileSync(resolve(dir, 'package.json'), 'utf8'));
-      return !pkg.scripts?.typecheck;
-    });
+    const dirs = workspaceManifests();
+    const missing = dirs.filter((pkg) => !pkg.scripts.typecheck).map((pkg) => pkg.dir);
     expect(missing).toEqual([]);
     // Floor: asserted after `missing`, and against the SAME list it was derived
     // from, so an empty expansion fails HERE rather than passing vacuously.
     expect(dirs.length).toBeGreaterThanOrEqual(12);
+  });
+});
+
+/**
+ * Parse the pnpm package selection out of the first command of a script.
+ *
+ * Models `pnpm`'s selection surface, not the whole CLI: the `-r`/`--recursive`
+ * flag and `--filter <x>` / `--filter=<x>` / `-F <x>` / `-F=<x>`, with a
+ * leading `!` marking an exclusion. That is deliberately narrow — but narrow
+ * has to mean LOUD, not lenient: any other spelling of a selection flag throws
+ * rather than being skipped, because a skipped `-F web` would leave the pins
+ * below asserting that ten suites run while pnpm ran one.
+ */
+export function pnpmSelection(script: string): {
+  recursive: boolean;
+  includes: string[];
+  excludes: string[];
+  runsScript: string | undefined;
+} {
+  const [command = ''] = script.split('&&');
+  const tokens = (command.match(/'[^']*'|"[^"]*"|\S+/g) ?? []).map((t) =>
+    /^(['"]).*\1$/.test(t) ? t.slice(1, -1) : t,
+  );
+  const includes: string[] = [];
+  const excludes: string[] = [];
+  const positional: string[] = [];
+  let recursive = false;
+  let seenPnpm = false;
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i];
+    if (token === '-r' || token === '--recursive') {
+      recursive = true;
+      continue;
+    }
+    let value: string | undefined;
+    if (token === '--filter' || token === '-F') {
+      value = tokens[++i];
+      // A dangling flag is modelled but incomplete — say so, rather than
+      // falling through to the "unmodelled flag" message below and pointing
+      // the next reader at the wrong problem.
+      if (value === undefined) throw new Error(`pnpm selection flag ${token} with no value`);
+    } else {
+      // Strip quotes off the captured value too: the tokenizer only unwraps a
+      // quote spanning the WHOLE token, so `--filter='!x'` arrives with them
+      // still attached and `'!x'` would classify as an INCLUDE named `'!x'`.
+      // Red rather than green, but pointing at the wrong problem — the thing
+      // the dangling-flag branch above exists to avoid.
+      value = token.match(/^(?:--filter|-F)=(.*)$/)?.[1]?.replace(/^(['"])(.*)\1$/, '$2');
+    }
+    if (value === undefined) {
+      // Any OTHER spelling of a selection flag — `--filter-prod`, an attached
+      // `-Fweb` — throws rather than being skipped, the way
+      // expandWorkspacePatterns throws on a pattern it cannot expand. Skipping
+      // it silently is the unsafe direction: the pins below would compute a
+      // selection of ten packages while pnpm ran one, which is exactly the
+      // #401 failure mode they exist to prevent.
+      if (/^(?:-F|--filter)/.test(token)) {
+        throw new Error(
+          `unmodelled pnpm selection flag: ${token} — extend pnpmSelection() in ` +
+            `scripts/__tests__/release-workflow.test.ts to cover it (do NOT drop the flag or ` +
+            `loosen the pin; mis-reading the selection is the bug this guards against)`,
+        );
+      }
+      // Not a selection flag. Everything before `pnpm` (an env prefix, a
+      // runner) and every other `-`-prefixed token is noise; what is left is
+      // the positional tail, whose head names the script pnpm runs.
+      if (!seenPnpm) seenPnpm = token === 'pnpm' || token.endsWith('/pnpm');
+      else if (!token.startsWith('-')) positional.push(token);
+      continue;
+    }
+    if (value.startsWith('!')) excludes.push(value.slice(1));
+    else includes.push(value);
+  }
+  const runsScript = positional[0] === 'run' ? positional[1] : positional[0];
+  return { recursive, includes, excludes, runsScript };
+}
+
+/**
+ * Contract pins for the unit-test lane (issue #401).
+ *
+ * `test:unit` used to name its ten packages by hand, so a NEW workspace
+ * package shipped with its suite silently skipped — CI green, rollup green,
+ * nothing anywhere saying the suite never ran. Same class as #216 (an absent
+ * test job hidden by a green rollup) and #378 (`pnpm -r typecheck` skipping a
+ * package with no script, so "12 of 12" was really 11).
+ *
+ * The script now selects recursively and subtracts an exclusion list, so the
+ * list cannot drift. These pins guard the two ways that could silently regress:
+ * someone reintroduces a hand-written filter list, or someone adds an
+ * exclusion that is not a recorded decision.
+ */
+describe('unit test lane (issue #401)', () => {
+  /**
+   * Workspace packages deliberately kept OUT of the unit lane, each with the
+   * reason. An exclusion belongs here or it is a bug — that is the whole point
+   * of the allow-list: skipping a suite becomes a decision recorded in a test
+   * rather than an omission nobody can see.
+   */
+  const EXCLUDED_FROM_UNIT_LANE: Record<string, string> = {
+    '@ejm/tests': 'the integration lane — needs the emulator lifecycle, runs via test:integration',
+  };
+
+  const script = () => rootManifest().scripts['test:unit'];
+
+  it('selects packages recursively instead of naming them', () => {
+    // The regression this issue is about: any positive `--filter` reintroduces
+    // a hand-written list, and the next package added to the workspace is
+    // silently unrun again.
+    const { recursive, includes, runsScript } = pnpmSelection(script());
+    expect(includes, 'test:unit must not name packages by hand').toEqual([]);
+    expect(recursive, 'test:unit must select with -r').toBe(true);
+    // ...and it must run `test` in each of them. Everything else here models
+    // the SELECTION, so `pnpm -r --filter '!@ejm/tests' lint` satisfied every
+    // other pin while running zero unit suites.
+    expect(runsScript, 'test:unit must run the `test` script').toBe('test');
+  });
+
+  it('excludes only packages whose exclusion is a recorded decision', () => {
+    const { excludes } = pnpmSelection(script());
+    // `Object.hasOwn`, not `in`: `in` walks the prototype chain, so
+    // `--filter '!constructor'` would read as a recorded decision against an
+    // object literal that records nothing of the sort.
+    expect(excludes.filter((name) => !Object.hasOwn(EXCLUDED_FROM_UNIT_LANE, name))).toEqual([]);
+    // And every recorded exclusion must name a package that actually exists,
+    // so a stale entry cannot sit here excusing a package nobody has.
+    const names = new Set(workspaceManifests().map((pkg) => pkg.name));
+    expect(Object.keys(EXCLUDED_FROM_UNIT_LANE).filter((name) => !names.has(name))).toEqual([]);
+  });
+
+  it('keeps the integration lane out of the unit lane', () => {
+    // Not implied by the assertion above: an empty exclusion list satisfies it
+    // while pulling the emulator suite into `pnpm test:unit`, where it has no
+    // emulator to talk to.
+    expect(pnpmSelection(script()).excludes).toContain('@ejm/tests');
+  });
+
+  it('runs every workspace package that defines a `test` script', () => {
+    // Derived from workspace membership rather than restated, so a new package
+    // is covered the moment it exists. Membership comes from
+    // pnpm-workspace.yaml — the file `pnpm -r` itself consults (#403).
+    //
+    // The selection is computed from the script rather than assumed from the
+    // pin above, so this fails on its own under the hand-written form as well
+    // as under a bad exclusion.
+    const { recursive, includes, excludes } = pnpmSelection(script());
+    const all = workspaceManifests();
+    const base = includes.length
+      ? includes
+      : recursive || excludes.length
+        ? all.map((pkg) => pkg.name)
+        : [];
+    const selected = new Set(base.filter((name) => !excludes.includes(name)));
+    const unrun = all
+      .filter((pkg) => pkg.scripts.test && !selected.has(pkg.name))
+      .filter((pkg) => !Object.hasOwn(EXCLUDED_FROM_UNIT_LANE, pkg.name))
+      .map((pkg) => pkg.name);
+    expect(unrun).toEqual([]);
+    // Floor, against the same list: an empty expansion must fail here rather
+    // than pass vacuously.
+    expect(workspaceManifests().filter((pkg) => pkg.scripts.test).length).toBeGreaterThanOrEqual(
+      11,
+    );
+  });
+
+  it('a package holding test FILES also declares the script that runs them', () => {
+    // The rung above the pin before it, and the last place this drift can
+    // hide. That one guarantees every package DECLARING a `test` script is
+    // selected; a package with test files and no script is skipped by
+    // `pnpm -r` exactly as `@ejm/shared-ui` is — silently, and in no lane at
+    // all. shared-ui has 27 components and no vitest config today, so the
+    // first `Button.test.tsx` added there would run nowhere.
+    const TEST_FILE = /\.(test|spec)\.[cm]?[jt]sx?$/;
+    const SKIP = new Set(['node_modules', 'dist', 'lib', '.git', 'coverage', 'build']);
+    // `*-bundle` too, for two reasons: a bundle is a COPY of another package,
+    // so a test file found there says nothing about this one — and
+    // bundle-shared-for-deploy.test.ts creates and deletes those directories
+    // under apps/functions while this file runs in a sibling worker, which
+    // would race this walk into an ENOENT.
+    const skip = (name: string) => SKIP.has(name) || name.endsWith('-bundle');
+    const hasTestFile = (dir: string): boolean =>
+      readdirSync(dir, { withFileTypes: true }).some((entry) => {
+        if (entry.isDirectory()) {
+          return skip(entry.name) ? false : hasTestFile(resolve(dir, entry.name));
+        }
+        return TEST_FILE.test(entry.name);
+      });
+
+    const undeclared = workspaceManifests()
+      .filter((pkg) => !pkg.scripts.test && hasTestFile(pkg.dir))
+      .map((pkg) => pkg.dir);
+    expect(undeclared).toEqual([]);
+  });
+
+  it('still runs the suites that live outside every package', () => {
+    // scripts/__tests__ — these pins among them — sit in no workspace package,
+    // so `pnpm -r` cannot reach them. Dropping this tail would silently stop
+    // running the file you are reading.
+    expect(script()).toContain('vitest run --project scripts');
+  });
+
+  describe('pnpmSelection', () => {
+    it('reads the hand-written form this issue removed', () => {
+      expect(
+        pnpmSelection('pnpm --filter @ejm/shared-core --filter web test && vitest run'),
+      ).toEqual({
+        recursive: false,
+        includes: ['@ejm/shared-core', 'web'],
+        excludes: [],
+        runsScript: 'test',
+      });
+    });
+
+    it('reads the recursive form, quoted negation and all', () => {
+      expect(
+        pnpmSelection("pnpm -r --filter '!@ejm/tests' test && vitest run --project scripts"),
+      ).toEqual({ recursive: true, includes: [], excludes: ['@ejm/tests'], runsScript: 'test' });
+    });
+
+    it('reads --filter=x as well as --filter x, quoted or not', () => {
+      expect(pnpmSelection('pnpm --recursive --filter=!a --filter=b test')).toEqual({
+        recursive: true,
+        includes: ['b'],
+        excludes: ['a'],
+        runsScript: 'test',
+      });
+      // The attached-AND-quoted form: the tokenizer only unwraps a quote
+      // spanning the whole token, so without the value-level strip this reads
+      // `'!@ejm/tests'` as an include and fails two pins for the wrong reason.
+      expect(pnpmSelection("pnpm -r --filter='!@ejm/tests' test && vitest run")).toEqual({
+        recursive: true,
+        includes: [],
+        excludes: ['@ejm/tests'],
+        runsScript: 'test',
+      });
+    });
+
+    it('reads pnpm’s -F alias, which is the same mechanism under another name', () => {
+      // Not academic: `pnpm -r --filter '!@ejm/tests' -F web test` satisfies
+      // every pin above if -F is skipped — includes stays empty, the exclusion
+      // stays recorded — while pnpm runs exactly one package.
+      expect(pnpmSelection("pnpm -r --filter '!@ejm/tests' -F web test && vitest run")).toEqual({
+        recursive: true,
+        includes: ['web'],
+        excludes: ['@ejm/tests'],
+        runsScript: 'test',
+      });
+      expect(pnpmSelection('pnpm -r -F=web test')).toEqual({
+        recursive: true,
+        includes: ['web'],
+        excludes: [],
+        runsScript: 'test',
+      });
+    });
+
+    it('says which problem it hit when a modelled flag has no value', () => {
+      // A dangling flag IS modelled — reporting it as unmodelled would send
+      // the next reader to extend a parser that already covers it.
+      expect(() => pnpmSelection('pnpm -r --filter')).toThrow(/--filter with no value/);
+      expect(() => pnpmSelection('pnpm -r -F && vitest run')).toThrow(/-F with no value/);
+    });
+
+    it('throws on a selection flag it does not model rather than skipping it', () => {
+      for (const flag of ['--filter-prod', '--filter-prod=web', '-Fweb']) {
+        expect(() => pnpmSelection(`pnpm -r ${flag} test`)).toThrow(
+          /unmodelled pnpm selection flag/,
+        );
+      }
+    });
+
+    it('stops at the first &&, so the tail command cannot contribute filters', () => {
+      expect(pnpmSelection('pnpm -r test && pnpm --filter web something')).toEqual({
+        recursive: true,
+        includes: [],
+        excludes: [],
+        runsScript: 'test',
+      });
+    });
+  });
+});
+
+/**
+ * Contract pin for src-first type resolution (issue #406).
+ *
+ * Every shared package's `exports` maps `require` to `./dist/*.js` and `types`
+ * to `./src/*.ts`. TypeScript walks those condition KEYS IN ORDER, so with
+ * `types` listed after `require` a CJS consumer (apps/functions,
+ * apps/study-functions — both `moduleResolution: node16`) resolves its types
+ * out of `dist/*.d.ts` whenever a `dist` happens to exist, and out of `src`
+ * when it does not.
+ *
+ * That made local typechecks disagree with CI in both directions: a stale
+ * `dist` invented ten `TS2724 has no exported member 'SIT_APP_URL'` errors on
+ * a green main (the false escalation this issue was filed from), and equally
+ * hides real errors, since the consumer is checked against yesterday's
+ * declarations. CI never sees either, because CI always starts clean.
+ *
+ * Listing `types` first makes source the single answer regardless of what is
+ * on disk. Nothing at runtime changes: `types` is a TypeScript-only condition,
+ * so Node and Vite skip it and still match `require`/`import`.
+ */
+describe('src-first type resolution (issue #406)', () => {
+  it('every exports condition map lists `types` first', () => {
+    const offenders: string[] = [];
+    for (const pkg of workspaceManifests()) {
+      if (typeof pkg.exports !== 'object' || pkg.exports === null) continue;
+      for (const [subpath, target] of Object.entries(pkg.exports as Record<string, unknown>)) {
+        if (typeof target !== 'object' || target === null) continue;
+        const conditions = Object.keys(target as Record<string, unknown>);
+        if (!conditions.includes('types')) continue;
+        if (conditions[0] !== 'types') {
+          offenders.push(`${pkg.name} "${subpath}": ${conditions.join(', ')}`);
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it('every map a CJS consumer resolves through declares `types` at all', () => {
+    // The assertion above is vacuously true for a map with no `types` key —
+    // the same bug wearing a different hat, since `require` would then be the
+    // only answer and `dist` the only source of types.
+    //
+    // DERIVED, not listed: "has a `require` pointing at dist" is precisely the
+    // property that makes a map reachable this way, so a new package — or a
+    // new subpath on an existing one — is covered the moment it exists.
+    // Restating the package names here would reintroduce the hand-written-list
+    // failure mode the unit-lane pin above exists to prevent, two lanes over.
+    const offenders: string[] = [];
+    let checked = 0;
+    for (const pkg of workspaceManifests()) {
+      if (typeof pkg.exports !== 'object' || pkg.exports === null) continue;
+      for (const [subpath, target] of Object.entries(pkg.exports as Record<string, unknown>)) {
+        if (typeof target !== 'object' || target === null) continue;
+        const conditions = target as Record<string, string>;
+        if (!/^\.\/dist\//.test(conditions.require ?? '')) continue;
+        checked++;
+        if (!/^\.\/src\//.test(conditions.types ?? '')) {
+          offenders.push(`${pkg.name} "${subpath}": types=${conditions.types ?? '(absent)'}`);
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
+    // Floor, against the same derivation: shared-core's five subpaths,
+    // shared-functions' ten, and one each for sit-core, study-core, do-core.
+    // An empty derivation must fail HERE rather than pass vacuously.
+    expect(checked).toBeGreaterThanOrEqual(18);
   });
 });
 

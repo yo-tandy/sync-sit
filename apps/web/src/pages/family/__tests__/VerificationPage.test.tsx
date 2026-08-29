@@ -7,7 +7,9 @@ import { MemoryRouter } from 'react-router';
 // storage is mocked because the upload paths are not what these tests pin.
 const h = vi.hoisted(() => ({
   callable: vi.fn(),
-  uploadBytes: vi.fn(() => Promise.resolve()),
+  uploadBytes: vi.fn<(ref: { path: string }, data: unknown) => Promise<void>>(() =>
+    Promise.resolve(),
+  ),
 }));
 
 vi.mock('@/config/firebase', () => ({
@@ -30,7 +32,7 @@ vi.mock('firebase/functions', () => ({
 
 vi.mock('firebase/storage', () => ({
   ref: (_storage: unknown, path: string) => ({ path }),
-  uploadBytes: (...args: unknown[]) => h.uploadBytes(...args),
+  uploadBytes: (...args: [ref: { path: string }, data: unknown]) => h.uploadBytes(...args),
   getDownloadURL: () => Promise.resolve('https://should-never-be-called'),
 }));
 

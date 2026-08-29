@@ -206,7 +206,51 @@ The cross-app switch target is configurable (defaults to the production URLs bak
 | `pnpm seed:test-data` | Seed families, babysitters and sample appointments |
 | `pnpm seed:admin:lane3` / `pnpm seed:test-data:lane3` | The same, into emulator lane 3 (`lane2` / `lane4` too; or `LANE=N pnpm seed:admin`) |
 | `pnpm typecheck` | Type-check all packages |
+| `pnpm test:unit` | Every workspace package's unit suite, plus the out-of-package `scripts/` suite |
 | `pnpm deploy` | Deploy to Firebase |
+
+`test:unit` selects packages recursively (`pnpm -r`) and subtracts one
+exclusion, `@ejm/tests` — the integration lane, which needs the emulator
+lifecycle and runs through `pnpm test:integration`. It does **not** name the
+packages it runs, so a new package's suite is picked up the moment it has a
+`test` script rather than being silently skipped (issue #401). The exclusion
+list is pinned in `scripts/__tests__/release-workflow.test.ts`, so removing a
+suite from the lane is a decision recorded in a test.
+
+### How the shared packages resolve
+
+Each shared package's `exports` answers three ways, and the order of the keys
+is load-bearing:
+
+```jsonc
+"types":   "./src/index.ts",   // every `typecheck` config — the source
+"import":  "./src/index.ts",   // Vite / Vitest — the source
+"require": "./dist/index.js"   // Node (emulators, deployed functions) — the build
+```
+
+`types` is listed **first** because TypeScript matches condition keys in the
+order they appear. With it listed last, a CJS consumer (`apps/functions`,
+`apps/study-functions` — both `moduleResolution: node16`) matched `require`
+and type-checked against `dist/*.d.ts` whenever a `dist` happened to exist,
+and against `src` when it did not. A stale `dist` then invented errors that
+were not real and hid ones that were, while CI — which always starts clean —
+saw neither (issue #406). Source is now the single answer for types, so
+`pnpm typecheck` no longer depends on whether anything has been built.
+
+"Every `typecheck` config" is the precise claim: those resolve through each
+package's `tsconfig.json` (`bundler`, or `node16` for the two functions apps).
+The `tsconfig.cjs.json` **build** configs split. `shared-core`'s and
+`shared-functions`' use `node10`, which ignores `exports` entirely and reads
+the top-level `"types": "./dist/index.d.ts"` instead — still `dist`. The other
+three (`sit-core`, `study-core`, `do-core`) are `node16` and so honour
+`exports`, meaning their builds read source for types now where they used to
+match `require`. Either is correct: a build needs its dependencies built
+anyway, and pnpm orders them topologically.
+
+`require` still points at `dist`, so **runtime** still needs a build: the
+emulators, the seed scripts and the deploy bundle all load compiled output.
+Run `pnpm --filter @ejm/shared-core build` (or the package you changed) before
+running against the emulators.
 
 ## Cloud Functions
 

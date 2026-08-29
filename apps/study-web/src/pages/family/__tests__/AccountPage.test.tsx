@@ -13,14 +13,17 @@ const h = vi.hoisted(() => ({
     refreshUserDoc: vi.fn(() => Promise.resolve()),
     resetPassword: vi.fn(() => Promise.resolve()),
   },
-  updateDoc: vi.fn(() => Promise.resolve()),
+  updateDoc: vi.fn<(ref: { path: string }, data: Record<string, unknown>) => Promise<void>>(
+    () => Promise.resolve(),
+  ),
 }));
 
 vi.mock('@/config/firebase', () => ({ db: {}, storage: {} }));
 
 vi.mock('firebase/firestore', () => ({
   doc: (_db: unknown, ...path: string[]) => ({ path: path.join('/') }),
-  updateDoc: (...args: unknown[]) => h.updateDoc(...args),
+  updateDoc: (...args: [ref: { path: string }, data: Record<string, unknown>]) =>
+    h.updateDoc(...args),
   serverTimestamp: () => 'ts',
 }));
 
@@ -86,7 +89,7 @@ describe('family AccountPage', () => {
       ),
     );
     // The auth login email is read-only here — never written from this page.
-    const payload = h.updateDoc.mock.calls[0][1] as Record<string, unknown>;
+    const payload = h.updateDoc.mock.calls[0][1];
     expect(payload).not.toHaveProperty('email');
     await waitFor(() => expect(h.auth.refreshUserDoc).toHaveBeenCalled());
   });
@@ -97,7 +100,7 @@ describe('family AccountPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Confirmation — Email' }));
 
     await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
-    const payload = h.updateDoc.mock.calls[0][1] as Record<string, unknown>;
+    const payload = h.updateDoc.mock.calls[0][1];
     expect(payload).toHaveProperty('notifPrefs.confirmed.email', false);
     const keys = Object.keys(payload);
     // Every key is either updatedAt or the toggled scenario/channel dot-path.
@@ -127,7 +130,7 @@ describe('family AccountPage', () => {
     // full map, with push matching the server's default-on gate.
     fireEvent.click(screen.getByRole('button', { name: 'Endorsements — Email' }));
     await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
-    const payload = h.updateDoc.mock.calls[0][1] as Record<string, unknown>;
+    const payload = h.updateDoc.mock.calls[0][1];
     expect(Object.keys(payload).sort()).toEqual(['notifPrefs.references', 'updatedAt']);
     expect(payload['notifPrefs.references']).toEqual({ push: true, email: false });
   });
@@ -143,7 +146,7 @@ describe('family AccountPage', () => {
     renderWithProviders(<AccountPage />);
     fireEvent.click(screen.getByRole('button', { name: 'Confirmation — Email' }));
     await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
-    const payload = h.updateDoc.mock.calls[0][1] as Record<string, unknown>;
+    const payload = h.updateDoc.mock.calls[0][1];
     expect(Object.keys(payload).sort()).toEqual(['notifPrefs.confirmed', 'updatedAt']);
     expect(payload['notifPrefs.confirmed']).toEqual({ push: true, email: false });
   });
@@ -181,7 +184,7 @@ describe('family AccountPage', () => {
       expect(pushToggle).not.toBeDisabled();
       fireEvent.click(pushToggle);
       await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
-      const payload = h.updateDoc.mock.calls[0][1] as Record<string, unknown>;
+      const payload = h.updateDoc.mock.calls[0][1];
       expect(payload).toHaveProperty('notifPrefs.confirmed.push', false);
       const keys = Object.keys(payload);
       expect(keys.every((k) => k === 'updatedAt' || /^notifPrefs\.[a-z]+\.push$/i.test(k))).toBe(true);

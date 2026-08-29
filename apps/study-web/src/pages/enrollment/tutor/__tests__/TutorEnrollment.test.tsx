@@ -13,10 +13,10 @@ const h = vi.hoisted(() => ({
   // catch -- the doc-blip pin silently re-tested the failure path).
   signedIn: false,
   subs: [] as ((s: unknown) => void)[],
-  refreshUserDoc: () => Promise.resolve(),
+  refreshUserDoc: vi.fn<() => Promise<void>>(() => Promise.resolve()),
   // A successful sign-in settles the store with the freshly-written tutor
   // doc (models the real store); the navigate gate reads it via getState.
-  signIn: vi.fn(() => {
+  signIn: vi.fn<(auth: unknown, email: string, password: string) => Promise<void>>(() => {
     h.signedIn = true;
     h.auth.userDoc = { profiles: { tutor: {} } };
     return Promise.resolve();
@@ -65,7 +65,9 @@ vi.mock('firebase/functions', () => ({
   },
 }));
 vi.mock('firebase/auth', () => ({
-  signInWithEmailAndPassword: (...args: unknown[]) => h.signIn(...args),
+  signInWithEmailAndPassword: (
+    ...args: [auth: unknown, email: string, password: string]
+  ) => h.signIn(...args),
 }));
 vi.mock('react-router', async (orig) => ({
   ...(await orig<typeof import('react-router')>()),

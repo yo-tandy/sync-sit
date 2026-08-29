@@ -4,11 +4,15 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 // writes its FCM token to the SIBLING `fcmTokensDo` array — never the legacy
 // `fcmTokens` array (sit's) or `fcmTokensStudy`. Mirrors the study suite.
 
+// The `doc` mock below collapses a Firestore reference to just its path, so
+// `{ path: string }` is the reference type `updateDoc` actually receives here.
 const h = vi.hoisted(() => ({
   initMessaging: vi.fn(),
   getToken: vi.fn(),
-  deleteToken: vi.fn(() => Promise.resolve(true)),
-  updateDoc: vi.fn(() => Promise.resolve()),
+  deleteToken: vi.fn<(messaging: unknown) => Promise<boolean>>(() => Promise.resolve(true)),
+  updateDoc: vi.fn<(ref: { path: string }, data: Record<string, unknown>) => Promise<void>>(() =>
+    Promise.resolve(),
+  ),
   requestPermission: vi.fn(() => Promise.resolve('granted' as NotificationPermission)),
 }));
 
@@ -20,13 +24,14 @@ vi.mock('@/config/firebase', () => ({
 
 vi.mock('firebase/messaging', () => ({
   getToken: (...args: unknown[]) => h.getToken(...args),
-  deleteToken: (...args: unknown[]) => h.deleteToken(...args),
+  deleteToken: (...args: [messaging: unknown]) => h.deleteToken(...args),
   onMessage: vi.fn(() => () => {}),
 }));
 
 vi.mock('firebase/firestore', () => ({
   doc: (_db: unknown, ...path: string[]) => ({ path: path.join('/') }),
-  updateDoc: (...args: unknown[]) => h.updateDoc(...args),
+  updateDoc: (...args: [ref: { path: string }, data: Record<string, unknown>]) =>
+    h.updateDoc(...args),
   arrayUnion: (v: string) => ({ op: 'arrayUnion', value: v }),
   arrayRemove: (v: string) => ({ op: 'arrayRemove', value: v }),
 }));
@@ -63,10 +68,7 @@ describe('do push token registration', () => {
     const token = await lib.requestPushPermission('u1');
     expect(token).toBe('do-token-abc');
     expect(h.updateDoc).toHaveBeenCalledTimes(1);
-    const [ref, payload] = h.updateDoc.mock.calls[0] as [
-      { path: string },
-      Record<string, unknown>,
-    ];
+    const [ref, payload] = h.updateDoc.mock.calls[0];
     expect(ref.path).toBe('users/u1');
     expect(Object.keys(payload)).toEqual(['fcmTokensDo']);
     expect(payload.fcmTokensDo).toEqual({ op: 'arrayUnion', value: 'do-token-abc' });
@@ -95,10 +97,7 @@ describe('do push token registration', () => {
     vi.stubGlobal('navigator', { ...navigator, serviceWorker: {} });
     await lib.removePushToken('u1');
     expect(h.updateDoc).toHaveBeenCalledTimes(1);
-    const [ref, payload] = h.updateDoc.mock.calls[0] as [
-      { path: string },
-      Record<string, unknown>,
-    ];
+    const [ref, payload] = h.updateDoc.mock.calls[0];
     expect(ref.path).toBe('users/u1');
     expect(Object.keys(payload)).toEqual(['fcmTokensDo']);
     expect(payload.fcmTokensDo).toEqual({ op: 'arrayRemove', value: 'do-token-abc' });
