@@ -114,7 +114,7 @@ describe('bundle-shared-for-deploy', () => {
 
     const bundled = new Set(listBundleFiles());
     const missing: string[] = [];
-    let checked = 0;
+    const emptyTrees: string[] = [];
 
     // Which deploy codebases each bundle lands in: step 6 mirrors four of the
     // five into apps/study-functions; do-core is apps/functions-only (its
@@ -131,26 +131,34 @@ describe('bundle-shared-for-deploy', () => {
     for (const [pkgName, bundleName, appDirs] of bundles) {
       for (const tree of ['src', 'dist']) {
         const pkgTree = path.join(repoRoot, 'packages', pkgName, tree);
+        // Guarded rather than letting readdirSync throw: the script itself
+        // copies dist only `if (fs.existsSync(distDir))`, so an absent tree is
+        // a case it tolerates. Recording it as empty turns both "missing" and
+        // "built nothing" into the one legible failure below instead of an
+        // opaque ENOENT on a path.
         const sources: string[] = [];
-        walk(pkgTree, sources);
+        if (fs.existsSync(pkgTree)) walk(pkgTree, sources);
 
+        let checkedHere = 0;
         for (const rel of sources) {
           const inPkg = path.relative(pkgTree, path.join(repoRoot, rel));
           if (isTestArtifact(inPkg)) continue;
           for (const appDir of appDirs) {
-            checked++;
+            checkedHere++;
             const expected = path.join(appDir, bundleName, tree, inPkg);
             if (!bundled.has(expected)) missing.push(expected);
           }
         }
+        if (checkedHere === 0) emptyTrees.push(`${pkgName}/${tree}`);
       }
     }
 
     expect(missing).toEqual([]);
-    // Sanity floor on what the loop actually consumed — `bundled.size` would
-    // stay green off the other packages if one package's walk came back empty,
-    // which is the exact failure this floor exists to catch.
-    expect(checked).toBeGreaterThan(1000);
+    // Per-(package, tree), not an aggregate: a global count sums ~1400 pairs,
+    // so a single tree coming back empty — study-core/dist, say, which is what
+    // Cloud Functions actually loads — stayed well above any global floor and
+    // passed vacuously. Named, so the failure says which tree.
+    expect(emptyTrees).toEqual([]);
   }, 60000);
 
   // The filename clause of the filter removes nothing today — every test file
@@ -162,7 +170,15 @@ describe('bundle-shared-for-deploy', () => {
   // the bundle — the .js especially, since dist is what Cloud Functions loads.
   it('drops a stray test file outside __tests__, and all four of its dist artifacts', () => {
     const pkgDir = path.join(repoRoot, 'packages/study-core');
-    const probeSrc = path.join(pkgDir, 'src', 'strayProbe.test.ts');
+    // Named to diagnose itself: the `finally` below only runs if the process
+    // survives, so a SIGINT or a CI job timeout leaves this in a tracked source
+    // tree where a later `git add -A` could sweep it up. .gitignore carries the
+    // path for the same reason. (It does NOT break study-core's own suite —
+    // that vitest include is `src/**/__tests__/**/*.test.ts`, which a file at
+    // the root of `src` does not match.)
+    const probeName = '__leftover_bundlerStrayProbe.test.ts';
+    const probeSrc = path.join(pkgDir, 'src', probeName);
+    const probeStem = '__leftover_bundlerStrayProbe';
     const distDir = path.join(pkgDir, 'dist');
 
     fs.writeFileSync(probeSrc, 'export const strayProbe = 1;\n');
@@ -173,21 +189,27 @@ describe('bundle-shared-for-deploy', () => {
       // so there was something for the filter to drop.
       const compiled = fs
         .readdirSync(distDir)
-        .filter((n) => n.startsWith('strayProbe'))
+        .filter((n) => n.startsWith(probeStem))
         .sort();
       expect(compiled).toEqual([
-        'strayProbe.test.d.ts',
-        'strayProbe.test.d.ts.map',
-        'strayProbe.test.js',
-        'strayProbe.test.js.map',
+        `${probeStem}.test.d.ts`,
+        `${probeStem}.test.d.ts.map`,
+        `${probeStem}.test.js`,
+        `${probeStem}.test.js.map`,
       ]);
 
       // And none of them — nor the .ts source — reached any bundle.
-      expect(listBundleFiles().filter((f) => f.includes('strayProbe'))).toEqual([]);
+      expect(listBundleFiles().filter((f) => f.includes(probeStem))).toEqual([]);
     } finally {
       fs.rmSync(probeSrc, { force: true });
-      for (const name of fs.readdirSync(distDir)) {
-        if (name.startsWith('strayProbe')) fs.rmSync(path.join(distDir, name), { force: true });
+      // Guarded like the rmSync above: if runScript threw before dist existed
+      // (fresh checkout — dist is gitignored — plus a build failure, which the
+      // script signals via process.exit(1)), an unguarded readdirSync would
+      // throw ENOENT out of the finally and replace the real build error.
+      if (fs.existsSync(distDir)) {
+        for (const name of fs.readdirSync(distDir)) {
+          if (name.startsWith(probeStem)) fs.rmSync(path.join(distDir, name), { force: true });
+        }
       }
     }
   }, 60000);

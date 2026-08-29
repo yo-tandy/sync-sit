@@ -68,3 +68,9 @@ _worktrees/
 /test-results/
 /playwright-report/
 /playwright/.cache/
+
+# Scratch file planted by the bundle-shared-for-deploy suite to prove the
+# filter drops a stray test file outside __tests__. Its cleanup runs in a
+# `finally`, so an interrupted run can leave it behind; ignored so it cannot be
+# swept into a commit.
+packages/*/src/__leftover_bundlerStrayProbe.test.ts
