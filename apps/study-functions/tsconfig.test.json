@@ -1,9 +1,12 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "noEmit": true,
-    "sourceMap": false
+    "noEmit": true
   },
-  "include": ["src/**/__tests__/**/*.ts"],
-  "exclude": []
+  "include": ["src/**/__tests__/**/*.ts", "src/**/*.test.ts"],
+  // `extends` does NOT merge `exclude`, so this line is load-bearing rather
+  // than boilerplate: inherited, the base's exclude would filter out every
+  // file the include above matches and tsc would fail TS18003. Clearing it
+  // also drops TypeScript's own defaults, so node_modules is re-listed.
+  "exclude": ["node_modules"]
 }
