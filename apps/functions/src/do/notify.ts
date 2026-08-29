@@ -24,6 +24,29 @@ import { resolveDoLang, type DoLang, type DoNotificationContent } from './notify
  * POST-COMMIT INVARIANT (the endorsementNotifications precedent): every
  * caller runs these AFTER its transaction committed, so nothing here may
  * reject the callable — wrap call-site blocks in notifyDoSafely.
+ *
+ * GUARDIAN COPIES COME FROM THE PLATFORM, NOT FROM CALL SITES (PR #334
+ * review). Every doc written here trips `mirrorNotificationToGuardians`
+ * (../guardian/onNotificationCreated.ts): a `notifications/{id}` create
+ * whose RECIPIENT carries `governedBy` is CC'd to every parent of the
+ * supervising family as a `guardian_mirror` copy (in-app + push,
+ * kid-prefixed title, `data.originalType` preserved). A supervised doer's
+ * notification therefore already reaches their parents, and a do call site
+ * must NOT also notify the guardian family for the same event — that would
+ * be two notices and two pushes for one thing. The rule for new call sites:
+ *
+ * - recipient is the supervised STUDENT → the guardian copy is automatic;
+ *   write nothing extra (acceptOffer's winner, declineOffer, cancelTask's
+ *   assigned doer and swept offerers, the digest, and
+ *   decideOfferAsGuardian's child-facing notice);
+ * - recipient is a PARENT being asked to act → not a mirror but an action
+ *   request addressed to the parent themselves, and the call site's job
+ *   (submitOffer's `task_guardian_approval`). It cannot double with the
+ *   trigger: a parent recipient carries no `governedBy` of their own, so
+ *   the mirror returns at its `governedBy` check.
+ *
+ * Whether do-world mirrors belong in the sit/study notification bells at
+ * all is an owner decision tracked on issue #336 — untouched here.
  */
 
 export type DoPrefCategory = 'newRequest' | 'confirmed' | 'cancelled';

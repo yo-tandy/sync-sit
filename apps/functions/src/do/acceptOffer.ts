@@ -10,13 +10,8 @@ import {
   tsMillis,
   validOfferId,
 } from './offerAccess.js';
+import { notifyDoSafely, sendDoNotificationToUser } from './notify.js';
 import {
-  notifyDoFamilyParents,
-  notifyDoSafely,
-  sendDoNotificationToUser,
-} from './notify.js';
-import {
-  buildTaskAssignedGuardian,
   buildTaskOfferAccepted,
   buildTaskOfferDeclined,
 } from './notifyContent.js';
@@ -205,8 +200,9 @@ export const doAcceptOffer = onCall(
       winnerData = student;
     });
 
-    // Step 9 — notify the winner, each loser, and the winner's guardian if
-    // there is an active link (plan §10, §13 PR9). Outside the transaction:
+    // Step 9 — notify the winner and each loser (plan §10, §13 PR9; the
+    // winner's guardian is CC'd by the platform mirror, see below).
+    // Outside the transaction:
     // notifications are not transactional writes, and nothing after the
     // commit may reject the callable (notifyDoSafely). "Each loser" = the
     // `pending` siblings step 8 flipped to declined/'sibling_accepted'.
@@ -242,29 +238,27 @@ export const doAcceptOffer = onCall(
           data: { taskId },
         });
       }
-      // Winner's guardian-if-linked: the server-owned `governedBy` mirror is
-      // present iff the guardianLinks doc is ACTIVE (shared-core User), so it
-      // is the authority here — supervision is transparent (§6.2).
-      const governedBy = winnerData.governedBy as
-        | { familyId?: string }
-        | undefined;
-      if (governedBy?.familyId) {
-        const childFirstName =
-          (winnerData.firstName as string | undefined) || 'Your child';
-        await notifyDoFamilyParents(governedBy.familyId, {
-          type: 'task_assigned',
-          prefCategory: 'confirmed',
-          content: (lang) =>
-            buildTaskAssignedGuardian(lang, {
-              childFirstName,
-              familyName,
-              taskTitle,
-              agreedPrice,
-              priceBasis,
-            }),
-          data: { taskId, offerId: offerRef.id },
-        });
-      }
+      // NO explicit guardian notification here, deliberately (PR #334
+      // review). Step 9's "the winner's guardian if there is an active link"
+      // is satisfied by the PLATFORM, not by a second write:
+      // `mirrorNotificationToGuardians`
+      // (apps/functions/src/guardian/onNotificationCreated.ts) fires on every
+      // `notifications/{id}` create whose recipient carries `governedBy` —
+      // exactly the supervised winner above — and CCs a `guardian_mirror`
+      // copy (in-app + push, kid-prefixed title) to every parent of the
+      // supervising family. The winner's `task_offer_accepted` IS that
+      // trigger, so notifying the guardian family here too would mean two
+      // notices and two pushes for one acceptance. `governedBy` is still the
+      // right authority for who is supervised — it is just read by the
+      // trigger rather than here.
+      //
+      // Whether do-world mirrors should surface in the sit/study bells at
+      // all is an owner decision tracked on issue #336 (decision-20's
+      // one-app-per-world line vs. child-safety oversight); it is not
+      // settled here and no sibling-app file is touched. Either way the
+      // guardian copy comes from ONE place, and `buildTaskAssignedGuardian`
+      // stays in notifyContent.ts as §10's `task_assigned` template that a
+      // "do types skip the mirror" resolution would re-attach a sender to.
     });
 
     // Step 10: audit the assignment.

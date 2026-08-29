@@ -16,7 +16,10 @@ import { seedTestData, type SeedData } from '../../setup/seed.js';
 // branding tables in shared-functions' unit suites. Here the pins are the
 // AUDIENCE and TYPE of each notification — §6.2's invisibility included:
 // the hiring family must never receive (or be mentioned in) anything about
-// an undecided or denied guardian-gated offer.
+// an undecided or denied guardian-gated offer. And, since PR #334's review,
+// that a supervised winner's guardian gets EXACTLY ONE notice per
+// acceptance: the platform's `guardian_mirror`, never a second write from
+// the call site on top of it.
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -104,6 +107,30 @@ async function notifsFor(recipientUid: string, type?: string) {
 async function clearNotifs() {
   const snap = await getDb().collection('notifications').get();
   await Promise.all(snap.docs.map((d) => d.ref.delete()));
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Poll until `recipientUid` holds at least `min` notifications. Only needed
+ * for `guardian_mirror` copies: those are written by the
+ * `mirrorNotificationToGuardians` Firestore trigger, which the callable does
+ * not await (mirrors tests/integration/guardian/guardian-mirroring.test.ts).
+ */
+async function waitForNotifs(
+  recipientUid: string,
+  min: number,
+  attempts = 20,
+  delayMs = 300,
+): Promise<FirebaseFirestore.DocumentData[]> {
+  for (let i = 0; i < attempts; i++) {
+    const docs = await notifsFor(recipientUid);
+    if (docs.length >= min) return docs;
+    await sleep(delayMs);
+  }
+  throw new Error(
+    `${recipientUid} never reached ${min} notification(s) after ${attempts * delayMs}ms`,
+  );
 }
 
 describe('sync-do call-site notifications (plan §10, §13 PR9)', () => {
@@ -218,7 +245,7 @@ describe('sync-do call-site notifications (plan §10, §13 PR9)', () => {
     expect(familyNotifs[0].data).toMatchObject({ taskId, offerId });
   });
 
-  it('doAcceptOffer: winner gets task_offer_accepted, each loser task_offer_declined, the winner\'s guardian task_assigned — and the expired pending_guardian sibling\'s doer gets nothing', async () => {
+  it('doAcceptOffer: winner gets task_offer_accepted, each loser task_offer_declined, the winner\'s guardian EXACTLY ONE (the platform mirror, not a second write) — and the expired pending_guardian sibling\'s doer gets nothing', async () => {
     const taskId = await postTask(parent1Token, 'green_thumb_lawn_mowing');
     // Winner is the GOVERNED kid — approve their offer first so it is
     // acceptable AND the guardian-notice path has a linked winner.
@@ -239,6 +266,10 @@ describe('sync-do call-site notifications (plan §10, §13 PR9)', () => {
       'doSubmitOffer', offerPayload(taskId, { price: 15 }), kid2Token,
     );
     expect(gatedStatus).toBe('pending_guardian');
+    // Let the guardian-mirror trigger drain the SETUP notifications before
+    // clearing, so a late mirror of the approval notice cannot be mistaken
+    // for a notice about the acceptance below.
+    await sleep(2500);
     await clearNotifs();
 
     await callFunction('doAcceptOffer', { offerId: kidOfferId }, parent1Token);
@@ -253,10 +284,27 @@ describe('sync-do call-site notifications (plan §10, §13 PR9)', () => {
     expect(loserNotifs).toHaveLength(1);
     expect(loserNotifs[0].data).toMatchObject({ taskId });
 
-    // Winner's guardian (active link → family-martin's parent).
-    const guardianNotifs = await notifsFor(seed.parent3.uid, 'task_assigned');
+    // Winner's guardian (active link → family-martin's parent): EXACTLY ONE
+    // notification for this acceptance, and it comes from the platform
+    // mirror, not from a second write in doAcceptOffer (PR #334 review).
+    // `mirrorNotificationToGuardians` CCs the winner's own
+    // `task_offer_accepted` to every parent of the supervising family; the
+    // explicit `task_assigned` that used to sit on top of it made one event
+    // into two notices and two pushes.
+    await waitForNotifs(seed.parent3.uid, 1);
+    await sleep(1500); // settle: a second write would have landed by now
+    const guardianNotifs = await notifsFor(seed.parent3.uid);
     expect(guardianNotifs).toHaveLength(1);
-    expect(guardianNotifs[0].body).toContain('First-doer-ntf-kid');
+    expect(guardianNotifs[0].type).toBe('guardian_mirror');
+    expect(guardianNotifs[0].data).toMatchObject({
+      originalType: 'task_offer_accepted',
+      mirroredFrom: 'doer-ntf-kid',
+      taskId,
+      offerId: kidOfferId,
+    });
+    expect(guardianNotifs[0].title).toContain('First-doer-ntf-kid');
+    // The former explicit guardian write is gone for good.
+    expect(await notifsFor(seed.parent3.uid, 'task_assigned')).toHaveLength(0);
 
     // The EXPIRED pending_guardian sibling's doer: no notification — nobody
     // declined that offer; its moment passed (§6.4 step 8).

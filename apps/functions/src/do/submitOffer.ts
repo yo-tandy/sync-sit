@@ -297,6 +297,14 @@ export const doSubmitOffer = onCall(
     // family; a `pending_guardian` offer notifies the SUPERVISING family
     // instead — the hiring family must not learn a gated offer exists
     // (§6.2's invisibility promise starts here, not at the decision).
+    //
+    // The supervising-family notice is NOT the guardian-mirror duplication
+    // acceptOffer avoids (PR #334 review): it is an approval DECISION
+    // addressed to the parent themselves, and nothing else emits it. It also
+    // cannot double with `mirrorNotificationToGuardians` — that trigger keys
+    // off the RECIPIENT's `governedBy`, and these recipients are parents, who
+    // carry none. The offering student is deliberately sent nothing here, so
+    // there is no student notification for the trigger to mirror either.
     const doerFirstName = (callerData.firstName as string) || 'A student';
     await notifyDoSafely('submitOffer', async () => {
       if (status === 'pending') {

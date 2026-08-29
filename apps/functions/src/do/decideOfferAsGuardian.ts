@@ -126,6 +126,14 @@ export const doDecideOfferAsGuardian = onCall(
     // notify the hiring family of the now-visible offer. On DENIAL the
     // hiring family gets NOTHING: §6.2's invisibility promise — they never
     // learn a guardian-gated offer existed, let alone that a parent said no.
+    //
+    // No explicit guardian copy here either (PR #334 review): the student is
+    // supervised by definition on this path, so the notice below is CC'd to
+    // the family's parents by `mirrorNotificationToGuardians` — including,
+    // by the trigger's design, back to the parent who just decided. That
+    // echo is platform behavior shared with sit/study's guardian actions,
+    // not something this module adds; whether do types should mirror at all
+    // is issue #336.
     await notifyDoSafely('decideOfferAsGuardian', async () => {
       await sendDoNotificationToUser({
         recipientUserId: childUid,

@@ -890,9 +890,26 @@ are explicit rather than interleaved:
    description: nobody declined this offer, its moment passed. §6.2's
    invisibility promise thus holds through BOTH exits — guardian denial
    and sibling acceptance.
-9. Write notifications: winner, each loser, the winner's guardian if there is
-   an active link (outside the transaction — notifications are not
+9. Write notifications: winner, each loser, and — for a supervised winner —
+   the winner's guardian (outside the transaction — notifications are not
    transactional writes).
+
+   **Correction (PR #334 review): the guardian copy is NOT a second write
+   from this call site.** `mirrorNotificationToGuardians`
+   (`apps/functions/src/guardian/onNotificationCreated.ts`) already fires on
+   every `notifications/{id}` create whose recipient carries `governedBy`
+   and CCs a `guardian_mirror` copy to every parent of the supervising
+   family, so the winner's own `task_offer_accepted` reaches those parents
+   by itself. `doAcceptOffer` therefore writes nothing extra for the
+   guardian — an explicit notice on top of the mirror was one event, two
+   notifications and two pushes. The `task_assigned` template stays in
+   `notifyContent.ts` unsent. The general rule for every sync-do call site:
+   a notification to a supervised STUDENT is CC'd automatically; a
+   notification to a PARENT asked to act (`task_guardian_approval` in §6.2)
+   is the call site's job and cannot double, because the mirror keys off the
+   recipient's own `governedBy`. Whether do-world mirrors should surface in
+   the sit/study notification bells at all is an open owner decision —
+   issue #336, out of scope for PR9.
 10. Audit-log the assignment via `writeUserActivity`.
 
 Step 8 is why acceptance is transactional and not a sequence of writes: a

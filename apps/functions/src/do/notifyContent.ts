@@ -238,6 +238,17 @@ export function buildTaskOfferAccepted(
 // ── task_assigned — to the winner's supervising parents (guardian-if-linked
 //    at acceptance; supervision is transparent, §6.2) ──────────────────────
 
+/**
+ * §10's `task_assigned` template. **No sender today** (PR #334 review):
+ * acceptOffer no longer notifies the winner's guardian family explicitly,
+ * because `mirrorNotificationToGuardians` already CCs the winner's own
+ * `task_offer_accepted` to those same parents — a second write meant a
+ * duplicate notice and a duplicate push for one acceptance. Kept rather than
+ * deleted: §10 lands all nine task/offer templates at PR9, and if issue #336
+ * resolves toward "do types skip the platform mirror" this is the copy the
+ * explicit guardian notice comes back on. Pinned by notifyContent.test.ts
+ * either way (EN≠FR, escaping).
+ */
 export function buildTaskAssignedGuardian(
   lang: DoLang,
   p: { childFirstName: string; familyName: string; taskTitle: string; agreedPrice: number; priceBasis: 'flat' | 'hourly' },
