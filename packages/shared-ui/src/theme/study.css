@@ -20,10 +20,12 @@
   --color-brand-700: #0538a8;
   --color-brand-800: #0538a8;
 
-  /* Recess ground + shadow tint (#366). Values are this ramp's own stops --
-     brand-50 for the ground, brand-100 for the shadow -- because the first
-     pass at study on the #124 canvas invented blues instead of lifting them,
-     and it showed. */
+  /* Recess ground + shadow tint (#366). Both are DERIVED from this ramp
+     rather than picked, because the first pass at study on the #124 canvas
+     invented blues instead of lifting them, and it showed. The shadow tint is
+     brand-100 exactly (#dde8f9). The ground is one step lighter than brand-50
+     (#eef3fc -> #f4f7fd): brand-50 itself is too saturated to sit under a
+     white card without the card reading as tinted rather than raised. */
   --color-ground: #f4f7fd;
   --color-ground-raised: #ffffff;
   --shadow-card-tint: #dde8f9;

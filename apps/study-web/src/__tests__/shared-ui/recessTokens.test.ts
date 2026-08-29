@@ -400,8 +400,8 @@ describe('no control pairs a height with the radius that halves it (#395 review 
    * equality. With --radius-lg at 20px that is everything up to and including
    * h-10 -- and three h-9 controls shipped as stadiums past a guard written to
    * catch exactly this defect, because 36 !== 40 and `h-9` was not even in the
-   * height map. The predicate is now `>=` and the map lists every height that
-   * appears beside a rounded-* class in the tree.
+   * height map. The predicate is now `>=`, and the map is DERIVED from the
+   * markup rather than hand-listed, so a height cannot go missing again.
    *
    * Both sides are rem-based, so the ratio holds at either root font size.
    */
@@ -420,18 +420,42 @@ describe('no control pairs a height with the radius that halves it (#395 review 
     expect(Object.keys(radii).sort()).toEqual(['2xl', '3xl', 'lg', 'md', 'sm', 'xl']);
   });
 
-  /** Tailwind heights that appear alongside a rounded-* class in the tree. */
-  const HEIGHTS: Record<string, number> = {
-    'h-3': 12,
-    'h-5': 20,
-    'h-7': 28,
-    'h-8': 32,
-    'h-9': 36,
-    'h-10': 40,
-    'h-11': 44,
-    'h-12': 48,
-    'h-14': 56,
-  };
+  /**
+   * Class strings, so a height and a radius only count when they land on the
+   * SAME element. Two earlier shapes of this were both wrong: matching across
+   * a whole file paired unrelated siblings, and matching only `class=`/
+   * `className=` ATTRIBUTES went blind to class strings held in module
+   * constants -- which is exactly where the highest-traffic controls keep
+   * theirs (`Button`'s `sizeClasses.sm`, `EmptyState`'s `actionClasses`).
+   * String literals cover both.
+   */
+  const CLASS_STRINGS = /"([^"\n]*)"|'([^'\n]*)'|`([^`]*)`/g;
+  const classStrings = (text: string) =>
+    [...text.matchAll(CLASS_STRINGS)].map((m) => m[1] ?? m[2] ?? m[3] ?? '');
+
+  /**
+   * DERIVED, not hand-listed. A hand-listed map is consulted before the size
+   * reasoning, so a height missing from it is invisible no matter what the
+   * predicate says -- that is how three `h-9` controls shipped past round 3.
+   * Tailwind's `h-<n>` is n * 0.25rem, i.e. n * 4px at the default root size.
+   */
+  const HEIGHTS: Record<string, number> = Object.fromEntries(
+    [...markup.values()]
+      .flatMap(classStrings)
+      .flatMap((cls) =>
+        [...cls.matchAll(/\bh-(\d+)\b/g)].map(
+          (m) => [`h-${m[1]}`, Number(m[1]) * 4] as const,
+        ),
+      ),
+  );
+
+  it('discovered the heights in use (guards the discovery)', () => {
+    // If this ever comes back thin, every pairing check below goes vacuously
+    // green. h-9 and h-10 are the two the round-3/round-4 defects lived on.
+    expect(Object.keys(HEIGHTS).length).toBeGreaterThan(8);
+    expect(HEIGHTS['h-9']).toBe(36);
+    expect(HEIGHTS['h-10']).toBe(40);
+  });
 
   const collidingPairs = Object.entries(HEIGHTS).flatMap(([h, px]) =>
     Object.entries(radii)
@@ -446,24 +470,19 @@ describe('no control pairs a height with the radius that halves it (#395 review 
     expect(collidingPairs.length).toBeGreaterThan(0);
   });
 
-  /**
-   * Class strings, so a height and a radius only count when they land on the
-   * SAME element. Matching across a whole file pairs unrelated siblings.
-   */
-  const CLASS_ATTR = /class(?:Name)?=(?:"([^"]*)"|'([^']*)'|\{`([^`]*)`\})/g;
-
   it.each(collidingPairs)('no %s control carries %s', (height, rounded) => {
     const h = new RegExp(`\\b${height}\\b`);
     const r = new RegExp(`\\b${rounded}\\b`);
     // A SQUARE is excluded: `h-8 w-8 rounded-lg` is a deliberate circle, not
     // an accidental stadium. The defect this guard exists to catch is a wide
-    // control whose ends go fully round by arithmetic nobody chose.
+    // control whose ends go fully round by arithmetic nobody chose. Narrow on
+    // purpose -- a NON-square offender at the same height still fails.
     const square = new RegExp(`\\bw-${height.slice(2)}\\b`);
     const offenders = [...markup.entries()]
       .filter(([, text]) =>
-        [...text.matchAll(CLASS_ATTR)]
-          .map((m) => m[1] ?? m[2] ?? m[3] ?? '')
-          .some((cls) => h.test(cls) && r.test(cls) && !square.test(cls)),
+        classStrings(text).some(
+          (cls) => h.test(cls) && r.test(cls) && !square.test(cls),
+        ),
       )
       .map(([path]) => path);
     expect(
