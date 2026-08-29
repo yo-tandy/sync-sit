@@ -123,7 +123,7 @@ export function AppBar({ role }: { role: UserRole }) {
       )}
 
       <Dialog open={menuOpen} onClose={() => setMenuOpen(false)} ariaLabel={t('menu.appMenu')}>
-        <div className="-m-6 overflow-hidden rounded-xl">
+        <div className="focus-ring-inset -m-6 overflow-hidden rounded-xl">
           <div className="border-b border-gray-100 px-4 py-3">
             <p className="text-base font-bold text-gray-900">{userDoc?.firstName} {userDoc?.lastName}</p>
             <p className="text-xs text-gray-500">{userDoc?.email}</p>

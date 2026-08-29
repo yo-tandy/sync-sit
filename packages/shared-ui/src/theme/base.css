@@ -46,6 +46,56 @@
   --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
 }
 
+/* WCAG 2.4.7 Focus Visible (issue #325): ONE shared keyboard-focus
+   treatment for interactive controls, all three apps. Two layers so the
+   ring reads on brand-colored AND white grounds: a 2px white box-shadow
+   backing fills the outline-offset gap (carries visibility on surfaces
+   like the AppBar, where a brand ring alone vanishes) and the 2px
+   brand-600 outline carries it on white. Brand token means sit rings
+   red, study blue, do green.
+
+   CASCADE (PR #327 round 1): this lives in @layer base, so every
+   Tailwind utility -- focus-visible:*, outline-none, shadow-*, ring-* --
+   overrides it; that IS the escape hatch, and it also means a control
+   carrying its own shadow-* keeps that shadow while focused (losing
+   only the white backing, which such light-ground controls don't need).
+   The selector's own specificity is (0,1,0): :where() zeroes its
+   arguments, :focus-visible outside it still counts.
+
+   Text-LIKE fields keep their focus border treatment and are unmatched;
+   checkbox/radio inputs ARE matched -- they had no BRANDED treatment,
+   only the browser default (their focus:ring-brand-500 set a ring color
+   with no width and painted nothing).
+   The Dialog panel's tabindex=-1 is excluded. */
+@layer base {
+  :where(a, button, [role="button"], select, summary, [tabindex]:not([tabindex="-1"])):focus-visible,
+  :where(input[type="checkbox"], input[type="radio"]):focus-visible {
+    outline: 2px solid var(--color-brand-600);
+    outline-offset: 2px;
+    box-shadow: 0 0 0 2px var(--color-white);
+  }
+
+  /* Containers that clip their children cut the outward ring off --
+     overflow-hidden menus/dropdowns, and ANY scroll container: per CSS,
+     overflow-x-auto computes overflow-y to auto, so a horizontal tab row
+     clips the ring vertically when its focusables sit within 4px of the
+     edge (round 7: NavTabs, DataTable, the schedule grids). Padded
+     scrollers (SideNav's px-3) clear the ring and need no opt-in.
+     Opting the container into .focus-ring-inset -- opting the container
+     draws the ring INSIDE the child instead. Same layer, so utilities
+     still win.
+     CONSTRAINT (round 6): the inset variant drops the white backing, so
+     it assumes a LIGHT container ground (all seven current sites are
+     bg-white). A brand-colored clipping container would need its own
+     treatment -- do not apply this class there. */
+  .focus-ring-inset :where(a, button, [role="button"], select, summary,
+      [tabindex]:not([tabindex="-1"]),
+      input[type="checkbox"], input[type="radio"]):focus-visible {
+    outline-offset: -2px;
+    box-shadow: none;
+  }
+}
+
 /* Base reset */
 html {
   -webkit-font-smoothing: antialiased;

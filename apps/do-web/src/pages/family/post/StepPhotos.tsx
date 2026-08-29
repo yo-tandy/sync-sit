@@ -65,7 +65,7 @@ export function StepPhotos({ draft, actions, pageNotice }: StepPhotosProps) {
         {draft.photos.map((photo) => (
           <div
             key={photo.photoId}
-            className="relative aspect-square overflow-hidden rounded-xl border border-gray-200 bg-gray-50"
+            className="focus-ring-inset relative aspect-square overflow-hidden rounded-xl border border-gray-200 bg-gray-50"
           >
             {photo.state === 'ready' && photo.url ? (
               <img src={photo.url} alt="" data-testid="photo-thumb" className="h-full w-full object-cover" />

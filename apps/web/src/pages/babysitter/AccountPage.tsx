@@ -519,7 +519,7 @@ export function BabysitterAccountPage() {
             type="checkbox"
             checked={contactSharingConsent}
             onChange={(e) => setContactSharingConsent(e.target.checked)}
-            className="mt-0.5 h-4 w-4 shrink-0 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+            className="mt-0.5 h-4 w-4 shrink-0 rounded border-gray-300 text-brand-600"
           />
           <span>{t('account.contactSharingConsent')}</span>
         </label>
@@ -551,7 +551,7 @@ export function BabysitterAccountPage() {
                   if (e.target.checked) setWhatsapp(phone);
                   else setWhatsapp('');
                 }}
-                className="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+                className="h-4 w-4 rounded border-gray-300 text-brand-600"
               />
               {t('account.whatsappSameAsPhone')}
             </label>
