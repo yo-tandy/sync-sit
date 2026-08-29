@@ -497,19 +497,48 @@ service cloud.firestore {
       // publishManualReference callables, which validate the
       // submitter<->babysitter relationship and admin role server-side.
       // See agent-9-security-baseline.md §7 [BL-5] and [BL-6].
+      //
+      // NO FOREIGN RECIPIENT KEY (PR #352 round-1 review). The four conditions
+      // below pin the doc to the CALLER as a sit babysitter, but left every
+      // other field free — so a client could satisfy all four while also
+      // setting `doerUserId: <victim>` (or `tutorUserId: <victim>`) and
+      // attacker-controlled `referenceText`/`submittedByName`. The recipient
+      // read disjuncts then grant that doc to the named victim, and the §9.2 /
+      // study EndorsementsPage lists — which are deliberately status-
+      // unfiltered, because their whole job is showing `private` rows — render
+      // it. Worse, it is unremovable by the victim: the update rule's owner
+      // branch keys on `babysitterUserId`, which is the ATTACKER's uid.
+      //
+      // The fix is the recipient keys, not a full field allow-list: this
+      // collection is deliberately mixed-shape (sit manual, sit
+      // family_submitted, study, do), so a `hasOnly` list would have to
+      // enumerate every sit manual field and would break the next time sit
+      // adds one — while the actual invariant being protected is narrower.
+      // A client-created reference is a SIT MANUAL reference about the caller;
+      // it names no other app's provider. Both keys are named, not just
+      // `doerUserId`: study's exposure through this same rule is identical,
+      // and closing only the half this PR happens to touch would be leaving a
+      // known hole open on purpose.
       allow create: if isAuth()
         && request.resource.data.status == 'private'
         && request.resource.data.babysitterUserId == request.auth.uid
         && request.resource.data.type == 'manual'
+        && !('doerUserId' in request.resource.data)
+        && !('tutorUserId' in request.resource.data)
         && (!('submittedByUserId' in request.resource.data)
             || request.resource.data.submittedByUserId == null);
       // Update: owner (babysitter or submitter) may edit their own reference,
       // but cannot:
       //  - mutate the identity tuple (babysitterUserId, submittedByUserId,
-      //    type, createdAt, and — for study endorsements reusing this
-      //    collection — tutorUserId, appSource, submittedByFamilyId) — prevents
-      //    transferring an endorsement between babysitters/tutors or families,
-      //    relabeling its app, or laundering an identity post-create;
+      //    type, createdAt, and — for the study and do endorsements reusing
+      //    this collection — tutorUserId, doerUserId, appSource,
+      //    submittedByFamilyId) — prevents transferring an endorsement between
+      //    babysitters/tutors/doers or families, relabeling its app, or
+      //    laundering an identity post-create. `doerUserId` joins the list at
+      //    PR #352: without it, a doc whose `babysitterUserId` is the caller
+      //    could be RETARGETED at any doer after creation, re-opening by
+      //    update exactly what the create rule above now refuses — and the
+      //    comment already claimed the freeze covered every recipient key;
       //  - promote status to 'approved' or 'published' — kills the
       //    BLOCK-LATER-4 reference-count inflation vector via update path.
       //    Status may only transition to 'private' or 'removed' from the
@@ -525,7 +554,7 @@ service cloud.firestore {
       allow update: if isAuth()
         && !request.resource.data.diff(resource.data).affectedKeys()
              .hasAny(['babysitterUserId', 'submittedByUserId', 'type', 'createdAt',
-                      'tutorUserId', 'appSource', 'submittedByFamilyId'])
+                      'tutorUserId', 'doerUserId', 'appSource', 'submittedByFamilyId'])
         && (
           resource.data.babysitterUserId == request.auth.uid
           || (
