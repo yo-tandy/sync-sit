@@ -116,6 +116,11 @@ export { doGetAssignedContact } from './do/getAssignedContact.js';
 export { doStripTaskPhoto } from './do/stripTaskPhoto.js';
 export { doGetOwnPhotoUrl } from './do/getOwnPhotoUrl.js';
 export { doGetTaskPhotoUrl } from './do/getTaskPhotoUrl.js';
+// Admin (§9.4): the two rows backing the Tasks tab in apps/web's EXISTING
+// panel. sync-do grows no admin tree of its own, and this tab is the ONE
+// sanctioned sit-side sync-do surface — admin tooling, not a member entry
+// point, so decision 20's no-reachability constraint is untouched.
+export { doAdminListTasks, doAdminDeleteTask } from './do/adminTasks.js';
 // doSweepTasks (plan §8) is NOT a separate scheduled export: it rides the
 // existing cleanupOldData schedule (runDoSweepTasks in ./do/sweepTasks.js),
 // per the §8 row — one daily job, not two.
