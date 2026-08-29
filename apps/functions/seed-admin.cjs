@@ -18,14 +18,12 @@
  * See docs/emulator-lanes.md.
  */
 
-const { resolveNodeEmulatorConfig } = require('./emulator-target.cjs');
+const { applySeedEmulatorTarget } = require('./emulator-target.cjs');
 
-// `localhost` is this script's historical default host; keep it so a bare
-// `pnpm seed:admin` produces the byte-identical target it always has.
-const emulator = resolveNodeEmulatorConfig(process.env, { defaultHost: 'localhost' });
-
-process.env.FIRESTORE_EMULATOR_HOST = `${emulator.host}:${emulator.firestorePort}`;
-process.env.FIREBASE_AUTH_EMULATOR_HOST = `${emulator.host}:${emulator.authPort}`;
+// Sets FIRESTORE_EMULATOR_HOST / FIREBASE_AUTH_EMULATOR_HOST from the lane
+// vars. `localhost` is this script's historical default host; keep it so a
+// bare `pnpm seed:admin` produces the byte-identical target it always has.
+const emulator = applySeedEmulatorTarget(process.env, 'localhost');
 
 const { initializeApp } = require('firebase-admin/app');
 const { getAuth } = require('firebase-admin/auth');

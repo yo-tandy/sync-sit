@@ -155,21 +155,7 @@ function parsePort(env: EmulatorEnvLike, key: string): number | undefined {
   return port;
 }
 
-function parseLane(env: EmulatorEnvLike, laneKeys: readonly string[]): number {
-  const set = laneKeys
-    .map((key) => ({ key, value: readVar(env, key) }))
-    .filter((entry): entry is { key: string; value: string } => entry.value !== undefined);
-
-  if (set.length === 0) return 1;
-
-  const [{ key, value }] = set;
-  const disagreeing = set.find((entry) => entry.value !== value);
-  if (disagreeing) {
-    throw new Error(
-      `${key}="${value}" and ${disagreeing.key}="${disagreeing.value}" name different lanes; set one`,
-    );
-  }
-
+function parseOneLane(key: string, value: string): number {
   if (!/^\d+$/.test(value)) {
     throw new Error(`${key} must be a lane number, got "${value}"`);
   }
@@ -178,6 +164,29 @@ function parseLane(env: EmulatorEnvLike, laneKeys: readonly string[]): number {
     throw new Error(`${key} must be between 1 and ${MAX_EMULATOR_LANE}, got "${value}"`);
   }
   return lane;
+}
+
+function parseLane(env: EmulatorEnvLike, laneKeys: readonly string[]): number {
+  // Every candidate is parsed BEFORE any are compared, so `LANE=nine
+  // E2E_LANE=3` reports the malformed value (which is the real problem)
+  // rather than a disagreement, and so `LANE=3 E2E_LANE=03` — the same lane,
+  // spelled two ways — is not a disagreement at all.
+  const set = laneKeys
+    .map((key) => ({ key, value: readVar(env, key) }))
+    .filter((entry): entry is { key: string; value: string } => entry.value !== undefined)
+    .map((entry) => ({ ...entry, lane: parseOneLane(entry.key, entry.value) }));
+
+  if (set.length === 0) return 1;
+
+  const [first] = set;
+  const disagreeing = set.find((entry) => entry.lane !== first.lane);
+  if (disagreeing) {
+    throw new Error(
+      `${first.key}="${first.value}" and ${disagreeing.key}="${disagreeing.value}" ` +
+        'name different lanes; set one',
+    );
+  }
+  return first.lane;
 }
 
 export function resolveEmulatorConfig(
@@ -227,4 +236,50 @@ export function resolveNodeEmulatorConfig(
     defaultHost: options.defaultHost ?? DEFAULT_EMULATOR_HOST,
     laneAliases: NODE_EMULATOR_LANE_ALIASES,
   });
+}
+
+/** The `firebase-admin` emulator env vars a resolved config implies. */
+export interface EmulatorAdminHosts {
+  FIRESTORE_EMULATOR_HOST: string;
+  FIREBASE_AUTH_EMULATOR_HOST: string;
+}
+
+export function emulatorAdminHosts(config: EmulatorConfig): EmulatorAdminHosts {
+  return {
+    FIRESTORE_EMULATOR_HOST: `${config.host}:${config.firestorePort}`,
+    FIREBASE_AUTH_EMULATOR_HOST: `${config.host}:${config.authPort}`,
+  };
+}
+
+/**
+ * Throw if the environment already carries a firebase-admin emulator host
+ * that disagrees with where the lane vars just resolved.
+ *
+ * The seed scripts overwrite `FIRESTORE_EMULATOR_HOST` /
+ * `FIREBASE_AUTH_EMULATOR_HOST` unconditionally, and always have. That is a
+ * quiet way to seed the wrong stack: the repo's backfill scripts ask you to
+ * `export FIRESTORE_EMULATOR_HOST` yourself, so a developer working lane 3
+ * plausibly has `FIRESTORE_EMULATOR_HOST=localhost:28080` in their shell —
+ * and then `pnpm seed:admin` writes to lane 1, the shared dev stack, saying
+ * nothing. Same accident as two lane vars naming different lanes, so the
+ * same remedy: fail loudly and make the operator pick.
+ *
+ * A pre-set value that AGREES is fine — that is the normal `export
+ * FIRESTORE_EMULATOR_HOST=localhost:28080; LANE=3 pnpm seed:admin` case.
+ */
+export function assertEmulatorAdminHostsAgree(
+  env: EmulatorEnvLike,
+  config: EmulatorConfig,
+): void {
+  const hosts = emulatorAdminHosts(config);
+  for (const key of Object.keys(hosts) as (keyof EmulatorAdminHosts)[]) {
+    const preset = readVar(env, key);
+    if (preset !== undefined && preset !== hosts[key]) {
+      throw new Error(
+        `${key} is already set to "${preset}", but this run resolves to lane ` +
+          `${config.lane} ("${hosts[key]}"). Unset ${key}, or point the lane ` +
+          'vars at the same place — seeding the wrong stack is silent otherwise.',
+      );
+    }
+  }
 }

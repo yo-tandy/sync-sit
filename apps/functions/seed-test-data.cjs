@@ -22,16 +22,14 @@
  * 127.0.0.1:9099 exactly as it always did. See docs/emulator-lanes.md.
  */
 
-const { resolveNodeEmulatorConfig } = require('./emulator-target.cjs');
+const { applySeedEmulatorTarget } = require('./emulator-target.cjs');
 
-// `127.0.0.1` is this script's historical default host (seed-admin.cjs says
-// `localhost`); each keeps its own so a bare run is unchanged.
-const emulator = resolveNodeEmulatorConfig(process.env, { defaultHost: '127.0.0.1' });
-
-// Override the target namespace with SEED_PROJECT_ID=<id> when the emulator
-// runs under a different --project than the demo-test default.
-process.env.FIRESTORE_EMULATOR_HOST = `${emulator.host}:${emulator.firestorePort}`;
-process.env.FIREBASE_AUTH_EMULATOR_HOST = `${emulator.host}:${emulator.authPort}`;
+// Sets FIRESTORE_EMULATOR_HOST / FIREBASE_AUTH_EMULATOR_HOST from the lane
+// vars. `127.0.0.1` is this script's historical default host (seed-admin.cjs
+// says `localhost`); each keeps its own so a bare run is unchanged.
+// Override the target NAMESPACE separately, with SEED_PROJECT_ID=<id>, when
+// the emulator runs under a different --project than the demo-test default.
+const emulator = applySeedEmulatorTarget(process.env, '127.0.0.1');
 
 const { initializeApp } = require('firebase-admin/app');
 const { getAuth } = require('firebase-admin/auth');
