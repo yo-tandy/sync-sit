@@ -145,7 +145,7 @@ export const cancelContactRequest = onCall(
     // ── Notify the tutor (respecting notifPrefs.study.cancelled) ──
     const tutorDoc = await db.collection('users').doc(result.tutorUserId).get();
     const tutorUser = tutorDoc.data() as StudyUser | undefined;
-    const notifPrefs = resolveNotifPref(tutorUser?.notifPrefs, 'study', 'cancelled');
+    const prefs = resolveNotifPref(tutorUser?.notifPrefs, 'study', 'cancelled');
     const title = 'Tutoring request withdrawn';
     const body = `${result.familyName || 'A family'} withdrew their tutoring request.`;
     const emailBody = `
@@ -156,11 +156,11 @@ export const cancelContactRequest = onCall(
 
     // Record the actual send outcomes, not assumptions.
     let emailSent = false;
-    if (notifPrefs.email && tutorUser?.email) {
+    if (prefs.email && tutorUser?.email) {
       emailSent = await sendNotificationEmail(tutorUser.email, `Tutoring request withdrawn — ${result.familyName || 'a family'}`, emailBody, 'study');
     }
     let pushSent = false;
-    if (notifPrefs.push) {
+    if (prefs.push) {
       pushSent = await sendPushNotification(result.tutorUserId, title, body, { requestId, type: 'study_contact_request_cancelled' }, 'study');
     }
     await db.collection('notifications').add({

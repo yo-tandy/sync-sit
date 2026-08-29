@@ -459,7 +459,7 @@ export const bookSession = onCall(
     // ── Notify the tutor (respecting notifPrefs.study.newRequest) ──
     // trialFirstSession is recurring-only; ignore it on the one_time path.
     const isTrialRequest = type === 'recurring' && trialFirstSession === true;
-    const notifPrefs = resolveNotifPref(tutorUser.notifPrefs, 'study', 'newRequest');
+    const prefs = resolveNotifPref(tutorUser.notifPrefs, 'study', 'newRequest');
     const title = 'New session request';
     const body = `${familyName || 'A family'} requested a tutoring session${isTrialRequest ? ' (first session as a trial)' : ''}.`;
     const emailBody = `
@@ -473,7 +473,7 @@ export const bookSession = onCall(
 
     // Record the actual send outcomes, not assumptions.
     let emailSent = false;
-    if (notifPrefs.email && tutorUser.email) {
+    if (prefs.email && tutorUser.email) {
       emailSent = await sendNotificationEmail(
         tutorUser.email,
         `New session request from ${familyName || 'a family'}`,
@@ -482,7 +482,7 @@ export const bookSession = onCall(
       );
     }
     let pushSent = false;
-    if (notifPrefs.push) {
+    if (prefs.push) {
       pushSent = await sendPushNotification(tutorUserId, title, body, {
         sessionId: sessionRef.id,
         type: 'study_session_request',

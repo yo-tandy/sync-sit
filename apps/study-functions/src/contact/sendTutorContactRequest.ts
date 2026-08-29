@@ -136,7 +136,7 @@ export const sendTutorContactRequest = onCall(
     await requestRef.set(doc);
 
     // ── Notify the tutor (respecting notifPrefs.study.newRequest) ──
-    const notifPrefs = resolveNotifPref(tutorUser.notifPrefs, 'study', 'newRequest');
+    const prefs = resolveNotifPref(tutorUser.notifPrefs, 'study', 'newRequest');
     const title = 'New tutoring request';
     const body = `${familyName || 'A family'} is interested in tutoring.`;
     const emailBody = `
@@ -148,11 +148,11 @@ export const sendTutorContactRequest = onCall(
 
     // Record the actual send outcomes, not assumptions.
     let emailSent = false;
-    if (notifPrefs.email && tutorUser.email) {
+    if (prefs.email && tutorUser.email) {
       emailSent = await sendNotificationEmail(tutorUser.email, `New tutoring request from ${familyName || 'a family'}`, emailBody, 'study');
     }
     let pushSent = false;
-    if (notifPrefs.push) {
+    if (prefs.push) {
       pushSent = await sendPushNotification(tutorUserId, title, body, { requestId: requestRef.id, type: 'study_contact_request' }, 'study');
     }
     await db.collection('notifications').add({

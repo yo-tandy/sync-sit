@@ -37,7 +37,8 @@ export async function recordEndorsementResponseActivity(
  * Notify the submitting family of the outcome (issue #168 Phase 0). The flow
  * is family submits -> tutor responds; without this the family never learns
  * whether their endorsement was published. Gated by each parent's
- * notifPrefs.references, branded for study. A dismissal reads neutrally — it
+ * notifPrefs.shared.references (issue #369 — reputation is the person's,
+ * not one marketplace's), branded for study. A dismissal reads neutrally — it
  * does not say the tutor rejected it. Best-effort; never rejects.
  */
 export async function notifyEndorsementOutcome(
