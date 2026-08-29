@@ -27,6 +27,11 @@
  *     angle-bracket one would carry its brackets into the path.
  *   - setext headings (`Title` underlined with `===` or `---`). Every heading
  *     in this repo is ATX (`#`), so no anchor is missed today.
+ *   - any target carrying a URI scheme (`scheme:`) or protocol-relative
+ *     (`//host/x`). Only relative paths and `#fragment`s are in scope.
+ *   - where a `../` target resolves. A link may point above the scan root and
+ *     will be checked there; the checker only ever compares heading slugs and
+ *     never emits file contents, so this is a scope note rather than a leak.
  *
  * That list is exhaustive on purpose. The point of a check like this is that
  * silence means "looked and found nothing", so anything it does NOT look at
@@ -211,13 +216,31 @@ export function checkTree(root) {
       for (const m of line.matchAll(/(!?)\[[^\]]*\]\(([^)\s]+)\)/g)) {
         const [, bang, target] = m;
         if (bang) continue;
-        if (/^(https?:|mailto:|tel:|ftp:|#!)/i.test(target)) continue;
+        // Skip anything that is not an in-repo path. This is a PATTERN, not
+        // an allowlist of four schemes: the previous allowlist sent every
+        // other scheme (`vscode://`, `slack://`) and every protocol-relative
+        // URL (`//example.com/x`) down the relative-path branch, where they
+        // were reported as `missing-file`. A false red on a docs job is how
+        // a check gets muted, which is the outcome this whole PR argues
+        // against — so an unrecognised scheme is skipped, not guessed at.
+        if (/^[a-z][a-z0-9+.-]*:/i.test(target) || target.startsWith('//')) continue;
 
         linksChecked++;
         const hashAt = target.indexOf('#');
         const pathPart = hashAt === -1 ? target : target.slice(0, hashAt);
         const anchor = hashAt === -1 ? '' : target.slice(hashAt + 1);
-        const targetFile = pathPart ? resolve(dirname(file), tryDecode(pathPart)) : file;
+
+        // A leading `/` is repo-root-relative in every renderer that matters
+        // (GitHub included), NOT filesystem-root. Resolving it against `/`
+        // would report a confusing `missing-file` — or, on a machine where
+        // that path happens to exist, silently read anchors from a file
+        // outside the checkout.
+        const decoded = tryDecode(pathPart);
+        const targetFile = !pathPart
+          ? file
+          : decoded.startsWith('/')
+            ? resolve(absRoot, `.${decoded}`)
+            : resolve(dirname(file), decoded);
 
         if (pathPart && !existsSync(targetFile)) {
           problems.push({ kind: 'missing-file', file: rel, line: i + 1, target });

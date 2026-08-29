@@ -180,6 +180,48 @@ describe('what it must NOT flag', () => {
     const r = withTree({ 'a.md': '# A\n\n![shot](assets/nope.png)\n' }, (dir) => checkTree(dir));
     expect(r.problems).toEqual([]);
   });
+
+  it('skips any URI scheme, not just the four that were once listed', () => {
+    // These used to fall through to the relative-path branch and be reported
+    // as `missing-file` — a false red, which is how a docs job gets muted.
+    const r = withTree(
+      {
+        'a.md': '# A\n\n[e](vscode://file/x)\n[s](slack://open)\n[p](//example.com/x)\n',
+      },
+      (dir) => checkTree(dir),
+    );
+    expect(r.problems).toEqual([]);
+    expect(r.linksChecked).toBe(0);
+  });
+});
+
+describe('root-relative targets resolve against the scan root', () => {
+  // `[x](/docs/plan.md)` is repo-root-relative in GitHub's renderer. Resolving
+  // it against the FILESYSTEM root produced a confusing `missing-file` — or,
+  // where that path happened to exist, silently read a file outside the
+  // checkout.
+  it('finds a file addressed from the root', () => {
+    const r = withTree(
+      {
+        'docs/a.md': '# A\n\n[b](/docs/b.md#section-two)\n',
+        'docs/b.md': '# B\n\n## Section two\n',
+      },
+      (dir) => checkTree(dir),
+    );
+    expect(r.problems).toEqual([]);
+    expect(r.linksChecked).toBe(1);
+  });
+
+  it('still reports a dead anchor through a root-relative path', () => {
+    const r = withTree(
+      {
+        'docs/a.md': '# A\n\n[b](/docs/b.md#nope)\n',
+        'docs/b.md': '# B\n\n## Section two\n',
+      },
+      (dir) => checkTree(dir),
+    );
+    expect(r.problems.map((p) => p.kind)).toEqual(['dead-anchor']);
+  });
 });
 
 describe('it must not pass by scanning nothing', () => {
@@ -210,36 +252,44 @@ describe('it must not pass by scanning nothing', () => {
     expect(r.ok).toBe(false);
   });
 
-  it('is ok on the real repository, which has both files and links', () => {
-    const r = checkTree(repoRoot);
+  it('is ok on a tree that has both files and links', () => {
+    const r = withTree(
+      { 'a.md': '# A\n\n[toc](#a)\n' },
+      (dir) => checkTree(dir),
+    );
     expect(r.scannedNothing).toBe(false);
     expect(r.ok).toBe(true);
   });
 });
 
-describe('the real repository', () => {
-  it('has no broken in-repo markdown links', () => {
-    const r = checkTree(repoRoot);
-    expect(r.problems).toEqual([]);
-  });
+/**
+ * COVERAGE of the real tree, deliberately NOT cleanliness of it.
+ *
+ * These assert that the walk still reaches the documentation — that a refactor
+ * or a widened ignore list has not quietly shrunk what the checker sees, which
+ * would make the CI job green for the worst possible reason. Every assertion
+ * here survives a dead link on purpose: repo link CLEANLINESS is enforced in
+ * exactly one place, the `docs-links` job, and asserting it here as well is
+ * what silently re-created the release gate this PR removes (see the release
+ * coupling test below).
+ */
+describe('the real repository is still in view', () => {
+  const real = checkTree(repoRoot);
 
-  /**
-   * Pins the scan surface. If a refactor moves docs, or the ignore list grows
-   * a pattern that swallows docs/, these numbers drop toward zero and the job
-   * above goes green for the wrong reason. Deliberately a floor rather than
-   * an exact count, so adding documentation never fails the build.
-   */
   it('actually scans the documentation tree', () => {
-    const r = checkTree(repoRoot);
-    expect(r.filesScanned).toBeGreaterThan(50);
-    expect(r.linksChecked).toBeGreaterThan(20);
+    // Floors, not exact counts, so adding documentation never fails a build.
+    expect(real.filesScanned).toBeGreaterThan(50);
+    expect(real.linksChecked).toBeGreaterThan(20);
   });
 
   it('reaches the plan docs specifically, not just the shallow ones', () => {
-    const r = checkTree(repoRoot);
-    expect(r.files).toContain('docs/sync-do-project-plan.md');
-    expect(r.files).toContain('docs/platform-plan.md');
-    expect(r.files).toContain('docs/sync-study-project-plan.md');
+    expect(real.files).toContain('docs/sync-do-project-plan.md');
+    expect(real.files).toContain('docs/platform-plan.md');
+    expect(real.files).toContain('docs/sync-study-project-plan.md');
+  });
+
+  it('is looking at something, rather than reporting an empty scan', () => {
+    expect(real.scannedNothing).toBe(false);
   });
 });
 
@@ -364,6 +414,68 @@ describe('malformed input fails legibly rather than crashing', () => {
   });
 });
 
+/**
+ * THE PROPERTY THE RELEASE OPT-OUT IS ACTUALLY FOR.
+ *
+ * Skipping the `docs-links` job is not enough on its own, and the first
+ * version of this PR shipped exactly that mistake: `release.yml` also runs the
+ * `test` job unconditionally, that job runs `pnpm test:unit`, whose tail is
+ * `vitest run --project scripts` — this file. While this file asserted
+ * `checkTree(repoRoot).problems === []`, a dead anchor in a plan still failed
+ * `verify_tests` and still blocked a tagged deploy, which is precisely the
+ * hotfix-under-incident case the opt-out exists to prevent.
+ *
+ * The two YAML pins could not see it. They assert the `with:` and the `if:`
+ * exist, and both did; the behaviour was broken anyway. A pin that both halves
+ * satisfy while the outcome is unchanged is the thing this whole PR argues
+ * against, so the property gets a test that exercises it end to end rather
+ * than a third pin on the plumbing.
+ *
+ * It plants a dead anchor in `docs/` and runs the `scripts` project the way
+ * the release path does, asserting it stays green. `LINKCHECK_META_CHILD`
+ * stops the child re-entering this test.
+ */
+const IS_META_CHILD = process.env.LINKCHECK_META_CHILD === '1';
+
+describe.skipIf(IS_META_CHILD)('a tagged release is not gated on documentation links', () => {
+  // Cleanup runs in a `finally`, so an interrupted run can strand this file;
+  // .gitignore carries the name so it can never be swept into a commit, and
+  // the test below asserts that entry still matches. Same convention as
+  // bundle-shared-for-deploy.test.ts's stray probe.
+  const FIXTURE = 'docs/__linkcheck_releaseCouplingProbe.md';
+
+  it('the scripts suite stays green while a doc in the tree has a dead anchor', () => {
+    const fixture = resolve(repoRoot, FIXTURE);
+    try {
+      writeFileSync(fixture, '# Probe\n\n[dead](#no-such-anchor-anywhere)\n');
+
+      // Sanity: the checker really does consider the tree broken right now.
+      // Without this the test could pass because the fixture did nothing.
+      const seen = checkTree(repoRoot);
+      expect(seen.problems.some((p) => p.file === FIXTURE)).toBe(true);
+
+      const child = spawnSync(
+        resolve(repoRoot, 'node_modules/.bin/vitest'),
+        ['run', '--project', 'scripts', 'markdown-links'],
+        {
+          cwd: repoRoot,
+          encoding: 'utf8',
+          env: { ...process.env, LINKCHECK_META_CHILD: '1', CI: '1' },
+        },
+      );
+
+      expect(child.status).toBe(0);
+    } finally {
+      rmSync(fixture, { force: true });
+    }
+  });
+
+  it('keeps the fixture name ignored, so an interrupted run cannot commit it', () => {
+    const ignored = readFileSync(resolve(repoRoot, '.gitignore'), 'utf8');
+    expect(ignored).toContain(FIXTURE);
+  });
+});
+
 describe('CI wiring', () => {
   /**
    * Asserted against the parsed yaml rather than the file text, for the
@@ -379,14 +491,17 @@ describe('CI wiring', () => {
       { if?: string; steps: { name?: string; run?: string; uses?: string }[] }
     >;
     permissions?: Record<string, string>;
-    // `on` is the YAML 1.1 boolean `true` once parsed — quoting it here keeps
-    // the property reachable by name.
-    on?: {
-      workflow_call?: {
-        inputs?: Record<string, { type?: string; default?: unknown }>;
-      };
+  } & Record<string, unknown>;
+
+  // `on:` parses to the boolean key `true` under YAML 1.1. The `yaml` package
+  // defaults to the 1.2 core schema, where it stays the string `"on"`, so
+  // reading `.on` works today — but release-workflow.test.ts reads both keys
+  // deliberately so its pins do not hinge on the parser's schema version, and
+  // there is no reason for the two workflow-pinning files to disagree.
+  const triggers = (doc: Record<string, unknown>) =>
+    (doc['on'] ?? doc[true as unknown as string]) as {
+      workflow_call?: { inputs?: Record<string, { type?: string; default?: unknown }> };
     };
-  };
 
   it('runs the checker as its own job in the Tests workflow', () => {
     expect(Object.keys(workflow.jobs)).toContain('docs-links');
@@ -422,7 +537,7 @@ describe('CI wiring', () => {
   it('declares the input the release workflow passes', () => {
     // A workflow_call input that the callee does not declare is a hard error
     // at dispatch time, so this pins the pair rather than one side.
-    const called = workflow.on?.workflow_call?.inputs?.skip_docs_links;
+    const called = triggers(workflow).workflow_call?.inputs?.skip_docs_links;
     expect(called).toBeDefined();
     expect(called.default).toBe(false);
   });
