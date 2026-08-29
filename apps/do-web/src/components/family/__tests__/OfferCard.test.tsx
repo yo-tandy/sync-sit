@@ -152,10 +152,17 @@ describe('OfferCard endorsements', () => {
     h.results.set('doerUserId', [
       { referenceText: 'Approved one', submittedByName: 'A', status: 'approved' },
       { referenceText: 'Published one', submittedByName: 'B', status: 'published' },
+      // A row the real query could NEVER return. Asserting it renders reads
+      // oddly on purpose — it is the only fixture that can fail if someone
+      // adds a client-side `status in [approved, published]` filter, which is
+      // the regression this test names. Two public-status rows alone would
+      // stay green under exactly that filter (PR #352 round-1 review).
+      { referenceText: 'Private one', submittedByName: 'C', status: 'private' },
     ]);
     renderWithProviders(<OfferCard offer={offer()} />);
     await waitFor(() => expect(screen.getByText(/Approved one/)).toBeInTheDocument());
     expect(screen.getByText(/Published one/)).toBeInTheDocument();
+    expect(screen.getByText(/Private one/)).toBeInTheDocument();
   });
 
   it('renders the starting-state line for a doer with no endorsements anywhere', async () => {
