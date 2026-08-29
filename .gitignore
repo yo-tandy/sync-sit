@@ -14,6 +14,12 @@ apps/functions/shared-bundle/
 # Environment
 .env
 .env.*
+# ...but example files carry placeholders, never values, and an operator
+# setting up a new environment needs them IN the repo. Without this the
+# staging runbook points at a file that only exists on the machine that
+# wrote it (PR #374 round 2).
+!.env.example
+!.env.*.example
 .env.local
 .env.*.local
 

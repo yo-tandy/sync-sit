@@ -29,6 +29,8 @@ function getResend(): any {
  * serve, and the custom domain is the canonical one, so everything now builds
  * on it.
  *
+ * Configuration reference: docs/environments.md.
+ *
  * ENV-OVERRIDABLE, and that is the point for anything that is not production:
  * a staging deployment whose emails link to production is worse than no
  * staging at all — a tester clicks "View your appointment" and lands on real
