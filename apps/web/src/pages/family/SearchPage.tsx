@@ -705,6 +705,19 @@ export function SearchPage() {
                       {(b.distance ?? 0) > 0 && (
                         <p className="text-xs text-gray-500">📍 {b.distance} km away</p>
                       )}
+                      {/* SIT-only count: searchBabysitters projects the sit
+                          reference tally, while the expanded block below is
+                          cross-app — so a sitter with 2 sit references and 1
+                          study endorsement shows "2 endorsements" here and
+                          "Endorsements (3)" when expanded. Intentional, and the
+                          honest pair: this line summarises what vouches for
+                          BABYSITTING, which is what a family filtering on
+                          references is asking about; the expanded list is where
+                          cross-app signal belongs, labeled by origin. Making
+                          this count cross-app would mean a server-side fan-out
+                          in the callable, and would fold tutoring endorsements
+                          into a babysitting summary number with no room for a
+                          label. Same property as TutorCard's badge. */}
                       {(b.referenceCount ?? 0) > 0 && (
                         <p className="text-xs text-gray-500"><span className="text-green-600">✓</span> {b.referenceCount} endorsement{(b.referenceCount ?? 0) > 1 ? 's' : ''}</p>
                       )}

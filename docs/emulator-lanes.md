@@ -12,7 +12,7 @@ pnpm test:integration:lane2   # or: pnpm test:integration:lane3 / pnpm test:inte
 
 Notes:
 - Always use the workspace CLI (`pnpm exec firebase`); the global standalone binary silently breaks pnpm child processes.
-- Build first: `pnpm -r --filter './packages/**' build && pnpm build:functions && pnpm build:study-functions` — a missing functions dist false-fails every callable test.
+- Build first: `pnpm -r --filter './packages/**' build && pnpm build:functions && pnpm build:study-functions` — a missing functions dist false-fails every callable test. In a FRESH worktree this must include `@ejm/do-core` (it is newer than this recipe): without its build the sit functions codebase fails to LOAD entirely, so `searchBabysitters` is silently absent and the search UI returns a bare `internal` — a failure that looks like a bug in the feature under test rather than a missing build.
 - `TEST_STORAGE_PORT` matters: without it the storage-rules suite connects to the DEFAULT port and `clearStorage()` wipes the dev stack's storage bucket.
 - Each lane spawns its own Java Firestore emulator (~hundreds of MB); two concurrent lanes plus the dev stack is a sensible ceiling on a laptop. Lane 3 exists for exactly that second concurrent session, lane 4 for a third; for a fifth lane, copy the config with a different offset and add a matching script.
 - Lanes are fully isolated: same `demo-test` project id is fine, data never crosses lanes.
