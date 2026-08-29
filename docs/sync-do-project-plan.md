@@ -1759,9 +1759,13 @@ it is spam.
   `enrollTutor`, the address itself is asserted EJM-valid or
   admin-preapproved BEFORE the code is consulted: the `verificationCodes`
   namespace is shared with the any-domain `verifyParentEmail`, so a valid
-  code alone proves only mailbox ownership (the platform-wide collision is
-  issue #322; sync-do carries its own domain check regardless of how #322
-  resolves). **A parent profile does not qualify** (corrected in PR #320
+  code alone proves only mailbox ownership. The platform-wide collision was
+  issue #322, RESOLVED in PR #400: every code doc now records the identity
+  class it proves (`identityClass: 'mailbox' | 'ejm'`), and `doEnrollDoer`
+  asserts `'ejm'` like its sit/study siblings now do. sync-do's own domain
+  check is KEPT as a second lock — it re-derives the fact from the address
+  instead of trusting a stored field, and it is what covers a doc written
+  before the stamp existed. **A parent profile does not qualify** (corrected in PR #320
   review): `verifyParentEmail` accepts any domain and `enrollFamily`
   completes on open self-signup, so accepting it would widen §7.2's board
   audience from EJM students to anyone with a mailbox. A parent-only

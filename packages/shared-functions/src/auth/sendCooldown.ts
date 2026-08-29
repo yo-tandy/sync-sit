@@ -22,7 +22,18 @@ import { getConfigValue } from '../config/adminConfig.js';
  *  Identity-class agnostic on purpose (issue #322 audit): the cooldown is a
  *  per-ADDRESS send budget shared by both issuing callables, and grading it
  *  by class would give one address two independent cooldowns to burn — a
- *  widening. It grants nothing; the enroll callables grade the class. */
+ *  widening. It grants nothing; the enroll callables grade the class.
+ *
+ *  Consequence worth knowing (UX, not security — PR #400 review): because
+ *  this fires across callables, a class MISMATCH can persist for up to one
+ *  cooldown. Request a parent code for an address, switch to a provider
+ *  wizard within the window, and verifyEjmEmail returns the fresh body
+ *  without writing — so the mailbox-class doc survives, the emailed code is
+ *  refused by the EJM-gated consumers, and the "request a new one" advice
+ *  cannot be acted on until the window lapses. Bounded and self-healing (the
+ *  cooldown default is 60s), and the same shape as any mid-signup address
+ *  switch. The alternative — letting a different-class request through —
+ *  IS the widening above. */
 export async function isInSendCooldown(email: string): Promise<boolean> {
   const doc = await db.collection('verificationCodes').doc(email).get();
   const createdAt = doc.data()?.createdAt;
