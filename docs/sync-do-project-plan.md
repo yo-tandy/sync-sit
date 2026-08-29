@@ -1872,6 +1872,25 @@ floor, a bookcase assembled wrong, an item broken in transit.
 
 This is a stance the *product* has to state, not just a paragraph in a contract:
 
+- **Terms of service** for sync-do carry it explicitly, and the wording should
+  be reconciled with sync-sit's and sync-study's — the position is
+  platform-wide, not sync-do's alone, and today it is under-stated for
+  babysitting.
+- **The posting flow** says it once, plainly, at the review step: the family is
+  responsible for insurance and for resolving any damage or injury directly
+  with the student.
+- **The acceptance dialog** repeats it at the moment money and access are
+  actually being committed, alongside the §11.3 helper disclosure.
+- **The considerations lists** already carry the concrete version per
+  sub-category — "what happens if something breaks" (Boxes), "who authorises
+  treatment and pays" (Pet), "does this void a warranty" (IT). Those lines are
+  the operational face of this policy and should not be softened.
+
+There is no damage-claim flow, no dispute queue, and no mediation surface in
+V1 — deliberately. Building one would imply a responsibility this decision
+declines. Admin can see the task record and the agreed price if asked to help
+two members reconstruct what was agreed; that is the limit.
+
 **Delivered state (PR #342, the §13 PR10 row) — the ToS half is carved out,
 and this is the record of it rather than a PR comment.** The two in-product
 sites shipped in PR7 and are pinned by tests: the posting flow's review step
@@ -1897,25 +1916,6 @@ with no policy line. Both halves therefore sit with #308.
 wording to #308 is the intended reading of decision 15's "stated in the
 terms", given the in-product halves are live. Nothing else in the PR10 row
 is outstanding.
-
-- **Terms of service** for sync-do carry it explicitly, and the wording should
-  be reconciled with sync-sit's and sync-study's — the position is
-  platform-wide, not sync-do's alone, and today it is under-stated for
-  babysitting.
-- **The posting flow** says it once, plainly, at the review step: the family is
-  responsible for insurance and for resolving any damage or injury directly
-  with the student.
-- **The acceptance dialog** repeats it at the moment money and access are
-  actually being committed, alongside the §11.3 helper disclosure.
-- **The considerations lists** already carry the concrete version per
-  sub-category — "what happens if something breaks" (Boxes), "who authorises
-  treatment and pays" (Pet), "does this void a warranty" (IT). Those lines are
-  the operational face of this policy and should not be softened.
-
-There is no damage-claim flow, no dispute queue, and no mediation surface in
-V1 — deliberately. Building one would imply a responsibility this decision
-declines. Admin can see the task record and the agreed price if asked to help
-two members reconstruct what was agreed; that is the limit.
 
 **Still worth a lawyer's eye before launch, not before build:** whether French
 rules on minors' occasional work bear on any of this, and whether the ToS

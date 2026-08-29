@@ -57,7 +57,11 @@ export function AdminAuditLogPage() {
     { value: 'delete_user', label: 'delete_user' },
     { value: 'deactivate_user', label: 'deactivate_user' },
     { value: 'activate_user', label: 'activate_user' },
-    { value: 'reset_password', label: 'reset_password' },
+    // `resetUserPassword.ts:45` writes `reset_user_password`; this list
+    // filtered for `reset_password`, so the option returned an empty feed
+    // for an action that IS logged — the same silent failure as a missing
+    // entry, wearing a plausible label. The written value is the truth.
+    { value: 'reset_user_password', label: 'reset_user_password' },
     { value: 'delete_appointment', label: 'delete_appointment' },
     // `listAuditLogs` applies actionFilter as a server-side equality, so an
     // action missing here shows in the unfiltered feed but cannot be

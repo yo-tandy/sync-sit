@@ -28,7 +28,10 @@ export const AuditAction = {
   BLOCK_USER: 'block_user',
   UNBLOCK_USER: 'unblock_user',
   DELETE_USER: 'delete_user',
-  RESET_PASSWORD: 'reset_password',
+  // Matches what `resetUserPassword` actually writes; the two had drifted,
+  // which is what left the admin audit filter searching for a value no
+  // document carries.
+  RESET_PASSWORD: 'reset_user_password',
   EXPORT_USER_DATA: 'export_user_data',
   DELETE_APPOINTMENT: 'delete_appointment',
   UPDATE_HOLIDAYS: 'update_holidays',
