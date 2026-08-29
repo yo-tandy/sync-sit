@@ -4,7 +4,9 @@ import { getCorsOrigin } from '../config/cors.js';
 import { verifyAdmin } from './verifyAdmin.js';
 
 /**
- * Return dashboard counts: active babysitters, families, appointments.
+ * Return dashboard counts: active babysitters, families, appointments,
+ * pending verifications, and sync-do tasks (plan §9.4 — "task counts on the
+ * admin dashboard", alongside the per-collection counts already here).
  */
 export const getAdminDashboard = onCall(
   { region: 'europe-west1', cors: getCorsOrigin() },
@@ -15,7 +17,14 @@ export const getAdminDashboard = onCall(
 
     await verifyAdmin(request.auth.uid);
 
-    const [babysitterSnap, familySnap, appointmentSnap, pendingVerSnap] = await Promise.all([
+    const [
+      babysitterSnap,
+      familySnap,
+      appointmentSnap,
+      pendingVerSnap,
+      taskSnap,
+      openTaskSnap,
+    ] = await Promise.all([
       // Plan D: a doc carrying profiles.babysitter.enrollmentComplete (always
       // a boolean on any babysitter profile) is a babysitter, regardless of
       // value — `in [true,false]` acts as an existence predicate. Equality/in
@@ -32,6 +41,13 @@ export const getAdminDashboard = onCall(
         .where('status', '==', 'pending')
         .count()
         .get(),
+      // sync-do (§9.4). Both counts, because the totals answer different
+      // questions: `doTaskCount` is the collection's size (it shrinks as the
+      // retention sweep runs), `doOpenTaskCount` is what is live on the
+      // board right now — the number an admin actually watches. An equality
+      // filter needs no composite index.
+      db.collection('doTasks').count().get(),
+      db.collection('doTasks').where('status', '==', 'open').count().get(),
     ]);
 
     return {
@@ -39,6 +55,8 @@ export const getAdminDashboard = onCall(
       familyCount: familySnap.data().count,
       appointmentCount: appointmentSnap.data().count,
       pendingVerificationCount: pendingVerSnap.data().count,
+      doTaskCount: taskSnap.data().count,
+      doOpenTaskCount: openTaskSnap.data().count,
     };
   }
 );
