@@ -10,6 +10,11 @@ interface AssignedWorkViewProps {
   onMarkDone: () => void;
   onCancel: () => void;
   busy: boolean;
+  /** The task's description/photos card, slotted between the contact card
+   * and the checklist: the details stay reachable past acceptance — the
+   * coordination phase is when they matter most (PR #331 round 2, same
+   * slot as the family's AssignedTaskView). */
+  details?: React.ReactNode;
 }
 
 /**
@@ -36,7 +41,7 @@ interface AssignedWorkViewProps {
  * (both entry points key on assignedUserId == uid), but the gate keeps
  * the two portals from drifting if that ever changes.
  */
-export function AssignedWorkView({ task, onMarkDone, onCancel, busy }: AssignedWorkViewProps) {
+export function AssignedWorkView({ task, onMarkDone, onCancel, busy, details }: AssignedWorkViewProps) {
   const { t } = useTranslation();
   const considerations = useConsiderations(task.subCategory);
   const [checked, setChecked] = useState<Record<number, boolean>>({});
@@ -128,6 +133,8 @@ export function AssignedWorkView({ task, onMarkDone, onCancel, busy }: AssignedW
         )}
       </Card>
       )}
+
+      {details}
 
       {considerations.length > 0 && !completed && !cancelled && (
         <Card className="mb-4">

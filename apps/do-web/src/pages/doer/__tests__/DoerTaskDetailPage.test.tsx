@@ -206,11 +206,14 @@ describe('DoerTaskDetailPage own-offer CTA states', () => {
 describe('DoerTaskDetailPage assigned + unavailable states', () => {
   it('renders the AssignedWorkView for the caller-s own assignment', async () => {
     renderDetail();
-    pushTask(task({ status: 'assigned', assignedUserId: 'd1', agreedPrice: 15 }));
+    pushTask(task({ status: 'assigned', assignedUserId: 'd1', assignedOfferId: 't1_d1', agreedPrice: 15 }));
     pushOffers([{ offerId: 't1_d1', status: 'accepted', price: 15, taskId: 't1' }]);
     await waitFor(() => expect(screen.getByText('Family contact details')).toBeInTheDocument());
     // The published-view CTA is gone; the money line is not repeated here.
     expect(screen.queryByRole('link', { name: 'Make an offer' })).toBeNull();
+    // Description stays reachable past acceptance (PR #331 round 2's
+    // details slot, mirrored on the doer side).
+    expect(screen.getByText(/Pick up a prescription/)).toBeInTheDocument();
   });
 
   it('maps a permission-denied read to the not-available state (§7.2 scope, not an error page)', () => {

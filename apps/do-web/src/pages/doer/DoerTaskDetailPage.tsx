@@ -188,6 +188,18 @@ export function DoerTaskDetailPage() {
               onMarkDone={() => setMarkDoneOpen(true)}
               onCancel={() => setCancelOpen(true)}
               busy={busy}
+              // Description + photos stay available past acceptance — the
+              // coordination phase is when the details matter most
+              // (PR #331 round 2, mirrored from the family side).
+              details={
+                <Card className="mb-4">
+                  <h3 className="mb-1 text-sm font-semibold text-gray-900">
+                    {t('doer.taskDetail.descriptionTitle')}
+                  </h3>
+                  <p className="text-sm whitespace-pre-wrap text-gray-600">{task.description}</p>
+                  <DoerTaskPhotos task={task} />
+                </Card>
+              }
             />
           </>
         ) : (
