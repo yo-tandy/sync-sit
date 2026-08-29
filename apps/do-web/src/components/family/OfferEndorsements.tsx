@@ -2,24 +2,25 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { collection, getDocs, limit, query, where } from 'firebase/firestore';
 import { Spinner } from '@ejm/shared-ui';
+import {
+  endorsementSources,
+  endorsementLabelKey,
+  toCrossAppEndorsement,
+  ENDORSEMENT_PER_SOURCE_LIMIT,
+  PUBLIC_ENDORSEMENT_STATUSES,
+  type CrossAppEndorsement,
+} from '@ejm/shared-core';
 import { db } from '@/config/firebase';
 
-interface EndorsementLine {
-  id: string;
-  /** Which app vouches — decides ordering and the origin label (§9.1). */
-  source: 'do' | 'sit' | 'study';
-  name: string;
-  text: string;
-}
-
-/** Per-source cap, the TutorCard precedent — an offer card is a summary,
- * not an archive. */
-const PER_SOURCE_LIMIT = 10;
+/** i18n prefix for this surface's origin labels — see endorsementLabelKey. */
+const ORIGIN_LABEL_PREFIX = 'family.taskDetail.endorsementFrom';
 
 /**
- * The §9.1 offer-card endorsements: three queries against the shared
- * `references` collection, one per app's key field — and each carries
- * `where('status','in',['approved','published'])`, which is LOAD-BEARING:
+ * The §9.1 offer-card endorsements: one query per registered product against
+ * the shared `references` collection, keyed by that product's subject field
+ * (the shared `endorsementSources` registry, issue #280 — sit and study read
+ * the same registry, so a fourth product is one entry, not three edits) — and
+ * each carries `where('status','in',['approved','published'])`, LOAD-BEARING:
  * the H2-hardened read rule grants an unrelated caller only the
  * public-status disjunct, provable only when the query constrains status.
  * Dropping it is PERMISSION_DENIED, and the wrong fix is widening the
@@ -35,44 +36,51 @@ const PER_SOURCE_LIMIT = 10;
  */
 export function OfferEndorsements({ doerUserId }: { doerUserId: string }) {
   const { t } = useTranslation();
-  const [lines, setLines] = useState<EndorsementLine[] | null>(null);
+  const [lines, setLines] = useState<CrossAppEndorsement[] | null>(null);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     async function load() {
       try {
-        const sources: { source: EndorsementLine['source']; field: string }[] = [
-          { source: 'do', field: 'doerUserId' },
-          { source: 'sit', field: 'babysitterUserId' },
-          { source: 'study', field: 'tutorUserId' },
-        ];
-        const snaps = await Promise.all(
+        const sources = endorsementSources('do');
+        // allSettled, not all: one failing source (an unbuilt sibling
+        // composite, a transient error) must not take the other two down with
+        // it. The error line below is now reserved for a TOTAL failure.
+        //
+        // Unlike sit's and study's cards there is no expand/collapse here, so
+        // there is no retry trigger to preserve: this effect is keyed on
+        // doerUserId and a partial result stands until the card remounts. That
+        // predates this PR (the surface was already one-shot Promise.all) and
+        // is not a regression — noting it so the next reader does not mistake
+        // the absence of a completeness flag for an oversight.
+        const settled = await Promise.allSettled(
           sources.map(({ field }) =>
             getDocs(
               query(
                 collection(db, 'references'),
                 where(field, '==', doerUserId),
-                where('status', 'in', ['approved', 'published']),
-                limit(PER_SOURCE_LIMIT),
+                where('status', 'in', PUBLIC_ENDORSEMENT_STATUSES),
+                limit(ENDORSEMENT_PER_SOURCE_LIMIT),
               ),
             ),
           ),
         );
         if (cancelled) return;
-        const result: EndorsementLine[] = [];
-        snaps.forEach((snap, i) => {
-          for (const d of snap.docs) {
-            const data = d.data() as Record<string, unknown>;
-            result.push({
-              id: d.id,
-              source: sources[i].source,
-              name: (data.submittedByName as string) || (data.refName as string) || '',
-              text: (data.referenceText as string) || '',
-            });
-          }
-        });
-        setLines(result);
+        if (settled.every((r) => r.status === 'rejected')) {
+          setFailed(true);
+          return;
+        }
+        // Concatenated in source order, so sync-do's own entries lead.
+        setLines(
+          settled.flatMap((r, i) =>
+            r.status === 'fulfilled'
+              ? r.value.docs.map((d) =>
+                  toCrossAppEndorsement(sources[i].app, d.id, d.data() as Record<string, unknown>),
+                )
+              : [],
+          ),
+        );
       } catch {
         if (!cancelled) setFailed(true);
       }
@@ -100,15 +108,13 @@ export function OfferEndorsements({ doerUserId }: { doerUserId: string }) {
   return (
     <ul className="space-y-2">
       {lines.map((line) => (
-        <li key={`${line.source}-${line.id}`} className="rounded-lg bg-gray-50 p-2.5">
+        <li key={`${line.sourceApp}-${line.id}`} className="rounded-lg bg-gray-50 p-2.5">
           <p className="text-xs leading-relaxed text-gray-600">“{line.text}”</p>
           <p className="mt-1 text-[11px] text-gray-400">
-            {line.name && <span className="font-medium">{line.name}</span>}
-            {line.source !== 'do' && (
+            {line.refName && <span className="font-medium">{line.refName}</span>}
+            {line.sourceApp !== 'do' && (
               <span className="ml-1.5 rounded bg-gray-200 px-1.5 py-0.5 font-medium text-gray-500">
-                {line.source === 'sit'
-                  ? t('family.taskDetail.endorsementFromSit')
-                  : t('family.taskDetail.endorsementFromStudy')}
+                {t(endorsementLabelKey(ORIGIN_LABEL_PREFIX, line.sourceApp))}
               </span>
             )}
           </p>

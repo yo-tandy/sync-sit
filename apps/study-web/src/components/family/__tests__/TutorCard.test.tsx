@@ -10,7 +10,13 @@ const h = vi.hoisted(() => ({
   where: vi.fn((field: string, op: string, val: unknown) => ({ field, op, val })),
   limit: vi.fn((n: number) => ({ limit: n })),
   getDocs: vi.fn(),
-  endorsementDocs: [] as { data: () => Record<string, unknown> }[],
+  queries: [] as unknown[][],
+  /** Rows per `references` subject field — the card issues one query per app. */
+  results: new Map<string, Record<string, unknown>[]>(),
+  /** Subject fields whose query should reject — models a partial outage. */
+  failFields: new Set<string>(),
+  /** Subject fields whose query hangs until released — models slow sources. */
+  hold: new Map<string, () => void>(),
   callable: vi.fn(),
 }));
 
@@ -54,9 +60,26 @@ function tutor(overrides: Partial<TutorSearchResult> = {}): TutorSearchResult {
 function reset() {
   h.where.mockClear();
   h.limit.mockClear();
-  h.endorsementDocs = [];
+  h.queries = [];
+  h.results = new Map();
+  h.failFields = new Set();
+  h.hold = new Map();
   h.getDocs.mockReset();
-  h.getDocs.mockImplementation(() => Promise.resolve({ docs: h.endorsementDocs }));
+  // Field-aware: the card issues ONE query per product, so a single shared
+  // doc list would triple every endorsement.
+  h.getDocs.mockImplementation((q: { query: unknown[] }) => {
+    h.queries.push(q.query);
+    const field = (q.query[1] as { field: string }).field;
+    if (h.failFields.has(field)) return Promise.reject(new Error('permission-denied'));
+    const rows = h.results.get(field) ?? [];
+    const result = { docs: rows.map((r, i) => ({ id: `${field}-${i}`, data: () => r })) };
+    if (h.hold.has(field)) {
+      return new Promise((resolve) => {
+        h.hold.set(field, () => resolve(result));
+      });
+    }
+    return Promise.resolve(result);
+  });
   h.callable.mockReset();
   h.callable.mockResolvedValue({ data: { requestId: 'r1' } });
 }
@@ -235,21 +258,160 @@ describe('TutorCard', () => {
   });
 
   // ── Endorsements lazy-load ──
+  const expand = () =>
+    fireEvent.click(screen.getByRole('button', { name: /show|more|details|less/i }));
+
   it('lazily queries approved endorsements on expand and lists refName + text', async () => {
-    h.endorsementDocs = [
-      { data: () => ({ submittedByName: 'Mme Dupont', referenceText: 'Great tutor.' }) },
-    ];
+    h.results.set('tutorUserId', [
+      { submittedByName: 'Mme Dupont', referenceText: 'Great tutor.' },
+    ]);
     renderWithProviders(<TutorCard result={tutor({ endorsementCount: 1 })} />);
 
     // Not fetched until expanded.
     expect(h.getDocs).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole('button', { name: /endorsement|show|more|details/i }));
+    expand();
 
     await waitFor(() => expect(h.getDocs).toHaveBeenCalled());
     expect(h.where).toHaveBeenCalledWith('tutorUserId', '==', 't1');
     expect(h.where).toHaveBeenCalledWith('status', 'in', ['approved', 'published']);
     expect(await screen.findByText(/Mme Dupont/)).toBeInTheDocument();
     expect(screen.getByText(/Great tutor/)).toBeInTheDocument();
+  });
+
+  // ── Cross-app endorsements (issue #280) ──
+  it('issues one status-constrained query per product, study first', async () => {
+    renderWithProviders(<TutorCard result={tutor()} />);
+    expand();
+    await waitFor(() => expect(h.queries).toHaveLength(3));
+    // Order is the contract: study's own field leads, siblings follow.
+    const fields = ['tutorUserId', 'babysitterUserId', 'doerUserId'];
+    h.queries.forEach((q, i) => {
+      expect(q[1]).toEqual({ field: fields[i], op: '==', val: 't1' });
+      // NOT optional: the H2-hardened references rule grants an unrelated
+      // family only the public-status disjunct, provable only from the query.
+      expect(q[2]).toEqual({ field: 'status', op: 'in', val: ['approved', 'published'] });
+      expect(q[3]).toEqual({ limit: 10 });
+    });
+  });
+
+  it('renders study endorsements first, then sit ones labeled with their origin', async () => {
+    h.results.set('tutorUserId', [
+      { submittedByName: 'Famille Etude', referenceText: 'Patient maths tutor' },
+    ]);
+    h.results.set('babysitterUserId', [
+      { refName: 'Famille Garde', referenceText: 'Great with our kids' },
+    ]);
+    renderWithProviders(<TutorCard result={tutor()} />);
+    expand();
+
+    await waitFor(() => expect(screen.getByText(/Patient maths tutor/)).toBeInTheDocument());
+    const texts = screen.getAllByText(/Patient maths tutor|Great with our kids/).map(
+      (el) => el.textContent,
+    );
+    expect(texts[0]).toContain('Patient maths tutor');
+
+    // The sit entry carries its origin; the study one — the current app's own
+    // signal — carries none, so cross-app text never reads as tutoring signal.
+    expect(screen.getByText('From Sync/Sit')).toBeInTheDocument();
+    const studyBlock = screen.getByText(/Patient maths tutor/).parentElement!;
+    expect(studyBlock.textContent).not.toContain('From Sync/');
+  });
+
+  it('loads endorsements even when the STUDY endorsement count is zero', async () => {
+    // endorsementCount is the study-only tally searchTutors projects; gating
+    // the fetch on it would hide every sit reference a tutor carries.
+    h.results.set('babysitterUserId', [
+      { refName: 'Famille Garde', referenceText: 'Great with our kids' },
+    ]);
+    renderWithProviders(<TutorCard result={tutor({ endorsementCount: 0 })} />);
+    expand();
+
+    expect(await screen.findByText(/Great with our kids/)).toBeInTheDocument();
+    expect(screen.getByText('From Sync/Sit')).toBeInTheDocument();
+  });
+
+  it('renders a sync-do endorsement labeled From Sync/Do (PR-11 needs no code change here)', async () => {
+    // The registry and label key already cover `do`; this pins that the i18n
+    // key actually RESOLVES, which TypeScript cannot.
+    h.results.set('doerUserId', [
+      { submittedByName: 'Famille Bricolage', referenceText: 'Assembled our shelves' },
+    ]);
+    renderWithProviders(<TutorCard result={tutor()} />);
+    expand();
+    expect(await screen.findByText(/Famille Bricolage/)).toBeInTheDocument();
+    expect(screen.getByText('From Sync/Do')).toBeInTheDocument();
+  });
+
+  it('keeps study endorsements when only a SIBLING query fails (allSettled, not all)', async () => {
+    // The regression this guards: with Promise.all, one failing secondary
+    // source hid the primary signal entirely.
+    h.results.set('tutorUserId', [
+      { submittedByName: 'Famille Etude', referenceText: 'Patient maths tutor' },
+    ]);
+    h.failFields = new Set(['babysitterUserId', 'doerUserId']);
+    renderWithProviders(<TutorCard result={tutor()} />);
+    expand();
+    expect(await screen.findByText(/Patient maths tutor/)).toBeInTheDocument();
+    expect(screen.queryByText(/From Sync\//)).not.toBeInTheDocument();
+  });
+
+  it('retries on re-expand after a PARTIAL failure — degradation is not cached', async () => {
+    h.results.set('tutorUserId', [
+      { submittedByName: 'Famille Etude', referenceText: 'Patient maths tutor' },
+    ]);
+    h.results.set('babysitterUserId', [
+      { refName: 'Famille Garde', referenceText: 'Great with our kids' },
+    ]);
+    h.failFields = new Set(['babysitterUserId']);
+    renderWithProviders(<TutorCard result={tutor()} />);
+    expand();
+    await waitFor(() => expect(h.queries).toHaveLength(3));
+    expect(screen.queryByText(/Great with our kids/)).not.toBeInTheDocument();
+
+    h.failFields = new Set();
+    expand(); // collapse
+    expand(); // re-expand must refetch, not serve the partial cache
+    await waitFor(() => expect(h.queries).toHaveLength(6));
+    expect(await screen.findByText(/Great with our kids/)).toBeInTheDocument();
+  });
+
+  it('does NOT refetch once a load has fully succeeded', async () => {
+    h.results.set('tutorUserId', [
+      { submittedByName: 'Famille Etude', referenceText: 'Patient maths tutor' },
+    ]);
+    renderWithProviders(<TutorCard result={tutor()} />);
+    expand();
+    await waitFor(() => expect(h.queries).toHaveLength(3));
+    expand();
+    expand();
+    await waitFor(() => expect(screen.getByText(/Patient maths tutor/)).toBeInTheDocument());
+    expect(h.queries).toHaveLength(3);
+  });
+
+  it('does not start a second load while one is in flight (no stale overwrite, no double reads)', async () => {
+    h.results.set('tutorUserId', [
+      { submittedByName: 'Famille Etude', referenceText: 'Patient maths tutor' },
+    ]);
+    h.hold.set('babysitterUserId', () => {}); // this source hangs
+    renderWithProviders(<TutorCard result={tutor()} />);
+    expand();
+    await waitFor(() => expect(h.queries).toHaveLength(3));
+
+    expand(); // collapse
+    expand(); // re-expand while load A is unresolved
+    expect(h.queries).toHaveLength(3); // not 6
+
+    h.hold.get('babysitterUserId')!();
+    await waitFor(() => expect(screen.getByText(/Patient maths tutor/)).toBeInTheDocument());
+  });
+
+  it('keeps the card intact when the endorsement queries are denied', async () => {
+    h.getDocs.mockRejectedValue(new Error('permission-denied'));
+    renderWithProviders(<TutorCard result={tutor()} />);
+    expand();
+
+    await waitFor(() => expect(h.getDocs).toHaveBeenCalled());
+    expect(screen.getByRole('button', { name: /request contact/i })).toBeInTheDocument();
   });
 });

@@ -754,6 +754,8 @@ export default {
         endorsementsTitle: 'Endorsements',
         endorsementFrom: 'Endorsement from {{name}}',
         endorsementAnon: 'Endorsement',
+        endorsementFromSit: 'From Sync/Sit',
+        endorsementFromDo: 'From Sync/Do',
         contactTitle: 'Contact details',
         whatsapp: 'WhatsApp',
         book: 'Book a session',

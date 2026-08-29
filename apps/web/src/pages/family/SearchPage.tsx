@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { humanizeNoticeWindow } from '@/utils/cancellationPolicy';
 import { Link, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
@@ -18,6 +18,15 @@ import { getDateTag } from '@/lib/dateTag';
 import { DateTag } from '@/components/ui/DateTag';
 import type { FamilyDoc, KidDoc, BabysitterSummary } from '@ejm/sit-core';
 import { getParentView } from '@ejm/sit-core';
+import {
+  endorsementSources,
+  endorsementLabelKey,
+  toCrossAppEndorsement,
+  ENDORSEMENT_PER_SOURCE_LIMIT,
+  PUBLIC_ENDORSEMENT_STATUSES,
+  type CrossAppEndorsement,
+} from '@ejm/shared-core';
+import { SIT_ORIGIN_LABEL_PREFIX } from '@/lib/endorsementLabels';
 
 // Time options 06:00–02:00
 function generateTimeOptions(): { value: string; label: string }[] {
@@ -111,46 +120,70 @@ export function SearchPage() {
   // Expanded card
   const [expandedBabysitter, setExpandedBabysitter] = useState<string | null>(null);
 
-  // References for expanded babysitter
-  interface RefInfo {
-    text: string;
-    refName: string;
-    refEmail?: string;
-    refPhone?: string;
-    refWhatsapp?: string;
-    isEjmFamily?: boolean;
-    numberOfKids?: number;
-    kidAges?: number[];
-  }
-  const [babysitterRefs, setBabysitterRefs] = useState<Record<string, RefInfo[]>>({});
+  // Endorsements for the expanded babysitter — sit's own references FIRST,
+  // then the sibling products' (issue #280). One query per source against the
+  // shared `references` collection, each keyed by that product's subject field.
+  const [babysitterRefs, setBabysitterRefs] = useState<Record<string, CrossAppEndorsement[]>>({});
+  // uids whose load had EVERY source succeed. The cache guard consults this,
+  // not babysitterRefs: allSettled always yields an array, so a partial (or
+  // total) failure would otherwise be cached as a complete answer and the
+  // guard would suppress every retry for the rest of the session — making the
+  // graceful degradation permanently sticky, which is the opposite of the
+  // point. Re-expanding a card now refetches until one load is whole.
+  const [completeRefUids, setCompleteRefUids] = useState<Set<string>>(new Set());
+  // uids with a load currently in flight. A ref, not state: it must be read
+  // and written SYNCHRONOUSLY within one click handler, and completeRefUids
+  // cannot serve here because it only latches after a load resolves — so a
+  // collapse-then-expand double-toggle would start a second load, and if the
+  // second (complete) one resolved first the first (partial) one would
+  // overwrite it while the complete flag stayed latched. That is the round-2
+  // sticky degradation reached through a different door. Deduping per uid
+  // makes the interleaving impossible rather than merely detectable, and it
+  // also stops the double-toggle costing two full query sets.
+  const refsInFlight = useRef<Set<string>>(new Set());
   const [expandedRefIds, setExpandedRefIds] = useState<Set<string>>(new Set());
 
   const loadRefs = async (uid: string) => {
-    if (babysitterRefs[uid]) return; // already loaded
+    if (completeRefUids.has(uid)) return; // already loaded, in full
+    if (refsInFlight.current.has(uid)) return; // a load is already running
+    refsInFlight.current.add(uid);
     try {
-      const snap = await getDocs(
-        query(
-          collection(db, 'references'),
-          where('babysitterUserId', '==', uid),
-          where('status', 'in', ['approved', 'published']),
-          limit(10)
+      const sources = endorsementSources('sit');
+      // allSettled, NOT all: with one query the failure mode was "this card's
+      // endorsements are missing"; with three, Promise.all would let a failure
+      // in a SECONDARY source (an unbuilt sibling composite, a transient
+      // error) hide sit's own primary signal. Degrade to fewer, never to none.
+      const settled = await Promise.allSettled(
+        sources.map(({ field }) =>
+          getDocs(
+            query(
+              collection(db, 'references'),
+              where(field, '==', uid),
+              // Load-bearing: the H2-hardened references read rule grants an
+              // unrelated family only the public-status disjunct, provable
+              // only from the QUERY. Without it every card is
+              // PERMISSION_DENIED — and the fix is the query, never the rule.
+              where('status', 'in', PUBLIC_ENDORSEMENT_STATUSES),
+              limit(ENDORSEMENT_PER_SOURCE_LIMIT)
+            )
+          )
         )
       );
-      const refs: RefInfo[] = snap.docs.map((d) => {
-        const data = d.data();
-        return {
-          text: data.referenceText || data.note || '',
-          refName: data.submittedByName || data.refName || '',
-          refEmail: data.refEmail || undefined,
-          refPhone: data.refPhone || undefined,
-          refWhatsapp: data.refWhatsapp || undefined,
-          isEjmFamily: data.isEjmFamily || false,
-          numberOfKids: data.numberOfKids || undefined,
-          kidAges: data.kidAges || undefined,
-        };
-      });
+      // Concatenated in source order, so sit's own references lead.
+      const refs = settled.flatMap((r, i) =>
+        r.status === 'fulfilled'
+          ? r.value.docs.map((d) =>
+              toCrossAppEndorsement(sources[i].app, d.id, d.data() as Record<string, unknown>)
+            )
+          : []
+      );
       setBabysitterRefs((prev) => ({ ...prev, [uid]: refs }));
-    } catch { /* silent */ }
+      if (settled.every((r) => r.status === 'fulfilled')) {
+        setCompleteRefUids((prev) => new Set(prev).add(uid));
+      }
+    } catch { /* silent */ } finally {
+      refsInFlight.current.delete(uid);
+    }
   };
 
   // Contact dialog
@@ -696,6 +729,19 @@ export function SearchPage() {
                       {(b.distance ?? 0) > 0 && (
                         <p className="text-xs text-gray-500">📍 {b.distance} km away</p>
                       )}
+                      {/* SIT-only count: searchBabysitters projects the sit
+                          reference tally, while the expanded block below is
+                          cross-app — so a sitter with 2 sit references and 1
+                          study endorsement shows "2 endorsements" here and
+                          "Endorsements (3)" when expanded. Intentional, and the
+                          honest pair: this line summarises what vouches for
+                          BABYSITTING, which is what a family filtering on
+                          references is asking about; the expanded list is where
+                          cross-app signal belongs, labeled by origin. Making
+                          this count cross-app would mean a server-side fan-out
+                          in the callable, and would fold tutoring endorsements
+                          into a babysitting summary number with no room for a
+                          label. Same property as TutorCard's badge. */}
                       {(b.referenceCount ?? 0) > 0 && (
                         <p className="text-xs text-gray-500"><span className="text-green-600">✓</span> {b.referenceCount} endorsement{(b.referenceCount ?? 0) > 1 ? 's' : ''}</p>
                       )}
@@ -721,20 +767,41 @@ export function SearchPage() {
                         <div className="mt-2 rounded-lg border border-gray-200 bg-gray-50 p-3">
                           <p className="mb-2 text-xs font-semibold text-gray-700"><span className="text-green-600">✓</span> {t('references.title')} ({babysitterRefs[b.uid].length})</p>
                           {babysitterRefs[b.uid].map((ref, i) => {
-                            const refKey = `${b.uid}-${i}`;
+                            const refKey = `${b.uid}-${ref.sourceApp}-${ref.id || i}`;
                             const refExpanded = expandedRefIds.has(refKey);
                             return (
-                              <div key={i} className="mb-1.5 last:mb-0">
+                              <div key={refKey} className="mb-1.5 last:mb-0">
                                 <button
                                   onClick={(e) => { e.stopPropagation(); setExpandedRefIds((prev) => { const next = new Set(prev); if (refExpanded) next.delete(refKey); else next.add(refKey); return next; }); }}
                                   className="w-full text-left rounded-md px-2 py-1.5 text-xs font-medium text-gray-700 hover:bg-white active:bg-white"
                                 >
                                   {refExpanded ? '▾' : '▸'} {ref.refName ? `Endorsement from ${ref.refName}` : `Endorsement ${i + 1}`}
+                                  {/* Deliberately NOT source-gated, unlike the sit-shaped
+                                      contact fields below: study endorsements DO carry
+                                      isEjmFamily (copied at write time), and "the submitting
+                                      family is an EJM family" is a cross-product fact about
+                                      the submitter, not a claim about babysitting. */}
                                   {ref.isEjmFamily && <span className="ml-1.5 text-blue-600 font-normal">EJM Family</span>}
+                                  {/* Origin label (issue #280): a Sync/Study
+                                      endorsement vouches for tutoring, not for
+                                      babysitting — unlabeled it would read as
+                                      generic reputation. */}
+                                  {ref.sourceApp !== 'sit' && (
+                                    <span className="ml-1.5 rounded bg-gray-200 px-1.5 py-0.5 text-[11px] font-medium text-gray-500">
+                                      {t(endorsementLabelKey(SIT_ORIGIN_LABEL_PREFIX, ref.sourceApp))}
+                                    </span>
+                                  )}
                                 </button>
                                 {refExpanded && (
                                   <div className="ml-4 mt-1 mb-2 space-y-1">
                                     {ref.text && <p className="text-xs text-gray-600 italic">"{ref.text}"</p>}
+                                    {/* Referee contact + kid counts are sit's
+                                        own reference shape. Gated on the source
+                                        so a sibling product that later carries
+                                        contact fields cannot have them rendered
+                                        as tappable babysitting-referee links by
+                                        this shared row markup. */}
+                                    {ref.sourceApp === 'sit' && (<>
                                     {ref.refEmail && (
                                       <a href={`mailto:${ref.refEmail}`} onClick={(e) => e.stopPropagation()} className="flex items-center gap-1.5 text-xs text-brand-600">
                                         <span>📧</span> {ref.refEmail}
@@ -756,6 +823,7 @@ export function SearchPage() {
                                         {ref.kidAges?.length ? ` (ages ${ref.kidAges.join(', ')})` : ''}
                                       </p>
                                     )}
+                                    </>)}
                                   </div>
                                 )}
                               </div>

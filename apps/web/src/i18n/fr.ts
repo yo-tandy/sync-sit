@@ -371,6 +371,8 @@ export default {
 
   references: {
     title: 'Recommandations',
+    fromStudy: 'De Sync/Study',
+    fromDo: 'De Sync/Do',
     myReferences: 'Recommandations saisies manuellement',
     noReferencesYet: 'Aucune recommandation ajoutée',
     addReference: 'Ajouter une recommandation',

@@ -1407,6 +1407,54 @@ describe('references collection — read hardening (H2)', () => {
     )));
   });
 
+  // ── Cross-app endorsements (issue #280) ──
+  // sit and study surfaces now issue the SIBLING app's query too. These pin
+  // the two properties the feature rests on: the sibling shapes are provable
+  // for an unrelated viewer, and they are provable ONLY because of the status
+  // constraint — the fix for a denial is the query, never the read rule.
+  it('LIST #280 cross-app: an unrelated sit family may list a STUDY endorsement by tutorUserId', async () => {
+    await seed('h2-x1', { tutorUserId: 'crossUid', appSource: 'study', status: 'approved' });
+    const sitFamily = testEnv.authenticatedContext('sitFamilyViewer');
+    await assertSucceeds(getDocs(query(
+      collection(sitFamily.firestore(), 'references'),
+      where('tutorUserId', '==', 'crossUid'),
+      where('status', 'in', ['approved', 'published']),
+      limit(10),
+    )));
+  });
+
+  it('LIST #280 cross-app: an unrelated study family may list a SIT reference by babysitterUserId', async () => {
+    await seed('h2-x2', { babysitterUserId: 'crossUid', type: 'manual', status: 'published' });
+    const studyFamily = testEnv.authenticatedContext('studyFamilyViewer');
+    await assertSucceeds(getDocs(query(
+      collection(studyFamily.firestore(), 'references'),
+      where('babysitterUserId', '==', 'crossUid'),
+      where('status', 'in', ['approved', 'published']),
+      limit(10),
+    )));
+  });
+
+  it('LIST #280 additive: the doerUserId shape is already provable (sync-do endorsements land later)', async () => {
+    await seed('h2-x3', { doerUserId: 'crossUid', status: 'approved' });
+    const viewer = testEnv.authenticatedContext('anyViewer');
+    await assertSucceeds(getDocs(query(
+      collection(viewer.firestore(), 'references'),
+      where('doerUserId', '==', 'crossUid'),
+      where('status', 'in', ['approved', 'published']),
+      limit(10),
+    )));
+  });
+
+  it('LIST #280 denied: the cross-app shape WITHOUT the status constraint is not provable', async () => {
+    await seed('h2-x4', { tutorUserId: 'crossUid', appSource: 'study', status: 'approved' });
+    const viewer = testEnv.authenticatedContext('anyViewer2');
+    await assertFails(getDocs(query(
+      collection(viewer.firestore(), 'references'),
+      where('tutorUserId', '==', 'crossUid'),
+      limit(10),
+    )));
+  });
+
   it('LIST #8/#9 involved: tutorUserId == own uid (EndorsementsPage / tutor DashboardPage)', async () => {
     await seed('h2-l8', {
       tutorUserId: 'tutorSelf', appSource: 'study', submittedByUserId: 'p', submittedByFamilyId: 'f',

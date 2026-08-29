@@ -1,10 +1,18 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { collection, query, where, limit, getDocs } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '@/config/firebase';
 import type { TutorSearchResult, StudyContactRequestStatus } from '@ejm/study-core';
+import {
+  endorsementSources,
+  endorsementLabelKey,
+  toCrossAppEndorsement,
+  ENDORSEMENT_PER_SOURCE_LIMIT,
+  PUBLIC_ENDORSEMENT_STATUSES,
+  type CrossAppEndorsement,
+} from '@ejm/shared-core';
 import { Card, Button, Badge, Avatar, Dialog, Textarea, formatProviderName } from '@ejm/shared-ui';
 import { humanizeNoticeWindow } from '@/utils/cancellationPolicy';
 
@@ -19,13 +27,36 @@ import { humanizeNoticeWindow } from '@/utils/cancellationPolicy';
  * The expanded card lazily loads the tutor's approved endorsements from the
  * shared `references` collection (client-readable, index-backed) and lists the
  * reference name + text.
+ *
+ * Cross-app (issue #280): the same collection holds sit references and sync-do
+ * endorsements for the SAME uid, so the card queries one source per product —
+ * study first, siblings after — and labels every non-study entry with its
+ * origin. The label is the product judgement, not decoration: a sit reference
+ * vouches for babysitting, not for teaching maths, and an unlabeled list would
+ * read as generic reputation.
  */
+/** i18n prefix for this surface's origin labels — see endorsementLabelKey. */
+const ORIGIN_LABEL_PREFIX = 'family.search.card.endorsementFrom';
+
 export function TutorCard({ result }: { result: TutorSearchResult }) {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
-  const [endorsements, setEndorsements] = useState<{ refName: string; text: string }[] | null>(
-    null,
-  );
+  const [endorsements, setEndorsements] = useState<CrossAppEndorsement[] | null>(null);
+  // Whether that load had EVERY source succeed. allSettled always yields an
+  // array, so without this a partial failure would be cached as a complete
+  // answer and re-expanding could never retry — sticky degradation, the
+  // opposite of what allSettled is for.
+  const [endorsementsComplete, setEndorsementsComplete] = useState(false);
+  // A load currently in flight. A ref, not state: it must be read and written
+  // SYNCHRONOUSLY inside one click handler. endorsementsComplete cannot serve
+  // here because it only latches after a load resolves, so a
+  // collapse-then-expand double-toggle would start a second load; if that
+  // second (complete) load resolved FIRST, the first (partial) one would then
+  // overwrite it while the complete flag stayed latched — the round-2 sticky
+  // degradation via a different route. Deduping per card makes the
+  // interleaving impossible rather than merely detectable, and stops the
+  // double-toggle costing two full query sets.
+  const loadInFlight = useRef(false);
   // Local, optimistic view of this family's request status toward the tutor.
   const [status, setStatus] = useState<'none' | 'incoming' | StudyContactRequestStatus>(result.requestStatus);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -37,28 +68,61 @@ export function TutorCard({ result }: { result: TutorSearchResult }) {
   const toggleExpand = async () => {
     const next = !expanded;
     setExpanded(next);
-    // Lazy-load approved endorsements the first time the card is opened.
-    if (next && endorsements === null && result.endorsementCount > 0) {
+    // Lazy-load endorsements the first time the card is opened. NOT gated on
+    // result.endorsementCount: that count is the STUDY tally the search
+    // callable projects, and a tutor with zero study endorsements can still
+    // carry sit references worth showing.
+    //
+    // Cost of dropping that gate, accepted deliberately: an expansion used to
+    // cost ZERO queries for a tutor with no study endorsements — likely the
+    // common case on a young marketplace — and now costs three
+    // unconditionally. The cheap mitigation, if read volume ever bites, is a
+    // server-side cross-app tally on TutorSearchResult (which would also close
+    // the badge/list divergence noted below), NOT reinstating a study-only
+    // gate that hides sit references by construction.
+    if (next && !endorsementsComplete && !loadInFlight.current) {
+      loadInFlight.current = true;
       try {
-        const snap = await getDocs(
-          query(
-            collection(db, 'references'),
-            where('tutorUserId', '==', result.uid),
-            where('status', 'in', ['approved', 'published']),
-            limit(10),
+        const sources = endorsementSources('study');
+        // allSettled, NOT all: with one query the failure mode was "this
+        // card's endorsements are missing"; with three, Promise.all would let
+        // a failure in a SECONDARY source (an unbuilt sibling composite, a
+        // transient error) hide study's own primary signal. Degrade to fewer
+        // entries, never to none.
+        const settled = await Promise.allSettled(
+          sources.map(({ field }) =>
+            getDocs(
+              query(
+                collection(db, 'references'),
+                where(field, '==', result.uid),
+                // Load-bearing, not cosmetic: the H2-hardened references read
+                // rule gives an unrelated family only the public-status
+                // disjunct, and Firestore proves it from the QUERY. Dropping
+                // this is PERMISSION_DENIED — fix the query, never the rule.
+                where('status', 'in', PUBLIC_ENDORSEMENT_STATUSES),
+                limit(ENDORSEMENT_PER_SOURCE_LIMIT),
+              ),
+            ),
           ),
         );
+        // Concatenated in source order, so study's own entries lead.
         setEndorsements(
-          snap.docs.map((d) => {
-            const data = d.data() as Record<string, unknown>;
-            return {
-              refName: (data.submittedByName as string) || (data.refName as string) || '',
-              text: (data.referenceText as string) || '',
-            };
-          }),
+          settled.flatMap((r, i) =>
+            r.status === 'fulfilled'
+              ? r.value.docs.map((d) =>
+                  toCrossAppEndorsement(sources[i].app, d.id, d.data() as Record<string, unknown>),
+                )
+              : [],
+          ),
         );
+        if (settled.every((r) => r.status === 'fulfilled')) setEndorsementsComplete(true);
       } catch {
+        // Belt-and-braces only: allSettled never rejects, and
+        // endorsementSources/toCrossAppEndorsement are total. This is NOT the
+        // partial-failure path — that one is handled above, per source.
         setEndorsements([]);
+      } finally {
+        loadInFlight.current = false;
       }
     }
   };
@@ -113,6 +177,11 @@ export function TutorCard({ result }: { result: TutorSearchResult }) {
             )}
           </div>
 
+          {/* STUDY-only count: searchTutors projects the study tally, and the
+              expanded list below is cross-app — so a tutor with 0 study and 3
+              sit endorsements shows no badge but expands into three rows. The
+              badge stays server-truth for study rather than growing a
+              client-side cross-app count the callable cannot verify. */}
           {result.endorsementCount > 0 && (
             <div className="mt-2">
               <Badge variant="green">
@@ -146,11 +215,16 @@ export function TutorCard({ result }: { result: TutorSearchResult }) {
           </p>
           <div className="space-y-2">
             {endorsements.map((e, i) => (
-              <div key={i}>
+              <div key={`${e.sourceApp}-${e.id || i}`}>
                 <p className="text-xs font-medium text-gray-700">
                   {e.refName
                     ? t('family.search.card.endorsementFrom', { name: e.refName })
                     : t('family.search.card.endorsementAnon')}
+                  {e.sourceApp !== 'study' && (
+                    <span className="ml-1.5 rounded bg-gray-200 px-1.5 py-0.5 text-[11px] font-medium text-gray-500">
+                      {t(endorsementLabelKey(ORIGIN_LABEL_PREFIX, e.sourceApp))}
+                    </span>
+                  )}
                 </p>
                 {e.text && <p className="text-xs italic text-gray-600">{e.text}</p>}
               </div>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { collection, getDocs, query as fsQuery, where as fsWhere, limit as fsLimit } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
@@ -14,6 +14,15 @@ import { useHolidays } from '@/hooks/useHolidays';
 import { getDateTag } from '@/lib/dateTag';
 import { DateTag } from '@/components/ui/DateTag';
 import { buildCalendarUrl } from '@/lib/calendar';
+import {
+  endorsementSources,
+  endorsementLabelKey,
+  toCrossAppEndorsement,
+  ENDORSEMENT_PER_SOURCE_LIMIT,
+  PUBLIC_ENDORSEMENT_STATUSES,
+  type CrossAppEndorsement,
+} from '@ejm/shared-core';
+import { SIT_ORIGIN_LABEL_PREFIX } from '@/lib/endorsementLabels';
 
 const borderColors: Record<string, string> = {
   pending: '#f59e0b',
@@ -37,17 +46,6 @@ function useBadgeLabels() {
     past: t('familyDashboard.badgeCompleted'),
     rejected: t('familyDashboard.badgeDeclined'),
   } as Record<string, string>;
-}
-
-interface RefInfo {
-  text: string;
-  refName: string;
-  refEmail?: string;
-  refPhone?: string;
-  refWhatsapp?: string;
-  isEjmFamily?: boolean;
-  numberOfKids?: number;
-  kidAges?: number[];
 }
 
 export function ExpandableBabysitterCard({
@@ -93,7 +91,25 @@ export function ExpandableBabysitterCard({
   const babysitterInitiated = appointment.initiatedBy === 'babysitter';
 
   // References for this babysitter
-  const [refs, setRefs] = useState<RefInfo[]>([]);
+  const [refs, setRefs] = useState<CrossAppEndorsement[]>([]);
+  // The uid whose endorsements are cached COMPLETE (every source fulfilled).
+  // Without this the effect refetched all three sources on every expand — the
+  // most read-expensive of the three surfaces, at 3 queries per toggle. Keyed
+  // by uid so a card reused for a different babysitter refetches rather than
+  // showing the previous one's endorsements. Same shape as SearchPage, and
+  // paired with the same in-flight guard, since adding a cache here would
+  // otherwise introduce the same stale-overwrite race.
+  const refsCompleteFor = useRef<string | null>(null);
+  const refsInFlight = useRef(false);
+  // The uid the in-flight load belongs to. Gating the write on IDENTITY, not
+  // on collapse, is what keeps the dedupe safe here: this surface is the only
+  // one that both cancels on collapse and dedupes in flight, and together
+  // those stranded the card — collapse set `cancelled`, the re-expand hit the
+  // in-flight guard and started nothing, then the load resolved into the
+  // cancelled branch and wrote nothing. Expanded card, empty list, no dep left
+  // to change. Letting a collapsed-then-reexpanded load land is also strictly
+  // cheaper: its three reads are already paid for.
+  const refsRequestedFor = useRef<string | null>(null);
   const [expandedRefIds, setExpandedRefIds] = useState<Set<string>>(new Set());
 
   // Appointment notes (issue #238, parity B2 — study's session notes adopted
@@ -173,28 +189,55 @@ export function ExpandableBabysitterCard({
     }
   };
 
+  // Cross-app endorsements (issue #280): sit's own references first, then the
+  // sibling products' entries for the same uid, each labeled on render.
   useEffect(() => {
-    if (!expanded || !appointment.babysitterUserId) return;
-    getDocs(fsQuery(
-      collection(db, 'references'),
-      fsWhere('babysitterUserId', '==', appointment.babysitterUserId),
-      fsWhere('status', 'in', ['approved', 'published']),
-      fsLimit(10)
-    )).then((snap) => {
-      setRefs(snap.docs.map((d) => {
-        const data = d.data();
-        return {
-          text: data.referenceText || data.note || '',
-          refName: data.submittedByName || data.refName || '',
-          refEmail: data.refEmail || undefined,
-          refPhone: data.refPhone || undefined,
-          refWhatsapp: data.refWhatsapp || undefined,
-          isEjmFamily: data.isEjmFamily || false,
-          numberOfKids: data.numberOfKids || undefined,
-          kidAges: data.kidAges || undefined,
-        };
-      }));
-    }).catch(() => {});
+    const babysitterUserId = appointment.babysitterUserId;
+    if (!expanded || !babysitterUserId) return;
+    if (refsCompleteFor.current === babysitterUserId) return; // cached, in full
+    // Stamped BEFORE the in-flight early return, not after: if the uid changes
+    // mid-load, the running load must be able to recognise ITSELF as stale.
+    // Set it later and a load for the previous babysitter would still match on
+    // resolve and latch their endorsements onto the new one, permanently.
+    refsRequestedFor.current = babysitterUserId;
+    if (refsInFlight.current) return; // a load is already running
+    refsInFlight.current = true;
+    const sources = endorsementSources('sit');
+    // allSettled, NOT all: with one query the failure mode was "this card's
+    // endorsements are missing"; with three, Promise.all would let a failure in
+    // a SECONDARY source (an unbuilt sibling composite, a transient error) hide
+    // sit's own primary signal. Degrade to fewer entries, never to none.
+    Promise.allSettled(
+      sources.map(({ field }) =>
+        getDocs(fsQuery(
+          collection(db, 'references'),
+          fsWhere(field, '==', babysitterUserId),
+          // Load-bearing: the H2-hardened references read rule grants an
+          // unrelated family only the public-status disjunct, provable only
+          // from the QUERY. Fix the query if this denies, never the rule.
+          fsWhere('status', 'in', PUBLIC_ENDORSEMENT_STATUSES),
+          fsLimit(ENDORSEMENT_PER_SOURCE_LIMIT)
+        ))
+      )
+    ).then((settled) => {
+      // Only stale if the card has since been pointed at a DIFFERENT
+      // babysitter; a mere collapse is not staleness.
+      if (refsRequestedFor.current !== babysitterUserId) return;
+      // Concatenated in source order, so sit's own references lead.
+      setRefs(settled.flatMap((r, i) =>
+        r.status === 'fulfilled'
+          ? r.value.docs.map((d) =>
+              toCrossAppEndorsement(sources[i].app, d.id, d.data() as Record<string, unknown>)
+            )
+          : []
+      ));
+      // Only a WHOLE load is cacheable; a partial one must retry on re-expand.
+      if (settled.every((r) => r.status === 'fulfilled')) {
+        refsCompleteFor.current = babysitterUserId;
+      }
+    }).catch(() => {}).finally(() => {
+      refsInFlight.current = false;
+    });
   }, [expanded, appointment.babysitterUserId]);
 
   // Format date/time for confirmed/past cards
@@ -298,20 +341,37 @@ export function ExpandableBabysitterCard({
             <div className="mt-2 rounded-lg border border-gray-200 bg-gray-50 p-3">
               <p className="mb-2 text-xs font-semibold text-gray-700"><span className="text-green-600">✓</span> {t('references.title')} ({refs.length})</p>
               {refs.map((ref, i) => {
-                const refKey = `${appointment.appointmentId}-${i}`;
+                const refKey = `${appointment.appointmentId}-${ref.sourceApp}-${ref.id || i}`;
                 const refExpanded = expandedRefIds.has(refKey);
                 return (
-                  <div key={i} className="mb-1.5 last:mb-0">
+                  <div key={refKey} className="mb-1.5 last:mb-0">
                     <button
                       onClick={(e) => { e.stopPropagation(); setExpandedRefIds((prev) => { const next = new Set(prev); if (refExpanded) next.delete(refKey); else next.add(refKey); return next; }); }}
                       className="w-full text-left rounded-md px-2 py-1.5 text-xs font-medium text-gray-700 hover:bg-white active:bg-white"
                     >
                       {refExpanded ? '▾' : '▸'} {ref.refName ? `Endorsement from ${ref.refName}` : `Endorsement ${i + 1}`}
+                      {/* Deliberately NOT source-gated, unlike the sit-shaped
+                          contact fields below: study endorsements DO carry
+                          isEjmFamily (copied at write time), and "the submitting
+                          family is an EJM family" is a cross-product fact about
+                          the submitter, not a claim about babysitting. */}
                       {ref.isEjmFamily && <span className="ml-1.5 text-blue-600 font-normal">EJM Family</span>}
+                      {/* Origin label (issue #280): a Sync/Study endorsement
+                          vouches for tutoring, not babysitting. */}
+                      {ref.sourceApp !== 'sit' && (
+                        <span className="ml-1.5 rounded bg-gray-200 px-1.5 py-0.5 text-[11px] font-medium text-gray-500">
+                          {t(endorsementLabelKey(SIT_ORIGIN_LABEL_PREFIX, ref.sourceApp))}
+                        </span>
+                      )}
                     </button>
                     {refExpanded && (
                       <div className="ml-4 mt-1 mb-2 space-y-1">
                         {ref.text && <p className="text-xs text-gray-600 italic">"{ref.text}"</p>}
+                        {/* Referee contact + kid counts are sit's own reference
+                            shape — gated on the source so a sibling product
+                            that later carries contact fields cannot have them
+                            rendered as babysitting-referee links here. */}
+                        {ref.sourceApp === 'sit' && (<>
                         {ref.refEmail && (
                           <a href={`mailto:${ref.refEmail}`} onClick={(e) => e.stopPropagation()} className="flex items-center gap-1.5 text-xs text-brand-600">
                             <span>📧</span> {ref.refEmail}
@@ -333,6 +393,7 @@ export function ExpandableBabysitterCard({
                             {ref.kidAges?.length ? ` (ages ${ref.kidAges.join(', ')})` : ''}
                           </p>
                         )}
+                        </>)}
                       </div>
                     )}
                   </div>
