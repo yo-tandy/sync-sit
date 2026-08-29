@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useFlashTimer, DashboardGreeting } from '@ejm/shared-ui';
+import { useFlashTimer, DashboardGreeting, DashboardSection } from '@ejm/shared-ui';
 import { Link, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { doc, updateDoc, serverTimestamp, collection, query, where, getDocs } from 'firebase/firestore';
@@ -13,59 +13,13 @@ import { useAppointments } from '@/hooks/useAppointments';
 import { useSchedule } from '@/hooks/useSchedule';
 import { AppointmentCard } from '@/components/appointments/AppointmentCard';
 import { SupervisionRequestCard } from '@/components/babysitter/SupervisionRequestCard';
-import { Card, Badge, Dialog, Button, SkeletonCard, Textarea, InstallAppBanner } from '@/components/ui';
+import { Card, Dialog, Button, SkeletonCard, Textarea, InstallAppBanner } from '@/components/ui';
 import {
   CalendarIcon,
   ChevronRightIcon,
 } from '@/components/ui/Icons';
-import type { AppointmentDoc } from '@ejm/sit-core';
 import { getBabysitterView } from '@ejm/sit-core';
 import { DAYS_OF_WEEK } from '@ejm/sit-core';
-
-// ── Appointment Section ──
-function Section({
-  title,
-  count,
-  defaultOpen = true,
-  variant,
-  items,
-  onCardClick,
-  onCancel,
-}: {
-  title: string;
-  count: number;
-  defaultOpen?: boolean;
-  variant: 'pending' | 'confirmed' | 'past' | 'rejected';
-  items: AppointmentDoc[];
-  onCardClick?: (apt: AppointmentDoc) => void;
-  onCancel?: (apt: AppointmentDoc) => void;
-}) {
-  const [open, setOpen] = useState(defaultOpen);
-  if (count === 0) return null;
-
-  return (
-    <div className="mb-4">
-      <button onClick={() => setOpen(!open)} className="mb-2 flex w-full items-center justify-between">
-        <div className="flex items-center gap-2">
-          <h3 className="text-sm font-semibold text-gray-700">{title}</h3>
-          <Badge variant={variant === 'pending' ? 'amber' : variant === 'confirmed' ? 'green' : 'gray'}>
-            {count}
-          </Badge>
-        </div>
-        <ChevronRightIcon className={`h-4 w-4 text-gray-400 transition-transform ${open ? 'rotate-90' : ''}`} />
-      </button>
-      {open && items.map((apt) => (
-        <AppointmentCard
-          key={apt.appointmentId}
-          appointment={apt}
-          variant={variant}
-          onClick={onCardClick ? () => onCardClick(apt) : undefined}
-          onCancel={onCancel ? () => onCancel(apt) : undefined}
-        />
-      ))}
-    </div>
-  );
-}
 
 // ── Onboarding ──
 // Tracks which dialogs have been dismissed this browser session
@@ -258,10 +212,28 @@ export function BabysitterDashboard() {
         </div>
       ) : hasAny ? (
         <>
-          <Section title={t('babysitterDashboard.newRequests')} count={pending.length} variant="pending" items={pending} onCardClick={(apt) => navigate(`/babysitter/request/${apt.appointmentId}`)} />
-          <Section title={t('babysitterDashboard.confirmed')} count={confirmed.length} variant="confirmed" items={confirmed} onCardClick={(apt) => navigate(`/babysitter/request/${apt.appointmentId}`)} onCancel={(apt) => setCancelTarget(apt.appointmentId)} />
-          <Section title={t('babysitterDashboard.past')} count={pastRecent.length} defaultOpen={false} variant="past" items={pastRecent} onCardClick={(apt) => navigate(`/babysitter/request/${apt.appointmentId}`)} />
-          <Section title={t('babysitterDashboard.rejected')} count={rejectedRecent.length} defaultOpen={false} variant="rejected" items={rejectedRecent} onCardClick={(apt) => navigate(`/babysitter/request/${apt.appointmentId}`)} />
+          {/* AppointmentCard carries its own mb-3, so these opt out of the
+              shared section's space-y-3 stacking. */}
+          <DashboardSection title={t('babysitterDashboard.newRequests')} count={pending.length} variant="pending" contentClassName="">
+            {pending.map((apt) => (
+              <AppointmentCard key={apt.appointmentId} appointment={apt} variant="pending" onClick={() => navigate(`/babysitter/request/${apt.appointmentId}`)} />
+            ))}
+          </DashboardSection>
+          <DashboardSection title={t('babysitterDashboard.confirmed')} count={confirmed.length} variant="confirmed" contentClassName="">
+            {confirmed.map((apt) => (
+              <AppointmentCard key={apt.appointmentId} appointment={apt} variant="confirmed" onClick={() => navigate(`/babysitter/request/${apt.appointmentId}`)} onCancel={() => setCancelTarget(apt.appointmentId)} />
+            ))}
+          </DashboardSection>
+          <DashboardSection title={t('babysitterDashboard.past')} count={pastRecent.length} defaultOpen={false} variant="past" contentClassName="">
+            {pastRecent.map((apt) => (
+              <AppointmentCard key={apt.appointmentId} appointment={apt} variant="past" onClick={() => navigate(`/babysitter/request/${apt.appointmentId}`)} />
+            ))}
+          </DashboardSection>
+          <DashboardSection title={t('babysitterDashboard.rejected')} count={rejectedRecent.length} defaultOpen={false} variant="rejected" contentClassName="">
+            {rejectedRecent.map((apt) => (
+              <AppointmentCard key={apt.appointmentId} appointment={apt} variant="rejected" onClick={() => navigate(`/babysitter/request/${apt.appointmentId}`)} />
+            ))}
+          </DashboardSection>
         </>
       ) : (
         <div className="flex flex-col items-center justify-center py-16 text-center">

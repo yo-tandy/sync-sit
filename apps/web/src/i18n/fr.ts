@@ -581,13 +581,13 @@ export default {
       error: 'Impossible d’enregistrer votre note. Veuillez réessayer.',
       errorClosed: 'Cette note ne peut plus être modifiée.',
     },
-    appointmentsTitle: 'Rendez-vous',
-    viewAppointments: 'Voir vos rendez-vous',
-    appointmentsPending_one: '{{count}} en attente',
-    appointmentsPending_other: '{{count}} en attente',
-    appointmentsUpcoming_one: '{{count}} à venir',
-    appointmentsUpcoming_other: '{{count}} à venir',
-    appointmentsNext: 'Prochain : {{when}}',
+    // Sections de la page d'accueil (issue #338). Le badge de « Vos
+    // demandes » ne compte que ce que la FAMILLE doit traiter ; une demande
+    // que nous avons envoyée est libellée, pas comptée.
+    yourRequests: 'Vos demandes',
+    yourAppointments: 'Vos rendez-vous',
+    awaitingBabysitter: 'En attente de la réponse du babysitter.',
+    loadError: 'Impossible de charger vos demandes et vos rendez-vous. Actualisez et réessayez.',
   },
 
   // Page dédiée aux rendez-vous de la famille (issue #241)

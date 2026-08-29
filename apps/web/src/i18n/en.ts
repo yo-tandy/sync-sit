@@ -599,13 +599,13 @@ export default {
       error: 'Couldn\'t save your note. Please try again.',
       errorClosed: 'This note can no longer be edited.',
     },
-    appointmentsTitle: 'Appointments',
-    viewAppointments: 'View your appointments',
-    appointmentsPending_one: '{{count}} pending',
-    appointmentsPending_other: '{{count}} pending',
-    appointmentsUpcoming_one: '{{count}} upcoming',
-    appointmentsUpcoming_other: '{{count}} upcoming',
-    appointmentsNext: 'Next: {{when}}',
+    // Landing-page sections (issue #338). The badge on "Your requests"
+    // counts only what the FAMILY must answer, so a request we sent is
+    // labelled rather than counted.
+    yourRequests: 'Your requests',
+    yourAppointments: 'Your appointments',
+    awaitingBabysitter: 'Waiting for the babysitter to reply.',
+    loadError: 'Could not load your requests and appointments. Please refresh and try again.',
   },
 
   // Dedicated family appointments page (issue #241)

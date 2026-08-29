@@ -1,29 +1,27 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Link } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
-import { getParentProfile, hasFamilyMembership } from '@ejm/shared-core';
+import { getFamilyId, hasFamilyMembership, PAST_VISIBILITY_DAYS } from '@ejm/shared-core';
+import type { StudyContactRequestDoc } from '@ejm/study-core';
+import type { RecurringSlot } from '@ejm/shared-core';
+import type { StudySessionDoc } from '@/types/studySession';
 import { CrossAppWelcomeCard } from '@/components/family/CrossAppWelcomeCard';
 import { InstallAppBanner } from '@/components/ui/InstallAppBanner';
 import {
   Card,
-  BellIcon,
-  CalendarIcon,
+  Button,
+  Badge,
+  SkeletonCard,
   SearchIcon,
-  SettingsIcon,
-  ShieldIcon,
-  UserIcon,
   ChevronRightIcon,
+  UsersIcon,
   useRefetchOnFocus,
   DashboardGreeting,
+  DashboardSection,
 } from '@ejm/shared-ui';
-
-/** The soonest confirmed one_time session, extracted alongside the counts.
- * A recurring series' concrete dates live in its `instances` subcollection,
- * which this page must not query — so the hero only surfaces one_time dates. */
-type NextSession = { date: string; startTime: string; tutorName?: string };
 
 /** Paris "YYYY-MM-DD" today (en-CA renders ISO order; tz-correct via runtime). */
 function parisToday(): string {
@@ -35,34 +33,10 @@ function parisToday(): string {
   }).format(new Date());
 }
 
-/** Paris wall-clock "YYYY-MM-DDTHH:MM" — same idiom as SessionsPage, so the
- * hero's "has this session already started" test matches the sessions hub. */
-function parisNowStamp(): string {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Europe/Paris',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hourCycle: 'h23',
-  }).formatToParts(new Date());
-  const g = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
-  return `${g('year')}-${g('month')}-${g('day')}T${g('hour')}:${g('minute')}`;
-}
-
-/** Whole-day difference between two "YYYY-MM-DD" strings, parsed field-by-field
- * (never `new Date(str)`, which reads as UTC midnight and can slip a day). */
-function dayDiff(from: string, to: string): number {
-  const [fy, fm, fd] = from.split('-').map(Number);
-  const [ty, tm, td] = to.split('-').map(Number);
-  return Math.round(
-    (new Date(ty, tm - 1, td).getTime() - new Date(fy, fm - 1, fd).getTime()) / 86_400_000,
-  );
-}
-
-/** Format a "YYYY-MM-DD" date field-by-field (see dayDiff on parsing). */
-function formatDateStr(s: string, lang: string): string {
+/** Format a "YYYY-MM-DD" date field-by-field (never `new Date(str)`, which
+ * reads as UTC midnight and can slip a day in negative offsets). */
+function formatDateStr(s: string | undefined, lang: string): string {
+  if (!s) return '';
   const [y, m, d] = s.split('-').map(Number);
   if (!y || !m || !d) return '';
   return new Date(y, m - 1, d).toLocaleDateString(lang === 'fr' ? 'fr-FR' : 'en-US', {
@@ -71,6 +45,17 @@ function formatDateStr(s: string, lang: string): string {
     day: 'numeric',
   });
 }
+
+/** 3-letter weekday code → the full-name i18n key under `days.*`. */
+const DAY_FULL: Record<RecurringSlot['day'], string> = {
+  mon: 'monday',
+  tue: 'tuesday',
+  wed: 'wednesday',
+  thu: 'thursday',
+  fri: 'friday',
+  sat: 'saturday',
+  sun: 'sunday',
+};
 
 /**
  * Family dashboard for the Sync/Study portal.
@@ -82,31 +67,49 @@ function formatDateStr(s: string, lang: string): string {
  * it is true, keeps tutor search locked and surfaces an explanatory banner. A
  * missing `verification` field is treated as not-verified.
  *
- * Status-first layout (issue #120): a single state-driven hero slot under the
- * verification banner answers "what matters now" (next confirmed session, then
- * accepted requests, then pending requests, then the search CTA), and every
- * other destination is a compact half-weight tile. All hero data derives from
- * the SAME two snapshots that feed the tile counts — no extra queries.
+ * LAYOUT (issue #338, owner request): the parent landing page is the tutor
+ * dashboard's layout with the parent's data in it — a single "Find a tutor"
+ * button, then a "Your requests" section and a "Your sessions" section, each a
+ * collapsible header with a to-do badge over real rows. This REPLACES the
+ * status-first hero + tile grid of issue #120: the hero said "you have 2
+ * pending requests" above a tile that said "2 pending", and the sections now
+ * say it once by simply showing the two requests. The destinations that were
+ * half-weight tiles (governance, family settings, account) all have hamburger
+ * menu entries — see FamilyAppBar — so nothing became unreachable; search does
+ * NOT, which is why its button is unconditional for a verified family rather
+ * than a state that can lose a priority race.
+ *
+ * Rows navigate to /family/requests and /family/sessions, where the
+ * accept/decline/cancel actions live — the same rule the two provider
+ * dashboards follow, so no callable is invoked from a landing page.
+ *
+ * INDEX NOTE: both collections are queried by familyId alone (single-field,
+ * always indexed) and filtered/sorted client-side. A recurring series' concrete
+ * dates live in its `instances` subcollection, which this page must not query —
+ * series render their weekly slot line instead of a date.
  */
 export function DashboardPage() {
   const { t, i18n } = useTranslation();
+  const navigate = useNavigate();
   const { userDoc } = useAuthStore();
-  const familyId = getParentProfile(userDoc)?.familyId ?? null;
+  // Both membership shapes, via the shared resolver — see getFamilyId.
+  const familyId = getFamilyId(userDoc);
 
   // null = still loading; true/false once the family doc has resolved.
   const [isVerified, setIsVerified] = useState<boolean | null>(null);
   const [familyName, setFamilyName] = useState<string | null>(null);
-  // Live pending/accepted request counts (null while loading).
-  const [counts, setCounts] = useState<
-    { pending: number; accepted: number; incoming: number } | null
-  >(null);
-  // Live pending/upcoming session counts plus the soonest confirmed one_time
-  // session (null while loading; one setState per snapshot).
-  const [sessionData, setSessionData] = useState<{
-    pending: number;
-    upcoming: number;
-    nextSession: NextSession | null;
-  } | null>(null);
+  // Null while loading — the sections and the empty state must not paint (and
+  // then visibly swap) while a snapshot is still in flight.
+  const [requests, setRequests] = useState<StudyContactRequestDoc[] | null>(null);
+  const [sessions, setSessions] = useState<StudySessionDoc[] | null>(null);
+  // A failed FIRST read must not strand the page on the spinner. One flag PER
+  // load — a shared flag cleared on any success lets the load that worked
+  // erase the other one's failure (the tutor dashboard's rule, PR #194
+  // review). Only rendered while `loading`, so a refetch blip over rendered
+  // sections stays invisible.
+  const [requestsError, setRequestsError] = useState(false);
+  const [sessionsError, setSessionsError] = useState(false);
+  const loadError = requestsError || sessionsError;
 
   // A mounted guard shared by the initial loads and every focus-triggered
   // refetch, so a late-resolving fetch never writes state after unmount.
@@ -138,81 +141,66 @@ export function DashboardPage() {
       .catch(() => {
         // A FAILED read is unknown, not unverified: only flip to false when
         // the doc genuinely says so. On a refetch blip a verified family
-        // keeps its last-known-good state (and the search CTA); on first
+        // keeps its last-known-good state (and the search button); on first
         // load the gate simply stays in its loading state.
       });
   }, [familyId]);
 
-  // Live request counts for the requests tile and the accepted/pending heroes.
-  const loadRequestCounts = useCallback(() => {
+  const loadRequests = useCallback(() => {
     if (!familyId) return;
     getDocs(query(collection(db, 'studyContactRequests'), where('familyId', '==', familyId)))
       .then((snap) => {
         if (!mountedRef.current) return;
-        let pending = 0;
-        let accepted = 0;
-        // Pending requests a TUTOR opened by answering one of our published
-        // searches (issue #207 PR4). Counted apart because the hero's whole
-        // job is to say who has to act, and for these it is US -- the
-        // "tutors usually reply" copy is backwards on both halves.
-        let incoming = 0;
-        snap.docs.forEach((d) => {
-          const data = d.data();
-          const status = data?.status;
-          if (status === 'pending') {
-            if (data?.initiatedBy === 'tutor') incoming += 1;
-            else pending += 1;
-          } else if (status === 'accepted') accepted += 1;
-        });
-        setCounts({ pending, accepted, incoming });
+        // `accepted` is TERMINAL for a contact request -- nothing moves it
+        // onward and it carries no date -- so keeping every one of them would
+        // grow the requests section without bound: a family that has worked
+        // with eight tutors would open the app to eight permanent green rows
+        // above the sessions that matter (PR #345 review). Counting N and
+        // listing N are different costs. Bound them by the DEFAULT visibility
+        // window (PAST_VISIBILITY_DAYS is ADMIN_CONFIG_DEFS.pastVisibilityDays
+        // .default). Sit resolves the admin-configurable value at runtime via
+        // getClientConfigValue, so raising it moves sit's windows and not this
+        // one; a landing page deliberately does not serialize a config read in
+        // front of first paint (that was itself a round-2 finding on #250), and
+        // the non-blocking resolve-then-rebucket that fixed it belongs in a
+        // hook, not inline here. Pending rows
+        // stay unbounded -- they are still actionable -- and a doc with
+        // neither timestamp (legacy) is kept rather than silently disappeared.
+        // Applied HERE rather than in render: the cutoff reads the clock, and
+        // render must stay pure.
+        const cutoff = Date.now() / 1000 - PAST_VISIBILITY_DAYS * 24 * 60 * 60;
+        const rows = snap.docs
+          .map((d) => d.data() as StudyContactRequestDoc)
+          .filter((r) => {
+            if (r.status !== 'accepted') return true;
+            const respondedSeconds = r.respondedAt?.seconds ?? r.updatedAt?.seconds;
+            return respondedSeconds === undefined || respondedSeconds >= cutoff;
+          });
+        rows.sort((a, b) => (b.createdAt?.seconds ?? 0) - (a.createdAt?.seconds ?? 0));
+        setRequests(rows);
+        setRequestsError(false);
       })
       .catch(() => {
-        // Keep last-known-good counts: zeroing on a refetch failure is an
-        // error masquerading as an empty state.
+        // A failed read is UNKNOWN, not zero: on first load `requests` stays
+        // null (loading rather than a wrong empty state); on a refetch blip
+        // the last-known-good rows survive.
+        if (mountedRef.current) setRequestsError(true);
       });
   }, [familyId]);
 
-  // Live session counts for the sessions tile (equality-only query, counted
-  // client-side — mirrors the requests tile) PLUS the next confirmed session
-  // for the hero, extracted from the same snapshot.
-  const loadSessionData = useCallback(() => {
+  const loadSessions = useCallback(() => {
     if (!familyId) return;
     getDocs(query(collection(db, 'study-sessions'), where('familyId', '==', familyId)))
       .then((snap) => {
         if (!mountedRef.current) return;
-        // Time-granular cutoff: a session that finished earlier TODAY must
-        // not claim the hero as "Next session · Today" all evening.
-        const now = parisNowStamp();
-        let pending = 0;
-        let upcoming = 0;
-        let nextSession: NextSession | null = null;
-        snap.docs.forEach((d) => {
-          const data = d.data();
-          const status = data?.status;
-          if (status === 'pending') pending += 1;
-          else if (status === 'confirmed') {
-            upcoming += 1;
-            const date = typeof data?.date === 'string' ? data.date : null;
-            const startTime = typeof data?.startTime === 'string' ? data.startTime : '';
-            if (data?.type !== 'recurring' && date && `${date}T${startTime}` > now) {
-              if (
-                !nextSession ||
-                date < nextSession.date ||
-                (date === nextSession.date && startTime < nextSession.startTime)
-              ) {
-                nextSession = {
-                  date,
-                  startTime,
-                  tutorName: typeof data?.tutorName === 'string' ? data.tutorName : undefined,
-                };
-              }
-            }
-          }
-        });
-        setSessionData({ pending, upcoming, nextSession });
+        const rows = snap.docs.map((d) => d.data() as StudySessionDoc);
+        rows.sort((a, b) => (b.createdAt?.seconds ?? 0) - (a.createdAt?.seconds ?? 0));
+        setSessions(rows);
+        setSessionsError(false);
       })
       .catch(() => {
-        // Keep last-known-good counts (see requests counts above).
+        /* keep last-known-good state (see requests above) */
+        if (mountedRef.current) setSessionsError(true);
       });
   }, [familyId]);
 
@@ -221,19 +209,19 @@ export function DashboardPage() {
   }, [loadVerification]);
 
   useEffect(() => {
-    loadRequestCounts();
-  }, [loadRequestCounts]);
+    loadRequests();
+  }, [loadRequests]);
 
   useEffect(() => {
-    loadSessionData();
-  }, [loadSessionData]);
+    loadSessions();
+  }, [loadSessions]);
 
   // Issue #117 tier (a): a returning user re-runs the same loads, so an open
-  // tab shows fresh verification state and summary counts.
+  // tab shows fresh verification state and sections.
   useRefetchOnFocus(() => {
     loadVerification();
-    loadRequestCounts();
-    loadSessionData();
+    loadRequests();
+    loadSessions();
   });
 
   // ── Family-less parent (issue #293): after removeCoParent (performed in
@@ -261,95 +249,121 @@ export function DashboardPage() {
     );
   }
 
-  // ── Hero (first match wins). The data-driven states need both snapshots;
-  // the search fallback deliberately does NOT — a failed requests read must
-  // never make tutor search unreachable (the app bar has no /family/search
-  // link; this page is the only way in). A null count can't be > 0, so
-  // hoisting the fallback leaves the priority order unchanged; when the
-  // snapshots resolve with activity, the swap happens in the same slot.
-  // The unverified state is owned by the banner, not the hero. ──
-  let hero: { to: string; title: string; desc: string; icon: React.ReactNode } | null = null;
-  if (counts !== null && sessionData !== null) {
-    if (sessionData.nextSession) {
-      const next = sessionData.nextSession;
-      const diff = dayDiff(parisToday(), next.date);
-      const rel =
-        diff <= 0
-          ? t('family.dashboard.hero.today')
-          : diff === 1
-            ? t('family.dashboard.hero.tomorrow')
-            : t('family.dashboard.hero.inDays', { count: diff });
-      hero = {
-        to: '/family/sessions',
-        title: t('family.dashboard.hero.nextSession'),
-        desc: [rel, formatDateStr(next.date, i18n.language), next.startTime, next.tutorName]
-          .filter(Boolean)
-          .join(' · '),
-        icon: <CalendarIcon className="h-6 w-6 text-brand-600" />,
-      };
-    } else if (counts.accepted > 0) {
-      hero = {
-        to: '/family/requests',
-        title: t('family.dashboard.hero.accepted', { count: counts.accepted }),
-        desc: t('family.dashboard.hero.acceptedDesc'),
-        icon: <BellIcon className="h-6 w-6 text-brand-600" />,
-      };
-    } else if (counts.incoming > 0) {
-      // Ahead of our own pending requests: this one is waiting on US.
-      hero = {
-        to: '/family/requests',
-        title: t('family.dashboard.hero.incoming', { count: counts.incoming }),
-        desc: t('family.dashboard.hero.incomingDesc'),
-        icon: <BellIcon className="h-6 w-6 text-brand-600" />,
-      };
-    } else if (counts.pending > 0) {
-      hero = {
-        to: '/family/requests',
-        title: t('family.dashboard.hero.pending', { count: counts.pending }),
-        desc: t('family.dashboard.hero.pendingDesc'),
-        icon: <BellIcon className="h-6 w-6 text-brand-600" />,
-      };
-    }
-  }
-  if (!hero && isVerified === true) {
-    hero = {
-      to: '/family/search',
-      title: t('family.dashboard.searchCardTitle'),
-      desc: t('family.dashboard.searchCardDesc'),
-      icon: <SearchIcon className="h-6 w-6 text-brand-600" />,
-    };
-  }
+  const slotLine = (slot: RecurringSlot): string =>
+    t('family.sessions.recurringSlot', {
+      day: t(`days.${DAY_FULL[slot.day]}`),
+      start: slot.startTime,
+      end: slot.endTime,
+    });
 
-  // Tile count lines (null while loading — no empty-state flash).
-  const requestsSub =
-    counts === null
-      ? undefined
-      : counts.pending + counts.accepted + counts.incoming > 0
-        ? [
-            // Ours to answer first — the tile is a summary, and this is the
-            // only one of the three that asks something of the family.
-            counts.incoming > 0
-              ? t('family.dashboard.tiles.requestsIncoming', { count: counts.incoming })
-              : null,
-            t('family.dashboard.tiles.requestsPending', { count: counts.pending }),
-            t('family.dashboard.tiles.requestsAccepted', { count: counts.accepted }),
-          ]
-            .filter(Boolean)
-            .join(' · ')
-        : t('family.dashboard.tiles.requestsEmpty');
-  const sessionsSub =
-    sessionData === null
-      ? undefined
-      : sessionData.pending + sessionData.upcoming > 0
-        ? `${t('family.dashboard.tiles.sessionsPending', { count: sessionData.pending })} · ${t('family.dashboard.tiles.sessionsUpcoming', { count: sessionData.upcoming })}`
-        : t('family.dashboard.tiles.sessionsEmpty');
+  // Skeletons only while a real fetch is in flight. Two things end a fetch:
+  // rows arriving, or the read failing — a load that has ERRORED is no longer
+  // in flight, and treating it as such is what kept a partial failure on
+  // skeletons forever (the `.catch` never assigns rows, so `requests`/
+  // `sessions` stay null). With this, one collection failing while the other
+  // resolves renders the half that worked; only a total failure reaches the
+  // error line below (PR #345 round 5). With no familyId there is nothing to
+  // load at all, so fall through to the empty state rather than spinning.
+  const requestsSettled = requests !== null || requestsError;
+  const sessionsSettled = sessions !== null || sessionsError;
+  const loading = familyId !== null && !(requestsSettled && sessionsSettled);
+  const today = parisToday();
+
+  // ── The split (PR #345 round 3). Pending bookings moved OUT of the sessions
+  // section and into requests, which is where sit and both providers already
+  // put them: sit's "Your requests" is its pending appointments, the tutor's
+  // "New Requests" holds pending contact requests AND pending sessions. It
+  // also fixes a real hole the round-2 badge rule opened — a tutor PROPOSAL
+  // is an action awaiting this family, and folded into a green row count it
+  // had no badge representation anywhere; collapse the section and it became
+  // indistinguishable from three confirmed sessions. Now it lands in the
+  // amber to-do count, where "amber badges what you must answer" can see it.
+  //
+  // So: requests = the live request pipeline (contact requests in either live
+  // state, plus bookings awaiting an answer); sessions = confirmed work.
+  //
+  // Date floor on the pending bookings for the same reason it is on the
+  // confirmed ones: nothing server-side expires a pending one_time booking,
+  // so without it an unanswered request sits here forever with a past date.
+  const pendingSessions = (sessions ?? [])
+    .filter(
+      (s) =>
+        s.status === 'pending' && (s.type === 'recurring' || (!!s.date && s.date >= today)),
+    )
+    // Soonest-first, the same date+time key the confirmed sessions use. The
+    // "recency is the only meaningful key" rationale covers the CONTACT
+    // requests above these rows — it does not extend here, because a booking
+    // carries a date and renders it (PR #345 round 5). Leaving these on
+    // createdAt-DESC put dates out of order directly above a section sorted
+    // soonest-first, and made a third ordering for the same conceptual
+    // section across the four dashboards.
+    .map((s) => ({
+      s,
+      sortDate: s.type === 'one_time' ? `${s.date}T${s.startTime ?? '00:00'}` : '9999-12-31',
+    }))
+    .sort((a, b) => (a.sortDate < b.sortDate ? -1 : a.sortDate > b.sortDate ? 1 : 0))
+    .map((e) => e.s);
+  // Declined/cancelled history stays on /family/requests — a landing page
+  // shows what is live. (Stale `accepted` rows were already dropped at load,
+  // where the clock read belongs.)
+  const activeRequests = (requests ?? []).filter(
+    (r) => r.status === 'pending' || r.status === 'accepted',
+  );
+  // ORDER: newest-first, inherited from loadRequests' createdAt DESC and kept
+  // deliberately — a contact request carries no date to sort by, so recency is
+  // the only meaningful key. The sessions section below sorts soonest-first
+  // because its rows DO have dates. Two adjacent sections ordering by
+  // different principles is intentional; it is pinned so a refactor cannot
+  // silently change it (PR #345 round 3).
+  const requestRows = activeRequests;
+
+  // The badge is a TO-DO count: rows awaiting an answer from US. Our own
+  // pending request awaits the TUTOR and a booking we sent awaits the tutor
+  // too — both still render, marked — while a tutor-initiated request
+  // (issue #207 PR4) and a tutor PROPOSAL are ours to answer.
+  const requestsTodo =
+    activeRequests.filter((r) => r.status === 'pending' && r.initiatedBy === 'tutor').length +
+    pendingSessions.filter((s) => s.proposedBy === 'provider').length;
+  const requestsTotal = activeRequests.length + pendingSessions.length;
+
+  // ── Your sessions: confirmed upcoming work only. ──
+  const activeSessions = (sessions ?? [])
+    .filter(
+      (s) =>
+        s.status === 'confirmed' &&
+        (s.type === 'recurring' || (!!s.date && s.date >= today)),
+    )
+    // Key on date+time, not the bare date: sort() is stable, so two sessions
+    // on the same day would otherwise keep loadSessions' createdAt-DESCENDING
+    // order and render the later one first (PR #345 review). The sentinel
+    // still compares greater than any real key, so recurring sorts last.
+    .map((s) => ({
+      s,
+      sortDate: s.type === 'one_time' ? `${s.date}T${s.startTime ?? '00:00'}` : '9999-12-31',
+    }))
+    .sort((a, b) => (a.sortDate < b.sortDate ? -1 : a.sortDate > b.sortDate ? 1 : 0))
+    .map((e) => e.s);
+  // Badge rule, uniform across all four dashboards (PR #345 round 2): an AMBER
+  // section badges what the reader must answer; a GREEN section badges how many
+  // rows it holds. This section is the green one — sit's "Your appointments"
+  // and both providers' "Confirmed" badge their row count too, and badging a
+  // to-do in green while the amber requests section above badges a to-do was
+  // the same semantic wearing two colours on one page. A tutor proposal is
+  // still called out where it belongs: on its own row, in amber.
+
+  const hasAny = requestsTotal > 0 || activeSessions.length > 0;
+
+  const sessionWhen = (s: StudySessionDoc): string =>
+    s.type === 'one_time'
+      ? `${formatDateStr(s.date, i18n.language)} · ${s.startTime}${s.endTime ? `–${s.endTime}` : ''}`
+      : s.recurringSlots?.[0]
+        ? slotLine(s.recurringSlots[0])
+        : '';
 
   return (
-    // Wide desktop tier (issue #119): the tile grid wants the 5xl cap.
+    // Wide desktop tier (issue #119): the sections want the 5xl cap.
     <div className="px-5 pt-4 pb-8" data-page-width="wide">
-      {/* Header — the shared idiom (parity D1, issue #239). This one had
-          neither comma, wave, nor context line, and rendered an empty
-          greeting for a doc with no firstName. */}
+      {/* Header — the shared idiom (parity D1, issue #239). */}
       <DashboardGreeting
         firstName={userDoc?.firstName}
         contextLine={familyName ? `${familyName.toUpperCase()} ${t('family.dashboard.family')}` : undefined}
@@ -374,93 +388,147 @@ export function DashboardPage() {
         </div>
       )}
 
-      {/* ── Hero: the single "what matters now" slot. The aria-label carries
-          the desc too — the label REPLACES the content for screen readers,
-          and the desc holds the actual date/time/name payload. ── */}
-      {hero && (
-        <Link to={hero.to} aria-label={`${hero.title} — ${hero.desc}`} className="mb-4 block">
-          <Card interactive className="flex items-center gap-3 border-brand-200 bg-brand-50 py-4">
-            {hero.icon}
-            <div className="min-w-0 flex-1">
-              <p className="text-base font-bold text-gray-900">{hero.title}</p>
-              <p className="text-sm text-gray-600">{hero.desc}</p>
-            </div>
-            <ChevronRightIcon className="h-5 w-5 shrink-0 text-gray-500" />
-          </Card>
-        </Link>
+      {/* ── Find a tutor: the page's one button, and the ONLY way into search
+          (FamilyAppBar has no /family/search entry) — so it never depends on
+          a snapshot that can fail. Sit's family landing has the same one. ── */}
+      {isVerified === true && (
+        <Button className="mb-6 h-14 text-lg" onClick={() => navigate('/family/search')}>
+          <SearchIcon className="h-5 w-5" />
+          {t('family.dashboard.searchCardTitle')}
+        </Button>
       )}
 
-      {/* ── Everything else: compact half-weight tiles ── */}
-      <div className="grid grid-cols-2 gap-3">
-        {/* While loading, the hero IS the search fallback (see above), so
-            this tile stays hidden then and only appears once a data-driven
-            state claims the hero — search always has exactly one entry. */}
-        {isVerified === true && hero?.to !== '/family/search' && (
-          <DashTile
-            to="/family/search"
-            icon={<SearchIcon className="h-6 w-6 text-brand-600" />}
-            title={t('family.dashboard.searchCardTitle')}
-          />
-        )}
-        <DashTile
-          to="/family/requests"
-          ariaLabel={t('family.dashboard.viewRequests')}
-          icon={<BellIcon className="h-6 w-6 text-brand-600" />}
-          title={t('family.dashboard.requestsTitle')}
-          sub={requestsSub}
-        />
-        <DashTile
-          to="/family/sessions"
-          icon={<CalendarIcon className="h-6 w-6 text-brand-600" />}
-          title={t('family.dashboard.sessionsTitle')}
-          sub={sessionsSub}
-        />
-        <DashTile
-          to="/family/governance"
-          icon={<ShieldIcon className="h-6 w-6 text-brand-600" />}
-          title={t('family.governance.navTitle')}
-        />
-        <DashTile
-          to="/family/settings"
-          icon={<SettingsIcon className="h-6 w-6 text-brand-600" />}
-          title={t('family.dashboard.settingsCard')}
-        />
-        <DashTile
-          to="/family/account"
-          icon={<UserIcon className="h-6 w-6 text-brand-600" />}
-          title={t('family.dashboard.accountCard')}
-        />
-      </div>
-    </div>
-  );
-}
-
-function DashTile({
-  to,
-  icon,
-  title,
-  sub,
-  ariaLabel,
-}: {
-  to: string;
-  icon: React.ReactNode;
-  title: string;
-  sub?: string;
-  ariaLabel?: string;
-}) {
-  // aria-label REPLACES the content for screen readers, so it must carry the
-  // count line too — otherwise "2 pending · 1 accepted" is sighted-only,
-  // defeating the point of moving the counts inline.
-  const label = [ariaLabel ?? title, sub].filter(Boolean).join(' — ');
-  return (
-    <Link to={to} aria-label={label} className="block h-full">
-      <Card interactive className="flex h-full flex-col gap-2 py-4">
-        {icon}
-        <div>
-          <p className="text-sm font-semibold text-gray-900">{title}</p>
-          {sub && <p className="mt-0.5 text-xs text-gray-500">{sub}</p>}
+      {/* ── The two sections (issue #338) ── */}
+      {/* `!hasAny`, not `loading`: with per-load error flags one collection can
+          fail while the other resolves with rows, and gating on `loading`
+          rendered the error paragraph over three perfectly good request rows
+          sitting unrendered in state. Sit's half of this page already took
+          this branch order (PR #345 round 5). */}
+      {loadError && !hasAny ? (
+        <p className="py-10 text-center text-sm text-brand-600">
+          {t('family.dashboard.loadError')}
+        </p>
+      ) : loading ? (
+        // Skeletons, not a spinner: this is a list surface now, so it keeps
+        // its footprint while loading (UX F12) — and matches sit's family
+        // dashboard, which this page is meant to be identical to (PR #345
+        // round 4). The skeleton-loaders plan exempted sit's page only
+        // because it was "a summary card, not a list"; that premise is gone.
+        <div className="space-y-3">
+          <SkeletonCard />
+          <SkeletonCard />
+          <SkeletonCard />
         </div>
-      </Card>
-    </Link>
+      ) : hasAny ? (
+        <>
+          <DashboardSection
+            title={t('family.dashboard.requestsTitle')}
+            count={requestsTodo}
+            total={requestsTotal}
+            variant="pending"
+          >
+            {requestRows.map((r) => (
+              <Link key={r.requestId} to="/family/requests" className="block">
+                <Card interactive>
+                  <div className="flex items-center gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-semibold text-gray-900">{r.tutorName}</p>
+                        <Badge variant={r.status === 'accepted' ? 'green' : 'amber'}>
+                          {t(`family.requests.status.${r.status}`)}
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-gray-500">
+                        {t(`tutor.subjects.names.${r.subject}`)} · {r.level}
+                      </p>
+                      {r.status === 'pending' && (
+                        <p className="mt-1 text-xs text-amber-700">
+                          {r.initiatedBy === 'tutor'
+                            ? t('family.requests.answeredPublishedSearch')
+                            : t('family.dashboard.awaitingTutorReply')}
+                        </p>
+                      )}
+                    </div>
+                    <ChevronRightIcon className="h-5 w-5 shrink-0 text-gray-400" />
+                  </div>
+                </Card>
+              </Link>
+            ))}
+            {/* Pending BOOKINGS, after the contact requests — the same
+                within-section ordering the tutor dashboard uses for its
+                "New Requests". */}
+            {pendingSessions.map((s) => (
+              <Link key={s.sessionId} to="/family/sessions" className="block">
+                <Card interactive>
+                  <div className="flex items-center gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-semibold text-gray-900">{s.tutorName}</p>
+                        <Badge variant="amber">{t('family.dashboard.statusPending')}</Badge>
+                      </div>
+                      <p className="text-xs text-gray-500">
+                        {t(`tutor.subjects.names.${s.subject}`)} · {s.level}
+                      </p>
+                      <p className="mt-1 text-xs text-gray-700">{sessionWhen(s)}</p>
+                      <p className="mt-1 text-xs text-amber-700">
+                        {s.proposedBy === 'provider'
+                          ? t('family.sessions.proposedBy', { name: s.tutorName })
+                          : t('family.sessions.awaitingTutor')}
+                      </p>
+                    </div>
+                    <ChevronRightIcon className="h-5 w-5 shrink-0 text-gray-400" />
+                  </div>
+                </Card>
+              </Link>
+            ))}
+          </DashboardSection>
+
+          <DashboardSection
+            title={t('family.dashboard.sessionsTitle')}
+            count={activeSessions.length}
+            variant="confirmed"
+          >
+            {activeSessions.map((s) => (
+              <Link key={s.sessionId} to="/family/sessions" className="block">
+                <Card interactive>
+                  <div className="flex items-center gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-semibold text-gray-900">{s.tutorName}</p>
+                        <Badge variant="green">
+                          {t('family.dashboard.statusConfirmed')}
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-gray-500">
+                        {t(`tutor.subjects.names.${s.subject}`)} · {s.level}
+                      </p>
+                      <p className="mt-1 text-xs text-gray-700">{sessionWhen(s)}</p>
+                    </div>
+                    <ChevronRightIcon className="h-5 w-5 shrink-0 text-gray-400" />
+                  </div>
+                </Card>
+              </Link>
+            ))}
+          </DashboardSection>
+        </>
+      ) : (
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gray-100">
+            <UsersIcon className="h-7 w-7 text-gray-400" />
+          </div>
+          <h3 className="mb-2 text-lg font-semibold">{t('family.dashboard.emptyTitle')}</h3>
+          {/* "Find a tutor to send your first request" is a dead instruction
+              when the Find-a-tutor button is not on screen — which is the
+              TYPICAL first-visit state, since the button is gated on
+              verification (PR #345 round 4). Point at the thing they can
+              actually do instead. */}
+          <p className="max-w-[240px] text-sm text-gray-500">
+            {isVerified === true
+              ? t('family.dashboard.emptyDesc')
+              : t('family.dashboard.emptyDescLocked')}
+          </p>
+        </div>
+      )}
+    </div>
   );
 }

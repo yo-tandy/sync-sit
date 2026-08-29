@@ -6,7 +6,7 @@ import { httpsCallable } from 'firebase/functions';
 import type { RecurringSlot, KidDoc } from '@ejm/shared-core';
 import { db, functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
-import { getParentProfile } from '@ejm/shared-core';
+import { getFamilyId } from '@ejm/shared-core';
 import type { TutorEndorsementDoc } from '@ejm/study-core';
 import {
   Card,
@@ -106,7 +106,9 @@ function hasStarted(date?: string, startTime?: string): boolean {
 export function SessionsPage() {
   const { t, i18n } = useTranslation();
   const { userDoc } = useAuthStore();
-  const familyId = getParentProfile(userDoc)?.familyId ?? null;
+  // Both membership shapes (PR #345 round 4) — the destination of the
+  // dashboard's session rows; see RequestsPage for the same reasoning.
+  const familyId = getFamilyId(userDoc);
   const defaultRefName = `${userDoc?.firstName ?? ''} ${userDoc?.lastName ?? ''}`.trim();
 
   const [sessions, setSessions] = useState<StudySessionDoc[] | null>(null);

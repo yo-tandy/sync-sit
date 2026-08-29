@@ -211,6 +211,22 @@ describe('family RequestsPage', () => {
     expect(action).toHaveAttribute('href', '/family/search');
   });
 
+  it('subscribes on a legacy Plan C ROOT familyId, so a dashboard row does not dead-end', async () => {
+    // The dashboard lists this family's live requests and every row links
+    // here; reading the profile pointer alone sent a Plan C parent from N rows
+    // straight to "No requests yet" (PR #345 round 4). Both surfaces resolve
+    // membership the same way now — getFamilyId, the same two places
+    // hasFamilyMembership accepts.
+    h.auth.userDoc = {
+      uid: 'p1',
+      familyId: 'fam-legacy',
+      profiles: { parent: { enrollmentComplete: true } },
+    };
+    renderWithProviders(<RequestsPage />);
+    await waitFor(() => expect(h.onSnapshot).toHaveBeenCalled());
+    expect(h.where).toHaveBeenCalledWith('familyId', '==', 'fam-legacy');
+  });
+
   it('resolves to the empty state (no permanent spinner) when there is no familyId', async () => {
     h.auth.userDoc = { uid: 'p1', profiles: { parent: { enrollmentComplete: true } } };
     renderWithProviders(<RequestsPage />);

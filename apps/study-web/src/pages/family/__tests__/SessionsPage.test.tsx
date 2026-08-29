@@ -135,6 +135,24 @@ function reset() {
 describe('family SessionsPage', () => {
   beforeEach(() => reset());
 
+  it('queries on a legacy Plan C ROOT familyId, so a dashboard row does not dead-end', async () => {
+    // The landing page lists this family's live sessions and every row links
+    // here; reading the profile pointer alone sent a Plan C parent from N rows
+    // straight to an authoritative "no sessions" — no error, no spinner
+    // (PR #345 rounds 4-5). Both surfaces resolve membership through
+    // getFamilyId now.
+    h.auth.userDoc = {
+      uid: 'p1',
+      familyId: 'fam-legacy',
+      profiles: { parent: { enrollmentComplete: true } },
+    };
+    h.sessions = [oneTime()];
+    renderWithProviders(<SessionsPage />);
+    await waitFor(() =>
+      expect(h.where).toHaveBeenCalledWith('familyId', '==', 'fam-legacy'),
+    );
+  });
+
   it('queries study-sessions for the signed-in family', async () => {
     h.sessions = [oneTime()];
     renderWithProviders(<SessionsPage />);

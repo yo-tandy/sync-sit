@@ -11,7 +11,8 @@ import { useFamilyAppointments } from '@/hooks/useFamilyAppointments';
 import { Button, Badge, Card, SkeletonCard, Input, Dialog, Textarea, TopNav } from '@/components/ui';
 import { CalendarIcon, SearchIcon } from '@/components/ui/Icons';
 import type { AppointmentDoc, BabysitterSummary, RecurringSlot, User } from '@ejm/sit-core';
-import { getBabysitterProfile, getParentProfile } from '@ejm/sit-core';
+import { getBabysitterProfile } from '@ejm/sit-core';
+import { getFamilyId } from '@ejm/shared-core';
 import { formatBabysitterName } from '@/lib/formatName';
 import { debouncedTogglePreferred } from '@/lib/debouncedPreferred';
 import { EndorsementDialog } from '@/components/endorsements/EndorsementDialog';
@@ -238,7 +239,10 @@ export function FamilyAppointmentsPage() {
   });
 
   // Load preferred babysitter IDs from family doc
-  const familyId = getParentProfile(userDoc)?.familyId ?? null;
+  // Both membership shapes (PR #345 round 4) — the destination of the sit
+  // dashboard's rows; the appointment lists already come from
+  // useFamilyAppointments, which resolves the same way.
+  const familyId = getFamilyId(userDoc);
   useEffect(() => {
     if (!familyId) return;
     const unsub = onSnapshot(doc(db, 'families', familyId), (snap) => {

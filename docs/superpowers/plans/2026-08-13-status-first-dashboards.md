@@ -2,6 +2,16 @@
 
 > **For agentic workers:** Work in THIS worktree (`.claude/worktrees/status-dashboards`, branch `feature/status-first-dashboards`). Steps use checkbox (`- [ ]`) syntax.
 
+> **Superseded for the FAMILY dashboard (2026-08-29, #338).** The owner asked
+> both parent landing pages to match the provider dashboards, so the study
+> family dashboard's hero slot and half-weight tile grid are gone — replaced by
+> a "Find a tutor" button over collapsible `DashboardSection` rows, mirroring
+> sit. The hero's content was not lost so much as made redundant: it announced
+> "you have 2 pending requests" above a tile reading "2 pending", where the
+> sections now say it once by showing the two requests. The TUTOR half of this
+> plan stands: that dashboard keeps its greeting/availability/section shape,
+> and #338 only swapped its local `Section` for the shared `DashboardSection`.
+
 **Goal:** Give the study family and tutor dashboards a single state-driven hero slot (what matters now) and demote everything else to a compact half-weight grid — same data, NO new queries.
 
 **Architecture:** Both dashboards already fetch full snapshots (`study-sessions` by familyId/tutorUserId, `studyContactRequests` likewise) and reduce them to counts. The hero derives from the SAME snapshots: extract the next confirmed session (soonest `status === 'confirmed'` with a start not in the past) alongside the counts in the existing `.then` reducers. Entry cards and the two summary cards become compact tiles in a 2-column grid. The verification gate/banner and the supervision prompt stay above the hero, untouched — they are already correct status-first elements (the issue says so).
