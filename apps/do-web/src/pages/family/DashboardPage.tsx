@@ -20,6 +20,9 @@ import { db } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { formatTimingSummary, tsMillis } from '@/lib/taskDisplay';
 
+/** How many completions the landing page keeps — see `completedRows`. */
+const RECENT_COMPLETIONS = 5;
+
 /**
  * The family portal's landing page (plan §9.0's route table: "**Each index is
  * a DASHBOARD, not a list**"), replacing PR A's temporary `/family` →
@@ -43,24 +46,31 @@ import { formatTimingSummary, tsMillis } from '@/lib/taskDisplay';
  *  3. **Recently completed** (gray) — with the §9.1 endorsement prompt on
  *     any completion this family has not endorsed yet.
  *
- * QUERIES — all four are shapes this app already issues; nothing new reaches
- * the server:
+ * QUERIES — no callable, index or rule is added, and three of the four are
+ * shapes THIS app already issues:
  *  - `doTasks` where(familyId) orderBy(createdAt desc) — MyTasksPage's.
  *  - `taskOffers` where(familyId) where(status=='pending') orderBy(createdAt)
  *    — §9.1's ONE list-wide badge query, grouped client-side by taskId.
  *    **Never `offerCount`**, which counts `pending_guardian` offers the
  *    family cannot read and would badge a number contradicting the visible
  *    list (§4.1 "BOUND-FACING ONLY").
- *  - `references` where(submittedByFamilyId) where(appSource=='do') — the
- *    equality-only endorsement gate, study's `SessionsPage` shape with do's
- *    `appSource`. Provable under the rules' submitting-family disjunct, and
- *    equality-only so it needs no composite.
  *  - `families/{familyId}` getDoc for the greeting's context line, exactly
  *    as both sibling family dashboards read it.
+ *
+ * The fourth is NEW TO do-web and its precedent is elsewhere, so it is worth
+ * naming precisely rather than waving at:
+ *  - `references` where(submittedByFamilyId) where(appSource=='do') — the
+ *    endorsement gate. No other do-web call site issues it: the family-facing
+ *    half of do's endorsements has only ever been the per-task prompt, which
+ *    asks the SERVER (`doSubmitEndorsement`'s `already-exists`) rather than
+ *    reading the collection. The shape is study-web's — `SessionsPage` and
+ *    `SubmittedEndorsementsPage` both run
+ *    `where(submittedByFamilyId) where(appSource=='study')` for exactly this
+ *    gate — with do's `appSource`, and it is the same field pair the do
+ *    server already dedups on (`apps/functions/src/do/submitEndorsement.ts`).
+ *    Provable under the `references` read rule's submitting-family disjunct
+ *    (`firestore.rules:488-489`), and equality-only, so it needs no composite.
  */
-/** How many completions the landing page keeps — see `completedRows`. */
-const RECENT_COMPLETIONS = 5;
-
 export function DashboardPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
