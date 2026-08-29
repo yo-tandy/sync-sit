@@ -6,54 +6,54 @@
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
+      "types": "./src/index.ts",
       "import": "./src/index.ts",
-      "require": "./dist/index.js",
-      "types": "./src/index.ts"
+      "require": "./dist/index.js"
     },
     "./config/*.js": {
+      "types": "./src/config/*.ts",
       "import": "./src/config/*.ts",
-      "require": "./dist/config/*.js",
-      "types": "./src/config/*.ts"
+      "require": "./dist/config/*.js"
     },
     "./auth/*.js": {
+      "types": "./src/auth/*.ts",
       "import": "./src/auth/*.ts",
-      "require": "./dist/auth/*.js",
-      "types": "./src/auth/*.ts"
+      "require": "./dist/auth/*.js"
     },
     "./enrollment/*.js": {
+      "types": "./src/enrollment/*.ts",
       "import": "./src/enrollment/*.ts",
-      "require": "./dist/enrollment/*.js",
-      "types": "./src/enrollment/*.ts"
+      "require": "./dist/enrollment/*.js"
     },
     "./guardian/*.js": {
+      "types": "./src/guardian/*.ts",
       "import": "./src/guardian/*.ts",
-      "require": "./dist/guardian/*.js",
-      "types": "./src/guardian/*.ts"
+      "require": "./dist/guardian/*.js"
     },
     "./verification/*.js": {
+      "types": "./src/verification/*.ts",
       "import": "./src/verification/*.ts",
-      "require": "./dist/verification/*.js",
-      "types": "./src/verification/*.ts"
+      "require": "./dist/verification/*.js"
     },
     "./admin/*.js": {
+      "types": "./src/admin/*.ts",
       "import": "./src/admin/*.ts",
-      "require": "./dist/admin/*.js",
-      "types": "./src/admin/*.ts"
+      "require": "./dist/admin/*.js"
     },
     "./scheduled/*.js": {
+      "types": "./src/scheduled/*.ts",
       "import": "./src/scheduled/*.ts",
-      "require": "./dist/scheduled/*.js",
-      "types": "./src/scheduled/*.ts"
+      "require": "./dist/scheduled/*.js"
     },
     "./schedule/*.js": {
+      "types": "./src/schedule/*.ts",
       "import": "./src/schedule/*.ts",
-      "require": "./dist/schedule/*.js",
-      "types": "./src/schedule/*.ts"
+      "require": "./dist/schedule/*.js"
     },
     "./handoff/*.js": {
+      "types": "./src/handoff/*.ts",
       "import": "./src/handoff/*.ts",
-      "require": "./dist/handoff/*.js",
-      "types": "./src/handoff/*.ts"
+      "require": "./dist/handoff/*.js"
     }
   },
   "scripts": {
