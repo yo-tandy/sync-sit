@@ -4,6 +4,15 @@ import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
 import { callerFamilyId, validTaskId } from './taskAccess.js';
+import {
+  notifyDoFamilyParents,
+  notifyDoSafely,
+  sendDoNotificationToUser,
+} from './notify.js';
+import {
+  buildTaskCancelledForDoer,
+  buildTaskCancelledForFamily,
+} from './notifyContent.js';
 
 /**
  * `doCancelTask` (plan §8, §6.5): task → `cancelled`.
@@ -46,6 +55,10 @@ export const doCancelTask = onCall(
 
     let cancelledBy: 'family' | 'doer' = 'family';
     let taskFamilyId = '';
+    let taskTitle = '';
+    let wasAssigned = false;
+    let assignedUserId: string | null = null;
+    let sweptOffererUids: string[] = [];
     await db.runTransaction(async (tx) => {
       // Reads first, then writes (Firestore transactions throw on a read
       // after any write — the §6.4 phase rule applies here too).
@@ -100,13 +113,57 @@ export const doCancelTask = onCall(
         offerCount: 0,
         updatedAt: now,
       });
+      sweptOffererUids = [];
       for (const offer of liveOffers.docs) {
         tx.update(offer.ref, { status: 'expired', updatedAt: now });
+        const offererUid = offer.data().doerUserId as string | undefined;
+        if (offererUid) sweptOffererUids.push(offererUid);
       }
+      taskTitle = task.title;
+      wasAssigned = task.status === 'assigned';
+      assignedUserId = task.assignedUserId;
     });
 
-    // PR9: notify the counterparty (and any swept offerers) — no
-    // notification plumbing in PR5.
+    // Notify the counterparty and any swept offerers (plan §8's row, §10,
+    // §13 PR9) — post-commit, failures swallowed. On an assigned task the
+    // NON-cancelling side is the counterparty; on an open task the swept
+    // offerers are the only audience (the family cancelled their own post).
+    await notifyDoSafely('cancelTask', async () => {
+      if (wasAssigned && cancelledBy === 'family' && assignedUserId) {
+        await sendDoNotificationToUser({
+          recipientUserId: assignedUserId,
+          type: 'task_cancelled',
+          prefCategory: 'cancelled',
+          content: (lang) =>
+            buildTaskCancelledForDoer(lang, { taskTitle, assigned: true }),
+          data: { taskId: ref.id },
+        });
+      } else if (wasAssigned && cancelledBy === 'doer') {
+        const doerFirstName =
+          (callerData.firstName as string | undefined) || 'The student';
+        await notifyDoFamilyParents(taskFamilyId, {
+          type: 'task_cancelled',
+          prefCategory: 'cancelled',
+          content: (lang) =>
+            buildTaskCancelledForFamily(lang, {
+              doerFirstName,
+              taskTitle,
+              taskId: ref.id,
+            }),
+          data: { taskId: ref.id },
+        });
+      }
+      for (const offererUid of sweptOffererUids) {
+        await sendDoNotificationToUser({
+          recipientUserId: offererUid,
+          type: 'task_cancelled',
+          prefCategory: 'cancelled',
+          content: (lang) =>
+            buildTaskCancelledForDoer(lang, { taskTitle, assigned: false }),
+          data: { taskId: ref.id },
+        });
+      }
+    });
 
     await writeUserActivity(uid, 'do.task_cancelled', {
       taskId: ref.id,

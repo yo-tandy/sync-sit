@@ -15,6 +15,9 @@ import {
   getTaskOrThrow,
 } from './taskAccess.js';
 import { extractTimingFields, type StoredTimingFields } from './taskInput.js';
+import { OFFER_LIVE_STATUSES } from './offerAccess.js';
+import { notifyDoSafely, sendDoNotificationToUser } from './notify.js';
+import { buildTaskUpdated } from './notifyContent.js';
 
 const TIMING_KEYS = [
   'timing',
@@ -178,8 +181,39 @@ export const doUpdateTask = onCall(
       tx.update(ref, update);
     });
 
-    // PR9: notify students with pending offers that the terms changed (§8's
-    // row). Deliberately not built here — no notification plumbing in PR5.
+    // Notify students with live offers that the terms changed (§8's row,
+    // §10, §13 PR9) — post-commit, failures swallowed. Both live statuses:
+    // a `pending_guardian` offer belongs to a student who can see it in "My
+    // offers" and cares that the terms moved (nothing here reaches the
+    // hiring family, so §6.2 is untouched). The empty-payload RENEW tap
+    // (§6.3: an ongoing task's "keep alive" is an edit with no fields) is
+    // deliberately silent — nothing the offerer sees changed.
+    const changedSomething =
+      data.description !== undefined ||
+      data.suggestedBudget !== undefined ||
+      data.photos !== undefined ||
+      newTiming !== null;
+    if (changedSomething) {
+      await notifyDoSafely('updateTask', async () => {
+        const liveOffers = await db
+          .collection('taskOffers')
+          .where('taskId', '==', ref.id)
+          .where('status', 'in', [...OFFER_LIVE_STATUSES])
+          .get();
+        for (const offerSnap of liveOffers.docs) {
+          const offererUid = offerSnap.data().doerUserId as string | undefined;
+          if (!offererUid) continue;
+          await sendDoNotificationToUser({
+            recipientUserId: offererUid,
+            type: 'task_updated',
+            prefCategory: 'newRequest',
+            content: (lang) =>
+              buildTaskUpdated(lang, { taskTitle: task.title, taskId: ref.id }),
+            data: { taskId: ref.id },
+          });
+        }
+      });
+    }
 
     await writeUserActivity(uid, 'do.task_updated', {
       taskId: ref.id,

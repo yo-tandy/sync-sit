@@ -5,6 +5,15 @@ import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
 import { loadActiveCaller, validOfferId } from './offerAccess.js';
+import {
+  notifyDoFamilyParents,
+  notifyDoSafely,
+  sendDoNotificationToUser,
+} from './notify.js';
+import {
+  buildGuardianDecisionForChild,
+  buildTaskOfferReceived,
+} from './notifyContent.js';
 
 /**
  * `doDecideOfferAsGuardian` (plan §6.2, §8): the supervising parent decides
@@ -68,6 +77,11 @@ export const doDecideOfferAsGuardian = onCall(
     await requireActiveLinkParent(uid, childUid);
 
     let taskId = '';
+    let taskTitle = '';
+    let hiringFamilyId = '';
+    let doerFirstName = '';
+    let price = 0;
+    let priceBasis: 'flat' | 'hourly' = 'flat';
     await db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
       if (!snap.exists) {
@@ -75,6 +89,11 @@ export const doDecideOfferAsGuardian = onCall(
       }
       const offer = snap.data() as OfferDoc;
       taskId = offer.taskId;
+      taskTitle = offer.taskTitle;
+      hiringFamilyId = offer.familyId;
+      doerFirstName = offer.doerFirstName;
+      price = offer.price;
+      priceBasis = offer.priceBasis;
       if (offer.status !== 'pending_guardian') {
         throw new HttpsError(
           'failed-precondition',
@@ -102,10 +121,40 @@ export const doDecideOfferAsGuardian = onCall(
       }
     });
 
-    // PR9: tell the student a parent acted (supervision is transparent —
-    // the notifyChildOfGuardianAction shape), and on approval notify the
-    // hiring family of the now-visible offer. No notification plumbing in
-    // PR6.
+    // Tell the student a parent acted (supervision is transparent — the
+    // notifyChildOfGuardianAction shape, plan §10/§13 PR9), and on approval
+    // notify the hiring family of the now-visible offer. On DENIAL the
+    // hiring family gets NOTHING: §6.2's invisibility promise — they never
+    // learn a guardian-gated offer existed, let alone that a parent said no.
+    await notifyDoSafely('decideOfferAsGuardian', async () => {
+      await sendDoNotificationToUser({
+        recipientUserId: childUid,
+        type: 'task_guardian_approval',
+        prefCategory: 'confirmed',
+        content: (lang) =>
+          buildGuardianDecisionForChild(lang, {
+            decision: approve ? 'approved' : 'denied',
+            taskTitle,
+            taskId,
+          }),
+        data: { taskId, offerId: ref.id, decision: approve ? 'approved' : 'denied' },
+      });
+      if (approve) {
+        await notifyDoFamilyParents(hiringFamilyId, {
+          type: 'task_offer_received',
+          prefCategory: 'newRequest',
+          content: (lang) =>
+            buildTaskOfferReceived(lang, {
+              doerFirstName,
+              taskTitle,
+              taskId,
+              price,
+              priceBasis,
+            }),
+          data: { taskId, offerId: ref.id },
+        });
+      }
+    });
 
     await writeUserActivity(uid, 'do.offer_guardian_decided', {
       offerId: ref.id,

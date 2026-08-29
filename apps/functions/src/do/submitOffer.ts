@@ -23,6 +23,11 @@ import {
   resolveDoerPhotoUrl,
   tsMillis,
 } from './offerAccess.js';
+import { notifyDoFamilyParents, notifyDoSafely } from './notify.js';
+import {
+  buildGuardianApprovalRequested,
+  buildTaskOfferReceived,
+} from './notifyContent.js';
 
 /**
  * `doSubmitOffer` (plan §4.2, §6.2, §6.3, §8, §11.1): an active, enrolled
@@ -145,6 +150,8 @@ export const doSubmitOffer = onCall(
 
     let status: 'pending' | 'pending_guardian' = 'pending';
     let resurrected = false;
+    let taskTitle = '';
+    let taskFamilyId = '';
     await db.runTransaction(async (tx) => {
       // Reads first, then writes (the §6.4 phase rule).
       const taskSnap = await tx.get(taskRef);
@@ -281,10 +288,44 @@ export const doSubmitOffer = onCall(
         offerCount: (task.offerCount ?? 0) + 1,
         updatedAt: now,
       });
+      taskTitle = task.title;
+      taskFamilyId = task.familyId;
     });
 
-    // PR9: notify the family (pending) or the supervising parent
-    // (pending_guardian) — no notification plumbing in PR6.
+    // Notify AFTER the commit (plan §10 / §13 PR9; post-commit invariant —
+    // failures log, never reject). A `pending` offer notifies the hiring
+    // family; a `pending_guardian` offer notifies the SUPERVISING family
+    // instead — the hiring family must not learn a gated offer exists
+    // (§6.2's invisibility promise starts here, not at the decision).
+    const doerFirstName = (callerData.firstName as string) || 'A student';
+    await notifyDoSafely('submitOffer', async () => {
+      if (status === 'pending') {
+        await notifyDoFamilyParents(taskFamilyId, {
+          type: 'task_offer_received',
+          prefCategory: 'newRequest',
+          content: (lang) =>
+            buildTaskOfferReceived(lang, {
+              doerFirstName,
+              taskTitle,
+              taskId,
+              price: data.price as number,
+              priceBasis: data.priceBasis as 'flat' | 'hourly',
+            }),
+          data: { taskId, offerId: offerRef.id },
+        });
+      } else if (supervisingFamilyId !== null) {
+        await notifyDoFamilyParents(supervisingFamilyId, {
+          type: 'task_guardian_approval',
+          prefCategory: 'newRequest',
+          content: (lang) =>
+            buildGuardianApprovalRequested(lang, {
+              childFirstName: doerFirstName,
+              taskTitle,
+            }),
+          data: { taskId, offerId: offerRef.id },
+        });
+      }
+    });
 
     await writeUserActivity(uid, 'do.offer_submitted', {
       offerId: offerRef.id,

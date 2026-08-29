@@ -10,6 +10,16 @@ import {
   tsMillis,
   validOfferId,
 } from './offerAccess.js';
+import {
+  notifyDoFamilyParents,
+  notifyDoSafely,
+  sendDoNotificationToUser,
+} from './notify.js';
+import {
+  buildTaskAssignedGuardian,
+  buildTaskOfferAccepted,
+  buildTaskOfferDeclined,
+} from './notifyContent.js';
 
 /**
  * `doAcceptOffer` — the §6.4 transaction, transcribed step by step. One
@@ -48,6 +58,11 @@ export const doAcceptOffer = onCall(
     let taskId = '';
     let doerUserId = '';
     let agreedPrice = 0;
+    let priceBasis: 'flat' | 'hourly' = 'flat';
+    let taskTitle = '';
+    let familyName = '';
+    let winnerData: Record<string, unknown> = {};
+    let loserDoerUserIds: string[] = [];
     await db.runTransaction(async (tx) => {
       // ── Read phase (§6.4 steps 1-5) ──
       // The offer names the task, so it is fetched first mechanically; the
@@ -166,15 +181,17 @@ export const doAcceptOffer = onCall(
       // excludes it, and it is the truthful description: nobody declined
       // this offer, its moment passed. §6.2's invisibility promise thus
       // holds through BOTH exits — guardian denial and sibling acceptance.
+      loserDoerUserIds = [];
       for (const sibling of liveOffers.docs) {
         if (sibling.id === offerRef.id) continue;
-        const siblingStatus = (sibling.data() as OfferDoc).status;
-        if (siblingStatus === 'pending') {
+        const siblingData = sibling.data() as OfferDoc;
+        if (siblingData.status === 'pending') {
           tx.update(sibling.ref, {
             status: 'declined',
             declinedReason: 'sibling_accepted',
             updatedAt: now,
           });
+          loserDoerUserIds.push(siblingData.doerUserId);
         } else {
           tx.update(sibling.ref, { status: 'expired', updatedAt: now });
         }
@@ -182,12 +199,73 @@ export const doAcceptOffer = onCall(
 
       taskId = task.taskId;
       doerUserId = offer.doerUserId;
+      priceBasis = offer.priceBasis;
+      taskTitle = task.title;
+      familyName = task.familyName;
+      winnerData = student;
     });
 
-    // Step 9 — PR9: notify the winner, each loser, and the winner's
-    // guardian if there is an active link (outside the transaction —
-    // notifications are not transactional writes). No notification
-    // plumbing in PR6.
+    // Step 9 — notify the winner, each loser, and the winner's guardian if
+    // there is an active link (plan §10, §13 PR9). Outside the transaction:
+    // notifications are not transactional writes, and nothing after the
+    // commit may reject the callable (notifyDoSafely). "Each loser" = the
+    // `pending` siblings step 8 flipped to declined/'sibling_accepted'.
+    // `pending_guardian` siblings went to `expired` — nobody declined them,
+    // their moment passed, and no notice is sent for an offer whose guardian
+    // never decided (§6.2: the student sees the state change in "My offers").
+    await notifyDoSafely('acceptOffer', async () => {
+      await sendDoNotificationToUser({
+        recipientUserId: doerUserId,
+        recipientData: winnerData,
+        type: 'task_offer_accepted',
+        prefCategory: 'confirmed',
+        content: (lang) =>
+          buildTaskOfferAccepted(lang, {
+            familyName,
+            taskTitle,
+            taskId,
+            agreedPrice,
+            priceBasis,
+          }),
+        data: { taskId, offerId: offerRef.id },
+      });
+      for (const loserUid of loserDoerUserIds) {
+        await sendDoNotificationToUser({
+          recipientUserId: loserUid,
+          type: 'task_offer_declined',
+          prefCategory: 'cancelled',
+          content: (lang) =>
+            buildTaskOfferDeclined(lang, {
+              taskTitle,
+              reason: 'sibling_accepted',
+            }),
+          data: { taskId },
+        });
+      }
+      // Winner's guardian-if-linked: the server-owned `governedBy` mirror is
+      // present iff the guardianLinks doc is ACTIVE (shared-core User), so it
+      // is the authority here — supervision is transparent (§6.2).
+      const governedBy = winnerData.governedBy as
+        | { familyId?: string }
+        | undefined;
+      if (governedBy?.familyId) {
+        const childFirstName =
+          (winnerData.firstName as string | undefined) || 'Your child';
+        await notifyDoFamilyParents(governedBy.familyId, {
+          type: 'task_assigned',
+          prefCategory: 'confirmed',
+          content: (lang) =>
+            buildTaskAssignedGuardian(lang, {
+              childFirstName,
+              familyName,
+              taskTitle,
+              agreedPrice,
+              priceBasis,
+            }),
+          data: { taskId, offerId: offerRef.id },
+        });
+      }
+    });
 
     // Step 10: audit the assignment.
     await writeUserActivity(uid, 'do.offer_accepted', {
