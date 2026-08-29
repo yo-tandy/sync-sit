@@ -33,9 +33,10 @@ jobs:
   # SCOPE, precisely: six projects run a real eslint — the three apps
   # (`apps/web`, `apps/study-web`, `apps/do-web`), `packages/shared-ui` (same
   # React config as the apps), and both functions packages (`apps/functions`,
-  # `apps/study-functions`, on a node/TS config with no React rules). #348
-  # replaced the stub `lint` scripts that used to echo and exit 0. Still NOT
-  # linted: the four pure-TS `packages/*-core` libraries and
+  # `apps/study-functions`, on a node/TS config with no React rules, covering
+  # their `.ts` sources AND their committed `.cjs` seed/backfill scripts).
+  # #348 replaced the stub `lint` scripts that used to echo and exit 0. Still
+  # NOT linted: the four pure-TS `packages/*-core` libraries and
   # `packages/shared-functions`, which have no `lint` script at all.
   lint:
     runs-on: ubuntu-latest
