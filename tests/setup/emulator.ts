@@ -154,8 +154,20 @@ export async function callFunction<T = unknown>(
  */
 export async function getIdToken(uid: string): Promise<string> {
   const auth = getAdminAuth();
-  const customToken = await auth.createCustomToken(uid);
+  return exchangeCustomToken(await auth.createCustomToken(uid));
+}
 
+/**
+ * Sign in with a custom token minted by production code and return the ID
+ * token — the same exchange `getIdToken` performs, but for a token the test
+ * did not mint itself.
+ *
+ * `redeemAppHandoffCode` returns exactly such a token, with the originating
+ * session's `originalAuthTime` baked in as a developer claim, so this is how a
+ * test can hold the session a cross-app handoff actually produces instead of
+ * asserting against a re-implementation of it.
+ */
+export async function exchangeCustomToken(customToken: string): Promise<string> {
   // Exchange custom token for ID token via Auth emulator REST API
   const res = await fetch(
     `${AUTH_URL}/identitytoolkit.googleapis.com/v1/accounts:signInWithCustomToken?key=fake-api-key`,
