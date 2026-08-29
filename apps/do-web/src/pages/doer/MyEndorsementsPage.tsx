@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { collection, getDocs, orderBy, query, where } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
-import type { DoerEndorsementDoc } from '@ejm/do-core';
+import { isTaskCategory, type DoerEndorsementDoc } from '@ejm/do-core';
 import { Button, Card, Dialog, EmptyState, Spinner, UsersIcon } from '@ejm/shared-ui';
 import { db, functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
@@ -32,6 +32,19 @@ import { formatEndorsementDate } from '@/lib/endorsementDisplay';
  * consent): publishing family-authored text about yourself is a decision,
  * so the row's status changes only once the callable resolves. On failure
  * the row stays pending and re-enables.
+ *
+ * SHAPE FILTER — defence in depth (PR #352 round-1 review). The query is
+ * deliberately status-unfiltered, so whatever a `doerUserId == me` read
+ * returns lands on this page. PR #352 tightened the `references` CREATE
+ * rule so a client can no longer smuggle a foreign `doerUserId` onto a
+ * manual reference of their own, which is the root fix — but a doc forged
+ * BEFORE that rule shipped is still in the collection, and this page is the
+ * one surface that would render it with attacker-controlled text and
+ * attribution. So the page narrows to exactly what
+ * `doRespondToEndorsement` will act on (`appSource === 'do'` and
+ * `type === 'family_submitted'`): anything else could only ever render as a
+ * row whose buttons the server refuses, which is worse than not rendering
+ * it at all.
  */
 export function MyEndorsementsPage() {
   const { t, i18n } = useTranslation();
@@ -124,20 +137,28 @@ export function MyEndorsementsPage() {
     );
   }
 
-  const pending = endorsements.filter((e) => e.status === 'private');
+  // Only rows this surface can actually act on — see SHAPE FILTER above.
+  const actionable = endorsements.filter(
+    (e) => e.appSource === 'do' && e.type === 'family_submitted',
+  );
+  const pending = actionable.filter((e) => e.status === 'private');
   // What the offer card shows, shown here in the same set: approved and
   // published. `removed` rows are hidden entirely — a declined endorsement
   // is gone, not archived (study's rule).
-  const publishedSet = endorsements.filter(
+  const publishedSet = actionable.filter(
     (e) => e.status === 'approved' || e.status === 'published',
   );
 
   const submitter = (e: DoerEndorsementDoc): string =>
     e.submittedByName || e.refName || t('doer.endorsements.anonymous');
 
+  // `category` is server-copied from the qualifying task, so it is always a
+  // real §4.3 key on a doc this app wrote — but an unknown value would print
+  // raw as "categories.foo", so it is checked against the taxonomy rather
+  // than trusted (PR #352 round-1 review).
   const meta = (e: DoerEndorsementDoc) =>
     [
-      e.category ? t(`categories.${e.category}`) : null,
+      e.category && isTaskCategory(e.category) ? t(`categories.${e.category}`) : null,
       formatEndorsementDate(e.createdAt, i18n.language),
     ]
       .filter(Boolean)

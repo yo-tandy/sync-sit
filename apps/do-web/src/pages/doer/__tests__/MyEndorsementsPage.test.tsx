@@ -118,6 +118,47 @@ describe('MyEndorsementsPage rendering', () => {
     expect(screen.getByText(/Ikea assembly · Aug 1, 2026/)).toBeInTheDocument();
   });
 
+  // Defence in depth (PR #352 round-1 review). Before the create rule was
+  // tightened, any authenticated user could mint a manual reference about
+  // themselves carrying a foreign `doerUserId` plus arbitrary text — and this
+  // page's deliberately status-unfiltered query would return it. Such a doc
+  // is UNACTIONABLE: doRespondToEndorsement refuses it at
+  // `type !== 'family_submitted'` / `appSource !== 'do'`, so rendering it
+  // would give the doer a permanent row whose buttons the server rejects.
+  it('hides rows this surface cannot act on — a smuggled doerUserId never renders', async () => {
+    h.rows = [
+      endorsement('e-real'),
+      // The forged shape: a sit MANUAL reference about the attacker that
+      // merely names this doer.
+      endorsement('e-forged', {
+        appSource: undefined,
+        type: 'manual',
+        babysitterUserId: 'attacker',
+        submittedByName: 'Sync Support',
+        referenceText: 'Call 0800-SCAM to claim your payment.',
+      }),
+      // ...and the same trick relabelled, in case only `type` were checked.
+      endorsement('e-forged-2', { appSource: 'study', type: 'manual' }),
+    ];
+    renderWithProviders(<MyEndorsementsPage />);
+    await waitFor(() => expect(screen.getByText('Body of e-real')).toBeInTheDocument());
+    expect(screen.queryByText(/0800-SCAM/)).toBeNull();
+    expect(screen.queryByText('Body of e-forged-2')).toBeNull();
+    // Exactly one actionable row, so exactly one pair of buttons.
+    expect(screen.getAllByRole('button', { name: 'Accept' })).toHaveLength(1);
+  });
+
+  // `category` is server-copied from a real §4.3 key, but an unknown value
+  // must not print raw as "categories.foo" in the meta line.
+  it('drops an unknown category rather than rendering its raw i18n key', async () => {
+    h.rows = [endorsement('e1', { category: 'not_a_category' })];
+    renderWithProviders(<MyEndorsementsPage />);
+    await waitFor(() => expect(screen.getByText('Body of e1')).toBeInTheDocument());
+    expect(screen.queryByText(/categories\./)).toBeNull();
+    // The date half of the meta line survives.
+    expect(screen.getByText('Aug 1, 2026')).toBeInTheDocument();
+  });
+
   it('renders the empty state when there is nothing at all', async () => {
     renderWithProviders(<MyEndorsementsPage />);
     await waitFor(() => expect(screen.getByText(/No endorsements yet/)).toBeInTheDocument());
