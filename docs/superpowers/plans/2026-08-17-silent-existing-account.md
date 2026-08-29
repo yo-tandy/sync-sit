@@ -21,6 +21,14 @@
      - `app: 'sit' | 'study'` — NEW optional request param from the client (untrusted; only selects email copy + login URL; default 'sit' for verifyEjmEmail callers that don't send it, and match each wizard).
      - Copy: "Someone just tried to create a <Sync/Sit|Sync/Study> account with this email address, but you already have an account. If this was you, simply log in: <login URL>. Your account works on both Sync/Sit and Sync/Study — the same email and password sign you in to either app. If this wasn't you, you can safely ignore this email or contact us at support@sync-sit.com."
      - Login URLs: https://sync-sit.web.app/login / https://sync-study-app.web.app/login (the prod fallbacks of appSwitch.ts SIT_APP_URL/STUDY_APP_URL — verified; the bare sync-sit.com domain is not the hosting target).
+
+> **Superseded 2026-08-29 (plan §18.9 centralisation).** The sit login URL is
+> now built from `SIT_APP_URL`, which resolves to `https://sync-sit.com`. The
+> rationale recorded above — "the bare sync-sit.com domain is not the hosting
+> target" — is no longer true: the custom domain serves the SPA on `/`,
+> `/login` and `/babysitter` (verified 200 with the app's own title), and
+> production emails had already been deep-linking it from a dozen functions
+> files. Two sit hosts were in circulation; this is the one that survived.
    - **Mail-bomb guard**: at most one account-exists email per address per 24h. Store marker doc `accountExistsNotices/{email} = { lastSentAt }`; skip sending when fresh, still return success:true. (Firestore rules: collection is server-only — confirm rules default-deny covers unknown collections; expect NO rules change, verify.)
    - Audit: `writeUserActivity('system', 'account_exists_email_sent', { email })` (mirrors existing verification_email_sent).
 2. **Clients** — remove the `already-exists` catch branches, `showLoginCta` state, CTA render blocks, and `enrollment.accountExistsCta` keys (en+fr, both apps). Pass `app: 'study'` / `app: 'sit'` in the callable payloads. The authed cross-app add-profile path is unaffected (bypass still issues a real code).

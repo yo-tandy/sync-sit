@@ -9,8 +9,7 @@ import {
   type User,
 } from '@ejm/shared-core';
 import { db } from '../config/firebase.js';
-import { escapeHtml, sendNotificationEmail } from '../config/email.js';
-import { SIT_APP_URL } from '../config/email.js';
+import { SIT_APP_URL, escapeHtml, sendNotificationEmail } from '../config/email.js';
 
 /**
  * The ONE success payload every createKidInvite branch returns. Anything a

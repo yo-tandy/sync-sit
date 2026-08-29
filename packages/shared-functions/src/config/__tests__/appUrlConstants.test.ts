@@ -87,6 +87,10 @@ describe('no server-side file re-inlines an app host', () => {
     // other test still passes — the exact silent-regression shape this file
     // exists for. Sources are scanned rather than call sites asserted, because
     // the next inlined host will be in a file that doesn't exist yet.
+    //
+    // Scope, stated so it isn't over-read: `roots` is a fixed list of the three
+    // server trees that exist today. A FOURTH functions codebase (an
+    // apps/do-functions, say) would not be scanned until it is added here.
     const { readdirSync, readFileSync, statSync } = await import('node:fs');
     const { join, resolve } = await import('node:path');
 
@@ -112,12 +116,12 @@ describe('no server-side file re-inlines an app host', () => {
     const HOST = /https:\/\/(sync-sit|sync-study-app|sync-do-app|sync-study|sync-do)[a-z0-9.-]*/g;
     const offenders: string[] = [];
     for (const root of roots) {
-      let files: string[];
-      try {
-        files = walk(root);
-      } catch {
-        continue; // a codebase may not exist in every checkout shape
-      }
+      // Deliberately NOT tolerant of a missing root. Swallowing the error let
+      // this pass vacuously: rename apps/functions and the scan silently
+      // covers two thirds of the surface while still reporting green -- the
+      // same silent-regression shape the file exists to prevent, one level up.
+      const files = walk(root);
+      expect(files.length, `${root} should contain sources to scan`).toBeGreaterThan(0);
       for (const f of files) {
         const src = readFileSync(f, 'utf8');
         src.split('\n').forEach((line, i) => {

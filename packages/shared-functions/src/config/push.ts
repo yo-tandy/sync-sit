@@ -1,8 +1,7 @@
 import { FieldValue } from 'firebase-admin/firestore';
 import { db, messaging } from './firebase.js';
-import { DO_APP_URL, STUDY_APP_URL } from './email.js';
+import { DO_APP_URL, SIT_APP_URL, STUDY_APP_URL } from './email.js';
 import type { NotificationApp } from './email.js';
-import { SIT_APP_URL } from './email.js';
 
 // Per-app push branding (issue #168 Phase 0). The study icon is the 512px
 // manifest variant (apps/study-web/public/icon-512.png) — the full logo.png
