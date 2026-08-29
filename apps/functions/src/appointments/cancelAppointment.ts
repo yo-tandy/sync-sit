@@ -7,7 +7,7 @@ import { writeUserActivity } from '../admin/writeAuditLog.js';
 import { escapeHtml, sendNotificationEmail } from '../config/email.js';
 import { sendPushNotification } from '../config/push.js';
 import { notifyAllParents } from '../config/notifyParents.js';
-import { getParentProfile, isBabysitter, type User } from '@ejm/shared-core';
+import { getParentProfile, isBabysitter, resolveNotifPref, type User } from '@ejm/shared-core';
 import {
   isActiveGuardianOf,
   notifyChildOfGuardianAction,
@@ -163,7 +163,7 @@ export const cancelAppointment = onCall(
       // Notify babysitter
       const babysitterDoc = await db.collection('users').doc(apt.babysitterUserId).get();
       const babysitterEmail = babysitterDoc.data()?.email;
-      const babysitterPrefs = babysitterDoc.data()?.notifPrefs?.cancelled;
+      const babysitterPrefs = resolveNotifPref(babysitterDoc.data()?.notifPrefs, 'sit', 'cancelled');
       const familyName = apt.familyName || 'A family';
 
       const dateInfo = apt.date ? `${apt.date}${apt.startTime ? `, ${apt.startTime}` : ''}${apt.endTime ? `–${apt.endTime}` : ''}` : 'Recurring';
@@ -181,7 +181,7 @@ export const cancelAppointment = onCall(
         createdAt: now,
       });
 
-      if (babysitterPrefs?.email !== false && babysitterEmail) {
+      if (babysitterPrefs.email && babysitterEmail) {
         await sendNotificationEmail(
           babysitterEmail,
           `Appointment cancelled by ${familyName}`,
@@ -191,7 +191,7 @@ export const cancelAppointment = onCall(
         );
       }
 
-      if (babysitterDoc.data()?.notifPrefs?.cancelled?.push !== false) {
+      if (babysitterPrefs.push) {
         await sendPushNotification(
           apt.babysitterUserId,
           'Appointment cancelled',

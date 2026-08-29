@@ -5,7 +5,7 @@ import { getCorsOrigin } from '@ejm/shared-functions/config/cors.js';
 import { writeUserActivity } from '@ejm/shared-functions/admin/writeAuditLog.js';
 import { escapeHtml, sendNotificationEmail, STUDY_APP_URL } from '@ejm/shared-functions/config/email.js';
 import { sendPushNotification } from '@ejm/shared-functions/config/push.js';
-import { getParentProfile } from '@ejm/shared-core';
+import { getParentProfile, resolveNotifPref } from '@ejm/shared-core';
 import type { User } from '@ejm/shared-core';
 import type { StudyUser, TutorProfile, SubjectOffering } from '@ejm/study-core';
 import { sendTutorContactRequestSchema } from '../validation/contact.js';
@@ -135,8 +135,8 @@ export const sendTutorContactRequest = onCall(
     if (message !== undefined) doc.message = message;
     await requestRef.set(doc);
 
-    // ── Notify the tutor (respecting notifPrefs.newRequest) ──
-    const notifPrefs = tutorUser.notifPrefs?.newRequest;
+    // ── Notify the tutor (respecting notifPrefs.study.newRequest) ──
+    const prefs = resolveNotifPref(tutorUser.notifPrefs, 'study', 'newRequest');
     const title = 'New tutoring request';
     const body = `${familyName || 'A family'} is interested in tutoring.`;
     const emailBody = `
@@ -148,11 +148,11 @@ export const sendTutorContactRequest = onCall(
 
     // Record the actual send outcomes, not assumptions.
     let emailSent = false;
-    if (notifPrefs?.email !== false && tutorUser.email) {
+    if (prefs.email && tutorUser.email) {
       emailSent = await sendNotificationEmail(tutorUser.email, `New tutoring request from ${familyName || 'a family'}`, emailBody, 'study');
     }
     let pushSent = false;
-    if (notifPrefs?.push !== false) {
+    if (prefs.push) {
       pushSent = await sendPushNotification(tutorUserId, title, body, { requestId: requestRef.id, type: 'study_contact_request' }, 'study');
     }
     await db.collection('notifications').add({

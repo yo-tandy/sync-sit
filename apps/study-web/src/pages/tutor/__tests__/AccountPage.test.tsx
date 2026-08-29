@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { screen, fireEvent, waitFor } from '@testing-library/react';
+import { screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
 import { renderWithProviders } from '@/__tests__/test-utils';
 
 // Hoisted, test-controllable state. The account page reads the auth store for
@@ -63,10 +63,12 @@ function makeUserDoc() {
     lastName: 'Martin',
     dateOfBirth: '2008-05-01',
     notifPrefs: {
-      newRequest: { push: true, email: true },
-      confirmed: { push: true, email: true },
-      cancelled: { push: true, email: true },
-      reminders: { push: true, email: false },
+      shared: { reminders: { push: true, email: false } },
+      study: {
+        newRequest: { push: true, email: true },
+        confirmed: { push: true, email: true },
+        cancelled: { push: true, email: true },
+      },
     },
     profiles: {
       tutor: {
@@ -200,34 +202,71 @@ describe('tutor AccountPage', () => {
     }
   });
 
-  it('toggling a scenario ABSENT from the stored doc writes the FULL channel map', async () => {
+  it('a SHARED category writes into notifPrefs.shared, not into the app block', async () => {
+    // `references` is reputation attached to the person, not to one
+    // marketplace, so it lives in the shared block (issue #369).
     renderWithProviders(<AccountPage />);
-    // references is absent from the stored prefs → treated as email-on; the
-    // first toggle turns it off. A single-channel dot-path here would create
-    // a half-populated map ({email} with no push) that sit's UI reads as
-    // "push off" while the server still sends — so the write must carry the
-    // full map, with push matching the server's default-on gate.
     fireEvent.click(screen.getByRole('button', { name: 'Endorsements — Email' }));
     await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
     const payload = h.updateDoc.mock.calls[0][1];
-    expect(Object.keys(payload).sort()).toEqual(['notifPrefs.references', 'updatedAt']);
-    expect(payload['notifPrefs.references']).toEqual({ push: true, email: false });
+    expect(Object.keys(payload).sort()).toEqual(['notifPrefs.shared.references.email', 'updatedAt']);
+    expect(payload['notifPrefs.shared.references.email']).toBe(false);
   });
 
-  it('toggling a HALF-POPULATED stored scenario ({email} with no push) also writes the full map', async () => {
-    // Docs the pre-fix dot-path code created on main: the key exists but the
-    // push channel is missing. The completeness check (not mere presence)
-    // must heal these on the next toggle — push defaults to the server's
-    // default-on gate.
+  it('a HALF-POPULATED stored category ({email} with no push) renders push ON, not off', async () => {
+    // Docs the pre-#369 dot-path code created: the key exists but the push
+    // channel is missing. The UI must read it exactly as the server does —
+    // missing channel = product default — instead of rendering it as off,
+    // which is what made the old "write the whole map" workaround necessary.
     const userDoc = makeUserDoc();
-    userDoc.notifPrefs = { ...userDoc.notifPrefs, confirmed: { email: true } } as never;
+    userDoc.notifPrefs = {
+      ...userDoc.notifPrefs,
+      study: { ...userDoc.notifPrefs.study, confirmed: { email: true } },
+    } as never;
+    h.auth.userDoc = userDoc;
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: query === '(display-mode: standalone)',
+    }));
+    try {
+      renderWithProviders(<AccountPage />);
+      expect(
+        screen.getByRole('button', { name: 'Confirmation — Push' }).className,
+      ).toContain('bg-brand-600');
+      fireEvent.click(screen.getByRole('button', { name: 'Confirmation — Email' }));
+      await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
+      const payload = h.updateDoc.mock.calls[0][1];
+      expect(Object.keys(payload).sort()).toEqual(['notifPrefs.study.confirmed.email', 'updatedAt']);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('never renders sync/do rows — not even for a tutor who also holds a doer profile', () => {
+    // The rendering rule of issue #369 at the surface: shared block + THIS
+    // app's block, never another app's. do rows are the hub's (#367).
+    renderWithProviders(<AccountPage />);
+    expect(
+      screen.getAllByRole('heading', { level: 4 }).map((el) => el.textContent),
+    ).toEqual(['All Sync apps', 'Sync/Study']);
+    cleanup();
+
+    const withDoer = makeUserDoc();
+    (withDoer.profiles as Record<string, unknown>).doer = { enrollmentComplete: true };
+    h.auth.userDoc = withDoer;
+    renderWithProviders(<AccountPage />);
+    expect(screen.getAllByRole('heading', { level: 4 })).toHaveLength(2);
+  });
+
+  it('still reads a pre-#369 FLAT doc during the transitional window', async () => {
+    const userDoc = makeUserDoc();
+    userDoc.notifPrefs = { newRequest: { push: true, email: false } } as never;
     h.auth.userDoc = userDoc;
     renderWithProviders(<AccountPage />);
-    fireEvent.click(screen.getByRole('button', { name: 'Confirmation — Email' }));
+    // Rendered OFF (the stored flat value), so toggling turns it back ON.
+    fireEvent.click(screen.getByRole('button', { name: 'New request — Email' }));
     await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
     const payload = h.updateDoc.mock.calls[0][1];
-    expect(Object.keys(payload).sort()).toEqual(['notifPrefs.confirmed', 'updatedAt']);
-    expect(payload['notifPrefs.confirmed']).toEqual({ push: true, email: false });
+    expect(payload['notifPrefs.study.newRequest.email']).toBe(true);
   });
 
   it('writes notif prefs as per-scenario dot-paths (never the whole object)', async () => {
@@ -239,13 +278,17 @@ describe('tutor AccountPage', () => {
     const call = h.updateDoc.mock.calls[0];
     expect(call[0]).toEqual(expect.objectContaining({ path: 'users/t1' }));
     const payload = call[1];
-    expect(payload).toHaveProperty('notifPrefs.newRequest.email', false);
+    expect(payload).toHaveProperty('notifPrefs.study.newRequest.email', false);
     const keys = Object.keys(payload);
-    // Every key is either updatedAt or the toggled scenario/channel dot-path —
-    // never the whole notifPrefs object (which would clobber channel values
-    // the sit app may have written) and never the untouched push channel.
-    expect(keys.every((k) => k === 'updatedAt' || /^notifPrefs\.[a-z]+\.(email|push)$/i.test(k))).toBe(true);
+    // Every key is either updatedAt or the toggled block/category/channel
+    // path — never the whole notifPrefs object (which would clobber blocks
+    // the sit app may have written), never the untouched push channel, and
+    // never another app's block (issue #369).
+    expect(
+      keys.every((k) => k === 'updatedAt' || /^notifPrefs\.(shared|sit|study|do)\.[a-z]+\.(email|push)$/i.test(k)),
+    ).toBe(true);
     expect(keys.some((k) => k.includes('push'))).toBe(false);
+    expect(keys.some((k) => k.includes('.sit.') || k.includes('.do.'))).toBe(false);
     expect(keys).not.toContain('notifPrefs');
   });
 
@@ -284,9 +327,11 @@ describe('tutor AccountPage', () => {
       fireEvent.click(pushToggle);
       await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
       const payload = h.updateDoc.mock.calls[0][1];
-      expect(payload).toHaveProperty('notifPrefs.newRequest.push', false);
+      expect(payload).toHaveProperty('notifPrefs.study.newRequest.push', false);
       const keys = Object.keys(payload);
-      expect(keys.every((k) => k === 'updatedAt' || /^notifPrefs\.[a-z]+\.push$/i.test(k))).toBe(true);
+      expect(
+        keys.every((k) => k === 'updatedAt' || /^notifPrefs\.(shared|sit|study|do)\.[a-z]+\.push$/i.test(k)),
+      ).toBe(true);
       expect(keys.some((k) => k.includes('email'))).toBe(false);
     } finally {
       vi.unstubAllGlobals();

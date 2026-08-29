@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useFlashTimer } from '@ejm/shared-ui';
 import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
@@ -8,8 +8,15 @@ import { httpsCallable } from 'firebase/functions';
 import { db, storage, functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { getTutorProfile } from '@ejm/study-core';
-import { DEFAULT_NOTIF_PREFS, isRunningAsPWA, getEjemEmail, getContact } from '@ejm/shared-core';
-import type { NotifPrefs } from '@ejm/shared-core';
+import {
+  isRunningAsPWA,
+  getEjemEmail,
+  getContact,
+  notifPrefPath,
+  notifPrefRowsForUser,
+  resolveNotifPrefsFor,
+} from '@ejm/shared-core';
+import type { NotifCategory, NotifChannels, NotifScope } from '@ejm/shared-core';
 import {
   TopNav,
   Button,
@@ -46,16 +53,35 @@ import { isPushSupported } from '@/lib/pushNotifications';
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
 const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
 
-// Notification scenarios relevant to tutors. `confirmed` gates
-// "family accepted your session/proposal" (respondToSession) and `references`
-// gates "someone submitted an endorsement for you" (submitTutorEndorsement).
-const SCENARIOS: { key: keyof NotifPrefs; labelKey: string; descKey: string }[] = [
-  { key: 'newRequest', labelKey: 'notifications.newRequest', descKey: 'notifications.newRequestDesc' },
-  { key: 'confirmed', labelKey: 'notifications.confirmation', descKey: 'notifications.confirmationTutorDesc' },
-  { key: 'cancelled', labelKey: 'notifications.cancellation', descKey: 'notifications.cancellationDesc' },
-  { key: 'reminders', labelKey: 'notifications.reminder', descKey: 'notifications.reminderDesc' },
-  { key: 'references', labelKey: 'notifications.endorsement', descKey: 'notifications.endorsementTutorDesc' },
-];
+/**
+ * Which app's preference block this page edits (issue #369). Rows come from
+ * `notifPrefRowsForUser` -- one shared block plus a block per profile held --
+ * narrowed to this page's own scope, so a tutor is never offered sync/do rows
+ * here even if they also hold a doer profile: that is the shared account
+ * hub's job (#367), not a per-app Account page's.
+ */
+const PREF_APP = 'study' as const;
+
+// Labels relevant to tutors. `confirmed` gates "family accepted your
+// session/proposal" (respondToSession) and `references` gates "someone
+// submitted an endorsement for you" (submitTutorEndorsement).
+const PREF_LABELS: Partial<Record<NotifCategory, { labelKey: string; descKey: string }>> = {
+  newRequest: { labelKey: 'notifications.newRequest', descKey: 'notifications.newRequestDesc' },
+  confirmed: { labelKey: 'notifications.confirmation', descKey: 'notifications.confirmationTutorDesc' },
+  cancelled: { labelKey: 'notifications.cancellation', descKey: 'notifications.cancellationDesc' },
+  reminders: { labelKey: 'notifications.reminder', descKey: 'notifications.reminderDesc' },
+  references: { labelKey: 'notifications.endorsement', descKey: 'notifications.endorsementTutorDesc' },
+};
+
+/** Module-level and therefore reference-stable — see the seeding effect. */
+const PREF_CATEGORIES = Object.keys(PREF_LABELS) as NotifCategory[];
+
+const BLOCK_HEADING: Record<NotifScope, string> = {
+  shared: 'notifications.blockShared',
+  sit: 'notifications.blockApp',
+  study: 'notifications.blockApp',
+  do: 'notifications.blockApp',
+};
 
 export function AccountPage() {
   const { t } = useTranslation();
@@ -87,7 +113,11 @@ export function AccountPage() {
   const [passwordResetting, setPasswordResetting] = useState(false);
 
   // Notification prefs
-  const [prefs, setPrefs] = useState<NotifPrefs>(DEFAULT_NOTIF_PREFS);
+  // Resolved through the SAME resolver the senders use, so a toggle rendered
+  // ON is one the server will actually act on.
+  const [prefs, setPrefs] = useState<Record<string, NotifChannels>>(() =>
+    resolveNotifPrefsFor(undefined, PREF_APP, PREF_CATEGORIES),
+  );
 
   // About-me bio: enrollment stopped collecting it (issue #143), so this is
   // now the only editor. Owner-writable dot-path; firestore.rules bounds it
@@ -135,10 +165,20 @@ export function AccountPage() {
       contact.whatsapp ? contact.whatsapp === contact.contactPhone : !whatsappCleared,
     );
     setAboutMe(tutor?.aboutMe ?? '');
-    if (userDoc.notifPrefs) {
-      setPrefs(userDoc.notifPrefs);
-    }
   }, [userDoc, tutor]);
+
+  // Seeded from a MEMO, not recomputed inside the effect above: that effect
+  // re-runs whenever `tutor` changes identity, and a freshly-built prefs
+  // object would set state every pass and spin forever. `userDoc.notifPrefs`
+  // is reference-stable between store updates, so this reseeds exactly when
+  // the stored prefs actually change.
+  const storedPrefs = useMemo(
+    () => resolveNotifPrefsFor(userDoc?.notifPrefs, PREF_APP, PREF_CATEGORIES),
+    [userDoc?.notifPrefs],
+  );
+  useEffect(() => {
+    setPrefs(storedPrefs);
+  }, [storedPrefs]);
 
   // Photo preview tracks the stored value on every userDoc change (the
   // auto-save path refreshes the doc after writing photoUrl).
@@ -393,49 +433,38 @@ export function AccountPage() {
   // refresh and save could still be clobbered, but nothing else writes
   // these keys today.
   const savePrefs = useCallback(
-    async (scenario: keyof NotifPrefs, channel: 'push' | 'email', value: boolean) => {
+    async (category: NotifCategory, channel: 'push' | 'email', value: boolean) => {
       if (!uid) return;
-      const stored = userDoc?.notifPrefs?.[scenario];
-      // Read push BEFORE the `'push' in stored` check: in the else branch
-      // tsc -b narrows `stored` to never (the declared map type always
-      // carries push), so the optional access fails the CI build.
-      const prevPush = stored?.push ?? true;
-      const prevEmail = stored?.email ?? true;
       await updateDoc(doc(db, 'users', uid), {
-        ...(stored && 'push' in stored && 'email' in stored
-          ? { [`notifPrefs.${scenario}.${channel}`]: value }
-          : {
-              [`notifPrefs.${scenario}`]: {
-                push: channel === 'push' ? value : prevPush,
-                email: channel === 'email' ? value : prevEmail,
-              },
-            }),
+        [notifPrefPath(PREF_APP, category, channel)]: value,
         updatedAt: serverTimestamp(),
       });
       await refreshUserDoc();
     },
-    [uid, userDoc, refreshUserDoc],
+    [uid, refreshUserDoc],
   );
 
-  const toggle = async (scenario: keyof NotifPrefs, channel: 'push' | 'email') => {
+  const toggle = async (category: NotifCategory, channel: 'push' | 'email') => {
     // In web-app mode, push toggles are inert — notifications won't be
     // delivered until the user installs the app to their home screen.
     if (channel === 'push' && !pwaMode) return;
     const previous = prefs;
-    // Absent-scenario full-map rule: seed the whole channel map when the
-    // stored prefs lack this scenario. The server treats an absent channel
-    // as ON (`!== false`), so both channels default to true here.
-    const current = prefs[scenario] || { push: true, email: true };
+    const current = prefs[category];
     const next = !current[channel];
-    setPrefs({ ...prefs, [scenario]: { ...current, [channel]: next } });
+    setPrefs({ ...prefs, [category]: { ...current, [channel]: next } });
     try {
-      await savePrefs(scenario, channel, next);
+      await savePrefs(category, channel, next);
     } catch {
       // Revert the optimistic toggle and surface the failure.
       setPrefs(previous);
       setError(t('account.notifSaveFailed'));
     }
   };
+
+  // One shared block plus this page's own app block (issue #369).
+  const prefRows = notifPrefRowsForUser(userDoc).filter(
+    (r) => (r.scope === 'shared' || r.scope === PREF_APP) && PREF_LABELS[r.category],
+  );
 
   return (
     <div>
@@ -722,10 +751,18 @@ export function AccountPage() {
           <span className="w-10 text-center text-xs font-medium text-gray-500">{t('notifications.emailNotif')}</span>
         </div>
 
-        {SCENARIOS.map((s) => {
-          const channel = prefs[s.key] || { push: true, email: true };
+        {prefRows.map((row, i) => {
+          const s = PREF_LABELS[row.category]!;
+          const channel = prefs[row.category];
+          const isBlockStart = i === 0 || prefRows[i - 1].scope !== row.scope;
           return (
-            <div key={s.key} className="mb-4 flex items-center justify-between">
+            <div key={`${row.scope}.${row.category}`}>
+            {isBlockStart && (
+              <h4 className="mb-2 mt-1 text-xs font-semibold uppercase tracking-wide text-gray-400">
+                {t(BLOCK_HEADING[row.scope])}
+              </h4>
+            )}
+            <div className="mb-4 flex items-center justify-between">
               <div className="flex-1 pr-4">
                 <p className="text-sm font-medium text-gray-900">{t(s.labelKey)}</p>
                 <p className="text-xs text-gray-500">{t(s.descKey)}</p>
@@ -737,7 +774,7 @@ export function AccountPage() {
                     contradiction (PR #192 review). */}
                 <button
                   type="button"
-                  onClick={() => toggle(s.key, 'push')}
+                  onClick={() => toggle(row.category, 'push')}
                   disabled={!pwaMode}
                   aria-disabled={!pwaMode}
                   aria-label={`${t(s.labelKey)} — ${t('notifications.push')}`}
@@ -749,12 +786,13 @@ export function AccountPage() {
                 <button
                   type="button"
                   aria-label={`${t(s.labelKey)} — ${t('notifications.emailNotif')}`}
-                  onClick={() => toggle(s.key, 'email')}
+                  onClick={() => toggle(row.category, 'email')}
                   className={`flex h-6 w-10 items-center rounded-full p-0.5 transition-colors ${channel.email ? 'bg-brand-600' : 'bg-gray-300'}`}
                 >
                   <div className={`h-5 w-5 rounded-full bg-white shadow transition-transform ${channel.email ? 'translate-x-4' : 'translate-x-0'}`} />
                 </button>
               </div>
+            </div>
             </div>
           );
         })}

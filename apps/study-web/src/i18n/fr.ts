@@ -88,6 +88,8 @@ export default {
     desc: 'Choisissez comment vous souhaitez être notifié(e).',
     push: 'Push',
     emailNotif: 'Email',
+    blockShared: 'Toutes les apps Sync',
+    blockApp: 'Sync/Study',
     newRequest: 'Nouvelle demande',
     newRequestDesc: 'Quand une famille vous envoie une demande de cours',
     proposal: 'Propositions de séance',

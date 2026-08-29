@@ -79,10 +79,22 @@ async function seed() {
     lastName: 'User',
     language: 'en',
     notifPrefs: {
-      newRequest: { push: true, email: true },
-      confirmed: { push: true, email: true },
-      cancelled: { push: true, email: true },
-      reminders: { push: true, email: false },
+      shared: { reminders: { push: true, email: false } },
+      sit: {
+        newRequest: { push: true, email: true },
+        confirmed: { push: true, email: true },
+        cancelled: { push: true, email: true },
+      },
+      study: {
+        newRequest: { push: true, email: true },
+        confirmed: { push: true, email: true },
+        cancelled: { push: true, email: true },
+      },
+      do: {
+        newRequest: { push: true, email: true },
+        confirmed: { push: true, email: true },
+        cancelled: { push: true, email: true },
+      },
     },
     fcmTokens: [],
     createdAt: FieldValue.serverTimestamp(),

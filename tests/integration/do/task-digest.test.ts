@@ -196,10 +196,22 @@ describe('runDoSendTaskDigest (the §10 board digest)', () => {
   it('the digest bypasses NotifPrefs (notifyNewTasks IS the opt-in) and no per-app pref is consulted', async () => {
     await seedDigestDoer('dg-prefs-off', {}, {
       notifPrefs: {
-        newRequest: { push: false, email: false },
-        confirmed: { push: false, email: false },
-        cancelled: { push: false, email: false },
-        reminders: { push: false, email: false },
+        shared: { reminders: { push: false, email: false } },
+        sit: {
+          newRequest: { push: false, email: false },
+          confirmed: { push: false, email: false },
+          cancelled: { push: false, email: false },
+        },
+        study: {
+          newRequest: { push: false, email: false },
+          confirmed: { push: false, email: false },
+          cancelled: { push: false, email: false },
+        },
+        do: {
+          newRequest: { push: false, email: false },
+          confirmed: { push: false, email: false },
+          cancelled: { push: false, email: false },
+        },
       },
     });
     await seedOpenTask('dg-t1');

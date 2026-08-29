@@ -44,7 +44,7 @@ describe('respondToTutorEndorsement', () => {
     await Promise.all(
       [seed.parent1.uid, seed.parent2.uid].map((uid) =>
         db.collection('users').doc(uid).update({
-          'notifPrefs.references': { push: true, email: true },
+          'notifPrefs.shared.references': { push: true, email: true },
         }),
       ),
     );
@@ -136,7 +136,7 @@ describe('respondToTutorEndorsement', () => {
   it('respects the references email pref when notifying (emailSent false when opted out)', async () => {
     const db = getDb();
     await db.collection('users').doc(seed.parent1.uid).update({
-      'notifPrefs.references': { push: false, email: false },
+      'notifPrefs.shared.references': { push: false, email: false },
     });
     const referenceId = await seedPrivateEndorsement(seed.tutor2.uid);
     await callFunction('respondToTutorEndorsement', { referenceId, action: 'accept' }, tutor2Token);

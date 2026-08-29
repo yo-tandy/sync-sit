@@ -5,6 +5,7 @@ import { getCorsOrigin } from '../config/cors.js';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
 import { escapeHtml, sendNotificationEmail } from '../config/email.js';
 import { sendPushNotification } from '../config/push.js';
+import { resolveNotifPref } from '@ejm/shared-core';
 import { SIT_APP_URL } from '@ejm/shared-functions';
 
 interface ContactRequestData {
@@ -154,7 +155,8 @@ export const sendContactRequest = onCall(
 
     // Record the actual send outcomes, not assumptions.
     let emailSent = false;
-    if (babysitterData.notifPrefs?.newRequest?.email !== false && babysitterData.email) {
+    const babysitterPrefs = resolveNotifPref(babysitterData.notifPrefs, 'sit', 'newRequest');
+    if (babysitterPrefs.email && babysitterData.email) {
       emailSent = await sendNotificationEmail(
         babysitterData.email,
         `New babysitting request from ${familyData.familyName}`,
@@ -164,7 +166,7 @@ export const sendContactRequest = onCall(
 
     // Send push notification
     let pushSent = false;
-    if (babysitterData.notifPrefs?.newRequest?.push !== false) {
+    if (babysitterPrefs.push) {
       pushSent = await sendPushNotification(
         data.babysitterUserId,
         'New babysitting request',

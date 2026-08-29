@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useFlashTimer } from '@ejm/shared-ui';
 import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
@@ -11,23 +11,45 @@ import { TopNav, Button, Input, Card, InfoBanner, LanguageSelector, Textarea, us
 import { BellIcon } from '@/components/ui/Icons';
 import { isPushSupported, getPushPermissionStatus, requestPushPermission } from '@/lib/pushNotifications';
 import { PhoneInput } from '@/components/forms/PhoneInput';
-import type { NotifPrefs } from '@ejm/sit-core';
-import { getBabysitterView, getEjemEmail, getContact } from '@ejm/sit-core';
+import type { NotifCategory, NotifChannels, NotifScope } from '@ejm/sit-core';
+import {
+  getBabysitterView,
+  getEjemEmail,
+  getContact,
+  notifPrefPath,
+  notifPrefRowsForUser,
+  resolveNotifPrefsFor,
+} from '@ejm/sit-core';
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
 const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
 
-interface NotifChannel {
-  push: boolean;
-  email: boolean;
-}
+/**
+ * Which app's preference block this page edits (issue #369). The rows
+ * themselves come from `notifPrefRowsForUser` -- one shared block plus a
+ * block per profile the user holds -- narrowed to this page's own scope and
+ * to the categories a sitter is shown. A sitter therefore never sees a
+ * sync/do row here, and could not even if they held a doer profile: that is
+ * the shared account hub's job (#367), not a per-app Account page's.
+ */
+const PREF_APP = 'sit' as const;
 
-const SCENARIOS: { key: keyof NotifPrefs; labelKey: string; descKey: string }[] = [
-  { key: 'newRequest', labelKey: 'notifications.newRequest', descKey: 'notifications.newRequestDesc' },
-  { key: 'cancelled', labelKey: 'notifications.cancellation', descKey: 'notifications.cancellationDesc' },
-  { key: 'reminders', labelKey: 'notifications.reminder', descKey: 'notifications.reminderDesc' },
-  { key: 'references', labelKey: 'notifications.references', descKey: 'notifications.referencesDesc' },
-];
+const PREF_LABELS: Partial<Record<NotifCategory, { labelKey: string; descKey: string }>> = {
+  newRequest: { labelKey: 'notifications.newRequest', descKey: 'notifications.newRequestDesc' },
+  cancelled: { labelKey: 'notifications.cancellation', descKey: 'notifications.cancellationDesc' },
+  reminders: { labelKey: 'notifications.reminder', descKey: 'notifications.reminderDesc' },
+  references: { labelKey: 'notifications.references', descKey: 'notifications.referencesDesc' },
+};
+
+/** Module-level and therefore reference-stable — see the seeding effect. */
+const PREF_CATEGORIES = Object.keys(PREF_LABELS) as NotifCategory[];
+
+const BLOCK_HEADING: Record<NotifScope, string> = {
+  shared: 'notifications.blockShared',
+  sit: 'notifications.blockApp',
+  study: 'notifications.blockApp',
+  do: 'notifications.blockApp',
+};
 
 function getGenderOptions(t: (key: string) => string) {
   return [
@@ -125,12 +147,11 @@ export function BabysitterAccountPage() {
   const [passwordResetting, setPasswordResetting] = useState(false);
 
   // Notification prefs
-  const [prefs, setPrefs] = useState<NotifPrefs>({
-    newRequest: { push: true, email: true },
-    confirmed: { push: true, email: true },
-    cancelled: { push: true, email: true },
-    reminders: { push: true, email: false },
-  });
+  // Resolved through the SAME resolver the senders use, so a toggle rendered
+  // ON is one the server will actually act on.
+  const [prefs, setPrefs] = useState<Record<string, NotifChannels>>(() =>
+    resolveNotifPrefsFor(undefined, PREF_APP, PREF_CATEGORIES),
+  );
 
   const [error, setError] = useState<string | null>(null);
 
@@ -175,10 +196,20 @@ export function BabysitterAccountPage() {
     if (babysitter.photoUrl) {
       setPhotoPreview(babysitter.photoUrl);
     }
-    if (babysitter.notifPrefs) {
-      setPrefs(babysitter.notifPrefs);
-    }
   }, [babysitter, userDoc]);
+
+  // Seeded from a MEMO, not recomputed inside the effect above: that effect
+  // re-runs on every render (`babysitter` is a fresh object each time), and a
+  // freshly-built prefs object would set state every pass and spin forever.
+  // `userDoc.notifPrefs` is reference-stable between store updates, so this
+  // reseeds exactly when the stored prefs actually change.
+  const storedPrefs = useMemo(
+    () => resolveNotifPrefsFor(userDoc?.notifPrefs, PREF_APP, PREF_CATEGORIES),
+    [userDoc?.notifPrefs],
+  );
+  useEffect(() => {
+    setPrefs(storedPrefs);
+  }, [storedPrefs]);
 
   // Format DOB for display
   const dobDisplay = (() => {
@@ -352,15 +383,22 @@ export function BabysitterAccountPage() {
   };
 
   // --- Notification prefs ---
-  // Write ONLY the toggled scenario/channel via a dot-path. A full-object
-  // `notifPrefs` write would clobber values another app (study-web) may have
-  // written after this page mounted.
+  // Write ONLY the toggled category/channel via a dot-path. A full-object
+  // `notifPrefs` write would clobber blocks another app (study-web, or the
+  // shared block) may have written after this page mounted. `notifPrefPath`
+  // routes the category to its own block: per-engagement categories into
+  // `notifPrefs.sit`, `reminders`/`references` into `notifPrefs.shared`.
+  //
+  // The single-channel write is now safe on its own -- `resolveNotifPref`
+  // merges a half-populated category over the product default on both the
+  // read and the send side, so the "write the whole map to self-heal"
+  // exception the study pages carried (issue #186 follow-up) is gone.
   const savePrefs = useCallback(
-    async (scenario: keyof NotifPrefs, channel: 'push' | 'email', value: boolean) => {
+    async (category: NotifCategory, channel: 'push' | 'email', value: boolean) => {
       if (!uid) return;
       try {
         await updateDoc(doc(db, 'users', uid), {
-          [`notifPrefs.${scenario}.${channel}`]: value,
+          [notifPrefPath(PREF_APP, category, channel)]: value,
           updatedAt: serverTimestamp(),
         });
         await refreshUserDoc();
@@ -371,20 +409,22 @@ export function BabysitterAccountPage() {
     [uid, refreshUserDoc],
   );
 
-  const toggle = (scenario: keyof NotifPrefs, channel: 'push' | 'email') => {
+  const toggle = (category: NotifCategory, channel: 'push' | 'email') => {
     // In web-app mode, push toggles are inert — notifications won't be
     // delivered until the user installs the app to their home screen.
     if (channel === 'push' && !pwaMode) return;
-    const next = !(prefs[scenario] as NotifChannel)[channel];
+    const next = !prefs[category][channel];
     setPrefs({
       ...prefs,
-      [scenario]: {
-        ...prefs[scenario],
-        [channel]: next,
-      },
+      [category]: { ...prefs[category], [channel]: next },
     });
-    savePrefs(scenario, channel, next);
+    savePrefs(category, channel, next);
   };
+
+  // One shared block plus this page's own app block (issue #369).
+  const prefRows = notifPrefRowsForUser(userDoc).filter(
+    (r) => (r.scope === 'shared' || r.scope === PREF_APP) && PREF_LABELS[r.category],
+  );
 
   return (
     <div>
@@ -620,10 +660,18 @@ export function BabysitterAccountPage() {
           <span className="w-10 text-center text-xs font-medium text-gray-500">{t('notifications.emailNotif')}</span>
         </div>
 
-        {SCENARIOS.map((s) => {
-          const channel = (prefs[s.key] || { push: true, email: true }) as NotifChannel;
+        {prefRows.map((row, i) => {
+          const s = PREF_LABELS[row.category]!;
+          const channel = prefs[row.category];
+          const isBlockStart = i === 0 || prefRows[i - 1].scope !== row.scope;
           return (
-            <div key={s.key} className="mb-4 flex items-center justify-between">
+            <div key={`${row.scope}.${row.category}`}>
+            {isBlockStart && (
+              <h4 className="mb-2 mt-1 text-xs font-semibold uppercase tracking-wide text-gray-400">
+                {t(BLOCK_HEADING[row.scope])}
+              </h4>
+            )}
+            <div className="mb-4 flex items-center justify-between">
               <div className="flex-1 pr-4">
                 <p className="text-sm font-medium text-gray-900">{t(s.labelKey)}</p>
                 <p className="text-xs text-gray-500">{t(s.descKey)}</p>
@@ -631,7 +679,7 @@ export function BabysitterAccountPage() {
               <div className="flex items-center gap-6">
                 <button
                   type="button"
-                  onClick={() => toggle(s.key, 'push')}
+                  onClick={() => toggle(row.category, 'push')}
                   disabled={!pwaMode}
                   aria-disabled={!pwaMode}
                   aria-label={`${t(s.labelKey)} — ${t('notifications.push')}`}
@@ -642,13 +690,14 @@ export function BabysitterAccountPage() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => toggle(s.key, 'email')}
+                  onClick={() => toggle(row.category, 'email')}
                   aria-label={`${t(s.labelKey)} — ${t('notifications.emailNotif')}`}
                   className={`flex h-6 w-10 items-center rounded-full p-0.5 transition-colors ${channel.email ? 'bg-brand-600' : 'bg-gray-300'}`}
                 >
                   <div className={`h-5 w-5 rounded-full bg-white shadow transition-transform ${channel.email ? 'translate-x-4' : 'translate-x-0'}`} />
                 </button>
               </div>
+            </div>
             </div>
           );
         })}

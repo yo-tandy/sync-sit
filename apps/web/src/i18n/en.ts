@@ -768,6 +768,8 @@ export default {
     desc: 'Choose how you want to be notified.',
     push: 'Push',
     emailNotif: 'Email',
+    blockShared: 'All Sync apps',
+    blockApp: 'Sync/Sit',
     newRequest: 'New request',
     newRequestDesc: 'When a family sends you a babysitting request',
     confirmation: 'Confirmation',
