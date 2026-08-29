@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readFileSync, existsSync } from 'node:fs';
+import {
+  mkdtempSync,
+  writeFileSync,
+  mkdirSync,
+  rmSync,
+  readFileSync,
+  existsSync,
+  readdirSync,
+} from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { resolve, join } from 'node:path';
@@ -444,7 +452,25 @@ describe.skipIf(IS_META_CHILD)('a tagged release is not gated on documentation l
   // bundle-shared-for-deploy.test.ts's stray probe.
   const FIXTURE = 'docs/__linkcheck_releaseCouplingProbe.md';
 
-  it('the scripts suite stays green while a doc in the tree has a dead anchor', () => {
+  /**
+   * SCOPE, because the name would otherwise overclaim: the child run is
+   * filtered to THIS file, not the whole `scripts` project that the release
+   * path actually runs.
+   *
+   * The filter is not about runtime. `bundle-shared-for-deploy.test.ts`
+   * rewrites every functions `package.json` to `file:` references and restores
+   * them afterwards; running it nested inside a run that may already be doing
+   * the same thing is a real way to corrupt a working tree, and trading a
+   * flaky mutation of the repo for slightly broader coverage is the wrong
+   * trade in the test that exists to keep CI trustworthy.
+   *
+   * The hole that leaves: a future sibling test could assert repo link
+   * cleanliness and silently re-create the release gate while this stays
+   * green — the same shape as the bug this test was written for. The
+   * companion test below closes it structurally by pinning that no other
+   * scripts test reaches for the checker at all.
+   */
+  it('this file stays green while a doc in the tree has a dead anchor', () => {
     const fixture = resolve(repoRoot, FIXTURE);
     try {
       writeFileSync(fixture, '# Probe\n\n[dead](#no-such-anchor-anywhere)\n');
@@ -463,6 +489,10 @@ describe.skipIf(IS_META_CHILD)('a tagged release is not gated on documentation l
       const child = spawnSync(vitestBin, ['run', '--project', 'scripts', 'markdown-links'], {
         cwd: repoRoot,
         encoding: 'utf8',
+        // Bound the child too: without this a wedged run hangs the outer
+        // suite until the CI job timeout, which reports as "the job took an
+        // hour" rather than "this test failed".
+        timeout: 45_000,
         env: { ...process.env, LINKCHECK_META_CHILD: '1', CI: '1' },
       });
 
@@ -472,6 +502,38 @@ describe.skipIf(IS_META_CHILD)('a tagged release is not gated on documentation l
     } finally {
       rmSync(fixture, { force: true });
     }
+    // 60s, matching bundle-shared-for-deploy.test.ts's six child-process
+    // tests. The 5000ms default is not enough for a cold nested vitest
+    // startup, and the way it fails is the ambiguous kind: `spawnSync` blocks
+    // the event loop, so vitest's deadline timer cannot fire until the body
+    // has already returned, and a passing run can still be reported as
+    // "timed out in 5000ms". An unreliable red on the job this PR adds is
+    // how the job gets muted.
+  }, 60_000);
+
+  /**
+   * The backstop for the filter above. The release path runs the WHOLE
+   * `scripts` project, so any sibling test that asserts repo-wide link
+   * cleanliness re-creates the gate — and the filtered child would never
+   * notice.
+   *
+   * Pinned structurally rather than behaviourally: to assert the repo's links
+   * are clean, a test has to reach the checker, and this is the only file
+   * allowed to. It is a weaker guarantee than running every sibling and it is
+   * named as one, but it fails loudly on the realistic path rather than
+   * resting on nobody thinking of it.
+   */
+  it('is the only scripts test that reaches for the link checker', () => {
+    const dir = resolve(__dirname);
+    const offenders = readdirSync(dir)
+      .filter((f) => f.endsWith('.test.ts') && f !== 'markdown-links.test.ts')
+      .filter((f) => readFileSync(join(dir, f), 'utf8').includes('check-markdown-links'));
+
+    expect(
+      offenders,
+      `these tests import the link checker, so they may assert repo-wide link ` +
+        `cleanliness and silently re-gate a tagged release: ${offenders.join(', ')}`,
+    ).toEqual([]);
   });
 
   it('keeps the fixture name ignored, so an interrupted run cannot commit it', () => {

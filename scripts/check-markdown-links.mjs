@@ -32,6 +32,15 @@
  *   - where a `../` target resolves. A link may point above the scan root and
  *     will be checked there; the checker only ever compares heading slugs and
  *     never emits file contents, so this is a scope note rather than a leak.
+ *   - fences indented four or more spaces — the normal indent for a code block
+ *     nested in a list item. `fenceTracker` matches `^\s{0,3}` before the
+ *     delimiter, so such a block is not tracked and its contents are read as
+ *     prose. Latent rather than active: content at that indent is itself
+ *     indented, so `^#{1,6}` cannot match a heading inside it either, and none
+ *     of the three docs that currently have one contains a link. A markdown
+ *     example inside a nested list item WOULD be flagged.
+ *   - `.gitignore`. The walk skips a fixed IGNORED_DIRS set, not whatever git
+ *     ignores, so the two lists have to be kept in step by hand.
  *
  * That list is exhaustive on purpose. The point of a check like this is that
  * silence means "looked and found nothing", so anything it does NOT look at
@@ -47,7 +56,32 @@ import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join, dirname, resolve, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const IGNORED_DIRS = new Set(['node_modules', '.git', 'dist', 'build', '.claude', 'coverage']);
+/**
+ * Directories the walk never enters.
+ *
+ * `_worktrees` and `.agents` are here because this repo gitignores both and
+ * both routinely hold another branch's markdown. CI never sees them — the
+ * runner checkout is clean — but the README advertises `pnpm docs:links` as
+ * "the same check CI runs", so a developer with an agent worktree parked in
+ * `_worktrees/` would get failures for files that are not in the repo, from a
+ * command documented as reproducing CI. A false red is how a check gets muted,
+ * which is the outcome this script exists to argue against.
+ *
+ * Not derived from `.gitignore`: that would need a matcher for its full
+ * syntax, and getting it subtly wrong shrinks what the checker sees, which is
+ * the one failure mode worth more than a few false positives. Kept in step by
+ * hand, and the docstring's NOT CHECKED list says so.
+ */
+const IGNORED_DIRS = new Set([
+  'node_modules',
+  '.git',
+  'dist',
+  'build',
+  '.claude',
+  'coverage',
+  '_worktrees',
+  '.agents',
+]);
 
 /**
  * GitHub's heading-to-anchor transform: lowercase, drop everything that is
@@ -309,5 +343,16 @@ if (invokedDirectly) {
     `checked ${result.linksChecked} in-repo links across ${result.filesScanned} markdown files; ` +
       `${result.problems.length} problem(s)`,
   );
-  process.exit(result.ok ? 0 : 1);
+  // `process.exitCode`, NOT `process.exit()`. Node's stdout and stderr are
+  // asynchronous when they are pipes — exactly how CI and `spawnSync` capture
+  // them — so exiting immediately after writing can truncate the output. With
+  // a long `problems` list, the case where the output matters most, the run
+  // would exit 1 having printed only some of the offenders. Setting the code
+  // lets the process drain and exit naturally; there are no open handles to
+  // keep it alive, so the status is otherwise identical.
+  //
+  // A check whose diagnostics can silently go missing while its exit code
+  // stays correct is a smaller version of the failure this script exists to
+  // catch.
+  process.exitCode = result.ok ? 0 : 1;
 }
