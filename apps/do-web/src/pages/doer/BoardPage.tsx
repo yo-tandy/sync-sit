@@ -76,6 +76,9 @@ export function BoardPage() {
   // synchronously in the effect body.
   const [issuedReset, setIssuedReset] = useState(0);
   const [settledReset, setSettledReset] = useState(-1);
+  // The category the settled rows belong to. Needed ALONGSIDE the generation
+  // pair, not instead of it — the two close different holes (see `stale`).
+  const [loadedCategory, setLoadedCategory] = useState<TaskCategory | '' | null>(null);
   const generationRef = useRef(0);
   const resetSeqRef = useRef(0);
   const [error, setError] = useState(false);
@@ -118,6 +121,7 @@ export function BoardPage() {
         setFetchedAt(Date.now());
         setTasks((prev) => (reset || prev === null ? rows : [...prev, ...rows]));
         if (resetSeq !== null) setSettledReset(resetSeq);
+        setLoadedCategory(category);
         setError(false);
       } catch {
         if (generation !== generationRef.current) return;
@@ -129,17 +133,30 @@ export function BoardPage() {
 
   useEffect(() => {
     cursorRef.current = null;
-    // Deferred to a microtask so nothing this effect triggers can land a
-    // setState in the same commit (react-hooks/set-state-in-effect): every
-    // write inside `fetchPage` is already behind its `await getDocs`, but
-    // the rule analyses the call, not the await boundary.
+    // Deferred to a microtask so no setState lands in this commit
+    // (react-hooks/set-state-in-effect). Note this is now load-bearing
+    // rather than a rule workaround: `fetchPage` sets `issuedReset`
+    // synchronously before its first await, so calling it directly here
+    // WOULD be a synchronous set. The deferral is what keeps that legal.
     void Promise.resolve().then(() => fetchPage(true));
   }, [fetchPage]);
 
-  // No rows yet, or a reset is still in flight — in which case `cursorRef`
-  // has been nulled and the rows on screen no longer match it. Gates the
-  // spinner AND "Load more" (see below).
-  const stale = tasks === null || settledReset !== issuedReset;
+  // "The rows on screen match `cursorRef`" — the invariant "Load more"
+  // depends on. THREE clauses, because each closes a hole the others leave:
+  //
+  //  - `tasks === null`      — nothing fetched yet.
+  //  - `loadedCategory !== category` — covers the RENDER GAP: the effect
+  //    nulls `cursorRef` synchronously at commit, but `setIssuedReset` only
+  //    runs in the microtask after it, so for one commit the generations
+  //    still match while the cursor is already gone. `category` changes in
+  //    that same commit, so this clause is already true there.
+  //  - `settledReset !== issuedReset` — covers AWAY-AND-BACK, where the
+  //    category returns to its old value (so the clause above goes quiet)
+  //    while a reset is still in flight.
+  //
+  // Rounds 1-4 each found one of these; keeping all three is the point.
+  const stale =
+    tasks === null || loadedCategory !== category || settledReset !== issuedReset;
 
   const areas = useMemo(
     () => [...new Set((tasks ?? []).map((task) => task.areaLabel).filter(Boolean))].sort(),

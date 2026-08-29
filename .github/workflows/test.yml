@@ -8,6 +8,12 @@ on:
   # job for every stacked PR while the check rollup still read green (issue #215).
   pull_request:
 
+# Neither job writes anything — no comments, no releases, no package pushes.
+# Least privilege rather than the repository default, which on many repos is
+# still read/write.
+permissions:
+  contents: read
+
 jobs:
   # The gate that was missing: five real errors (two set-state-in-effect, three
   # react-refresh export splits) reached main because nothing in CI ran eslint —

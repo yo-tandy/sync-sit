@@ -203,6 +203,28 @@ describe('BoardPage category-switch staleness', () => {
     expect(screen.queryByText('Task a0')).toBeNull();
   });
 
+  // The RENDER GAP: the effect nulls `cursorRef` synchronously at commit, but
+  // the reset generation only moves in the microtask after it. For that one
+  // commit the generations still match — so without the category clause, the
+  // previous render's "Load more" is still on screen with a nulled cursor, and
+  // a click there fetches page 1 of the NEW category and appends it to the OLD
+  // rows (and bumps the generation past the in-flight reset, stranding the
+  // spinner forever).
+  it('hides Load more in the commit where the category changes, before the reset issues', async () => {
+    h.docsQueue.push(asDocs(Array.from({ length: BOARD_PAGE_SIZE }, (_, i) => taskDoc(`a${i}`))));
+    renderWithProviders(<BoardPage />);
+    await screen.findByText('Task a0');
+    expect(screen.getByText('Load more')).toBeInTheDocument();
+
+    // Change the category WITHOUT flushing microtasks: this is the gap.
+    h.docsQueue.push(asDocs([taskDoc('b0', { category: 'boxes' })]));
+    fireEvent.change(screen.getByLabelText('Category'), { target: { value: 'boxes' } });
+    expect(screen.queryByText('Load more')).toBeNull();
+
+    await screen.findByText('Task b0');
+    expect(screen.queryByText('Task a0')).toBeNull();
+  });
+
   // Away-and-back: a VALUE comparison (loadedCategory === category) reads
   // "fresh" here even though the reset is still in flight and `cursorRef`
   // was nulled — so Load more would re-fetch page 1 and APPEND it, giving
