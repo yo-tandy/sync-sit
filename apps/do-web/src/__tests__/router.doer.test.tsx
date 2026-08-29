@@ -8,6 +8,7 @@ vi.mock('@/layouts/FamilyLayout', () => ({ FamilyLayout: () => null }));
 
 import { Navigate } from 'react-router';
 import { router } from '@/router';
+import { BoardPage, DoerDashboardPage } from '@/lazyPages';
 
 type RouteNode = { path?: string; children?: RouteNode[] };
 
@@ -43,18 +44,27 @@ describe('do-web router — doer portal branch (plan §13 PR8, §9.2 at PR11)', 
     }
   });
 
-  // TEMPORARY: replaced by PR B's doer dashboard.
-  it('forwards the portal index /doer to the board', () => {
+  // §9.0's route table, issue #360: the portal INDEX is the DASHBOARD, and
+  // the board it displaced lives at /doer/board. Pinned as "not a Navigate"
+  // as well as "is the dashboard page": the defect this issue exists to fix
+  // was an index that dropped the student straight onto a list, and a forward
+  // is exactly how that comes back.
+  it('renders the doer dashboard at the portal index /doer', () => {
     const branch = (router.routes as RouteNode[]).find((b) =>
       (b.children ?? []).some((c) => c.path === '/doer/board'),
     );
     const index = branch?.children?.find((c) => c.path === '/doer') as
-      | { element: React.ReactElement<{ to?: string; replace?: boolean }> }
+      | { element: React.ReactElement }
+      | undefined;
+    const board = branch?.children?.find((c) => c.path === '/doer/board') as
+      | { element: React.ReactElement }
       | undefined;
     expect(index).toBeTruthy();
-    expect(index!.element.type).toBe(Navigate);
-    expect(index!.element.props.to).toBe('/doer/board');
-    expect(index!.element.props.replace).toBe(true);
+    expect(index!.element.type).not.toBe(Navigate);
+    expect(index!.element.type).toBe(DoerDashboardPage);
+    // …and it is a DIFFERENT page from the board, not the board re-mounted.
+    expect(board!.element.type).toBe(BoardPage);
+    expect(index!.element.type).not.toBe(board!.element.type);
   });
 
   it('keeps the doer branch separate from the public and family branches', () => {

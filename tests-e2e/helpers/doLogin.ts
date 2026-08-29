@@ -6,10 +6,16 @@ import { Page, expect } from '@playwright/test';
  * index `/family`, doers (and admins, who pass the doer guard) on the doer
  * portal index `/doer`.
  *
- * Both indexes currently forward straight on — `/family` to `/family/tasks`,
- * `/doer` to `/doer/board` — so the assertion below has to accept the index
- * OR the surface behind it, and keeps accepting both once the dashboards
- * land on the indexes and the forwarding stops.
+ * Both indexes are now DASHBOARDS (issue #360), not the forwards to
+ * `/family/tasks` and `/doer/board` they were when this helper was written,
+ * so login STOPS at the index. The regexes still accept the index OR the
+ * surface behind it, deliberately: a caller that navigates onward before the
+ * assertion settles should not fail on that alone.
+ *
+ * What that widening does NOT do is keep a CALLER's later clicks working. A
+ * landing surface that no longer lists tasks is a change to the specs that
+ * click through it — see step 2 of d1-do-endorsement-flow, which now visits
+ * the board explicitly instead of relying on the old redirect.
  *
  * It cannot reuse `helpers/login.ts`: that one's `Persona` map is sit's
  * (`/admin`, `/babysitter`, `/family`) and its base URL is apps/web's

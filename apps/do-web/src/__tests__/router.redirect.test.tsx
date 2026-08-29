@@ -43,7 +43,8 @@ vi.mock('@/layouts/FamilyLayout', () => ({ FamilyLayout: () => <Outlet /> }));
 // rather than as a stale mock. Importing the original is cheap and loads no
 // page: lazyPages' top level only builds lazy() wrappers, and the dynamic
 // import() inside each never runs, because each wrapper is replaced here
-// before anything can render it.
+// before anything can render it. (PR B added the two dashboards and needed no
+// edit here — which is what the derivation was for.)
 vi.mock('@/lazyPages', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
   const Blank = () => null;
@@ -84,13 +85,16 @@ describe('pre-namespace paths still resolve (issue #296 — PR9 mail is already 
     await expect(resolves(from)).resolves.toBe(to);
   });
 
-  // The two temporary index redirects. PR B (the dashboards PR, stacked on
-  // this one) replaces BOTH with real dashboard pages; when it does, these
-  // two expectations flip to "renders the dashboard" and the rest of this
-  // file stays exactly as it is.
-  it('forwards the portal indexes to their current landing surfaces', async () => {
-    await expect(resolves('/doer')).resolves.toBe('/doer/board');
-    await expect(resolves('/family')).resolves.toBe('/family/tasks');
+  // The two portal indexes are now DASHBOARDS (issue #360, §9.0's route
+  // table), not the temporary forwards PR A left here. They must RESOLVE TO
+  // THEMSELVES: a page renders at the index, and the browser stays put. This
+  // is the assertion that catches the regression the whole issue is about —
+  // an index that forwards to a list is exactly what "no dashboards" looked
+  // like, and it reads as a passing route table either way unless the
+  // destination is pinned.
+  it('renders the portal indexes in place — they are dashboards, not forwards', async () => {
+    await expect(resolves('/doer')).resolves.toBe('/doer');
+    await expect(resolves('/family')).resolves.toBe('/family');
   });
 
   // Guard against the redirect "working" only because the catch-all swallowed
