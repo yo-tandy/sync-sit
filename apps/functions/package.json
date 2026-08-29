@@ -6,10 +6,11 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json",
     "test": "vitest run",
     "predeploy": "node ../../scripts/bundle-shared-for-deploy.js",
-    "count:underage-providers": "node count-underage-providers.cjs"
+    "count:underage-providers": "node count-underage-providers.cjs",
+    "lint": "eslint ."
   },
   "dependencies": {
     "@ejm/do-core": "workspace:*",
@@ -23,7 +24,11 @@
     "zod": "^3.23.0"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.4",
+    "eslint": "^9.39.4",
+    "globals": "^17.4.0",
     "typescript": "^5.6.0",
+    "typescript-eslint": "^8.57.0",
     "vitest": "^4.1.4"
   },
   "engines": {

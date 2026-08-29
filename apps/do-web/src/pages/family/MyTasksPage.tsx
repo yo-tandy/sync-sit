@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router';
+import { Link, useSearchParams } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { collection, onSnapshot, orderBy, query, where } from 'firebase/firestore';
 import { getParentProfile } from '@ejm/shared-core';
@@ -25,13 +25,27 @@ const TABS: Tab[] = ['open', 'assigned', 'completed', 'cancelled'];
  * pending_guardian offers the family cannot see, so a task with hidden
  * gated offers would badge a number contradicting its own visible list
  * (§4.1 "BOUND-FACING ONLY").
+ *
+ * `?tab=` picks the OPENING tab. The family dashboard's capped sections hand
+ * their overflow here, and its In-progress and Recently-completed sections
+ * would otherwise land the reader on Open — a see-all that shows something
+ * else is worse than no see-all. Nothing about the page's own tabs changes:
+ * the param seeds the initial state only, so a click still wins and the URL
+ * is never rewritten behind the reader.
  */
 export function MyTasksPage() {
   const { t } = useTranslation();
   const { userDoc } = useAuthStore();
   const familyId = getParentProfile(userDoc)?.familyId ?? null;
 
-  const [tab, setTab] = useState<Tab>('open');
+  const [searchParams] = useSearchParams();
+  // Lazy initialiser: read once, at mount. An unknown or absent value falls
+  // back to Open, the page's long-standing default — a hand-typed
+  // `?tab=nonsense` must not be able to produce a tabless page.
+  const [tab, setTab] = useState<Tab>(() => {
+    const requested = searchParams.get('tab');
+    return TABS.includes(requested as Tab) ? (requested as Tab) : 'open';
+  });
   const [tasks, setTasks] = useState<TaskDoc[] | null>(null);
   const [pendingByTask, setPendingByTask] = useState<Record<string, number>>({});
   const [error, setError] = useState(false);

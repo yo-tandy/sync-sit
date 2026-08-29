@@ -1,16 +1,13 @@
 /**
  * Brand constants for Sync/Do (mirrors apps/web/src/constants/brand.ts).
  *
- * The address is deliberately NOT support@sync-do.com (issue #349):
- * sync-do.com is neither connected nor Resend-verified, so every member
- * reading the legal pages on the live sync-do-app.web.app and mailing that
- * address got a bounce. sync-sit.com is the one domain that receives, and
- * the server side already made this exact call --
- * apps/functions/src/do/notifyContent.ts sends do's digest opt-out link to
- * support@sync-sit.com and its copy suite bans sync-do.com outright. The
- * brand shown to the member stays Sync/Do; only the mailbox is shared.
- * Revisit when the suite moves to one verified domain (plan §18.9), at
- * which point all three apps change here together.
+ * SUPPORT_EMAIL points at the sync-sit.com mailbox, not a per-app address:
+ * it is the only domain in the suite that actually RECEIVES mail. As of
+ * 2026-08-29 `sync-do.com` and `sync-study.com` have no MX record (and no A
+ * record — they are unregistered/unconfigured), so a per-app address there
+ * bounces silently on a page users reach when something has already gone
+ * wrong. Give this app its own address the day its domain has an MX record,
+ * not before. See issue #349.
  */
 export const BRAND = 'Sync/Do';
 export const SUPPORT_EMAIL = 'support@sync-sit.com';

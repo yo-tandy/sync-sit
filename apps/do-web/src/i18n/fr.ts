@@ -215,6 +215,13 @@ export default {
       inProgressBadge: 'Attribuée',
       completedBadge: 'Terminée',
       endorsePrompt: 'Dites comment ça s\'est passé',
+      /* Le pied d'une section plafonnée, affiché uniquement s'il y en a plus
+         que ce que le tableau de bord garde — et il annonce le total, car un
+         plafond invisible est le défaut lui-même. `total`, et non `count` :
+         la ligne est inatteignable à un, donc pas de forme au singulier. */
+      seeAllOpen: 'Voir les {{total}} tâches ouvertes',
+      seeAllAssigned: 'Voir les {{total}} tâches en cours',
+      seeAllCompleted: 'Voir les {{total}} tâches terminées',
       emptyDesc: 'Rien en cours. Publiez une tâche et les étudiants EJM proposeront leur aide.',
       loadError: 'Impossible de charger vos tâches. Veuillez rafraîchir et réessayer.',
     },
@@ -309,6 +316,9 @@ export default {
       publishError: 'Impossible de publier la tâche. Veuillez réessayer.',
       capError: "Vous avez déjà le nombre maximal de tâches ouvertes. Terminez-en ou annulez-en une d'abord.",
       postDeniedError: "Votre compte ne peut pas publier de tâches pour le moment. Publier demande un compte parent actif avec une famille vérifiée — la vérification de Sync/Sit ou Sync/Study compte, une seule approbation vaut pour les trois applications.",
+      deniedNotActive: "Votre compte est suspendu : il ne peut pas publier de tâches. Contactez le support si vous pensez qu'il s'agit d'une erreur.",
+      deniedNotParent: 'Seul un compte parent rattaché à une famille peut publier des tâches. Demandez à un parent de votre famille de publier celle-ci.',
+      deniedNotVerified: "Votre famille n'est pas encore vérifiée : elle ne peut pas publier de tâches. La vérification de Sync/Sit ou Sync/Study compte — une seule approbation vaut pour les trois applications.",
       addressRequiredTitle: "Complétez d'abord votre adresse",
       addressRequiredBody: "Votre tâche doit afficher votre quartier (p. ex. votre arrondissement) pour que les étudiants sachent à peu près où se trouve le travail. Nous n'avons pas pu le déterminer depuis votre fiche famille — choisissez votre adresse ci-dessous ; seul le libellé du quartier apparaît sur le tableau.",
       addressLabel: 'Adresse',
@@ -437,6 +447,11 @@ export default {
       awaitingParent: "En attente de l'accord de votre parent.",
       nextMarkDone: 'Marquez-la faite une fois terminée',
       endorsementPrompt: "Acceptez-la pour l'afficher avec vos offres, ou refusez-la.",
+      /* Le pied d'une section plafonnée — voir les seeAll* du tableau de bord
+         famille. */
+      seeAllOffers: 'Voir les {{total}} offres',
+      seeAllAssigned: 'Voir les {{total}} tâches attribuées',
+      seeAllEndorsements: 'Voir les {{total}} recommandations',
       endorsementsLoadError: "Impossible de vérifier si une recommandation attend votre réponse.",
       emptyDesc: 'Rien en cours. Parcourez le tableau et proposez votre aide sur une tâche.',
       loadError: 'Impossible de charger votre tableau de bord. Veuillez rafraîchir et réessayer.',

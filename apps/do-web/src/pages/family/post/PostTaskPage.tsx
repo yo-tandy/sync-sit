@@ -24,7 +24,8 @@ import { StepTiming } from './StepTiming';
 import { StepDescribe } from './StepDescribe';
 import { StepPhotos } from './StepPhotos';
 import { usePhotoUploads } from './usePhotoUploads';
-import { StepReview, type PublishErrorKey } from './StepReview';
+import { StepReview } from './StepReview';
+import { isPostDenial, type PublishErrorKey } from './postRefusals';
 import { AddressFixPanel } from './AddressFixPanel';
 
 /**
@@ -35,7 +36,8 @@ import { AddressFixPanel } from './AddressFixPanel';
  * (postTaskDraft.isStepValid), so the server's invalid-argument branch is
  * pre-empted; the review step maps the callable's machine-readable refusals
  * (address_required → the decision-17 in-wizard address panel, task_cap,
- * verification) to their own copy.
+ * and the three posting-gate denials — see postRefusals.ts) to their own
+ * copy.
  */
 export function PostTaskPage() {
   const { t } = useTranslation();
@@ -108,12 +110,13 @@ export function PostTaskPage() {
         setPhotosNotice(t('family.post.photoNotReadyNotice'));
         setStepIndex(POST_STEPS.indexOf('photos'));
       } else if (code.endsWith('permission-denied')) {
-        // loadVerifiedFamilyCaller emits NO details.reason and throws this
-        // code for three distinct refusals (account not active / not a
-        // parent / family not verified), so the copy states the honest
-        // UNION rather than asserting verification specifically
-        // (PR #331 round 3).
-        setPublishError('denied');
+        // loadVerifiedFamilyCaller throws this one code for three distinct
+        // refusals and now NAMES which in `details.reason` (issue #333), so
+        // each gets its own copy. A reason this bundle does not recognise —
+        // a functions deployment older than it, or a fourth case added
+        // server-side later — falls back to the honest UNION copy the wizard
+        // showed for all three before (PR #331 round 3).
+        setPublishError(isPostDenial(reason) ? reason : 'denied');
       } else {
         setPublishError('generic');
       }

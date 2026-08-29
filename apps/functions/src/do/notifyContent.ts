@@ -94,7 +94,8 @@ function cta(href: string, label: string): string {
 /**
  * Support address for the digest's opt-out line.
  *
- * `support@sync-sit.com`, NOT do-web's `support@sync-do.com`
+ * `support@sync-sit.com` — which do-web now also uses (#349: sync-do.com
+ * has no MX record, so the per-app address bounced)
  * (`apps/do-web/src/constants/brand.ts`), for the same reason §10 / issue
  * #156 keeps every CTA on the live web.app host: sync-do.com is not the
  * platform's live mail domain — the verified sending domain is sync-sit.com,

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { checkPasswordRequirements } from '@ejm/shared-core';
@@ -46,12 +46,18 @@ export function StepPassword({ onSubmit, consentVersion, loading, error, collect
   // Wizards resolve auth state asynchronously, so collectPassword can flip
   // after mount; clear any partially-typed password when entering
   // consent-only mode so a later flip back doesn't resurface stale input.
-  useEffect(() => {
+  // Adjusted during render on the prop change rather than in an effect: the
+  // effect version rendered the stale password once and then re-rendered
+  // (react-hooks/set-state-in-effect). React re-runs this render pass
+  // immediately, before committing anything, so nothing stale is painted.
+  const [prevCollectPassword, setPrevCollectPassword] = useState(collectPassword);
+  if (prevCollectPassword !== collectPassword) {
+    setPrevCollectPassword(collectPassword);
     if (!collectPassword) {
       setPassword('');
       setPasswordConfirm('');
     }
-  }, [collectPassword]);
+  }
 
   const reqs = checkPasswordRequirements(password);
   const allReqsMet = reqs.minLength && reqs.hasLowercase && reqs.hasUppercase && reqs.hasNumber;

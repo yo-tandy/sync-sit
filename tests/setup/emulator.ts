@@ -126,7 +126,12 @@ export async function callFunction<T = unknown>(
     body: JSON.stringify({ data }),
   });
 
-  const body = await res.json();
+  // `res.json()` is `unknown`. Name the callable protocol envelope instead of
+  // reaching into an untyped value.
+  const body = (await res.json()) as {
+    result?: unknown;
+    error?: { message?: string; status: string; details?: unknown };
+  };
 
   if (body.error) {
     const err = new Error(body.error.message || 'Function error') as Error & {
@@ -161,7 +166,7 @@ export async function getIdToken(uid: string): Promise<string> {
     }
   );
 
-  const data = await res.json();
+  const data = (await res.json()) as { idToken?: string };
   if (!data.idToken) {
     throw new Error(`Failed to get ID token: ${JSON.stringify(data)}`);
   }

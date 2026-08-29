@@ -4,8 +4,9 @@ import { Button, Card, InfoBanner } from '@ejm/shared-ui';
 import { formatTimingSummary, type TimingLike } from '@/lib/taskDisplay';
 import type { TaskDraft } from './postTaskDraft';
 import { parsedBudget } from './postTaskDraft';
+import { publishErrorCopyKey, type PublishErrorKey } from './postRefusals';
 
-export type PublishErrorKey = 'generic' | 'cap' | 'denied' | null;
+export type { PublishErrorKey };
 
 interface StepReviewProps {
   draft: TaskDraft;
@@ -99,11 +100,7 @@ export function StepReview({ draft, publishing, publishError, onPublish }: StepR
 
       {publishError && (
         <p className="mb-3 text-sm text-error-600">
-          {publishError === 'cap'
-            ? t('family.post.capError')
-            : publishError === 'denied'
-              ? t('family.post.postDeniedError')
-              : t('family.post.publishError')}
+          {t(publishErrorCopyKey(publishError))}
         </p>
       )}
 

@@ -8,3 +8,4 @@ export * from './parisTime.js';
 export * from './publishedSearchBoard.js';
 export * from './pwa.js';
 export * from './crossAppEndorsements.js';
+export * from './emulatorConfig.js';

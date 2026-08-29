@@ -217,10 +217,27 @@ describe('sync-do endorsements', () => {
       ).rejects.toMatchObject({ code: 'INVALID_ARGUMENT' });
     });
 
-    it('refuses an unknown user', async () => {
-      await expect(
-        callFunction('doSubmitEndorsement', { doerUserId: 'nobody-at-all', referenceText: GOOD_TEXT, refName: 'M' }, parent1Token),
-      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    // Issue #357 item 1: the relationship gate runs BEFORE the enrollment
+    // check, so a uid this family has no completed task with is refused the
+    // SAME way whether or not it names a real enrolled doer. Under the old
+    // order the callable was an enumeration oracle over student accounts for
+    // anyone with one completed task: `NOT_FOUND` meant "no such doer",
+    // `PERMISSION_DENIED` meant "there is one, you just never hired them".
+    it('refuses an unknown user IDENTICALLY to a real doer this family never hired', async () => {
+      const attempts = [
+        // Not an account at all.
+        { doerUserId: 'nobody-at-all', referenceText: GOOD_TEXT, refName: 'M' },
+        // A real, fully enrolled doer — with no completed task for family1.
+        { doerUserId: OTHER_DOER, referenceText: GOOD_TEXT, refName: 'M' },
+      ];
+      for (const payload of attempts) {
+        await expect(
+          callFunction('doSubmitEndorsement', payload, parent1Token),
+        ).rejects.toMatchObject({
+          code: 'PERMISSION_DENIED',
+          details: { reason: 'no_completed_task' },
+        });
+      }
     });
 
     // "Enrolled" means `enrollmentComplete`, the same thing it means at
@@ -262,6 +279,27 @@ describe('sync-do endorsements', () => {
       await expect(
         callFunction('doSubmitEndorsement', { doerUserId: DOER, referenceText: GOOD_TEXT, refName: 'Pierre' }, parent2Token),
       ).rejects.toMatchObject({ code: 'ALREADY_EXISTS', details: { reason: 'already_endorsed' } });
+      expect((await getDb().collection('references').get()).size).toBe(1);
+    });
+
+    // Issue #357 item 2: the dedup used to be a plain query-then-set() on a
+    // fresh auto-id doc, so the sequential test above passed while two
+    // co-parents submitting AT THE SAME TIME both read an empty result and
+    // both wrote — one family speaking twice on an offer card, with neither
+    // parent able to remove the other's doc. The transaction serializes them.
+    it('survives two co-parents submitting CONCURRENTLY — exactly one lands', async () => {
+      const results = await Promise.allSettled([
+        callFunction('doSubmitEndorsement', { doerUserId: DOER, referenceText: GOOD_TEXT, refName: 'Marie' }, parent1Token),
+        callFunction('doSubmitEndorsement', { doerUserId: DOER, referenceText: GOOD_TEXT, refName: 'Pierre' }, parent2Token),
+      ]);
+      expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+      // The loser is refused honestly, not with an internal error.
+      const loser = results.find((r) => r.status === 'rejected');
+      expect((loser as PromiseRejectedResult).reason).toMatchObject({
+        code: 'ALREADY_EXISTS',
+        details: { reason: 'already_endorsed' },
+      });
+      // The database is the authority, not the return values.
       expect((await getDb().collection('references').get()).size).toBe(1);
     });
 

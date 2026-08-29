@@ -1,5 +1,8 @@
 import { ReportProblemPage as SharedReportProblemPage } from '@ejm/shared-ui';
 import { useAuthStore } from '@/stores/authStore';
+// One constant, not a local literal: the duplicate here is exactly the drift
+// brand.ts warns about, and it kept a bouncing address alive after the
+// constant was corrected (#349).
 import { BRAND, SUPPORT_EMAIL } from '@/constants/brand';
 
 /**

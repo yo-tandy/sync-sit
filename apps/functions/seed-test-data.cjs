@@ -8,16 +8,30 @@
  *   - A few sample appointments
  *
  * Usage:
- *   node apps/functions/seed-test-data.cjs
+ *   pnpm seed:test-data          # lane 1 (the shared dev stack), as always
+ *   LANE=3 pnpm seed:test-data   # seed emulator lane 3 instead
+ *   pnpm seed:test-data:lane3    # the same thing, spelled as a script
+ *   node apps/functions/seed-test-data.cjs   # needs shared-core built
  *
  * Prerequisites: Firebase emulators must be running.
  * All passwords are "test1234".
+ *
+ * The endpoint comes from the SAME resolver the three web apps use for their
+ * VITE_EMULATOR_* vars (issue #376), under plain `EMULATOR_*` names plus
+ * `LANE` / `E2E_LANE`. With none of them set this targets 127.0.0.1:8080 /
+ * 127.0.0.1:9099 exactly as it always did. See docs/emulator-lanes.md.
  */
+
+const { resolveNodeEmulatorConfig } = require('./emulator-target.cjs');
+
+// `127.0.0.1` is this script's historical default host (seed-admin.cjs says
+// `localhost`); each keeps its own so a bare run is unchanged.
+const emulator = resolveNodeEmulatorConfig(process.env, { defaultHost: '127.0.0.1' });
 
 // Override the target namespace with SEED_PROJECT_ID=<id> when the emulator
 // runs under a different --project than the demo-test default.
-process.env.FIRESTORE_EMULATOR_HOST = '127.0.0.1:8080';
-process.env.FIREBASE_AUTH_EMULATOR_HOST = '127.0.0.1:9099';
+process.env.FIRESTORE_EMULATOR_HOST = `${emulator.host}:${emulator.firestorePort}`;
+process.env.FIREBASE_AUTH_EMULATOR_HOST = `${emulator.host}:${emulator.authPort}`;
 
 const { initializeApp } = require('firebase-admin/app');
 const { getAuth } = require('firebase-admin/auth');
@@ -62,6 +76,10 @@ function makeSlots(ranges) {
 
 async function seed() {
   console.log('\n=== Seeding Test Data ===\n');
+  console.log(
+    `Target: lane ${emulator.lane} — firestore ${process.env.FIRESTORE_EMULATOR_HOST}, ` +
+      `auth ${process.env.FIREBASE_AUTH_EMULATOR_HOST}\n`,
+  );
 
   // ─── Admin ───
   console.log('Creating admin...');

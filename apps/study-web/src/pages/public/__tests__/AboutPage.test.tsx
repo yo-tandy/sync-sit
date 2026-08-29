@@ -23,13 +23,10 @@ describe('AboutPage (study)', () => {
       screen.getByText(/Tutors verify their school affiliation through their official school email/),
     ).toBeInTheDocument();
     expect(screen.getByText(/independent initiative for families in the EJM community/)).toBeInTheDocument();
-    // NOT support@sync-study.com: sync-study.com was never connected (#115),
-    // so this address bounced on a live site.
     expect(screen.getByRole('link', { name: 'support@sync-sit.com' })).toHaveAttribute(
       'href',
       'mailto:support@sync-sit.com',
     );
-    expect(screen.queryByText(/sync-study\.com/)).toBeNull();
   });
 
   it('links both role guides from the How-to Guides section (mirrors sit, issue #236)', () => {

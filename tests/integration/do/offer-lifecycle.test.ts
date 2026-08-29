@@ -235,7 +235,20 @@ describe('offer lifecycle callables (submit / update / withdraw / decline)', () 
         { headers: { Authorization: `Bearer ${parent1Token}` } },
       );
       expect(res.status).toBe(200);
-      const body = await res.json();
+      // `res.json()` is `unknown`; name the slice of the Firestore REST
+      // document shape these two assertions walk.
+      const body = (await res.json()) as {
+        fields: {
+          helper: {
+            mapValue: {
+              fields: {
+                firstName: { stringValue: string };
+                age: { integerValue: string };
+              };
+            };
+          };
+        };
+      };
       expect(body.fields.helper.mapValue.fields.firstName.stringValue).toBe('Ana');
       expect(body.fields.helper.mapValue.fields.age.integerValue).toBe('16');
     });

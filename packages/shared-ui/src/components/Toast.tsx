@@ -1,12 +1,6 @@
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useRef,
-  useState,
-  type ReactNode,
-} from 'react';
+import { useCallback, useRef, useState, type ReactNode } from 'react';
 import { useFlashTimer } from '../hooks/useFlashTimer.js';
+import { ToastContext, type ToastFn, type ToastTone } from './toastContext.js';
 
 /**
  * Toast — THE feedback idiom for transient confirmations (UX F7, issue #121).
@@ -28,10 +22,6 @@ import { useFlashTimer } from '../hooks/useFlashTimer.js';
  * reduced-motion needs no special casing.
  */
 
-type ToastTone = 'success' | 'error';
-
-type ToastFn = (message: string, options?: { tone?: ToastTone }) => void;
-
 interface ToastState {
   message: string;
   tone: ToastTone;
@@ -39,8 +29,6 @@ interface ToastState {
 }
 
 const TOAST_DURATION_MS = 3000;
-
-const ToastContext = createContext<ToastFn | null>(null);
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [current, setCurrent] = useState<ToastState | null>(null);
@@ -89,12 +77,4 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       </div>
     </ToastContext.Provider>
   );
-}
-
-export function useToast(): ToastFn {
-  const toast = useContext(ToastContext);
-  if (!toast) {
-    throw new Error('useToast must be used within a ToastProvider (mount it once at the app root)');
-  }
-  return toast;
 }

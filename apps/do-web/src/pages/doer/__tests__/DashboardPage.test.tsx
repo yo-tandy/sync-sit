@@ -462,3 +462,99 @@ describe('doer dashboard — empty, loading and error states', () => {
     expect(screen.queryByText(/Could not load your dashboard/)).toBeNull();
   });
 });
+
+// ── A SUMMARY, NOT A SECOND LIST (the owner's redundancy report, applied to
+//    both portals). Each section shows at most CAP rows and then names the
+//    total on a link into the page that owns the rest. /doer/board is NOT
+//    one of those pages and stays untouched: it is discovery across every
+//    family's open tasks, not a longer copy of anything here. ──
+const CAP = 5;
+
+describe('doer dashboard — capped sections and their see-all', () => {
+  it('shows at most five live offers and says how many there are', async () => {
+    renderWithProviders(<DashboardPage />);
+    pushOffers(Array.from({ length: 7 }, (_, i) => offerDoc(`o${i}`)));
+    pushTasks([]);
+    await settled();
+
+    expect(screen.getByText('Offer o4')).toBeInTheDocument();
+    expect(screen.queryByText('Offer o5')).toBeNull();
+    expect(screen.queryByText('Offer o6')).toBeNull();
+    expect(screen.getAllByText(/^Offer o\d$/)).toHaveLength(CAP);
+    expect(screen.getByRole('link', { name: 'See all 7 offers' })).toHaveAttribute(
+      'href',
+      '/doer/offers',
+    );
+  });
+
+  it('shows no see-all when every live offer already fits', async () => {
+    renderWithProviders(<DashboardPage />);
+    pushOffers(Array.from({ length: CAP }, (_, i) => offerDoc(`o${i}`)));
+    pushTasks([]);
+    await settled();
+
+    expect(screen.getAllByText(/^Offer o\d$/)).toHaveLength(CAP);
+    expect(screen.queryByRole('link', { name: /See all/ })).toBeNull();
+  });
+
+  it('caps assigned work and links its see-all to /doer/work', async () => {
+    renderWithProviders(<DashboardPage />);
+    pushOffers([]);
+    pushTasks(Array.from({ length: 6 }, (_, i) => taskDoc(`t${i}`)));
+    await settled();
+
+    expect(screen.getAllByText(/^Task t\d$/)).toHaveLength(CAP);
+    expect(screen.queryByText('Task t5')).toBeNull();
+    expect(screen.getByRole('link', { name: 'See all 6 assigned tasks' })).toHaveAttribute(
+      'href',
+      '/doer/work',
+    );
+    // Badge over the FULL set: five rows under a badge of six is the second
+    // half of making the cap visible.
+    expect(screen.getByRole('button', { name: /^Assigned work\s*6$/ })).toBeInTheDocument();
+  });
+
+  it('caps endorsements to answer and links its see-all to /doer/endorsements', async () => {
+    h.referenceRows = Array.from({ length: 6 }, (_, i) => referenceDoc(`r${i}`));
+    renderWithProviders(<DashboardPage />);
+    pushOffers([]);
+    pushTasks([]);
+    await settled();
+
+    expect(screen.getAllByText(/^Family r\d$/)).toHaveLength(CAP);
+    expect(screen.queryByText('Family r5')).toBeNull();
+    expect(screen.getByRole('link', { name: 'See all 6 endorsements' })).toHaveAttribute(
+      'href',
+      '/doer/endorsements',
+    );
+    expect(
+      screen.getByRole('button', { name: /^Endorsements to answer\s*6$/ }),
+    ).toBeInTheDocument();
+  });
+
+  it('counts each section separately — a busy page carries three see-alls', async () => {
+    h.referenceRows = Array.from({ length: 8 }, (_, i) => referenceDoc(`r${i}`));
+    renderWithProviders(<DashboardPage />);
+    pushOffers(Array.from({ length: 6 }, (_, i) => offerDoc(`o${i}`)));
+    pushTasks(Array.from({ length: 7 }, (_, i) => taskDoc(`t${i}`)));
+    await settled();
+
+    expect(screen.getByRole('link', { name: 'See all 6 offers' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'See all 7 assigned tasks' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'See all 8 endorsements' })).toBeInTheDocument();
+  });
+
+  it('never renders a see-all in place of the endorsements error state', async () => {
+    // The error+retry block replaces the SECTION, so there is no row list to
+    // cap and nothing to link — a failed read must not be summarised as if it
+    // had returned rows (PR #362 round 1's rule, restated for the cap).
+    h.referencesFail = true;
+    renderWithProviders(<DashboardPage />);
+    pushOffers([]);
+    pushTasks([]);
+    await settled();
+
+    expect(screen.getByText(/Could not check whether an endorsement is waiting/)).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /See all/ })).toBeNull();
+  });
+});

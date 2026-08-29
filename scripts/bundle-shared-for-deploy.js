@@ -28,6 +28,36 @@ const repoRoot = path.resolve(__dirname, '..');
 const functionsDir = path.resolve(repoRoot, 'apps/functions');
 const studyFunctionsDir = path.resolve(repoRoot, 'apps/study-functions');
 
+/** Matches a test/spec filename in any of the extensions this repo compiles or
+ *  ships: foo.test.ts, foo.spec.tsx, foo.test.mjs, foo.spec.cjs, … */
+const TEST_FILE_RE = /\.(test|spec)\.[cm]?[jt]sx?$/;
+
+/**
+ * `fs.cpSync` filter: false drops the entry, and dropping a directory drops its
+ * whole subtree.
+ *
+ * Without it the bundler copied each package's raw `src` verbatim, so 113
+ * `__tests__` entries (78 files) landed in the deploy artifact on every deploy —
+ * `shared-functions`' admin-SDK fixtures among them (issue #384). No tsconfig
+ * `exclude` can reach them, because this path copies sources rather than
+ * compiling them.
+ *
+ * Two clauses, not one: the `__tests__` clause mirrors what every package's
+ * `tsconfig.cjs.json` excludes from `dist`, and the filename clause covers a
+ * stray `src/foo.test.ts` sitting outside a `__tests__` directory — the case
+ * #382 widened the functions packages' own globs for. Today every test file in
+ * every bundled package's `src` sits under a `__tests__` directory, so the
+ * second clause removes nothing yet; it is what keeps the next one that does
+ * not from silently shipping.
+ *
+ * @param {string} srcPath  absolute path of the entry being copied
+ * @returns {boolean}       true to copy it
+ */
+function isDeployableSource(srcPath) {
+  const base = path.basename(srcPath);
+  return base !== '__tests__' && !TEST_FILE_RE.test(base);
+}
+
 /**
  * Bundle one workspace package into apps/functions/<bundleName>/.
  *
@@ -51,14 +81,23 @@ function bundlePackage(pkgFilter, pkgDirAbs, bundleName) {
     process.exit(1);
   }
 
-  // Copy src.
+  // Copy src, minus test sources (see isDeployableSource).
   const srcDir = path.join(pkgDirAbs, 'src');
-  fs.cpSync(srcDir, path.join(bundleDir, 'src'), { recursive: true });
+  fs.cpSync(srcDir, path.join(bundleDir, 'src'), {
+    recursive: true,
+    filter: isDeployableSource,
+  });
 
-  // Copy dist.
+  // Copy dist. Same filter: dist is clean today (every package's
+  // tsconfig.cjs.json excludes src/**/__tests__), so this removes nothing — but
+  // compiled test output would be *executable* in the artifact rather than
+  // inert .ts source, so it is the copy least worth leaving unguarded.
   const distDir = path.join(pkgDirAbs, 'dist');
   if (fs.existsSync(distDir)) {
-    fs.cpSync(distDir, path.join(bundleDir, 'dist'), { recursive: true });
+    fs.cpSync(distDir, path.join(bundleDir, 'dist'), {
+      recursive: true,
+      filter: isDeployableSource,
+    });
   }
 
   // Copy package.json and tsconfigs.

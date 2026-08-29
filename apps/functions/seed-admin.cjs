@@ -2,14 +2,30 @@
  * Seed script — creates an admin user in the Firebase emulator.
  *
  * Usage:
- *   pnpm seed:admin              # uses defaults
+ *   pnpm seed:admin              # lane 1 (the shared dev stack), as always
  *   pnpm seed:admin admin@ejm.org mypassword
+ *   LANE=3 pnpm seed:admin       # seed emulator lane 3 instead
+ *   pnpm seed:admin:lane3        # the same thing, spelled as a script
  *
- * Prerequisites: Firebase emulators must be running (pnpm emulators).
+ * Prerequisites: Firebase emulators must be running (`pnpm emulators`, or
+ * `firebase emulators:start --config firebase.lane3.json ...` for a lane).
+ *
+ * The endpoint comes from the SAME resolver the three web apps use for their
+ * VITE_EMULATOR_* vars (issue #376), under plain `EMULATOR_*` names plus
+ * `LANE` / `E2E_LANE` — so "start lane N → seed lane N → run the app against
+ * lane N" is one dial end to end. With none of them set this targets
+ * localhost:8080 / localhost:9099 exactly as it always did.
+ * See docs/emulator-lanes.md.
  */
 
-process.env.FIRESTORE_EMULATOR_HOST = 'localhost:8080';
-process.env.FIREBASE_AUTH_EMULATOR_HOST = 'localhost:9099';
+const { resolveNodeEmulatorConfig } = require('./emulator-target.cjs');
+
+// `localhost` is this script's historical default host; keep it so a bare
+// `pnpm seed:admin` produces the byte-identical target it always has.
+const emulator = resolveNodeEmulatorConfig(process.env, { defaultHost: 'localhost' });
+
+process.env.FIRESTORE_EMULATOR_HOST = `${emulator.host}:${emulator.firestorePort}`;
+process.env.FIREBASE_AUTH_EMULATOR_HOST = `${emulator.host}:${emulator.authPort}`;
 
 const { initializeApp } = require('firebase-admin/app');
 const { getAuth } = require('firebase-admin/auth');
@@ -27,6 +43,14 @@ const db = getFirestore(app);
 
 async function seed() {
   console.log('\nSeeding admin user: ' + EMAIL);
+  console.log(
+    '  Target: lane ' +
+      emulator.lane +
+      ' — firestore ' +
+      process.env.FIRESTORE_EMULATOR_HOST +
+      ', auth ' +
+      process.env.FIREBASE_AUTH_EMULATOR_HOST,
+  );
 
   let uid;
 

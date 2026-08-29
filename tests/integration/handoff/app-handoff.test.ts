@@ -10,7 +10,7 @@ import { seedTestData, type SeedData } from '../../setup/seed.js';
 const AUTH_URL = `http://127.0.0.1:${process.env.TEST_AUTH_PORT ?? '9099'}`;
 
 /** The client-side contract: the returned custom token signs in via the SDK path. */
-async function signInWithCustomToken(token: string) {
+async function signInWithCustomToken(token: string): Promise<{ idToken: string }> {
   const res = await fetch(
     `${AUTH_URL}/identitytoolkit.googleapis.com/v1/accounts:signInWithCustomToken?key=fake-api-key`,
     {
@@ -19,7 +19,9 @@ async function signInWithCustomToken(token: string) {
       body: JSON.stringify({ token, returnSecureToken: true }),
     },
   );
-  return res.json();
+  // `res.json()` is `unknown`; the emulator's signIn response shape is the
+  // contract this helper exists to exercise.
+  return (await res.json()) as { idToken: string };
 }
 
 /** uid claim of an emulator-issued ID token (unsigned JWT). */

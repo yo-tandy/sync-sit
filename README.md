@@ -131,7 +131,9 @@ pnpm install
 pnpm emulators
 
 # Integration tests can run WITHOUT killing this dev stack via the second
-# emulator lane (`pnpm test:integration:lane2`) — see docs/emulator-lanes.md
+# emulator lane (`pnpm test:integration:lane2`) — see docs/emulator-lanes.md.
+# The web apps and the seed scripts can be pointed at another lane too —
+# "Running against an emulator lane" below.
 
 # Seed an admin user (emulator only). Both seed scripts and both apps'
 # .env.development target the demo-test namespace; if you previously ran the
@@ -139,11 +141,39 @@ pnpm emulators
 # namespace. Override with SEED_PROJECT_ID=<id> if needed.
 pnpm seed:admin
 
+# Optional: the fuller fixture set (2 families, 4 babysitters, appointments)
+pnpm seed:test-data
+
 # In a separate terminal, start the web dev server
 pnpm dev
 ```
 
 The app runs at `http://localhost:5173`. The emulator UI is at `http://localhost:4000`.
+
+### Running against an emulator lane
+
+The setup above is *lane 1* — the shared dev stack. A lane is a full second copy of the emulators on ports shifted by `(lane - 1) * 10000` (`firebase.lane{2,3,4}.json`), so a test run or a browser-driven e2e can have its own data without disturbing anyone else's. Three things have to name the same lane, and each has its own dial:
+
+```bash
+# 1. start lane 3's emulators (own terminal)
+pnpm exec firebase emulators:start --config firebase.lane3.json \
+  --only auth,functions,firestore,storage --project demo-test
+
+# 2. seed lane 3 — a freshly started lane is EMPTY
+pnpm seed:admin:lane3            # or: LANE=3 pnpm seed:admin
+pnpm seed:test-data:lane3        # or: LANE=3 pnpm seed:test-data
+
+# 3a. run an app against lane 3, on that lane's dev port (own terminal)
+cd apps/do-web && VITE_EMULATOR_LANE=3 pnpm exec vite --port 5375 --strictPort
+
+# 3b. ...or run the integration suite in it (starts and stops the lane itself)
+pnpm test:integration:lane3
+
+# 3c. ...or a Playwright spec against the app from 3a
+E2E_APP=do E2E_LANE=3 pnpm exec playwright test tests-e2e/<spec>.spec.ts
+```
+
+The apps read `VITE_EMULATOR_LANE` (only `VITE_`-prefixed vars reach a browser bundle) and the seed scripts read `EMULATOR_LANE`, `LANE` or `E2E_LANE` — different names, but one shared resolver (`packages/shared-core/src/utils/emulatorConfig.ts`), so the browser and the seeder cannot disagree about where lane 3 is. Either throws on a malformed value rather than quietly falling back to lane 1 and writing to the shared stack. (The integration suite predates that helper and takes the four `TEST_*_PORT` vars instead; its `lane{2,3,4}` scripts set them for you.) Full details, per-lane dev ports and the individual port overrides: **docs/emulator-lanes.md**.
 
 ### Environment Variables
 
@@ -158,6 +188,8 @@ VITE_FIREBASE_MESSAGING_SENDER_ID=123456789
 VITE_FIREBASE_APP_ID=1:123456789:web:abc123
 ```
 
+In DEV builds only, all three apps resolve their Firebase emulator endpoint from `VITE_EMULATOR_LANE` / `VITE_EMULATOR_HOST` / `VITE_EMULATOR_{AUTH,FIRESTORE,FUNCTIONS,STORAGE}_PORT`, defaulting to the lane-1 ports `pnpm emulators` starts (`localhost` 9099/8080/5001/9199). The seed scripts take the same dial on the command line under plain names (`LANE` / `EMULATOR_LANE` / `EMULATOR_HOST` / `EMULATOR_{AUTH,FIRESTORE,FUNCTIONS,STORAGE}_PORT`). Unset, nothing changes; set, a dev server and its seed data can move to a lane of their own instead of the shared stack. Defaults and precedence: `.env.example`; full recipe: docs/emulator-lanes.md.
+
 The cross-app switch target is configurable (defaults to the production URLs baked into the code): `VITE_STUDY_APP_URL` in `apps/web`, `VITE_SIT_APP_URL` in `apps/study-web`, and BOTH (`VITE_SIT_APP_URL` + `VITE_STUDY_APP_URL`) in `apps/do-web`, whose switcher links out to both siblings (the reverse links are owner-gated — plan decision 20, issue #304). All three apps ship a committed `.env.development` pointing these at the sibling dev ports; note that `.env.*` is gitignored, so a git checkout will silently overwrite any untracked local copy of these files.
 
 ## Scripts
@@ -169,8 +201,10 @@ The cross-app switch target is configurable (defaults to the production URLs bak
 | `pnpm build` | Build sit web app for production |
 | `pnpm build:study` / `pnpm build:do` | Build the study / do web apps |
 | `pnpm build:functions` | Compile Cloud Functions |
-| `pnpm emulators` | Start Firebase emulators |
+| `pnpm emulators` | Start Firebase emulators (lane 1) |
 | `pnpm seed:admin` | Create admin user in emulator |
+| `pnpm seed:test-data` | Seed families, babysitters and sample appointments |
+| `pnpm seed:admin:lane3` / `pnpm seed:test-data:lane3` | The same, into emulator lane 3 (`lane2` / `lane4` too; or `LANE=N pnpm seed:admin`) |
 | `pnpm typecheck` | Type-check all packages |
 | `pnpm deploy` | Deploy to Firebase |
 

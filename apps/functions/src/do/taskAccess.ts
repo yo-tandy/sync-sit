@@ -42,6 +42,16 @@ export interface VerifiedFamilyCaller {
  * portable, cross-app approval (never a per-app verification state). The
  * familyId is derived server-side from the caller's own profile, never from
  * input (the publishSearch precedent).
+ *
+ * Each of the three refusals carries its own machine-readable
+ * `details.reason` (issue #333), the idiom the rest of sync-do already uses
+ * (`task_cap`, `photo_not_ready`, `no_completed_task`, …). Without them the
+ * wizard saw ONE undifferentiated `permission-denied` for three unrelated
+ * situations and could only print the honest UNION of all three — so a
+ * suspended parent of a fully verified family was told their family might
+ * still need verifying, and a student who somehow reached the form was told
+ * the same thing. No enumeration risk: the subject of all three facts is the
+ * CALLER'S OWN account, which they may already read.
  */
 export async function loadVerifiedFamilyCaller(
   uid: string,
@@ -49,11 +59,15 @@ export async function loadVerifiedFamilyCaller(
   const callerDoc = await db.collection('users').doc(uid).get();
   const callerData = (callerDoc.data() ?? {}) as Record<string, unknown>;
   if ((callerData.status as string | undefined) !== 'active') {
-    throw new HttpsError('permission-denied', 'Account is not active');
+    throw new HttpsError('permission-denied', 'Account is not active', {
+      reason: 'account_not_active',
+    });
   }
   const parent = getParentProfile(callerData as unknown as User);
   if (!parent?.familyId) {
-    throw new HttpsError('permission-denied', 'Only parents can manage tasks');
+    throw new HttpsError('permission-denied', 'Only parents can manage tasks', {
+      reason: 'not_parent',
+    });
   }
   const familyDoc = await db.collection('families').doc(parent.familyId).get();
   const familyData = familyDoc.data();
@@ -61,6 +75,7 @@ export async function loadVerifiedFamilyCaller(
     throw new HttpsError(
       'permission-denied',
       'Family verification required before posting a task',
+      { reason: 'family_not_verified' },
     );
   }
   return { uid, callerData, familyId: parent.familyId, familyData };

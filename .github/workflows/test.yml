@@ -30,13 +30,14 @@ jobs:
   # together. `--max-warnings` stays unset so pre-existing warnings (apps/web
   # carries seven `react-hooks/exhaustive-deps`) stay visible without blocking.
   #
-  # SCOPE, precisely: of the workspace projects only the three apps run a real
-  # eslint (`apps/web`, `apps/study-web`, `apps/do-web`, each with its own
-  # config). `packages/shared-ui` and `apps/study-functions` have stub `lint`
-  # scripts that echo and exit 0, and the rest have no `lint` script at all —
-  # so shared-ui components and both functions codebases are NOT linted here.
-  # Giving them real configs is worth doing and is tracked separately (#348)
-  # rather than smuggled into this PR.
+  # SCOPE, precisely: six projects run a real eslint — the three apps
+  # (`apps/web`, `apps/study-web`, `apps/do-web`), `packages/shared-ui` (same
+  # React config as the apps), and both functions packages (`apps/functions`,
+  # `apps/study-functions`, on a node/TS config with no React rules, covering
+  # their `.ts` sources AND their committed `.cjs` seed/backfill scripts).
+  # #348 replaced the stub `lint` scripts that used to echo and exit 0. Still
+  # NOT linted: the four pure-TS `packages/*-core` libraries and
+  # `packages/shared-functions`, which have no `lint` script at all.
   lint:
     runs-on: ubuntu-latest
     steps:
@@ -56,6 +57,47 @@ jobs:
 
       - name: Lint
         run: pnpm -r lint
+
+  # The same gap as `lint` above, one rung over: `pnpm -r typecheck` was green
+  # repo-wide but NOTHING in .github/workflows ran it, so it was a local gate
+  # only and a PR breaking a type in any package merged green (issue #378).
+  # That also meant the tsconfig.test.json pair #373 added to the functions
+  # packages — the thing that gets their vitest files type-checked at all —
+  # could not actually be enforced.
+  #
+  # Its OWN job, parallel to `lint` and `test`, for the reason spelled out on
+  # the lint job (#341): a type gate ordered ahead of the suites erases their
+  # signal the moment it fails, which is the failure mode #215/#216 closed.
+  #
+  # No build step: every packages/* manifest maps its `types` export condition
+  # to `src/*.ts`, so `tsc` reads sources directly and a fresh checkout needs no
+  # `dist`. Verified by running `pnpm -r typecheck` green with no dist present.
+  #
+  # SCOPE, precisely: all 12 workspace projects now define `typecheck` (`tests`
+  # had no such script until this change, so `pnpm -r` silently skipped the
+  # integration suite entirely). Still NOT covered: the ~250 test files under
+  # apps/{web,study-web,do-web}/src, which their tsconfig.app.json excludes —
+  # bringing those in needs ~424 bare `vi.fn()` mocks across 145 files retyped
+  # first, tracked separately rather than bundled in here.
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Enable pnpm (Corepack)
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.13.1 --activate
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm -r typecheck
 
   test:
     runs-on: ubuntu-latest

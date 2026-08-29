@@ -377,3 +377,137 @@ describe('family dashboard — empty, loading and error states', () => {
     expect(screen.getByText(/Could not load your tasks/)).toBeInTheDocument();
   });
 });
+
+// ── A SUMMARY, NOT A SECOND LIST (the owner's redundancy report). Before
+//    this, `/family` rendered EVERY live open task and EVERY assigned task,
+//    so only cancelled rows, expired rows and the sixth-oldest completion
+//    were unique to /family/tasks — two routes, one screen. These pin the
+//    cap AND its visibility: a truncation the reader cannot see would trade
+//    the redundancy for a lie. ──
+const CAP = 5;
+
+/** Task-detail links, i.e. rendered ROWS — the see-all's `?tab=` link is not
+ *  one, which is what makes "exactly CAP rows" countable. */
+function rowLinks(): HTMLElement[] {
+  return screen
+    .getAllByRole('link')
+    .filter((el) => /^\/family\/tasks\/[^?]+$/.test(el.getAttribute('href') ?? ''));
+}
+
+describe('family dashboard — capped sections and their see-all', () => {
+  it('shows at most five open tasks and says how many there are', async () => {
+    renderWithProviders(<DashboardPage />);
+    pushTasks(
+      Array.from({ length: 7 }, (_, i) =>
+        taskDoc(`t${i}`, {
+          title: `Task ${i}`,
+          expiresAt: { toMillis: () => NOW + (i + 1) * DAY_MS },
+        }),
+      ),
+    );
+    pushOffers([]);
+    await settled();
+
+    expect(rowLinks()).toHaveLength(CAP);
+    // Soonest-to-expire first, so the two that fall off are the last two.
+    expect(screen.getByText('Task 4')).toBeInTheDocument();
+    expect(screen.queryByText('Task 5')).toBeNull();
+    expect(screen.queryByText('Task 6')).toBeNull();
+
+    // The cap is stated, not silent — and it points at the tab that holds
+    // the rest.
+    expect(screen.getByRole('link', { name: 'See all 7 open tasks' })).toHaveAttribute(
+      'href',
+      '/family/tasks?tab=open',
+    );
+  });
+
+  it('shows no see-all when everything open already fits', async () => {
+    renderWithProviders(<DashboardPage />);
+    pushTasks(
+      Array.from({ length: CAP }, (_, i) =>
+        taskDoc(`t${i}`, {
+          title: `Task ${i}`,
+          expiresAt: { toMillis: () => NOW + (i + 1) * DAY_MS },
+        }),
+      ),
+    );
+    pushOffers([]);
+    await settled();
+
+    expect(rowLinks()).toHaveLength(CAP);
+    expect(screen.getByText('Task 4')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /See all/ })).toBeNull();
+  });
+
+  it('caps in-progress work and links its see-all to the Assigned tab', async () => {
+    renderWithProviders(<DashboardPage />);
+    pushTasks(
+      Array.from({ length: 6 }, (_, i) =>
+        taskDoc(`t${i}`, { status: 'assigned', title: `Task ${i}`, assignedUserId: 'd1' }),
+      ),
+    );
+    pushOffers([]);
+    await settled();
+
+    expect(rowLinks()).toHaveLength(CAP);
+    expect(screen.queryByText('Task 5')).toBeNull();
+    expect(
+      screen.getByRole('link', { name: 'See all 6 tasks in progress' }),
+    ).toHaveAttribute('href', '/family/tasks?tab=assigned');
+    // The section badge keeps counting the FULL set: five rows under a badge
+    // of six is the second half of making the cap visible.
+    expect(screen.getByRole('button', { name: /^In progress\s*6$/ })).toBeInTheDocument();
+  });
+
+  it('says how many completions it is hiding — the cap it already had was silent', async () => {
+    renderWithProviders(<DashboardPage />);
+    pushTasks(
+      Array.from({ length: 7 }, (_, i) =>
+        taskDoc(`t${i}`, {
+          status: 'completed',
+          title: `Task ${i}`,
+          assignedUserId: 'd1',
+          completedAt: { toMillis: () => NOW - i * 1000 },
+        }),
+      ),
+    );
+    pushOffers([]);
+    await settled();
+
+    expect(rowLinks()).toHaveLength(CAP);
+    expect(
+      screen.getByRole('link', { name: 'See all 7 completed tasks' }),
+    ).toHaveAttribute('href', '/family/tasks?tab=completed');
+  });
+
+  it('counts each section separately — a busy page carries three see-alls', async () => {
+    renderWithProviders(<DashboardPage />);
+    pushTasks([
+      ...Array.from({ length: 6 }, (_, i) =>
+        taskDoc(`o${i}`, {
+          title: `Open ${i}`,
+          expiresAt: { toMillis: () => NOW + (i + 1) * DAY_MS },
+        }),
+      ),
+      ...Array.from({ length: 7 }, (_, i) =>
+        taskDoc(`a${i}`, { status: 'assigned', title: `Assigned ${i}`, assignedUserId: 'd1' }),
+      ),
+      ...Array.from({ length: 8 }, (_, i) =>
+        taskDoc(`c${i}`, {
+          status: 'completed',
+          title: `Completed ${i}`,
+          assignedUserId: 'd1',
+          completedAt: { toMillis: () => NOW - i * 1000 },
+        }),
+      ),
+    ]);
+    pushOffers([]);
+    await settled();
+
+    expect(rowLinks()).toHaveLength(3 * CAP);
+    expect(screen.getByRole('link', { name: 'See all 6 open tasks' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'See all 7 tasks in progress' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'See all 8 completed tasks' })).toBeInTheDocument();
+  });
+});

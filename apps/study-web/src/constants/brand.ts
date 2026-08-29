@@ -4,14 +4,12 @@
  * pages address the SAME mailbox -- two literals drift, one constant
  * cannot. Mirrors apps/web/src/constants/brand.ts.
  *
- * The address is deliberately NOT support@sync-study.com: sync-study.com
- * was never connected (issue #115), so mail to it bounced with no error
- * anyone could see. sync-sit.com is the one domain that actually receives,
- * and the same rule already governs the server side --
- * apps/functions/src/do/notifyContent.ts routes do's support link here too.
- * The brand shown to the member stays Sync/Study; only the mailbox is
- * shared. Revisit when the suite moves to one verified domain (plan
- * §18.9), at which point all three apps change here together.
+ * SUPPORT_EMAIL points at sync-sit.com, not sync-study.com: as of
+ * 2026-08-29 `sync-study.com` has no MX record (and no A record), so the
+ * per-app address published here bounced silently — on the very pages a
+ * user reaches when something has already gone wrong. sync-sit.com is the
+ * only domain in the suite that receives mail. Restore a per-app address
+ * the day this domain has an MX record, not before. See issue #349.
  */
 export const BRAND = 'Sync/Study';
 export const SUPPORT_EMAIL = 'support@sync-sit.com';

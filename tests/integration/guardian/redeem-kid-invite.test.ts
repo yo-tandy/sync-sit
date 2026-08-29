@@ -34,7 +34,10 @@ function sha256(s: string): string {
 const AUTH_URL = `http://127.0.0.1:${process.env.TEST_AUTH_PORT ?? '9099'}`;
 
 /** Prove the created credentials actually work (the client sign-in contract). */
-async function signInWithPassword(email: string, password: string) {
+async function signInWithPassword(
+  email: string,
+  password: string,
+): Promise<{ idToken: string; localId: string }> {
   const res = await fetch(
     `${AUTH_URL}/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=fake-api-key`,
     {
@@ -43,7 +46,9 @@ async function signInWithPassword(email: string, password: string) {
       body: JSON.stringify({ email, password, returnSecureToken: true }),
     },
   );
-  return res.json();
+  // `res.json()` is `unknown`; the emulator's signIn response shape is the
+  // contract this helper exists to exercise.
+  return (await res.json()) as { idToken: string; localId: string };
 }
 
 describe('redeemKidInvite', () => {
