@@ -158,7 +158,7 @@
      draws the ring INSIDE the child instead. Same layer, so utilities
      still win.
      CONSTRAINT (round 6): the inset variant drops the white backing, so
-     it assumes a LIGHT container ground (all seven current sites are
+     it assumes a LIGHT container ground (all eight current sites are
      bg-white). A brand-colored clipping container would need its own
      treatment -- do not apply this class there. */
   .focus-ring-inset :where(a, button, [role="button"], select, summary,

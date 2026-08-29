@@ -18,7 +18,8 @@ export function FamilyLayout() {
         <PageContainer>
           <Outlet />
         </PageContainer>
-        <AppSwitchBarHost accountHref="/family/account" homeHref="/family" />
+        {/* Account tab -> the SHARED hub (#367); home stays this portal (#385). */}
+        <AppSwitchBarHost accountHref="/account" homeHref="/family" />
       </div>
     </AuthGuard>
   );

@@ -286,6 +286,20 @@ export default {
     terms: 'Terms & Conditions',
   },
 
+  accountHub: {
+    title: 'My account',
+    subtitle: 'Shared across sync/sit, sync/study and sync/do.',
+    myAccount: 'My account',
+    myFamily: 'My family',
+    supervisedKids: 'Supervised kids',
+    verification: 'Verification',
+    appointments: 'Appointments',
+    sessions: 'Sessions',
+    tasks: 'Tasks',
+    search: 'Search',
+    endorsements: 'Endorsements',
+    favorites: 'Favorites',
+  },
   appSwitch: {
     account: 'My account',
     barLabel: 'Switch app',

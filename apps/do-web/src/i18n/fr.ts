@@ -724,6 +724,20 @@ export default {
     validEmail: 'Veuillez saisir une adresse email valide',
   },
 
+  accountHub: {
+    title: 'Mon compte',
+    subtitle: 'Partagé entre sync/sit, sync/study et sync/do.',
+    myAccount: 'Mon compte',
+    myFamily: 'Ma famille',
+    supervisedKids: 'Enfants supervisés',
+    verification: 'Vérification',
+    appointments: 'Rendez-vous',
+    sessions: 'Séances',
+    tasks: 'Tâches',
+    search: 'Recherche',
+    endorsements: 'Recommandations',
+    favorites: 'Favoris',
+  },
   appSwitch: {
     account: 'Mon compte',
     barLabel: "Changer d'application",
