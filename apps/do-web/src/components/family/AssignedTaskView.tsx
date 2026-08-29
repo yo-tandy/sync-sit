@@ -1,26 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { httpsCallable } from 'firebase/functions';
 import type { TaskDoc } from '@ejm/do-core';
 import { Button, Card, Checkbox, InfoBanner, Spinner } from '@ejm/shared-ui';
-import { functions } from '@/config/firebase';
 import { useConsiderations } from '@/lib/considerations';
+import { useAssignedContact } from '@/lib/useAssignedContact';
 
-export interface AssignedContact {
-  taskId: string;
-  family: {
-    familyName: string;
-    address: string;
-    parents: { firstName: string; lastName: string; email: string; phone?: string; whatsapp?: string }[];
-  };
-  doer: {
-    firstName: string;
-    lastName: string;
-    contactEmail?: string | null;
-    contactPhone?: string | null;
-    whatsapp?: string | null;
-  };
-}
+export type { AssignedContact } from '@/lib/useAssignedContact';
 
 interface AssignedTaskViewProps {
   task: TaskDoc;
@@ -45,37 +30,10 @@ export function AssignedTaskView({ task, doerFirstName, onMarkDone, onCancel, bu
   const { t } = useTranslation();
   const considerations = useConsiderations(task.subCategory);
   const [checked, setChecked] = useState<Record<number, boolean>>({});
-  const [contact, setContact] = useState<AssignedContact | null>(null);
-  const [contactState, setContactState] = useState<'loading' | 'ready' | 'grace_elapsed' | 'error'>('loading');
-  const [retryTick, setRetryTick] = useState(0);
+  const { contact, contactState, retry } = useAssignedContact(task.taskId);
 
   const cancelled = task.status === 'cancelled';
   const completed = task.status === 'completed';
-
-  useEffect(() => {
-    let stale = false;
-    // NOTE: contactState is set back to 'loading' by whoever schedules a
-    // refetch (initial state, or the Retry handler) — not synchronously
-    // here (react-hooks/set-state-in-effect).
-    const getContact = httpsCallable<{ taskId: string }, AssignedContact>(
-      functions,
-      'doGetAssignedContact',
-    );
-    getContact({ taskId: task.taskId })
-      .then((res) => {
-        if (stale) return;
-        setContact(res.data);
-        setContactState('ready');
-      })
-      .catch((err: unknown) => {
-        if (stale) return;
-        const reason = (err as { details?: { reason?: string } } | null)?.details?.reason;
-        setContactState(reason === 'grace_elapsed' ? 'grace_elapsed' : 'error');
-      });
-    return () => {
-      stale = true;
-    };
-  }, [task.taskId, retryTick]);
 
   return (
     <div>
@@ -121,10 +79,7 @@ export function AssignedTaskView({ task, doerFirstName, onMarkDone, onCancel, bu
               size="sm"
               variant="outline"
               fullWidth={false}
-              onClick={() => {
-                setContactState('loading');
-                setRetryTick((n) => n + 1);
-              }}
+              onClick={retry}
             >
               {t('family.assigned.contactRetry')}
             </Button>
