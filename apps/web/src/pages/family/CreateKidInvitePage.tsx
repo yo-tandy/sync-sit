@@ -97,7 +97,7 @@ export function CreateKidInvitePage() {
         type="checkbox"
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}
-        className="mt-0.5 h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+        className="mt-0.5 h-4 w-4 rounded border-gray-300 text-brand-600"
       />
       <span>
         {t('governance.invite.consentAgree')}{' '}

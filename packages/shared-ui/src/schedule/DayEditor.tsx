@@ -278,7 +278,7 @@ export function DayEditor({ day, slots: initialSlots, open, onClose, onSave, loc
       {ranges.length === 0 ? (
         <p className="mb-4 text-sm text-gray-500">{t('schedule.noAvailabilitySet')}</p>
       ) : (
-        <div className={`mb-4 space-y-2 overflow-y-auto ${locationTags ? 'max-h-60' : 'max-h-40'}`}>
+        <div className={`focus-ring-inset mb-4 space-y-2 overflow-y-auto ${locationTags ? 'max-h-60' : 'max-h-40'}`}>
           {locationTags?.helpText && (
             <p className="text-xs text-gray-500">{locationTags.helpText}</p>
           )}

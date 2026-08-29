@@ -70,6 +70,11 @@ export const getVerificationDocument = onCall(
         // text/html upload would render as a live page on
         // storage.googleapis.com when an admin opens it from the review
         // queue (issue #281).
+        //
+        // DOWNSTREAM COUPLING (issue #292): the admin review queue clicks
+        // this URL through a TARGETLESS anchor, relying on this header to
+        // download rather than navigate the panel away. Removing or
+        // weakening it means changing VerificationsPage's call site too.
         responseDisposition: 'attachment',
         // v4 signs the full query string. The SDK default (v2, as of
         // @google-cloud/storage 7.19.0) signs only verb/MD5/type/expiry/
