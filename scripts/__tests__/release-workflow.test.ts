@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { parse } from 'yaml';
 
@@ -19,6 +19,60 @@ import { parse } from 'yaml';
  */
 const wf = (name: string) =>
   parse(readFileSync(resolve(__dirname, '../../.github/workflows', name), 'utf8'));
+
+/**
+ * Expand pnpm-workspace `packages:` patterns to absolute directories.
+ *
+ * Supports the two shapes this repo uses (a literal path, and one trailing
+ * `/*`) plus `!` negations. Anything else THROWS rather than being skipped:
+ * a pattern this cannot expand must fail loudly, since silently covering less
+ * is the exact failure the pin using it exists to prevent.
+ *
+ * `listDir` is injected so the expander can be tested directly — including the
+ * negation branch, which the real workspace cannot exercise (apps/mobile is
+ * excluded AND absent from disk, so a broken `!` would still look correct).
+ */
+export function expandWorkspacePatterns(
+  patterns: string[],
+  root: string,
+  listDir: (dir: string) => string[],
+): string[] {
+  const expand = (pattern: string): string[] => {
+    if (!pattern.includes('*')) return [resolve(root, pattern)];
+    const [prefix, ...rest] = pattern.split('/');
+    if (rest.length !== 1 || rest[0] !== '*' || prefix.includes('*')) {
+      throw new Error(
+        `unsupported pnpm-workspace pattern: ${pattern} — extend expandWorkspacePatterns() ` +
+          `in scripts/__tests__/release-workflow.test.ts to cover it (do NOT remove the pattern ` +
+          `or loosen the pin; narrowing what this sees is the bug it guards against)`,
+      );
+    }
+    return listDir(resolve(root, prefix)).map((name) => resolve(root, prefix, name));
+  };
+
+  const included = new Set<string>();
+  const excluded = new Set<string>();
+  for (const pattern of patterns) {
+    const negated = pattern.startsWith('!');
+    const target = negated ? excluded : included;
+    for (const dir of expand(negated ? pattern.slice(1) : pattern)) target.add(dir);
+  }
+  return [...included].filter((dir) => !excluded.has(dir));
+}
+
+/**
+ * The workspace's package directories, read from pnpm-workspace.yaml — the
+ * same file `pnpm -r` reads, so the pin cannot drift away from the tool.
+ */
+function workspacePackageDirs(): string[] {
+  const root = resolve(__dirname, '../..');
+  const { packages } = parse(readFileSync(resolve(root, 'pnpm-workspace.yaml'), 'utf8')) as {
+    packages: string[];
+  };
+  return expandWorkspacePatterns(packages, root, readdirSync).filter((dir) =>
+    existsSync(resolve(dir, 'package.json')),
+  );
+}
 
 // `on:` parses to the boolean key `true` in YAML 1.1 — the Norway problem's
 // cousin. Read both so this doesn't hinge on the parser's version.
@@ -215,29 +269,60 @@ describe('typecheck gate (issue #378)', () => {
     expect(jobs.lint.needs).toBeUndefined();
   });
 
+  // The expander gets its own tests because the real workspace cannot exercise
+  // it: apps/mobile is both excluded AND absent from disk, so deleting the `!`
+  // handling entirely would leave every assertion above still green.
+  describe('expandWorkspacePatterns', () => {
+    const root = '/repo';
+    const listDir = (dir: string) =>
+      ({
+        '/repo/packages': ['shared-core', 'sit-core'],
+        '/repo/apps': ['web', 'mobile'],
+      })[dir] ?? [];
+
+    it('expands a trailing /* and keeps literal paths', () => {
+      expect(expandWorkspacePatterns(['packages/*', 'tests'], root, listDir)).toEqual([
+        '/repo/packages/shared-core',
+        '/repo/packages/sit-core',
+        '/repo/tests',
+      ]);
+    });
+
+    it('honours ! negations', () => {
+      expect(expandWorkspacePatterns(['apps/*', '!apps/mobile'], root, listDir)).toEqual([
+        '/repo/apps/web',
+      ]);
+    });
+
+    it('throws on a pattern it cannot expand rather than silently skipping it', () => {
+      for (const pattern of ['tools/**/pkg', 'services/api/*', 'packages/*-core']) {
+        expect(() => expandWorkspacePatterns([pattern], root, listDir)).toThrow(
+          /unsupported pnpm-workspace pattern/,
+        );
+      }
+    });
+  });
+
   it('every workspace package defines a `typecheck` script', () => {
     // The gap this issue actually closed: `tests/` had a tsconfig but no
     // script, so `pnpm -r typecheck` silently skipped it and "12 of 12" was
     // really 11. A NEW package shipping without the script would put the repo
     // straight back into that state with nothing turning red.
-    const { readdirSync, existsSync, readFileSync } = require('node:fs') as typeof import('node:fs');
-    const root = resolve(__dirname, '../..');
-    const dirs: string[] = [];
-    for (const group of ['packages', 'apps']) {
-      for (const name of readdirSync(resolve(root, group))) {
-        if (group === 'apps' && name === 'mobile') continue; // excluded in pnpm-workspace.yaml
-        const dir = resolve(root, group, name);
-        if (existsSync(resolve(dir, 'package.json'))) dirs.push(dir);
-      }
-    }
-    dirs.push(resolve(root, 'tests'));
-
+    //
+    // Membership is read from pnpm-workspace.yaml rather than a hardcoded
+    // directory shape, because that file is what `pnpm -r` actually consults.
+    // Hardcoding it would reintroduce the same silent drift in the pin itself:
+    // a new top-level glob (`services/*`) would be skipped by the walk and the
+    // floor would still pass, and dropping the `!apps/mobile` exclusion would
+    // leave mobile exempt forever.
+    const dirs = workspacePackageDirs();
     const missing = dirs.filter((dir) => {
       const pkg = JSON.parse(readFileSync(resolve(dir, 'package.json'), 'utf8'));
       return !pkg.scripts?.typecheck;
     });
     expect(missing).toEqual([]);
-    // Floor: the walk must actually have found the workspace, not an empty list.
+    // Floor: asserted after `missing`, and against the SAME list it was derived
+    // from, so an empty expansion fails HERE rather than passing vacuously.
     expect(dirs.length).toBeGreaterThanOrEqual(12);
   });
 });
@@ -247,7 +332,6 @@ describe('no other workflow deploys to production on merge', () => {
     // A leftover copy would keep main coupled to prod while release.yml looked
     // correct in isolation.
     const dir = resolve(__dirname, '../../.github/workflows');
-    const { readdirSync } = require('node:fs') as typeof import('node:fs');
     // Both edges matter: Actions accepts .yaml as well as .yml, and the root
     // `pnpm deploy` script IS `firebase deploy` (package.json), so matching
     // only the literal command would miss a workflow calling it by name.
