@@ -1,16 +1,16 @@
 import type { Firestore } from 'firebase-admin/firestore';
-import type { getStorage } from 'firebase-admin/storage';
 import {
   DO_CANCELLED_RETENTION_DAYS,
   DO_COMPLETED_RETENTION_DAYS,
   DO_DONE_AUTOCOMPLETE_DAYS,
   type TaskDoc,
 } from '@ejm/do-core';
-import { photoObjectPath, DO_PHOTOS_PREFIX, DO_UPLOADS_PREFIX } from './taskAccess.js';
-
-/** Structural bucket type — avoids a direct @google-cloud/storage import
- *  (transitive dep; firebase-admin/storage re-exports the instance type). */
-type StorageBucket = ReturnType<ReturnType<typeof getStorage>['bucket']>;
+import {
+  deleteTaskCascade,
+  DO_PHOTOS_PREFIX,
+  DO_UPLOADS_PREFIX,
+  type StorageBucket,
+} from './taskAccess.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -90,54 +90,21 @@ export async function runDoSweepTasks(
     taskCascadeErrors: 0,
   };
 
-  /** Delete one task with its offers and photo objects (§11.4's cascade). */
-  async function deleteTaskCascade(
+  /**
+   * Delete one task with its offers and photo objects (§11.4's cascade).
+   * The body lives in `taskAccess.deleteTaskCascade` because PR10's
+   * `doAdminDeleteTask` performs the identical cascade — an admin delete
+   * that left `taskOffers` rows and `do-photos` objects behind would create
+   * exactly the orphans §11.4 exists to prevent. This wrapper only folds the
+   * returned counts into the sweep's stats.
+   */
+  async function cascade(
     taskRef: FirebaseFirestore.DocumentReference,
     task: TaskDoc,
   ): Promise<void> {
-    // Offers first: every offer on the task, regardless of status — the
-    // task is the reason the offer exists, and admin inspection of a
-    // deleted task's offers is not a supported surface (§11.4 retention).
-    // Chunked below Firestore's 500-writes-per-batch cap: nothing bounds
-    // offers-per-task in this PR's world (DO_OFFER_MAX_PER_TASK caps LIVE
-    // offers only, and PR6 adds the write path), and one oversized batch
-    // must not poison the cascade.
-    const offers = await db
-      .collection('taskOffers')
-      .where('taskId', '==', taskRef.id)
-      .get();
-    for (let i = 0; i < offers.docs.length; i += 400) {
-      const batch = db.batch();
-      for (const offer of offers.docs.slice(i, i + 400)) {
-        batch.delete(offer.ref);
-      }
-      await batch.commit();
-    }
-    stats.offersDeleted += offers.size;
-    // Task doc BEFORE its photo objects, so the reference check below never
-    // counts the task being deleted.
-    await taskRef.delete();
-    // Photo objects: the stored pair IS the object path — but NOT
-    // unconditionally: nothing dedupes pairs across tasks (both write paths
-    // accept the same own-prefix pair on two tasks), so deleting blindly
-    // would 404 a still-open sibling task's photo with no way to re-attach
-    // (only the stripper writes the final prefix). Same exact-map
-    // array-contains check the orphan sweep uses; a pair another task still
-    // references is left for the orphan pass to collect once the LAST
-    // referencing task is gone. ignoreNotFound — a re-run after a partial
-    // failure must not throw on the half that already succeeded.
-    for (const pair of task.photos ?? []) {
-      const stillReferenced = await db
-        .collection('doTasks')
-        .where('photos', 'array-contains', { uid: pair.uid, photoId: pair.photoId })
-        .limit(1)
-        .get();
-      if (!stillReferenced.empty) continue;
-      await bucket
-        .file(photoObjectPath(pair.uid, pair.photoId))
-        .delete({ ignoreNotFound: true });
-      stats.taskPhotoObjectsDeleted += 1;
-    }
+    const result = await deleteTaskCascade(db, bucket, taskRef, task);
+    stats.offersDeleted += result.offersDeleted;
+    stats.taskPhotoObjectsDeleted += result.photoObjectsDeleted;
   }
 
   // ── 1–3: the three deletion queries, each drained with a bounded pass
@@ -189,7 +156,7 @@ export async function runDoSweepTasks(
       let deleted = 0;
       for (const doc of snap.docs) {
         try {
-          await deleteTaskCascade(doc.ref, doc.data() as TaskDoc);
+          await cascade(doc.ref, doc.data() as TaskDoc);
           deleted += 1;
         } catch (err) {
           stats.taskCascadeErrors += 1;
