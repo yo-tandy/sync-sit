@@ -3,6 +3,7 @@ import { screen, cleanup } from '@testing-library/react';
 import { renderWithProviders, i18n } from '@/__tests__/test-utils';
 import { SIT_APP_URL } from '@/utils/appSwitch';
 import { AboutPage } from '../AboutPage';
+import { SUPPORT_EMAIL } from '@/constants/brand';
 
 describe('AboutPage (study)', () => {
   beforeEach(() => i18n.changeLanguage('en'));
@@ -23,9 +24,9 @@ describe('AboutPage (study)', () => {
       screen.getByText(/Tutors verify their school affiliation through their official school email/),
     ).toBeInTheDocument();
     expect(screen.getByText(/independent initiative for families in the EJM community/)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'support@sync-study.com' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: SUPPORT_EMAIL })).toHaveAttribute(
       'href',
-      'mailto:support@sync-study.com',
+      `mailto:${SUPPORT_EMAIL}`,
     );
   });
 

@@ -1,8 +1,9 @@
 import { ReportProblemPage as SharedReportProblemPage } from '@ejm/shared-ui';
 import { useAuthStore } from '@/stores/authStore';
-
-const SUPPORT_EMAIL = 'support@sync-study.com';
-const BRAND = 'Sync/Study';
+// From the shared constants rather than re-declared: this file held its own
+// copy of both, which is exactly the drift brand.ts's docblock warns about
+// (issue #115 -- the copy here outlived the address it named).
+import { BRAND, SUPPORT_EMAIL } from '@/constants/brand';
 
 /**
  * Sync/Study wrapper around the shared ReportProblemPage — binds the brand,
