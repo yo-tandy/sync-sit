@@ -19,8 +19,11 @@ export const POST_DENIAL_KEYS: Record<PostDenial, string> = {
   family_not_verified: 'family.post.deniedNotVerified',
 };
 
+// `Object.hasOwn`, not `in`: `in` walks the prototype chain, so a reason of
+// 'constructor' or 'toString' would be accepted as a denial and then resolve
+// to an inherited Object member instead of a copy key.
 export function isPostDenial(reason: unknown): reason is PostDenial {
-  return typeof reason === 'string' && reason in POST_DENIAL_KEYS;
+  return typeof reason === 'string' && Object.hasOwn(POST_DENIAL_KEYS, reason);
 }
 
 /**

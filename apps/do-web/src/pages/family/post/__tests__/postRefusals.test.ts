@@ -63,6 +63,15 @@ describe('isPostDenial', () => {
       expect(isPostDenial(other)).toBe(false);
     }
   });
+
+  it('rejects inherited Object keys — a `in` check would accept these', () => {
+    // `'constructor' in POST_DENIAL_KEYS` is true, and the lookup would then
+    // hand `t()` the Object constructor instead of a copy key.
+    for (const inherited of ['constructor', 'toString', 'hasOwnProperty', '__proto__']) {
+      expect(isPostDenial(inherited), inherited).toBe(false);
+      expect(publishErrorCopyKey(inherited as never)).toBe('family.post.publishError');
+    }
+  });
 });
 
 describe('publishErrorCopyKey', () => {
