@@ -30,6 +30,44 @@ describe('admin functions', () => {
       expect(result.familyCount).toBeGreaterThanOrEqual(2);     // 2 families
     });
 
+    // sync-do §9.4's task tiles. Seeded here rather than trusting the seed
+    // set, so a typo in the status literal (or a tile wired to the wrong
+    // field) fails instead of passing on an all-zero dashboard.
+    it('counts sync-do tasks, total and open', async () => {
+      const db = getDb();
+      const base = {
+        familyId: 'dash-family',
+        createdByUserId: 'dash-parent',
+        category: 'ikea',
+        photos: [],
+        offerCount: 0,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      await db.collection('doTasks').doc('dash-open').set({ ...base, status: 'open' });
+      await db.collection('doTasks').doc('dash-done').set({ ...base, status: 'completed' });
+
+      try {
+        const result = await callFunction<{
+          doTaskCount: number;
+          doOpenTaskCount: number;
+        }>('getAdminDashboard', {}, adminToken);
+
+        expect(result.doTaskCount).toBe(2);
+        // The open count is the narrower one — a completed task must not
+        // inflate it, which is the whole reason both tiles exist.
+        expect(result.doOpenTaskCount).toBe(1);
+      } finally {
+        // In a `finally`, so a failed assertion cannot leak these two into
+        // the rest of the file. This suite seeds once in `beforeAll` and is
+        // otherwise non-destructive, so a stray `doTasks` doc would be a trap
+        // for the next counting test added here rather than an immediate
+        // failure — the kind that only bites months later.
+        await db.collection('doTasks').doc('dash-open').delete();
+        await db.collection('doTasks').doc('dash-done').delete();
+      }
+    });
+
     it('rejects non-admin user', async () => {
       await expect(
         callFunction('getAdminDashboard', {}, parentToken)

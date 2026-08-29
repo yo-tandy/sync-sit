@@ -536,6 +536,36 @@ describe('GDPR coverage for sync-do data (§11.4)', () => {
       });
     });
 
+    // NOTE ON WHAT THIS DOES AND DOES NOT PIN. Deleting the object BEFORE
+    // the callable runs means the erasure's own listing never returns it, so
+    // the `ignoreNotFound` path is never entered — this case passes with or
+    // without that option, and an earlier revision of this PR wrongly
+    // claimed otherwise. The real race (an object vanishing BETWEEN the
+    // listing and the delete) cannot be staged from here: the callable runs
+    // inside the functions emulator and the test cannot reach into it
+    // mid-erasure. That pin lives at the options seam, in
+    // `packages/shared-functions/src/admin/__tests__/doGdprPrefixErasure.test.ts`,
+    // and is mutation-checked.
+    //
+    // What this case IS worth: a partially-swept prefix — the ordinary state
+    // after the daily quarantine sweep, or an admin retry — still erases end
+    // to end, with the account actually deleted rather than the callable
+    // throwing over an already-absent object.
+    it('erases a partially-swept prefix end to end', async () => {
+      await seedPhoto(seed.parent1.uid, 'racy-1');
+      await seedPhoto(seed.parent1.uid, 'racy-2', 'do-uploads');
+      // Already gone before the callable runs — a prefix the sweep partly
+      // cleared. NOT the mid-erasure race; see the note above.
+      await getBucket().file(`do-uploads/${seed.parent1.uid}/racy-2`).delete();
+
+      await callFunction('deleteUser', { targetUserId: seed.parent1.uid }, adminToken);
+
+      // The erasure completed: the remaining object is gone AND the account
+      // was actually deleted, which a throw partway would have prevented.
+      expect(await objectExists(`do-photos/${seed.parent1.uid}/racy-1`)).toBe(false);
+      expect((await getDb().collection('users').doc(seed.parent1.uid).get()).exists).toBe(false);
+    });
+
     it("leaves an unrelated family's task and photos completely untouched", async () => {
       await seedPhoto(seed.parent1.uid, 'mine-1');
       await seedPhoto(seed.parent3.uid, 'theirs-1');

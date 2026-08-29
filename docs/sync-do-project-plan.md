@@ -1891,6 +1891,32 @@ V1 — deliberately. Building one would imply a responsibility this decision
 declines. Admin can see the task record and the agreed price if asked to help
 two members reconstruct what was agreed; that is the limit.
 
+**Delivered state (PR #342, the §13 PR10 row) — the ToS half is carved out,
+and this is the record of it rather than a PR comment.** The two in-product
+sites shipped in PR7 and are pinned by tests: the posting flow's review step
+and the acceptance dialog both render `family.post.liabilityNotice`, EN and
+FR. The **ToS half did not ship, deliberately.** All three apps render the
+shared `packages/shared-ui/src/pages/TermsPage.tsx` with only the brand
+interpolated, and that page is babysitting-specific throughout — §2's service
+description and, decisively, §8 "Platform Role and Limitation of Liability",
+which names babysitters exclusively and says nothing about a student
+assembling furniture or house-sitting. Closing it is not an appended
+sentence: it is the counsel pass **issue #308** already scopes (per-app
+service description, the handshake-only stance, minors' occasional-work
+rules), and this section itself calls the ToS wording a Tandy SARL item and
+the plan's one launch blocker. Editing it inside a build PR would be exactly
+the unreviewed legal copy #308 exists to prevent.
+
+The **privacy policy has the same gap and the same owner**: `PrivacyPage.tsx`'s
+retention list enumerates only sit-era categories, so task photos of home
+interiors and decision 19's 6-month task retention are a new data category
+with no policy line. Both halves therefore sit with #308.
+
+**Open for the owner:** confirm that deferring the ToS and privacy-policy
+wording to #308 is the intended reading of decision 15's "stated in the
+terms", given the in-product halves are live. Nothing else in the PR10 row
+is outstanding.
+
 **Still worth a lawyer's eye before launch, not before build:** whether French
 rules on minors' occasional work bear on any of this, and whether the ToS
 wording achieves what decision 15 intends. That is a Tandy SARL item, and it is
@@ -1978,7 +2004,7 @@ the repo has been using.
 | **7** | Family UI: post wizard, my tasks, offer review, assigned task, contact reveal. | 12 |
 | **8** | Doer UI: board with filters, task detail, offer form, my offers, my assignments. | 12 |
 | **9** | Notifications: all twelve `NotificationType` values added to `shared-core` (§10), email templates EN+FR and senders for the nine task/offer types, `fcmTokensDo` push, the rate-limited board digest. The endorsement trio's templates/senders land at PR11 with their surface. | 8 |
-| **10** | Admin tasks tab, audit coverage, GDPR export + hard-delete coverage (documents AND the photo prefixes + the export's photo-path enumeration, §11.4), and the decision-15 liability copy in the ToS + posting review + acceptance dialog. (The photo pipeline itself moved to PR5 — its dependents live there.) | 8 |
+| **10** | Admin tasks tab, audit coverage, GDPR export + hard-delete coverage (documents AND the photo prefixes + the export's photo-path enumeration, §11.4), and the decision-15 liability copy in the ToS + posting review + acceptance dialog. (The photo pipeline itself moved to PR5 — its dependents live there.) **Shipped 2 of the 3 liability sites — the ToS half is carved out to #308; see §11.5.** | 8 |
 | **11** | Completion + cancellation flows; **doer endorsements** (`DoerEndorsementDoc` in `references` with the rules amendment, `doSubmitEndorsement` / `doRespondToEndorsement` mirroring study's pair, the family prompt after completion, the §9.2 "My endorsements" surface, and the offer card's three-source ordering); FR i18n pass, Playwright e2e for post→offer→accept→complete→endorse, screenshots on the PR. | 12 |
 
 Dependencies: 1 → 2 → {3, 4} → 5 → 6 → {7, 8} → 9 → 10 → 11. PRs 7 and 8 can run

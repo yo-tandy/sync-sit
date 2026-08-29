@@ -260,6 +260,13 @@ export async function eraseDoUserData(
     ).values(),
   ) as FirebaseFirestore.QueryDocumentSnapshot[];
 
+  // A THIRD task-deletion path, and deliberately not `deleteTaskCascade`:
+  // `shared-functions` cannot import `apps/functions/src/do/taskAccess`, so
+  // the sibling-reference check does not run here. That is the correct
+  // outcome rather than a gap — a task created by the erased user may hold
+  // `{uid, photoId}` pairs belonging to the SURVIVING co-parent, whose
+  // objects step 3 must not touch; they simply become unreferenced and the
+  // sweep's 1-day orphan pass collects them.
   for (const taskDoc of tasksToDelete) {
     const offers = await db
       .collection(DO_OFFERS_COLLECTION)
@@ -370,12 +377,37 @@ export async function eraseDoUserData(
   stats.assignmentsCleared = survivingAssignments.length;
 
   // ── 3. Photo objects: both prefixes, wholesale ──
+  // ONE listing, then bounded-concurrency deletes from it — deliberately not
+  // `bucket.deleteFiles()`.
+  //
+  // `deleteFiles` re-streams the same prefix internally, so pairing it with a
+  // `getFiles` for the count lists everything twice — the exact cost the
+  // parallelism was meant to save. Worse, its `query` is forwarded verbatim
+  // to each `file.delete(query)`, which is how an earlier revision of this
+  // block silently lost `ignoreNotFound: true`. That option is not
+  // decoration here: the daily quarantine sweep can remove a
+  // `do-uploads/{uid}/` object between the listing and the delete, and an
+  // admin re-running `deleteUser` after any partial failure hits the same
+  // race. Without it a benign 404 aborts a GDPR erasure.
+  //
+  // On aborting: a Storage failure SHOULD still throw. An earlier revision
+  // justified `force` as "shortening the abort window" before
+  // `userRef.delete()`; that was wrong twice over — `force` aggregates
+  // per-file errors and rejects anyway, and more importantly aborting is the
+  // behaviour we want. Every step here is re-runnable, so a throw leaves the
+  // account alive and the erasure retryable; swallowing the error would
+  // delete the account and report success over objects that are still there.
+  // A failed erasure that says so beats a partial one that doesn't.
   const bucket = getStorage().bucket();
+  const DELETE_CONCURRENCY = 20;
   for (const prefix of [DO_PHOTOS_PREFIX, DO_UPLOADS_PREFIX]) {
     const [files] = await bucket.getFiles({ prefix: `${prefix}${targetUserId}/` });
-    for (const file of files) {
-      await file.delete({ ignoreNotFound: true });
-      stats.photoObjectsDeleted += 1;
+    for (let i = 0; i < files.length; i += DELETE_CONCURRENCY) {
+      const chunk = files.slice(i, i + DELETE_CONCURRENCY);
+      await Promise.all(chunk.map((file) => file.delete({ ignoreNotFound: true })));
+      // Counted per settled delete, so the number is what this call actually
+      // removed rather than what a prior listing happened to see.
+      stats.photoObjectsDeleted += chunk.length;
     }
   }
 

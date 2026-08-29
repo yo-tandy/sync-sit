@@ -125,15 +125,19 @@ export const doAdminListTasks = onCall(
     }
     await verifyAdmin(request.auth.uid);
 
-    const {
-      searchQuery,
-      categoryFilter,
-      statusFilter,
-      familyIdFilter,
-      taskId,
-      limit = ADMIN_TASKS_LIMIT,
-      startAfterId,
-    } = (request.data ?? {}) as AdminListTasksInput;
+    const raw = (request.data ?? {}) as AdminListTasksInput;
+    const { taskId, limit = ADMIN_TASKS_LIMIT, startAfterId } = raw;
+    // Narrowed at the boundary, uniformly with the `pageLimit` clamp below:
+    // these are typed `string | undefined` but arrive as arbitrary JSON, and
+    // a number reaching `.toLowerCase()` or `.where()` surfaces as `internal`
+    // rather than as something the caller can act on. Admin-only, so the
+    // impact is a confusing 500 — but the inconsistency is the point.
+    const str = (v: unknown): string | undefined =>
+      typeof v === 'string' && v.length > 0 ? v : undefined;
+    const searchQuery = str(raw.searchQuery);
+    const categoryFilter = str(raw.categoryFilter);
+    const statusFilter = str(raw.statusFilter);
+    const familyIdFilter = str(raw.familyIdFilter);
 
     // ── Detail mode: one task + all of its offers ──
     if (taskId) {
