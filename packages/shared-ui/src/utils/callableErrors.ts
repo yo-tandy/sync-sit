@@ -32,3 +32,26 @@ export function ageGateErrorCode(err: unknown): AgeGateErrorCode | null {
   const code = details?.code;
   return code === 'age/under-15' || code === 'age/mismatch' ? code : null;
 }
+
+/**
+ * The Firebase callable error code, with the client SDK's `functions/` prefix
+ * stripped, or null when the rejection carries no recognisable code.
+ *
+ * Why a CODE and not `err.message`: the callables throw English-only server
+ * strings ('You cannot remove yourself', 'Must be logged in') and literally
+ * `internal` on an unexpected fault, so echoing the message puts untranslated
+ * English — or a bare error token — in front of French users. `err instanceof
+ * Error` is not a usable guard either: a FunctionsError IS an Error, so an
+ * `instanceof` check passes for every real rejection and any i18n fallback
+ * behind it is unreachable (PR #343 round 5 — that is exactly how the
+ * generate-link path kept echoing raw server text after the removal path was
+ * fixed).
+ *
+ * Call sites map the code to their OWN message keys: the same code means
+ * different things on different actions.
+ */
+export function callableErrorCode(err: unknown): string | null {
+  const code = (err as { code?: unknown } | null)?.code;
+  if (typeof code !== 'string') return null;
+  return code.startsWith('functions/') ? code.slice('functions/'.length) : code;
+}

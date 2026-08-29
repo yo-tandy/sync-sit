@@ -731,6 +731,8 @@ export default {
 
   // Invite
   invite: {
+    generateErrorNotAllowed: 'You do not have permission to invite a co-parent to this family.',
+    generateErrorNoFamily: 'Your family could not be found. Please reload and try again.',
     generateFailed: 'Could not generate an invite link. Please try again.',
     familyMemberFallback: 'Family member',
     title: 'Invite Members',

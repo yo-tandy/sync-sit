@@ -704,6 +704,8 @@ export default {
   },
 
   invite: {
+    generateErrorNotAllowed: 'Vous n\'avez pas la permission d\'inviter un co-parent dans cette famille.',
+    generateErrorNoFamily: 'Votre famille est introuvable. Veuillez recharger la page et réessayer.',
     generateFailed: 'Impossible de générer un lien d\'invitation. Veuillez réessayer.',
     familyMemberFallback: 'Membre de la famille',
     title: 'Inviter des membres',

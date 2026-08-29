@@ -4,6 +4,7 @@ import { Button } from '../components/Button.js';
 import { Card } from '../components/Card.js';
 import { Dialog } from '../components/Dialog.js';
 import { Spinner } from '../components/Spinner.js';
+import { callableErrorCode } from '../utils/callableErrors.js';
 
 export interface CoParentMember {
   uid: string;
@@ -35,15 +36,11 @@ interface CoParentSettingsProps {
  * leaves the wording to each app's catalogue.
  */
 function removeErrorKey(err: unknown): string {
-  const code = (err as { code?: string } | null)?.code;
-  switch (code) {
-    case 'functions/permission-denied':
+  switch (callableErrorCode(err)) {
     case 'permission-denied':
       return 'coParent.removeErrorNotAllowed';
-    case 'functions/not-found':
     case 'not-found':
       return 'coParent.removeErrorNotFound';
-    case 'functions/failed-precondition':
     case 'failed-precondition':
       return 'coParent.removeErrorState';
     default:

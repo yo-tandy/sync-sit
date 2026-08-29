@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor, fireEvent } from '@testing-library/react';
+import { cleanup, screen, fireEvent } from '@testing-library/react';
 
 /**
  * The container half of the co-parent move (issue #340). The presentation is
@@ -100,10 +100,40 @@ describe('study CoParentSection (issue #340)', () => {
     expect(await screen.findByText('An error occurred')).toBeInTheDocument();
   });
 
-  it('reports a failed link generation', async () => {
-    h.callable.mockRejectedValue(new Error('Boom'));
+  it('translates a failed link generation instead of echoing server text', async () => {
+    // The previous version of this test asserted the RAW message and so pinned
+    // the defect rather than the fix (PR #343 round 5): a FunctionsError is an
+    // Error, so `err instanceof Error ? err.message : fallback` always echoed
+    // the callable's English-only string and the fallback key was unreachable.
+    h.callable.mockRejectedValue(
+      Object.assign(new Error('You are not a member of this family'), {
+        code: 'functions/permission-denied',
+      }),
+    );
     renderWithProviders(<CoParentSection />);
     fireEvent.click(await screen.findByRole('button', { name: 'Generate invite link' }));
-    await waitFor(() => expect(screen.getByText('Boom')).toBeInTheDocument());
+    expect(
+      await screen.findByText('You do not have permission to invite a co-parent to this family.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('You are not a member of this family')).toBeNull();
+  });
+
+  it('maps each generate error code to its own message, with a real fallback', async () => {
+    const cases: [string | undefined, string][] = [
+      ['functions/not-found', 'Your family could not be found. Please reload and try again.'],
+      ['functions/internal', 'Could not generate an invite link. Please try again.'],
+      // No code at all (a plain throw) must still reach the fallback, not blank.
+      [undefined, 'Could not generate an invite link. Please try again.'],
+    ];
+    for (const [code, expected] of cases) {
+      h.callable.mockReset();
+      const err = new Error('server text');
+      if (code) Object.assign(err, { code });
+      h.callable.mockRejectedValue(err);
+      renderWithProviders(<CoParentSection />);
+      fireEvent.click(await screen.findByRole('button', { name: 'Generate invite link' }));
+      expect(await screen.findByText(expected)).toBeInTheDocument();
+      cleanup();
+    }
   });
 });

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { doc, getDoc } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
-import { CoParentSettings, useFlashTimer, type CoParentMember } from '@ejm/shared-ui';
+import { CoParentSettings, callableErrorCode, useFlashTimer, type CoParentMember } from '@ejm/shared-ui';
 import { db, functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { useToast } from '@/components/ui';
@@ -14,6 +14,19 @@ import { getParentView } from '@ejm/sit-core';
  * for it. Firebase access lives here because shared-ui carries no firebase
  * dependency; the presentation is shared so the two apps cannot drift.
  */
+/** Map a generateInviteLink rejection to a translated message. Same reasoning
+ * as the removal path in CoParentSettings: map the CODE, never the message. */
+function generateErrorKey(err: unknown): string {
+  switch (callableErrorCode(err)) {
+    case 'permission-denied':
+      return 'invite.generateErrorNotAllowed';
+    case 'not-found':
+      return 'invite.generateErrorNoFamily';
+    default:
+      return 'invite.generateFailed';
+  }
+}
+
 export function CoParentSection() {
   const { t } = useTranslation();
   const toast = useToast();
@@ -76,7 +89,11 @@ export function CoParentSection() {
       const token = (res.data as { token: string }).token;
       setInviteLink(`${window.location.origin}/invite/${token}`);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : t('invite.generateFailed'));
+      // NOT `err instanceof Error ? err.message : ...`: a FunctionsError IS an
+      // Error, so that branch always won and echoed the callable's English-only
+      // server text ('Must be logged in', or bare `internal`) at French users,
+      // leaving the fallback key unreachable (PR #343 round 5).
+      setError(t(generateErrorKey(err)));
     } finally {
       setGenerating(false);
     }
