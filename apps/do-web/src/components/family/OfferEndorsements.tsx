@@ -2,24 +2,30 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { collection, getDocs, limit, query, where } from 'firebase/firestore';
 import { Spinner } from '@ejm/shared-ui';
+import {
+  endorsementSources,
+  toCrossAppEndorsement,
+  PUBLIC_ENDORSEMENT_STATUSES,
+  type CrossAppEndorsement,
+} from '@ejm/shared-core';
 import { db } from '@/config/firebase';
 
-interface EndorsementLine {
-  id: string;
-  /** Which app vouches — decides ordering and the origin label (§9.1). */
-  source: 'do' | 'sit' | 'study';
-  name: string;
-  text: string;
-}
+/** Origin label per sibling product; do labels only what is NOT its own. */
+const ORIGIN_LABEL_KEY: Record<'sit' | 'study', string> = {
+  sit: 'family.taskDetail.endorsementFromSit',
+  study: 'family.taskDetail.endorsementFromStudy',
+};
 
 /** Per-source cap, the TutorCard precedent — an offer card is a summary,
  * not an archive. */
 const PER_SOURCE_LIMIT = 10;
 
 /**
- * The §9.1 offer-card endorsements: three queries against the shared
- * `references` collection, one per app's key field — and each carries
- * `where('status','in',['approved','published'])`, which is LOAD-BEARING:
+ * The §9.1 offer-card endorsements: one query per registered product against
+ * the shared `references` collection, keyed by that product's subject field
+ * (the shared `endorsementSources` registry, issue #280 — sit and study read
+ * the same registry, so a fourth product is one entry, not three edits) — and
+ * each carries `where('status','in',['approved','published'])`, LOAD-BEARING:
  * the H2-hardened read rule grants an unrelated caller only the
  * public-status disjunct, provable only when the query constrains status.
  * Dropping it is PERMISSION_DENIED, and the wrong fix is widening the
@@ -35,44 +41,35 @@ const PER_SOURCE_LIMIT = 10;
  */
 export function OfferEndorsements({ doerUserId }: { doerUserId: string }) {
   const { t } = useTranslation();
-  const [lines, setLines] = useState<EndorsementLine[] | null>(null);
+  const [lines, setLines] = useState<CrossAppEndorsement[] | null>(null);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     async function load() {
       try {
-        const sources: { source: EndorsementLine['source']; field: string }[] = [
-          { source: 'do', field: 'doerUserId' },
-          { source: 'sit', field: 'babysitterUserId' },
-          { source: 'study', field: 'tutorUserId' },
-        ];
+        const sources = endorsementSources('do');
         const snaps = await Promise.all(
           sources.map(({ field }) =>
             getDocs(
               query(
                 collection(db, 'references'),
                 where(field, '==', doerUserId),
-                where('status', 'in', ['approved', 'published']),
+                where('status', 'in', PUBLIC_ENDORSEMENT_STATUSES),
                 limit(PER_SOURCE_LIMIT),
               ),
             ),
           ),
         );
         if (cancelled) return;
-        const result: EndorsementLine[] = [];
-        snaps.forEach((snap, i) => {
-          for (const d of snap.docs) {
-            const data = d.data() as Record<string, unknown>;
-            result.push({
-              id: d.id,
-              source: sources[i].source,
-              name: (data.submittedByName as string) || (data.refName as string) || '',
-              text: (data.referenceText as string) || '',
-            });
-          }
-        });
-        setLines(result);
+        // Concatenated in source order, so sync-do's own entries lead.
+        setLines(
+          snaps.flatMap((snap, i) =>
+            snap.docs.map((d) =>
+              toCrossAppEndorsement(sources[i].app, d.id, d.data() as Record<string, unknown>),
+            ),
+          ),
+        );
       } catch {
         if (!cancelled) setFailed(true);
       }
@@ -100,15 +97,13 @@ export function OfferEndorsements({ doerUserId }: { doerUserId: string }) {
   return (
     <ul className="space-y-2">
       {lines.map((line) => (
-        <li key={`${line.source}-${line.id}`} className="rounded-lg bg-gray-50 p-2.5">
+        <li key={`${line.sourceApp}-${line.id}`} className="rounded-lg bg-gray-50 p-2.5">
           <p className="text-xs leading-relaxed text-gray-600">“{line.text}”</p>
           <p className="mt-1 text-[11px] text-gray-400">
-            {line.name && <span className="font-medium">{line.name}</span>}
-            {line.source !== 'do' && (
+            {line.refName && <span className="font-medium">{line.refName}</span>}
+            {line.sourceApp !== 'do' && (
               <span className="ml-1.5 rounded bg-gray-200 px-1.5 py-0.5 font-medium text-gray-500">
-                {line.source === 'sit'
-                  ? t('family.taskDetail.endorsementFromSit')
-                  : t('family.taskDetail.endorsementFromStudy')}
+                {t(ORIGIN_LABEL_KEY[line.sourceApp])}
               </span>
             )}
           </p>

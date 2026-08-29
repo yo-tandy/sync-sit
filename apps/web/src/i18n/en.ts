@@ -387,6 +387,8 @@ export default {
   // References
   references: {
     title: 'Endorsements',
+    fromStudy: 'From Sync/Study',
+    fromDo: 'From Sync/Do',
     myReferences: 'Manually entered endorsements',
     noReferencesYet: 'No endorsements added yet',
     addReference: 'Add an endorsement',

@@ -10,7 +10,9 @@ const h = vi.hoisted(() => ({
   where: vi.fn((field: string, op: string, val: unknown) => ({ field, op, val })),
   limit: vi.fn((n: number) => ({ limit: n })),
   getDocs: vi.fn(),
-  endorsementDocs: [] as { data: () => Record<string, unknown> }[],
+  queries: [] as unknown[][],
+  /** Rows per `references` subject field — the card issues one query per app. */
+  results: new Map<string, Record<string, unknown>[]>(),
   callable: vi.fn(),
 }));
 
@@ -54,9 +56,17 @@ function tutor(overrides: Partial<TutorSearchResult> = {}): TutorSearchResult {
 function reset() {
   h.where.mockClear();
   h.limit.mockClear();
-  h.endorsementDocs = [];
+  h.queries = [];
+  h.results = new Map();
   h.getDocs.mockReset();
-  h.getDocs.mockImplementation(() => Promise.resolve({ docs: h.endorsementDocs }));
+  // Field-aware: the card issues ONE query per product, so a single shared
+  // doc list would triple every endorsement.
+  h.getDocs.mockImplementation((q: { query: unknown[] }) => {
+    h.queries.push(q.query);
+    const field = (q.query[1] as { field: string }).field;
+    const rows = h.results.get(field) ?? [];
+    return Promise.resolve({ docs: rows.map((r, i) => ({ id: `${field}-${i}`, data: () => r })) });
+  });
   h.callable.mockReset();
   h.callable.mockResolvedValue({ data: { requestId: 'r1' } });
 }
@@ -235,21 +245,87 @@ describe('TutorCard', () => {
   });
 
   // ── Endorsements lazy-load ──
+  const expand = () =>
+    fireEvent.click(screen.getByRole('button', { name: /show|more|details|less/i }));
+
   it('lazily queries approved endorsements on expand and lists refName + text', async () => {
-    h.endorsementDocs = [
-      { data: () => ({ submittedByName: 'Mme Dupont', referenceText: 'Great tutor.' }) },
-    ];
+    h.results.set('tutorUserId', [
+      { submittedByName: 'Mme Dupont', referenceText: 'Great tutor.' },
+    ]);
     renderWithProviders(<TutorCard result={tutor({ endorsementCount: 1 })} />);
 
     // Not fetched until expanded.
     expect(h.getDocs).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole('button', { name: /endorsement|show|more|details/i }));
+    expand();
 
     await waitFor(() => expect(h.getDocs).toHaveBeenCalled());
     expect(h.where).toHaveBeenCalledWith('tutorUserId', '==', 't1');
     expect(h.where).toHaveBeenCalledWith('status', 'in', ['approved', 'published']);
     expect(await screen.findByText(/Mme Dupont/)).toBeInTheDocument();
     expect(screen.getByText(/Great tutor/)).toBeInTheDocument();
+  });
+
+  // ── Cross-app endorsements (issue #280) ──
+  it('issues one status-constrained query per product, study first', async () => {
+    renderWithProviders(<TutorCard result={tutor()} />);
+    expand();
+    await waitFor(() => expect(h.queries).toHaveLength(3));
+    // Order is the contract: study's own field leads, siblings follow.
+    expect(h.queries.map((q) => (q[1] as { field: string }).field)).toEqual([
+      'tutorUserId',
+      'babysitterUserId',
+      'doerUserId',
+    ]);
+    for (const q of h.queries) {
+      // NOT optional: the H2-hardened references rule grants an unrelated
+      // family only the public-status disjunct, provable only from the query.
+      expect(q[2]).toEqual({ field: 'status', op: 'in', val: ['approved', 'published'] });
+    }
+  });
+
+  it('renders study endorsements first, then sit ones labeled with their origin', async () => {
+    h.results.set('tutorUserId', [
+      { submittedByName: 'Famille Etude', referenceText: 'Patient maths tutor' },
+    ]);
+    h.results.set('babysitterUserId', [
+      { refName: 'Famille Garde', referenceText: 'Great with our kids' },
+    ]);
+    renderWithProviders(<TutorCard result={tutor()} />);
+    expand();
+
+    await waitFor(() => expect(screen.getByText(/Patient maths tutor/)).toBeInTheDocument());
+    const texts = screen.getAllByText(/Patient maths tutor|Great with our kids/).map(
+      (el) => el.textContent,
+    );
+    expect(texts[0]).toContain('Patient maths tutor');
+
+    // The sit entry carries its origin; the study one — the current app's own
+    // signal — carries none, so cross-app text never reads as tutoring signal.
+    expect(screen.getByText('From Sync/Sit')).toBeInTheDocument();
+    const studyBlock = screen.getByText(/Patient maths tutor/).parentElement!;
+    expect(studyBlock.textContent).not.toContain('From Sync/');
+  });
+
+  it('loads endorsements even when the STUDY endorsement count is zero', async () => {
+    // endorsementCount is the study-only tally searchTutors projects; gating
+    // the fetch on it would hide every sit reference a tutor carries.
+    h.results.set('babysitterUserId', [
+      { refName: 'Famille Garde', referenceText: 'Great with our kids' },
+    ]);
+    renderWithProviders(<TutorCard result={tutor({ endorsementCount: 0 })} />);
+    expand();
+
+    expect(await screen.findByText(/Great with our kids/)).toBeInTheDocument();
+    expect(screen.getByText('From Sync/Sit')).toBeInTheDocument();
+  });
+
+  it('keeps the card intact when the endorsement queries are denied', async () => {
+    h.getDocs.mockRejectedValue(new Error('permission-denied'));
+    renderWithProviders(<TutorCard result={tutor()} />);
+    expand();
+
+    await waitFor(() => expect(h.getDocs).toHaveBeenCalled());
+    expect(screen.getByRole('button', { name: /request contact/i })).toBeInTheDocument();
   });
 });

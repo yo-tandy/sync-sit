@@ -18,6 +18,21 @@ import { getDateTag } from '@/lib/dateTag';
 import { DateTag } from '@/components/ui/DateTag';
 import type { FamilyDoc, KidDoc, BabysitterSummary } from '@ejm/sit-core';
 import { getParentView } from '@ejm/sit-core';
+import {
+  endorsementSources,
+  toCrossAppEndorsement,
+  PUBLIC_ENDORSEMENT_STATUSES,
+  type CrossAppEndorsement,
+} from '@ejm/shared-core';
+
+/** Per-source cap — a result card is a summary, not an archive. */
+const PER_SOURCE_ENDORSEMENT_LIMIT = 10;
+
+/** Origin label per sibling product; sit labels only what is NOT its own. */
+const SIT_ORIGIN_LABEL_KEY: Record<'study' | 'do', string> = {
+  study: 'references.fromStudy',
+  do: 'references.fromDo',
+};
 
 // Time options 06:00–02:00
 function generateTimeOptions(): { value: string; label: string }[] {
@@ -111,44 +126,38 @@ export function SearchPage() {
   // Expanded card
   const [expandedBabysitter, setExpandedBabysitter] = useState<string | null>(null);
 
-  // References for expanded babysitter
-  interface RefInfo {
-    text: string;
-    refName: string;
-    refEmail?: string;
-    refPhone?: string;
-    refWhatsapp?: string;
-    isEjmFamily?: boolean;
-    numberOfKids?: number;
-    kidAges?: number[];
-  }
-  const [babysitterRefs, setBabysitterRefs] = useState<Record<string, RefInfo[]>>({});
+  // Endorsements for the expanded babysitter — sit's own references FIRST,
+  // then the sibling products' (issue #280). One query per source against the
+  // shared `references` collection, each keyed by that product's subject field.
+  const [babysitterRefs, setBabysitterRefs] = useState<Record<string, CrossAppEndorsement[]>>({});
   const [expandedRefIds, setExpandedRefIds] = useState<Set<string>>(new Set());
 
   const loadRefs = async (uid: string) => {
     if (babysitterRefs[uid]) return; // already loaded
     try {
-      const snap = await getDocs(
-        query(
-          collection(db, 'references'),
-          where('babysitterUserId', '==', uid),
-          where('status', 'in', ['approved', 'published']),
-          limit(10)
+      const sources = endorsementSources('sit');
+      const snaps = await Promise.all(
+        sources.map(({ field }) =>
+          getDocs(
+            query(
+              collection(db, 'references'),
+              where(field, '==', uid),
+              // Load-bearing: the H2-hardened references read rule grants an
+              // unrelated family only the public-status disjunct, provable
+              // only from the QUERY. Without it every card is
+              // PERMISSION_DENIED — and the fix is the query, never the rule.
+              where('status', 'in', PUBLIC_ENDORSEMENT_STATUSES),
+              limit(PER_SOURCE_ENDORSEMENT_LIMIT)
+            )
+          )
         )
       );
-      const refs: RefInfo[] = snap.docs.map((d) => {
-        const data = d.data();
-        return {
-          text: data.referenceText || data.note || '',
-          refName: data.submittedByName || data.refName || '',
-          refEmail: data.refEmail || undefined,
-          refPhone: data.refPhone || undefined,
-          refWhatsapp: data.refWhatsapp || undefined,
-          isEjmFamily: data.isEjmFamily || false,
-          numberOfKids: data.numberOfKids || undefined,
-          kidAges: data.kidAges || undefined,
-        };
-      });
+      // Concatenated in source order, so sit's own references lead.
+      const refs = snaps.flatMap((snap, i) =>
+        snap.docs.map((d) =>
+          toCrossAppEndorsement(sources[i].app, d.id, d.data() as Record<string, unknown>)
+        )
+      );
       setBabysitterRefs((prev) => ({ ...prev, [uid]: refs }));
     } catch { /* silent */ }
   };
@@ -721,16 +730,25 @@ export function SearchPage() {
                         <div className="mt-2 rounded-lg border border-gray-200 bg-gray-50 p-3">
                           <p className="mb-2 text-xs font-semibold text-gray-700"><span className="text-green-600">✓</span> {t('references.title')} ({babysitterRefs[b.uid].length})</p>
                           {babysitterRefs[b.uid].map((ref, i) => {
-                            const refKey = `${b.uid}-${i}`;
+                            const refKey = `${b.uid}-${ref.sourceApp}-${ref.id || i}`;
                             const refExpanded = expandedRefIds.has(refKey);
                             return (
-                              <div key={i} className="mb-1.5 last:mb-0">
+                              <div key={refKey} className="mb-1.5 last:mb-0">
                                 <button
                                   onClick={(e) => { e.stopPropagation(); setExpandedRefIds((prev) => { const next = new Set(prev); if (refExpanded) next.delete(refKey); else next.add(refKey); return next; }); }}
                                   className="w-full text-left rounded-md px-2 py-1.5 text-xs font-medium text-gray-700 hover:bg-white active:bg-white"
                                 >
                                   {refExpanded ? '▾' : '▸'} {ref.refName ? `Endorsement from ${ref.refName}` : `Endorsement ${i + 1}`}
                                   {ref.isEjmFamily && <span className="ml-1.5 text-blue-600 font-normal">EJM Family</span>}
+                                  {/* Origin label (issue #280): a Sync/Study
+                                      endorsement vouches for tutoring, not for
+                                      babysitting — unlabeled it would read as
+                                      generic reputation. */}
+                                  {ref.sourceApp !== 'sit' && (
+                                    <span className="ml-1.5 rounded bg-gray-200 px-1.5 py-0.5 text-[11px] font-medium text-gray-500">
+                                      {t(SIT_ORIGIN_LABEL_KEY[ref.sourceApp])}
+                                    </span>
+                                  )}
                                 </button>
                                 {refExpanded && (
                                   <div className="ml-4 mt-1 mb-2 space-y-1">

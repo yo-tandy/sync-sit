@@ -5,6 +5,12 @@ import { collection, query, where, limit, getDocs } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '@/config/firebase';
 import type { TutorSearchResult, StudyContactRequestStatus } from '@ejm/study-core';
+import {
+  endorsementSources,
+  toCrossAppEndorsement,
+  PUBLIC_ENDORSEMENT_STATUSES,
+  type CrossAppEndorsement,
+} from '@ejm/shared-core';
 import { Card, Button, Badge, Avatar, Dialog, Textarea, formatProviderName } from '@ejm/shared-ui';
 import { humanizeNoticeWindow } from '@/utils/cancellationPolicy';
 
@@ -19,13 +25,27 @@ import { humanizeNoticeWindow } from '@/utils/cancellationPolicy';
  * The expanded card lazily loads the tutor's approved endorsements from the
  * shared `references` collection (client-readable, index-backed) and lists the
  * reference name + text.
+ *
+ * Cross-app (issue #280): the same collection holds sit references and sync-do
+ * endorsements for the SAME uid, so the card queries one source per product —
+ * study first, siblings after — and labels every non-study entry with its
+ * origin. The label is the product judgement, not decoration: a sit reference
+ * vouches for babysitting, not for teaching maths, and an unlabeled list would
+ * read as generic reputation.
  */
+/** Per-source cap — a result card is a summary, not an archive. */
+const PER_SOURCE_LIMIT = 10;
+
+/** Origin label per sibling product; study labels only what is NOT its own. */
+const ORIGIN_LABEL_KEY: Record<'sit' | 'do', string> = {
+  sit: 'family.search.card.endorsementFromSit',
+  do: 'family.search.card.endorsementFromDo',
+};
+
 export function TutorCard({ result }: { result: TutorSearchResult }) {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
-  const [endorsements, setEndorsements] = useState<{ refName: string; text: string }[] | null>(
-    null,
-  );
+  const [endorsements, setEndorsements] = useState<CrossAppEndorsement[] | null>(null);
   // Local, optimistic view of this family's request status toward the tutor.
   const [status, setStatus] = useState<'none' | 'incoming' | StudyContactRequestStatus>(result.requestStatus);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -37,25 +57,36 @@ export function TutorCard({ result }: { result: TutorSearchResult }) {
   const toggleExpand = async () => {
     const next = !expanded;
     setExpanded(next);
-    // Lazy-load approved endorsements the first time the card is opened.
-    if (next && endorsements === null && result.endorsementCount > 0) {
+    // Lazy-load endorsements the first time the card is opened. NOT gated on
+    // result.endorsementCount: that count is the STUDY tally the search
+    // callable projects, and a tutor with zero study endorsements can still
+    // carry sit references worth showing.
+    if (next && endorsements === null) {
       try {
-        const snap = await getDocs(
-          query(
-            collection(db, 'references'),
-            where('tutorUserId', '==', result.uid),
-            where('status', 'in', ['approved', 'published']),
-            limit(10),
+        const sources = endorsementSources('study');
+        const snaps = await Promise.all(
+          sources.map(({ field }) =>
+            getDocs(
+              query(
+                collection(db, 'references'),
+                where(field, '==', result.uid),
+                // Load-bearing, not cosmetic: the H2-hardened references read
+                // rule gives an unrelated family only the public-status
+                // disjunct, and Firestore proves it from the QUERY. Dropping
+                // this is PERMISSION_DENIED — fix the query, never the rule.
+                where('status', 'in', PUBLIC_ENDORSEMENT_STATUSES),
+                limit(PER_SOURCE_LIMIT),
+              ),
+            ),
           ),
         );
+        // Concatenated in source order, so study's own entries lead.
         setEndorsements(
-          snap.docs.map((d) => {
-            const data = d.data() as Record<string, unknown>;
-            return {
-              refName: (data.submittedByName as string) || (data.refName as string) || '',
-              text: (data.referenceText as string) || '',
-            };
-          }),
+          snaps.flatMap((snap, i) =>
+            snap.docs.map((d) =>
+              toCrossAppEndorsement(sources[i].app, d.id, d.data() as Record<string, unknown>),
+            ),
+          ),
         );
       } catch {
         setEndorsements([]);
@@ -146,11 +177,16 @@ export function TutorCard({ result }: { result: TutorSearchResult }) {
           </p>
           <div className="space-y-2">
             {endorsements.map((e, i) => (
-              <div key={i}>
+              <div key={`${e.sourceApp}-${e.id || i}`}>
                 <p className="text-xs font-medium text-gray-700">
                   {e.refName
                     ? t('family.search.card.endorsementFrom', { name: e.refName })
                     : t('family.search.card.endorsementAnon')}
+                  {e.sourceApp !== 'study' && (
+                    <span className="ml-1.5 rounded bg-gray-200 px-1.5 py-0.5 text-[11px] font-medium text-gray-500">
+                      {t(ORIGIN_LABEL_KEY[e.sourceApp])}
+                    </span>
+                  )}
                 </p>
                 {e.text && <p className="text-xs italic text-gray-600">{e.text}</p>}
               </div>

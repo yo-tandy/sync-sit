@@ -754,6 +754,8 @@ export default {
         endorsementsTitle: 'Recommandations',
         endorsementFrom: 'Recommandation de {{name}}',
         endorsementAnon: 'Recommandation',
+        endorsementFromSit: 'De Sync/Sit',
+        endorsementFromDo: 'De Sync/Do',
         contactTitle: 'Coordonnées',
         whatsapp: 'WhatsApp',
         book: 'Réserver un cours',
