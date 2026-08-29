@@ -379,7 +379,7 @@ describe('tutor AccountPage', () => {
   });
 
   it('removes the photo by nulling the top-level photoUrl', async () => {
-    const userDoc = makeUserDoc();
+    const userDoc = makeUserDoc() as Record<string, unknown>;
     userDoc.photoUrl = 'https://cdn.example/old.png';
     h.auth.userDoc = userDoc;
     renderWithProviders(<AccountPage />);
@@ -415,7 +415,7 @@ describe('tutor AccountPage', () => {
   });
 
   it('a refresh blip AFTER a successful removal stays silent (the photo IS removed)', async () => {
-    const userDoc = makeUserDoc();
+    const userDoc = makeUserDoc() as Record<string, unknown>;
     userDoc.photoUrl = 'https://cdn.example/old.png';
     h.auth.userDoc = userDoc;
     h.auth.refreshUserDoc.mockRejectedValueOnce(new Error('offline'));
@@ -434,7 +434,7 @@ describe('tutor AccountPage', () => {
   });
 
   it('remove also deletes the storage object recovered from the download URL', async () => {
-    const userDoc = makeUserDoc();
+    const userDoc = makeUserDoc() as Record<string, unknown>;
     userDoc.photoUrl =
       'https://firebasestorage.example/v0/b/x/o/profile-photos%2Ft1.jpg?alt=media&token=abc';
     h.auth.userDoc = userDoc;
@@ -449,7 +449,7 @@ describe('tutor AccountPage', () => {
   });
 
   it('a failed removal shows an inline error and keeps showing the photo', async () => {
-    const userDoc = makeUserDoc();
+    const userDoc = makeUserDoc() as Record<string, unknown>;
     userDoc.photoUrl = 'https://cdn.example/old.png';
     h.auth.userDoc = userDoc;
     h.updateDoc.mockRejectedValueOnce(new Error('offline'));
@@ -464,7 +464,7 @@ describe('tutor AccountPage', () => {
   });
 
   it('a failed upload shows the inline photo error and reverts the preview', async () => {
-    const userDoc = makeUserDoc();
+    const userDoc = makeUserDoc() as Record<string, unknown>;
     userDoc.photoUrl = 'https://cdn.example/old.png';
     h.auth.userDoc = userDoc;
     h.uploadBytes.mockRejectedValueOnce(new Error('storage down'));
