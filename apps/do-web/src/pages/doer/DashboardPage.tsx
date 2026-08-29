@@ -13,6 +13,7 @@ import {
   EmptyState,
   SearchIcon,
   SkeletonCard,
+  Spinner,
   useRefetchOnFocus,
 } from '@ejm/shared-ui';
 import { db } from '@/config/firebase';
@@ -47,7 +48,11 @@ import { formatTimingSummary } from '@/lib/taskDisplay';
  *     the sole source of a whole section, so a read that was still in flight
  *     (or had failed) used to let the empty state say "Nothing on the go"
  *     over an endorsement genuinely waiting — MyEndorsementsPage's rule, and
- *     the same shape as the defect PR #331 round 2 fixed.
+ *     the same shape as the defect PR #331 round 2 fixed. That error state is
+ *     scoped three ways (PR #362 round 2): it renders only when the read has
+ *     nothing to show, its retry spins inside this section instead of
+ *     reopening the page-level gate, and the page-level failure line waits
+ *     for every read to settle before calling the whole page failed.
  *
  * QUERIES — all three are shapes this app already issues; nothing new reaches
  * the server:
@@ -79,6 +84,16 @@ export function DashboardPage() {
   // before it settles.
   const [endorsements, setEndorsements] = useState<DoerEndorsementDoc[] | null>(null);
   const [endorsementsError, setEndorsementsError] = useState(false);
+  /**
+   * Has the FIRST attempt completed — resolved or failed? This, not
+   * `endorsements !== null`, is what the page-level loading gate reads, and a
+   * retry deliberately does NOT reopen it: the page has already painted, and
+   * pulling the offers and assigned-work sections back to skeletons because a
+   * third read is being retried is the opposite of scoping (PR #362 round 2).
+   */
+  const [endorsementsSettled, setEndorsementsSettled] = useState(false);
+  /** A retry is in flight. Scoped to this section — never the page. */
+  const [endorsementsRetrying, setEndorsementsRetrying] = useState(false);
   /** Bumped by the retry button; re-runs the read through the effect below. */
   const [endorsementsTick, setEndorsementsTick] = useState(0);
 
@@ -132,13 +147,19 @@ export function DashboardPage() {
         if (!mountedRef.current) return;
         setEndorsements(snap.docs.map((d) => d.data() as DoerEndorsementDoc));
         setEndorsementsError(false);
+        setEndorsementsSettled(true);
+        setEndorsementsRetrying(false);
       })
       .catch(() => {
-        // Error, never an empty list — see the state declaration. On a focus
-        // REFETCH blip the last-known-good rows survive, because only the
-        // flag is set; on first load `endorsements` is still null, so the
-        // error branch is what renders.
-        if (mountedRef.current) setEndorsementsError(true);
+        // Error, never an empty list — see the state declaration. Rows this
+        // read has ALREADY delivered are kept: `endorsementsBlank` below is
+        // what gates the error block, so a focus-refetch blip over a rendered
+        // section stays invisible (study's dashboards' rule) instead of
+        // replacing a real to-do with an error.
+        if (!mountedRef.current) return;
+        setEndorsementsError(true);
+        setEndorsementsSettled(true);
+        setEndorsementsRetrying(false);
       });
   }, [uid]);
 
@@ -189,19 +210,20 @@ export function DashboardPage() {
   // nothing can load at all.
   const loading =
     uid !== null &&
-    !(
-      (offers !== null || offersError) &&
-      (tasks !== null || tasksError) &&
-      (endorsements !== null || endorsementsError)
-    );
+    !((offers !== null || offersError) && (tasks !== null || tasksError) && endorsementsSettled);
   const loadError = offersError || tasksError;
   const hasRows =
     liveOffers.length > 0 || assignedRows.length > 0 || pendingEndorsements.length > 0;
-  // The endorsement read's own error block is CONTENT: without it in this
-  // gate, a denied endorsements read on an otherwise-quiet account collapses
-  // straight into "Nothing on the go" — the affirmative false statement this
-  // whole branch exists to prevent.
-  const hasAny = hasRows || endorsementsError;
+  // A failed endorsements read takes the section over ONLY when it has
+  // nothing to show. With last-known-good rows in hand the failure is a
+  // refetch blip and stays invisible; with none, "no endorsements" would be
+  // an affirmative statement we cannot make, so the error block renders.
+  const endorsementsBlank = endorsementsError && endorsements === null;
+  // Both of those are CONTENT: without them in this gate, a denied (or
+  // retrying) endorsements read on an otherwise-quiet account collapses
+  // straight into "Nothing on the go" — the false statement this whole
+  // branch exists to prevent.
+  const hasAny = hasRows || endorsementsBlank || endorsementsRetrying;
 
   return (
     <div className="px-5 pt-4 pb-8" data-page-width="wide">
@@ -222,8 +244,11 @@ export function DashboardPage() {
 
       {/* `!hasRows`, not `!hasAny`: when all three reads fail there is nothing
           to show but this line, and it says more than the endorsement block
-          alone would. */}
-      {loadError && !hasRows ? (
+          alone would. `!loading` too: this is a verdict on the whole page, so
+          it must not be delivered while a read is still out (PR #362 round
+          2). In the all-failed case every read has settled, so `loading` is
+          false by construction and the line still renders. */}
+      {loadError && !hasRows && !loading ? (
         <p className="py-10 text-center text-sm text-gray-500">{t('doer.dashboard.loadError')}</p>
       ) : loading ? (
         <div className="space-y-3">
@@ -312,11 +337,24 @@ export function DashboardPage() {
             ))}
           </DashboardSection>
 
-          {/* A failed endorsements read renders as an ERROR with a retry —
-              never as this section quietly not being there, which reads as
-              "nothing to answer" (MyEndorsementsPage's rule, PR #331 round
-              2). Scoped here, so the two sections above still render. */}
-          {endorsementsError ? (
+          {/* A failed endorsements read with NOTHING to show renders as an
+              error with a retry — never as this section quietly not being
+              there, which reads as "nothing to answer" (MyEndorsementsPage's
+              rule, PR #331 round 2). Scoped here, so the two sections above
+              still render — through the retry as well as the error. A failure
+              that still has last-known-good rows renders those rows instead:
+              hiding a live to-do behind an error is the same defect wearing a
+              different colour. */}
+          {endorsementsRetrying ? (
+            <div className="mb-4">
+              <h3 className="mb-2 text-sm font-semibold text-gray-700">
+                {t('doer.dashboard.endorsementsTitle')}
+              </h3>
+              <div className="flex justify-center py-6">
+                <Spinner />
+              </div>
+            </div>
+          ) : endorsementsBlank ? (
             <div className="mb-4">
               <h3 className="mb-2 text-sm font-semibold text-gray-700">
                 {t('doer.dashboard.endorsementsTitle')}
@@ -329,12 +367,16 @@ export function DashboardPage() {
                 variant="outline"
                 fullWidth={false}
                 onClick={() => {
-                  // Clear the error so the retry FALLS THROUGH to the loading
+                  // Clear the error so the retry FALLS THROUGH to a loading
                   // state — otherwise a re-failed read changes nothing on
                   // screen and the button reads as dead (the AssignedTaskView
-                  // / MyEndorsementsPage retry idiom).
+                  // / MyEndorsementsPage retry idiom). That loading state is
+                  // the spinner ABOVE, in this section's own slot: the
+                  // page-level gate reads `endorsementsSettled`, which a
+                  // retry never reopens, so the sections that already loaded
+                  // stay on screen throughout.
                   setEndorsementsError(false);
-                  setEndorsements(null);
+                  setEndorsementsRetrying(true);
                   setEndorsementsTick((n) => n + 1);
                 }}
               >

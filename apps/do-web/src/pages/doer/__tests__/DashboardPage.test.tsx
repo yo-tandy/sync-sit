@@ -28,6 +28,7 @@ const h = vi.hoisted(() => ({
   tasksError: null as null | ((err: unknown) => void),
   referenceRows: [] as Record<string, unknown>[],
   referencesFail: false,
+  referencesGate: null as Promise<void> | null,
   unsub: vi.fn(),
 }));
 
@@ -40,10 +41,16 @@ vi.mock('firebase/firestore', () => ({
   orderBy: (...args: unknown[]) => ({ orderBy: args }),
   getDocs: (q: unknown) => {
     h.getDocsCalls.push(q);
-    if (h.referencesFail) return Promise.reject(new Error('denied'));
-    return Promise.resolve({
-      docs: h.referenceRows.map((r, i) => ({ id: `r${i}`, data: () => r })),
-    });
+    const settle = () =>
+      h.referencesFail
+        ? Promise.reject(new Error('denied'))
+        : Promise.resolve({
+            docs: h.referenceRows.map((r, i) => ({ id: `r${i}`, data: () => r })),
+          });
+    // `referencesGate` holds the one-shot read open, so a test can observe
+    // the page WHILE it is in flight — the state the two snapshots alone
+    // cannot produce.
+    return h.referencesGate ? h.referencesGate.then(settle) : settle();
   },
   onSnapshot: (q: unknown, next: (snap: unknown) => void, error: (err: unknown) => void) => {
     h.queries.push(q);
@@ -125,6 +132,26 @@ async function settled() {
   await waitFor(() => expect(screen.queryByTestId('skeleton-card')).toBeNull());
 }
 
+/** Hold the endorsements read open; the returned function releases it. */
+function holdEndorsements(): () => Promise<void> {
+  let release!: () => void;
+  h.referencesGate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  return async () => {
+    h.referencesGate = null;
+    release();
+    await act(async () => {});
+  };
+}
+
+/** Re-fire the focus refetch `useRefetchOnFocus` listens for. */
+async function refocus() {
+  await act(async () => {
+    window.dispatchEvent(new Event('focus'));
+  });
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   h.queries = [];
@@ -135,6 +162,7 @@ beforeEach(() => {
   h.tasksError = null;
   h.referenceRows = [];
   h.referencesFail = false;
+  h.referencesGate = null;
   h.auth.userDoc = { uid: 'd1', firstName: 'Lea' };
   h.auth.firebaseUser = { uid: 'd1' };
 });
@@ -305,6 +333,69 @@ describe('doer dashboard — sections', () => {
     expect(screen.getByText('Offer o1')).toBeInTheDocument();
     expect(screen.getByText(/Could not check whether an endorsement is waiting/)).toBeInTheDocument();
     // The page-level error line is for the two list reads, not this one.
+    expect(screen.queryByText(/Could not load your dashboard/)).toBeNull();
+  });
+
+  // ── Round 2. Three states the round-1 specs could not reach: they all
+  //    failed on FIRST load, with nothing rendered yet, so first-load and
+  //    refetch behaviour were indistinguishable. ──
+  it('keeps last-known-good rows through a focus-refetch failure', async () => {
+    h.referenceRows = [referenceDoc('r1')];
+    renderWithProviders(<DashboardPage />);
+    pushOffers([]);
+    pushTasks([]);
+    await settled();
+    expect(screen.getByText('Family r1')).toBeInTheDocument();
+
+    // A transient failure on the REFETCH must not take the section away: the
+    // reader is looking at a real to-do, and replacing it with an error hides
+    // it — the softer form of the affirmative false statement this branch
+    // exists to prevent. Study's dashboards state the rule as "a refetch blip
+    // over rendered sections stays invisible".
+    h.referencesFail = true;
+    await refocus();
+
+    expect(screen.getByText('Family r1')).toBeInTheDocument();
+    expect(screen.queryByText(/Could not check whether an endorsement is waiting/)).toBeNull();
+  });
+
+  it('holds the retry inside its own section — the loaded sections never blank', async () => {
+    h.referencesFail = true;
+    renderWithProviders(<DashboardPage />);
+    pushOffers([offerDoc('o1')]);
+    pushTasks([taskDoc('t1')]);
+    await settled();
+    expect(screen.getByText(/Could not check whether an endorsement is waiting/)).toBeInTheDocument();
+
+    h.referencesFail = false;
+    h.referenceRows = [referenceDoc('r1')];
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+
+    // SYNCHRONOUSLY after the click, with the re-read still in flight: the
+    // offer and the assignment are still on screen. Reopening the PAGE-level
+    // loading gate would have replaced both with skeletons.
+    expect(screen.getByText('Offer o1')).toBeInTheDocument();
+    expect(screen.getByText('Task t1')).toBeInTheDocument();
+    expect(screen.queryByTestId('skeleton-card')).toBeNull();
+
+    await waitFor(() => expect(screen.getByText('Family r1')).toBeInTheDocument());
+  });
+
+  it('waits for every read before calling the whole page a failure', async () => {
+    const release = holdEndorsements();
+    renderWithProviders(<DashboardPage />);
+    // The offers listener errors and the tasks snapshot lands empty while the
+    // one-shot endorsements read is still out. The page is LOADING, not
+    // failed: "could not load your dashboard" is a verdict on a page that has
+    // not finished loading.
+    act(() => h.offersError!(new Error('denied')));
+    pushTasks([]);
+    expect(screen.queryByText(/Could not load your dashboard/)).toBeNull();
+    expect(screen.getAllByTestId('skeleton-card').length).toBeGreaterThan(0);
+
+    h.referenceRows = [referenceDoc('r1')];
+    await release();
+    expect(screen.getByText('Family r1')).toBeInTheDocument();
     expect(screen.queryByText(/Could not load your dashboard/)).toBeNull();
   });
 
