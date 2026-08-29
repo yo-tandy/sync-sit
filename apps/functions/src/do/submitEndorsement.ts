@@ -163,11 +163,22 @@ export const doSubmitEndorsement = onCall(
       });
     });
 
-    await writeUserActivity(uid, 'do.endorsement_submitted', {
-      doerUserId,
-      referenceId: refDoc.id,
-      taskId: task.taskId,
-    });
+    // Same post-write rule as the notify block above, for the same reason
+    // (PR #352 round-1 review): the endorsement is already durable, and
+    // `writeUserActivity` does a plain `auditLogs.add()` that can reject. An
+    // unguarded throw here would return `internal` for an action that
+    // SUCCEEDED — and the family's retry then hits the dedup query and is
+    // refused `already-exists`, with no way forward. Matches
+    // `doRespondToEndorsement`'s treatment of its own audit write.
+    try {
+      await writeUserActivity(uid, 'do.endorsement_submitted', {
+        doerUserId,
+        referenceId: refDoc.id,
+        taskId: task.taskId,
+      });
+    } catch (err) {
+      console.error('doSubmitEndorsement: audit write failed after commit:', err);
+    }
 
     return { referenceId: refDoc.id };
   },
