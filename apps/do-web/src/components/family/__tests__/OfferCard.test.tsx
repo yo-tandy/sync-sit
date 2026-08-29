@@ -19,6 +19,8 @@ const h = vi.hoisted(() => ({
   queries: [] as unknown[][],
   results: new Map<string, Record<string, unknown>[]>(),
   fail: false,
+  /** Subject fields whose query should reject — models a partial outage. */
+  failFields: new Set<string>(),
 }));
 
 vi.mock('@/config/firebase', () => ({ db: {}, functions: {} }));
@@ -31,6 +33,7 @@ vi.mock('firebase/firestore', () => ({
     h.queries.push(q.query);
     if (h.fail) return Promise.reject(new Error('denied'));
     const field = (q.query[1] as { where: [string] }).where[0];
+    if (h.failFields.has(field)) return Promise.reject(new Error('denied'));
     const rows = h.results.get(field) ?? [];
     return Promise.resolve({ docs: rows.map((r, i) => ({ id: `${field}-${i}`, data: () => r })) });
   },
@@ -67,6 +70,7 @@ beforeEach(() => {
   h.queries = [];
   h.results = new Map();
   h.fail = false;
+  h.failFields = new Set();
 });
 
 describe('OfferCard endorsements', () => {
@@ -114,6 +118,19 @@ describe('OfferCard endorsements', () => {
     await waitFor(() =>
       expect(screen.getByText(/No endorsements yet/)).toBeInTheDocument(),
     );
+  });
+
+  it('keeps do endorsements when only a SIBLING query fails (allSettled, not all)', async () => {
+    // The error line is now reserved for a TOTAL failure: one failing
+    // secondary source must not hide sync-do's own primary signal.
+    h.results.set('doerUserId', [
+      { referenceText: 'Built our shelves perfectly', submittedByName: 'Famille A' },
+    ]);
+    h.failFields = new Set(['babysitterUserId', 'tutorUserId']);
+    renderWithProviders(<OfferCard offer={offer()} />);
+    await waitFor(() => expect(screen.getByText(/Built our shelves/)).toBeInTheDocument());
+    expect(screen.queryByText(/could not be loaded/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/From Sync\//)).not.toBeInTheDocument();
   });
 
   it('degrades to the error line when the queries fail, card intact', async () => {

@@ -13,6 +13,8 @@ const h = vi.hoisted(() => ({
   queries: [] as unknown[][],
   /** Rows per `references` subject field — the card issues one query per app. */
   results: new Map<string, Record<string, unknown>[]>(),
+  /** Subject fields whose query should reject — models a partial outage. */
+  failFields: new Set<string>(),
   callable: vi.fn(),
 }));
 
@@ -58,12 +60,14 @@ function reset() {
   h.limit.mockClear();
   h.queries = [];
   h.results = new Map();
+  h.failFields = new Set();
   h.getDocs.mockReset();
   // Field-aware: the card issues ONE query per product, so a single shared
   // doc list would triple every endorsement.
   h.getDocs.mockImplementation((q: { query: unknown[] }) => {
     h.queries.push(q.query);
     const field = (q.query[1] as { field: string }).field;
+    if (h.failFields.has(field)) return Promise.reject(new Error('permission-denied'));
     const rows = h.results.get(field) ?? [];
     return Promise.resolve({ docs: rows.map((r, i) => ({ id: `${field}-${i}`, data: () => r })) });
   });
@@ -272,16 +276,14 @@ describe('TutorCard', () => {
     expand();
     await waitFor(() => expect(h.queries).toHaveLength(3));
     // Order is the contract: study's own field leads, siblings follow.
-    expect(h.queries.map((q) => (q[1] as { field: string }).field)).toEqual([
-      'tutorUserId',
-      'babysitterUserId',
-      'doerUserId',
-    ]);
-    for (const q of h.queries) {
+    const fields = ['tutorUserId', 'babysitterUserId', 'doerUserId'];
+    h.queries.forEach((q, i) => {
+      expect(q[1]).toEqual({ field: fields[i], op: '==', val: 't1' });
       // NOT optional: the H2-hardened references rule grants an unrelated
       // family only the public-status disjunct, provable only from the query.
       expect(q[2]).toEqual({ field: 'status', op: 'in', val: ['approved', 'published'] });
-    }
+      expect(q[3]).toEqual({ limit: 10 });
+    });
   });
 
   it('renders study endorsements first, then sit ones labeled with their origin', async () => {
@@ -318,6 +320,31 @@ describe('TutorCard', () => {
 
     expect(await screen.findByText(/Great with our kids/)).toBeInTheDocument();
     expect(screen.getByText('From Sync/Sit')).toBeInTheDocument();
+  });
+
+  it('renders a sync-do endorsement labeled From Sync/Do (PR-11 needs no code change here)', async () => {
+    // The registry and label key already cover `do`; this pins that the i18n
+    // key actually RESOLVES, which TypeScript cannot.
+    h.results.set('doerUserId', [
+      { submittedByName: 'Famille Bricolage', referenceText: 'Assembled our shelves' },
+    ]);
+    renderWithProviders(<TutorCard result={tutor()} />);
+    expand();
+    expect(await screen.findByText(/Famille Bricolage/)).toBeInTheDocument();
+    expect(screen.getByText('From Sync/Do')).toBeInTheDocument();
+  });
+
+  it('keeps study endorsements when only a SIBLING query fails (allSettled, not all)', async () => {
+    // The regression this guards: with Promise.all, one failing secondary
+    // source hid the primary signal entirely.
+    h.results.set('tutorUserId', [
+      { submittedByName: 'Famille Etude', referenceText: 'Patient maths tutor' },
+    ]);
+    h.failFields = new Set(['babysitterUserId', 'doerUserId']);
+    renderWithProviders(<TutorCard result={tutor()} />);
+    expand();
+    expect(await screen.findByText(/Patient maths tutor/)).toBeInTheDocument();
+    expect(screen.queryByText(/From Sync\//)).not.toBeInTheDocument();
   });
 
   it('keeps the card intact when the endorsement queries are denied', async () => {

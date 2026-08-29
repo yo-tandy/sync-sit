@@ -20,19 +20,13 @@ import type { FamilyDoc, KidDoc, BabysitterSummary } from '@ejm/sit-core';
 import { getParentView } from '@ejm/sit-core';
 import {
   endorsementSources,
+  endorsementLabelKey,
   toCrossAppEndorsement,
+  ENDORSEMENT_PER_SOURCE_LIMIT,
   PUBLIC_ENDORSEMENT_STATUSES,
   type CrossAppEndorsement,
 } from '@ejm/shared-core';
-
-/** Per-source cap — a result card is a summary, not an archive. */
-const PER_SOURCE_ENDORSEMENT_LIMIT = 10;
-
-/** Origin label per sibling product; sit labels only what is NOT its own. */
-const SIT_ORIGIN_LABEL_KEY: Record<'study' | 'do', string> = {
-  study: 'references.fromStudy',
-  do: 'references.fromDo',
-};
+import { SIT_ORIGIN_LABEL_PREFIX } from '@/lib/endorsementLabels';
 
 // Time options 06:00–02:00
 function generateTimeOptions(): { value: string; label: string }[] {
@@ -136,7 +130,11 @@ export function SearchPage() {
     if (babysitterRefs[uid]) return; // already loaded
     try {
       const sources = endorsementSources('sit');
-      const snaps = await Promise.all(
+      // allSettled, NOT all: with one query the failure mode was "this card's
+      // endorsements are missing"; with three, Promise.all would let a failure
+      // in a SECONDARY source (an unbuilt sibling composite, a transient
+      // error) hide sit's own primary signal. Degrade to fewer, never to none.
+      const settled = await Promise.allSettled(
         sources.map(({ field }) =>
           getDocs(
             query(
@@ -147,16 +145,18 @@ export function SearchPage() {
               // only from the QUERY. Without it every card is
               // PERMISSION_DENIED — and the fix is the query, never the rule.
               where('status', 'in', PUBLIC_ENDORSEMENT_STATUSES),
-              limit(PER_SOURCE_ENDORSEMENT_LIMIT)
+              limit(ENDORSEMENT_PER_SOURCE_LIMIT)
             )
           )
         )
       );
       // Concatenated in source order, so sit's own references lead.
-      const refs = snaps.flatMap((snap, i) =>
-        snap.docs.map((d) =>
-          toCrossAppEndorsement(sources[i].app, d.id, d.data() as Record<string, unknown>)
-        )
+      const refs = settled.flatMap((r, i) =>
+        r.status === 'fulfilled'
+          ? r.value.docs.map((d) =>
+              toCrossAppEndorsement(sources[i].app, d.id, d.data() as Record<string, unknown>)
+            )
+          : []
       );
       setBabysitterRefs((prev) => ({ ...prev, [uid]: refs }));
     } catch { /* silent */ }
@@ -746,13 +746,20 @@ export function SearchPage() {
                                       generic reputation. */}
                                   {ref.sourceApp !== 'sit' && (
                                     <span className="ml-1.5 rounded bg-gray-200 px-1.5 py-0.5 text-[11px] font-medium text-gray-500">
-                                      {t(SIT_ORIGIN_LABEL_KEY[ref.sourceApp])}
+                                      {t(endorsementLabelKey(SIT_ORIGIN_LABEL_PREFIX, ref.sourceApp))}
                                     </span>
                                   )}
                                 </button>
                                 {refExpanded && (
                                   <div className="ml-4 mt-1 mb-2 space-y-1">
                                     {ref.text && <p className="text-xs text-gray-600 italic">"{ref.text}"</p>}
+                                    {/* Referee contact + kid counts are sit's
+                                        own reference shape. Gated on the source
+                                        so a sibling product that later carries
+                                        contact fields cannot have them rendered
+                                        as tappable babysitting-referee links by
+                                        this shared row markup. */}
+                                    {ref.sourceApp === 'sit' && (<>
                                     {ref.refEmail && (
                                       <a href={`mailto:${ref.refEmail}`} onClick={(e) => e.stopPropagation()} className="flex items-center gap-1.5 text-xs text-brand-600">
                                         <span>📧</span> {ref.refEmail}
@@ -774,6 +781,7 @@ export function SearchPage() {
                                         {ref.kidAges?.length ? ` (ages ${ref.kidAges.join(', ')})` : ''}
                                       </p>
                                     )}
+                                    </>)}
                                   </div>
                                 )}
                               </div>

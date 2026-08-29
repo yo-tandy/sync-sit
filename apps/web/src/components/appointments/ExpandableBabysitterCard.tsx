@@ -16,19 +16,13 @@ import { DateTag } from '@/components/ui/DateTag';
 import { buildCalendarUrl } from '@/lib/calendar';
 import {
   endorsementSources,
+  endorsementLabelKey,
   toCrossAppEndorsement,
+  ENDORSEMENT_PER_SOURCE_LIMIT,
   PUBLIC_ENDORSEMENT_STATUSES,
   type CrossAppEndorsement,
 } from '@ejm/shared-core';
-
-/** Per-source cap — an appointment card is a summary, not an archive. */
-const PER_SOURCE_ENDORSEMENT_LIMIT = 10;
-
-/** Origin label per sibling product; sit labels only what is NOT its own. */
-const SIT_ORIGIN_LABEL_KEY: Record<'study' | 'do', string> = {
-  study: 'references.fromStudy',
-  do: 'references.fromDo',
-};
+import { SIT_ORIGIN_LABEL_PREFIX } from '@/lib/endorsementLabels';
 
 const borderColors: Record<string, string> = {
   pending: '#f59e0b',
@@ -183,7 +177,11 @@ export function ExpandableBabysitterCard({
     const babysitterUserId = appointment.babysitterUserId;
     if (!expanded || !babysitterUserId) return;
     const sources = endorsementSources('sit');
-    Promise.all(
+    // allSettled, NOT all: with one query the failure mode was "this card's
+    // endorsements are missing"; with three, Promise.all would let a failure in
+    // a SECONDARY source (an unbuilt sibling composite, a transient error) hide
+    // sit's own primary signal. Degrade to fewer entries, never to none.
+    Promise.allSettled(
       sources.map(({ field }) =>
         getDocs(fsQuery(
           collection(db, 'references'),
@@ -192,15 +190,17 @@ export function ExpandableBabysitterCard({
           // unrelated family only the public-status disjunct, provable only
           // from the QUERY. Fix the query if this denies, never the rule.
           fsWhere('status', 'in', PUBLIC_ENDORSEMENT_STATUSES),
-          fsLimit(PER_SOURCE_ENDORSEMENT_LIMIT)
+          fsLimit(ENDORSEMENT_PER_SOURCE_LIMIT)
         ))
       )
-    ).then((snaps) => {
+    ).then((settled) => {
       // Concatenated in source order, so sit's own references lead.
-      setRefs(snaps.flatMap((snap, i) =>
-        snap.docs.map((d) =>
-          toCrossAppEndorsement(sources[i].app, d.id, d.data() as Record<string, unknown>)
-        )
+      setRefs(settled.flatMap((r, i) =>
+        r.status === 'fulfilled'
+          ? r.value.docs.map((d) =>
+              toCrossAppEndorsement(sources[i].app, d.id, d.data() as Record<string, unknown>)
+            )
+          : []
       ));
     }).catch(() => {});
   }, [expanded, appointment.babysitterUserId]);
@@ -320,13 +320,18 @@ export function ExpandableBabysitterCard({
                           vouches for tutoring, not babysitting. */}
                       {ref.sourceApp !== 'sit' && (
                         <span className="ml-1.5 rounded bg-gray-200 px-1.5 py-0.5 text-[11px] font-medium text-gray-500">
-                          {t(SIT_ORIGIN_LABEL_KEY[ref.sourceApp])}
+                          {t(endorsementLabelKey(SIT_ORIGIN_LABEL_PREFIX, ref.sourceApp))}
                         </span>
                       )}
                     </button>
                     {refExpanded && (
                       <div className="ml-4 mt-1 mb-2 space-y-1">
                         {ref.text && <p className="text-xs text-gray-600 italic">"{ref.text}"</p>}
+                        {/* Referee contact + kid counts are sit's own reference
+                            shape — gated on the source so a sibling product
+                            that later carries contact fields cannot have them
+                            rendered as babysitting-referee links here. */}
+                        {ref.sourceApp === 'sit' && (<>
                         {ref.refEmail && (
                           <a href={`mailto:${ref.refEmail}`} onClick={(e) => e.stopPropagation()} className="flex items-center gap-1.5 text-xs text-brand-600">
                             <span>📧</span> {ref.refEmail}
@@ -348,6 +353,7 @@ export function ExpandableBabysitterCard({
                             {ref.kidAges?.length ? ` (ages ${ref.kidAges.join(', ')})` : ''}
                           </p>
                         )}
+                        </>)}
                       </div>
                     )}
                   </div>

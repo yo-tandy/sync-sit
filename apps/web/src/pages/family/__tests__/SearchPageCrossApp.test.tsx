@@ -25,6 +25,8 @@ const h = vi.hoisted(() => ({
   /** Rows per `references` subject field — one query is issued per product. */
   refResults: new Map<string, Record<string, unknown>[]>(),
   refFail: false,
+  /** Subject fields whose query should reject — models a partial outage. */
+  refFailFields: new Set<string>(),
   unsub: vi.fn(),
 }));
 
@@ -50,6 +52,7 @@ vi.mock('firebase/firestore', () => ({
     h.refQueries.push(parts);
     if (h.refFail) return Promise.reject(new Error('permission-denied'));
     const field = (parts[1] as { where: [string] }).where[0];
+    if (h.refFailFields.has(field)) return Promise.reject(new Error('permission-denied'));
     const rows = h.refResults.get(field) ?? [];
     return Promise.resolve({ docs: rows.map((r, i) => ({ id: `${field}-${i}`, data: () => r })) });
   },
@@ -90,6 +93,7 @@ beforeEach(() => {
   h.refQueries = [];
   h.refResults = new Map();
   h.refFail = false;
+  h.refFailFields = new Set();
   h.auth.userDoc = {
     uid: 'p1',
     profiles: { parent: { enrollmentComplete: true, familyId: 'fam1' } },
@@ -124,18 +128,16 @@ describe('SearchPage cross-app endorsements (issue #280)', () => {
   it('issues one status-constrained references query per product, sit first', async () => {
     await expandFirstResult();
     await waitFor(() => expect(h.refQueries).toHaveLength(3));
-    expect(h.refQueries.map((q) => (q[1] as { where: [string] }).where[0])).toEqual([
-      'babysitterUserId',
-      'tutorUserId',
-      'doerUserId',
-    ]);
-    for (const q of h.refQueries) {
-      expect(q[1]).toEqual({ where: [(q[1] as { where: [string] }).where[0], '==', 'bs-1'] });
+    // Fields AND their order pinned per query, not derived from the query
+    // under test — sit's own field must lead.
+    const fields = ['babysitterUserId', 'tutorUserId', 'doerUserId'];
+    h.refQueries.forEach((q, i) => {
+      expect(q[1]).toEqual({ where: [fields[i], '==', 'bs-1'] });
       // NOT optional: the H2-hardened rule grants an unrelated family only the
       // public-status disjunct, and Firestore proves it from the QUERY.
       expect(q[2]).toEqual({ where: ['status', 'in', ['approved', 'published']] });
       expect(q[3]).toEqual({ limit: 10 });
-    }
+    });
   });
 
   it('lists sit references first, then the study one labeled with its origin', async () => {
@@ -166,6 +168,50 @@ describe('SearchPage cross-app endorsements (issue #280)', () => {
     h.refResults.set('tutorUserId', [{ submittedByName: 'B', referenceText: 'y' }]);
     await expandFirstResult();
     expect(await screen.findByText(/Endorsements \(2\)/)).toBeInTheDocument();
+  });
+
+  it('renders a sync-do endorsement labeled From Sync/Do (PR-11 needs no code change here)', async () => {
+    // The registry and the label key already cover `do`; this pins that the
+    // i18n key actually RESOLVES, which TypeScript cannot.
+    h.refResults.set('doerUserId', [
+      { submittedByName: 'Famille Bricolage', referenceText: 'Assembled our shelves' },
+    ]);
+    await expandFirstResult();
+    expect(await screen.findByText(/Endorsement from Famille Bricolage/)).toBeInTheDocument();
+    expect(screen.getByText('From Sync/Do')).toBeInTheDocument();
+  });
+
+  it('keeps sit references when only a SIBLING query fails (allSettled, not all)', async () => {
+    // The regression this guards: with Promise.all, one failing secondary
+    // source hid the primary signal — five good sit references showing zero.
+    h.refResults.set('babysitterUserId', [
+      { refName: 'Famille Garde', note: 'Sat for us for two years' },
+    ]);
+    h.refFailFields = new Set(['tutorUserId', 'doerUserId']);
+    await expandFirstResult();
+    expect(await screen.findByText(/Endorsement from Famille Garde/)).toBeInTheDocument();
+    expect(screen.queryByText(/From Sync\//)).not.toBeInTheDocument();
+  });
+
+  it('never renders referee contact details for a cross-app entry', async () => {
+    // Sibling docs do not carry these fields today; the gate keeps a future
+    // one from being rendered as a babysitting-referee mailto/tel by this
+    // shared row markup.
+    h.refResults.set('tutorUserId', [
+      {
+        submittedByName: 'Famille Etude',
+        referenceText: 'Patient maths tutor',
+        refEmail: 'etude@example.com',
+        refPhone: '+33100000000',
+        numberOfKids: 2,
+      },
+    ]);
+    await expandFirstResult();
+    const row = await screen.findByRole('button', { name: /Endorsement from Famille Etude/ });
+    fireEvent.click(row);
+    expect(await screen.findByText(/Patient maths tutor/)).toBeInTheDocument();
+    expect(screen.queryByText(/etude@example\.com/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/\+33100000000/)).not.toBeInTheDocument();
   });
 
   it('leaves the card intact when the endorsement queries are denied', async () => {

@@ -7,7 +7,9 @@ import { db, functions } from '@/config/firebase';
 import type { TutorSearchResult, StudyContactRequestStatus } from '@ejm/study-core';
 import {
   endorsementSources,
+  endorsementLabelKey,
   toCrossAppEndorsement,
+  ENDORSEMENT_PER_SOURCE_LIMIT,
   PUBLIC_ENDORSEMENT_STATUSES,
   type CrossAppEndorsement,
 } from '@ejm/shared-core';
@@ -33,14 +35,8 @@ import { humanizeNoticeWindow } from '@/utils/cancellationPolicy';
  * vouches for babysitting, not for teaching maths, and an unlabeled list would
  * read as generic reputation.
  */
-/** Per-source cap — a result card is a summary, not an archive. */
-const PER_SOURCE_LIMIT = 10;
-
-/** Origin label per sibling product; study labels only what is NOT its own. */
-const ORIGIN_LABEL_KEY: Record<'sit' | 'do', string> = {
-  sit: 'family.search.card.endorsementFromSit',
-  do: 'family.search.card.endorsementFromDo',
-};
+/** i18n prefix for this surface's origin labels — see endorsementLabelKey. */
+const ORIGIN_LABEL_PREFIX = 'family.search.card.endorsementFrom';
 
 export function TutorCard({ result }: { result: TutorSearchResult }) {
   const { t } = useTranslation();
@@ -64,7 +60,12 @@ export function TutorCard({ result }: { result: TutorSearchResult }) {
     if (next && endorsements === null) {
       try {
         const sources = endorsementSources('study');
-        const snaps = await Promise.all(
+        // allSettled, NOT all: with one query the failure mode was "this
+        // card's endorsements are missing"; with three, Promise.all would let
+        // a failure in a SECONDARY source (an unbuilt sibling composite, a
+        // transient error) hide study's own primary signal. Degrade to fewer
+        // entries, never to none.
+        const settled = await Promise.allSettled(
           sources.map(({ field }) =>
             getDocs(
               query(
@@ -75,17 +76,19 @@ export function TutorCard({ result }: { result: TutorSearchResult }) {
                 // disjunct, and Firestore proves it from the QUERY. Dropping
                 // this is PERMISSION_DENIED — fix the query, never the rule.
                 where('status', 'in', PUBLIC_ENDORSEMENT_STATUSES),
-                limit(PER_SOURCE_LIMIT),
+                limit(ENDORSEMENT_PER_SOURCE_LIMIT),
               ),
             ),
           ),
         );
         // Concatenated in source order, so study's own entries lead.
         setEndorsements(
-          snaps.flatMap((snap, i) =>
-            snap.docs.map((d) =>
-              toCrossAppEndorsement(sources[i].app, d.id, d.data() as Record<string, unknown>),
-            ),
+          settled.flatMap((r, i) =>
+            r.status === 'fulfilled'
+              ? r.value.docs.map((d) =>
+                  toCrossAppEndorsement(sources[i].app, d.id, d.data() as Record<string, unknown>),
+                )
+              : [],
           ),
         );
       } catch {
@@ -144,6 +147,11 @@ export function TutorCard({ result }: { result: TutorSearchResult }) {
             )}
           </div>
 
+          {/* STUDY-only count: searchTutors projects the study tally, and the
+              expanded list below is cross-app — so a tutor with 0 study and 3
+              sit endorsements shows no badge but expands into three rows. The
+              badge stays server-truth for study rather than growing a
+              client-side cross-app count the callable cannot verify. */}
           {result.endorsementCount > 0 && (
             <div className="mt-2">
               <Badge variant="green">
@@ -184,7 +192,7 @@ export function TutorCard({ result }: { result: TutorSearchResult }) {
                     : t('family.search.card.endorsementAnon')}
                   {e.sourceApp !== 'study' && (
                     <span className="ml-1.5 rounded bg-gray-200 px-1.5 py-0.5 text-[11px] font-medium text-gray-500">
-                      {t(ORIGIN_LABEL_KEY[e.sourceApp])}
+                      {t(endorsementLabelKey(ORIGIN_LABEL_PREFIX, e.sourceApp))}
                     </span>
                   )}
                 </p>

@@ -20,6 +20,8 @@ const h = vi.hoisted(() => ({
   /** Rows per `references` subject field — one query is issued per product. */
   results: new Map<string, Record<string, unknown>[]>(),
   fail: false,
+  /** Subject fields whose query should reject — models a partial outage. */
+  failFields: new Set<string>(),
 }));
 
 // Echo translation keys so label assertions name the key the card renders.
@@ -42,6 +44,7 @@ vi.mock('firebase/firestore', () => ({
     h.queries.push(q.query);
     if (h.fail) return Promise.reject(new Error('permission-denied'));
     const field = (q.query[1] as { where: [string] }).where[0];
+    if (h.failFields.has(field)) return Promise.reject(new Error('permission-denied'));
     const rows = h.results.get(field) ?? [];
     return Promise.resolve({ docs: rows.map((r, i) => ({ id: `${field}-${i}`, data: () => r })) });
   },
@@ -77,6 +80,7 @@ beforeEach(() => {
   h.queries = [];
   h.results = new Map();
   h.fail = false;
+  h.failFields = new Set();
 });
 afterEach(cleanup);
 
@@ -84,18 +88,16 @@ describe('ExpandableBabysitterCard cross-app endorsements (issue #280)', () => {
   it('issues one status-constrained query per product, sit first', async () => {
     renderCard();
     await waitFor(() => expect(h.queries).toHaveLength(3));
-    expect(h.queries.map((q) => (q[1] as { where: [string] }).where[0])).toEqual([
-      'babysitterUserId',
-      'tutorUserId',
-      'doerUserId',
-    ]);
-    for (const q of h.queries) {
+    // Fields AND their order pinned per query, sit's own field leading.
+    const fields = ['babysitterUserId', 'tutorUserId', 'doerUserId'];
+    h.queries.forEach((q, i) => {
       expect(q[0]).toEqual({ path: 'references' });
+      expect(q[1]).toEqual({ where: [fields[i], '==', 'bs-1'] });
       // NOT optional: an unrelated family can only prove the public-status
       // disjunct of the references read rule, and only from the query.
       expect(q[2]).toEqual({ where: ['status', 'in', ['approved', 'published']] });
       expect(q[3]).toEqual({ limit: 10 });
-    }
+    });
   });
 
   it('lists sit references first, then study endorsements labeled by origin', async () => {
@@ -129,6 +131,46 @@ describe('ExpandableBabysitterCard cross-app endorsements (issue #280)', () => {
       expect(screen.getByText(/Endorsement from Famille Etude/)).toBeInTheDocument(),
     );
     expect(screen.getByText('references.fromStudy')).toBeInTheDocument();
+  });
+
+  it('renders a sync-do endorsement labeled references.fromDo (PR-11 needs no code change here)', async () => {
+    h.results.set('doerUserId', [
+      { submittedByName: 'Famille Bricolage', referenceText: 'Assembled our shelves' },
+    ]);
+    renderCard();
+    await waitFor(() =>
+      expect(screen.getByText(/Endorsement from Famille Bricolage/)).toBeInTheDocument(),
+    );
+    expect(screen.getByText('references.fromDo')).toBeInTheDocument();
+  });
+
+  it('keeps sit references when only a SIBLING query fails (allSettled, not all)', async () => {
+    h.results.set('babysitterUserId', [
+      { refName: 'Famille Garde', note: 'Sat for us for two years' },
+    ]);
+    h.failFields = new Set(['tutorUserId', 'doerUserId']);
+    renderCard();
+    await waitFor(() =>
+      expect(screen.getByText(/Endorsement from Famille Garde/)).toBeInTheDocument(),
+    );
+    expect(screen.queryByText(/references\.from/)).not.toBeInTheDocument();
+  });
+
+  it('never renders referee contact details for a cross-app entry', async () => {
+    h.results.set('tutorUserId', [
+      {
+        submittedByName: 'Famille Etude',
+        referenceText: 'Patient maths tutor',
+        refEmail: 'etude@example.com',
+        refPhone: '+33100000000',
+      },
+    ]);
+    renderCard();
+    const row = await screen.findByRole('button', { name: /Endorsement from Famille Etude/ });
+    fireEvent.click(row);
+    expect(await screen.findByText(/Patient maths tutor/)).toBeInTheDocument();
+    expect(screen.queryByText(/etude@example\.com/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/\+33100000000/)).not.toBeInTheDocument();
   });
 
   it('keeps the card intact when the endorsement queries are denied', async () => {

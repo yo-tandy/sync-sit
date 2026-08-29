@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
   ENDORSEMENT_APPS,
+  ENDORSEMENT_PER_SOURCE_LIMIT,
+  endorsementLabelKey,
   ENDORSEMENT_SUBJECT_FIELD,
   PUBLIC_ENDORSEMENT_STATUSES,
   endorsementSources,
@@ -111,5 +113,31 @@ describe('toCrossAppEndorsement', () => {
     expect(line.isEjmFamily).toBe(false);
     expect(line.numberOfKids).toBeUndefined();
     expect(line.kidAges).toBeUndefined();
+  });
+});
+
+describe('endorsementLabelKey', () => {
+  it('derives the key from the app name under each surface\'s own prefix', () => {
+    expect(endorsementLabelKey('references.from', 'study')).toBe('references.fromStudy');
+    expect(endorsementLabelKey('references.from', 'do')).toBe('references.fromDo');
+    expect(endorsementLabelKey('family.search.card.endorsementFrom', 'sit')).toBe(
+      'family.search.card.endorsementFromSit',
+    );
+    expect(endorsementLabelKey('family.taskDetail.endorsementFrom', 'study')).toBe(
+      'family.taskDetail.endorsementFromStudy',
+    );
+  });
+
+  it('produces a distinct key for every registered app', () => {
+    const keys = ENDORSEMENT_APPS.map((a) => endorsementLabelKey('x.', a));
+    expect(new Set(keys).size).toBe(ENDORSEMENT_APPS.length);
+  });
+});
+
+describe('ENDORSEMENT_PER_SOURCE_LIMIT', () => {
+  it('is a per-source cap, so one app cannot crowd out another', () => {
+    // Pinned because it is asserted verbatim in the surfaces' query-shape
+    // tests; a change here must be a deliberate, cross-surface decision.
+    expect(ENDORSEMENT_PER_SOURCE_LIMIT).toBe(10);
   });
 });

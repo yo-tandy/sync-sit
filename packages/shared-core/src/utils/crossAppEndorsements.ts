@@ -59,6 +59,13 @@ export const ENDORSEMENT_SUBJECT_FIELD: Record<EndorsementApp, string> = {
  */
 export const PUBLIC_ENDORSEMENT_STATUSES: readonly string[] = ['approved', 'published'];
 
+/**
+ * Per-source cap every surface shares. A search/offer card is a summary, not
+ * an archive, and the cap must be per SOURCE (not per card) or a provider with
+ * many sit references would crowd out their study ones entirely.
+ */
+export const ENDORSEMENT_PER_SOURCE_LIMIT = 10;
+
 export interface EndorsementSource {
   app: EndorsementApp;
   /** The `references` field to match the provider's uid against. */
@@ -125,4 +132,18 @@ export function toCrossAppEndorsement(
     numberOfKids: typeof numberOfKids === 'number' ? numberOfKids : undefined,
     kidAges: Array.isArray(kidAges) ? (kidAges as number[]) : undefined,
   };
+}
+
+/**
+ * The i18n key for "this entry came from <app>", derived from the app name so
+ * the label map is registry-shaped rather than hand-maintained per surface.
+ * Each app passes its own prefix and follows the same `…FromSit` / `…FromStudy`
+ * / `…FromDo` suffix convention, so a fourth product needs ONE registry entry
+ * plus its locale strings — no per-surface label map to forget.
+ *
+ * Callers only ever label the apps that are NOT their own, so no app needs a
+ * key for itself.
+ */
+export function endorsementLabelKey(prefix: string, app: EndorsementApp): string {
+  return `${prefix}${app.charAt(0).toUpperCase()}${app.slice(1)}`;
 }

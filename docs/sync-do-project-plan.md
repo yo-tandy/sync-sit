@@ -1493,6 +1493,18 @@ checked-in icon at PR2 (sizes per sit's #197 manifest work).
     current-app-first, origin-labeled treatment applies to sit and study's
     own search surfaces — tracked as its own sit/study issue, opened from
     this review round, since it touches those apps rather than sync-do.
+    **DONE (issue #280, PR #337):** that issue landed the shared
+    `endorsementSources` / `endorsementLabelKey` registry in shared-core and
+    wired ALL THREE consumer surfaces to it — sit's SearchPage and
+    ExpandableBabysitterCard, study's TutorCard, and this offer card (which
+    was refactored off its hard-coded three-source list). `doerUserId` is
+    already in the registry and its shape is pinned in the rules suite, so
+    PR-11 needs no UI or rules change here: the first `DoerEndorsementDoc`
+    written renders on every surface labeled "From Sync/Do" automatically.
+    One caveat for PR-11: sit's expanded-row markup renders referee
+    contact links, and it is gated on `sourceApp === 'sit'` — if
+    `DoerEndorsementDoc` ever carries contact fields, that gate is the
+    deliberate decision point, not an oversight to remove.
   - Surfacing the cross-app half means **three queries against the shared
     `references` collection**, and their exact shape is load-bearing:
 

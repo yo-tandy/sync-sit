@@ -4,21 +4,16 @@ import { collection, getDocs, limit, query, where } from 'firebase/firestore';
 import { Spinner } from '@ejm/shared-ui';
 import {
   endorsementSources,
+  endorsementLabelKey,
   toCrossAppEndorsement,
+  ENDORSEMENT_PER_SOURCE_LIMIT,
   PUBLIC_ENDORSEMENT_STATUSES,
   type CrossAppEndorsement,
 } from '@ejm/shared-core';
 import { db } from '@/config/firebase';
 
-/** Origin label per sibling product; do labels only what is NOT its own. */
-const ORIGIN_LABEL_KEY: Record<'sit' | 'study', string> = {
-  sit: 'family.taskDetail.endorsementFromSit',
-  study: 'family.taskDetail.endorsementFromStudy',
-};
-
-/** Per-source cap, the TutorCard precedent — an offer card is a summary,
- * not an archive. */
-const PER_SOURCE_LIMIT = 10;
+/** i18n prefix for this surface's origin labels — see endorsementLabelKey. */
+const ORIGIN_LABEL_PREFIX = 'family.taskDetail.endorsementFrom';
 
 /**
  * The §9.1 offer-card endorsements: one query per registered product against
@@ -49,25 +44,34 @@ export function OfferEndorsements({ doerUserId }: { doerUserId: string }) {
     async function load() {
       try {
         const sources = endorsementSources('do');
-        const snaps = await Promise.all(
+        // allSettled, not all: one failing source (an unbuilt sibling
+        // composite, a transient error) must not take the other two down with
+        // it. The error line below is now reserved for a TOTAL failure.
+        const settled = await Promise.allSettled(
           sources.map(({ field }) =>
             getDocs(
               query(
                 collection(db, 'references'),
                 where(field, '==', doerUserId),
                 where('status', 'in', PUBLIC_ENDORSEMENT_STATUSES),
-                limit(PER_SOURCE_LIMIT),
+                limit(ENDORSEMENT_PER_SOURCE_LIMIT),
               ),
             ),
           ),
         );
         if (cancelled) return;
+        if (settled.every((r) => r.status === 'rejected')) {
+          setFailed(true);
+          return;
+        }
         // Concatenated in source order, so sync-do's own entries lead.
         setLines(
-          snaps.flatMap((snap, i) =>
-            snap.docs.map((d) =>
-              toCrossAppEndorsement(sources[i].app, d.id, d.data() as Record<string, unknown>),
-            ),
+          settled.flatMap((r, i) =>
+            r.status === 'fulfilled'
+              ? r.value.docs.map((d) =>
+                  toCrossAppEndorsement(sources[i].app, d.id, d.data() as Record<string, unknown>),
+                )
+              : [],
           ),
         );
       } catch {
@@ -103,7 +107,7 @@ export function OfferEndorsements({ doerUserId }: { doerUserId: string }) {
             {line.refName && <span className="font-medium">{line.refName}</span>}
             {line.sourceApp !== 'do' && (
               <span className="ml-1.5 rounded bg-gray-200 px-1.5 py-0.5 font-medium text-gray-500">
-                {t(ORIGIN_LABEL_KEY[line.sourceApp])}
+                {t(endorsementLabelKey(ORIGIN_LABEL_PREFIX, line.sourceApp))}
               </span>
             )}
           </p>
