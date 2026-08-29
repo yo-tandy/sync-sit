@@ -205,11 +205,28 @@ export function AdminVerificationsPage() {
                           'getVerificationDocument',
                         );
                         const result = await fn({ filePath });
-                        // After the await we are outside the user-gesture
-                        // window — a popup blocker makes open() return null,
-                        // which must surface as an error, not silence.
-                        const win = window.open(result.data.url, '_blank');
-                        if (!win) throw new Error('popup blocked');
+                        // Download semantics (issue #292): the signed URL
+                        // always carries Content-Disposition: attachment
+                        // (getVerificationDocument passes responseDisposition
+                        // with v4 signing — PR #285, pinned in
+                        // shared-functions' getVerificationDocument suite), so
+                        // a plain anchor click downloads the file and leaves
+                        // this page untouched. window.open flashed a tab that
+                        // Chrome/Firefox auto-close and Safari leaves behind,
+                        // and after the await it was popup-blockable.
+                        // COUPLING: without that server header a targetless
+                        // click would navigate the admin panel away -- if the
+                        // disposition ever changes, change this call site too.
+                        // The download attribute is advisory only here (the
+                        // URL is cross-origin, so browsers ignore it); the
+                        // header is what guarantees the download.
+                        const a = document.createElement('a');
+                        a.href = result.data.url;
+                        a.download = v.fileName || '';
+                        a.rel = 'noopener';
+                        document.body.appendChild(a);
+                        a.click();
+                        a.remove();
                       } catch (err) {
                         // No raw-fileUrl fallback: new uploads store TOKENLESS
                         // fileUrls (path carriers only), so opening one 403s —
