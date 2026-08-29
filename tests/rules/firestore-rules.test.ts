@@ -3413,4 +3413,120 @@ describe('references collection — §9.1 offer-card queries (sync-do)', () => {
       where('tutorUserId', '==', 'doerOk'),
     )));
   });
+
+});
+
+// The §12 second amendment (issue #300, PR11): the `references` READ rule
+// gains a `doerUserId` recipient disjunct, `.get()`-defaulted like its
+// babysitterUserId/tutorUserId siblings because the collection holds mixed
+// shapes. Without it a `private` DoerEndorsementDoc — which is what
+// doSubmitEndorsement writes — is unreadable by the doer it NAMES, and
+// §9.2's "My endorsements → pending" list renders empty on exactly the docs
+// it exists to show. Pinned like the sit/study recipient disjuncts above,
+// in both directions, plus the surface's own list query.
+describe('references collection — the doerUserId recipient disjunct (#300)', () => {
+  async function seedDoerEndorsement(id: string, overrides: Record<string, unknown> = {}) {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'references', id), {
+        referenceId: id,
+        doerUserId: 'doerSelf',
+        appSource: 'do',
+        type: 'family_submitted',
+        status: 'private',
+        submittedByUserId: 'endorsingParent',
+        submittedByFamilyId: 'famEndorse',
+        referenceText: 'Assembled our PAX beautifully.',
+        createdAt: new Date(),
+        ...overrides,
+      });
+    });
+  }
+
+  it('allows the endorsed DOER to read their own PRIVATE endorsement', async () => {
+    await seedDoerEndorsement('do-own-private');
+    const doer = testEnv.authenticatedContext('doerSelf');
+    await assertSucceeds(getDoc(doc(doer.firestore(), 'references', 'do-own-private')));
+  });
+
+  it('denies an unrelated caller reading that same private endorsement', async () => {
+    await seedDoerEndorsement('do-own-private-2');
+    const stranger = testEnv.authenticatedContext('stranger');
+    await assertFails(getDoc(doc(stranger.firestore(), 'references', 'do-own-private-2')));
+  });
+
+  // A DIFFERENT enrolled doer is the interesting negative: the disjunct is an
+  // equality against the caller's own uid, so it must not leak sideways to a
+  // peer who also has a `doerUserId` key on their own docs.
+  it('denies ANOTHER doer reading a private endorsement naming someone else', async () => {
+    await seedDoerEndorsement('do-own-private-3');
+    const peer = testEnv.authenticatedContext('doerPeer');
+    await assertFails(getDoc(doc(peer.firestore(), 'references', 'do-own-private-3')));
+  });
+
+  // §9.2's list query: doerUserId == me, newest first, NO status filter —
+  // provable only through the recipient disjunct (the same shape LIST #8/#9
+  // pins for the tutor side). Served by the (doerUserId, createdAt DESC)
+  // composite added to §7.3 at PR11.
+  it('allows the §9.2 "My endorsements" list query (doerUserId == me, createdAt desc, no status filter)', async () => {
+    await seedDoerEndorsement('do-list-1');
+    await seedDoerEndorsement('do-list-2', { status: 'approved' });
+    await seedDoerEndorsement('do-list-3', { status: 'removed' });
+    const doer = testEnv.authenticatedContext('doerSelf');
+    await assertSucceeds(getDocs(query(
+      collection(doer.firestore(), 'references'),
+      where('doerUserId', '==', 'doerSelf'),
+      orderBy('createdAt', 'desc'),
+    )));
+  });
+
+  it('still denies that same unconstrained list query for a NON-recipient', async () => {
+    await seedDoerEndorsement('do-list-4');
+    const stranger = testEnv.authenticatedContext('stranger');
+    await assertFails(getDocs(query(
+      collection(stranger.firestore(), 'references'),
+      where('doerUserId', '==', 'doerSelf'),
+      orderBy('createdAt', 'desc'),
+    )));
+  });
+
+  // The amendment is a RECIPIENT disjunct only. A `removed` (declined)
+  // endorsement must stay invisible to everyone except the parties — proving
+  // the public-status disjunct was not widened along the way.
+  it('denies a stranger reading a REMOVED do endorsement', async () => {
+    await seedDoerEndorsement('do-removed', { status: 'removed' });
+    const stranger = testEnv.authenticatedContext('stranger');
+    await assertFails(getDoc(doc(stranger.firestore(), 'references', 'do-removed')));
+  });
+
+  it('still allows the submitting parent and their co-parent to read it', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'families', 'famEndorse'), {
+        familyId: 'famEndorse', parentIds: ['endorsingParent', 'coParent'],
+      });
+    });
+    await seedDoerEndorsement('do-submitter-read');
+    const submitter = testEnv.authenticatedContext('endorsingParent');
+    await assertSucceeds(getDoc(doc(submitter.firestore(), 'references', 'do-submitter-read')));
+    const coParent = testEnv.authenticatedContext('coParent');
+    await assertSucceeds(getDoc(doc(coParent.firestore(), 'references', 'do-submitter-read')));
+  });
+
+  // No client write path: every mutation goes through doSubmitEndorsement /
+  // doRespondToEndorsement on the Admin SDK. The create rule's own conditions
+  // (status private + babysitterUserId == caller + type manual) already
+  // exclude this shape; pinned so a later loosening of that rule cannot make
+  // a doer endorsement client-forgeable.
+  it('denies a client creating or self-approving a do endorsement', async () => {
+    const forger = testEnv.authenticatedContext('doerSelf');
+    await assertFails(setDoc(doc(forger.firestore(), 'references', 'do-forged'), {
+      referenceId: 'do-forged', doerUserId: 'doerSelf', appSource: 'do',
+      type: 'family_submitted', status: 'private',
+      submittedByUserId: 'someParent', submittedByFamilyId: 'famX',
+      referenceText: 'I am excellent.', createdAt: new Date(),
+    }));
+    await seedDoerEndorsement('do-self-approve');
+    await assertFails(
+      updateDoc(doc(forger.firestore(), 'references', 'do-self-approve'), { status: 'approved' }),
+    );
+  });
 });
