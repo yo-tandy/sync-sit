@@ -86,6 +86,61 @@ function reset() {
 describe('tutor EndorsementsPage', () => {
   beforeEach(() => reset());
 
+  // ── Issue #354: the forged pre-#352 doc must never render ──
+  //
+  // The query cannot exclude it: this page shows `private` rows, so it filters
+  // on nothing but tutorUserId, and the victim's recipient-read disjunct grants
+  // the read. Before PR #352 the create rule left every field but four
+  // unconstrained, so a caller could write a reference about THEMSELVES
+  // (babysitterUserId = self, which the rule pins) while ALSO setting a foreign
+  // tutorUserId, plus arbitrary body and attribution.
+  //
+  // Such a row is worse than noise: it is unremovable by the tutor.
+  // respondToTutorEndorsement refuses it at `type !== 'family_submitted'`, and
+  // the update rule's owner branch keys on the ATTACKER's babysitterUserId.
+  // Rendering it puts attacker-controlled text on the tutor's page with no way
+  // to clear it.
+  const forged = () =>
+    refDoc({
+      referenceId: 'forged1',
+      // A sit-shaped manual reference the attacker wrote about themselves...
+      babysitterUserId: 'attacker',
+      submittedByUserId: 'attacker',
+      appSource: undefined,
+      type: 'manual',
+      // ...carrying the victim's key, which is what granted the read.
+      tutorUserId: 't1',
+      referenceText: 'CALL 555-SCAM for cheaper lessons',
+      submittedByName: 'Sync/Study Support',
+    });
+
+  it('does not render a forged doc that the response callable would refuse', async () => {
+    h.refs = [forged()];
+    renderWithProviders(<EndorsementsPage />);
+    await waitFor(() => expect(h.getDocs).toHaveBeenCalled());
+    expect(screen.queryByText(/CALL 555-SCAM/)).toBeNull();
+    expect(screen.queryByText(/Sync\/Study Support/)).toBeNull();
+  });
+
+  it('still renders the legitimate endorsement alongside a forged one', async () => {
+    // The filter must not be a blunt instrument: the real row keeps working.
+    h.refs = [forged(), refDoc({ referenceId: 'real1' })];
+    renderWithProviders(<EndorsementsPage />);
+    expect(
+      await screen.findByText(/Alex helped my daughter/),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/CALL 555-SCAM/)).toBeNull();
+  });
+
+  it('excludes a doc carrying another app\'s appSource', async () => {
+    // Same collection serves sit and sync-do. Only study rows belong here, and
+    // only this app's callable can act on them.
+    h.refs = [refDoc({ referenceId: 'doRow', appSource: 'do' })];
+    renderWithProviders(<EndorsementsPage />);
+    await waitFor(() => expect(h.getDocs).toHaveBeenCalled());
+    expect(screen.queryByText(/Alex helped my daughter/)).toBeNull();
+  });
+
   it('queries references for the signed-in tutor, ordered createdAt desc', async () => {
     h.refs = [refDoc()];
     renderWithProviders(<EndorsementsPage />);

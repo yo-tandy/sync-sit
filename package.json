@@ -32,7 +32,8 @@
     "backfill:family-postcode": "node scripts/backfill-family-postcode.cjs",
     "backfill:shared-identity": "node scripts/backfill-shared-identity.cjs",
     "emulators": "firebase emulators:start --only auth,functions,firestore,storage --project demo-test",
-    "deploy": "firebase deploy"
+    "deploy": "firebase deploy",
+    "audit:354-forged-endorsements": "node scripts/audit-354-forged-tutor-endorsements.cjs"
   },
   "engines": {
     "node": ">=20",

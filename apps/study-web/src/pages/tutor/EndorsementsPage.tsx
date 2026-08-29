@@ -99,8 +99,30 @@ export function EndorsementsPage() {
   };
 
   const all = endorsements ?? [];
-  const pending = all.filter((e) => e.status === 'private');
-  const published = all.filter((e) => e.status === 'approved' || e.status === 'published');
+  // SHAPE FILTER (issue #354). The query is `where('tutorUserId','==',uid)` with
+  // no other constraint, deliberately -- this surface's whole job is showing
+  // `private` rows, so it cannot filter on status. That means it renders
+  // whatever the recipient-read disjunct returns.
+  //
+  // Before PR #352 the `references` create rule left every field but four
+  // unconstrained, so a caller could write a reference about THEMSELVES while
+  // also setting a foreign `tutorUserId`, and the victim's read disjunct then
+  // granted the read. #352 closed the mint -- a client-created reference may
+  // now carry neither `tutorUserId` nor `doerUserId` -- but docs forged before
+  // it shipped are still in the collection, and such a row is UNREMOVABLE by
+  // the tutor: `respondToTutorEndorsement` refuses it at
+  // `type !== 'family_submitted'`, and the update rule's owner branch keys on
+  // the attacker's `babysitterUserId`.
+  //
+  // So narrow to exactly what the callable will act on, before partitioning.
+  // Both fields are set at creation (submitTutorEndorsement) and required by
+  // TutorEndorsementDoc, so this hides nothing legitimate. Mirrors do-web's
+  // MyEndorsementsPage, which #352 fixed the same way.
+  const actionable = all.filter((e) => e.appSource === 'study' && e.type === 'family_submitted');
+  const pending = actionable.filter((e) => e.status === 'private');
+  const published = actionable.filter(
+    (e) => e.status === 'approved' || e.status === 'published',
+  );
   const hasVisible = pending.length > 0 || published.length > 0;
 
   const submitter = (e: TutorEndorsementDoc): string =>
