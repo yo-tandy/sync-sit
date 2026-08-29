@@ -155,21 +155,7 @@ function parsePort(env: EmulatorEnvLike, key: string): number | undefined {
   return port;
 }
 
-function parseLane(env: EmulatorEnvLike, laneKeys: readonly string[]): number {
-  const set = laneKeys
-    .map((key) => ({ key, value: readVar(env, key) }))
-    .filter((entry): entry is { key: string; value: string } => entry.value !== undefined);
-
-  if (set.length === 0) return 1;
-
-  const [{ key, value }] = set;
-  const disagreeing = set.find((entry) => entry.value !== value);
-  if (disagreeing) {
-    throw new Error(
-      `${key}="${value}" and ${disagreeing.key}="${disagreeing.value}" name different lanes; set one`,
-    );
-  }
-
+function parseOneLane(key: string, value: string): number {
   if (!/^\d+$/.test(value)) {
     throw new Error(`${key} must be a lane number, got "${value}"`);
   }
@@ -178,6 +164,29 @@ function parseLane(env: EmulatorEnvLike, laneKeys: readonly string[]): number {
     throw new Error(`${key} must be between 1 and ${MAX_EMULATOR_LANE}, got "${value}"`);
   }
   return lane;
+}
+
+function parseLane(env: EmulatorEnvLike, laneKeys: readonly string[]): number {
+  // Every candidate is parsed BEFORE any are compared, so `LANE=nine
+  // E2E_LANE=3` reports the malformed value (which is the real problem)
+  // rather than a disagreement, and so `LANE=3 E2E_LANE=03` — the same lane,
+  // spelled two ways — is not a disagreement at all.
+  const set = laneKeys
+    .map((key) => ({ key, value: readVar(env, key) }))
+    .filter((entry): entry is { key: string; value: string } => entry.value !== undefined)
+    .map((entry) => ({ ...entry, lane: parseOneLane(entry.key, entry.value) }));
+
+  if (set.length === 0) return 1;
+
+  const [first] = set;
+  const disagreeing = set.find((entry) => entry.lane !== first.lane);
+  if (disagreeing) {
+    throw new Error(
+      `${first.key}="${first.value}" and ${disagreeing.key}="${disagreeing.value}" ` +
+        'name different lanes; set one',
+    );
+  }
+  return first.lane;
 }
 
 export function resolveEmulatorConfig(
@@ -227,4 +236,98 @@ export function resolveNodeEmulatorConfig(
     defaultHost: options.defaultHost ?? DEFAULT_EMULATOR_HOST,
     laneAliases: NODE_EMULATOR_LANE_ALIASES,
   });
+}
+
+/** The `firebase-admin` emulator env vars a resolved config implies. */
+export interface EmulatorAdminHosts {
+  FIRESTORE_EMULATOR_HOST: string;
+  FIREBASE_AUTH_EMULATOR_HOST: string;
+}
+
+export function emulatorAdminHosts(config: EmulatorConfig): EmulatorAdminHosts {
+  return {
+    FIRESTORE_EMULATOR_HOST: `${config.host}:${config.firestorePort}`,
+    FIREBASE_AUTH_EMULATOR_HOST: `${config.host}:${config.authPort}`,
+  };
+}
+
+/**
+ * Spellings of "this machine" that name the same emulator.
+ *
+ * These are compared as equal, because they ARE equal to a client, and
+ * because the two seed scripts deliberately resolve different ones —
+ * `seed-admin.cjs` says `localhost`, `seed-test-data.cjs` says `127.0.0.1`,
+ * each keeping the literal it used before it was lane-aware. Comparing raw
+ * strings would make a single exported `FIRESTORE_EMULATOR_HOST` satisfiable
+ * by at most one of the two, and refuse the other on a run pointed at the
+ * very same emulator (PR #404 review).
+ *
+ * `0.0.0.0` is deliberately NOT here: as a destination it is not a loopback
+ * synonym, and treating it as one would hide a real mistake.
+ */
+const LOOPBACK_HOST_SPELLINGS = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
+
+function splitHostPort(value: string): { host: string; port: string } {
+  const cut = value.lastIndexOf(':');
+  return cut === -1
+    ? { host: value, port: '' }
+    : { host: value.slice(0, cut), port: value.slice(cut + 1) };
+}
+
+function canonicalHost(host: string): string {
+  const lowered = host.trim().toLowerCase();
+  return LOOPBACK_HOST_SPELLINGS.has(lowered) ? 'localhost' : lowered;
+}
+
+/**
+ * Throw if the environment already carries a firebase-admin emulator host
+ * that points somewhere other than where the lane vars just resolved.
+ *
+ * The seed scripts overwrite `FIRESTORE_EMULATOR_HOST` /
+ * `FIREBASE_AUTH_EMULATOR_HOST` unconditionally, and always have. That is a
+ * quiet way to seed the wrong stack: the repo's backfill scripts ask you to
+ * `export FIRESTORE_EMULATOR_HOST` yourself, so a developer working lane 3
+ * plausibly has `FIRESTORE_EMULATOR_HOST=localhost:28080` in their shell —
+ * and then `pnpm seed:admin` writes to lane 1, the shared dev stack, saying
+ * nothing. Same accident as two lane vars naming different lanes, so the
+ * same remedy: fail loudly and make the operator pick.
+ *
+ * What counts as agreement is the TARGET, not the spelling: the port must
+ * match (the port is what carries the lane), and the host must match after
+ * loopback synonyms are folded together. So `export
+ * FIRESTORE_EMULATOR_HOST=localhost:28080` is fine for `LANE=3 pnpm
+ * seed:admin` AND for `LANE=3 pnpm seed:test-data`, which resolves
+ * `127.0.0.1:28080` — the same emulator.
+ */
+export function assertEmulatorAdminHostsAgree(
+  env: EmulatorEnvLike,
+  config: EmulatorConfig,
+): void {
+  const hosts = emulatorAdminHosts(config);
+  for (const key of Object.keys(hosts) as (keyof EmulatorAdminHosts)[]) {
+    const preset = readVar(env, key);
+    if (preset === undefined) continue;
+
+    const want = hosts[key];
+    const from = splitHostPort(preset);
+    const to = splitHostPort(want);
+    const portsDiffer = from.port !== to.port;
+    const hostsDiffer = canonicalHost(from.host) !== canonicalHost(to.host);
+    if (!portsDiffer && !hostsDiffer) continue;
+
+    // Name the disagreement actually found: no lane var can fix a host
+    // mismatch (lanes only shift ports), and no host var can fix a lane one.
+    const detail = portsDiffer
+      ? 'a different PORT, which means a different lane'
+      : 'the same port but a different HOST';
+    const remedy = portsDiffer
+      ? `Unset ${key}, or point EMULATOR_LANE / LANE / E2E_LANE at the lane it names`
+      : `Unset ${key}, or set EMULATOR_HOST to "${from.host}" — no lane var changes the host`;
+
+    throw new Error(
+      `${key} is already set to "${preset}", but this run resolves to lane ` +
+        `${config.lane} ("${want}") — ${detail}. ${remedy}; seeding the wrong ` +
+        'stack is silent otherwise.',
+    );
+  }
 }
