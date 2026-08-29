@@ -194,15 +194,28 @@ describe('no other workflow deploys to production on merge', () => {
     // Both edges matter: Actions accepts .yaml as well as .yml, and the root
     // `pnpm deploy` script IS `firebase deploy` (package.json), so matching
     // only the literal command would miss a workflow calling it by name.
-    const DEPLOYS = /firebase deploy|pnpm(?: run)? deploy\b/;
+    const DEPLOYS = /firebase deploy|firebase hosting:channel:deploy|pnpm(?: run)? deploy\b/;
+    // A step can deploy without any `run:` string at all. This repo already
+    // authenticates with google-github-actions/auth, and the published
+    // Firebase deploy actions (FirebaseExtended/action-hosting-deploy,
+    // w9jds/firebase-action) need no shell command -- so a `run:`-only sweep
+    // reads them as harmless.
+    const DEPLOY_ACTIONS = /firebase|hosting-deploy|gcloud/i;
     const offenders = readdirSync(dir).filter((f) => {
       if (!/\.ya?ml$/.test(f)) return false;
       const doc = wf(f);
       if (!pushReachesMain(triggers(doc))) return false;
       // A workflow may run ON main; it may not DEPLOY from it.
-      const jobs = (doc.jobs ?? {}) as Record<string, { steps?: { run?: string }[] }>;
+      const jobs = (doc.jobs ?? {}) as Record<
+        string,
+        { steps?: { run?: string; uses?: string }[] }
+      >;
       return Object.values(jobs).some((j) =>
-        (j.steps ?? []).some((s) => typeof s.run === 'string' && DEPLOYS.test(s.run)),
+        (j.steps ?? []).some(
+          (s) =>
+            (typeof s.run === 'string' && DEPLOYS.test(s.run)) ||
+            (typeof s.uses === 'string' && DEPLOY_ACTIONS.test(s.uses)),
+        ),
       );
     });
     expect(offenders).toEqual([]);
