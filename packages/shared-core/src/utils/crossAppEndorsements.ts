@@ -50,6 +50,11 @@ export const ENDORSEMENT_APPS = Object.freeze(['sit', 'study', 'do'] as const) s
  * `where(field,'==',uid) + where('status','in',PUBLIC_ENDORSEMENT_STATUSES)`
  * needs exactly that.
  */
+/**
+ * Also the source of `REFERENCE_PROVIDER_KEYS` in shared-functions, which
+ * GDPR export/erasure iterate — so a new product is covered for erasure by the
+ * same one-line entry that covers it for rendering. Do not restate this list.
+ */
 export const ENDORSEMENT_SUBJECT_FIELD = Object.freeze({
   sit: 'babysitterUserId',
   study: 'tutorUserId',

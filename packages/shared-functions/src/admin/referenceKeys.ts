@@ -1,3 +1,5 @@
+import { ENDORSEMENT_SUBJECT_FIELD } from '@ejm/shared-core';
+
 /**
  * Provider-side uid keys on docs in the shared `references` collection
  * (issue #295). A reference/endorsement names exactly one provider, keyed by
@@ -11,12 +13,17 @@
  *                          and makes GDPR export/erasure cover doers
  *                          automatically the moment the field exists.
  *
+ * DERIVED, not restated (issue #280): this list and the cross-app rendering
+ * registry are the same set of fields, and they had drifted apart into two
+ * hand-maintained copies. The failure modes are not symmetric — forgetting the
+ * rendering registry costs a missing badge, forgetting THIS one leaves a
+ * provider's endorsements alive after their account is erased, silently. So it
+ * derives from `ENDORSEMENT_SUBJECT_FIELD` in shared-core (firebase-free
+ * precisely so admin-SDK code can consume it) and a fourth product becomes one
+ * registry entry for erasure as well as for rendering.
+ *
  * Used by exportUserData (export references where the user is the provider)
  * and deleteUser (erase them). The submitter side is keyed separately by
  * `submittedByUserId` / `submittedByFamilyId`, which are shared across apps.
  */
-export const REFERENCE_PROVIDER_KEYS = [
-  'babysitterUserId',
-  'tutorUserId',
-  'doerUserId',
-] as const;
+export const REFERENCE_PROVIDER_KEYS = Object.values(ENDORSEMENT_SUBJECT_FIELD);

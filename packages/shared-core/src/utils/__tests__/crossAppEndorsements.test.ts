@@ -171,3 +171,17 @@ describe('runtime immutability', () => {
     expect(ENDORSEMENT_SUBJECT_FIELD.sit).toBe('babysitterUserId');
   });
 });
+
+describe('registry is the single source for GDPR erasure keys', () => {
+  it('covers every app, so a new product is erasable by the same one-line entry', () => {
+    // shared-functions' REFERENCE_PROVIDER_KEYS derives from this map. Pinned
+    // here because the two failure modes are asymmetric: a missed rendering
+    // entry costs a badge, a missed erasure key leaves a provider's
+    // endorsements alive after their account is deleted — silently.
+    const keys = Object.values(ENDORSEMENT_SUBJECT_FIELD);
+    expect(keys).toEqual(['babysitterUserId', 'tutorUserId', 'doerUserId']);
+    for (const app of ENDORSEMENT_APPS) {
+      expect(keys).toContain(ENDORSEMENT_SUBJECT_FIELD[app]);
+    }
+  });
+});

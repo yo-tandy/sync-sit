@@ -22,6 +22,8 @@ const h = vi.hoisted(() => ({
   fail: false,
   /** Subject fields whose query should reject — models a partial outage. */
   failFields: new Set<string>(),
+  /** Subject fields whose query hangs until released — models slow sources. */
+  hold: new Map<string, () => void>(),
 }));
 
 // Echo translation keys so label assertions name the key the card renders.
@@ -46,7 +48,13 @@ vi.mock('firebase/firestore', () => ({
     const field = (q.query[1] as { where: [string] }).where[0];
     if (h.failFields.has(field)) return Promise.reject(new Error('permission-denied'));
     const rows = h.results.get(field) ?? [];
-    return Promise.resolve({ docs: rows.map((r, i) => ({ id: `${field}-${i}`, data: () => r })) });
+    const result = { docs: rows.map((r, i) => ({ id: `${field}-${i}`, data: () => r })) };
+    if (h.hold.has(field)) {
+      return new Promise((resolve) => {
+        h.hold.set(field, () => resolve(result));
+      });
+    }
+    return Promise.resolve(result);
   },
 }));
 
@@ -83,6 +91,7 @@ beforeEach(() => {
   h.results = new Map();
   h.fail = false;
   h.failFields = new Set();
+  h.hold = new Map();
 });
 afterEach(cleanup);
 
@@ -218,6 +227,32 @@ describe('ExpandableBabysitterCard cross-app endorsements (issue #280)', () => {
     fireEvent.click(screen.getAllByRole('button')[0]); // re-expand refetches
     await waitFor(() => expect(h.queries).toHaveLength(6));
     expect(await screen.findByText(/Endorsement from Famille Etude/)).toBeInTheDocument();
+  });
+
+  it('does not strand the card when a collapse races an in-flight load', async () => {
+    // The bug this guards: collapse cancelled the load, the re-expand hit the
+    // in-flight guard and started nothing, and the resolving load then wrote
+    // nothing — leaving an expanded card with an empty list and no dep left to
+    // change. The write is now gated on UID identity, not on collapse, so a
+    // collapsed-then-reexpanded load still lands (and its reads are not wasted).
+    h.results.set('babysitterUserId', [{ refName: 'Famille Garde', note: 'x' }]);
+    h.hold.set('tutorUserId', () => {}); // this source hangs
+    renderCard();
+    await waitFor(() => expect(h.queries).toHaveLength(3));
+
+    const toggle = () => fireEvent.click(screen.getAllByRole('button')[0]);
+    toggle(); // collapse mid-load
+    toggle(); // re-expand — deduped, starts nothing
+    expect(h.queries).toHaveLength(3);
+
+    h.hold.get('tutorUserId')!(); // the original load lands
+    expect(await screen.findByText(/Endorsement from Famille Garde/)).toBeInTheDocument();
+
+    // And it cached as complete: toggling again issues no further queries.
+    toggle();
+    toggle();
+    await waitFor(() => expect(screen.getByText(/Famille Garde/)).toBeInTheDocument());
+    expect(h.queries).toHaveLength(3);
   });
 
   it('keeps the card intact when the endorsement queries are denied', async () => {

@@ -1499,8 +1499,16 @@ checked-in icon at PR2 (sizes per sit's #197 manifest work).
     ExpandableBabysitterCard, study's TutorCard, and this offer card (which
     was refactored off its hard-coded three-source list). `doerUserId` is
     already in the registry and its shape is pinned in the rules suite, so
-    PR-11 needs no UI or rules change here: the first `DoerEndorsementDoc`
-    written renders on every surface labeled "From Sync/Do" automatically.
+    PR-11 needs no UI or rules change **for these cross-app list queries**:
+    the first `DoerEndorsementDoc` written renders on every surface labeled
+    "From Sync/Do" automatically. That is scoped deliberately — the
+    `references` read rule has owner disjuncts for `babysitterUserId`,
+    `tutorUserId`, `submittedByUserId` and `submittedByFamilyId` but NOT
+    `doerUserId`, and `create` is `babysitterUserId`-only. So a DOER-facing
+    surface listing their own not-yet-approved endorsements (the analogue of
+    sit's EndorsementsPage and study's tutor dashboard, both of which lean on
+    those owner disjuncts) WILL need a rules change. PR-11 owns that half;
+    nothing here removes it.
     One caveat for PR-11: sit's expanded-row markup renders referee
     contact links, and it is gated on `sourceApp === 'sit'` — if
     `DoerEndorsementDoc` ever carries contact fields, that gate is the

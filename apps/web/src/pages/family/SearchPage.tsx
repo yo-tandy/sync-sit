@@ -776,6 +776,11 @@ export function SearchPage() {
                                   className="w-full text-left rounded-md px-2 py-1.5 text-xs font-medium text-gray-700 hover:bg-white active:bg-white"
                                 >
                                   {refExpanded ? '▾' : '▸'} {ref.refName ? `Endorsement from ${ref.refName}` : `Endorsement ${i + 1}`}
+                                  {/* Deliberately NOT source-gated, unlike the sit-shaped
+                                      contact fields below: study endorsements DO carry
+                                      isEjmFamily (copied at write time), and "the submitting
+                                      family is an EJM family" is a cross-product fact about
+                                      the submitter, not a claim about babysitting. */}
                                   {ref.isEjmFamily && <span className="ml-1.5 text-blue-600 font-normal">EJM Family</span>}
                                   {/* Origin label (issue #280): a Sync/Study
                                       endorsement vouches for tutoring, not for

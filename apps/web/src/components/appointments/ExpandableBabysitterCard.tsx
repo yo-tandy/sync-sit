@@ -101,6 +101,15 @@ export function ExpandableBabysitterCard({
   // otherwise introduce the same stale-overwrite race.
   const refsCompleteFor = useRef<string | null>(null);
   const refsInFlight = useRef(false);
+  // The uid the in-flight load belongs to. Gating the write on IDENTITY, not
+  // on collapse, is what keeps the dedupe safe here: this surface is the only
+  // one that both cancels on collapse and dedupes in flight, and together
+  // those stranded the card — collapse set `cancelled`, the re-expand hit the
+  // in-flight guard and started nothing, then the load resolved into the
+  // cancelled branch and wrote nothing. Expanded card, empty list, no dep left
+  // to change. Letting a collapsed-then-reexpanded load land is also strictly
+  // cheaper: its three reads are already paid for.
+  const refsRequestedFor = useRef<string | null>(null);
   const [expandedRefIds, setExpandedRefIds] = useState<Set<string>>(new Set());
 
   // Appointment notes (issue #238, parity B2 — study's session notes adopted
@@ -188,7 +197,7 @@ export function ExpandableBabysitterCard({
     if (refsCompleteFor.current === babysitterUserId) return; // cached, in full
     if (refsInFlight.current) return; // a load is already running
     refsInFlight.current = true;
-    let cancelled = false;
+    refsRequestedFor.current = babysitterUserId;
     const sources = endorsementSources('sit');
     // allSettled, NOT all: with one query the failure mode was "this card's
     // endorsements are missing"; with three, Promise.all would let a failure in
@@ -207,7 +216,9 @@ export function ExpandableBabysitterCard({
         ))
       )
     ).then((settled) => {
-      if (cancelled) return;
+      // Only stale if the card has since been pointed at a DIFFERENT
+      // babysitter; a mere collapse is not staleness.
+      if (refsRequestedFor.current !== babysitterUserId) return;
       // Concatenated in source order, so sit's own references lead.
       setRefs(settled.flatMap((r, i) =>
         r.status === 'fulfilled'
@@ -223,7 +234,6 @@ export function ExpandableBabysitterCard({
     }).catch(() => {}).finally(() => {
       refsInFlight.current = false;
     });
-    return () => { cancelled = true; };
   }, [expanded, appointment.babysitterUserId]);
 
   // Format date/time for confirmed/past cards
@@ -336,6 +346,11 @@ export function ExpandableBabysitterCard({
                       className="w-full text-left rounded-md px-2 py-1.5 text-xs font-medium text-gray-700 hover:bg-white active:bg-white"
                     >
                       {refExpanded ? '▾' : '▸'} {ref.refName ? `Endorsement from ${ref.refName}` : `Endorsement ${i + 1}`}
+                      {/* Deliberately NOT source-gated, unlike the sit-shaped
+                          contact fields below: study endorsements DO carry
+                          isEjmFamily (copied at write time), and "the submitting
+                          family is an EJM family" is a cross-product fact about
+                          the submitter, not a claim about babysitting. */}
                       {ref.isEjmFamily && <span className="ml-1.5 text-blue-600 font-normal">EJM Family</span>}
                       {/* Origin label (issue #280): a Sync/Study endorsement
                           vouches for tutoring, not babysitting. */}
