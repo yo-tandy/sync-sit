@@ -193,6 +193,16 @@ export async function eraseUserAccount(targetUserId: string, actorUid: string) {
   // 4-bis. Guardian cleanup (governance PR 2).
   // As a CHILD: their link and the invites addressed to them are personal
   // data — remove both.
+  //
+  // The link is READ BACK before it is deleted, and the supervising family
+  // returned to the caller. Callers need it AFTER the erasure (the self-delete
+  // path tells the guardian their supervised member is gone, #368) and by then
+  // there is nothing left to look up. Capturing it here rather than asking
+  // callers to read it first makes the ordering structural: a caller cannot
+  // get it wrong, because the value only exists as a result of the erasure.
+  const ownLink = (await db.collection('guardianLinks').doc(targetUserId).get()).data();
+  const supervisingFamilyId =
+    ownLink?.status === 'active' ? ((ownLink.familyId as string) ?? null) : null;
   await db.collection('guardianLinks').doc(targetUserId).delete();
   if (email) {
     const ownInvites = await db
@@ -392,6 +402,8 @@ export async function eraseUserAccount(targetUserId: string, actorUid: string) {
     isLastParent,
     refDocsDeleted: refDocsToDelete.length,
     doErasure,
+    /** The family that supervised this member, captured before the link was deleted. */
+    supervisingFamilyId,
   };
 }
 
