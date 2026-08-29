@@ -37,7 +37,9 @@ Three things throw rather than resolve quietly, all for the same reason — sile
 
 - a malformed value (`LANE=nine`, `EMULATOR_AUTH_PORT=70000`);
 - two lane vars naming *different* lanes (`LANE=3 E2E_LANE=4`) — the same lane spelled two ways is fine;
-- a `FIRESTORE_EMULATOR_HOST` / `FIREBASE_AUTH_EMULATOR_HOST` already exported that disagrees with the resolved lane. The backfill scripts ask you to export those by hand, so having one left over in a shell is normal; without this check `pnpm seed:admin` would overwrite it and seed lane 1 without a word. An exported value that agrees is fine.
+- a `FIRESTORE_EMULATOR_HOST` / `FIREBASE_AUTH_EMULATOR_HOST` already exported that points somewhere other than the resolved lane. The backfill scripts ask you to export those by hand, so having one left over in a shell is normal; without this check `pnpm seed:admin` would overwrite it and seed lane 1 without a word.
+
+  What is compared is the target, not the spelling: the port must match, and the host must match once `localhost`, `127.0.0.1` and `::1` are folded together. So one `export FIRESTORE_EMULATOR_HOST=localhost:28080` satisfies both scripts in the same shell, even though they resolve different default hosts. The error names which half disagreed — a wrong port is a lane problem, a wrong host is an `EMULATOR_HOST` problem, and no lane var can fix the latter.
 
 ```bash
 LANE=3 pnpm seed:admin                  # or: pnpm seed:admin:lane3

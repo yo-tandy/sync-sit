@@ -382,4 +382,61 @@ describe('emulatorAdminHosts / assertEmulatorAdminHostsAgree', () => {
       /FIRESTORE_EMULATOR_HOST.*lane 4/s,
     );
   });
+
+  describe('what is compared is the target, not the spelling (PR #404 review)', () => {
+    // The two seed scripts resolve DIFFERENT default hosts on purpose, so a
+    // byte-comparison would let one exported var satisfy at most one of them
+    // and refuse the other on a run pointed at the very same emulator.
+    it.each([
+      ['localhost', '127.0.0.1'],
+      ['127.0.0.1', 'localhost'],
+      ['localhost', '::1'],
+      ['[::1]', '127.0.0.1'],
+      ['LOCALHOST', 'localhost'],
+    ])('pre-set %s:28080 agrees with a lane-3 run resolving %s:28080', (preset, scriptHost) => {
+      const env = { LANE: '3', FIRESTORE_EMULATOR_HOST: `${preset}:28080` };
+      const config = resolveNodeEmulatorConfig(env, { defaultHost: scriptHost });
+      expect(() => assertEmulatorAdminHostsAgree(env, config)).not.toThrow();
+    });
+
+    it('the two seed scripts satisfy one exported var in the same shell', () => {
+      // `export FIRESTORE_EMULATOR_HOST=localhost:28080` then both of:
+      //   LANE=3 pnpm seed:admin      (defaultHost localhost)
+      //   LANE=3 pnpm seed:test-data  (defaultHost 127.0.0.1)
+      const env = {
+        LANE: '3',
+        FIRESTORE_EMULATOR_HOST: 'localhost:28080',
+        FIREBASE_AUTH_EMULATOR_HOST: 'localhost:29099',
+      };
+      for (const defaultHost of ['localhost', '127.0.0.1']) {
+        const config = resolveNodeEmulatorConfig(env, { defaultHost });
+        expect(() => assertEmulatorAdminHostsAgree(env, config)).not.toThrow();
+      }
+    });
+
+    it('a different port still throws, whatever the host is spelled like', () => {
+      // The lane lives in the port, so this is the accident the guard exists for.
+      const env = { LANE: '3', FIRESTORE_EMULATOR_HOST: '127.0.0.1:8080' };
+      const config = resolveNodeEmulatorConfig(env, { defaultHost: 'localhost' });
+      expect(() => assertEmulatorAdminHostsAgree(env, config)).toThrow(/different PORT/);
+      expect(() => assertEmulatorAdminHostsAgree(env, config)).toThrow(/EMULATOR_LANE/);
+    });
+
+    it('a genuinely different host throws and points at EMULATOR_HOST, not the lane', () => {
+      const env = { LANE: '3', FIRESTORE_EMULATOR_HOST: 'db.example.test:28080' };
+      const config = resolveNodeEmulatorConfig(env, { defaultHost: 'localhost' });
+      expect(() => assertEmulatorAdminHostsAgree(env, config)).toThrow(/different HOST/);
+      expect(() => assertEmulatorAdminHostsAgree(env, config)).toThrow(
+        /set EMULATOR_HOST to "db\.example\.test"/,
+      );
+    });
+
+    it('0.0.0.0 is not treated as a loopback synonym', () => {
+      // As a destination it is not the same place, and folding it in would
+      // hide a real mistake.
+      const env = { LANE: '3', FIRESTORE_EMULATOR_HOST: '0.0.0.0:28080' };
+      const config = resolveNodeEmulatorConfig(env, { defaultHost: 'localhost' });
+      expect(() => assertEmulatorAdminHostsAgree(env, config)).toThrow(/different HOST/);
+    });
+  });
 });

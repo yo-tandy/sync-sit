@@ -80,9 +80,6 @@ function applySeedEmulatorTarget(env, defaultHost) {
   return config;
 }
 
-module.exports = {
-  applySeedEmulatorTarget,
-  resolveNodeEmulatorConfig: resolver.resolveNodeEmulatorConfig,
-  emulatorAdminHosts: resolver.emulatorAdminHosts,
-  assertEmulatorAdminHostsAgree: resolver.assertEmulatorAdminHostsAgree,
-};
+// Only what the seed scripts call. `NEEDED` above is then the single
+// statement of what this shim requires from `dist/`.
+module.exports = { applySeedEmulatorTarget };
