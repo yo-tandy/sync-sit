@@ -13,6 +13,7 @@
     "build:study-functions": "pnpm --filter study-functions build",
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r typecheck",
+    "docs:links": "node scripts/check-markdown-links.mjs",
     "test": "vitest run",
     "test:unit": "pnpm -r --filter '!@ejm/tests' test && vitest run --project scripts",
     "test:integration": "ADMIN_CONFIG_TTL_MS=0 pnpm --filter @ejm/tests test",

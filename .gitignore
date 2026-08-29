@@ -75,3 +75,11 @@ _worktrees/
 # leave it behind; ignored so it cannot be swept into a commit. That test
 # asserts this line still matches, so the two cannot drift apart.
 packages/*/src/__leftover_bundlerStrayProbe.test.ts
+
+# Planted by scripts/__tests__/markdown-links.test.ts: a doc with a deliberately
+# dead anchor, used to prove that repo link rot does NOT fail the `scripts` test
+# project and therefore cannot block a tagged release. Its cleanup runs in a
+# `finally`, so an interrupted run can leave it behind; ignored so it cannot be
+# swept into a commit. That test asserts this line still matches, so the two
+# cannot drift apart.
+docs/__linkcheck_releaseCouplingProbe.md
