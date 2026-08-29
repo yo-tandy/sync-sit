@@ -353,11 +353,11 @@ describe('typecheck gate (issue #378)', () => {
  * Parse the pnpm package selection out of the first command of a script.
  *
  * Models `pnpm`'s selection surface, not the whole CLI: the `-r`/`--recursive`
- * flag and `--filter <x>` / `--filter=<x>`, with a leading `!` marking an
- * exclusion. That is deliberately narrow — the pin above it asserts the script
- * uses NO positive filter, so the only shape this has to get right is
- * "recursive, minus an exclusion list", and a script that grows some other
- * selection mechanism will fail that assertion rather than be mis-modelled here.
+ * flag and `--filter <x>` / `--filter=<x>` / `-F <x>` / `-F=<x>`, with a
+ * leading `!` marking an exclusion. That is deliberately narrow — but narrow
+ * has to mean LOUD, not lenient: any other spelling of a selection flag throws
+ * rather than being skipped, because a skipped `-F web` would leave the pins
+ * below asserting that ten suites run while pnpm ran one.
  */
 export function pnpmSelection(script: string): {
   recursive: boolean;
@@ -377,8 +377,25 @@ export function pnpmSelection(script: string): {
       recursive = true;
       continue;
     }
-    const value = token === '--filter' ? tokens[++i] : token.match(/^--filter=(.*)$/)?.[1];
-    if (value === undefined) continue;
+    let value: string | undefined;
+    if (token === '--filter' || token === '-F') value = tokens[++i];
+    else value = token.match(/^(?:--filter|-F)=(.*)$/)?.[1];
+    if (value === undefined) {
+      // Any OTHER spelling of a selection flag — `--filter-prod`, an attached
+      // `-Fweb` — throws rather than being skipped, the way
+      // expandWorkspacePatterns throws on a pattern it cannot expand. Skipping
+      // it silently is the unsafe direction: the pins below would compute a
+      // selection of ten packages while pnpm ran one, which is exactly the
+      // #401 failure mode they exist to prevent.
+      if (/^(?:-F|--filter)/.test(token)) {
+        throw new Error(
+          `unmodelled pnpm selection flag: ${token} — extend pnpmSelection() in ` +
+            `scripts/__tests__/release-workflow.test.ts to cover it (do NOT drop the flag or ` +
+            `loosen the pin; mis-reading the selection is the bug this guards against)`,
+        );
+      }
+      continue;
+    }
     if (value.startsWith('!')) excludes.push(value.slice(1));
     else includes.push(value);
   }
@@ -488,6 +505,30 @@ describe('unit test lane (issue #401)', () => {
       });
     });
 
+    it('reads pnpm’s -F alias, which is the same mechanism under another name', () => {
+      // Not academic: `pnpm -r --filter '!@ejm/tests' -F web test` satisfies
+      // every pin above if -F is skipped — includes stays empty, the exclusion
+      // stays recorded — while pnpm runs exactly one package.
+      expect(pnpmSelection("pnpm -r --filter '!@ejm/tests' -F web test && vitest run")).toEqual({
+        recursive: true,
+        includes: ['web'],
+        excludes: ['@ejm/tests'],
+      });
+      expect(pnpmSelection('pnpm -r -F=web test')).toEqual({
+        recursive: true,
+        includes: ['web'],
+        excludes: [],
+      });
+    });
+
+    it('throws on a selection flag it does not model rather than skipping it', () => {
+      for (const flag of ['--filter-prod', '--filter-prod=web', '-Fweb']) {
+        expect(() => pnpmSelection(`pnpm -r ${flag} test`)).toThrow(
+          /unmodelled pnpm selection flag/,
+        );
+      }
+    });
+
     it('stops at the first &&, so the tail command cannot contribute filters', () => {
       expect(pnpmSelection('pnpm -r test && pnpm --filter web something')).toEqual({
         recursive: true,
@@ -535,22 +576,35 @@ describe('src-first type resolution (issue #406)', () => {
     expect(offenders).toEqual([]);
   });
 
-  it('the packages a CJS consumer resolves through actually declare `types`', () => {
-    // The assertion above is vacuously true for a map with no `types` key at
-    // all — which is the same bug wearing a different hat, since `require`
-    // would then be the only answer and `dist` the only source of types.
-    const needsTypes = ['@ejm/shared-core', '@ejm/sit-core', '@ejm/shared-functions'];
-    const byName = new Map(workspaceManifests().map((pkg) => [pkg.name, pkg]));
-    for (const name of needsTypes) {
-      const exports = byName.get(name)?.exports as Record<string, Record<string, string>>;
-      expect(exports, `${name} must keep an exports map`).toBeDefined();
-      for (const [subpath, target] of Object.entries(exports)) {
-        expect(target.types, `${name} "${subpath}" must map types to src`).toMatch(/^\.\/src\//);
-        expect(target.require, `${name} "${subpath}" must keep require on dist`).toMatch(
-          /^\.\/dist\//,
-        );
+  it('every map a CJS consumer resolves through declares `types` at all', () => {
+    // The assertion above is vacuously true for a map with no `types` key —
+    // the same bug wearing a different hat, since `require` would then be the
+    // only answer and `dist` the only source of types.
+    //
+    // DERIVED, not listed: "has a `require` pointing at dist" is precisely the
+    // property that makes a map reachable this way, so a new package — or a
+    // new subpath on an existing one — is covered the moment it exists.
+    // Restating the package names here would reintroduce the hand-written-list
+    // failure mode the unit-lane pin above exists to prevent, two lanes over.
+    const offenders: string[] = [];
+    let checked = 0;
+    for (const pkg of workspaceManifests()) {
+      if (typeof pkg.exports !== 'object' || pkg.exports === null) continue;
+      for (const [subpath, target] of Object.entries(pkg.exports as Record<string, unknown>)) {
+        if (typeof target !== 'object' || target === null) continue;
+        const conditions = target as Record<string, string>;
+        if (!/^\.\/dist\//.test(conditions.require ?? '')) continue;
+        checked++;
+        if (!/^\.\/src\//.test(conditions.types ?? '')) {
+          offenders.push(`${pkg.name} "${subpath}": types=${conditions.types ?? '(absent)'}`);
+        }
       }
     }
+    expect(offenders).toEqual([]);
+    // Floor, against the same derivation: shared-core's five subpaths,
+    // shared-functions' ten, and one each for sit-core, study-core, do-core.
+    // An empty derivation must fail HERE rather than pass vacuously.
+    expect(checked).toBeGreaterThanOrEqual(18);
   });
 });
 
