@@ -161,6 +161,29 @@ describe('deleteAppointment', () => {
     expect((await readAudit(appointmentId))!.details.scheduleClaimReleased).toBe(false);
   });
 
+  it('collects a claim left behind on a CANCELLED appointment', async () => {
+    // The predicate is the ledger entry, not the status. A cancel that failed
+    // to release (issue #408 item 1 found `deleteUser` doing exactly that)
+    // leaves a `cancelled` appointment still holding a claim — and that is the
+    // claim an admin delete most needs to collect, because deleting the doc is
+    // the last chance anything has to find it.
+    const appointmentId = await seedAppointment({
+      babysitterUserId: seed.babysitter1.uid,
+      familyId: seed.family1Id,
+      createdByUserId: seed.parent1.uid,
+      status: 'cancelled',
+      date: DATE,
+    });
+    await seedOverride(seed.babysitter1.uid, DATE, [[32, 40]], [
+      { startIdx: 32, endIdx: 40, appointmentId },
+    ]);
+
+    await callFunction('deleteAppointment', { appointmentId }, adminToken);
+
+    expect((await readOverride(seed.babysitter1.uid, DATE)).exists).toBe(false);
+    expect((await readAudit(appointmentId))!.details.scheduleClaimReleased).toBe(true);
+  });
+
   it('releases nothing for a PENDING appointment (it never claimed a slot)', async () => {
     const appointmentId = await seedAppointment({
       babysitterUserId: seed.babysitter1.uid,

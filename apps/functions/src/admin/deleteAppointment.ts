@@ -76,15 +76,24 @@ export const deleteAppointment = onCall(
     // writes) is the recoverable direction: it reopens a slot the admin is in
     // the act of freeing anyway.
     //
-    // Only a CONFIRMED appointment with a concrete date ever claimed slots: a
-    // pending request claims nothing, and a confirmed RECURRING arrangement
-    // stores `date: null` and blocks no override (`respondToRequest` gates its
-    // schedule write on the same pair). `releaseClaim` re-checks the date shape
-    // and no-ops when the override doc or the ledger entry is absent.
+    // The predicate is the LEDGER ENTRY, deliberately not the status. Only a
+    // confirmed appointment with a concrete date ever claims slots — a pending
+    // request claims nothing, and a confirmed RECURRING arrangement stores
+    // `date: null` and blocks no override (`respondToRequest` gates its
+    // schedule write on the same pair) — so a `status === 'confirmed'` guard
+    // here would be unreachable-by-construction on every healthy document, and
+    // on an UNhealthy one it would do harm: an appointment whose claim was
+    // never released at cancel (exactly what item 1 of this issue found
+    // `deleteUser` doing) is `cancelled` and still holds a ledger entry, and
+    // that is precisely the claim an admin delete should collect. Matching the
+    // entry by `appointmentId` is both the precise test and the safe one —
+    // `releaseClaim` no-ops when the override doc, or an entry naming this
+    // appointment, is absent. The `date` check is needed for real: a recurring
+    // doc has no date to key an override on.
     let claimReleased = false;
     if (
-      apptData.status === 'confirmed' &&
       typeof apptData.date === 'string' &&
+      apptData.date &&
       typeof apptData.babysitterUserId === 'string' &&
       apptData.babysitterUserId
     ) {
