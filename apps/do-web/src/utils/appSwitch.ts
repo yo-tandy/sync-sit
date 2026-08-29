@@ -6,7 +6,7 @@
  * here depends on it.
  */
 export const SIT_APP_URL: string = (
-  import.meta.env.VITE_SIT_APP_URL ?? 'https://sync-sit.web.app'
+  import.meta.env.VITE_SIT_APP_URL ?? 'https://sync-sit.com'
 ).replace(/\/$/, '');
 
 export const STUDY_APP_URL: string = (

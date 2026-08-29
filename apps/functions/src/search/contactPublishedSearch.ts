@@ -11,6 +11,7 @@ import type { User } from '@ejm/sit-core';
 import { isActivePublishedSearch } from '@ejm/shared-core';
 import { getEjemEmail } from '@ejm/shared-core';
 import { passesAgeBackstop } from './ageBackstop.js';
+import { SIT_APP_URL } from '@ejm/shared-functions';
 
 interface ContactPublishedSearchData {
   publishedSearchId: string;
@@ -309,7 +310,7 @@ export const contactPublishedSearch = onCall(
       ${dateInfo}
       ${messageInfo}
       <p>Your address stays private until you accept.</p>
-      <p style="margin-top: 16px;"><a href="https://sync-sit.com/family" style="background: #DC2626; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View request</a></p>
+      <p style="margin-top: 16px;"><a href="${SIT_APP_URL}/family" style="background: #DC2626; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View request</a></p>
     `,
       data: { appointmentId: appointmentRef.id, publishedSearchId: data.publishedSearchId },
     });

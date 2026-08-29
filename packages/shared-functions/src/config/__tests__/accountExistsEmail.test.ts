@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { buildAccountExistsEmail, normalizeAccountExistsApp } from '../email.js';
+import { buildAccountExistsEmail, normalizeAccountExistsApp, SIT_APP_URL } from '../email.js';
+
+// Built from the constant, not a literal: the sit host moved from
+// sync-sit.web.app to the custom domain sync-sit.com when the three app-host
+// constants were centralised (plan §18.9). Both hosts serve; the custom domain
+// is canonical, and the functions were already emailing it while this table
+// named the other one. Asserting through the constant means the next domain
+// move doesn't reopen this file.
 
 // Copy-selection pins for the silent existing-account email (issue #148).
 // The app param is untrusted client input: it only ever selects between the
@@ -31,7 +38,7 @@ describe('buildAccountExistsEmail', () => {
     const { subject, html } = buildAccountExistsEmail('sit');
     expect(subject).toContain('Sync/Sit');
     expect(html).toContain('create a Sync/Sit account');
-    expect(html).toContain('https://sync-sit.web.app/login');
+    expect(html).toContain(`${SIT_APP_URL}/login`);
     expect(html).not.toContain('https://sync-study-app.web.app/login');
   });
 
@@ -40,7 +47,7 @@ describe('buildAccountExistsEmail', () => {
     expect(subject).toContain('Sync/Study');
     expect(html).toContain('create a Sync/Study account');
     expect(html).toContain('https://sync-study-app.web.app/login');
-    expect(html).not.toContain('https://sync-sit.web.app/login');
+    expect(html).not.toContain(`${SIT_APP_URL}/login`);
   });
 
   it('do copy names Sync/Do and links the LIVE web.app login page (never sync-do.com)', () => {
@@ -49,7 +56,7 @@ describe('buildAccountExistsEmail', () => {
     expect(html).toContain('create a Sync/Do account');
     expect(html).toContain('https://sync-do-app.web.app/login');
     expect(html).not.toContain('sync-do.com');
-    expect(html).not.toContain('https://sync-sit.web.app/login');
+    expect(html).not.toContain(`${SIT_APP_URL}/login`);
   });
 
   it('sit and study copy carry NO Sync/Do mention (decision 20 — sibling apps must not surface sync-do)', () => {

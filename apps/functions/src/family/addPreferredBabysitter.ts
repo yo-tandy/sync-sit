@@ -5,6 +5,7 @@ import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { escapeHtml, sendNotificationEmail } from '../config/email.js';
 import { sendPushNotification } from '../config/push.js';
+import { SIT_APP_URL } from '@ejm/shared-functions';
 
 export const addPreferredBabysitter = onCall(
   { region: 'europe-west1', cors: getCorsOrigin() },
@@ -86,7 +87,7 @@ export const addPreferredBabysitter = onCall(
           `${parentName} from the ${familyName} family added you to their favorites!`,
           `<p><strong>${escapeHtml(parentName)}</strong> from the <strong>${escapeHtml(familyName)}</strong> family added you to their favorite babysitters!</p>
            <p>Would you like to share your contact information with them?</p>
-           <p style="margin-top: 16px;"><a href="https://sync-sit.com/babysitter/families" style="background: #DC2626; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">Respond</a></p>`
+           <p style="margin-top: 16px;"><a href="${SIT_APP_URL}/babysitter/families" style="background: #DC2626; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">Respond</a></p>`
         );
       }
 

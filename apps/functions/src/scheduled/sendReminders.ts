@@ -4,6 +4,7 @@ import { db } from '../config/firebase.js';
 import { escapeHtml, sendNotificationEmail } from '../config/email.js';
 import { sendPushNotification } from '../config/push.js';
 import { parisDateString, parisWallTimeToUtc } from './parisTime.js';
+import { SIT_APP_URL } from '@ejm/shared-functions';
 
 export interface SendRemindersStats {
   remindersSent: number;
@@ -88,7 +89,7 @@ export async function runSendReminders(
               babysitterEmail,
               'Babysitting appointment tomorrow',
               `<p>Reminder: You have a babysitting appointment with <strong>${escapeHtml(familyName)}</strong> on <strong>${appointmentDate}</strong> at <strong>${escapeHtml(apt.startTime)}</strong>.</p>
-               <p style="margin-top: 16px;"><a href="https://sync-sit.com/babysitter" style="background: #DC2626; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View Appointment</a></p>`
+               <p style="margin-top: 16px;"><a href="${SIT_APP_URL}/babysitter" style="background: #DC2626; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View Appointment</a></p>`
             );
           }
         }
@@ -137,7 +138,7 @@ export async function runSendReminders(
                 parentEmail,
                 'Babysitting appointment tomorrow',
                 `<p>Reminder: Your babysitting appointment is on <strong>${appointmentDate}</strong> at <strong>${escapeHtml(apt.startTime)}</strong>.</p>
-                 <p style="margin-top: 16px;"><a href="https://sync-sit.com/family" style="background: #DC2626; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View Appointment</a></p>`
+                 <p style="margin-top: 16px;"><a href="${SIT_APP_URL}/family" style="background: #DC2626; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View Appointment</a></p>`
               );
             }
           }

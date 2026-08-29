@@ -6,6 +6,7 @@ import { writeUserActivity } from '../admin/writeAuditLog.js';
 import { escapeHtml, sendNotificationEmail } from '../config/email.js';
 import { sendPushNotification } from '../config/push.js';
 import { getParentProfile, type User } from '@ejm/shared-core';
+import { SIT_APP_URL } from '@ejm/shared-functions';
 
 interface ResubmitInput {
   originalAppointmentId: string;
@@ -192,7 +193,7 @@ export const resubmitAppointment = onCall(
         `Request resubmitted by ${familyName}`,
         `<p><strong>${escapeHtml(familyName)}</strong> has resubmitted a babysitting request for <strong>${escapeHtml(dateInfo)}</strong>.</p>
          <p><strong>Note:</strong> ${escapeHtml(data.additionalNotes.trim())}</p>
-         <p style="margin-top: 16px;"><a href="https://sync-sit.com/babysitter/request/${newAppointmentRef.id}" style="background: #DC2626; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View Request</a></p>`
+         <p style="margin-top: 16px;"><a href="${SIT_APP_URL}/babysitter/request/${newAppointmentRef.id}" style="background: #DC2626; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View Request</a></p>`
       );
     }
 

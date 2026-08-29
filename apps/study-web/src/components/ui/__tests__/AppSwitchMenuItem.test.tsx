@@ -38,7 +38,7 @@ describe('AppSwitchMenuItem (study → sit)', () => {
     expect(h.callable).toHaveBeenCalledWith('createAppHandoffCode', {});
     // The fragment pin: #code=… (never a query param — fragments never reach
     // servers or logs), URL-encoded, on the prod sit origin by default.
-    expect(h.assign).toHaveBeenCalledWith('https://sync-sit.web.app/handoff#code=abc%2B%2F%3D&lang=en');
+    expect(h.assign).toHaveBeenCalledWith('https://sync-sit.com/handoff#code=abc%2B%2F%3D&lang=en');
   });
 
   it('carries fr when the app language is French (incl. regional variants)', async () => {
@@ -49,7 +49,7 @@ describe('AppSwitchMenuItem (study → sit)', () => {
     fireEvent.click(screen.getByRole('button', { name: /ouvrir sync-sit/i }));
 
     await waitFor(() => expect(h.assign).toHaveBeenCalledTimes(1));
-    expect(h.assign).toHaveBeenCalledWith('https://sync-sit.web.app/handoff#code=abc%2B%2F%3D&lang=fr');
+    expect(h.assign).toHaveBeenCalledWith('https://sync-sit.com/handoff#code=abc%2B%2F%3D&lang=fr');
     await i18n.changeLanguage('en');
   });
 

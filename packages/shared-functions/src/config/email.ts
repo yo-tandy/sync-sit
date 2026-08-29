@@ -14,6 +14,40 @@ function getResend(): any {
   return resendInstance;
 }
 
+/**
+ * The three canonical app hosts — the ONE place any server-side link is built
+ * from (sync-do plan §18.9's first work item).
+ *
+ * `SIT_APP_URL` did not exist: `https://sync-sit.com` was inlined ~20 times
+ * across a dozen files under `apps/functions/src/**`, while study and do had
+ * had constants since day one. Since the coming domain move IS a sit-domain
+ * move, the sweep landed almost entirely on the half that was never
+ * centralised. It is centralised now, so the cutover is these three lines.
+ *
+ * Two sit hosts were in circulation — the functions inlined `sync-sit.com`
+ * while `email.ts` and `guardian/shared.ts` used `sync-sit.web.app`. Both
+ * serve, and the custom domain is the canonical one, so everything now builds
+ * on it.
+ *
+ * Configuration reference: docs/environments.md.
+ *
+ * ENV-OVERRIDABLE, and that is the point for anything that is not production:
+ * a staging deployment whose emails link to production is worse than no
+ * staging at all — a tester clicks "View your appointment" and lands on real
+ * data. Firebase loads `.env` and then `.env.<projectId>` from the functions
+ * directory at deploy time, so the staging project sets these and nothing
+ * else changes.
+ *
+ * NOT env-driven here: `FROM_EMAIL`, `SUPPORT_EMAIL` and `ADMIN_EMAIL`. Those
+ * are addresses, not links, and moving them needs the new domain verified at
+ * Resend with SPF and DKIM (plan §18.9, and the still-half-open issue #156) —
+ * mail from an unverified domain lands in spam. Separate work with real lead
+ * time; deliberately not bundled here.
+ */
+export const SIT_APP_URL = process.env.SIT_APP_URL ?? 'https://sync-sit.com';
+export const STUDY_APP_URL = process.env.STUDY_APP_URL ?? 'https://sync-study-app.web.app';
+export const DO_APP_URL = process.env.DO_APP_URL ?? 'https://sync-do-app.web.app';
+
 const FROM_EMAIL = 'Sync/Sit <noreply@sync-sit.com>';
 
 /**
@@ -97,15 +131,13 @@ export function normalizeAccountExistsApp(app: unknown): AccountExistsApp {
   return app === 'study' || app === 'do' ? app : 'sit';
 }
 
-// Canonical prod login URLs, hardcoded because functions cannot import app
-// code. Keep in sync with the prod fallbacks of the appSwitch constants:
-// - apps/study-web/src/utils/appSwitch.ts SIT_APP_URL   -> https://sync-sit.web.app
-// - apps/web/src/lib/appSwitch.ts        STUDY_APP_URL  -> https://sync-study-app.web.app
-// - apps/do-web/src/utils/appSwitch.ts (DO)             -> https://sync-do-app.web.app
+// Login URLs build on the three constants above rather than repeating hosts:
+// this table previously named `sync-sit.web.app` while the functions emailed
+// `sync-sit.com`, which is how two sit hosts stayed in circulation.
 const ACCOUNT_EXISTS_COPY: Record<AccountExistsApp, { appName: string; loginUrl: string }> = {
-  sit: { appName: 'Sync/Sit', loginUrl: 'https://sync-sit.web.app/login' },
-  study: { appName: 'Sync/Study', loginUrl: 'https://sync-study-app.web.app/login' },
-  do: { appName: 'Sync/Do', loginUrl: 'https://sync-do-app.web.app/login' },
+  sit: { appName: 'Sync/Sit', loginUrl: `${SIT_APP_URL}/login` },
+  study: { appName: 'Sync/Study', loginUrl: `${STUDY_APP_URL}/login` },
+  do: { appName: 'Sync/Do', loginUrl: `${DO_APP_URL}/login` },
 };
 
 const SUPPORT_EMAIL = 'support@sync-sit.com';
@@ -208,7 +240,7 @@ export async function sendAdminNotification(subject: string, body: string): Prom
           ${body}
           <hr style="border: none; border-top: 1px solid #E5E7EB; margin: 24px 0;" />
           <p style="color: #9CA3AF; font-size: 12px;">
-            <a href="https://sync-sit.com/admin/verifications" style="color: #DC2626;">Review in admin panel</a>
+            <a href="${SIT_APP_URL}/admin/verifications" style="color: #DC2626;">Review in admin panel</a>
           </p>
         </div>
       `,
@@ -226,22 +258,6 @@ export async function sendAdminNotification(subject: string, body: string): Prom
  */
 export type NotificationApp = 'sit' | 'study' | 'do';
 
-/**
- * The ONE canonical study host. Matches the prod fallback of
- * apps/web/src/lib/appSwitch.ts STUDY_APP_URL and PUSH_BRANDING in push.ts —
- * sync-study.com is not live (issue #156). Every study email CTA must build on
- * this constant so the next domain move is a single edit.
- */
-export const STUDY_APP_URL = 'https://sync-study-app.web.app';
-
-/**
- * The ONE canonical sync-do host (sync-do plan §10, issue #156's rule):
- * sync-do.com is NOT live, so every do email CTA must build on this live
- * web.app constant — never sync-do.com — and the next domain move is a
- * single edit here.
- */
-export const DO_APP_URL = 'https://sync-do-app.web.app';
-
 // Per-app notification branding (issue #168 Phase 0). Same literal-copy-set
 // pattern as ACCOUNT_EXISTS_COPY above. The FROM address stays
 // noreply@sync-sit.com for BOTH apps until #156 resolves study domain setup —
@@ -255,7 +271,7 @@ export const NOTIFICATION_BRANDING: Record<
   sit: {
     appName: 'Sync/Sit',
     color: '#DC2626',
-    appUrl: 'https://sync-sit.com',
+    appUrl: SIT_APP_URL,
     from: 'Sync/Sit <noreply@sync-sit.com>',
     fromFallback: 'Sync/Sit <onboarding@resend.dev>',
     tagline: 'Connecting EJM families with trusted student babysitters',

@@ -16,6 +16,7 @@ import {
   buildRestoredOverride,
   type SessionBlockEntry,
 } from '@ejm/shared-functions/schedule/sessionOverride.js';
+import { SIT_APP_URL } from '@ejm/shared-functions';
 
 /** sit's provenance stamp + ownership gate (see buildRestoredOverride). */
 const SIT_PROVENANCE = { appSource: 'sit', reason: 'appointment' } as const;
@@ -186,7 +187,7 @@ export const cancelAppointment = onCall(
           `Appointment cancelled by ${familyName}`,
           `<p><strong>${escapeHtml(familyName)}</strong> has cancelled the appointment for <strong>${escapeHtml(dateInfo)}</strong>.</p>
            <p><strong>Reason:</strong> ${escapeHtml(reason.trim())}</p>
-           <p style="margin-top: 16px;"><a href="https://sync-sit.com/babysitter" style="background: #DC2626; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View Dashboard</a></p>`
+           <p style="margin-top: 16px;"><a href="${SIT_APP_URL}/babysitter" style="background: #DC2626; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View Dashboard</a></p>`
         );
       }
 
@@ -211,7 +212,7 @@ export const cancelAppointment = onCall(
         emailSubject: 'Babysitting appointment cancelled',
         emailBody: `<p>The babysitter has cancelled the appointment for <strong>${escapeHtml(dateInfo)}</strong>.</p>
            <p><strong>Reason:</strong> ${escapeHtml(reason.trim())}</p>
-           <p style="margin-top: 16px;"><a href="https://sync-sit.com/family/search" style="background: #DC2626; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">Search Babysitters</a></p>`,
+           <p style="margin-top: 16px;"><a href="${SIT_APP_URL}/family/search" style="background: #DC2626; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">Search Babysitters</a></p>`,
         data: { appointmentId },
       });
     }

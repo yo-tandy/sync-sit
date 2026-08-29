@@ -28,6 +28,7 @@ vi.mock('../../config/email.js', async (importOriginal) => {
 });
 
 import { sendKidInviteEmail } from '../shared.js';
+import { SIT_APP_URL } from '../../config/email.js';
 
 describe('sendKidInviteEmail escaping (issue #188 convention)', () => {
   beforeEach(() => {
@@ -53,6 +54,6 @@ describe('sendKidInviteEmail escaping (issue #188 convention)', () => {
     expect(html).toContain('Hi Yael,');
     expect(html).toContain('the Cohen family');
     // The link is built from a constant + a server-generated token: never escaped.
-    expect(html).toContain('https://sync-sit.web.app/kid-invite?token=tok-abc');
+    expect(html).toContain(`${SIT_APP_URL}/kid-invite?token=tok-abc`);
   });
 });

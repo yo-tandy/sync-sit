@@ -9,7 +9,7 @@ import {
   type User,
 } from '@ejm/shared-core';
 import { db } from '../config/firebase.js';
-import { escapeHtml, sendNotificationEmail } from '../config/email.js';
+import { SIT_APP_URL, escapeHtml, sendNotificationEmail } from '../config/email.js';
 
 /**
  * The ONE success payload every createKidInvite branch returns. Anything a
@@ -105,7 +105,7 @@ export async function sendKidInviteEmail(
   familyName: string,
   rawToken: string,
 ): Promise<void> {
-  const link = `https://sync-sit.web.app/kid-invite?token=${rawToken}`;
+  const link = `${SIT_APP_URL}/kid-invite?token=${rawToken}`;
   await sendNotificationEmail(
     kidEmail,
     'Your parents invited you to Sync/Sit',

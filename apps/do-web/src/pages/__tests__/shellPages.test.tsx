@@ -85,7 +85,7 @@ describe('AboutPage', () => {
     renderWithProviders(<AboutPage />);
     expect(screen.getByRole('link', { name: /sync\/sit/i })).toHaveAttribute(
       'href',
-      'https://sync-sit.web.app',
+      'https://sync-sit.com',
     );
     expect(screen.getByRole('link', { name: /sync\/study/i })).toHaveAttribute(
       'href',
