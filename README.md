@@ -131,7 +131,10 @@ pnpm install
 pnpm emulators
 
 # Integration tests can run WITHOUT killing this dev stack via the second
-# emulator lane (`pnpm test:integration:lane2`) — see docs/emulator-lanes.md
+# emulator lane (`pnpm test:integration:lane2`) — see docs/emulator-lanes.md.
+# The WEB APPS can be pointed at another lane too (VITE_EMULATOR_LANE), which
+# is how a browser-driven Playwright run avoids commandeering this stack —
+# same doc, "Running a WEB APP in a lane".
 
 # Seed an admin user (emulator only). Both seed scripts and both apps'
 # .env.development target the demo-test namespace; if you previously ran the
@@ -157,6 +160,8 @@ VITE_FIREBASE_STORAGE_BUCKET=your-project.firebasestorage.app
 VITE_FIREBASE_MESSAGING_SENDER_ID=123456789
 VITE_FIREBASE_APP_ID=1:123456789:web:abc123
 ```
+
+In DEV builds only, all three apps resolve their Firebase emulator endpoint from `VITE_EMULATOR_LANE` / `VITE_EMULATOR_HOST` / `VITE_EMULATOR_{AUTH,FIRESTORE,FUNCTIONS,STORAGE}_PORT`, defaulting to the lane-1 ports `pnpm emulators` starts (`localhost` 9099/8080/5001/9199). Unset, nothing changes; set, a dev server can drive its own emulator lane instead of the shared one. Defaults and precedence: `.env.example`; full e2e recipe: docs/emulator-lanes.md.
 
 The cross-app switch target is configurable (defaults to the production URLs baked into the code): `VITE_STUDY_APP_URL` in `apps/web`, `VITE_SIT_APP_URL` in `apps/study-web`, and BOTH (`VITE_SIT_APP_URL` + `VITE_STUDY_APP_URL`) in `apps/do-web`, whose switcher links out to both siblings (the reverse links are owner-gated — plan decision 20, issue #304). All three apps ship a committed `.env.development` pointing these at the sibling dev ports; note that `.env.*` is gitignored, so a git checkout will silently overwrite any untracked local copy of these files.
 
