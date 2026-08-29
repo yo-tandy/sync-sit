@@ -9,6 +9,15 @@ import { runDoSweepTasks } from '../do/sweepTasks.js';
 import { runStudySweepSessions } from './sweepStudySessions.js';
 import { createClaimReleaser, DATE_RE, SIT_PROVENANCE } from './retentionClaims.js';
 
+/**
+ * Lower bound for the sit retention range (block 7a). Below every real
+ * 'YYYY-MM-DD' booking date and above '', so the only non-conforming string
+ * shape a bare upper bound would return is excluded from the QUERY rather
+ * than only from the deletions. See the block comment for the measured
+ * Firestore semantics this rests on.
+ */
+const MIN_BOOKING_DATE = '0001-01-01';
+
 export interface CleanupStats {
   totalDeleted: number;
   notificationsDeleted: number;
@@ -24,6 +33,13 @@ export interface CleanupStats {
   appointmentClaimsReleased: number;
   /** Retention cascades that failed and were skipped (poison-pill isolation). */
   appointmentCascadeErrors: number;
+  /**
+   * Docs the retention QUERY returned that the shape guard then refused.
+   * Should always be 0: the range bounds are supposed to match only deletable
+   * documents, so a non-zero value means a non-conforming shape is riding at
+   * the head of the page — the thing that makes a sweep stop draining.
+   */
+  appointmentsSkippedMalformedDate: number;
   publishedSearchesDeleted: number;
   appointmentNotesRedacted: number;
 }
@@ -80,6 +96,7 @@ export async function runCleanupOldData(
     completedAppointmentsDeleted: 0,
     appointmentClaimsReleased: 0,
     appointmentCascadeErrors: 0,
+    appointmentsSkippedMalformedDate: 0,
     publishedSearchesDeleted: 0,
     appointmentNotesRedacted: 0,
   };
@@ -259,17 +276,44 @@ export async function runCleanupOldData(
   // `date` is past, and the retention clock runs from that date. The query is
   // (status, date) — the composite added with this sweep.
   //
-  // TWO DOCUMENT SHAPES MUST SURVIVE, and both are excluded structurally
-  // rather than by luck:
-  //   • A confirmed RECURRING arrangement carries `recurringSlots` and no
-  //     `date`; a doc missing the field is absent from the (status, date)
-  //     index, so the range query never returns it.
-  //   • A doc with `date: ''` IS in the index, and '' sorts before every
-  //     cutoff — it would be swept by the raw query. The dashboards treat a
-  //     dateless confirmed doc as a live recurring arrangement (7b's
-  //     `outOfReach` reads it the same way), so an explicit shape guard below
-  //     keeps it. Deleting a live arrangement because its date field was
-  //     written empty is the one unrecoverable mistake available here.
+  // A CONFIRMED RECURRING ARRANGEMENT IS LIVE AND MUST NEVER BE SWEPT.
+  // `AppointmentDoc.date` is declared `date?: string`, but the TYPE says
+  // nothing about what production wrote — every creation path stores an
+  // explicit null: `sendContactRequest.ts:83` and `:118` (`data.date ||
+  // null`), `contactPublishedSearch.ts:167` (`search.date ?? null`),
+  // `resubmitAppointment.ts:133` (`original.date || null`). So these docs are
+  // NOT absent from the (status, date) index; they are in it, with a null.
+  //
+  // What keeps them out of this query is a Firestore semantic worth writing
+  // down, because it is easy to get wrong in both directions (PR #396 review
+  // did, and so did this comment's first draft). A range filter constrains to
+  // the TYPE of its bound: `where('date', '<', <string>)` matches only
+  // STRING-valued `date` fields. Measured directly against the emulator over
+  // fixtures {null, '', absent, '2020-01-01', '2030-01-01', 5, false}:
+  //     date < '2026-01-01'                        -> ['', '2020-01-01']
+  //     date >= '0001-01-01' AND date < '2026-01-01' -> ['2020-01-01']
+  //     orderBy('date') with no filter             -> all six (null included)
+  // Cross-type ordering is real for orderBy — null does sort below strings —
+  // but the inequality filter never surfaces the other types at all. So the
+  // null recurring arrangements never enter this page, and they cannot crowd
+  // out the documents the sweep wants.
+  //
+  // `date: ''` is the one non-conforming shape a bare upper bound WOULD
+  // return (it is a string, and '' sorts below every cutoff). No current
+  // writer produces it — `publishSearch.ts:177` stores a DATE_RE-validated
+  // string or null, and the two `|| null` writers coerce '' to null — but
+  // guarding it costs one clause, and a page full of such docs ahead of every
+  // deletable one is precisely the "matches only deletable docs, therefore
+  // drains by construction" property 7b's comment contrasts itself against.
+  // Hence the LOWER bound below (7b's `where(field, '>', '')` precedent),
+  // which excludes '' structurally, and the cursor pagination, which means
+  // no non-conforming doc can hold the head of the page even if one appears.
+  //
+  // The in-memory shape guard below is DEFENCE IN DEPTH — do not delete it as
+  // redundant. It is the last thing between this sweep and deleting a live
+  // arrangement, and the two opposite wrong premises about these semantics
+  // are exactly the reason to keep belt and braces both.
+  //
   // `pending` docs are untouched (they render forever — 7b's deliberate
   // exception), and cancelled/rejected retention above is unchanged.
   //
@@ -288,23 +332,39 @@ export async function runCleanupOldData(
     const retentionCutoffStr = retentionCutoff.toISOString().split('T')[0];
     const releaseClaim = createClaimReleaser(firestoreDb, now);
 
+    // Cursor-paginated WITHIN the run: a doc the guard skipped, or one whose
+    // cascade failed, stays in the index, so a head-restarting pass loop
+    // would re-fetch the same prefix every pass and make no progress past
+    // it. `startAfter(snapshot)` is value-based ((date, __name__) — the
+    // implicit tiebreak means no doc is ever skipped), so it positions
+    // correctly even though the previous page's docs have just been deleted.
+    let cursor: FirebaseFirestore.QueryDocumentSnapshot | null = null;
     for (let pass = 0; pass < 10; pass++) {
-      const pastConfirmed = await firestoreDb
+      let query = firestoreDb
         .collection('appointments')
         .where('status', '==', 'confirmed')
+        // Lower bound — the load-bearing half. Excludes null (every recurring
+        // arrangement), '' and every non-string type; see the block comment.
+        .where('date', '>=', MIN_BOOKING_DATE)
         .where('date', '<', retentionCutoffStr)
-        .limit(200)
-        .get();
+        .orderBy('date')
+        .limit(200);
+      if (cursor) query = query.startAfter(cursor);
+      const pastConfirmed = await query.get();
       if (pastConfirmed.empty) break;
 
       // Per-appointment isolation (doSweepTasks' pattern): one poisoned
       // cascade logs and continues, so a deterministic per-doc failure can
       // never wedge this category — or the blocks after it — every day.
       let deleted = 0;
+      let skipped = 0;
       for (const doc of pastConfirmed.docs) {
         const bookingDate = doc.get('date');
-        // Shape guard, not a redundant filter — see the '' case above.
-        if (typeof bookingDate !== 'string' || !DATE_RE.test(bookingDate)) continue;
+        // Defence in depth behind the range bounds — see the block comment.
+        if (typeof bookingDate !== 'string' || !DATE_RE.test(bookingDate)) {
+          skipped += 1;
+          continue;
+        }
         try {
           const babysitterUserId = (doc.get('babysitterUserId') as string) ?? '';
           const released = await releaseClaim(
@@ -329,10 +389,29 @@ export async function runCleanupOldData(
       console.log(
         `Deleted ${deleted} completed appointments >${COMPLETED_ENGAGEMENT_RETENTION_DAYS}d past their date (decision 19)`,
       );
+      stats.appointmentsSkippedMalformedDate += skipped;
+      if (skipped > 0) {
+        // A doc that passed both range bounds but failed the shape guard is a
+        // malformed `date` no writer produces — say so loudly rather than
+        // letting it read as a healthy run.
+        console.warn(
+          `cleanupOldData: ${skipped} appointment(s) matched the retention range but failed the date shape guard`,
+        );
+      }
+      cursor = pastConfirmed.docs[pastConfirmed.docs.length - 1];
       if (pastConfirmed.size < 200) break;
-      // A full page that deleted nothing is either all-guarded or all-failing;
-      // re-querying returns the same page, so further passes repeat it.
-      if (deleted === 0) break;
+      if (pass === 9) {
+        console.warn(
+          'cleanupOldData: appointment retention sweep hit its 10-pass ceiling; the remainder is deferred to the next run',
+        );
+      }
+    }
+    if (stats.appointmentCascadeErrors > 0) {
+      // The handler discards the returned stats, so the counter reaches
+      // nobody unless it is logged at a severity that shows.
+      console.warn(
+        `cleanupOldData: ${stats.appointmentCascadeErrors} appointment retention cascade(s) failed and were skipped`,
+      );
     }
   }
 

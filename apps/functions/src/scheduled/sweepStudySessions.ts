@@ -129,16 +129,32 @@ export async function runStudySweepSessions(
     await doc.ref.delete();
   }
 
+  // Cursor-paginated WITHIN the run, for the same reason the sit half is: a
+  // session whose cascade fails deterministically keeps its `completedAt`, so
+  // it sorts to the head of `completedAt ASC` and a head-restarting pass loop
+  // would re-fetch it — and only it — on every pass. `startAfter(snapshot)`
+  // is value-based ((completedAt, __name__)), so it positions correctly past
+  // documents the previous page just deleted.
+  //
+  // ABSENT-vs-NULL AUDIT (the sit half's bug, checked here too): `completedAt`
+  // is written in exactly three places, all in `markSessionsCompleted`
+  // (:91, :136, :166), always as a real timestamp alongside
+  // `status: 'completed'`. No writer stores `completedAt: null`, and no path
+  // sets `status: 'completed'` without it — so unlike sit's `date`, this
+  // range needs no lower bound to keep non-conforming shapes out of the page.
+  let cursor: FirebaseFirestore.QueryDocumentSnapshot | null = null;
   for (let pass = 0; pass < SWEEP_MAX_PASSES; pass++) {
     // (status, completedAt) composite — added to firestore.indexes.json with
     // this sweep. Without it the query fails FAILED_PRECONDITION inside a
     // scheduled job where nobody is watching.
-    const snap = await db
+    let query = db
       .collection('study-sessions')
       .where('status', '==', 'completed')
       .where('completedAt', '<', cutoff)
-      .limit(SWEEP_PAGE)
-      .get();
+      .orderBy('completedAt')
+      .limit(SWEEP_PAGE);
+    if (cursor) query = query.startAfter(cursor);
+    const snap = await query.get();
     if (snap.empty) break;
 
     // Per-session error isolation (the doSweepTasks / sendTaskDigest pattern):
@@ -158,12 +174,30 @@ export async function runStudySweepSessions(
     console.log(
       `studySweepSessions: deleted ${deleted} completed sessions >${COMPLETED_ENGAGEMENT_RETENTION_DAYS}d (decision 19)`,
     );
+    if (deleted === 0 && snap.size === SWEEP_PAGE) {
+      // A FULL page where nothing succeeded. The cursor still advances past
+      // it, so this is not a wedge — but it is indistinguishable from a
+      // healthy zero-delete run in the logs unless it says so.
+      console.warn(
+        'studySweepSessions: a full page of sessions failed to cascade; advancing past it',
+      );
+    }
+    cursor = snap.docs[snap.docs.length - 1];
     if (snap.size < SWEEP_PAGE) break;
-    // Every doc in a full page failed: re-querying returns the same page, so
-    // further passes only repeat the failures — stop.
-    if (deleted === 0) break;
+    if (pass === SWEEP_MAX_PASSES - 1) {
+      console.warn(
+        'studySweepSessions: hit the pass ceiling; the remainder is deferred to the next run',
+      );
+    }
   }
 
+  if (stats.sessionCascadeErrors > 0) {
+    // The caller (the cleanupOldData handler) discards the returned stats, so
+    // the counter reaches nobody unless it is logged at a severity that shows.
+    console.warn(
+      `studySweepSessions: ${stats.sessionCascadeErrors} session cascade(s) failed and were skipped`,
+    );
+  }
   console.log(`studySweepSessions complete: ${JSON.stringify(stats)}`);
   return stats;
 }

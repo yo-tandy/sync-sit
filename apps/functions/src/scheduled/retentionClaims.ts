@@ -119,5 +119,3 @@ export function createClaimReleaser(db: Firestore, now: Date) {
     return changed;
   };
 }
-
-export type ClaimReleaser = ReturnType<typeof createClaimReleaser>;
