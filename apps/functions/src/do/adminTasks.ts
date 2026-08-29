@@ -39,10 +39,9 @@ interface AdminListTasksInput {
 }
 
 /** The wire row — an explicit projection, not a doc spread. */
-function projectTask(doc: FirebaseFirestore.DocumentSnapshot) {
-  const t = doc.data() as TaskDoc;
+function projectTask(id: string, t: TaskDoc) {
   return {
-    id: doc.id,
+    id,
     familyId: t.familyId ?? '',
     familyName: t.familyName ?? '',
     createdByUserId: t.createdByUserId ?? '',
@@ -138,13 +137,13 @@ export const doAdminListTasks = onCall(
 
     // ── Detail mode: one task + all of its offers ──
     if (taskId) {
-      const { ref } = await getTaskOrThrow(taskId);
-      const [taskSnap, offersSnap] = await Promise.all([
-        ref.get(),
-        db.collection('taskOffers').where('taskId', '==', ref.id).get(),
-      ]);
+      const { ref, data: task } = await getTaskOrThrow(taskId);
+      const offersSnap = await db
+        .collection('taskOffers')
+        .where('taskId', '==', ref.id)
+        .get();
       return {
-        tasks: [projectTask(taskSnap)],
+        tasks: [projectTask(ref.id, task)],
         // Ordered in memory: an unfiltered (taskId, createdAt) order would
         // need a composite no other query asks for, and a single task's
         // offers are bounded small. `toMillis` guards a doc written by a
@@ -171,11 +170,16 @@ export const doAdminListTasks = onCall(
     // A widened window when the in-memory search runs, so a match beyond the
     // first page is still findable — the listUsers precedent. `hasMore` is
     // computed with the +1 probe on the window actually fetched.
-    const pageLimit = Math.min(Math.max(limit, 1), ADMIN_TASKS_LIMIT);
+    // Clamped, and non-numeric input falls back rather than reaching
+    // `query.limit()` as NaN (which throws as `internal`, not the
+    // `invalid-argument` a caller could act on).
+    const pageLimit = Number.isFinite(limit)
+      ? Math.min(Math.max(Math.floor(limit as number), 1), ADMIN_TASKS_LIMIT)
+      : ADMIN_TASKS_LIMIT;
     const fetchLimit = searchQuery ? ADMIN_TASKS_SEARCH_WINDOW : pageLimit + 1;
     const snapshot = await query.limit(fetchLimit).get();
 
-    let tasks = snapshot.docs.map(projectTask);
+    let tasks = snapshot.docs.map((doc) => projectTask(doc.id, doc.data() as TaskDoc));
 
     if (searchQuery) {
       const needle = searchQuery.toLowerCase();
