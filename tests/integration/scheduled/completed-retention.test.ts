@@ -142,9 +142,55 @@ function poisonSchedules(db: Firestore, poisonUid: string): Firestore {
   }) as Firestore;
 }
 
+/**
+ * A Firestore handle whose RETENTION query throws — and only that one. The
+ * taint is the `date >= …` lower bound, which no other query in the run uses,
+ * so block 7's cancelled/rejected sweep and block 7b's note walk (both on
+ * `appointments`) still work against the real emulator.
+ */
+function poisonRetentionQuery(db: Firestore): Firestore {
+  type AnyQuery = Record<string, unknown> & {
+    where: (...a: unknown[]) => AnyQuery;
+    get: () => Promise<unknown>;
+  };
+  const wrap = (q: AnyQuery, tainted: boolean): AnyQuery =>
+    new Proxy(q, {
+      get(t, p) {
+        if (p === 'where') {
+          return (...a: unknown[]) =>
+            wrap(t.where(...a), tainted || (a[0] === 'date' && a[1] === '>='));
+        }
+        if (p === 'orderBy' || p === 'limit' || p === 'startAfter') {
+          const fn = Reflect.get(t, p) as (...a: unknown[]) => AnyQuery;
+          return (...a: unknown[]) => wrap(fn.apply(t, a), tainted);
+        }
+        if (p === 'get' && tainted) {
+          return async () => {
+            throw new Error('simulated FAILED_PRECONDITION: index still building');
+          };
+        }
+        const v = Reflect.get(t, p);
+        return typeof v === 'function' ? v.bind(t) : v;
+      },
+    }) as AnyQuery;
+
+  return new Proxy(db, {
+    get(t, p) {
+      if (p === 'collection') {
+        return (name: string) => {
+          const c = t.collection(name);
+          return name === 'appointments' ? wrap(c as unknown as AnyQuery, false) : c;
+        };
+      }
+      const v = Reflect.get(t, p);
+      return typeof v === 'function' ? v.bind(t) : v;
+    },
+  }) as Firestore;
+}
+
 async function wipe(): Promise<void> {
   const db = getDb();
-  for (const col of ['appointments', 'cronState']) {
+  for (const col of ['appointments', 'cronState', 'publishedSearches']) {
     const docs = await db.collection(col).get();
     await Promise.all(docs.docs.map((d) => d.ref.delete()));
   }
@@ -371,6 +417,43 @@ describe('completed-engagement retention (decision 19 / issue #294)', () => {
       expect(stats.completedAppointmentsDeleted).toBe(1);
       expect((await db.collection('appointments').doc('sit-last-in-line').get()).exists)
         .toBe(false);
+    });
+
+    it('a failing retention QUERY does not starve the blocks after it', async () => {
+      // Block-level isolation. The page fetch is the one statement in 7a
+      // outside the per-document try; a throw there used to propagate out of
+      // runCleanupOldData and silently disable 7b (note redaction — door
+      // codes, allergy details) and block 8 (expired published searches,
+      // whose sweep is what bounds an expired doc's readable window). The
+      // likeliest real trigger is FAILED_PRECONDITION while the new composite
+      // is still building after a release, which would repeat every day.
+      const db = getDb();
+      await seedAppointment('sit-would-have-been-deleted', { date: dateAgo(181) });
+      // Out of reach for 7b (updatedAt older than the 7-day visibility
+      // window) but too young for block 7's 30-day cancelled rule, so this
+      // doc reaches the redaction pass rather than being deleted first.
+      await seedAppointment('sit-note-to-redact', {
+        status: 'cancelled', date: dateAgo(20),
+        createdAt: daysAgo(10), updatedAt: daysAgo(10),
+        preAppointmentNote: 'door code 4242',
+      });
+      await db.collection('publishedSearches').add({
+        app: 'sit', familyId: 'retention-family',
+        expiresAt: daysAgo(1), createdAt: daysAgo(8),
+      });
+
+      // Must RESOLVE, not reject.
+      const stats = await runCleanupOldData(poisonRetentionQuery(db), new Date());
+
+      expect(stats.completedAppointmentsDeleted).toBe(0);
+      expect((await db.collection('appointments').doc('sit-would-have-been-deleted').get()).exists)
+        .toBe(true);
+      // …and everything downstream of 7a still ran.
+      expect(stats.appointmentNotesRedacted).toBe(1);
+      expect(stats.publishedSearchesDeleted).toBe(1);
+      const redacted = await db.collection('appointments').doc('sit-note-to-redact').get();
+      expect(redacted.get('preAppointmentNote')).toBeUndefined();
+      expect((await db.collection('publishedSearches').get()).size).toBe(0);
     });
 
     it('isolates a per-document failure: the poisoned doc is skipped, its sibling still deleted', async () => {

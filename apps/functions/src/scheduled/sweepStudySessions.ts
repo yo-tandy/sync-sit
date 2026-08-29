@@ -79,9 +79,22 @@ export async function runStudySweepSessions(
   const releaseClaim = createClaimReleaser(db, now);
 
   /**
-   * Delete one completed session with its instances and schedule claims.
-   * Documents are deleted LAST: if a claim release throws, the parent survives
-   * and the whole cascade is retried on the next run rather than half-applied.
+   * Delete one completed session with its instances and schedule claims, in
+   * three steps: release claims, delete the instances, delete the parent.
+   *
+   * The PARENT is deleted last, which buys one specific guarantee and not a
+   * general one. A failed claim release (step 1) leaves the whole engagement
+   * intact — documents and ledger both — so the next run retries it whole,
+   * and no override entry is ever left naming a document that has gone. A
+   * failure BETWEEN the instance batches and the parent delete (a throw on
+   * `doc.ref.delete()`, or the 540s budget expiring in that window) is not
+   * covered: it leaves an instance-less parent. That state is benign and
+   * self-healing — the next run re-fetches an empty `instances`, releases
+   * nothing, and deletes the parent — at the cost of a completed series
+   * rendering with zero occurrences for up to a day. Making it atomic would
+   * need a transaction spanning an unbounded subcollection, which Firestore
+   * will not give us; accepting a self-healing intermediate state is the
+   * right trade for a sweep whose documents are already 180 days dead.
    */
   async function cascade(
     doc: FirebaseFirestore.QueryDocumentSnapshot,

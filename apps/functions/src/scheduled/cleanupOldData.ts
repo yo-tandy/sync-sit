@@ -339,72 +339,93 @@ export async function runCleanupOldData(
     // implicit tiebreak means no doc is ever skipped), so it positions
     // correctly even though the previous page's docs have just been deleted.
     let cursor: FirebaseFirestore.QueryDocumentSnapshot | null = null;
-    for (let pass = 0; pass < 10; pass++) {
-      let query = firestoreDb
-        .collection('appointments')
-        .where('status', '==', 'confirmed')
-        // Lower bound — the load-bearing half. Excludes null (every recurring
-        // arrangement), '' and every non-string type; see the block comment.
-        .where('date', '>=', MIN_BOOKING_DATE)
-        .where('date', '<', retentionCutoffStr)
-        .orderBy('date')
-        .limit(200);
-      if (cursor) query = query.startAfter(cursor);
-      const pastConfirmed = await query.get();
-      if (pastConfirmed.empty) break;
+    // BLOCK-LEVEL isolation, distinct from the per-document isolation inside.
+    // The `query.get()` below is the one statement here that is not already
+    // inside a per-doc try, and a throw from it would propagate out of
+    // runCleanupOldData and starve EVERY LATER BLOCK — 7b's note redaction
+    // (door codes, allergy details) and block 8's expired-published-search
+    // deletion, which is what bounds an expired doc's readable window to
+    // <24h. The likeliest trigger is the very condition the new composite
+    // exists for: FAILED_PRECONDITION while `(status ASC, date ASC)` is
+    // still building after a release, which would repeat every day until the
+    // build finishes. Deferring a retention pass costs nothing (the next run
+    // restarts from the head); deferring redaction and the published-search
+    // sweep does. So this block fails CLOSED into a log, the way the handler
+    // already isolates the three top-level sweeps from each other.
+    try {
+      for (let pass = 0; pass < 10; pass++) {
+        let query = firestoreDb
+          .collection('appointments')
+          .where('status', '==', 'confirmed')
+          // Lower bound — the load-bearing half. Excludes null (every recurring
+          // arrangement), '' and every non-string type; see the block comment.
+          .where('date', '>=', MIN_BOOKING_DATE)
+          .where('date', '<', retentionCutoffStr)
+          .orderBy('date')
+          .limit(200);
+        if (cursor) query = query.startAfter(cursor);
+        const pastConfirmed = await query.get();
+        if (pastConfirmed.empty) break;
 
-      // Per-appointment isolation (doSweepTasks' pattern): one poisoned
-      // cascade logs and continues, so a deterministic per-doc failure can
-      // never wedge this category — or the blocks after it — every day.
-      let deleted = 0;
-      let skipped = 0;
-      for (const doc of pastConfirmed.docs) {
-        const bookingDate = doc.get('date');
-        // Defence in depth behind the range bounds — see the block comment.
-        if (typeof bookingDate !== 'string' || !DATE_RE.test(bookingDate)) {
-          skipped += 1;
-          continue;
+        // Per-appointment isolation (doSweepTasks' pattern): one poisoned
+        // cascade logs and continues, so a deterministic per-doc failure can
+        // never wedge this category every day. A failure of the PAGE FETCH
+        // itself is caught one level out — see the block-level note above.
+        let deleted = 0;
+        let skipped = 0;
+        for (const doc of pastConfirmed.docs) {
+          const bookingDate = doc.get('date');
+          // Defence in depth behind the range bounds — see the block comment.
+          if (typeof bookingDate !== 'string' || !DATE_RE.test(bookingDate)) {
+            skipped += 1;
+            continue;
+          }
+          try {
+            const babysitterUserId = (doc.get('babysitterUserId') as string) ?? '';
+            const released = await releaseClaim(
+              babysitterUserId,
+              bookingDate,
+              (b) => b.appointmentId === doc.id,
+              SIT_PROVENANCE,
+            );
+            if (released) stats.appointmentClaimsReleased += 1;
+            // Doc last: a claim release that throws leaves the appointment in
+            // place, so the whole cascade retries next run instead of leaving a
+            // ledger entry pointing at nothing.
+            await doc.ref.delete();
+            deleted += 1;
+          } catch (err) {
+            stats.appointmentCascadeErrors += 1;
+            console.error(`cleanupOldData: retention cascade failed for ${doc.id}:`, err);
+          }
         }
-        try {
-          const babysitterUserId = (doc.get('babysitterUserId') as string) ?? '';
-          const released = await releaseClaim(
-            babysitterUserId,
-            bookingDate,
-            (b) => b.appointmentId === doc.id,
-            SIT_PROVENANCE,
+        stats.completedAppointmentsDeleted += deleted;
+        stats.totalDeleted += deleted;
+        console.log(
+          `Deleted ${deleted} completed appointments >${COMPLETED_ENGAGEMENT_RETENTION_DAYS}d past their date (decision 19)`,
+        );
+        stats.appointmentsSkippedMalformedDate += skipped;
+        if (skipped > 0) {
+          // A doc that passed both range bounds but failed the shape guard is a
+          // malformed `date` no writer produces — say so loudly rather than
+          // letting it read as a healthy run.
+          console.warn(
+            `cleanupOldData: ${skipped} appointment(s) matched the retention range but failed the date shape guard`,
           );
-          if (released) stats.appointmentClaimsReleased += 1;
-          // Doc last: a claim release that throws leaves the appointment in
-          // place, so the whole cascade retries next run instead of leaving a
-          // ledger entry pointing at nothing.
-          await doc.ref.delete();
-          deleted += 1;
-        } catch (err) {
-          stats.appointmentCascadeErrors += 1;
-          console.error(`cleanupOldData: retention cascade failed for ${doc.id}:`, err);
+        }
+        cursor = pastConfirmed.docs[pastConfirmed.docs.length - 1];
+        if (pastConfirmed.size < 200) break;
+        if (pass === 9) {
+          console.warn(
+            'cleanupOldData: appointment retention sweep hit its 10-pass ceiling; the remainder is deferred to the next run',
+          );
         }
       }
-      stats.completedAppointmentsDeleted += deleted;
-      stats.totalDeleted += deleted;
-      console.log(
-        `Deleted ${deleted} completed appointments >${COMPLETED_ENGAGEMENT_RETENTION_DAYS}d past their date (decision 19)`,
-      );
-      stats.appointmentsSkippedMalformedDate += skipped;
-      if (skipped > 0) {
-        // A doc that passed both range bounds but failed the shape guard is a
-        // malformed `date` no writer produces — say so loudly rather than
-        // letting it read as a healthy run.
-        console.warn(
-          `cleanupOldData: ${skipped} appointment(s) matched the retention range but failed the date shape guard`,
-        );
-      }
-      cursor = pastConfirmed.docs[pastConfirmed.docs.length - 1];
-      if (pastConfirmed.size < 200) break;
-      if (pass === 9) {
-        console.warn(
-          'cleanupOldData: appointment retention sweep hit its 10-pass ceiling; the remainder is deferred to the next run',
-        );
-      }
+    } catch (err) {
+      // Deliberately swallowed — see the block-level isolation note above.
+      // The counters already reflect whatever this run managed before the
+      // failure, and the next run picks the sweep up from the head.
+      console.error('cleanupOldData: appointment retention sweep failed; later blocks continue:', err);
     }
     if (stats.appointmentCascadeErrors > 0) {
       // The handler discards the returned stats, so the counter reaches
