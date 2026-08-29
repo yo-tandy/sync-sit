@@ -40,3 +40,14 @@ export const DoerEnrollment = lazy(() =>
 export const HomePage = lazy(() =>
   import('@/pages/home/HomePage').then((m) => ({ default: m.HomePage })),
 );
+
+// Family portal (plan §13 PR7)
+export const MyTasksPage = lazy(() =>
+  import('@/pages/family/MyTasksPage').then((m) => ({ default: m.MyTasksPage })),
+);
+export const PostTaskPage = lazy(() =>
+  import('@/pages/family/post/PostTaskPage').then((m) => ({ default: m.PostTaskPage })),
+);
+export const TaskDetailPage = lazy(() =>
+  import('@/pages/family/TaskDetailPage').then((m) => ({ default: m.TaskDetailPage })),
+);
