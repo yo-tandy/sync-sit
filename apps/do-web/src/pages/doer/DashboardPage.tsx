@@ -318,7 +318,17 @@ export function DashboardPage() {
                 `pending_guardian`, which /doer/offers splits across its
                 first two tabs, so the link lands on the page's own default
                 (Pending) rather than asserting a tab that would be wrong for
-                half the rows. */}
+                half the rows.
+                KNOWN GAP (PR #394 review): the label counts BOTH statuses
+                while that default tab shows only the `pending` ones, so a
+                doer whose live offers are mostly gated lands on fewer rows
+                than the line promised. The honest fix is a single live-offer
+                view on /doer/offers — which this PR cannot make, since its
+                brief is that the list pages keep the tabs they have — so it
+                is carried as a follow-up rather than papered over with a
+                tab assertion that is wrong for the other half. Seeding a tab
+                from the majority status would be the same guess with more
+                machinery. */}
             {liveOffers.length > SECTION_ROWS && (
               <SeeAllLink
                 to="/doer/offers"
