@@ -28,9 +28,16 @@ const repoRoot = path.resolve(__dirname, '..');
 const functionsDir = path.resolve(repoRoot, 'apps/functions');
 const studyFunctionsDir = path.resolve(repoRoot, 'apps/study-functions');
 
-/** Matches a test/spec filename in any of the extensions this repo compiles or
- *  ships: foo.test.ts, foo.spec.tsx, foo.test.mjs, foo.spec.cjs, … */
-const TEST_FILE_RE = /\.(test|spec)\.[cm]?[jt]sx?$/;
+/** Matches a test/spec filename in any of the shapes this repo compiles or
+ *  ships: foo.test.ts, foo.spec.tsx, foo.test.mjs, foo.spec.cjs.
+ *
+ *  The optional `d.` and `.map` groups are what make this hold on the dist
+ *  side. Each package's tsconfig.cjs.json sets declaration + declarationMap +
+ *  sourceMap and excludes only the `__tests__` directories, so a stray
+ *  `src/foo.test.ts` compiles to FOUR dist artifacts: foo.test.js,
+ *  foo.test.d.ts, foo.test.js.map and foo.test.d.ts.map. Matching only the
+ *  `.js` would drop one of them and ship the other three. */
+const TEST_FILE_RE = /\.(test|spec)\.(d\.)?[cm]?[jt]sx?(\.map)?$/;
 
 /**
  * `fs.cpSync` filter: false drops the entry, and dropping a directory drops its
