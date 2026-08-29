@@ -36,29 +36,18 @@ import { Outlet } from 'react-router';
 vi.mock('@/layouts/PublicLayout', () => ({ PublicLayout: () => <Outlet /> }));
 vi.mock('@/layouts/DoerLayout', () => ({ DoerLayout: () => <Outlet /> }));
 vi.mock('@/layouts/FamilyLayout', () => ({ FamilyLayout: () => <Outlet /> }));
-vi.mock('@/lazyPages', () => {
+// Every page becomes a blank, with the stub set DERIVED from the real
+// module's export names rather than hand-listed: a hand-list goes stale the
+// moment a page is added (PR B adds two dashboards), and the symptom — the
+// new route's element resolving to `undefined` — reads as a routing bug
+// rather than as a stale mock. Importing the original is cheap and loads no
+// page: lazyPages' top level only builds lazy() wrappers, and the dynamic
+// import() inside each never runs, because each wrapper is replaced here
+// before anything can render it.
+vi.mock('@/lazyPages', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
   const Blank = () => null;
-  return Object.fromEntries(
-    [
-      'WelcomePage',
-      'LoginPage',
-      'SignUpRolePage',
-      'ForgotPasswordPage',
-      'AboutPage',
-      'ReportProblemPage',
-      'ComingSoonPage',
-      'DoerEnrollment',
-      'BoardPage',
-      'DoerTaskDetailPage',
-      'OfferPage',
-      'MyOffersPage',
-      'MyWorkPage',
-      'MyEndorsementsPage',
-      'MyTasksPage',
-      'PostTaskPage',
-      'TaskDetailPage',
-    ].map((name) => [name, Blank]),
-  );
+  return Object.fromEntries(Object.keys(actual).map((name) => [name, Blank]));
 });
 
 import { createMemoryRouter, RouterProvider } from 'react-router';
@@ -73,6 +62,15 @@ async function resolves(from: string): Promise<string> {
 }
 
 describe('pre-namespace paths still resolve (issue #296 — PR9 mail is already sent)', () => {
+  // Self-diagnosis for the derived page mock above: if the derivation ever
+  // came back empty, every route element would be `undefined` and the whole
+  // file would fail as though routing broke. Fail here first, saying why.
+  it('stubs every lazy page (the mock derives its keys, so it cannot go stale)', async () => {
+    const pages = await import('@/lazyPages');
+    expect(Object.keys(pages).length).toBeGreaterThan(0);
+    for (const value of Object.values(pages)) expect(typeof value).toBe('function');
+  });
+
   it.each([
     // The five paths PR9's notifyContent.ts builds CTAs on.
     ['/home', '/doer/board'],
