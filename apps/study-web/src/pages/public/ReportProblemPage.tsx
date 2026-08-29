@@ -1,8 +1,9 @@
 import { ReportProblemPage as SharedReportProblemPage } from '@ejm/shared-ui';
 import { useAuthStore } from '@/stores/authStore';
-
-const SUPPORT_EMAIL = 'support@sync-study.com';
-const BRAND = 'Sync/Study';
+// One constant, not a local literal: the duplicate here is exactly the drift
+// brand.ts warns about, and it kept a bouncing address alive after the
+// constant was corrected (#349).
+import { BRAND, SUPPORT_EMAIL } from '@/constants/brand';
 
 /**
  * Sync/Study wrapper around the shared ReportProblemPage — binds the brand,
