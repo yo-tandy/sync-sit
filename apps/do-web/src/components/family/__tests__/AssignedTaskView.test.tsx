@@ -133,6 +133,25 @@ describe('AssignedTaskView contact reveal (decision 16)', () => {
     expect(screen.getByText('This task was cancelled.')).toBeInTheDocument();
   });
 
+  it('renders the plain cancelled summary for a never-assigned task and NEVER calls doGetAssignedContact', () => {
+    // Cancelled while still open: doCancelTask leaves assignedOfferId null —
+    // there was never a counterparty (PR #331 round 1 blocker).
+    renderView(
+      task({
+        status: 'cancelled',
+        cancelledBy: 'family',
+        assignedOfferId: null,
+        assignedUserId: null,
+        agreedPrice: null,
+      }),
+    );
+    expect(screen.getByText('This task was cancelled.')).toBeInTheDocument();
+    expect(screen.queryByText('Contact details')).toBeNull();
+    expect(screen.queryByText(/Contact details stay available/)).toBeNull();
+    expect(screen.queryByText(/Could not load contact details/)).toBeNull();
+    expect(h.getAssignedContact).not.toHaveBeenCalled();
+  });
+
   it('maps grace_elapsed to its own copy, not the generic error', async () => {
     h.getAssignedContact.mockRejectedValueOnce(
       Object.assign(new Error('gone'), {

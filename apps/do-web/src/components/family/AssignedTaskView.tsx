@@ -18,10 +18,15 @@ interface AssignedTaskViewProps {
 /**
  * The family's assigned-task view (plan §9.1 last bullet):
  * - contact via `doGetAssignedContact`, fetched LIVE on each view with a
- *   loading state (decision 16 — nothing cached in Firestore). §6.4: the
- *   callable keeps serving for DO_CONTACT_GRACE_DAYS after a cancellation,
- *   so this view calls it for cancelled tasks too and maps `grace_elapsed`
- *   to its own copy rather than treating it as an error;
+ *   loading state (decision 16 — nothing cached in Firestore) through the
+ *   shared useAssignedContact hook. §6.4: the callable keeps serving for
+ *   DO_CONTACT_GRACE_DAYS after a cancellation, so this view calls it for
+ *   cancelled tasks too and maps `grace_elapsed` to its own copy rather
+ *   than treating it as an error;
+ * - a task cancelled while still OPEN never had a doer (`assignedOfferId`
+ *   stays null — the hook's never-assigned gate, PR #331 round 1), so it
+ *   gets the plain cancelled summary: banner only, no assignment/contact
+ *   cards, no grace note;
  * - the §5 considerations as a checklist (surface 3 of 3) — local ticks
  *   only, a conversation aid, nothing persisted;
  * - mark-done and cancel (the confirm dialogs live in the page).
@@ -30,7 +35,7 @@ export function AssignedTaskView({ task, doerFirstName, onMarkDone, onCancel, bu
   const { t } = useTranslation();
   const considerations = useConsiderations(task.subCategory);
   const [checked, setChecked] = useState<Record<number, boolean>>({});
-  const { contact, contactState, retry } = useAssignedContact(task.taskId);
+  const { contact, contactState, hasAssignment, retry } = useAssignedContact(task);
 
   const cancelled = task.status === 'cancelled';
   const completed = task.status === 'completed';
@@ -45,19 +50,22 @@ export function AssignedTaskView({ task, doerFirstName, onMarkDone, onCancel, bu
         </InfoBanner>
       )}
 
-      <Card className="mb-4">
-        {doerFirstName && (
-          <p className="mb-1 text-sm font-semibold text-gray-900">
-            {t('family.assigned.assignedTo', { name: doerFirstName })}
-          </p>
-        )}
-        {task.agreedPrice !== null && (
-          <p className="text-xs text-gray-500">
-            {t('family.assigned.agreedPrice')}: <span className="font-semibold text-gray-900">{task.agreedPrice} €</span>
-          </p>
-        )}
-      </Card>
+      {hasAssignment && (
+        <Card className="mb-4">
+          {doerFirstName && (
+            <p className="mb-1 text-sm font-semibold text-gray-900">
+              {t('family.assigned.assignedTo', { name: doerFirstName })}
+            </p>
+          )}
+          {task.agreedPrice !== null && (
+            <p className="text-xs text-gray-500">
+              {t('family.assigned.agreedPrice')}: <span className="font-semibold text-gray-900">{task.agreedPrice} €</span>
+            </p>
+          )}
+        </Card>
+      )}
 
+      {hasAssignment && (
       <Card className="mb-4">
         <h3 className="mb-2 text-sm font-semibold text-gray-900">{t('family.assigned.contactTitle')}</h3>
         {cancelled && contactState !== 'grace_elapsed' && (
@@ -114,6 +122,7 @@ export function AssignedTaskView({ task, doerFirstName, onMarkDone, onCancel, bu
           </div>
         )}
       </Card>
+      )}
 
       {considerations.length > 0 && !completed && !cancelled && (
         <Card className="mb-4">

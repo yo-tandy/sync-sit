@@ -55,6 +55,18 @@ function Harness({ initialPhotos = [] as PhotoItem[] }) {
   );
 }
 
+function HarnessWithNotice({ notice }: { notice: string }) {
+  const [draft, setDraft] = useState<TaskDraft>({ ...EMPTY_DRAFT });
+  return (
+    <StepPhotos
+      draft={draft}
+      update={(c) => setDraft((d) => ({ ...d, ...c }))}
+      updatePhotos={(mutate) => setDraft((d) => ({ ...d, photos: mutate(d.photos) }))}
+      pageNotice={notice}
+    />
+  );
+}
+
 function pickFile() {
   const input = screen.getByTestId('photo-file-input');
   fireEvent.change(input, { target: { files: [new File(['x'], 'garden.jpg', { type: 'image/jpeg' })] } });
@@ -132,6 +144,62 @@ describe('StepPhotos (§7.4 client pipeline)', () => {
     );
     fireEvent.click(screen.getByLabelText('Remove photo'));
     expect(screen.queryByText(/could not be processed/i)).toBeNull();
+  });
+
+  it('refuses an oversized file BEFORE uploading, with the size copy (storage.rules mirror)', async () => {
+    renderWithProviders(<Harness />);
+    const big = new File(['x'], 'huge.jpg', { type: 'image/jpeg' });
+    Object.defineProperty(big, 'size', { value: 10 * 1024 * 1024 });
+    fireEvent.change(screen.getByTestId('photo-file-input'), { target: { files: [big] } });
+    await waitFor(() =>
+      expect(screen.getByText(/larger than 10 MB/)).toBeInTheDocument(),
+    );
+    expect(h.uploadBytes).not.toHaveBeenCalled();
+  });
+
+  it('refuses a non-image file BEFORE uploading, with the type copy', async () => {
+    renderWithProviders(<Harness />);
+    const pdf = new File(['x'], 'plan.pdf', { type: 'application/pdf' });
+    fireEvent.change(screen.getByTestId('photo-file-input'), { target: { files: [pdf] } });
+    await waitFor(() =>
+      expect(screen.getByText(/not an image/)).toBeInTheDocument(),
+    );
+    expect(h.uploadBytes).not.toHaveBeenCalled();
+  });
+
+  it('Retry mid-poll clears the pending timer — ONE chain, not two (PR #221 lesson)', async () => {
+    vi.useFakeTimers();
+    h.getOwnPhotoUrl.mockImplementation(notFound);
+    renderWithProviders(<Harness />);
+    pickFile();
+
+    // Flush upload + first (rejected) poll → a re-poll timer is armed.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(h.getOwnPhotoUrl).toHaveBeenCalledTimes(1);
+
+    // Manual Retry while that timer is pending: must clear it and start a
+    // single fresh chain.
+    fireEvent.click(screen.getByText('Retry'));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(h.getOwnPhotoUrl).toHaveBeenCalledTimes(2);
+
+    // One interval later exactly ONE re-poll fires (two chains would fire
+    // two).
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(PHOTO_POLL_INTERVAL_MS);
+    });
+    expect(h.getOwnPhotoUrl).toHaveBeenCalledTimes(3);
+  });
+
+  it('renders the page-level bounce-back notice above the step when given', () => {
+    renderWithProviders(
+      <HarnessWithNotice notice="One of your photos is still being prepared. Wait until every thumbnail shows, then publish again." />,
+    );
+    expect(screen.getByText(/still being prepared/)).toBeInTheDocument();
   });
 
   it('refuses a 7th photo (≤6, §4.1)', async () => {

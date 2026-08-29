@@ -28,12 +28,19 @@ interface AssignedWorkViewProps {
  *   stays `assigned` and this view shows the awaiting-family state until
  *   the family confirms (or the 7-day sweep auto-completes);
  * - cancel (doer side), with the aftermath-grace note in the dialog copy.
+ *
+ * A never-assigned cancelled task (assignedOfferId null) renders the
+ * plain cancelled summary — banner only, no contact card, no grace note:
+ * the shared hook's gate (PR #331 round 1) never calls the callable, and
+ * this view hides the cards. Not reachable from the doer routes today
+ * (both entry points key on assignedUserId == uid), but the gate keeps
+ * the two portals from drifting if that ever changes.
  */
 export function AssignedWorkView({ task, onMarkDone, onCancel, busy }: AssignedWorkViewProps) {
   const { t } = useTranslation();
   const considerations = useConsiderations(task.subCategory);
   const [checked, setChecked] = useState<Record<number, boolean>>({});
-  const { contact, contactState, retry } = useAssignedContact(task.taskId);
+  const { contact, contactState, hasAssignment, retry } = useAssignedContact(task);
 
   const cancelled = task.status === 'cancelled';
   const completed = task.status === 'completed';
@@ -49,7 +56,7 @@ export function AssignedWorkView({ task, onMarkDone, onCancel, busy }: AssignedW
         </InfoBanner>
       )}
 
-      {task.agreedPrice !== null && (
+      {hasAssignment && task.agreedPrice !== null && (
         <Card className="mb-4">
           <p className="text-xs text-gray-500">
             {t('doer.assigned.agreedPrice')}:{' '}
@@ -58,6 +65,7 @@ export function AssignedWorkView({ task, onMarkDone, onCancel, busy }: AssignedW
         </Card>
       )}
 
+      {hasAssignment && (
       <Card className="mb-4">
         <h3 className="mb-2 text-sm font-semibold text-gray-900">{t('doer.assigned.contactTitle')}</h3>
         {cancelled && contactState !== 'grace_elapsed' && (
@@ -119,6 +127,7 @@ export function AssignedWorkView({ task, onMarkDone, onCancel, busy }: AssignedW
           </div>
         )}
       </Card>
+      )}
 
       {considerations.length > 0 && !completed && !cancelled && (
         <Card className="mb-4">

@@ -127,6 +127,15 @@ describe('AssignedWorkView contact states (decision 16 / §6.4)', () => {
     expect(h.getAssignedContact).toHaveBeenCalledTimes(1);
   });
 
+  it('NEVER-ASSIGNED cancelled task: no callable call, no contact card, no grace note (PR #331 round 1 gate, owned by the shared hook)', () => {
+    renderView(task({ status: 'cancelled', cancelledBy: 'family', assignedUserId: null, assignedOfferId: null, agreedPrice: null }));
+    // The plain cancelled summary: banner only.
+    expect(screen.getByText('This task was cancelled.')).toBeInTheDocument();
+    expect(screen.queryByText('Family contact details')).toBeNull();
+    expect(screen.queryByText(/Contact details stay available/)).toBeNull();
+    expect(h.getAssignedContact).not.toHaveBeenCalled();
+  });
+
   it('maps grace_elapsed to its own copy, not the error state', async () => {
     h.getAssignedContact.mockRejectedValue({ details: { reason: 'grace_elapsed' } });
     renderView(task({ status: 'cancelled', cancelledBy: 'family' }));
