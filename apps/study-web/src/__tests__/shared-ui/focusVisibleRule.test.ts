@@ -61,8 +61,11 @@ describe('shared focus-visible rule (issue #325)', () => {
     // outline-none sits on UNMATCHED elements: text inputs/textareas and
     // the tabIndex=-1 Dialog panel. A new outline-none anywhere else in
     // shared-ui fails here and must either be justified (extend the
-    // allowlist with a comment) or removed. App-level call sites are
-    // review-covered; a per-line context crawl was judged too brittle.
+    // allowlist with a comment) or removed. Known limits (round 7): the
+    // allowlist is FILE-level while the invariant is element-level, so an
+    // outline-none added to a matched element inside an allowlisted file
+    // (AddressAutocomplete's suggestion buttons, PhoneInput's select)
+    // passes here and relies on review; app-level call sites likewise.
     const ALLOWED = new Set([
       'forms/CodeInput.tsx',        // text inputs
       'forms/PhoneInput.tsx',       // tel text input (its select was cleaned)
@@ -80,31 +83,63 @@ describe('shared focus-visible rule (issue #325)', () => {
     // Walk the WHOLE package (round 6: a hardcoded dir list missed
     // pages/), skipping only non-component dirs with no .tsx.
     const offenders = readdirSync(resolve(sharedUi, '.'), { withFileTypes: true })
-      .filter((e) => e.isDirectory())
-      .flatMap((e) => walk(e.name))
+      .flatMap((e) =>
+        e.isDirectory() ? walk(e.name) : e.name.endsWith('.tsx') ? [e.name] : [],
+      )
       .filter((rel) => !ALLOWED.has(rel))
       .filter((rel) => readFileSync(resolve(sharedUi, rel), 'utf8').includes('outline-none'));
     expect(offenders, 'files defeating the shared focus ring').toEqual([]);
   });
 
-  it('every overflow-hidden menu/dropdown wrapper keeps its focus-ring-inset opt-in', () => {
-    // The CSS side has pins; the call sites had none -- deleting the
-    // class from a wrapper while keeping overflow-hidden restores the
-    // clipped-ring bug with all tests green (round 6). Seven known sites.
+  it('every clipping container is either opted into focus-ring-inset or consciously allowlisted', () => {
+    // Round-7 upgrade from a fixed seven-site retention pin: DISCOVER the
+    // clipping containers (overflow-hidden AND overflow-*-auto -- per CSS,
+    // overflow-x-auto computes overflow-y to auto, so scroll rows clip the
+    // ring vertically) line-by-line across shared-ui and all apps, and
+    // require each className to carry the opt-in or its site to be
+    // allowlisted with a reason. Line-scoped, so moving the class to a
+    // different element in the same file no longer slips through, and a
+    // NEW clipping menu in any app fails the day it lands.
     const repo = resolve(sharedUi, '../../..');
-    const SITES = [
-      'packages/shared-ui/src/forms/AddressAutocomplete.tsx',
-      'apps/web/src/components/ui/AppBar.tsx',
-      'apps/web/src/components/ui/EnrollmentAppBar.tsx',
-      'apps/do-web/src/components/ui/EnrollmentAppBar.tsx',
-      'apps/study-web/src/components/ui/AppBar.tsx',
-      'apps/study-web/src/components/ui/EnrollmentAppBar.tsx',
-      'apps/study-web/src/components/ui/FamilyAppBar.tsx',
+    // Sites whose focusables clear the 4px ring (padding) or that hold no
+    // focusable children. Keyed file:substring so line moves don't break.
+    const ALLOWED_CLIPPERS = [
+      'SideNav.tsx',            // px-3 py-4 padded scroller -- ring fits
+      'Dialog.tsx',             // p-4 padded backdrop scroller
+      'ReportProblemPage.tsx',  // p-2 padded read-only log box
     ];
-    for (const rel of SITES) {
-      const src = readFileSync(resolve(repo, rel), 'utf8');
-      expect(src.includes('overflow-hidden'), `${rel} lost its overflow-hidden? update this pin`).toBe(true);
-      expect(src.includes('focus-ring-inset'), `${rel} clips the focus ring without the inset opt-in`).toBe(true);
+    const roots = ['packages/shared-ui/src', 'apps/web/src', 'apps/study-web/src', 'apps/do-web/src'];
+    const walkAbs = (dir: string): string[] =>
+      readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
+        e.isDirectory() && e.name !== '__tests__'
+          ? walkAbs(`${dir}/${e.name}`)
+          : e.name.endsWith('.tsx') ? [`${dir}/${e.name}`] : [],
+      );
+    const offenders: string[] = [];
+    for (const root of roots) {
+      for (const file of walkAbs(resolve(repo, root))) {
+        const lines = readFileSync(file, 'utf8').split('\n');
+        lines.forEach((line, i) => {
+          if (!/overflow-(hidden|x-auto|y-auto|auto)/.test(line)) return;
+          if (!/className/.test(line)) return;
+          if (line.includes('focus-ring-inset')) return;
+          // An element's OWN overflow never clips its own outline (only
+          // ancestor overflow does). JSX spreads attributes across lines,
+          // so join the element OPENING (from its last '<' within a
+          // 6-line look-back) and skip when the overflow className belongs
+          // to the interactive element itself rather than a wrapper.
+          const context = lines.slice(Math.max(0, i - 6), i + 1).join(' ');
+          const opening = context.slice(context.lastIndexOf('<'));
+          if (/^<(button|a[ >]|select|summary)/.test(opening)) return;
+          // pointer-events-none overlays are decorative and hold no
+          // reachable focusables.
+          if (line.includes('pointer-events-none')) return;
+          const short = file.slice(file.lastIndexOf('/') + 1);
+          if (ALLOWED_CLIPPERS.some((a) => a.split(':')[0] === short)) return;
+          offenders.push(`${file.replace(String(resolve(repo)) + '/', '')}:${i + 1}`);
+        });
+      }
     }
+    expect(offenders, 'clipping containers without the inset opt-in (add the class, or allowlist with a reason)').toEqual([]);
   });
 });

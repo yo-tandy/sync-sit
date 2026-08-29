@@ -427,7 +427,7 @@ export function WeeklyTimeline({ weekly, onChange, onDayHeaderClick, locationTag
   const dragEndTime = dragPreview ? displayIdxToEndTime(dragMaxIdx) : '';
 
   return (
-    <div className="overflow-x-auto select-none touch-none">
+    <div className="focus-ring-inset overflow-x-auto select-none touch-none">
       {/* min-w-[286px]: the binding constraint is the NARROWEST render site
           on the NARROWEST mainstream device. The grid renders twice per
           schedule page -- at page level (px-5 padding = 40px) and nested in a

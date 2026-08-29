@@ -75,11 +75,15 @@
     box-shadow: 0 0 0 2px var(--color-white);
   }
 
-  /* Containers that clip their children (overflow-hidden menus, rounded
-     dropdowns) cut the outward ring off entirely -- opting the container
-     into .focus-ring-inset draws the ring INSIDE the child instead
-     (PR #327 rounds 1+3: AddressAutocomplete's dropdown and the six
-     AppBar/menu wrappers). Same layer, so utilities still win.
+  /* Containers that clip their children cut the outward ring off --
+     overflow-hidden menus/dropdowns, and ANY scroll container: per CSS,
+     overflow-x-auto computes overflow-y to auto, so a horizontal tab row
+     clips the ring vertically when its focusables sit within 4px of the
+     edge (round 7: NavTabs, DataTable, the schedule grids). Padded
+     scrollers (SideNav's px-3) clear the ring and need no opt-in.
+     Opting the container into .focus-ring-inset -- opting the container
+     draws the ring INSIDE the child instead. Same layer, so utilities
+     still win.
      CONSTRAINT (round 6): the inset variant drops the white backing, so
      it assumes a LIGHT container ground (all seven current sites are
      bg-white). A brand-colored clipping container would need its own
