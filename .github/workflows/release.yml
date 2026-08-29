@@ -42,9 +42,12 @@ concurrency:
   group: firebase-deploy-prod
   cancel-in-progress: false
 
+# Least privilege at the WORKFLOW level; only the job that authenticates to
+# Google gets `id-token: write` (round 2). verify_tag checks out and runs git
+# -- giving it a credential-minting token hands the WIF sink to the job that
+# handles the least-trusted input in the whole pipeline.
 permissions:
   contents: read
-  id-token: write
 
 jobs:
   # Gate 1: the tag must point at a commit that is ON main. Without this a tag
@@ -54,8 +57,9 @@ jobs:
   # between a typo'd checkout and production.
   verify_tag:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     outputs:
-      ref: ${{ steps.resolve.outputs.ref }}
       sha: ${{ steps.resolve.outputs.sha }}
     steps:
       - uses: actions/checkout@v4
@@ -76,17 +80,23 @@ jobs:
           # account itself -- the gate's own bypass. Via `env:` the value
           # arrives as data and the quoting below keeps it that way.
           TAG: ${{ inputs.tag || github.ref_name }}
+        shell: bash
         run: |
           set -euo pipefail
 
           # Constrain the alphabet as well as the quoting: defence in depth, and
           # it also rejects tags that simply aren't releases.
-          if ! printf '%s' "$TAG" | grep -Eq '^v[0-9][A-Za-z0-9._-]*$'; then
+          #
+          # bash [[ =~ ]], NOT grep: grep is line-oriented, so `^...$` anchors a
+          # LINE and `v1.0.0\nanything` passes on its first line. Git refs
+          # cannot contain newlines, but inputs.tag is a free-form
+          # workflow_dispatch string that can -- so the line-anchored version
+          # held on the push path and not on the rollback path, which is the
+          # one place this check is the only validation there is.
+          if ! [[ "$TAG" =~ ^v[0-9][A-Za-z0-9._-]*$ ]]; then
             echo "::error::Refusing to release from an unexpected tag name."
             exit 1
           fi
-          echo "ref=$TAG" >> "$GITHUB_OUTPUT"
-
           if ! git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
             echo "::error::No such tag: $TAG"
             exit 1
@@ -133,6 +143,9 @@ jobs:
       && needs.verify_tag.result == 'success'
       && (needs.verify_tests.result == 'success' || needs.verify_tests.result == 'skipped')
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@v4
         with:

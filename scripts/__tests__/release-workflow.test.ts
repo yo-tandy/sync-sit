@@ -25,6 +25,29 @@ const wf = (name: string) =>
 const triggers = (doc: Record<string, unknown>) =>
   (doc['on'] ?? doc[true as unknown as string]) as Record<string, unknown>;
 
+/**
+ * Does this workflow run on a push that can reach `main`?
+ *
+ * Three shapes reach it and only one has an explicit filter, which is what the
+ * first version of this sweep missed:
+ *   on: push: { branches: [main] }   explicit
+ *   on: push:                        no filter at all -> every branch
+ *   on: [push, pull_request]         array form -> `t.push` is undefined
+ *
+ * A push filtered to `tags` only does NOT run on branch pushes -- that is
+ * release.yml itself, and treating "no branches key" as "every branch" made
+ * this sweep flag the very workflow it exists to protect.
+ */
+function pushReachesMain(t: unknown): boolean {
+  if (Array.isArray(t)) return t.includes('push');
+  const push = (t as Record<string, unknown>)?.push;
+  if (push === undefined) return false;
+  if (push === null) return true;
+  const { branches, tags } = push as { branches?: string[]; tags?: string[] };
+  if (branches) return branches.some((b) => b === 'main' || b === '*' || b === '**');
+  return tags === undefined;
+}
+
 describe('release workflow (issue #353)', () => {
   const release = wf('release.yml');
   const on = triggers(release);
@@ -50,6 +73,27 @@ describe('release workflow (issue #353)', () => {
 
   it('gates the deploy on the tag being verified AND on the tests', () => {
     expect(release.jobs.build_and_deploy.needs).toEqual(['verify_tag', 'verify_tests']);
+  });
+
+  it('gives the gate job no credential-minting token', () => {
+    // verify_tag handles the least-trusted input in the pipeline (a pushed tag
+    // name). Workflow-level id-token: write handed it the WIF sink; only the
+    // deploy needs one.
+    expect(release.permissions).toEqual({ contents: 'read' });
+    expect(release.jobs.verify_tag.permissions['id-token']).toBeUndefined();
+    expect(release.jobs.build_and_deploy.permissions['id-token']).toBe('write');
+  });
+
+  it('validates the tag against the WHOLE value, not a line of it', () => {
+    // grep is line-oriented, so `^...$` anchors a line: `v1.0.0\nanything`
+    // passed. A workflow_dispatch input can contain newlines; a git ref cannot,
+    // so the weak version held on the push path and failed on the rollback
+    // path -- the one path where this check is the only validation.
+    const steps = release.jobs.verify_tag.steps as { id?: string; run?: string; shell?: string }[];
+    const resolve = steps.find((s) => s.id === 'resolve')!;
+    expect(resolve.shell, '[[ =~ ]] is bash, not POSIX sh').toBe('bash');
+    expect(String(resolve.run)).toMatch(/\[\[\s+"\$TAG"\s+=~/);
+    expect(String(resolve.run)).not.toMatch(/grep -Eq/);
   });
 
   it('deploys the resolved tag SHA, not whatever ref the run started from', () => {
@@ -154,9 +198,7 @@ describe('no other workflow deploys to production on merge', () => {
     const offenders = readdirSync(dir).filter((f) => {
       if (!/\.ya?ml$/.test(f)) return false;
       const doc = wf(f);
-      const t = triggers(doc);
-      const push = t?.push as { branches?: string[] } | undefined;
-      if (!push?.branches?.includes('main')) return false;
+      if (!pushReachesMain(triggers(doc))) return false;
       // A workflow may run ON main; it may not DEPLOY from it.
       const jobs = (doc.jobs ?? {}) as Record<string, { steps?: { run?: string }[] }>;
       return Object.values(jobs).some((j) =>
