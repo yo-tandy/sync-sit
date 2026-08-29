@@ -3,6 +3,7 @@ import { cleanup } from '@testing-library/react';
 import { readFileSync } from 'node:fs';
 import { renderWithProviders, i18n } from '@/__tests__/test-utils';
 import { PrivacyPage, TermsPage } from '@ejm/shared-ui';
+import { MIN_BABYSITTER_AGE } from '@ejm/shared-core';
 
 /**
  * The shared legal copy (issue #308). Both pages are rendered by ALL THREE
@@ -166,8 +167,12 @@ describe('shared legal copy — service description (issue #308)', () => {
       // siblings, or the sit SERVICE. It must never stand in for the provider.
       expect(src).not.toContain('student babysitters');
       expect(src).not.toContain('élèves babysitters');
-      expect(src).not.toMatch(/aged 15 to 18/);
-      expect(src).not.toMatch(/âgés de 15 à 18 ans/);
+      // The defect was "babysitters ... aged 15 to 18" as the description of
+      // every provider on every app. The bare age range is legitimate where it
+      // describes sit's and study's actual enrollment window (Terms §3), so
+      // this pins the combination rather than the phrase.
+      expect(src).not.toMatch(/[Bb]abysitters[^.]*aged 15 to 18/);
+      expect(src).not.toMatch(/babysitters[^.]*âgés de 15 à 18/);
     }
   });
 });
@@ -314,12 +319,26 @@ describe('shared legal copy — age and consent', () => {
     renderWithProviders(<PrivacyPage brand="Sync/Sit" supportEmail="help@example.com" />);
     const text = bodyText();
 
-    // The under-15 self-enrollment floor (packages/shared-core/src/utils/agePolicy.ts).
-    expect(text).toContain('A student who signs up on their own must be at least 15');
+    // The self-enrollment floor, pinned against the constant rather than the
+    // prose: this must fail when the age policy moves, not when the sentence
+    // is reworded.
+    expect(text).toContain(
+      `A student who signs up on their own must be at least ${MIN_BABYSITTER_AGE}`,
+    );
     // The governed carve-out — supervision is the protection, at any age.
-    expect(text).toContain('A student under 15 can take part only through a supervised account');
-    // No code caps a provider at 18; the old copy asserted one.
-    expect(text).toContain('We do not set an upper age limit for service providers.');
+    expect(text).toContain(
+      `A student under ${MIN_BABYSITTER_AGE} can take part only through a supervised account`,
+    );
+    // The upper bound is a PER-APP difference, not the absence the first draft
+    // claimed: study-web StepProfile.tsx:79 and web StepProfile.tsx:48 both
+    // gate `age >= 15 && age < 19`, and checkEnrollmentAge returns
+    // 'age_mismatch' outside ±1 school year (waivable via enrollmentExemptions).
+    // Only do-web (`governed || age >= 15`) has no ceiling.
+    expect(text).toContain('There is no single upper age limit, because the apps differ');
+    expect(text).toContain('consistent with their EJM school year');
+    expect(text).toContain('an administrator can grant an exemption');
+    expect(text).toContain('On Sync/Do there is no upper limit');
+    expect(text).not.toContain('We do not set an upper age limit');
     // Guardian consent for flagged sync-do sub-categories.
     expect(text).toContain('approve that specific offer before the family sees it');
   });
@@ -329,8 +348,18 @@ describe('shared legal copy — age and consent', () => {
     renderWithProviders(<TermsPage brand="Sync/Do" supportEmail="help@example.com" />);
     const text = bodyText();
 
-    expect(text).toContain('Must be at least 15 years of age to sign up on their own');
-    expect(text).toContain('We do not set an upper age limit for service providers.');
+    expect(text).toContain(
+      `Must be at least ${MIN_BABYSITTER_AGE} years of age to sign up on their own`,
+    );
+    // §3 is the OPERATIVE eligibility list, so the per-app ceiling has to be a
+    // bullet here — a 19-year-old terminale repeater with a valid @ejm.org
+    // address reads this list, and enrollment will refuse them.
+    expect(text).toContain(
+      'On Sync/Sit and Sync/Study, must have a date of birth consistent with their EJM school year',
+    );
+    expect(text).toContain('aged 15 to 18 at enrollment');
+    expect(text).toContain('Sync/Do sets no upper age limit');
+    expect(text).not.toContain('We do not set an upper age limit');
   });
 
   it('states the real floor and carve-out (terms, FR)', async () => {
@@ -338,8 +367,12 @@ describe('shared legal copy — age and consent', () => {
     renderWithProviders(<TermsPage brand="Sync/Do" supportEmail="help@example.com" />);
     const text = bodyText();
 
-    expect(text).toContain("Être âgé(e) d'au moins 15 ans pour s'inscrire de sa propre initiative");
-    expect(text).toContain("Nous ne fixons aucune limite d'âge supérieure pour les prestataires.");
+    expect(text).toContain(
+      `Être âgé(e) d'au moins ${MIN_BABYSITTER_AGE} ans pour s'inscrire de sa propre initiative`,
+    );
+    expect(text).toContain("cohérente avec son année scolaire à l'EJM");
+    expect(text).toContain("Sync/Do ne fixe aucune limite d'âge supérieure");
+    expect(text).not.toContain("Nous ne fixons aucune limite d'âge supérieure");
   });
 });
 
