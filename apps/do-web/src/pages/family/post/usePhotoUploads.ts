@@ -63,6 +63,17 @@ export function usePhotoUploads({
   // Live timers by photoId, cleared on unmount — the poll must never outlive
   // the wizard (the AreaPage timer-leak lesson, PR #221).
   const timersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  // Poll-chain GENERATION per photoId: exactly one chain may be live per
+  // photo. The timer-clear alone misses the request-in-flight window (a
+  // Retry during a slow doGetOwnPhotoUrl call — PR #331 round 2), so every
+  // chain carries the generation it was started under and its callbacks
+  // no-op once a newer chain (or a remove) bumped it.
+  const gensRef = useRef<Map<string, number>>(new Map());
+  const bumpGen = (photoId: string): number => {
+    const next = (gensRef.current.get(photoId) ?? 0) + 1;
+    gensRef.current.set(photoId, next);
+    return next;
+  };
   const unmountedRef = useRef(false);
   useEffect(() => {
     unmountedRef.current = false;
@@ -74,23 +85,28 @@ export function usePhotoUploads({
     };
   }, []);
 
-  const pollThumbnail = (photoId: string, attempt: number) => {
+  const pollThumbnail = (photoId: string, attempt: number, gen: number) => {
     if (unmountedRef.current) return;
+    const stale = () => gensRef.current.get(photoId) !== gen;
+    if (stale()) return;
     const getUrl = httpsCallable<{ photoId: string }, { url: string }>(functions, 'doGetOwnPhotoUrl');
     getUrl({ photoId })
       .then((res) => {
-        if (unmountedRef.current) return;
+        if (unmountedRef.current || stale()) return;
         timersRef.current.delete(photoId);
         onChange((prev) => patch(prev, photoId, { state: 'ready', url: res.data.url }));
       })
       .catch((err: unknown) => {
-        if (unmountedRef.current) return;
+        if (unmountedRef.current || stale()) return;
         const code = (err as { code?: string } | null)?.code ?? '';
         if (code.endsWith('not-found')) {
           // Not yet stripped (§7.4's retry signal). Keep polling up to the
           // cap; past it the photo stays 'processing' with a manual Retry.
           if (attempt + 1 < PHOTO_POLL_MAX_ATTEMPTS) {
-            const timer = setTimeout(() => pollThumbnail(photoId, attempt + 1), PHOTO_POLL_INTERVAL_MS);
+            const timer = setTimeout(
+              () => pollThumbnail(photoId, attempt + 1, gen),
+              PHOTO_POLL_INTERVAL_MS,
+            );
             timersRef.current.set(photoId, timer);
           } else {
             timersRef.current.delete(photoId);
@@ -135,24 +151,28 @@ export function usePhotoUploads({
     }
     if (unmountedRef.current) return;
     onChange((prev) => patch(prev, photoId, { state: 'processing' }));
-    pollThumbnail(photoId, 0);
+    pollThumbnail(photoId, 0, bumpGen(photoId));
   };
 
   const retryPhoto = (photoId: string) => {
     // Clear any poll already pending for this photo BEFORE starting a fresh
-    // chain (mirrors removePhoto) — otherwise a mid-poll Retry runs two
-    // chains for one id, and only the last timer stays clearable on
-    // unmount. Same timer-lifecycle class as the PR #221 lesson.
+    // chain (mirrors removePhoto), and bump the generation so an IN-FLIGHT
+    // request's callbacks no-op too — the timer-clear alone misses the
+    // request-in-flight window (PR #331 round 2). Same timer-lifecycle
+    // class as the PR #221 lesson.
     const pending = timersRef.current.get(photoId);
     if (pending) {
       clearTimeout(pending);
       timersRef.current.delete(photoId);
     }
     onChange((prev) => patch(prev, photoId, { state: 'processing' }));
-    pollThumbnail(photoId, 0);
+    pollThumbnail(photoId, 0, bumpGen(photoId));
   };
 
   const removePhoto = (photoId: string) => {
+    // Bump the generation: a removed photo's in-flight chain must not
+    // resurrect it into the list via a late patch.
+    bumpGen(photoId);
     const timer = timersRef.current.get(photoId);
     if (timer) {
       clearTimeout(timer);
