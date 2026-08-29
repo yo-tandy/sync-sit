@@ -2470,9 +2470,9 @@ PR each decision lands in.
 
 | PR | Change |
 |---|---|
-| **2** | Ships the shared `AppSwitchBar` from `shared-ui` instead of any do-web nav. Brand-mark consolidation is a prerequisite of the bar, not a side-quest. Theme is Recess-shaped (radii, Nunito) on §9.0's palette. |
+| **2** | Ships the shared `AppSwitchBar` from `shared-ui` instead of any do-web nav. ~~Brand-mark consolidation is a prerequisite~~ — consolidation was already done in d50e3f80 (#302); what the bar needed was bar-*weight* marks, added by #364 (see platform plan §2). Theme is Recess-shaped (radii, Nunito) on §9.0's palette. |
 | **4** | `doEnrollDoer` must accept the handoff-from-account-hub entry path. do-web ships a **doer-settings screen**, not an account page. |
 | **7** | Family shell uses the shared bar; "Post a task" is the page hero, "My tasks" the first card (matches the canvas). |
 | **8** | Doer shell uses the shared bar; the board is the hero — no visibility toggle exists for doers. |
-| **9** | Blocked on the notifications decision (platform plan §5) before the twelve types are wired. |
+| **9** | Unblocked: the notifications decision is taken (platform plan §5, Decision 27 — app-scoped prefs, shipped on issue #369). |
 | **10** | Admin tab inherits neutral gray; do green must not leak into admin chrome. Self-serve delete (platform plan §6.1) should be built alongside the hard-delete coverage already scoped here. |

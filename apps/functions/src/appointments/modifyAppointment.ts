@@ -6,7 +6,7 @@ import { getCorsOrigin } from '../config/cors.js';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
 import { escapeHtml, sendNotificationEmail } from '../config/email.js';
 import { sendPushNotification } from '../config/push.js';
-import { getParentProfile, type User } from '@ejm/shared-core';
+import { getParentProfile, resolveNotifPref, type User } from '@ejm/shared-core';
 import { SIT_APP_URL } from '@ejm/shared-functions';
 
 interface ModifyInput {
@@ -137,7 +137,7 @@ export const modifyAppointment = onCall(
     // Notify babysitter
     const babysitterDoc = await db.collection('users').doc(apt.babysitterUserId).get();
     const babysitterEmail = babysitterDoc.data()?.email;
-    const babysitterPrefs = babysitterDoc.data()?.notifPrefs?.newRequest;
+    const babysitterPrefs = resolveNotifPref(babysitterDoc.data()?.notifPrefs, 'sit', 'newRequest');
     const familyName = apt.familyName || 'A family';
     const dateInfo = apt.date ? `${apt.date}${updates.startTime || apt.startTime ? `, ${updates.startTime || apt.startTime}` : ''}${updates.endTime || apt.endTime ? `–${updates.endTime || apt.endTime}` : ''}` : 'Recurring';
 
@@ -154,7 +154,7 @@ export const modifyAppointment = onCall(
       createdAt: now,
     });
 
-    if (babysitterPrefs?.email !== false && babysitterEmail) {
+    if (babysitterPrefs.email && babysitterEmail) {
       await sendNotificationEmail(
         babysitterEmail,
         `Appointment modified by ${familyName}`,
@@ -165,7 +165,7 @@ export const modifyAppointment = onCall(
       );
     }
 
-    if (babysitterDoc.data()?.notifPrefs?.newRequest?.push !== false) {
+    if (babysitterPrefs.push) {
       await sendPushNotification(
         apt.babysitterUserId,
         'Appointment modified',

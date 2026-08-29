@@ -82,7 +82,7 @@ describe('runSendStudySessionReminders', () => {
     }
     // Reset reminders prefs the prefs-gating test mutates.
     await db.collection('users').doc(seed.parent1.uid).update({
-      'notifPrefs.reminders': { push: true, email: true },
+      'notifPrefs.shared.reminders': { push: true, email: true },
     });
   });
 
@@ -127,7 +127,7 @@ describe('runSendStudySessionReminders', () => {
 
   it('writes the notification doc but no email when reminders.email is false', async () => {
     await getDb().collection('users').doc(seed.parent1.uid).update({
-      'notifPrefs.reminders': { push: true, email: false },
+      'notifPrefs.shared.reminders': { push: true, email: false },
     });
     await seedOneTime('at24', { startTime: '12:00' });
     await runSendStudySessionReminders(getDb(), NOW);

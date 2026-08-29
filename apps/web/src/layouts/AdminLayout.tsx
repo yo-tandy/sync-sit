@@ -59,7 +59,7 @@ export function AdminLayout() {
 
   return (
     <AuthGuard role="admin">
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-ground-admin">
         <ScrollToTop />
         <AppBar role="admin" />
         <div className="md:flex">

@@ -288,6 +288,8 @@ export default {
   },
 
   appSwitch: {
+    account: 'Mon compte',
+    barLabel: "Changer d'application",
     toStudy: 'Ouvrir sync-study',
     error: "Impossible de changer d'application. Veuillez réessayer.",
   },
@@ -738,6 +740,8 @@ export default {
     desc: 'Choisissez comment vous souhaitez \u00eatre notifi\u00e9(e).',
     push: 'Push',
     emailNotif: 'Email',
+    blockShared: 'Toutes les apps Sync',
+    blockApp: 'Sync/Sit',
     newRequest: 'Nouvelle demande',
     newRequestDesc: "Quand une famille vous envoie une demande de babysitting",
     confirmation: 'Confirmation',

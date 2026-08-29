@@ -14,14 +14,21 @@
     "./theme/do.css": "./src/theme/do.css",
     "./brand-marks/sync-sit.png": "./src/assets/sync-sit-mark.png",
     "./brand-marks/sync-study.png": "./src/assets/sync-study-mark.png",
-    "./brand-marks/sync-do.png": "./src/assets/sync-do-mark.png"
+    "./brand-marks/sync-do.png": "./src/assets/sync-do-mark.png",
+    "./brand-marks/sync-sit-48.png": "./src/assets/sync-sit-mark-48.png",
+    "./brand-marks/sync-study-48.png": "./src/assets/sync-study-mark-48.png",
+    "./brand-marks/sync-do-48.png": "./src/assets/sync-do-mark-48.png",
+    "./brand-marks/sync-sit-96.png": "./src/assets/sync-sit-mark-96.png",
+    "./brand-marks/sync-study-96.png": "./src/assets/sync-study-mark-96.png",
+    "./brand-marks/sync-do-96.png": "./src/assets/sync-do-mark-96.png"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
     "lint": "eslint ."
   },
   "dependencies": {
-    "@ejm/shared-core": "workspace:*"
+    "@ejm/shared-core": "workspace:*",
+    "@fontsource-variable/nunito": "^5.3.0"
   },
   "peerDependencies": {
     "react": "^19.2.0",

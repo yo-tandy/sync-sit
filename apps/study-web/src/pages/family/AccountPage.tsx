@@ -1,12 +1,18 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useFlashTimer } from '@ejm/shared-ui';
 import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
-import { getParentView, DEFAULT_NOTIF_PREFS, isRunningAsPWA } from '@ejm/shared-core';
-import type { NotifPrefs } from '@ejm/shared-core';
+import {
+  getParentView,
+  isRunningAsPWA,
+  notifPrefPath,
+  notifPrefRowsForUser,
+  resolveNotifPrefsFor,
+} from '@ejm/shared-core';
+import type { NotifCategory, NotifChannels, NotifScope } from '@ejm/shared-core';
 import {
   TopNav,
   Button,
@@ -34,13 +40,31 @@ import { isPushSupported } from '@/lib/pushNotifications';
 // Notification scenarios relevant to parents. `newRequest` is the
 // category tutor-initiated session proposals arrive under (proposeSession),
 // and `references` gates updates about endorsements the family submitted.
-const SCENARIOS: { key: keyof NotifPrefs; labelKey: string; descKey: string }[] = [
-  { key: 'newRequest', labelKey: 'notifications.proposal', descKey: 'notifications.proposalDesc' },
-  { key: 'confirmed', labelKey: 'notifications.confirmation', descKey: 'notifications.confirmationDesc' },
-  { key: 'cancelled', labelKey: 'notifications.cancellation', descKey: 'notifications.cancellationDesc' },
-  { key: 'reminders', labelKey: 'notifications.reminder', descKey: 'notifications.reminderDesc' },
-  { key: 'references', labelKey: 'notifications.endorsement', descKey: 'notifications.endorsementFamilyDesc' },
-];
+/**
+ * Which app's preference block this page edits (issue #369). Rows come from
+ * `notifPrefRowsForUser` -- one shared block plus a block per profile held --
+ * narrowed to this page's own scope, so a study family is never offered
+ * sync/do rows here.
+ */
+const PREF_APP = 'study' as const;
+
+const PREF_LABELS: Partial<Record<NotifCategory, { labelKey: string; descKey: string }>> = {
+  newRequest: { labelKey: 'notifications.proposal', descKey: 'notifications.proposalDesc' },
+  confirmed: { labelKey: 'notifications.confirmation', descKey: 'notifications.confirmationDesc' },
+  cancelled: { labelKey: 'notifications.cancellation', descKey: 'notifications.cancellationDesc' },
+  reminders: { labelKey: 'notifications.reminder', descKey: 'notifications.reminderDesc' },
+  references: { labelKey: 'notifications.endorsement', descKey: 'notifications.endorsementFamilyDesc' },
+};
+
+/** Module-level and therefore reference-stable — see the seeding effect. */
+const PREF_CATEGORIES = Object.keys(PREF_LABELS) as NotifCategory[];
+
+const BLOCK_HEADING: Record<NotifScope, string> = {
+  shared: 'notifications.blockShared',
+  sit: 'notifications.blockApp',
+  study: 'notifications.blockApp',
+  do: 'notifications.blockApp',
+};
 
 export function AccountPage() {
   const { t } = useTranslation();
@@ -61,7 +85,11 @@ export function AccountPage() {
   const [passwordResetting, setPasswordResetting] = useState(false);
 
   // Notification prefs
-  const [prefs, setPrefs] = useState<NotifPrefs>(DEFAULT_NOTIF_PREFS);
+  // Resolved through the SAME resolver the senders use, so a toggle rendered
+  // ON is one the server will actually act on.
+  const [prefs, setPrefs] = useState<Record<string, NotifChannels>>(() =>
+    resolveNotifPrefsFor(undefined, PREF_APP, PREF_CATEGORIES),
+  );
 
   const [error, setError] = useState<string | null>(null);
 
@@ -74,10 +102,20 @@ export function AccountPage() {
     setPhone(parent.phone || '');
     setWhatsapp(parent.whatsapp || '');
     setWhatsappSameAsPhone(parent.whatsapp ? parent.whatsapp === parent.phone : true);
-    if (userDoc?.notifPrefs) {
-      setPrefs(userDoc.notifPrefs);
-    }
   }, [parent, userDoc]);
+
+  // Seeded from a MEMO, not recomputed inside the effect above: that effect
+  // re-runs whenever `parent` changes identity, and a freshly-built prefs
+  // object would set state every pass and spin forever. `userDoc.notifPrefs`
+  // is reference-stable between store updates, so this reseeds exactly when
+  // the stored prefs actually change.
+  const storedPrefs = useMemo(
+    () => resolveNotifPrefsFor(userDoc?.notifPrefs, PREF_APP, PREF_CATEGORIES),
+    [userDoc?.notifPrefs],
+  );
+  useEffect(() => {
+    setPrefs(storedPrefs);
+  }, [storedPrefs]);
 
   // --- Contact handlers ---
   const handleContactSave = async (e: React.FormEvent) => {
@@ -117,67 +155,52 @@ export function AccountPage() {
   };
 
   // --- Notification prefs ---
-  // Write ONLY the toggled scenario/channel via a dot-path: a full-object
-  // `notifPrefs` write would clobber channel values the sit app may have
-  // written after this page mounted (issue #186's rule; both channels are
-  // editable here now that study has push). notifPrefs is SHARED across apps
-  // by design (one preference per scenario, whichever app the user toggles
-  // it in); a per-app split is a tracked #168 question, not a bug.
-  // EXCEPTION (issue #186 follow-up): when the stored scenario map is
-  // absent or incomplete — the key predates the scenario (e.g. references)
-  // or is half-populated ({email} with no push, which pre-fix toggles
-  // created) — a single-channel dot-path would leave the map incomplete:
-  // sit's UI renders a missing push as off while the server (missing = on)
-  // still sends. Write the full map once instead, defaulting the untoggled
-  // channel from the stored value or the server's default-on gate; the next
-  // toggle self-heals, no backfill needed. "Stored" means the in-memory
-  // userDoc as of the last refresh — a concurrent sit-side write between
-  // refresh and save could still be clobbered, but nothing else writes
-  // these keys today.
+  // Write ONLY the toggled category/channel via a dot-path: a full-object
+  // `notifPrefs` write would clobber blocks the sit app (or the shared block)
+  // may have written after this page mounted — issue #186's rule, unchanged.
+  // `notifPrefPath` routes each category to its own block: the per-engagement
+  // trio into `notifPrefs.study`, `reminders`/`references` into
+  // `notifPrefs.shared` (issue #369).
+  //
+  // The #186 follow-up's "write the whole map when it is absent or
+  // half-populated" exception is GONE, and with it the last-refresh clobber
+  // window it carried: `resolveNotifPref` now merges a partial category over
+  // the product default identically on the read side and in every sender, so
+  // a single-channel dot-path can no longer leave the UI and the server
+  // disagreeing about the channel nobody wrote.
   const savePrefs = useCallback(
-    async (scenario: keyof NotifPrefs, channel: 'push' | 'email', value: boolean) => {
+    async (category: NotifCategory, channel: 'push' | 'email', value: boolean) => {
       if (!uid) return;
-      const stored = userDoc?.notifPrefs?.[scenario];
-      // Read push BEFORE the `'push' in stored` check: in the else branch
-      // tsc -b narrows `stored` to never (the declared map type always
-      // carries push), so the optional access fails the CI build.
-      const prevPush = stored?.push ?? true;
-      const prevEmail = stored?.email ?? true;
       await updateDoc(doc(db, 'users', uid), {
-        ...(stored && 'push' in stored && 'email' in stored
-          ? { [`notifPrefs.${scenario}.${channel}`]: value }
-          : {
-              [`notifPrefs.${scenario}`]: {
-                push: channel === 'push' ? value : prevPush,
-                email: channel === 'email' ? value : prevEmail,
-              },
-            }),
+        [notifPrefPath(PREF_APP, category, channel)]: value,
         updatedAt: serverTimestamp(),
       });
       await refreshUserDoc();
     },
-    [uid, userDoc, refreshUserDoc],
+    [uid, refreshUserDoc],
   );
 
-  const toggle = async (scenario: keyof NotifPrefs, channel: 'push' | 'email') => {
+  const toggle = async (category: NotifCategory, channel: 'push' | 'email') => {
     // In web-app mode, push toggles are inert — notifications won't be
     // delivered until the user installs the app to their home screen.
     if (channel === 'push' && !pwaMode) return;
     const previous = prefs;
-    // Absent-scenario full-map rule: seed the whole channel map when the
-    // stored prefs lack this scenario. The server treats an absent channel
-    // as ON (`!== false`), so both channels default to true here.
-    const current = prefs[scenario] || { push: true, email: true };
+    const current = prefs[category];
     const next = !current[channel];
-    setPrefs({ ...prefs, [scenario]: { ...current, [channel]: next } });
+    setPrefs({ ...prefs, [category]: { ...current, [channel]: next } });
     try {
-      await savePrefs(scenario, channel, next);
+      await savePrefs(category, channel, next);
     } catch {
       // Revert the optimistic toggle and surface the failure.
       setPrefs(previous);
       setError(t('account.notifSaveFailed'));
     }
   };
+
+  // One shared block plus this page's own app block (issue #369).
+  const prefRows = notifPrefRowsForUser(userDoc).filter(
+    (r) => (r.scope === 'shared' || r.scope === PREF_APP) && PREF_LABELS[r.category],
+  );
 
   return (
     <div>
@@ -300,10 +323,18 @@ export function AccountPage() {
           <span className="w-10 text-center text-xs font-medium text-gray-500">{t('notifications.emailNotif')}</span>
         </div>
 
-        {SCENARIOS.map((s) => {
-          const channel = prefs[s.key] || { push: true, email: true };
+        {prefRows.map((row, i) => {
+          const s = PREF_LABELS[row.category]!;
+          const channel = prefs[row.category];
+          const isBlockStart = i === 0 || prefRows[i - 1].scope !== row.scope;
           return (
-            <div key={s.key} className="mb-4 flex items-center justify-between">
+            <div key={`${row.scope}.${row.category}`}>
+            {isBlockStart && (
+              <h4 className="mb-2 mt-1 text-xs font-semibold uppercase tracking-wide text-gray-400">
+                {t(BLOCK_HEADING[row.scope])}
+              </h4>
+            )}
+            <div className="mb-4 flex items-center justify-between">
               <div className="flex-1 pr-4">
                 <p className="text-sm font-medium text-gray-900">{t(s.labelKey)}</p>
                 <p className="text-xs text-gray-500">{t(s.descKey)}</p>
@@ -315,7 +346,7 @@ export function AccountPage() {
                     contradiction (PR #192 review). */}
                 <button
                   type="button"
-                  onClick={() => toggle(s.key, 'push')}
+                  onClick={() => toggle(row.category, 'push')}
                   disabled={!pwaMode}
                   aria-disabled={!pwaMode}
                   aria-label={`${t(s.labelKey)} — ${t('notifications.push')}`}
@@ -327,12 +358,13 @@ export function AccountPage() {
                 <button
                   type="button"
                   aria-label={`${t(s.labelKey)} — ${t('notifications.emailNotif')}`}
-                  onClick={() => toggle(s.key, 'email')}
+                  onClick={() => toggle(row.category, 'email')}
                   className={`flex h-6 w-10 items-center rounded-full p-0.5 transition-colors ${channel.email ? 'bg-brand-600' : 'bg-gray-300'}`}
                 >
                   <div className={`h-5 w-5 rounded-full bg-white shadow transition-transform ${channel.email ? 'translate-x-4' : 'translate-x-0'}`} />
                 </button>
               </div>
+            </div>
             </div>
           );
         })}

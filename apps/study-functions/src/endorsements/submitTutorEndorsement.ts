@@ -5,7 +5,7 @@ import { getCorsOrigin } from '@ejm/shared-functions/config/cors.js';
 import { writeUserActivity } from '@ejm/shared-functions/admin/writeAuditLog.js';
 import { escapeHtml, sendNotificationEmail, STUDY_APP_URL } from '@ejm/shared-functions/config/email.js';
 import { sendPushNotification } from '@ejm/shared-functions/config/push.js';
-import { getParentProfile } from '@ejm/shared-core';
+import { getParentProfile, resolveNotifPref } from '@ejm/shared-core';
 import type { User } from '@ejm/shared-core';
 import type { StudyUser, TutorProfile } from '@ejm/study-core';
 import { submitTutorEndorsementSchema } from '../validation/endorsement.js';
@@ -95,12 +95,12 @@ export const submitTutorEndorsement = onCall(
     await refDoc.set(payload);
 
     // ── Notify the tutor inline (see trigger note above) ──
-    const refsPrefs = tutorUser?.notifPrefs?.references || { push: true, email: true };
+    const refsPrefs = resolveNotifPref(tutorUser?.notifPrefs, 'study', 'references');
     const submitterLabel = submittedByName || refName.trim() || 'A family';
     const now = new Date();
     // Record the actual send outcomes, not assumptions.
     let emailSent = false;
-    if (refsPrefs.email !== false && tutorUser?.email) {
+    if (refsPrefs.email && tutorUser?.email) {
       emailSent = await sendNotificationEmail(
         tutorUser.email,
         `New endorsement from ${submitterLabel}`,
@@ -113,7 +113,7 @@ export const submitTutorEndorsement = onCall(
       );
     }
     let pushSent = false;
-    if (refsPrefs.push !== false) {
+    if (refsPrefs.push) {
       pushSent = await sendPushNotification(
         tutorUserId,
         'New endorsement received',

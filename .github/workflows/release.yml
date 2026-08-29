@@ -127,6 +127,14 @@ jobs:
     needs: verify_tag
     if: github.event_name == 'push'
     uses: ./.github/workflows/test.yml
+    with:
+      # Documentation links are checked on pull requests and on pushes to
+      # main, not here. Whether a plan's table of contents still resolves has
+      # no bearing on whether this tag is safe to deploy, and the failure mode
+      # of including it is the expensive one: a hotfix tag held up by doc-link
+      # rot, discovered while an incident is running. Reasoning in test.yml on
+      # the docs-links job.
+      skip_docs_links: true
 
   build_and_deploy:
     needs: [verify_tag, verify_tests]

@@ -17,10 +17,14 @@ describe('SkeletonCard (shared-ui)', () => {
     const { container } = renderWithProviders(<SkeletonCard />);
     const card = container.querySelector('[data-testid="skeleton-card"]') as HTMLElement;
     expect(card).not.toBeNull();
-    // Same frame as <Card>: rounded, bordered, white, padded.
+    // Same frame as <Card>: rounded, bordered, RAISED-SURFACE, padded.
+    // bg-ground-raised, not bg-white (#395 review round 2): the skeleton
+    // stands in for a Card, so it has to resolve to the same surface token —
+    // otherwise the first brand that makes raised surfaces non-white gets a
+    // list that flashes as data arrives.
     expect(card.className).toContain('rounded-lg');
     expect(card.className).toContain('border-gray-200');
-    expect(card.className).toContain('bg-white');
+    expect(card.className).toContain('bg-ground-raised');
     expect(bars(container)).toHaveLength(3);
   });
 

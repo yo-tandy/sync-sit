@@ -8,6 +8,7 @@ import {
   parisDateString,
   parisWallTimeToUtc,
 } from '@ejm/shared-functions/scheduled/parisTime.js';
+import { resolveNotifPref } from '@ejm/shared-core';
 
 export interface StudyReminderStats {
   remindersSent: number;
@@ -63,7 +64,7 @@ async function notifyBothSides(
   const tutorDoc = await firestoreDb.collection('users').doc(t.tutorUserId).get();
   const tutorData = tutorDoc.data();
   const tutorEmail = tutorData?.email as string | undefined;
-  const rp = tutorData?.notifPrefs?.reminders;
+  const rp = resolveNotifPref(tutorData?.notifPrefs, 'study', 'reminders');
   const tutorName =
     t.tutorName ||
     `${tutorData?.firstName || ''} ${tutorData?.lastName || ''}`.trim() ||
@@ -71,7 +72,7 @@ async function notifyBothSides(
 
   // Record the actual send outcomes, not assumptions.
   let emailSent = false;
-  if (rp?.email !== false && tutorEmail) {
+  if (rp.email && tutorEmail) {
     emailSent = await sendNotificationEmail(
       tutorEmail,
       'Tutoring session tomorrow',
@@ -82,7 +83,7 @@ async function notifyBothSides(
   }
   // Send push before the doc write so pushSent records the real outcome.
   let pushSent = false;
-  if (rp?.push !== false) {
+  if (rp.push) {
     pushSent = await sendPushNotification(
       t.tutorUserId,
       'Tutoring session tomorrow',

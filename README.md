@@ -207,6 +207,7 @@ The cross-app switch target is configurable (defaults to the production URLs bak
 | `pnpm seed:admin:lane3` / `pnpm seed:test-data:lane3` | The same, into emulator lane 3 (`lane2` / `lane4` too; or `LANE=N pnpm seed:admin`) |
 | `pnpm typecheck` | Type-check all packages |
 | `pnpm test:unit` | Every workspace package's unit suite, plus the out-of-package `scripts/` suite |
+| `pnpm docs:links` | Check every in-repo markdown link and `#anchor` resolves (same check CI runs) |
 | `pnpm deploy` | Deploy to Firebase |
 
 `test:unit` selects packages recursively (`pnpm -r`) and subtracts one

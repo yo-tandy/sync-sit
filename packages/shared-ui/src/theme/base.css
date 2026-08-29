@@ -16,6 +16,30 @@
 
 @source "../**/*.{ts,tsx}";
 
+/* Nunito, SELF-HOSTED (issue #366, the Recess direction).
+   Why not a Google Fonts <link>: GDPR. Loading fonts from fonts.gstatic.com
+   sends every visitor's IP to Google on every page. This is an EU product
+   handling minors' data and the rest of the codebase is careful about
+   exactly this; a German court has held the practice unlawful. Self-hosting
+   removes the transfer, and that reason carries the decision on its own.
+
+   NOT a reason, though the commit message claimed it (review round 1):
+   "a bundled font survives offline". Nothing here precaches -- no vite
+   config loads a PWA/workbox plugin and the only service worker is
+   firebase-messaging-sw.js, which is FCM-only -- so a self-hosted .woff2
+   is no more available on a cold cache than a remote one.
+
+   Variable font, so one file covers every weight the design uses.
+
+   LICENCE: Nunito is SIL OFL 1.1, which requires the copyright notice and
+   licence to accompany redistribution. The licence text ships in each app's
+   public/licenses/Nunito-OFL.txt, copied verbatim into dist by Vite --
+   that is the compliance artifact, because a notice that never reaches the
+   deployed build is not one. packages/shared-ui/THIRD_PARTY_NOTICES.md is
+   the repo-side index and says so itself; the package's own LICENSE lives in
+   node_modules and does not ship. */
+@import '@fontsource-variable/nunito';
+
 @theme {
   /* Semantic feedback colors (shared) — always the same hue regardless
      of which app's brand palette is active. Components use these for
@@ -33,17 +57,66 @@
   --color-error-600: #DC2626;
   --color-error-700: #B91C1C;
 
-  /* Radii */
-  --radius-sm: 0.5rem;
-  --radius-md: 0.75rem;
-  --radius-lg: 1rem;
-  --radius-xl: 1.25rem;
+  /* Radii — Recess (#366). Rounder across the board: the direction's
+     20-22px corners land on lg/xl, and sm/md rise with them so the ramp
+     stays proportional rather than leaving small controls looking sharp
+     next to round cards.
 
-  /* Shadows */
-  --shadow-card: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+     2xl/3xl are overridden too (review round 1). Leaving them at
+     Tailwind's 16px/24px defaults left the ramp INVERTED -- rounded-2xl
+     read squarer than rounded-xl. The inversion predates this PR (xl was
+     already 20px against 2xl's 16px) but the 22px xl widened it, and this
+     is the radii-proportionality pass, so it gets fixed here rather than
+     documented as a known wart. The 16 rounded-2xl call sites are the app
+     logo images, which want the rounder corner. recessTokens.test.ts pins
+     monotonicity so a future edit to one stop cannot re-invert the ramp
+     silently.
 
-  /* Font */
-  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+     xs and 4xl stay Tailwind's (2px / 32px) and BRACKET this range: nothing
+     uses either class today, and 3xl at 30px keeps the whole ramp ordered
+     without needing to override the ends too. Raising 3xl past 32px means
+     overriding 4xl as well -- the test says so when it goes red. */
+  --radius-sm: 0.625rem;  /* 10px */
+  --radius-md: 0.875rem;  /* 14px */
+  --radius-lg: 1.25rem;   /* 20px */
+  --radius-xl: 1.375rem;  /* 22px */
+  --radius-2xl: 1.75rem;  /* 28px — app logo images */
+  --radius-3xl: 1.875rem; /* 30px */
+  /* Pill badges and chips: a real pill, not a large radius that reads as
+     one only at some heights. Read by Badge and Chip via rounded-pill;
+     rounded-full stays the right class for actual circles (avatars,
+     spinners), which is the distinction this token exists to make. */
+  --radius-pill: 9999px;
+
+  /* Shadows — Recess wants weight UNDER a card rather than a soft halo
+     around it. The offset is vertical-only and the blur small, so cards
+     read as sitting on the ground rather than floating over it.
+     --shadow-card-brand is the tinted variant; each app's theme sets
+     --shadow-card-tint to its own hue (see sit.css).
+
+     The tint carries a FALLBACK (review round 1): a bare
+     var(--shadow-card-tint) is invalid at computed-value time if the tint
+     is ever undefined -- a consumer importing base.css with no brand
+     override -- and Tailwind's --tw-shadow is a registered property, so
+     the card would fall back to a TRANSPARENT shadow and lose its
+     elevation on hover rather than degrade to the untinted one. The
+     fallback makes --shadow-card's own colour the floor. */
+  --shadow-card: 0 3px 0 rgba(17, 24, 39, 0.06), 0 4px 10px rgba(17, 24, 39, 0.05);
+  --shadow-card-brand: 0 3px 0 var(--shadow-card-tint, rgba(17, 24, 39, 0.06)), 0 4px 10px rgba(17, 24, 39, 0.05);
+
+  /* Admin is NEUTRAL (decision 25): its own gray ground and shadow tint, so
+     no app's brand reaches admin chrome. Defined in base rather than per app
+     because admin looks the same whichever app hosts it -- that is the point
+     of the decision. The tint is WIRED in the @layer base rule below; on its
+     own this line is just a value nothing reads. */
+  --color-ground-admin: #f6f7f9;
+  --shadow-card-tint-admin: rgb(226, 232, 240);
+
+  /* Font — Nunito, imported above. It is IMPORTED as well as named: the
+     previous token asked for 'Inter' and nothing ever loaded it, so all
+     three apps have been rendering in system-ui while claiming otherwise
+     (found while doing #366). Naming a font is not shipping it. */
+  --font-sans: 'Nunito Variable', 'Nunito', ui-sans-serif, system-ui, -apple-system, sans-serif;
 }
 
 /* WCAG 2.4.7 Focus Visible (issue #325): ONE shared keyboard-focus
@@ -93,6 +166,28 @@
       input[type="checkbox"], input[type="radio"]):focus-visible {
     outline-offset: -2px;
     box-shadow: none;
+  }
+
+  /* ADMIN NEUTRAL TINT (decision 25; review round 1). --shadow-card-tint-admin
+     was defined above and read by nothing, so <Card interactive> in admin --
+     DashboardPage, GdprExportPage -- hovered with whichever brand the HOST app
+     loaded: sit's coral, since apps/web imports sit.css. Exactly the
+     token-with-no-reader shape this PR exists to fix.
+
+     WHY the override is on the tint and not on --shadow-card-brand: Tailwind
+     v4 inlines a shadow theme value's TEXT into --tw-shadow on the element
+     carrying the utility -- the emitted rule is
+       --tw-shadow: 0 3px 0 var(--tw-shadow-color, var(--shadow-card-tint)), ...
+     so var(--shadow-card-tint) resolves against the CARD and an ancestor
+     override inherits down. Nothing ever emits var(--shadow-card-brand), so
+     overriding that name here would paint nothing. (Verified against
+     tailwindcss 4.2.2's compiler output, not assumed.)
+
+     Scoped on the admin shell's own ground class so it costs one rule and no
+     new markup; recessTokens.test.ts pins that AdminLayout still carries that
+     class, which is what keeps the coupling from rotting silently. */
+  .bg-ground-admin {
+    --shadow-card-tint: var(--shadow-card-tint-admin);
   }
 }
 

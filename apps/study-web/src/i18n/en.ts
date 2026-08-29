@@ -88,6 +88,8 @@ export default {
     desc: 'Choose how you want to be notified.',
     push: 'Push',
     emailNotif: 'Email',
+    blockShared: 'All Sync apps',
+    blockApp: 'Sync/Study',
     newRequest: 'New request',
     newRequestDesc: 'When a family sends you a tutoring request',
     proposal: 'Session proposals',
@@ -285,6 +287,8 @@ export default {
   },
 
   appSwitch: {
+    account: 'My account',
+    barLabel: 'Switch app',
     toSit: 'Open sync-sit',
     error: 'Could not switch apps. Please try again.',
   },

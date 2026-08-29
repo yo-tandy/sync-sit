@@ -59,7 +59,7 @@ export async function seedTestData(): Promise<SeedData> {
   await db.collection('users').doc(adminUid).set({
     uid: adminUid, isAdmin: true, email: 'admin@syncsit.test', status: 'active',
     firstName: 'Admin', lastName: 'User', language: 'en',
-    notifPrefs: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true }, reminders: { push: true, email: false } },
+    notifPrefs: { shared: { reminders: { push: true, email: false } }, sit: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } }, study: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } }, do: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } } },
     fcmTokens: [], createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
   });
 
@@ -72,7 +72,7 @@ export async function seedTestData(): Promise<SeedData> {
     uid: parent1Uid, email: 'marie.dupont@test.com', status: 'active',
     firstName: 'Marie', lastName: 'Dupont', language: 'fr',
     profiles: { parent: { enrollmentComplete: true, familyId: family1Id, phone: '+33 612345678' } },
-    notifPrefs: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true }, reminders: { push: true, email: true } },
+    notifPrefs: { shared: { reminders: { push: true, email: true } }, sit: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } }, study: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } }, do: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } } },
     fcmTokens: [], createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
   });
 
@@ -80,7 +80,7 @@ export async function seedTestData(): Promise<SeedData> {
     uid: parent2Uid, email: 'pierre.dupont@test.com', status: 'active',
     firstName: 'Pierre', lastName: 'Dupont', language: 'fr',
     profiles: { parent: { enrollmentComplete: true, familyId: family1Id } },
-    notifPrefs: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true }, reminders: { push: true, email: true } },
+    notifPrefs: { shared: { reminders: { push: true, email: true } }, sit: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } }, study: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } }, do: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } } },
     fcmTokens: [], createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
   });
 
@@ -110,7 +110,7 @@ export async function seedTestData(): Promise<SeedData> {
     uid: parent3Uid, email: 'sophie.martin@test.com', status: 'active',
     firstName: 'Sophie', lastName: 'Martin', language: 'en',
     profiles: { parent: { enrollmentComplete: true, familyId: family2Id } },
-    notifPrefs: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true }, reminders: { push: true, email: false } },
+    notifPrefs: { shared: { reminders: { push: true, email: false } }, sit: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } }, study: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } }, do: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } } },
     fcmTokens: [], createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
   });
 
@@ -142,7 +142,7 @@ export async function seedTestData(): Promise<SeedData> {
       areaMode: 'arrondissement', arrondissements: ['15e', '16e', '7e'],
       areaLatLng: { lat: 48.8530, lng: 2.2750 },
     } },
-    notifPrefs: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true }, reminders: { push: true, email: true } },
+    notifPrefs: { shared: { reminders: { push: true, email: true } }, sit: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } }, study: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } }, do: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } } },
     fcmTokens: [], language: 'fr',
     createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
   });
@@ -167,7 +167,7 @@ export async function seedTestData(): Promise<SeedData> {
       areaMode: 'distance', areaAddress: '8 Rue Lecourbe, 75015 Paris',
       areaLatLng: { lat: 48.8450, lng: 2.3050 }, areaRadiusKm: 5,
     } },
-    notifPrefs: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true }, reminders: { push: true, email: true } },
+    notifPrefs: { shared: { reminders: { push: true, email: true } }, sit: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } }, study: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } }, do: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } } },
     fcmTokens: [], language: 'en',
     createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
   });
@@ -192,7 +192,7 @@ export async function seedTestData(): Promise<SeedData> {
       areaMode: 'arrondissement', arrondissements: ['14e', '15e', '16e', '6e', '7e'],
       areaLatLng: { lat: 48.8480, lng: 2.2800 },
     } },
-    notifPrefs: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true }, reminders: { push: true, email: true } },
+    notifPrefs: { shared: { reminders: { push: true, email: true } }, sit: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } }, study: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } }, do: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } } },
     fcmTokens: [], language: 'fr',
     createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
   });
@@ -217,7 +217,7 @@ export async function seedTestData(): Promise<SeedData> {
       areaMode: 'arrondissement', arrondissements: ['16e'],
       areaLatLng: { lat: 48.8600, lng: 2.2700 },
     } },
-    notifPrefs: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true }, reminders: { push: true, email: true } },
+    notifPrefs: { shared: { reminders: { push: true, email: true } }, sit: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } }, study: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } }, do: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } } },
     fcmTokens: [], language: 'fr',
     createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
   });
@@ -241,7 +241,7 @@ export async function seedTestData(): Promise<SeedData> {
       areaMode: 'arrondissement', arrondissements: ['15e', '16e'],
       areaLatLng: { lat: 48.8530, lng: 2.2750 },
     } },
-    notifPrefs: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true }, reminders: { push: true, email: true } },
+    notifPrefs: { shared: { reminders: { push: true, email: true } }, sit: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } }, study: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } }, do: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } } },
     fcmTokens: [], language: 'fr',
     createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
   });
@@ -270,7 +270,7 @@ export async function seedTestData(): Promise<SeedData> {
       areaMode: 'distance', areaAddress: 'Paris center',
       areaLatLng: { lat: 48.8566, lng: 2.3522 }, areaRadiusKm: 5,
     } },
-    notifPrefs: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true }, reminders: { push: true, email: true } },
+    notifPrefs: { shared: { reminders: { push: true, email: true } }, sit: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } }, study: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } }, do: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } } },
     fcmTokens: [], language: 'en',
     createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
   });
@@ -302,7 +302,7 @@ export async function seedTestData(): Promise<SeedData> {
       areaMode: 'distance', areaAddress: 'Paris center',
       areaLatLng: { lat: 48.8566, lng: 2.3522 }, areaRadiusKm: 5,
     } },
-    notifPrefs: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true }, reminders: { push: true, email: true } },
+    notifPrefs: { shared: { reminders: { push: true, email: true } }, sit: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } }, study: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } }, do: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } } },
     fcmTokens: [], language: 'fr',
     createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
   });
@@ -669,4 +669,113 @@ export async function seedReference(data: ReferenceSeed): Promise<string> {
 
   await ref.set(doc);
   return ref.id;
+}
+
+/**
+ * A `study-sessions/{id}` document, in the shape `bookSession` /
+ * `respondToSession` leave behind. Fields the caller does not override get a
+ * complete, realistic denormalized payload — the GDPR suites assert on
+ * `tutorName` / `parentName` / `students[]` / `address`, so a sparse fixture
+ * would pass a test that a real document fails.
+ */
+export interface StudySessionSeed {
+  sessionId?: string;
+  familyId: string;
+  tutorUserId: string;
+  createdByUserId?: string;
+  parentUserId?: string;
+  status?: 'pending' | 'confirmed' | 'cancelled' | 'declined' | 'completed';
+  type?: 'one_time' | 'recurring';
+  date?: string | null;
+  [key: string]: unknown;
+}
+
+export async function seedStudySession(data: StudySessionSeed): Promise<string> {
+  const db = getDb();
+  const ref = data.sessionId
+    ? db.collection('study-sessions').doc(data.sessionId)
+    : db.collection('study-sessions').doc();
+  const { sessionId: _ignored, ...overrides } = data;
+  const doc: Record<string, unknown> = {
+    sessionId: ref.id,
+    subject: 'math',
+    level: '4e',
+    rate: 25,
+    studentIds: ['kid1'],
+    students: [{ firstName: 'Lucas', age: 6 }],
+    familyName: 'Dupont',
+    parentName: 'Marie Dupont',
+    tutorName: 'Noa Katz',
+    type: 'one_time',
+    startTime: '17:00',
+    endTime: '18:00',
+    sessionLengthMinutes: 60,
+    paddingMinutes: 15,
+    location: 'family_home',
+    address: '15 Rue de Passy, 75016 Paris',
+    latLng: { lat: 48.8566, lng: 2.2769 },
+    status: 'confirmed',
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    ...overrides,
+  };
+  for (const [k, v] of Object.entries(doc)) {
+    if (v === undefined) delete doc[k];
+  }
+  await ref.set(doc);
+  return ref.id;
+}
+
+/** One occurrence under `study-sessions/{sessionId}/instances/{date}`. */
+export async function seedStudyInstance(
+  sessionId: string,
+  date: string,
+  overrides: Record<string, unknown> = {},
+): Promise<void> {
+  const db = getDb();
+  const doc: Record<string, unknown> = {
+    instanceId: date,
+    sessionId,
+    date,
+    startTime: '17:00',
+    endTime: '18:00',
+    sessionLengthMinutes: 60,
+    paddingMinutes: 15,
+    status: 'scheduled',
+    subject: 'math',
+    level: '4e',
+    rate: 25,
+    location: 'family_home',
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    ...overrides,
+  };
+  for (const [k, v] of Object.entries(doc)) {
+    if (v === undefined) delete doc[k];
+  }
+  await db.collection('study-sessions').doc(sessionId).collection('instances').doc(date).set(doc);
+}
+
+/**
+ * An override doc in exactly the shape a confirm leaves behind: slots 32..40
+ * AND-ed to false, with the matching `sessionBlocks` ledger entry. Mirrors the
+ * retention suite's fixture so both GDPR and sweep tests pin the same shape.
+ */
+export async function seedOverrideClaim(
+  providerUid: string,
+  date: string,
+  entry: Record<string, unknown>,
+  provenance: { appSource: string; reason: string },
+): Promise<void> {
+  const slots = new Array(96).fill(true);
+  for (let i = 32; i < 40; i++) slots[i] = false;
+  await getDb()
+    .collection('schedules').doc(providerUid)
+    .collection('overrides').doc(date)
+    .set({
+      date, type: 'custom', slots,
+      sessionBlocks: [{ startIdx: 32, endIdx: 40, ...entry }],
+      ...provenance,
+      createdAt: new Date(), updatedAt: new Date(),
+    });
 }

@@ -2,6 +2,7 @@ import { onDocumentCreated } from 'firebase-functions/v2/firestore';
 import { db } from '../config/firebase.js';
 import { escapeHtml, sendNotificationEmail } from '../config/email.js';
 import { derivePushWorld, sendPushNotification } from '../config/push.js';
+import { resolveNotifPref, type AppNotifCategory } from '@ejm/shared-core';
 
 /**
  * Guardian notification mirroring (governance design: "child notifications CC
@@ -28,7 +29,7 @@ const SKIP_TYPES = new Set(['guardian_mirror', 'supervision_request']);
  * because guessing a category could email a parent who opted that category
  * out.
  */
-const EMAIL_PREF_CATEGORY: Record<string, 'newRequest' | 'confirmed' | 'cancelled'> = {
+const EMAIL_PREF_CATEGORY: Record<string, AppNotifCategory> = {
   new_request: 'newRequest',
   contact_sharing_request: 'newRequest',
   study_contact_request: 'newRequest',
@@ -152,17 +153,22 @@ export const mirrorNotificationToGuardians = onDocumentCreated(
     const originalHadEmailIntent =
       Array.isArray(original.channels) && original.channels.includes('email');
     const emailCategory = EMAIL_PREF_CATEGORY[originalType];
+    // Which app's preference block gates this mirror (issue #369). The same
+    // derivation that decides the mail's BRANDING decides which block answers
+    // for it: a Sync/Do-branded copy of a do event is muted by the parent's
+    // `notifPrefs.do`, not by their sit block. Anything else would let a
+    // parent mute sync/do and keep receiving its mail under a sit gate.
+    const mirrorApp = deriveMirrorEmailApp(originalType);
     const now = new Date();
 
     for (const parentUid of parentIds) {
       if (parentUid === recipientUserId) continue; // defensive: never self-mirror
 
       const parent = (await db.collection('users').doc(parentUid).get()).data();
-      const prefs = emailCategory ? parent?.notifPrefs?.[emailCategory] : undefined;
       const sendEmail =
         originalHadEmailIntent &&
         emailCategory !== undefined &&
-        prefs?.email !== false &&
+        resolveNotifPref(parent?.notifPrefs, mirrorApp, emailCategory).email &&
         typeof parent?.email === 'string';
 
       await db

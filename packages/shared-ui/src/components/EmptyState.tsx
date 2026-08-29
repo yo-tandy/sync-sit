@@ -26,7 +26,7 @@ type EmptyStateProps = {
 // reads like every other primary button; Button renders only <button> and
 // exports no class helper, so the classes are restated here.
 const actionClasses =
-  'inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-lg bg-brand-600 px-4 text-sm font-semibold text-white transition-all hover:bg-brand-600/90';
+  'inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-md bg-brand-600 px-4 text-sm font-semibold text-white transition-all hover:bg-brand-600/90';
 
 export function EmptyState({ icon, message, actionLabel, actionTo, onAction }: EmptyStateProps) {
   return (

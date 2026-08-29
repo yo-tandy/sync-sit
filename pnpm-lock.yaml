@@ -475,6 +475,9 @@ importers:
       '@ejm/shared-core':
         specifier: workspace:*
         version: link:../shared-core
+      '@fontsource-variable/nunito':
+        specifier: ^5.3.0
+        version: 5.3.0
     devDependencies:
       '@eslint/js':
         specifier: ^9.39.4
@@ -1003,6 +1006,9 @@ packages:
 
   '@firebase/webchannel-wrapper@1.0.5':
     resolution: {integrity: sha512-+uGNN7rkfn41HLO0vekTFhTxk61eKa8mTpRGLO0QSqlQdKvIoGAvLp3ppdVIWbTGYJWM6Kp0iN+PjMIOcnVqTw==}
+
+  '@fontsource-variable/nunito@5.3.0':
+    resolution: {integrity: sha512-tw0ch7evIDSwoeUy+0XzocYHfbRWLeCRPJy22KgbrLjDLAbNw/fErBiil10Ssrs3Sjr55zaZrr36a975j8cBkQ==}
 
   '@google-cloud/cloud-sql-connector@1.11.2':
     resolution: {integrity: sha512-ImHGgHunHoAHnQ9Bbsuq9an0rwmMdaPL8nrdQkVNnuIb0GKE+rTyjKNV+po7DJLuk84JPUUbK0cWW9AjPiAblA==}
@@ -2664,6 +2670,7 @@ packages:
   eslint@9.39.4:
     resolution: {integrity: sha512-XoMjdBOwe/esVgEvLmNsD3IRHkm7fbKIUGvrleloJXUZgDHig2IPWNniv+GwjyJXzuNqVjlr5+4yVUZjycJwfQ==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
+    deprecated: This version is no longer supported. Please see https://eslint.org/version-support for other options.
     hasBin: true
     peerDependencies:
       jiti: '*'
@@ -5536,6 +5543,8 @@ snapshots:
       tslib: 2.8.1
 
   '@firebase/webchannel-wrapper@1.0.5': {}
+
+  '@fontsource-variable/nunito@5.3.0': {}
 
   '@google-cloud/cloud-sql-connector@1.11.2':
     dependencies:

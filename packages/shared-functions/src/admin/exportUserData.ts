@@ -6,6 +6,7 @@ import { verifyAdmin } from './verifyAdmin.js';
 import { writeAuditLog } from './writeAuditLog.js';
 import { REFERENCE_PROVIDER_KEYS } from './referenceKeys.js';
 import { collectDoUserData } from './doGdpr.js';
+import { collectStudySessions, collectScheduleData } from './studyGdpr.js';
 
 interface ExportUserDataInput {
   targetUserId: string;
@@ -14,8 +15,10 @@ interface ExportUserDataInput {
 /**
  * Export all data related to a user: profile, family, appointments,
  * notifications, audit logs targeting them, guardian links/invites,
- * references/endorsements (both sides: provider and submitter), and their
- * sync-do tasks/offers with the photo paths those tasks reference.
+ * references/endorsements (both sides: provider and submitter), their sync-do
+ * tasks/offers with the photo paths those tasks reference, their study sessions
+ * (both sides, with each series' `instances` inlined) and their availability
+ * schedule with its overrides.
  */
 export const exportUserData = onCall(
   { region: 'europe-west1', cors: getCorsOrigin() },
@@ -163,6 +166,23 @@ export const exportUserData = onCall(
     // query covers which side and why the helper's data surfaces here.
     const doData = await collectDoUserData(targetUserId, familyId);
 
+    // sync-study (issue #408 item 1): the SAME blind spot as the erasure half.
+    // `study-sessions` was absent from the export entirely, so a tutor's or a
+    // family's whole engagement history — with the denormalized `tutorName`,
+    // `parentName`, `students[]` roster, `address` and both parties' session
+    // notes — never reached a subject-access request. `instances` is inlined
+    // per session: Firestore does not return a subcollection with its parent,
+    // so a flat export would drop every occurrence of a recurring series.
+    //
+    // `schedules/{uid}` + `overrides` is the other half of the asymmetry: the
+    // hard delete has erased that document since the first version of
+    // `deleteUser` — i.e. it is already treated as the subject's personal data
+    // — while the export has never returned it.
+    const [studySessions, schedule] = await Promise.all([
+      collectStudySessions(targetUserId, familyId),
+      collectScheduleData(targetUserId),
+    ]);
+
     await writeAuditLog({
       adminUserId: request.auth.uid,
       action: 'export_user_data',
@@ -181,6 +201,8 @@ export const exportUserData = onCall(
       doTasks: doData.tasks,
       taskOffers: doData.offers,
       doPhotoPaths: doData.photoPaths,
+      studySessions,
+      schedule,
     };
   }
 );

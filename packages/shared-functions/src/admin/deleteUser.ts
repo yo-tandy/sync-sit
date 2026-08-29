@@ -8,6 +8,9 @@ import { writeAuditLog } from './writeAuditLog.js';
 import { escapeHtml, sendAdminNotification } from '../config/email.js';
 import { REFERENCE_PROVIDER_KEYS } from './referenceKeys.js';
 import { eraseDoUserData } from './doGdpr.js';
+import { eraseStudyUserData } from './studyGdpr.js';
+import { createClaimReleaser, SIT_PROVENANCE } from '../schedule/claimRelease.js';
+import type { SessionBlockEntry } from '../schedule/sessionOverride.js';
 
 interface DeleteUserInput {
   targetUserId: string;
@@ -15,7 +18,9 @@ interface DeleteUserInput {
 
 /**
  * GDPR-compliant hard delete: removes all user personal data from Firestore,
- * anonymizes appointment references, deletes their references/endorsements
+ * anonymizes appointment references, anonymizes their study sessions and
+ * releases the schedule claims that cancel leaves behind, deletes their
+ * schedule + overrides, deletes their references/endorsements
  * (both as provider and as submitter), erases their sync-do tasks/offers and
  * both `do-photos`/`do-uploads` object prefixes (scrubbing the dangling
  * `{uid, photoId}` entries off a co-parent's surviving tasks and cancelling
@@ -68,6 +73,14 @@ export async function eraseUserAccount(targetUserId: string, actorUid: string) {
   const batch1 = db.batch();
   let batch1Ops = 0;
   let cancelledCount = 0;
+  /**
+   * Appointments cancelled on the FAMILY side, whose babysitter SURVIVES —
+   * their schedule claim has to come back to them (step 1-bis). The
+   * babysitter-side cancels below need no entry: those claims live on the
+   * erased user's own `schedules/{uid}`, which step 3 deletes wholesale.
+   */
+  const sitClaimsToRelease: { appointmentId: string; babysitterUserId: string; date: string }[] =
+    [];
 
   for (const appt of babysitterAppts.docs) {
     const data = appt.data();
@@ -112,6 +125,18 @@ export async function eraseUserAccount(targetUserId: string, actorUid: string) {
         updates.status = 'cancelled';
         updates.statusReason = 'account_deleted';
         cancelledCount++;
+        if (
+          data.status === 'confirmed' &&
+          typeof data.date === 'string' &&
+          typeof data.babysitterUserId === 'string' &&
+          data.babysitterUserId !== targetUserId
+        ) {
+          sitClaimsToRelease.push({
+            appointmentId: appt.id,
+            babysitterUserId: data.babysitterUserId,
+            date: data.date,
+          });
+        }
       }
       if (isLastParent && data.preAppointmentNote !== undefined) {
         // The FAMILY authored the pre-appointment note (issue #238; it is
@@ -131,6 +156,48 @@ export async function eraseUserAccount(targetUserId: string, actorUid: string) {
     await batch1.commit();
   }
 
+  // 1-bis. Give the SURVIVING babysitter back the slots the appointments
+  // just cancelled above were holding (issue #408). `respondToRequest`
+  // AND-blocks `schedules/{sitter}/overrides/{date}` and appends a
+  // `sessionBlocks` ledger entry naming the appointment; `cancelAppointment`
+  // gives them back, but this path never did — so erasing a family's last
+  // parent left their babysitters with slots blocked forever by appointments
+  // marked cancelled. Same defect class as item 4 (`admin/deleteAppointment`),
+  // and the study half below would mint it fresh in the sibling app if it
+  // were not fixed here too.
+  //
+  // `createClaimReleaser` is the ONE shared wrapper over `buildRestoredOverride`
+  // — the lossless inverse every cancel path and both retention sweeps use —
+  // so a cross-app STUDY claim on the same date is conserved and only this
+  // appointment's slots reopen. Released AFTER the cancel commits, matching
+  // `cancelAppointment`'s own order: a failed release leaves a blocked slot on
+  // an already-cancelled appointment (benign, and exactly today's behaviour),
+  // whereas releasing first and failing to cancel would reopen a slot on a
+  // still-confirmed appointment — a double-booking.
+  const now = new Date();
+  const releaseClaim = createClaimReleaser(db, now);
+  let sitClaimsReleased = 0;
+  let claimReleaseErrors = 0;
+  for (const claim of sitClaimsToRelease) {
+    // Per-appointment isolation: one poisoned override must not abort an
+    // erasure whose earlier steps have already committed.
+    try {
+      const released = await releaseClaim(
+        claim.babysitterUserId,
+        claim.date,
+        (b: SessionBlockEntry) => b.appointmentId === claim.appointmentId,
+        SIT_PROVENANCE,
+      );
+      if (released) sitClaimsReleased++;
+    } catch (err) {
+      claimReleaseErrors++;
+      console.error(
+        `deleteUser: failed to release the sit claim for ${claim.appointmentId}:`,
+        err,
+      );
+    }
+  }
+
   // 2. Delete all notifications for this user
   const notifications = await db
     .collection('notifications')
@@ -145,23 +212,35 @@ export async function eraseUserAccount(targetUserId: string, actorUid: string) {
     await batch2.commit();
   }
 
-  // 3. If babysitter: delete schedule and overrides
-  if (role === 'babysitter') {
-    const scheduleRef = db.collection('schedules').doc(targetUserId);
-
-    // Delete overrides subcollection
-    const overrides = await scheduleRef.collection('overrides').get();
-    if (overrides.docs.length > 0) {
-      const batch3 = db.batch();
-      for (const doc of overrides.docs) {
-        batch3.delete(doc.ref);
-      }
-      await batch3.commit();
+  // 3. Delete the schedule document and its overrides subcollection.
+  //
+  // This used to be gated on `role === 'babysitter'` — issue #408 item 1, and
+  // the most serious of the four. `getUserRole` returns the FIRST profile it
+  // finds (babysitter → tutor → parent), so a tutor-only account never
+  // entered this branch and kept `schedules/{uid}` plus every override doc
+  // through a GDPR hard delete: their weekly availability grid, every date
+  // they marked unavailable, and the `sessionBlocks` ledger naming the
+  // sessions that claimed their slots. A dual-role student (tutor AND
+  // babysitter) was covered only by the accident of the lookup order.
+  //
+  // The gate is gone rather than widened to `|| role === 'tutor'`, because
+  // the role was never the right predicate: `schedules/{uid}` is ONE
+  // per-user document shared by both apps (`ensureScheduleDoc`'s own
+  // docblock says so), keyed by the subject's own uid, holding nothing but
+  // their availability. There is no app split to gate on. A user who holds
+  // no provider profile simply has no document and the delete is a no-op —
+  // Firestore's delete on a missing document succeeds.
+  const scheduleRef = db.collection('schedules').doc(targetUserId);
+  const overrides = await scheduleRef.collection('overrides').get();
+  if (overrides.docs.length > 0) {
+    const batch3 = db.batch();
+    for (const doc of overrides.docs) {
+      batch3.delete(doc.ref);
     }
-
-    // Delete schedule doc
-    await scheduleRef.delete();
+    await batch3.commit();
   }
+  await scheduleRef.delete();
+  const scheduleOverridesDeleted = overrides.docs.length;
 
   // 4. If parent and last parent: delete family doc + kids subcollection
   if (familyId && role === 'parent') {
@@ -193,7 +272,6 @@ export async function eraseUserAccount(targetUserId: string, actorUid: string) {
   // 4-bis. Guardian cleanup (governance PR 2).
   // As a CHILD: their link and the invites addressed to them are personal
   // data — remove both.
-  //
   // The link is READ BACK before it is deleted, and the supervising family
   // returned to the caller. Callers need it AFTER the erasure (the self-delete
   // path tells the guardian their supervised member is gone, #368) and by then
@@ -238,7 +316,8 @@ export async function eraseUserAccount(targetUserId: string, actorUid: string) {
         .collection('guardianLinks')
         .where('familyId', '==', familyId)
         .get();
-      const now = new Date();
+      // `now` is the single deletion instant declared at step 1-bis: every
+      // timestamp this erasure writes names the same moment.
       for (const linkDoc of familyLinks.docs) {
         if (linkDoc.data().status !== 'active') continue;
         const childUid = linkDoc.data().childUid;
@@ -379,6 +458,23 @@ export async function eraseUserAccount(targetUserId: string, actorUid: string) {
   // `doGdpr.eraseDoUserData` for the four halves and their reasoning.
   const doErasure = await eraseDoUserData(targetUserId, familyId, isLastParent);
 
+  // 4-quinquies. sync-study (issue #408 item 1). `deleteUser` never touched
+  // `study-sessions` at all — not to delete, not to anonymize — so an erased
+  // tutor's sessions kept their `tutorName` and an erased family's kept
+  // `familyName`, `parentName`, the `students[]` roster (each child's first
+  // name and age) and the family's home `address`/`latLng`. sit's appointments
+  // have had the anonymize-and-cancel treatment since the first version of
+  // this callable; this is the sibling app's half of the SAME engagement
+  // record, with the fields study denormalizes that sit does not.
+  //
+  // Runs BEFORE the user doc is deleted so the familyId/isLastParent
+  // decisions above still hold, and takes the same last-parent rule the
+  // family, endorsement and sync-do steps take. See
+  // `studyGdpr.eraseStudyUserData` for the per-field reasoning (and for why
+  // the field-by-field pass lands on ANONYMIZE here where the identical pass
+  // landed on DELETE for `references`).
+  const studyErasure = await eraseStudyUserData(targetUserId, familyId, isLastParent, now);
+
   // 5. Delete the user document from Firestore
   await userRef.delete();
 
@@ -392,6 +488,7 @@ export async function eraseUserAccount(targetUserId: string, actorUid: string) {
     }
   }
 
+
   return {
     role,
     email,
@@ -404,6 +501,14 @@ export async function eraseUserAccount(targetUserId: string, actorUid: string) {
     doErasure,
     /** The family that supervised this member, captured before the link was deleted. */
     supervisingFamilyId,
+    // issue #408 item 1 -- the study/schedule half of the erasure. Returned
+    // rather than logged here so the CALLER owns the audit trail, which is the
+    // whole point of the extraction.
+    scheduleOverridesDeleted,
+    sitClaimsReleased,
+    studyErasure,
+    claimReleaseErrors,
+    now,
   };
 }
 
@@ -423,8 +528,20 @@ export const deleteUser = onCall(
     }
 
     const erased = await eraseUserAccount(targetUserId, request.auth.uid);
-    const { role, email, familyId, cancelledCount, isLastParent, refDocsDeleted, doErasure } =
-      erased;
+    const {
+      role,
+      email,
+      familyId,
+      cancelledCount,
+      isLastParent,
+      refDocsDeleted,
+      doErasure,
+      scheduleOverridesDeleted,
+      sitClaimsReleased,
+      studyErasure,
+      claimReleaseErrors,
+      now,
+    } = erased;
 
     // 7. Write audit log (only stores uid, not personal data)
     await writeAuditLog({
@@ -445,8 +562,35 @@ export const deleteUser = onCall(
         scrubbedDoTaskPhotos: doErasure.tasksScrubbed,
         clearedDoAssignments: doErasure.assignmentsCleared,
         releasedDoOfferSlots: doErasure.offerSlotsReleased,
+        // issue #408 item 1 — counts only, no personal data (the
+        // `deletedReferences` convention).
+        deletedScheduleOverrides: scheduleOverridesDeleted,
+        releasedAppointmentClaims: sitClaimsReleased,
+        anonymizedStudySessions: studyErasure.sessionsAnonymized,
+        cancelledStudySessions: studyErasure.sessionsCancelled,
+        cancelledStudyInstances: studyErasure.instancesCancelled,
+        scrubbedStudyInstances: studyErasure.instancesScrubbed,
+        releasedStudyClaims: studyErasure.claimsReleased,
+        // A non-zero value means the erasure was PARTIAL. It is recorded here,
+        // shown in the admin email, and raised as an adminAlert — the user
+        // document is gone by now, so `deleteUser` cannot simply be re-run and
+        // a silent skip would leave un-anonymized personal data with nobody
+        // aware of it.
+        erasureFailures: studyErasure.cascadeErrors + claimReleaseErrors,
       },
     });
+
+    if (studyErasure.cascadeErrors > 0 || claimReleaseErrors > 0) {
+      await db.collection('adminAlerts').add({
+        type: 'partial_user_erasure',
+        createdAt: now,
+        data: {
+          targetUserId,
+          studySessionCascadeErrors: studyErasure.cascadeErrors,
+          claimReleaseErrors,
+        },
+      });
+    }
 
     await sendAdminNotification(
       `User deleted: ${email}`,
@@ -455,7 +599,15 @@ export const deleteUser = onCall(
        <p><strong>Email:</strong> ${escapeHtml(email)}</p>
        <p><strong>Role:</strong> ${role}</p>
        <p><strong>Cancelled appointments:</strong> ${cancelledCount}</p>
-       <p><strong>Family deleted:</strong> ${isLastParent && !!familyId ? 'Yes' : 'No'}</p>`
+       <p><strong>Cancelled study sessions:</strong> ${studyErasure.sessionsCancelled}</p>
+       <p><strong>Family deleted:</strong> ${isLastParent && !!familyId ? 'Yes' : 'No'}</p>
+       ${
+         studyErasure.cascadeErrors + claimReleaseErrors > 0
+           ? `<p><strong>⚠ PARTIAL ERASURE:</strong> ${
+               studyErasure.cascadeErrors + claimReleaseErrors
+             } cascade(s) failed — personal data may remain. See adminAlerts.</p>`
+           : ''
+       }`
     );
 
     return { success: true, cancelledAppointments: cancelledCount };

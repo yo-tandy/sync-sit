@@ -1,10 +1,14 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { httpsCallable } from 'firebase/functions';
-import { Spinner } from '@ejm/shared-ui';
-import sitBrandMark from '@ejm/shared-ui/brand-marks/sync-sit.png';
+import { BRAND_MARKS, Spinner } from '@ejm/shared-ui';
 import { functions } from '@/config/firebase';
 import { SIT_APP_URL } from '@/utils/appSwitch';
+
+// Bar-weight mark, not the 256px original (#364): this slot is 20px, and the
+// full mark costs ~100 KB to draw it. Resolved through BRAND_MARKS so
+// replacing the art stays one file plus the assets (#386).
+const sitMark = BRAND_MARKS.sit;
 
 /**
  * Burger-menu entry that jumps to sync-sit without re-login: mints a
@@ -12,6 +16,13 @@ import { SIT_APP_URL } from '@/utils/appSwitch';
  * (#code=… — fragments never reach servers or logs). Non-optimistic: the
  * entry disables with a spinner until the mint resolves; nothing navigates
  * on failure. Shared by the tutor AppBar and the FamilyAppBar.
+ *
+ * Hidden below `md` BY THE TWO APP BARS since #365, because there the
+ * app-switch bar is the entry point and a second one would let a code be
+ * minted around the bar's whole-bar lock. At `md+` the bar is `md:hidden`
+ * and this is the only switcher there is, until Q9 is answered (#417).
+ * AdminInfoPage is unwrapped on purpose: it is a public route with no shell
+ * and therefore no bar at any width.
  */
 export function AppSwitchMenuItem() {
   const { t, i18n } = useTranslation();
@@ -50,7 +61,14 @@ export function AppSwitchMenuItem() {
           {busy ? (
             <Spinner className="h-5 w-5" />
           ) : (
-            <img src={sitBrandMark} alt="" className="h-5 w-5 rounded object-contain" />
+            <img
+              src={sitMark.sm}
+              srcSet={`${sitMark.sm} 1x, ${sitMark.md} 2x`}
+              alt=""
+              width={20}
+              height={20}
+              className="h-5 w-5 rounded object-contain"
+            />
           )}
         </span>
         <span>{t('appSwitch.toSit')}</span>

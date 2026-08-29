@@ -2,6 +2,7 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { db, adminAuth } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { familyEnrollmentSchema } from '@ejm/sit-core';
+import { DEFAULT_NOTIF_PREFS } from '@ejm/shared-core';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
 import { addProfileToUser, assertCanAddProfile } from './addProfileToUser.js';
 import { assertCodeIdentityClass } from '../auth/verificationCodeClass.js';
@@ -198,12 +199,11 @@ export const enrollFamily = onCall(
             familyId,
           },
         },
-        notifPrefs: {
-          newRequest: { push: true, email: true },
-          confirmed: { push: true, email: true },
-          cancelled: { push: true, email: true },
-          reminders: { push: true, email: false },
-        },
+        // App-scoped since issue #369; the shared constant is the single
+
+        // source for the product defaults.
+
+        notifPrefs: DEFAULT_NOTIF_PREFS,
         fcmTokens: [],
         createdAt: now,
         updatedAt: now,

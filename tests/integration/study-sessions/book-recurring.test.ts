@@ -72,7 +72,7 @@ describe('bookSession — recurring', () => {
     const db = getDb();
     await db.collection('users').doc(seed.tutor2.uid).update({
       'profiles.tutor.approvedFamilies': [seed.family1Id],
-      'notifPrefs.newRequest': { push: true, email: true },
+      'notifPrefs.study.newRequest': { push: true, email: true },
     });
     for (const coll of ['study-sessions', 'notifications']) {
       const snap = await db.collection(coll).get();

@@ -24,4 +24,11 @@
   --color-brand-600: #0d8204; /* primary buttons/links (AA 4.99:1 on white) */
   --color-brand-700: #085c1c;
   --color-brand-800: #043f12; /* icon forest green */
+
+  /* Recess ground + shadow tint (#366), derived from do's own green ramp:
+     the shadow tint is brand-100 exactly (#d8f5cd), the ground one step
+     lighter than brand-50 (#eefbe9 -> #f5fbf2), matching study.css. */
+  --color-ground: #f5fbf2;
+  --color-ground-raised: #ffffff;
+  --shadow-card-tint: #d8f5cd;
 }

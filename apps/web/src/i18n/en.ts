@@ -302,6 +302,8 @@ export default {
   },
 
   appSwitch: {
+    account: 'My account',
+    barLabel: 'Switch app',
     toStudy: 'Open sync-study',
     error: 'Could not switch apps. Please try again.',
   },
@@ -766,6 +768,8 @@ export default {
     desc: 'Choose how you want to be notified.',
     push: 'Push',
     emailNotif: 'Email',
+    blockShared: 'All Sync apps',
+    blockApp: 'Sync/Sit',
     newRequest: 'New request',
     newRequestDesc: 'When a family sends you a babysitting request',
     confirmation: 'Confirmation',

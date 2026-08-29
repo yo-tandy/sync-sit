@@ -3,6 +3,7 @@ import type { Firestore } from 'firebase-admin/firestore';
 import { db } from '../config/firebase.js';
 import { escapeHtml, sendNotificationEmail } from '../config/email.js';
 import { sendPushNotification } from '../config/push.js';
+import { resolveNotifPref } from '@ejm/shared-core';
 import { parisDateString, parisWallTimeToUtc } from './parisTime.js';
 import { SIT_APP_URL } from '@ejm/shared-functions';
 
@@ -63,9 +64,9 @@ export async function runSendReminders(
     if (apt.babysitterUserId) {
       // Check babysitter's notification preferences
       const babysitterDoc = await firestoreDb.collection('users').doc(apt.babysitterUserId).get();
-      const babysitterPrefs = babysitterDoc.data()?.notifPrefs?.reminders;
+      const babysitterPrefs = resolveNotifPref(babysitterDoc.data()?.notifPrefs, 'sit', 'reminders');
 
-      if (babysitterPrefs?.push || babysitterPrefs?.email) {
+      if (babysitterPrefs.push || babysitterPrefs.email) {
         await firestoreDb.collection('notifications').add({
           recipientUserId: apt.babysitterUserId,
           type: 'reminder',
@@ -73,8 +74,8 @@ export async function runSendReminders(
           body: `Reminder: You have a babysitting appointment with ${familyName} on ${appointmentDate} at ${apt.startTime}.`,
           read: false,
           channels: {
-            push: babysitterPrefs?.push ?? true,
-            email: babysitterPrefs?.email ?? false,
+            push: babysitterPrefs.push,
+            email: babysitterPrefs.email,
           },
           pushSent: false,
           emailSent: false,
@@ -82,7 +83,7 @@ export async function runSendReminders(
           createdAt: now,
         });
 
-        if (babysitterPrefs?.email) {
+        if (babysitterPrefs.email) {
           const babysitterEmail = babysitterDoc.data()?.email;
           if (babysitterEmail) {
             await sendNotificationEmail(
@@ -94,7 +95,7 @@ export async function runSendReminders(
           }
         }
 
-        if (babysitterPrefs?.push) {
+        if (babysitterPrefs.push) {
           await sendPushNotification(
             apt.babysitterUserId,
             'Babysitting appointment tomorrow',
@@ -112,9 +113,9 @@ export async function runSendReminders(
 
       for (const parentId of parentIds) {
         const parentDoc = await firestoreDb.collection('users').doc(parentId).get();
-        const parentPrefs = parentDoc.data()?.notifPrefs?.reminders;
+        const parentPrefs = resolveNotifPref(parentDoc.data()?.notifPrefs, 'sit', 'reminders');
 
-        if (parentPrefs?.push || parentPrefs?.email) {
+        if (parentPrefs.push || parentPrefs.email) {
           await firestoreDb.collection('notifications').add({
             recipientUserId: parentId,
             type: 'reminder',
@@ -122,8 +123,8 @@ export async function runSendReminders(
             body: `Reminder: Your babysitting appointment is on ${appointmentDate} at ${apt.startTime}.`,
             read: false,
             channels: {
-              push: parentPrefs?.push ?? true,
-              email: parentPrefs?.email ?? false,
+              push: parentPrefs.push,
+              email: parentPrefs.email,
             },
             pushSent: false,
             emailSent: false,
@@ -131,7 +132,7 @@ export async function runSendReminders(
             createdAt: now,
           });
 
-          if (parentPrefs?.email) {
+          if (parentPrefs.email) {
             const parentEmail = parentDoc.data()?.email;
             if (parentEmail) {
               await sendNotificationEmail(
@@ -143,7 +144,7 @@ export async function runSendReminders(
             }
           }
 
-          if (parentPrefs?.push) {
+          if (parentPrefs.push) {
             await sendPushNotification(
               parentId,
               'Babysitting appointment tomorrow',

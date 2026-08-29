@@ -177,7 +177,7 @@ export function MyOffersPage() {
                   {offer.status === 'pending' && (
                     <Link
                       to={`/doer/tasks/${offer.taskId}/offer`}
-                      className="inline-flex h-9 flex-1 items-center justify-center rounded-lg border-[1.5px] border-gray-300 px-3 text-sm font-semibold text-gray-700 transition-colors hover:border-brand-300"
+                      className="inline-flex h-9 flex-1 items-center justify-center rounded-md border-[1.5px] border-gray-300 px-3 text-sm font-semibold text-gray-700 transition-colors hover:border-brand-300"
                     >
                       {t('doer.myOffers.updateCta')}
                     </Link>

@@ -98,8 +98,16 @@ export function FamilyAppBar() {
 
           <div className="border-t border-gray-100" />
 
-          <AppSwitchMenuItem target="sit" />
-          <AppSwitchMenuItem target="study" />
+          {/* Below `md` the app-switch BAR (#365) is the entry point, so these
+              rows hide there — two entry points would let a second handoff
+              code be minted around the bar's whole-bar lock. `hidden` is
+              display:none, so they leave the tab order and the a11y tree too.
+              At `md+` the bar is `md:hidden` and these rows are the ONLY
+              switcher, until Q9 is answered (#417). */}
+          <div className="hidden md:block">
+            <AppSwitchMenuItem target="sit" />
+            <AppSwitchMenuItem target="study" />
+          </div>
 
           <div className="px-4 py-3">
             <LanguageSelector />

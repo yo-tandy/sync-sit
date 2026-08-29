@@ -153,7 +153,7 @@ describe('cancellation policy', () => {
     await db.collection('users').doc(seed.tutor2.uid).update({
       'profiles.tutor.approvedFamilies': [seed.family1Id],
       'profiles.tutor.cancellationNoticeHours': 48,
-      'notifPrefs.newRequest': { push: true, email: true },
+      'notifPrefs.study.newRequest': { push: true, email: true },
     });
     // Clear instances first (subcollections survive parent deletion).
     const inst = await db.collectionGroup('instances').get();

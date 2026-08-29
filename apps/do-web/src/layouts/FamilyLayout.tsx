@@ -3,6 +3,7 @@ import { Outlet } from 'react-router';
 import { PageContainer, Spinner } from '@ejm/shared-ui';
 import { AuthGuard } from './AuthGuard';
 import { FamilyAppBar } from '@/components/ui/FamilyAppBar';
+import { AppSwitchBarHost } from '@/components/ui/AppSwitchBarHost';
 
 /**
  * Family portal shell (plan §13 PR7) — study-web's FamilyLayout shape:
@@ -12,7 +13,9 @@ import { FamilyAppBar } from '@/components/ui/FamilyAppBar';
 export function FamilyLayout() {
   return (
     <AuthGuard role="parent">
-      <div className="min-h-screen bg-white">
+      {/* pb-16 clears the fixed app-switch bar on phones; the bar is
+          md:hidden so the padding lifts at the same breakpoint. */}
+      <div className="min-h-screen bg-ground pb-16 md:pb-0">
         <FamilyAppBar />
         <PageContainer>
           <Suspense
@@ -25,6 +28,7 @@ export function FamilyLayout() {
             <Outlet />
           </Suspense>
         </PageContainer>
+        <AppSwitchBarHost homeHref="/family" />
       </div>
     </AuthGuard>
   );

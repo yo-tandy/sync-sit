@@ -8,7 +8,7 @@ import { escapeHtml, sendNotificationEmail, STUDY_APP_URL } from '@ejm/shared-fu
 import { sendPushNotification } from '@ejm/shared-functions/config/push.js';
 import { notifyAllParents } from '@ejm/shared-functions/config/notifyParents.js';
 import { parisWallClockPosition, parisWallTimeToUtc } from '@ejm/shared-functions/scheduled/parisTime.js';
-import { timeToSlotIndex, slotIndexToTime, getParentProfile } from '@ejm/shared-core';
+import { timeToSlotIndex, slotIndexToTime, getParentProfile, resolveNotifPref } from '@ejm/shared-core';
 import type { User } from '@ejm/shared-core';
 import type { LocationPref } from '@ejm/study-core';
 import {
@@ -591,9 +591,9 @@ export const modifySession = onCall(
       message: 'message',
     };
     const changed = outcome.modifiedFields.map((f) => FIELD_LABELS[f] ?? f).join(', ');
-    const prefs = tutorUser?.notifPrefs?.newRequest;
+    const prefs = resolveNotifPref(tutorUser?.notifPrefs, 'study', 'newRequest');
     let emailSent = false;
-    if (prefs?.email !== false && tutorUser?.email) {
+    if (prefs.email && tutorUser?.email) {
       emailSent = await sendNotificationEmail(
         tutorUser.email,
         `Session modified by ${familyName}`,
@@ -605,7 +605,7 @@ export const modifySession = onCall(
       );
     }
     let pushSent = false;
-    if (prefs?.push !== false) {
+    if (prefs.push) {
       pushSent = await sendPushNotification(
         tutorUserId,
         'Session modified',

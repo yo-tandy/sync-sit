@@ -3,6 +3,7 @@ import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { z } from 'zod';
 import { strongPasswordSchema } from '@ejm/sit-core';
 import {
+  DEFAULT_NOTIF_PREFS,
   validateEjmEmail,
   checkEnrollmentAge,
   getEjemEmail,
@@ -532,12 +533,11 @@ export const doEnrollDoer = onCall(
       ...(enrollment.whatsapp?.trim() ? { whatsapp: enrollment.whatsapp.trim() } : {}),
       status: 'active',
       language: 'en',
-      notifPrefs: {
-        newRequest: { push: true, email: true },
-        confirmed: { push: true, email: true },
-        cancelled: { push: true, email: true },
-        reminders: { push: true, email: false },
-      },
+      // App-scoped since issue #369; the shared constant is the single
+
+      // source for the product defaults.
+
+      notifPrefs: DEFAULT_NOTIF_PREFS,
       fcmTokens: [],
       profiles: {
         doer: doerProfile,
