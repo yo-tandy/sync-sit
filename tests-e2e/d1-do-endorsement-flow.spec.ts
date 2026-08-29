@@ -105,6 +105,13 @@ test.describe('D-1: sync-do post → offer → accept → complete → endorse',
     await doLogout(page);
     await doLoginAs(page, DOER_EMAIL, PASSWORD, 'doer');
 
+    // The doer lands on `/doer`, which is the DASHBOARD (issue #360) — it was
+    // a redirect to the board when this spec was written, so the click below
+    // used to find the task without going anywhere. A doer who has not
+    // offered on anything yet has no offers, no assignments and no
+    // endorsements, so the dashboard is showing its empty state: the board is
+    // now somewhere to GO, not where login leaves you.
+    await page.goto('/doer/board');
     await page.getByText(TASK_TITLE).first().click();
     await page.getByRole('link', { name: /Make an offer|Faire une offre/i }).click();
 
@@ -116,6 +123,14 @@ test.describe('D-1: sync-do post → offer → accept → complete → endorse',
     await expect(page.getByText(TASK_TITLE)).toBeVisible({ timeout: 15_000 });
 
     // ── 3. The family accepts (§6.4) ──
+    // No goto needed here, unlike step 2, and the difference is the point:
+    // the parent lands on `/family`, which is the family DASHBOARD, and its
+    // first section is the family's live open tasks — this task, badged with
+    // the offer just made, its row linking to /family/tasks/:taskId. So the
+    // click below still reaches the detail page, now via the dashboard rather
+    // than via a redirect to the list. (Checked against the dashboard's open
+    // section, which floors on `expiresAt`: a task posted seconds ago in
+    // step 1 is nowhere near it.)
     await doLogout(page);
     await doLoginAs(page, PARENT_EMAIL, PASSWORD, 'parent');
     await page.getByText(TASK_TITLE).first().click();
