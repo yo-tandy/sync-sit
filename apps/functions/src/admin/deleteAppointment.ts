@@ -6,14 +6,20 @@ import { verifyAdmin } from './verifyAdmin.js';
 import { writeAuditLog } from './writeAuditLog.js';
 import { escapeHtml, sendNotificationEmail } from '../config/email.js';
 import { SIT_APP_URL } from '@ejm/shared-functions';
+import type { SessionBlockEntry } from '@ejm/shared-functions/schedule/sessionOverride.js';
+import { createClaimReleaser, SIT_PROVENANCE } from '../scheduled/retentionClaims.js';
 
 interface DeleteAppointmentInput {
   appointmentId: string;
 }
 
 /**
- * Cancel an appointment (set status to 'cancelled', reason to 'admin_action')
- * and notify both babysitter and family.
+ * Permanently delete an appointment and notify both babysitter and family.
+ *
+ * (The docblock used to say "set status to 'cancelled', reason to
+ * 'admin_action'". It never did that — the document is hard-deleted, and has
+ * been since this callable shipped. Corrected while fixing what that mismatch
+ * hid.)
  */
 export const deleteAppointment = onCall(
   { region: 'europe-west1', cors: getCorsOrigin() },
@@ -38,6 +44,67 @@ export const deleteAppointment = onCall(
     }
 
     const apptData = apptDoc.data()!;
+
+    // ── Release the babysitter's schedule claim (issue #408 item 4) ──
+    //
+    // Confirming an appointment AND-blocks the sitter's
+    // `schedules/{uid}/overrides/{date}` slots and appends a `sessionBlocks`
+    // ledger entry naming this appointment (`respondToRequest`).
+    // `cancelAppointment` gives those slots back through the shared lossless
+    // inverse; THIS path never did. So an admin delete removed the appointment
+    // and left the claim: the sitter's slot stayed unavailable forever, with
+    // nothing left in the system pointing at it — invisible in the UI, and
+    // unrecoverable without a manual Firestore edit, because the only thing
+    // that could have released it is the document that was just deleted.
+    //
+    // `createClaimReleaser` is the SAME wrapper the retention sweeps use
+    // (PR #396) over `buildRestoredOverride`, the one lossless inverse shared
+    // by every cancel path in both apps. Reused, not reimplemented: a second
+    // copy is how the claim paths drift. It conserves a cross-app STUDY claim
+    // on the same date, leaves a legacy pre-ledger override untouched, and
+    // deletes the override doc outright when this claim was the only thing on
+    // it (the day reverts to the bare weekly grid).
+    //
+    // ORDER: release BEFORE the delete, and let a failure propagate. This is
+    // the retention sweeps' discipline and the opposite of `cancelAppointment`'s
+    // — deliberately, because the failure modes are opposite. Here the document
+    // is DELETED, so releasing after and failing would strand a ledger entry
+    // naming a document that no longer exists, with nothing able to collect it
+    // ever again. Releasing first and failing leaves the appointment and the
+    // claim both intact and consistent, and the admin simply retries. A
+    // released claim on a still-present appointment (the window between the two
+    // writes) is the recoverable direction: it reopens a slot the admin is in
+    // the act of freeing anyway.
+    //
+    // The predicate is the LEDGER ENTRY, deliberately not the status. Only a
+    // confirmed appointment with a concrete date ever claims slots — a pending
+    // request claims nothing, and a confirmed RECURRING arrangement stores
+    // `date: null` and blocks no override (`respondToRequest` gates its
+    // schedule write on the same pair) — so a `status === 'confirmed'` guard
+    // here would be unreachable-by-construction on every healthy document, and
+    // on an UNhealthy one it would do harm: an appointment whose claim was
+    // never released at cancel (exactly what item 1 of this issue found
+    // `deleteUser` doing) is `cancelled` and still holds a ledger entry, and
+    // that is precisely the claim an admin delete should collect. Matching the
+    // entry by `appointmentId` is both the precise test and the safe one —
+    // `releaseClaim` no-ops when the override doc, or an entry naming this
+    // appointment, is absent. The `date` check is needed for real: a recurring
+    // doc has no date to key an override on.
+    let claimReleased = false;
+    if (
+      typeof apptData.date === 'string' &&
+      apptData.date &&
+      typeof apptData.babysitterUserId === 'string' &&
+      apptData.babysitterUserId
+    ) {
+      const releaseClaim = createClaimReleaser(db, new Date());
+      claimReleased = await releaseClaim(
+        apptData.babysitterUserId,
+        apptData.date,
+        (b: SessionBlockEntry) => b.appointmentId === appointmentId,
+        SIT_PROVENANCE,
+      );
+    }
 
     // Delete the appointment document permanently
     await apptRef.delete();
@@ -125,6 +192,10 @@ export const deleteAppointment = onCall(
         appointmentId,
         babysitterUserId: apptData.babysitterUserId || null,
         familyId: apptData.familyId || null,
+        // issue #408 item 4: whether this delete actually reopened slots.
+        // False for a pending/recurring doc (nothing was ever claimed) and for
+        // a legacy override with no ledger entry to match.
+        scheduleClaimReleased: claimReleased,
       },
     });
 
