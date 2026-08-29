@@ -128,7 +128,7 @@ Settled in review, 2026-08-28 (the §17 open-questions round):
 | 16 | Post-acceptance contact reveal (Q6) | **Callable, not a stored copy.** `doGetAssignedContact` serves both sides' details on demand; nothing contact-shaped is ever persisted on the offer. The owner's reason is the deciding one: "If the parents update contact information after acceptance, it should be reflected" — a snapshot written at acceptance goes stale the moment either party edits their details. §6.4. |
 | 17 | Area label on the task (Q6-related) | **Required, not best-effort.** "The neighborhood of the requesting family should appear in the original request. It is a necessary information for the doer before they accept." `areaLabel` becomes non-null on `TaskDoc`; `doPostTask` refuses to publish until the family's address resolves a label. §4.1. |
 | 18 | Re-offers after a family decline (Q7) | **Allowed.** "At this point, I don't want to block re-offers" — the `family_declined` branch resurrects like `withdrawn`, full submit path re-run. Revisitable if re-notification becomes a nuisance in practice. §4.2. |
-| 19 | Completed-task retention (Q8) | **6 months, platform-wide.** "There's no reason to retain completed engagement indefinitely — in any of the sync apps." sync-do builds it into `doSweepTasks` from day one; the sit/study half is issue #294, since it touches those apps. §11.4. |
+| 19 | Completed-task retention (Q8) | **6 months, platform-wide.** "There's no reason to retain completed engagement indefinitely — in any of the sync apps." sync-do builds it into `doSweepTasks` from day one; the sit/study half (issue #294) is now built as well and rides the same `cleanupOldData` invocation, on the one shared `COMPLETED_ENGAGEMENT_RETENTION_DAYS` constant. §11.4. |
 | 20 | Cross-app visibility at build time | **Gated on owner approval** (owner, 2026-08-28, build kickoff): sync-do must not be made reachable FROM sync-sit or sync-study — no switcher entries, links, or promos in the sibling apps — before the owner approves that change. `do-web` linking OUT to the siblings is fine. §9.5 records the asymmetric switcher shape this gives PR2; the sit/study-side flip is its own owner-approved PR. |
 
 Two decisions carry known trade-offs that the design mitigates rather than
@@ -1932,12 +1932,40 @@ discovered in an incident.
   period of 6 months." `doSweepTasks` deletes `completed` tasks (and their
   offers) once `completedAt` is older than 180 days, via the
   `(status, completedAt)` index in §7.3 — built into the sweep from day one
-  rather than retrofitted. Note what the platform does TODAY, because
-  sync-do is now ahead of it: `cleanupOldData.ts:181-186` deletes only
-  `status in ['cancelled','rejected']` appointments older than 30 days;
-  completed sit appointments and study sessions are never deleted. The
-  decision is explicitly platform-wide, so the sit/study half is tracked as
-  **issue #294** — it touches the live apps and is not this plan's to build.
+  rather than retrofitted.
+
+  **The platform-wide half is now BUILT too — issue #294, no longer pending.**
+  sync-do was ahead of its siblings for one release: `cleanupOldData` deleted
+  only `status in ['cancelled','rejected']` appointments older than 30 days,
+  and completed sit appointments and study sessions were never deleted. Both
+  halves now ride the SAME daily `cleanupOldData` invocation (a third half
+  alongside `runDoSweepTasks`, not a fourth scheduled job), on the one
+  `COMPLETED_ENGAGEMENT_RETENTION_DAYS = 180` constant in shared-core that
+  `DO_COMPLETED_RETENTION_DAYS` now aliases, so the three sweeps cannot drift:
+
+  - **sit** — a `confirmed` appointment whose booking `date` is more than 180
+    days past, plus the release of the babysitter's `sessionBlocks` schedule
+    claim for that date. Sit has NO `completed` status (the vocabulary is
+    pending | confirmed | rejected | cancelled and a past sitting stays
+    `confirmed`), so there is no `completedAt` to key on and the sweep uses a
+    new `(status, date)` composite, range-bounded on BOTH sides. Live recurring
+    arrangements store `date: null` — an explicit null every writer stores, not
+    an absent field — and a Firestore range filter constrains to its bound's
+    TYPE, so a string range never surfaces them. The lower bound excludes the
+    one string shape (`''`) a bare upper bound would return, and an in-memory
+    shape guard backs both up. Pending docs and the 30-day cancelled/rejected
+    rule are untouched.
+  - **study** — a `study-sessions` doc with `status: 'completed'` and
+    `completedAt` older than 180 days, via a new `(status, completedAt)`
+    composite, cascading to its entire `instances` subcollection (Firestore
+    does not delete subcollections with their parent) and to the tutor's
+    schedule claims. Session notes are fields on those documents and leave
+    with them.
+
+  Still NOT swept, and deliberately left to the owner rather than invented:
+  study `cancelled`/`declined` sessions have no retention rule at all (sit
+  deletes its cancelled/rejected at 30 days; study deletes nothing), which is
+  a separate window-and-cascade policy call and not what decision 19 settled.
 
   Why retention matters more here than for an appointment: a completed
   sync-do task carries the free-text description, the photos, the agreed
@@ -2307,7 +2335,8 @@ analytics — which categories go unfilled, where the supply gaps are.
 - **Q8 — completed-task retention** → decision 19: **6 months,
   platform-wide** — "there's no reason to retain completed engagement
   indefinitely — in any of the sync apps." sync-do builds it into
-  `doSweepTasks` (§11.4); the sit/study half is issue #294. Combined with
+  `doSweepTasks` (§11.4); the sit/study half (issue #294) is now built too,
+  riding the same `cleanupOldData` invocation. Combined with
   Q6's no-stored-copy answer, the §11.3 helper exposure is bounded at 6
   months and no second copy of the family's address ever exists.
 

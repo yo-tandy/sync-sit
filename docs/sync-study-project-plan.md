@@ -201,7 +201,7 @@ This lets each app display "blocked by other app" in its UI if desired.
 **Appointments** (6): respondToRequest, cancelAppointment, modifyAppointment, acknowledgeModification, getParentContacts, resubmitAppointment
 **Verification** (8): submitVerification, reviewVerification, listPendingVerifications, getVerificationStatus, generateCommunityCode, lookupCommunityCode, approveCommunityCode, getVerificationDocument
 **References** (1): notifyOnNewReference (Firestore trigger)
-**Scheduled** (2): sendReminders, cleanupOldData
+**Scheduled** (2): sendReminders, cleanupOldData — the latter also runs the study completed-session retention sweep (issue #294; see the retention note in the security/GDPR section)
 **Admin** (14): getAdminDashboard, listUsers, blockUser, deleteUser, resetUserPassword, listAppointments, deleteAppointment, updateHolidays, listAuditLogs, exportUserData, deactivateUser, addPreapprovedEmail, removePreapprovedEmail, listPreapprovedEmails
 **Config/Helpers** (5): firebase.ts, cors.ts, email.ts, push.ts, notifyParents.ts, writeAuditLog.ts
 
@@ -1489,6 +1489,34 @@ This agent acts as continuous integration for teams without a CI pipeline. It ca
 **Two binding mandates:**
 1. **No new security risks.** Every change must be at least as secure as sync-sit's current posture: auth boundaries preserved, cross-app blast radius controlled, secrets handling unchanged, Firestore rules tightened or unchanged (never loosened), CORS surface unchanged for shared endpoints.
 2. **GDPR expectations preserved.** Personal data handling (user, family, kid, verification documents) must continue to meet the existing posture: data minimization, purpose limitation, retention behavior (cleanupOldData), DSR support (exportUserData), no new PII leak surfaces, no cross-border data movement beyond europe-west1.
+
+> **Study session retention — 180 days (issue #294, decision 19).** Since
+> August 2026 the daily `cleanupOldData` job deletes `study-sessions`
+> documents with `status: 'completed'` whose `completedAt` is older than 180
+> days — the owner's platform-wide call, "there's no reason to retain
+> completed engagement indefinitely, in any of the sync apps". It covers both
+> shapes `markSessionsCompleted` produces (a one_time session, and a recurring
+> series parent), and it cascades: the entire `instances` subcollection goes
+> with the parent (Firestore does not delete subcollections implicitly), the
+> per-session and per-occurrence notes go with their documents, and the
+> tutor's `schedules/{tutorUserId}/overrides/{date}` `sessionBlocks` claims are
+> released. That claim release is currently the ONLY mechanism that prunes a
+> tutor's override ledger for a completed one_time session.
+>
+> **The implementation lives in the sit codebase**, not this one:
+> `apps/functions/src/scheduled/sweepStudySessions.ts`, run from
+> `cleanupOldData`'s existing schedule rather than as a fourth study cron
+> (`apps/study-functions/src/scheduled/` holds only `markSessionsCompleted`,
+> `extendRecurring` and `sendStudySessionReminders`). `cleanupOldData` is the
+> platform's retention job — it already sweeps cross-app collections study
+> writes to, such as `notifications` — and one daily invocation with isolated
+> halves is what the sync-do plan §8 established. Full rationale and the
+> interaction analysis are in `docs/sync-do-project-plan.md` §11.4.
+>
+> **Not covered:** study `cancelled` and `declined` sessions have no retention
+> rule at all. sit deletes its cancelled/rejected appointments at 30 days;
+> study deletes nothing. The window and the cascade are a policy call the
+> owner has not made, and decision 19 is about *completed* engagement.
 
 **Tasks:**
 

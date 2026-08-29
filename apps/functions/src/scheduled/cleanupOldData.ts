@@ -1,10 +1,22 @@
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { resolveConfigValue } from '@ejm/shared-functions/config/adminConfig.js';
+import { COMPLETED_ENGAGEMENT_RETENTION_DAYS } from '@ejm/shared-core';
 import { FieldPath, FieldValue } from 'firebase-admin/firestore';
 import type { Firestore } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
 import { db } from '../config/firebase.js';
 import { runDoSweepTasks } from '../do/sweepTasks.js';
+import { runStudySweepSessions } from './sweepStudySessions.js';
+import { createClaimReleaser, DATE_RE, SIT_PROVENANCE } from './retentionClaims.js';
+
+/**
+ * Lower bound for the sit retention range (block 7a). Below every real
+ * 'YYYY-MM-DD' booking date and above '', so the only non-conforming string
+ * shape a bare upper bound would return is excluded from the QUERY rather
+ * than only from the deletions. See the block comment for the measured
+ * Firestore semantics this rests on.
+ */
+const MIN_BOOKING_DATE = '0001-01-01';
 
 export interface CleanupStats {
   totalDeleted: number;
@@ -15,6 +27,26 @@ export interface CleanupStats {
   accountExistsNoticesDeleted: number;
   verificationSendCountersDeleted: number;
   appointmentsDeleted: number;
+  /** Decision 19 / issue #294: confirmed appointments >180d past their date. */
+  completedAppointmentsDeleted: number;
+  /** Override `sessionBlocks` entries pruned alongside those deletions. */
+  appointmentClaimsReleased: number;
+  /** Retention cascades that failed and were skipped (poison-pill isolation). */
+  appointmentCascadeErrors: number;
+  /**
+   * Live recurring arrangements the retention query returned because they
+   * carry a real past `date`, refused by the terminal-by-shape guard. Should
+   * be 0: the date/type coupling is a client convention, so a non-zero value
+   * means a caller reached `sendContactRequest` directly.
+   */
+  appointmentsSkippedNonTerminal: number;
+  /**
+   * Docs the retention QUERY returned that the date shape guard then refused.
+   * Should always be 0: the range bounds are supposed to match only deletable
+   * documents, so a non-zero value means a non-conforming shape is riding at
+   * the head of the page — the thing that makes a sweep stop draining.
+   */
+  appointmentsSkippedMalformedDate: number;
   publishedSearchesDeleted: number;
   appointmentNotesRedacted: number;
 }
@@ -33,6 +65,11 @@ export interface CleanupStats {
  *   window — the daily address cap — is spent by then; stale counters only
  *   retain targeted addresses)
  * - Cancelled/rejected appointments: 30 days AND date > 7 days ago
+ * - COMPLETED appointments (issue #294, decision 19): 180 days past the
+ *   booking date. Sit has no `completed` status — a past sitting stays
+ *   `confirmed` — so the sweep keys on (status: confirmed, date) and skips
+ *   the dateless recurring arrangements, which are still live. The
+ *   babysitter's schedule claim for that date is released with the doc.
  * - Published searches: immediate (past expiresAt — the server-computed
  *   min(publish + 7d, babysitting date) lifetime; issue #207)
  * - Appointment notes (issue #238): redacted once the appointment leaves
@@ -63,6 +100,11 @@ export async function runCleanupOldData(
     accountExistsNoticesDeleted: 0,
     verificationSendCountersDeleted: 0,
     appointmentsDeleted: 0,
+    completedAppointmentsDeleted: 0,
+    appointmentClaimsReleased: 0,
+    appointmentCascadeErrors: 0,
+    appointmentsSkippedMalformedDate: 0,
+    appointmentsSkippedNonTerminal: 0,
     publishedSearchesDeleted: 0,
     appointmentNotesRedacted: 0,
   };
@@ -228,6 +270,233 @@ export async function runCleanupOldData(
       stats.appointmentsDeleted = count;
       stats.totalDeleted += count;
       console.log(`Deleted ${count} old cancelled/rejected appointments`);
+    }
+  }
+
+  // 7a. Delete COMPLETED sit engagements older than 180 days — decision 19
+  // ("there's no reason to retain completed engagement indefinitely — in any
+  // of the sync apps"; sync-do plan §2, §11.4; issue #294). sync-do shipped
+  // this from day one in `doSweepTasks`; this is the sit half.
+  //
+  // WHAT "COMPLETED" MEANS IN SIT. Sit has NO `completed` status — the
+  // AppointmentStatus vocabulary is pending | confirmed | rejected |
+  // cancelled, and a sitting that simply happened stays `confirmed` forever
+  // (setAppointmentNote.ts:40 states the same thing). So there is no
+  // `completedAt` to key on the way `doTasks` and `study-sessions` have one:
+  // the terminal sit engagement is a CONFIRMED appointment whose booking
+  // `date` is past, and the retention clock runs from that date. The query is
+  // (status, date) — the composite added with this sweep.
+  //
+  // A CONFIRMED RECURRING ARRANGEMENT IS LIVE AND MUST NEVER BE SWEPT.
+  // `AppointmentDoc.date` is declared `date?: string`, but the TYPE says
+  // nothing about what production wrote — every creation path stores an
+  // explicit null: `sendContactRequest.ts:83` and `:118` (`data.date ||
+  // null`), `contactPublishedSearch.ts:167` (`search.date ?? null`),
+  // `resubmitAppointment.ts:133` (`original.date || null`). So these docs are
+  // NOT absent from the (status, date) index; they are in it, with a null.
+  //
+  // What keeps them out of this query is a Firestore semantic worth writing
+  // down, because it is easy to get wrong in both directions (PR #396 review
+  // did, and so did this comment's first draft). A range filter constrains to
+  // the TYPE of its bound: `where('date', '<', <string>)` matches only
+  // STRING-valued `date` fields. Measured directly against the emulator over
+  // fixtures {null, '', absent, '2020-01-01', '2030-01-01', 5, false}:
+  //     date < '2026-01-01'                        -> ['', '2020-01-01']
+  //     date >= '0001-01-01' AND date < '2026-01-01' -> ['2020-01-01']
+  //     orderBy('date') with no filter             -> all six (null included)
+  // Cross-type ordering is real for orderBy — null does sort below strings —
+  // but the inequality filter never surfaces the other types at all. So the
+  // null recurring arrangements never enter this page, and they cannot crowd
+  // out the documents the sweep wants.
+  //
+  // `date: ''` is the one non-conforming shape a bare upper bound WOULD
+  // return (it is a string, and '' sorts below every cutoff). No current
+  // writer produces it — `publishSearch.ts:177` stores a DATE_RE-validated
+  // string or null, and the two `|| null` writers coerce '' to null — but
+  // guarding it costs one clause, and a page full of such docs ahead of every
+  // deletable one is precisely the "matches only deletable docs, therefore
+  // drains by construction" property 7b's comment contrasts itself against.
+  // Hence the LOWER bound below (7b's `where(field, '>', '')` precedent),
+  // which excludes '' structurally, and the cursor pagination, which means
+  // no non-conforming doc can hold the head of the page even if one appears.
+  //
+  // The in-memory shape guard below is DEFENCE IN DEPTH — do not delete it as
+  // redundant. It is the last thing between this sweep and deleting a live
+  // arrangement, and the two opposite wrong premises about these semantics
+  // are exactly the reason to keep belt and braces both.
+  //
+  // `pending` docs are untouched (they render forever — 7b's deliberate
+  // exception), and cancelled/rejected retention above is unchanged.
+  //
+  // TWO USER-VISIBLE CONSEQUENCES, both deliberate. (1) The family's
+  // reference-submission window closes at 180 days: submitFamilyEndorsement
+  // requires the appointment to exist AND still be `confirmed`. (2) The star
+  // "returning babysitter" marker in family search silently becomes
+  // "returning within six months" — SearchPage.tsx:249-256 builds
+  // `returningIds` from EVERY confirmed appointment of the family, unbounded
+  // by date, and :709 renders it. Both change behaviour with no client
+  // change, which is why they are written down rather than found later.
+  //
+  // CASCADE. The notes (`preAppointmentNote`, `postAppointmentNote`) are
+  // fields on the doc and leave with it. The one thing that does NOT leave
+  // with it is the babysitter's schedule claim: confirming AND-blocked
+  // `schedules/{babysitterUserId}/overrides/{date}` and appended a
+  // `sessionBlocks` ledger entry, and because sit never marks an appointment
+  // completed, NOTHING prunes that entry today. Deleting the appointment
+  // without releasing the claim would leave a ledger entry naming a document
+  // that no longer exists.
+  {
+    const retentionCutoff = new Date(
+      now.getTime() - COMPLETED_ENGAGEMENT_RETENTION_DAYS * 24 * 60 * 60 * 1000,
+    );
+    const retentionCutoffStr = retentionCutoff.toISOString().split('T')[0];
+    const releaseClaim = createClaimReleaser(firestoreDb, now);
+
+    // Cursor-paginated WITHIN the run: a doc the guard skipped, or one whose
+    // cascade failed, stays in the index, so a head-restarting pass loop
+    // would re-fetch the same prefix every pass and make no progress past
+    // it. `startAfter(snapshot)` is value-based ((date, __name__) — the
+    // implicit tiebreak means no doc is ever skipped), so it positions
+    // correctly even though the previous page's docs have just been deleted.
+    let cursor: FirebaseFirestore.QueryDocumentSnapshot | null = null;
+    // Soft wall-clock budget, so this block's cost is bounded structurally
+    // rather than arithmetically. At full pass budget it is 2000 documents,
+    // each a sequential override probe plus a delete plus — on the FIRST run
+    // after deploy, when the backlog and the claim-hit rate are both at their
+    // maximum — a transaction, and it shares one 540s invocation with the
+    // note redaction, the published-search sweep, and the do and study
+    // sweeps. A deferred retention pass costs nothing; a starved redaction
+    // pass does. Same asymmetry the block-level try/catch below rests on.
+    const blockStartedAt = Date.now();
+    const BLOCK_BUDGET_MS = 120_000;
+    // BLOCK-LEVEL isolation, distinct from the per-document isolation inside.
+    // The `query.get()` below is the one statement here that is not already
+    // inside a per-doc try, and a throw from it would propagate out of
+    // runCleanupOldData and starve EVERY LATER BLOCK — 7b's note redaction
+    // (door codes, allergy details) and block 8's expired-published-search
+    // deletion, which is what bounds an expired doc's readable window to
+    // <24h. The likeliest trigger is the very condition the new composite
+    // exists for: FAILED_PRECONDITION while `(status ASC, date ASC)` is
+    // still building after a release, which would repeat every day until the
+    // build finishes. Deferring a retention pass costs nothing (the next run
+    // restarts from the head); deferring redaction and the published-search
+    // sweep does. So this block fails CLOSED into a log, the way the handler
+    // already isolates the three top-level sweeps from each other.
+    try {
+      for (let pass = 0; pass < 10; pass++) {
+        let query = firestoreDb
+          .collection('appointments')
+          .where('status', '==', 'confirmed')
+          // Lower bound — the load-bearing half. Excludes null (every recurring
+          // arrangement), '' and every non-string type; see the block comment.
+          .where('date', '>=', MIN_BOOKING_DATE)
+          .where('date', '<', retentionCutoffStr)
+          .orderBy('date')
+          .limit(200);
+        if (cursor) query = query.startAfter(cursor);
+        const pastConfirmed = await query.get();
+        if (pastConfirmed.empty) break;
+
+        // Per-appointment isolation (doSweepTasks' pattern): one poisoned
+        // cascade logs and continues, so a deterministic per-doc failure can
+        // never wedge this category every day. A failure of the PAGE FETCH
+        // itself is caught one level out — see the block-level note above.
+        let deleted = 0;
+        let skipped = 0;
+        let skippedNonTerminal = 0;
+        for (const doc of pastConfirmed.docs) {
+          const bookingDate = doc.get('date');
+          // Defence in depth behind the range bounds — see the block comment.
+          if (typeof bookingDate !== 'string' || !DATE_RE.test(bookingDate)) {
+            skipped += 1;
+            continue;
+          }
+          // TERMINAL-BY-SHAPE guard, and the reason it is not redundant with
+          // the two date checks: those both reason about the DATE, and a
+          // recurring arrangement carrying a real past date passes all of
+          // them. The date/type coupling is NOT enforced server-side on every
+          // path — `publishSearch.ts:177` nulls the date for recurring
+          // structurally, but `sendContactRequest` validates only
+          // babysitterUserId and familyId and writes `date: data.date || null`
+          // unconditionally (:83, :118), with the coupling living in the
+          // client (SearchPage.tsx:303); `resubmitAppointment.ts:133` then
+          // inherits whatever the original had. So a family calling the
+          // callable directly with {searchType:'recurring', recurringSlots:
+          // [...], date:'2020-01-01'} mints a LIVE arrangement that every
+          // date-shaped check here would wave through 180 days later.
+          // Deciding terminality from the document's OWN SHAPE keeps the
+          // invariant local to this sweep instead of resting on three writers
+          // staying correct.
+          const slots = doc.get('recurringSlots');
+          if (doc.get('type') === 'recurring' || (Array.isArray(slots) && slots.length > 0)) {
+            skippedNonTerminal += 1;
+            continue;
+          }
+          try {
+            const babysitterUserId = (doc.get('babysitterUserId') as string) ?? '';
+            const released = await releaseClaim(
+              babysitterUserId,
+              bookingDate,
+              (b) => b.appointmentId === doc.id,
+              SIT_PROVENANCE,
+            );
+            if (released) stats.appointmentClaimsReleased += 1;
+            // Doc last: a claim release that throws leaves the appointment in
+            // place, so the whole cascade retries next run instead of leaving a
+            // ledger entry pointing at nothing.
+            await doc.ref.delete();
+            deleted += 1;
+          } catch (err) {
+            stats.appointmentCascadeErrors += 1;
+            console.error(`cleanupOldData: retention cascade failed for ${doc.id}:`, err);
+          }
+        }
+        stats.completedAppointmentsDeleted += deleted;
+        stats.totalDeleted += deleted;
+        console.log(
+          `Deleted ${deleted} completed appointments >${COMPLETED_ENGAGEMENT_RETENTION_DAYS}d past their date (decision 19)`,
+        );
+        stats.appointmentsSkippedMalformedDate += skipped;
+        stats.appointmentsSkippedNonTerminal += skippedNonTerminal;
+        if (skippedNonTerminal > 0) {
+          console.warn(
+            `cleanupOldData: ${skippedNonTerminal} recurring arrangement(s) carried a past date and were refused by the terminal-shape guard`,
+          );
+        }
+        if (skipped > 0) {
+          // A doc that passed both range bounds but failed the shape guard is a
+          // malformed `date` no writer produces — say so loudly rather than
+          // letting it read as a healthy run.
+          console.warn(
+            `cleanupOldData: ${skipped} appointment(s) matched the retention range but failed the date shape guard`,
+          );
+        }
+        cursor = pastConfirmed.docs[pastConfirmed.docs.length - 1];
+        if (pastConfirmed.size < 200) break;
+        if (Date.now() - blockStartedAt > BLOCK_BUDGET_MS) {
+          console.warn(
+            'cleanupOldData: appointment retention sweep hit its time budget; the remainder is deferred to the next run',
+          );
+          break;
+        }
+        if (pass === 9) {
+          console.warn(
+            'cleanupOldData: appointment retention sweep hit its 10-pass ceiling; the remainder is deferred to the next run',
+          );
+        }
+      }
+    } catch (err) {
+      // Deliberately swallowed — see the block-level isolation note above.
+      // The counters already reflect whatever this run managed before the
+      // failure, and the next run picks the sweep up from the head.
+      console.error('cleanupOldData: appointment retention sweep failed; later blocks continue:', err);
+    }
+    if (stats.appointmentCascadeErrors > 0) {
+      // The handler discards the returned stats, so the counter reaches
+      // nobody unless it is logged at a severity that shows.
+      console.warn(
+        `cleanupOldData: ${stats.appointmentCascadeErrors} appointment retention cascade(s) failed and were skipped`,
+      );
     }
   }
 
@@ -427,11 +696,11 @@ export const cleanupOldData = onSchedule(
   },
   async () => {
     const now = new Date();
-    // The sync-do sweep rides this schedule rather than adding a second job
-    // (plan §8's doSweepTasks row). The halves are independent: a failure in
-    // one must not starve the other, so each error is captured and the
-    // first is rethrown at the end (a thrown error is what surfaces the run
-    // as failed in Cloud Scheduler).
+    // The sync-do sweep, and now the sync-study one (issue #294), ride this
+    // schedule rather than adding further jobs (plan §8's doSweepTasks row).
+    // The halves are independent: a failure in one must not starve the
+    // others, so each error is captured and the first is rethrown at the end
+    // (a thrown error is what surfaces the run as failed in Cloud Scheduler).
     let firstError: unknown = null;
     try {
       await runCleanupOldData(db, now);
@@ -443,6 +712,12 @@ export const cleanupOldData = onSchedule(
       await runDoSweepTasks(db, getStorage().bucket(), now);
     } catch (err) {
       console.error('runDoSweepTasks failed:', err);
+      firstError = firstError ?? err;
+    }
+    try {
+      await runStudySweepSessions(db, now);
+    } catch (err) {
+      console.error('runStudySweepSessions failed:', err);
       firstError = firstError ?? err;
     }
     if (firstError) throw firstError;
