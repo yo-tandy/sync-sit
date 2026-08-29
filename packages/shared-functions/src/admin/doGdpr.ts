@@ -248,6 +248,13 @@ export async function eraseDoUserData(
   }
 
   // ── 4. Dangling-reference scrub on the family's SURVIVING tasks ──
+  // Scoped to the user's CURRENT family, which is what §11.4 specifies
+  // ("their family's live tasks") and covers the case the clause was written
+  // for: a co-parent's task holding the erased parent's pairs. A user who
+  // moved between families could in principle leave a pair on a former
+  // family's task; the failure mode there is a broken thumbnail, not a leak
+  // (step 3 already removed the bytes), and the sweep's orphan pass does not
+  // reach it either — noted rather than silently assumed away.
   if (familyId) {
     const survivors = await db
       .collection(DO_TASKS_COLLECTION)
