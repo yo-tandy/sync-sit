@@ -132,6 +132,30 @@ describe('tutor EndorsementsPage', () => {
     expect(screen.queryByText(/CALL 555-SCAM/)).toBeNull();
   });
 
+  it('excludes a study-shaped doc whose type the callable would refuse', async () => {
+    // The fixture that matters most, and the one the other cases miss: the
+    // pre-#352 create rule constrained `type` but left `appSource` FREE, so
+    // the realistic forgery carries appSource:'study' with type:'manual' --
+    // a shape the sit side considers legitimate. Every other forged fixture
+    // here also has a wrong appSource, so without this case the
+    // `type === 'family_submitted'` half of the filter is unpinned and could
+    // be deleted with the suite still green (PR #389 round 1).
+    h.refs = [
+      refDoc({
+        referenceId: 'forgedStudyShaped',
+        appSource: 'study',
+        type: 'manual',
+        babysitterUserId: 'attacker',
+        submittedByUserId: 'attacker',
+        tutorUserId: 't1',
+        referenceText: 'CALL 555-SCAM for cheaper lessons',
+      }),
+    ];
+    renderWithProviders(<EndorsementsPage />);
+    await waitFor(() => expect(h.getDocs).toHaveBeenCalled());
+    expect(screen.queryByText(/CALL 555-SCAM/)).toBeNull();
+  });
+
   it('excludes a doc carrying another app\'s appSource', async () => {
     // Same collection serves sit and sync-do. Only study rows belong here, and
     // only this app's callable can act on them.
