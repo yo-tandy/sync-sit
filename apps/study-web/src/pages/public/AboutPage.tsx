@@ -8,6 +8,7 @@ import {
   CalendarIcon,
   DownloadIcon,
 } from '@ejm/shared-ui';
+import { SUPPORT_EMAIL } from '@/constants/brand';
 import sitBrandMark from '@ejm/shared-ui/brand-marks/sync-sit.png';
 import { SIT_APP_URL } from '@/utils/appSwitch';
 
@@ -191,7 +192,7 @@ export function AboutPage() {
             {isFr ? 'Exploité par Tandy SARL, Paris' : 'Operated by Tandy SARL, Paris'}
           </p>
           <p className="mb-1 text-xs text-gray-500">
-            <a href="mailto:support@sync-study.com" className="text-brand-500 hover:underline">support@sync-study.com</a>
+            <a href={`mailto:${SUPPORT_EMAIL}`} className="text-brand-500 hover:underline">{SUPPORT_EMAIL}</a>
           </p>
           <p className="text-xs text-gray-500">Version 1.0.0</p>
         </div>

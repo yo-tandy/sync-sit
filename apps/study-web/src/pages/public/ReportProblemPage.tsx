@@ -1,8 +1,6 @@
 import { ReportProblemPage as SharedReportProblemPage } from '@ejm/shared-ui';
 import { useAuthStore } from '@/stores/authStore';
-
-const SUPPORT_EMAIL = 'support@sync-study.com';
-const BRAND = 'Sync/Study';
+import { BRAND, SUPPORT_EMAIL } from '@/constants/brand';
 
 /**
  * Sync/Study wrapper around the shared ReportProblemPage — binds the brand,

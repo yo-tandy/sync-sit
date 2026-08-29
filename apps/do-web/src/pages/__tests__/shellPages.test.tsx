@@ -93,11 +93,15 @@ describe('AboutPage', () => {
     );
   });
 
-  it('shows the do support address', () => {
+  it('shows a support address on a domain that actually receives mail (#349)', () => {
+    // NOT support@sync-do.com: sync-do.com is not connected, so this page --
+    // live and public on sync-do-app.web.app -- was handing every reader an
+    // address that bounces.
     renderWithProviders(<AboutPage />);
-    expect(screen.getByRole('link', { name: 'support@sync-do.com' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'support@sync-sit.com' })).toHaveAttribute(
       'href',
-      'mailto:support@sync-do.com',
+      'mailto:support@sync-sit.com',
     );
+    expect(screen.queryByText(/sync-do\.com/)).toBeNull();
   });
 });
