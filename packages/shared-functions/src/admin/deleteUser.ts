@@ -18,8 +18,9 @@ interface DeleteUserInput {
  * anonymizes appointment references, deletes their references/endorsements
  * (both as provider and as submitter), erases their sync-do tasks/offers and
  * both `do-photos`/`do-uploads` object prefixes (scrubbing the dangling
- * `{uid, photoId}` entries off a co-parent's surviving tasks), and deletes
- * the Firebase Auth account.
+ * `{uid, photoId}` entries off a co-parent's surviving tasks and cancelling
+ * any surviving task assigned to them), and deletes the Firebase Auth
+ * account.
  */
 export const deleteUser = onCall(
   { region: 'europe-west1', cors: getCorsOrigin() },
@@ -395,6 +396,7 @@ export const deleteUser = onCall(
         deletedDoOffers: doErasure.offersDeleted,
         deletedDoPhotoObjects: doErasure.photoObjectsDeleted,
         scrubbedDoTaskPhotos: doErasure.tasksScrubbed,
+        clearedDoAssignments: doErasure.assignmentsCleared,
       },
     });
 

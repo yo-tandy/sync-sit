@@ -27,6 +27,22 @@ export const DO_UPLOADS_PREFIX = 'do-uploads/';
 /** §7.4's final prefix — stripper output, callable-signed reads only. */
 export const DO_PHOTOS_PREFIX = 'do-photos/';
 
+/**
+ * The offer statuses a FAMILY may read, mirroring the ALLOW-LIST in
+ * `firestore.rules`' `taskOffers` read block verbatim. Kept in sync by hand
+ * — shared-functions cannot evaluate the rules file — so if that allow-list
+ * changes, change this too. Deliberately excludes `pending_guardian`,
+ * `withdrawn` and `expired`: §6.2's invisibility promise means a family must
+ * not be able to tell a guardian denial from a self-withdrawal, and §6.4's
+ * sibling flip routes guardian-gated offers to `expired` for the same
+ * reason.
+ */
+export const FAMILY_READABLE_OFFER_STATUSES = [
+  'pending',
+  'accepted',
+  'declined',
+] as const;
+
 /** The §7.4 object path a stored `{uid, photoId}` pair denotes. */
 export function doPhotoObjectPath(uid: string, photoId: string): string {
   return `${DO_PHOTOS_PREFIX}${uid}/${photoId}`;
@@ -73,8 +89,20 @@ export interface DoUserData {
  *   offer that became an assignment (an accepted offer is the record of the
  *   engagement, §8's `doCancelTask` row).
  * - the family's INBOUND offers (`familyId` on the offer, denormalized from
- *   the task), so a parent's export shows what was offered on their tasks —
- *   this is data they already read in the app.
+ *   the task), **restricted to `FAMILY_READABLE_OFFER_STATUSES`** — the
+ *   export must not hand a family what §7.2 deliberately withholds from it.
+ *   `pending_guardian` and `withdrawn` are excluded by the rule's ALLOW-LIST
+ *   (`firestore.rules`, the `taskOffers` read block) precisely because a
+ *   guardian denial moves an offer to `withdrawn`: surfacing either status
+ *   would disclose that a supervising parent refused, plus the doer's name,
+ *   bio, price, message and the §11.3 helper's name and age, to a family
+ *   that was never permitted to see them. `expired` is excluded for the
+ *   same reason — §6.4's sibling flip routes guardian-gated offers there
+ *   rather than to `declined` exactly so they stay invisible. Only the
+ *   three the family genuinely read in the app come back.
+ *
+ *   The doer-side query above is deliberately UNrestricted: those offers are
+ *   the doer's own personal data, and they are the subject here.
  *
  * Note what an offer carries and the export therefore surfaces: the §11.3
  * +1 helper's first name, last name and age. The helper has no account, so
@@ -98,7 +126,11 @@ export async function collectDoUserData(
         .get(),
       db.collection(DO_OFFERS_COLLECTION).where('doerUserId', '==', targetUserId).get(),
       familyId
-        ? db.collection(DO_OFFERS_COLLECTION).where('familyId', '==', familyId).get()
+        ? db
+            .collection(DO_OFFERS_COLLECTION)
+            .where('familyId', '==', familyId)
+            .where('status', 'in', FAMILY_READABLE_OFFER_STATUSES)
+            .get()
         : Promise.resolve(empty as any),
     ]);
 
@@ -140,6 +172,8 @@ export interface DoEraseStats {
   photoObjectsDeleted: number;
   /** Live tasks whose `photos[]` lost this uid's entries (the §11.4 scrub). */
   tasksScrubbed: number;
+  /** Surviving tasks whose `assignedUserId` named the erased doer. */
+  assignmentsCleared: number;
 }
 
 /** Chunked batch delete — `deleteUser`'s own batches have no 500-op guard,
@@ -172,6 +206,9 @@ async function deleteAll(
  *    leave a contentless ghost, the same reasoning the `references` step
  *    records for the submitter side. Offers on a SURVIVING family's tasks
  *    are still deleted: the doer is the data subject, not the family.
+ * 2-bis. ASSIGNMENTS ON SURVIVING TASKS. Deleting the accepted offer is not
+ *    enough: the family's task still names the erased doer. Anonymized and,
+ *    when still live, cancelled — see the call site for the two reasons.
  * 3. PHOTO OBJECTS. `do-photos/{uid}/**` and `do-uploads/{uid}/**` are
  *    deleted WHOLESALE, by prefix — the uid-keyed layout §7.4 chose makes
  *    "this user's images" exactly one prefix listing, and §11.4 names both
@@ -197,6 +234,7 @@ export async function eraseDoUserData(
     offersDeleted: 0,
     photoObjectsDeleted: 0,
     tasksScrubbed: 0,
+    assignmentsCleared: 0,
   };
   const empty = { docs: [] as FirebaseFirestore.QueryDocumentSnapshot[] };
 
@@ -236,6 +274,50 @@ export async function eraseDoUserData(
   stats.offersDeleted += await deleteAll(
     doerOffers.docs.filter((d) => !goneTaskIds.has(d.data().taskId)),
   );
+
+  // ── 2-bis. Assignments on tasks that SURVIVE ──
+  // Step 2 deletes the accepted offer, but a surviving family task still
+  // names the erased doer in `assignedUserId` (and points at the offer that
+  // no longer exists). Two reasons that cannot stand:
+  //   - GDPR: the erased subject's uid lingers on a live document. Nothing
+  //     collects it — retention sweeps expired-open, cancelled >30d and
+  //     completed >180d, never `assigned` — so "indefinitely" is literal.
+  //     `deleteUser` anonymizes `appointments.babysitterUserId → 'deleted'`
+  //     for exactly this reason; this is the same move.
+  //   - Function: the engagement cannot proceed. The doer's account is gone,
+  //     `doGetAssignedContact` throws `not-found` on the missing offer, and
+  //     no member-facing path clears an `assigned` task whose doer vanished.
+  // So mirror the appointment rule in both halves: anonymize the uid AND
+  // cancel the live engagement, with `cancelledBy: 'admin'` (a TaskDoc enum
+  // value) recording who ended it. The 30-day cancelled sweep then collects
+  // the task and its remaining offers on the normal schedule.
+  const assignedSnap = await db
+    .collection(DO_TASKS_COLLECTION)
+    .where('assignedUserId', '==', targetUserId)
+    .get();
+  const survivingAssignments = assignedSnap.docs.filter((d) => !goneTaskIds.has(d.id));
+  const now = new Date();
+  for (let i = 0; i < survivingAssignments.length; i += 400) {
+    const batch = db.batch();
+    for (const doc of survivingAssignments.slice(i, i + 400)) {
+      const updates: Record<string, unknown> = {
+        assignedUserId: 'deleted',
+        assignedOfferId: null,
+        updatedAt: now,
+      };
+      // Only a LIVE engagement is cancelled. A `completed` task keeps its
+      // history — the family's record of what was done and what it cost,
+      // the same way an anonymized past appointment survives.
+      if (doc.data().status === 'assigned') {
+        updates.status = 'cancelled';
+        updates.cancelledAt = now;
+        updates.cancelledBy = 'admin';
+      }
+      batch.update(doc.ref, updates);
+    }
+    await batch.commit();
+  }
+  stats.assignmentsCleared = survivingAssignments.length;
 
   // ── 3. Photo objects: both prefixes, wholesale ──
   const bucket = getStorage().bucket();
