@@ -85,12 +85,31 @@ export function assertSelfDeleteAllowed(
  *
  * Best-effort per channel and per parent: the account is already gone by the
  * time this runs, so a failing email must not surface as a failed deletion.
+ *
+ * Returns TWO counts, not one. An earlier version returned a single
+ * `notified`, incremented once per parent whose user doc existed — which reads
+ * as "the guardian was told" while recording success for a guardian nothing
+ * reached (no email address, no push tokens, and an in-app doc nobody opens).
+ * That is the precise failure this number exists to catch, so the trail now
+ * distinguishes "there was nobody to tell" from "we tried and nothing landed":
+ *   - `found`   — guardians the supervising family names.
+ *   - `reached` — guardians at least one CHANNEL actually delivered to.
+ * `found > reached` in an audit entry is the signal to look.
+ *
+ * Exported for that reason and no other: the emulator's mail transport
+ * short-circuits to `true` for any address, and every production writer of a
+ * `users` doc sets `email` — so a guardian both channels miss is a state the
+ * integration suite CANNOT stage without seeding a document shape production
+ * never writes. It is reachable in production (Resend rejects the send, no FCM
+ * registration), so the two counts diverging is pinned where the channel
+ * results are inputs rather than fixtures. See
+ * `__tests__/guardianNotifyCounts.test.ts`.
  */
-async function notifyGuardiansOfSelfDelete(
+export async function notifyGuardiansOfSelfDelete(
   familyId: string,
   childUid: string,
   childName: string,
-): Promise<number> {
+): Promise<{ found: number; reached: number }> {
   const familyDoc = await db.collection('families').doc(familyId).get();
   const parentIds: string[] = familyDoc.data()?.parentIds ?? [];
   const now = new Date();
@@ -99,7 +118,11 @@ async function notifyGuardiansOfSelfDelete(
   const title = 'A supervised account was deleted';
   const body = `${name} deleted their account. They are no longer on the platform and your supervision of them has ended.`;
 
-  let notified = 0;
+  // Every parent the family names is one the guardian duty was owed to,
+  // including one whose user doc has gone missing — that is a guardian who was
+  // NOT told, and the count must say so rather than skip them silently.
+  const found = parentIds.length;
+  let reached = 0;
   for (const parentId of parentIds) {
     const parentData = (await db.collection('users').doc(parentId).get()).data();
     if (!parentData) continue;
@@ -138,9 +161,12 @@ async function notifyGuardiansOfSelfDelete(
       pushSent,
       createdAt: now,
     });
-    notified += 1;
+    // Only a delivered channel counts. The in-app doc above is deliberately
+    // NOT one: it is written unconditionally, so counting it would make
+    // `reached` unconditional again and put the same lie back in the log.
+    if (emailSent || pushSent) reached += 1;
   }
-  return notified;
+  return { found, reached };
 }
 
 /**
@@ -187,13 +213,11 @@ export const deleteMyAccount = onCall(
     const { confirm } = (request.data ?? {}) as DeleteMyAccountInput;
     assertSelfDeleteAllowed(Number(request.auth.token.auth_time ?? 0), Date.now(), confirm);
 
-    // Read identity BEFORE the erasure: afterwards the document is gone and
-    // there is nothing left to name in the audit log or the notification.
-    const snap = await db.collection('users').doc(uid).get();
-    if (!snap.exists) {
-      throw new HttpsError('not-found', 'Account not found.');
-    }
-
+    // No pre-read of the user doc here. `eraseUserAccount`'s first act is to
+    // read the same document and throw `not-found` before it writes anything,
+    // and every identity value used below (firstName / lastName / email /
+    // role) comes off its return value — so a read here would be dead weight
+    // whose only effect was a different error string.
     const erased = await eraseUserAccount(uid, uid);
     // The supervising family comes back OUT of the erasure rather than being
     // read here first: `eraseUserAccount` deletes `guardianLinks/{uid}`, so a
@@ -207,10 +231,10 @@ export const deleteMyAccount = onCall(
     // ever "this happened", never "this is about to". Best-effort: the
     // account is already gone, so a mail failure must not read as a failed
     // deletion.
-    let guardiansNotified = 0;
+    let guardians = { found: 0, reached: 0 };
     if (supervisingFamilyId) {
       try {
-        guardiansNotified = await notifyGuardiansOfSelfDelete(
+        guardians = await notifyGuardiansOfSelfDelete(
           supervisingFamilyId,
           uid,
           `${erased.firstName} ${erased.lastName}`,
@@ -239,11 +263,15 @@ export const deleteMyAccount = onCall(
         scrubbedDoTaskPhotos: erased.doErasure.tasksScrubbed,
         clearedDoAssignments: erased.doErasure.assignmentsCleared,
         releasedDoOfferSlots: erased.doErasure.offerSlotsReleased,
-        // Whether this account was supervised, and how many guardians were
-        // told. Recorded because "the guardian was informed" is the part of
-        // this decision that could fail silently.
+        // Whether this account was supervised, how many guardians the family
+        // named, and how many a channel actually delivered to. Recorded
+        // because "the guardian was informed" is the part of this decision
+        // that could fail silently — and a single count cannot say whether
+        // there was nobody to tell or nothing landed. `guardiansFound >
+        // guardiansReached` is the entry to investigate.
         wasSupervised: !!supervisingFamilyId,
-        guardiansNotified,
+        guardiansFound: guardians.found,
+        guardiansReached: guardians.reached,
       },
     });
 
