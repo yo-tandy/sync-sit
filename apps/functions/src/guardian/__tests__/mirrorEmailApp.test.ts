@@ -15,6 +15,7 @@ vi.mock('firebase-functions/v2/firestore', () => ({
 }));
 vi.mock('../../config/firebase.js', () => ({ db: {} }));
 
+import { derivePushWorld } from '../../config/push.js';
 import { deriveMirrorEmailApp } from '../onNotificationCreated.js';
 
 describe('deriveMirrorEmailApp', () => {
@@ -49,19 +50,41 @@ describe('deriveMirrorEmailApp', () => {
     }
   });
 
-  it("keeps STUDY mirrors on 'sit' too — unchanged, not a sync-do PR's call", () => {
-    // `derivePushWorld` separates study from sit, but study mirrors have been
-    // sit-branded since they shipped. Rebranding them is a sibling-app
-    // behavior change; this pins that the round-3 fix did NOT make it.
+  it("brands every STUDY-world mirror as 'study' (issue #350)", () => {
+    // PR #334 pinned these on 'sit' deliberately: rebranding a sibling app's
+    // existing mail was not a sync-do PR's call to make. #350 IS that call.
+    // A supervising parent's copy of a tutoring event used to arrive as
+    // `Sync/Sit <noreply@sync-sit.com>`, footed "Open Sync/Sit", about a
+    // session that exists only in Sync/Study.
     for (const type of [
       'study_session_confirmed',
       'study_session_cancelled',
+      'study_session_declined',
+      'study_session_modified',
       'study_request_accepted',
       'study_request_declined',
-      'study_session_modified',
+      'study_contact_request',
       'tutor_endorsement_received',
     ]) {
-      expect(deriveMirrorEmailApp(type)).toBe('sit');
+      expect(deriveMirrorEmailApp(type)).toBe('study');
+    }
+  });
+
+  it('agrees with the PUSH leg on every type — one world rule, both legs', () => {
+    // The invariant #350 establishes. Before it, a study mirror's push said
+    // Sync/Study and its email said Sync/Sit, about the same event.
+    for (const type of [
+      'study_session_confirmed',
+      'tutor_endorsement_received',
+      'task_offer_accepted',
+      'doer_endorsement_received',
+      'new_task_matching',
+      'new_request',
+      'published_search_contact',
+      'something_new',
+      '',
+    ]) {
+      expect(deriveMirrorEmailApp(type), type).toBe(derivePushWorld(type));
     }
   });
 

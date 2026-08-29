@@ -1,6 +1,7 @@
 import { HttpsError } from 'firebase-functions/v2/https';
 import type { TaskDoc } from '@ejm/do-core';
 import { db } from '../config/firebase.js';
+import { tsMillis } from './offerAccess.js';
 
 /**
  * Shared plumbing for the sync-do endorsement callables (plan decision 12,
@@ -76,19 +77,11 @@ export async function findQualifyingCompletedTask(
   let bestMs = -1;
   for (const doc of snap.docs) {
     const task = doc.data() as TaskDoc;
-    const ms = toMillis(task.completedAt);
+    const ms = tsMillis(task.completedAt);
     if (ms >= bestMs) {
       bestMs = ms;
       best = task;
     }
   }
   return best;
-}
-
-/** Firestore Timestamp | Date → epoch ms (0 when absent/unreadable). */
-function toMillis(value: unknown): number {
-  if (value instanceof Date) return value.getTime();
-  const asTs = value as { toMillis?: () => number } | null | undefined;
-  if (asTs && typeof asTs.toMillis === 'function') return asTs.toMillis();
-  return 0;
 }

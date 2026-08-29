@@ -91,14 +91,40 @@ describe('task lifecycle callables', () => {
         .rejects.toMatchObject({ code: 'UNAUTHENTICATED' });
     });
 
-    it('rejects a non-parent (doer) caller', async () => {
+    // The three posting-gate refusals share one code, so each must carry its
+    // own `details.reason` (issue #333) — without it the wizard can only
+    // print the union of all three and accuse the parent of the two that are
+    // actually fine.
+    it('rejects a non-parent (doer) caller, saying WHICH gate refused', async () => {
       await expect(callFunction('doPostTask', ongoingPayload(), doerToken))
-        .rejects.toMatchObject({ code: 'PERMISSION_DENIED' });
+        .rejects.toMatchObject({
+          code: 'PERMISSION_DENIED',
+          details: { reason: 'not_parent' },
+        });
     });
 
     it('rejects an unverified family — decision 14, portable verification gate', async () => {
       await expect(callFunction('doPostTask', ongoingPayload(), unverifiedParentToken))
-        .rejects.toMatchObject({ code: 'PERMISSION_DENIED' });
+        .rejects.toMatchObject({
+          code: 'PERMISSION_DENIED',
+          details: { reason: 'family_not_verified' },
+        });
+    });
+
+    it('rejects a SUSPENDED parent of a verified family with its own reason', async () => {
+      // The case the union copy served worst: nothing is wrong with this
+      // family's verification, only with the account.
+      const ref = getDb().collection('users').doc(seed.parent1.uid);
+      await ref.update({ status: 'suspended' });
+      try {
+        await expect(callFunction('doPostTask', ongoingPayload(), parent1Token))
+          .rejects.toMatchObject({
+            code: 'PERMISSION_DENIED',
+            details: { reason: 'account_not_active' },
+          });
+      } finally {
+        await ref.update({ status: 'active' });
+      }
     });
 
     it('refuses address_required when the family postcode/city resolves no label (decision 17)', async () => {

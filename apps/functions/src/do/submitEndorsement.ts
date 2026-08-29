@@ -77,7 +77,30 @@ export const doSubmitEndorsement = onCall(
       throw new HttpsError('invalid-argument', 'Cannot endorse yourself');
     }
 
+    // ── Relationship gate FIRST: a completed task this family assigned to
+    //    them. Order is the whole point (issue #357 item 1). With the
+    //    enrollment check ahead of it, the two refusals were distinguishable
+    //    for ANY uid a caller cared to name — `not-found` meant "this uid is
+    //    not an enrolled doer", `permission-denied` meant "it is, but you
+    //    have never worked with them" — which turns this callable into an
+    //    enumeration oracle over doer accounts for anyone with one completed
+    //    task. Running the relationship gate first means a caller only ever
+    //    learns about students their own family has actually hired, which is
+    //    how the platform's other lookups already behave. ──
+    const task = await findQualifyingCompletedTask(familyId, doerUserId);
+    if (task === null) {
+      throw new HttpsError(
+        'permission-denied',
+        'Endorsements require a completed task with this student',
+        { reason: 'no_completed_task' },
+      );
+    }
+
     // ── The doer must exist and be ENROLLED ──
+    // Past the gate above this is no longer an oracle: the caller's own
+    // family assigned this student a task and marked it complete, so the
+    // account's existence is already known to them.
+    //
     // `enrollmentComplete`, not merely "has a doer profile" (PR #352 round-2
     // review): a bare `getDoerProfile` read is satisfied by a half-finished
     // enrollment, and `enrollmentComplete` is what "enrolled" means
@@ -101,16 +124,6 @@ export const doSubmitEndorsement = onCall(
       throw new HttpsError('not-found', 'Doer not found');
     }
 
-    // ── Relationship gate: a completed task this family assigned to them ──
-    const task = await findQualifyingCompletedTask(familyId, doerUserId);
-    if (task === null) {
-      throw new HttpsError(
-        'permission-denied',
-        'Endorsements require a completed task with this student',
-        { reason: 'no_completed_task' },
-      );
-    }
-
     // ── Dedup: one endorsement per (family, doer), study's rule. Equality
     //    filters only, so no composite index (see endorsementAccess).
     //
@@ -128,22 +141,36 @@ export const doSubmitEndorsement = onCall(
     //    Excluding `removed` from the dedup is defensible — it is the
     //    recipient's own decline, not a platform judgement — but it is a
     //    PLATFORM behaviour change touching study, so it belongs in an issue
-    //    against both apps rather than in one app's PR. ──
-    const dup = await db
-      .collection(REFERENCES)
-      .where('appSource', '==', 'do')
-      .where('doerUserId', '==', doerUserId)
-      .where('submittedByFamilyId', '==', familyId)
-      .limit(1)
-      .get();
-    if (!dup.empty) {
-      throw new HttpsError(
-        'already-exists',
-        'You have already endorsed this student',
-        { reason: 'already_endorsed' },
-      );
-    }
-
+    //    against both apps rather than in one app's PR.
+    //
+    //    RACE-SAFE, in a transaction (issue #357 item 2). As a plain
+    //    query-then-set() this was best-effort: two co-parents submitting at
+    //    once both read an empty result and both wrote, and the surfaces
+    //    would then show one family speaking twice on an offer card, with no
+    //    way for either parent to remove the other's doc. `tx.get` on the
+    //    query serializes the pair — the second submission re-runs and sees
+    //    the first, exactly as submitOffer's per-doer ceiling does.
+    //
+    //    NOT a deterministic doc id, unlike the sync-do offer precedent
+    //    (`${taskId}_${doerUserId}`). Two reasons, both about this collection
+    //    rather than about ids:
+    //      - `taskOffers` is `allow create: if false` — callables only — so a
+    //        predictable id there is unreachable by clients. `references` is
+    //        SHARED with sit and study and DOES allow client creates (a
+    //        babysitter's own manual reference, any doc id). A predictable
+    //        `${familyId}_${doerUserId}` would therefore be squattable: an
+    //        attacker who creates a doc at that address permanently blocks a
+    //        real family from ever endorsing that student, and the squatted
+    //        doc is not removable by the victim (the update rule keys on the
+    //        ATTACKER's `babysitterUserId`).
+    //      - PR11 endorsements already in the database carry auto-ids, so an
+    //        id-based invariant would not see them and this query would have
+    //        had to stay anyway — leaving the "structural" fix structural for
+    //        only half the data.
+    //    Keeping the auto-id also keeps the doc's identity stable for
+    //    everything that already reads one: the #311/#342 GDPR export and
+    //    erasure paths (which key on FIELDS, not ids), the admin surfaces,
+    //    and `doRespondToEndorsement`'s client-supplied `referenceId`. ──
     const familySnap = await db.collection('families').doc(familyId).get();
     const isEjmFamily = !!familySnap.data()?.verification?.isFullyVerified;
     const submittedByName = `${(callerData.firstName as string) || ''} ${
@@ -157,21 +184,39 @@ export const doSubmitEndorsement = onCall(
     // offer write in this codebase uses `new Date()` for the same reason).
     const now = new Date();
     const refDoc = db.collection(REFERENCES).doc();
-    await refDoc.set({
-      referenceId: refDoc.id,
-      doerUserId,
-      appSource: 'do',
-      type: 'family_submitted',
-      status: 'private',
-      submittedByUserId: uid,
-      submittedByFamilyId: familyId,
-      submittedByName,
-      refName,
-      referenceText,
-      isEjmFamily,
-      category: task.category,
-      createdAt: now,
-      updatedAt: now,
+    await db.runTransaction(async (tx) => {
+      // Read before write (the transaction phase rule).
+      const dup = await tx.get(
+        db
+          .collection(REFERENCES)
+          .where('appSource', '==', 'do')
+          .where('doerUserId', '==', doerUserId)
+          .where('submittedByFamilyId', '==', familyId)
+          .limit(1),
+      );
+      if (!dup.empty) {
+        throw new HttpsError(
+          'already-exists',
+          'You have already endorsed this student',
+          { reason: 'already_endorsed' },
+        );
+      }
+      tx.set(refDoc, {
+        referenceId: refDoc.id,
+        doerUserId,
+        appSource: 'do',
+        type: 'family_submitted',
+        status: 'private',
+        submittedByUserId: uid,
+        submittedByFamilyId: familyId,
+        submittedByName,
+        refName,
+        referenceText,
+        isEjmFamily,
+        category: task.category,
+        createdAt: now,
+        updatedAt: now,
+      });
     });
 
     // ── Notify the doer. Post-write and best-effort: the endorsement is

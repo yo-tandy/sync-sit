@@ -252,11 +252,50 @@ describe('PostTaskPage review + publish', () => {
     expect(screen.queryByText(/still being prepared/)).toBeNull();
   });
 
-  it('maps permission-denied to the honest union copy (active parent + verified family)', async () => {
+  // Issue #333: the posting gate throws one code for three unrelated
+  // refusals and now names which in `details.reason`, so each gets its own
+  // copy instead of a union that accused the parent of all three at once.
+  it.each([
+    ['account_not_active', /account is suspended/i],
+    ['not_parent', /Only a parent account/i],
+    ['family_not_verified', /family is not verified yet/i],
+  ])('maps the %s denial to its own copy', async (reason, expected) => {
+    renderWithProviders(<PostTaskPage />);
+    walkToReview();
+    h.callable.mockRejectedValueOnce(
+      Object.assign(new Error('denied'), {
+        code: 'functions/permission-denied',
+        details: { reason },
+      }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Publish task' }));
+    await waitFor(() => expect(screen.getByText(expected)).toBeInTheDocument());
+    // And the union copy is NOT what is shown — that would defeat the point.
+    expect(screen.queryByText(/can't post tasks right now/i)).toBeNull();
+  });
+
+  it('falls back to the honest union copy for a permission-denied with NO reason', async () => {
+    // A functions deployment older than this bundle — the ordinary state of
+    // the world for the minutes between the two deploys.
     renderWithProviders(<PostTaskPage />);
     walkToReview();
     h.callable.mockRejectedValueOnce(
       Object.assign(new Error('denied'), { code: 'functions/permission-denied' }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Publish task' }));
+    await waitFor(() =>
+      expect(screen.getByText(/can't post tasks right now/i)).toBeInTheDocument(),
+    );
+  });
+
+  it('falls back to the union copy for an UNRECOGNISED denial reason too', async () => {
+    renderWithProviders(<PostTaskPage />);
+    walkToReview();
+    h.callable.mockRejectedValueOnce(
+      Object.assign(new Error('denied'), {
+        code: 'functions/permission-denied',
+        details: { reason: 'a_fourth_case_added_later' },
+      }),
     );
     fireEvent.click(screen.getByRole('button', { name: 'Publish task' }));
     await waitFor(() =>
