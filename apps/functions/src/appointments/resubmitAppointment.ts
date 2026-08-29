@@ -89,7 +89,7 @@ export const resubmitAppointment = onCall(
     let kids = original.kids;
     if (data.kidIds) {
       const kidsSnap = await db.collection('families').doc(original.familyId).collection('kids').get();
-      const kidMap: Record<string, any> = {};
+      const kidMap: Record<string, FirebaseFirestore.DocumentData | undefined> = {};
       for (const doc of kidsSnap.docs) {
         kidMap[doc.id] = doc.data();
       }

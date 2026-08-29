@@ -19,8 +19,15 @@ export function useRefetchOnFocus(
   { minIntervalMs = 15000 }: RefetchOnFocusOptions = {},
 ): void {
   const refetchRef = useRef(refetch);
-  refetchRef.current = refetch;
   const lastRunRef = useRef(0);
+
+  // Sync after commit rather than during render (react-hooks/refs): a ref
+  // written during render is not rolled back when React throws that render
+  // away. Only the listeners below read `.current`, and a focus event can
+  // only arrive after a commit, so they still see the latest `refetch`.
+  useEffect(() => {
+    refetchRef.current = refetch;
+  });
 
   useEffect(() => {
     const maybeRefetch = () => {

@@ -26,6 +26,7 @@ export { SideNav } from './SideNav.js';
 export type { SideNavItem, SideNavSection } from './SideNav.js';
 export { Dialog } from './Dialog.js';
 export { StepIndicator } from './StepIndicator.js';
-export { ToastProvider, useToast } from './Toast.js';
+export { ToastProvider } from './Toast.js';
+export { useToast } from './toastContext.js';
 export { EmptyState } from './EmptyState.js';
 export { SkeletonCard } from './SkeletonCard.js';
