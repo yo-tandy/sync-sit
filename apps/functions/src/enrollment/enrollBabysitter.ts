@@ -5,6 +5,7 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { strongPasswordSchema } from '@ejm/sit-core';
 import { getEjemEmail, getContact, type User } from '@ejm/shared-core';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
+import { assertCodeIdentityClass } from '@ejm/shared-functions/auth/verificationCodeClass.js';
 import {
   addProfileToUser,
   assertCanAddProfile,
@@ -112,6 +113,19 @@ export const enrollBabysitter = onCall(
       }
 
       const codeData = codeDoc.data()!;
+
+      // Babysitting is an EJM-member activity, so this path requires an EJM
+      // identity — NOT merely "a code exists" (issue #322). The any-domain
+      // `verifyParentEmail` writes the same verificationCodes/{email}
+      // namespace this line reads, so without the class assertion anyone with
+      // any mailbox could mint a code there and enroll as a babysitter.
+      // Transitional: a doc written before #322 carries no stamp and reads as
+      // the weakest class, so it lands here — an enrollment in flight across
+      // the deploy must request a new code (codes live 10 minutes; the
+      // fallback can go once one code lifetime has passed post-deploy).
+      // Placed before the expiry/attempts/comparison checks: the refusal is
+      // about what the doc IS, so it must not burn a brute-force attempt.
+      assertCodeIdentityClass(codeData, 'ejm');
 
       if (codeData.expiresAt.toDate() < new Date()) {
         throw new HttpsError('deadline-exceeded', 'Verification code has expired. Please request a new one.');

@@ -121,7 +121,10 @@ export async function runCleanupOldData(
     console.log(`Deleted ${expiredInvites.size} expired invite links`);
   }
 
-  // 4. Delete expired verification codes
+  // 4. Delete expired verification codes. Identity-class agnostic on purpose
+  // (issue #322 audit): this reader grants nothing and only sweeps on
+  // expiresAt, so every class — and any unstamped legacy doc — is swept
+  // alike. Deleting a code can only ever fail closed.
   const expiredCodes = await firestoreDb
     .collection('verificationCodes')
     .where('expiresAt', '<', now)

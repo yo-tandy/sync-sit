@@ -5,6 +5,7 @@ import { validateEjmEmail, checkEnrollmentAge, getEjemEmail, getContact, type Us
 import { db, adminAuth } from '@ejm/shared-functions/config/firebase.js';
 import { writeUserActivity } from '@ejm/shared-functions/admin/writeAuditLog.js';
 import { getCorsOrigin } from '@ejm/shared-functions/config/cors.js';
+import { assertCodeIdentityClass } from '@ejm/shared-functions/auth/verificationCodeClass.js';
 import {
   addProfileToUser,
   assertCanAddProfile,
@@ -174,6 +175,19 @@ export const enrollTutor = onCall(
 
       const codeData = codeDoc.data()!;
 
+      // Tutoring is an EJM-member activity, so this path requires an EJM
+      // identity — NOT merely "a code exists" (issue #322). The any-domain
+      // `verifyParentEmail` writes the same verificationCodes/{email}
+      // namespace this line reads, so without the class assertion anyone with
+      // any mailbox could mint a code there and enroll as a tutor.
+      // Transitional: a doc written before #322 carries no stamp and reads as
+      // the weakest class, so it lands here — an enrollment in flight across
+      // the deploy must request a new code (codes live 10 minutes; the
+      // fallback can go once one code lifetime has passed post-deploy).
+      // Placed before the expiry/attempts/comparison checks: the refusal is
+      // about what the doc IS, so it must not burn a brute-force attempt.
+      assertCodeIdentityClass(codeData, 'ejm');
+
       if (codeData.expiresAt.toDate() < new Date()) {
         throw new HttpsError(
           'deadline-exceeded',
@@ -219,10 +233,18 @@ export const enrollTutor = onCall(
 
     // 5-bis. Self-enrollment age gate (governance PR 1): dual-signal check of
     // the entered DOB against the graduation year embedded in the EJM email.
-    // Runs on BOTH paths, before any account/profile write. In production the
-    // email is always EJM-valid (verifyEjmEmail gates code issuance), so an
-    // unparseable email (legacy fixtures) skips the check rather than adding a
-    // new rejection here. The under-15 floor is never waivable; a mismatch is
+    // Runs on BOTH paths, before any account/profile write. An unparseable
+    // email skips the check rather than adding a new rejection here — and
+    // that residual is REAL, not the impossible case this comment used to
+    // claim ("in production the email is always EJM-valid, verifyEjmEmail
+    // gates code issuance"): issue #322 found code issuance was never gated,
+    // because the any-domain verifyParentEmail writes the same namespace.
+    // Post-#322 the class assertion in step 3 does guarantee verifyEjmEmail
+    // issued the code, but its acceptance set includes ADMIN-PREAPPROVED
+    // addresses of any domain — so an unparseable email still reaches here,
+    // as do legacy fixtures and the crossApp path (whose stored identity is
+    // whatever the first enrollment recorded). The under-15 floor is never
+    // waivable; a mismatch is
     // waived only by an admin-managed enrollmentExemptions doc.
     //
     // GOVERNED bypass (governance PR 2): an account whose guardianLinks doc is

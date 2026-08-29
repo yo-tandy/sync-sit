@@ -20,6 +20,7 @@ import {
 import { db, adminAuth } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
+import { assertCodeIdentityClass } from '@ejm/shared-functions/auth/verificationCodeClass.js';
 import {
   addProfileToUser,
   assertCanAddProfile,
@@ -271,13 +272,22 @@ export const doEnrollDoer = onCall(
       // reads — so without a domain check, anyone with any mailbox could
       // mint a code there and satisfy the identity gate. Assert the address
       // is one verifyEjmEmail would have issued to, mirroring its exact
-      // acceptance set (verifyEjmEmail.ts:34-46): admin-preapproved
+      // acceptance set (verifyEjmEmail.ts): admin-preapproved
       // (`preapprovedEmails/{email}` with used === false — test/invite
       // accounts), else EJM-valid per validateEjmEmail (domain + in-window
-      // graduation year). The shared-namespace collision is platform-wide
-      // (enrollTutor/enrollBabysitter inherit the same shape) and tracked
-      // as issue #322; this local check is sync-do's defense regardless of
-      // how #322 resolves.
+      // graduation year).
+      //
+      // KEPT after the #322 source fix, deliberately — this is not dead
+      // code. The code doc now states its own identity class and the
+      // assertion below grades it, which is the platform fix; this check is
+      // sync-do's independent second lock. It is what made the do path
+      // correct BEFORE the stamp existed (so it, not the stamp, covers any
+      // unstamped legacy doc), it re-derives the fact from the address
+      // rather than trusting a stored field, and it survives a future writer
+      // that stamps `ejm` too loosely. Defence in depth: do NOT delete it as
+      // now-redundant. The two differ where verifyEjmEmail's graduation-year
+      // window has since moved on — an address valid when the code was
+      // issued can fail here — which fails closed and is fine.
       const preapprovedDoc = await db.collection('preapprovedEmails').doc(ejemEmailLower).get();
       const isPreapproved = preapprovedDoc.exists && preapprovedDoc.data()?.used === false;
       if (!isPreapproved) {
@@ -297,6 +307,17 @@ export const doEnrollDoer = onCall(
       }
 
       const codeData = codeDoc.data()!;
+
+      // The platform half of the same fact (issue #322): the code doc must
+      // itself state that it proves an EJM identity, i.e. verifyEjmEmail
+      // issued it. Complements — never replaces — the address check above.
+      // Transitional: a doc written before #322 carries no stamp and reads
+      // as the weakest class, so it lands here — an enrollment in flight
+      // across the deploy must request a new code (codes live 10 minutes;
+      // the fallback can go once one code lifetime has passed post-deploy).
+      // Placed before the expiry/attempts/comparison checks: the refusal is
+      // about what the doc IS, so it must not burn a brute-force attempt.
+      assertCodeIdentityClass(codeData, 'ejm');
 
       if (codeData.expiresAt.toDate() < new Date()) {
         throw new HttpsError(
