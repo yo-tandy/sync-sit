@@ -166,7 +166,18 @@ export function AppBar({ role }: { role: UserRole }) {
               section 3" is not -- noted so the next reader isn't surprised
               (PR #343 round 4). */}
           <MenuItem icon={<ShareIcon className="h-5 w-5" />} label={t('share.title')} to="/share" onNavigate={() => setMenuOpen(false)} />
-          <AppSwitchMenuItem />
+          {/* Below `md` the app-switch BAR (#365) is the entry point, so this
+              row hides there — two entry points would let a second handoff
+              code be minted around the bar's whole-bar lock. `hidden` is
+              display:none, so it leaves the tab order and the a11y tree too.
+              At `md+` the bar is `md:hidden` and this row is the ONLY
+              switcher, until Q9 is answered (#417).
+              ADMIN is the exception at every width: AdminLayout renders no
+              AppSwitchBarHost, so hiding this would leave a phone admin with
+              no switcher at all. */}
+          <div className={role === 'admin' ? undefined : 'hidden md:block'}>
+            <AppSwitchMenuItem />
+          </div>
           {role !== 'admin' && (
             <div className="px-4 py-3">
               <LanguageSelector />

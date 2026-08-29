@@ -725,6 +725,8 @@ export default {
   },
 
   appSwitch: {
+    account: 'Mon compte',
+    barLabel: "Changer d'application",
     toSit: 'Ouvrir sync-sit',
     toStudy: 'Ouvrir sync-study',
     error: "Impossible de changer d'application. Veuillez réessayer.",

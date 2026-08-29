@@ -1,9 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { httpsCallable } from 'firebase/functions';
-import { Spinner } from '@ejm/shared-ui';
-import sitBrandMark from '@ejm/shared-ui/brand-marks/sync-sit.png';
-import studyBrandMark from '@ejm/shared-ui/brand-marks/sync-study.png';
+import { BRAND_MARKS, Spinner } from '@ejm/shared-ui';
 import { functions } from '@/config/firebase';
 import { SIT_APP_URL, STUDY_APP_URL } from '@/utils/appSwitch';
 
@@ -17,6 +15,11 @@ import { SIT_APP_URL, STUDY_APP_URL } from '@/utils/appSwitch';
  * targets, so the target is a prop. Both directions here are OUT-links,
  * which decision 20 permits (plan §9.5) — the gated direction is sit/study
  * linking here, and that lives in their code, not this component.
+ *
+ * Hidden below `md` by both app bars since #365, because there the
+ * app-switch bar is the entry point and a second one would let a code be
+ * minted around the bar's whole-bar lock. At `md+` the bar is `md:hidden`
+ * and this is the only switcher there is, until Q9 is answered (#417).
  */
 export function AppSwitchMenuItem({ target }: { target: 'sit' | 'study' }) {
   const { t, i18n } = useTranslation();
@@ -24,7 +27,10 @@ export function AppSwitchMenuItem({ target }: { target: 'sit' | 'study' }) {
   const [failed, setFailed] = useState(false);
 
   const appUrl = target === 'sit' ? SIT_APP_URL : STUDY_APP_URL;
-  const mark = target === 'sit' ? sitBrandMark : studyBrandMark;
+  // Bar-weight mark, not the 256px original (#364): this slot is 20px, and
+  // the full mark costs ~100 KB to draw it. Resolved through BRAND_MARKS so
+  // replacing the art stays one file plus the assets (#386).
+  const mark = BRAND_MARKS[target];
   const label = target === 'sit' ? t('appSwitch.toSit') : t('appSwitch.toStudy');
 
   const handleClick = async () => {
@@ -59,7 +65,14 @@ export function AppSwitchMenuItem({ target }: { target: 'sit' | 'study' }) {
           {busy ? (
             <Spinner className="h-5 w-5" />
           ) : (
-            <img src={mark} alt="" className="h-5 w-5 rounded object-contain" />
+            <img
+              src={mark.sm}
+              srcSet={`${mark.sm} 1x, ${mark.md} 2x`}
+              alt=""
+              width={20}
+              height={20}
+              className="h-5 w-5 rounded object-contain"
+            />
           )}
         </span>
         <span>{label}</span>

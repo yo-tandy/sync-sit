@@ -2470,7 +2470,7 @@ PR each decision lands in.
 
 | PR | Change |
 |---|---|
-| **2** | Ships the shared `AppSwitchBar` from `shared-ui` instead of any do-web nav. Brand-mark consolidation is a prerequisite of the bar, not a side-quest. Theme is Recess-shaped (radii, Nunito) on §9.0's palette. |
+| **2** | Ships the shared `AppSwitchBar` from `shared-ui` instead of any do-web nav. ~~Brand-mark consolidation is a prerequisite~~ — consolidation was already done in d50e3f80 (#302); what the bar needed was bar-*weight* marks, added by #364 (see platform plan §2). Theme is Recess-shaped (radii, Nunito) on §9.0's palette. |
 | **4** | `doEnrollDoer` must accept the handoff-from-account-hub entry path. do-web ships a **doer-settings screen**, not an account page. |
 | **7** | Family shell uses the shared bar; "Post a task" is the page hero, "My tasks" the first card (matches the canvas). |
 | **8** | Doer shell uses the shared bar; the board is the hero — no visibility toggle exists for doers. |

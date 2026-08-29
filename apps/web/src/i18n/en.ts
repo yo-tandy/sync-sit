@@ -302,6 +302,8 @@ export default {
   },
 
   appSwitch: {
+    account: 'My account',
+    barLabel: 'Switch app',
     toStudy: 'Open sync-study',
     error: 'Could not switch apps. Please try again.',
   },

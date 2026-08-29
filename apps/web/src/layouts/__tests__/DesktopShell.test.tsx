@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, cleanup, within } from '@testing-library/react';
+import { render, screen, cleanup, within, fireEvent } from '@testing-library/react';
 import { I18nextProvider } from 'react-i18next';
 import { MemoryRouter, Route, Routes } from 'react-router';
 
@@ -7,19 +7,32 @@ vi.mock('../AuthGuard', () => ({
   AuthGuard: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 vi.mock('@/components/ui/AppBar', () => ({ AppBar: () => <div data-testid="appbar" /> }));
+vi.mock('@/config/firebase', () => ({ functions: {} }));
+vi.mock('firebase/functions', () => ({
+  httpsCallable: () => () => new Promise(() => {}),
+}));
 
 import i18n from '@/i18n';
 import { FamilyLayout } from '../FamilyLayout';
 import { BabysitterLayout } from '../BabysitterLayout';
 import { AdminLayout } from '../AdminLayout';
 
-function renderLayout(layout: React.ReactElement, pageText: string) {
+function renderLayout(
+  layout: React.ReactElement,
+  pageText: string,
+  path?: string,
+  /** Extra routes under the same layout, so in-app navigation can be followed. */
+  also: ReadonlyArray<{ path: string; text: string }> = [],
+) {
   render(
     <I18nextProvider i18n={i18n}>
-      <MemoryRouter>
+      <MemoryRouter initialEntries={[path ?? '/']}>
         <Routes>
           <Route element={layout}>
-            <Route index element={<div>{pageText}</div>} />
+            <Route path={path ?? '/'} element={<div>{pageText}</div>} />
+            {also.map((r) => (
+              <Route key={r.path} path={r.path} element={<div>{r.text}</div>} />
+            ))}
           </Route>
         </Routes>
       </MemoryRouter>
@@ -88,5 +101,86 @@ describe('sit portal shells cap routed content (issue #119)', () => {
       '/admin/audit-log',
       '/admin/gdpr-export',
     ]);
+  });
+});
+
+/**
+ * "Shipped in all six shells" (#365) is a claim about the LAYOUTS, and until
+ * this block existed deleting <AppSwitchBarHost /> from either shell left the
+ * whole suite green — every other bar test renders a host in isolation.
+ *
+ * The admin case is the load-bearing one: AdminLayout deliberately has NO
+ * bar, which is exactly why AppBar keeps the burger switch row for admins at
+ * every width.
+ */
+const SWITCH_BAR = { name: /switch app/i } as const;
+
+/**
+ * The fixed bar and each shell's bottom padding are a MATCHED PAIR, and only
+ * one half was pinned. Delete `pb-16` and every page still renders, every
+ * mount test stays green, and the last row of each scrolled page sits under
+ * the bar on a phone — the same "invisible by construction" shape the mount
+ * assertions exist for. `md:pb-0` matters as much: the padding has to lift at
+ * exactly the breakpoint the bar disappears at (PR #385 round 4).
+ */
+function shellReservesBarHeight(bar: HTMLElement) {
+  const shellRoot = bar.parentElement!;
+  expect(shellRoot.className).toMatch(/\bpb-16\b/);
+  expect(shellRoot.className).toMatch(/\bmd:pb-0\b/);
+}
+
+/**
+ * The current-app tab is `disabled` unless the shell supplies `home`, and for
+ * a while no shell did — the component honoured the prop, its own tests passed
+ * it, and every shipped bar had a permanently dead tab (PR #385 round 4).
+ *
+ * This FOLLOWS the navigation rather than asserting the tab is enabled.
+ * Enabled is not enough: the host builds `home={{ href: homeHref, ... }}`
+ * unconditionally, so a shell that stops passing `homeHref` still yields a
+ * truthy `home` and an enabled, useless tab. Landing on the home route is the
+ * only assertion that fails when the shell drops the prop — verified, because
+ * the enabled-only version of this pin did NOT go red under that mutation.
+ */
+function currentAppTabNavigatesHome(bar: HTMLElement, app: RegExp, homeText: string) {
+  fireEvent.click(within(bar).getByRole('button', { name: app }));
+  expect(screen.getByText(homeText)).toBeInTheDocument();
+}
+
+describe('the app-switch bar is mounted in sit’s shells (#365)', () => {
+  afterEach(cleanup);
+
+  it('FamilyLayout renders the bar, with the parent account path', () => {
+    renderLayout(<FamilyLayout />, 'family page', '/family/account', [
+      { path: '/family', text: 'parent home' },
+    ]);
+    const bar = screen.getByRole('navigation', SWITCH_BAR);
+    shellReservesBarHeight(bar);
+    // aria-current proves the host passed '/family/account', not some other
+    // path: the bar derives the active tab from the route it is given.
+    expect(within(bar).getByRole('button', { name: /my account/i })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    currentAppTabNavigatesHome(bar, /sync\/sit/, 'parent home');
+  });
+
+  it('BabysitterLayout renders the bar, with the BABYSITTER account path', () => {
+    // The babysitter's account lives at a different path than the parent's; a
+    // typo here would ship silently.
+    renderLayout(<BabysitterLayout />, 'babysitter page', '/babysitter/account', [
+      { path: '/babysitter', text: 'babysitter home' },
+    ]);
+    const bar = screen.getByRole('navigation', SWITCH_BAR);
+    shellReservesBarHeight(bar);
+    expect(within(bar).getByRole('button', { name: /my account/i })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    currentAppTabNavigatesHome(bar, /sync\/sit/, 'babysitter home');
+  });
+
+  it('AdminLayout renders NO bar — which is why the burger keeps admin’s switch row', () => {
+    renderLayout(<AdminLayout />, 'admin page');
+    expect(screen.queryByRole('navigation', SWITCH_BAR)).toBeNull();
   });
 });

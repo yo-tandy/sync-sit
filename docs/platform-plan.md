@@ -30,7 +30,7 @@ Lifecycle and Cloud Functions.
 | | | |
 |---|---|---|
 | #364 | brand marks consolidated into `shared-ui` (`./brand-marks/*`) | **done** (issue #302); the bar-weight variants ship with #385 |
-| #365 | `AppSwitchBar`, wired into all six switcher call sites | **open — in PR #385** |
+| #365 | `AppSwitchBar`, wired into all six switcher call sites | **done** (PR #385) — and the bar is in all six authed *shells*, a different six; §2 is superseded on phones only, Q9 (#417) gates the rest |
 | #386 | drop in owner-supplied bar icons | waiting on art |
 | #366 | Recess visual pass; admin neutral | open |
 | #367 | `AccountHome` — the shared hub | open, wants #366 |
@@ -79,8 +79,19 @@ bar**, which changes the gating conversation rather than resolving it:
   decision 20 is now a *visual* change to sit and study, not a hidden one.
 - The asymmetry PR2 already ships is unchanged: do-web's bar links out to sit
   and study; theirs does not link to do.
-- **Brand-mark consolidation is now a hard prerequisite, not an overdue
-  tidy-up.** Every app's bar renders every app's mark. PR2 already owns this.
+- **The supersession is PHONE-ONLY, by design (#385).** The bar is
+  `md:hidden` — Q9 in §7 (where the desktop switch belongs) is unanswered — so
+  at `md+` §9.5's burger row is still the only switcher, and sit's admin shell
+  keeps it at every width because `AdminLayout` renders no bar. Each app bar
+  hides the row below `md`, so exactly one entry point exists at any width.
+  **Q9 is what gates full supersession**, tracked as #417.
+- **CORRECTION (#385): brand-mark consolidation was NOT a prerequisite.** It
+  was already done in d50e3f80 (issue #302) — `shared-ui` exported all three
+  marks by subpath and every app already imported its siblings'. What was
+  missing was *weight*: the only variants were the 256px originals at
+  93–104 KB, and the bar draws every app's mark on every phone screen. #364
+  added the 48/96px variants and `lib/brandMarks.ts` as the one place bar-size
+  marks resolve. Every app's bar renders every app's mark; that part stands.
 
 ## 3. do-web ships no account page
 
