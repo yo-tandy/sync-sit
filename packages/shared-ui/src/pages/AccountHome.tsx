@@ -94,7 +94,15 @@ export function AccountHome({
                 )}
               </h2>
 
-              <ul className="overflow-hidden rounded-lg border border-gray-200 bg-white">
+              {/* focus-ring-inset (issue #325's opt-in): overflow-hidden rounds
+                  this group's corners by CLIPPING, the rows carry their own
+                  px-4 py-3 while the <ul> has none of its own, and each row is
+                  full-bleed — so a focused row's 2px ring at 2px offset is cut
+                  off on every edge. The opt-in draws it inside the row instead.
+                  Safe here: the variant drops the white backing and so assumes a
+                  light container ground, which bg-white is (the constraint noted
+                  on the rule in base.css). */}
+              <ul className="focus-ring-inset overflow-hidden rounded-lg border border-gray-200 bg-white">
                 {section.rows.map((row, j) => (
                   <li key={row.href} className={j > 0 ? 'border-t border-gray-100' : ''}>
                     <button
