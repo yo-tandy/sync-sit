@@ -8,6 +8,7 @@ vi.mock('@/layouts/FamilyLayout', () => ({ FamilyLayout: () => null }));
 
 import { Navigate } from 'react-router';
 import { router } from '@/router';
+import { FamilyDashboardPage, MyTasksPage } from '@/lazyPages';
 
 type RouteNode = { path?: string; children?: RouteNode[] };
 
@@ -28,19 +29,27 @@ describe('do-web router — family portal branch (plan §13 PR7)', () => {
     expect(familyPaths).toContain('/family/tasks/:taskId');
   });
 
-  // TEMPORARY: replaced by PR B's family dashboard. The LIST moved off
-  // /family to /family/tasks (issue #296) to make room for it.
-  it('forwards the portal index /family to the task list', () => {
+  // §9.0's route table, issue #360: the portal INDEX is the DASHBOARD, and
+  // the list it displaced lives at /family/tasks (issue #296). Pinned as "not
+  // a Navigate" as well as "is the dashboard page": the defect this issue
+  // exists to fix was an index that dropped the parent straight onto a list,
+  // and a forward is exactly how that comes back.
+  it('renders the family dashboard at the portal index /family', () => {
     const branch = (router.routes as RouteNode[]).find((b) =>
       (b.children ?? []).some((c) => c.path === '/family/tasks'),
     );
     const index = branch?.children?.find((c) => c.path === '/family') as
-      | { element: React.ReactElement<{ to?: string; replace?: boolean }> }
+      | { element: React.ReactElement }
+      | undefined;
+    const list = branch?.children?.find((c) => c.path === '/family/tasks') as
+      | { element: React.ReactElement }
       | undefined;
     expect(index).toBeTruthy();
-    expect(index!.element.type).toBe(Navigate);
-    expect(index!.element.props.to).toBe('/family/tasks');
-    expect(index!.element.props.replace).toBe(true);
+    expect(index!.element.type).not.toBe(Navigate);
+    expect(index!.element.type).toBe(FamilyDashboardPage);
+    // …and it is a DIFFERENT page from the list, not the list re-mounted.
+    expect(list!.element.type).toBe(MyTasksPage);
+    expect(index!.element.type).not.toBe(list!.element.type);
   });
 
   it('keeps the family branch separate from the public and doer branches', () => {

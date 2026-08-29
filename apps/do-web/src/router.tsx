@@ -18,12 +18,14 @@ import {
   ReportProblemPage,
   ComingSoonPage,
   DoerEnrollment,
+  DoerDashboardPage,
   BoardPage,
   DoerTaskDetailPage,
   OfferPage,
   MyOffersPage,
   MyWorkPage,
   MyEndorsementsPage,
+  FamilyDashboardPage,
   MyTasksPage,
   PostTaskPage,
   TaskDetailPage,
@@ -64,10 +66,12 @@ export const router = createBrowserRouter([
     // guard in DoerLayout.
     element: <DoerLayout />,
     children: [
-      // TEMPORARY: /doer is the portal index, and today it only forwards to
-      // the board. PR B (the dashboards PR, stacked on this one) replaces it
-      // with the doer dashboard — sit's /babysitter and study's /tutor shape.
-      { path: '/doer', element: <Navigate to="/doer/board" replace /> },
+      // The portal index is the DASHBOARD (§9.0's route table, issue #360) —
+      // sit's /babysitter and study's /tutor shape. It replaced the temporary
+      // forward to /doer/board that the namespace move (issue #296) left
+      // here; the board keeps its own path and the dashboard's quick action
+      // links to it.
+      { path: '/doer', element: <DoerDashboardPage /> },
       { path: '/doer/board', element: <BoardPage /> },
       { path: '/doer/tasks/:taskId', element: <DoerTaskDetailPage /> },
       { path: '/doer/tasks/:taskId/offer', element: <OfferPage /> },
@@ -79,12 +83,13 @@ export const router = createBrowserRouter([
   {
     element: <FamilyLayout />,
     children: [
-      // TEMPORARY: /family is the portal index, and today it only forwards to
-      // the task list. PR B replaces it with the family dashboard — sit's and
-      // study's /family shape. The LIST moved to /family/tasks to make room
-      // (study names its family lists /family/requests, /family/sessions; the
-      // task detail already nested under this path).
-      { path: '/family', element: <Navigate to="/family/tasks" replace /> },
+      // The portal index is the DASHBOARD (§9.0's route table, issue #360) —
+      // sit's and study's /family shape. It replaced the temporary forward to
+      // /family/tasks that the namespace move (issue #296) left here; the
+      // LIST keeps /family/tasks (study names its family lists
+      // /family/requests, /family/sessions; the task detail already nested
+      // under this path).
+      { path: '/family', element: <FamilyDashboardPage /> },
       { path: '/family/tasks', element: <MyTasksPage /> },
       { path: '/family/post', element: <PostTaskPage /> },
       { path: '/family/tasks/:taskId', element: <TaskDetailPage /> },
