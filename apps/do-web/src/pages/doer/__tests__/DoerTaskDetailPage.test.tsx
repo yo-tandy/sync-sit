@@ -105,9 +105,9 @@ function task(overrides: Row = {}): Row {
 function renderDetail() {
   return renderWithProviders(
     <Routes>
-      <Route path="/tasks/:taskId" element={<DoerTaskDetailPage />} />
+      <Route path="/doer/tasks/:taskId" element={<DoerTaskDetailPage />} />
     </Routes>,
-    '/tasks/t1',
+    '/doer/tasks/t1',
   );
 }
 
@@ -145,7 +145,7 @@ describe('DoerTaskDetailPage published content (§9.2)', () => {
     expect(screen.getByText(/Adult present.*No/)).toBeInTheDocument();
     // §5.6 handlesFamilyMoney -> the standing platform money line.
     expect(screen.getByText(/Sync\/Do handles no money/)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Make an offer' })).toHaveAttribute('href', '/tasks/t1/offer');
+    expect(screen.getByRole('link', { name: 'Make an offer' })).toHaveAttribute('href', '/doer/tasks/t1/offer');
   });
 
   it('NEVER renders the poisoned address or latLng (§11.2)', () => {
@@ -176,7 +176,7 @@ describe('DoerTaskDetailPage own-offer CTA states', () => {
     pushOffers([{ offerId: 't1_d1', status: 'pending', price: 12, taskId: 't1' }]);
     expect(screen.queryByRole('link', { name: 'Make an offer' })).toBeNull();
     expect(screen.getByText(/Your offer/)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Update your offer' })).toHaveAttribute('href', '/tasks/t1/offer');
+    expect(screen.getByRole('link', { name: 'Update your offer' })).toHaveAttribute('href', '/doer/tasks/t1/offer');
   });
 
   it('a pending_guardian offer shows the awaiting-parent hint, no update link (§6.2 badge)', () => {
@@ -191,7 +191,7 @@ describe('DoerTaskDetailPage own-offer CTA states', () => {
     renderDetail();
     pushTask(task());
     pushOffers([{ offerId: 't1_d1', status: 'withdrawn', price: 12, taskId: 't1' }]);
-    expect(screen.getByRole('link', { name: 'Offer again' })).toHaveAttribute('href', '/tasks/t1/offer');
+    expect(screen.getByRole('link', { name: 'Offer again' })).toHaveAttribute('href', '/doer/tasks/t1/offer');
   });
 
   it('an expired open task hides the offer CTA (§6.1: filtered, not a status)', () => {

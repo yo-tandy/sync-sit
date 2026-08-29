@@ -134,7 +134,7 @@ export function DoerTaskDetailPage() {
   if (unavailable || task === 'missing') {
     return (
       <div>
-        <TopNav title={t('doer.taskDetail.title')} backTo="/home" />
+        <TopNav title={t('doer.taskDetail.title')} backTo="/doer/board" />
         <p className="px-6 py-10 text-center text-sm text-gray-500">{t('doer.taskDetail.notAvailable')}</p>
       </div>
     );
@@ -142,7 +142,7 @@ export function DoerTaskDetailPage() {
   if (task === null) {
     return (
       <div>
-        <TopNav title={t('doer.taskDetail.title')} backTo="/home" />
+        <TopNav title={t('doer.taskDetail.title')} backTo="/doer/board" />
         <div className="flex justify-center py-20">
           <Spinner />
         </div>
@@ -168,7 +168,7 @@ export function DoerTaskDetailPage() {
 
   return (
     <div>
-      <TopNav title={t('doer.taskDetail.title')} backTo="/home" />
+      <TopNav title={t('doer.taskDetail.title')} backTo="/doer/board" />
       <div className="px-6 pt-4 pb-8">
         <h1 className="mb-1 text-lg font-bold text-gray-950">{task.title}</h1>
         <p className="mb-2 text-xs text-gray-500">
@@ -277,7 +277,7 @@ export function DoerTaskDetailPage() {
                 myOffer.status === 'declined' ||
                 myOffer.status === 'expired' ? (
                   <Link
-                    to={`/tasks/${task.taskId}/offer`}
+                    to={`/doer/tasks/${task.taskId}/offer`}
                     className="inline-flex h-12 w-full items-center justify-center rounded-lg bg-brand-600 px-4 text-sm font-semibold text-white transition-all hover:bg-brand-600/90"
                   >
                     {myOffer === null ? t('doer.taskDetail.offerCta') : t('doer.taskDetail.offerAgainCta')}
@@ -294,7 +294,7 @@ export function DoerTaskDetailPage() {
                       <>
                         <p className="mb-2 text-xs text-gray-500">{t('doer.taskDetail.reviewOfferHint')}</p>
                         <Link
-                          to={`/tasks/${task.taskId}/offer`}
+                          to={`/doer/tasks/${task.taskId}/offer`}
                           className="text-sm font-semibold text-brand-600"
                         >
                           {t('doer.taskDetail.updateOfferCta')}

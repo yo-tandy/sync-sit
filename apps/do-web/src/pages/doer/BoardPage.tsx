@@ -264,7 +264,7 @@ export function BoardPage() {
         />
       ) : (
         visible.map((task) => (
-          <Link key={task.taskId} to={`/tasks/${task.taskId}`} className="block">
+          <Link key={task.taskId} to={`/doer/tasks/${task.taskId}`} className="block">
             <Card className="mb-3 transition-colors hover:border-brand-300">
               <div className="flex items-start gap-3">
                 <CardThumb task={task} />

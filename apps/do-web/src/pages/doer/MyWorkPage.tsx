@@ -27,7 +27,7 @@ const TABS: Tab[] = ['assigned', 'completed', 'cancelled'];
  * and a cancelled assignment the student can never navigate back to would
  * make that grace unreachable from this side.
  *
- * Cards link to /tasks/:taskId — readable by the caller precisely because
+ * Cards link to /doer/tasks/:taskId — readable by the caller precisely because
  * assignedUserId is theirs (§7.2) — where AssignedWorkView carries
  * contact, checklist, mark-done and cancel.
  */
@@ -107,7 +107,7 @@ export function MyWorkPage() {
         <EmptyState icon={<ClipboardListIcon className="h-6 w-6" />} message={t(emptyKey)} />
       ) : (
         byTab[tab].map((task) => (
-          <Link key={task.taskId} to={`/tasks/${task.taskId}`} className="block">
+          <Link key={task.taskId} to={`/doer/tasks/${task.taskId}`} className="block">
             <Card className="mb-3 transition-colors hover:border-brand-300">
               <div className="flex items-center gap-3">
                 <div className="min-w-0 flex-1">

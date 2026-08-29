@@ -66,9 +66,9 @@ function openTask(overrides: Record<string, unknown> = {}) {
 function renderOffer() {
   return renderWithProviders(
     <Routes>
-      <Route path="/tasks/:taskId/offer" element={<OfferPage />} />
+      <Route path="/doer/tasks/:taskId/offer" element={<OfferPage />} />
     </Routes>,
-    '/tasks/t1/offer',
+    '/doer/tasks/t1/offer',
   );
 }
 
