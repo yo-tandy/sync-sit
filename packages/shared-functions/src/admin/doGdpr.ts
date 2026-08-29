@@ -174,6 +174,8 @@ export interface DoEraseStats {
   tasksScrubbed: number;
   /** Surviving tasks whose `assignedUserId` named the erased doer. */
   assignmentsCleared: number;
+  /** Live-offer slots returned to surviving tasks (§4.1's `offerCount`). */
+  offerSlotsReleased: number;
 }
 
 /** Chunked batch delete — `deleteUser`'s own batches have no 500-op guard,
@@ -205,7 +207,9 @@ async function deleteAll(
  *    age, `doerBio`) are all doer-side personal data, so anonymizing would
  *    leave a contentless ghost, the same reasoning the `references` step
  *    records for the submitter side. Offers on a SURVIVING family's tasks
- *    are still deleted: the doer is the data subject, not the family.
+ *    are still deleted: the doer is the data subject, not the family. Each
+ *    LIVE offer removed from a SURVIVING task also decrements that task's
+ *    `offerCount` — §4.1's invariant, and a fifth path into it.
  * 2-bis. ASSIGNMENTS ON SURVIVING TASKS. Deleting the accepted offer is not
  *    enough: the family's task still names the erased doer. Anonymized and,
  *    when still live, cancelled — see the call site for the two reasons.
@@ -235,6 +239,7 @@ export async function eraseDoUserData(
     photoObjectsDeleted: 0,
     tasksScrubbed: 0,
     assignmentsCleared: 0,
+    offerSlotsReleased: 0,
   };
   const empty = { docs: [] as FirebaseFirestore.QueryDocumentSnapshot[] };
 
@@ -271,9 +276,54 @@ export async function eraseDoUserData(
     .get();
   // Skip any already removed with their task above.
   const goneTaskIds = new Set(tasksToDelete.map((d) => d.id));
-  stats.offersDeleted += await deleteAll(
-    doerOffers.docs.filter((d) => !goneTaskIds.has(d.data().taskId)),
+  const survivingOffers = doerOffers.docs.filter(
+    (d) => !goneTaskIds.has(d.data().taskId),
   );
+
+  // §4.1's invariant, written as an invariant precisely so an enumeration
+  // cannot go stale: `offerCount` decrements whenever an offer leaves the
+  // LIVE set by ANY path. Erasure is a fifth path alongside withdraw,
+  // decline, cancel and accept, and the only one that reaches a task the
+  // subject does not own. Nothing reconciles the field afterwards — the
+  // sweep never touches it — so skipping this permanently burns a slot of
+  // `DO_OFFER_MAX_PER_TASK` on every surviving task the erased doer had a
+  // live offer on, until `doSubmitOffer` refuses new offers on a task with
+  // zero live ones. That ceiling is correctness, not policy: §6.4 bounds
+  // the acceptance transaction's write set with it.
+  //
+  // Only `pending` and `pending_guardian` decrement — a terminal offer
+  // (withdrawn / declined / expired / accepted) already left the live set,
+  // counted out by whichever path moved it there.
+  const liveByTask = new Map<string, number>();
+  for (const doc of survivingOffers) {
+    const status = doc.data().status;
+    if (status === 'pending' || status === 'pending_guardian') {
+      const taskId = doc.data().taskId as string;
+      liveByTask.set(taskId, (liveByTask.get(taskId) ?? 0) + 1);
+    }
+  }
+
+  // Delete BEFORE decrementing, deliberately: the intermediate state
+  // over-counts live offers, which fails CLOSED (a new offer is refused).
+  // Decrementing first would under-count and let the cap be exceeded.
+  stats.offersDeleted += await deleteAll(survivingOffers);
+
+  // Read-modify-write in a transaction — the same `Math.max(0, count - n)`
+  // shape `doWithdrawOffer` and `doDeclineOffer` use, so a concurrent submit
+  // cannot interleave and the field can never go negative.
+  for (const [taskId, liveCount] of liveByTask) {
+    await db.runTransaction(async (tx) => {
+      const ref = db.collection(DO_TASKS_COLLECTION).doc(taskId);
+      const snap = await tx.get(ref);
+      if (!snap.exists) return;
+      const current = (snap.data()?.offerCount as number | undefined) ?? 0;
+      tx.update(ref, {
+        offerCount: Math.max(0, current - liveCount),
+        updatedAt: new Date(),
+      });
+    });
+    stats.offerSlotsReleased += liveCount;
+  }
 
   // ── 2-bis. Assignments on tasks that SURVIVE ──
   // Step 2 deletes the accepted offer, but a surviving family task still

@@ -397,6 +397,7 @@ export const deleteUser = onCall(
         deletedDoPhotoObjects: doErasure.photoObjectsDeleted,
         scrubbedDoTaskPhotos: doErasure.tasksScrubbed,
         clearedDoAssignments: doErasure.assignmentsCleared,
+        releasedDoOfferSlots: doErasure.offerSlotsReleased,
       },
     });
 
