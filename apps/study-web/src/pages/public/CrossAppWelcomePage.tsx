@@ -294,7 +294,7 @@ export function CrossAppWelcomePage() {
         {/* rounded-xl, not rounded-2xl — see the note on the sit twin of this
             page (#395 review round 2): 2xl is exactly half of h-14, so it would
             round this mark into a perfect circle. */}
-          <img src="/logo.png" alt="Sync/Study" className="h-14 w-14 rounded-xl" />
+        <img src="/logo.png" alt="Sync/Study" className="h-14 w-14 rounded-xl" />
         <p className="text-lg font-bold text-gray-900">Sync/Study</p>
       </div>
       <Card>

@@ -32,9 +32,12 @@
    Variable font, so one file covers every weight the design uses.
 
    LICENCE: Nunito is SIL OFL 1.1, which requires the copyright notice and
-   licence to accompany redistribution. The built dist ships only .woff2
-   files, so the notice lives in packages/shared-ui/THIRD_PARTY_NOTICES.md
-   (the package's own LICENSE is in node_modules and does not ship). */
+   licence to accompany redistribution. The licence text ships in each app's
+   public/licenses/Nunito-OFL.txt, copied verbatim into dist by Vite --
+   that is the compliance artifact, because a notice that never reaches the
+   deployed build is not one. packages/shared-ui/THIRD_PARTY_NOTICES.md is
+   the repo-side index and says so itself; the package's own LICENSE lives in
+   node_modules and does not ship. */
 @import '@fontsource-variable/nunito';
 
 @theme {

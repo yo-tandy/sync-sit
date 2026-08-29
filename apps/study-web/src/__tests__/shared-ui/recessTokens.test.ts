@@ -14,9 +14,18 @@ import { dirname, join, relative } from 'node:path';
  * `Card` inlined an arbitrary shadow, and every authed shell was `bg-white`
  * so no ground could appear. Review then found the PR reproducing that shape
  * with four more unread tokens. So the central pin here is generic rather
- * than a list of today's mistakes: EVERY semantic token the pass introduces
- * must have a real reader, which fails the day a fifth one is added and
- * forgotten.
+ * than a list of today's mistakes: every token in the families this pass
+ * introduced -- `--color-ground*`, `--shadow-card*`, `--radius-pill*` -- must
+ * have a real reader, and a new one in any of those families fails the day it
+ * is added unread.
+ *
+ * SCOPE, stated because the accuracy of these comments is load-bearing here
+ * (#395 review round 3): that is generic WITHIN those three families and
+ * enumerated ACROSS them. A future token in a new family (`--color-canvas`,
+ * say) is not discovered by the regex and would not be caught. Widening it to
+ * the whole semantic namespace, minus the numeric ramps, is the better shape
+ * and is left as follow-up rather than done here -- it changes what the
+ * discovery guard asserts, which is its own review.
  */
 
 function repoRoot(dir: string): string {
@@ -361,5 +370,78 @@ describe('radii ramp (#366)', () => {
     // bracket it. Push 3xl past 2rem and 4xl must be overridden too.
     expect(rem('sm')!).toBeGreaterThan(0.125);
     expect(rem('3xl')!).toBeLessThan(2);
+  });
+});
+
+describe('no control pairs a height with the radius that halves it (#395 review round 3)', () => {
+  /**
+   * A radius of exactly half an element's height is a stadium, not a rounded
+   * rectangle. The Recess pass raised `--radius-lg` to 1.25rem (20px), exactly
+   * half of `h-10` (2.5rem / 40px) -- so every 40px control carrying
+   * `rounded-lg` silently became a pill, `Button.sm` among them, and with it
+   * every small button in all three apps.
+   *
+   * That is the failure `--radius-pill`'s own comment warns about ("a real
+   * pill, not a large radius that reads as one only at some heights"), and it
+   * arrived by arithmetic rather than by choice.
+   *
+   * THE COLLISION ALONE IS NOT THE DEFECT, which is what the first cut of this
+   * test got wrong: on a proportional ramp nearly every height halves onto
+   * SOME stop -- h-5/sm, h-7/md, h-10/lg, h-11/xl, h-14/2xl all pair exactly.
+   * Only a control that actually carries both is a pill. So this enumerates
+   * the colliding pairs and then looks for them in the markup, rather than
+   * treating the ratio itself as a bug.
+   *
+   * Both sides are rem-based, so the ratio holds at either root font size.
+   */
+  const REM_PX = 16; // ratio only; both sides scale with the root size.
+
+  const radii = Object.fromEntries(
+    [...themeCss.matchAll(/--radius-([a-z0-9]+)\s*:\s*([\d.]+)rem/g)].map((m) => [
+      m[1],
+      parseFloat(m[2]) * REM_PX,
+    ]),
+  );
+
+  it('found the rem-valued radii (guards the discovery)', () => {
+    // A regex that stopped matching would make the pairing check below
+    // vacuously green.
+    expect(Object.keys(radii).sort()).toEqual(['2xl', '3xl', 'lg', 'md', 'sm', 'xl']);
+  });
+
+  /** Tailwind heights that appear alongside a rounded-* class in the tree. */
+  const HEIGHTS: Record<string, number> = {
+    'h-5': 20,
+    'h-7': 28,
+    'h-10': 40,
+    'h-11': 44,
+    'h-14': 56,
+  };
+
+  const collidingPairs = Object.entries(HEIGHTS).flatMap(([h, px]) =>
+    Object.entries(radii)
+      .filter(([, r]) => r * 2 === px)
+      .map(([name]) => [h, `rounded-${name}`] as const),
+  );
+
+  it('there are colliding pairs to look for (guards the enumeration)', () => {
+    // If the ramp is ever retuned so nothing halves onto a used height, this
+    // goes red and the pairing check below can be retired rather than left
+    // silently checking nothing.
+    expect(collidingPairs.length).toBeGreaterThan(0);
+  });
+
+  it.each(collidingPairs)('no %s control carries %s', (height, rounded) => {
+    const near = new RegExp(
+      `${height}[^"'\`]*\\b${rounded}\\b|\\b${rounded}\\b[^"'\`]*${height}`,
+    );
+    const offenders = [...markup.entries()]
+      .filter(([, text]) => near.test(text))
+      .map(([path]) => path);
+    expect(
+      offenders,
+      `${height} is exactly twice ${rounded}, so these render as pills. Either ` +
+        `move them to rounded-pill deliberately, or drop a stop.`,
+    ).toEqual([]);
   });
 });

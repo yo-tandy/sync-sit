@@ -82,7 +82,7 @@ export function CrossAppWelcomePage() {
             (3.5rem) at every root font size — so 2xl would render this mark as
             a perfect circle and clip the squircle artwork's corners. The other
             14 rounded-2xl sites are h-20/h-24/h-32 and are unaffected. */}
-          <img src="/logo.png" alt="Sync/Sit" className="h-14 w-14 rounded-xl" />
+        <img src="/logo.png" alt="Sync/Sit" className="h-14 w-14 rounded-xl" />
         <p className="text-lg font-bold text-gray-900">Sync/Sit</p>
       </div>
       <Card>

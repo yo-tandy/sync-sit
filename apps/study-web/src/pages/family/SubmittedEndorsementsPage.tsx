@@ -225,7 +225,7 @@ export function SubmittedEndorsementsPage() {
             value={editRefName}
             onChange={(e) => setEditRefName(e.target.value)}
             maxLength={100}
-            className="mb-4 h-10 w-full rounded-lg border-[1.5px] border-gray-300 px-3 text-sm outline-none focus:border-brand-600"
+            className="mb-4 h-10 w-full rounded-md border-[1.5px] border-gray-300 px-3 text-sm outline-none focus:border-brand-600"
           />
           {actionError && <p className="mb-3 text-sm text-brand-600">{t('common.error')}</p>}
           <div className="flex justify-end gap-2">
