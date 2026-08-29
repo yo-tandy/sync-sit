@@ -8,15 +8,19 @@ import { getDoc, onSnapshot } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 
 // The sessionEpoch suite ported from study-web (the PR #310 review
-// carry-forward, recorded on #296: land it once profiles.doer exists). The
-// one delta from study's copy: do-web ships no push until plan §13 PR9, so
-// there is no removePushToken mock and no push-token assertions.
+// carry-forward, recorded on #296: land it once profiles.doer exists).
+// do-web has push as of plan §13 PR9, so study's two logout push-token pins
+// are ported alongside it (PR #334 review).
 const h = vi.hoisted(() => ({
   authCb: null as ((user: unknown) => void) | null,
   signOutEverywhere: vi.fn(() => Promise.resolve({ data: { ok: true } })),
+  removePushToken: vi.fn(() => Promise.resolve()),
 }));
 
 vi.mock('@/config/firebase', () => ({ auth: {}, db: {}, functions: {} }));
+vi.mock('@/lib/pushNotifications', () => ({
+  removePushToken: h.removePushToken,
+}));
 vi.mock('firebase/auth', () => ({
   onAuthStateChanged: vi.fn((_auth: unknown, cb: (user: unknown) => void) => {
     h.authCb = cb;
@@ -97,6 +101,7 @@ installLocalStorageStub();
 beforeEach(() => {
   vi.clearAllMocks();
   h.signOutEverywhere.mockResolvedValue({ data: { ok: true } });
+  h.removePushToken.mockResolvedValue();
   mSignOut.mockResolvedValue();
   // Drain any pending fresh-sign-in mark a login test left behind, so each
   // test starts with deterministic module state (flag consumed, no watcher,
@@ -156,6 +161,11 @@ describe('do authStore', () => {
   it('logout signs out and clears the user', async () => {
     useAuthStore.setState({ firebaseUser: { uid: 'u1' } as never, userDoc: { uid: 'u1' } as never });
     await useAuthStore.getState().logout();
+    // The device's token is unregistered from fcmTokensDo for THIS uid —
+    // otherwise the next sign-in on a shared device re-registers the same
+    // token and this user's pushes land on the next user's screen (the
+    // guarantee study pins in its twin; PR #334 review).
+    expect(h.removePushToken).toHaveBeenCalledWith('u1');
     expect(mSignOut).toHaveBeenCalled();
     expect(useAuthStore.getState().userDoc).toBeNull();
     expect(useAuthStore.getState().firebaseUser).toBeNull();
@@ -343,14 +353,20 @@ describe('do authStore — cross-app session coherence (issue #181)', () => {
     expect(mSignOut).toHaveBeenCalled();
   });
 
-  it('logout is bounded: a hanging callable still yields local sign-out', async () => {
+  it('logout is bounded: hanging removePushToken AND callable still yield local sign-out', async () => {
     vi.useFakeTimers();
     try {
+      // Both legs of logout hang. The bounds are the reason
+      // PUSH_TOKEN_TIMEOUT_MS and raceWithTimeout exist: a regression here
+      // traps a user on a stalled connection instead of merely losing a
+      // token (PR #334 review, mirroring study's pin).
+      h.removePushToken.mockImplementationOnce((() => new Promise(() => {})) as never);
       h.signOutEverywhere.mockImplementationOnce((() => new Promise(() => {})) as never);
       useAuthStore.setState({ firebaseUser: { uid: 'u1' } as never, userDoc: { uid: 'u1' } as never });
 
       const done = useAuthStore.getState().logout();
-      // 5s callable bound (no push-token leg in do-web until PR9).
+      // 3s push-token bound + 5s callable bound (mirrors sit's/study's pin).
+      await vi.advanceTimersByTimeAsync(3000);
       await vi.advanceTimersByTimeAsync(5000);
       await done;
 
