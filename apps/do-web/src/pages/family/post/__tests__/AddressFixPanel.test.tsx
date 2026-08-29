@@ -10,14 +10,19 @@ import { renderWithProviders } from '@/__tests__/test-utils';
  * nothing in the suite going red (PR #331 round 1).
  */
 
+// The `doc` mock below collapses a Firestore reference to just its path, so
+// `{ docPath: string }` is the reference type `updateDoc` actually receives.
 const h = vi.hoisted(() => ({
-  updateDoc: vi.fn(() => Promise.resolve()),
+  updateDoc: vi.fn<(ref: { docPath: string }, data: Record<string, unknown>) => Promise<void>>(
+    () => Promise.resolve(),
+  ),
 }));
 
 vi.mock('@/config/firebase', () => ({ db: {} }));
 vi.mock('firebase/firestore', () => ({
   doc: (_db: unknown, ...path: string[]) => ({ docPath: path.join('/') }),
-  updateDoc: (...args: unknown[]) => h.updateDoc(...(args as [])),
+  updateDoc: (...args: [ref: { docPath: string }, data: Record<string, unknown>]) =>
+    h.updateDoc(...args),
   serverTimestamp: () => ({ __serverTimestamp: true }),
 }));
 
@@ -64,7 +69,7 @@ describe('AddressFixPanel (decision-17 in-wizard save)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save address' }));
 
     await waitFor(() => expect(h.updateDoc).toHaveBeenCalledTimes(1));
-    const [ref, payload] = h.updateDoc.mock.calls[0] as [unknown, Record<string, unknown>];
+    const [ref, payload] = h.updateDoc.mock.calls[0];
     expect(ref).toEqual({ docPath: 'families/fam1' });
     // Exact field set: inside firestore.rules' hasOnly allow-list, with the
     // lat/lng order right ([lng, lat] on the wire → {lat, lng} stored) and

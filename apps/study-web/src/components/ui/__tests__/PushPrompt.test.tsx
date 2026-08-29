@@ -10,7 +10,9 @@ const h = vi.hoisted(() => ({
   isPushSupported: vi.fn(() => true),
   wasPrompted: vi.fn(() => false),
   markPrompted: vi.fn(),
-  requestPushPermission: vi.fn(() => Promise.resolve('tok')),
+  requestPushPermission: vi.fn<(userId: string) => Promise<string | null>>(() =>
+    Promise.resolve('tok'),
+  ),
 }));
 
 vi.mock('@/stores/authStore', () => ({
@@ -21,7 +23,7 @@ vi.mock('@/lib/pushNotifications', () => ({
   isPushSupported: () => h.isPushSupported(),
   wasPrompted: () => h.wasPrompted(),
   markPrompted: () => h.markPrompted(),
-  requestPushPermission: (...args: unknown[]) => h.requestPushPermission(...args),
+  requestPushPermission: (...args: [userId: string]) => h.requestPushPermission(...args),
 }));
 
 import { PushPrompt } from '../PushPrompt';

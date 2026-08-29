@@ -17,9 +17,13 @@ const h = vi.hoisted(() => {
   };
   return {
     batch,
-    writeBatch: vi.fn(() => batch),
-    setDoc: vi.fn(() => Promise.resolve()),
-    onSnapshot: vi.fn(() => () => {}),
+    writeBatch: vi.fn<(db: unknown) => typeof batch>(() => batch),
+    setDoc: vi.fn<
+      (ref: { path: string }, data: Record<string, unknown>, options?: { merge?: boolean }) => Promise<void>
+    >(() => Promise.resolve()),
+    onSnapshot: vi.fn<(ref: { path: string }, next: (snap: unknown) => void) => () => void>(
+      () => () => {},
+    ),
   };
 });
 
@@ -31,11 +35,14 @@ vi.mock('@/stores/authStore', () => ({
 vi.mock('firebase/firestore', () => ({
   doc: (_db: unknown, ...path: string[]) => ({ path: path.join('/') }),
   collection: (_db: unknown, ...path: string[]) => ({ path: path.join('/') }),
-  onSnapshot: (...args: unknown[]) => h.onSnapshot(...args),
-  setDoc: (...args: unknown[]) => h.setDoc(...args),
+  onSnapshot: (...args: [ref: { path: string }, next: (snap: unknown) => void]) =>
+    h.onSnapshot(...args),
+  setDoc: (
+    ...args: [ref: { path: string }, data: Record<string, unknown>, options?: { merge?: boolean }]
+  ) => h.setDoc(...args),
   deleteDoc: vi.fn(() => Promise.resolve()),
   serverTimestamp: () => 'ts',
-  writeBatch: (...args: unknown[]) => h.writeBatch(...args),
+  writeBatch: (...args: [db: unknown]) => h.writeBatch(...args),
 }));
 
 import { useSchedule } from '../useSchedule';

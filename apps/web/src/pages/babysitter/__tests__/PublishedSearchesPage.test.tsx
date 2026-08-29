@@ -28,8 +28,12 @@ const h = vi.hoisted(() => ({
   snapshotError: null as null | ((err: unknown) => void),
   aptNext: null as null | ((snap: unknown) => void),
   aptQuery: null as unknown,
-  updateDoc: vi.fn(() => Promise.resolve()),
-  callable: vi.fn(() => Promise.resolve({ data: { appointmentId: 'apt-1' } })),
+  updateDoc: vi.fn<(ref: { path: string }, data: Record<string, unknown>) => Promise<void>>(
+    () => Promise.resolve(),
+  ),
+  callable: vi.fn<(name: string, payload?: unknown) => Promise<{ data: unknown }>>(() =>
+    Promise.resolve({ data: { appointmentId: 'apt-1' } }),
+  ),
   unsub: vi.fn(),
 }));
 
@@ -59,7 +63,8 @@ vi.mock('firebase/firestore', () => ({
     }
     return h.unsub;
   },
-  updateDoc: (...args: unknown[]) => h.updateDoc(...args),
+  updateDoc: (...args: [ref: { path: string }, data: Record<string, unknown>]) =>
+    h.updateDoc(...args),
 }));
 
 vi.mock('@/stores/authStore', () => ({

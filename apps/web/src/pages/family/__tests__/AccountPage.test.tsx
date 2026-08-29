@@ -12,7 +12,9 @@ const h = vi.hoisted(() => ({
     refreshUserDoc: vi.fn(() => Promise.resolve()),
     resetPassword: vi.fn(() => Promise.resolve()),
   },
-  updateDoc: vi.fn(() => Promise.resolve()),
+  updateDoc: vi.fn<(ref: { path: string }, data: Record<string, unknown>) => Promise<void>>(
+    () => Promise.resolve(),
+  ),
   // Controls isRunningAsPWA per test: false = web mode (push toggles
   // disabled), true = installed PWA (push toggles live).
   pwaMode: false,
@@ -22,7 +24,8 @@ vi.mock('@/config/firebase', () => ({ db: {}, storage: {} }));
 
 vi.mock('firebase/firestore', () => ({
   doc: (_db: unknown, ...path: string[]) => ({ path: path.join('/') }),
-  updateDoc: (...args: unknown[]) => h.updateDoc(...args),
+  updateDoc: (...args: [ref: { path: string }, data: Record<string, unknown>]) =>
+    h.updateDoc(...args),
   serverTimestamp: () => 'ts',
 }));
 
@@ -92,11 +95,11 @@ describe('family AccountPage', () => {
 
     await waitFor(() =>
       expect(
-        h.updateDoc.mock.calls.some((c) => (c[0] as { path: string }).path === 'users/p1'),
+        h.updateDoc.mock.calls.some((c) => c[0].path === 'users/p1'),
       ).toBe(true),
     );
     const userCall = h.updateDoc.mock.calls.find(
-      (c) => (c[0] as { path: string }).path === 'users/p1',
+      (c) => c[0].path === 'users/p1',
     )!;
     expect(userCall[1]).not.toHaveProperty('email');
     expect(userCall[1]).toHaveProperty('profiles.parent.phone');
@@ -125,7 +128,7 @@ describe('family AccountPage', () => {
     );
 
     await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
-    const payload = h.updateDoc.mock.calls[0][1] as Record<string, unknown>;
+    const payload = h.updateDoc.mock.calls[0][1];
     expect(payload).toHaveProperty('notifPrefs.confirmed.email', false);
     const keys = Object.keys(payload);
     // Mutation pin: only the toggled scenario/channel dot-path + updatedAt.
@@ -163,7 +166,7 @@ describe('family AccountPage', () => {
     expect(button).not.toBeDisabled();
     fireEvent.click(button);
     await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
-    const payload = h.updateDoc.mock.calls[0][1] as Record<string, unknown>;
+    const payload = h.updateDoc.mock.calls[0][1];
     expect(Object.keys(payload).sort()).toEqual(['notifPrefs.confirmed.push', 'updatedAt']);
     expect(payload['notifPrefs.confirmed.push']).toBe(false);
   });
