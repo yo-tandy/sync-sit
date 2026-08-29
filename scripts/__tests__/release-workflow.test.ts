@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { parse } from 'yaml';
 
@@ -19,6 +19,43 @@ import { parse } from 'yaml';
  */
 const wf = (name: string) =>
   parse(readFileSync(resolve(__dirname, '../../.github/workflows', name), 'utf8'));
+
+/**
+ * The workspace's package directories, expanded from pnpm-workspace.yaml —
+ * the same file `pnpm -r` reads, so the pin cannot drift away from the tool.
+ *
+ * Supports the two pattern shapes the repo uses (a literal path, and one
+ * trailing `/*`), plus `!` negations. Anything else THROWS rather than being
+ * skipped: a pattern this cannot expand must fail the suite loudly, since
+ * silently covering less is the exact failure the pin exists to prevent.
+ */
+function workspacePackageDirs(): string[] {
+  const root = resolve(__dirname, '../..');
+  const { packages } = parse(readFileSync(resolve(root, 'pnpm-workspace.yaml'), 'utf8')) as {
+    packages: string[];
+  };
+
+  const expand = (pattern: string): string[] => {
+    if (!pattern.includes('*')) return [resolve(root, pattern)];
+    const [prefix, ...rest] = pattern.split('/');
+    if (rest.length !== 1 || rest[0] !== '*' || prefix.includes('*')) {
+      throw new Error(`unsupported pnpm-workspace pattern: ${pattern}`);
+    }
+    return readdirSync(resolve(root, prefix)).map((name) => resolve(root, prefix, name));
+  };
+
+  const included = new Set<string>();
+  const excluded = new Set<string>();
+  for (const pattern of packages) {
+    const negated = pattern.startsWith('!');
+    const target = negated ? excluded : included;
+    for (const dir of expand(negated ? pattern.slice(1) : pattern)) target.add(dir);
+  }
+
+  return [...included].filter(
+    (dir) => !excluded.has(dir) && existsSync(resolve(dir, 'package.json')),
+  );
+}
 
 // `on:` parses to the boolean key `true` in YAML 1.1 — the Norway problem's
 // cousin. Read both so this doesn't hinge on the parser's version.
@@ -220,25 +257,21 @@ describe('typecheck gate (issue #378)', () => {
     // script, so `pnpm -r typecheck` silently skipped it and "12 of 12" was
     // really 11. A NEW package shipping without the script would put the repo
     // straight back into that state with nothing turning red.
-    const { readdirSync, existsSync, readFileSync } = require('node:fs') as typeof import('node:fs');
-    const root = resolve(__dirname, '../..');
-    const dirs: string[] = [];
-    for (const group of ['packages', 'apps']) {
-      for (const name of readdirSync(resolve(root, group))) {
-        if (group === 'apps' && name === 'mobile') continue; // excluded in pnpm-workspace.yaml
-        const dir = resolve(root, group, name);
-        if (existsSync(resolve(dir, 'package.json'))) dirs.push(dir);
-      }
-    }
-    dirs.push(resolve(root, 'tests'));
-
-    const missing = dirs.filter((dir) => {
+    //
+    // Membership is read from pnpm-workspace.yaml rather than a hardcoded
+    // directory shape, because that file is what `pnpm -r` actually consults.
+    // Hardcoding it would reintroduce the same silent drift in the pin itself:
+    // a new top-level glob (`services/*`) would be skipped by the walk and the
+    // floor would still pass, and dropping the `!apps/mobile` exclusion would
+    // leave mobile exempt forever.
+    const missing = workspacePackageDirs().filter((dir) => {
       const pkg = JSON.parse(readFileSync(resolve(dir, 'package.json'), 'utf8'));
       return !pkg.scripts?.typecheck;
     });
     expect(missing).toEqual([]);
-    // Floor: the walk must actually have found the workspace, not an empty list.
-    expect(dirs.length).toBeGreaterThanOrEqual(12);
+    // Floor: asserted after `missing` so an empty expansion fails HERE rather
+    // than passing vacuously above.
+    expect(workspacePackageDirs().length).toBeGreaterThanOrEqual(12);
   });
 });
 
