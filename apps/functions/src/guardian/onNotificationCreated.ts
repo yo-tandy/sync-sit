@@ -103,12 +103,21 @@ const EMAIL_PREF_CATEGORY: Record<string, 'newRequest' | 'confirmed' | 'cancelle
  * "Open Sync/Sit → sync-sit.com", about a task assignment that does not
  * exist in Sync/Sit (PR #334 round-3 review).
  *
- * DO-ORIGIN ONLY, deliberately. `derivePushWorld` also separates study from
- * sit, but study mirrors have been sit-branded since they shipped: correcting
- * that would change what a study parent's mail looks like, which is a
- * sibling-app behavior change and not a sync-do PR's to make. So this returns
- * `'do'` for do-world types and today's `'sit'` default for everything else —
- * strictly additive, with the study-origin gap left as a separate follow-up.
+ * NOW ALL THREE WORLDS (issue #350). PR #334 fixed only the do half and
+ * pinned study on `'sit'` on purpose: rebranding a sibling app's existing
+ * mail inside a sync-do PR would have been an unrelated change. Making that
+ * deliberate gap good is this function's whole remaining job, so it simply IS
+ * `derivePushWorld` now — one world-derivation rule for both legs of the
+ * mirror, which is also why the two can no longer drift.
+ *
+ * The study-origin change is real and user-visible: a supervising parent's
+ * copy of `study_session_confirmed` used to arrive as
+ * `Sync/Sit <noreply@sync-sit.com>`, headed Sync/Sit and footed "Open
+ * Sync/Sit → sync-sit.com", about a tutoring session that exists only in
+ * Sync/Study. It now arrives Sync/Study-branded, matching the push leg the
+ * same parent already gets and the mail the STUDENT's own notification
+ * already sends. Nothing about who is emailed, or whether, changes here —
+ * `EMAIL_PREF_CATEGORY` and the per-parent prefs still decide that.
  *
  * Orthogonal to issue #336. That decision is whether do mirrors should reach
  * a parent's sit/study surfaces AT ALL; this only decides that if such a mail
@@ -116,7 +125,7 @@ const EMAIL_PREF_CATEGORY: Record<string, 'newRequest' | 'confirmed' | 'cancelle
  * mirrors, this leg simply stops firing.
  */
 export function deriveMirrorEmailApp(originalType: string): 'sit' | 'study' | 'do' {
-  return derivePushWorld(originalType) === 'do' ? 'do' : 'sit';
+  return derivePushWorld(originalType);
 }
 
 export const mirrorNotificationToGuardians = onDocumentCreated(
