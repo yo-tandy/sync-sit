@@ -15,7 +15,7 @@ Configuration is split by *when* it is read, and the halves behave differently.
 | | Server (functions) | Client (web apps) |
 |---|---|---|
 | Read at | **Deploy time**, from the process environment | **Build time**, inlined by Vite |
-| Source | `.env` / `.env.<projectId>` in `apps/functions/` | `env:` block in the deploy workflow |
+| Source | `.env` / `.env.<projectId>` in each functions codebase | Vite's `.env.<mode>` files **and** the `env:` block in the deploy workflow |
 | Changing it needs | a functions deploy | a rebuild **and** a hosting deploy |
 | Missing value | falls back to the production host | falls back to the production host |
 
@@ -70,20 +70,24 @@ redeploying.
 | `VITE_FIREBASE_APP_ID` | Currently the sit app id for all three apps |
 | `VITE_FIREBASE_VAPID_KEY` | Web push; project-wide |
 
-**Read by the apps but set by nothing** — production runs on the hardcoded
-fallbacks in `appSwitch.ts`, so these two exist as an override mechanism that
-has never been exercised:
+**Set in development only**, by committed `.env.development` files — Vite loads
+`.env.<mode>`, and a production build runs in mode `production`, so these files
+apply to `pnpm dev` and to nothing else:
 
-| Variable | Read by | Fallback |
-|---|---|---|
-| `VITE_SIT_APP_URL` | study-web, do-web | `https://sync-sit.com` |
-| `VITE_STUDY_APP_URL` | web, do-web | `https://sync-study-app.web.app` |
+| Variable | Read by | Set in dev to | Production build |
+|---|---|---|---|
+| `VITE_SIT_APP_URL` | study-web, do-web | `http://localhost:5173` | **unset** → falls back to `https://sync-sit.com` |
+| `VITE_STUDY_APP_URL` | web, do-web | `http://localhost:5174` | **unset** → falls back to `https://sync-study-app.web.app` |
+
+So the override mechanism works and is exercised every local dev run — that is
+what makes cross-app switching point at your own dev servers rather than at
+production. What is *not* exercised is setting them **in a deployed build**:
+production has never needed to, because its fallbacks are its own hosts.
 
 **A new environment must add both to its workflow's `env:` blocks.** This is
 the client-side face of the same trap: leave them unset and staging's app
-switcher sends people to production. Being untested in production is a reason
-to check them deliberately on the first staging deploy, not a reason to assume
-they work.
+switcher sends people to production. The dev files do not help — a deployed
+build is mode `production` and never reads them.
 
 There is no `VITE_DO_APP_URL`: sit and study do not link to sync-do yet — that
 is issue #304, still owner-gated.

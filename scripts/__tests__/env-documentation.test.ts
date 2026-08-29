@@ -94,6 +94,31 @@ describe('docs/environments.md matches reality', () => {
     expect(undocumented, 'add these to docs/environments.md').toEqual([]);
   });
 
+  it('names every committed .env file that sets a VITE_ variable', () => {
+    // The hole in the previous version of this file: it checked workflow env:
+    // blocks only, so it happily let the doc claim these vars were "set by
+    // nothing" while three committed .env.development files set them for every
+    // local dev run (PR #374 round 5). A source the test cannot see is a source
+    // the doc will eventually get wrong.
+    const { execSync } = require('node:child_process') as typeof import('node:child_process');
+    const tracked = execSync('git ls-files', { cwd: ROOT, encoding: 'utf8' })
+      .split('\n')
+      .filter((f) => /(^|\/)\.env(\.|$)/.test(f) && !f.endsWith('.example'));
+    expect(tracked.length).toBeGreaterThan(0);
+
+    const undocumented: string[] = [];
+    for (const f of tracked) {
+      const body = readFileSync(join(ROOT, f), 'utf8');
+      const names = [...body.matchAll(/^(VITE_[A-Z0-9_]+)=/gm)].map((m) => m[1]);
+      if (names.length === 0) continue;
+      // The file itself must be named as a source, and each var documented.
+      const base = f.split('/').pop()!;
+      if (!doc.includes(base)) undocumented.push(`${f} (file not named in the doc)`);
+      for (const n of names) if (!doc.includes(n)) undocumented.push(`${f}: ${n}`);
+    }
+    expect(undocumented, 'docs/environments.md must name these').toEqual([]);
+  });
+
   it("does not claim a VITE_ variable is set by a workflow when it isn't", () => {
     // The specific error this file was written for. Any VITE_ name the doc
     // presents under "Set today" must genuinely appear in a workflow.
@@ -101,7 +126,11 @@ describe('docs/environments.md matches reality', () => {
       .filter((f) => /\.ya?ml$/.test(f))
       .map((f) => readFileSync(join(ROOT, '.github/workflows', f), 'utf8'))
       .join('\n');
-    const setSection = doc.split('**Set today**')[1]?.split('**Read by the apps')[0] ?? '';
+    // Delimited by the NEXT bold heading rather than one specific phrase: the
+    // previous version keyed on '**Read by the apps', and renaming that heading
+    // silently widened the slice to the rest of the document.
+    const after = doc.split('**Set today**')[1] ?? '';
+    const setSection = after.split(/\n\*\*/)[0];
     expect(setSection, 'the "Set today" section should exist').not.toBe('');
     const claimed = [...setSection.matchAll(/`(VITE_[A-Z0-9_]+)`/g)].map((m) => m[1]);
     expect(claimed.length).toBeGreaterThan(0);
