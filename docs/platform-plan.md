@@ -37,12 +37,17 @@ Lifecycle and Cloud Functions.
 | #370 | search and primary action become the page hero | open, wants #365 + #366 |
 | #368 | self-serve cross-app account deletion | open |
 | #369 | `notifPrefs` shape — **owner decision, blocks sync-do PR9** | open |
+| #374 | the three app-host constants, env-overridable — §8's original first work item | **done** |
 
-Statuses checked against the tree, not the issue tracker, on 2026-08-29. The
-marker for #365 is an `AppSwitchBar` in `packages/shared-ui`: until PR #385
-lands, all six authed shells still render `AppSwitchMenuItem`, which is the
-menu-item switcher §2 of this plan declares superseded. Whoever merges #385
-flips this row.
+Statuses checked against the tree, not the issue tracker, on 2026-08-29.
+
+The marker for #365 is an `AppSwitchBar` in `packages/shared-ui`. Until PR #385
+lands, `AppSwitchMenuItem` — the menu-item switcher §2 of this plan declares
+superseded — is still rendered at **six call sites: five authed shells**
+(`apps/web`'s `AppBar`, study-web's `AppBar` and `FamilyAppBar`, do-web's
+`DoerAppBar` and `FamilyAppBar`) **plus the public `AdminInfoPage`**, which is
+not a shell but is a site #385 has to handle all the same. Whoever merges #385
+flips that row.
 
 The domain cutover (§8 below) additionally needs owner action outside the repo:
 registering the domain, pointing DNS, and verifying the sending domain with
@@ -201,44 +206,46 @@ the answer is *subdomains*, the failure is discovering that sessions do not
 carry — after shipping. So the sync-do ladder proceeds unchanged: handoff
 intact, bar with its loading state, per-app account hosting.
 
-**The migration surface is asymmetric, and the asymmetry runs the wrong way.**
-study and do were built *expecting* a domain move: `email.ts` exports
-`STUDY_APP_URL` and `DO_APP_URL` with a comment promising "the next domain move
-is a single edit here", and both web apps read `SIT_APP_URL`/`STUDY_APP_URL`
-from env-overridable constants. **sit was not.** There is no server-side
-`SIT_APP_URL`; `https://sync-sit.com/...` is inlined directly into email HTML
-about twenty times across twelve files under `apps/functions/src/**`
-(appointments, admin, references, search, guardian, reminders). Since this *is*
-a sit-domain move, it lands almost entirely on the half that was never
-centralised.
+**The migration surface WAS asymmetric, and the asymmetry ran the wrong way.
+That half is now closed — this section's original first work item has
+shipped (PR #374).** study and do were built *expecting* a domain move:
+`email.ts` exported `STUDY_APP_URL` and `DO_APP_URL` with a comment promising
+"the next domain move is a single edit here". **sit was not:** there was no
+server-side `SIT_APP_URL`, and `https://sync-sit.com/...` was inlined directly
+into email HTML about twenty times across twelve files under
+`apps/functions/src/**` (appointments, admin, references, search, guardian,
+reminders). Since this *is* a sit-domain move, it would have landed almost
+entirely on the half that was never centralised.
 
-Two smaller notes in the same area. The client apps' sit fallback is
-`https://sync-sit.web.app` while the functions inline `https://sync-sit.com`, so
-two sit hosts are already in circulation. And the surface splits in two halves
-that are in very different states:
+PR #374 gave sit the constant its siblings already had and rewrote those files
+onto it. `apps/functions/src/**` now contains **no inlined sit host at all**,
+and all three constants are env-overridable per deployment, so a staging
+project's mail no longer links to production.
 
-- **Support addresses are now centralised.** Each app's
-  `src/constants/brand.ts` holds one `SUPPORT_EMAIL`, every consumer reads it,
-  and `scripts/__tests__/support-addresses.test.ts` fails the build if an app
+The surface splits into two halves, and **both are now centralised**:
+
+- **Support addresses.** Each app's `src/constants/brand.ts` holds one
+  `SUPPORT_EMAIL`, every consumer reads it, and
+  `scripts/__tests__/support-addresses.test.ts` fails the build if an app
   hardcodes one elsewhere or points at a domain that does not receive mail.
   That happened because study-web and do-web were publishing
   `support@sync-study.com` and `support@sync-do.com`, neither of which was ever
   connected, on live sites. At the cutover this half is three constants.
-- **Host URLs are not.** Roughly twenty `https://sync-sit.com/...` literals sit
-  inline in email HTML across twelve files under `apps/functions/src/**`. This
-  is the half the work item below addresses.
+- **Host URLs.** `SIT_APP_URL` / `STUDY_APP_URL` / `DO_APP_URL` in
+  `packages/shared-functions/src/config/email.ts` server-side, and the
+  `VITE_*`-overridable equivalents in each web app's `appSwitch.ts`. Note the
+  sit fallback is now `https://sync-sit.com` on **both** sides — the earlier
+  split where clients fell back to `sync-sit.web.app` while the functions
+  inlined the custom domain is gone.
 
-Together, **21 files carry 47 lines with a literal host or address** outside
-tests. The number moves as work lands; the ratio is the point — the address
-half is one constant per app, the host half is a sweep.
+A deliberate non-goal: this section no longer carries a count of literal host
+strings. It carried one, it was wrong within days of being written, and the
+count was never the decision — "is each half one constant per app, or a sweep?"
+is, and both halves now answer *constant*.
 
-**First work item, and it is cheap: give sit the constant the other two already
-have.** An exported `SIT_APP_URL` in `email.ts` alongside its siblings, and the
-twelve functions files rewritten to build on it, makes the eventual cutover the
-single edit the comment already claims it is. This is worth doing *now*,
-independently of Q12 and before the domain is chosen — it is pure
-centralisation, it is testable, and it shrinks the cutover from a 21-file sweep
-to a handful of constants.
+**What the cutover therefore costs, today:** three server constants, three
+client constants, the env files, and the two items below with real lead time.
+Not a sweep.
 
 Two items carry real lead time and should start before a cutover date is fixed:
 

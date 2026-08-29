@@ -12,8 +12,10 @@
 > that blocks PR9, and names backend work that is not do-specific but is
 > do-blocking.
 >
-> Companion docs: `docs/sync-study-project-plan.md` (the template this plan
-> follows), `docs/shared-modules-roadmap.md` (the shared-package contract).
+> Companion docs: `docs/platform-plan.md` (the suite-wide shell and domain
+> decisions, moved out of this plan's §18),
+> `docs/sync-study-project-plan.md` (the template this plan follows),
+> `docs/shared-modules-roadmap.md` (the shared-package contract).
 
 ## Table of Contents
 

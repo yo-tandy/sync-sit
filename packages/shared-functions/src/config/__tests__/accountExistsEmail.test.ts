@@ -4,10 +4,9 @@ import { buildAccountExistsEmail, normalizeAccountExistsApp, SIT_APP_URL } from 
 // Built from the constant, not a literal: the sit host moved from
 // sync-sit.web.app to the custom domain sync-sit.com when the three app-host
 // constants were centralised (docs/platform-plan.md §8). Both hosts serve; the
-// custom domain is canonical, and the functions were already emailing it
-// while this table
-// named the other one. Asserting through the constant means the next domain
-// move doesn't reopen this file.
+// custom domain is canonical, and the functions were already emailing it while
+// this table named the other one. Asserting through the constant means the
+// next domain move doesn't reopen this file.
 
 // Copy-selection pins for the silent existing-account email (issue #148).
 // The app param is untrusted client input: it only ever selects between the

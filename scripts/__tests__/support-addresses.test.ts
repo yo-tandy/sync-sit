@@ -16,10 +16,9 @@ import { resolve, join } from 'node:path';
  *
  * The allowed set is deliberately tiny and deliberately not "looks like our
  * brand". Adding a domain here is a claim that it has MX records and is
- * verified with Resend -- make that claim only after checking, and see plan
+ * verified with Resend -- make that claim only after checking, and see
  * docs/platform-plan.md §8 for the consolidation that should eventually
- * collapse this to one
- * entry that matches every brand.
+ * collapse this to one entry that matches every brand.
  */
 const RECEIVES_MAIL = new Set(['sync-sit.com']);
 
