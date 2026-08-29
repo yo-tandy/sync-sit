@@ -6,7 +6,7 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json",
     "test": "vitest run",
     "lint": "echo 'no eslint config for study-functions yet' && exit 0",
     "predeploy": "node ../../scripts/bundle-shared-for-deploy.js"
