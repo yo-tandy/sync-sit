@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
-import { renderWithProviders } from '@/__tests__/test-utils';
+import { cleanup } from '@testing-library/react';
+import { renderWithProviders, i18n } from '@/__tests__/test-utils';
 import { CoParentSettings, type CoParentMember } from '@ejm/shared-ui';
 
 /**
@@ -98,6 +99,33 @@ describe('CoParentSettings (shared-ui, study i18n)', () => {
     await waitFor(() =>
       expect(within(screen.getByRole('dialog')).queryByRole('alert')).toBeNull(),
     );
+  });
+
+  it('shows a generate failure whether or not a link already exists', () => {
+    // onGenerate doubles as "New link" once a link exists, so an error
+    // confined to the no-link branch makes a failed regeneration silent
+    // (PR #343 round 3).
+    renderSettings({ error: 'Could not generate a link', inviteLink: null });
+    expect(screen.getByText('Could not generate a link')).toBeInTheDocument();
+    cleanup();
+
+    renderSettings({ error: 'Could not generate a link', inviteLink: 'https://x/invite/tok' });
+    expect(screen.getByRole('button', { name: 'New link' })).toBeInTheDocument();
+    expect(screen.getByText('Could not generate a link')).toBeInTheDocument();
+  });
+
+  it('renders the French catalogue with its diacritics intact', async () => {
+    await i18n.changeLanguage('fr');
+    try {
+      renderSettings();
+      // Accent-stripped copy is still valid JS and renders fine, so only an
+      // assertion on the accented form catches it (PR #343 round 3).
+      expect(screen.getByText(/Générer un lien d'invitation/)).toBeInTheDocument();
+      expect(screen.getByText(/Invitez un autre parent à rejoindre/)).toBeInTheDocument();
+      expect(document.body.textContent).not.toMatch(/Generer|Invitez un autre parent a rejoindre/);
+    } finally {
+      await i18n.changeLanguage('en');
+    }
   });
 
   it('closes the dialog when the removal succeeds', async () => {

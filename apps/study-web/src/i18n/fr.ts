@@ -1,21 +1,21 @@
 export default {
   invite: {
-    desc: 'Invitez un autre parent a rejoindre votre famille. Il pourra chercher des tuteurs et gerer les seances.',
-    generateLink: 'Generer un lien d\'invitation',
-    generating: 'Generation...',
+    desc: 'Invitez un autre parent à rejoindre votre famille. Il pourra rechercher des tuteurs et gérer les séances.',
+    generateLink: 'Générer un lien d\'invitation',
+    generating: 'Génération...',
     inviteLink: 'Lien d\'invitation',
     copyLink: 'Copier le lien',
-    copied: 'Copie !',
+    copied: 'Copié !',
     newLink: 'Nouveau lien',
-    linkDesc: 'Partagez ce lien avec l\'autre parent. Il creera un compte et rejoindra automatiquement votre famille. Expire dans 7 jours.',
-    linkCopied: 'Lien copie !',
+    linkDesc: 'Partagez ce lien avec l\'autre parent. Il créera un compte et rejoindra automatiquement votre famille. Expire dans 7 jours.',
+    linkCopied: 'Lien copié !',
     familyMembers: 'Membres de la famille',
     you: 'Vous',
   },
   coParent: {
     remove: 'Retirer',
     removeTitle: 'Retirer le co-parent',
-    removeConfirm: 'Retirer {{name}} de votre famille ? Cette personne perdra l\'acces aux fonctionnalites familiales, mais son compte ne sera pas supprime.',
+    removeConfirm: 'Retirer {{name}} de votre famille ? Cette personne perdra l\'accès aux fonctionnalités familiales, mais son compte ne sera pas supprimé.',
     confirmRemove: 'Retirer',
   },
   common: {
@@ -663,7 +663,7 @@ export default {
   },
 
   family: {
-    coParentCrossApp: 'Le lien d\'invitation ouvre Sync/Sit, ou se fait l\'adhesion a une famille. Votre famille est partagee entre les deux applications : le co-parent apparaitra ici des qu\'il aura rejoint.',
+    coParentCrossApp: 'Le lien d\'invitation ouvre Sync/Sit, où se fait l\'adhésion à une famille. Votre famille est partagée entre les deux applications : le co-parent apparaîtra ici dès qu\'il aura rejoint.',
     dashboardTitle: 'Tableau de bord',
     accountTitle: 'Mon compte',
     settingsTitle: 'Paramètres de la famille',

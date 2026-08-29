@@ -87,10 +87,23 @@ export function CoParentSettings({
       <p className="mb-3 text-sm text-gray-500">{t('invite.desc')}</p>
       {note}
 
+      {/* The generate error renders in BOTH branches: `onGenerate` is also the
+          "New link" action once a link exists, and a failed regeneration was
+          silent while this lived only in the no-link branch (PR #343 round 3
+          -- the same failure class as the removal path in round 1). */}
+      {/* The generate error renders in BOTH branches: `onGenerate` is also the
+          "New link" action once a link exists, and a failed regeneration was
+          silent while this lived only in the no-link branch (PR #343 round 3
+          -- the same failure class as the removal path in round 1). */}
+      {error && (
+        <p className="mb-3 text-sm text-brand-600" role="alert">
+          {error}
+        </p>
+      )}
+
       {!inviteLink ? (
         <Card className="mb-4">
           <p className="mb-3 text-sm text-gray-700">{t('invite.linkDesc')}</p>
-          {error && <p className="mb-3 text-sm text-brand-600" role="alert">{error}</p>}
           <Button onClick={onGenerate} disabled={generating}>
             {generating ? t('invite.generating') : t('invite.generateLink')}
           </Button>
