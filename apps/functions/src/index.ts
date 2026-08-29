@@ -116,6 +116,9 @@ export { doGetAssignedContact } from './do/getAssignedContact.js';
 export { doStripTaskPhoto } from './do/stripTaskPhoto.js';
 export { doGetOwnPhotoUrl } from './do/getOwnPhotoUrl.js';
 export { doGetTaskPhotoUrl } from './do/getTaskPhotoUrl.js';
+// The §10 board digest (plan §8's doSendTaskDigest row) — hourly batcher,
+// per-recipient 6h rate limit via profiles.doer.lastDigestAt.
+export { doSendTaskDigest } from './do/sendTaskDigest.js';
 // doSweepTasks (plan §8) is NOT a separate scheduled export: it rides the
 // existing cleanupOldData schedule (runDoSweepTasks in ./do/sweepTasks.js),
 // per the §8 row — one daily job, not two.
