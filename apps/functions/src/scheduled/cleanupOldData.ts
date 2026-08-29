@@ -34,7 +34,14 @@ export interface CleanupStats {
   /** Retention cascades that failed and were skipped (poison-pill isolation). */
   appointmentCascadeErrors: number;
   /**
-   * Docs the retention QUERY returned that the shape guard then refused.
+   * Live recurring arrangements the retention query returned because they
+   * carry a real past `date`, refused by the terminal-by-shape guard. Should
+   * be 0: the date/type coupling is a client convention, so a non-zero value
+   * means a caller reached `sendContactRequest` directly.
+   */
+  appointmentsSkippedNonTerminal: number;
+  /**
+   * Docs the retention QUERY returned that the date shape guard then refused.
    * Should always be 0: the range bounds are supposed to match only deletable
    * documents, so a non-zero value means a non-conforming shape is riding at
    * the head of the page — the thing that makes a sweep stop draining.
@@ -97,6 +104,7 @@ export async function runCleanupOldData(
     appointmentClaimsReleased: 0,
     appointmentCascadeErrors: 0,
     appointmentsSkippedMalformedDate: 0,
+    appointmentsSkippedNonTerminal: 0,
     publishedSearchesDeleted: 0,
     appointmentNotesRedacted: 0,
   };
@@ -317,6 +325,15 @@ export async function runCleanupOldData(
   // `pending` docs are untouched (they render forever — 7b's deliberate
   // exception), and cancelled/rejected retention above is unchanged.
   //
+  // TWO USER-VISIBLE CONSEQUENCES, both deliberate. (1) The family's
+  // reference-submission window closes at 180 days: submitFamilyEndorsement
+  // requires the appointment to exist AND still be `confirmed`. (2) The star
+  // "returning babysitter" marker in family search silently becomes
+  // "returning within six months" — SearchPage.tsx:249-256 builds
+  // `returningIds` from EVERY confirmed appointment of the family, unbounded
+  // by date, and :709 renders it. Both change behaviour with no client
+  // change, which is why they are written down rather than found later.
+  //
   // CASCADE. The notes (`preAppointmentNote`, `postAppointmentNote`) are
   // fields on the doc and leave with it. The one thing that does NOT leave
   // with it is the babysitter's schedule claim: confirming AND-blocked
@@ -339,6 +356,16 @@ export async function runCleanupOldData(
     // implicit tiebreak means no doc is ever skipped), so it positions
     // correctly even though the previous page's docs have just been deleted.
     let cursor: FirebaseFirestore.QueryDocumentSnapshot | null = null;
+    // Soft wall-clock budget, so this block's cost is bounded structurally
+    // rather than arithmetically. At full pass budget it is 2000 documents,
+    // each a sequential override probe plus a delete plus — on the FIRST run
+    // after deploy, when the backlog and the claim-hit rate are both at their
+    // maximum — a transaction, and it shares one 540s invocation with the
+    // note redaction, the published-search sweep, and the do and study
+    // sweeps. A deferred retention pass costs nothing; a starved redaction
+    // pass does. Same asymmetry the block-level try/catch below rests on.
+    const blockStartedAt = Date.now();
+    const BLOCK_BUDGET_MS = 120_000;
     // BLOCK-LEVEL isolation, distinct from the per-document isolation inside.
     // The `query.get()` below is the one statement here that is not already
     // inside a per-doc try, and a throw from it would propagate out of
@@ -373,11 +400,33 @@ export async function runCleanupOldData(
         // itself is caught one level out — see the block-level note above.
         let deleted = 0;
         let skipped = 0;
+        let skippedNonTerminal = 0;
         for (const doc of pastConfirmed.docs) {
           const bookingDate = doc.get('date');
           // Defence in depth behind the range bounds — see the block comment.
           if (typeof bookingDate !== 'string' || !DATE_RE.test(bookingDate)) {
             skipped += 1;
+            continue;
+          }
+          // TERMINAL-BY-SHAPE guard, and the reason it is not redundant with
+          // the two date checks: those both reason about the DATE, and a
+          // recurring arrangement carrying a real past date passes all of
+          // them. The date/type coupling is NOT enforced server-side on every
+          // path — `publishSearch.ts:177` nulls the date for recurring
+          // structurally, but `sendContactRequest` validates only
+          // babysitterUserId and familyId and writes `date: data.date || null`
+          // unconditionally (:83, :118), with the coupling living in the
+          // client (SearchPage.tsx:303); `resubmitAppointment.ts:133` then
+          // inherits whatever the original had. So a family calling the
+          // callable directly with {searchType:'recurring', recurringSlots:
+          // [...], date:'2020-01-01'} mints a LIVE arrangement that every
+          // date-shaped check here would wave through 180 days later.
+          // Deciding terminality from the document's OWN SHAPE keeps the
+          // invariant local to this sweep instead of resting on three writers
+          // staying correct.
+          const slots = doc.get('recurringSlots');
+          if (doc.get('type') === 'recurring' || (Array.isArray(slots) && slots.length > 0)) {
+            skippedNonTerminal += 1;
             continue;
           }
           try {
@@ -405,6 +454,12 @@ export async function runCleanupOldData(
           `Deleted ${deleted} completed appointments >${COMPLETED_ENGAGEMENT_RETENTION_DAYS}d past their date (decision 19)`,
         );
         stats.appointmentsSkippedMalformedDate += skipped;
+        stats.appointmentsSkippedNonTerminal += skippedNonTerminal;
+        if (skippedNonTerminal > 0) {
+          console.warn(
+            `cleanupOldData: ${skippedNonTerminal} recurring arrangement(s) carried a past date and were refused by the terminal-shape guard`,
+          );
+        }
         if (skipped > 0) {
           // A doc that passed both range bounds but failed the shape guard is a
           // malformed `date` no writer produces — say so loudly rather than
@@ -415,6 +470,12 @@ export async function runCleanupOldData(
         }
         cursor = pastConfirmed.docs[pastConfirmed.docs.length - 1];
         if (pastConfirmed.size < 200) break;
+        if (Date.now() - blockStartedAt > BLOCK_BUDGET_MS) {
+          console.warn(
+            'cleanupOldData: appointment retention sweep hit its time budget; the remainder is deferred to the next run',
+          );
+          break;
+        }
         if (pass === 9) {
           console.warn(
             'cleanupOldData: appointment retention sweep hit its 10-pass ceiling; the remainder is deferred to the next run',

@@ -44,6 +44,16 @@ export interface MarkCompletedStats {
  *
  * Extracted (injectable db + now) for testability; the cron wrapper passes the
  * real db and clock.
+ *
+ * WHERE COMPLETED SESSIONS GO. The documents this job flips to 'completed' are
+ * DELETED 180 days later by the platform retention sweep — issue #294,
+ * decision 19 ("no reason to retain completed engagement indefinitely, in any
+ * of the sync apps"), together with their `instances` subcollection and the
+ * tutor's schedule claims. That sweep deliberately lives in the SIT codebase
+ * (`apps/functions/src/scheduled/sweepStudySessions.ts`, riding
+ * `cleanupOldData`'s daily schedule), not here, so do not go looking for it in
+ * this directory. See docs/sync-study-project-plan.md's retention note and
+ * docs/sync-do-project-plan.md §11.4.
  */
 export async function runMarkSessionsCompleted(
   firestoreDb: Firestore,

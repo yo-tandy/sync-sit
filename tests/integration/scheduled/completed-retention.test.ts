@@ -387,6 +387,34 @@ describe('completed-engagement retention (decision 19 / issue #294)', () => {
         .toBe(true);
     });
 
+    it('refuses a recurring arrangement carrying a real past date', async () => {
+      // The terminal-by-shape guard's pin, and the one shape no date check
+      // can catch. The date/type coupling is a CLIENT convention
+      // (SearchPage.tsx:303) — `sendContactRequest` writes
+      // `date: data.date || null` with no cross-validation — so a caller
+      // reaching the callable directly can mint a live recurring arrangement
+      // with a real past date. Both range bounds pass, DATE_RE passes, and
+      // only the shape guard stops it being deleted 180 days later.
+      await seedAppointment('sit-recurring-with-date', {
+        type: 'recurring', date: dateAgo(400),
+        recurringSlots: [{ day: 'mon', startTime: '18:00', endTime: '22:00' }],
+      });
+      // Same trap without the `type` marker: recurringSlots alone must do it.
+      await seedAppointment('sit-slots-only', {
+        type: 'one_time', date: dateAgo(400),
+        recurringSlots: [{ day: 'tue', startTime: '18:00', endTime: '22:00' }],
+      });
+
+      const stats = await runCleanupOldData(getDb(), new Date());
+
+      expect(stats.completedAppointmentsDeleted).toBe(0);
+      expect(stats.appointmentsSkippedNonTerminal).toBe(2);
+      const db = getDb();
+      for (const id of ['sit-recurring-with-date', 'sit-slots-only']) {
+        expect((await db.collection('appointments').doc(id).get()).exists).toBe(true);
+      }
+    });
+
     it('advances past a full page of failing cascades instead of re-reading it', async () => {
       // The cursor's pin. 201 docs whose cascade fails deterministically, all
       // sorting ahead of one healthy deletable doc. A head-restarting pass
