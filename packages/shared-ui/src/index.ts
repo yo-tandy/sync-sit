@@ -6,3 +6,4 @@ export * from './enrollment/index.js';
 export * from './lib/index.js';
 export * from './pages/index.js';
 export * from './utils/index.js';
+export * from './family/index.js';

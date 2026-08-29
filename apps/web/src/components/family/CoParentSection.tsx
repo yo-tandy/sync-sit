@@ -1,0 +1,111 @@
+import { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
+import { doc, getDoc } from 'firebase/firestore';
+import { httpsCallable } from 'firebase/functions';
+import { CoParentSettings, useFlashTimer, type CoParentMember } from '@ejm/shared-ui';
+import { db, functions } from '@/config/firebase';
+import { useAuthStore } from '@/stores/authStore';
+import { useToast } from '@/components/ui';
+import { getParentView } from '@ejm/sit-core';
+
+/**
+ * sit's co-parent container (issue #340): the management UI moved OFF its
+ * own /family/invite page and INTO family settings, where the owner asked
+ * for it. Firebase access lives here because shared-ui carries no firebase
+ * dependency; the presentation is shared so the two apps cannot drift.
+ */
+export function CoParentSection() {
+  const { t } = useTranslation();
+  const toast = useToast();
+  const { userDoc } = useAuthStore();
+  const parent = getParentView(userDoc);
+  const familyId = parent?.familyId;
+
+  const [members, setMembers] = useState<CoParentMember[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [inviteLink, setInviteLink] = useState<string | null>(null);
+  const [generating, setGenerating] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const flashAfter = useFlashTimer();
+
+  const loadMembers = useCallback(async () => {
+    if (!familyId) { setLoading(false); return; }
+    try {
+      const familySnap = await getDoc(doc(db, 'families', familyId));
+      if (!familySnap.exists()) return;
+      const parentIds: string[] = familySnap.data().parentIds || [];
+      const list: CoParentMember[] = [];
+      for (const pid of parentIds) {
+        try {
+          const userSnap = await getDoc(doc(db, 'users', pid));
+          const u = userSnap.data();
+          list.push({ uid: pid, name: u ? `${u.firstName} ${u.lastName}` : t('invite.familyMembers') });
+        } catch {
+          list.push({ uid: pid, name: t('invite.familyMembers') });
+        }
+      }
+      setMembers(list);
+    } finally {
+      setLoading(false);
+    }
+  }, [familyId, t]);
+
+  useEffect(() => { loadMembers(); }, [loadMembers]);
+
+  const handleGenerate = async () => {
+    if (!familyId) return;
+    setGenerating(true);
+    setError(null);
+    try {
+      const fn = httpsCallable(functions, 'generateInviteLink');
+      const res = await fn({ familyId });
+      const token = (res.data as { token: string }).token;
+      setInviteLink(`${window.location.origin}/invite/${token}`);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : t('invite.generateLink'));
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const handleCopy = async () => {
+    if (!inviteLink) return;
+    try {
+      await navigator.clipboard.writeText(inviteLink);
+    } catch {
+      const input = document.createElement('input');
+      input.value = inviteLink;
+      document.body.appendChild(input);
+      input.select();
+      document.execCommand('copy');
+      document.body.removeChild(input);
+    }
+    setCopied(true);
+    flashAfter(() => setCopied(false), 3000);
+    toast(t('invite.linkCopied'));
+  };
+
+  const handleRemove = async (member: CoParentMember) => {
+    const fn = httpsCallable(functions, 'removeCoParent');
+    await fn({ targetUserId: member.uid });
+    await loadMembers();
+  };
+
+  if (!familyId) return null;
+
+  return (
+    <CoParentSettings
+      members={members}
+      loading={loading}
+      currentUid={userDoc?.uid}
+      inviteLink={inviteLink}
+      generating={generating}
+      error={error}
+      copied={copied}
+      onGenerate={handleGenerate}
+      onCopy={handleCopy}
+      onRemove={handleRemove}
+    />
+  );
+}

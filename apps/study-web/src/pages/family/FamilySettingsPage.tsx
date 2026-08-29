@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { CoParentSection } from '@/components/family/CoParentSection';
 import { useTranslation } from 'react-i18next';
 import {
   doc,
@@ -293,6 +294,12 @@ export function FamilySettingsPage() {
         <Button onClick={handleSave} disabled={saving || !familyName.trim()}>
           {saving ? t('common.saving') : t('family.settings.save')}
         </Button>
+
+        {/* Co-parent management (issue #340): study had none at all; it
+            lives in family settings here to match sit exactly. */}
+        <div className="mt-8 border-t border-gray-100 pt-6">
+          <CoParentSection />
+        </div>
       </div>
     </div>
   );

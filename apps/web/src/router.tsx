@@ -43,7 +43,6 @@ import { RequestDetailPage } from '@/pages/babysitter/RequestDetailPage';
 import { FamilyDashboard } from '@/pages/family/DashboardPage';
 import { FamilyAppointmentsPage } from '@/pages/family/AppointmentsPage';
 import { FamilySettingsPage } from '@/pages/family/FamilySettingsPage';
-import { InvitePage } from '@/pages/family/InvitePage';
 import { SubmittedEndorsementsPage } from '@/pages/family/SubmittedEndorsementsPage';
 import { SearchPage } from '@/pages/family/SearchPage';
 import { VerificationPage } from '@/pages/family/VerificationPage';
@@ -125,7 +124,10 @@ export const router = createBrowserRouter([
       { path: '/family', element: <FamilyDashboard /> },
       { path: '/family/appointments', element: <FamilyAppointmentsPage /> },
       { path: '/family/settings', element: <FamilySettingsPage /> },
-      { path: '/family/invite', element: <InvitePage /> },
+      // Co-parent management moved INTO family settings (issue #340). The
+      // route stays as a redirect: it was reachable from the menu for a
+      // long time, so bookmarks and any pasted links keep working.
+      { path: '/family/invite', element: <Navigate to="/family/settings" replace /> },
       { path: '/family/endorsements', element: <SubmittedEndorsementsPage /> },
       { path: '/family/references', element: <Navigate to="/family/endorsements" replace /> },
       { path: '/family/search', element: <SearchPage /> },

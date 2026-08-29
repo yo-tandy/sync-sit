@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { SUPPORT_EMAIL } from '@/constants/brand';
 import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '@/stores/authStore';
@@ -14,7 +15,6 @@ import {
   FileTextIcon,
   MailIcon,
   LogOutIcon,
-  UserPlusIcon,
   ClipboardListIcon,
   DownloadIcon,
   ShareIcon,
@@ -67,16 +67,25 @@ export function AppBar({ role }: { role: UserRole }) {
         ]
       : role === 'parent'
         ? [
-            { to: '/family/appointments', icon: <CalendarIcon className="h-5 w-5" />, label: t('menu.myAppointments') },
-            { to: '/family/verification', icon: <ShieldIcon className="h-5 w-5" />, label: t('verification.menuTitle') },
+            // Section 1 -- who you are and how the family is configured.
             { to: '/family/account', icon: <UserIcon className="h-5 w-5" />, label: t('menu.myAccount') },
             { to: '/family/settings', icon: <SettingsIcon className="h-5 w-5" />, label: t('menu.myFamily') },
-            { to: '/family/preferred', icon: <UsersIcon className="h-5 w-5" />, label: t('menu.preferredBabysitters') },
-            { to: '/family/invite', icon: <UserPlusIcon className="h-5 w-5" />, label: t('menu.coParent') },
             { to: '/family/governance', icon: <ShieldIcon className="h-5 w-5" />, label: t('governance.menuTitle') },
-            { to: '/family/endorsements', icon: <FileTextIcon className="h-5 w-5" />, label: t('menu.myReferences') },
+            { to: '/family/verification', icon: <ShieldIcon className="h-5 w-5" />, label: t('verification.menuTitle') },
           ]
         : [];
+
+  // Section 2 -- what you are DOING with the app, in the owner's order
+  // (issue #339). Co-parent is deliberately absent: it moved inside family
+  // settings (issue #340).
+  const activityNav =
+    role === 'parent'
+      ? [
+          { to: '/family/appointments', icon: <CalendarIcon className="h-5 w-5" />, label: t('menu.myAppointments') },
+          { to: '/family/endorsements', icon: <FileTextIcon className="h-5 w-5" />, label: t('menu.myReferences') },
+          { to: '/family/preferred', icon: <UsersIcon className="h-5 w-5" />, label: t('menu.preferredBabysitters') },
+        ]
+      : [];
 
   return (
     <>
@@ -106,9 +115,9 @@ export function AppBar({ role }: { role: UserRole }) {
 
       {/* Persistent primary nav at md+ (issue #119); the burger stays the
           phone entry point and, at desktop, the home of the secondary items. */}
-      {primaryNav.length > 0 && (
+      {[...primaryNav, ...activityNav].length > 0 && (
         <NavTabs
-          items={primaryNav.map(({ to, label }) => ({ to, label }))}
+          items={[...primaryNav, ...activityNav].map(({ to, label }) => ({ to, label }))}
           ariaLabel={t('menu.primaryNav')}
         />
       )}
@@ -121,6 +130,11 @@ export function AppBar({ role }: { role: UserRole }) {
           </div>
 
           {primaryNav.map((item) => (
+            <MenuItem key={item.to} icon={item.icon} label={item.label} to={item.to} onNavigate={() => setMenuOpen(false)} />
+          ))}
+
+          {activityNav.length > 0 && <div className="border-t border-gray-100" />}
+          {activityNav.map((item) => (
             <MenuItem key={item.to} icon={item.icon} label={item.label} to={item.to} onNavigate={() => setMenuOpen(false)} />
           ))}
 
@@ -141,16 +155,26 @@ export function AppBar({ role }: { role: UserRole }) {
 
           <div className="border-t border-gray-100" />
 
-          <MenuItem icon={<InfoIcon className="h-5 w-5" />} label={t('menu.about')} to="/about" onNavigate={() => setMenuOpen(false)} />
-          <MenuItem icon={<MailIcon className="h-5 w-5" />} label={t('menu.sendFeedback')} onClick={() => { setMenuOpen(false); window.location.href = `mailto:support@sync-sit.com?subject=${encodeURIComponent('Feedback — Sync/Sit')}`; }} />
-          <MenuItem icon={<MailIcon className="h-5 w-5" />} label={t('menu.reportProblem')} to="/report" onNavigate={() => setMenuOpen(false)} />
-          <MenuItem icon={<ShieldIcon className="h-5 w-5" />} label={t('menu.privacyPolicy')} to="/privacy" onNavigate={() => setMenuOpen(false)} />
-          <MenuItem icon={<FileTextIcon className="h-5 w-5" />} label={t('menu.terms')} to="/terms" onNavigate={() => setMenuOpen(false)} />
+          {/* Section 3 -- cross-app and language (issue #339). Language was
+              previously rendered for admins only; every role gets it now. */}
+          <MenuItem icon={<ShareIcon className="h-5 w-5" />} label={t('share.title')} to="/share" onNavigate={() => setMenuOpen(false)} />
+          <AppSwitchMenuItem />
+          {role !== 'admin' && (
+            <div className="px-4 py-3">
+              <LanguageSelector />
+            </div>
+          )}
 
           <div className="border-t border-gray-100" />
 
-          <MenuItem icon={<ShareIcon className="h-5 w-5" />} label={t('share.title')} to="/share" onNavigate={() => setMenuOpen(false)} />
-          <AppSwitchMenuItem />
+          {/* Section 4 -- support and legal. Report a problem is kept beside
+              Send feedback: the owner's list names only the latter, but
+              deleting a working support surface was not asked for. */}
+          <MenuItem icon={<MailIcon className="h-5 w-5" />} label={t('menu.sendFeedback')} onClick={() => { setMenuOpen(false); window.location.href = `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent('Feedback — Sync/Sit')}`; }} />
+          <MenuItem icon={<MailIcon className="h-5 w-5" />} label={t('menu.reportProblem')} to="/report" onNavigate={() => setMenuOpen(false)} />
+          <MenuItem icon={<InfoIcon className="h-5 w-5" />} label={t('menu.about')} to="/about" onNavigate={() => setMenuOpen(false)} />
+          <MenuItem icon={<ShieldIcon className="h-5 w-5" />} label={t('menu.privacyPolicy')} to="/privacy" onNavigate={() => setMenuOpen(false)} />
+          <MenuItem icon={<FileTextIcon className="h-5 w-5" />} label={t('menu.terms')} to="/terms" onNavigate={() => setMenuOpen(false)} />
 
           <div className="border-t border-gray-100" />
 

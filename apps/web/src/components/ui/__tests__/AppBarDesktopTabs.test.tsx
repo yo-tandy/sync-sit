@@ -47,15 +47,17 @@ describe('sit desktop nav tabs', () => {
     const hrefs = within(nav)
       .getAllByRole('link')
       .map((a) => a.getAttribute('href'));
+    // Owner's menu order (issue #339): identity and family configuration
+    // first, then activity. /family/invite is GONE from the nav entirely --
+    // co-parent moved inside family settings (issue #340).
     expect(hrefs).toEqual([
-      '/family/appointments',
-      '/family/verification',
       '/family/account',
       '/family/settings',
-      '/family/preferred',
-      '/family/invite',
       '/family/governance',
+      '/family/verification',
+      '/family/appointments',
       '/family/endorsements',
+      '/family/preferred',
     ]);
   });
 

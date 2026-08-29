@@ -76,14 +76,18 @@ describe('study desktop nav tabs', () => {
     const hrefs = within(tabsNav())
       .getAllByRole('link')
       .map((a) => a.getAttribute('href'));
+    // Order follows the owner's menu spec (issue #339): identity and
+    // family configuration first, then activity. The tab row renders the
+    // same list as the burger, so this pin doubles as the desktop half of
+    // the section-order guarantee.
     expect(hrefs).toEqual([
-      '/family/sessions',
-      '/family/requests',
-      '/family/endorsements',
-      '/family/governance',
-      '/family/verification',
       '/family/account',
       '/family/settings',
+      '/family/governance',
+      '/family/verification',
+      '/family/requests',
+      '/family/sessions',
+      '/family/endorsements',
     ]);
   });
 });
