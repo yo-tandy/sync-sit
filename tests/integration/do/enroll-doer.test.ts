@@ -38,6 +38,9 @@ async function seedCode(email: string) {
     .doc(email.toLowerCase())
     .set({
       code: CODE,
+      // The stamp verifyEjmEmail writes (issue #322): this enrollment is
+      // EJM-gated and refuses a code without it.
+      identityClass: 'ejm',
       email: email.toLowerCase(),
       expiresAt: new Date(Date.now() + 10 * 60 * 1000),
       attempts: 0,

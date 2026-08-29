@@ -5,6 +5,7 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { joinFamilySchema } from '@ejm/sit-core';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
 import { addProfileToUser } from './addProfileToUser.js';
+import { assertCodeIdentityClass } from '../auth/verificationCodeClass.js';
 
 interface JoinFamilyData {
   token: string;
@@ -62,6 +63,13 @@ export const joinFamily = onCall(
       }
 
       const codeData = codeDoc.data()!;
+
+      // Joining a family as a second parent asserts nothing about EJM
+      // membership — the invite token is the authorization, the code only
+      // proves the joiner owns the mailbox. 'mailbox' (the class every issuer
+      // produces) is exactly that. Stated rather than assumed (issue #322).
+      // Unstamped legacy docs also read as 'mailbox', so no transitional gap.
+      assertCodeIdentityClass(codeData, 'mailbox');
 
       if (codeData.expiresAt.toDate() < new Date()) {
         throw new HttpsError('deadline-exceeded', 'Verification code expired');

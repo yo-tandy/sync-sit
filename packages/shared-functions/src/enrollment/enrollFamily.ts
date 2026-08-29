@@ -4,6 +4,7 @@ import { getCorsOrigin } from '../config/cors.js';
 import { familyEnrollmentSchema } from '@ejm/sit-core';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
 import { addProfileToUser, assertCanAddProfile } from './addProfileToUser.js';
+import { assertCodeIdentityClass } from '../auth/verificationCodeClass.js';
 
 interface KidInput {
   firstName: string;
@@ -64,6 +65,16 @@ export const enrollFamily = onCall(
       }
 
       const codeData = codeDoc.data()!;
+
+      // A parent account asserts nothing about EJM membership — this flow is
+      // open self-signup, and 'mailbox' (the class every issuer produces) is
+      // genuinely all it needs. Stated rather than assumed (issue #322): the
+      // requirement lives at the read, so the next reader of this code does
+      // not have to work out which callable minted the doc. Deliberately NOT
+      // tightened to 'ejm' — an EJM student enrolling their own family is a
+      // supported flow, and 'mailbox' accepts both classes. Unstamped legacy
+      // docs also read as 'mailbox', so this path has no transitional gap.
+      assertCodeIdentityClass(codeData, 'mailbox');
 
       if (codeData.expiresAt.toDate() < new Date()) {
         throw new HttpsError('deadline-exceeded', 'Verification code expired');

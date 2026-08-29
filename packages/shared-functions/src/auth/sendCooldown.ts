@@ -17,7 +17,12 @@ import { getConfigValue } from '../config/adminConfig.js';
 // AND its floor).
 
 /** True when a verificationCodes/{email} doc exists and was created less
- *  than the configured cooldown ago. */
+ *  than the configured cooldown ago.
+ *
+ *  Identity-class agnostic on purpose (issue #322 audit): the cooldown is a
+ *  per-ADDRESS send budget shared by both issuing callables, and grading it
+ *  by class would give one address two independent cooldowns to burn — a
+ *  widening. It grants nothing; the enroll callables grade the class. */
 export async function isInSendCooldown(email: string): Promise<boolean> {
   const doc = await db.collection('verificationCodes').doc(email).get();
   const createdAt = doc.data()?.createdAt;

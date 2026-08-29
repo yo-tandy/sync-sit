@@ -346,7 +346,12 @@ export function DoerEnrollment() {
             ejemEmail={ejemEmail}
             onVerify={async (code) => {
               const verifyFn = httpsCallable(functions, 'verifyCode');
-              await verifyFn({ email: ejemEmail, code });
+              // doEnrollDoer requires an EJM-class code (issue #322); say so
+              // here too, so a code minted through the any-domain parent
+              // callable fails at this step instead of at the end of the
+              // wizard. UX only — doEnrollDoer asserts it server-side (and
+              // independently re-checks the address).
+              await verifyFn({ email: ejemEmail, code, requireIdentityClass: 'ejm' });
               setVerificationCode(code);
               setError(null);
               setStep(step + 1);

@@ -12,6 +12,9 @@ describe('enrollTutor (unauthenticated create path)', () => {
     await clearAll();
     await getDb().collection('verificationCodes').doc(EMAIL).set({
       code: CODE,
+      // The stamp verifyEjmEmail writes (issue #322): this enrollment is
+      // EJM-gated and refuses a code without it.
+      identityClass: 'ejm',
       email: EMAIL,
       expiresAt: new Date(Date.now() + 10 * 60 * 1000),
       attempts: 0,
@@ -101,6 +104,9 @@ describe('enrollTutor area coordinates (distance mode)', () => {
     for (const email of [DIST_EMAIL, BOUNDS_EMAIL]) {
       await db.collection('verificationCodes').doc(email).set({
         code: CODE,
+        // The stamp verifyEjmEmail writes (issue #322): this enrollment is
+        // EJM-gated and refuses a code without it.
+        identityClass: 'ejm',
         email,
         expiresAt: new Date(Date.now() + 10 * 60 * 1000),
         attempts: 0,

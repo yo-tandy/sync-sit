@@ -7,6 +7,7 @@ import { writeUserActivity } from '../admin/writeAuditLog.js';
 import { handleExistingAccountSignup } from './accountExistsNotice.js';
 import { isInSendCooldown } from './sendCooldown.js';
 import { registerVerificationSend } from './sendRateLimit.js';
+import { PARENT_CODE_STAMP } from './verificationCodeClass.js';
 
 /**
  * Send a 6-digit verification code to any email address (for parent enrollment).
@@ -62,6 +63,10 @@ export const verifyParentEmail = onCall(
       return handleExistingAccountSignup(normalizedEmail, app, {
         code: crypto.randomInt(100000, 999999).toString(),
         email: normalizedEmail,
+        // The decoy carries THIS callable's stamp, exactly as the fresh
+        // write below does — a decoy that graded differently would be an
+        // enumeration oracle (issue #322 on top of #148).
+        ...PARENT_CODE_STAMP,
         expiresAt: new Date(Date.now() + 10 * 60 * 1000),
         attempts: 0,
         createdAt: new Date(),
@@ -72,10 +77,15 @@ export const verifyParentEmail = onCall(
     const code = crypto.randomInt(100000, 999999).toString();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
-    // Store verification code
+    // Store verification code. The stamp records what this code PROVES
+    // (issue #322): this callable accepts ANY domain and checks no
+    // membership, so the code proves mailbox ownership and nothing more —
+    // `enrollTutor`/`enrollBabysitter`/`doEnrollDoer` reject it, `enrollFamily`
+    // and `joinFamily` (which need exactly this much) accept it.
     await db.collection('verificationCodes').doc(normalizedEmail).set({
       code,
       email: normalizedEmail,
+      ...PARENT_CODE_STAMP,
       expiresAt,
       attempts: 0,
       createdAt: new Date(),
