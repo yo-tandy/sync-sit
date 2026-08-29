@@ -36,7 +36,7 @@ Lifecycle and Cloud Functions.
 | #367 | `AccountHome` — the shared hub | open, wants #366 |
 | #370 | search and primary action become the page hero | open, wants #365 + #366 |
 | #368 | self-serve cross-app account deletion | open |
-| #369 | `notifPrefs` shape — **owner decision, blocks sync-do PR9** | open |
+| #369 | `notifPrefs` shape — app-scoped, Decision 27; no longer blocks sync-do PR9 | **done** |
 | #374 | the three app-host constants, env-overridable — the original first work item of §8 of this plan | **done** |
 
 Statuses checked against the tree, not the issue tracker, on 2026-08-29.
@@ -113,11 +113,14 @@ three apps, and that `profiles.doer` has **no `searchable` flag** by design
 digest opt-in, never a visibility gate, and the sync-do plan's §7.2 read rule
 must still not consult it).
 
-## 5. Notifications — a concrete problem the flat shape creates
+## 5. Notifications — the flat shape, and the app-scoped one that replaced it
 
-`NotifPrefs` (`packages/shared-core/src/types/common.ts:27-33`) is a flat map
-of **event category → channels**: `newRequest`, `confirmed`, `cancelled`,
-`reminders`, `references`. It is not app-scoped.
+**Status: SETTLED and shipped (issue #369).** What follows records the problem
+and the decision taken, not an open question.
+
+`NotifPrefs` USED TO BE a flat map of **event category → channels**:
+`newRequest`, `confirmed`, `cancelled`, `reminders`, `references`, with no app
+scope.
 
 §10 adds **twelve** `NotificationType` values for do. Under the flat shape,
 their preference rows would appear on the notifications screen of **every
@@ -126,19 +129,56 @@ user, including those with no doer profile** — a sit-only parent would see
 That is not a style objection; it is the shared account screen surfacing a
 per-app concern to the wrong people.
 
-Two ways out, and PR9 should not proceed without a choice:
+**DECISION 27 (owner, 2026-08-29): option 1, app-scoped preferences —
+`notifPrefs: { shared, sit, study, do }`, rendered as one shared block plus a
+block per profile the user holds.** It matches where the push tokens already
+are (`fcmTokens` / `fcmTokensStudy` / `fcmTokensDo`) and is what issue #168
+Phase 2 wants anyway. Option 2 (render-time filtering over the flat map) was
+rejected: it leaves the schema saying something the UI contradicts.
 
-1. **App-scoped prefs** — `notifPrefs: { shared, sit, study, do }`, rendered as
-   one shared block plus a block per profile the user holds. Matches where the
-   push tokens already are (`fcmTokens` / `fcmTokensStudy` / `fcmTokensDo`) and
-   is what issue #168 Phase 2 wants anyway. **Costs a schema migration.**
-2. **Render-time filtering** — keep the flat map, hide rows for apps the user
-   has no profile in. No migration; leaves the schema saying something the UI
-   contradicts, and #168 Phase 2 migrates it later regardless.
+**The split, read off what the senders actually gate — not off taste:**
 
-Recommendation: (1), done once, at PR9 — because PR9 is the moment do's twelve
-types land, and migrating a map that already carries them is strictly worse
-than shaping it correctly on arrival.
+| Category | Block | Why |
+|---|---|---|
+| `newRequest`, `confirmed`, `cancelled` | **per app** | Each gates a state change on ONE engagement inside ONE marketplace (`sendContactRequest` / `bookSession` / `submitOffer`). The three differ in volume and stakes by an order of magnitude — do's board is a high-traffic offer feed, a sit request is a rare, high-stakes ask about a child — so "mute new requests" only has an answer per app. |
+| `reminders`, `references` | **shared** | `reminders` is the upcoming-engagement nudge in every app that has a scheduler; it is about the user's own calendar, of which they have one, and it is the one category whose default is deliberately push-only, i.e. a CHANNEL habit rather than an interest in a kind of event. `references` is reputation attached to the PERSON, who under the portable-user-entity model is one identity across the three apps. |
+
+Two facts from the code back the second row rather than intuition: sync-do
+consults **neither** shared category (`sendTaskDigest` passes
+`prefCategory: null`, and `do/submitEndorsement` maps onto `newRequest`), and
+`DoPrefCategory` was already exactly the per-app trio — it is now literally
+`AppNotifCategory`.
+
+**Every reader goes through `resolveNotifPref` (`@ejm/shared-core`)** instead
+of indexing the stored object, which puts the category→block mapping, the
+transitional read of the flat shape and the fail direction each in one place.
+Fail direction: a known category with nothing stored resolves to the PRODUCT
+DEFAULT for that category (never a blanket "notify" — `reminders.email` is
+false by design), merged channel-by-channel; an unknown category or app fails
+CLOSED and warns, because that can only be a code/schema mismatch and the user
+was never shown a toggle for it. It warns rather than throws because every
+caller is a post-commit sender.
+
+**Rendering rule** is `notifPrefRowsForUser`: shared block always, plus an app
+block per PROVIDER profile held (`babysitter`→sit, `tutor`→study, `doer`→do).
+`profiles.parent` is app-agnostic by design, so it grants sit and study — the
+two apps that ship a family Account page — and NOT do, which has no family
+profile slot (sync-do plan §3.3) and no family settings surface. Residual: a
+hiring parent in sync/do cannot yet TUNE their do preferences (delivery is
+unaffected — the senders resolve to the product defaults); closing it needs a
+do-side family marker on the user doc, tracked as the #369 follow-up.
+
+**Migration**: `scripts/backfill-369-app-scoped-notifprefs.cjs`, dry-run by
+default, idempotent. It copies the per-engagement trio into all three app
+blocks — the only mapping under which nobody's delivery changes on migration
+day — and LEAVES the flat keys in place for one release, so instances still
+running the previous build keep reading them. The flat keys, the
+`LegacyNotifPrefs` type and the transitional branch in `resolveNotifPref` are
+removed together once the backfill has run against prod.
+
+**This unblocks §3's account hub on the shape question**: the hub renders
+`notifPrefRowsForUser` whole, where a per-app Account page renders it narrowed
+to its own scope.
 
 ## 6. Backend work this implies (none of it do-specific, all of it do-blocking)
 
@@ -149,7 +189,7 @@ than shaping it correctly on arrival.
    it has to reach do's collections too. **This is new work that touches
    sync-do's data and should be built with §11.4's hard-delete coverage rather
    than after it.**
-2. **`notifPrefs` shape** — see §5 of this plan.
+2. **`notifPrefs` shape** — DONE (Decision 27 / issue #369); see §5 of this plan.
 3. **No handoff change.** `appHandoffCodes` is already app-agnostic (§3.3);
    moving the call from a menu item to a tab needs nothing server-side.
 4. **No rules change.** The bar and hub read `users/{uid}` as owner and
@@ -169,8 +209,9 @@ than shaping it correctly on arrival.
   recommended), or one app owns `/account` and the others deep-link through
   the handoff (one implementation, but every visit costs a cross-origin hop
   and a token redemption).
-- **Q11 — Notifications shape** (§5 of this plan): migrate to app-scoped prefs
-  at PR9, or filter at render and migrate later under #168 Phase 2.
+- ~~**Q11 — Notifications shape** (§5 of this plan)~~ — **ANSWERED, Decision 27
+  (2026-08-29): app-scoped prefs.** Shipped on issue #369; see §5 for the
+  split, the fail direction, the rendering rule and the migration.
 - **Q12 — Paths or subdomains under the new domain** (§8 below). Decisive: it
   decides whether `appHandoffCodes` survives, whether the bar is an instant
   tab switch, and whether Q10 exists at all. Until it is answered, build for

@@ -15,6 +15,12 @@ import {
   type StoredNotifPrefs,
 } from '../../types/common.js';
 
+// shared-core compiles against `lib: ES2022` only (no DOM, no @types/node),
+// so `console` is not a declared global here — the resolver reaches it through
+// `globalThis` for exactly that reason. Bind the same object the spy replaces.
+const hostConsole = (globalThis as unknown as { console: { warn: (m: string) => void } })
+  .console;
+
 afterEach(() => {
   vi.restoreAllMocks();
 });
@@ -94,7 +100,7 @@ describe('resolveNotifPref — the fail direction', () => {
   });
 
   it('fails CLOSED and warns on an unknown category', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const warn = vi.spyOn(hostConsole, 'warn').mockImplementation(() => {});
     expect(
       resolveNotifPref({}, 'do', 'boardDigest' as never),
     ).toEqual({ push: false, email: false });
@@ -102,7 +108,7 @@ describe('resolveNotifPref — the fail direction', () => {
   });
 
   it('fails CLOSED and warns on an unknown app scope', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const warn = vi.spyOn(hostConsole, 'warn').mockImplementation(() => {});
     expect(resolveNotifPref({}, 'shop' as never, 'newRequest')).toEqual({
       push: false,
       email: false,
