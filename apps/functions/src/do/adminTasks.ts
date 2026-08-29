@@ -152,6 +152,7 @@ export const doAdminListTasks = onCall(
           .sort((a, b) => offerMillis(a) - offerMillis(b))
           .map(projectOffer),
         hasMore: false,
+        truncated: false,
       };
     }
 
@@ -194,7 +195,16 @@ export const doAdminListTasks = onCall(
 
     const hasMore = tasks.length > pageLimit;
 
-    return { tasks: tasks.slice(0, pageLimit), offers: [], hasMore };
+    // A search whose WINDOW filled is reported as truncated, because
+    // `hasMore` cannot distinguish "search exhausted" from "the 500-row
+    // window ran out before reaching a match". Without this, searching for a
+    // year-old task once `doTasks` passes the window size returns "no tasks
+    // found" — a silent miss presented as a definitive answer, in exactly
+    // the support context ("find this family's task") where that is worst.
+    // The UI turns it into a visible caveat rather than a wrong answer.
+    const truncated = Boolean(searchQuery) && snapshot.size === ADMIN_TASKS_SEARCH_WINDOW;
+
+    return { tasks: tasks.slice(0, pageLimit), offers: [], hasMore, truncated };
   },
 );
 
@@ -231,15 +241,22 @@ export const doAdminDeleteTask = onCall(
     // the `targetUserId` slot the wrapper does not expose (the
     // `deleteAppointment` precedent). Same `auditLogs` collection, same
     // `do.`-prefixed action namespace as the member-side entries.
+    // Every field defaulted, because this write happens AFTER the cascade has
+    // already destroyed the data: `writeAuditLog` has no
+    // `ignoreUndefinedProperties`, so one `undefined` (a doc written before a
+    // field existed, or by a repair script) would throw, return `internal`,
+    // and leave the destructive action with no audit record at all — the one
+    // thing §11.4 relies on here. `projectTask` above defends the same fields
+    // for the same reason.
     await writeAuditLog({
       adminUserId: request.auth.uid,
       action: 'do.admin_delete_task',
-      targetUserId: task.createdByUserId,
+      targetUserId: task.createdByUserId ?? 'unknown',
       details: {
         taskId: ref.id,
-        familyId: task.familyId,
-        status: task.status,
-        category: task.category,
+        familyId: task.familyId ?? null,
+        status: task.status ?? null,
+        category: task.category ?? null,
         assignedUserId: task.assignedUserId ?? null,
         offersDeleted: stats.offersDeleted,
         photoObjectsDeleted: stats.photoObjectsDeleted,

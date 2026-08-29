@@ -59,6 +59,7 @@ export function AdminDoTasksPage() {
     doTasksLoadingMore,
     doTasksHasMore,
     doTasksError,
+    doTasksTruncated,
     fetchDoTasks,
     fetchDoTaskOffers,
     deleteDoTask,
@@ -74,6 +75,7 @@ export function AdminDoTasksPage() {
   const [offersError, setOffersError] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<AdminDoTaskRow | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState(false);
 
   const currentParams = useCallback(
     () => ({
@@ -121,16 +123,24 @@ export function AdminDoTasksPage() {
     }
   };
 
+  // The dialog closes only on SUCCESS. `deleteDoTask` rethrows (unlike the
+  // list fetch, which flags an error instead), and a `finally`-only close
+  // would look identical to a success while the row stayed put — on the one
+  // action in this panel that also deletes files. So a failure keeps the
+  // dialog open and shows the reason.
   const handleDelete = async () => {
     if (!deleteTarget || deleting) return;
     setDeleting(true);
+    setDeleteError(false);
     try {
       await deleteDoTask(deleteTarget.id);
       if (expandedId === deleteTarget.id) setExpandedId(null);
+      setDeleteTarget(null);
       loadTasks();
+    } catch {
+      setDeleteError(true);
     } finally {
       setDeleting(false);
-      setDeleteTarget(null);
     }
   };
 
@@ -342,6 +352,15 @@ export function AdminDoTasksPage() {
           />
         )}
 
+        {/* The search window filled before the filter ran, so "no match" is
+            not a definitive answer — say so rather than let a silent miss
+            read as "this task does not exist". */}
+        {!doTasksLoading && doTasksTruncated && (
+          <p className="mt-4 text-center text-sm text-amber-700" role="status">
+            {t('admin.doTasks.searchTruncated')}
+          </p>
+        )}
+
         {/* Load failure: distinguishable from a genuinely empty result */}
         {doTasksError && (
           <p className="mt-4 text-center text-sm text-brand-600" role="alert">
@@ -368,15 +387,30 @@ export function AdminDoTasksPage() {
           objects (§11.4), which no other admin action in this panel does. */}
       <Dialog
         open={!!deleteTarget}
-        onClose={() => setDeleteTarget(null)}
+        onClose={() => {
+          setDeleteTarget(null);
+          setDeleteError(false);
+        }}
         ariaLabel={t('admin.doTasks.deleteTitle')}
       >
         <h3 className="mb-2 text-lg font-semibold">{t('admin.doTasks.deleteTitle')}</h3>
-        <p className="mb-6 text-sm text-gray-600">
+        <p className="mb-4 text-sm text-gray-600">
           {t('admin.doTasks.confirmDelete', { title: deleteTarget?.title ?? '' })}
         </p>
+        {deleteError && (
+          <p className="mb-4 text-sm text-brand-600" role="alert">
+            {t('admin.doTasks.deleteError')}
+          </p>
+        )}
         <div className="flex gap-3">
-          <Button variant="secondary" size="sm" onClick={() => setDeleteTarget(null)}>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => {
+              setDeleteTarget(null);
+              setDeleteError(false);
+            }}
+          >
             {t('common.cancel')}
           </Button>
           <Button variant="primary" size="sm" onClick={handleDelete} disabled={deleting}>

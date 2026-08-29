@@ -304,6 +304,10 @@ interface AdminState {
   doTasksLoadingMore: boolean;
   doTasksHasMore: boolean;
   doTasksError: boolean;
+  /** The search window filled before the filter ran — results may be
+   *  incomplete, and the page says so rather than implying a definitive
+   *  "not found". */
+  doTasksTruncated: boolean;
   fetchDoTasks: (params: {
     search?: string;
     category?: string;
@@ -492,6 +496,7 @@ export const useAdminStore = create<AdminState>((set, get) => ({
   doTasksLoadingMore: false,
   doTasksHasMore: false,
   doTasksError: false,
+  doTasksTruncated: false,
   fetchDoTasks: async (params) => {
     const append = Boolean(params.startAfterId);
     if (append && get().doTasksLoadingMore) return;
@@ -500,7 +505,7 @@ export const useAdminStore = create<AdminState>((set, get) => ({
     try {
       const fn = httpsCallable<
         ListDoTasksPayload,
-        { tasks: AdminDoTaskRow[]; hasMore: boolean }
+        { tasks: AdminDoTaskRow[]; hasMore: boolean; truncated?: boolean }
       >(functions, 'doAdminListTasks');
       // Omit empty fields entirely — the callable client serializes
       // undefined as null (the listFamilies note).
@@ -514,6 +519,7 @@ export const useAdminStore = create<AdminState>((set, get) => ({
       set((state) => ({
         doTasks: append ? [...state.doTasks, ...result.data.tasks] : result.data.tasks,
         doTasksHasMore: result.data.hasMore,
+        doTasksTruncated: Boolean(result.data.truncated),
         doTasksLoading: false,
         doTasksLoadingMore: false,
       }));

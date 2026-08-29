@@ -975,6 +975,9 @@ export default {
         'Supprimer définitivement « {{title}} » ? Toutes les offres associées et ses fichiers photo seront également supprimés. Cette action est irréversible.',
       empty: 'Aucune tâche trouvée',
       loadError: 'Impossible de charger les tâches. Veuillez réessayer.',
+      deleteError: 'Impossible de supprimer la tâche. Veuillez réessayer.',
+      searchTruncated:
+        "Seules les tâches les plus récentes ont été parcourues — une correspondance au-delà n'apparaîtrait pas. Affinez avec les filtres catégorie, statut ou famille.",
       openTasks: 'Tâches Do ouvertes',
       allTasks: 'Tâches Do (toutes)',
       status: {

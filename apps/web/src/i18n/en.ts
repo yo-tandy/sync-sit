@@ -1006,6 +1006,9 @@ export default {
         'Permanently delete "{{title}}"? This also deletes every offer on it and its photo files. This cannot be undone.',
       empty: 'No tasks found',
       loadError: 'Could not load tasks. Please try again.',
+      deleteError: 'Could not delete the task. Please try again.',
+      searchTruncated:
+        'Only the most recent tasks were searched — a match beyond that window would not appear. Narrow the search with the category, status or family filters.',
       openTasks: 'Open Do tasks',
       allTasks: 'Do tasks (all)',
       status: {
