@@ -1,5 +1,17 @@
 # Sync-Study Project Plan
 
+> ⚠️ **Suite-wide decisions that change sync-study live in
+> `docs/platform-plan.md`** (issue #371): the shared bottom bar that switches
+> apps, the shared neutral account hub, search and the primary action becoming
+> the page hero, admin going neutral gray, the app-scoped `notifPrefs` question,
+> and the move of all three apps under one domain. They are owner-decided and
+> they are not recorded anywhere in this file — read them before reshaping a
+> sync-study shell, account page or notification preference.
+>
+> Companion docs: `docs/platform-plan.md` (suite-wide),
+> `docs/shared-modules-roadmap.md` (the shared-package contract),
+> `docs/sync-do-project-plan.md` (the third app).
+
 ## Table of Contents
 
 1. [Project Overview](#1-project-overview)

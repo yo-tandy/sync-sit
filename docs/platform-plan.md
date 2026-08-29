@@ -15,18 +15,22 @@ look (issue #371). The sync-do plan keeps its own per-PR impact table (its
 Design reference: the canvas on issue #124 (artboards for parent, student, do,
 admin, and the account hub). Decisions below are the owner's, taken there.
 
-**Reading the cross-references.** A bare `§9.2` means the *sync-do* plan --
-these sections were written as an appendix to it and the references were left
-verbatim rather than rewritten from memory. References to sections of THIS
-document say `§5` with no other qualifier only inside a sentence that names
-this plan; where it could be read either way, the document is named.
+**Reading the cross-references.** A bare `§9.2` always means the *sync-do*
+plan (`docs/sync-do-project-plan.md`) — these sections were written as an
+appendix to it, and the references were left verbatim rather than rewritten
+from memory. Sections of THIS document are never bare: they are written
+`§5 of this plan`, or `§8 below` / `§2 above`. The qualifier is not
+decoration — the numbers collide, and both readings are plausible. This plan's
+§2, §5, §6 and §8 are the switcher, notifications, backend work and the domain;
+the sync-do plan's are Decisions Taken, Category Taxonomy, Task & Offer
+Lifecycle and Cloud Functions.
 
 ## 0. Build state
 
 | | | |
 |---|---|---|
-| #364 | bar-weight brand marks | **done** (#385) |
-| #365 | `AppSwitchBar`, wired into all six authed shells | **done** (#385) |
+| #364 | brand marks consolidated into `shared-ui` (`./brand-marks/*`) | **done** (issue #302); the bar-weight variants ship with #385 |
+| #365 | `AppSwitchBar`, wired into all six authed shells | **open — in PR #385** |
 | #386 | drop in owner-supplied bar icons | waiting on art |
 | #366 | Recess visual pass; admin neutral | open |
 | #367 | `AccountHome` — the shared hub | open, wants #366 |
@@ -34,7 +38,13 @@ this plan; where it could be read either way, the document is named.
 | #368 | self-serve cross-app account deletion | open |
 | #369 | `notifPrefs` shape — **owner decision, blocks sync-do PR9** | open |
 
-The domain cutover (§8) additionally needs owner action outside the repo:
+Statuses checked against the tree, not the issue tracker, on 2026-08-29. The
+marker for #365 is an `AppSwitchBar` in `packages/shared-ui`: until PR #385
+lands, all six authed shells still render `AppSwitchMenuItem`, which is the
+menu-item switcher §2 of this plan declares superseded. Whoever merges #385
+flips this row.
+
+The domain cutover (§8 below) additionally needs owner action outside the repo:
 registering the domain, pointing DNS, and verifying the sending domain with
 Resend. That last one has real lead time.
 
@@ -81,7 +91,8 @@ This is the largest scope change, and it *reduces* work.
   `doEnrollDoer`), not a new callable. **PR4 must therefore treat "arrived via
   handoff from another app's account hub" as a first-class entry path**, not
   only "opened do-web directly".
-- Because the hub is hosted by each app (see §6), sit and study will
+- Because the hub is hosted by each app (§7 Q10 of this plan, whose
+  recommended answer is exactly that), sit and study will
   render a *summary* of the doer profile. That needs `@ejm/do-core`'s
   `DoerProfile` type available to them — a package edge §12 does not currently
   list.
@@ -90,12 +101,12 @@ This is the largest scope change, and it *reduces* work.
 
 In sit and study a student waits to be found, so their hero control is the
 `searchable` visibility toggle. **In do the board is demand-first, so the
-doer's hero is the board itself.** §9.2 already describes this; the appendix
+doer's hero is the board itself.** §9.2 already describes this; this plan
 records that it makes the student shell deliberately non-uniform across the
 three apps, and that `profiles.doer` has **no `searchable` flag** by design
 (§3.3 named the field `notifyNewTasks` for exactly this reason — it is a
-digest opt-in, never a visibility gate, and the §7.2 read rule must still not
-consult it).
+digest opt-in, never a visibility gate, and the sync-do plan's §7.2 read rule
+must still not consult it).
 
 ## 5. Notifications — a concrete problem the flat shape creates
 
@@ -133,12 +144,12 @@ than shaping it correctly on arrival.
    it has to reach do's collections too. **This is new work that touches
    sync-do's data and should be built with §11.4's hard-delete coverage rather
    than after it.**
-2. **`notifPrefs` shape** — see §5.
+2. **`notifPrefs` shape** — see §5 of this plan.
 3. **No handoff change.** `appHandoffCodes` is already app-agnostic (§3.3);
    moving the call from a menu item to a tab needs nothing server-side.
 4. **No rules change.** The bar and hub read `users/{uid}` as owner and
-   `families/{familyId}` as member — both already permitted. The §7.2
-   amendments stand as written.
+   `families/{familyId}` as member — both already permitted. The sync-do
+   plan's §7.2 amendments stand as written.
 5. **Firebase Auth authorized domains** still needs the `sync-do-app` entry
    before do's tab can resolve — already a PR2 blocker, unchanged.
 
@@ -153,9 +164,9 @@ than shaping it correctly on arrival.
   recommended), or one app owns `/account` and the others deep-link through
   the handoff (one implementation, but every visit costs a cross-origin hop
   and a token redemption).
-- **Q11 — Notifications shape** (§5): migrate to app-scoped prefs at PR9, or
-  filter at render and migrate later under #168 Phase 2.
-- **Q12 — Paths or subdomains under the new domain** (§8). Decisive: it
+- **Q11 — Notifications shape** (§5 of this plan): migrate to app-scoped prefs
+  at PR9, or filter at render and migrate later under #168 Phase 2.
+- **Q12 — Paths or subdomains under the new domain** (§8 below). Decisive: it
   decides whether `appHandoffCodes` survives, whether the bar is an instant
   tab switch, and whether Q10 exists at all. Until it is answered, build for
   separate origins — that assumption degrades gracefully and the reverse does
@@ -177,7 +188,7 @@ Firebase Auth persists its session in IndexedDB and IndexedDB is scoped
 | Origins | **One** | **Three** (subdomains are separate origins for storage) |
 | Auth session | One session for all three apps | One per app, as today |
 | `appHandoffCodes` | **Becomes dead code** — nothing to carry | Stays exactly as it is |
-| Bottom bar (§2) | A real instant tab switch; no loading state | Keeps its pressed/loading state |
+| Bottom bar (§2 of this plan) | A real instant tab switch; no loading state | Keeps its pressed/loading state |
 | Q10 (which origin serves the account) | **Dissolves** — one `/account` route | Stays a live fork |
 | Auth authorized domains | One entry | Three entries |
 | PWA / service workers | Need per-path scoping; `firebase-messaging-sw.js` scope matters | Clean separation, unchanged |
@@ -201,12 +212,25 @@ about twenty times across twelve files under `apps/functions/src/**`
 a sit-domain move, it lands almost entirely on the half that was never
 centralised.
 
-Two smaller notes in the same area: the client apps' sit fallback is
+Two smaller notes in the same area. The client apps' sit fallback is
 `https://sync-sit.web.app` while the functions inline `https://sync-sit.com`, so
-two sit hosts are already in circulation; and `apps/web/src/constants/brand.ts`,
-`apps/do-web/src/constants/brand.ts` and `AboutPage.tsx` carry their own
-literals. In total, **21 files hold 46 literal host or address strings** outside
-tests.
+two sit hosts are already in circulation. And the surface splits in two halves
+that are in very different states:
+
+- **Support addresses are now centralised.** Each app's
+  `src/constants/brand.ts` holds one `SUPPORT_EMAIL`, every consumer reads it,
+  and `scripts/__tests__/support-addresses.test.ts` fails the build if an app
+  hardcodes one elsewhere or points at a domain that does not receive mail.
+  That happened because study-web and do-web were publishing
+  `support@sync-study.com` and `support@sync-do.com`, neither of which was ever
+  connected, on live sites. At the cutover this half is three constants.
+- **Host URLs are not.** Roughly twenty `https://sync-sit.com/...` literals sit
+  inline in email HTML across twelve files under `apps/functions/src/**`. This
+  is the half the work item below addresses.
+
+Together, **21 files carry 47 lines with a literal host or address** outside
+tests. The number moves as work lands; the ratio is the point — the address
+half is one constant per app, the host half is a sweep.
 
 **First work item, and it is cheap: give sit the constant the other two already
 have.** An exported `SIT_APP_URL` in `email.ts` alongside its siblings, and the
@@ -234,8 +258,8 @@ Two items carry real lead time and should start before a cutover date is fixed:
    scope stay on the old domain until the member reinstalls. Worth checking the
    install count and deciding whether members are prompted.
 
-**Consequences already recorded elsewhere in this plan that Q12 may change:**
-§3.1 (three hosting targets), §3.3 (the switcher and Auth authorized domains),
-§2 (the bar's loading state), §7 Q10 (account hosting). None of them
-need editing until Q12 is answered; this section is the pointer so the change
-is not discovered piecemeal.
+**Consequences already recorded elsewhere that Q12 may change:** in the sync-do
+plan, §3.1 (three hosting targets) and §3.3 (the switcher and Auth authorized
+domains); in this plan, §2 (the bar's loading state) and §7 Q10 (account
+hosting). None of them need editing until Q12 is answered; this section is the
+pointer so the change is not discovered piecemeal.

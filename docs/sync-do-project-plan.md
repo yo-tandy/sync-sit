@@ -34,7 +34,7 @@
 15. [V1 Scope Decisions](#15-v1-scope-decisions)
 16. [Future Roadmap](#16-future-roadmap)
 17. [Open Questions & Risks](#17-open-questions--risks)
-18. [Appendix A — the shared shell](#18-appendix-a--the-shared-shell-issue-124-owner-decided-2026-08-29)
+18. [Appendix A — the shared shell and the domain, moved to `docs/platform-plan.md`](#18-appendix-a--the-shared-shell-and-the-domain-moved)
 
 ---
 
