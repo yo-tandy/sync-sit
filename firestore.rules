@@ -456,22 +456,34 @@ service cloud.firestore {
     // (referenceText, submittedByName, submittedByFamilyId; sit and study).
     // Disjuncts, each provable from a client query's constraints:
     //   - public status: approved/published are profile-visible to everyone;
-    //   - recipient: babysitterUserId (sit) or tutorUserId (study) == caller;
+    //   - recipient: babysitterUserId (sit), tutorUserId (study) or
+    //     doerUserId (sync-do) == caller;
     //   - submitter: submittedByUserId == caller;
     //   - submitting family: caller is a member of submittedByFamilyId;
     //   - admin.
-    // .get(...) defaults keep the mixed sit/study shapes from erroring (sit
+    // .get(...) defaults keep the mixed sit/study/do shapes from erroring (sit
     // manual docs have no tutorUserId/submittedByUserId/submittedByFamilyId;
-    // study docs have no babysitterUserId). The family disjunct is guarded by a
-    // non-empty check so isFamilyMember() — which get()s the family doc — is
-    // only evaluated for docs that actually carry a submittedByFamilyId; a
-    // missing family would otherwise error the whole || chain and deny reads a
-    // LATER disjunct (isAdmin) should grant. See the H2 rules tests.
+    // study and do docs have no babysitterUserId). The family disjunct is
+    // guarded by a non-empty check so isFamilyMember() — which get()s the
+    // family doc — is only evaluated for docs that actually carry a
+    // submittedByFamilyId; a missing family would otherwise error the whole ||
+    // chain and deny reads a LATER disjunct (isAdmin) should grant. See the H2
+    // rules tests.
+    //
+    // THE doerUserId DISJUNCT (sync-do plan §12 second amendment, issue #300).
+    // A DoerEndorsementDoc is written `private` by doSubmitEndorsement and is
+    // ABOUT the doer it names — without this disjunct the doer cannot read it,
+    // and §9.2's "My endorsements → pending" list renders empty on the exact
+    // docs it exists to show. Added as a RECIPIENT disjunct only: the
+    // public-status disjunct is deliberately NOT widened, because §9.1's three
+    // offer-card queries ride it and depend on their
+    // `status in ['approved','published']` constraint staying load-bearing.
     match /references/{referenceId} {
       allow read: if isAuth() && (
         resource.data.status in ['approved', 'published']
         || resource.data.get('babysitterUserId', '') == request.auth.uid
         || resource.data.get('tutorUserId', '') == request.auth.uid
+        || resource.data.get('doerUserId', '') == request.auth.uid
         || resource.data.get('submittedByUserId', '') == request.auth.uid
         || (resource.data.get('submittedByFamilyId', '') != ''
             && isFamilyMember(resource.data.get('submittedByFamilyId', '')))

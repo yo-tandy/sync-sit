@@ -1192,6 +1192,7 @@ taskOffers: (doerUserId ASC, createdAt DESC)                — "my offers" (sta
 taskOffers: (guardian.familyId ASC, status ASC)             — guardian queue (server-side, see below)
 references: (tutorUserId ASC, status ASC)                   — offer-card endorsements, study side (NEW)
 references: (doerUserId ASC, status ASC)                    — offer-card endorsements, do side (NEW)
+references: (doerUserId ASC, createdAt DESC)                — §9.2 "My endorsements", the doer's own set newest-first (NEW, PR11 — the sibling of the existing (tutorUserId, createdAt DESC) that serves study's EndorsementsPage; it rides the READ rule's new doerUserId recipient disjunct, so it carries no status filter)
 users:      (status ASC, profiles.doer.notifyNewTasks ASC,
              profiles.doer.categories ARRAY)                — the §10 digest's recipient query (server-side)
 ```
