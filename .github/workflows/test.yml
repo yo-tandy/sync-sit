@@ -26,6 +26,14 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      # Lint — cheap, and the gate that was missing: five real errors
+      # (two set-state-in-effect, three react-refresh export splits) reached
+      # main because nothing in CI ran eslint. Same class as the absent-test-job
+      # gap issue #216 closed; `--max-warnings` is deliberately NOT set, so
+      # pre-existing warnings stay visible without blocking.
+      - name: Lint
+        run: pnpm -r lint
+
       # Unit tests — fast, no emulators needed
       - name: Run unit tests
         run: pnpm test:unit

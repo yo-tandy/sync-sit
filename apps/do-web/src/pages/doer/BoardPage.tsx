@@ -65,6 +65,10 @@ export function BoardPage() {
   // Server-side dimension: category ('' = all).
   const [category, setCategory] = useState<TaskCategory | ''>('');
   const [tasks, setTasks] = useState<TaskDoc[] | null>(null);
+  // The category the rows in `tasks` were fetched for. Staleness is DERIVED
+  // from it rather than blanking `tasks` synchronously inside the effect,
+  // which cascades renders; the spinner shows while it lags `category`.
+  const [loadedCategory, setLoadedCategory] = useState<TaskCategory | '' | null>(null);
   const [error, setError] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [exhausted, setExhausted] = useState(true);
@@ -93,6 +97,7 @@ export function BoardPage() {
         setExhausted(snap.docs.length < BOARD_PAGE_SIZE);
         setFetchedAt(Date.now());
         setTasks((prev) => (reset || prev === null ? rows : [...prev, ...rows]));
+        setLoadedCategory(category);
         setError(false);
       } catch {
         setError(true);
@@ -103,8 +108,13 @@ export function BoardPage() {
 
   useEffect(() => {
     cursorRef.current = null;
-    setTasks(null);
-    void fetchPage(true);
+    // Deferred to a microtask so nothing this effect triggers can land a
+    // setState in the same commit (react-hooks/set-state-in-effect): every
+    // write inside `fetchPage` is already behind its `await getDocs`, but
+    // the rule analyses the call, not the await boundary. Staleness is
+    // derived from `loadedCategory`, so a superseded page is ignored on
+    // arrival rather than raced.
+    void Promise.resolve().then(() => fetchPage(true));
   }, [fetchPage]);
 
   const areas = useMemo(
@@ -202,7 +212,7 @@ export function BoardPage() {
         />
       </div>
 
-      {tasks === null ? (
+      {tasks === null || loadedCategory !== category ? (
         <div className="flex justify-center py-20">
           <Spinner />
         </div>
