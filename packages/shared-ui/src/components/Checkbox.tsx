@@ -9,7 +9,7 @@ export function Checkbox({ label, className = '', ...props }: CheckboxProps) {
     <label className={`flex items-start gap-3 ${className}`}>
       <input
         type="checkbox"
-        className="mt-0.5 h-5 w-5 shrink-0 cursor-pointer rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+        className="mt-0.5 h-5 w-5 shrink-0 cursor-pointer rounded border-gray-300 text-brand-600"
         {...props}
       />
       <span className="text-sm text-gray-600">{label}</span>

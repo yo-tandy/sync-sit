@@ -163,7 +163,7 @@ export function StepDoerDetails({ onNext, loading, error, initial = null, onBack
           type="checkbox"
           checked={notifyNewTasks}
           onChange={(e) => setNotifyNewTasks(e.target.checked)}
-          className="mt-0.5 h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+          className="mt-0.5 h-4 w-4 rounded border-gray-300 text-brand-600"
         />
         <span>{t('enrollment.doer.notifyNewTasks')}</span>
       </label>

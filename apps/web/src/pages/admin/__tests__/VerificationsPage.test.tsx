@@ -124,12 +124,29 @@ describe('AdminVerificationsPage view-document error surfacing', () => {
     vi.restoreAllMocks();
   });
 
+  /**
+   * Issue #292: the document is fetched with DOWNLOAD semantics -- a
+   * programmatic anchor click, not window.open (which flashed a tab and
+   * was popup-blockable after the await). Spy captures the href of every
+   * anchor clicked programmatically.
+   */
+  function spyOnAnchorClicks(): string[] {
+    const hrefs: string[] = [];
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (
+      this: HTMLAnchorElement,
+    ) {
+      hrefs.push(this.href);
+    });
+    return hrefs;
+  }
+
   it('surfaces an inline error and never falls back to the raw fileUrl when the callable fails', async () => {
     const { httpsCallable } = await import('firebase/functions');
     (httpsCallable as ReturnType<typeof vi.fn>).mockReturnValue(
       vi.fn().mockRejectedValue(new Error('internal')),
     );
     const openSpy = vi.spyOn(window, 'open').mockReturnValue(null);
+    const hrefs = spyOnAnchorClicks();
 
     renderPage();
     const { fireEvent, waitFor } = await import('@testing-library/react');
@@ -140,23 +157,60 @@ describe('AdminVerificationsPage view-document error surfacing', () => {
         i18n.t('verification.viewDocumentError'),
       ),
     );
-    // The old masking fallback (window.open(raw fileUrl)) must be gone.
+    // The old masking fallback (opening the raw fileUrl) must be gone --
+    // by EITHER mechanism.
     expect(openSpy).not.toHaveBeenCalled();
+    expect(hrefs).toEqual([]);
   });
 
-  it('opens the signed URL (not the raw fileUrl) on success and shows no error', async () => {
+  it('DOWNLOADS the signed URL (not the raw fileUrl) on success and shows no error', async () => {
     const { httpsCallable } = await import('firebase/functions');
     const fn = vi.fn().mockResolvedValue({ data: { url: 'https://signed.example/u' } });
     (httpsCallable as ReturnType<typeof vi.fn>).mockReturnValue(fn);
     const openSpy = vi.spyOn(window, 'open').mockReturnValue({} as Window);
+    const hrefs = spyOnAnchorClicks();
 
     renderPage();
     const { fireEvent, waitFor } = await import('@testing-library/react');
     fireEvent.click(screen.getByText(i18n.t('verification.viewDocument')));
 
-    await waitFor(() => expect(openSpy).toHaveBeenCalledWith('https://signed.example/u', '_blank'));
+    await waitFor(() => expect(hrefs).toEqual(['https://signed.example/u']));
     expect(fn).toHaveBeenCalledWith({ filePath: 'verification-documents/fam1/id.pdf' });
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    // Issue #292 regression guard: the popup mechanism must not come back
+    // -- window.open flashed a tab (Safari left it behind) and was
+    // popup-blockable after the await.
+    expect(openSpy).not.toHaveBeenCalled();
+  });
+
+  it('leaves the admin page in place: the anchor is targetless, in the DOM at click time, and removed after', async () => {
+    const { httpsCallable } = await import('firebase/functions');
+    (httpsCallable as ReturnType<typeof vi.fn>).mockReturnValue(
+      vi.fn().mockResolvedValue({ data: { url: 'https://signed.example/u' } }),
+    );
+    // RECORD the clicks rather than sampling an attribute into a
+    // null-initialized variable: `toBe(null)` against a null sentinel
+    // cannot distinguish "clicked without a target" from "never clicked"
+    // (round-1 review caught exactly that vacuity here).
+    const clicks: { target: string | null; inDom: boolean }[] = [];
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (
+      this: HTMLAnchorElement,
+    ) {
+      clicks.push({ target: this.getAttribute('target'), inDom: document.body.contains(this) });
+    });
+
+    renderPage();
+    const { fireEvent, waitFor } = await import('@testing-library/react');
+    fireEvent.click(screen.getByText(i18n.t('verification.viewDocument')));
+
+    // Exactly one click happened; it carried NO target (so the server's
+    // Content-Disposition downloads it and the queue stays on screen) and
+    // the anchor was attached when clicked (a detached anchor is inert in
+    // some browsers).
+    await waitFor(() => expect(clicks).toHaveLength(1));
+    expect(clicks[0]).toEqual({ target: null, inDom: true });
+    // ...and nothing is left behind afterwards.
+    expect(document.querySelectorAll('a[download]')).toHaveLength(0);
   });
 
   it('surfaces an error for an unparseable fileUrl instead of opening it raw', async () => {
@@ -165,6 +219,7 @@ describe('AdminVerificationsPage view-document error surfacing', () => {
     const fn = vi.fn();
     (httpsCallable as ReturnType<typeof vi.fn>).mockReturnValue(fn);
     const openSpy = vi.spyOn(window, 'open').mockReturnValue({} as Window);
+    const hrefs = spyOnAnchorClicks();
 
     renderPage();
     const { fireEvent, waitFor } = await import('@testing-library/react');
@@ -173,19 +228,36 @@ describe('AdminVerificationsPage view-document error surfacing', () => {
     await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
     expect(fn).not.toHaveBeenCalled();
     expect(openSpy).not.toHaveBeenCalled();
+    expect(hrefs).toEqual([]);
   });
 
-  it('treats a popup-blocked open (null return) as a surfaced error', async () => {
+  // The old 'popup-blocked open surfaces an error' pin is GONE with the
+  // mechanism it guarded: an anchor download cannot be popup-blocked, so
+  // there is no null-return failure to surface (issue #292). A blocked
+  // popup was the failure mode; removing the popup removes the mode. The
+  // real error path -- a failing callable -- keeps its own pin above, and
+  // the success pin asserts window.open is never called again.
+  it('carries the document filename as the download hint when one is known', async () => {
     const { httpsCallable } = await import('firebase/functions');
     (httpsCallable as ReturnType<typeof vi.fn>).mockReturnValue(
       vi.fn().mockResolvedValue({ data: { url: 'https://signed.example/u' } }),
     );
-    vi.spyOn(window, 'open').mockReturnValue(null);
+    // Record clicks like the sibling pin (round 2): a last-value sample
+    // cannot assert that exactly ONE anchor was clicked.
+    const downloads: (string | null)[] = [];
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (
+      this: HTMLAnchorElement,
+    ) {
+      downloads.push(this.getAttribute('download'));
+    });
 
     renderPage();
     const { fireEvent, waitFor } = await import('@testing-library/react');
     fireEvent.click(screen.getByText(i18n.t('verification.viewDocument')));
 
-    await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
+    // Advisory only cross-origin (browsers ignore it; the server's
+    // Content-Disposition does the work) -- pinned so a same-origin
+    // future, or a filename regression, is visible.
+    await waitFor(() => expect(downloads).toEqual(['id.pdf']));
   });
 });

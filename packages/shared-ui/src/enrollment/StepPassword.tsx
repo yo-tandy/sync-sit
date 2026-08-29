@@ -107,7 +107,7 @@ export function StepPassword({ onSubmit, consentVersion, loading, error, collect
           type="checkbox"
           checked={consent}
           onChange={(e) => setConsent(e.target.checked)}
-          className="mt-0.5 h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+          className="mt-0.5 h-4 w-4 rounded border-gray-300 text-brand-600"
         />
         <span>
           {t('enrollment.consentAgree')}{' '}
