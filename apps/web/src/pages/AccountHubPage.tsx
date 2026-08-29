@@ -1,8 +1,11 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
+import { httpsCallable } from 'firebase/functions';
 import { AccountHome, type AccountSection } from '@ejm/shared-ui';
 import { getSitRole } from '@ejm/sit-core';
 import { useAuthStore } from '@/stores/authStore';
+import { functions } from '@/config/firebase';
 import { STUDY_APP_URL } from '@/lib/appSwitch';
 
 /**
@@ -19,13 +22,50 @@ import { STUDY_APP_URL } from '@/lib/appSwitch';
  * destinations. sync/do gets no block here yet: nothing in do is reachable
  * from a sit-hosted hub without a handoff, and do's own rows (tasks, board,
  * endorsements) live behind that switch rather than in this list.
+ *
+ * The study block is a SINGLE row for the same reason the missing rows are
+ * absent: a cross-origin deep link cannot work today (study's handoff page
+ * drops the destination), so the hub offers the one move that does. See the
+ * note on that section.
  */
 export function AccountHubPage() {
   const navigate = useNavigate();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const userDoc = useAuthStore((s) => s.userDoc);
   const role = userDoc ? getSitRole(userDoc) : null;
   const isParent = role === 'parent';
+  const [busy, setBusy] = useState(false);
+  const [handoffFailed, setHandoffFailed] = useState(false);
+
+  /**
+   * Leaving for study is a REAL handoff, not a plain link (#416 review).
+   * Firebase auth persistence is per-origin, so `location.assign` to a study
+   * URL drops anyone without an existing study session on this browser onto
+   * study's `/login`. Same shape as `AppSwitchMenuItem`: mint a one-time code,
+   * carry it in the URL FRAGMENT (fragments never reach servers or logs), and
+   * navigate only once the mint resolves.
+   */
+  const openStudy = async () => {
+    if (busy) return;
+    setBusy(true);
+    setHandoffFailed(false);
+    try {
+      const mint = httpsCallable<Record<string, never>, { code: string }>(
+        functions,
+        'createAppHandoffCode',
+      );
+      const res = await mint({});
+      // Whitelisted at the source, mirroring the receiver's en|fr allowlist.
+      const lang = i18n.language?.startsWith('fr') ? 'fr' : 'en';
+      window.location.assign(
+        `${STUDY_APP_URL}/handoff#code=${encodeURIComponent(res.data.code)}&lang=${encodeURIComponent(lang)}`,
+      );
+      // Stay busy: the browser is navigating away.
+    } catch {
+      setHandoffFailed(true);
+      setBusy(false);
+    }
+  };
 
   const sections: AccountSection[] = [
     {
@@ -63,14 +103,33 @@ export function AccountHubPage() {
     },
     {
       app: 'study' as const,
-      // Cross-origin until the domain consolidates (plan §8, Q12): these go
-      // through the session handoff, not a plain link.
+      /*
+       * ONE row, not a deep-link list (#416 review round 1).
+       *
+       * The first cut listed study's account/sessions/search as deep links.
+       * Two things were wrong with that and neither is fixable here. Study's
+       * `HandoffPage` reads only `code` and `lang` and always lands via
+       * `postLoginRouter`, so a cross-origin DEEP link is not expressible
+       * today at all -- the destination is dropped on arrival. And the deep
+       * rows were parent-shaped for every role: study guards `/family/*` on
+       * role="parent", so a sit student following them is bounced.
+       *
+       * Adding a `next` to the handoff is the real fix and it is NOT a small
+       * one: the handoff mints a session, so an unvalidated destination on
+       * that endpoint is an open redirect against a freshly authenticated
+       * user. It needs an allowlist of in-app relative paths rejecting any
+       * scheme or `//` prefix, with hostile inputs pinned. Tracked separately.
+       *
+       * Until then this page applies its own rule -- absent beats broken --
+       * and offers the one destination that actually works.
+       */
       rows: [
-        { label: t('accountHub.myAccount'), href: `${STUDY_APP_URL}/family/account`, external: true },
-        { label: t('accountHub.sessions'), href: `${STUDY_APP_URL}/family/sessions`, external: true },
-        { label: t('accountHub.search'), href: `${STUDY_APP_URL}/family/search`, external: true },
-        // No favorites row: study has no tutor equivalent of
-        // /family/preferred. Absent rather than invented.
+        {
+          label: t('appSwitch.toStudy'),
+          href: STUDY_APP_URL,
+          external: true,
+          ...(handoffFailed ? { hint: t('appSwitch.error') } : {}),
+        },
       ],
     },
   ];
@@ -79,7 +138,7 @@ export function AccountHubPage() {
     <AccountHome
       sections={sections}
       onNavigate={(href) => void navigate(href)}
-      onNavigateExternal={(href) => window.location.assign(href)}
+      onNavigateExternal={() => void openStudy()}
     />
   );
 }

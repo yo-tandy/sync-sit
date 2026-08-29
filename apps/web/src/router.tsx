@@ -144,7 +144,6 @@ export const router = createBrowserRouter([
     ],
   },
 
-  // Admin portal (auth + role guard)
   // The shared account hub (#367). Its OWN layout: neutral, no branded
   // AppBar, no back button — it is not a subsection of either portal.
   {

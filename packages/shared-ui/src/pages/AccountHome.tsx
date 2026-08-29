@@ -108,8 +108,14 @@ export function AccountHome({
                     <button
                       type="button"
                       onClick={() =>
-                        row.external && onNavigateExternal
-                          ? onNavigateExternal(row.href)
+                        /* An external row NEVER falls through to onNavigate
+                           (#416 review): that pushed an absolute URL into the
+                           router, which resolves as a same-origin path and
+                           404s. A host that declares a cross-origin row and
+                           supplies no handoff has a wiring bug, and doing
+                           nothing is the honest failure. */
+                        row.external
+                          ? onNavigateExternal?.(row.href)
                           : onNavigate(row.href)
                       }
                       className="flex w-full items-center gap-3 px-4 py-3 text-left active:bg-gray-50"

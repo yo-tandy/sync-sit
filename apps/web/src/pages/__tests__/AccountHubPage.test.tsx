@@ -1,15 +1,31 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, cleanup, within } from '@testing-library/react';
+import { render, screen, cleanup, within, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { I18nextProvider } from 'react-i18next';
 
-const h = vi.hoisted(() => ({ userDoc: null as unknown }));
+const h = vi.hoisted(() => ({
+  userDoc: null as unknown,
+  navigate: vi.fn(),
+  assign: vi.fn(),
+  mint: vi.fn(),
+  callable: vi.fn(),
+}));
 
 vi.mock('@/config/firebase', () => ({ functions: {} }));
-vi.mock('firebase/functions', () => ({ httpsCallable: () => vi.fn() }));
+vi.mock('firebase/functions', () => ({
+  httpsCallable: (_fns: unknown, name: string) => {
+    h.callable(name);
+    return h.mint;
+  },
+}));
 vi.mock('@/stores/authStore', () => ({
   useAuthStore: (selector?: (s: { userDoc: unknown }) => unknown) =>
     selector ? selector({ userDoc: h.userDoc }) : { userDoc: h.userDoc },
+}));
+
+vi.mock('react-router', async () => ({
+  ...(await vi.importActual<typeof import('react-router')>('react-router')),
+  useNavigate: () => h.navigate,
 }));
 
 import i18n from '@/i18n';
@@ -32,8 +48,16 @@ function renderHub(userDoc: unknown) {
 describe('AccountHubPage (sit)', () => {
   beforeEach(() => {
     h.userDoc = null;
+    h.navigate.mockReset();
+    h.assign.mockReset();
+    h.callable.mockReset();
+    h.mint.mockReset().mockResolvedValue({ data: { code: 'abc+/=' } });
+    vi.stubGlobal('location', { assign: h.assign });
   });
-  afterEach(() => cleanup());
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
 
   it('offers the four shared entries to a parent', () => {
     renderHub(PARENT);
@@ -63,12 +87,53 @@ describe('AccountHubPage (sit)', () => {
     expect(within(studySection).queryByText('Favorites')).toBeNull();
   });
 
-  it('routes study rows cross-origin, sit rows in-app', () => {
+  /*
+   * These three replace a pin that asserted only that two labels were present
+   * (#416 review). Label presence passes with the two handlers SWAPPED, which
+   * is exactly where the bug lived: the study rows were doing a plain
+   * location.assign instead of the session handoff. So each one now CLICKS a
+   * row and asserts which mechanism fired -- and that the other did not.
+   */
+  it('a sit row navigates in-app and never leaves the origin', async () => {
     renderHub(PARENT);
     const sit = screen.getByText('sync/sit').closest('section')!;
+    fireEvent.click(within(sit).getByText('Appointments'));
+    expect(h.navigate).toHaveBeenCalledWith('/family/appointments');
+    expect(h.assign).not.toHaveBeenCalled();
+  });
+
+  it('the study row mints a handoff code and lands on /handoff, not a deep link', async () => {
+    renderHub(PARENT);
     const study = screen.getByText('sync/study').closest('section')!;
-    expect(within(sit).getByText('Appointments')).toBeInTheDocument();
-    expect(within(study).getByText('Sessions')).toBeInTheDocument();
+    fireEvent.click(within(study).getByText('Open sync-study'));
+    await waitFor(() => expect(h.assign).toHaveBeenCalled());
+    expect(h.callable).toHaveBeenCalledWith('createAppHandoffCode');
+    // Fragment, not query: fragments never reach servers or logs. Code is
+    // encoded -- 'abc+/=' round-trips only if encodeURIComponent is applied.
+    expect(h.assign).toHaveBeenCalledWith(
+      'https://sync-study-app.web.app/handoff#code=abc%2B%2F%3D&lang=en',
+    );
+    // The router must not be asked to push an absolute URL.
+    expect(h.navigate).not.toHaveBeenCalled();
+  });
+
+  it('shows an error and stays put when the mint fails', async () => {
+    h.mint.mockRejectedValue(new Error('offline'));
+    renderHub(PARENT);
+    const study = screen.getByText('sync/study').closest('section')!;
+    fireEvent.click(within(study).getByText('Open sync-study'));
+    expect(h.assign).not.toHaveBeenCalled();
+    expect(await screen.findByText('Could not switch apps. Please try again.')).toBeInTheDocument();
+  });
+
+  it('offers no study DEEP links — study drops the destination on arrival', () => {
+    // Absent beats broken: study's HandoffPage reads only code+lang and always
+    // routes via postLoginRouter, and its /family/* routes are parent-guarded.
+    renderHub(STUDENT);
+    const study = screen.getByText('sync/study').closest('section')!;
+    for (const gone of ['Sessions', 'Search']) {
+      expect(within(study).queryByText(gone)).toBeNull();
+    }
   });
 
   it('gives a STUDENT their own account row and no family rows', () => {
