@@ -110,10 +110,12 @@ describe('family AccountPage', () => {
       uid: 'p1',
       email: 'parent@example.com',
       notifPrefs: {
-        newRequest: { push: true, email: true },
-        confirmed: { push: true, email: true },
-        cancelled: { push: true, email: true },
-        reminders: { push: true, email: false },
+        shared: { reminders: { push: true, email: false } },
+        sit: {
+          newRequest: { push: true, email: true },
+          confirmed: { push: true, email: true },
+          cancelled: { push: true, email: true },
+        },
       },
       profiles: { parent: { familyId: 'fam1', phone: '+33100000000' } },
     };
@@ -129,14 +131,40 @@ describe('family AccountPage', () => {
 
     await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
     const payload = h.updateDoc.mock.calls[0][1];
-    expect(payload).toHaveProperty('notifPrefs.confirmed.email', false);
+    // Per-engagement category -> THIS app's block (issue #369).
+    expect(payload).toHaveProperty('notifPrefs.sit.confirmed.email', false);
     const keys = Object.keys(payload);
-    // Mutation pin: only the toggled scenario/channel dot-path + updatedAt.
-    // Never the whole notifPrefs object (would clobber values study-web owns)
-    // and never another scenario or the push channel.
-    expect(keys.sort()).toEqual(['notifPrefs.confirmed.email', 'updatedAt']);
+    // Mutation pin: only the toggled category/channel dot-path + updatedAt.
+    // Never the whole notifPrefs object (would clobber blocks study-web owns)
+    // and never another category, another app's block, or the push channel.
+    expect(keys.sort()).toEqual(['notifPrefs.sit.confirmed.email', 'updatedAt']);
     expect(keys).not.toContain('notifPrefs');
     expect(keys.some((k) => k.includes('push'))).toBe(false);
+    expect(keys.some((k) => k.includes('.study.') || k.includes('.do.'))).toBe(false);
+  });
+
+  it('a SHARED category writes into notifPrefs.shared, not into the app block', async () => {
+    renderPage();
+    await screen.findByText('parent@example.com');
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: `${i18n.t('notifications.reminder')} — ${i18n.t('notifications.emailNotif')}`,
+      }),
+    );
+    await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
+    const payload = h.updateDoc.mock.calls[0][1];
+    expect(Object.keys(payload).sort()).toEqual(['notifPrefs.shared.reminders.email', 'updatedAt']);
+  });
+
+  it('never renders sync/do rows — a sit parent holds no doer profile', async () => {
+    // The defect issue #369 opens with, pinned at the surface.
+    renderPage();
+    await screen.findByText('parent@example.com');
+    const headings = screen.getAllByRole('heading', { level: 4 }).map((el) => el.textContent);
+    expect(headings).toEqual([
+      i18n.t('notifications.blockShared'),
+      i18n.t('notifications.blockApp'),
+    ]);
   });
 
   it('push toggles are DISABLED outside PWA mode (no write at all)', async () => {
@@ -167,7 +195,7 @@ describe('family AccountPage', () => {
     fireEvent.click(button);
     await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
     const payload = h.updateDoc.mock.calls[0][1];
-    expect(Object.keys(payload).sort()).toEqual(['notifPrefs.confirmed.push', 'updatedAt']);
-    expect(payload['notifPrefs.confirmed.push']).toBe(false);
+    expect(Object.keys(payload).sort()).toEqual(['notifPrefs.sit.confirmed.push', 'updatedAt']);
+    expect(payload['notifPrefs.sit.confirmed.push']).toBe(false);
   });
 });

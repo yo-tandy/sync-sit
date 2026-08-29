@@ -59,7 +59,7 @@ export async function seedTestData(): Promise<SeedData> {
   await db.collection('users').doc(adminUid).set({
     uid: adminUid, isAdmin: true, email: 'admin@syncsit.test', status: 'active',
     firstName: 'Admin', lastName: 'User', language: 'en',
-    notifPrefs: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true }, reminders: { push: true, email: false } },
+    notifPrefs: { shared: { reminders: { push: true, email: false } }, sit: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } }, study: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } }, do: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } } },
     fcmTokens: [], createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
   });
 
@@ -72,7 +72,7 @@ export async function seedTestData(): Promise<SeedData> {
     uid: parent1Uid, email: 'marie.dupont@test.com', status: 'active',
     firstName: 'Marie', lastName: 'Dupont', language: 'fr',
     profiles: { parent: { enrollmentComplete: true, familyId: family1Id, phone: '+33 612345678' } },
-    notifPrefs: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true }, reminders: { push: true, email: true } },
+    notifPrefs: { shared: { reminders: { push: true, email: true } }, sit: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } }, study: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } }, do: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } } },
     fcmTokens: [], createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
   });
 
@@ -80,7 +80,7 @@ export async function seedTestData(): Promise<SeedData> {
     uid: parent2Uid, email: 'pierre.dupont@test.com', status: 'active',
     firstName: 'Pierre', lastName: 'Dupont', language: 'fr',
     profiles: { parent: { enrollmentComplete: true, familyId: family1Id } },
-    notifPrefs: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true }, reminders: { push: true, email: true } },
+    notifPrefs: { shared: { reminders: { push: true, email: true } }, sit: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } }, study: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } }, do: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } } },
     fcmTokens: [], createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
   });
 
@@ -110,7 +110,7 @@ export async function seedTestData(): Promise<SeedData> {
     uid: parent3Uid, email: 'sophie.martin@test.com', status: 'active',
     firstName: 'Sophie', lastName: 'Martin', language: 'en',
     profiles: { parent: { enrollmentComplete: true, familyId: family2Id } },
-    notifPrefs: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true }, reminders: { push: true, email: false } },
+    notifPrefs: { shared: { reminders: { push: true, email: false } }, sit: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } }, study: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } }, do: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } } },
     fcmTokens: [], createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
   });
 
@@ -142,7 +142,7 @@ export async function seedTestData(): Promise<SeedData> {
       areaMode: 'arrondissement', arrondissements: ['15e', '16e', '7e'],
       areaLatLng: { lat: 48.8530, lng: 2.2750 },
     } },
-    notifPrefs: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true }, reminders: { push: true, email: true } },
+    notifPrefs: { shared: { reminders: { push: true, email: true } }, sit: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } }, study: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } }, do: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } } },
     fcmTokens: [], language: 'fr',
     createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
   });
@@ -167,7 +167,7 @@ export async function seedTestData(): Promise<SeedData> {
       areaMode: 'distance', areaAddress: '8 Rue Lecourbe, 75015 Paris',
       areaLatLng: { lat: 48.8450, lng: 2.3050 }, areaRadiusKm: 5,
     } },
-    notifPrefs: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true }, reminders: { push: true, email: true } },
+    notifPrefs: { shared: { reminders: { push: true, email: true } }, sit: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } }, study: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } }, do: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } } },
     fcmTokens: [], language: 'en',
     createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
   });
@@ -192,7 +192,7 @@ export async function seedTestData(): Promise<SeedData> {
       areaMode: 'arrondissement', arrondissements: ['14e', '15e', '16e', '6e', '7e'],
       areaLatLng: { lat: 48.8480, lng: 2.2800 },
     } },
-    notifPrefs: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true }, reminders: { push: true, email: true } },
+    notifPrefs: { shared: { reminders: { push: true, email: true } }, sit: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } }, study: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } }, do: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } } },
     fcmTokens: [], language: 'fr',
     createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
   });
@@ -217,7 +217,7 @@ export async function seedTestData(): Promise<SeedData> {
       areaMode: 'arrondissement', arrondissements: ['16e'],
       areaLatLng: { lat: 48.8600, lng: 2.2700 },
     } },
-    notifPrefs: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true }, reminders: { push: true, email: true } },
+    notifPrefs: { shared: { reminders: { push: true, email: true } }, sit: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } }, study: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } }, do: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } } },
     fcmTokens: [], language: 'fr',
     createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
   });
@@ -241,7 +241,7 @@ export async function seedTestData(): Promise<SeedData> {
       areaMode: 'arrondissement', arrondissements: ['15e', '16e'],
       areaLatLng: { lat: 48.8530, lng: 2.2750 },
     } },
-    notifPrefs: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true }, reminders: { push: true, email: true } },
+    notifPrefs: { shared: { reminders: { push: true, email: true } }, sit: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } }, study: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } }, do: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } } },
     fcmTokens: [], language: 'fr',
     createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
   });
@@ -270,7 +270,7 @@ export async function seedTestData(): Promise<SeedData> {
       areaMode: 'distance', areaAddress: 'Paris center',
       areaLatLng: { lat: 48.8566, lng: 2.3522 }, areaRadiusKm: 5,
     } },
-    notifPrefs: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true }, reminders: { push: true, email: true } },
+    notifPrefs: { shared: { reminders: { push: true, email: true } }, sit: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } }, study: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } }, do: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } } },
     fcmTokens: [], language: 'en',
     createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
   });
@@ -302,7 +302,7 @@ export async function seedTestData(): Promise<SeedData> {
       areaMode: 'distance', areaAddress: 'Paris center',
       areaLatLng: { lat: 48.8566, lng: 2.3522 }, areaRadiusKm: 5,
     } },
-    notifPrefs: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true }, reminders: { push: true, email: true } },
+    notifPrefs: { shared: { reminders: { push: true, email: true } }, sit: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } }, study: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } }, do: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } } },
     fcmTokens: [], language: 'fr',
     createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
   });

@@ -200,3 +200,41 @@ export function hasNotifPrefScope(
 ): boolean {
   return notifPrefScopesForUser(user).includes(scope);
 }
+
+/** One toggle row on a notification-preferences surface. */
+export interface NotifPrefRow {
+  scope: NotifScope;
+  category: NotifCategory;
+}
+
+/**
+ * Exactly the rows a notification-preferences surface may render for this
+ * user: the shared block first, then one block per profile they hold, in
+ * `notifPrefScopesForUser` order. This is the rendering rule of issue #369
+ * made executable — a per-app Account page filters it down to its own scope,
+ * and the shared account hub (#367) renders it whole.
+ */
+export function notifPrefRowsForUser(user: NotifScopeUser | null | undefined): NotifPrefRow[] {
+  return notifPrefScopesForUser(user).flatMap((scope) =>
+    (scope === 'shared' ? SHARED_CATEGORIES : APP_CATEGORIES).map((category) => ({
+      scope,
+      category: category as NotifCategory,
+    })),
+  );
+}
+
+/**
+ * Resolve a whole set of categories at once, for a surface that renders them
+ * together. Same resolution — and therefore the same answer — as the senders'
+ * per-category reads, which is the point: the toggle a user sees ON must be
+ * one the server will act on.
+ */
+export function resolveNotifPrefsFor(
+  prefs: StoredNotifPrefs | null | undefined,
+  app: NotifAppScope,
+  categories: readonly NotifCategory[],
+): Record<string, NotifChannels> {
+  const out: Record<string, NotifChannels> = {};
+  for (const category of categories) out[category] = resolveNotifPref(prefs, app, category);
+  return out;
+}

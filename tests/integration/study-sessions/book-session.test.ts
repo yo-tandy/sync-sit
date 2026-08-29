@@ -101,7 +101,7 @@ describe('bookSession', () => {
     // Approve family1 for tutor2 by default (happy path); negatives override.
     await db.collection('users').doc(seed.tutor2.uid).update({
       'profiles.tutor.approvedFamilies': [seed.family1Id],
-      'notifPrefs.newRequest': { push: true, email: true },
+      'notifPrefs.study.newRequest': { push: true, email: true },
     });
     // Wipe sessions, tutor2 overrides, and notifications between tests.
     for (const coll of ['study-sessions', 'notifications']) {
@@ -315,7 +315,7 @@ describe('bookSession', () => {
   it('respects the tutor\'s newRequest email preference', async () => {
     const db = getDb();
     await db.collection('users').doc(seed.tutor2.uid).update({
-      'notifPrefs.newRequest': { push: true, email: false },
+      'notifPrefs.study.newRequest': { push: true, email: false },
     });
     await callFunction<BookResponse>('bookSession', happyInput(), parent1Token);
     const notifs = await db

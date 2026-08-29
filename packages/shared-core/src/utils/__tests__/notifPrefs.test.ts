@@ -3,8 +3,10 @@ import {
   hasNotifPrefScope,
   notifCategoryScope,
   notifPrefPath,
+  notifPrefRowsForUser,
   notifPrefScopesForUser,
   resolveNotifPref,
+  resolveNotifPrefsFor,
 } from '../notifPrefs.js';
 import {
   DEFAULT_APP_NOTIF_PREFS,
@@ -200,6 +202,59 @@ describe('notifPrefScopesForUser — the rendering rule', () => {
     const both = { profiles: { babysitter: {}, parent: {} } };
     const scopes = notifPrefScopesForUser(both);
     expect(scopes.filter((s) => s === 'sit')).toHaveLength(1);
+  });
+});
+
+describe('notifPrefRowsForUser — which toggle rows a surface renders', () => {
+  const doRows = (user: Parameters<typeof notifPrefRowsForUser>[0]) =>
+    notifPrefRowsForUser(user).filter((r) => r.scope === 'do');
+
+  it('renders NO do rows for a user with no doer profile', () => {
+    // The defect issue #369 opens with: a sit-only parent offered "board
+    // digest" and "offer received" toggles for an app they never opened.
+    expect(doRows({ profiles: { parent: { familyId: 'f1' } } })).toEqual([]);
+    expect(doRows({ profiles: { babysitter: {}, tutor: {}, parent: {} } })).toEqual([]);
+    expect(doRows({ profiles: {} })).toEqual([]);
+    expect(doRows(undefined)).toEqual([]);
+  });
+
+  it('renders the do rows for a user WITH a doer profile', () => {
+    expect(doRows({ profiles: { doer: { enrollmentComplete: true } } })).toEqual([
+      { scope: 'do', category: 'newRequest' },
+      { scope: 'do', category: 'confirmed' },
+      { scope: 'do', category: 'cancelled' },
+    ]);
+  });
+
+  it('always leads with the shared block, then one block per held profile', () => {
+    const rows = notifPrefRowsForUser({ profiles: { babysitter: {}, doer: {} } });
+    expect(rows.slice(0, 2)).toEqual([
+      { scope: 'shared', category: 'reminders' },
+      { scope: 'shared', category: 'references' },
+    ]);
+    expect([...new Set(rows.map((r) => r.scope))]).toEqual(['shared', 'sit', 'do']);
+  });
+
+  it('puts each category in exactly one block', () => {
+    const rows = notifPrefRowsForUser({ profiles: { babysitter: {}, tutor: {}, doer: {} } });
+    for (const category of ['reminders', 'references'] as const) {
+      expect(rows.filter((r) => r.category === category)).toHaveLength(1);
+    }
+    // The per-app trio repeats once per app the user holds, and nowhere else.
+    expect(rows.filter((r) => r.category === 'newRequest').map((r) => r.scope)).toEqual([
+      'sit',
+      'study',
+      'do',
+    ]);
+  });
+});
+
+describe('resolveNotifPrefsFor — a surface agrees with the senders', () => {
+  it('resolves each category exactly as the per-category read does', () => {
+    const prefs = { sit: { newRequest: { email: false } } } as unknown as StoredNotifPrefs;
+    const bulk = resolveNotifPrefsFor(prefs, 'sit', ['newRequest', 'reminders']);
+    expect(bulk.newRequest).toEqual(resolveNotifPref(prefs, 'sit', 'newRequest'));
+    expect(bulk.reminders).toEqual(resolveNotifPref(prefs, 'sit', 'reminders'));
   });
 });
 

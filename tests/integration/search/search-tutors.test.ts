@@ -39,10 +39,22 @@ function tutorDoc(overrides: {
       },
     },
     notifPrefs: {
-      newRequest: { push: true, email: true },
-      confirmed: { push: true, email: true },
-      cancelled: { push: true, email: true },
-      reminders: { push: true, email: true },
+      shared: { reminders: { push: true, email: true } },
+      sit: {
+        newRequest: { push: true, email: true },
+        confirmed: { push: true, email: true },
+        cancelled: { push: true, email: true },
+      },
+      study: {
+        newRequest: { push: true, email: true },
+        confirmed: { push: true, email: true },
+        cancelled: { push: true, email: true },
+      },
+      do: {
+        newRequest: { push: true, email: true },
+        confirmed: { push: true, email: true },
+        cancelled: { push: true, email: true },
+      },
     },
     fcmTokens: [],
   };
