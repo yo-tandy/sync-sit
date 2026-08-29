@@ -79,7 +79,11 @@
      dropdowns) cut the outward ring off entirely -- opting the container
      into .focus-ring-inset draws the ring INSIDE the child instead
      (PR #327 rounds 1+3: AddressAutocomplete's dropdown and the six
-     AppBar/menu wrappers). Same layer, so utilities still win. */
+     AppBar/menu wrappers). Same layer, so utilities still win.
+     CONSTRAINT (round 6): the inset variant drops the white backing, so
+     it assumes a LIGHT container ground (all seven current sites are
+     bg-white). A brand-colored clipping container would need its own
+     treatment -- do not apply this class there. */
   .focus-ring-inset :where(a, button, [role="button"], select, summary,
       [tabindex]:not([tabindex="-1"]),
       input[type="checkbox"], input[type="radio"]):focus-visible {

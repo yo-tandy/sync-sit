@@ -18,6 +18,17 @@ const sharedUi = resolve(__dirname, '../../../../../packages/shared-ui/src');
 const css = readFileSync(resolve(sharedUi, 'theme/base.css'), 'utf8');
 
 describe('shared focus-visible rule (issue #325)', () => {
+  it('the ring rule keeps its CONTENT: brand outline + white backing', () => {
+    // Position pins alone pass with the declarations gutted (round 6):
+    // the brand token is what makes each app ring its own hue, and the
+    // white backing is the entire reason the ring survives the red
+    // AppBar. Extract the rule block and pin both declarations.
+    const start = css.indexOf('):focus-visible');
+    const block = css.slice(start, css.indexOf('}', start));
+    expect(block).toContain('outline: 2px solid var(--color-brand-600)');
+    expect(block).toContain('box-shadow: 0 0 0 2px var(--color-white)');
+  });
+
   it('the ring rule lives INSIDE @layer base', () => {
     const layerStart = css.indexOf('@layer base {');
     expect(layerStart).toBeGreaterThan(-1);
@@ -60,15 +71,40 @@ describe('shared focus-visible rule (issue #325)', () => {
       'components/Input.tsx',
       'components/Textarea.tsx',
       'components/Dialog.tsx',      // tabIndex=-1 panel, excluded by the selector
+      'pages/LoginPage.tsx',        // email + password text inputs (round 6)
     ]);
     const walk = (dir: string): string[] =>
       readdirSync(resolve(sharedUi, dir), { withFileTypes: true }).flatMap((e) =>
         e.isDirectory() ? walk(`${dir}/${e.name}`) : e.name.endsWith('.tsx') ? [`${dir}/${e.name}`] : [],
       );
-    const offenders = ['components', 'forms', 'enrollment', 'schedule']
-      .flatMap((d) => walk(d))
+    // Walk the WHOLE package (round 6: a hardcoded dir list missed
+    // pages/), skipping only non-component dirs with no .tsx.
+    const offenders = readdirSync(resolve(sharedUi, '.'), { withFileTypes: true })
+      .filter((e) => e.isDirectory())
+      .flatMap((e) => walk(e.name))
       .filter((rel) => !ALLOWED.has(rel))
       .filter((rel) => readFileSync(resolve(sharedUi, rel), 'utf8').includes('outline-none'));
     expect(offenders, 'files defeating the shared focus ring').toEqual([]);
+  });
+
+  it('every overflow-hidden menu/dropdown wrapper keeps its focus-ring-inset opt-in', () => {
+    // The CSS side has pins; the call sites had none -- deleting the
+    // class from a wrapper while keeping overflow-hidden restores the
+    // clipped-ring bug with all tests green (round 6). Seven known sites.
+    const repo = resolve(sharedUi, '../../..');
+    const SITES = [
+      'packages/shared-ui/src/forms/AddressAutocomplete.tsx',
+      'apps/web/src/components/ui/AppBar.tsx',
+      'apps/web/src/components/ui/EnrollmentAppBar.tsx',
+      'apps/do-web/src/components/ui/EnrollmentAppBar.tsx',
+      'apps/study-web/src/components/ui/AppBar.tsx',
+      'apps/study-web/src/components/ui/EnrollmentAppBar.tsx',
+      'apps/study-web/src/components/ui/FamilyAppBar.tsx',
+    ];
+    for (const rel of SITES) {
+      const src = readFileSync(resolve(repo, rel), 'utf8');
+      expect(src.includes('overflow-hidden'), `${rel} lost its overflow-hidden? update this pin`).toBe(true);
+      expect(src.includes('focus-ring-inset'), `${rel} clips the focus ring without the inset opt-in`).toBe(true);
+    }
   });
 });
