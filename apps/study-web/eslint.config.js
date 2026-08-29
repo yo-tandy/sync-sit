@@ -5,6 +5,10 @@ import reactRefresh from 'eslint-plugin-react-refresh'
 import tseslint from 'typescript-eslint'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
+// Globals for anything under public/: service-worker scope plus the firebase
+// namespace the compat bundles attach via importScripts().
+const browserWorkerGlobals = { ...globals.serviceworker, firebase: 'readonly' }
+
 export default defineConfig([
   // Generated output that can contain emitted or vendored JS: build artifacts
   // and coverage reports, whose lcov-report/*.js are third-party scripts.
@@ -43,14 +47,30 @@ export default defineConfig([
     },
   },
   {
-    // public/ is served to the browser -- firebase-messaging-sw.js today.
-    // Service-worker globals plus the firebase namespace the compat bundles
-    // attach via importScripts().
-    files: ['public/**/*.{js,cjs,mjs}'],
+    // public/ is served to the browser. firebase-messaging-sw.js is a CLASSIC
+    // service worker, on two independent grounds: nothing passes a custom
+    // serviceWorkerRegistration to getToken(), so Firebase auto-registers it
+    // without { type: 'module' }; and it calls importScripts(), which exists
+    // only in classic workers and throws in a module one. So sourceType is
+    // pinned to 'script' rather than left to ESLint's per-extension default,
+    // which would parse .js as ESM and quietly disagree with this comment.
+    files: ['public/**/*.js', 'public/**/*.cjs'],
     extends: [js.configs.recommended],
     languageOptions: {
       ecmaVersion: 2022,
-      globals: { ...globals.serviceworker, firebase: 'readonly' },
+      sourceType: 'script',
+      globals: browserWorkerGlobals,
+    },
+  },
+  {
+    // A .mjs under public/ is ESM by extension. No such file today; the block
+    // exists so one cannot be added and silently match nothing.
+    files: ['public/**/*.mjs'],
+    extends: [js.configs.recommended],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: 'module',
+      globals: browserWorkerGlobals,
     },
   },
 ])
