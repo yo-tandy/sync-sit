@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { screen, fireEvent, waitFor } from '@testing-library/react';
+import { act, screen, fireEvent, waitFor } from '@testing-library/react';
 import { renderWithProviders } from '@/__tests__/test-utils';
 
 /**
@@ -19,6 +19,9 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const h = vi.hoisted(() => ({
   calls: [] as unknown[][],
   docsQueue: [] as unknown[][],
+  // When set, the NEXT getDocs awaits this instead of the queue — lets a test
+  // hold a fetch open and inspect the in-flight window.
+  pending: null as Promise<unknown[]> | null,
 }));
 
 vi.mock('@/config/firebase', () => ({ db: {}, functions: {} }));
@@ -35,6 +38,11 @@ vi.mock('firebase/firestore', () => ({
   startAfter: (cursor: unknown) => ({ startAfter: cursor }),
   getDocs: (q: { query: unknown[] }) => {
     h.calls.push(q.query);
+    if (h.pending) {
+      const held = h.pending;
+      h.pending = null;
+      return held.then((docs) => ({ docs }));
+    }
     return Promise.resolve({ docs: h.docsQueue.shift() ?? [] });
   },
 }));
@@ -75,6 +83,7 @@ const asDocs = (rows: Row[]) => rows.map((r) => ({ id: r.taskId as string, data:
 beforeEach(() => {
   h.calls = [];
   h.docsQueue = [];
+  h.pending = null;
 });
 
 describe('BoardPage query shape (§7.3 pins)', () => {
@@ -164,6 +173,133 @@ describe('BoardPage client-side narrowing (§7.3 split)', () => {
     renderWithProviders(<BoardPage />);
     await screen.findByText('Task live');
     expect(screen.queryByText('Task stale')).toBeNull();
+  });
+});
+
+describe('BoardPage category-switch staleness', () => {
+  // Deriving the spinner from `loadedCategory` (rather than blanking `tasks`)
+  // must gate "Load more" as well: mid-switch the cursor is already reset, so
+  // a click there would page the NEW category and append it to the OLD rows.
+  it('hides Load more while a category switch is in flight, and never mixes categories', async () => {
+    // A FULL first page ⇒ not exhausted ⇒ Load more is on screen.
+    h.docsQueue.push(asDocs(Array.from({ length: BOARD_PAGE_SIZE }, (_, i) => taskDoc(`a${i}`))));
+    renderWithProviders(<BoardPage />);
+    await screen.findByText('Task a0');
+    expect(screen.getByText('Load more')).toBeInTheDocument();
+
+    // Switch category, holding the new page open.
+    let release!: (docs: unknown[]) => void;
+    h.pending = new Promise<unknown[]>((res) => {
+      release = res;
+    });
+    fireEvent.change(screen.getByLabelText('Category'), { target: { value: 'boxes' } });
+
+    // Mid-switch: Load more is GONE (the regression pin).
+    await waitFor(() => expect(screen.queryByText('Load more')).toBeNull());
+
+    release(asDocs([taskDoc('b0', { category: 'boxes' })]));
+    await screen.findByText('Task b0');
+    // The old category's rows are replaced, never appended to.
+    expect(screen.queryByText('Task a0')).toBeNull();
+  });
+
+  // The RENDER GAP: the effect nulls `cursorRef` synchronously at commit, but
+  // the reset generation only moves in the microtask after it. For that one
+  // commit the generations still match — so without the category clause, the
+  // previous render's "Load more" is still on screen with a nulled cursor, and
+  // a click there fetches page 1 of the NEW category and appends it to the OLD
+  // rows (and bumps the generation past the in-flight reset, stranding the
+  // spinner forever).
+  it('hides Load more in the commit where the category changes, before the reset issues', async () => {
+    h.docsQueue.push(asDocs(Array.from({ length: BOARD_PAGE_SIZE }, (_, i) => taskDoc(`a${i}`))));
+    renderWithProviders(<BoardPage />);
+    await screen.findByText('Task a0');
+    expect(screen.getByText('Load more')).toBeInTheDocument();
+
+    // Change the category WITHOUT flushing microtasks: this is the gap.
+    h.docsQueue.push(asDocs([taskDoc('b0', { category: 'boxes' })]));
+    fireEvent.change(screen.getByLabelText('Category'), { target: { value: 'boxes' } });
+    expect(screen.queryByText('Load more')).toBeNull();
+
+    await screen.findByText('Task b0');
+    expect(screen.queryByText('Task a0')).toBeNull();
+  });
+
+  // Away-and-back: a VALUE comparison (loadedCategory === category) reads
+  // "fresh" here even though the reset is still in flight and `cursorRef`
+  // was nulled — so Load more would re-fetch page 1 and APPEND it, giving
+  // duplicate rows and duplicate keys. Reset generations are monotonic, so
+  // the return trip is still a new request.
+  it('stays stale when the category is switched away and back before the reset lands', async () => {
+    h.docsQueue.push(asDocs(Array.from({ length: BOARD_PAGE_SIZE }, (_, i) => taskDoc(`a${i}`))));
+    renderWithProviders(<BoardPage />);
+    await screen.findByText('Task a0');
+    expect(screen.getByText('Load more')).toBeInTheDocument();
+
+    // Switch away (fetch #2 held open), then straight back to '' (fetch #3).
+    let releaseSecond!: (docs: unknown[]) => void;
+    h.pending = new Promise<unknown[]>((res) => {
+      releaseSecond = res;
+    });
+    fireEvent.change(screen.getByLabelText('Category'), { target: { value: 'boxes' } });
+    // Let fetch #2 actually issue and claim its held promise — the mock has a
+    // single pending slot, so overlapping fetches must be staged.
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    let releaseThird!: (docs: unknown[]) => void;
+    h.pending = new Promise<unknown[]>((res) => {
+      releaseThird = res;
+    });
+    fireEvent.change(screen.getByLabelText('Category'), { target: { value: '' } });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    // Back on the ORIGINAL category, but its reset has not landed: the
+    // cursor is nulled, so Load more must not be offered.
+    expect(screen.queryByText('Load more')).toBeNull();
+
+    releaseSecond(asDocs([taskDoc('b0', { category: 'boxes' })]));
+    releaseThird(asDocs(Array.from({ length: BOARD_PAGE_SIZE }, (_, i) => taskDoc(`c${i}`))));
+    await screen.findByText('Task c0');
+    expect(screen.getByText('Load more')).toBeInTheDocument();
+    expect(screen.queryByText('Task b0')).toBeNull();
+  });
+
+  // The generation guard: a superseded fetch that resolves LAST must perform
+  // none of its writes. Without it the late response wins — it would restore
+  // the old category's rows and, worse, leave `cursorRef` pointing at that
+  // category's last doc, so the next "Load more" pages the wrong category.
+  it('ignores a superseded response that lands after the newer one', async () => {
+    // Fetch #1 (no category) is held open.
+    let releaseFirst!: (docs: unknown[]) => void;
+    h.pending = new Promise<unknown[]>((res) => {
+      releaseFirst = res;
+    });
+    renderWithProviders(<BoardPage />);
+
+    // Fetch #2 (category switch) issues and resolves FIRST.
+    h.docsQueue.push(asDocs([taskDoc('b0', { category: 'boxes' })]));
+    fireEvent.change(screen.getByLabelText('Category'), { target: { value: 'boxes' } });
+    await screen.findByText('Task b0');
+
+    // Now the superseded first page lands. Flush its .then chain fully
+    // BEFORE asserting — otherwise the assertions can run in the gap before
+    // the late writes land and pass vacuously (checked: with the guard
+    // removed, this test must fail).
+    releaseFirst(asDocs([taskDoc('a0')]));
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    // The late page wrote nothing: b0 is still on screen (not blanked by a
+    // stale `loadedCategory`), a0 never appears, and the board is NOT back
+    // in its loading state.
+    expect(screen.getByText('Task b0')).toBeInTheDocument();
+    expect(screen.queryByText('Task a0')).toBeNull();
+    expect(document.querySelector('.animate-spin')).toBeNull();
   });
 });
 

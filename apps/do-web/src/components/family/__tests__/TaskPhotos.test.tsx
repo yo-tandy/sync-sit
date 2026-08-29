@@ -26,8 +26,8 @@ vi.mock('firebase/functions', () => ({
 
 import { TaskPhotos } from '../TaskPhotos';
 
-function task(photos: { uid: string; photoId: string }[]): TaskDoc {
-  return { taskId: 'task1', photos } as unknown as TaskDoc;
+function task(photos: { uid: string; photoId: string }[], taskId = 'task1'): TaskDoc {
+  return { taskId, photos } as unknown as TaskDoc;
 }
 
 beforeEach(() => {
@@ -68,6 +68,28 @@ describe('TaskPhotos (doGetTaskPhotoUrl signing)', () => {
     );
     expect(container.querySelector('.animate-spin')).toBeTruthy();
     resolveSign({ data: { url: 'https://signed/ph-1' } });
+    await waitFor(() => expect(screen.getByTestId('task-photo')).toBeInTheDocument());
+  });
+
+  // The hook keys its settled marker on `taskId|photoKey`, not photoKey
+  // alone: the effect depends on both, so a taskId change with an identical
+  // photo list is still a refetch. Keyed on photoKey alone it read as
+  // already-settled and rendered the PREVIOUS task's signed URLs.
+  it('re-signs (and shows loading) when only the taskId changes', async () => {
+    const photos = [{ uid: 'parentA', photoId: 'ph-1' }];
+    const { rerender, container } = renderWithProviders(<TaskPhotos task={task(photos, 'task1')} />);
+    await waitFor(() => expect(screen.getByTestId('task-photo')).toBeInTheDocument());
+    expect(h.getTaskPhotoUrl).toHaveBeenCalledWith({ taskId: 'task1', photoId: 'ph-1' });
+
+    let resolveSecond!: (v: unknown) => void;
+    h.getTaskPhotoUrl.mockReturnValueOnce(new Promise((res) => (resolveSecond = res)));
+    rerender(<TaskPhotos task={task(photos, 'task2')} />);
+
+    // Same photoKey, different task: this MUST read as loading, not settled.
+    await waitFor(() => expect(container.querySelector('.animate-spin')).toBeTruthy());
+    expect(h.getTaskPhotoUrl).toHaveBeenCalledWith({ taskId: 'task2', photoId: 'ph-1' });
+
+    resolveSecond({ data: { url: 'https://signed/ph-1-task2' } });
     await waitFor(() => expect(screen.getByTestId('task-photo')).toBeInTheDocument());
   });
 

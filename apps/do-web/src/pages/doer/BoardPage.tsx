@@ -65,6 +65,22 @@ export function BoardPage() {
   // Server-side dimension: category ('' = all).
   const [category, setCategory] = useState<TaskCategory | ''>('');
   const [tasks, setTasks] = useState<TaskDoc[] | null>(null);
+  // Staleness is DERIVED rather than written by blanking `tasks` inside the
+  // effect (which cascades renders). It compares RESET GENERATIONS, not the
+  // category value: switching away and back before the first reset lands
+  // would leave a value comparison reading "fresh" while `cursorRef` has
+  // already been nulled — and then "Load more" would re-fetch page 1 and
+  // append it to the rows already on screen (duplicate rows, duplicate
+  // keys). Generations are monotonic, so a return trip is still a new
+  // request. Both are STATE and both are written from async paths, never
+  // synchronously in the effect body.
+  const [issuedReset, setIssuedReset] = useState(0);
+  const [settledReset, setSettledReset] = useState(-1);
+  // The category the settled rows belong to. Needed ALONGSIDE the generation
+  // pair, not instead of it — the two close different holes (see `stale`).
+  const [loadedCategory, setLoadedCategory] = useState<TaskCategory | '' | null>(null);
+  const generationRef = useRef(0);
+  const resetSeqRef = useRef(0);
   const [error, setError] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [exhausted, setExhausted] = useState(true);
@@ -82,19 +98,33 @@ export function BoardPage() {
 
   const fetchPage = useCallback(
     async (reset: boolean) => {
+      // Every fetch carries the generation it was issued under. A response
+      // that lands after a newer fetch was issued performs NO writes — the
+      // out-of-order case is real (a slow first query resolving after the
+      // second), and without this a superseded page would clobber the
+      // current one, including `cursorRef`.
+      const generation = ++generationRef.current;
+      // Only a RESET moves the staleness pair. "Load more" must not blank the
+      // list behind a spinner — it has its own inline `loadingMore` state.
+      const resetSeq = reset ? ++resetSeqRef.current : null;
+      if (resetSeq !== null) setIssuedReset(resetSeq);
       const parts = [where('status', '==', 'open')];
       if (category) parts.push(where('category', '==', category));
       const tail = [orderBy('createdAt', 'desc'), limit(BOARD_PAGE_SIZE)];
       const cursor = !reset && cursorRef.current ? [startAfter(cursorRef.current)] : [];
       try {
         const snap = await getDocs(query(collection(db, 'doTasks'), ...parts, ...tail, ...cursor));
+        if (generation !== generationRef.current) return;
         const rows = snap.docs.map((d) => ({ ...(d.data() as TaskDoc), taskId: d.id }));
         cursorRef.current = snap.docs.length > 0 ? snap.docs[snap.docs.length - 1] : cursorRef.current;
         setExhausted(snap.docs.length < BOARD_PAGE_SIZE);
         setFetchedAt(Date.now());
         setTasks((prev) => (reset || prev === null ? rows : [...prev, ...rows]));
+        if (resetSeq !== null) setSettledReset(resetSeq);
+        setLoadedCategory(category);
         setError(false);
       } catch {
+        if (generation !== generationRef.current) return;
         setError(true);
       }
     },
@@ -103,9 +133,30 @@ export function BoardPage() {
 
   useEffect(() => {
     cursorRef.current = null;
-    setTasks(null);
-    void fetchPage(true);
+    // Deferred to a microtask so no setState lands in this commit
+    // (react-hooks/set-state-in-effect). Note this is now load-bearing
+    // rather than a rule workaround: `fetchPage` sets `issuedReset`
+    // synchronously before its first await, so calling it directly here
+    // WOULD be a synchronous set. The deferral is what keeps that legal.
+    void Promise.resolve().then(() => fetchPage(true));
   }, [fetchPage]);
+
+  // "The rows on screen match `cursorRef`" — the invariant "Load more"
+  // depends on. THREE clauses, because each closes a hole the others leave:
+  //
+  //  - `tasks === null`      — nothing fetched yet.
+  //  - `loadedCategory !== category` — covers the RENDER GAP: the effect
+  //    nulls `cursorRef` synchronously at commit, but `setIssuedReset` only
+  //    runs in the microtask after it, so for one commit the generations
+  //    still match while the cursor is already gone. `category` changes in
+  //    that same commit, so this clause is already true there.
+  //  - `settledReset !== issuedReset` — covers AWAY-AND-BACK, where the
+  //    category returns to its old value (so the clause above goes quiet)
+  //    while a reset is still in flight.
+  //
+  // Rounds 1-4 each found one of these; keeping all three is the point.
+  const stale =
+    tasks === null || loadedCategory !== category || settledReset !== issuedReset;
 
   const areas = useMemo(
     () => [...new Set((tasks ?? []).map((task) => task.areaLabel).filter(Boolean))].sort(),
@@ -202,7 +253,7 @@ export function BoardPage() {
         />
       </div>
 
-      {tasks === null ? (
+      {stale ? (
         <div className="flex justify-center py-20">
           <Spinner />
         </div>
@@ -250,7 +301,12 @@ export function BoardPage() {
         ))
       )}
 
-      {tasks !== null && !exhausted && (
+      {/* `stale` gates this too, not just the list: while a category switch is
+          in flight the cursor has been reset, so a click here would page the
+          NEW category and append it to the OLD rows — a mixed-category list.
+          Blanking `tasks` used to hide the button; deriving staleness has to
+          cover both places. */}
+      {!stale && !exhausted && (
         <Button
           variant="outline"
           disabled={loadingMore}

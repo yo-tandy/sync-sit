@@ -7,6 +7,7 @@ import { verifyAdmin } from './verifyAdmin.js';
 import { writeAuditLog } from './writeAuditLog.js';
 import { escapeHtml, sendAdminNotification } from '../config/email.js';
 import { REFERENCE_PROVIDER_KEYS } from './referenceKeys.js';
+import { eraseDoUserData } from './doGdpr.js';
 
 interface DeleteUserInput {
   targetUserId: string;
@@ -15,7 +16,11 @@ interface DeleteUserInput {
 /**
  * GDPR-compliant hard delete: removes all user personal data from Firestore,
  * anonymizes appointment references, deletes their references/endorsements
- * (both as provider and as submitter), and deletes the Firebase Auth account.
+ * (both as provider and as submitter), erases their sync-do tasks/offers and
+ * both `do-photos`/`do-uploads` object prefixes (scrubbing the dangling
+ * `{uid, photoId}` entries off a co-parent's surviving tasks and cancelling
+ * any surviving task assigned to them), and deletes the Firebase Auth
+ * account.
  */
 export const deleteUser = onCall(
   { region: 'europe-west1', cors: getCorsOrigin() },
@@ -352,6 +357,15 @@ export const deleteUser = onCall(
       }
     }
 
+    // 4-quater. sync-do (plan §11.4): `doTasks` + `taskOffers` on BOTH sides,
+    // the two uid-keyed Storage prefixes, and the dangling-reference scrub
+    // that keeps a co-parent's surviving task from pointing at objects this
+    // erasure just removed. Runs BEFORE the user doc is deleted so the
+    // familyId/isLastParent decisions above still hold, and it takes the same
+    // last-parent rule the family and endorsement steps take. See
+    // `doGdpr.eraseDoUserData` for the four halves and their reasoning.
+    const doErasure = await eraseDoUserData(targetUserId, familyId, isLastParent);
+
     // 5. Delete the user document from Firestore
     await userRef.delete();
 
@@ -378,6 +392,12 @@ export const deleteUser = onCall(
         cancelledAppointments: cancelledCount,
         familyDeleted: isLastParent && !!familyId,
         deletedReferences: refDocsToDelete.length,
+        deletedDoTasks: doErasure.tasksDeleted,
+        deletedDoOffers: doErasure.offersDeleted,
+        deletedDoPhotoObjects: doErasure.photoObjectsDeleted,
+        scrubbedDoTaskPhotos: doErasure.tasksScrubbed,
+        clearedDoAssignments: doErasure.assignmentsCleared,
+        releasedDoOfferSlots: doErasure.offerSlotsReleased,
       },
     });
 

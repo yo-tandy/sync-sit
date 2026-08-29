@@ -5,6 +5,7 @@ import { getCorsOrigin } from '../config/cors.js';
 import { verifyAdmin } from './verifyAdmin.js';
 import { writeAuditLog } from './writeAuditLog.js';
 import { REFERENCE_PROVIDER_KEYS } from './referenceKeys.js';
+import { collectDoUserData } from './doGdpr.js';
 
 interface ExportUserDataInput {
   targetUserId: string;
@@ -12,8 +13,9 @@ interface ExportUserDataInput {
 
 /**
  * Export all data related to a user: profile, family, appointments,
- * notifications, audit logs targeting them, guardian links/invites, and
- * references/endorsements (both sides: provider and submitter).
+ * notifications, audit logs targeting them, guardian links/invites,
+ * references/endorsements (both sides: provider and submitter), and their
+ * sync-do tasks/offers with the photo paths those tasks reference.
  */
 export const exportUserData = onCall(
   { region: 'europe-west1', cors: getCorsOrigin() },
@@ -155,6 +157,12 @@ export const exportUserData = onCall(
       ).values(),
     );
 
+    // sync-do (plan §11.4): `doTasks` + `taskOffers`, both sides — the
+    // family's tasks and the doer's offers — plus the `do-photos` object
+    // paths those tasks reference. See `doGdpr.collectDoUserData` for which
+    // query covers which side and why the helper's data surfaces here.
+    const doData = await collectDoUserData(targetUserId, familyId);
+
     await writeAuditLog({
       adminUserId: request.auth.uid,
       action: 'export_user_data',
@@ -170,6 +178,9 @@ export const exportUserData = onCall(
       guardianLinks,
       kidInvites,
       references,
+      doTasks: doData.tasks,
+      taskOffers: doData.offers,
+      doPhotoPaths: doData.photoPaths,
     };
   }
 );
