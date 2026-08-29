@@ -23,6 +23,7 @@ import {
   OfferPage,
   MyOffersPage,
   MyWorkPage,
+  MyEndorsementsPage,
   MyTasksPage,
   PostTaskPage,
   TaskDetailPage,
@@ -62,6 +63,7 @@ export const router = createBrowserRouter([
       { path: '/tasks/:taskId/offer', element: <OfferPage /> },
       { path: '/offers', element: <MyOffersPage /> },
       { path: '/work', element: <MyWorkPage /> },
+      { path: '/endorsements', element: <MyEndorsementsPage /> },
     ],
   },
   {
