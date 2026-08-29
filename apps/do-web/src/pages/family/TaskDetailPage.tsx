@@ -40,6 +40,11 @@ export function TaskDetailPage() {
   const [task, setTask] = useState<TaskDoc | null | 'missing'>(null);
   const [taskError, setTaskError] = useState(false);
   const [offers, setOffers] = useState<OfferDoc[] | null>(null);
+  // A FAILED offers read must never render as the reassuring empty state
+  // ("No offers yet" would be an affirmative false statement — PR #331
+  // round 2); it gets its own error + retry. The tick re-subscribes.
+  const [offersError, setOffersError] = useState(false);
+  const [offersTick, setOffersTick] = useState(0);
 
   const [acceptTarget, setAcceptTarget] = useState<OfferDoc | null>(null);
   const [declineTarget, setDeclineTarget] = useState<OfferDoc | null>(null);
@@ -71,11 +76,14 @@ export function TaskDetailPage() {
         where('status', 'in', ['pending', 'accepted', 'declined']),
         orderBy('createdAt'),
       ),
-      (snap) => setOffers(snap.docs.map((d) => ({ ...(d.data() as OfferDoc), offerId: d.id }))),
-      () => setOffers([]),
+      (snap) => {
+        setOffers(snap.docs.map((d) => ({ ...(d.data() as OfferDoc), offerId: d.id })));
+        setOffersError(false);
+      },
+      () => setOffersError(true),
     );
     return unsub;
-  }, [taskId, familyId]);
+  }, [taskId, familyId, offersTick]);
 
   const runAction = async (
     callable: string,
@@ -90,10 +98,18 @@ export function TaskDetailPage() {
       onDone?.();
     } catch (err: unknown) {
       const reason = (err as { details?: { reason?: string } } | null)?.details?.reason;
+      // doAcceptOffer's FULL machine-readable reason set (acceptOffer.ts):
+      // task_not_open / task_expired / not_pending / doer_unavailable —
+      // each terminal refusal gets its own copy so none reads as a
+      // retryable transient (PR #331 round 2).
       if (callable === 'doAcceptOffer' && reason === 'task_not_open') {
         setActionError(t('family.taskDetail.acceptTaskNotOpen'));
+      } else if (callable === 'doAcceptOffer' && reason === 'task_expired') {
+        setActionError(t('family.taskDetail.acceptTaskExpired'));
       } else if (callable === 'doAcceptOffer' && reason === 'not_pending') {
         setActionError(t('family.taskDetail.acceptOfferGone'));
+      } else if (callable === 'doAcceptOffer' && reason === 'doer_unavailable') {
+        setActionError(t('family.taskDetail.acceptDoerUnavailable'));
       } else {
         setActionError(t(errorKey));
       }
@@ -168,7 +184,24 @@ export function TaskDetailPage() {
               {t('family.taskDetail.offersTitle')}
             </h2>
             {actionError && <p className="mb-3 text-sm text-error-600">{actionError}</p>}
-            {offers === null ? (
+            {offersError ? (
+              // A failed read is an ERROR, never the reassuring empty state
+              // (PR #331 round 2).
+              <div className="py-6 text-center">
+                <p className="mb-3 text-sm text-error-600">{t('family.taskDetail.offersLoadError')}</p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  fullWidth={false}
+                  onClick={() => {
+                    setOffers(null);
+                    setOffersTick((n) => n + 1);
+                  }}
+                >
+                  {t('family.taskDetail.offersRetry')}
+                </Button>
+              </div>
+            ) : offers === null ? (
               <div className="flex justify-center py-10">
                 <Spinner />
               </div>
@@ -210,6 +243,18 @@ export function TaskDetailPage() {
               onMarkDone={() => setMarkDoneOpen(true)}
               onCancel={() => setCancelOpen(true)}
               busy={busy}
+              // Description + photos stay available past acceptance — the
+              // coordination phase is when the details matter most
+              // (PR #331 round 2). Slotted between contact and checklist.
+              details={
+                <Card className="mb-4">
+                  <h3 className="mb-1 text-sm font-semibold text-gray-900">
+                    {t('family.taskDetail.descriptionTitle')}
+                  </h3>
+                  <p className="text-sm whitespace-pre-wrap text-gray-600">{task.description}</p>
+                  <TaskPhotos task={task} />
+                </Card>
+              }
             />
           </>
         )}
@@ -243,19 +288,22 @@ export function TaskDetailPage() {
           <div className="mt-2 flex gap-2">
             <Button
               disabled={busy}
-              onClick={() =>
-                runAction(
+              onClick={() => {
+                // Close BEFORE dispatching (the study RequestsPage
+                // precedent — PR #331 round 2): a refusal's copy must
+                // render on the PAGE, never behind an aria-modal scrim
+                // where it is invisible and unannounced.
+                const target = acceptTarget;
+                setAcceptTarget(null);
+                void runAction(
                   'doAcceptOffer',
-                  { offerId: acceptTarget.offerId },
+                  { offerId: target.offerId },
                   'family.taskDetail.acceptError',
-                  () => {
-                    setAcceptTarget(null);
-                  },
-                )
-              }
+                );
+              }}
               className="flex-1"
             >
-              {busy ? t('family.taskDetail.accepting') : t('family.taskDetail.acceptConfirmCta')}
+              {t('family.taskDetail.acceptConfirmCta')}
             </Button>
             <Button variant="ghost" onClick={() => setAcceptTarget(null)} className="flex-1">
               {t('common.back')}
@@ -273,17 +321,19 @@ export function TaskDetailPage() {
           <div className="mt-2 flex gap-2">
             <Button
               disabled={busy}
-              onClick={() =>
-                runAction(
+              onClick={() => {
+                // Close before dispatching — see the accept dialog.
+                const target = declineTarget;
+                setDeclineTarget(null);
+                void runAction(
                   'doDeclineOffer',
-                  { offerId: declineTarget.offerId },
+                  { offerId: target.offerId },
                   'family.taskDetail.declineError',
-                  () => setDeclineTarget(null),
-                )
-              }
+                );
+              }}
               className="flex-1"
             >
-              {busy ? t('family.taskDetail.declining') : t('family.taskDetail.declineConfirmCta')}
+              {t('family.taskDetail.declineConfirmCta')}
             </Button>
             <Button variant="ghost" onClick={() => setDeclineTarget(null)} className="flex-1">
               {t('common.back')}
@@ -305,15 +355,16 @@ export function TaskDetailPage() {
           <div className="mt-2 flex gap-2">
             <Button
               disabled={busy}
-              onClick={() =>
-                runAction('doCancelTask', { taskId: task.taskId }, 'family.assigned.cancelError', () => {
-                  setCancelOpen(false);
-                  toast(t('family.assigned.cancelledBanner'));
-                })
-              }
+              onClick={() => {
+                // Close before dispatching — see the accept dialog.
+                setCancelOpen(false);
+                void runAction('doCancelTask', { taskId: task.taskId }, 'family.assigned.cancelError', () =>
+                  toast(t('family.assigned.cancelledBanner')),
+                );
+              }}
               className="flex-1"
             >
-              {busy ? t('family.assigned.cancelling') : t('family.assigned.cancelConfirmCta')}
+              {t('family.assigned.cancelConfirmCta')}
             </Button>
             <Button variant="ghost" onClick={() => setCancelOpen(false)} className="flex-1">
               {t('family.assigned.cancelKeep')}
@@ -329,15 +380,16 @@ export function TaskDetailPage() {
           <div className="mt-2 flex gap-2">
             <Button
               disabled={busy}
-              onClick={() =>
-                runAction('doMarkTaskDone', { taskId: task.taskId }, 'family.assigned.markDoneError', () => {
-                  setMarkDoneOpen(false);
-                  toast(t('family.assigned.completedBanner'));
-                })
-              }
+              onClick={() => {
+                // Close before dispatching — see the accept dialog.
+                setMarkDoneOpen(false);
+                void runAction('doMarkTaskDone', { taskId: task.taskId }, 'family.assigned.markDoneError', () =>
+                  toast(t('family.assigned.completedBanner')),
+                );
+              }}
               className="flex-1"
             >
-              {busy ? t('family.assigned.markingDone') : t('family.assigned.markDoneConfirmCta')}
+              {t('family.assigned.markDoneConfirmCta')}
             </Button>
             <Button variant="ghost" onClick={() => setMarkDoneOpen(false)} className="flex-1">
               {t('common.back')}
