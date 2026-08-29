@@ -1509,6 +1509,16 @@ notification mail deep-links five of them.
   progress, and recent completions carrying the endorsement prompt for any
   doer this family has not endorsed yet. Empty for a family with no tasks,
   pointing at posting one.
+  **A SUMMARY, NOT A SECOND LIST (PR #394).** Each section shows at most five
+  rows and then defers to `/family/tasks`. Shipped uncapped, it rendered every
+  live open task and every assigned task, so the only rows unique to the list
+  page were the cancelled ones, the expired ones and completions past the
+  fifth — the owner reported the two routes as near-duplicates, and they were.
+  Five is the number the completions section already used (decision 19's
+  six-month retention), kept as the one cap across all three. The cap is never
+  silent: whenever it bites, the section's foot carries a "See all N …" link
+  naming the FULL count, and the section badges keep counting the full sets
+  rather than the visible slice.
 - **Post a task** — a wizard: category → sub-category → timing (the four models
   each with their own small form) → title + free-text description *with the
   considerations list rendered alongside* → photos → adult-present declaration →
@@ -1526,6 +1536,13 @@ notification mail deep-links five of them.
   served by the `(familyId, status, createdAt)` composite added to §7.3
   for exactly this: the four-field `(familyId, taskId, status, createdAt)`
   index cannot serve it, because `taskId` sits unconstrained in the middle.
+  `?tab=open|assigned|completed|cancelled` seeds the OPENING tab (PR #394),
+  so the dashboard's capped sections can hand their overflow to the right
+  one. Initial state only: a click still wins, the URL is never rewritten,
+  and an unknown value falls back to Open. The page keeps its four tabs and
+  remains the complete history — the Open tab is deliberately broader than
+  the dashboard's live-only section, since it also shows expired tasks
+  badged Expired.
 - **Task detail with offers** — the offer list is the heart of the product:
   student name, photo, bio, price, basis, message, declared helper, and their
   **endorsements from all three apps** (decision 12 as revised by the owner
@@ -1615,6 +1632,15 @@ notification mail deep-links five of them.
   they wait on (the family, or §6.2's supervising parent), assigned work with
   what is next, and endorsements to answer. Empty for a new student, pointing
   at the board.
+  **A SUMMARY, NOT A SECOND LIST (PR #394)** — the same five-row cap and the
+  same "See all N …" foot as the family dashboard, deferring to
+  `/doer/offers`, `/doer/work` and `/doer/endorsements`. `/doer/board` is
+  deliberately untouched: it is discovery across every family's open tasks,
+  not a longer copy of anything on the dashboard. KNOWN GAP: the offers link
+  cannot name a tab, because a live offer is `pending` or `pending_guardian`
+  and **My offers** splits those across two tabs — the label's merged total
+  therefore over-states what the landing tab shows. The fix is a single
+  live-offer view on that page, carried as a follow-up.
 - **Board** — the demand feed. Filters: category, sub-category, timing, area,
   adult-present, transport-needed. Sorted newest-first by default. It is the
   student's daily destination, reached from the dashboard's quick action and
