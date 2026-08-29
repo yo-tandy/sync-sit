@@ -84,7 +84,11 @@ export function AccountLayout() {
         <PageContainer>
           <Outlet />
         </PageContainer>
-        <AppSwitchBarHost accountHref="/account" homeHref="/" />
+        {/* homeHref is the member's OWN portal, not '/': #385 requires the
+            current-app tab to actually navigate, and the hub belongs to no
+            portal, so it borrows the same role-aware target the desktop exit
+            uses. '/' only for a member with no sit role, who has no portal. */}
+        <AppSwitchBarHost accountHref="/account" homeHref={portalHref ?? '/'} />
       </div>
     </AuthGuard>
   );

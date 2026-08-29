@@ -149,14 +149,16 @@ function currentAppTabNavigatesHome(bar: HTMLElement, app: RegExp, homeText: str
 describe('the app-switch bar is mounted in sit’s shells (#365)', () => {
   afterEach(cleanup);
 
-  it('FamilyLayout renders the bar, with the parent account path', () => {
-    renderLayout(<FamilyLayout />, 'family page', '/family/account', [
+  it('FamilyLayout renders the bar, pointing at the SHARED account hub', () => {
+    // '/account', not '/family/account' (#367): the hub is one page for every
+    // portal, which is the point of it. The pin still proves the host passed
+    // a real path -- the bar derives the active tab from the route it is
+    // given -- it just pins the collapsed path now rather than the portal one.
+    renderLayout(<FamilyLayout />, 'family page', '/account', [
       { path: '/family', text: 'parent home' },
     ]);
     const bar = screen.getByRole('navigation', SWITCH_BAR);
     shellReservesBarHeight(bar);
-    // aria-current proves the host passed '/family/account', not some other
-    // path: the bar derives the active tab from the route it is given.
     expect(within(bar).getByRole('button', { name: /my account/i })).toHaveAttribute(
       'aria-current',
       'page',
@@ -164,10 +166,13 @@ describe('the app-switch bar is mounted in sit’s shells (#365)', () => {
     currentAppTabNavigatesHome(bar, /sync\/sit/, 'parent home');
   });
 
-  it('BabysitterLayout renders the bar, with the BABYSITTER account path', () => {
-    // The babysitter's account lives at a different path than the parent's; a
-    // typo here would ship silently.
-    renderLayout(<BabysitterLayout />, 'babysitter page', '/babysitter/account', [
+  it('BabysitterLayout renders the bar, pointing at the SAME shared hub', () => {
+    // The babysitter's account USED to live at a different path than the
+    // parent's, and this pin existed because a typo between them would ship
+    // silently. #367 removes the divergence at the source: both portals now
+    // send the account tab to the one hub, so the pin's job flips from
+    // "these two differ correctly" to "these two no longer differ at all".
+    renderLayout(<BabysitterLayout />, 'babysitter page', '/account', [
       { path: '/babysitter', text: 'babysitter home' },
     ]);
     const bar = screen.getByRole('navigation', SWITCH_BAR);
