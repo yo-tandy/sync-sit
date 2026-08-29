@@ -90,6 +90,64 @@ interface ListFamiliesPayload {
   startAfterId?: string;
 }
 
+/**
+ * One row of `doAdminListTasks` (sync-do plan §8, §9.4). The Tasks tab is
+ * the ONE sync-do surface inside `apps/web`: admin tooling, not a member
+ * entry point — decision 20 forbids the latter until the owner approves it.
+ * Fields are the callable's explicit projection, not a `TaskDoc` spread, so
+ * `apps/web` needs no `@ejm/do-core` dependency.
+ */
+export interface AdminDoTaskRow {
+  id: string;
+  familyId: string;
+  familyName: string;
+  createdByUserId: string;
+  areaLabel: string;
+  category: string;
+  subCategory: string;
+  title: string;
+  description: string;
+  status: string;
+  timing: string;
+  offerCount: number;
+  photoCount: number;
+  suggestedBudget: number | null;
+  agreedPrice: number | null;
+  assignedUserId: string | null;
+  adultPresent: string | null;
+  createdAt: WireTimestamp | null;
+  expiresAt: WireTimestamp | null;
+  completedAt: WireTimestamp | null;
+  cancelledAt: WireTimestamp | null;
+  cancelledBy: string | null;
+}
+
+/** One offer as the detail mode returns it. */
+export interface AdminDoOfferRow {
+  id: string;
+  taskId: string;
+  doerUserId: string;
+  doerFirstName: string;
+  price: number | null;
+  priceBasis: string | null;
+  message: string;
+  helper: { firstName: string; lastName: string; age: number } | null;
+  status: string;
+  guardianRequired: boolean;
+  declinedReason: string | null;
+  createdAt: WireTimestamp | null;
+  updatedAt: WireTimestamp | null;
+}
+
+interface ListDoTasksPayload {
+  searchQuery?: string;
+  categoryFilter?: string;
+  statusFilter?: string;
+  familyIdFilter?: string;
+  taskId?: string;
+  startAfterId?: string;
+}
+
 interface PreapprovedEmail {
   email: string;
   used: boolean;
@@ -152,10 +210,12 @@ export interface AdminAuditLogEntry {
   targetInfo: { email: string; name: string; role: string } | null;
 }
 
-// Dashboard stats include an extra pendingVerificationCount on top of the
-// base shared type.
+// Dashboard stats include an extra pendingVerificationCount and the sync-do
+// task counts (plan §9.4) on top of the base shared type.
 interface AdminStatsWithVerifications extends AdminDashboardStats {
   pendingVerificationCount: number;
+  doTaskCount: number;
+  doOpenTaskCount: number;
 }
 
 /**
@@ -237,6 +297,28 @@ interface AdminState {
   appointmentsLoading: boolean;
   fetchAppointments: (params: { status?: string }) => Promise<void>;
   deleteAppointment: (id: string) => Promise<void>;
+
+  // sync-do tasks (plan §9.4)
+  doTasks: AdminDoTaskRow[];
+  doTasksLoading: boolean;
+  doTasksLoadingMore: boolean;
+  doTasksHasMore: boolean;
+  doTasksError: boolean;
+  /** The search window filled before the filter ran — results may be
+   *  incomplete, and the page says so rather than implying a definitive
+   *  "not found". */
+  doTasksTruncated: boolean;
+  fetchDoTasks: (params: {
+    search?: string;
+    category?: string;
+    status?: string;
+    familyId?: string;
+    startAfterId?: string;
+  }) => Promise<void>;
+  /** Detail mode: the task's offers, any status. Returns them rather than
+   *  storing a second list — one expanded row at a time. */
+  fetchDoTaskOffers: (taskId: string) => Promise<AdminDoOfferRow[]>;
+  deleteDoTask: (taskId: string) => Promise<void>;
 
   // Holidays
   updateHolidays: (schoolYear: string, zone: string, periods: HolidayPeriod[]) => Promise<void>;
@@ -404,6 +486,58 @@ export const useAdminStore = create<AdminState>((set, get) => ({
   deleteAppointment: async (id) => {
     const fn = httpsCallable(functions, 'deleteAppointment');
     await fn({ appointmentId: id });
+  },
+
+  // sync-do tasks (plan §9.4) — same slice shape as Families: an explicit
+  // error flag rather than a throw, so a failed load renders a banner and
+  // not the empty state.
+  doTasks: [],
+  doTasksLoading: false,
+  doTasksLoadingMore: false,
+  doTasksHasMore: false,
+  doTasksError: false,
+  doTasksTruncated: false,
+  fetchDoTasks: async (params) => {
+    const append = Boolean(params.startAfterId);
+    if (append && get().doTasksLoadingMore) return;
+    if (append) set({ doTasksLoadingMore: true, doTasksError: false });
+    else set({ doTasksLoading: true, doTasksError: false });
+    try {
+      const fn = httpsCallable<
+        ListDoTasksPayload,
+        { tasks: AdminDoTaskRow[]; hasMore: boolean; truncated?: boolean }
+      >(functions, 'doAdminListTasks');
+      // Omit empty fields entirely — the callable client serializes
+      // undefined as null (the listFamilies note).
+      const payload: ListDoTasksPayload = {};
+      if (params.search) payload.searchQuery = params.search;
+      if (params.category) payload.categoryFilter = params.category;
+      if (params.status) payload.statusFilter = params.status;
+      if (params.familyId) payload.familyIdFilter = params.familyId;
+      if (params.startAfterId) payload.startAfterId = params.startAfterId;
+      const result = await fn(payload);
+      set((state) => ({
+        doTasks: append ? [...state.doTasks, ...result.data.tasks] : result.data.tasks,
+        doTasksHasMore: result.data.hasMore,
+        doTasksTruncated: Boolean(result.data.truncated),
+        doTasksLoading: false,
+        doTasksLoadingMore: false,
+      }));
+    } catch {
+      set({ doTasksLoading: false, doTasksLoadingMore: false, doTasksError: true });
+    }
+  },
+  fetchDoTaskOffers: async (taskId) => {
+    const fn = httpsCallable<ListDoTasksPayload, { offers: AdminDoOfferRow[] }>(
+      functions,
+      'doAdminListTasks',
+    );
+    const result = await fn({ taskId });
+    return result.data.offers;
+  },
+  deleteDoTask: async (taskId) => {
+    const fn = httpsCallable(functions, 'doAdminDeleteTask');
+    await fn({ taskId });
   },
 
   // Holidays

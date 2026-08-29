@@ -48,6 +48,7 @@ export function AdminLayout() {
       title: t('admin.nav.operations'),
       items: [
         { to: '/admin/appointments', label: t('admin.manageAppointments'), icon: <CalendarIcon className="h-5 w-5" /> },
+        { to: '/admin/do-tasks', label: t('admin.doTasks.title'), icon: <ClipboardListIcon className="h-5 w-5" /> },
         { to: '/admin/holidays', label: t('admin.holidays'), icon: <CalendarIcon className="h-5 w-5" /> },
         { to: '/admin/configuration', label: t('admin.config.title'), icon: <ClipboardListIcon className="h-5 w-5" /> },
         { to: '/admin/audit-log', label: t('admin.auditLog'), icon: <ClipboardListIcon className="h-5 w-5" /> },

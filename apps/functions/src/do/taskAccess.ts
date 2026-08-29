@@ -1,5 +1,6 @@
 import { HttpsError } from 'firebase-functions/v2/https';
 import { getStorage } from 'firebase-admin/storage';
+import type { Firestore } from 'firebase-admin/firestore';
 import { getParentProfile, isAdmin, type User } from '@ejm/shared-core';
 import type { TaskDoc } from '@ejm/do-core';
 import { db } from '../config/firebase.js';
@@ -125,6 +126,83 @@ export async function assertPhotosOwnedByCaller(
       );
     }
   }
+}
+
+/** Structural bucket type — avoids a direct @google-cloud/storage import
+ *  (transitive dep; firebase-admin/storage re-exports the instance type). */
+export type StorageBucket = ReturnType<ReturnType<typeof getStorage>['bucket']>;
+
+export interface TaskCascadeStats {
+  offersDeleted: number;
+  photoObjectsDeleted: number;
+}
+
+/**
+ * Delete one task with its offers and its photo objects — §11.4's cascade,
+ * shared by the daily sweep (`runDoSweepTasks`, three retention paths) and
+ * `doAdminDeleteTask` (PR10). ONE implementation on purpose: an admin delete
+ * that dropped the task doc but left `taskOffers` rows and `do-photos`
+ * objects behind would leave exactly the orphans §11.4 exists to prevent,
+ * and two copies of this logic would drift the moment either grew a step.
+ *
+ * Order and the two guards are load-bearing:
+ * - Offers first, EVERY status: the task is the reason the offer exists, and
+ *   inspecting a deleted task's offers is not a supported surface (§11.4
+ *   retention). Chunked below Firestore's 500-writes-per-batch cap —
+ *   `DO_OFFER_MAX_PER_TASK` caps LIVE offers only, so a long-lived task can
+ *   hold arbitrarily many withdrawn/declined ones.
+ * - Task doc BEFORE its photo objects, so the still-referenced check below
+ *   never counts the task being deleted.
+ * - Photo objects are NOT deleted blindly: nothing dedupes `{uid, photoId}`
+ *   pairs across tasks (both write paths accept the same own-prefix pair on
+ *   two tasks), so an unconditional delete would 404 a still-open sibling
+ *   task's photo with no way to re-attach — only the stripper writes the
+ *   final prefix. A pair another task still references is left for the
+ *   sweep's orphan pass to collect once the LAST referencing task is gone.
+ *   `ignoreNotFound` so a re-run after a partial failure does not throw on
+ *   the half that already succeeded.
+ */
+export async function deleteTaskCascade(
+  firestore: Firestore,
+  bucket: StorageBucket,
+  taskRef: FirebaseFirestore.DocumentReference,
+  task: TaskDoc,
+  // Accumulated into as each step commits, not assembled at the end, so a
+  // caller that catches a mid-cascade throw still sees what actually
+  // happened. The sweep's poison-pill isolation reads these numbers on
+  // exactly the runs where something failed, which is when understating
+  // them is worst.
+  stats: TaskCascadeStats = { offersDeleted: 0, photoObjectsDeleted: 0 },
+): Promise<TaskCascadeStats> {
+  const offers = await firestore
+    .collection('taskOffers')
+    .where('taskId', '==', taskRef.id)
+    .get();
+  for (let i = 0; i < offers.docs.length; i += 400) {
+    const batch = firestore.batch();
+    for (const offer of offers.docs.slice(i, i + 400)) {
+      batch.delete(offer.ref);
+    }
+    await batch.commit();
+  }
+  stats.offersDeleted += offers.size;
+
+  await taskRef.delete();
+
+  for (const pair of task.photos ?? []) {
+    const stillReferenced = await firestore
+      .collection('doTasks')
+      .where('photos', 'array-contains', { uid: pair.uid, photoId: pair.photoId })
+      .limit(1)
+      .get();
+    if (!stillReferenced.empty) continue;
+    await bucket
+      .file(photoObjectPath(pair.uid, pair.photoId))
+      .delete({ ignoreNotFound: true });
+    stats.photoObjectsDeleted += 1;
+  }
+
+  return stats;
 }
 
 /**
