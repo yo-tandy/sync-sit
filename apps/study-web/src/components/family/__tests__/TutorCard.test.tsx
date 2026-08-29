@@ -15,6 +15,8 @@ const h = vi.hoisted(() => ({
   results: new Map<string, Record<string, unknown>[]>(),
   /** Subject fields whose query should reject — models a partial outage. */
   failFields: new Set<string>(),
+  /** Subject fields whose query hangs until released — models slow sources. */
+  hold: new Map<string, () => void>(),
   callable: vi.fn(),
 }));
 
@@ -61,6 +63,7 @@ function reset() {
   h.queries = [];
   h.results = new Map();
   h.failFields = new Set();
+  h.hold = new Map();
   h.getDocs.mockReset();
   // Field-aware: the card issues ONE query per product, so a single shared
   // doc list would triple every endorsement.
@@ -69,7 +72,13 @@ function reset() {
     const field = (q.query[1] as { field: string }).field;
     if (h.failFields.has(field)) return Promise.reject(new Error('permission-denied'));
     const rows = h.results.get(field) ?? [];
-    return Promise.resolve({ docs: rows.map((r, i) => ({ id: `${field}-${i}`, data: () => r })) });
+    const result = { docs: rows.map((r, i) => ({ id: `${field}-${i}`, data: () => r })) };
+    if (h.hold.has(field)) {
+      return new Promise((resolve) => {
+        h.hold.set(field, () => resolve(result));
+      });
+    }
+    return Promise.resolve(result);
   });
   h.callable.mockReset();
   h.callable.mockResolvedValue({ data: { requestId: 'r1' } });
@@ -378,6 +387,23 @@ describe('TutorCard', () => {
     expand();
     await waitFor(() => expect(screen.getByText(/Patient maths tutor/)).toBeInTheDocument());
     expect(h.queries).toHaveLength(3);
+  });
+
+  it('does not start a second load while one is in flight (no stale overwrite, no double reads)', async () => {
+    h.results.set('tutorUserId', [
+      { submittedByName: 'Famille Etude', referenceText: 'Patient maths tutor' },
+    ]);
+    h.hold.set('babysitterUserId', () => {}); // this source hangs
+    renderWithProviders(<TutorCard result={tutor()} />);
+    expand();
+    await waitFor(() => expect(h.queries).toHaveLength(3));
+
+    expand(); // collapse
+    expand(); // re-expand while load A is unresolved
+    expect(h.queries).toHaveLength(3); // not 6
+
+    h.hold.get('babysitterUserId')!();
+    await waitFor(() => expect(screen.getByText(/Patient maths tutor/)).toBeInTheDocument());
   });
 
   it('keeps the card intact when the endorsement queries are denied', async () => {

@@ -141,3 +141,33 @@ describe('ENDORSEMENT_PER_SOURCE_LIMIT', () => {
     expect(ENDORSEMENT_PER_SOURCE_LIMIT).toBe(10);
   });
 });
+
+describe('runtime immutability', () => {
+  // The module argues these values must not drift; `readonly` is erased at
+  // runtime, so only Object.freeze actually enforces it. Refactoring the
+  // freeze back to a bare `as const` would pass every content assertion above
+  // while leaving the array pushable — one stray push turns all four
+  // cross-app surfaces into PERMISSION_DENIED at once.
+  it.each([
+    ['PUBLIC_ENDORSEMENT_STATUSES', PUBLIC_ENDORSEMENT_STATUSES],
+    ['ENDORSEMENT_APPS', ENDORSEMENT_APPS],
+    ['ENDORSEMENT_SUBJECT_FIELD', ENDORSEMENT_SUBJECT_FIELD],
+  ])('%s is frozen at runtime, not merely readonly at compile time', (_name, value) => {
+    expect(Object.isFrozen(value)).toBe(true);
+  });
+
+  it('rejects a push onto the status list rather than silently accepting it', () => {
+    // Module scope is strict mode, so the write throws instead of no-op'ing.
+    expect(() =>
+      (PUBLIC_ENDORSEMENT_STATUSES as unknown as string[]).push('private'),
+    ).toThrow();
+    expect(PUBLIC_ENDORSEMENT_STATUSES).toEqual(['approved', 'published']);
+  });
+
+  it('rejects re-pointing a subject field', () => {
+    expect(() => {
+      (ENDORSEMENT_SUBJECT_FIELD as unknown as Record<string, string>).sit = 'tutorUserId';
+    }).toThrow();
+    expect(ENDORSEMENT_SUBJECT_FIELD.sit).toBe('babysitterUserId');
+  });
+});

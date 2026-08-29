@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { humanizeNoticeWindow } from '@/utils/cancellationPolicy';
 import { Link, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
@@ -131,10 +131,22 @@ export function SearchPage() {
   // graceful degradation permanently sticky, which is the opposite of the
   // point. Re-expanding a card now refetches until one load is whole.
   const [completeRefUids, setCompleteRefUids] = useState<Set<string>>(new Set());
+  // uids with a load currently in flight. A ref, not state: it must be read
+  // and written SYNCHRONOUSLY within one click handler, and completeRefUids
+  // cannot serve here because it only latches after a load resolves — so a
+  // collapse-then-expand double-toggle would start a second load, and if the
+  // second (complete) one resolved first the first (partial) one would
+  // overwrite it while the complete flag stayed latched. That is the round-2
+  // sticky degradation reached through a different door. Deduping per uid
+  // makes the interleaving impossible rather than merely detectable, and it
+  // also stops the double-toggle costing two full query sets.
+  const refsInFlight = useRef<Set<string>>(new Set());
   const [expandedRefIds, setExpandedRefIds] = useState<Set<string>>(new Set());
 
   const loadRefs = async (uid: string) => {
     if (completeRefUids.has(uid)) return; // already loaded, in full
+    if (refsInFlight.current.has(uid)) return; // a load is already running
+    refsInFlight.current.add(uid);
     try {
       const sources = endorsementSources('sit');
       // allSettled, NOT all: with one query the failure mode was "this card's
@@ -169,7 +181,9 @@ export function SearchPage() {
       if (settled.every((r) => r.status === 'fulfilled')) {
         setCompleteRefUids((prev) => new Set(prev).add(uid));
       }
-    } catch { /* silent */ }
+    } catch { /* silent */ } finally {
+      refsInFlight.current.delete(uid);
+    }
   };
 
   // Contact dialog

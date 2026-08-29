@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { collection, query, where, limit, getDocs } from 'firebase/firestore';
@@ -47,6 +47,16 @@ export function TutorCard({ result }: { result: TutorSearchResult }) {
   // answer and re-expanding could never retry — sticky degradation, the
   // opposite of what allSettled is for.
   const [endorsementsComplete, setEndorsementsComplete] = useState(false);
+  // A load currently in flight. A ref, not state: it must be read and written
+  // SYNCHRONOUSLY inside one click handler. endorsementsComplete cannot serve
+  // here because it only latches after a load resolves, so a
+  // collapse-then-expand double-toggle would start a second load; if that
+  // second (complete) load resolved FIRST, the first (partial) one would then
+  // overwrite it while the complete flag stayed latched — the round-2 sticky
+  // degradation via a different route. Deduping per card makes the
+  // interleaving impossible rather than merely detectable, and stops the
+  // double-toggle costing two full query sets.
+  const loadInFlight = useRef(false);
   // Local, optimistic view of this family's request status toward the tutor.
   const [status, setStatus] = useState<'none' | 'incoming' | StudyContactRequestStatus>(result.requestStatus);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -70,7 +80,8 @@ export function TutorCard({ result }: { result: TutorSearchResult }) {
     // server-side cross-app tally on TutorSearchResult (which would also close
     // the badge/list divergence noted below), NOT reinstating a study-only
     // gate that hides sit references by construction.
-    if (next && !endorsementsComplete) {
+    if (next && !endorsementsComplete && !loadInFlight.current) {
+      loadInFlight.current = true;
       try {
         const sources = endorsementSources('study');
         // allSettled, NOT all: with one query the failure mode was "this
@@ -106,7 +117,12 @@ export function TutorCard({ result }: { result: TutorSearchResult }) {
         );
         if (settled.every((r) => r.status === 'fulfilled')) setEndorsementsComplete(true);
       } catch {
+        // Belt-and-braces only: allSettled never rejects, and
+        // endorsementSources/toCrossAppEndorsement are total. This is NOT the
+        // partial-failure path — that one is handled above, per source.
         setEndorsements([]);
+      } finally {
+        loadInFlight.current = false;
       }
     }
   };

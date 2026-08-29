@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { collection, getDocs, query as fsQuery, where as fsWhere, limit as fsLimit } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
@@ -92,6 +92,15 @@ export function ExpandableBabysitterCard({
 
   // References for this babysitter
   const [refs, setRefs] = useState<CrossAppEndorsement[]>([]);
+  // The uid whose endorsements are cached COMPLETE (every source fulfilled).
+  // Without this the effect refetched all three sources on every expand — the
+  // most read-expensive of the three surfaces, at 3 queries per toggle. Keyed
+  // by uid so a card reused for a different babysitter refetches rather than
+  // showing the previous one's endorsements. Same shape as SearchPage, and
+  // paired with the same in-flight guard, since adding a cache here would
+  // otherwise introduce the same stale-overwrite race.
+  const refsCompleteFor = useRef<string | null>(null);
+  const refsInFlight = useRef(false);
   const [expandedRefIds, setExpandedRefIds] = useState<Set<string>>(new Set());
 
   // Appointment notes (issue #238, parity B2 — study's session notes adopted
@@ -176,6 +185,10 @@ export function ExpandableBabysitterCard({
   useEffect(() => {
     const babysitterUserId = appointment.babysitterUserId;
     if (!expanded || !babysitterUserId) return;
+    if (refsCompleteFor.current === babysitterUserId) return; // cached, in full
+    if (refsInFlight.current) return; // a load is already running
+    refsInFlight.current = true;
+    let cancelled = false;
     const sources = endorsementSources('sit');
     // allSettled, NOT all: with one query the failure mode was "this card's
     // endorsements are missing"; with three, Promise.all would let a failure in
@@ -194,6 +207,7 @@ export function ExpandableBabysitterCard({
         ))
       )
     ).then((settled) => {
+      if (cancelled) return;
       // Concatenated in source order, so sit's own references lead.
       setRefs(settled.flatMap((r, i) =>
         r.status === 'fulfilled'
@@ -202,7 +216,14 @@ export function ExpandableBabysitterCard({
             )
           : []
       ));
-    }).catch(() => {});
+      // Only a WHOLE load is cacheable; a partial one must retry on re-expand.
+      if (settled.every((r) => r.status === 'fulfilled')) {
+        refsCompleteFor.current = babysitterUserId;
+      }
+    }).catch(() => {}).finally(() => {
+      refsInFlight.current = false;
+    });
+    return () => { cancelled = true; };
   }, [expanded, appointment.babysitterUserId]);
 
   // Format date/time for confirmed/past cards

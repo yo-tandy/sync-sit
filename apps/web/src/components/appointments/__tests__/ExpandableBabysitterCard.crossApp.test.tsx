@@ -191,6 +191,35 @@ describe('ExpandableBabysitterCard cross-app endorsements (issue #280)', () => {
     expect(screen.queryByText(/\+33100000000/)).not.toBeInTheDocument();
   });
 
+  it('caches a WHOLE load — re-expanding does not refetch all three sources', async () => {
+    // This surface previously refetched on every expand, the most read-
+    // expensive of the three at 3 queries per toggle.
+    h.results.set('babysitterUserId', [{ refName: 'Famille Garde', note: 'x' }]);
+    renderCard();
+    await waitFor(() => expect(h.queries).toHaveLength(3));
+    fireEvent.click(screen.getAllByRole('button')[0]); // collapse
+    fireEvent.click(screen.getAllByRole('button')[0]); // re-expand
+    await waitFor(() => expect(screen.getByText(/Famille Garde/)).toBeInTheDocument());
+    expect(h.queries).toHaveLength(3);
+  });
+
+  it('retries on re-expand after a PARTIAL load — only whole loads are cached', async () => {
+    h.results.set('babysitterUserId', [{ refName: 'Famille Garde', note: 'x' }]);
+    h.results.set('tutorUserId', [
+      { submittedByName: 'Famille Etude', referenceText: 'Patient maths tutor' },
+    ]);
+    h.failFields = new Set(['tutorUserId']);
+    renderCard();
+    await waitFor(() => expect(h.queries).toHaveLength(3));
+    expect(screen.queryByText(/Famille Etude/)).not.toBeInTheDocument();
+
+    h.failFields = new Set();
+    fireEvent.click(screen.getAllByRole('button')[0]); // collapse
+    fireEvent.click(screen.getAllByRole('button')[0]); // re-expand refetches
+    await waitFor(() => expect(h.queries).toHaveLength(6));
+    expect(await screen.findByText(/Endorsement from Famille Etude/)).toBeInTheDocument();
+  });
+
   it('keeps the card intact when the endorsement queries are denied', async () => {
     h.fail = true;
     renderCard();

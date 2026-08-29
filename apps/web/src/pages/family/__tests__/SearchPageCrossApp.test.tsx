@@ -27,6 +27,8 @@ const h = vi.hoisted(() => ({
   refFail: false,
   /** Subject fields whose query should reject — models a partial outage. */
   refFailFields: new Set<string>(),
+  /** Subject fields whose query hangs until released — models slow sources. */
+  refHold: new Map<string, () => void>(),
   unsub: vi.fn(),
 }));
 
@@ -54,7 +56,13 @@ vi.mock('firebase/firestore', () => ({
     const field = (parts[1] as { where: [string] }).where[0];
     if (h.refFailFields.has(field)) return Promise.reject(new Error('permission-denied'));
     const rows = h.refResults.get(field) ?? [];
-    return Promise.resolve({ docs: rows.map((r, i) => ({ id: `${field}-${i}`, data: () => r })) });
+    const result = { docs: rows.map((r, i) => ({ id: `${field}-${i}`, data: () => r })) };
+    if (h.refHold.has(field)) {
+      return new Promise((resolve) => {
+        h.refHold.set(field, () => resolve(result));
+      });
+    }
+    return Promise.resolve(result);
   },
   onSnapshot: () => h.unsub,
   deleteDoc: vi.fn(),
@@ -94,6 +102,7 @@ beforeEach(() => {
   h.refResults = new Map();
   h.refFail = false;
   h.refFailFields = new Set();
+  h.refHold = new Map();
   h.auth.userDoc = {
     uid: 'p1',
     profiles: { parent: { enrollmentComplete: true, familyId: 'fam1' } },
@@ -245,6 +254,28 @@ describe('SearchPage cross-app endorsements (issue #280)', () => {
     // Still 3: a complete answer stays cached, so the cost is paid once.
     await waitFor(() => expect(screen.getByText(/Famille Garde/)).toBeInTheDocument());
     expect(h.refQueries).toHaveLength(3);
+  });
+
+  it('does not start a second load while one is in flight (no stale overwrite, no double reads)', async () => {
+    // The race the completeness flag alone does NOT close: collapse-then-
+    // expand while load A is still running starts load B; if B (complete)
+    // resolves first and A (partial) second, A overwrites the full list while
+    // the complete flag is already latched — sticky degradation again, by
+    // another door. Deduping per uid makes the interleaving impossible.
+    h.refResults.set('babysitterUserId', [{ refName: 'Famille Garde', note: 'x' }]);
+    h.refHold.set('tutorUserId', () => {}); // this source hangs
+    await expandFirstResult();
+    await waitFor(() => expect(h.refQueries).toHaveLength(3));
+
+    // Double-toggle while load A is unresolved.
+    fireEvent.click(screen.getByText('Marie DUPONT'));
+    fireEvent.click(screen.getByText('Marie DUPONT'));
+    // Still 3, not 6: no second query set was issued.
+    expect(h.refQueries).toHaveLength(3);
+
+    // Release the hung source; the single in-flight load completes normally.
+    h.refHold.get('tutorUserId')!();
+    await waitFor(() => expect(screen.getByText(/Famille Garde/)).toBeInTheDocument());
   });
 
   it('leaves the card intact when the endorsement queries are denied', async () => {
