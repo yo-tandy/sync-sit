@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readFileSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readFileSync, existsSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { resolve, join } from 'node:path';
@@ -454,17 +454,21 @@ describe.skipIf(IS_META_CHILD)('a tagged release is not gated on documentation l
       const seen = checkTree(repoRoot);
       expect(seen.problems.some((p) => p.file === FIXTURE)).toBe(true);
 
-      const child = spawnSync(
-        resolve(repoRoot, 'node_modules/.bin/vitest'),
-        ['run', '--project', 'scripts', 'markdown-links'],
-        {
-          cwd: repoRoot,
-          encoding: 'utf8',
-          env: { ...process.env, LINKCHECK_META_CHILD: '1', CI: '1' },
-        },
-      );
+      // Assert the runner exists rather than letting a missing binary come
+      // back as `status: null` and read like an unrelated failure. Same
+      // discipline as the checker's own "cannot pass by scanning nothing".
+      const vitestBin = resolve(repoRoot, 'node_modules/.bin/vitest');
+      expect(existsSync(vitestBin)).toBe(true);
 
-      expect(child.status).toBe(0);
+      const child = spawnSync(vitestBin, ['run', '--project', 'scripts', 'markdown-links'], {
+        cwd: repoRoot,
+        encoding: 'utf8',
+        env: { ...process.env, LINKCHECK_META_CHILD: '1', CI: '1' },
+      });
+
+      // On failure, surface the child's own output — otherwise this reports
+      // only "expected 1 to be 0" and the reason is a run you cannot see.
+      expect(child.status, `child vitest failed:\n${child.stdout}\n${child.stderr}`).toBe(0);
     } finally {
       rmSync(fixture, { force: true });
     }
