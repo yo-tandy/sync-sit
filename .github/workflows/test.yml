@@ -7,6 +7,10 @@ on:
   # Filtering on `branches` here matches the PR base, which silently skipped this
   # job for every stacked PR while the check rollup still read green (issue #215).
   pull_request:
+  # Called by release.yml so the release gate IS this workflow rather than a
+  # copy of it (issue #353). A duplicated gate drifts, and the copy that drifts
+  # is always the one guarding production.
+  workflow_call:
 
 # Neither job writes anything — no comments, no releases, no package pushes.
 # Least privilege rather than the repository default, which on many repos is

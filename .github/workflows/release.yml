@@ -1,18 +1,36 @@
-name: Deploy to Firebase on merge
+name: Release to production
+
+# Production ships on a TAG, not on a merge (issue #353). A push to main used
+# to be a push to production, which meant no way to accumulate coherent,
+# tested changes before releasing and no record of what prod was running.
+#
+# Cut a release:      git tag -a v1.4.0 -m "..." && git push origin v1.4.0
+# Roll back:          Actions -> Release to production -> Run workflow -> v1.3.0
+#
+# All three apps (sit, study, do) release together, from one tag, deliberately:
+# they share a Firebase project, a functions codebase and shared-* packages, so
+# a per-app release would ship half a shared change. See docs/releasing.md.
 on:
   push:
-    branches:
-      - main
+    tags:
+      - 'v*'
+  # Rollback path. Re-pushing an existing tag does NOT re-run the push trigger,
+  # so redeploying a known-good release needs its own entry point.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag to deploy (rollback), e.g. v1.3.0'
+        required: true
+        type: string
 
-# Serialize merge deploys (2026-08-28 incident): five PRs merged in quick
+# Serialize production deploys (2026-08-28 incident): five PRs merged in quick
 # succession each launched a full functions deploy in parallel and the
 # Cloud Functions API returned 429 "Per project mutation requests" quota
-# exceeded, leaving prod one merge behind. One deploy at a time; a queued
-# run always deploys the branch tip, and GitHub keeps only the newest
-# pending run per group, so intermediate pushes coalesce. cancel-in-progress
-# stays FALSE deliberately -- never kill a prod deploy mid-flight.
+# exceeded, leaving prod one merge behind. One deploy at a time.
+# cancel-in-progress stays FALSE deliberately -- never kill a prod deploy
+# mid-flight, and never cancel a rollback because a new tag arrived.
 concurrency:
-  group: firebase-deploy-main
+  group: firebase-deploy-prod
   cancel-in-progress: false
 
 permissions:
@@ -20,10 +38,74 @@ permissions:
   id-token: write
 
 jobs:
+  # Gate 1: the tag must point at a commit that is ON main. Without this a tag
+  # pushed from any branch -- or from a feature branch that was never merged --
+  # releases code that main's Tests workflow never saw. `git tag` is a local
+  # operation with no review attached, so this is the only thing standing
+  # between a typo'd checkout and production.
+  verify_tag:
+    runs-on: ubuntu-latest
+    outputs:
+      ref: ${{ steps.resolve.outputs.ref }}
+      sha: ${{ steps.resolve.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - id: resolve
+        name: Resolve the tag and prove it is on main
+        run: |
+          set -euo pipefail
+          REF="${{ inputs.tag || github.ref_name }}"
+          echo "ref=$REF" >> "$GITHUB_OUTPUT"
+
+          if ! git rev-parse -q --verify "refs/tags/$REF" >/dev/null; then
+            echo "::error::No such tag: $REF"
+            exit 1
+          fi
+          SHA="$(git rev-list -n 1 "refs/tags/$REF")"
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+
+          git fetch --no-tags origin main
+          if ! git merge-base --is-ancestor "$SHA" origin/main; then
+            echo "::error::Tag $REF ($SHA) is not an ancestor of origin/main."
+            echo "::error::Only commits that have landed on main may be released."
+            exit 1
+          fi
+          echo "Releasing $REF -> $SHA (verified on main)"
+
+  # Gate 2: the same Tests workflow main runs, re-run against the tagged tree.
+  # The commit passed on main, but CI tests the MERGE ref, and a later merge can
+  # break an earlier commit's assumptions; a release is the one place worth
+  # paying for the certainty rather than inferring it.
+  #
+  # NEW releases only. A reusable workflow resolves at the CALLER's ref, and a
+  # workflow_dispatch run resolves at the default branch -- so on the rollback
+  # path this would test main, not the tag being deployed, and report a green
+  # gate for a tree it never looked at. A rollback target is by definition a
+  # tag that already passed this gate when it was released, and blocking an
+  # emergency rollback on a fresh test run would be the wrong trade anyway.
+  verify_tests:
+    needs: verify_tag
+    if: github.event_name == 'push'
+    uses: ./.github/workflows/test.yml
+
   build_and_deploy:
+    needs: [verify_tag, verify_tests]
+    # `needs` on a SKIPPED job skips the dependent too, which would make every
+    # rollback a no-op that reports success. Require verify_tag to have passed
+    # and verify_tests to have either passed or been deliberately skipped --
+    # never to have failed.
+    if: >-
+      always()
+      && needs.verify_tag.result == 'success'
+      && (needs.verify_tests.result == 'success' || needs.verify_tests.result == 'skipped')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.verify_tag.outputs.sha }}
 
       - name: Enable pnpm (Corepack)
         run: |
