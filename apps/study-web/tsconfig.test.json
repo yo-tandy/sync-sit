@@ -1,0 +1,29 @@
+{
+  "extends": "./tsconfig.app.json",
+  "compilerOptions": {
+    "noEmit": true,
+    // `types` does not merge through `extends`, so vite/client has to be
+    // re-listed rather than added to. `node` is genuinely needed here: a few
+    // tests read fixtures off disk via node:fs / import.meta.dirname.
+    "types": ["vite/client", "node"]
+  },
+  "include": [
+    "src/**/__tests__/**/*.ts",
+    "src/**/__tests__/**/*.tsx",
+    "src/**/*.test.ts",
+    "src/**/*.test.tsx",
+    "src/**/*.spec.ts",
+    "src/**/*.spec.tsx",
+    // Its `import '@testing-library/jest-dom/vitest'` is what augments
+    // Vitest's Assertion interface with toBeInTheDocument / toHaveTextContent
+    // / etc. Without it the matchers are unknown and every assertion using one
+    // fails TS2339. Including it also type-checks the setup file itself,
+    // which nothing did before.
+    "vitest.setup.ts"
+  ],
+  // `extends` does NOT merge `exclude`, so this line is load-bearing rather
+  // than boilerplate: inherited, the app config's exclude would filter out
+  // every file the include above matches and tsc would fail TS18003. Clearing
+  // it also drops TypeScript's own defaults, so node_modules is re-listed.
+  "exclude": ["node_modules"]
+}

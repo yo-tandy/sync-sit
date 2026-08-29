@@ -46,14 +46,17 @@ const h = vi.hoisted(() => ({
     userDoc: null as unknown,
     refreshUserDoc: vi.fn(() => Promise.resolve()),
   },
-  updateDoc: vi.fn(() => Promise.resolve()),
+  updateDoc: vi.fn<(ref: { path: string }, data: Record<string, unknown>) => Promise<void>>(
+    () => Promise.resolve(),
+  ),
 }));
 
 vi.mock('@/config/firebase', () => ({ db: {}, storage: {} }));
 
 vi.mock('firebase/firestore', () => ({
   doc: (_db: unknown, ...path: string[]) => ({ path: path.join('/') }),
-  updateDoc: (...args: unknown[]) => h.updateDoc(...args),
+  updateDoc: (...args: [ref: { path: string }, data: Record<string, unknown>]) =>
+    h.updateDoc(...args),
   serverTimestamp: () => 'ts',
 }));
 
@@ -96,7 +99,7 @@ function seed(area: Record<string, unknown>) {
 }
 
 function savedPayload(): Record<string, unknown> {
-  const call = h.updateDoc.mock.calls[0] as unknown[];
+  const call = h.updateDoc.mock.calls[0];
   expect(call[0]).toEqual(expect.objectContaining({ path: 'users/t1' }));
   return call[1] as Record<string, unknown>;
 }

@@ -24,7 +24,9 @@ const h = vi.hoisted(() => ({
   snapshotError: null as null | ((err: unknown) => void),
   requestsNext: null as null | ((snap: unknown) => void),
   callable: vi.fn(),
-  updateDoc: vi.fn(() => Promise.resolve()),
+  updateDoc: vi.fn<(ref: { path: string }, data: Record<string, unknown>) => Promise<void>>(
+    () => Promise.resolve(),
+  ),
   unsub: vi.fn(),
 }));
 
@@ -58,7 +60,8 @@ vi.mock('firebase/firestore', () => ({
     h.snapshotError = error;
     return h.unsub;
   },
-  updateDoc: (...args: unknown[]) => h.updateDoc(...args),
+  updateDoc: (...args: [ref: { path: string }, data: Record<string, unknown>]) =>
+    h.updateDoc(...args),
 }));
 
 vi.mock('@/stores/authStore', () => ({

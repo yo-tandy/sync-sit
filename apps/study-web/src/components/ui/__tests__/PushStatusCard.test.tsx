@@ -4,12 +4,14 @@ import { renderWithProviders } from '@/__tests__/test-utils';
 
 const h = vi.hoisted(() => ({
   getPushPermissionStatus: vi.fn(() => 'default' as NotificationPermission),
-  requestPushPermission: vi.fn(() => Promise.resolve<string | null>('tok')),
+  requestPushPermission: vi.fn<(userId: string) => Promise<string | null>>(() =>
+    Promise.resolve<string | null>('tok'),
+  ),
 }));
 
 vi.mock('@/lib/pushNotifications', () => ({
   getPushPermissionStatus: () => h.getPushPermissionStatus(),
-  requestPushPermission: (...args: unknown[]) => h.requestPushPermission(...args),
+  requestPushPermission: (...args: [userId: string]) => h.requestPushPermission(...args),
 }));
 
 import { PushStatusCard } from '../PushStatusCard';

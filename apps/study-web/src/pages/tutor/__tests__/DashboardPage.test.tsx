@@ -17,7 +17,9 @@ const h = vi.hoisted(() => ({
   requests: [] as Record<string, unknown>[],
   // study-sessions docs for the New Requests + Confirmed sections.
   sessions: [] as Record<string, unknown>[],
-  updateDoc: vi.fn(() => Promise.resolve()),
+  updateDoc: vi.fn<(ref: { path: string }, data: Record<string, unknown>) => Promise<void>>(
+    () => Promise.resolve(),
+  ),
   getDoc: vi.fn(),
   where: vi.fn((field: string, op: string, val: unknown) => ({ where: [field, op, val] })),
   getDocs: vi.fn(),
@@ -32,7 +34,8 @@ vi.mock('firebase/firestore', () => ({
   where: (...args: [string, string, unknown]) => h.where(...args),
   getDoc: (...args: unknown[]) => h.getDoc(...args),
   getDocs: (...args: unknown[]) => h.getDocs(...args),
-  updateDoc: (...args: unknown[]) => h.updateDoc(...args),
+  updateDoc: (...args: [ref: { path: string }, data: Record<string, unknown>]) =>
+    h.updateDoc(...args),
   serverTimestamp: () => 'ts',
   orderBy: (...args: unknown[]) => ({ orderBy: args }),
   limit: (n: number) => ({ limit: n }),

@@ -23,7 +23,9 @@ const h = vi.hoisted(() => ({
     userDoc: null as unknown,
     refreshUserDoc: vi.fn(() => Promise.resolve()),
   },
-  updateDoc: vi.fn(() => Promise.resolve()),
+  updateDoc: vi.fn<(ref: { path: string }, data: Record<string, unknown>) => Promise<void>>(
+    () => Promise.resolve(),
+  ),
 }));
 
 vi.mock('@/hooks/useSchedule', () => ({ useSchedule: () => h.schedule }));
@@ -33,7 +35,8 @@ vi.mock('@/stores/authStore', () => ({ useAuthStore: () => h.auth }));
 
 vi.mock('firebase/firestore', () => ({
   doc: (_db: unknown, ...path: string[]) => ({ path: path.join('/') }),
-  updateDoc: (...args: unknown[]) => h.updateDoc(...args),
+  updateDoc: (...args: [ref: { path: string }, data: Record<string, unknown>]) =>
+    h.updateDoc(...args),
   serverTimestamp: () => 'ts',
 }));
 
@@ -157,7 +160,7 @@ describe('tutor SchedulePage', () => {
     );
     // The value is the NUMBER 48, never the string '48'.
     const call = h.updateDoc.mock.calls.find(
-      (c) => (c[1] as Record<string, unknown>)['profiles.tutor.cancellationNoticeHours'] !== undefined,
+      (c) => c[1]['profiles.tutor.cancellationNoticeHours'] !== undefined,
     );
     expect(call?.[1]['profiles.tutor.cancellationNoticeHours']).toBe(48);
     await waitFor(() => expect(h.auth.refreshUserDoc).toHaveBeenCalled());
@@ -230,7 +233,7 @@ describe('tutor SchedulePage', () => {
     fireEvent.click(screen.getByRole('button', { name: /save preferences/i }));
 
     await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
-    const call = h.updateDoc.mock.calls[0] as unknown[];
+    const call = h.updateDoc.mock.calls[0];
     expect(call[0]).toEqual(expect.objectContaining({ path: 'users/t1' }));
     const payload = call[1] as Record<string, unknown>;
     // Pin the FULL key set: dot-paths only — never a wholesale profiles.tutor
