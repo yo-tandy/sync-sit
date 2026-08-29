@@ -279,6 +279,7 @@ running against the emulators.
 | `correctUserIdentity` | Admin | Correct set-once root identity (audited) |
 | `deactivateUser` | Admin | Toggle babysitter searchable flag |
 | `deleteUser` | Admin | GDPR-compliant hard delete |
+| `deleteMyAccount` | Auth | The member's OWN hard delete — same erasure as `deleteUser`, across sit/study/do. Requires a credential presented in the last 15 min and `confirm: 'DELETE'` |
 | `resetUserPassword` | Admin | Send password reset email |
 | `listAppointments` | Admin | List/filter appointments |
 | `deleteAppointment` | Admin | Cancel appointment |
