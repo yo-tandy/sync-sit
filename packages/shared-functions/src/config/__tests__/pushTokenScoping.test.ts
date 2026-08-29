@@ -115,6 +115,47 @@ describe('sendPushNotification token scoping', () => {
     expect(Object.keys(payload)).toEqual(['fcmTokensStudy']);
   });
 
+  it("'do' reads fcmTokensDo — never the sibling arrays — and carries the do 192px icon (sync-do §13 PR9)", async () => {
+    h.userData = {
+      fcmTokens: ['sit-token-1'],
+      fcmTokensStudy: ['study-token-1'],
+      fcmTokensDo: ['do-token-1'],
+    };
+    h.sendEachForMulticast.mockResolvedValue(allSuccess(1));
+    const sent = await sendPushNotification('u1', 'T', 'B', undefined, 'do');
+    expect(sent).toBe(true);
+    const msg = h.sendEachForMulticast.mock.calls[0][0] as {
+      tokens: string[];
+      webpush: { notification: { icon: string }; fcmOptions: { link: string } };
+    };
+    expect(msg.tokens).toEqual(['do-token-1']);
+    expect(msg.webpush.notification.icon).toBe('https://sync-do-app.web.app/icon-192.png');
+    expect(msg.webpush.fcmOptions.link).toBe('https://sync-do-app.web.app');
+  });
+
+  it("'do' with no do tokens returns false without sending, even when sibling tokens exist", async () => {
+    h.userData = { fcmTokens: ['sit-token-1'], fcmTokensStudy: ['study-token-1'] };
+    const sent = await sendPushNotification('u1', 'T', 'B', undefined, 'do');
+    expect(sent).toBe(false);
+    expect(h.sendEachForMulticast).not.toHaveBeenCalled();
+  });
+
+  it('cleans up invalid do tokens from fcmTokensDo — not the sibling arrays', async () => {
+    h.userData = { fcmTokens: ['sit-token-1'], fcmTokensDo: ['do-token-1'] };
+    h.sendEachForMulticast.mockResolvedValue({
+      successCount: 0,
+      failureCount: 1,
+      responses: [
+        { success: false, error: { code: 'messaging/registration-token-not-registered' } },
+      ],
+    });
+    const sent = await sendPushNotification('u1', 'T', 'B', undefined, 'do');
+    expect(sent).toBe(false);
+    expect(h.update).toHaveBeenCalledTimes(1);
+    const payload = h.update.mock.calls[0][0] as Record<string, unknown>;
+    expect(Object.keys(payload)).toEqual(['fcmTokensDo']);
+  });
+
   it('cleans up invalid sit tokens from fcmTokens (default app)', async () => {
     h.sendEachForMulticast.mockResolvedValue({
       successCount: 1,
@@ -201,6 +242,37 @@ describe("sendPushNotification app='auto' affinity routing", () => {
     expect(h.update).not.toHaveBeenCalled();
   });
 
+  const DO_ICON = 'https://sync-do-app.web.app/icon-192.png';
+
+  it('do-only recipient routes to fcmTokensDo with do branding (three-way affinity, sync-do §13 PR9)', async () => {
+    h.userData = { fcmTokensDo: ['do-token-1'] };
+    h.sendEachForMulticast.mockResolvedValue(allSuccess(1));
+    const sent = await sendPushNotification('u1', 'T', 'B', undefined, 'auto');
+    expect(sent).toBe(true);
+    expect(lastMessage().tokens).toEqual(['do-token-1']);
+    expect(lastMessage().webpush.notification.icon).toBe(DO_ICON);
+  });
+
+  it("triple-install recipient follows a 'do' world hint", async () => {
+    h.userData = {
+      fcmTokens: ['sit-token-1'],
+      fcmTokensStudy: ['study-token-1'],
+      fcmTokensDo: ['do-token-1'],
+    };
+    h.sendEachForMulticast.mockResolvedValue(allSuccess(1));
+    await sendPushNotification('u1', 'T', 'B', undefined, 'auto', 'do');
+    expect(lastMessage().tokens).toEqual(['do-token-1']);
+    expect(lastMessage().webpush.notification.icon).toBe(DO_ICON);
+  });
+
+  it("a 'do' world hint with NO do tokens falls back instead of short-circuiting to a false negative", async () => {
+    h.userData = { fcmTokens: ['sit-token-1'], fcmTokensStudy: ['study-token-1'] };
+    h.sendEachForMulticast.mockResolvedValue(allSuccess(1));
+    const sent = await sendPushNotification('u1', 'T', 'B', undefined, 'auto', 'do');
+    expect(sent).toBe(true);
+    expect(lastMessage().tokens).toEqual(['sit-token-1']);
+  });
+
   it('cleanup under auto writes to the array the resolution actually used', async () => {
     h.userData = { fcmTokensStudy: ['study-token-1'] };
     h.sendEachForMulticast.mockResolvedValue({
@@ -229,6 +301,13 @@ describe('derivePushWorld', () => {
 
   it('maps tutor_endorsement_* types to the study world', () => {
     expect(derivePushWorld('tutor_endorsement_received')).toBe('study');
+  });
+
+  it('maps the §10 do set — task_*, new_task_matching, doer_endorsement_* — to the do world', () => {
+    expect(derivePushWorld('task_offer_received')).toBe('do');
+    expect(derivePushWorld('task_guardian_approval')).toBe('do');
+    expect(derivePushWorld('new_task_matching')).toBe('do');
+    expect(derivePushWorld('doer_endorsement_received')).toBe('do');
   });
 
   it('maps everything else to the sit world', () => {

@@ -6,9 +6,12 @@ import { buildAccountExistsEmail, normalizeAccountExistsApp } from '../email.js'
 // two literal copy sets and must collapse to 'sit' for anything else.
 
 describe('normalizeAccountExistsApp', () => {
-  it("passes through the two literal values", () => {
+  it("passes through the three literal values", () => {
     expect(normalizeAccountExistsApp('sit')).toBe('sit');
     expect(normalizeAccountExistsApp('study')).toBe('study');
+    // 'do' passes through since sync-do plan §13 PR9 — the PR4 deferral
+    // (do collapsed to sit until the branding tables existed) is closed.
+    expect(normalizeAccountExistsApp('do')).toBe('do');
   });
 
   it("defaults anything else to 'sit' (unknown strings, injection attempts, non-strings)", () => {
@@ -16,6 +19,7 @@ describe('normalizeAccountExistsApp', () => {
     expect(normalizeAccountExistsApp(null)).toBe('sit');
     expect(normalizeAccountExistsApp('')).toBe('sit');
     expect(normalizeAccountExistsApp('STUDY')).toBe('sit');
+    expect(normalizeAccountExistsApp('DO')).toBe('sit');
     expect(normalizeAccountExistsApp('<script>alert(1)</script>')).toBe('sit');
     expect(normalizeAccountExistsApp(42)).toBe('sit');
     expect(normalizeAccountExistsApp({ app: 'study' })).toBe('sit');
@@ -39,18 +43,39 @@ describe('buildAccountExistsEmail', () => {
     expect(html).not.toContain('https://sync-sit.web.app/login');
   });
 
-  it('cross-app credentials line, invite-link hint, and support contact are present for both apps', () => {
+  it('do copy names Sync/Do and links the LIVE web.app login page (never sync-do.com)', () => {
+    const { subject, html } = buildAccountExistsEmail('do');
+    expect(subject).toContain('Sync/Do');
+    expect(html).toContain('create a Sync/Do account');
+    expect(html).toContain('https://sync-do-app.web.app/login');
+    expect(html).not.toContain('sync-do.com');
+    expect(html).not.toContain('https://sync-sit.web.app/login');
+  });
+
+  it('sit and study copy carry NO Sync/Do mention (decision 20 — sibling apps must not surface sync-do)', () => {
     for (const app of ['sit', 'study'] as const) {
+      const { subject, html } = buildAccountExistsEmail(app);
+      expect(subject).not.toContain('Sync/Do');
+      expect(html).not.toContain('Sync/Do');
+      expect(html).not.toContain('sync-do-app.web.app');
+    }
+  });
+
+  it('cross-app credentials line, invite-link hint, and support contact are present for all apps', () => {
+    for (const app of ['sit', 'study', 'do'] as const) {
       const { html } = buildAccountExistsEmail(app);
-      expect(html).toContain('works on both Sync/Sit and Sync/Study');
-      expect(html).toContain('the same email and password sign you in to either app');
+      // Name-free cross-app line: decision 20 (sync-do plan §2) bars naming
+      // Sync/Do inside sit/study-branded copy, so the shared sentence names
+      // no sibling at all.
+      expect(html).toContain('works across the Sync apps');
+      expect(html).toContain('the same email and password sign you in to each of them');
       expect(html).toContain('If you were following an invite link, open it again after logging in.');
       expect(html).toContain('support@sync-sit.com');
     }
   });
 
   it('never mentions a verification code (the email replaces the code email)', () => {
-    for (const app of ['sit', 'study'] as const) {
+    for (const app of ['sit', 'study', 'do'] as const) {
       const { subject, html } = buildAccountExistsEmail(app);
       expect(subject.toLowerCase()).not.toContain('code');
       expect(html.toLowerCase()).not.toContain('verification code');

@@ -81,30 +81,31 @@ export async function sendVerificationEmail(
 
 /**
  * Which app a signup attempt came from. Untrusted display-only client input:
- * it selects between two literal copy sets and NOTHING else — never interpolate
- * the raw client value anywhere. Normalize with normalizeAccountExistsApp.
- * NOTE: do-web already sends app:'do' (doer enrollment, sync-do plan §13
- * PR4); it normalizes to 'sit' here until PR9 extends the branding tables
- * (NotificationApp/NOTIFICATION_BRANDING/PUSH_BRANDING) with the third app —
- * the copy is display-only, and the sit fallback stays functionally correct.
+ * it selects between three literal copy sets and NOTHING else — never
+ * interpolate the raw client value anywhere. Normalize with
+ * normalizeAccountExistsApp.
  */
-export type AccountExistsApp = 'sit' | 'study';
+export type AccountExistsApp = 'sit' | 'study' | 'do';
 
 /**
- * Collapses an untrusted `app` request param to the literal set; anything that
- * is not exactly 'study' becomes 'sit'.
+ * Collapses an untrusted `app` request param to the literal set; anything
+ * that is not exactly 'study' or 'do' becomes 'sit'. 'do' joined at sync-do
+ * plan §13 PR9 (branding tables landed) — closing the PR4 deferral where
+ * doer verification emails collapsed to sit branding.
  */
 export function normalizeAccountExistsApp(app: unknown): AccountExistsApp {
-  return app === 'study' ? 'study' : 'sit';
+  return app === 'study' || app === 'do' ? app : 'sit';
 }
 
 // Canonical prod login URLs, hardcoded because functions cannot import app
 // code. Keep in sync with the prod fallbacks of the appSwitch constants:
 // - apps/study-web/src/utils/appSwitch.ts SIT_APP_URL   -> https://sync-sit.web.app
 // - apps/web/src/lib/appSwitch.ts        STUDY_APP_URL  -> https://sync-study-app.web.app
+// - apps/do-web/src/utils/appSwitch.ts (DO)             -> https://sync-do-app.web.app
 const ACCOUNT_EXISTS_COPY: Record<AccountExistsApp, { appName: string; loginUrl: string }> = {
   sit: { appName: 'Sync/Sit', loginUrl: 'https://sync-sit.web.app/login' },
   study: { appName: 'Sync/Study', loginUrl: 'https://sync-study-app.web.app/login' },
+  do: { appName: 'Sync/Do', loginUrl: 'https://sync-do-app.web.app/login' },
 };
 
 const SUPPORT_EMAIL = 'support@sync-sit.com';
@@ -114,6 +115,10 @@ const SUPPORT_EMAIL = 'support@sync-sit.com';
  * code when someone tries to sign up with an email that already has an
  * account. Only the mailbox owner ever learns the account exists — the on
  * screen flow stays indistinguishable from a fresh signup.
+ *
+ * The cross-app line deliberately names NO sibling app: this copy renders
+ * under every app's branding, and decision 20 (sync-do plan §2) bars naming
+ * Sync/Do in a sit/study-facing surface until the owner flips visibility.
  */
 export function buildAccountExistsEmail(app: AccountExistsApp): { subject: string; html: string } {
   const { appName, loginUrl } = ACCOUNT_EXISTS_COPY[app];
@@ -128,7 +133,7 @@ export function buildAccountExistsEmail(app: AccountExistsApp): { subject: strin
           <a href="${loginUrl}" style="color: #DC2626; font-weight: bold;">${loginUrl}</a>
         </p>
         <p>If you were following an invite link, open it again after logging in.</p>
-        <p style="color: #6B7280; font-size: 14px;">Your account works on both Sync/Sit and Sync/Study — the same email and password sign you in to either app.</p>
+        <p style="color: #6B7280; font-size: 14px;">Your account works across the Sync apps — the same email and password sign you in to each of them.</p>
         <p style="color: #6B7280; font-size: 14px;">If this wasn't you, you can safely ignore this email or contact us at <a href="mailto:${SUPPORT_EMAIL}" style="color: #DC2626;">${SUPPORT_EMAIL}</a>.</p>
         <hr style="border: none; border-top: 1px solid #E5E7EB; margin: 24px 0;" />
         <p style="color: #9CA3AF; font-size: 12px;">${appName}</p>
@@ -215,11 +220,11 @@ export async function sendAdminNotification(subject: string, body: string): Prom
 }
 
 /**
- * Which app a notification belongs to. Selects between two literal branding
+ * Which app a notification belongs to. Selects between three literal branding
  * sets (name, accent color, host link, sender display name) and NOTHING else —
  * never interpolate an untrusted value anywhere in the email.
  */
-export type NotificationApp = 'sit' | 'study';
+export type NotificationApp = 'sit' | 'study' | 'do';
 
 /**
  * The ONE canonical study host. Matches the prod fallback of
@@ -228,6 +233,14 @@ export type NotificationApp = 'sit' | 'study';
  * this constant so the next domain move is a single edit.
  */
 export const STUDY_APP_URL = 'https://sync-study-app.web.app';
+
+/**
+ * The ONE canonical sync-do host (sync-do plan §10, issue #156's rule):
+ * sync-do.com is NOT live, so every do email CTA must build on this live
+ * web.app constant — never sync-do.com — and the next domain move is a
+ * single edit here.
+ */
+export const DO_APP_URL = 'https://sync-do-app.web.app';
 
 // Per-app notification branding (issue #168 Phase 0). Same literal-copy-set
 // pattern as ACCOUNT_EXISTS_COPY above. The FROM address stays
@@ -254,6 +267,17 @@ export const NOTIFICATION_BRANDING: Record<
     from: 'Sync/Study <noreply@sync-sit.com>',
     fromFallback: 'Sync/Study <onboarding@resend.dev>',
     tagline: 'Connecting EJM families with trusted student tutors',
+  },
+  // sync-do (plan §10, §13 PR9). Accent = the do theme's brand-600
+  // (packages/shared-ui/src/theme/do.css). Same shared verified FROM domain
+  // as study — only the display name varies (see the table comment above).
+  do: {
+    appName: 'Sync/Do',
+    color: '#0d8204',
+    appUrl: DO_APP_URL,
+    from: 'Sync/Do <noreply@sync-sit.com>',
+    fromFallback: 'Sync/Do <onboarding@resend.dev>',
+    tagline: 'Connecting EJM families with trusted student helpers',
   },
 };
 

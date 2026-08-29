@@ -24,15 +24,31 @@ describe('buildVerificationEmail', () => {
     expect(html).toContain('tutors');
   });
 
+  it('do copy is Sync/Do-branded end to end — the PR4 deferral (doer codes arrived sit-branded) is closed', () => {
+    const { subject, html } = buildVerificationEmail('222333', 'do');
+    expect(subject).toContain('Sync/Do');
+    expect(html).toContain('Sync/Do');
+    expect(html).not.toContain('Sync/Sit');
+    expect(html).not.toContain('Sync/Study');
+    expect(html).toContain('helpers');
+    expect(html).toContain('222333');
+  });
+
   it('defaults to sit when no app is given (matches the callables\' normalize default)', () => {
     expect(buildVerificationEmail('111111').subject).toContain('Sync/Sit');
   });
 });
 
 describe('NOTIFICATION_BRANDING senders', () => {
-  it('both apps send from the SAME verified domain with app-true display names', () => {
+  it('all apps send from the SAME verified domain with app-true display names', () => {
     expect(NOTIFICATION_BRANDING.sit.from).toBe('Sync/Sit <noreply@sync-sit.com>');
     expect(NOTIFICATION_BRANDING.study.from).toBe('Sync/Study <noreply@sync-sit.com>');
     expect(NOTIFICATION_BRANDING.study.fromFallback).toContain('Sync/Study');
+    expect(NOTIFICATION_BRANDING.do.from).toBe('Sync/Do <noreply@sync-sit.com>');
+    expect(NOTIFICATION_BRANDING.do.fromFallback).toContain('Sync/Do');
+  });
+
+  it('do branding builds on the LIVE web.app host — never sync-do.com (§10/#156)', () => {
+    expect(NOTIFICATION_BRANDING.do.appUrl).toBe('https://sync-do-app.web.app');
   });
 });
