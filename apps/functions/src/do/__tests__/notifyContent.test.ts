@@ -97,6 +97,40 @@ describe('every builder, both languages', () => {
     }
   });
 
+  // Issue #296: the doer portal is namespaced under /doer/*. This mail is the
+  // only place outside do-web that hardcodes app paths, and nothing in lint or
+  // tsc can see a stale string path — so pin the SHAPE, not just the host.
+  // Every do CTA is one of exactly two families: /doer/* for the student's
+  // surfaces, /family/tasks/* for the hiring family's.
+  it('points every CTA at a namespaced path — no pre-#296 root-level doer paths', () => {
+    const ALLOWED = /^https:\/\/sync-do-app\.web\.app\/(doer(\/|$)|family\/tasks(\/|$))/;
+    const OPT_OUT_MAILTO = 'mailto:support@sync-sit.com';
+    const seen = new Set<string>();
+    for (const lang of LANGS) {
+      for (const c of allContents(lang)) {
+        for (const [, href] of c.emailBody.matchAll(/href="([^"]+)"/g)) {
+          seen.add(href);
+          if (href === OPT_OUT_MAILTO) continue;
+          expect(href).toMatch(ALLOWED);
+        }
+      }
+    }
+    // Not every builder carries a CTA (the guardian-approval notice and the
+    // endorsement-outcome notice deliberately do not), so the loop above
+    // could pass on an empty set. Name the destinations that must be there:
+    // one per CTA constant, which is what a stale root path would break.
+    for (const url of [
+      'https://sync-do-app.web.app/doer/board',
+      'https://sync-do-app.web.app/doer/offers',
+      'https://sync-do-app.web.app/doer/work',
+      'https://sync-do-app.web.app/doer/endorsements',
+      'https://sync-do-app.web.app/doer/tasks/t1',
+      'https://sync-do-app.web.app/family/tasks/t1',
+    ]) {
+      expect(seen).toContain(url);
+    }
+  });
+
   it('every CTA href builds on the live web.app host — sync-do.com never appears', () => {
     // The ONE non-web.app href allowed anywhere in do copy: the digest's
     // opt-out address, on the VERIFIED sending domain (PR #334 round-3
@@ -162,8 +196,8 @@ describe('buildNewTaskDigest (§10 board digest)', () => {
     expect(c.emailBody).toContain('suggested €15');
     expect(c.emailBody).toContain('Set up a NAS');
     expect(c.emailBody).toContain('IT help');
-    expect(c.emailBody).toContain('https://sync-do-app.web.app/tasks/t1');
-    expect(c.emailBody).toContain('https://sync-do-app.web.app/tasks/t2');
+    expect(c.emailBody).toContain('https://sync-do-app.web.app/doer/tasks/t1');
+    expect(c.emailBody).toContain('https://sync-do-app.web.app/doer/tasks/t2');
   });
 
   it('singular copy for one task, with the task named in the push body', () => {
@@ -261,7 +295,7 @@ describe('the §10 endorsement trio (decision 12, PR11)', () => {
     for (const lang of LANGS) {
       expect(
         buildEndorsementReceived(lang, { submitterLabel: 'M', taskTitle: 't' }).emailBody,
-      ).toContain('https://sync-do-app.web.app/endorsements');
+      ).toContain('https://sync-do-app.web.app/doer/endorsements');
     }
   });
 
