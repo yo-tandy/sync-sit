@@ -81,13 +81,25 @@ function sectionsOf(page: keyof typeof PAGES): ParsedSection[] {
     });
 }
 
-/** Structure of a rendered section: bullet lines and paragraph breaks. */
+/**
+ * Structure of a rendered section: bullet lines, paragraph breaks, placeholders
+ * — and every number it contains.
+ *
+ * The numbers are the point. Skeleton parity alone passes a section that says
+ * "retained for 6 months" in English and "conservées pendant 3 mois" in French,
+ * which is the divergence bilingual legal copy actually suffers from. Every
+ * digit run in this copy is a legal quantity — the age floor, the retention
+ * windows, the GDPR article numbers, the section cross-references — and none of
+ * them may differ between locales. Compared as a sorted multiset, so a repeated
+ * figure dropped from one language still fails.
+ */
 function shape(text: string) {
   return {
     bullets: (text.match(/^- /gm) || []).length,
     breaks: (text.match(/\n\n/g) || []).length,
     hasSupportEmail: text.includes('{{supportEmail}}'),
     hasBrand: text.includes('{{brand}}'),
+    numbers: (text.match(/\d+/g) || []).sort(),
   };
 }
 
@@ -179,6 +191,64 @@ describe('shared legal copy — personal data categories', () => {
     await i18n.changeLanguage('en');
     renderWithProviders(<PrivacyPage brand="Sync/Do" supportEmail="help@example.com" />);
     expect(bodyText()).toContain('visible to every enrolled student');
+  });
+});
+
+describe('shared legal copy — the address, and who it reaches (PR #412 review)', () => {
+  // The first draft of this rewrite claimed the address is "never shown to
+  // other users". It is: doGetAssignedContact serves it to the assigned doer
+  // post-acceptance, and sit's own accept dialog tells the family so
+  // (apps/web/src/i18n/en.ts:560). These pin the scoped claim so the absolute
+  // form cannot come back.
+  it('scopes the withholding to the pre-acceptance surfaces (EN)', async () => {
+    await i18n.changeLanguage('en');
+    renderWithProviders(<PrivacyPage brand="Sync/Do" supportEmail="help@example.com" />);
+    const text = bodyText();
+
+    expect(text).toContain('your address is not shown in search results');
+    expect(text).toContain('shared with a service provider only once you accept them');
+    expect(text).not.toContain('address is never shown to other users');
+  });
+
+  it('scopes the withholding to the pre-acceptance surfaces (FR)', async () => {
+    await i18n.changeLanguage('fr');
+    renderWithProviders(<PrivacyPage brand="Sync/Do" supportEmail="help@example.com" />);
+    const text = bodyText();
+
+    expect(text).toContain("votre adresse n'apparaît ni dans les résultats de recherche");
+    expect(text).not.toContain("votre adresse n'est jamais affichée aux autres utilisateurs");
+  });
+
+  it('lists the counterparty as a recipient, with the per-app storage difference', async () => {
+    await i18n.changeLanguage('en');
+    renderWithProviders(<PrivacyPage brand="Sync/Sit" supportEmail="help@example.com" />);
+    const text = bodyText();
+
+    expect(text).toContain('The other party to an engagement you accept');
+    // Both halves of the two-way reveal.
+    expect(text).toContain("the family's address and its parents' names, email and phone");
+    expect(text).toContain("the service provider's name, email and phone");
+    // Decision 16 holds for sync-do only — sit's appointment doc really does
+    // carry `address` (packages/sit-core/src/types/appointment.ts:78), so the
+    // "served live, never stored" claim must not be stated suite-wide.
+    expect(text).toContain('never stored on the offer');
+    expect(text).toContain('recorded on the appointment itself');
+  });
+
+  it('does not overstate the helper retention bound (EN + FR)', async () => {
+    await i18n.changeLanguage('en');
+    renderWithProviders(<PrivacyPage brand="Sync/Do" supportEmail="help@example.com" />);
+    let text = bodyText();
+    // sweepTasks.ts:67-75 KNOWN RETENTION GAP: an assigned task abandoned by
+    // both sides is swept by nothing, so "at the latest 6 months" was false.
+    expect(text).not.toContain('at the latest');
+    expect(text).toContain('If a task is assigned but neither side ever closes it');
+
+    await i18n.changeLanguage('fr');
+    renderWithProviders(<PrivacyPage brand="Sync/Do" supportEmail="help@example.com" />);
+    text = bodyText();
+    expect(text).not.toContain('au plus tard');
+    expect(text).toContain("ni l'une ni l'autre des parties ne la clôture");
   });
 });
 
@@ -332,6 +402,20 @@ describe('shared legal copy — EN/FR parity mechanism (PR #59 design)', () => {
       const mutated = bulleted!.fr.replace(/^- .*\n/m, '');
       expect(mutated).not.toBe(bulleted!.fr);
       expect(shape(mutated)).not.toEqual(shape(bulleted!.en));
+    },
+  );
+
+  it.each(['PrivacyPage', 'TermsPage'] as const)(
+    '%s: a legal quantity that disagrees across locales fails the guard',
+    (page) => {
+      // The divergence skeleton parity cannot see: "retained for 6 months" vs
+      // "conservées pendant 3 mois" is structurally identical. Mutate a real
+      // figure in one locale and prove the numbers comparison catches it.
+      const numbered = sectionsOf(page).find((s) => shape(s.fr).numbers.length > 0);
+      expect(numbered).toBeDefined();
+      const mutated = numbered!.fr.replace(/\d+/, (d) => String(Number(d) + 1));
+      expect(mutated).not.toBe(numbered!.fr);
+      expect(shape(mutated).numbers).not.toEqual(shape(numbered!.en).numbers);
     },
   );
 });
