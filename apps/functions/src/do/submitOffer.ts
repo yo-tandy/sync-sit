@@ -322,6 +322,15 @@ export const doSubmitOffer = onCall(
           data: { taskId, offerId: offerRef.id },
         });
       } else if (supervisingFamilyId !== null) {
+        // Gated on `newRequest` until issue #168 Phase-2 gives sync-do its own
+        // pref categories (§10 tells this PR not to pre-empt that) — a
+        // deliberate tradeoff worth stating, because this is the one do type
+        // where a muted category loses an ACTION rather than information: a
+        // parent who muted `newRequest` in Sync/Sit ("new babysitting
+        // request") is not told their child is waiting on a consent decision,
+        // and the offer just expires unseen by the hiring family (§6.2). The
+        // in-app row is still written either way, and the digest's
+        // `prefCategory: null` is the escape hatch if this is ever revisited.
         await notifyDoFamilyParents(supervisingFamilyId, {
           type: 'task_guardian_approval',
           prefCategory: 'newRequest',

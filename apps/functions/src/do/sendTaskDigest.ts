@@ -181,6 +181,15 @@ export async function runDoSendTaskDigest(
       // Neither touches another user, and §3.3 claims only "server-owned
       // (the batcher writes it)". Worth pinning in `doerIdentityUnchanged()`
       // if this field ever gates anything beyond self-directed mail.
+      //
+      // One angle that is NOT purely self-inflicted, for whoever takes that
+      // follow-up (PR #334 round-2 review): the limit is bounded per RUN, not
+      // over time. Clearing the field before each hourly run yields up to 24
+      // self-addressed digests a day, each re-batching up to
+      // DO_DIGEST_LOOKBACK_MS of board tasks — scripted across a set of real
+      // accounts, the cost lands on the shared verified sending domain's
+      // reputation, which is not the abuser's alone to spend. That, rather
+      // than one inbox's volume, is the argument for the one-line rules pin.
       await firestoreDb
         .collection('users')
         .doc(uid)
