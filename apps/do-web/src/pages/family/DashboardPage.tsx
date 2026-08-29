@@ -81,8 +81,16 @@ export function DashboardPage() {
   const [tasks, setTasks] = useState<TaskDoc[] | null>(null);
   const [tasksError, setTasksError] = useState(false);
   const [pendingByTask, setPendingByTask] = useState<Record<string, number>>({});
-  /** doerUserIds this family has already endorsed — gates the §9.1 prompt. */
-  const [endorsedDoers, setEndorsedDoers] = useState<Set<string>>(new Set());
+  /**
+   * doerUserIds this family has already endorsed — gates the §9.1 prompt.
+   * NULL until the read settles, and part of `loading` below: starting it
+   * empty meant every completed row wore the amber "Say how it went" to-do
+   * for as long as the read took, and each already-endorsed one then
+   * retracted it (PR #362 round 2). A to-do that appears and withdraws itself
+   * is the same class of lie as one that never appears — this is the
+   * settled-check discipline the doer page applies to its own one-shot read.
+   */
+  const [endorsedDoers, setEndorsedDoers] = useState<Set<string> | null>(null);
   // Expiry is judged against the clock captured AT snapshot time (MyTasksPage's
   // idiom, and render purity): fresh enough — every task change re-delivers
   // the snapshot.
@@ -169,10 +177,15 @@ export function DashboardPage() {
         setEndorsedDoers(new Set(rows.map((r) => r.doerUserId)));
       })
       .catch(() => {
-        // A denied/failed endorsements read must not block the completions
-        // section (study's SessionsPage rule): fall back to "none endorsed".
-        // Worst case is a prompt the callable then refuses `already-exists`,
-        // which EndorseDoerDialog already handles gracefully.
+        // A denied/failed read falls back to "none endorsed" — deliberately
+        // NOT the doer page's error+retry, and the asymmetry is the point:
+        // there, a failed read would have SUPPRESSED a to-do; here it can
+        // only over-offer one, and `doSubmitEndorsement` refuses a duplicate
+        // with `already-exists`, which EndorseDoerDialog handles gracefully
+        // (study's SessionsPage rule). An empty set is also a SETTLED value,
+        // so the failure releases the loading gate rather than stranding the
+        // page — the completions still render, just without the gate's
+        // narrowing.
         if (mountedRef.current) setEndorsedDoers(new Set());
       });
   }, [familyId]);
@@ -223,11 +236,17 @@ export function DashboardPage() {
 
   /** Completions this family could still endorse — the §9.1 prompt's gate. */
   const endorsable = (task: TaskDoc): boolean =>
-    !!task.assignedUserId && !endorsedDoers.has(task.assignedUserId);
+    !!task.assignedUserId && !(endorsedDoers ?? new Set()).has(task.assignedUserId);
 
-  // With no familyId nothing can load at all, so fall through to the empty
-  // state rather than spinning forever (study's family-dashboard rule).
-  const loading = familyId !== null && tasks === null && !tasksError;
+  // Both reads that feed a rendered row must settle first — the tasks
+  // snapshot, and the endorsement gate that decides what a completed row
+  // SAYS. With no familyId neither can load at all, so fall through to the
+  // empty state rather than spinning forever (study's family-dashboard rule).
+  // The `families` getDoc is deliberately NOT in here: it feeds the
+  // greeting's context line, which is decoration and renders name-only until
+  // it lands.
+  const loading =
+    familyId !== null && !((tasks !== null || tasksError) && endorsedDoers !== null);
   const hasAny = openRows.length > 0 || assignedRows.length > 0 || completedRows.length > 0;
   // The amber badge is a TO-DO count: open tasks with offers to review.
   const openTodo = openRows.filter((task) => (pendingByTask[task.taskId] ?? 0) > 0).length;
