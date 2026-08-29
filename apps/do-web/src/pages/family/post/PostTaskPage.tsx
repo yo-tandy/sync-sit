@@ -74,7 +74,7 @@ export function PostTaskPage() {
       return;
     }
     if (stepIndex === 0) {
-      navigate('/family');
+      navigate('/family/tasks');
       return;
     }
     setStepIndex(stepIndex - 1);

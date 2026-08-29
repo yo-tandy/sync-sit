@@ -51,7 +51,7 @@ function MenuItem({ icon, label, to, onClick, onNavigate }: { icon: React.ReactN
  * the three tabs are the app's daily loop (find work, track offers, do the
  * work), and a fourth would crowd them for a surface visited when a
  * notification says there is something to respond to — which deep-links
- * straight to /endorsements anyway.
+ * straight to /doer/endorsements anyway.
  */
 export function DoerAppBar() {
   const { t } = useTranslation();
@@ -60,15 +60,15 @@ export function DoerAppBar() {
   const [menuOpen, setMenuOpen] = useState(false);
 
   const primaryNav = [
-    { to: '/home', icon: <SearchIcon className="h-5 w-5" />, label: t('doer.nav.board') },
-    { to: '/offers', icon: <MailIcon className="h-5 w-5" />, label: t('doer.nav.myOffers') },
-    { to: '/work', icon: <ClipboardListIcon className="h-5 w-5" />, label: t('doer.nav.myWork') },
+    { to: '/doer/board', icon: <SearchIcon className="h-5 w-5" />, label: t('doer.nav.board') },
+    { to: '/doer/offers', icon: <MailIcon className="h-5 w-5" />, label: t('doer.nav.myOffers') },
+    { to: '/doer/work', icon: <ClipboardListIcon className="h-5 w-5" />, label: t('doer.nav.myWork') },
   ];
 
   return (
     <>
       <div className="sticky top-0 z-40 flex h-12 items-center justify-between bg-brand-600 px-4">
-        <Link to="/home" aria-label={t('menu.home')} className="-m-1.5 flex h-11 w-11 items-center justify-center text-white">
+        <Link to="/doer" aria-label={t('menu.home')} className="-m-1.5 flex h-11 w-11 items-center justify-center text-white">
           <HomeIcon className="h-5 w-5" />
         </Link>
         <span className="text-sm font-semibold text-white">Sync/Do</span>
@@ -100,7 +100,7 @@ export function DoerAppBar() {
           <MenuItem
             icon={<UsersIcon className="h-5 w-5" />}
             label={t('doer.nav.myEndorsements')}
-            to="/endorsements"
+            to="/doer/endorsements"
             onNavigate={() => setMenuOpen(false)}
           />
 

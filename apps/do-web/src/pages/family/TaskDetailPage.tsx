@@ -136,7 +136,7 @@ export function TaskDetailPage() {
   if (taskError) {
     return (
       <div>
-        <TopNav title={t('family.taskDetail.title')} backTo="/family" />
+        <TopNav title={t('family.taskDetail.title')} backTo="/family/tasks" />
         <p className="px-6 py-10 text-center text-sm text-gray-500">{t('family.taskDetail.loadError')}</p>
       </div>
     );
@@ -144,7 +144,7 @@ export function TaskDetailPage() {
   if (task === 'missing') {
     return (
       <div>
-        <TopNav title={t('family.taskDetail.title')} backTo="/family" />
+        <TopNav title={t('family.taskDetail.title')} backTo="/family/tasks" />
         <p className="px-6 py-10 text-center text-sm text-gray-500">{t('family.taskDetail.notFound')}</p>
       </div>
     );
@@ -152,7 +152,7 @@ export function TaskDetailPage() {
   if (task === null) {
     return (
       <div>
-        <TopNav title={t('family.taskDetail.title')} backTo="/family" />
+        <TopNav title={t('family.taskDetail.title')} backTo="/family/tasks" />
         <div className="flex justify-center py-20">
           <Spinner />
         </div>
@@ -172,7 +172,7 @@ export function TaskDetailPage() {
 
   return (
     <div>
-      <TopNav title={t('family.taskDetail.title')} backTo="/family" />
+      <TopNav title={t('family.taskDetail.title')} backTo="/family/tasks" />
       <div className="px-6 pt-4 pb-8">
         <div className="mb-1 flex items-center justify-between gap-2">
           <h1 className="text-lg font-bold text-gray-950">{task.title}</h1>

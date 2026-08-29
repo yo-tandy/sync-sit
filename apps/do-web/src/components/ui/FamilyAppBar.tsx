@@ -53,7 +53,7 @@ export function FamilyAppBar() {
   const [menuOpen, setMenuOpen] = useState(false);
 
   const primaryNav = [
-    { to: '/family', icon: <ClipboardListIcon className="h-5 w-5" />, label: t('family.nav.myTasks') },
+    { to: '/family/tasks', icon: <ClipboardListIcon className="h-5 w-5" />, label: t('family.nav.myTasks') },
     { to: '/family/post', icon: <PlusIcon className="h-5 w-5" />, label: t('family.nav.postTask') },
   ];
 

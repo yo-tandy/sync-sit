@@ -53,8 +53,8 @@ describe('postLoginRouter', () => {
   });
 
   it('sends doers, admins and role-less accounts to the shell home', () => {
-    expect(postLoginRouter(doerDoc)).toBe('/home');
-    expect(postLoginRouter(adminDoc)).toBe('/home');
-    expect(postLoginRouter(null)).toBe('/home');
+    expect(postLoginRouter(doerDoc)).toBe('/doer');
+    expect(postLoginRouter(adminDoc)).toBe('/doer');
+    expect(postLoginRouter(null)).toBe('/doer');
   });
 });

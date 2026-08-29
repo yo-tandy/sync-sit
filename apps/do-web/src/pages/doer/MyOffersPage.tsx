@@ -166,7 +166,7 @@ export function MyOffersPage() {
           return (
             <Card key={offer.offerId} className="mb-3">
               {isLinkable(offer.status) ? (
-                <Link to={`/tasks/${offer.taskId}`} className="block">
+                <Link to={`/doer/tasks/${offer.taskId}`} className="block">
                   {body}
                 </Link>
               ) : (
@@ -176,7 +176,7 @@ export function MyOffersPage() {
                 <div className="mt-3 flex gap-2 border-t border-gray-100 pt-3">
                   {offer.status === 'pending' && (
                     <Link
-                      to={`/tasks/${offer.taskId}/offer`}
+                      to={`/doer/tasks/${offer.taskId}/offer`}
                       className="inline-flex h-9 flex-1 items-center justify-center rounded-lg border-[1.5px] border-gray-300 px-3 text-sm font-semibold text-gray-700 transition-colors hover:border-brand-300"
                     >
                       {t('doer.myOffers.updateCta')}

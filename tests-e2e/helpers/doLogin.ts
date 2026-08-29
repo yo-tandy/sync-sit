@@ -2,8 +2,14 @@ import { Page, expect } from '@playwright/test';
 
 /**
  * do-web's login helper — the sit-side `loginAs` shape, with do-web's own
- * post-login landings (`postLoginRouter`): parents land on `/family`, doers
- * (and admins, who pass the doer guard) on `/home`.
+ * post-login landings (`postLoginRouter`): parents land on the family portal
+ * index `/family`, doers (and admins, who pass the doer guard) on the doer
+ * portal index `/doer`.
+ *
+ * Both indexes currently forward straight on — `/family` to `/family/tasks`,
+ * `/doer` to `/doer/board` — so the assertion below has to accept the index
+ * OR the surface behind it, and keeps accepting both once the dashboards
+ * land on the indexes and the forwarding stops.
  *
  * It cannot reuse `helpers/login.ts`: that one's `Persona` map is sit's
  * (`/admin`, `/babysitter`, `/family`) and its base URL is apps/web's
@@ -14,9 +20,9 @@ import { Page, expect } from '@playwright/test';
  */
 export type DoPersona = 'parent' | 'doer';
 
-const LANDING_PATH: Record<DoPersona, string> = {
-  parent: '/family',
-  doer: '/home',
+const LANDING_URL: Record<DoPersona, RegExp> = {
+  parent: /\/family(\/tasks)?(\?|#|$)/,
+  doer: /\/doer(\/board)?(\?|#|$)/,
 };
 
 export async function doLoginAs(
@@ -32,7 +38,7 @@ export async function doLoginAs(
   await emailInput.fill(email);
   await passwordInput.fill(password);
   await page.locator('button[type="submit"]').first().click();
-  await expect(page).toHaveURL(new RegExp(LANDING_PATH[persona]), { timeout: 15_000 });
+  await expect(page).toHaveURL(LANDING_URL[persona], { timeout: 15_000 });
 }
 
 /** Clear the session between the two personas one spec drives. */

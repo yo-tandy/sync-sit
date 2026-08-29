@@ -38,11 +38,11 @@ describe('do-web router — shell route table', () => {
     expect(publicPaths).toContain('/enroll/parent');
   });
 
-  it('registers /home in its own guarded branch, not the public one', () => {
-    const homePaths = branchContaining('/home');
+  it('registers the doer board in its own guarded branch, not the public one', () => {
+    const boardPaths = branchContaining('/doer/board');
     const publicPaths = branchContaining('/login');
-    expect(homePaths).not.toContain('/login');
-    expect(publicPaths).not.toContain('/home');
+    expect(boardPaths).not.toContain('/login');
+    expect(publicPaths).not.toContain('/doer/board');
   });
 
   it('sends unknown public paths back to the welcome page', () => {

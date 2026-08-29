@@ -110,10 +110,15 @@ const supportLink = (label: string) =>
   `<a href="mailto:${DO_SUPPORT_EMAIL}" style="color: #0d8204;">${label}</a>`;
 
 const FAMILY_TASK_URL = (taskId: string) => `${DO_APP_URL}/family/tasks/${taskId}`;
-const DOER_TASK_URL = (taskId: string) => `${DO_APP_URL}/tasks/${taskId}`;
-const MY_OFFERS_URL = `${DO_APP_URL}/offers`;
-const MY_WORK_URL = `${DO_APP_URL}/work`;
-const BOARD_URL = `${DO_APP_URL}/home`;
+// Doer-side CTAs live under the /doer/* namespace (issue #296 — §9.0 parity
+// with sit's /babysitter/* and study's /tutor/*). The pre-namespace paths that
+// mail sent before the move still redirect in do-web's route table
+// (apps/do-web/src/__tests__/router.redirect.test.tsx) — but every NEW message
+// must point at the real path, not at a redirect.
+const DOER_TASK_URL = (taskId: string) => `${DO_APP_URL}/doer/tasks/${taskId}`;
+const MY_OFFERS_URL = `${DO_APP_URL}/doer/offers`;
+const MY_WORK_URL = `${DO_APP_URL}/doer/work`;
+const BOARD_URL = `${DO_APP_URL}/doer/board`;
 
 // ── task_offer_received — to the hiring family (submit; guardian approval
 //    making a gated offer visible rides the same builder) ──────────────────
@@ -600,7 +605,7 @@ export function buildNewTaskDigest(
 //    three land here, with the surface that emits them. ──────────────────
 
 /** Where the doer manages the set (§9.2). */
-const MY_ENDORSEMENTS_URL = `${DO_APP_URL}/endorsements`;
+const MY_ENDORSEMENTS_URL = `${DO_APP_URL}/doer/endorsements`;
 
 /**
  * `doer_endorsement_received` — to the endorsed STUDENT, on submit.

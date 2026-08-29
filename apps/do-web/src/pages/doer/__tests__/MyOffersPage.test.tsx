@@ -144,7 +144,7 @@ describe('MyOffersPage §4.2 terminal fallback (dead offer = summary line, never
     push([offer('p1', 'pending'), offer('d1', 'declined', { declinedReason: 'sibling_accepted' }), offer('w1', 'withdrawn')]);
 
     // Pending links to the (open, hence readable) task.
-    expect(screen.getByText('Title p1').closest('a')).toHaveAttribute('href', '/tasks/task-p1');
+    expect(screen.getByText('Title p1').closest('a')).toHaveAttribute('href', '/doer/tasks/task-p1');
 
     fireEvent.click(screen.getByRole('tab', { name: 'Declined' }));
     expect(screen.getByText('Title d1').closest('a')).toBeNull();
@@ -167,7 +167,7 @@ describe('MyOffersPage actions', () => {
     renderWithProviders(<MyOffersPage />);
     push([offer('p1', 'pending')]);
 
-    expect(screen.getByRole('link', { name: 'Update' })).toHaveAttribute('href', '/tasks/task-p1/offer');
+    expect(screen.getByRole('link', { name: 'Update' })).toHaveAttribute('href', '/doer/tasks/task-p1/offer');
     fireEvent.click(screen.getByRole('button', { name: 'Withdraw' }));
     fireEvent.click(screen.getByRole('button', { name: 'Withdraw offer' }));
     await waitFor(() => expect(h.callables).toHaveLength(1));

@@ -179,7 +179,7 @@ export function OfferPage() {
       if (editing && existing) {
         await httpsCallable(functions, 'doUpdateOffer')({ ...payload, offerId: existing.offerId });
         toast(t('doer.offerForm.updated'));
-        navigate('/offers');
+        navigate('/doer/offers');
       } else {
         const res = await httpsCallable<Record<string, unknown>, { status: string }>(
           functions,
@@ -192,7 +192,7 @@ export function OfferPage() {
               : 'doer.offerForm.submittedPending',
           ),
         );
-        navigate('/offers');
+        navigate('/doer/offers');
       }
     } catch (err: unknown) {
       const reason = (err as { details?: { reason?: string } } | null)?.details?.reason;
@@ -205,7 +205,7 @@ export function OfferPage() {
   if (loadState === 'loading') {
     return (
       <div>
-        <TopNav title={t('doer.offerForm.title')} backTo={`/tasks/${taskId}`} />
+        <TopNav title={t('doer.offerForm.title')} backTo={`/doer/tasks/${taskId}`} />
         <div className="flex justify-center py-20">
           <Spinner />
         </div>
@@ -215,7 +215,7 @@ export function OfferPage() {
   if (loadState === 'not_open' || loadState === 'error' || task === null) {
     return (
       <div>
-        <TopNav title={t('doer.offerForm.title')} backTo="/home" />
+        <TopNav title={t('doer.offerForm.title')} backTo="/doer/board" />
         <p className="px-6 py-10 text-center text-sm text-gray-500">
           {t(loadState === 'error' ? 'doer.offerForm.loadError' : 'doer.offerForm.taskNotOpen')}
         </p>
@@ -226,7 +226,7 @@ export function OfferPage() {
   if (existing?.status === 'pending_guardian' || existing?.status === 'accepted') {
     return (
       <div>
-        <TopNav title={t('doer.offerForm.title')} backTo={`/tasks/${task.taskId}`} />
+        <TopNav title={t('doer.offerForm.title')} backTo={`/doer/tasks/${task.taskId}`} />
         <p className="px-6 py-10 text-center text-sm text-gray-500">
           {t(
             existing.status === 'pending_guardian'
@@ -242,7 +242,7 @@ export function OfferPage() {
     <div>
       <TopNav
         title={t(editing ? 'doer.offerForm.editTitle' : 'doer.offerForm.title')}
-        backTo={`/tasks/${task.taskId}`}
+        backTo={`/doer/tasks/${task.taskId}`}
       />
       <div className="px-6 pt-4 pb-8">
         <h1 className="mb-1 text-lg font-bold text-gray-950">{task.title}</h1>

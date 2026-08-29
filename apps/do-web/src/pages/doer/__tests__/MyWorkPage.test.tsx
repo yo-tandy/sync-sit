@@ -93,7 +93,7 @@ describe('MyWorkPage tabs and badges', () => {
     renderWithProviders(<MyWorkPage />);
     push([task('a1', 'assigned', { doerMarkedDoneAt: { toMillis: () => 5 } })]);
     expect(screen.getByText('Awaiting family confirmation')).toBeInTheDocument();
-    expect(screen.getByText('Task a1').closest('a')).toHaveAttribute('href', '/tasks/a1');
+    expect(screen.getByText('Task a1').closest('a')).toHaveAttribute('href', '/doer/tasks/a1');
     expect(screen.getByText('30 € agreed')).toBeInTheDocument();
   });
 });

@@ -124,7 +124,7 @@ export function DoerEnrollment() {
   // snapshot updates genuinely shrink it — the post-submit refresh persists
   // the very DOB/contact whose absence put 'profile' in the array, flipping
   // crossAppNeedsProfileStep false and making steps[2] undefined for the
-  // frames before navigate('/home'). The sibling wizards' sequences are
+  // frames before navigate('/doer'). The sibling wizards' sequences are
   // static by construction; freezing at auth-resolution pins the same
   // property for this derived one. (Not frozen at MOUNT: the wizard mounts
   // during authLoading, when the shape would be computed against a
@@ -168,7 +168,7 @@ export function DoerEnrollment() {
     setRetryMissed(false);
     try {
       if (await ensureDoerProfileLoaded(refreshUserDoc)) {
-        navigate('/home');
+        navigate('/doer');
       } else {
         setRetryMissed(true);
       }
@@ -183,7 +183,7 @@ export function DoerEnrollment() {
   useEffect(() => {
     if (!signedOutSuccess) return;
     const check = (s: { firebaseUser: unknown; userDoc: User | null }) => {
-      if (s.firebaseUser && getDoerProfile(s.userDoc)) navigate('/home');
+      if (s.firebaseUser && getDoerProfile(s.userDoc)) navigate('/doer');
     };
     // Check the CURRENT state before subscribing — zustand's subscribe only
     // fires on subsequent changes.
@@ -196,7 +196,7 @@ export function DoerEnrollment() {
   // on step === 0 so this only fires before the flow starts.
   useEffect(() => {
     if (step === 0 && !authLoading && firebaseUser && getDoerProfile(userDoc)) {
-      navigate('/home', { replace: true });
+      navigate('/doer', { replace: true });
     }
   }, [step, authLoading, firebaseUser, userDoc, navigate]);
 
@@ -269,11 +269,11 @@ export function DoerEnrollment() {
         enrollment,
       });
       if (isAddProfile) {
-        // Already signed in; refresh pulls the fresh doer profile so /home's
+        // Already signed in; refresh pulls the fresh doer profile so the board's
         // guard resolves. Both reads are best-effort — enrollment has
         // already succeeded.
         if (await ensureDoerProfileLoaded(refreshUserDoc)) {
-          navigate('/home');
+          navigate('/doer');
         } else {
           setSignedOutSuccess('profileLoad');
         }
@@ -308,7 +308,7 @@ export function DoerEnrollment() {
         settled = useAuthStore.getState();
       }
       if (settled.firebaseUser && getDoerProfile(settled.userDoc)) {
-        navigate('/home');
+        navigate('/doer');
       } else {
         setSignedOutSuccess(settled.firebaseUser ? 'profileLoad' : 'login');
       }

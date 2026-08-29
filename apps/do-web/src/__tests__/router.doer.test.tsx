@@ -6,6 +6,7 @@ vi.mock('@/layouts/PublicLayout', () => ({ PublicLayout: () => null }));
 vi.mock('@/layouts/DoerLayout', () => ({ DoerLayout: () => null }));
 vi.mock('@/layouts/FamilyLayout', () => ({ FamilyLayout: () => null }));
 
+import { Navigate } from 'react-router';
 import { router } from '@/router';
 
 type RouteNode = { path?: string; children?: RouteNode[] };
@@ -20,26 +21,48 @@ function branchContaining(path: string): string[] {
 }
 
 describe('do-web router — doer portal branch (plan §13 PR8, §9.2 at PR11)', () => {
-  it('registers the six doer routes together behind one guarded branch, /home the board first among them', () => {
-    const doerPaths = branchContaining('/home');
+  it('namespaces every doer surface under /doer/*, in one guarded branch (issue #296)', () => {
+    const doerPaths = branchContaining('/doer/board');
     for (const p of [
-      '/home',
-      '/tasks/:taskId',
-      '/tasks/:taskId/offer',
-      '/offers',
-      '/work',
-      '/endorsements',
+      '/doer',
+      '/doer/board',
+      '/doer/tasks/:taskId',
+      '/doer/tasks/:taskId/offer',
+      '/doer/offers',
+      '/doer/work',
+      '/doer/endorsements',
     ]) {
       expect(doerPaths).toContain(p);
     }
+    // §9.0 parity: the provider portal is namespaced like sit's /babysitter/*
+    // and study's /tutor/*, so NO doer SURFACE may sit at the root any more.
+    // (The old root paths survive as redirects, in their own branch — see
+    // router.redirect.test.tsx.)
+    for (const p of ['/home', '/offers', '/work', '/endorsements', '/tasks/:taskId']) {
+      expect(doerPaths).not.toContain(p);
+    }
+  });
+
+  // TEMPORARY: replaced by PR B's doer dashboard.
+  it('forwards the portal index /doer to the board', () => {
+    const branch = (router.routes as RouteNode[]).find((b) =>
+      (b.children ?? []).some((c) => c.path === '/doer/board'),
+    );
+    const index = branch?.children?.find((c) => c.path === '/doer') as
+      | { element: React.ReactElement<{ to?: string; replace?: boolean }> }
+      | undefined;
+    expect(index).toBeTruthy();
+    expect(index!.element.type).toBe(Navigate);
+    expect(index!.element.props.to).toBe('/doer/board');
+    expect(index!.element.props.replace).toBe(true);
   });
 
   it('keeps the doer branch separate from the public and family branches', () => {
-    const doerPaths = branchContaining('/home');
+    const doerPaths = branchContaining('/doer/board');
     expect(doerPaths).not.toContain('/login');
     expect(doerPaths).not.toContain('/family');
-    expect(branchContaining('/family')).not.toContain('/home');
-    expect(branchContaining('/login')).not.toContain('/offers');
+    expect(branchContaining('/family')).not.toContain('/doer/board');
+    expect(branchContaining('/login')).not.toContain('/doer/offers');
   });
 
   // PR8's placeholder pinned this route ABSENT ("that surface is PR11").
@@ -47,8 +70,8 @@ describe('do-web router — doer portal branch (plan §13 PR8, §9.2 at PR11)', 
   // else — an endorsement-management surface reachable from the public
   // branch would let anyone load it.
   it('registers "my endorsements" in the doer branch only (§9.2, PR11)', () => {
-    expect(branchContaining('/endorsements')).toContain('/home');
-    expect(branchContaining('/login')).not.toContain('/endorsements');
-    expect(branchContaining('/family')).not.toContain('/endorsements');
+    expect(branchContaining('/doer/endorsements')).toContain('/doer/board');
+    expect(branchContaining('/login')).not.toContain('/doer/endorsements');
+    expect(branchContaining('/family')).not.toContain('/doer/endorsements');
   });
 });
