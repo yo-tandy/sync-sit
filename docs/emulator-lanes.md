@@ -31,7 +31,13 @@ Both seed scripts now read the lane from env, through the **same resolver** the 
 | `EMULATOR_HOST` | per script — `localhost` for `seed-admin.cjs`, `127.0.0.1` for `seed-test-data.cjs` | Host for the emulators. |
 | `EMULATOR_{AUTH,FIRESTORE,FUNCTIONS,STORAGE}_PORT` | 9099/8080/5001/9199 | Overrides the lane-derived port. |
 
-Precedence is the browser side's: explicit port var → lane-derived → default. With none of them set each script targets exactly what it hardcoded before, so a plain `pnpm seed:admin` still seeds the shared dev stack. A malformed value throws; two lane vars naming *different* lanes throws too, rather than picking one.
+Precedence is the browser side's: explicit port var → lane-derived → default. With none of them set each script targets exactly what it hardcoded before, so a plain `pnpm seed:admin` still seeds the shared dev stack.
+
+Three things throw rather than resolve quietly, all for the same reason — silently landing on lane 1 means WRITING to the shared dev stack:
+
+- a malformed value (`LANE=nine`, `EMULATOR_AUTH_PORT=70000`);
+- two lane vars naming *different* lanes (`LANE=3 E2E_LANE=4`) — the same lane spelled two ways is fine;
+- a `FIRESTORE_EMULATOR_HOST` / `FIREBASE_AUTH_EMULATOR_HOST` already exported that disagrees with the resolved lane. The backfill scripts ask you to export those by hand, so having one left over in a shell is normal; without this check `pnpm seed:admin` would overwrite it and seed lane 1 without a word. An exported value that agrees is fine.
 
 ```bash
 LANE=3 pnpm seed:admin                  # or: pnpm seed:admin:lane3
@@ -41,7 +47,7 @@ LANE=4 pnpm seed:admin me@ejm.org pw    # script args still pass through
 
 `seed:admin:lane{2,3,4}` and `seed:test-data:lane{2,3,4}` exist for the three lanes that have configs, matching `test:integration:lane{2,3,4}`. Both scripts print the lane and the resolved host:port they are about to write to as their first line of output — read it before assuming.
 
-`pnpm seed:*` builds `@ejm/shared-core` first, because the resolver reaches a `.cjs` through that package's `dist/`. Running `node apps/functions/seed-test-data.cjs` directly skips that build; if `dist/` is missing the script says so and tells you the one command to run.
+`pnpm seed:*` builds `@ejm/shared-core` first, because the resolver reaches a `.cjs` through that package's `dist/`. Running `node apps/functions/seed-test-data.cjs` directly skips that build; if `dist/` is missing *or stale* the script says so and tells you the one command to run.
 
 ## Running a WEB APP in a lane (browser-driven e2e)
 
@@ -88,6 +94,6 @@ E2E_APP=do E2E_LANE=3 pnpm exec playwright test tests-e2e/d1-do-endorsement-flow
 
 The lane number appears four times and must be the same one every time. `E2E_LANE` is also accepted by the seed scripts, so `export E2E_LANE=3` once covers steps 2 and 4; step 3 still needs its own `VITE_EMULATOR_LANE` (Vite will not pass a non-`VITE_` var into the bundle).
 
-`E2E_APP` (`sit`/`web`, `study`/`study-web`, `do`/`do-web`) and `E2E_LANE` only pick Playwright's `baseURL`; they do not configure the app — step 2's `VITE_EMULATOR_LANE` does that, and the two must name the same lane. `PLAYWRIGHT_BASE_URL` still overrides both, and with nothing set the base URL is `http://localhost:5173` as before.
+`E2E_APP` (`sit`/`web`, `study`/`study-web`, `do`/`do-web`) and `E2E_LANE` only pick Playwright's `baseURL`; they do not configure the app — step 3's `VITE_EMULATOR_LANE` does that, and the two must name the same lane. `PLAYWRIGHT_BASE_URL` still overrides both, and with nothing set the base URL is `http://localhost:5173` as before.
 
-`--strictPort` is not optional: without it step 2 silently lands on 5376 when 5375 is taken and step 3 then drives whatever is on 5375.
+`--strictPort` is not optional: without it step 3 silently lands on 5376 when 5375 is taken and step 4 then drives whatever is on 5375.

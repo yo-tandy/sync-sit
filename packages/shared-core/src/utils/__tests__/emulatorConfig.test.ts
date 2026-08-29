@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
+  assertEmulatorAdminHostsAgree,
+  emulatorAdminHosts,
   resolveEmulatorConfig,
   resolveNodeEmulatorConfig,
   DEFAULT_EMULATOR_HOST,
@@ -261,6 +263,23 @@ describe('resolveNodeEmulatorConfig (issue #376: lane-aware seed scripts)', () =
       );
     });
 
+    it('the same lane spelled two ways is not a disagreement', () => {
+      // Lanes are compared as parsed numbers, not raw strings.
+      expect(resolveNodeEmulatorConfig({ LANE: '3', E2E_LANE: '03' }).lane).toBe(3);
+      expect(resolveNodeEmulatorConfig({ EMULATOR_LANE: ' 4 ', LANE: '4' }).lane).toBe(4);
+    });
+
+    it('a malformed lane is reported as malformed, not as a disagreement', () => {
+      // Every candidate is parsed before any are compared, so the reader is
+      // sent at the typo rather than at a second var to go unset.
+      expect(() => resolveNodeEmulatorConfig({ LANE: 'nine', E2E_LANE: '3' })).toThrow(
+        'LANE must be a lane number, got "nine"',
+      );
+      expect(() => resolveNodeEmulatorConfig({ LANE: '3', E2E_LANE: '99' })).toThrow(
+        `E2E_LANE must be between 1 and ${MAX_EMULATOR_LANE}`,
+      );
+    });
+
     it('an explicit port var beats the lane-derived port', () => {
       const config = resolveNodeEmulatorConfig({
         LANE: '3',
@@ -313,5 +332,54 @@ describe('resolveNodeEmulatorConfig (issue #376: lane-aware seed scripts)', () =
     ])('%s=%s', (key, value) => {
       expect(() => resolveNodeEmulatorConfig({ [key]: value })).toThrow(key);
     });
+  });
+});
+
+describe('emulatorAdminHosts / assertEmulatorAdminHostsAgree', () => {
+  it('composes the firebase-admin env pair the seed scripts set', () => {
+    expect(emulatorAdminHosts(resolveNodeEmulatorConfig({}, { defaultHost: 'localhost' }))).toEqual({
+      FIRESTORE_EMULATOR_HOST: 'localhost:8080',
+      FIREBASE_AUTH_EMULATOR_HOST: 'localhost:9099',
+    });
+    expect(emulatorAdminHosts(resolveNodeEmulatorConfig({ LANE: '3' }))).toEqual({
+      FIRESTORE_EMULATOR_HOST: 'localhost:28080',
+      FIREBASE_AUTH_EMULATOR_HOST: 'localhost:29099',
+    });
+  });
+
+  it('passes when nothing is pre-set', () => {
+    const config = resolveNodeEmulatorConfig({ LANE: '3' });
+    expect(() => assertEmulatorAdminHostsAgree({ PATH: '/usr/bin' }, config)).not.toThrow();
+  });
+
+  it('passes when a pre-set value agrees with the resolved lane', () => {
+    const env = {
+      LANE: '3',
+      FIRESTORE_EMULATOR_HOST: 'localhost:28080',
+      FIREBASE_AUTH_EMULATOR_HOST: ' localhost:29099 ',
+    };
+    expect(() =>
+      assertEmulatorAdminHostsAgree(env, resolveNodeEmulatorConfig(env)),
+    ).not.toThrow();
+  });
+
+  it.each([
+    ['FIRESTORE_EMULATOR_HOST', 'localhost:28080'],
+    ['FIREBASE_AUTH_EMULATOR_HOST', 'localhost:29099'],
+  ])('throws when %s is exported for another lane and no lane var is set', (key, staleValue) => {
+    // The silent version of this seeds lane 1 — the shared dev stack — while
+    // the operator believes they are on lane 3.
+    const env = { [key]: staleValue };
+    const config = resolveNodeEmulatorConfig(env, { defaultHost: 'localhost' });
+    expect(() => assertEmulatorAdminHostsAgree(env, config)).toThrow(key);
+    expect(() => assertEmulatorAdminHostsAgree(env, config)).toThrow(staleValue);
+    expect(() => assertEmulatorAdminHostsAgree(env, config)).toThrow('lane 1');
+  });
+
+  it('throws when a pre-set host disagrees with an explicit lane var', () => {
+    const env = { LANE: '4', FIRESTORE_EMULATOR_HOST: 'localhost:8080' };
+    expect(() => assertEmulatorAdminHostsAgree(env, resolveNodeEmulatorConfig(env))).toThrow(
+      /FIRESTORE_EMULATOR_HOST.*lane 4/s,
+    );
   });
 });
