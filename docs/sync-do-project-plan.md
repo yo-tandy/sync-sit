@@ -1918,10 +1918,13 @@ discovered in an incident.
     claim for that date. Sit has NO `completed` status (the vocabulary is
     pending | confirmed | rejected | cancelled and a past sitting stays
     `confirmed`), so there is no `completedAt` to key on and the sweep uses a
-    new `(status, date)` composite. Dateless recurring arrangements are still
-    live and are excluded structurally; a doc with `date: ''` is excluded by an
-    explicit shape guard. Pending docs and the 30-day cancelled/rejected rule
-    are untouched.
+    new `(status, date)` composite, range-bounded on BOTH sides. Live recurring
+    arrangements store `date: null` — an explicit null every writer stores, not
+    an absent field — and a Firestore range filter constrains to its bound's
+    TYPE, so a string range never surfaces them. The lower bound excludes the
+    one string shape (`''`) a bare upper bound would return, and an in-memory
+    shape guard backs both up. Pending docs and the 30-day cancelled/rejected
+    rule are untouched.
   - **study** — a `study-sessions` doc with `status: 'completed'` and
     `completedAt` older than 180 days, via a new `(status, completedAt)`
     composite, cascading to its entire `instances` subcollection (Firestore
