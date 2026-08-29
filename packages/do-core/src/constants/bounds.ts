@@ -5,6 +5,8 @@
  * the two sides must share the same numbers (§8).
  */
 
+import { COMPLETED_ENGAGEMENT_RETENTION_DAYS } from '@ejm/shared-core';
+
 /** Open tasks per family — anti-spam on the board (§6.3). */
 export const DO_TASK_MAX_ACTIVE = 5;
 
@@ -100,8 +102,13 @@ export const DO_CANCELLED_RETENTION_DAYS = 30;
  * completed tasks (and their offers, including the +1 helper's name and age
  * on the accepted offer — the one data subject with no GDPR path of their
  * own, §11.4) once `completedAt` is older than 6 months.
+ *
+ * ALIASED, not re-declared: issue #294 built the sit and study halves of the
+ * same decision, so the number now lives once in shared-core and all three
+ * sweeps read it. Keeping the do-named export means every do call site and
+ * test stays byte-for-byte unchanged.
  */
-export const DO_COMPLETED_RETENTION_DAYS = 180;
+export const DO_COMPLETED_RETENTION_DAYS = COMPLETED_ENGAGEMENT_RETENTION_DAYS;
 
 /**
  * Endorsement free-text bounds (decision 12, §9.1). The floor mirrors
