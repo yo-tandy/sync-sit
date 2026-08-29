@@ -165,7 +165,15 @@ export function AppBar() {
           <div className="border-t border-gray-100" />
 
           <MenuItem icon={<ShareIcon className="h-5 w-5" />} label={t('share.title')} to="/share" onNavigate={() => setMenuOpen(false)} />
-          <AppSwitchMenuItem />
+          {/* Below `md` the app-switch BAR (#365) is the entry point, so this
+              row hides there — two entry points would let a second handoff
+              code be minted around the bar's whole-bar lock. `hidden` is
+              display:none, so it leaves the tab order and the a11y tree too.
+              At `md+` the bar is `md:hidden` and this row is the ONLY
+              switcher, until Q9 is answered (#417). */}
+          <div className="hidden md:block">
+            <AppSwitchMenuItem />
+          </div>
 
           <div className="px-4 py-3">
             <LanguageSelector />

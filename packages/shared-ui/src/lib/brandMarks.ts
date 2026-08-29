@@ -28,6 +28,11 @@ export const APP_NAME: Record<SyncApp, string> = {
  * they are for About pages and install prompts, and pulling one into a bar
  * costs ~100 KB per app on every screen (see
  * scripts/__tests__/brand-mark-weights.test.ts).
+ *
+ * Consumers, exhaustively: `AppSwitchBar` (24px tabs) and each app's
+ * `AppSwitchMenuItem` (20px burger rows). The only remaining direct imports
+ * of `@ejm/shared-ui/brand-marks/sync-*.png` are the three About pages,
+ * which is what those exports are for.
  */
 export const BRAND_MARKS: Record<SyncApp, { sm: string; md: string }> = {
   sit: { sm: sitSm, md: sitMd },

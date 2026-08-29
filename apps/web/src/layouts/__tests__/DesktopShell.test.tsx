@@ -7,19 +7,23 @@ vi.mock('../AuthGuard', () => ({
   AuthGuard: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 vi.mock('@/components/ui/AppBar', () => ({ AppBar: () => <div data-testid="appbar" /> }));
+vi.mock('@/config/firebase', () => ({ functions: {} }));
+vi.mock('firebase/functions', () => ({
+  httpsCallable: () => () => new Promise(() => {}),
+}));
 
 import i18n from '@/i18n';
 import { FamilyLayout } from '../FamilyLayout';
 import { BabysitterLayout } from '../BabysitterLayout';
 import { AdminLayout } from '../AdminLayout';
 
-function renderLayout(layout: React.ReactElement, pageText: string) {
+function renderLayout(layout: React.ReactElement, pageText: string, path?: string) {
   render(
     <I18nextProvider i18n={i18n}>
-      <MemoryRouter>
+      <MemoryRouter initialEntries={[path ?? '/']}>
         <Routes>
           <Route element={layout}>
-            <Route index element={<div>{pageText}</div>} />
+            <Route path={path ?? '/'} element={<div>{pageText}</div>} />
           </Route>
         </Routes>
       </MemoryRouter>
@@ -88,5 +92,47 @@ describe('sit portal shells cap routed content (issue #119)', () => {
       '/admin/audit-log',
       '/admin/gdpr-export',
     ]);
+  });
+});
+
+/**
+ * "Shipped in all six shells" (#365) is a claim about the LAYOUTS, and until
+ * this block existed deleting <AppSwitchBarHost /> from either shell left the
+ * whole suite green — every other bar test renders a host in isolation.
+ *
+ * The admin case is the load-bearing one: AdminLayout deliberately has NO
+ * bar, which is exactly why AppBar keeps the burger switch row for admins at
+ * every width.
+ */
+const SWITCH_BAR = { name: /switch app/i } as const;
+
+describe('the app-switch bar is mounted in sit’s shells (#365)', () => {
+  afterEach(cleanup);
+
+  it('FamilyLayout renders the bar, with the parent account path', () => {
+    renderLayout(<FamilyLayout />, 'family page', '/family/account');
+    const bar = screen.getByRole('navigation', SWITCH_BAR);
+    // aria-current proves the host passed '/family/account', not some other
+    // path: the bar derives the active tab from the route it is given.
+    expect(within(bar).getByRole('button', { name: /my account/i })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+  });
+
+  it('BabysitterLayout renders the bar, with the BABYSITTER account path', () => {
+    // The student's account lives at a different path than the parent's; a
+    // typo here would ship silently.
+    renderLayout(<BabysitterLayout />, 'babysitter page', '/babysitter/account');
+    const bar = screen.getByRole('navigation', SWITCH_BAR);
+    expect(within(bar).getByRole('button', { name: /my account/i })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+  });
+
+  it('AdminLayout renders NO bar — which is why the burger keeps admin’s switch row', () => {
+    renderLayout(<AdminLayout />, 'admin page');
+    expect(screen.queryByRole('navigation', SWITCH_BAR)).toBeNull();
   });
 });
