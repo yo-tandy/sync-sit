@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { screen, fireEvent, waitFor } from '@testing-library/react';
+import { act, screen, fireEvent, waitFor } from '@testing-library/react';
 import { renderWithProviders } from '@/__tests__/test-utils';
 
 /**
@@ -201,6 +201,41 @@ describe('BoardPage category-switch staleness', () => {
     await screen.findByText('Task b0');
     // The old category's rows are replaced, never appended to.
     expect(screen.queryByText('Task a0')).toBeNull();
+  });
+
+  // The generation guard: a superseded fetch that resolves LAST must perform
+  // none of its writes. Without it the late response wins — it would restore
+  // the old category's rows and, worse, leave `cursorRef` pointing at that
+  // category's last doc, so the next "Load more" pages the wrong category.
+  it('ignores a superseded response that lands after the newer one', async () => {
+    // Fetch #1 (no category) is held open.
+    let releaseFirst!: (docs: unknown[]) => void;
+    h.pending = new Promise<unknown[]>((res) => {
+      releaseFirst = res;
+    });
+    renderWithProviders(<BoardPage />);
+
+    // Fetch #2 (category switch) issues and resolves FIRST.
+    h.docsQueue.push(asDocs([taskDoc('b0', { category: 'boxes' })]));
+    fireEvent.change(screen.getByLabelText('Category'), { target: { value: 'boxes' } });
+    await screen.findByText('Task b0');
+
+    // Now the superseded first page lands. Flush its .then chain fully
+    // BEFORE asserting — otherwise the assertions can run in the gap before
+    // the late writes land and pass vacuously (checked: with the guard
+    // removed, this test must fail).
+    releaseFirst(asDocs([taskDoc('a0')]));
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    // The late page wrote nothing: b0 is still on screen (not blanked by a
+    // stale `loadedCategory`), a0 never appears, and the board is NOT back
+    // in its loading state.
+    expect(screen.getByText('Task b0')).toBeInTheDocument();
+    expect(screen.queryByText('Task a0')).toBeNull();
+    expect(document.querySelector('.animate-spin')).toBeNull();
   });
 });
 

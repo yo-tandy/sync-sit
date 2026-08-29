@@ -9,7 +9,17 @@ on:
   pull_request:
 
 jobs:
-  test:
+  # The gate that was missing: five real errors (two set-state-in-effect, three
+  # react-refresh export splits) reached main because nothing in CI ran eslint —
+  # the same class as the absent-test-job gap issue #216 closed.
+  #
+  # Its OWN job, deliberately, and not a step in `test`: a step ordered before
+  # the suites would let a one-line style regression short-circuit them and
+  # erase the test signal entirely, which is the failure mode #215/#216 were
+  # about. Parallel means a lint error and a test failure are always reported
+  # together. `--max-warnings` stays unset so pre-existing warnings (apps/web
+  # carries seven `react-hooks/exhaustive-deps`) stay visible without blocking.
+  lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -26,13 +36,25 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      # Lint — cheap, and the gate that was missing: five real errors
-      # (two set-state-in-effect, three react-refresh export splits) reached
-      # main because nothing in CI ran eslint. Same class as the absent-test-job
-      # gap issue #216 closed; `--max-warnings` is deliberately NOT set, so
-      # pre-existing warnings stay visible without blocking.
       - name: Lint
         run: pnpm -r lint
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Enable pnpm (Corepack)
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.13.1 --activate
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
 
       # Unit tests — fast, no emulators needed
       - name: Run unit tests

@@ -276,7 +276,7 @@ export function BoardPage() {
           NEW category and append it to the OLD rows — a mixed-category list.
           Blanking `tasks` used to hide the button; deriving staleness has to
           cover both places. */}
-      {!stale && tasks !== null && !exhausted && (
+      {!stale && !exhausted && (
         <Button
           variant="outline"
           disabled={loadingMore}
