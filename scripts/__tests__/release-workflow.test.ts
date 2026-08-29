@@ -363,6 +363,7 @@ export function pnpmSelection(script: string): {
   recursive: boolean;
   includes: string[];
   excludes: string[];
+  runsScript: string | undefined;
 } {
   const [command = ''] = script.split('&&');
   const tokens = (command.match(/'[^']*'|"[^"]*"|\S+/g) ?? []).map((t) =>
@@ -370,7 +371,9 @@ export function pnpmSelection(script: string): {
   );
   const includes: string[] = [];
   const excludes: string[] = [];
+  const positional: string[] = [];
   let recursive = false;
+  let seenPnpm = false;
   for (let i = 0; i < tokens.length; i++) {
     const token = tokens[i];
     if (token === '-r' || token === '--recursive') {
@@ -406,12 +409,18 @@ export function pnpmSelection(script: string): {
             `loosen the pin; mis-reading the selection is the bug this guards against)`,
         );
       }
+      // Not a selection flag. Everything before `pnpm` (an env prefix, a
+      // runner) and every other `-`-prefixed token is noise; what is left is
+      // the positional tail, whose head names the script pnpm runs.
+      if (!seenPnpm) seenPnpm = token === 'pnpm' || token.endsWith('/pnpm');
+      else if (!token.startsWith('-')) positional.push(token);
       continue;
     }
     if (value.startsWith('!')) excludes.push(value.slice(1));
     else includes.push(value);
   }
-  return { recursive, includes, excludes };
+  const runsScript = positional[0] === 'run' ? positional[1] : positional[0];
+  return { recursive, includes, excludes, runsScript };
 }
 
 /**
@@ -445,9 +454,13 @@ describe('unit test lane (issue #401)', () => {
     // The regression this issue is about: any positive `--filter` reintroduces
     // a hand-written list, and the next package added to the workspace is
     // silently unrun again.
-    const { recursive, includes } = pnpmSelection(script());
+    const { recursive, includes, runsScript } = pnpmSelection(script());
     expect(includes, 'test:unit must not name packages by hand').toEqual([]);
     expect(recursive, 'test:unit must select with -r').toBe(true);
+    // ...and it must run `test` in each of them. Everything else here models
+    // the SELECTION, so `pnpm -r --filter '!@ejm/tests' lint` satisfied every
+    // other pin while running zero unit suites.
+    expect(runsScript, 'test:unit must run the `test` script').toBe('test');
   });
 
   it('excludes only packages whose exclusion is a recorded decision', () => {
@@ -497,6 +510,35 @@ describe('unit test lane (issue #401)', () => {
     );
   });
 
+  it('a package holding test FILES also declares the script that runs them', () => {
+    // The rung above the pin before it, and the last place this drift can
+    // hide. That one guarantees every package DECLARING a `test` script is
+    // selected; a package with test files and no script is skipped by
+    // `pnpm -r` exactly as `@ejm/shared-ui` is — silently, and in no lane at
+    // all. shared-ui has 27 components and no vitest config today, so the
+    // first `Button.test.tsx` added there would run nowhere.
+    const TEST_FILE = /\.(test|spec)\.[cm]?[jt]sx?$/;
+    const SKIP = new Set(['node_modules', 'dist', 'lib', '.git', 'coverage', 'build']);
+    // `*-bundle` too, for two reasons: a bundle is a COPY of another package,
+    // so a test file found there says nothing about this one — and
+    // bundle-shared-for-deploy.test.ts creates and deletes those directories
+    // under apps/functions while this file runs in a sibling worker, which
+    // would race this walk into an ENOENT.
+    const skip = (name: string) => SKIP.has(name) || name.endsWith('-bundle');
+    const hasTestFile = (dir: string): boolean =>
+      readdirSync(dir, { withFileTypes: true }).some((entry) => {
+        if (entry.isDirectory()) {
+          return skip(entry.name) ? false : hasTestFile(resolve(dir, entry.name));
+        }
+        return TEST_FILE.test(entry.name);
+      });
+
+    const undeclared = workspaceManifests()
+      .filter((pkg) => !pkg.scripts.test && hasTestFile(pkg.dir))
+      .map((pkg) => pkg.dir);
+    expect(undeclared).toEqual([]);
+  });
+
   it('still runs the suites that live outside every package', () => {
     // scripts/__tests__ — these pins among them — sit in no workspace package,
     // so `pnpm -r` cannot reach them. Dropping this tail would silently stop
@@ -508,12 +550,18 @@ describe('unit test lane (issue #401)', () => {
     it('reads the hand-written form this issue removed', () => {
       expect(
         pnpmSelection('pnpm --filter @ejm/shared-core --filter web test && vitest run'),
-      ).toEqual({ recursive: false, includes: ['@ejm/shared-core', 'web'], excludes: [] });
+      ).toEqual({
+        recursive: false,
+        includes: ['@ejm/shared-core', 'web'],
+        excludes: [],
+        runsScript: 'test',
+      });
     });
 
     it('reads the recursive form, quoted negation and all', () => {
-      expect(pnpmSelection("pnpm -r --filter '!@ejm/tests' test && vitest run --project scripts"))
-        .toEqual({ recursive: true, includes: [], excludes: ['@ejm/tests'] });
+      expect(
+        pnpmSelection("pnpm -r --filter '!@ejm/tests' test && vitest run --project scripts"),
+      ).toEqual({ recursive: true, includes: [], excludes: ['@ejm/tests'], runsScript: 'test' });
     });
 
     it('reads --filter=x as well as --filter x, quoted or not', () => {
@@ -521,6 +569,7 @@ describe('unit test lane (issue #401)', () => {
         recursive: true,
         includes: ['b'],
         excludes: ['a'],
+        runsScript: 'test',
       });
       // The attached-AND-quoted form: the tokenizer only unwraps a quote
       // spanning the whole token, so without the value-level strip this reads
@@ -529,6 +578,7 @@ describe('unit test lane (issue #401)', () => {
         recursive: true,
         includes: [],
         excludes: ['@ejm/tests'],
+        runsScript: 'test',
       });
     });
 
@@ -540,11 +590,13 @@ describe('unit test lane (issue #401)', () => {
         recursive: true,
         includes: ['web'],
         excludes: ['@ejm/tests'],
+        runsScript: 'test',
       });
       expect(pnpmSelection('pnpm -r -F=web test')).toEqual({
         recursive: true,
         includes: ['web'],
         excludes: [],
+        runsScript: 'test',
       });
     });
 
@@ -568,6 +620,7 @@ describe('unit test lane (issue #401)', () => {
         recursive: true,
         includes: [],
         excludes: [],
+        runsScript: 'test',
       });
     });
   });
