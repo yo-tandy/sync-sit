@@ -233,7 +233,7 @@ export function SubmittedEndorsementsPage() {
             </div>
           )}
           {!searching && searchResults.length > 0 && (
-            <div className="max-h-60 space-y-1 overflow-y-auto">
+            <div className="focus-ring-inset max-h-60 space-y-1 overflow-y-auto">
               {searchResults.map((b) => (
                 <button
                   key={b.uid}

@@ -205,7 +205,7 @@ export function AdminGovernancePage() {
               type="checkbox"
               checked={onlyUnreviewed}
               onChange={toggleUnreviewed}
-              className="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+              className="h-4 w-4 rounded border-gray-300 text-brand-600"
             />
             {t('admin.governance.onlyUnreviewed')}
           </label>

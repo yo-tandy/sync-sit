@@ -54,7 +54,7 @@ export function DataTable<T>({ columns, rows, rowKey, emptyLabel, initialSort }:
   }
 
   return (
-    <div className="overflow-x-auto rounded-xl border border-gray-200">
+    <div className="focus-ring-inset overflow-x-auto rounded-xl border border-gray-200">
       <table className="w-full min-w-max text-left text-sm">
         <thead className="border-b border-gray-200 bg-gray-50">
           <tr>

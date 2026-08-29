@@ -89,7 +89,7 @@ export function PhoneInput({ label, value, onChange, placeholder, className = ''
         <select
           value={countryCode}
           onChange={(e) => handleCountryChange(e.target.value)}
-          className="h-12 rounded-lg border-[1.5px] border-gray-300 bg-white px-2 text-sm text-gray-950 outline-none focus:border-brand-600"
+          className="h-12 rounded-lg border-[1.5px] border-gray-300 bg-white px-2 text-sm text-gray-950 focus:border-brand-600"
         >
           {COUNTRY_CODES.map((cc) => (
             <option key={cc.code} value={cc.code}>

@@ -27,7 +27,7 @@ export function NavTabs({ items, ariaLabel }: { items: NavTabItem[]; ariaLabel: 
       aria-label={ariaLabel}
       className="sticky top-12 z-30 hidden border-b border-gray-200 bg-white md:block"
     >
-      <div className="mx-auto flex max-w-5xl gap-1 overflow-x-auto px-4">
+      <div className="focus-ring-inset mx-auto flex max-w-5xl gap-1 overflow-x-auto px-4">
         {items.map((item) => (
           <NavLink
             key={item.to}
