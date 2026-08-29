@@ -30,7 +30,7 @@ export function FamilyLayout() {
             <Outlet />
           </Suspense>
         </PageContainer>
-        <AppSwitchBarHost accountHref="/family/account" />
+        <AppSwitchBarHost accountHref="/family/account" homeHref="/family" />
       </div>
     </AuthGuard>
   );

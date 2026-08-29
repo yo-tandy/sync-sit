@@ -17,39 +17,33 @@ const SIBLINGS = [
   { app: 'do' as const, url: 'https://sync-do-app.web.app' },
 ];
 
+/**
+ * The DEFAULT here mirrors what every shipped shell passes -- `account` and
+ * `home` both supplied -- so a test that overrides neither is exercising a
+ * production configuration. sit's babysitter/parent shells and study's two
+ * pass both; do passes `home` only, which the omit-account test covers.
+ */
 function renderBar(props: Partial<React.ComponentProps<typeof AppSwitchBar>> = {}) {
   const mint = props.mintHandoffCode ?? vi.fn().mockResolvedValue('code123');
-  const onNavigateAccount = props.onNavigateAccount ?? vi.fn();
-  const ui = (
+  const onNavigateAccount = props.account?.onNavigate ?? vi.fn();
+  const onNavigateHome = props.home?.onNavigate ?? vi.fn();
+  const bar = (pathname: string) => (
     <I18nextProvider i18n={i18n}>
       <AppSwitchBar
         current="sit"
         siblings={SIBLINGS.slice(0, 1)}
         mintHandoffCode={mint}
-        accountHref="/family/account"
-        pathname="/family"
-        onNavigateAccount={onNavigateAccount}
+        account={{ href: '/family/account', onNavigate: onNavigateAccount }}
+        home={{ href: '/family', onNavigate: onNavigateHome }}
+        pathname={pathname}
         {...props}
       />
     </I18nextProvider>
   );
-  const { rerender } = render(ui);
+  const { rerender } = render(bar('/family'));
   /** Re-render at a new route, the way the shell's useLocation would. */
-  const navigateTo = (pathname: string) =>
-    rerender(
-      <I18nextProvider i18n={i18n}>
-        <AppSwitchBar
-          current="sit"
-          siblings={SIBLINGS.slice(0, 1)}
-          mintHandoffCode={mint}
-          accountHref="/family/account"
-          pathname={pathname}
-          onNavigateAccount={onNavigateAccount}
-          {...props}
-        />
-      </I18nextProvider>,
-    );
-  return { mint, onNavigateAccount, navigateTo };
+  const navigateTo = (pathname: string) => rerender(bar(pathname));
+  return { mint, onNavigateAccount, onNavigateHome, navigateTo };
 }
 
 describe('AppSwitchBar', () => {
@@ -199,11 +193,9 @@ describe('AppSwitchBar', () => {
     });
 
     it('clears when the current-app tab is tapped, which navigates nowhere', async () => {
-      renderBar({
-        mintHandoffCode: vi.fn().mockRejectedValue(new Error('boom')),
-        homeHref: '/family',
-        onNavigateHome: vi.fn(),
-      });
+      // No prop overrides beyond the failing mint: every shipped shell
+      // passes `home`, so this is the configuration a user actually meets.
+      failOnce();
       fireEvent.click(screen.getByRole('button', { name: /sync\/study/ }));
       await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
 
@@ -267,21 +259,27 @@ describe('AppSwitchBar', () => {
     // is no route to point at, and a tab leading nowhere is worse than none.
     render(
       <I18nextProvider i18n={i18n}>
-        <AppSwitchBar current="do" siblings={SIBLINGS} mintHandoffCode={vi.fn()} pathname="/doer" />
+        <AppSwitchBar
+          current="do"
+          siblings={SIBLINGS}
+          mintHandoffCode={vi.fn()}
+          pathname="/doer"
+          home={{ href: '/doer', onNavigate: vi.fn() }}
+        />
       </I18nextProvider>,
     );
     expect(screen.queryByRole('button', { name: /my account/i })).toBeNull();
     expect(screen.getByRole('button', { name: /sync\/do/ })).toBeInTheDocument();
   });
 
-  it('the current app tab is inert unless a home target is given', () => {
-    renderBar();
+  it('the current app tab is inert when no home target is given', () => {
+    // A legitimate state, but one no shell ships -- all six pass `home`.
+    renderBar({ home: undefined });
     expect(screen.getByRole('button', { name: /sync\/sit/ })).toBeDisabled();
   });
 
-  it('navigates home when the current app tab has a target', () => {
-    const onNavigateHome = vi.fn();
-    renderBar({ homeHref: '/family', onNavigateHome });
+  it('navigates home when the current app tab is tapped', () => {
+    const { onNavigateHome } = renderBar();
     fireEvent.click(screen.getByRole('button', { name: /sync\/sit/ }));
 
     expect(onNavigateHome).toHaveBeenCalledWith('/family');

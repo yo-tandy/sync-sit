@@ -20,7 +20,7 @@ describe('AppSwitchBarHost (do)', () => {
     render(
       <MemoryRouter initialEntries={['/doer']}>
         <I18nextProvider i18n={i18n}>
-          <AppSwitchBarHost />
+          <AppSwitchBarHost homeHref="/doer" />
         </I18nextProvider>
       </MemoryRouter>,
     );

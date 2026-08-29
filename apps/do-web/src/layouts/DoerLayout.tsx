@@ -30,7 +30,7 @@ export function DoerLayout() {
             <Outlet />
           </Suspense>
         </PageContainer>
-        <AppSwitchBarHost />
+        <AppSwitchBarHost homeHref="/doer" />
       </div>
     </AuthGuard>
   );

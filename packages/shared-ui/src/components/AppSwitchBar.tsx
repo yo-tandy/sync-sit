@@ -21,15 +21,22 @@ export interface AppSwitchBarProps {
    */
   mintHandoffCode: () => Promise<string>;
   /**
-   * Where the account tab goes within THIS app.
+   * The account tab: where it goes within THIS app, and how to get there.
    *
    * OMIT IT AND THE TAB IS NOT RENDERED. sync-do has no account route by
-   * design (plan §18.3 -- do-web ships no account page; the shared hub owns
-   * identity and do contributes only a doer-settings screen), so until the hub
-   * exists (#367) there is nowhere for that tab to go. A tab pointing at a
-   * route that does not exist is worse than an absent one.
+   * design (platform plan §3 -- do-web ships no account page; the shared hub
+   * owns identity and do contributes only a doer-settings screen), so until
+   * the hub exists (#367) there is nowhere for that tab to go. A tab pointing
+   * at a route that does not exist is worse than an absent one.
+   *
+   * ONE OBJECT, not an href plus a handler, so the two cannot be
+   * half-supplied. An href without a handler renders a visible, enabled,
+   * aria-current-capable tab that does nothing when tapped -- the same
+   * failure the paragraph above argues against, reached from the other side.
+   * Same reasoning that made `pathname` required: unforgettable beats
+   * conventional (PR #385 round 4).
    */
-  accountHref?: string;
+  account?: { href: string; onNavigate: (href: string) => void };
   /**
    * The route currently on screen in THIS app.
    *
@@ -42,11 +49,15 @@ export interface AppSwitchBarProps {
    * shell supplies it; making it required is what stops a shell forgetting.
    */
   pathname: string;
-  /** Same-origin navigation for the account tab (router push). */
-  onNavigateAccount?: (href: string) => void;
-  /** Where the current app's own tab goes when tapped. Omit to make it inert. */
-  homeHref?: string;
-  onNavigateHome?: (href: string) => void;
+  /**
+   * The current app's own tab: its home route and how to get there. Paired
+   * for the same reason `account` is.
+   *
+   * Omitting it makes that tab inert (rendered, disabled) -- which is a
+   * legitimate state, but not one any shell ships: all six pass it, so the
+   * tab navigates home like the tab bar it looks like.
+   */
+  home?: { href: string; onNavigate: (href: string) => void };
 }
 
 /**
@@ -79,17 +90,15 @@ export function AppSwitchBar({
   current,
   siblings,
   mintHandoffCode,
-  accountHref,
+  account,
   pathname,
-  onNavigateAccount,
-  homeHref,
-  onNavigateHome,
+  home,
 }: AppSwitchBarProps) {
   const { t, i18n } = useTranslation();
   const [busyApp, setBusyApp] = useState<SyncApp | null>(null);
   const [failed, setFailed] = useState(false);
 
-  const accountActive = accountHref !== undefined && pathname === accountHref;
+  const accountActive = account !== undefined && pathname === account.href;
 
   // The failure message belongs to ONE attempt, not to the session. This bar
   // never unmounts, so nothing else would ever take it down: a user whose
@@ -172,7 +181,7 @@ export function AppSwitchBar({
               <button
                 type="button"
                 aria-current={isCurrent ? 'page' : undefined}
-                disabled={busyApp !== null || (isCurrent && !homeHref)}
+                disabled={busyApp !== null || (isCurrent && !home)}
                 onClick={() => {
                   if (isCurrent) {
                     // Clear here as well as on route change: tapping home while
@@ -180,7 +189,7 @@ export function AppSwitchBar({
                     // above never fires and the message would outlive the
                     // interaction that was meant to end it.
                     setFailed(false);
-                    if (homeHref && onNavigateHome) onNavigateHome(homeHref);
+                    if (home) home.onNavigate(home.href);
                     return;
                   }
                   if (url) void switchTo(app, url);
@@ -209,7 +218,7 @@ export function AppSwitchBar({
           );
         })}
 
-        {accountHref && (
+        {account && (
         <li className="flex-1">
           <button
             type="button"
@@ -217,7 +226,7 @@ export function AppSwitchBar({
             disabled={busyApp !== null}
             onClick={() => {
               setFailed(false);
-              onNavigateAccount?.(accountHref);
+              account.onNavigate(account.href);
             }}
             className={`flex w-full flex-col items-center gap-1 px-1 py-2 text-[11px] font-semibold transition-colors ${
               // Neutral, not branded: the account is shared and app-agnostic

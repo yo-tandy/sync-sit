@@ -16,7 +16,14 @@ import { STUDY_APP_URL } from '@/lib/appSwitch';
  * the whole change when that is approved -- which is why the gate lives at
  * this call site rather than inside the shared component.
  */
-export function AppSwitchBarHost({ accountHref }: { accountHref: string }) {
+export function AppSwitchBarHost({
+  accountHref,
+  homeHref,
+}: {
+  accountHref: string;
+  /** This portal's dashboard route -- where the current-app tab goes. */
+  homeHref: string;
+}) {
   const navigate = useNavigate();
   const { pathname } = useLocation();
 
@@ -34,9 +41,9 @@ export function AppSwitchBarHost({ accountHref }: { accountHref: string }) {
       current="sit"
       siblings={[{ app: 'study', url: STUDY_APP_URL }]}
       mintHandoffCode={mintHandoffCode}
-      accountHref={accountHref}
+      account={{ href: accountHref, onNavigate: (href) => void navigate(href) }}
       pathname={pathname}
-      onNavigateAccount={(href) => void navigate(href)}
+      home={{ href: homeHref, onNavigate: (href) => void navigate(href) }}
     />
   );
 }

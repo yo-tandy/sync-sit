@@ -14,7 +14,14 @@ import { SIT_APP_URL } from '@/utils/appSwitch';
  * decision 20 gates sync-do's reachability and #304 is the flip. Adding one
  * entry here is the whole change.
  */
-export function AppSwitchBarHost({ accountHref }: { accountHref: string }) {
+export function AppSwitchBarHost({
+  accountHref,
+  homeHref,
+}: {
+  accountHref: string;
+  /** This portal's dashboard route -- where the current-app tab goes. */
+  homeHref: string;
+}) {
   const navigate = useNavigate();
   const { pathname } = useLocation();
 
@@ -32,9 +39,9 @@ export function AppSwitchBarHost({ accountHref }: { accountHref: string }) {
       current="study"
       siblings={[{ app: 'sit', url: SIT_APP_URL }]}
       mintHandoffCode={mintHandoffCode}
-      accountHref={accountHref}
+      account={{ href: accountHref, onNavigate: (href) => void navigate(href) }}
       pathname={pathname}
-      onNavigateAccount={(href) => void navigate(href)}
+      home={{ href: homeHref, onNavigate: (href) => void navigate(href) }}
     />
   );
 }

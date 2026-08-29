@@ -17,9 +17,9 @@ export function BabysitterLayout() {
         <PageContainer>
           <Outlet />
         </PageContainer>
-        {/* The student's account lives at a different path than the parent's;
+        {/* The babysitter's account lives at a different path than the parent's;
             the shared account hub (#367) is what collapses these to one. */}
-        <AppSwitchBarHost accountHref="/babysitter/account" />
+        <AppSwitchBarHost accountHref="/babysitter/account" homeHref="/babysitter" />
       </div>
     </AuthGuard>
   );
