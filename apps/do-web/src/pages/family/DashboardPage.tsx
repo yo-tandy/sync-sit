@@ -352,6 +352,12 @@ export function DashboardPage() {
                 ),
               );
             })}
+            {/* The count is of LIVE open tasks; the Open tab is deliberately
+                broader — it groups on `status === 'open'` and renders expired
+                ones too, badged Expired (PR #394 review). A superset is the
+                safe direction: the label can under-promise what the next
+                screen holds, never over-promise it, so nothing this line
+                counts is missing when the reader arrives. */}
             {openRows.length > SECTION_ROWS && (
               <SeeAllLink
                 to="/family/tasks?tab=open"
