@@ -10,7 +10,16 @@ import { getParentProfile } from '@ejm/sit-core';
 
 export function useFamilyAppointments() {
   const userDoc = useAuthStore((s) => s.userDoc);
-  const familyId = getParentProfile(userDoc)?.familyId;
+  // Plan D pointer first, then the legacy Plan C ROOT field — the same two
+  // places hasFamilyMembership accepts (shared-core userAdapter). Reading only
+  // the profile pointer left a Plan C parent with an empty subscription that
+  // never errored: `loading` initialised false, both buckets stayed [], and
+  // every consumer rendered an empty state to a family that may have live
+  // appointments (PR #345 round 3). The client guards match the server 1:1 or
+  // they are not guards.
+  const familyId =
+    getParentProfile(userDoc)?.familyId ??
+    (userDoc as { familyId?: string } | null | undefined)?.familyId;
   // Initial loading state derives from familyId: if there is no signed-in
   // parent we have nothing to fetch, so we are already "done" loading.
   // The snapshot callback below flips this back to false once Firestore

@@ -253,8 +253,11 @@ describe('family DashboardPage — requests & appointments sections (issue #338)
   it('shows one empty state, and no sections, when there is nothing booked', () => {
     renderPage();
     expect(screen.getByText('No appointments yet')).toBeTruthy();
-    expect(screen.queryByRole('heading', { name: 'Your requests' })).toBeNull();
-    expect(screen.queryByRole('heading', { name: 'Your appointments' })).toBeNull();
+    // Prefix, not exact: a badged section's accessible name is
+    // "Your appointments1", so an exact-name query can never match and the
+    // assertion would pass even if the section HAD rendered.
+    expect(screen.queryByRole('heading', { name: /^Your requests/ })).toBeNull();
+    expect(screen.queryByRole('heading', { name: /^Your appointments/ })).toBeNull();
   });
 
   it('does not flash the empty state while the snapshot is still loading', () => {
@@ -347,8 +350,14 @@ describe('family DashboardPage — family-less parent recovery state (issue #293
       familyId: 'fam-legacy',
       profiles: { parent: { enrollmentComplete: true } },
     };
+    h.apts.confirmed = [apt('a1', 'confirmed')];
     renderPage();
     expect(screen.queryByText('You are not currently part of a family')).toBeNull();
-    expect(screen.getByText('No appointments yet')).toBeTruthy();
+    // The rows load, so the empty state is never claimed. This used to assert
+    // 'No appointments yet' — pinning an affirmative statement that could be
+    // flatly false for a family with live appointments, and one the new empty
+    // state does not even link away from (PR #345 round 3).
+    expect(screen.getByRole('heading', { name: /^Your appointments/ })).toBeTruthy();
+    expect(screen.queryByText('No appointments yet')).toBeNull();
   });
 });

@@ -42,7 +42,13 @@ export function FamilyDashboard() {
   // appointments; past and declined history stays on /family/appointments.
   const { pending, confirmed, loading: aptsLoading } = useFamilyAppointments();
 
-  const familyId = getParentProfile(userDoc)?.familyId ?? null;
+  // Same two places hasFamilyMembership accepts (see useFamilyAppointments):
+  // without the root fallback a Plan C parent never loaded their kids either,
+  // so the "Find a babysitter" button stayed suppressed behind kids.length > 0.
+  const familyId =
+    getParentProfile(userDoc)?.familyId ??
+    (userDoc as { familyId?: string } | null | undefined)?.familyId ??
+    null;
 
   // Run-scoped: mount + familyId change + focus refetch can overlap.
   const loadRunRef = useRef(0);

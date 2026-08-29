@@ -425,6 +425,48 @@ describe('tutor DashboardPage', () => {
     expect(paths.every((p) => p === 'study-sessions' || p === 'studyContactRequests')).toBe(true);
   });
 
+  it('orders same-day confirmed sessions by start time, not by when they were booked', async () => {
+    // sort() is stable, so a bare-date key kept loadSessions'
+    // createdAt-DESCENDING order for two sessions on one day. Same defect the
+    // family dashboard carried, fixed there in PR #345 round 2; this branch's
+    // premise is that all four dashboards share one idiom, so it is fixed here
+    // too rather than left as the odd one out.
+    h.auth.userDoc = tutor();
+    h.sessions = [
+      {
+        sessionId: 's-late',
+        tutorUserId: 't1',
+        status: 'confirmed',
+        type: 'one_time',
+        date: '2099-03-10',
+        startTime: '17:00',
+        familyName: 'Evening',
+        subject: 'math',
+        level: '6e',
+        location: 'online',
+        createdAt: { seconds: 2000 },
+      },
+      {
+        sessionId: 's-early',
+        tutorUserId: 't1',
+        status: 'confirmed',
+        type: 'one_time',
+        date: '2099-03-10',
+        startTime: '09:00',
+        familyName: 'Morning',
+        subject: 'math',
+        level: '6e',
+        location: 'online',
+        createdAt: { seconds: 1000 },
+      },
+    ];
+    renderWithProviders(<DashboardPage />);
+
+    await screen.findByText('Confirmed');
+    const names = screen.getAllByText(/^(Evening|Morning)$/).map((n) => n.textContent);
+    expect(names).toEqual(['Morning', 'Evening']);
+  });
+
   it('excludes past and terminal sessions from Confirmed', async () => {
     h.auth.userDoc = tutor();
     h.sessions = [

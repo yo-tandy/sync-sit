@@ -255,7 +255,17 @@ export function DashboardPage() {
         s.status === 'confirmed' &&
         (s.type === 'recurring' || (!!s.date && s.date >= today)),
     )
-    .map((s) => ({ s, sortDate: s.type === 'one_time' ? (s.date as string) : '9999-12-31' }))
+    // Key on date+time, not the bare date: sort() is stable, so two confirmed
+    // sessions on the same day would otherwise keep loadSessions'
+    // createdAt-DESCENDING order and render the later one first. Same defect
+    // the family page carried, fixed there in PR #345 round 2 and here for the
+    // same reason this branch exists — one idiom across all four dashboards.
+    // The sentinel still compares greater than any real key, so a recurring
+    // series (whose dates live in the instances subcollection) sorts last.
+    .map((s) => ({
+      s,
+      sortDate: s.type === 'one_time' ? `${s.date}T${s.startTime ?? '00:00'}` : '9999-12-31',
+    }))
     .sort((a, b) => (a.sortDate < b.sortDate ? -1 : a.sortDate > b.sortDate ? 1 : 0))
     .map((e) => e.s);
 

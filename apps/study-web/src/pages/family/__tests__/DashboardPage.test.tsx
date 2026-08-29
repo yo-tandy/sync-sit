@@ -252,36 +252,77 @@ describe('family DashboardPage', () => {
     expect(screen.queryByText('1')).not.toBeInTheDocument();
   });
 
-  it('marks a tutor PROPOSAL as ours to answer, on the row', async () => {
+  it('puts a tutor PROPOSAL in the amber requests section, where the to-do badge sees it', async () => {
+    // Round 3: folded into the green sessions row count, a proposal — an
+    // action awaiting THIS family — had no badge representation anywhere, so
+    // collapsing the section made it indistinguishable from confirmed work.
+    // sit and both providers already put pending rows in the amber section.
     h.sessions = [session({ sessionId: 's1', status: 'pending', proposedBy: 'provider' })];
     renderWithProviders(<DashboardPage />);
-    await screen.findByRole('heading', { name: /Your sessions/ });
+
+    const requests = await screen.findByRole('heading', { name: /Your requests/ });
+    expect(requests).toHaveTextContent('1');
     expect(screen.getByText('Proposed by Leo')).toBeInTheDocument();
+    // ...and it is NOT in the sessions section, which is confirmed-only now.
+    expect(screen.queryByRole('heading', { name: /Your sessions/ })).not.toBeInTheDocument();
   });
 
-  it('marks a booking WE sent as awaiting the tutor', async () => {
+  it('a booking WE sent renders in requests, marked, without inflating the badge', async () => {
     h.sessions = [session({ sessionId: 's1', status: 'pending' })];
     renderWithProviders(<DashboardPage />);
-    await screen.findByRole('heading', { name: /Your sessions/ });
+    const requests = await screen.findByRole('heading', { name: /Your requests/ });
     expect(screen.getByText(/waiting for the tutor to confirm/i)).toBeInTheDocument();
+    expect(requests).not.toHaveTextContent('1');
   });
 
   it('badges the sessions section with its ROW COUNT, as sit and both providers do', async () => {
-    // The badge rule across all four dashboards (PR #345 round 2): an AMBER
-    // section badges what you must answer, a GREEN section badges how many
-    // rows it holds. Badging a to-do in green — while the amber requests
-    // section above badged a to-do — was one semantic in two colours on one
-    // page, and diverged from sit's "Your appointments" and the tutor's
-    // "Confirmed", which both count rows.
+    // The badge rule across all four dashboards: an AMBER section badges what
+    // you must answer, a GREEN section badges how many rows it holds.
     h.sessions = [
       session({ sessionId: 's1' }),
       session({ sessionId: 's2', date: '2099-02-02' }),
-      session({ sessionId: 's3', status: 'pending', proposedBy: 'provider', date: '2099-03-03' }),
+      session({ sessionId: 's3', date: '2099-03-03' }),
     ];
     renderWithProviders(<DashboardPage />);
     const heading = await screen.findByRole('heading', { name: /Your sessions/ });
-    // Three rows → 3, not "1 proposal awaiting us".
     expect(heading).toHaveTextContent('3');
+  });
+
+  it('keeps confirmed sessions OUT of the requests section', async () => {
+    h.sessions = [session({ sessionId: 's1' })];
+    renderWithProviders(<DashboardPage />);
+    await screen.findByRole('heading', { name: /Your sessions/ });
+    expect(screen.queryByRole('heading', { name: /Your requests/ })).not.toBeInTheDocument();
+  });
+
+  it('drops a past-dated PENDING booking, the same floor the confirmed rows get', async () => {
+    // Nothing server-side expires an unanswered booking, so without the floor
+    // it would sit in the requests section forever with a past date.
+    h.sessions = [
+      session({ sessionId: 's-old', status: 'pending', date: parisDatePlus(-4), tutorName: 'Old' }),
+      session({ sessionId: 's-new', status: 'pending', date: parisDatePlus(4), tutorName: 'Soon' }),
+    ];
+    renderWithProviders(<DashboardPage />);
+    await screen.findByRole('heading', { name: /Your requests/ });
+    expect(screen.getByText('Soon')).toBeInTheDocument();
+    expect(screen.queryByText('Old')).not.toBeInTheDocument();
+  });
+
+  it('orders the requests section newest-first, contact requests before bookings', async () => {
+    // Round 3: two adjacent sections order by different principles — a contact
+    // request has no date, so recency is the only meaningful key, while the
+    // sessions section sorts soonest-first. Deliberate, and pinned so a
+    // refactor cannot silently change it.
+    h.requests = [
+      request({ requestId: 'r-old', tutorName: 'Older', createdAt: { seconds: 1000 } }),
+      request({ requestId: 'r-new', tutorName: 'Newer', createdAt: { seconds: 2000 } }),
+    ];
+    h.sessions = [session({ sessionId: 's1', status: 'pending', tutorName: 'Booking' })];
+    renderWithProviders(<DashboardPage />);
+
+    await screen.findByRole('heading', { name: /Your requests/ });
+    const names = screen.getAllByText(/^(Older|Newer|Booking)$/).map((n) => n.textContent);
+    expect(names).toEqual(['Newer', 'Older', 'Booking']);
   });
 
   it('sorts sessions soonest-first and renders a recurring series by its weekly slot', async () => {

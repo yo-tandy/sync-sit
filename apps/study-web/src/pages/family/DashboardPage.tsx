@@ -271,29 +271,54 @@ export function DashboardPage() {
   const loading = familyId !== null && (requests === null || sessions === null);
   const today = parisToday();
 
-  // ── Your requests: the rows still in play. Declined/cancelled history
-  // stays on /family/requests — a landing page shows what is live. (Stale
-  // `accepted` rows were already dropped at load, where the clock read
-  // belongs.) ──
+  // ── The split (PR #345 round 3). Pending bookings moved OUT of the sessions
+  // section and into requests, which is where sit and both providers already
+  // put them: sit's "Your requests" is its pending appointments, the tutor's
+  // "New Requests" holds pending contact requests AND pending sessions. It
+  // also fixes a real hole the round-2 badge rule opened — a tutor PROPOSAL
+  // is an action awaiting this family, and folded into a green row count it
+  // had no badge representation anywhere; collapse the section and it became
+  // indistinguishable from three confirmed sessions. Now it lands in the
+  // amber to-do count, where "amber badges what you must answer" can see it.
+  //
+  // So: requests = the live request pipeline (contact requests in either live
+  // state, plus bookings awaiting an answer); sessions = confirmed work.
+  //
+  // Date floor on the pending bookings for the same reason it is on the
+  // confirmed ones: nothing server-side expires a pending one_time booking,
+  // so without it an unanswered request sits here forever with a past date.
+  const pendingSessions = (sessions ?? []).filter(
+    (s) =>
+      s.status === 'pending' && (s.type === 'recurring' || (!!s.date && s.date >= today)),
+  );
+  // Declined/cancelled history stays on /family/requests — a landing page
+  // shows what is live. (Stale `accepted` rows were already dropped at load,
+  // where the clock read belongs.)
   const activeRequests = (requests ?? []).filter(
     (r) => r.status === 'pending' || r.status === 'accepted',
   );
-  // The badge is a TO-DO count, so our own pending requests (which await the
-  // TUTOR) don't count — they still render, marked "waiting for the tutor".
-  // Only a request a tutor opened by answering our published search asks
-  // something of this family (issue #207 PR4).
-  const requestsTodo = activeRequests.filter(
-    (r) => r.status === 'pending' && r.initiatedBy === 'tutor',
-  ).length;
+  // ORDER: newest-first, inherited from loadRequests' createdAt DESC and kept
+  // deliberately — a contact request carries no date to sort by, so recency is
+  // the only meaningful key. The sessions section below sorts soonest-first
+  // because its rows DO have dates. Two adjacent sections ordering by
+  // different principles is intentional; it is pinned so a refactor cannot
+  // silently change it (PR #345 round 3).
+  const requestRows = activeRequests;
 
-  // ── Your sessions: pending bookings plus upcoming confirmed work. Same
-  // date floor on both — nothing server-side expires a pending one_time
-  // booking, so without it an unanswered request would sit here forever with
-  // a past date (the tutor dashboard's rule). ──
+  // The badge is a TO-DO count: rows awaiting an answer from US. Our own
+  // pending request awaits the TUTOR and a booking we sent awaits the tutor
+  // too — both still render, marked — while a tutor-initiated request
+  // (issue #207 PR4) and a tutor PROPOSAL are ours to answer.
+  const requestsTodo =
+    activeRequests.filter((r) => r.status === 'pending' && r.initiatedBy === 'tutor').length +
+    pendingSessions.filter((s) => s.proposedBy === 'provider').length;
+  const requestsTotal = activeRequests.length + pendingSessions.length;
+
+  // ── Your sessions: confirmed upcoming work only. ──
   const activeSessions = (sessions ?? [])
     .filter(
       (s) =>
-        (s.status === 'pending' || s.status === 'confirmed') &&
+        s.status === 'confirmed' &&
         (s.type === 'recurring' || (!!s.date && s.date >= today)),
     )
     // Key on date+time, not the bare date: sort() is stable, so two sessions
@@ -314,7 +339,7 @@ export function DashboardPage() {
   // the same semantic wearing two colours on one page. A tutor proposal is
   // still called out where it belongs: on its own row, in amber.
 
-  const hasAny = activeRequests.length > 0 || activeSessions.length > 0;
+  const hasAny = requestsTotal > 0 || activeSessions.length > 0;
 
   const sessionWhen = (s: StudySessionDoc): string =>
     s.type === 'one_time'
@@ -375,10 +400,10 @@ export function DashboardPage() {
           <DashboardSection
             title={t('family.dashboard.requestsTitle')}
             count={requestsTodo}
-            total={activeRequests.length}
+            total={requestsTotal}
             variant="pending"
           >
-            {activeRequests.map((r) => (
+            {requestRows.map((r) => (
               <Link key={r.requestId} to="/family/requests" className="block">
                 <Card interactive>
                   <div className="flex items-center gap-3">
@@ -405,6 +430,33 @@ export function DashboardPage() {
                 </Card>
               </Link>
             ))}
+            {/* Pending BOOKINGS, after the contact requests — the same
+                within-section ordering the tutor dashboard uses for its
+                "New Requests". */}
+            {pendingSessions.map((s) => (
+              <Link key={s.sessionId} to="/family/sessions" className="block">
+                <Card interactive>
+                  <div className="flex items-center gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-semibold text-gray-900">{s.tutorName}</p>
+                        <Badge variant="amber">{t('family.dashboard.statusPending')}</Badge>
+                      </div>
+                      <p className="text-xs text-gray-500">
+                        {t(`tutor.subjects.names.${s.subject}`)} · {s.level}
+                      </p>
+                      <p className="mt-1 text-xs text-gray-700">{sessionWhen(s)}</p>
+                      <p className="mt-1 text-xs text-amber-700">
+                        {s.proposedBy === 'provider'
+                          ? t('family.sessions.proposedBy', { name: s.tutorName })
+                          : t('family.sessions.awaitingTutor')}
+                      </p>
+                    </div>
+                    <ChevronRightIcon className="h-5 w-5 shrink-0 text-gray-400" />
+                  </div>
+                </Card>
+              </Link>
+            ))}
           </DashboardSection>
 
           <DashboardSection
@@ -419,23 +471,14 @@ export function DashboardPage() {
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
                         <p className="text-sm font-semibold text-gray-900">{s.tutorName}</p>
-                        <Badge variant={s.status === 'confirmed' ? 'green' : 'amber'}>
-                          {s.status === 'confirmed'
-                            ? t('family.dashboard.statusConfirmed')
-                            : t('family.dashboard.statusPending')}
+                        <Badge variant="green">
+                          {t('family.dashboard.statusConfirmed')}
                         </Badge>
                       </div>
                       <p className="text-xs text-gray-500">
                         {t(`tutor.subjects.names.${s.subject}`)} · {s.level}
                       </p>
                       <p className="mt-1 text-xs text-gray-700">{sessionWhen(s)}</p>
-                      {s.status === 'pending' && (
-                        <p className="mt-1 text-xs text-amber-700">
-                          {s.proposedBy === 'provider'
-                            ? t('family.sessions.proposedBy', { name: s.tutorName })
-                            : t('family.sessions.awaitingTutor')}
-                        </p>
-                      )}
                     </div>
                     <ChevronRightIcon className="h-5 w-5 shrink-0 text-gray-400" />
                   </div>
