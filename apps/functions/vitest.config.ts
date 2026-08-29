@@ -5,6 +5,10 @@ export default defineConfig({
   test: {
     name: 'functions',
     root: resolve(import.meta.dirname),
-    include: ['src/**/__tests__/**/*.test.ts'],
+    // Deliberately a SUPERSET of the __tests__ convention, matching what
+    // tsconfig.json excludes from the build: a stray src/foo/bar.test.ts is
+    // then type-checked, kept out of dist AND actually run, rather than
+    // silently never executing (PR #380 review).
+    include: ['src/**/*.test.ts', 'src/**/*.spec.ts'],
   },
 });
