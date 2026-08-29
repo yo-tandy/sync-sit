@@ -26,8 +26,15 @@ people into real data rather than failing loudly.
 
 ## Server: app hosts
 
-Set in `apps/functions/.env.<projectId>`. Firebase loads `.env` and then
-`.env.<projectId>` from the functions directory at deploy time.
+Set in **each functions codebase's own** `.env.<projectId>`. `firebase.json`
+declares two — `default` at `apps/functions` and `study` at
+`apps/study-functions` — and the Firebase CLI loads `.env` / `.env.<projectId>`
+from each codebase's own `source` directory, not from one shared place.
+
+**Both must be configured.** `apps/study-functions` has 14 modules building
+email CTAs from `STUDY_APP_URL`; configure only `apps/functions` and every
+study email from that environment links into production. A `.env.example` sits
+in each.
 
 | Variable | Production value (the fallback) | Used for |
 |---|---|---|
@@ -91,8 +98,12 @@ is issue #304, still owner-gated.
    roles the production deploy SA holds — including
    `roles/firebasestorage.admin` and GCS `storage.buckets.get`, both of which
    were learned the hard way (#282, #286).
-5. Write `apps/functions/.env.<projectId>` from `.env.example`, pointing the
-   three hosts at *that* environment's own hosting URLs.
+5. Write `.env.<projectId>` from `.env.example` in **every** functions
+   codebase declared in `firebase.json` — today `apps/functions` **and**
+   `apps/study-functions` — pointing the three hosts at *that* environment's
+   own hosting URLs. One codebase configured and the other not is the worst
+   case: half the mail is right, so the problem looks like a bug in one
+   feature rather than missing configuration.
 6. Add a deploy workflow whose build steps set the `VITE_*` block for that
    project — **including `VITE_SIT_APP_URL` and `VITE_STUDY_APP_URL`, which
    production does not set.** Copying production's block verbatim is exactly

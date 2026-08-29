@@ -27,6 +27,41 @@ const walk = (dir: string): string[] => {
   return out;
 };
 
+describe('every functions codebase is configurable', () => {
+  it('each codebase in firebase.json ships its own .env.example', () => {
+    // The CLI loads .env/.env.<projectId> from each codebase's OWN source
+    // directory, so one example file does not cover two codebases. A third
+    // codebase added later would silently inherit the production fallbacks
+    // for every link it builds — configuration missing in exactly the way
+    // nothing fails (PR #374 round 4).
+    const { existsSync } = require('node:fs') as typeof import('node:fs');
+    const fb = JSON.parse(readFileSync(join(ROOT, 'firebase.json'), 'utf8')) as {
+      functions?: { codebase?: string; source: string } | { codebase?: string; source: string }[];
+    };
+    const codebases = Array.isArray(fb.functions)
+      ? fb.functions
+      : fb.functions
+        ? [fb.functions]
+        : [];
+    expect(codebases.length).toBeGreaterThan(0);
+    const missing = codebases
+      .filter((c) => !existsSync(join(ROOT, c.source, '.env.example')))
+      .map((c) => `${c.codebase ?? 'default'} (${c.source})`);
+    expect(missing, 'add a .env.example to each functions codebase').toEqual([]);
+  });
+
+  it('the runbook names every codebase an operator must configure', () => {
+    const fb = JSON.parse(readFileSync(join(ROOT, 'firebase.json'), 'utf8')) as {
+      functions?: { source: string } | { source: string }[];
+    };
+    const sources = (Array.isArray(fb.functions) ? fb.functions : [fb.functions!]).map(
+      (c) => c.source,
+    );
+    const unnamed = sources.filter((src) => !doc.includes(src));
+    expect(unnamed, 'docs/environments.md must name every functions source').toEqual([]);
+  });
+});
+
 describe('docs/environments.md matches reality', () => {
   it('documents every VITE_ variable the apps actually read', () => {
     const read = new Set<string>();
