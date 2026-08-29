@@ -663,6 +663,7 @@ export default {
       statusConfirmed: 'Confirmed',
       emptyTitle: 'Nothing booked yet',
       emptyDesc: 'Find a tutor to send your first request — it will show up here.',
+      emptyDescLocked: 'Once your family is verified you can search for a tutor, and your requests and sessions will show up here.',
       loadError: 'Could not load your requests and sessions. Please refresh and try again.',
       noFamilyTitle: 'You are not currently part of a family',
       noFamilyDesc:

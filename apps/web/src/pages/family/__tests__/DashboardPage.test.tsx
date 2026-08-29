@@ -19,6 +19,7 @@ const h = vi.hoisted(() => ({
     pastRecent: [] as unknown[],
     rejectedRecent: [] as unknown[],
     loading: false,
+    loadError: false,
   },
 }));
 
@@ -119,6 +120,7 @@ beforeEach(() => {
   h.apts.pastRecent = [];
   h.apts.rejectedRecent = [];
   h.apts.loading = false;
+  h.apts.loadError = false;
   auth.userDoc = {
     uid: 'p1',
     firstName: 'Dana',
@@ -258,6 +260,26 @@ describe('family DashboardPage — requests & appointments sections (issue #338)
     // assertion would pass even if the section HAD rendered.
     expect(screen.queryByRole('heading', { name: /^Your requests/ })).toBeNull();
     expect(screen.queryByRole('heading', { name: /^Your appointments/ })).toBeNull();
+  });
+
+  it('says so when the subscription fails, instead of skeletons forever', () => {
+    // An erroring onSnapshot used to leave `loading` true with no error
+    // branch, so this page showed three skeletons indefinitely with no way
+    // out (PR #345 round 4). Study's half had said so since round 1.
+    h.apts.loading = true;
+    h.apts.loadError = true;
+    renderPage();
+    expect(screen.getByText(/could not load your requests and appointments/i)).toBeTruthy();
+  });
+
+  it('a refetch blip over rendered rows stays invisible', () => {
+    // Same rule as study: the error line belongs to the first read, not to a
+    // blip over content that is already on screen.
+    h.apts.confirmed = [apt('a1', 'confirmed')];
+    h.apts.loadError = true;
+    renderPage();
+    expect(screen.getByRole('heading', { name: /^Your appointments/ })).toBeTruthy();
+    expect(screen.queryByText(/could not load/i)).toBeNull();
   });
 
   it('does not flash the empty state while the snapshot is still loading', () => {

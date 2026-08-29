@@ -664,6 +664,7 @@ export default {
       statusConfirmed: 'Confirmé',
       emptyTitle: 'Rien de réservé pour le moment',
       emptyDesc: 'Trouvez un professeur pour envoyer votre première demande — elle apparaîtra ici.',
+      emptyDescLocked: 'Une fois votre famille vérifiée, vous pourrez rechercher un professeur ; vos demandes et vos cours apparaîtront ici.',
       loadError: 'Impossible de charger vos demandes et vos cours. Actualisez et réessayez.',
       noFamilyTitle: 'Vous ne faites actuellement partie d’aucune famille',
       noFamilyDesc:

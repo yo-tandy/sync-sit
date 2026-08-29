@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
-import { getParentProfile, hasFamilyMembership, PAST_VISIBILITY_DAYS } from '@ejm/shared-core';
+import { getFamilyId, hasFamilyMembership, PAST_VISIBILITY_DAYS } from '@ejm/shared-core';
 import type { StudyContactRequestDoc } from '@ejm/study-core';
 import type { RecurringSlot } from '@ejm/shared-core';
 import type { StudySessionDoc } from '@/types/studySession';
@@ -14,7 +14,7 @@ import {
   Card,
   Button,
   Badge,
-  Spinner,
+  SkeletonCard,
   SearchIcon,
   ChevronRightIcon,
   UsersIcon,
@@ -92,16 +92,8 @@ export function DashboardPage() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const { userDoc } = useAuthStore();
-  // Plan D pointer first, then the legacy Plan C ROOT field — the same two
-  // places hasFamilyMembership accepts (shared-core userAdapter). Reading only
-  // the profile pointer let a Plan C parent past the membership guard and then
-  // straight into "Nothing booked yet" with no search button, an affirmative
-  // claim that could be flatly false for a family with live sessions (PR #345
-  // round 2). The client guards match the server 1:1 or they are not guards.
-  const familyId =
-    getParentProfile(userDoc)?.familyId ??
-    (userDoc as { familyId?: string } | null | undefined)?.familyId ??
-    null;
+  // Both membership shapes, via the shared resolver — see getFamilyId.
+  const familyId = getFamilyId(userDoc);
 
   // null = still loading; true/false once the family doc has resolved.
   const [isVerified, setIsVerified] = useState<boolean | null>(null);
@@ -392,8 +384,15 @@ export function DashboardPage() {
           {t('family.dashboard.loadError')}
         </p>
       ) : loading ? (
-        <div className="flex justify-center py-12">
-          <Spinner className="h-8 w-8 text-brand-600" />
+        // Skeletons, not a spinner: this is a list surface now, so it keeps
+        // its footprint while loading (UX F12) — and matches sit's family
+        // dashboard, which this page is meant to be identical to (PR #345
+        // round 4). The skeleton-loaders plan exempted sit's page only
+        // because it was "a summary card, not a list"; that premise is gone.
+        <div className="space-y-3">
+          <SkeletonCard />
+          <SkeletonCard />
+          <SkeletonCard />
         </div>
       ) : hasAny ? (
         <>
@@ -493,8 +492,15 @@ export function DashboardPage() {
             <UsersIcon className="h-7 w-7 text-gray-400" />
           </div>
           <h3 className="mb-2 text-lg font-semibold">{t('family.dashboard.emptyTitle')}</h3>
+          {/* "Find a tutor to send your first request" is a dead instruction
+              when the Find-a-tutor button is not on screen — which is the
+              TYPICAL first-visit state, since the button is gated on
+              verification (PR #345 round 4). Point at the thing they can
+              actually do instead. */}
           <p className="max-w-[240px] text-sm text-gray-500">
-            {t('family.dashboard.emptyDesc')}
+            {isVerified === true
+              ? t('family.dashboard.emptyDesc')
+              : t('family.dashboard.emptyDescLocked')}
           </p>
         </div>
       )}

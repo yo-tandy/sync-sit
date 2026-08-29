@@ -585,6 +585,7 @@ export default {
     yourRequests: 'Vos demandes',
     yourAppointments: 'Vos rendez-vous',
     awaitingBabysitter: 'En attente de la réponse du babysitter.',
+    loadError: 'Impossible de charger vos demandes et vos rendez-vous. Actualisez et réessayez.',
   },
 
   // Page dédiée aux rendez-vous de la famille (issue #241)

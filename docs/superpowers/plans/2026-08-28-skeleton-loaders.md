@@ -79,6 +79,14 @@ work:
 - **Admin pages** (sit `admin/*`) — internal tooling, out of F12's scope
   (the review covered the member-facing apps).
 
+*Addendum (2026-08-29, #338):* the sit `family/DashboardPage` exclusion no
+longer holds — its premise was that the page showed "a summary card, not a
+list", and #338 replaced that card with the provider dashboards' collapsible
+row sections. Both family dashboards are list surfaces now and both render
+`SkeletonCard`s; study's `family/DashboardPage` joins them for the same
+reason. Study's `family/RequestsPage` stays excluded on its own merits (it is
+still the secondary inbox).
+
 ## Tests
 
 - `apps/study-web/src/__tests__/shared-ui/SkeletonCard.test.tsx` — bar count

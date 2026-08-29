@@ -603,6 +603,7 @@ export default {
     yourRequests: 'Your requests',
     yourAppointments: 'Your appointments',
     awaitingBabysitter: 'Waiting for the babysitter to reply.',
+    loadError: 'Could not load your requests and appointments. Please refresh and try again.',
   },
 
   // Dedicated family appointments page (issue #241)

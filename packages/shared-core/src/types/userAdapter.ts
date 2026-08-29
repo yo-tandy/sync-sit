@@ -38,6 +38,29 @@ export function hasFamilyMembership(user: User | null | undefined): boolean {
   );
 }
 
+/**
+ * The family this user belongs to, or null — read from the SAME two places
+ * `hasFamilyMembership` accepts, so a surface can never disagree with the
+ * guard that let the user reach it.
+ *
+ * That divergence was a real defect, twice (PR #345 rounds 2-4): pages read
+ * `getParentProfile(user)?.familyId` alone, so a legacy Plan C parent passed
+ * the membership guard and then hit a page that queried on `undefined` — no
+ * error, just an authoritative empty state shown to a family with live data.
+ * Encoding it once here is what makes "the client guards match the server
+ * 1:1" true rather than true in the places someone remembered.
+ *
+ * Access is still gated server-side on `families/{id}.parentIds`, never on
+ * this pointer, so resolving it in more places grants nothing new.
+ */
+export function getFamilyId(user: User | null | undefined): string | null {
+  return (
+    user?.profiles?.parent?.familyId ??
+    (user as { familyId?: string } | null | undefined)?.familyId ??
+    null
+  );
+}
+
 export function isBabysitter(user: User | null | undefined): boolean {
   return !!user?.profiles?.babysitter;
 }

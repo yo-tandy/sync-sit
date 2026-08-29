@@ -15,7 +15,7 @@
  * different question — which field the query was built from.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 
 type MockUserDoc = {
   familyId?: string;
@@ -24,7 +24,11 @@ type MockUserDoc = {
 
 const { authState, queryState } = vi.hoisted(() => ({
   authState: { userDoc: null as MockUserDoc | null },
-  queryState: { wheres: [] as { field: string; op: string; val: unknown }[], subscribed: 0 },
+  queryState: {
+    wheres: [] as { field: string; op: string; val: unknown }[],
+    subscribed: 0,
+    onError: null as null | ((e: unknown) => void),
+  },
 }));
 
 vi.mock('@/stores/authStore', () => ({
@@ -40,8 +44,9 @@ vi.mock('firebase/firestore', () => ({
     queryState.wheres.push({ field, op, val });
     return { __where: { field, op, val } };
   },
-  onSnapshot: () => {
+  onSnapshot: (_q: unknown, _cb: unknown, onError?: (e: unknown) => void) => {
     queryState.subscribed += 1;
+    queryState.onError = onError ?? null;
     return () => {};
   },
 }));
@@ -51,6 +56,7 @@ import { useFamilyAppointments } from '@/hooks/useFamilyAppointments';
 beforeEach(() => {
   queryState.wheres = [];
   queryState.subscribed = 0;
+  queryState.onError = null;
   authState.userDoc = null;
 });
 
@@ -90,6 +96,31 @@ describe('useFamilyAppointments — legacy Plan C membership', () => {
       op: '==',
       val: 'fam-legacy',
     });
+  });
+
+  it('a subscription error stops claiming to load, and says so', async () => {
+    // The fallback makes this hook subscribe where it previously did not, so
+    // an erroring subscription is newly reachable — PERMISSION_DENIED for a
+    // root familyId whose family does not list this uid, say. With no error
+    // callback `bucket` never runs, `loading` stays true, and the family
+    // dashboard shows its skeletons forever with no way out (PR #345 round 4).
+    authState.userDoc = {
+      familyId: 'fam-legacy',
+      profiles: { parent: { enrollmentComplete: true } },
+    };
+    const { result } = renderHook(() => useFamilyAppointments());
+    await waitFor(() => expect(queryState.onError).toBeTruthy());
+
+    expect(result.current.loading).toBe(true);
+    expect(result.current.loadError).toBe(false);
+
+    act(() => queryState.onError!(new Error('permission-denied')));
+
+    expect(result.current.loading).toBe(false);
+    expect(result.current.loadError).toBe(true);
+    // A failed read is UNKNOWN, not empty — the buckets are untouched.
+    expect(result.current.pending).toEqual([]);
+    expect(result.current.confirmed).toEqual([]);
   });
 
   it('still opens nothing, and is not loading, for a doc with no pointer at all', () => {

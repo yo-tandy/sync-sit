@@ -465,6 +465,24 @@ describe('family DashboardPage', () => {
     expect(screen.queryByText('Nothing booked yet')).not.toBeInTheDocument();
   });
 
+  it('keeps the empty-state instruction truthful when search is locked', async () => {
+    // "Find a tutor to send your first request" is a dead instruction when the
+    // Find-a-tutor button is not on screen — and unverified is the TYPICAL
+    // first-visit state (PR #345 round 4).
+    h.familyData = { familyName: 'Cohen', verification: { isFullyVerified: false } };
+    renderWithProviders(<DashboardPage />);
+    expect(await screen.findByText('Nothing booked yet')).toBeInTheDocument();
+    expect(screen.getByText(/once your family is verified/i)).toBeInTheDocument();
+    expect(screen.queryByText(/find a tutor to send your first request/i)).not.toBeInTheDocument();
+  });
+
+  it('gives the actionable instruction once verified', async () => {
+    h.familyData = { familyName: 'Cohen', verification: { isFullyVerified: true } };
+    renderWithProviders(<DashboardPage />);
+    expect(await screen.findByText(/find a tutor to send your first request/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /find a tutor/i })).toBeInTheDocument();
+  });
+
   it('says so when the FIRST read fails, instead of spinning forever', async () => {
     h.getDocs.mockImplementation(() => Promise.reject(new Error('offline')));
     renderWithProviders(<DashboardPage />);

@@ -10,7 +10,7 @@ import { Button, Badge, Card, SkeletonCard, Input, InstallAppBanner } from '@/co
 import { CalendarIcon, ChevronRightIcon, PlusIcon, SearchIcon } from '@/components/ui/Icons';
 import type { AppointmentDoc, RecurringSlot } from '@ejm/sit-core';
 import { getParentProfile } from '@ejm/sit-core';
-import { hasFamilyMembership } from '@ejm/shared-core';
+import { getFamilyId, hasFamilyMembership } from '@ejm/shared-core';
 import { useRefetchOnFocus, DashboardGreeting, DashboardSection } from '@ejm/shared-ui';
 import { formatFamilyTitle } from '@/lib/formatName';
 import { parisNowStamp } from '@/lib/appointmentTime';
@@ -40,15 +40,12 @@ export function FamilyDashboard() {
   // Live via onSnapshot. The landing page shows the two sections the owner
   // asked for (issue #338) — the pending requests and the confirmed
   // appointments; past and declined history stays on /family/appointments.
-  const { pending, confirmed, loading: aptsLoading } = useFamilyAppointments();
+  const { pending, confirmed, loading: aptsLoading, loadError: aptsError } = useFamilyAppointments();
 
-  // Same two places hasFamilyMembership accepts (see useFamilyAppointments):
-  // without the root fallback a Plan C parent never loaded their kids either,
-  // so the "Find a babysitter" button stayed suppressed behind kids.length > 0.
-  const familyId =
-    getParentProfile(userDoc)?.familyId ??
-    (userDoc as { familyId?: string } | null | undefined)?.familyId ??
-    null;
+  // Both membership shapes, via the shared resolver. Without the root field a
+  // Plan C parent never loaded their kids either, so "Find a babysitter"
+  // stayed suppressed behind kids.length > 0.
+  const familyId = getFamilyId(userDoc);
 
   // Run-scoped: mount + familyId change + focus refetch can overlap.
   const loadRunRef = useRef(0);
@@ -284,7 +281,11 @@ export function FamilyDashboard() {
       {/* ── Requests & appointments, in the babysitter dashboard's section
           idiom (issue #338). Skeletons sized like the loaded rows, so the
           list keeps its footprint while loading (UX F12, issue #126). ── */}
-      {aptsLoading ? (
+      {aptsError && !hasAny ? (
+        <p className="py-10 text-center text-sm text-brand-600">
+          {t('familyDashboard.loadError')}
+        </p>
+      ) : aptsLoading ? (
         <div className="space-y-3">
           <SkeletonCard />
           <SkeletonCard />

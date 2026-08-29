@@ -5,7 +5,7 @@ import { collection, query, where, orderBy, onSnapshot } from 'firebase/firestor
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
-import { getParentProfile } from '@ejm/shared-core';
+import { getFamilyId } from '@ejm/shared-core';
 import type {
   StudyContactRequestDoc,
   StudyContactRequestStatus,
@@ -54,7 +54,10 @@ export function RequestsPage() {
   const { t, i18n } = useTranslation();
   const toast = useToast();
   const { userDoc } = useAuthStore();
-  const familyId = getParentProfile(userDoc)?.familyId ?? null;
+  // Both membership shapes (PR #345 round 4): this page is where the
+  // dashboard's request rows land, so reading the profile pointer alone sent a
+  // Plan C parent from a list of live requests straight to "No requests yet".
+  const familyId = getFamilyId(userDoc);
   const defaultRefName = `${userDoc?.firstName ?? ''} ${userDoc?.lastName ?? ''}`.trim();
 
   const [requests, setRequests] = useState<StudyContactRequestDoc[] | null>(null);

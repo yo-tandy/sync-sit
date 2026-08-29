@@ -6,20 +6,15 @@ import { PAST_VISIBILITY_DAYS } from '@ejm/sit-core';
 import { getClientConfigValue } from '@/lib/adminConfigClient';
 import { ADMIN_CONFIG_DEFS } from '@ejm/shared-core';
 import type { AppointmentDoc } from '@ejm/sit-core';
-import { getParentProfile } from '@ejm/sit-core';
+import { getFamilyId } from '@ejm/shared-core';
 
 export function useFamilyAppointments() {
   const userDoc = useAuthStore((s) => s.userDoc);
-  // Plan D pointer first, then the legacy Plan C ROOT field — the same two
-  // places hasFamilyMembership accepts (shared-core userAdapter). Reading only
-  // the profile pointer left a Plan C parent with an empty subscription that
-  // never errored: `loading` initialised false, both buckets stayed [], and
-  // every consumer rendered an empty state to a family that may have live
-  // appointments (PR #345 round 3). The client guards match the server 1:1 or
-  // they are not guards.
-  const familyId =
-    getParentProfile(userDoc)?.familyId ??
-    (userDoc as { familyId?: string } | null | undefined)?.familyId;
+  // Both membership shapes, via the shared resolver — see getFamilyId. Reading
+  // only the profile pointer left a Plan C parent with a subscription that was
+  // never opened: no error, `loading` false from the start, both buckets
+  // permanently empty (PR #345 round 3).
+  const familyId = getFamilyId(userDoc);
   // Initial loading state derives from familyId: if there is no signed-in
   // parent we have nothing to fetch, so we are already "done" loading.
   // The snapshot callback below flips this back to false once Firestore
@@ -29,6 +24,12 @@ export function useFamilyAppointments() {
   const [confirmed, setConfirmed] = useState<AppointmentDoc[]>([]);
   const [pastRecent, setPastRecent] = useState<AppointmentDoc[]>([]);
   const [rejectedRecent, setRejectedRecent] = useState<AppointmentDoc[]>([]);
+  // The subscription errored (PERMISSION_DENIED, sustained outage). Without
+  // this, an erroring onSnapshot never calls `bucket`, so `loading` stayed true
+  // forever and a consumer showed its skeletons indefinitely with no way out
+  // (PR #345 round 4). Study's family dashboard grew per-load error flags in
+  // round 1 for exactly this; sit's half of the parity claim was missing it.
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
     if (!familyId) return;
@@ -59,10 +60,22 @@ export function useFamilyAppointments() {
         if (latestSnap) bucket(latestSnap);
       })
       .catch(() => {});
-    const unsub = onSnapshot(q, (snap) => {
-      latestSnap = snap;
-      bucket(snap);
-    });
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        latestSnap = snap;
+        setLoadError(false);
+        bucket(snap);
+      },
+      () => {
+        // A failed read is UNKNOWN, not empty: leave the last-known-good
+        // buckets alone and stop claiming to be loading, so the consumer can
+        // say so instead of spinning.
+        if (cancelled) return;
+        setLoading(false);
+        setLoadError(true);
+      },
+    );
     function bucket(snap: QuerySnapshot) {
       const now = new Date();
       const cutoff = new Date();
@@ -113,5 +126,5 @@ export function useFamilyAppointments() {
     };
   }, [familyId]);
 
-  return { pending, confirmed, pastRecent, rejectedRecent, loading };
+  return { pending, confirmed, pastRecent, rejectedRecent, loading, loadError };
 }
