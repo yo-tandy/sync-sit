@@ -51,8 +51,15 @@ export function AssignedTaskView({ task, doerFirstName, onMarkDone, onCancel, bu
 
   const cancelled = task.status === 'cancelled';
   const completed = task.status === 'completed';
+  // A task cancelled while still OPEN never had a doer — doCancelTask
+  // leaves assignedOfferId null — so there is no counterparty to reveal:
+  // calling doGetAssignedContact would only earn its `not_assigned`
+  // refusal (PR #331 round 1). Such a task gets the plain cancelled
+  // summary: banner only, no assignment/contact cards, no grace note.
+  const hasAssignment = task.assignedOfferId !== null;
 
   useEffect(() => {
+    if (!hasAssignment) return;
     let stale = false;
     // NOTE: contactState is set back to 'loading' by whoever schedules a
     // refetch (initial state, or the Retry handler) — not synchronously
@@ -75,7 +82,7 @@ export function AssignedTaskView({ task, doerFirstName, onMarkDone, onCancel, bu
     return () => {
       stale = true;
     };
-  }, [task.taskId, retryTick]);
+  }, [task.taskId, retryTick, hasAssignment]);
 
   return (
     <div>
@@ -87,19 +94,22 @@ export function AssignedTaskView({ task, doerFirstName, onMarkDone, onCancel, bu
         </InfoBanner>
       )}
 
-      <Card className="mb-4">
-        {doerFirstName && (
-          <p className="mb-1 text-sm font-semibold text-gray-900">
-            {t('family.assigned.assignedTo', { name: doerFirstName })}
-          </p>
-        )}
-        {task.agreedPrice !== null && (
-          <p className="text-xs text-gray-500">
-            {t('family.assigned.agreedPrice')}: <span className="font-semibold text-gray-900">{task.agreedPrice} €</span>
-          </p>
-        )}
-      </Card>
+      {hasAssignment && (
+        <Card className="mb-4">
+          {doerFirstName && (
+            <p className="mb-1 text-sm font-semibold text-gray-900">
+              {t('family.assigned.assignedTo', { name: doerFirstName })}
+            </p>
+          )}
+          {task.agreedPrice !== null && (
+            <p className="text-xs text-gray-500">
+              {t('family.assigned.agreedPrice')}: <span className="font-semibold text-gray-900">{task.agreedPrice} €</span>
+            </p>
+          )}
+        </Card>
+      )}
 
+      {hasAssignment && (
       <Card className="mb-4">
         <h3 className="mb-2 text-sm font-semibold text-gray-900">{t('family.assigned.contactTitle')}</h3>
         {cancelled && contactState !== 'grace_elapsed' && (
@@ -159,6 +169,7 @@ export function AssignedTaskView({ task, doerFirstName, onMarkDone, onCancel, bu
           </div>
         )}
       </Card>
+      )}
 
       {considerations.length > 0 && !completed && !cancelled && (
         <Card className="mb-4">
