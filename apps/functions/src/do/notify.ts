@@ -128,9 +128,46 @@ export async function sendDoNotificationToUser(
 }
 
 /**
+ * One recipient, ISOLATED: a failure is logged and swallowed so it cannot
+ * take the notification's other recipients down with it (PR #334 round-3
+ * review — the same fix round 1 made in the digest loop). The transports
+ * inside `sendDoNotificationToUser` already swallow their own failures, but
+ * the `notifications.add()` and the `users`/`families` reads can still
+ * reject; post-commit there is no retry, so an unguarded loop meant a
+ * transient error on the winner left every loser untold.
+ *
+ * Use this for every INDEPENDENT recipient of one event. Callers that need
+ * to observe the failure (the digest, which counts `stats.errors`) keep
+ * calling `sendDoNotificationToUser` directly.
+ */
+export async function sendDoNotificationSafely(
+  n: DoUserNotification,
+): Promise<void> {
+  try {
+    await sendDoNotificationToUser(n);
+  } catch (err) {
+    console.error(
+      `[do-notify] ${n.type} to ${n.recipientUserId} failed; other recipients continue:`,
+      err,
+    );
+  }
+}
+
+/** The same, for a list of recipients sharing one notification. */
+export async function sendDoNotificationToEach(
+  recipientUserIds: string[],
+  n: Omit<DoUserNotification, 'recipientUserId' | 'recipientData'>,
+): Promise<void> {
+  for (const recipientUserId of recipientUserIds) {
+    await sendDoNotificationSafely({ ...n, recipientUserId });
+  }
+}
+
+/**
  * Send to every parent of a family — the notifyAllParents shape, redone here
  * because do emails are per-recipient LOCALIZED (notifyAllParents takes one
- * prebuilt subject/body for all parents).
+ * prebuilt subject/body for all parents). Per-parent isolated: one parent's
+ * failure must not silence the other.
  */
 export async function notifyDoFamilyParents(
   familyId: string,
@@ -138,9 +175,7 @@ export async function notifyDoFamilyParents(
 ): Promise<void> {
   const familyDoc = await db.collection('families').doc(familyId).get();
   const parentIds: string[] = (familyDoc.data()?.parentIds as string[]) || [];
-  for (const parentId of parentIds) {
-    await sendDoNotificationToUser({ ...n, recipientUserId: parentId });
-  }
+  await sendDoNotificationToEach(parentIds, n);
 }
 
 /**

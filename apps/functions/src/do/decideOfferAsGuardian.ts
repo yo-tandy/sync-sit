@@ -8,7 +8,7 @@ import { loadActiveCaller, validOfferId } from './offerAccess.js';
 import {
   notifyDoFamilyParents,
   notifyDoSafely,
-  sendDoNotificationToUser,
+  sendDoNotificationSafely,
 } from './notify.js';
 import {
   buildGuardianDecisionForChild,
@@ -135,10 +135,16 @@ export const doDecideOfferAsGuardian = onCall(
     // not something this module adds; whether do types should mirror at all
     // is issue #336.
     await notifyDoSafely('decideOfferAsGuardian', async () => {
-      await sendDoNotificationToUser({
+      await sendDoNotificationSafely({
         recipientUserId: childUid,
         type: 'task_guardian_approval',
-        prefCategory: 'confirmed',
+        // Split by DECISION, per notify.ts's documented mapping (accepted →
+        // confirmed, declined/cancelled → cancelled): a denial is the
+        // canonical "something fell through" case, the same one
+        // `buildTaskOfferDeclined` gates on `cancelled` (PR #334 round-3
+        // review). Gating both halves on `confirmed` meant a student who
+        // muted `confirmed` but kept `cancelled` lost the withdrawal notice.
+        prefCategory: approve ? 'confirmed' : 'cancelled',
         content: (lang) =>
           buildGuardianDecisionForChild(lang, {
             decision: approve ? 'approved' : 'denied',

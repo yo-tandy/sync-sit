@@ -16,7 +16,7 @@ import {
 } from './taskAccess.js';
 import { extractTimingFields, type StoredTimingFields } from './taskInput.js';
 import { OFFER_LIVE_STATUSES } from './offerAccess.js';
-import { notifyDoSafely, sendDoNotificationToUser } from './notify.js';
+import { notifyDoSafely, sendDoNotificationToEach } from './notify.js';
 import { buildTaskUpdated } from './notifyContent.js';
 
 const TIMING_KEYS = [
@@ -200,18 +200,18 @@ export const doUpdateTask = onCall(
           .where('taskId', '==', ref.id)
           .where('status', 'in', [...OFFER_LIVE_STATUSES])
           .get();
-        for (const offerSnap of liveOffers.docs) {
-          const offererUid = offerSnap.data().doerUserId as string | undefined;
-          if (!offererUid) continue;
-          await sendDoNotificationToUser({
-            recipientUserId: offererUid,
-            type: 'task_updated',
-            prefCategory: 'newRequest',
-            content: (lang) =>
-              buildTaskUpdated(lang, { taskTitle: task.title, taskId: ref.id }),
-            data: { taskId: ref.id },
-          });
-        }
+        // Per-offerer isolated: one failing recipient must not silence the
+        // rest, and post-commit there is no retry (PR #334 round-3 review).
+        const offererUids = liveOffers.docs
+          .map((offerSnap) => offerSnap.data().doerUserId as string | undefined)
+          .filter((offererUid): offererUid is string => !!offererUid);
+        await sendDoNotificationToEach(offererUids, {
+          type: 'task_updated',
+          prefCategory: 'newRequest',
+          content: (lang) =>
+            buildTaskUpdated(lang, { taskTitle: task.title, taskId: ref.id }),
+          data: { taskId: ref.id },
+        });
       });
     }
 

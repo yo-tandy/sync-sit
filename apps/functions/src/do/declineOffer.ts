@@ -5,7 +5,7 @@ import { getCorsOrigin } from '../config/cors.js';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
 import { callerFamilyId } from './taskAccess.js';
 import { loadActiveCaller, validOfferId } from './offerAccess.js';
-import { notifyDoSafely, sendDoNotificationToUser } from './notify.js';
+import { notifyDoSafely, sendDoNotificationSafely } from './notify.js';
 import { buildTaskOfferDeclined } from './notifyContent.js';
 
 /**
@@ -88,7 +88,7 @@ export const doDeclineOffer = onCall(
     // post-commit, failures swallowed. Decision 18 allows a re-offer, and
     // the copy says so.
     await notifyDoSafely('declineOffer', async () => {
-      await sendDoNotificationToUser({
+      await sendDoNotificationSafely({
         recipientUserId: doerUserId,
         type: 'task_offer_declined',
         prefCategory: 'cancelled',

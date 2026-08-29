@@ -12,6 +12,9 @@ const h = vi.hoisted(() => ({
   users: {} as Record<string, Record<string, unknown> | undefined>,
   families: {} as Record<string, Record<string, unknown> | undefined>,
   added: [] as Record<string, unknown>[],
+  /** Recipients whose `notifications.add()` rejects — fault injection for
+   *  the per-recipient isolation pins (PR #334 round-3 review). */
+  failAddFor: new Set<string>(),
   sendNotificationEmail: vi.fn<(...a: unknown[]) => Promise<boolean>>(() => Promise.resolve(true)),
   sendPushNotification: vi.fn<(...a: unknown[]) => Promise<boolean>>(() => Promise.resolve(true)),
 }));
@@ -26,6 +29,9 @@ vi.mock('../../config/firebase.js', () => ({
           }),
       }),
       add: (doc: Record<string, unknown>) => {
+        if (h.failAddFor.has(doc.recipientUserId as string)) {
+          return Promise.reject(new Error(`add rejected for ${doc.recipientUserId}`));
+        }
         h.added.push(doc);
         return Promise.resolve({ id: `n${h.added.length}` });
       },
@@ -39,7 +45,13 @@ vi.mock('../../config/push.js', () => ({
   sendPushNotification: (...a: unknown[]) => h.sendPushNotification(...a),
 }));
 
-import { notifyDoFamilyParents, notifyDoSafely, sendDoNotificationToUser } from '../notify.js';
+import {
+  notifyDoFamilyParents,
+  notifyDoSafely,
+  sendDoNotificationSafely,
+  sendDoNotificationToEach,
+  sendDoNotificationToUser,
+} from '../notify.js';
 import type { DoLang } from '../notifyContent.js';
 
 function contentFor(lang: DoLang) {
@@ -58,6 +70,7 @@ describe('sendDoNotificationToUser', () => {
     };
     h.families = {};
     h.added = [];
+    h.failAddFor = new Set();
     h.sendNotificationEmail.mockClear().mockResolvedValue(true);
     h.sendPushNotification.mockClear().mockResolvedValue(true);
   });
@@ -187,6 +200,7 @@ describe('notifyDoFamilyParents', () => {
     };
     h.families = { fam1: { parentIds: ['p1', 'p2'] } };
     h.added = [];
+    h.failAddFor = new Set();
     h.sendNotificationEmail.mockClear().mockResolvedValue(true);
     h.sendPushNotification.mockClear().mockResolvedValue(true);
   });
@@ -228,5 +242,73 @@ describe('notifyDoSafely (post-commit invariant)', () => {
       expect.any(Error),
     );
     errSpy.mockRestore();
+  });
+});
+
+// Per-recipient isolation (PR #334 round-3 review). Post-commit there is no
+// retry, so a single failing recipient must never take the others down with
+// it — the same guarantee round 1 gave the digest loop.
+describe('per-recipient isolation', () => {
+  beforeEach(() => {
+    h.users = {
+      a: { email: 'a@x.org', language: 'en', notifPrefs: {} },
+      b: { email: 'b@x.org', language: 'en', notifPrefs: {} },
+      c: { email: 'c@x.org', language: 'fr', notifPrefs: {} },
+      p1: { email: 'p1@x.org', language: 'en', notifPrefs: {} },
+      p2: { email: 'p2@x.org', language: 'fr', notifPrefs: {} },
+    };
+    h.families = { fam1: { parentIds: ['p1', 'p2'] } };
+    h.added = [];
+    h.failAddFor = new Set();
+    h.sendNotificationEmail.mockClear().mockResolvedValue(true);
+    h.sendPushNotification.mockClear().mockResolvedValue(true);
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  it('sendDoNotificationToEach: a failing recipient does not stop the ones after it', async () => {
+    h.failAddFor = new Set(['b']);
+
+    await expect(
+      sendDoNotificationToEach(['a', 'b', 'c'], {
+        type: 'task_offer_declined',
+        prefCategory: 'cancelled',
+        content: contentFor,
+      }),
+    ).resolves.toBeUndefined();
+
+    // 'c' comes AFTER the failing 'b' — the regression this pins.
+    expect(h.added.map((d) => d.recipientUserId)).toEqual(['a', 'c']);
+  });
+
+  it('sendDoNotificationSafely: one recipient throwing never rejects the caller', async () => {
+    h.failAddFor = new Set(['a']);
+    const errSpy = vi.spyOn(console, 'error');
+
+    await expect(
+      sendDoNotificationSafely({
+        recipientUserId: 'a',
+        type: 'task_offer_accepted',
+        prefCategory: 'confirmed',
+        content: contentFor,
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(h.added).toHaveLength(0);
+    expect(errSpy).toHaveBeenCalledWith(
+      expect.stringContaining('task_offer_accepted to a'),
+      expect.any(Error),
+    );
+  });
+
+  it('notifyDoFamilyParents: one parent failing still notifies the co-parent', async () => {
+    h.failAddFor = new Set(['p1']);
+
+    await notifyDoFamilyParents('fam1', {
+      type: 'task_offer_received',
+      prefCategory: 'newRequest',
+      content: contentFor,
+    });
+
+    expect(h.added.map((d) => d.recipientUserId)).toEqual(['p2']);
   });
 });

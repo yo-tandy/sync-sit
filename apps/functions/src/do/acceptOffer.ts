@@ -10,7 +10,11 @@ import {
   tsMillis,
   validOfferId,
 } from './offerAccess.js';
-import { notifyDoSafely, sendDoNotificationToUser } from './notify.js';
+import {
+  notifyDoSafely,
+  sendDoNotificationSafely,
+  sendDoNotificationToEach,
+} from './notify.js';
 import {
   buildTaskOfferAccepted,
   buildTaskOfferDeclined,
@@ -209,8 +213,12 @@ export const doAcceptOffer = onCall(
     // `pending_guardian` siblings went to `expired` — nobody declined them,
     // their moment passed, and no notice is sent for an offer whose guardian
     // never decided (§6.2: the student sees the state change in "My offers").
+    // Every recipient below is INDEPENDENT of the others, so each send is
+    // isolated (…Safely / …ToEach): post-commit there is no retry, and an
+    // unguarded sequence meant one transient failure on the winner left every
+    // loser untold (PR #334 round-3 review).
     await notifyDoSafely('acceptOffer', async () => {
-      await sendDoNotificationToUser({
+      await sendDoNotificationSafely({
         recipientUserId: doerUserId,
         recipientData: winnerData,
         type: 'task_offer_accepted',
@@ -225,19 +233,16 @@ export const doAcceptOffer = onCall(
           }),
         data: { taskId, offerId: offerRef.id },
       });
-      for (const loserUid of loserDoerUserIds) {
-        await sendDoNotificationToUser({
-          recipientUserId: loserUid,
-          type: 'task_offer_declined',
-          prefCategory: 'cancelled',
-          content: (lang) =>
-            buildTaskOfferDeclined(lang, {
-              taskTitle,
-              reason: 'sibling_accepted',
-            }),
-          data: { taskId },
-        });
-      }
+      await sendDoNotificationToEach(loserDoerUserIds, {
+        type: 'task_offer_declined',
+        prefCategory: 'cancelled',
+        content: (lang) =>
+          buildTaskOfferDeclined(lang, {
+            taskTitle,
+            reason: 'sibling_accepted',
+          }),
+        data: { taskId },
+      });
       // NO explicit guardian notification here, deliberately (PR #334
       // review). Step 9's "the winner's guardian if there is an active link"
       // is satisfied by the PLATFORM, not by a second write:
