@@ -30,14 +30,14 @@ Lifecycle and Cloud Functions.
 | | | |
 |---|---|---|
 | #364 | brand marks consolidated into `shared-ui` (`./brand-marks/*`) | **done** (issue #302); the bar-weight variants ship with #385 |
-| #365 | `AppSwitchBar`, wired into all six authed shells | **open — in PR #385** |
+| #365 | `AppSwitchBar`, wired into all six switcher call sites | **open — in PR #385** |
 | #386 | drop in owner-supplied bar icons | waiting on art |
 | #366 | Recess visual pass; admin neutral | open |
 | #367 | `AccountHome` — the shared hub | open, wants #366 |
 | #370 | search and primary action become the page hero | open, wants #365 + #366 |
 | #368 | self-serve cross-app account deletion | open |
 | #369 | `notifPrefs` shape — **owner decision, blocks sync-do PR9** | open |
-| #374 | the three app-host constants, env-overridable — §8's original first work item | **done** |
+| #374 | the three app-host constants, env-overridable — the original first work item of §8 of this plan | **done** |
 
 Statuses checked against the tree, not the issue tracker, on 2026-08-29.
 
@@ -243,9 +243,10 @@ strings. It carried one, it was wrong within days of being written, and the
 count was never the decision — "is each half one constant per app, or a sweep?"
 is, and both halves now answer *constant*.
 
-**What the cutover therefore costs, today:** three server constants, three
-client constants, the env files, and the two items below with real lead time.
-Not a sweep.
+**What the cutover therefore costs, today:** three server constants, the
+client `appSwitch.ts` constants (not one per app — each app declares only the
+hosts it links out to), the env files, and the two items below with real lead
+time. Not a sweep.
 
 Two items carry real lead time and should start before a cutover date is fixed:
 
