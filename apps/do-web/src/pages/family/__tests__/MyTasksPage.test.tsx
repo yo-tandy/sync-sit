@@ -184,3 +184,57 @@ describe('MyTasksPage badges and tabs', () => {
     );
   });
 });
+
+// ── `?tab=` is what makes the dashboard's capped In-progress and
+//    Recently-completed sections able to hand their overflow to the RIGHT
+//    tab: a see-all that lands on Open would show the reader something other
+//    than what they clicked. It seeds the initial tab only. ──
+describe('MyTasksPage — the tab the dashboard asked for', () => {
+  const rows = () => [
+    taskDoc('t1'),
+    taskDoc('t2', { status: 'assigned', title: 'Task assigned' }),
+    taskDoc('t3', { status: 'completed', title: 'Task done' }),
+  ];
+
+  it('opens on Open with no param — the long-standing default', () => {
+    renderWithProviders(<MyTasksPage />, '/family/tasks');
+    pushTasks(rows());
+    pushOffers([]);
+    expect(screen.getByRole('tab', { name: 'Open', selected: true })).toBeInTheDocument();
+    expect(screen.getByText('Task t1')).toBeInTheDocument();
+  });
+
+  it('opens on the Assigned tab for ?tab=assigned', () => {
+    renderWithProviders(<MyTasksPage />, '/family/tasks?tab=assigned');
+    pushTasks(rows());
+    pushOffers([]);
+    expect(screen.getByRole('tab', { name: 'Assigned', selected: true })).toBeInTheDocument();
+    expect(screen.getByText('Task assigned')).toBeInTheDocument();
+    expect(screen.queryByText('Task t1')).toBeNull();
+  });
+
+  it('opens on the Completed tab for ?tab=completed', () => {
+    renderWithProviders(<MyTasksPage />, '/family/tasks?tab=completed');
+    pushTasks(rows());
+    pushOffers([]);
+    expect(screen.getByRole('tab', { name: 'Completed', selected: true })).toBeInTheDocument();
+    expect(screen.getByText('Task done')).toBeInTheDocument();
+  });
+
+  it('falls back to Open on a value that is not a tab', () => {
+    renderWithProviders(<MyTasksPage />, '/family/tasks?tab=nonsense');
+    pushTasks(rows());
+    pushOffers([]);
+    expect(screen.getByRole('tab', { name: 'Open', selected: true })).toBeInTheDocument();
+    expect(screen.getByText('Task t1')).toBeInTheDocument();
+  });
+
+  it('lets a click override the tab the URL opened on', () => {
+    renderWithProviders(<MyTasksPage />, '/family/tasks?tab=assigned');
+    pushTasks(rows());
+    pushOffers([]);
+    fireEvent.click(screen.getByRole('tab', { name: 'Completed' }));
+    expect(screen.getByText('Task done')).toBeInTheDocument();
+    expect(screen.queryByText('Task assigned')).toBeNull();
+  });
+});
