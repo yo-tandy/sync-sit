@@ -9,6 +9,10 @@ export default {
     error: 'Une erreur est survenue',
     signOut: 'Se déconnecter',
     language: 'Langue',
+    // Les deux chaînes que lit DashboardGreeting de shared-ui (parité D1,
+    // issue #239).
+    hello: 'Bonjour,',
+    helloNoName: 'Bonjour',
   },
 
   auth: {
@@ -199,6 +203,20 @@ export default {
     nav: {
       myTasks: 'Mes tâches',
       postTask: 'Publier une tâche',
+    },
+
+    /** La page d'accueil du portail famille (§9.0, issue #360). */
+    dashboard: {
+      family: 'famille',
+      postCta: 'Publier une tâche',
+      openTitle: 'Vos tâches ouvertes',
+      assignedTitle: 'En cours',
+      completedTitle: 'Terminées récemment',
+      inProgressBadge: 'Attribuée',
+      completedBadge: 'Terminée',
+      endorsePrompt: 'Dites comment ça s\'est passé',
+      emptyDesc: 'Rien en cours. Publiez une tâche et les étudiants EJM proposeront leur aide.',
+      loadError: 'Impossible de charger vos tâches. Veuillez rafraîchir et réessayer.',
     },
 
     myTasks: {
@@ -406,6 +424,21 @@ export default {
       myOffers: 'Mes offres',
       myWork: 'Mes tâches',
       myEndorsements: 'Mes recommandations',
+    },
+
+    /** La page d'accueil du portail doer (§9.0, issue #360). */
+    dashboard: {
+      greeting: 'Trouvez des tâches, suivez vos offres et réalisez-les.',
+      boardCta: 'Parcourir le tableau',
+      offersTitle: 'Vos offres',
+      assignedTitle: 'Tâches attribuées',
+      endorsementsTitle: 'Recommandations à traiter',
+      awaitingFamily: 'En attente de la décision de la famille.',
+      awaitingParent: "En attente de l'accord de votre parent.",
+      nextMarkDone: 'Marquez-la faite une fois terminée',
+      endorsementPrompt: "Acceptez-la pour l'afficher avec vos offres, ou refusez-la.",
+      emptyDesc: 'Rien en cours. Parcourez le tableau et proposez votre aide sur une tâche.',
+      loadError: 'Impossible de charger votre tableau de bord. Veuillez rafraîchir et réessayer.',
     },
 
     /** La surface de gestion des recommandations du §9.2 (décision 12). */

@@ -9,6 +9,12 @@ export default {
     error: 'An error occurred',
     signOut: 'Sign out',
     language: 'Language',
+    // The two strings shared-ui's DashboardGreeting reads (parity D1, issue
+    // #239). The comma lives in the string: French punctuation spacing is not
+    // a thing to hard-code in JSX, and a name-less "Hello, 👋" would be wrong
+    // in both languages.
+    hello: 'Hello,',
+    helloNoName: 'Hello',
   },
 
   auth: {
@@ -199,6 +205,20 @@ export default {
     nav: {
       myTasks: 'My tasks',
       postTask: 'Post a task',
+    },
+
+    /** The family portal's landing page (§9.0's route table, issue #360). */
+    dashboard: {
+      family: 'family',
+      postCta: 'Post a task',
+      openTitle: 'Your open tasks',
+      assignedTitle: 'In progress',
+      completedTitle: 'Recently completed',
+      inProgressBadge: 'Assigned',
+      completedBadge: 'Completed',
+      endorsePrompt: 'Say how it went',
+      emptyDesc: 'Nothing on the go. Post a task and EJM students will offer to help.',
+      loadError: 'Could not load your tasks. Please refresh and try again.',
     },
 
     myTasks: {
@@ -406,6 +426,21 @@ export default {
       myOffers: 'My offers',
       myWork: 'My tasks',
       myEndorsements: 'My endorsements',
+    },
+
+    /** The doer portal's landing page (§9.0's route table, issue #360). */
+    dashboard: {
+      greeting: 'Find work, track your offers and get it done.',
+      boardCta: 'Browse the board',
+      offersTitle: 'Your offers',
+      assignedTitle: 'Assigned work',
+      endorsementsTitle: 'Endorsements to answer',
+      awaitingFamily: 'Waiting for the family to decide.',
+      awaitingParent: 'Waiting for your parent to approve it.',
+      nextMarkDone: 'Mark it done when you finish',
+      endorsementPrompt: 'Accept it to show it with your offers, or decline it.',
+      emptyDesc: 'Nothing on the go. Browse the board and offer to help with a task.',
+      loadError: 'Could not load your dashboard. Please refresh and try again.',
     },
 
     /** §9.2's endorsement-management surface (decision 12). */
