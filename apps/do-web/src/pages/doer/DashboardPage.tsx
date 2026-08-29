@@ -17,8 +17,18 @@ import {
   useRefetchOnFocus,
 } from '@ejm/shared-ui';
 import { db } from '@/config/firebase';
+import { SeeAllLink } from '@/components/ui/SeeAllLink';
 import { useAuthStore } from '@/stores/authStore';
 import { formatTimingSummary } from '@/lib/taskDisplay';
+
+/**
+ * How many rows a section shows before it defers to its list page — the same
+ * number the family dashboard uses, for the same reason (see its
+ * `SECTION_ROWS`). /doer/board is deliberately NOT one of those list pages
+ * and is untouched by this: it is discovery across every family's open tasks,
+ * not a longer copy of anything on here.
+ */
+const SECTION_ROWS = 5;
 
 /**
  * The doer portal's landing page (plan §9.0's route table: "**Each index is a
@@ -32,6 +42,10 @@ import { formatTimingSummary } from '@/lib/taskDisplay';
  * Rows navigate; no callable is fired from a landing page — withdraw lives on
  * /doer/offers, mark-done on the task detail, accept/decline on
  * /doer/endorsements.
+ *
+ * A SUMMARY, NOT A SECOND LIST (the owner's redundancy report against the
+ * family portal, applied to both): each section shows at most `SECTION_ROWS`
+ * and then names the total on a link into the page that owns the rest.
  *
  * SECTIONS:
  *  1. **Your offers** (amber) — `pending` (with the family) and
@@ -266,7 +280,7 @@ export function DashboardPage() {
             total={liveOffers.length}
             variant="pending"
           >
-            {liveOffers.map((offer) => (
+            {liveOffers.slice(0, SECTION_ROWS).map((offer) => (
               <Link key={offer.offerId} to="/doer/offers" className="block">
                 <Card interactive>
                   <div className="flex items-center gap-3">
@@ -300,6 +314,17 @@ export function DashboardPage() {
                 </Card>
               </Link>
             ))}
+            {/* No tab is expressible here: a live offer is `pending` OR
+                `pending_guardian`, which /doer/offers splits across its
+                first two tabs, so the link lands on the page's own default
+                (Pending) rather than asserting a tab that would be wrong for
+                half the rows. */}
+            {liveOffers.length > SECTION_ROWS && (
+              <SeeAllLink
+                to="/doer/offers"
+                label={t('doer.dashboard.seeAllOffers', { total: liveOffers.length })}
+              />
+            )}
           </DashboardSection>
 
           <DashboardSection
@@ -307,7 +332,7 @@ export function DashboardPage() {
             count={assignedRows.length}
             variant="confirmed"
           >
-            {assignedRows.map((task) => (
+            {assignedRows.slice(0, SECTION_ROWS).map((task) => (
               <Link key={task.taskId} to={`/doer/tasks/${task.taskId}`} className="block">
                 <Card interactive>
                   <div className="flex items-center gap-3">
@@ -335,6 +360,14 @@ export function DashboardPage() {
                 </Card>
               </Link>
             ))}
+            {/* /doer/work opens on its own Assigned tab, which is exactly this
+                section's set. */}
+            {assignedRows.length > SECTION_ROWS && (
+              <SeeAllLink
+                to="/doer/work"
+                label={t('doer.dashboard.seeAllAssigned', { total: assignedRows.length })}
+              />
+            )}
           </DashboardSection>
 
           {/* A failed endorsements read with NOTHING to show renders as an
@@ -389,7 +422,7 @@ export function DashboardPage() {
             count={pendingEndorsements.length}
             variant="pending"
           >
-            {pendingEndorsements.map((e) => (
+            {pendingEndorsements.slice(0, SECTION_ROWS).map((e) => (
               <Link key={e.referenceId} to="/doer/endorsements" className="block">
                 <Card interactive>
                   <div className="flex items-center gap-3">
@@ -406,6 +439,19 @@ export function DashboardPage() {
                 </Card>
               </Link>
             ))}
+            {/* Capped like the other two — a doer coming back to six waiting
+                endorsements should see the page say six and hand them the
+                surface that answers them, not scroll a to-do list on a
+                summary. /doer/endorsements has no tabs: its pending set is
+                the top of the page. */}
+            {pendingEndorsements.length > SECTION_ROWS && (
+              <SeeAllLink
+                to="/doer/endorsements"
+                label={t('doer.dashboard.seeAllEndorsements', {
+                  total: pendingEndorsements.length,
+                })}
+              />
+            )}
           </DashboardSection>
           )}
         </>

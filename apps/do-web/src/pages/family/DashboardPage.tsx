@@ -17,11 +17,29 @@ import {
   useRefetchOnFocus,
 } from '@ejm/shared-ui';
 import { db } from '@/config/firebase';
+import { SeeAllLink } from '@/components/ui/SeeAllLink';
 import { useAuthStore } from '@/stores/authStore';
 import { formatTimingSummary, tsMillis } from '@/lib/taskDisplay';
 
-/** How many completions the landing page keeps — see `completedRows`. */
-const RECENT_COMPLETIONS = 5;
+/**
+ * How many rows a section shows before it defers to /family/tasks.
+ *
+ * ONE number for all three sections, and it is the number the completions
+ * section already used: a dashboard that showed five completions but every
+ * open and assigned task was not a summary, it was /family/tasks again with
+ * the cancelled and expired rows removed — the redundancy the owner reported.
+ * Five is the sibling-implied size: it is what this page already chose for the
+ * only section it did cap, and it is the shelf study's board preview
+ * (`PublishedSearchesPreview`, three) sits just under — that one previews
+ * OTHER people's posts, where these are the reader's own live work and a
+ * three-row cap would hide the fourth thing they have to do.
+ *
+ * Capping is only half of it: whenever the cap bites, the section renders a
+ * `SeeAllLink` carrying the full count, so more-than-five is stated rather
+ * than silently truncated. The section badges keep counting the FULL sets for
+ * the same reason.
+ */
+const SECTION_ROWS = 5;
 
 /**
  * The family portal's landing page (plan §9.0's route table: "**Each index is
@@ -36,6 +54,15 @@ const RECENT_COMPLETIONS = 5;
  * NAVIGATE — they never fire a callable, the rule all four sibling
  * dashboards follow — so accept/decline/mark-done/endorse all stay on
  * `/family/tasks/:taskId`, which owns them.
+ *
+ * A SUMMARY, NOT A SECOND LIST (the owner's redundancy report). Every section
+ * is capped at `SECTION_ROWS` and hands the rest to /family/tasks, which is
+ * the line sit's family dashboard draws in words — "past and declined history
+ * stays on /family/appointments" — and this page failed to draw in numbers:
+ * showing EVERY live open task and EVERY assigned task left only the
+ * cancelled, the expired and the sixth-oldest completion unique to the list
+ * page, so for most families the two routes were the same screen. The tabs,
+ * the full history and every action stay on /family/tasks.
  *
  * SECTIONS, in sync-do's demand-first order:
  *  1. **Open tasks** (amber) — the offers awaiting review. Amber badges what
@@ -222,15 +249,19 @@ export function DashboardPage() {
       // Newest-first, inherited from the query's createdAt DESC: a task has
       // no single date across the four timing models to sort these by.
       assignedRows: all.filter((task) => task.status === 'assigned'),
-      // Most recently completed first, capped: decision 19 keeps completed
-      // tasks for six months, so an unbounded list would push the live
-      // sections off a long-standing family's screen. The full history stays
-      // on /family/tasks.
+      // Most recently completed first. Decision 19 keeps completed tasks for
+      // six months, so an unbounded list would push the live sections off a
+      // long-standing family's screen. The full history stays on
+      // /family/tasks.
+      //
+      // FULL sets, all three: the cap is applied at render (`SECTION_ROWS`),
+      // because the section badge and the see-all label both need the total.
+      // Slicing here would have made the page unable to say how much it was
+      // hiding.
       completedRows: all
         .filter((task) => task.status === 'completed')
         .slice()
-        .sort((a, b) => tsMillis(b.completedAt) - tsMillis(a.completedAt))
-        .slice(0, RECENT_COMPLETIONS),
+        .sort((a, b) => tsMillis(b.completedAt) - tsMillis(a.completedAt)),
     };
   }, [tasks, snapshotNow]);
 
@@ -310,7 +341,7 @@ export function DashboardPage() {
             total={openRows.length}
             variant="pending"
           >
-            {openRows.map((task) => {
+            {openRows.slice(0, SECTION_ROWS).map((task) => {
               const pending = pendingByTask[task.taskId] ?? 0;
               return row(
                 task,
@@ -321,6 +352,12 @@ export function DashboardPage() {
                 ),
               );
             })}
+            {openRows.length > SECTION_ROWS && (
+              <SeeAllLink
+                to="/family/tasks?tab=open"
+                label={t('family.dashboard.seeAllOpen', { total: openRows.length })}
+              />
+            )}
           </DashboardSection>
 
           <DashboardSection
@@ -328,7 +365,7 @@ export function DashboardPage() {
             count={assignedRows.length}
             variant="confirmed"
           >
-            {assignedRows.map((task) =>
+            {assignedRows.slice(0, SECTION_ROWS).map((task) =>
               row(
                 task,
                 task.doerMarkedDoneAt !== null ? (
@@ -337,6 +374,12 @@ export function DashboardPage() {
                   <Badge variant="blue">{t('family.dashboard.inProgressBadge')}</Badge>
                 ),
               ),
+            )}
+            {assignedRows.length > SECTION_ROWS && (
+              <SeeAllLink
+                to="/family/tasks?tab=assigned"
+                label={t('family.dashboard.seeAllAssigned', { total: assignedRows.length })}
+              />
             )}
           </DashboardSection>
 
@@ -349,7 +392,7 @@ export function DashboardPage() {
             total={completedRows.length}
             variant="past"
           >
-            {completedRows.map((task) =>
+            {completedRows.slice(0, SECTION_ROWS).map((task) =>
               row(
                 task,
                 endorsable(task) ? (
@@ -358,6 +401,16 @@ export function DashboardPage() {
                   <Badge variant="gray">{t('family.dashboard.completedBadge')}</Badge>
                 ),
               ),
+            )}
+            {/* This cap is not new — the page already kept five completions —
+                but it WAS silent, and a truncation the reader cannot see is
+                the same misreport as the two above. Same affordance, same
+                number, pointed at the tab that holds the six-month history. */}
+            {completedRows.length > SECTION_ROWS && (
+              <SeeAllLink
+                to="/family/tasks?tab=completed"
+                label={t('family.dashboard.seeAllCompleted', { total: completedRows.length })}
+              />
             )}
           </DashboardSection>
         </>

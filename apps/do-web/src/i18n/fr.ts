@@ -215,6 +215,13 @@ export default {
       inProgressBadge: 'Attribuée',
       completedBadge: 'Terminée',
       endorsePrompt: 'Dites comment ça s\'est passé',
+      /* Le pied d'une section plafonnée, affiché uniquement s'il y en a plus
+         que ce que le tableau de bord garde — et il annonce le total, car un
+         plafond invisible est le défaut lui-même. `total`, et non `count` :
+         la ligne est inatteignable à un, donc pas de forme au singulier. */
+      seeAllOpen: 'Voir les {{total}} tâches ouvertes',
+      seeAllAssigned: 'Voir les {{total}} tâches en cours',
+      seeAllCompleted: 'Voir les {{total}} tâches terminées',
       emptyDesc: 'Rien en cours. Publiez une tâche et les étudiants EJM proposeront leur aide.',
       loadError: 'Impossible de charger vos tâches. Veuillez rafraîchir et réessayer.',
     },
@@ -440,6 +447,11 @@ export default {
       awaitingParent: "En attente de l'accord de votre parent.",
       nextMarkDone: 'Marquez-la faite une fois terminée',
       endorsementPrompt: "Acceptez-la pour l'afficher avec vos offres, ou refusez-la.",
+      /* Le pied d'une section plafonnée — voir les seeAll* du tableau de bord
+         famille. */
+      seeAllOffers: 'Voir les {{total}} offres',
+      seeAllAssigned: 'Voir les {{total}} tâches attribuées',
+      seeAllEndorsements: 'Voir les {{total}} recommandations',
       endorsementsLoadError: "Impossible de vérifier si une recommandation attend votre réponse.",
       emptyDesc: 'Rien en cours. Parcourez le tableau et proposez votre aide sur une tâche.',
       loadError: 'Impossible de charger votre tableau de bord. Veuillez rafraîchir et réessayer.',
