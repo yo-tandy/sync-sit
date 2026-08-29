@@ -81,7 +81,7 @@ export default {
     terms: 'Terms & Conditions',
   },
 
-  /** The seven §5 categories, in board display order. */
+  /** Push-permission prompt and foreground toasts (plan §10, §13 PR9). */
   notifications: {
     pushPromptTitle: 'Enable notifications',
     pushPromptDesc: 'Get notified about offers, assignments and new tasks.',
@@ -89,6 +89,7 @@ export default {
     notNow: 'Not now',
   },
 
+  /** The seven §5 categories, in board display order. */
   categories: {
     green_thumb: 'Green thumb',
     boxes: 'Boxes & moving',

@@ -81,7 +81,7 @@ export default {
     terms: 'Conditions générales',
   },
 
-  /** Les sept catégories du §5, dans l'ordre d'affichage du tableau. */
+  /** Demande d'autorisation push et toasts au premier plan (§10, §13 PR9). */
   notifications: {
     pushPromptTitle: 'Activer les notifications',
     pushPromptDesc: 'Recevez des notifications pour les offres, les missions et les nouvelles tâches.',
@@ -89,6 +89,7 @@ export default {
     notNow: 'Plus tard',
   },
 
+  /** Les sept catégories du §5, dans l'ordre d'affichage du tableau. */
   categories: {
     green_thumb: 'Main verte',
     boxes: 'Cartons & déménagement',
