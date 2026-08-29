@@ -196,9 +196,15 @@ describe('sync-do call-site notifications (plan §10, §13 PR9)', () => {
     );
     expect(status).toBe('pending_guardian');
 
-    // Supervising parent (family-martin → parent3): approval request.
-    const guardianNotifs = await notifsFor(seed.parent3.uid, 'task_guardian_approval');
+    // Supervising parent (family-martin → parent3): approval request. This
+    // one IS the call site's job — an action request addressed to the parent
+    // — and it does not double with the guardian mirror, which keys off the
+    // RECIPIENT's own `governedBy` (a parent has none) and has no student
+    // notification to copy here anyway (PR #334 review).
+    await sleep(2000); // a mirror, if one fired, would have landed
+    const guardianNotifs = await notifsFor(seed.parent3.uid);
     expect(guardianNotifs).toHaveLength(1);
+    expect(guardianNotifs[0].type).toBe('task_guardian_approval');
     expect(guardianNotifs[0].body).toContain('First-doer-ntf-kid');
 
     // Hiring family: NOTHING — the offer does not exist for them yet.
