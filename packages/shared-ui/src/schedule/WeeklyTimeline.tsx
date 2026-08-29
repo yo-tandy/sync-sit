@@ -4,11 +4,11 @@ import { DAYS_OF_WEEK, slotIndexToTime } from '@ejm/shared-core';
 import type { DayOfWeek } from '@ejm/shared-core';
 import { Dialog, Button, Select } from '../components/index.js';
 import {
-  RangeTagChips,
   rangeTagSelection,
   toggleSelection,
   type LocationTagLabels,
-} from './locationTagChips.js';
+} from './locationTags.js';
+import { RangeTagChips } from './locationTagChips.js';
 
 /**
  * Optional per-range location tags (study issue #166) for the range-click
