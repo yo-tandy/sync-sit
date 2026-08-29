@@ -632,16 +632,60 @@ describe('deleteUser', () => {
       const doc = (await db.collection('study-sessions').doc(sessionId).get()).data()!;
       expect(doc.createdByUserId).toBe('deleted');
       expect(doc.parentUserId).toBe('deleted');
-      // The family still exists and can honour the booking: nothing
+      // `parentName` is NOT family data, even though it sits beside
+      // `familyName` on the document: `parentUserId` is defined as the uid
+      // OWNING it, and nameFanOut corrects it keyed on that uid. So it goes
+      // with its owner, co-parent surviving or not — and it has to go on THIS
+      // write, because once `parentUserId` is 'deleted' neither fan-out sweep
+      // can ever reach the field again.
+      expect(doc.parentName).toBe('');
+      // The family still exists and can honour the booking: nothing genuinely
       // family-level is erased and the session stays confirmed.
       expect(doc.familyName).toBe('Dupont');
-      expect(doc.parentName).toBe('Pierre Dupont');
       expect(doc.students).toEqual([{ firstName: 'Lucas', age: 6 }]);
       expect(doc.address).toBe('15 Rue de Passy, 75016 Paris');
       expect(doc.preSessionNote).toBe('family door code');
       expect(doc.status).toBe('confirmed');
       // ...and the tutor keeps the slot they are still booked for.
       expect(await overrideExists(seed.tutor2.uid, date)).toBe(true);
+    });
+
+    it("erases a pre-#273 doc's parentName via createdByUserId, but never a tutor-created one", async () => {
+      const db = getDb();
+      // Legacy shape: no `parentUserId` at all, so the only thing tying
+      // `parentName` to a person is `createdByUserId`. nameFanOut's
+      // `legacyParentGuard` corrects exactly these; the erasure must reach the
+      // same set or the name is stranded with nothing able to find it.
+      const legacy = await seedStudySession({
+        familyId: seed.family1Id,
+        tutorUserId: seed.tutor2.uid,
+        createdByUserId: seed.parent2.uid,
+        parentUserId: undefined,
+        parentName: 'Pierre Dupont',
+        status: 'completed',
+        date: dateIn(-40),
+      });
+      // The other half of that guard: a TUTOR-created proposal. Its
+      // `createdByUserId` is the tutor, so a parent erasure must not touch
+      // `parentName` here — it names somebody else.
+      const tutorCreated = await seedStudySession({
+        familyId: seed.family1Id,
+        tutorUserId: seed.tutor2.uid,
+        createdByUserId: seed.tutor2.uid,
+        parentUserId: undefined,
+        proposedBy: 'provider',
+        parentName: 'Marie Dupont',
+        status: 'completed',
+        date: dateIn(-40),
+      });
+
+      await callFunction('deleteUser', { targetUserId: seed.parent2.uid }, adminToken);
+
+      expect((await db.collection('study-sessions').doc(legacy).get()).data()!.parentName)
+        .toBe('');
+      expect(
+        (await db.collection('study-sessions').doc(tutorCreated).get()).data()!.parentName,
+      ).toBe('Marie Dupont');
     });
 
     it('a recurring series: FUTURE occurrences are cancelled with their claims, past ones keep their status', async () => {

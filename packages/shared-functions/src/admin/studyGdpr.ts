@@ -226,15 +226,24 @@ async function commitChunked(
  *     IS the tutor. Same rule and same reason as the appointment
  *     `createdByUserId` anonymization: without it a deleted party's uid lingers
  *     on docs the surviving party still owns.
+ *   - `parentName` → '' when `parentUserId` names the erased user (or, on a
+ *     pre-#273 doc with no `parentUserId`, when they created it and are not
+ *     the tutor). Side- and last-parent-independent, like the uids: it is an
+ *     individual's name, not the family's.
  *   - `message` → deleted, keyed on WHO WROTE IT: the tutor on a
  *     `proposedBy: 'provider'` proposal, the family on every other booking.
  *     Authorship decides every other free-text field here, so it decides this
  *     one.
  *
  * FAMILY erased:
- *   - Everything FAMILY-level — `familyName`, `parentName`, `students[]` and
- *     `studentIds`, `address`/`latLng`, `preSessionNote` (and every instance's
- *     `preSessionNote`) — goes ONLY when the LAST parent goes. This
+ *   - Everything FAMILY-level — `familyName`, `students[]` and `studentIds`,
+ *     `address`/`latLng`, `preSessionNote` (and every instance's
+ *     `preSessionNote`) — goes ONLY when the LAST parent goes. `parentName` is
+ *     deliberately NOT in this list despite sitting beside `familyName` on the
+ *     document: it is ONE PERSON's name (see the uid rule above) and goes with
+ *     its owner's uid. The last-parent block clears it too, which is redundant
+ *     for a sole parent who booked the session themselves and correct for a
+ *     family whose surviving name belonged to a parent who left earlier. This
  *     is exactly the `preAppointmentNote` rule: the note, the roster and the
  *     address are family data, not per-parent data; while a co-parent survives
  *     they stay theirs to manage, and when the family itself is deleted they go
@@ -332,7 +341,40 @@ export async function eraseStudyUserData(
       // The `proposedBy` invariant SURVIVES: on such a doc `tutorUserId` and
       // `createdByUserId` are the same uid, so both become 'deleted' together.
       if (session.createdByUserId === targetUserId) updates.createdByUserId = DELETED;
-      if (session.parentUserId === targetUserId) updates.parentUserId = DELETED;
+      if (session.parentUserId === targetUserId) {
+        updates.parentUserId = DELETED;
+        // `parentName` goes WITH the uid that owns it, co-parent or not.
+        // It is not family data, despite sitting next to `familyName`:
+        // `SessionDoc` defines `parentUserId` as "users/{uid} OWNING
+        // parentName", `bookSession` (:164) stamps it from the booking
+        // parent and `respondToSession` (:156-161) from the confirming one,
+        // and `nameFanOut`'s study-sessions sweeps correct it keyed on
+        // `parentUserId` — the schema treats it throughout as one
+        // individual's name. So it takes exactly the treatment `tutorName`
+        // takes two branches down, for exactly the same reason, and the
+        // treatment `createdByUserId` takes on the line above.
+        //
+        // This has to happen HERE and not in the last-parent block, because
+        // after `parentUserId` becomes 'deleted' the field is unreachable
+        // forever: `nameFanOut`'s primary sweep queries
+        // `parentUserId == uid` and its legacy sweep guards on
+        // `!data.parentUserId`, so neither can ever find it again.
+        updates.parentName = '';
+      } else if (
+        // Pre-#273 documents carry no `parentUserId` at all. There
+        // `parentName` is attributable only through `createdByUserId`, and
+        // only when the creator was a PARENT — on a provider proposal the
+        // creator is the tutor and `parentName` is somebody else's (or ''),
+        // so it must not be touched. This is `nameFanOut.legacyParentGuard`
+        // (`!data.parentUserId && data.tutorUserId !== targetUserId`)
+        // verbatim, so the erasure reaches exactly the documents the
+        // correction sweep would have.
+        !session.parentUserId &&
+        session.createdByUserId === targetUserId &&
+        session.tutorUserId !== targetUserId
+      ) {
+        updates.parentName = '';
+      }
 
       // `message` belongs to whoever CREATED the document, which is not always
       // the family. On a `proposedBy: 'provider'` doc it is the tutor's own
@@ -395,6 +437,8 @@ export async function eraseStudyUserData(
         data: Record<string, unknown>;
       }[] = [];
       const claimDates: string[] = [];
+      let pendingCancelled = 0;
+      let pendingScrubbed = 0;
       for (const inst of instancesSnap.docs) {
         const data = inst.data();
         const instUpdates: Record<string, unknown> = {};
@@ -432,8 +476,14 @@ export async function eraseStudyUserData(
             instUpdates.preSessionNote !== undefined;
           instUpdates.updatedAt = now;
           instanceWrites.push({ ref: inst.ref, data: instUpdates });
-          if (cancelInstance) stats.instancesCancelled += 1;
-          if (noteErased) stats.instancesScrubbed += 1;
+          // Counted into LOCALS, folded into `stats` only once the batch has
+          // committed. These numbers are the accountability record for an
+          // erasure that cannot be re-run, so every one of them has to be a
+          // statement about a write that actually landed — an entry reading
+          // `cancelledStudyInstances: 3, erasureFailures: 1` where the three
+          // were never written is worse than no number at all.
+          if (cancelInstance) pendingCancelled += 1;
+          if (noteErased) pendingScrubbed += 1;
         }
       }
 
@@ -447,6 +497,8 @@ export async function eraseStudyUserData(
         stats.sessionsAnonymized += 1;
       }
       if (instanceWrites.length > 0) await commitChunked(instanceWrites);
+      stats.instancesCancelled += pendingCancelled;
+      stats.instancesScrubbed += pendingScrubbed;
       if (cancelling) stats.sessionsCancelled += 1;
 
       // Only a SURVIVING tutor's claims need releasing; an erased tutor's whole
