@@ -11,12 +11,23 @@ import type { PhotoItem } from './postTaskDraft';
 export const PHOTO_POLL_INTERVAL_MS = 2500;
 export const PHOTO_POLL_MAX_ATTEMPTS = 8;
 
+/**
+ * Client-side mirror of the storage.rules quarantine bounds
+ * (`request.resource.size < 10MB && contentType.matches('image/.*')`): the
+ * rules are the enforcement, this pre-check is the COPY — without it an
+ * oversized camera photo dies as an opaque rules rejection with copy that
+ * invites retrying (PR #331 round 1). Keep in sync with storage.rules.
+ */
+export const PHOTO_MAX_BYTES = 10 * 1024 * 1024;
+
 interface UsePhotoUploadsArgs {
   uid: string | null;
   photos: PhotoItem[];
   onChange: (mutate: (prev: PhotoItem[]) => PhotoItem[]) => void;
   onLimitError: () => void;
   onUploadError: () => void;
+  onFileTooLarge: () => void;
+  onFileWrongType: () => void;
 }
 
 function patch(photos: PhotoItem[], photoId: string, changes: Partial<PhotoItem>): PhotoItem[] {
@@ -40,7 +51,15 @@ function patch(photos: PhotoItem[], photoId: string, changes: Partial<PhotoItem>
  * States: uploading → processing (polling) → ready | error; 'processing'
  * past the poll cap keeps a manual Retry.
  */
-export function usePhotoUploads({ uid, photos, onChange, onLimitError, onUploadError }: UsePhotoUploadsArgs) {
+export function usePhotoUploads({
+  uid,
+  photos,
+  onChange,
+  onLimitError,
+  onUploadError,
+  onFileTooLarge,
+  onFileWrongType,
+}: UsePhotoUploadsArgs) {
   // Live timers by photoId, cleared on unmount — the poll must never outlive
   // the wizard (the AreaPage timer-leak lesson, PR #221).
   const timersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
@@ -89,6 +108,17 @@ export function usePhotoUploads({ uid, photos, onChange, onLimitError, onUploadE
       onLimitError();
       return;
     }
+    // Pre-empt the storage.rules bounds with actionable copy (the
+    // VerificationPage file-size precedent): `accept="image/*"` on the
+    // input is a picker hint, not enforcement.
+    if (!file.type.startsWith('image/')) {
+      onFileWrongType();
+      return;
+    }
+    if (file.size >= PHOTO_MAX_BYTES) {
+      onFileTooLarge();
+      return;
+    }
     // Client-minted UUID (§7.4): safe because both prefixes are keyed by the
     // caller's own uid — a colliding id can only clobber the caller's own
     // objects.
@@ -109,6 +139,15 @@ export function usePhotoUploads({ uid, photos, onChange, onLimitError, onUploadE
   };
 
   const retryPhoto = (photoId: string) => {
+    // Clear any poll already pending for this photo BEFORE starting a fresh
+    // chain (mirrors removePhoto) — otherwise a mid-poll Retry runs two
+    // chains for one id, and only the last timer stays clearable on
+    // unmount. Same timer-lifecycle class as the PR #221 lesson.
+    const pending = timersRef.current.get(photoId);
+    if (pending) {
+      clearTimeout(pending);
+      timersRef.current.delete(photoId);
+    }
     onChange((prev) => patch(prev, photoId, { state: 'processing' }));
     pollThumbnail(photoId, 0);
   };

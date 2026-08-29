@@ -154,7 +154,10 @@ describe('PostTaskPage sequencing + gating', () => {
     next();
     fireEvent.click(screen.getByRole('button', { name: /Kids' entertainment/ }));
     expect(screen.getByText(/childcare/i)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Open Sync/Sit' })).toBeInTheDocument();
+    const link = screen.getByRole('link', { name: 'Open Sync/Sit' });
+    // New tab so the wizard draft survives the read (PR #331 round 1).
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer');
   });
 });
 
@@ -225,6 +228,28 @@ describe('PostTaskPage review + publish', () => {
     await waitFor(() =>
       expect(screen.getByText(/maximum number of open tasks/i)).toBeInTheDocument(),
     );
+  });
+
+  it('photo_not_ready bounces back to the photos step WITH a visible explanation', async () => {
+    renderWithProviders(<PostTaskPage />);
+    walkToReview();
+    h.callable.mockRejectedValueOnce(
+      Object.assign(new Error('strip'), {
+        code: 'functions/failed-precondition',
+        details: { reason: 'photo_not_ready', photoId: 'ph-1' },
+      }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Publish task' }));
+    // Back on the photos step, and the jump is explained (PR #331 round 1 —
+    // a silent four-step bounce reads as a broken wizard).
+    await waitFor(() => expect(screen.getByText(/Up to 6 photos/)).toBeInTheDocument());
+    expect(screen.getByText(/still being prepared/)).toBeInTheDocument();
+    // Leaving the step forward clears the notice (every thumbnail is ready
+    // again — isStepValid gates Next on exactly that).
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    expect(screen.getByText(/Up to 6 photos/)).toBeInTheDocument();
+    expect(screen.queryByText(/still being prepared/)).toBeNull();
   });
 
   it('maps permission-denied to the verification copy', async () => {

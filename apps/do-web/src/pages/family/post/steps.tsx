@@ -86,11 +86,18 @@ export function StepSubCategory({ draft, update }: StepProps) {
       ))}
       {/* §5.4: kids' entertainment gets the explicit "is this childcare?"
           interstitial with the way OUT to sync-sit (decision 20 permits
-          out-links; only the reverse direction is gated). */}
+          out-links; only the reverse direction is gated). New tab, so the
+          in-progress wizard draft survives the read (PR #331 round 1) —
+          the nudge is informational, not a decision point. */}
       {draft.subCategory === 'party_kids_entertainment' && (
         <InfoBanner variant="warning" className="mt-2">
           {t('family.post.childcareInterstitial')}{' '}
-          <a href={SIT_APP_URL} className="font-semibold text-brand-600 underline">
+          <a
+            href={SIT_APP_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-semibold text-brand-600 underline"
+          >
             {t('family.post.childcareInterstitialLink')}
           </a>
         </InfoBanner>

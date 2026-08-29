@@ -5,7 +5,7 @@ import { InfoBanner, PlusIcon, Spinner, XIcon } from '@ejm/shared-ui';
 import { useAuthStore } from '@/stores/authStore';
 import type { StepProps } from './steps';
 import type { PhotoItem } from './postTaskDraft';
-import { usePhotoUploads } from './usePhotoUploads';
+import { PHOTO_MAX_BYTES, usePhotoUploads } from './usePhotoUploads';
 
 interface StepPhotosProps extends StepProps {
   /** FUNCTIONAL photo updates: the upload/poll callbacks resolve long after
@@ -13,6 +13,10 @@ interface StepPhotosProps extends StepProps {
    * a value-style `update({ photos: ... })` here would write through a
    * stale closure and drop concurrent uploads. */
   updatePhotos: (mutate: (prev: PhotoItem[]) => PhotoItem[]) => void;
+  /** Page-level notice rendered ABOVE the step (e.g. the wizard bounced the
+   * parent back here because doPostTask refused with photo_not_ready) —
+   * the jump must come with an explanation (PR #331 round 1). */
+  pageNotice?: string | null;
 }
 
 /**
@@ -21,7 +25,7 @@ interface StepPhotosProps extends StepProps {
  * doGetOwnPhotoUrl, ≤6 with a remove control. The §11.2 visibility warning
  * shows here as well as at review — photos are board-visible.
  */
-export function StepPhotos({ draft, updatePhotos }: StepPhotosProps) {
+export function StepPhotos({ draft, updatePhotos, pageNotice }: StepPhotosProps) {
   const { t } = useTranslation();
   const uid = useAuthStore((s) => s.firebaseUser)?.uid ?? null;
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -33,10 +37,20 @@ export function StepPhotos({ draft, updatePhotos }: StepPhotosProps) {
     onChange: updatePhotos,
     onLimitError: () => setNotice(t('family.post.photoTooMany', { max: DO_TASK_PHOTOS_MAX })),
     onUploadError: () => setNotice(t('family.post.photoUploadError')),
+    // Client-side mirror of the storage.rules quarantine bounds — the copy
+    // that turns a rules rejection into an actionable message.
+    onFileTooLarge: () =>
+      setNotice(t('family.post.photoTooLarge', { maxMb: Math.floor(PHOTO_MAX_BYTES / (1024 * 1024)) })),
+    onFileWrongType: () => setNotice(t('family.post.photoWrongType')),
   });
 
   return (
     <div>
+      {pageNotice && (
+        <InfoBanner variant="warning" className="mb-4">
+          {pageNotice}
+        </InfoBanner>
+      )}
       <p className="mb-2 text-sm text-gray-600">
         {t('family.post.photosHint', { max: DO_TASK_PHOTOS_MAX })}
       </p>

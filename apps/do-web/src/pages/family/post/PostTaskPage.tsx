@@ -48,6 +48,9 @@ export function PostTaskPage() {
   const [publishing, setPublishing] = useState(false);
   const [publishError, setPublishError] = useState<PublishErrorKey>(null);
   const [addressFix, setAddressFix] = useState(false);
+  // Why the wizard bounced back to the photos step (photo_not_ready): the
+  // jump must be explained on arrival, not silent (PR #331 round 1).
+  const [photosNotice, setPhotosNotice] = useState<string | null>(null);
 
   const step = POST_STEPS[stepIndex];
   const update = (changes: Partial<TaskDraft>) => setDraft((d) => ({ ...d, ...changes }));
@@ -88,7 +91,8 @@ export function PostTaskPage() {
       } else if (reason === 'photo_not_ready') {
         // The stripper is still working on a photo doPostTask checked —
         // send the parent back to the photos step, where the pending state
-        // and its retry live.
+        // and its retry live, WITH the reason for the jump.
+        setPhotosNotice(t('family.post.photoNotReadyNotice'));
         setStepIndex(POST_STEPS.indexOf('photos'));
       } else if (code.endsWith('permission-denied')) {
         setPublishError('notVerified');
@@ -116,6 +120,7 @@ export function PostTaskPage() {
             draft={draft}
             update={update}
             updatePhotos={(mutate) => setDraft((d) => ({ ...d, photos: mutate(d.photos) }))}
+            pageNotice={photosNotice}
           />
         );
       case 'adultPresent':
@@ -166,7 +171,15 @@ export function PostTaskPage() {
         {stepBody()}
         {step !== 'review' && (
           <div className="mt-6">
-            <Button onClick={() => setStepIndex(stepIndex + 1)} disabled={!isStepValid(step, draft)}>
+            <Button
+              onClick={() => {
+                // Leaving the photos step forward clears the bounce-back
+                // notice — every thumbnail is ready again (isStepValid).
+                if (step === 'photos') setPhotosNotice(null);
+                setStepIndex(stepIndex + 1);
+              }}
+              disabled={!isStepValid(step, draft)}
+            >
               {t('family.post.next')}
             </Button>
           </div>
