@@ -515,16 +515,30 @@ service cloud.firestore {
       // enumerate every sit manual field and would break the next time sit
       // adds one — while the actual invariant being protected is narrower.
       // A client-created reference is a SIT MANUAL reference about the caller;
-      // it names no other app's provider. Both keys are named, not just
-      // `doerUserId`: study's exposure through this same rule is identical,
-      // and closing only the half this PR happens to touch would be leaving a
-      // known hole open on purpose.
+      // it names no other app's provider, and no submitting family. Every key
+      // is named, not just `doerUserId`: study's exposure through this same
+      // rule is identical, and closing only the half a given PR happens to
+      // touch would be leaving a known hole open on purpose.
+      //
+      // `submittedByFamilyId` is the same injection one field over (PR #352
+      // round-2 review). The read rule's family disjunct grants a doc to every
+      // member of the family it names, so an attacker could point their own
+      // manual reference at a victim FAMILY and have it render on study's
+      // family RequestsPage (`where('submittedByFamilyId','==',mine)`) with
+      // attacker-controlled text. It is also the one key whose absence this
+      // rule already implied: `submittedByUserId` must be absent or null here
+      // — there is no submitter — so a submitting family without a submitter
+      // was never a coherent shape. The one client create in the repo
+      // (`apps/web/src/hooks/useEndorsements.ts:73`) spreads a typed
+      // `ManualRefInput` that carries none of these three keys, so nothing
+      // real writes them; the regression case below pins that.
       allow create: if isAuth()
         && request.resource.data.status == 'private'
         && request.resource.data.babysitterUserId == request.auth.uid
         && request.resource.data.type == 'manual'
         && !('doerUserId' in request.resource.data)
         && !('tutorUserId' in request.resource.data)
+        && !('submittedByFamilyId' in request.resource.data)
         && (!('submittedByUserId' in request.resource.data)
             || request.resource.data.submittedByUserId == null);
       // Update: owner (babysitter or submitter) may edit their own reference,

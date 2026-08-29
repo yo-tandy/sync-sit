@@ -3590,6 +3590,26 @@ describe('references collection — no foreign recipient key on a client create 
     }));
   });
 
+  // The same injection ONE FIELD OVER (round-2 review). The read rule's
+  // family disjunct grants a doc to every member of the family it names, so
+  // an attacker pointing their own manual reference at a victim FAMILY has it
+  // render on study's family RequestsPage (`submittedByFamilyId == mine`)
+  // with attacker-controlled text. It is also the key this rule already
+  // implied: `submittedByUserId` must be absent or null, so a submitting
+  // family with no submitter was never a coherent shape.
+  it('denies a client attaching a foreign submittedByFamilyId', async () => {
+    const attacker = testEnv.authenticatedContext('attacker');
+    await assertFails(setDoc(doc(attacker.firestore(), 'references', 'fam-smuggled'), {
+      ...LEGIT_MANUAL,
+      referenceId: 'fam-smuggled',
+      babysitterUserId: 'attacker',
+      submittedByFamilyId: 'famVictim',
+      appSource: 'study',
+      referenceText: 'Call 0800-SCAM to claim your payment.',
+      submittedByName: 'Sync Support',
+    }));
+  });
+
   // Even the attacker's OWN uid in the recipient slot is refused: the rule
   // says a client create names no other app's provider at all, so it cannot
   // be sidestepped by first minting a self-named doc and then retargeting it.
