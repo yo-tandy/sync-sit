@@ -12,13 +12,21 @@ const h = vi.hoisted(() => ({
     refreshUserDoc: vi.fn(() => Promise.resolve()),
     resetPassword: vi.fn(() => Promise.resolve()),
   },
-  updateDoc: vi.fn(() => Promise.resolve()),
-  uploadBytes: vi.fn(() => Promise.resolve()),
-  getDownloadURL: vi.fn(() => Promise.resolve('https://cdn.example/photo.png')),
-  deleteObject: vi.fn(() => Promise.resolve()),
+  updateDoc: vi.fn<(ref: { path: string }, data: Record<string, unknown>) => Promise<void>>(
+    () => Promise.resolve(),
+  ),
+  uploadBytes: vi.fn<(ref: { path: string }, data: unknown) => Promise<void>>(() =>
+    Promise.resolve(),
+  ),
+  getDownloadURL: vi.fn<(ref: { path: string }) => Promise<string>>(() =>
+    Promise.resolve('https://cdn.example/photo.png'),
+  ),
+  deleteObject: vi.fn<(ref: { path: string }) => Promise<void>>(() => Promise.resolve()),
   // Personal-code mint (issue #235). Default: resolves a code, so the many
   // tests whose seeded doc predates personalCode render the section quietly.
-  callable: vi.fn(() => Promise.resolve({ data: { code: 'A1B2C3D4' } })),
+  callable: vi.fn<(name: string, payload?: unknown) => Promise<{ data: unknown }>>(() =>
+    Promise.resolve({ data: { code: 'A1B2C3D4' } }),
+  ),
 }));
 
 vi.mock('@/config/firebase', () => ({ db: {}, storage: {}, functions: {} }));
@@ -29,15 +37,16 @@ vi.mock('firebase/functions', () => ({
 
 vi.mock('firebase/firestore', () => ({
   doc: (_db: unknown, ...path: string[]) => ({ path: path.join('/') }),
-  updateDoc: (...args: unknown[]) => h.updateDoc(...args),
+  updateDoc: (...args: [ref: { path: string }, data: Record<string, unknown>]) =>
+    h.updateDoc(...args),
   serverTimestamp: () => 'ts',
 }));
 
 vi.mock('firebase/storage', () => ({
   ref: (_storage: unknown, path: string) => ({ path }),
-  uploadBytes: (...args: unknown[]) => h.uploadBytes(...args),
-  deleteObject: (...args: unknown[]) => h.deleteObject(...args),
-  getDownloadURL: (...args: unknown[]) => h.getDownloadURL(...args),
+  uploadBytes: (...args: [ref: { path: string }, data: unknown]) => h.uploadBytes(...args),
+  deleteObject: (...args: [ref: { path: string }]) => h.deleteObject(...args),
+  getDownloadURL: (...args: [ref: { path: string }]) => h.getDownloadURL(...args),
 }));
 
 vi.mock('@/stores/authStore', () => ({
@@ -119,7 +128,7 @@ describe('tutor AccountPage', () => {
     );
     // Root-only: no nested contact keys may ride the payload — the nested
     // copy is a frozen back-compat duplicate, never client-written again.
-    const payload = h.updateDoc.mock.calls[0][1] as Record<string, unknown>;
+    const payload = h.updateDoc.mock.calls[0][1];
     for (const key of Object.keys(payload)) {
       expect(key.startsWith('profiles.')).toBe(false);
     }
@@ -157,7 +166,7 @@ describe('tutor AccountPage', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /save contact/i }));
     await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
-    const payload = h.updateDoc.mock.calls[0][1] as Record<string, unknown>;
+    const payload = h.updateDoc.mock.calls[0][1];
     expect(payload).toHaveProperty('contactEmail', null);
     expect(payload).toHaveProperty('whatsapp', null);
   });
@@ -200,7 +209,7 @@ describe('tutor AccountPage', () => {
     // full map, with push matching the server's default-on gate.
     fireEvent.click(screen.getByRole('button', { name: 'Endorsements — Email' }));
     await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
-    const payload = h.updateDoc.mock.calls[0][1] as Record<string, unknown>;
+    const payload = h.updateDoc.mock.calls[0][1];
     expect(Object.keys(payload).sort()).toEqual(['notifPrefs.references', 'updatedAt']);
     expect(payload['notifPrefs.references']).toEqual({ push: true, email: false });
   });
@@ -216,7 +225,7 @@ describe('tutor AccountPage', () => {
     renderWithProviders(<AccountPage />);
     fireEvent.click(screen.getByRole('button', { name: 'Confirmation — Email' }));
     await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
-    const payload = h.updateDoc.mock.calls[0][1] as Record<string, unknown>;
+    const payload = h.updateDoc.mock.calls[0][1];
     expect(Object.keys(payload).sort()).toEqual(['notifPrefs.confirmed', 'updatedAt']);
     expect(payload['notifPrefs.confirmed']).toEqual({ push: true, email: false });
   });
@@ -227,9 +236,9 @@ describe('tutor AccountPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'New request — Email' }));
 
     await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
-    const call = h.updateDoc.mock.calls[0] as unknown[];
+    const call = h.updateDoc.mock.calls[0];
     expect(call[0]).toEqual(expect.objectContaining({ path: 'users/t1' }));
-    const payload = call[1] as Record<string, unknown>;
+    const payload = call[1];
     expect(payload).toHaveProperty('notifPrefs.newRequest.email', false);
     const keys = Object.keys(payload);
     // Every key is either updatedAt or the toggled scenario/channel dot-path —
@@ -274,7 +283,7 @@ describe('tutor AccountPage', () => {
       expect(pushToggle).not.toBeDisabled();
       fireEvent.click(pushToggle);
       await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
-      const payload = h.updateDoc.mock.calls[0][1] as Record<string, unknown>;
+      const payload = h.updateDoc.mock.calls[0][1];
       expect(payload).toHaveProperty('notifPrefs.newRequest.push', false);
       const keys = Object.keys(payload);
       expect(keys.every((k) => k === 'updatedAt' || /^notifPrefs\.[a-z]+\.push$/i.test(k))).toBe(true);
@@ -294,7 +303,7 @@ describe('tutor AccountPage', () => {
 
     await waitFor(() => expect(h.uploadBytes).toHaveBeenCalled());
     // Storage path is uid-keyed — the owner-write gate in storage.rules.
-    expect((h.uploadBytes.mock.calls[0][0] as { path: string }).path).toBe('profile-photos/t1.png');
+    expect(h.uploadBytes.mock.calls[0][0].path).toBe('profile-photos/t1.png');
     await waitFor(() =>
       expect(h.updateDoc).toHaveBeenCalledWith(
         expect.objectContaining({ path: 'users/t1' }),
@@ -436,9 +445,9 @@ describe('tutor AccountPage', () => {
     fireEvent.click(screen.getByRole('button', { name: /save about me/i }));
 
     await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
-    const call = h.updateDoc.mock.calls[0] as unknown[];
+    const call = h.updateDoc.mock.calls[0];
     expect(call[0]).toEqual(expect.objectContaining({ path: 'users/t1' }));
-    const payload = call[1] as Record<string, unknown>;
+    const payload = call[1];
     // Pin the FULL key set: dot-paths only — never a wholesale profiles.tutor
     // rewrite (would clobber server-owned siblings like approvedFamilies).
     expect(Object.keys(payload).sort()).toEqual(['profiles.tutor.aboutMe', 'updatedAt']);
@@ -452,7 +461,7 @@ describe('tutor AccountPage', () => {
     fireEvent.click(screen.getByRole('button', { name: /save about me/i }));
 
     await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
-    const payload = h.updateDoc.mock.calls[0][1] as Record<string, unknown>;
+    const payload = h.updateDoc.mock.calls[0][1];
     expect(payload['profiles.tutor.aboutMe']).toBeNull();
   });
 

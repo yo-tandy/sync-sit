@@ -217,7 +217,7 @@ describe('configured pastVisibilityDays (issue #250)', () => {
     for (let i = 0; i < 5 && !snapState.cb; i++) await act(async () => {});
     expect(snapState.cb).toBeTruthy();
     act(() => {
-      snapState.cb?.({ docs: [{ data: () => old20 }] });
+      snapState.cb?.({ docs: [{ id: 'old20', data: () => old20 }] });
     });
     await act(async () => {});
     expect(result.current.pastRecent.map((a) => a.appointmentId)).toEqual(['old20']);

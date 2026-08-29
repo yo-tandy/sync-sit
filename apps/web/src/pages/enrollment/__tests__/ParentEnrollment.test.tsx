@@ -26,7 +26,7 @@ const h = vi.hoisted(() => ({
   // reads them via getState. Failure paths override per-test: a rejection
   // settles nothing, a doc blip settles only firebaseUser — so the gate
   // fails and the account-ready login state renders (issue #262).
-  signIn: vi.fn(() => {
+  signIn: vi.fn<(auth: unknown, email: string, password: string) => Promise<void>>(() => {
     h.auth.firebaseUser = { uid: 'new' };
     h.auth.userDoc = { profiles: { parent: { familyId: 'fam-1' } } };
     return Promise.resolve();
@@ -64,7 +64,9 @@ vi.mock('firebase/functions', () => ({
   },
 }));
 vi.mock('firebase/auth', () => ({
-  signInWithEmailAndPassword: (...args: unknown[]) => h.signIn(...args),
+  signInWithEmailAndPassword: (
+    ...args: [auth: unknown, email: string, password: string]
+  ) => h.signIn(...args),
 }));
 vi.mock('react-router', async (orig) => ({
   ...(await orig<typeof import('react-router')>()),
