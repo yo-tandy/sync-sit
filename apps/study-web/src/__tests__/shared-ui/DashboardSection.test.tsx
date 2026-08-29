@@ -18,7 +18,7 @@ describe('DashboardSection', () => {
         <p>row one</p>
       </DashboardSection>,
     );
-    expect(screen.getByRole('heading', { name: 'New requests' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /New requests/ })).toBeInTheDocument();
     expect(screen.getByText('2')).toBeInTheDocument();
     expect(screen.getByText('row one')).toBeInTheDocument();
     expect(screen.getByRole('button')).toHaveAttribute('aria-expanded', 'true');
@@ -32,7 +32,7 @@ describe('DashboardSection', () => {
     );
     // renderWithProviders mounts the toast live-regions, so assert on the
     // section's own markup rather than an empty container.
-    expect(screen.queryByRole('heading', { name: 'New requests' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /New requests/ })).not.toBeInTheDocument();
     expect(screen.queryByText('row one')).not.toBeInTheDocument();
   });
 
@@ -44,7 +44,7 @@ describe('DashboardSection', () => {
         <p>row one</p>
       </DashboardSection>,
     );
-    expect(screen.getByRole('heading', { name: 'New requests' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /New requests/ })).toBeInTheDocument();
     expect(screen.getByText('row one')).toBeInTheDocument();
     expect(screen.queryByText('0')).not.toBeInTheDocument();
   });
@@ -71,6 +71,38 @@ describe('DashboardSection', () => {
     );
     expect(screen.getByRole('button')).toHaveAttribute('aria-expanded', 'false');
     expect(screen.queryByText('row one')).not.toBeInTheDocument();
+  });
+
+  it('wraps the toggle in the heading, not the other way round (valid content model)', () => {
+    // Both source dashboards had <h3> INSIDE <button> — a button takes
+    // phrasing content, a heading is flow content — and AT flattens a button's
+    // descendants into its name, so the titles were not reachable by heading
+    // navigation at all. jsdom is more permissive than real AT, which is why
+    // no test caught it. This is the WAI-ARIA APG accordion shape (PR #345
+    // round 2).
+    renderWithProviders(
+      <DashboardSection title="New requests" count={2} variant="pending">
+        <p>row one</p>
+      </DashboardSection>,
+    );
+    const heading = screen.getByRole('heading');
+    const toggle = screen.getByRole('button');
+    expect(heading.tagName).toBe('H3');
+    expect(heading.contains(toggle)).toBe(true);
+    // ...and nothing flow-level is left inside the button.
+    expect(toggle.querySelector('h1,h2,h3,h4,h5,h6,div,p')).toBeNull();
+  });
+
+  it('completes the disclosure: aria-controls points at the content it opens', () => {
+    renderWithProviders(
+      <DashboardSection title="New requests" count={2} variant="pending">
+        <p>row one</p>
+      </DashboardSection>,
+    );
+    const toggle = screen.getByRole('button');
+    const controls = toggle.getAttribute('aria-controls');
+    expect(controls).toBeTruthy();
+    expect(document.getElementById(controls!)).toContainElement(screen.getByText('row one'));
   });
 
   it('lets a call site opt out of the default row stacking', () => {

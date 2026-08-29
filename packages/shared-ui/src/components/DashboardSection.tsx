@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useId, useState, type ReactNode } from 'react';
 import { Badge } from './Badge.js';
 import { ChevronRightIcon } from './Icons.js';
 
@@ -15,6 +15,17 @@ import { ChevronRightIcon } from './Icons.js';
  *
  * Both apps' `Badge`, `Card` and icons already come from this package, so the
  * move changes no pixels on the provider dashboards.
+ *
+ * MARKUP (PR #345 round 2): the heading WRAPS the toggle, which is the WAI-ARIA
+ * APG accordion shape. Both source dashboards had the `<h3>` *inside* the
+ * `<button>` — an invalid content model (a button takes phrasing content; a
+ * heading is flow content), and one that assistive tech flattens into the
+ * button's accessible name, so the section titles were not reachable by heading
+ * navigation at all. jsdom's role mapping is more permissive than real AT, so
+ * no test caught it. Extracting the component is the moment to fix it once
+ * rather than four times — the same class of defect as the `<button>`-inside-
+ * `<a>` this branch already fixed. `aria-expanded` + `aria-controls` complete
+ * the disclosure so the toggle announces what it opens.
  */
 const BADGE_VARIANT = {
   pending: 'amber',
@@ -59,25 +70,35 @@ export function DashboardSection({
   children,
 }: DashboardSectionProps) {
   const [open, setOpen] = useState(defaultOpen);
+  const contentId = useId();
   if ((total ?? count) === 0) return null;
 
   return (
     <div className="mb-4">
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        aria-expanded={open}
-        className="mb-2 flex w-full items-center justify-between"
-      >
-        <div className="flex items-center gap-2">
-          <h3 className="text-sm font-semibold text-gray-700">{title}</h3>
-          {count > 0 && <Badge variant={BADGE_VARIANT[variant]}>{count}</Badge>}
-        </div>
-        <ChevronRightIcon
-          className={`h-4 w-4 text-gray-400 transition-transform ${open ? 'rotate-90' : ''}`}
-        />
-      </button>
-      {open && <div className={contentClassName}>{children}</div>}
+      {/* The badge sits INSIDE the toggle deliberately: it is part of what the
+          section says, and hiding it from the accessible name would make the
+          count sighted-only. Both are phrasing content, so the button's
+          content model stays valid. */}
+      <h3 className="mb-2">
+        <button
+          type="button"
+          onClick={() => setOpen(!open)}
+          aria-expanded={open}
+          aria-controls={contentId}
+          className="flex w-full items-center justify-between"
+        >
+          <span className="flex items-center gap-2">
+            <span className="text-sm font-semibold text-gray-700">{title}</span>
+            {count > 0 && <Badge variant={BADGE_VARIANT[variant]}>{count}</Badge>}
+          </span>
+          <ChevronRightIcon
+            className={`h-4 w-4 text-gray-400 transition-transform ${open ? 'rotate-90' : ''}`}
+          />
+        </button>
+      </h3>
+      <div id={contentId} className={open ? contentClassName : 'hidden'}>
+        {open && children}
+      </div>
     </div>
   );
 }

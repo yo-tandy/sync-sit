@@ -130,12 +130,34 @@ afterEach(() => cleanup());
 
 // ── Issue #338: the landing page carries the provider-style sections ──
 describe('family DashboardPage — requests & appointments sections (issue #338)', () => {
+  // The page drops past-dated pending rows, so every assertion here depends on
+  // where "now" sits relative to the fixture dates. Two things follow, and the
+  // frozen clock fixes both (PR #345 review):
+  //   1. Hardcoded fixture dates are a time bomb — '2026-09-01' stops being a
+  //      future date on 2026-09-02 and the rows silently vanish.
+  //   2. Left on the real clock these tests are FLAKY, not merely doomed: on a
+  //      full-suite run they fail intermittently (observed 3 failures in one
+  //      run, 0 in the next, same commit), because the wall clock this block
+  //      reads is not isolated from the rest of the suite.
+  // Only Date is faked; waitFor and the getDocs promises need real timers,
+  // matching the focus-refetch block below.
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-08-29T09:00:00Z'));
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('renders the two section headers over real rows', () => {
     h.apts.pending = [apt('a1', 'pending')];
     h.apts.confirmed = [apt('a2', 'confirmed', { date: '2026-09-05', startTime: '10:00', endTime: '12:00' })];
     renderPage();
-    expect(screen.getByRole('heading', { name: 'Your requests' })).toBeTruthy();
-    expect(screen.getByRole('heading', { name: 'Your appointments' })).toBeTruthy();
+    // DashboardSection puts the count badge inside the toggle deliberately, so
+    // the accessible name of a badged section is "Your appointments1". Match a
+    // prefix rather than asserting a name the component never produces.
+    expect(screen.getByRole('heading', { name: /^Your requests/ })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: /^Your appointments/ })).toBeTruthy();
     // Each row carries its own date/time line...
     expect(screen.getByText(/Tue.*1 Sep.*· 18:00–21:00/)).toBeTruthy();
     expect(screen.getByText(/Sat.*5 Sep.*· 10:00–12:00/)).toBeTruthy();
@@ -173,7 +195,7 @@ describe('family DashboardPage — requests & appointments sections (issue #338)
     // `total` gates the section, `count` only the badge.
     h.apts.pending = [apt('a1', 'pending')];
     renderPage();
-    expect(screen.getByRole('heading', { name: 'Your requests' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: /^Your requests/ })).toBeTruthy();
     expect(screen.queryByText('1')).toBeNull();
   });
 
@@ -210,7 +232,7 @@ describe('family DashboardPage — requests & appointments sections (issue #338)
       }),
     ];
     renderPage();
-    expect(screen.getByRole('heading', { name: 'Your requests' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: /^Your requests/ })).toBeTruthy();
     // The future request and the dateless recurring one render...
     expect(screen.getByText(new RegExp(shortDate(parisDatePlus(5))))).toBeTruthy();
     expect(screen.getByText('Mon 17:00–19:00')).toBeTruthy();

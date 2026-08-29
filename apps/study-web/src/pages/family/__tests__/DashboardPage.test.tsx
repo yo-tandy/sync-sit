@@ -198,8 +198,8 @@ describe('family DashboardPage', () => {
     h.sessions = [session({ sessionId: 's1', tutorName: 'Leo' })];
     renderWithProviders(<DashboardPage />);
 
-    expect(await screen.findByRole('heading', { name: 'Your requests' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Your sessions' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /Your requests/ })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Your sessions/ })).toBeInTheDocument();
     // Real rows, not a count line: the tutor's name and the row's subject.
     expect(screen.getByText('Sarah')).toBeInTheDocument();
     expect(screen.getByText('Leo')).toBeInTheDocument();
@@ -232,7 +232,7 @@ describe('family DashboardPage', () => {
     ];
     renderWithProviders(<DashboardPage />);
 
-    await screen.findByRole('heading', { name: 'Your requests' });
+    await screen.findByRole('heading', { name: /Your requests/ });
     // Both rows show...
     expect(screen.getByText('Sarah')).toBeInTheDocument();
     expect(screen.getByText('Marc')).toBeInTheDocument();
@@ -247,25 +247,41 @@ describe('family DashboardPage', () => {
     // outgoing request must still see it.
     h.requests = [request({ requestId: 'r1', tutorName: 'Marc' })];
     renderWithProviders(<DashboardPage />);
-    expect(await screen.findByRole('heading', { name: 'Your requests' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /Your requests/ })).toBeInTheDocument();
     expect(screen.getByText('Marc')).toBeInTheDocument();
     expect(screen.queryByText('1')).not.toBeInTheDocument();
   });
 
-  it('marks a tutor PROPOSAL as ours to answer and badges it', async () => {
+  it('marks a tutor PROPOSAL as ours to answer, on the row', async () => {
     h.sessions = [session({ sessionId: 's1', status: 'pending', proposedBy: 'provider' })];
     renderWithProviders(<DashboardPage />);
-    await screen.findByRole('heading', { name: 'Your sessions' });
+    await screen.findByRole('heading', { name: /Your sessions/ });
     expect(screen.getByText('Proposed by Leo')).toBeInTheDocument();
-    expect(screen.getByText('1')).toBeInTheDocument();
   });
 
-  it('marks a booking WE sent as awaiting the tutor, and does not badge it', async () => {
+  it('marks a booking WE sent as awaiting the tutor', async () => {
     h.sessions = [session({ sessionId: 's1', status: 'pending' })];
     renderWithProviders(<DashboardPage />);
-    await screen.findByRole('heading', { name: 'Your sessions' });
+    await screen.findByRole('heading', { name: /Your sessions/ });
     expect(screen.getByText(/waiting for the tutor to confirm/i)).toBeInTheDocument();
-    expect(screen.queryByText('1')).not.toBeInTheDocument();
+  });
+
+  it('badges the sessions section with its ROW COUNT, as sit and both providers do', async () => {
+    // The badge rule across all four dashboards (PR #345 round 2): an AMBER
+    // section badges what you must answer, a GREEN section badges how many
+    // rows it holds. Badging a to-do in green — while the amber requests
+    // section above badged a to-do — was one semantic in two colours on one
+    // page, and diverged from sit's "Your appointments" and the tutor's
+    // "Confirmed", which both count rows.
+    h.sessions = [
+      session({ sessionId: 's1' }),
+      session({ sessionId: 's2', date: '2099-02-02' }),
+      session({ sessionId: 's3', status: 'pending', proposedBy: 'provider', date: '2099-03-03' }),
+    ];
+    renderWithProviders(<DashboardPage />);
+    const heading = await screen.findByRole('heading', { name: /Your sessions/ });
+    // Three rows → 3, not "1 proposal awaiting us".
+    expect(heading).toHaveTextContent('3');
   });
 
   it('sorts sessions soonest-first and renders a recurring series by its weekly slot', async () => {
@@ -282,7 +298,7 @@ describe('family DashboardPage', () => {
     ];
     renderWithProviders(<DashboardPage />);
 
-    await screen.findByRole('heading', { name: 'Your sessions' });
+    await screen.findByRole('heading', { name: /Your sessions/ });
     const names = screen.getAllByText(/^(Later|Series|Sooner)$/).map((n) => n.textContent);
     // Concrete dates ascending; the series (no single date) sorts last.
     expect(names).toEqual(['Sooner', 'Later', 'Series']);
@@ -310,7 +326,7 @@ describe('family DashboardPage', () => {
       }),
     ];
     renderWithProviders(<DashboardPage />);
-    await screen.findByRole('heading', { name: 'Your sessions' });
+    await screen.findByRole('heading', { name: /Your sessions/ });
     const names = screen.getAllByText(/^(Evening|Morning)$/).map((n) => n.textContent);
     expect(names).toEqual(['Morning', 'Evening']);
   });
@@ -336,7 +352,7 @@ describe('family DashboardPage', () => {
       request({ requestId: 'r-legacy', status: 'accepted', tutorName: 'Legacy' }),
     ];
     renderWithProviders(<DashboardPage />);
-    await screen.findByRole('heading', { name: 'Your requests' });
+    await screen.findByRole('heading', { name: /Your requests/ });
     expect(screen.getByText('Recent')).toBeInTheDocument();
     expect(screen.getByText('Legacy')).toBeInTheDocument();
     expect(screen.queryByText('Stale')).not.toBeInTheDocument();
@@ -353,7 +369,7 @@ describe('family DashboardPage', () => {
       }),
     ];
     renderWithProviders(<DashboardPage />);
-    await screen.findByRole('heading', { name: 'Your requests' });
+    await screen.findByRole('heading', { name: /Your requests/ });
     expect(screen.getByText('Waiting')).toBeInTheDocument();
   });
 
@@ -365,7 +381,7 @@ describe('family DashboardPage', () => {
       session({ sessionId: 's2', date: parisDatePlus(3), tutorName: 'Soon' }),
     ];
     renderWithProviders(<DashboardPage />);
-    await screen.findByRole('heading', { name: 'Your sessions' });
+    await screen.findByRole('heading', { name: /Your sessions/ });
     expect(screen.getByText('Soon')).toBeInTheDocument();
     expect(screen.queryByText('Old')).not.toBeInTheDocument();
   });
@@ -377,7 +393,7 @@ describe('family DashboardPage', () => {
       request({ requestId: 'r3', status: 'accepted', tutorName: 'Ada' }),
     ];
     renderWithProviders(<DashboardPage />);
-    await screen.findByRole('heading', { name: 'Your requests' });
+    await screen.findByRole('heading', { name: /Your requests/ });
     expect(screen.getByText('Ada')).toBeInTheDocument();
     expect(screen.queryByText('Dora')).not.toBeInTheDocument();
     expect(screen.queryByText('Cleo')).not.toBeInTheDocument();
@@ -398,8 +414,8 @@ describe('family DashboardPage', () => {
   it('shows one empty state when the family has neither requests nor sessions', async () => {
     renderWithProviders(<DashboardPage />);
     expect(await screen.findByText('Nothing booked yet')).toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'Your requests' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'Your sessions' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /Your requests/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /Your sessions/ })).not.toBeInTheDocument();
   });
 
   it('does not flash the empty state while the snapshots are still loading', () => {
@@ -450,7 +466,7 @@ describe('family DashboardPage', () => {
     h.sessions = [session()];
     renderWithProviders(<DashboardPage />);
 
-    await screen.findByRole('heading', { name: 'Your sessions' });
+    await screen.findByRole('heading', { name: /Your sessions/ });
     expect(screen.queryByRole('link', { name: /supervised kids/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /family settings/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /^account\b/i })).not.toBeInTheDocument();
@@ -493,15 +509,30 @@ describe('family DashboardPage — family-less parent recovery state (issue #293
     expect(await screen.findByText('Nothing booked yet')).toBeInTheDocument();
   });
 
-  it('a LEGACY Plan C doc (root familyId only) is a member, not an orphan', async () => {
+  it('a LEGACY Plan C doc (root familyId only) is a member, and its family is QUERIED', async () => {
+    // Reading only profiles.parent.familyId let a Plan C parent past the
+    // membership guard and then straight into an affirmative "Nothing booked
+    // yet" — a claim that could be flatly false, with no search button either
+    // (PR #345 round 2). hasFamilyMembership accepts the root field, so the
+    // page must resolve it the same way: the client guards match the server
+    // 1:1 or they are not guards.
     h.auth.userDoc = {
       uid: 'p1',
       firstName: 'Dana',
       familyId: 'fam-legacy',
       profiles: { parent: { enrollmentComplete: true } },
     };
+    h.familyData = { familyName: 'Legacy', verification: { isFullyVerified: true } };
+    h.requests = [request({ requestId: 'r1', tutorName: 'Sarah' })];
     renderWithProviders(<DashboardPage />);
+
     expect(screen.queryByText('You are not currently part of a family')).not.toBeInTheDocument();
-    expect(await screen.findByText('Nothing booked yet')).toBeInTheDocument();
+    // The row loads, so the empty state is never claimed...
+    expect(await screen.findByText('Sarah')).toBeInTheDocument();
+    expect(screen.queryByText('Nothing booked yet')).not.toBeInTheDocument();
+    // ...the queries used the ROOT familyId...
+    expect(h.where).toHaveBeenCalledWith('familyId', '==', 'fam-legacy');
+    // ...and the verification gate resolved, so search is reachable.
+    expect(screen.getByRole('button', { name: /find a tutor/i })).toBeInTheDocument();
   });
 });

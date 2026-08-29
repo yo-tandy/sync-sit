@@ -92,7 +92,16 @@ export function DashboardPage() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const { userDoc } = useAuthStore();
-  const familyId = getParentProfile(userDoc)?.familyId ?? null;
+  // Plan D pointer first, then the legacy Plan C ROOT field — the same two
+  // places hasFamilyMembership accepts (shared-core userAdapter). Reading only
+  // the profile pointer let a Plan C parent past the membership guard and then
+  // straight into "Nothing booked yet" with no search button, an affirmative
+  // claim that could be flatly false for a family with live sessions (PR #345
+  // round 2). The client guards match the server 1:1 or they are not guards.
+  const familyId =
+    getParentProfile(userDoc)?.familyId ??
+    (userDoc as { familyId?: string } | null | undefined)?.familyId ??
+    null;
 
   // null = still loading; true/false once the family doc has resolved.
   const [isVerified, setIsVerified] = useState<boolean | null>(null);
@@ -155,8 +164,14 @@ export function DashboardPage() {
         // grow the requests section without bound: a family that has worked
         // with eight tutors would open the app to eight permanent green rows
         // above the sessions that matter (PR #345 review). Counting N and
-        // listing N are different costs. Bound them by the same visibility
-        // window sit bounds its past/rejected appointments with. Pending rows
+        // listing N are different costs. Bound them by the DEFAULT visibility
+        // window (PAST_VISIBILITY_DAYS is ADMIN_CONFIG_DEFS.pastVisibilityDays
+        // .default). Sit resolves the admin-configurable value at runtime via
+        // getClientConfigValue, so raising it moves sit's windows and not this
+        // one; a landing page deliberately does not serialize a config read in
+        // front of first paint (that was itself a round-2 finding on #250), and
+        // the non-blocking resolve-then-rebucket that fixed it belongs in a
+        // hook, not inline here. Pending rows
         // stay unbounded -- they are still actionable -- and a doc with
         // neither timestamp (legacy) is kept rather than silently disappeared.
         // Applied HERE rather than in render: the cutoff reads the clock, and
@@ -257,10 +272,9 @@ export function DashboardPage() {
   const today = parisToday();
 
   // ── Your requests: the rows still in play. Declined/cancelled history
-  // stays on /family/requests — a landing page shows what is live. ──
-  // Declined/cancelled history stays on /family/requests — a landing page
-  // shows what is live. (Stale `accepted` rows were already dropped at load,
-  // where the clock read belongs.)
+  // stays on /family/requests — a landing page shows what is live. (Stale
+  // `accepted` rows were already dropped at load, where the clock read
+  // belongs.) ──
   const activeRequests = (requests ?? []).filter(
     (r) => r.status === 'pending' || r.status === 'accepted',
   );
@@ -292,10 +306,13 @@ export function DashboardPage() {
     }))
     .sort((a, b) => (a.sortDate < b.sortDate ? -1 : a.sortDate > b.sortDate ? 1 : 0))
     .map((e) => e.s);
-  // A tutor PROPOSAL is ours to answer; a booking we sent awaits the tutor.
-  const sessionsTodo = activeSessions.filter(
-    (s) => s.status === 'pending' && s.proposedBy === 'provider',
-  ).length;
+  // Badge rule, uniform across all four dashboards (PR #345 round 2): an AMBER
+  // section badges what the reader must answer; a GREEN section badges how many
+  // rows it holds. This section is the green one — sit's "Your appointments"
+  // and both providers' "Confirmed" badge their row count too, and badging a
+  // to-do in green while the amber requests section above badges a to-do was
+  // the same semantic wearing two colours on one page. A tutor proposal is
+  // still called out where it belongs: on its own row, in amber.
 
   const hasAny = activeRequests.length > 0 || activeSessions.length > 0;
 
@@ -392,8 +409,7 @@ export function DashboardPage() {
 
           <DashboardSection
             title={t('family.dashboard.sessionsTitle')}
-            count={sessionsTodo}
-            total={activeSessions.length}
+            count={activeSessions.length}
             variant="confirmed"
           >
             {activeSessions.map((s) => (
