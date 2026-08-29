@@ -1,8 +1,14 @@
 # Sync-Do Project Plan
 
 > **Status:** planning draft, 2026-08-27; revised 2026-08-28 with the owner's
-> review-round decisions (12–20, §2). Owner decisions in §2 are settled;
-> everything marked **OPEN** in §17 is not.
+> review-round decisions (12–20, §2); **revised 2026-08-29 with §18 — Appendix
+> A, the shared shell (decisions 21–25).** Owner decisions in §2 and §18.1 are
+> settled; everything marked **OPEN** in §17 and §18.8 is not.
+>
+> ⚠️ **If you are implementing this plan, read §18 before PR2, PR4, PR7, PR8
+> and PR9.** It changes what do-web builds (no account page; a shared
+> app-switch bar), records a notifications problem that blocks PR9, and names
+> backend work that is not do-specific but is do-blocking.
 >
 > Companion docs: `docs/sync-study-project-plan.md` (the template this plan
 > follows), `docs/shared-modules-roadmap.md` (the shared-package contract).
@@ -26,6 +32,7 @@
 15. [V1 Scope Decisions](#15-v1-scope-decisions)
 16. [Future Roadmap](#16-future-roadmap)
 17. [Open Questions & Risks](#17-open-questions--risks)
+18. [Appendix A — the shared shell](#18-appendix-a--the-shared-shell-issue-124-owner-decided-2026-08-29)
 
 ---
 
@@ -2339,3 +2346,143 @@ decision 1 already puts the judgement call.
   posting review step, and at acceptance (§11.5) — and that the same position
   is currently under-stated for sync-sit. A lawyer's read on the wording before
   launch is the only remaining launch blocker in this plan.
+
+---
+
+## 18. Appendix A — the shared shell (issue #124, owner-decided 2026-08-29)
+
+**Read this before PR2, PR4, PR7, PR8 and PR9.** The owner chose a visual
+direction and, with it, three structural changes that land *outside* sync-do
+but that sync-do must be built against. Nothing above is retracted; this
+appendix says which parts of it are now served by shared components rather
+than by do-web's own code, and which parts change shape.
+
+Design reference: the canvas on issue #124 (artboards for parent, student, do,
+admin, and the account hub). Decisions below are the owner's, taken there.
+
+### 18.1 What the owner decided
+
+| # | Decision | Consequence for sync-do |
+|---|---|---|
+| 21 | **Visual direction "Recess"** — warm per-app tinted grounds, Nunito, 20–22px radii, chunky bottom-shadow cards, pill badges. | §9.0's palette stands; the *shapes and type* around it change. do's green ground joins sit's coral and study's sky. |
+| 22 | **The bottom bar switches APPS, not pages** — `sync/sit · sync/study · My account`, four tabs once do is reachable. | §9.5 changes shape (below). do-web consumes a shared bar; it does not build a nav. |
+| 23 | **Search and the primary action move INTO the page** — hero button under the greeting; the list becomes the first card. | §9.1's post wizard entry becomes the hero button ("Post a task"); §9.2's board becomes the doer's hero. |
+| 24 | **The account is shared and neutral**, with per-app sections carrying their brand chip. | do-web ships **no account page**. It ships a doer-settings screen reached from the shared hub. |
+| 25 | **Admin is neutral gray**, not any app's brand. | §9.4's admin tab inherits gray; do's green never reaches admin surfaces. |
+
+### 18.2 §9.5 is superseded — the switcher is a bar, and decision 20 still gates it
+
+§9.5 described a *switcher* (a menu item). It is now a **persistent bottom
+bar**, which changes the gating conversation rather than resolving it:
+
+- **Decision 20 still holds.** The bar in sit and study shows **three** tabs —
+  `sit · study · My account` — with **no sync/do tab** until the owner
+  approves reachability. The four-tab bar is do-web's own, plus the
+  post-approval state of the other two.
+- That gate is now more visible, not less: a missing tab is a more noticeable
+  absence than a missing menu row. Worth the owner knowing that flipping
+  decision 20 is now a *visual* change to sit and study, not a hidden one.
+- The asymmetry PR2 already ships is unchanged: do-web's bar links out to sit
+  and study; theirs does not link to do.
+- **Brand-mark consolidation is now a hard prerequisite, not an overdue
+  tidy-up.** Every app's bar renders every app's mark. PR2 already owns this.
+
+### 18.3 do-web ships no account page
+
+This is the largest scope change, and it *reduces* work.
+
+- The shared `AccountHome` (neutral, in `shared-ui`) owns: identity, contact
+  channels, language, notifications, password, family, legal, delete.
+- do-web contributes **one per-profile screen** — doer settings: categories,
+  transport, bio, `notifyNewTasks`, `defaultRate` — reached from a `Doer` row
+  in the hub.
+- The hub renders a **"Join" affordance** when `profiles.doer` is absent. That
+  is a handoff into do-web's abbreviated enrollment (PR4's
+  `doEnrollDoer`), not a new callable. **PR4 must therefore treat "arrived via
+  handoff from another app's account hub" as a first-class entry path**, not
+  only "opened do-web directly".
+- Because the hub is hosted by each app (see 18.6 Q2), sit and study will
+  render a *summary* of the doer profile. That needs `@ejm/do-core`'s
+  `DoerProfile` type available to them — a package edge §12 does not currently
+  list.
+
+### 18.4 The doer student's hero is a SEARCH, not a toggle
+
+In sit and study a student waits to be found, so their hero control is the
+`searchable` visibility toggle. **In do the board is demand-first, so the
+doer's hero is the board itself.** §9.2 already describes this; the appendix
+records that it makes the student shell deliberately non-uniform across the
+three apps, and that `profiles.doer` has **no `searchable` flag** by design
+(§3.3 named the field `notifyNewTasks` for exactly this reason — it is a
+digest opt-in, never a visibility gate, and the §7.2 read rule must still not
+consult it).
+
+### 18.5 Notifications — a concrete problem the flat shape creates
+
+`NotifPrefs` (`packages/shared-core/src/types/common.ts:27-33`) is a flat map
+of **event category → channels**: `newRequest`, `confirmed`, `cancelled`,
+`reminders`, `references`. It is not app-scoped.
+
+§10 adds **twelve** `NotificationType` values for do. Under the flat shape,
+their preference rows would appear on the notifications screen of **every
+user, including those with no doer profile** — a sit-only parent would see
+"board digest" and "offer received" toggles for an app they have never opened.
+That is not a style objection; it is the shared account screen surfacing a
+per-app concern to the wrong people.
+
+Two ways out, and PR9 should not proceed without a choice:
+
+1. **App-scoped prefs** — `notifPrefs: { shared, sit, study, do }`, rendered as
+   one shared block plus a block per profile the user holds. Matches where the
+   push tokens already are (`fcmTokens` / `fcmTokensStudy` / `fcmTokensDo`) and
+   is what issue #168 Phase 2 wants anyway. **Costs a schema migration.**
+2. **Render-time filtering** — keep the flat map, hide rows for apps the user
+   has no profile in. No migration; leaves the schema saying something the UI
+   contradicts, and #168 Phase 2 migrates it later regardless.
+
+Recommendation: (1), done once, at PR9 — because PR9 is the moment do's twelve
+types land, and migrating a map that already carries them is strictly worse
+than shaping it correctly on arrival.
+
+### 18.6 Backend work this implies (none of it do-specific, all of it do-blocking)
+
+1. **Self-serve account deletion does not exist.** `deleteUser` is
+   admin-only; there is no callable a member can invoke on themselves. The
+   hub's "Delete my account" needs one — and it must be genuinely cross-app
+   (the hub says so: "removes you from sync/sit, sync/study and sync/do"), so
+   it has to reach do's collections too. **This is new work that touches
+   sync-do's data and should be built with §11.4's hard-delete coverage rather
+   than after it.**
+2. **`notifPrefs` shape** — see 18.5.
+3. **No handoff change.** `appHandoffCodes` is already app-agnostic (§3.3);
+   moving the call from a menu item to a tab needs nothing server-side.
+4. **No rules change.** The bar and hub read `users/{uid}` as owner and
+   `families/{familyId}` as member — both already permitted. The §7.2
+   amendments stand as written.
+5. **Firebase Auth authorized domains** still needs the `sync-do-app` entry
+   before do's tab can resolve — already a PR2 blocker, unchanged.
+
+### 18.7 Where each ladder PR is affected
+
+| PR | Change |
+|---|---|
+| **2** | Ships the shared `AppSwitchBar` from `shared-ui` instead of any do-web nav. Brand-mark consolidation is a prerequisite of the bar, not a side-quest. Theme is Recess-shaped (radii, Nunito) on §9.0's palette. |
+| **4** | `doEnrollDoer` must accept the handoff-from-account-hub entry path. do-web ships a **doer-settings screen**, not an account page. |
+| **7** | Family shell uses the shared bar; "Post a task" is the page hero, "My tasks" the first card (matches the canvas). |
+| **8** | Doer shell uses the shared bar; the board is the hero — no visibility toggle exists for doers. |
+| **9** | Blocked on the 18.5 notifications decision before the twelve types are wired. |
+| **10** | Admin tab inherits neutral gray; do green must not leak into admin chrome. Self-serve delete (18.6.1) should be built alongside the hard-delete coverage already scoped here. |
+
+### 18.8 Still open for the owner
+
+- **Q9 — Where does the app switch live on desktop?** The bar is phone-only.
+  `md+` already has `NavTabs` (primary destinations) and the admin sidebar
+  (#119 / #288–290). Suggestion: a persistent switcher in the sidebar head
+  rather than a bottom bar on a desktop window.
+- **Q10 — Which origin serves the shared account?** Either each app hosts its
+  own copy of the same `shared-ui` component (simple, no extra hops —
+  recommended), or one app owns `/account` and the others deep-link through
+  the handoff (one implementation, but every visit costs a cross-origin hop
+  and a token redemption).
+- **Q11 — Notifications shape** (18.5): migrate to app-scoped prefs at PR9, or
+  filter at render and migrate later under #168 Phase 2.
