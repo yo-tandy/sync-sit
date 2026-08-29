@@ -24,10 +24,18 @@ interface UsePhotoUploadsArgs {
   uid: string | null;
   photos: PhotoItem[];
   onChange: (mutate: (prev: PhotoItem[]) => PhotoItem[]) => void;
-  onLimitError: () => void;
-  onUploadError: () => void;
-  onFileTooLarge: () => void;
-  onFileWrongType: () => void;
+}
+
+/** What addPhoto did with the file — the STEP maps these to its notice
+ * copy. A return value rather than callbacks so the hook can live in
+ * PostTaskPage (outliving the step) while the notices stay step-local. */
+export type AddPhotoResult = 'added' | 'limit' | 'wrong_type' | 'too_large' | 'upload_failed';
+
+/** The three pipeline actions, as handed down to StepPhotos. */
+export interface PhotoActions {
+  addPhoto: (file: File) => Promise<AddPhotoResult>;
+  retryPhoto: (photoId: string) => void;
+  removePhoto: (photoId: string) => void;
 }
 
 function patch(photos: PhotoItem[], photoId: string, changes: Partial<PhotoItem>): PhotoItem[] {
@@ -50,16 +58,16 @@ function patch(photos: PhotoItem[], photoId: string, changes: Partial<PhotoItem>
  *
  * States: uploading → processing (polling) → ready | error; 'processing'
  * past the poll cap keeps a manual Retry.
+ *
+ * OWNED BY PostTaskPage, not the photos step (PR #331 round 3): the wizard
+ * renders only the current step, so a hook mounted inside StepPhotos dies
+ * on a Back press — an in-flight uploadBytes would resolve into a
+ * permanently-`uploading` tile with no recovery control. Hosted in the
+ * page, the pipeline runs for the wizard's whole life and uploads/polls
+ * simply continue while the parent visits other steps; unmount cleanup
+ * fires only when the wizard itself is left (where the draft dies too).
  */
-export function usePhotoUploads({
-  uid,
-  photos,
-  onChange,
-  onLimitError,
-  onUploadError,
-  onFileTooLarge,
-  onFileWrongType,
-}: UsePhotoUploadsArgs) {
+export function usePhotoUploads({ uid, photos, onChange }: UsePhotoUploadsArgs): PhotoActions {
   // Live timers by photoId, cleared on unmount — the poll must never outlive
   // the wizard (the AreaPage timer-leak lesson, PR #221).
   const timersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
@@ -118,22 +126,19 @@ export function usePhotoUploads({
       });
   };
 
-  const addPhoto = async (file: File) => {
-    if (!uid) return;
+  const addPhoto = async (file: File): Promise<AddPhotoResult> => {
+    if (!uid) return 'upload_failed';
     if (photos.length >= DO_TASK_PHOTOS_MAX) {
-      onLimitError();
-      return;
+      return 'limit';
     }
     // Pre-empt the storage.rules bounds with actionable copy (the
     // VerificationPage file-size precedent): `accept="image/*"` on the
     // input is a picker hint, not enforcement.
     if (!file.type.startsWith('image/')) {
-      onFileWrongType();
-      return;
+      return 'wrong_type';
     }
     if (file.size >= PHOTO_MAX_BYTES) {
-      onFileTooLarge();
-      return;
+      return 'too_large';
     }
     // Client-minted UUID (§7.4): safe because both prefixes are keyed by the
     // caller's own uid — a colliding id can only clobber the caller's own
@@ -145,13 +150,13 @@ export function usePhotoUploads({
     } catch {
       if (!unmountedRef.current) {
         onChange((prev) => prev.filter((p) => p.photoId !== photoId));
-        onUploadError();
       }
-      return;
+      return 'upload_failed';
     }
-    if (unmountedRef.current) return;
+    if (unmountedRef.current) return 'added';
     onChange((prev) => patch(prev, photoId, { state: 'processing' }));
     pollThumbnail(photoId, 0, bumpGen(photoId));
+    return 'added';
   };
 
   const retryPhoto = (photoId: string) => {

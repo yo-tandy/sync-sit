@@ -23,6 +23,7 @@ import {
 import { StepTiming } from './StepTiming';
 import { StepDescribe } from './StepDescribe';
 import { StepPhotos } from './StepPhotos';
+import { usePhotoUploads } from './usePhotoUploads';
 import { StepReview, type PublishErrorKey } from './StepReview';
 import { AddressFixPanel } from './AddressFixPanel';
 
@@ -51,6 +52,18 @@ export function PostTaskPage() {
   // Why the wizard bounced back to the photos step (photo_not_ready): the
   // jump must be explained on arrival, not silent (PR #331 round 1).
   const [photosNotice, setPhotosNotice] = useState<string | null>(null);
+
+  // The §7.4 photo pipeline lives HERE, not in StepPhotos (PR #331 round
+  // 3): the wizard renders one step at a time, so a step-local hook died on
+  // Back mid-upload and the resolving uploadBytes stranded the tile in a
+  // permanent 'uploading'. Page-hosted, uploads and polls keep running
+  // while the parent visits other steps; the cleanup fires only when the
+  // wizard itself unmounts — where the draft dies with it anyway.
+  const photoActions = usePhotoUploads({
+    uid: firebaseUser?.uid ?? null,
+    photos: draft.photos,
+    onChange: (mutate) => setDraft((d) => ({ ...d, photos: mutate(d.photos) })),
+  });
 
   const step = POST_STEPS[stepIndex];
   const update = (changes: Partial<TaskDraft>) => setDraft((d) => ({ ...d, ...changes }));
@@ -95,7 +108,12 @@ export function PostTaskPage() {
         setPhotosNotice(t('family.post.photoNotReadyNotice'));
         setStepIndex(POST_STEPS.indexOf('photos'));
       } else if (code.endsWith('permission-denied')) {
-        setPublishError('notVerified');
+        // loadVerifiedFamilyCaller emits NO details.reason and throws this
+        // code for three distinct refusals (account not active / not a
+        // parent / family not verified), so the copy states the honest
+        // UNION rather than asserting verification specifically
+        // (PR #331 round 3).
+        setPublishError('denied');
       } else {
         setPublishError('generic');
       }
@@ -115,14 +133,7 @@ export function PostTaskPage() {
       case 'describe':
         return <StepDescribe draft={draft} update={update} />;
       case 'photos':
-        return (
-          <StepPhotos
-            draft={draft}
-            update={update}
-            updatePhotos={(mutate) => setDraft((d) => ({ ...d, photos: mutate(d.photos) }))}
-            pageNotice={photosNotice}
-          />
-        );
+        return <StepPhotos draft={draft} update={update} actions={photoActions} pageNotice={photosNotice} />;
       case 'adultPresent':
         return <StepAdultPresent draft={draft} update={update} />;
       case 'toolsTransport':

@@ -194,6 +194,11 @@ export function TaskDetailPage() {
                   variant="outline"
                   fullWidth={false}
                   onClick={() => {
+                    // Clear the error too, so the retry FALLS THROUGH to the
+                    // loading spinner (the AssignedTaskView retry idiom) —
+                    // otherwise a re-failed subscribe changes nothing on
+                    // screen and the button reads as dead (PR #331 round 3).
+                    setOffersError(false);
                     setOffers(null);
                     setOffersTick((n) => n + 1);
                   }}

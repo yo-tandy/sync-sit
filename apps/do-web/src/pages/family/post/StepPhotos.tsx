@@ -2,17 +2,16 @@ import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { DO_TASK_PHOTOS_MAX } from '@ejm/do-core';
 import { InfoBanner, PlusIcon, Spinner, XIcon } from '@ejm/shared-ui';
-import { useAuthStore } from '@/stores/authStore';
 import type { StepProps } from './steps';
-import type { PhotoItem } from './postTaskDraft';
-import { PHOTO_MAX_BYTES, usePhotoUploads } from './usePhotoUploads';
+import { PHOTO_MAX_BYTES, type AddPhotoResult, type PhotoActions } from './usePhotoUploads';
 
 interface StepPhotosProps extends StepProps {
-  /** FUNCTIONAL photo updates: the upload/poll callbacks resolve long after
-   * the render that scheduled them, so they must mutate the LATEST list —
-   * a value-style `update({ photos: ... })` here would write through a
-   * stale closure and drop concurrent uploads. */
-  updatePhotos: (mutate: (prev: PhotoItem[]) => PhotoItem[]) => void;
+  /** The pipeline actions, OWNED BY PostTaskPage (PR #331 round 3): the
+   * hook must outlive this step — a Back press mid-upload used to strand
+   * the photo in a permanent 'uploading' tile because the step-local hook
+   * died with the step. The step only renders states and maps addPhoto's
+   * result codes to its local notice copy. */
+  actions: PhotoActions;
   /** Page-level notice rendered ABOVE the step (e.g. the wizard bounced the
    * parent back here because doPostTask refused with photo_not_ready) —
    * the jump must come with an explanation (PR #331 round 1). */
@@ -25,24 +24,28 @@ interface StepPhotosProps extends StepProps {
  * doGetOwnPhotoUrl, ≤6 with a remove control. The §11.2 visibility warning
  * shows here as well as at review — photos are board-visible.
  */
-export function StepPhotos({ draft, updatePhotos, pageNotice }: StepPhotosProps) {
+export function StepPhotos({ draft, actions, pageNotice }: StepPhotosProps) {
   const { t } = useTranslation();
-  const uid = useAuthStore((s) => s.firebaseUser)?.uid ?? null;
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const { addPhoto, retryPhoto, removePhoto } = actions;
 
-  const { addPhoto, retryPhoto, removePhoto } = usePhotoUploads({
-    uid,
-    photos: draft.photos,
-    onChange: updatePhotos,
-    onLimitError: () => setNotice(t('family.post.photoTooMany', { max: DO_TASK_PHOTOS_MAX })),
-    onUploadError: () => setNotice(t('family.post.photoUploadError')),
-    // Client-side mirror of the storage.rules quarantine bounds — the copy
-    // that turns a rules rejection into an actionable message.
-    onFileTooLarge: () =>
-      setNotice(t('family.post.photoTooLarge', { maxMb: Math.floor(PHOTO_MAX_BYTES / (1024 * 1024)) })),
-    onFileWrongType: () => setNotice(t('family.post.photoWrongType')),
-  });
+  const noticeFor = (result: AddPhotoResult): string | null => {
+    switch (result) {
+      case 'limit':
+        return t('family.post.photoTooMany', { max: DO_TASK_PHOTOS_MAX });
+      // Client-side mirror of the storage.rules quarantine bounds — the
+      // copy that turns a rules rejection into an actionable message.
+      case 'too_large':
+        return t('family.post.photoTooLarge', { maxMb: Math.floor(PHOTO_MAX_BYTES / (1024 * 1024)) });
+      case 'wrong_type':
+        return t('family.post.photoWrongType');
+      case 'upload_failed':
+        return t('family.post.photoUploadError');
+      case 'added':
+        return null;
+    }
+  };
 
   return (
     <div>
@@ -123,7 +126,7 @@ export function StepPhotos({ draft, updatePhotos, pageNotice }: StepPhotosProps)
         onChange={(e) => {
           setNotice(null);
           const file = e.target.files?.[0];
-          if (file) void addPhoto(file);
+          if (file) void addPhoto(file).then((result) => setNotice(noticeFor(result)));
           e.target.value = '';
         }}
       />

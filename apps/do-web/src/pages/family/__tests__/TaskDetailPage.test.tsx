@@ -235,8 +235,12 @@ describe('TaskDetailPage (open task)', () => {
     expect(screen.getByText(/Could not load the offers/)).toBeInTheDocument();
     expect(screen.queryByText(/No offers yet/)).toBeNull();
 
-    // Retry re-subscribes; a successful snapshot then renders normally.
+    // Retry clears the error IMMEDIATELY and falls through to the loading
+    // spinner — a re-failed subscribe must not read as a dead button
+    // (PR #331 round 3).
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(screen.queryByText(/Could not load the offers/)).toBeNull();
+    // A successful snapshot then renders normally.
     pushOffers([offerRow('o1')]);
     expect(screen.getByText('Emma')).toBeInTheDocument();
     expect(screen.queryByText(/Could not load the offers/)).toBeNull();

@@ -5,7 +5,7 @@ import { formatTimingSummary, type TimingLike } from '@/lib/taskDisplay';
 import type { TaskDraft } from './postTaskDraft';
 import { parsedBudget } from './postTaskDraft';
 
-export type PublishErrorKey = 'generic' | 'cap' | 'notVerified' | null;
+export type PublishErrorKey = 'generic' | 'cap' | 'denied' | null;
 
 interface StepReviewProps {
   draft: TaskDraft;
@@ -101,8 +101,8 @@ export function StepReview({ draft, publishing, publishError, onPublish }: StepR
         <p className="mb-3 text-sm text-error-600">
           {publishError === 'cap'
             ? t('family.post.capError')
-            : publishError === 'notVerified'
-              ? t('family.post.notVerifiedError')
+            : publishError === 'denied'
+              ? t('family.post.postDeniedError')
               : t('family.post.publishError')}
         </p>
       )}

@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { getSubCategories } from '@ejm/do-core';
 import {
   ALONE_HOME_SUBCATEGORIES,
   EMPTY_DRAFT,
@@ -141,6 +142,29 @@ describe('isStepValid', () => {
     expect(
       isStepValid('adultPresent', draft({ category: 'ikea', subCategory: 'ikea_assembly', adultPresent: 'no' })),
     ).toBe(true);
+  });
+
+  it('§5.7 drift guard: every pet_house sub-category is EXPLICITLY classified for the alone-at-home ack', () => {
+    // ALONE_HOME_SUBCATEGORIES duplicates taxonomy knowledge do-core cannot
+    // express (no §5.7 flag on SubCategoryDef — the UI-only constraint).
+    // This map is the guard: it must cover EXACTLY do-core's pet_house
+    // keys, so adding a sub-category to the taxonomy fails this test and
+    // forces the classification decision, instead of silently skipping the
+    // acknowledgement (PR #331 round 3). An `aloneInHome` flag in do-core
+    // is the eventual home for this knowledge (PR8+, shared-package
+    // change).
+    const classification: Record<string, boolean> = {
+      pet_house_dog_walking: false, // student is outside, with the animal
+      pet_house_feeding: true, // alone in an empty home, keys/codes (§5.7)
+      pet_house_drop_in: true, // ditto — the decision-13 scenario minus sleeping
+      pet_house_vet_trips: false, // outside, at the vet
+      pet_house_other: false, // unflagged catch-all; guardianConsent still applies via do-core
+    };
+    const taxonomyKeys = getSubCategories('pet_house').map((s) => s.key);
+    expect(Object.keys(classification).sort()).toEqual([...taxonomyKeys].sort());
+    expect([...ALONE_HOME_SUBCATEGORIES].sort()).toEqual(
+      Object.keys(classification).filter((k) => classification[k]).sort(),
+    );
   });
 
   it('gates budget on the shared price bounds, empty allowed', () => {

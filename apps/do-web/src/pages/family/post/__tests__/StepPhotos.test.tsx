@@ -40,31 +40,38 @@ vi.mock('@/stores/authStore', () => ({
 
 import { StepPhotos } from '../StepPhotos';
 import { EMPTY_DRAFT, type PhotoItem, type TaskDraft } from '../postTaskDraft';
-import { PHOTO_POLL_INTERVAL_MS } from '../usePhotoUploads';
+import { PHOTO_POLL_INTERVAL_MS, usePhotoUploads } from '../usePhotoUploads';
 
-/** Stateful harness: StepPhotos mutates draft.photos through updatePhotos
- * (functional — the async pipeline's requirement). */
-function Harness({ initialPhotos = [] as PhotoItem[] }) {
+/**
+ * Stateful harness mirroring PostTaskPage's architecture (PR #331 round 3):
+ * the PIPELINE HOOK lives in the harness (the page) while StepPhotos only
+ * renders — `showStep` simulates the wizard leaving/re-entering the photos
+ * step, which unmounts the step but NOT the pipeline.
+ */
+function Harness({
+  initialPhotos = [] as PhotoItem[],
+  showStep = true,
+  notice = null as string | null,
+}) {
   const [draft, setDraft] = useState<TaskDraft>({ ...EMPTY_DRAFT, photos: initialPhotos });
+  const actions = usePhotoUploads({
+    uid: 'parent-1',
+    photos: draft.photos,
+    onChange: (mutate) => setDraft((d) => ({ ...d, photos: mutate(d.photos) })),
+  });
+  if (!showStep) return <div>other-step</div>;
   return (
     <StepPhotos
       draft={draft}
       update={(c) => setDraft((d) => ({ ...d, ...c }))}
-      updatePhotos={(mutate) => setDraft((d) => ({ ...d, photos: mutate(d.photos) }))}
+      actions={actions}
+      pageNotice={notice}
     />
   );
 }
 
 function HarnessWithNotice({ notice }: { notice: string }) {
-  const [draft, setDraft] = useState<TaskDraft>({ ...EMPTY_DRAFT });
-  return (
-    <StepPhotos
-      draft={draft}
-      update={(c) => setDraft((d) => ({ ...d, ...c }))}
-      updatePhotos={(mutate) => setDraft((d) => ({ ...d, photos: mutate(d.photos) }))}
-      pageNotice={notice}
-    />
-  );
+  return <Harness notice={notice} />;
 }
 
 function pickFile() {
@@ -165,6 +172,31 @@ describe('StepPhotos (§7.4 client pipeline)', () => {
       expect(screen.getByText(/not an image/)).toBeInTheDocument(),
     );
     expect(h.uploadBytes).not.toHaveBeenCalled();
+  });
+
+  it('an upload in flight survives the photos step unmounting (pipeline owned by the page, PR #331 round 3)', async () => {
+    let resolveUpload!: () => void;
+    h.uploadBytes.mockImplementationOnce(() => new Promise<void>((res) => (resolveUpload = res)));
+    const { rerender } = renderWithProviders(<Harness />);
+    pickFile();
+    await waitFor(() => expect(h.uploadBytes).toHaveBeenCalledTimes(1));
+    expect(screen.getByText('Uploading...')).toBeInTheDocument();
+
+    // Back press: the STEP unmounts; the page-hosted pipeline does not.
+    rerender(<Harness showStep={false} />);
+    expect(screen.getByText('other-step')).toBeInTheDocument();
+
+    // The upload finishes while the parent is on another step, and the
+    // poll fetches the thumbnail in the background.
+    await act(async () => {
+      resolveUpload();
+    });
+
+    // Returning to the step shows the READY thumbnail — never the
+    // permanently stuck 'Uploading...' tile the step-local hook produced.
+    rerender(<Harness showStep />);
+    await waitFor(() => expect(screen.getByTestId('photo-thumb')).toBeInTheDocument());
+    expect(screen.queryByText('Uploading...')).toBeNull();
   });
 
   it('Retry during an IN-FLIGHT poll leaves one live chain (generation guard, PR #331 round 2)', async () => {

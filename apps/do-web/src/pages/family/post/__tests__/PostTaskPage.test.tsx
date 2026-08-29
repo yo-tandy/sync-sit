@@ -252,7 +252,7 @@ describe('PostTaskPage review + publish', () => {
     expect(screen.queryByText(/still being prepared/)).toBeNull();
   });
 
-  it('maps permission-denied to the verification copy', async () => {
+  it('maps permission-denied to the honest union copy (active parent + verified family)', async () => {
     renderWithProviders(<PostTaskPage />);
     walkToReview();
     h.callable.mockRejectedValueOnce(
@@ -260,7 +260,7 @@ describe('PostTaskPage review + publish', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: 'Publish task' }));
     await waitFor(() =>
-      expect(screen.getByText(/must be verified before posting/i)).toBeInTheDocument(),
+      expect(screen.getByText(/can't post tasks right now/i)).toBeInTheDocument(),
     );
   });
 });
