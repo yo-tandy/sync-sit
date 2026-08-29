@@ -55,8 +55,9 @@ const NOTICE_WINDOW_MS = 24 * 60 * 60 * 1000;
  * @param app untrusted client hint of which app the attempt came from —
  *   normalized to the literal 'sit' | 'study' set before it touches copy.
  * @param decoyCodeDoc the exact doc shape the CALLER's fresh path writes
- *   (each callable owns its shape — verifyEjmEmail includes graduationYear,
- *   verifyParentEmail does not), with an unguessable random code.
+ *   (each callable owns its shape — verifyEjmEmail includes graduationYear
+ *   and the `ejm` identity stamp, verifyParentEmail the `mailbox` one), with
+ *   an unguessable random code.
  */
 export async function handleExistingAccountSignup(
   email: string,
@@ -66,7 +67,11 @@ export async function handleExistingAccountSignup(
   // Decoy vs real handling (round 4). Decoys carry a server-only
   // `decoy: true` tag (unobservable: the collection is client-unreadable and
   // every consumer — verifyCode + the four enroll callables — reads only the
-  // named code/attempts/expiresAt fields, copying nothing onward).
+  // named code/attempts/expiresAt/identityClass fields, copying nothing
+  // onward). `identityClass` (issue #322) is graded by the enroll callables,
+  // so the decoy MUST carry the calling callable's stamp — which it does:
+  // each caller passes its own fresh-write shape in `decoyCodeDoc`, and a
+  // stamp mismatch would grade differently and re-open the oracle.
   //
   // - Existing DECOY: clobber unconditionally. A repeat request past the
   //   cooldown must reset attempts and refresh expiresAt/createdAt exactly

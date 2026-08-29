@@ -8,6 +8,7 @@ import { writeUserActivity } from '../admin/writeAuditLog.js';
 import { handleExistingAccountSignup } from './accountExistsNotice.js';
 import { isInSendCooldown } from './sendCooldown.js';
 import { registerVerificationSend, registerBypassSend } from './sendRateLimit.js';
+import { EJM_CODE_STAMP } from './verificationCodeClass.js';
 
 /**
  * Send a 6-digit verification code to an EJM email address.
@@ -88,6 +89,10 @@ export const verifyEjmEmail = onCall(
         code: crypto.randomInt(100000, 999999).toString(),
         email: normalizedEmail,
         graduationYear,
+        // The decoy carries THIS callable's stamp, exactly as the fresh
+        // write below does — a decoy that graded differently would be an
+        // enumeration oracle (issue #322 on top of #148).
+        ...EJM_CODE_STAMP,
         expiresAt: new Date(Date.now() + 10 * 60 * 1000),
         attempts: 0,
         createdAt: new Date(),
@@ -130,11 +135,16 @@ export const verifyEjmEmail = onCall(
     const code = crypto.randomInt(100000, 999999).toString();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
-    // Store verification code
+    // Store verification code. The stamp records what this code PROVES
+    // (issue #322): reaching here means the address is EJM-valid (domain +
+    // in-window graduation year) or admin-preapproved, so the code proves an
+    // EJM identity and satisfies the EJM-gated enroll callables. Codes for
+    // the SAME address written by the any-domain verifyParentEmail do not.
     await db.collection('verificationCodes').doc(normalizedEmail).set({
       code,
       email: normalizedEmail,
       graduationYear,
+      ...EJM_CODE_STAMP,
       expiresAt,
       attempts: 0,
       createdAt: new Date(),
