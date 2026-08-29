@@ -148,6 +148,9 @@ importers:
       typescript:
         specifier: ^5.6.0
         version: 5.9.3
+      vitest:
+        specifier: ^4.1.4
+        version: 4.1.4(@opentelemetry/api@1.9.1)(@types/node@24.12.0)(jsdom@29.1.1)(vite@8.0.3(@emnapi/core@1.9.1)(@emnapi/runtime@1.11.3)(@types/node@24.12.0)(jiti@2.6.1)(yaml@2.9.0))
 
   apps/study-functions:
     dependencies:
