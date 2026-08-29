@@ -1,3 +1,4 @@
+import { useLocation } from 'react-router';
 import { httpsCallable } from 'firebase/functions';
 import { AppSwitchBar } from '@ejm/shared-ui';
 import { functions } from '@/config/firebase';
@@ -19,6 +20,12 @@ import { SIT_APP_URL, STUDY_APP_URL } from '@/utils/appSwitch';
  *   lands.
  */
 export function AppSwitchBarHost() {
+  // The bar is persistent -- it lives in the layout, outside <Outlet /> -- so
+  // it cannot see a route change on its own and needs the current path to
+  // retire a failed-switch message. do has no account tab to mark active, but
+  // the message lifetime applies here exactly as it does in sit and study.
+  const { pathname } = useLocation();
+
   const mintHandoffCode = async () => {
     const mint = httpsCallable<Record<string, never>, { code: string }>(
       functions,
@@ -36,6 +43,7 @@ export function AppSwitchBarHost() {
         { app: 'study', url: STUDY_APP_URL },
       ]}
       mintHandoffCode={mintHandoffCode}
+      pathname={pathname}
     />
   );
 }

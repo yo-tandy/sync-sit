@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Spinner } from './Spinner.js';
 import { APP_NAME, BRAND_MARKS, type SyncApp } from '../lib/brandMarks.js';
@@ -30,8 +30,18 @@ export interface AppSwitchBarProps {
    * route that does not exist is worse than an absent one.
    */
   accountHref?: string;
-  /** True when the account view is the one on screen. */
-  accountActive?: boolean;
+  /**
+   * The route currently on screen in THIS app.
+   *
+   * Required, and deliberately not optional, because the bar is PERSISTENT:
+   * it lives in the layout outside `<Outlet />`, so it never unmounts and
+   * cannot discover a route change on its own. Two things depend on it -- the
+   * account tab's active state, and clearing a failed-switch message that
+   * would otherwise stay pinned to the bottom of every screen for the rest of
+   * the session. shared-ui stays router-free (no `useLocation` here), so the
+   * shell supplies it; making it required is what stops a shell forgetting.
+   */
+  pathname: string;
   /** Same-origin navigation for the account tab (router push). */
   onNavigateAccount?: (href: string) => void;
   /** Where the current app's own tab goes when tapped. Omit to make it inert. */
@@ -47,6 +57,13 @@ export interface AppSwitchBarProps {
  * admin sidebar, and where the switch belongs there is still open (Q9), so
  * this deliberately renders nothing rather than guessing.
  *
+ * That is why §9.5's burger-menu row is superseded ON PHONES ONLY. Each app
+ * bar hides its `AppSwitchMenuItem` below `md` -- the same breakpoint, from
+ * the other side -- so exactly one entry point exists at any width and the
+ * whole-bar lock cannot be walked around via the burger. At `md+` the row is
+ * still the only switcher there is, and it stays until Q9 is answered (#417).
+ * sit's admin shell renders no bar at any width, so it keeps the row always.
+ *
  * Switching a sibling is a CROSS-ORIGIN move today: mint a one-time code,
  * then navigate with it in the URL fragment (fragments never reach servers or
  * logs). That is why a tab shows a busy state instead of switching instantly
@@ -55,15 +72,15 @@ export interface AppSwitchBarProps {
  * disappears and these become real instant tab switches; the component is
  * shaped so that change is a smaller one.
  *
- * Non-optimistic, like the menu item it replaces: nothing navigates until the
- * mint resolves, and a failure leaves you where you are with a message.
+ * Non-optimistic, like the menu row it supersedes: nothing navigates until
+ * the mint resolves, and a failure leaves you where you are with a message.
  */
 export function AppSwitchBar({
   current,
   siblings,
   mintHandoffCode,
   accountHref,
-  accountActive = false,
+  pathname,
   onNavigateAccount,
   homeHref,
   onNavigateHome,
@@ -71,6 +88,37 @@ export function AppSwitchBar({
   const { t, i18n } = useTranslation();
   const [busyApp, setBusyApp] = useState<SyncApp | null>(null);
   const [failed, setFailed] = useState(false);
+
+  const accountActive = accountHref !== undefined && pathname === accountHref;
+
+  // The failure message belongs to ONE attempt, not to the session. This bar
+  // never unmounts, so nothing else would ever take it down: a user whose
+  // switch failed would carry the red line at the bottom of every screen
+  // until they happened to try again. Any route change ends the attempt.
+  //
+  // Adjusted DURING RENDER rather than in an effect -- React's documented
+  // "resetting state when a prop changes" shape. An effect would paint the
+  // stale message once on the new route and then re-render, and
+  // react-hooks/set-state-in-effect rejects it.
+  const [renderedAt, setRenderedAt] = useState(pathname);
+  if (renderedAt !== pathname) {
+    setRenderedAt(pathname);
+    setFailed(false);
+  }
+
+  // Staying busy through the cross-origin navigation is correct -- but the
+  // page can come BACK with that state intact when the browser restores it
+  // from bfcache (back button). `disabled={busyApp !== null}` covers every
+  // tab, so a restored page would show a permanently dead bar until reload.
+  useEffect(() => {
+    const onPageShow = (e: PageTransitionEvent) => {
+      if (!e.persisted) return;
+      setBusyApp(null);
+      setFailed(false);
+    };
+    window.addEventListener('pageshow', onPageShow);
+    return () => window.removeEventListener('pageshow', onPageShow);
+  }, []);
 
   const switchTo = async (app: SyncApp, url: string) => {
     if (busyApp) return;
@@ -108,7 +156,13 @@ export function AppSwitchBar({
           {t('appSwitch.error')}
         </p>
       )}
-      <ul className="flex items-stretch">
+      {/* focus-ring-inset: these tabs sit flush against the viewport's bottom
+          and side edges, so the shared WCAG 2.4.7 ring (outline-offset 2px +
+          a 2px white backing, base.css) would paint ~4px OUTSIDE the viewport
+          and simply not render for the bottom row and the end tabs. Drawing
+          it inside keeps the indicator visible. The ground is bg-white, which
+          is that class's documented light-ground constraint. */}
+      <ul className="focus-ring-inset flex items-stretch">
         {appTabs.map(({ app, url }) => {
           const isCurrent = app === current;
           const busy = busyApp === app;
@@ -121,6 +175,11 @@ export function AppSwitchBar({
                 disabled={busyApp !== null || (isCurrent && !homeHref)}
                 onClick={() => {
                   if (isCurrent) {
+                    // Clear here as well as on route change: tapping home while
+                    // already home navigates nowhere, so the pathname effect
+                    // above never fires and the message would outlive the
+                    // interaction that was meant to end it.
+                    setFailed(false);
                     if (homeHref && onNavigateHome) onNavigateHome(homeHref);
                     return;
                   }
@@ -156,7 +215,10 @@ export function AppSwitchBar({
             type="button"
             aria-current={accountActive ? 'page' : undefined}
             disabled={busyApp !== null}
-            onClick={() => onNavigateAccount?.(accountHref)}
+            onClick={() => {
+              setFailed(false);
+              onNavigateAccount?.(accountHref);
+            }}
             className={`flex w-full flex-col items-center gap-1 px-1 py-2 text-[11px] font-semibold transition-colors ${
               // Neutral, not branded: the account is shared and app-agnostic
               // (decision 24), so it must not wear the host app's colour.

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, cleanup, act } from '@testing-library/react';
 import { I18nextProvider } from 'react-i18next';
 
 const h = vi.hoisted(() => ({ assign: vi.fn() }));
@@ -20,19 +20,36 @@ const SIBLINGS = [
 function renderBar(props: Partial<React.ComponentProps<typeof AppSwitchBar>> = {}) {
   const mint = props.mintHandoffCode ?? vi.fn().mockResolvedValue('code123');
   const onNavigateAccount = props.onNavigateAccount ?? vi.fn();
-  render(
+  const ui = (
     <I18nextProvider i18n={i18n}>
       <AppSwitchBar
         current="sit"
         siblings={SIBLINGS.slice(0, 1)}
         mintHandoffCode={mint}
         accountHref="/family/account"
+        pathname="/family"
         onNavigateAccount={onNavigateAccount}
         {...props}
       />
-    </I18nextProvider>,
+    </I18nextProvider>
   );
-  return { mint, onNavigateAccount };
+  const { rerender } = render(ui);
+  /** Re-render at a new route, the way the shell's useLocation would. */
+  const navigateTo = (pathname: string) =>
+    rerender(
+      <I18nextProvider i18n={i18n}>
+        <AppSwitchBar
+          current="sit"
+          siblings={SIBLINGS.slice(0, 1)}
+          mintHandoffCode={mint}
+          accountHref="/family/account"
+          pathname={pathname}
+          onNavigateAccount={onNavigateAccount}
+          {...props}
+        />
+      </I18nextProvider>,
+    );
+  return { mint, onNavigateAccount, navigateTo };
 }
 
 describe('AppSwitchBar', () => {
@@ -153,6 +170,88 @@ describe('AppSwitchBar', () => {
     expect(h.assign).not.toHaveBeenCalled();
   });
 
+  // The bar is PERSISTENT -- it lives in the layout, outside <Outlet />, so it
+  // never unmounts. The menu item it supersedes lived in a Dialog that
+  // returned null when closed, which reset its error for free. Nothing does
+  // that here, so the message's lifetime has to be managed explicitly.
+  describe('the failure message belongs to one attempt, not to the session', () => {
+    const failOnce = () =>
+      renderBar({ mintHandoffCode: vi.fn().mockRejectedValue(new Error('boom')) });
+
+    it('clears when the user navigates anywhere else in the app', async () => {
+      const { navigateTo } = failOnce();
+      fireEvent.click(screen.getByRole('button', { name: /sync\/study/ }));
+      await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
+
+      // Without this the red line stays pinned to the bottom of EVERY screen
+      // for the rest of the session.
+      navigateTo('/family/appointments');
+      expect(screen.queryByRole('alert')).toBeNull();
+    });
+
+    it('clears when the user taps another tab instead of retrying', async () => {
+      failOnce();
+      fireEvent.click(screen.getByRole('button', { name: /sync\/study/ }));
+      await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
+
+      fireEvent.click(screen.getByRole('button', { name: /my account/i }));
+      expect(screen.queryByRole('alert')).toBeNull();
+    });
+
+    it('clears when the current-app tab is tapped, which navigates nowhere', async () => {
+      renderBar({
+        mintHandoffCode: vi.fn().mockRejectedValue(new Error('boom')),
+        homeHref: '/family',
+        onNavigateHome: vi.fn(),
+      });
+      fireEvent.click(screen.getByRole('button', { name: /sync\/study/ }));
+      await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
+
+      // Tapping home while already home leaves pathname unchanged, so the
+      // route-change reset above would not fire for this interaction.
+      fireEvent.click(screen.getByRole('button', { name: /sync\/sit/ }));
+      expect(screen.queryByRole('alert')).toBeNull();
+    });
+  });
+
+  it('un-sticks a busy bar when the browser restores the page from bfcache', async () => {
+    // Staying busy through the cross-origin navigation is correct, but the
+    // back button can restore this page with that state intact. Every tab is
+    // disabled while busy, so the bar would be permanently dead until reload.
+    renderBar({ mintHandoffCode: vi.fn().mockResolvedValue('code123') });
+    fireEvent.click(screen.getByRole('button', { name: /sync\/study/ }));
+    await waitFor(() => expect(h.assign).toHaveBeenCalledTimes(1));
+    expect(screen.getByRole('button', { name: /my account/i })).toBeDisabled();
+
+    await act(async () => {
+      window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }));
+    });
+    expect(screen.getByRole('button', { name: /my account/i })).toBeEnabled();
+  });
+
+  it('ignores a NON-restore pageshow — a first load must not cancel a live switch', async () => {
+    renderBar({ mintHandoffCode: vi.fn(() => new Promise<string>(() => {})) });
+    fireEvent.click(screen.getByRole('button', { name: /sync\/study/ }));
+    await waitFor(() => expect(screen.getByRole('button', { name: /sync\/study/ })).toBeDisabled());
+
+    // act() flushes the listener's state update; asserting straight after a
+    // bare dispatch would pass even with the `persisted` guard deleted.
+    await act(async () => {
+      window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: false }));
+    });
+    expect(screen.getByRole('button', { name: /sync\/study/ })).toBeDisabled();
+  });
+
+  it('draws its focus ring INSIDE the tabs — they sit flush against the viewport edges', () => {
+    // jsdom applies no CSS, so the class IS the contract here. The shared
+    // WCAG 2.4.7 ring (base.css) offsets 2px outward plus a 2px white
+    // backing; on a fixed bottom bar that ~4px falls outside the viewport and
+    // is never painted for the bottom row and the end tabs.
+    renderBar();
+    const row = screen.getByRole('button', { name: /sync\/sit/ }).closest('ul')!;
+    expect(row.className).toMatch(/\bfocus-ring-inset\b/);
+  });
+
   it('navigates in-app for the account tab — no handoff, it is same-origin', () => {
     const { mint, onNavigateAccount } = renderBar();
     fireEvent.click(screen.getByRole('button', { name: /my account/i }));
@@ -168,7 +267,7 @@ describe('AppSwitchBar', () => {
     // is no route to point at, and a tab leading nowhere is worse than none.
     render(
       <I18nextProvider i18n={i18n}>
-        <AppSwitchBar current="do" siblings={SIBLINGS} mintHandoffCode={vi.fn()} />
+        <AppSwitchBar current="do" siblings={SIBLINGS} mintHandoffCode={vi.fn()} pathname="/doer" />
       </I18nextProvider>,
     );
     expect(screen.queryByRole('button', { name: /my account/i })).toBeNull();

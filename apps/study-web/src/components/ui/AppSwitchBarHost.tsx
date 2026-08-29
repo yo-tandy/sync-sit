@@ -33,7 +33,7 @@ export function AppSwitchBarHost({ accountHref }: { accountHref: string }) {
       siblings={[{ app: 'sit', url: SIT_APP_URL }]}
       mintHandoffCode={mintHandoffCode}
       accountHref={accountHref}
-      accountActive={pathname === accountHref}
+      pathname={pathname}
       onNavigateAccount={(href) => void navigate(href)}
     />
   );
