@@ -3,25 +3,29 @@ import { useAuthStore } from '@/stores/authStore';
 import { getDoRole, type DoRole } from '@/utils/doRole';
 
 interface AuthGuardProps {
-  /**
-   * Portal role this route belongs to. Omitted = the roleless shell (the
-   * placeholder /home): any signed-in account passes — that page is the
-   * doer's landing until the doer portal ships (plan §13 PR8), and the
-   * neutral landing for accounts with no sync-do role yet.
-   */
-  role?: DoRole;
+  /** Portal role this route belongs to. Since PR8 every authenticated
+   * route is role-guarded: 'parent' for the family portal, 'doer' for the
+   * doer portal (whose /home board replaced the PR2 placeholder shell). */
+  role: DoRole;
   children: React.ReactNode;
 }
 
 /**
  * Route guard for do-web, following study-web's AuthGuard pattern
  * (loading -> render nothing; signed-out -> /login; role mismatch -> that
- * role's own portal). The family portal (plan §13 PR7) is the first
- * role-guarded surface; the doer portal grows its own role at PR8.
+ * role's own portal).
  *
  * Like study, the guard does NOT gate on enrollment completeness or family
  * verification — those are the surfaces' own banners/errors, never the
- * guard's (the doPostTask callable is the real gate for posting).
+ * guard's (the callables are the real gates).
+ *
+ * ADMIN accounts pass the DOER guard. do-web has no admin tree (plan §9.4
+ * — admin lives only in apps/web), so an admin needs SOME landing here,
+ * and the doer portal is the one whose reads work for them: §7.2's
+ * `isAdmin()` disjuncts make `doTasks`/`taskOffers` admin-readable
+ * (caller-based, so the board query stays provable), and the uid-scoped
+ * lists simply come back empty. Bouncing admins off /home instead would
+ * loop the guard against its own mismatch fallback.
  */
 export function AuthGuard({ role, children }: AuthGuardProps) {
   const { firebaseUser, userDoc, loading } = useAuthStore();
@@ -33,16 +37,13 @@ export function AuthGuard({ role, children }: AuthGuardProps) {
   // Not signed in at all -> the login page.
   if (!firebaseUser) return <Navigate to="/login" replace />;
 
-  // Roleless shell route: any signed-in account.
-  if (!role) return <>{children}</>;
-
   const doRole = getDoRole(userDoc);
-  if (doRole !== role) {
+  if (doRole !== role && !(role === 'doer' && doRole === 'admin')) {
     // Role-mismatch fallback mirrors postLoginRouter so the guard and the
-    // post-login router agree: parents to /family; doers (and admins, whose
-    // panel lives only in apps/web — plan §9.4) to the shell home. An
-    // account with no sync-do role falls through to /signup to add one
-    // rather than dead-ending.
+    // post-login router agree: parents to /family; doers (and admins, per
+    // the pass-through above) to the board at /home. An account with no
+    // sync-do role falls through to /signup to add one rather than
+    // dead-ending.
     if (doRole === 'parent') return <Navigate to="/family" replace />;
     if (doRole === 'doer' || doRole === 'admin') return <Navigate to="/home" replace />;
     return <Navigate to="/signup" replace />;
