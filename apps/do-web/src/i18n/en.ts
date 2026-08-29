@@ -217,6 +217,13 @@ export default {
       inProgressBadge: 'Assigned',
       completedBadge: 'Completed',
       endorsePrompt: 'Say how it went',
+      /* The foot of a capped section, shown only when there is more than the
+         dashboard keeps — and it names the FULL count, because a cap the
+         reader cannot see is the defect. `total`, not `count`: the line is
+         unreachable at one, so it needs no singular form. */
+      seeAllOpen: 'See all {{total}} open tasks',
+      seeAllAssigned: 'See all {{total}} tasks in progress',
+      seeAllCompleted: 'See all {{total}} completed tasks',
       emptyDesc: 'Nothing on the go. Post a task and EJM students will offer to help.',
       loadError: 'Could not load your tasks. Please refresh and try again.',
     },
@@ -442,6 +449,10 @@ export default {
       awaitingParent: 'Waiting for your parent to approve it.',
       nextMarkDone: 'Mark it done when you finish',
       endorsementPrompt: 'Accept it to show it with your offers, or decline it.',
+      /* The foot of a capped section — see the family dashboard's seeAll*. */
+      seeAllOffers: 'See all {{total}} offers',
+      seeAllAssigned: 'See all {{total}} assigned tasks',
+      seeAllEndorsements: 'See all {{total}} endorsements',
       endorsementsLoadError: 'Could not check whether an endorsement is waiting for you.',
       emptyDesc: 'Nothing on the go. Browse the board and offer to help with a task.',
       loadError: 'Could not load your dashboard. Please refresh and try again.',
