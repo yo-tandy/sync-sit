@@ -12,6 +12,9 @@ describe('enrollBabysitter (unauthenticated create path)', () => {
     await clearAll();
     await getDb().collection('verificationCodes').doc(EMAIL).set({
       code: CODE,
+      // The stamp verifyEjmEmail writes (issue #322): this enrollment is
+      // EJM-gated and refuses a code without it.
+      identityClass: 'ejm',
       email: EMAIL,
       expiresAt: new Date(Date.now() + 10 * 60 * 1000),
       attempts: 0,

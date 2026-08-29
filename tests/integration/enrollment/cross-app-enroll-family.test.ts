@@ -7,6 +7,11 @@ const TUTOR_EMAIL = 'tutoronly2@test.com';
 const SITTER_UID = 'standalone-sitter-2';
 const SITTER_EMAIL = 'sitteronly2@test.com';
 
+// Deliberately UNSTAMPED (issue #322): enrollFamily requires only the
+// 'mailbox' class, and a doc with no identityClass — a pre-#322 doc — reads
+// as exactly that. So this fixture doubles as the transitional-compatibility
+// coverage for the parent path; the dedicated pins live in
+// tests/integration/auth/verification-code-class.test.ts.
 async function seedCode(email: string) {
   await getDb().collection('verificationCodes').doc(email.toLowerCase()).set({
     code: CODE,

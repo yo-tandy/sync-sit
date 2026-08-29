@@ -57,6 +57,9 @@ describe('tutor activation without admin step', () => {
     parentToken = await getIdToken(seed.parent1.uid); // verified family
     await getDb().collection('verificationCodes').doc(TUTOR_EMAIL).set({
       code: CODE,
+      // The stamp verifyEjmEmail writes (issue #322): this enrollment is
+      // EJM-gated and refuses a code without it.
+      identityClass: 'ejm',
       email: TUTOR_EMAIL,
       expiresAt: new Date(Date.now() + 10 * 60 * 1000),
       attempts: 0,
