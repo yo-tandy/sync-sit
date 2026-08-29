@@ -19,9 +19,16 @@ async function signInWithCustomToken(token: string): Promise<{ idToken: string }
       body: JSON.stringify({ token, returnSecureToken: true }),
     },
   );
-  // `res.json()` is `unknown`; the emulator's signIn response shape is the
-  // contract this helper exists to exercise.
-  return (await res.json()) as { idToken: string };
+  // `res.json()` is `unknown`. The emulator answers EITHER shape, so the
+  // declared return type is made true by the guard rather than asserted over a
+  // failure — same modelling as getIdToken in setup/emulator.ts, and a failed
+  // sign-in surfaces the emulator's own error instead of a downstream
+  // TypeError.
+  const body = (await res.json()) as { idToken?: string; error?: unknown };
+  if (!body.idToken) {
+    throw new Error(`signInWithCustomToken failed: ${JSON.stringify(body)}`);
+  }
+  return { idToken: body.idToken };
 }
 
 /** uid claim of an emulator-issued ID token (unsigned JWT). */

@@ -185,6 +185,63 @@ describe('test workflow stays callable by the release gate', () => {
   });
 });
 
+/**
+ * Contract pins for the typecheck gate (issue #378).
+ *
+ * Same rationale as the release pins above: the premise of that issue is that
+ * an ABSENT gate is invisible, which applies to the gate itself. Both
+ * regressions below are silent — every other check stays green while the type
+ * gate quietly covers less than it claims to.
+ */
+describe('typecheck gate (issue #378)', () => {
+  it('test.yml runs `pnpm -r typecheck` in a job of its own', () => {
+    // Asserted on the parsed step's `run`, so the workflow's own comments
+    // about typechecking cannot satisfy it.
+    const test = wf('test.yml');
+    const job = (test.jobs as Record<string, { steps?: { run?: string }[] }>).typecheck;
+    expect(job, 'test.yml must keep a `typecheck` job').toBeDefined();
+    const runs = (job.steps ?? []).map((s) => String(s.run ?? ''));
+    expect(runs.some((r) => /pnpm\s+-r\s+typecheck/.test(r))).toBe(true);
+  });
+
+  it('is parallel to the suites, never ordered ahead of them', () => {
+    // A gate with `needs: [typecheck]` on `test` would let a type error
+    // short-circuit the suites and erase their signal — the failure mode
+    // #341/#215/#216 were about, and the reason this is its own job.
+    const test = wf('test.yml');
+    const jobs = test.jobs as Record<string, { needs?: unknown }>;
+    expect(jobs.typecheck.needs).toBeUndefined();
+    expect(jobs.test.needs).toBeUndefined();
+    expect(jobs.lint.needs).toBeUndefined();
+  });
+
+  it('every workspace package defines a `typecheck` script', () => {
+    // The gap this issue actually closed: `tests/` had a tsconfig but no
+    // script, so `pnpm -r typecheck` silently skipped it and "12 of 12" was
+    // really 11. A NEW package shipping without the script would put the repo
+    // straight back into that state with nothing turning red.
+    const { readdirSync, existsSync, readFileSync } = require('node:fs') as typeof import('node:fs');
+    const root = resolve(__dirname, '../..');
+    const dirs: string[] = [];
+    for (const group of ['packages', 'apps']) {
+      for (const name of readdirSync(resolve(root, group))) {
+        if (group === 'apps' && name === 'mobile') continue; // excluded in pnpm-workspace.yaml
+        const dir = resolve(root, group, name);
+        if (existsSync(resolve(dir, 'package.json'))) dirs.push(dir);
+      }
+    }
+    dirs.push(resolve(root, 'tests'));
+
+    const missing = dirs.filter((dir) => {
+      const pkg = JSON.parse(readFileSync(resolve(dir, 'package.json'), 'utf8'));
+      return !pkg.scripts?.typecheck;
+    });
+    expect(missing).toEqual([]);
+    // Floor: the walk must actually have found the workspace, not an empty list.
+    expect(dirs.length).toBeGreaterThanOrEqual(12);
+  });
+});
+
 describe('no other workflow deploys to production on merge', () => {
   it('the merge-deploy workflow is gone, not merely renamed alongside a survivor', () => {
     // A leftover copy would keep main coupled to prod while release.yml looked
