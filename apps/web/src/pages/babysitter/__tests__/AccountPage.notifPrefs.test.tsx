@@ -109,7 +109,7 @@ describe('babysitter AccountPage notification prefs', () => {
     await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
     const call = h.updateDoc.mock.calls[0];
     expect(call[0]).toEqual(expect.objectContaining({ path: 'users/bs1' }));
-    const payload = call[1] as Record<string, unknown>;
+    const payload = call[1];
     expect(payload).toHaveProperty('notifPrefs.newRequest.email', false);
     const keys = Object.keys(payload);
     // Mutation pin: only the toggled scenario/channel dot-path + updatedAt.

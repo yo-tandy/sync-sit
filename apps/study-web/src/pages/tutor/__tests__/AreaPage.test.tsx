@@ -101,7 +101,7 @@ function seed(area: Record<string, unknown>) {
 function savedPayload(): Record<string, unknown> {
   const call = h.updateDoc.mock.calls[0];
   expect(call[0]).toEqual(expect.objectContaining({ path: 'users/t1' }));
-  return call[1] as Record<string, unknown>;
+  return call[1];
 }
 
 describe('tutor AreaPage', () => {

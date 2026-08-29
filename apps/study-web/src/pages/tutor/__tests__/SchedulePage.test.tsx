@@ -235,7 +235,7 @@ describe('tutor SchedulePage', () => {
     await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
     const call = h.updateDoc.mock.calls[0];
     expect(call[0]).toEqual(expect.objectContaining({ path: 'users/t1' }));
-    const payload = call[1] as Record<string, unknown>;
+    const payload = call[1];
     // Pin the FULL key set: dot-paths only — never a wholesale profiles.tutor
     // rewrite (would clobber server-owned siblings like approvedFamilies).
     // aboutMe stayed on AccountPage (issue #169 split it out of this save).

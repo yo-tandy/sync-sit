@@ -238,7 +238,7 @@ describe('tutor AccountPage', () => {
     await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
     const call = h.updateDoc.mock.calls[0];
     expect(call[0]).toEqual(expect.objectContaining({ path: 'users/t1' }));
-    const payload = call[1] as Record<string, unknown>;
+    const payload = call[1];
     expect(payload).toHaveProperty('notifPrefs.newRequest.email', false);
     const keys = Object.keys(payload);
     // Every key is either updatedAt or the toggled scenario/channel dot-path —
@@ -447,7 +447,7 @@ describe('tutor AccountPage', () => {
     await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
     const call = h.updateDoc.mock.calls[0];
     expect(call[0]).toEqual(expect.objectContaining({ path: 'users/t1' }));
-    const payload = call[1] as Record<string, unknown>;
+    const payload = call[1];
     // Pin the FULL key set: dot-paths only — never a wholesale profiles.tutor
     // rewrite (would clobber server-owned siblings like approvedFamilies).
     expect(Object.keys(payload).sort()).toEqual(['profiles.tutor.aboutMe', 'updatedAt']);
