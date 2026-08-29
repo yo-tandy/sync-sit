@@ -88,7 +88,9 @@ export function OfferCard({ offer, onAccept, onDecline }: OfferCardProps) {
       )}
       {declined && (
         <div className="mt-3">
-          <Badge variant="gray">{t('family.taskDetail.declineCta')}</Badge>
+          {/* Noun-state label, NOT the imperative CTA string ('Refusée', not
+              'Refuser' — PR #331 round 1). */}
+          <Badge variant="gray">{t('family.taskDetail.declinedBadge')}</Badge>
         </div>
       )}
     </Card>

@@ -162,5 +162,9 @@ describe('OfferCard rendering', () => {
       <OfferCard offer={offer({ status: 'declined' })} onAccept={onAccept} onDecline={onDecline} />,
     );
     expect(screen.queryByRole('button', { name: 'Accept offer' })).toBeNull();
+    // Noun-state badge, not the imperative CTA string (PR #331 round 1) —
+    // and no lingering action buttons on a declined card.
+    expect(screen.getByText('Declined')).toBeInTheDocument();
+    expect(screen.queryByText('Decline')).toBeNull();
   });
 });
