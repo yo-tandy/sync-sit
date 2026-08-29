@@ -392,6 +392,17 @@ describe('no control pairs a height with the radius that halves it (#395 review 
    * the colliding pairs and then looks for them in the markup, rather than
    * treating the ratio itself as a bug.
    *
+   * EQUALITY WAS THE SECOND MISTAKE (review round 4). The first version of
+   * this guard filtered on `r * 2 === px`, which encodes "a radius of exactly
+   * half the height". That is not the rule. CSS Backgrounds 3 section 5.5
+   * CLAMPS corner radii whenever the two radii on a side sum to more than that
+   * side's length, so the stadium appears for every height <= 2r, not only at
+   * equality. With --radius-lg at 20px that is everything up to and including
+   * h-10 -- and three h-9 controls shipped as stadiums past a guard written to
+   * catch exactly this defect, because 36 !== 40 and `h-9` was not even in the
+   * height map. The predicate is now `>=` and the map lists every height that
+   * appears beside a rounded-* class in the tree.
+   *
    * Both sides are rem-based, so the ratio holds at either root font size.
    */
   const REM_PX = 16; // ratio only; both sides scale with the root size.
@@ -411,16 +422,20 @@ describe('no control pairs a height with the radius that halves it (#395 review 
 
   /** Tailwind heights that appear alongside a rounded-* class in the tree. */
   const HEIGHTS: Record<string, number> = {
+    'h-3': 12,
     'h-5': 20,
     'h-7': 28,
+    'h-8': 32,
+    'h-9': 36,
     'h-10': 40,
     'h-11': 44,
+    'h-12': 48,
     'h-14': 56,
   };
 
   const collidingPairs = Object.entries(HEIGHTS).flatMap(([h, px]) =>
     Object.entries(radii)
-      .filter(([, r]) => r * 2 === px)
+      .filter(([, r]) => r * 2 >= px)
       .map(([name]) => [h, `rounded-${name}`] as const),
   );
 
@@ -431,17 +446,31 @@ describe('no control pairs a height with the radius that halves it (#395 review 
     expect(collidingPairs.length).toBeGreaterThan(0);
   });
 
+  /**
+   * Class strings, so a height and a radius only count when they land on the
+   * SAME element. Matching across a whole file pairs unrelated siblings.
+   */
+  const CLASS_ATTR = /class(?:Name)?=(?:"([^"]*)"|'([^']*)'|\{`([^`]*)`\})/g;
+
   it.each(collidingPairs)('no %s control carries %s', (height, rounded) => {
-    const near = new RegExp(
-      `${height}[^"'\`]*\\b${rounded}\\b|\\b${rounded}\\b[^"'\`]*${height}`,
-    );
+    const h = new RegExp(`\\b${height}\\b`);
+    const r = new RegExp(`\\b${rounded}\\b`);
+    // A SQUARE is excluded: `h-8 w-8 rounded-lg` is a deliberate circle, not
+    // an accidental stadium. The defect this guard exists to catch is a wide
+    // control whose ends go fully round by arithmetic nobody chose.
+    const square = new RegExp(`\\bw-${height.slice(2)}\\b`);
     const offenders = [...markup.entries()]
-      .filter(([, text]) => near.test(text))
+      .filter(([, text]) =>
+        [...text.matchAll(CLASS_ATTR)]
+          .map((m) => m[1] ?? m[2] ?? m[3] ?? '')
+          .some((cls) => h.test(cls) && r.test(cls) && !square.test(cls)),
+      )
       .map(([path]) => path);
     expect(
       offenders,
-      `${height} is exactly twice ${rounded}, so these render as pills. Either ` +
-        `move them to rounded-pill deliberately, or drop a stop.`,
+      `${rounded} is at least half of ${height}, so the browser clamps the ` +
+        `corners and these render as stadiums. Either move them to ` +
+        `rounded-pill deliberately, step down a radius, or drop a stop.`,
     ).toEqual([]);
   });
 });

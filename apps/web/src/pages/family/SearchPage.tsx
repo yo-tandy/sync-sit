@@ -531,7 +531,7 @@ export function SearchPage() {
                                     updated[i] = { ...slot, startTime: e.target.value };
                                     setRecurringSlots(updated);
                                   }}
-                                  className="h-9 flex-1 rounded-lg border border-gray-300 bg-white px-2 text-sm"
+                                  className="h-9 flex-1 rounded-md border border-gray-300 bg-white px-2 text-sm"
                                 >
                                   {TIME_OPTIONS.map((o) => (
                                     <option key={o.value} value={o.value}>{o.label}</option>
@@ -545,7 +545,7 @@ export function SearchPage() {
                                     updated[i] = { ...slot, endTime: e.target.value };
                                     setRecurringSlots(updated);
                                   }}
-                                  className="h-9 flex-1 rounded-lg border border-gray-300 bg-white px-2 text-sm"
+                                  className="h-9 flex-1 rounded-md border border-gray-300 bg-white px-2 text-sm"
                                 >
                                   {TIME_OPTIONS.map((o) => (
                                     <option key={o.value} value={o.value}>{o.label}</option>
