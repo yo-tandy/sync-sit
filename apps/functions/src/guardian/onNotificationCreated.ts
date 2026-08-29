@@ -82,6 +82,33 @@ const EMAIL_PREF_CATEGORY: Record<string, 'newRequest' | 'confirmed' | 'cancelle
   //   can reach this map.
 };
 
+/**
+ * Which app BRANDS a mirror's email (sender name, header colour, footer CTA).
+ *
+ * The push leg already derives its world from the mirrored notification's
+ * original type; the email leg passed nothing and so defaulted to `'sit'`.
+ * Harmless while every mapped type was a sit type — but the sync-do entries
+ * above made it reachable with do content, which would have sent
+ * `Sync/Sit <noreply@sync-sit.com>` mail, headed Sync/Sit, footed
+ * "Open Sync/Sit → sync-sit.com", about a task assignment that does not
+ * exist in Sync/Sit (PR #334 round-3 review).
+ *
+ * DO-ORIGIN ONLY, deliberately. `derivePushWorld` also separates study from
+ * sit, but study mirrors have been sit-branded since they shipped: correcting
+ * that would change what a study parent's mail looks like, which is a
+ * sibling-app behavior change and not a sync-do PR's to make. So this returns
+ * `'do'` for do-world types and today's `'sit'` default for everything else —
+ * strictly additive, with the study-origin gap left as a separate follow-up.
+ *
+ * Orthogonal to issue #336. That decision is whether do mirrors should reach
+ * a parent's sit/study surfaces AT ALL; this only decides that if such a mail
+ * is sent, it is honestly branded. If #336 resolves toward suppressing do
+ * mirrors, this leg simply stops firing.
+ */
+export function deriveMirrorEmailApp(originalType: string): 'sit' | 'study' | 'do' {
+  return derivePushWorld(originalType) === 'do' ? 'do' : 'sit';
+}
+
 export const mirrorNotificationToGuardians = onDocumentCreated(
   { document: 'notifications/{notificationId}', region: 'europe-west1' },
   async (event) => {
@@ -140,12 +167,16 @@ export const mirrorNotificationToGuardians = onDocumentCreated(
         });
 
       if (sendEmail) {
+        // Branded from the ORIGINAL type, like the push leg below — a do-world
+        // event sends Sync/Do mail with the Sync/Do CTA, not sit mail pointing
+        // at an app where the event does not exist (see deriveMirrorEmailApp).
         await sendNotificationEmail(
           parent!.email as string,
           title,
           `<p>${escapeHtml(body)}</p>
            <p style="color: #6B7280; font-size: 14px;">You receive this copy because you
            supervise ${escapeHtml(kidName)}'s account.</p>`,
+          deriveMirrorEmailApp(originalType),
         );
       }
       // app='auto': the parent's app affinity is theirs, not the kid's. The
