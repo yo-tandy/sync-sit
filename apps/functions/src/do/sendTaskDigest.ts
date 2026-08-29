@@ -55,6 +55,9 @@ export interface DoDigestStats {
   tasksConsidered: number;
   recipientsMatched: number;
   digestsSent: number;
+  /** Recipients whose digest threw and was skipped — the run's only other
+   *  observability besides the summary log (PR #334 review). */
+  errors: number;
 }
 
 function chunk<T>(values: T[], size: number): T[][] {
@@ -73,6 +76,7 @@ export async function runDoSendTaskDigest(
     tasksConsidered: 0,
     recipientsMatched: 0,
     digestsSent: 0,
+    errors: 0,
   };
 
   // ── 1. Candidate tasks: OPEN, recent, unexpired ──
@@ -106,64 +110,90 @@ export async function runDoSendTaskDigest(
   stats.recipientsMatched = recipients.size;
 
   // ── 3. Per recipient: in-memory filters, batch, send, stamp ──
+  //
+  // The whole body is per-recipient ISOLATED (PR #334 review). The
+  // transports inside sendDoNotificationToUser are already fail-safe, but
+  // its `notifications.add()`, the `users` stamp below and a malformed user
+  // doc can all still reject — and unguarded, one bad recipient aborted the
+  // entire scheduled run: every recipient after it got nothing that hour and
+  // the summary log never printed. Log it, count it, carry on. Nothing is
+  // lost: `lastDigestAt` is stamped only on success, so a failed recipient
+  // is picked up by the next hourly run.
   for (const [uid, userData] of recipients) {
-    const doer = (
-      (userData.profiles ?? {}) as Record<string, Record<string, unknown> | undefined>
-    ).doer;
-    // §7.3 in-memory half 1: only enrolled doers — the composite must not
-    // carry this equality.
-    if (doer?.enrollmentComplete !== true) continue;
+    try {
+      const doer = (
+        (userData.profiles ?? {}) as Record<string, Record<string, unknown> | undefined>
+      ).doer;
+      // §7.3 in-memory half 1: only enrolled doers — the composite must not
+      // carry this equality.
+      if (doer?.enrollmentComplete !== true) continue;
 
-    // §7.3 in-memory half 2: the 6h per-recipient rate limit. Absent means
-    // never digested.
-    const lastDigestMs = doer.lastDigestAt ? tsMillis(doer.lastDigestAt) : null;
-    if (
-      lastDigestMs !== null &&
-      now.getTime() - lastDigestMs < DO_DIGEST_MIN_INTERVAL_MS
-    ) {
-      continue;
+      // §7.3 in-memory half 2: the 6h per-recipient rate limit. Absent means
+      // never digested.
+      const lastDigestMs = doer.lastDigestAt ? tsMillis(doer.lastDigestAt) : null;
+      if (
+        lastDigestMs !== null &&
+        now.getTime() - lastDigestMs < DO_DIGEST_MIN_INTERVAL_MS
+      ) {
+        continue;
+      }
+
+      // "Tasks created since their last digest", matched on the student's own
+      // category list (array-contains-any can over-match across chunks).
+      const cats = new Set((doer.categories as string[] | undefined) ?? []);
+      const sinceMs = lastDigestMs ?? 0;
+      const matching = tasks
+        .filter((t) => cats.has(t.category) && tsMillis(t.createdAt) > sinceMs)
+        .sort((a, b) => tsMillis(b.createdAt) - tsMillis(a.createdAt));
+      if (matching.length === 0) continue;
+
+      const lines: DigestTaskLine[] = matching.map((t) => ({
+        taskId: t.taskId,
+        title: t.title,
+        category: t.category,
+        areaLabel: t.areaLabel,
+        suggestedBudget: t.suggestedBudget,
+      }));
+
+      // prefCategory null: `profiles.doer.notifyNewTasks` IS the opt-in
+      // (§3.3) — the shared NotifPrefs categories do not gate the digest, and
+      // no per-app pref category is added (issue #168 Phase-2, plan §10).
+      await sendDoNotificationToUser({
+        recipientUserId: uid,
+        recipientData: userData,
+        type: 'new_task_matching',
+        prefCategory: null,
+        content: (lang) => buildNewTaskDigest(lang, lines),
+        data: { taskCount: String(lines.length) },
+      });
+
+      // The per-recipient dedupe state (§3.3: "the batcher IS that state").
+      // Admin SDK write — server-WRITTEN, but NOT rules-pinned (this
+      // corrects an over-claiming comment, PR #334 review):
+      // `doerIdentityUnchanged()` pins only
+      // `profiles.doer.enrollmentComplete`, `doerBoundsValid()` bounds
+      // bio/defaultRate/categories, and the `users` update allow-list does
+      // not block nested `profiles.doer.*` — so the owner CAN write this
+      // field. Left unpinned deliberately: the blast radius is the owner's
+      // own inbox. Backdating or clearing it makes them eligible for their
+      // own digest sooner (at most once per hourly run, listing their own
+      // board matches); a far-future value silences their own digest.
+      // Neither touches another user, and §3.3 claims only "server-owned
+      // (the batcher writes it)". Worth pinning in `doerIdentityUnchanged()`
+      // if this field ever gates anything beyond self-directed mail.
+      await firestoreDb
+        .collection('users')
+        .doc(uid)
+        .update({ 'profiles.doer.lastDigestAt': now });
+      stats.digestsSent += 1;
+    } catch (err) {
+      stats.errors += 1;
+      console.error(`[doSendTaskDigest] recipient ${uid} failed:`, err);
     }
-
-    // "Tasks created since their last digest", matched on the student's own
-    // category list (array-contains-any can over-match across chunks).
-    const cats = new Set((doer.categories as string[] | undefined) ?? []);
-    const sinceMs = lastDigestMs ?? 0;
-    const matching = tasks
-      .filter((t) => cats.has(t.category) && tsMillis(t.createdAt) > sinceMs)
-      .sort((a, b) => tsMillis(b.createdAt) - tsMillis(a.createdAt));
-    if (matching.length === 0) continue;
-
-    const lines: DigestTaskLine[] = matching.map((t) => ({
-      taskId: t.taskId,
-      title: t.title,
-      category: t.category,
-      areaLabel: t.areaLabel,
-      suggestedBudget: t.suggestedBudget,
-    }));
-
-    // prefCategory null: `profiles.doer.notifyNewTasks` IS the opt-in
-    // (§3.3) — the shared NotifPrefs categories do not gate the digest, and
-    // no per-app pref category is added (issue #168 Phase-2, plan §10).
-    await sendDoNotificationToUser({
-      recipientUserId: uid,
-      recipientData: userData,
-      type: 'new_task_matching',
-      prefCategory: null,
-      content: (lang) => buildNewTaskDigest(lang, lines),
-      data: { taskCount: String(lines.length) },
-    });
-
-    // The per-recipient dedupe state (§3.3: "the batcher IS that state").
-    // Admin SDK write — server-owned, rules-pinned client-immutable.
-    await firestoreDb
-      .collection('users')
-      .doc(uid)
-      .update({ 'profiles.doer.lastDigestAt': now });
-    stats.digestsSent += 1;
   }
 
   console.log(
-    `[doSendTaskDigest] tasks=${stats.tasksConsidered} matched=${stats.recipientsMatched} sent=${stats.digestsSent}`,
+    `[doSendTaskDigest] tasks=${stats.tasksConsidered} matched=${stats.recipientsMatched} sent=${stats.digestsSent} errors=${stats.errors}`,
   );
   return stats;
 }
