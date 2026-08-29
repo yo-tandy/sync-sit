@@ -8,11 +8,12 @@ interface ChipProps {
 }
 
 export function Chip({ selected = false, onClick, children, className = '' }: ChipProps) {
+  // `rounded-pill`, not `rounded-full` — see the note in Badge.tsx.
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`inline-flex cursor-pointer items-center gap-1 rounded-full px-3 py-1 text-xs font-medium transition-all ${
+      className={`inline-flex cursor-pointer items-center gap-1 rounded-pill px-3 py-1 text-xs font-medium transition-all ${
         selected
           ? 'bg-brand-100 text-brand-600'
           : 'border border-gray-200 bg-white text-gray-500 hover:border-gray-400'

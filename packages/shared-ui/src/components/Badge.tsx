@@ -21,9 +21,13 @@ const variantClasses: Record<BadgeVariant, string> = {
 };
 
 export function Badge({ variant = 'gray', children, className = '' }: BadgeProps) {
+  // `rounded-pill`, not `rounded-full` (#366, review round 1): --radius-pill
+  // was added for exactly this and then read by nothing. rounded-full stays
+  // correct for actual circles (avatars, spinners); a badge is a pill, and
+  // routing pills through the token makes it the one place to change them.
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium ${variantClasses[variant]} ${className}`}
+      className={`inline-flex items-center gap-1 rounded-pill px-3 py-1 text-xs font-medium ${variantClasses[variant]} ${className}`}
     >
       {children}
     </span>
