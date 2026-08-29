@@ -468,6 +468,7 @@ describe('deleteUser', () => {
         parentUserId: seed.parent1.uid,
         status: 'confirmed',
         date: dateIn(14),
+        message: 'he needs help with fractions',
         preSessionNote: 'gate code 1234',
         postSessionNote: 'Lucas struggled with fractions',
       });
@@ -477,6 +478,20 @@ describe('deleteUser', () => {
         status: 'completed',
         date: dateIn(-90),
         postSessionNote: 'final debrief',
+      });
+      // A TUTOR-INITIATED proposal (V1.1 feature 3). `proposeSession` writes
+      // `createdByUserId` = the proposing TUTOR, and `respondToSession` never
+      // rewrites it at accept — so this is a tutor uid sitting outside the
+      // family-side branch, and the `message` on it is the tutor's own words.
+      const proposal = await seedStudySession({
+        familyId: seed.family1Id,
+        tutorUserId: seed.tutor1.uid,
+        createdByUserId: seed.tutor1.uid,
+        parentUserId: seed.parent1.uid,
+        proposedBy: 'provider',
+        status: 'confirmed',
+        date: dateIn(21),
+        message: 'I have a free slot on Thursdays if that helps',
       });
       const other = await seedStudySession({
         familyId: seed.family1Id,
@@ -502,6 +517,12 @@ describe('deleteUser', () => {
       expect(liveDoc.students).toEqual([{ firstName: 'Lucas', age: 6 }]);
       expect(liveDoc.address).toBe('15 Rue de Passy, 75016 Paris');
       expect(liveDoc.preSessionNote).toBe('gate code 1234');
+      // The family AUTHORED this booking's message, so it survives the tutor's
+      // erasure — the other half of the authorship rule pinned below.
+      expect(liveDoc.message).toBe('he needs help with fractions');
+      // A family-initiated doc's createdByUserId names a PARENT, who is not the
+      // subject here.
+      expect(liveDoc.createdByUserId).toBe(seed.parent1.uid);
 
       // A COMPLETED session is anonymized but never re-statused: it is the
       // family's record of a session that actually happened.
@@ -509,6 +530,23 @@ describe('deleteUser', () => {
       expect(pastDoc.tutorUserId).toBe('deleted');
       expect(pastDoc.status).toBe('completed');
       expect('postSessionNote' in pastDoc).toBe(false);
+
+      // A TUTOR-INITIATED proposal: `createdByUserId` is the erased TUTOR, and
+      // it sits outside the family-side branch entirely — a tutor-only account
+      // has no familyId at all. Gating the anonymization on the family side
+      // left this uid raw, which is the very defect this suite exists for.
+      const proposalDoc = (await db.collection('study-sessions').doc(proposal).get()).data()!;
+      expect(proposalDoc.createdByUserId).toBe('deleted');
+      expect(proposalDoc.tutorUserId).toBe('deleted');
+      // The study invariant `proposedBy === 'provider'` ⟺ `createdByUserId ===
+      // tutorUserId` survives the erasure: both sides become the same sentinel.
+      expect(proposalDoc.proposedBy).toBe('provider');
+      expect(proposalDoc.createdByUserId).toBe(proposalDoc.tutorUserId);
+      // The proposal's `message` is the TUTOR's free text, so it goes with them
+      // — the same rule that erases their post-session note.
+      expect('message' in proposalDoc).toBe(false);
+      // The confirming parent's uid is not the subject and stays.
+      expect(proposalDoc.parentUserId).toBe(seed.parent1.uid);
 
       // Another tutor's session is untouched in every field.
       const otherDoc = (await db.collection('study-sessions').doc(other).get()).data()!;
@@ -665,6 +703,17 @@ describe('deleteUser', () => {
       // Only the FUTURE date's claim is released.
       expect(await overrideExists(seed.tutor2.uid, futureDate)).toBe(false);
       expect(await overrideExists(seed.tutor2.uid, pastDate)).toBe(true);
+
+      // The two instance counters are INDEPENDENT, not a partition: BOTH
+      // occurrences lost the family's pre-note, and only one was cancelled. An
+      // auditor asking "how many occurrences lost personal data" must get 2.
+      const logs = await db.collection('auditLogs')
+        .where('action', '==', 'delete_user')
+        .where('targetUserId', '==', seed.parent3.uid)
+        .get();
+      const details = logs.docs[0].data().details;
+      expect(details.cancelledStudyInstances).toBe(1);
+      expect(details.scrubbedStudyInstances).toBe(2);
     });
 
     it('sole-parent erasure gives the surviving BABYSITTER back the appointment slot', async () => {

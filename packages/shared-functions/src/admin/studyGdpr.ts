@@ -38,6 +38,10 @@ const DELETED = 'deleted';
 /** Firestore's write-batch ceiling, with the same headroom `doGdpr` takes. */
 const BATCH_CHUNK = 400;
 
+/** Concurrency bound on the export's per-session subcollection reads. Same
+ *  number as the write chunk so both halves of this module scale alike. */
+const READ_CHUNK = BATCH_CHUNK;
+
 export interface StudySessionExport extends Record<string, unknown> {
   id: string;
   /** The `instances` subcollection, inlined — Firestore never returns it with
@@ -54,7 +58,8 @@ export interface StudySessionExport extends Record<string, unknown> {
  * - the FAMILY side (`familyId`) — the same reasoning that already gives a
  *   parent their family's appointments and their family's endorsements: a
  *   session is family data and either parent may have booked it. It carries the
- *   family's `students[]` roster, `address`, `message` and `preSessionNote`.
+ *   family's `students[]` roster, `address` and `preSessionNote` (and, on a
+ *   family-initiated booking, `message`).
  *
  * Deduplicated by doc id. Both queries are single-field equality, served by the
  * automatic single-field indexes — no composite is required (and none exists
@@ -82,16 +87,27 @@ export async function collectStudySessions(
     ).values(),
   ) as FirebaseFirestore.QueryDocumentSnapshot[];
 
-  return Promise.all(
-    sessionDocs.map(async (doc) => {
-      const instancesSnap = await doc.ref.collection(STUDY_INSTANCES_SUBCOLLECTION).get();
-      return {
-        id: doc.id,
-        ...doc.data(),
-        instances: instancesSnap.docs.map((i) => ({ id: i.id, ...i.data() })),
-      };
-    }),
-  );
+  // Bounded fan-out. One subcollection read per session, but issued in chunks
+  // rather than all at once: the erasure half of this module explicitly budgets
+  // for "a long-lived tutor can hold arbitrarily many sessions", and an
+  // unbounded `Promise.all` over that same set would give the export a cost
+  // profile the erasure deliberately avoids. `READ_CHUNK` mirrors the write
+  // chunk so both halves scale the same way.
+  const out: StudySessionExport[] = [];
+  for (let i = 0; i < sessionDocs.length; i += READ_CHUNK) {
+    const page = await Promise.all(
+      sessionDocs.slice(i, i + READ_CHUNK).map(async (doc) => {
+        const instancesSnap = await doc.ref.collection(STUDY_INSTANCES_SUBCOLLECTION).get();
+        return {
+          id: doc.id,
+          ...doc.data(),
+          instances: instancesSnap.docs.map((inst) => ({ id: inst.id, ...inst.data() })),
+        };
+      }),
+    );
+    out.push(...page);
+  }
+  return out;
 }
 
 export interface ScheduleExport extends Record<string, unknown> {
@@ -135,7 +151,8 @@ export interface StudyEraseStats {
   sessionsCancelled: number;
   /** Future `scheduled` occurrences cancelled alongside their series. */
   instancesCancelled: number;
-  /** Occurrences whose denormalized notes were erased. */
+  /** Occurrences that lost a pre- or post-session note. Independent of
+   *  `instancesCancelled`: an occurrence can be counted in both. */
   instancesScrubbed: number;
   /** Tutor `sessionBlocks` claims released back to a SURVIVING tutor. */
   claimsReleased: number;
@@ -187,9 +204,14 @@ async function commitChunked(
  *   - `tutorName` → '' — a denormalized snapshot of the erased person's name,
  *     kept on the doc only because a family cannot read a tutor doc. sit's
  *     appointments carry no counterpart field, so this half has no precedent to
- *     copy; '' is what the identity fan-out already writes for an unknown name
- *     and what both portals already render (they fall back to the generic
- *     "Tutor" label rather than crashing).
+ *     copy, and '' is what the identity fan-out already writes for an unknown
+ *     name. What the family portal then RENDERS is a blank, not a fallback
+ *     label: `SessionsPage.tsx` interpolates `{s.tutorName}` raw at :658 and
+ *     :952 (and into the endorse/proposed-by strings at :617/:863). That is
+ *     acceptable — the alternative is retaining an erased person's name — but
+ *     it is a blank, and saying otherwise would let the next reader take
+ *     unverified UI behaviour as verified. A `deletedAt` tombstone letting the
+ *     UI say "former tutor" is the real fix; see the PR's follow-ups.
  *   - `postSessionNote` (and every instance's) → deleted. TUTOR-authored free
  *     text, the exact analogue of the `postAppointmentNote` erasure issue #238
  *     added to the sit half: erased immediately with the account rather than
@@ -197,15 +219,22 @@ async function commitChunked(
  *   - `pending`/`confirmed` → cancelled, `statusReason: 'account_deleted'`.
  *     There is no tutor left to teach it.
  *
- * FAMILY erased:
+ * EITHER SIDE:
  *   - `createdByUserId` / `parentUserId` → 'deleted' when they name the erased
- *     user. ALWAYS, co-parent surviving or not — the identical rule (and the
- *     identical reason) as the appointment `createdByUserId` anonymization:
- *     without it a deleted co-parent's uid lingers on docs the surviving parent
- *     still owns.
+ *     user. ALWAYS — co-parent surviving or not, and tutor side as well as
+ *     family side, because on a `proposedBy: 'provider'` doc `createdByUserId`
+ *     IS the tutor. Same rule and same reason as the appointment
+ *     `createdByUserId` anonymization: without it a deleted party's uid lingers
+ *     on docs the surviving party still owns.
+ *   - `message` → deleted, keyed on WHO WROTE IT: the tutor on a
+ *     `proposedBy: 'provider'` proposal, the family on every other booking.
+ *     Authorship decides every other free-text field here, so it decides this
+ *     one.
+ *
+ * FAMILY erased:
  *   - Everything FAMILY-level — `familyName`, `parentName`, `students[]` and
- *     `studentIds`, `address`/`latLng`, `message`, `preSessionNote` (and every
- *     instance's `preSessionNote`) — goes ONLY when the LAST parent goes. This
+ *     `studentIds`, `address`/`latLng`, `preSessionNote` (and every instance's
+ *     `preSessionNote`) — goes ONLY when the LAST parent goes. This
  *     is exactly the `preAppointmentNote` rule: the note, the roster and the
  *     address are family data, not per-parent data; while a co-parent survives
  *     they stay theirs to manage, and when the family itself is deleted they go
@@ -286,6 +315,41 @@ export async function eraseStudyUserData(
       const isFamilySide = !!familyId && session.familyId === familyId;
       const updates: Record<string, unknown> = {};
 
+      // ── Author-keyed uid anonymization, SIDE-INDEPENDENT ──
+      // These two run for a tutor erasure as well as a family one, because on a
+      // TUTOR-INITIATED proposal `createdByUserId` IS the tutor: `proposeSession`
+      // writes `createdByUserId: uid` with `uid` the proposing tutor (:186), the
+      // invariant `proposedBy === 'provider'` ⟺ `createdByUserId === tutorUserId`
+      // is stated at :28-29, and `respondToSession` deliberately does NOT rewrite
+      // it at accept — it records the confirming parent in `parentUserId`
+      // *because* `createdByUserId` stays the tutor (:156-161). Gating these on
+      // `isFamilySide` left a tutor's raw uid on every session they ever
+      // proposed (a tutor-only account has no `familyId`, so the branch never
+      // ran) — the exact defect this module exists to close, on the other side
+      // of the document. The rule is and always was "anonymize the uid when it
+      // names the erased user", which is not a side-specific statement.
+      //
+      // The `proposedBy` invariant SURVIVES: on such a doc `tutorUserId` and
+      // `createdByUserId` are the same uid, so both become 'deleted' together.
+      if (session.createdByUserId === targetUserId) updates.createdByUserId = DELETED;
+      if (session.parentUserId === targetUserId) updates.parentUserId = DELETED;
+
+      // `message` belongs to whoever CREATED the document, which is not always
+      // the family. On a `proposedBy: 'provider'` doc it is the tutor's own
+      // free text soliciting the booking (`proposeSession` :48-58, stored at
+      // :208); everywhere else it is the family's note to the tutor
+      // (`bookSession`). Authorship is what decides erasure for every other
+      // free-text field on this document — `postSessionNote` goes with the
+      // tutor, `preSessionNote` with the family — so it decides this one too.
+      // Leaving it on the family branch by default would have let a tutor's own
+      // words outlive their erasure indefinitely while their post-session note,
+      // two branches up, was erased immediately.
+      const messageIsTutorAuthored = session.proposedBy === 'provider';
+      const eraseMessage =
+        session.message !== undefined &&
+        (messageIsTutorAuthored ? isTutorSide : isFamilySide && isLastParent);
+      if (eraseMessage) updates.message = FieldValue.delete();
+
       if (isTutorSide) {
         updates.tutorUserId = DELETED;
         updates.tutorName = '';
@@ -295,8 +359,6 @@ export async function eraseStudyUserData(
       }
 
       if (isFamilySide) {
-        if (session.createdByUserId === targetUserId) updates.createdByUserId = DELETED;
-        if (session.parentUserId === targetUserId) updates.parentUserId = DELETED;
         if (isLastParent) {
           updates.familyName = '';
           updates.parentName = '';
@@ -304,7 +366,7 @@ export async function eraseStudyUserData(
           updates.studentIds = [];
           if (session.address !== undefined) updates.address = FieldValue.delete();
           if (session.latLng !== undefined) updates.latLng = FieldValue.delete();
-          if (session.message !== undefined) updates.message = FieldValue.delete();
+          // (`message` is handled above — its author is not always the family.)
           if (session.preSessionNote !== undefined) {
             updates.preSessionNote = FieldValue.delete();
           }
@@ -359,10 +421,19 @@ export async function eraseStudyUserData(
           claimDates.push(data.date as string);
         }
         if (Object.keys(instUpdates).length > 0) {
+          // The two counters are INDEPENDENT, not a partition. An occurrence
+          // that is both note-scrubbed and cancelled must count in both:
+          // `instancesScrubbed` is the number an auditor actually wants — how
+          // many occurrences lost personal data — and an `else` here would
+          // under-report it by exactly the cancelled ones, which are the most
+          // likely to have carried a note.
+          const noteErased =
+            instUpdates.postSessionNote !== undefined ||
+            instUpdates.preSessionNote !== undefined;
           instUpdates.updatedAt = now;
           instanceWrites.push({ ref: inst.ref, data: instUpdates });
           if (cancelInstance) stats.instancesCancelled += 1;
-          else stats.instancesScrubbed += 1;
+          if (noteErased) stats.instancesScrubbed += 1;
         }
       }
 
