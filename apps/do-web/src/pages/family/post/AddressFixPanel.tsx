@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { resolveAreaLabel } from '@ejm/shared-core';
 import {
   AddressAutocomplete,
   Button,
@@ -32,11 +33,13 @@ export function AddressFixPanel({ familyId, onSaved, onBack }: AddressFixPanelPr
   const [picked, setPicked] = useState<AddressResult | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(false);
+  const [outsideArea, setOutsideArea] = useState(false);
 
   const handleSave = async () => {
     if (!picked) return;
     setSaving(true);
     setError(false);
+    setOutsideArea(false);
     try {
       await updateDoc(doc(db, 'families', familyId), {
         address: picked.fullAddress,
@@ -45,7 +48,22 @@ export function AddressFixPanel({ familyId, onSaved, onBack }: AddressFixPanelPr
         city: picked.city || null,
         updatedAt: serverTimestamp(),
       });
-      onSaved();
+      // The save succeeding says nothing about PUBLISHABILITY: run the same
+      // resolveAreaLabel check doPostTask runs (PR #331 round 2). A real
+      // address outside the covered set is saved — it IS their address —
+      // but "you can publish now" would send them straight back into the
+      // address_required loop with no exit, so the honest out-of-area copy
+      // shows instead and onSaved (return-to-review) does not fire.
+      const resolves =
+        resolveAreaLabel({
+          postcode: picked.postcode || undefined,
+          city: picked.city || undefined,
+        }) !== null;
+      if (resolves) {
+        onSaved();
+      } else {
+        setOutsideArea(true);
+      }
     } catch {
       setError(true);
     } finally {
@@ -69,6 +87,9 @@ export function AddressFixPanel({ familyId, onSaved, onBack }: AddressFixPanelPr
       />
 
       {error && <p className="mb-3 text-sm text-error-600">{t('family.post.addressSaveError')}</p>}
+      {outsideArea && (
+        <p className="mb-3 text-sm text-amber-700">{t('family.post.addressSavedNoArea')}</p>
+      )}
 
       <div className="flex gap-2">
         <Button onClick={handleSave} disabled={saving || !picked} className="flex-1">

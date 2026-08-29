@@ -167,6 +167,47 @@ describe('StepPhotos (§7.4 client pipeline)', () => {
     expect(h.uploadBytes).not.toHaveBeenCalled();
   });
 
+  it('Retry during an IN-FLIGHT poll leaves one live chain (generation guard, PR #331 round 2)', async () => {
+    vi.useFakeTimers();
+    // First poll hangs (a cold function start); everything after is the
+    // normal not-found retry signal.
+    let rejectFirst!: (e: unknown) => void;
+    h.getOwnPhotoUrl
+      .mockImplementationOnce(() => new Promise((_res, rej) => (rejectFirst = rej)))
+      .mockImplementation(notFound);
+    renderWithProviders(<Harness />);
+    pickFile();
+
+    // Flush the upload; the first poll is dispatched and STILL in flight —
+    // no timer exists yet, which is exactly the window the round-1
+    // timer-clear missed.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(h.getOwnPhotoUrl).toHaveBeenCalledTimes(1);
+
+    // Retry while in flight: a fresh chain dispatches (call 2)...
+    fireEvent.click(screen.getByText('Retry'));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(h.getOwnPhotoUrl).toHaveBeenCalledTimes(2);
+
+    // ...and the STALE chain's late rejection must no-op (generation
+    // bumped), never arm a second timer.
+    await act(async () => {
+      rejectFirst(Object.assign(new Error('nf'), { code: 'functions/not-found' }));
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    // One interval later exactly ONE re-poll fires — two live chains would
+    // fire two.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(PHOTO_POLL_INTERVAL_MS);
+    });
+    expect(h.getOwnPhotoUrl).toHaveBeenCalledTimes(3);
+  });
+
   it('Retry mid-poll clears the pending timer — ONE chain, not two (PR #221 lesson)', async () => {
     vi.useFakeTimers();
     h.getOwnPhotoUrl.mockImplementation(notFound);

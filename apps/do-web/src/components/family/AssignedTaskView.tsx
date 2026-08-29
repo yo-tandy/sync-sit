@@ -13,6 +13,10 @@ interface AssignedTaskViewProps {
   onMarkDone: () => void;
   onCancel: () => void;
   busy: boolean;
+  /** The task's description/photos card, slotted between the contact card
+   * and the checklist: the details stay reachable past acceptance — the
+   * coordination phase is when they matter most (PR #331 round 2). */
+  details?: React.ReactNode;
 }
 
 /**
@@ -31,7 +35,7 @@ interface AssignedTaskViewProps {
  *   only, a conversation aid, nothing persisted;
  * - mark-done and cancel (the confirm dialogs live in the page).
  */
-export function AssignedTaskView({ task, doerFirstName, onMarkDone, onCancel, busy }: AssignedTaskViewProps) {
+export function AssignedTaskView({ task, doerFirstName, onMarkDone, onCancel, busy, details }: AssignedTaskViewProps) {
   const { t } = useTranslation();
   const considerations = useConsiderations(task.subCategory);
   const [checked, setChecked] = useState<Record<number, boolean>>({});
@@ -123,6 +127,8 @@ export function AssignedTaskView({ task, doerFirstName, onMarkDone, onCancel, bu
         )}
       </Card>
       )}
+
+      {details}
 
       {considerations.length > 0 && !completed && !cancelled && (
         <Card className="mb-4">

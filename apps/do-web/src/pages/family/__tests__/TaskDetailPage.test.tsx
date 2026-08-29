@@ -20,6 +20,7 @@ const h = vi.hoisted(() => ({
   offerQueries: [] as unknown[][],
   taskNext: null as null | ((snap: unknown) => void),
   offersNext: null as null | ((snap: unknown) => void),
+  offersError: null as null | ((err: unknown) => void),
   callable: vi.fn(),
   unsub: vi.fn(),
 }));
@@ -36,12 +37,13 @@ vi.mock('firebase/firestore', () => ({
   orderBy: (...args: unknown[]) => ({ orderBy: args }),
   limit: (n: number) => ({ limit: n }),
   getDocs: () => Promise.resolve({ docs: [] }),
-  onSnapshot: (q: unknown, next: (snap: unknown) => void) => {
+  onSnapshot: (q: unknown, next: (snap: unknown) => void, error: (err: unknown) => void) => {
     if ((q as { docPath?: string }).docPath) {
       h.taskNext = next;
     } else {
       h.offerQueries.push((q as { query: unknown[] }).query);
       h.offersNext = next;
+      h.offersError = error;
     }
     return h.unsub;
   },
@@ -110,6 +112,7 @@ beforeEach(() => {
   h.offerQueries = [];
   h.taskNext = null;
   h.offersNext = null;
+  h.offersError = null;
   h.callable.mockImplementation((name: string) => {
     if (name === 'doGetAssignedContact') {
       return Promise.resolve({
@@ -171,7 +174,7 @@ describe('TaskDetailPage (open task)', () => {
     await waitFor(() => expect(h.callable).toHaveBeenCalledWith('doAcceptOffer', { offerId: 'o1' }));
   });
 
-  it('maps a task_not_open acceptance race to its own copy', async () => {
+  it('a failed accept closes the dialog and renders the race copy ON THE PAGE (never behind the scrim)', async () => {
     renderWithProviders(<TaskDetailPage />);
     pushTask(taskRow());
     pushOffers([offerRow('o1')]);
@@ -186,6 +189,57 @@ describe('TaskDetailPage (open task)', () => {
     await waitFor(() =>
       expect(screen.getByText(/no longer open/)).toBeInTheDocument(),
     );
+    // The dialog must be CLOSED (the study RequestsPage precedent): an
+    // aria-modal scrim over the message would hide it visually and from
+    // assistive tech — PR #331 round 2 blocker.
+    expect(screen.queryByText('Accept this offer?')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Accept & share contact details' })).toBeNull();
+  });
+
+  it("maps doAcceptOffer's OTHER terminal refusals — task_expired and doer_unavailable — to their own copy", async () => {
+    renderWithProviders(<TaskDetailPage />);
+    pushTask(taskRow());
+    pushOffers([offerRow('o1')]);
+
+    h.callable.mockRejectedValueOnce(
+      Object.assign(new Error('expired'), {
+        code: 'functions/failed-precondition',
+        details: { reason: 'task_expired' },
+      }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Accept offer' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Accept & share contact details' }));
+    await waitFor(() =>
+      expect(screen.getByText(/This task has expired/)).toBeInTheDocument(),
+    );
+
+    h.callable.mockRejectedValueOnce(
+      Object.assign(new Error('gone'), {
+        code: 'functions/failed-precondition',
+        details: { reason: 'doer_unavailable' },
+      }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Accept offer' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Accept & share contact details' }));
+    await waitFor(() =>
+      expect(screen.getByText(/no longer available on Sync\/Do/)).toBeInTheDocument(),
+    );
+    // Neither reads as the retryable generic.
+    expect(screen.queryByText(/Could not accept the offer/)).toBeNull();
+  });
+
+  it('a failed offers read renders the error + retry, NEVER the reassuring empty state', () => {
+    renderWithProviders(<TaskDetailPage />);
+    pushTask(taskRow());
+    act(() => h.offersError!(new Error('index building')));
+    expect(screen.getByText(/Could not load the offers/)).toBeInTheDocument();
+    expect(screen.queryByText(/No offers yet/)).toBeNull();
+
+    // Retry re-subscribes; a successful snapshot then renders normally.
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    pushOffers([offerRow('o1')]);
+    expect(screen.getByText('Emma')).toBeInTheDocument();
+    expect(screen.queryByText(/Could not load the offers/)).toBeNull();
   });
 
   it('declines a single offer through its dialog', async () => {
@@ -209,6 +263,10 @@ describe('TaskDetailPage (assigned task)', () => {
     await waitFor(() => expect(screen.getByText('Emma Martin')).toBeInTheDocument());
     expect(h.callable).toHaveBeenCalledWith('doGetAssignedContact', { taskId: 'task1' });
     expect(screen.getByText('Before you start')).toBeInTheDocument();
+    // Description + photos stay available past acceptance (PR #331 round 2):
+    // the coordination phase is when the details matter most.
+    expect(screen.getByText('Description')).toBeInTheDocument();
+    expect(screen.getByText('Two wardrobes')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Mark as completed' }));
     fireEvent.click(screen.getByRole('button', { name: 'Yes, it is done' }));
@@ -230,6 +288,24 @@ describe('TaskDetailPage (assigned task)', () => {
     await waitFor(() =>
       expect(h.callable).toHaveBeenCalledWith('doCancelTask', { taskId: 'task1' }),
     );
+  });
+
+  it('a failed mark-done closes the dialog and renders its error on the page', async () => {
+    renderWithProviders(<TaskDetailPage />);
+    pushTask(taskRow({ status: 'assigned', assignedUserId: 'doer1', assignedOfferId: 'o1' }));
+    pushOffers([offerRow('o1', { status: 'accepted' })]);
+    h.callable.mockImplementation((name: string) =>
+      name === 'doMarkTaskDone'
+        ? Promise.reject(Object.assign(new Error('boom'), { code: 'functions/internal' }))
+        : Promise.resolve({ data: {} }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Mark as completed' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Yes, it is done' }));
+    await waitFor(() =>
+      expect(screen.getByText(/Could not complete the task/)).toBeInTheDocument(),
+    );
+    // Dialog closed — the message is reachable, not scrimmed over.
+    expect(screen.queryByText('Mark this task as completed?')).toBeNull();
   });
 
   it('shows not-found for a vanished task', () => {

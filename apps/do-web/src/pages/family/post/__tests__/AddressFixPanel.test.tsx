@@ -78,6 +78,49 @@ describe('AddressFixPanel (decision-17 in-wizard save)', () => {
     });
   });
 
+  it('an out-of-coverage address SAVES but shows the honest no-area copy and does NOT return to review', async () => {
+    // resolveAreaLabel (the same check doPostTask runs) resolves nothing
+    // for a non-750xx postcode outside NEARBY_TOWNS — "you can publish
+    // now" would send the family into the address_required loop with no
+    // exit (PR #331 round 2).
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockImplementation(() =>
+      Promise.resolve({
+        json: () =>
+          Promise.resolve({
+            features: [
+              {
+                properties: {
+                  label: '3 Rue Grande 77300 Fontainebleau',
+                  name: '3 Rue Grande',
+                  city: 'Fontainebleau',
+                  postcode: '77300',
+                  context: '77, Seine-et-Marne',
+                },
+                geometry: { coordinates: [2.7016, 48.4046] },
+              },
+            ],
+          }),
+      }),
+    );
+    const onSaved = vi.fn();
+    renderWithProviders(<AddressFixPanel familyId="fam1" onSaved={onSaved} onBack={vi.fn()} />);
+    fireEvent.change(screen.getByPlaceholderText('Start typing an address...'), {
+      target: { value: '3 Rue Grande' },
+    });
+    await waitFor(() => expect(screen.getByText('77300 Fontainebleau')).toBeInTheDocument());
+    fireEvent.click(screen.getByText('77300 Fontainebleau'));
+    fireEvent.click(screen.getByRole('button', { name: 'Save address' }));
+
+    // The address IS saved — it is their real address...
+    await waitFor(() => expect(h.updateDoc).toHaveBeenCalledTimes(1));
+    // ...but the panel states the coverage truth instead of returning to
+    // review with "you can publish now".
+    await waitFor(() =>
+      expect(screen.getByText(/outside the area Sync\/Do currently covers/)).toBeInTheDocument(),
+    );
+    expect(onSaved).not.toHaveBeenCalled();
+  });
+
   it('signals onSaved after a successful save, and disables Save with no pick', async () => {
     const onSaved = vi.fn();
     renderWithProviders(<AddressFixPanel familyId="fam1" onSaved={onSaved} onBack={vi.fn()} />);
