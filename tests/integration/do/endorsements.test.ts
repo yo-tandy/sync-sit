@@ -292,17 +292,30 @@ describe('sync-do endorsements', () => {
       }
     });
 
-    // A doer must not be able to respond to a sit reference or a study
-    // endorsement through the do callable, even one that happens to name
-    // them — the appSource check backs up the doerUserId one.
-    it('refuses a doc from a sibling app', async () => {
-      await getDb().collection('references').doc('sit-ref').set({
-        referenceId: 'sit-ref', babysitterUserId: DOER, type: 'family_submitted',
-        status: 'private', submittedByUserId: seed.parent1.uid, createdAt: new Date(),
+    // A doer must not be able to respond to a sibling app's endorsement
+    // through the do callable, even one that NAMES them — this is the
+    // `appSource !== 'do'` half of the guard, which the `doerUserId !== uid`
+    // half alone cannot reach.
+    //
+    // The fixture deliberately carries NO `babysitterUserId`. An earlier
+    // version used a sit `family_submitted` doc keyed on the doer, which
+    // trips sit's `notifyOnNewReference` trigger asynchronously; the
+    // resulting `reference_received` landed in a LATER test's notification
+    // assertions, and CI (slower than this machine) caught it as a flake this
+    // suite had no business having.
+    it('refuses a doc from a sibling app that names this doer', async () => {
+      await getDb().collection('references').doc('study-ref').set({
+        referenceId: 'study-ref', doerUserId: DOER, appSource: 'study',
+        type: 'family_submitted', status: 'private',
+        submittedByUserId: seed.parent1.uid, submittedByFamilyId: seed.family1Id,
+        referenceText: 'Mislabelled endorsement.', createdAt: new Date(),
       });
       await expect(
-        callFunction('doRespondToEndorsement', { referenceId: 'sit-ref', action: 'accept' }, doerToken),
+        callFunction('doRespondToEndorsement', { referenceId: 'study-ref', action: 'accept' }, doerToken),
       ).rejects.toMatchObject({ code: 'PERMISSION_DENIED' });
+      // Untouched — a refusal must not have mutated it.
+      expect((await getDb().collection('references').doc('study-ref').get()).data()!.status)
+        .toBe('private');
     });
 
     it('refuses an unknown referenceId, and a slashed one before it reaches .doc()', async () => {
