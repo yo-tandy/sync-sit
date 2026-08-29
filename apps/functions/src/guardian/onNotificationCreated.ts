@@ -187,8 +187,9 @@ export const mirrorNotificationToGuardians = onDocumentCreated(
 
       if (sendEmail) {
         // Branded from the ORIGINAL type, like the push leg below — a do-world
-        // event sends Sync/Do mail with the Sync/Do CTA, not sit mail pointing
-        // at an app where the event does not exist (see deriveMirrorEmailApp).
+        // event sends Sync/Do mail with the Sync/Do CTA and a study-world one
+        // sends Sync/Study mail, never sit mail pointing at an app where the
+        // event does not exist (see deriveMirrorEmailApp).
         await sendNotificationEmail(
           parent!.email as string,
           title,
