@@ -8,6 +8,7 @@ import {
 import {
   deleteTaskCascade,
   DO_PHOTOS_PREFIX,
+  type TaskCascadeStats,
   DO_UPLOADS_PREFIX,
   type StorageBucket,
 } from './taskAccess.js';
@@ -97,14 +98,26 @@ export async function runDoSweepTasks(
    * that left `taskOffers` rows and `do-photos` objects behind would create
    * exactly the orphans §11.4 exists to prevent. This wrapper only folds the
    * returned counts into the sweep's stats.
+   *
+   * The accumulator is passed IN and folded in a `finally`, not read from
+   * the return value: a cascade that throws partway (a persistent 5xx on an
+   * object delete) still deleted offers, and the caller's poison-pill catch
+   * below is exactly the path whose numbers must not understate what
+   * happened. Returning-only would report 0 for a pass that really removed
+   * documents — the inline accounting this was extracted from got that
+   * right, and losing it was the extraction's one behavioural change.
    */
   async function cascade(
     taskRef: FirebaseFirestore.DocumentReference,
     task: TaskDoc,
   ): Promise<void> {
-    const result = await deleteTaskCascade(db, bucket, taskRef, task);
-    stats.offersDeleted += result.offersDeleted;
-    stats.taskPhotoObjectsDeleted += result.photoObjectsDeleted;
+    const result: TaskCascadeStats = { offersDeleted: 0, photoObjectsDeleted: 0 };
+    try {
+      await deleteTaskCascade(db, bucket, taskRef, task, result);
+    } finally {
+      stats.offersDeleted += result.offersDeleted;
+      stats.taskPhotoObjectsDeleted += result.photoObjectsDeleted;
+    }
   }
 
   // ── 1–3: the three deletion queries, each drained with a bounded pass

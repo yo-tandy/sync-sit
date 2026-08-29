@@ -167,9 +167,13 @@ export async function deleteTaskCascade(
   bucket: StorageBucket,
   taskRef: FirebaseFirestore.DocumentReference,
   task: TaskDoc,
+  // Accumulated into as each step commits, not assembled at the end, so a
+  // caller that catches a mid-cascade throw still sees what actually
+  // happened. The sweep's poison-pill isolation reads these numbers on
+  // exactly the runs where something failed, which is when understating
+  // them is worst.
+  stats: TaskCascadeStats = { offersDeleted: 0, photoObjectsDeleted: 0 },
 ): Promise<TaskCascadeStats> {
-  const stats: TaskCascadeStats = { offersDeleted: 0, photoObjectsDeleted: 0 };
-
   const offers = await firestore
     .collection('taskOffers')
     .where('taskId', '==', taskRef.id)
@@ -181,7 +185,7 @@ export async function deleteTaskCascade(
     }
     await batch.commit();
   }
-  stats.offersDeleted = offers.size;
+  stats.offersDeleted += offers.size;
 
   await taskRef.delete();
 

@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { TopNav } from '@/components/ui/TopNav';
 import { Badge } from '@/components/ui/Badge';
@@ -105,21 +105,36 @@ export function AdminDoTasksPage() {
     fetchDoTasks({ ...currentParams(), startAfterId: last.id });
   };
 
+  // Generation guard (the BoardPage shape): expanding row A then row B
+  // before A's callable resolves would otherwise render A's offers under B —
+  // including the §11.3 helper's name and age attributed to the wrong task,
+  // and B's spinner cleared early. Both callables are fast, so the window is
+  // narrow; the mis-attribution is also exactly the kind nobody notices in a
+  // support context, which is what makes it worth a guard rather than a
+  // comment. Captured at call time, checked before every state write.
+  const offersRequestRef = useRef(0);
+
   const toggleOffers = async (task: AdminDoTaskRow) => {
     if (expandedId === task.id) {
       setExpandedId(null);
       return;
     }
+    const generation = ++offersRequestRef.current;
     setExpandedId(task.id);
     setOffers([]);
     setOffersError(false);
     setOffersLoading(true);
     try {
-      setOffers(await fetchDoTaskOffers(task.id));
+      const rows = await fetchDoTaskOffers(task.id);
+      if (offersRequestRef.current !== generation) return;
+      setOffers(rows);
     } catch {
+      if (offersRequestRef.current !== generation) return;
       setOffersError(true);
     } finally {
-      setOffersLoading(false);
+      // Guarded too: a stale request must not clear the CURRENT row's
+      // spinner, which would render "no offers" over a live fetch.
+      if (offersRequestRef.current === generation) setOffersLoading(false);
     }
   };
 
