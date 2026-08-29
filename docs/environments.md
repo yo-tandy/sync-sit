@@ -47,9 +47,11 @@ that lands a tester on real data is not.
 
 ## Client: build-time variables
 
-Set in the `env:` block of each build step in `.github/workflows/release.yml`.
-Vite inlines them, so they are baked into the bundle at build time — changing
-one means rebuilding, not just redeploying.
+Vite inlines these at build time, so changing one means rebuilding, not just
+redeploying.
+
+**Set today** in the `env:` block of each build step in
+`.github/workflows/release.yml`:
 
 | Variable | Notes |
 |---|---|
@@ -60,8 +62,21 @@ one means rebuilding, not just redeploying.
 | `VITE_FIREBASE_MESSAGING_SENDER_ID` | |
 | `VITE_FIREBASE_APP_ID` | Currently the sit app id for all three apps |
 | `VITE_FIREBASE_VAPID_KEY` | Web push; project-wide |
-| `VITE_SIT_APP_URL` | Read by study-web and do-web to link *back* to sit |
-| `VITE_STUDY_APP_URL` | Read by web and do-web |
+
+**Read by the apps but set by nothing** — production runs on the hardcoded
+fallbacks in `appSwitch.ts`, so these two exist as an override mechanism that
+has never been exercised:
+
+| Variable | Read by | Fallback |
+|---|---|---|
+| `VITE_SIT_APP_URL` | study-web, do-web | `https://sync-sit.com` |
+| `VITE_STUDY_APP_URL` | web, do-web | `https://sync-study-app.web.app` |
+
+**A new environment must add both to its workflow's `env:` blocks.** This is
+the client-side face of the same trap: leave them unset and staging's app
+switcher sends people to production. Being untested in production is a reason
+to check them deliberately on the first staging deploy, not a reason to assume
+they work.
 
 There is no `VITE_DO_APP_URL`: sit and study do not link to sync-do yet — that
 is issue #304, still owner-gated.
@@ -79,7 +94,10 @@ is issue #304, still owner-gated.
 5. Write `apps/functions/.env.<projectId>` from `.env.example`, pointing the
    three hosts at *that* environment's own hosting URLs.
 6. Add a deploy workflow whose build steps set the `VITE_*` block for that
-   project.
+   project — **including `VITE_SIT_APP_URL` and `VITE_STUDY_APP_URL`, which
+   production does not set.** Copying production's block verbatim is exactly
+   the mistake: it is correct for production precisely because the fallbacks
+   are production.
 7. Seed data. Never copy production data into a non-production environment:
    it is real families' personal data and copying it makes every environment a
    breach surface.
