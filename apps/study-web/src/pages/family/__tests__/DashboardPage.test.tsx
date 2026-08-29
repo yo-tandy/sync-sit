@@ -491,6 +491,58 @@ describe('family DashboardPage', () => {
     ).toBeInTheDocument();
   });
 
+  it('a PARTIAL first-load failure renders the half that worked', async () => {
+    // Per-load error flags exist so one collection's failure cannot erase the
+    // other's success; gating the error line on `loading` threw that away,
+    // painting the error over rows sitting unrendered in state. And an errored
+    // load has to count as SETTLED, or the page sits on skeletons forever
+    // because the catch never assigns rows (PR #345 round 5).
+    h.requests = [request({ requestId: 'r1', tutorName: 'Sarah' })];
+    h.getDocs.mockImplementation((q: { query?: { path: string }[] }) => {
+      const path = q?.query?.[0]?.path ?? '';
+      if (path === 'study-sessions') return Promise.reject(new Error('offline'));
+      return Promise.resolve({ docs: h.requests.map((r) => ({ id: r.requestId, data: () => r })) });
+    });
+    renderWithProviders(<DashboardPage />);
+
+    expect(await screen.findByText('Sarah')).toBeInTheDocument();
+    expect(screen.queryByText(/could not load/i)).not.toBeInTheDocument();
+  });
+
+  it('only a TOTAL first-load failure shows the error line', async () => {
+    h.getDocs.mockImplementation(() => Promise.reject(new Error('offline')));
+    renderWithProviders(<DashboardPage />);
+    expect(
+      await screen.findByText(/could not load your requests and sessions/i),
+    ).toBeInTheDocument();
+  });
+
+  it('orders pending BOOKINGS soonest-first, not by when they were booked', async () => {
+    // These rows carry dates and render them, so the "recency is the only
+    // meaningful key" rationale that covers contact requests does not reach
+    // them (PR #345 round 5).
+    h.sessions = [
+      session({
+        sessionId: 's-late',
+        status: 'pending',
+        date: parisDatePlus(20),
+        tutorName: 'Later',
+        createdAt: { seconds: 2000 },
+      }),
+      session({
+        sessionId: 's-early',
+        status: 'pending',
+        date: parisDatePlus(2),
+        tutorName: 'Sooner',
+        createdAt: { seconds: 1000 },
+      }),
+    ];
+    renderWithProviders(<DashboardPage />);
+    await screen.findByRole('heading', { name: /Your requests/ });
+    const names = screen.getAllByText(/^(Later|Sooner)$/).map((n) => n.textContent);
+    expect(names).toEqual(['Sooner', 'Later']);
+  });
+
   it('a refetch blip keeps last-known-good rows and the verified state', async () => {
     h.familyData = { familyName: 'Cohen', verification: { isFullyVerified: true } };
     h.requests = [request({ requestId: 'r1', tutorName: 'Sarah' })];

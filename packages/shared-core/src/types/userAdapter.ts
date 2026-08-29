@@ -54,9 +54,16 @@ export function hasFamilyMembership(user: User | null | undefined): boolean {
  * this pointer, so resolving it in more places grants nothing new.
  */
 export function getFamilyId(user: User | null | undefined): string | null {
+  // `||`, not `??`, so this mirrors hasFamilyMembership EXACTLY (PR #345
+  // round 5). With `??`, a doc carrying `profiles.parent.familyId: ''` and a
+  // real root pointer would pass the guard (truthiness falls through) and
+  // resolve to `''` here (nullishness does not) — a value that is falsy for
+  // load guards but is not `null`, which is enough to strand a page on a
+  // spinner forever. The invariant is pinned:
+  //     hasFamilyMembership(u) === (getFamilyId(u) !== null)
   return (
-    user?.profiles?.parent?.familyId ??
-    (user as { familyId?: string } | null | undefined)?.familyId ??
+    user?.profiles?.parent?.familyId ||
+    (user as { familyId?: string } | null | undefined)?.familyId ||
     null
   );
 }

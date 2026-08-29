@@ -256,11 +256,17 @@ export function DashboardPage() {
       end: slot.endTime,
     });
 
-  // Spinner only while a real fetch is in flight. With no familyId there is
-  // nothing to load — a legacy Plan C doc carries membership at the doc root,
-  // not on the parent profile — so fall through to the empty state instead of
-  // spinning forever (RequestsPage's rule).
-  const loading = familyId !== null && (requests === null || sessions === null);
+  // Skeletons only while a real fetch is in flight. Two things end a fetch:
+  // rows arriving, or the read failing — a load that has ERRORED is no longer
+  // in flight, and treating it as such is what kept a partial failure on
+  // skeletons forever (the `.catch` never assigns rows, so `requests`/
+  // `sessions` stay null). With this, one collection failing while the other
+  // resolves renders the half that worked; only a total failure reaches the
+  // error line below (PR #345 round 5). With no familyId there is nothing to
+  // load at all, so fall through to the empty state rather than spinning.
+  const requestsSettled = requests !== null || requestsError;
+  const sessionsSettled = sessions !== null || sessionsError;
+  const loading = familyId !== null && !(requestsSettled && sessionsSettled);
   const today = parisToday();
 
   // ── The split (PR #345 round 3). Pending bookings moved OUT of the sessions
@@ -279,10 +285,24 @@ export function DashboardPage() {
   // Date floor on the pending bookings for the same reason it is on the
   // confirmed ones: nothing server-side expires a pending one_time booking,
   // so without it an unanswered request sits here forever with a past date.
-  const pendingSessions = (sessions ?? []).filter(
-    (s) =>
-      s.status === 'pending' && (s.type === 'recurring' || (!!s.date && s.date >= today)),
-  );
+  const pendingSessions = (sessions ?? [])
+    .filter(
+      (s) =>
+        s.status === 'pending' && (s.type === 'recurring' || (!!s.date && s.date >= today)),
+    )
+    // Soonest-first, the same date+time key the confirmed sessions use. The
+    // "recency is the only meaningful key" rationale covers the CONTACT
+    // requests above these rows — it does not extend here, because a booking
+    // carries a date and renders it (PR #345 round 5). Leaving these on
+    // createdAt-DESC put dates out of order directly above a section sorted
+    // soonest-first, and made a third ordering for the same conceptual
+    // section across the four dashboards.
+    .map((s) => ({
+      s,
+      sortDate: s.type === 'one_time' ? `${s.date}T${s.startTime ?? '00:00'}` : '9999-12-31',
+    }))
+    .sort((a, b) => (a.sortDate < b.sortDate ? -1 : a.sortDate > b.sortDate ? 1 : 0))
+    .map((e) => e.s);
   // Declined/cancelled history stays on /family/requests — a landing page
   // shows what is live. (Stale `accepted` rows were already dropped at load,
   // where the clock read belongs.)
@@ -379,7 +399,12 @@ export function DashboardPage() {
       )}
 
       {/* ── The two sections (issue #338) ── */}
-      {loading && loadError ? (
+      {/* `!hasAny`, not `loading`: with per-load error flags one collection can
+          fail while the other resolves with rows, and gating on `loading`
+          rendered the error paragraph over three perfectly good request rows
+          sitting unrendered in state. Sit's half of this page already took
+          this branch order (PR #345 round 5). */}
+      {loadError && !hasAny ? (
         <p className="py-10 text-center text-sm text-brand-600">
           {t('family.dashboard.loadError')}
         </p>

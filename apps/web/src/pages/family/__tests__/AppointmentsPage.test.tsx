@@ -128,6 +128,23 @@ describe('family AppointmentsPage — submitted references query (H2, moved from
   });
 });
 
+describe('family AppointmentsPage — legacy Plan C membership (PR #345 rounds 4-5)', () => {
+  it('subscribes to the family doc on a ROOT familyId, so a dashboard row does not dead-end', () => {
+    // The landing page lists this family's live appointments and every row
+    // links here; reading the profile pointer alone left this page resolving
+    // `undefined` and rendering nothing for them. getFamilyId now resolves the
+    // same two places hasFamilyMembership accepts, on both surfaces.
+    auth.userDoc = {
+      uid: 'p1',
+      familyId: 'fam-legacy',
+      profiles: { parent: { enrollmentComplete: true } },
+    };
+    renderPage();
+    const paths = h.onSnapshot.mock.calls.map((c) => (c[0] as { path?: string })?.path ?? '');
+    expect(paths).toContain('families/fam-legacy');
+  });
+});
+
 describe('family AppointmentsPage — sections (issue #241)', () => {
   it('renders all four sections with their appointment cards', () => {
     h.apts.pending = [apt('a1', 'pending')];
