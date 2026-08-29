@@ -16,7 +16,9 @@ const h = vi.hoisted(() => ({
   },
   // Per-name callable dispatcher: httpsCallable(functions, name) returns a
   // fn that routes here, so tests can assert each callable's payload.
-  invoke: vi.fn(() => Promise.resolve({ data: {} })),
+  invoke: vi.fn<(name: string, data?: unknown) => Promise<{ data: unknown }>>(() =>
+    Promise.resolve({ data: {} }),
+  ),
 }));
 
 vi.mock('@/config/firebase', () => ({ auth: {}, db: {}, functions: {} }));
@@ -174,7 +176,7 @@ describe('DoerEnrollment — step sequences', () => {
     };
     // Post-enroll profile-load check resolves via the mocked store state —
     // give the store a doer profile as soon as the callable resolves.
-    h.invoke.mockImplementation(((name: string) => {
+    h.invoke.mockImplementation((name: string) => {
       if (name === 'doEnrollDoer') {
         h.state.userDoc = {
           ...(h.state.userDoc as Record<string, unknown>),
@@ -183,7 +185,7 @@ describe('DoerEnrollment — step sequences', () => {
         return Promise.resolve({ data: { uid: 'sitter1' } });
       }
       return Promise.resolve({ data: {} });
-    }) as never);
+    });
     renderWithProviders(<DoerEnrollment />);
 
     fireEvent.click(screen.getByRole('checkbox'));
@@ -212,7 +214,7 @@ describe('DoerEnrollment — step sequences', () => {
     const schoolYearEnd = d.getMonth() >= 8 ? d.getFullYear() + 1 : d.getFullYear();
     const grad = String((schoolYearEnd + 2) % 100).padStart(2, '0');
     const typedEmail = `New.Doer${grad}@ejm.org`;
-    h.invoke.mockImplementation(((name: string) => {
+    h.invoke.mockImplementation((name: string) => {
       if (name === 'doEnrollDoer') {
         // Flip the store to a settled signed-in doer so the post-enroll
         // wait resolves immediately instead of running its 5s timeout.
@@ -221,7 +223,7 @@ describe('DoerEnrollment — step sequences', () => {
         return Promise.resolve({ data: { uid: 'new1' } });
       }
       return Promise.resolve({ data: {} });
-    }) as never);
+    });
     renderWithProviders(<DoerEnrollment />);
 
     // Step 0 — EJM email.
@@ -287,7 +289,7 @@ describe('DoerEnrollment — step sequences', () => {
       dateOfBirth: '2009-05-20',
       profiles: { babysitter: { enrollmentComplete: true } },
     };
-    h.invoke.mockImplementation(((name: string) => {
+    h.invoke.mockImplementation((name: string) => {
       if (name === 'doEnrollDoer') {
         // The post-submit refresh lands the contact AND the doer profile —
         // both of which change the computed flow shape.
@@ -299,7 +301,7 @@ describe('DoerEnrollment — step sequences', () => {
         return Promise.resolve({ data: { uid: 'sitter3' } });
       }
       return Promise.resolve({ data: {} });
-    }) as never);
+    });
     renderWithProviders(<DoerEnrollment />);
 
     fireEvent.click(screen.getByRole('checkbox'));
@@ -326,7 +328,7 @@ describe('DoerEnrollment — step sequences', () => {
       contactEmail: 'zoe@test.com',
       profiles: { babysitter: { enrollmentComplete: true } },
     };
-    h.invoke.mockImplementation(((name: string) => {
+    h.invoke.mockImplementation((name: string) => {
       if (name === 'doEnrollDoer') {
         return Promise.reject(
           Object.assign(new Error('You need to be at least 15 to enroll on your own.'), {
@@ -335,7 +337,7 @@ describe('DoerEnrollment — step sequences', () => {
         );
       }
       return Promise.resolve({ data: {} });
-    }) as never);
+    });
     renderWithProviders(<DoerEnrollment />);
 
     fireEvent.click(screen.getByRole('checkbox'));
