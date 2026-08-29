@@ -11,14 +11,17 @@ const h = vi.hoisted(() => ({
     firebaseUser: { uid: 'bs1' },
     refreshUserDoc: vi.fn(() => Promise.resolve()),
   },
-  updateDoc: vi.fn(() => Promise.resolve()),
+  updateDoc: vi.fn<(ref: { path: string }, data: Record<string, unknown>) => Promise<void>>(
+    () => Promise.resolve(),
+  ),
 }));
 
 vi.mock('@/config/firebase', () => ({ functions: {}, auth: {}, db: {}, storage: {} }));
 
 vi.mock('firebase/firestore', () => ({
   doc: (_db: unknown, ...path: string[]) => ({ path: path.join('/') }),
-  updateDoc: (...args: unknown[]) => h.updateDoc(...args),
+  updateDoc: (...args: [ref: { path: string }, data: Record<string, unknown>]) =>
+    h.updateDoc(...args),
   serverTimestamp: () => 'ts',
 }));
 
@@ -107,7 +110,7 @@ describe('BabysitterAccountPage contact (shared identity, issue #203)', () => {
 
     fireEvent.click(saveButton());
     await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
-    const payload = h.updateDoc.mock.calls[0][1] as Record<string, unknown>;
+    const payload = h.updateDoc.mock.calls[0][1];
     expect(payload).toHaveProperty('contactEmail', null);
     expect(payload).toHaveProperty('whatsapp', null);
   });
@@ -122,7 +125,7 @@ describe('BabysitterAccountPage contact (shared identity, issue #203)', () => {
     fireEvent.click(saveButton());
 
     await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
-    const payload = h.updateDoc.mock.calls[0][1] as Record<string, unknown>;
+    const payload = h.updateDoc.mock.calls[0][1];
     expect(payload).toHaveProperty('contactEmail', null);
     // and no nested contact key rides along (root-only writes)
     expect(Object.keys(payload).some((k) => /^profiles\..*\.(contactEmail|contactPhone|whatsapp)$/.test(k))).toBe(false);
@@ -144,7 +147,7 @@ describe('BabysitterAccountPage contact (shared identity, issue #203)', () => {
         }),
       ),
     );
-    const payload = (h.updateDoc.mock.calls[0] as unknown[])[1] as Record<string, unknown>;
+    const payload = h.updateDoc.mock.calls[0][1];
     // contactSharingConsent legitimately stays nested (profile-scoped GDPR
     // toggle); the contact TRIO must not appear under profiles.* anymore.
     for (const key of Object.keys(payload)) {

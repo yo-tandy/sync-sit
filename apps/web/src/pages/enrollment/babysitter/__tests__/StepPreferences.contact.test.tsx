@@ -13,14 +13,17 @@ const h = vi.hoisted(() => ({
     firebaseUser: { uid: 'bs1' },
     refreshUserDoc: vi.fn(() => Promise.resolve()),
   },
-  updateDoc: vi.fn(() => Promise.resolve()),
+  updateDoc: vi.fn<(ref: { path: string }, data: Record<string, unknown>) => Promise<void>>(
+    () => Promise.resolve(),
+  ),
 }));
 
 vi.mock('@/config/firebase', () => ({ functions: {}, auth: {}, db: {}, storage: {} }));
 
 vi.mock('firebase/firestore', () => ({
   doc: (_db: unknown, ...path: string[]) => ({ path: path.join('/') }),
-  updateDoc: (...args: unknown[]) => h.updateDoc(...args),
+  updateDoc: (...args: [ref: { path: string }, data: Record<string, unknown>]) =>
+    h.updateDoc(...args),
   serverTimestamp: () => 'ts',
 }));
 
@@ -60,7 +63,7 @@ describe('StepPreferences shared-identity contact (issue #203)', () => {
     fireEvent.click(screen.getByRole('button', { name: /^save/i }));
 
     await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
-    const payload = h.updateDoc.mock.calls[0][1] as Record<string, unknown>;
+    const payload = h.updateDoc.mock.calls[0][1];
     expect(payload.contactEmail).toBe('lea@contact.com');
     expect(payload['profiles.babysitter.contactEmail']).toBe('lea@contact.com');
     // A channel the user NEVER supplied is omitted at the ROOT (presence
@@ -81,7 +84,7 @@ describe('StepPreferences shared-identity contact (issue #203)', () => {
     fireEvent.change(screen.getByLabelText(/^email$/i), { target: { value: '' } });
     fireEvent.click(screen.getByRole('button', { name: /^save/i }));
     await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
-    const payload = h.updateDoc.mock.calls[0][1] as Record<string, unknown>;
+    const payload = h.updateDoc.mock.calls[0][1];
     expect(payload).toHaveProperty('contactEmail', null);
   });
 
@@ -103,7 +106,7 @@ describe('StepPreferences shared-identity contact (issue #203)', () => {
     fireEvent.change(email, { target: { value: '' } });
     fireEvent.click(screen.getByRole('button', { name: /^save/i }));
     await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
-    const payload = h.updateDoc.mock.calls[0][1] as Record<string, unknown>;
+    const payload = h.updateDoc.mock.calls[0][1];
     expect(payload).toHaveProperty('contactEmail', null);
     // A channel that was never shown stays absent at the root.
     expect(payload).not.toHaveProperty('contactPhone');
@@ -135,7 +138,7 @@ describe('StepPreferences shared-identity contact (issue #203)', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /^save/i }));
     await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
-    const payload = h.updateDoc.mock.calls[0][1] as Record<string, unknown>;
+    const payload = h.updateDoc.mock.calls[0][1];
     expect(payload.whatsapp).toBeNull();
     expect(payload['profiles.babysitter.whatsapp']).toBeNull();
   });

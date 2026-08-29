@@ -14,7 +14,9 @@ const h = vi.hoisted(() => ({
     refreshUserDoc: vi.fn(() => Promise.resolve()),
     resetPassword: vi.fn(() => Promise.resolve()),
   },
-  updateDoc: vi.fn(() => Promise.resolve()),
+  updateDoc: vi.fn<(ref: { path: string }, data: Record<string, unknown>) => Promise<void>>(
+    () => Promise.resolve(),
+  ),
   // Controls isRunningAsPWA per test: false = web mode (push toggles
   // disabled), true = installed PWA (push toggles live).
   pwaMode: false,
@@ -29,7 +31,8 @@ vi.mock('@ejm/sit-core', async (importActual) => {
 
 vi.mock('firebase/firestore', () => ({
   doc: (_db: unknown, ...path: string[]) => ({ path: path.join('/') }),
-  updateDoc: (...args: unknown[]) => h.updateDoc(...args),
+  updateDoc: (...args: [ref: { path: string }, data: Record<string, unknown>]) =>
+    h.updateDoc(...args),
   serverTimestamp: () => 'ts',
 }));
 
@@ -104,7 +107,7 @@ describe('babysitter AccountPage notification prefs', () => {
     );
 
     await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
-    const call = h.updateDoc.mock.calls[0] as unknown[];
+    const call = h.updateDoc.mock.calls[0];
     expect(call[0]).toEqual(expect.objectContaining({ path: 'users/bs1' }));
     const payload = call[1] as Record<string, unknown>;
     expect(payload).toHaveProperty('notifPrefs.newRequest.email', false);
@@ -141,7 +144,7 @@ describe('babysitter AccountPage notification prefs', () => {
     expect(button).not.toBeDisabled();
     fireEvent.click(button);
     await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
-    const payload = h.updateDoc.mock.calls[0][1] as Record<string, unknown>;
+    const payload = h.updateDoc.mock.calls[0][1];
     expect(Object.keys(payload).sort()).toEqual(['notifPrefs.newRequest.push', 'updatedAt']);
     expect(payload['notifPrefs.newRequest.push']).toBe(false);
   });

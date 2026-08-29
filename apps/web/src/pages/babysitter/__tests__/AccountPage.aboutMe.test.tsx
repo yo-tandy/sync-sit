@@ -12,14 +12,17 @@ const h = vi.hoisted(() => ({
     firebaseUser: { uid: 'bs1' },
     refreshUserDoc: vi.fn(() => Promise.resolve()),
   },
-  updateDoc: vi.fn(() => Promise.resolve()),
+  updateDoc: vi.fn<(ref: { path: string }, data: Record<string, unknown>) => Promise<void>>(
+    () => Promise.resolve(),
+  ),
 }));
 
 vi.mock('@/config/firebase', () => ({ functions: {}, auth: {}, db: {}, storage: {} }));
 
 vi.mock('firebase/firestore', () => ({
   doc: (_db: unknown, ...path: string[]) => ({ path: path.join('/') }),
-  updateDoc: (...args: unknown[]) => h.updateDoc(...args),
+  updateDoc: (...args: [ref: { path: string }, data: Record<string, unknown>]) =>
+    h.updateDoc(...args),
   serverTimestamp: () => 'ts',
 }));
 

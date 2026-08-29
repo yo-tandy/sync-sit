@@ -21,7 +21,7 @@ const h = vi.hoisted(() => ({
   getDocs: vi.fn(),
   callable: vi.fn(),
   snapshotNext: null as ((snap: unknown) => void) | null,
-  deleteDoc: vi.fn(() => Promise.resolve()),
+  deleteDoc: vi.fn<(ref: { path: string }) => Promise<void>>(() => Promise.resolve()),
   unsub: vi.fn(),
 }));
 
@@ -39,7 +39,7 @@ vi.mock('firebase/firestore', () => ({
     h.snapshotNext = next;
     return h.unsub;
   },
-  deleteDoc: (...args: unknown[]) => h.deleteDoc(...args),
+  deleteDoc: (...args: [ref: { path: string }]) => h.deleteDoc(...args),
 }));
 
 vi.mock('firebase/functions', () => ({

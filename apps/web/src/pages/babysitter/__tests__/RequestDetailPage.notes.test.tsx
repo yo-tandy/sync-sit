@@ -18,7 +18,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import type { AppointmentDoc } from '@ejm/sit-core';
 
 const h = vi.hoisted(() => ({
-  callable: vi.fn((name: string) =>
+  callable: vi.fn<(name: string, payload?: unknown) => Promise<{ data: unknown }>>((name) =>
     name === 'getParentContacts'
       ? Promise.resolve({ data: { contacts: [] } })
       : Promise.resolve({ data: { success: true } }),
@@ -227,7 +227,7 @@ describe('RequestDetailPage — appointment notes (post)', () => {
     h.callable.mockImplementation((name: string) =>
       name === 'getParentContacts'
         ? Promise.resolve({ data: { contacts: [] } })
-        : new Promise((_resolve, reject) => { rejectCall = reject; }),
+        : new Promise<{ data: unknown }>((_resolve, reject) => { rejectCall = reject; }),
     );
     fireEvent.click(screen.getByText('request.notes.remove'));
     // Dialog is open BEFORE the confirm click -- pins that the click below

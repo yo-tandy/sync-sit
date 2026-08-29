@@ -12,14 +12,17 @@ const h = vi.hoisted(() => ({
     firebaseUser: { uid: 'bs1' },
     refreshUserDoc: vi.fn(() => Promise.resolve()),
   },
-  updateDoc: vi.fn(() => Promise.resolve()),
+  updateDoc: vi.fn<(ref: { path: string }, data: Record<string, unknown>) => Promise<void>>(
+    () => Promise.resolve(),
+  ),
 }));
 
 vi.mock('@/config/firebase', () => ({ functions: {}, auth: {}, db: {} }));
 
 vi.mock('firebase/firestore', () => ({
   doc: (_db: unknown, ...path: string[]) => ({ path: path.join('/') }),
-  updateDoc: (...args: unknown[]) => h.updateDoc(...args),
+  updateDoc: (...args: [ref: { path: string }, data: Record<string, unknown>]) =>
+    h.updateDoc(...args),
   serverTimestamp: () => 'ts',
 }));
 
@@ -88,7 +91,7 @@ describe('BabysittingOptionsPage (post-#171 scope)', () => {
     fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
 
     await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
-    const payload = h.updateDoc.mock.calls[0][1] as Record<string, unknown>;
+    const payload = h.updateDoc.mock.calls[0][1];
     expect(Object.keys(payload)).not.toContain('profiles.babysitter.aboutMe');
     // The preference fields are still saved from here.
     expect(payload['profiles.babysitter.hourlyRate']).toBe(15);

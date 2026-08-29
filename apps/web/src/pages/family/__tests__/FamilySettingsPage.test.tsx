@@ -14,9 +14,13 @@ const h = vi.hoisted(() => ({
   kids: [] as { id: string; data: Record<string, unknown> }[],
   getDoc: vi.fn(),
   getDocs: vi.fn(),
-  updateDoc: vi.fn(() => Promise.resolve()),
-  addDoc: vi.fn(() => Promise.resolve({ id: 'newkid' })),
-  deleteDoc: vi.fn(() => Promise.resolve()),
+  updateDoc: vi.fn<(ref: { path: string }, data: Record<string, unknown>) => Promise<void>>(
+    () => Promise.resolve(),
+  ),
+  addDoc: vi.fn<(ref: { path: string }, data: Record<string, unknown>) => Promise<{ id: string }>>(() =>
+    Promise.resolve({ id: 'newkid' }),
+  ),
+  deleteDoc: vi.fn<(ref: { path: string }) => Promise<void>>(() => Promise.resolve()),
 }));
 
 vi.mock('@/config/firebase', () => ({ db: {}, storage: {} }));
@@ -26,9 +30,10 @@ vi.mock('firebase/firestore', () => ({
   collection: (_db: unknown, ...path: string[]) => ({ path: path.join('/') }),
   getDoc: (...args: unknown[]) => h.getDoc(...args),
   getDocs: (...args: unknown[]) => h.getDocs(...args),
-  updateDoc: (...args: unknown[]) => h.updateDoc(...args),
-  addDoc: (...args: unknown[]) => h.addDoc(...args),
-  deleteDoc: (...args: unknown[]) => h.deleteDoc(...args),
+  updateDoc: (...args: [ref: { path: string }, data: Record<string, unknown>]) =>
+    h.updateDoc(...args),
+  addDoc: (...args: [ref: { path: string }, data: Record<string, unknown>]) => h.addDoc(...args),
+  deleteDoc: (...args: [ref: { path: string }]) => h.deleteDoc(...args),
   serverTimestamp: () => 'ts',
 }));
 
@@ -185,7 +190,7 @@ describe('family FamilySettingsPage', () => {
 
     await waitFor(() =>
       expect(
-        h.updateDoc.mock.calls.some((c) => (c[0] as { path: string }).path === 'families/fam1/kids/kid1'),
+        h.updateDoc.mock.calls.some((c) => c[0].path === 'families/fam1/kids/kid1'),
       ).toBe(true),
     );
     const kidCall = h.updateDoc.mock.calls.find(
