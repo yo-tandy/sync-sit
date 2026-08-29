@@ -4,6 +4,7 @@ import { AboutPageShell } from '@ejm/shared-ui';
 import studyBrandMark from '@ejm/shared-ui/brand-marks/sync-study.png';
 import { ShieldIcon, SearchIcon, UsersIcon, CalendarIcon, DownloadIcon } from '@/components/ui/Icons';
 import { STUDY_APP_URL } from '@/lib/appSwitch';
+import { SUPPORT_EMAIL } from '@/constants/brand';
 
 export function AboutPage() {
   const { t, i18n } = useTranslation();
@@ -184,7 +185,7 @@ export function AboutPage() {
             {isFr ? 'Exploité par Tandy SARL, Paris' : 'Operated by Tandy SARL, Paris'}
           </p>
           <p className="mb-1 text-xs text-gray-500">
-            <a href="mailto:support@sync-sit.com" className="text-brand-500 hover:underline">support@sync-sit.com</a>
+            <a href={`mailto:${SUPPORT_EMAIL}`} className="text-brand-500 hover:underline">{SUPPORT_EMAIL}</a>
           </p>
           <p className="text-xs text-gray-500">Version 1.0.0</p>
         </div>
