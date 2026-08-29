@@ -11,6 +11,23 @@ on:
   # copy of it (issue #353). A duplicated gate drifts, and the copy that drifts
   # is always the one guarding production.
   workflow_call:
+    inputs:
+      # Release runs pass `true`. A stale documentation anchor has no bearing
+      # on whether a tagged build is safe to ship, and blocking a hotfix tag
+      # on doc-link rot — discovered under incident pressure, in a workflow
+      # nobody is thinking about at that moment — is a strictly worse outcome
+      # than shipping with a dead link in a plan.
+      #
+      # The flag is phrased as SKIP rather than RUN on purpose: `inputs` is
+      # empty on push and pull_request, and GitHub coerces null to false in a
+      # comparison, so a `run_docs_links` defaulting true would evaluate false
+      # and silently skip the job everywhere. Defaulting the skip to false
+      # means the job runs unless a caller explicitly opts out.
+      skip_docs_links:
+        description: 'Skip the docs-links job (release gating passes true)'
+        type: boolean
+        required: false
+        default: false
 
 # No job here writes anything — no comments, no releases, no package pushes.
 # Least privilege rather than the repository default, which on many repos is
@@ -153,7 +170,19 @@ jobs:
   # this repo keeps hitting — `.cjs` files "linted" by a config matching none
   # of them, `pnpm -r typecheck` skipping the package with no script, the test
   # job absent on stacked PRs while the rollup read green.
+  #
+  # DELIBERATELY NOT A RELEASE GATE. release.yml calls this workflow via
+  # workflow_call, so every job here also gates a tagged production deploy.
+  # That is right for lint, typecheck and test, and wrong for this one:
+  # documentation-link rot says nothing about whether a build is safe to ship,
+  # and a hotfix tag blocked by a dead anchor in a plan is a bad trade made at
+  # the worst possible moment. release.yml passes skip_docs_links: true; pull
+  # requests and pushes to main still run it, which is where the rot is
+  # actually introduced and where fixing it is cheap.
   docs-links:
+    # `inputs` is empty for push and pull_request, so this is true there and
+    # only an explicit `true` from a caller turns the job off.
+    if: ${{ !inputs.skip_docs_links }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

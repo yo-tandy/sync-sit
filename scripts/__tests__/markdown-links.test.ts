@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { resolve, join } from 'node:path';
 import { parse } from 'yaml';
@@ -242,6 +243,127 @@ describe('the real repository', () => {
   });
 });
 
+describe('the CLI, which is what CI actually runs', () => {
+  /**
+   * These exist because the module API was entirely correct while the binary
+   * was a NO-OP. `invokedDirectly` compared argv[1] against
+   * `new URL(import.meta.url).pathname`, which is percent-encoded, so from a
+   * checkout under a path with a space ("/Users/me/My Repos/sync-sit") the
+   * guard was false, the CLI block never ran, and the command printed nothing
+   * and exited 0. Twenty-six passing tests said nothing about it, because not
+   * one of them ran the file as a program.
+   *
+   * A check whose own entry point is untested is precisely what this PR is
+   * arguing against, so the entry point is tested — including from a
+   * directory whose name contains a space, which is the case that failed.
+   */
+  const script = resolve(__dirname, '../check-markdown-links.mjs');
+
+  const run = (dir: string) => {
+    const r = spawnSync(process.execPath, [script, dir], { encoding: 'utf8' });
+    return { status: r.status, stdout: r.stdout, stderr: r.stderr };
+  };
+
+  it('exits 1 and names the offender on a dead anchor', () => {
+    const r = withTree(
+      { 'a.md': '# A\n\n[toc](#gone)\n\n## Still here\n' },
+      (dir) => run(dir),
+    );
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain('dead-anchor');
+    expect(r.stderr).toContain('#gone');
+  });
+
+  it('exits 0 on a clean tree, and says what it looked at', () => {
+    const r = withTree(
+      { 'a.md': '# A\n\n[toc](#still-here)\n\n## Still here\n' },
+      (dir) => run(dir),
+    );
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain('checked 1 in-repo links');
+  });
+
+  it('exits 1 rather than passing quietly when there is nothing to check', () => {
+    const r = withTree({ 'a.md': '# A\n\nProse only.\n' }, (dir) => run(dir));
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain('covered nothing');
+  });
+
+  it('works from a directory whose path contains a space', () => {
+    // The exact reproduction of the bug: before the fileURLToPath fix this
+    // exited 0 with empty output on this input.
+    const parent = mkdtempSync(join(tmpdir(), 'linkcheck-'));
+    const dir = join(parent, 'My Repos');
+    try {
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(join(dir, 'a.md'), '# A\n\n[toc](#gone)\n');
+      const r = run(dir);
+      expect(r.status).toBe(1);
+      expect(r.stderr).toContain('dead-anchor');
+    } finally {
+      rmSync(parent, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('fenced blocks close on a matching delimiter', () => {
+  it('does not let a ~~~ inside a ``` block end the block', () => {
+    // The bug this pins: with interchangeable toggles, the `~~~` flipped the
+    // state, so `## Real heading` below was treated as fenced content, its
+    // anchor never registered, and the link to it reported dead.
+    const r = withTree(
+      {
+        'a.md': [
+          '# A',
+          '',
+          '```',
+          'code with a ~~~ inside it',
+          '```',
+          '',
+          '## Real heading',
+          '',
+          '[link](#real-heading)',
+          '',
+        ].join('\n'),
+      },
+      (dir) => checkTree(dir),
+    );
+    expect(r.problems).toEqual([]);
+    expect(r.linksChecked).toBe(1);
+  });
+
+  it('closes a four-backtick fence only on four or more backticks', () => {
+    const r = withTree(
+      {
+        'a.md': [
+          '# A',
+          '',
+          '````',
+          '```',
+          'still inside',
+          '```',
+          '````',
+          '',
+          '## After',
+          '',
+          '[link](#after)',
+          '',
+        ].join('\n'),
+      },
+      (dir) => checkTree(dir),
+    );
+    expect(r.problems).toEqual([]);
+    expect(r.linksChecked).toBe(1);
+  });
+});
+
+describe('malformed input fails legibly rather than crashing', () => {
+  it('does not throw URIError on a literal percent in a link target', () => {
+    const r = withTree({ 'a.md': '# A\n\n[odd](./100%-done.md)\n' }, (dir) => checkTree(dir));
+    expect(r.problems.map((p) => p.kind)).toEqual(['missing-file']);
+  });
+});
+
 describe('CI wiring', () => {
   /**
    * Asserted against the parsed yaml rather than the file text, for the
@@ -252,8 +374,18 @@ describe('CI wiring', () => {
   const workflow = parse(
     readFileSync(resolve(repoRoot, '.github/workflows/test.yml'), 'utf8'),
   ) as {
-    jobs: Record<string, { steps: { name?: string; run?: string; uses?: string }[] }>;
+    jobs: Record<
+      string,
+      { if?: string; steps: { name?: string; run?: string; uses?: string }[] }
+    >;
     permissions?: Record<string, string>;
+    // `on` is the YAML 1.1 boolean `true` once parsed — quoting it here keeps
+    // the property reachable by name.
+    on?: {
+      workflow_call?: {
+        inputs?: Record<string, { type?: string; default?: unknown }>;
+      };
+    };
   };
 
   it('runs the checker as its own job in the Tests workflow', () => {
@@ -263,6 +395,41 @@ describe('CI wiring', () => {
   it('invokes the real script, not an inline reimplementation that can drift', () => {
     const runs = workflow.jobs['docs-links'].steps.map((s) => s.run ?? '').join('\n');
     expect(runs).toContain('scripts/check-markdown-links.mjs');
+  });
+
+  /**
+   * The release path. release.yml calls test.yml via workflow_call, so every
+   * job here also gates a tagged production deploy — including, without this,
+   * a hotfix tag blocked by a dead link in a plan. The decoupling is only as
+   * good as the two halves staying in sync, and both halves are silent when
+   * they break: drop the `with:` and doc rot gates production again; drop the
+   * `if:` and the input does nothing at all.
+   */
+  it('does not gate a tagged release on documentation links', () => {
+    const release = parse(
+      readFileSync(resolve(repoRoot, '.github/workflows/release.yml'), 'utf8'),
+    ) as { jobs: Record<string, { with?: Record<string, unknown>; uses?: string }> };
+
+    expect(release.jobs.verify_tests.uses).toBe('./.github/workflows/test.yml');
+    expect(release.jobs.verify_tests.with?.skip_docs_links).toBe(true);
+  });
+
+  it('honours that opt-out with an if: on the job', () => {
+    // Without this the input is inert and the `with:` above is decoration.
+    expect(String(workflow.jobs['docs-links'].if)).toContain('skip_docs_links');
+  });
+
+  it('declares the input the release workflow passes', () => {
+    // A workflow_call input that the callee does not declare is a hard error
+    // at dispatch time, so this pins the pair rather than one side.
+    const called = workflow.on?.workflow_call?.inputs?.skip_docs_links;
+    expect(called).toBeDefined();
+    expect(called.default).toBe(false);
+  });
+
+  it('exposes the checker as a pnpm script so it can be run before pushing', () => {
+    const pkg = JSON.parse(readFileSync(resolve(repoRoot, 'package.json'), 'utf8'));
+    expect(pkg.scripts['docs:links']).toContain('scripts/check-markdown-links.mjs');
   });
 
   it('keeps the workflow read-only', () => {

@@ -20,15 +20,27 @@
  *     the commit gets muted — worse than absent, because the badge still
  *     claims someone is watching.
  *   - reference-style links (`[text][label]`) and bare autolinks. This repo
- *     does not use them; if that changes, extend this rather than assuming
- *     the silence means they were checked.
+ *     does not use them.
+ *   - titled destinations (`[x](y "title")`) and angle-bracket destinations
+ *     (`[x](<y>)`). The destination regex stops at the first space or `)`,
+ *     so a titled link is currently skipped rather than mis-parsed, and an
+ *     angle-bracket one would carry its brackets into the path.
+ *   - setext headings (`Title` underlined with `===` or `---`). Every heading
+ *     in this repo is ATX (`#`), so no anchor is missed today.
+ *
+ * That list is exhaustive on purpose. The point of a check like this is that
+ * silence means "looked and found nothing", so anything it does NOT look at
+ * has to be written down — otherwise the next person reads a green run as a
+ * guarantee it never made.
  *
  * Usage: node scripts/check-markdown-links.mjs [root]
+ *        pnpm docs:links
  * Exit 0 when clean, 1 when anything is broken OR when the scan covered
- * nothing (see `nothing-scanned`).
+ * nothing (see `scannedNothing`).
  */
-import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join, dirname, resolve, relative, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const IGNORED_DIRS = new Set(['node_modules', '.git', 'dist', 'build', '.claude', 'coverage']);
 
@@ -49,18 +61,57 @@ export function slug(heading) {
     .replace(/\s/g, '-');
 }
 
+/**
+ * Track fenced code blocks the way CommonMark does: a fence closes only on a
+ * run of the SAME character that is at least as long as the one that opened
+ * it.
+ *
+ * Treating ``` and ~~~ as interchangeable toggles — which the first version
+ * of this did — means a `~~~` sample inside a ``` block flips the state and
+ * every line after it is misclassified: real links stop being checked and
+ * real headings stop producing anchors, so the file reports false
+ * `dead-anchor`s while silently skipping the rest. "Silently stops checking"
+ * is exactly what this script exists to prevent, so it must not do it itself.
+ *
+ * Returns a fence tracker: call `.toggle(line)`, then read `.inFence`.
+ */
+function fenceTracker() {
+  let open = null; // { char, len }
+  return {
+    get inFence() {
+      return open !== null;
+    },
+    /** @returns true when this line is a fence delimiter (open or close). */
+    toggle(line) {
+      const m = /^\s{0,3}(`{3,}|~{3,})\s*(.*)$/.exec(line);
+      if (!m) return false;
+      const char = m[1][0];
+      const len = m[1].length;
+      if (open === null) {
+        // An opening fence may carry an info string; a closing one may not.
+        open = { char, len };
+        return true;
+      }
+      if (char === open.char && len >= open.len && m[2].trim() === '') {
+        open = null;
+        return true;
+      }
+      // A shorter run, a different character, or an info string inside a
+      // block is just content.
+      return false;
+    },
+  };
+}
+
 /** Every anchor a rendered markdown document exposes, in document order. */
 export function headingAnchors(text) {
   const anchors = new Set();
   const seen = new Map();
-  let inFence = false;
+  const fence = fenceTracker();
 
   for (const line of text.split('\n')) {
-    if (/^\s*(```|~~~)/.test(line)) {
-      inFence = !inFence;
-      continue;
-    }
-    if (inFence) continue;
+    if (fence.toggle(line)) continue;
+    if (fence.inFence) continue;
 
     const m = /^#{1,6}\s+(.+?)\s*#*\s*$/.exec(line);
     if (!m) continue;
@@ -81,35 +132,46 @@ export function headingAnchors(text) {
  * removed so reported line numbers still match the file.
  */
 function maskNonLinkSpans(text) {
-  let inFence = false;
+  const fence = fenceTracker();
   return text.split('\n').map((line) => {
-    if (/^\s*(```|~~~)/.test(line)) {
-      inFence = !inFence;
-      return '';
-    }
-    if (inFence) return '';
+    if (fence.toggle(line)) return '';
+    if (fence.inFence) return '';
     return line.replace(/`[^`]*`/g, '');
   });
 }
 
+/**
+ * `decodeURIComponent` throws `URIError` on a malformed escape, so a single
+ * link containing a literal `%` would abort the whole run with a stack trace.
+ * A percent sign in a path is far more likely than a percent-escape here, so
+ * fall back to the raw string rather than failing the file.
+ */
+function tryDecode(s) {
+  try {
+    return decodeURIComponent(s);
+  } catch {
+    return s;
+  }
+}
+
+/**
+ * `withFileTypes` reads the entry type from the directory record instead of
+ * a `statSync` per entry: one syscall fewer per file, and — the reason that
+ * matters here — it does NOT follow symlinks, so a symlinked directory cycle
+ * cannot send this into infinite recursion.
+ */
 function walk(dir, out = []) {
   let entries;
   try {
-    entries = readdirSync(dir);
+    entries = readdirSync(dir, { withFileTypes: true });
   } catch {
     return out;
   }
   for (const entry of entries) {
-    if (IGNORED_DIRS.has(entry)) continue;
-    const full = join(dir, entry);
-    let stat;
-    try {
-      stat = statSync(full);
-    } catch {
-      continue;
-    }
-    if (stat.isDirectory()) walk(full, out);
-    else if (entry.toLowerCase().endsWith('.md')) out.push(full);
+    if (IGNORED_DIRS.has(entry.name)) continue;
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) walk(full, out);
+    else if (entry.isFile() && entry.name.toLowerCase().endsWith('.md')) out.push(full);
   }
   return out;
 }
@@ -155,7 +217,7 @@ export function checkTree(root) {
         const hashAt = target.indexOf('#');
         const pathPart = hashAt === -1 ? target : target.slice(0, hashAt);
         const anchor = hashAt === -1 ? '' : target.slice(hashAt + 1);
-        const targetFile = pathPart ? resolve(dirname(file), decodeURIComponent(pathPart)) : file;
+        const targetFile = pathPart ? resolve(dirname(file), tryDecode(pathPart)) : file;
 
         if (pathPart && !existsSync(targetFile)) {
           problems.push({ kind: 'missing-file', file: rel, line: i + 1, target });
@@ -165,7 +227,7 @@ export function checkTree(root) {
         // Only markdown exposes heading anchors; a fragment into anything
         // else is not something this can adjudicate.
         if (!targetFile.toLowerCase().endsWith('.md')) continue;
-        if (!anchorsOf(targetFile).has(decodeURIComponent(anchor))) {
+        if (!anchorsOf(targetFile).has(tryDecode(anchor))) {
           problems.push({ kind: 'dead-anchor', file: rel, line: i + 1, target });
         }
       }
@@ -189,12 +251,23 @@ export function checkTree(root) {
   };
 }
 
-// CLI. `import.meta.main` is Node 24+; compare paths so this works on 20.
-const invokedDirectly =
-  process.argv[1] && resolve(process.argv[1]) === resolve(new URL(import.meta.url).pathname);
+// CLI. `import.meta.main` is Node 24+, so this compares paths to stay on 20.
+//
+// It MUST go through fileURLToPath. `new URL(import.meta.url).pathname` is
+// percent-ENCODED, so a checkout under a path containing a space or any
+// non-ASCII character ("/Users/me/My Repos/sync-sit", anything OneDrive
+// syncs) produced "/Users/me/My%20Repos/..." — never equal to argv[1], so
+// this block did not run and `node scripts/check-markdown-links.mjs` printed
+// nothing and exited 0. A silent pass, in the script whose entire purpose is
+// that silence means "checked". It was not reachable on the CI runner path,
+// which is exactly why only a developer would ever have hit it, and they
+// could not have told it from a clean run. `markdown-links.test.ts` spawns
+// this file from a directory with a space to keep it fixed.
+const thisFile = fileURLToPath(import.meta.url);
+const invokedDirectly = process.argv[1] && resolve(process.argv[1]) === thisFile;
 
 if (invokedDirectly) {
-  const root = process.argv[2] ?? resolve(dirname(new URL(import.meta.url).pathname), '..');
+  const root = process.argv[2] ?? resolve(dirname(thisFile), '..');
   const result = checkTree(root);
 
   for (const p of result.problems) {
