@@ -60,6 +60,7 @@ import { AdminUsersPage } from '@/pages/admin/UsersPage';
 import { AdminEnrollmentAccessPage } from '@/pages/admin/EnrollmentAccessPage';
 import { AdminFamiliesPage } from '@/pages/admin/FamiliesPage';
 import { AdminAppointmentsPage } from '@/pages/admin/AppointmentsPage';
+import { AdminDoTasksPage } from '@/pages/admin/DoTasksPage';
 import { AdminHolidaysPage } from '@/pages/admin/HolidaysPage';
 import { AdminConfigurationPage } from '@/pages/admin/ConfigurationPage';
 import { AdminAuditLogPage } from '@/pages/admin/AuditLogPage';
@@ -148,6 +149,10 @@ export const router = createBrowserRouter([
       { path: '/admin/enrollment-access', element: <AdminEnrollmentAccessPage /> },
       { path: '/admin/families', element: <AdminFamiliesPage /> },
       { path: '/admin/appointments', element: <AdminAppointmentsPage /> },
+      // sync-do §9.4. Admin tooling only — it sits behind AdminLayout's
+      // `role="admin"` guard and adds no member-facing sync-do entry point
+      // anywhere in this app (decision 20).
+      { path: '/admin/do-tasks', element: <AdminDoTasksPage /> },
       { path: '/admin/holidays', element: <AdminHolidaysPage /> },
       { path: '/admin/configuration', element: <AdminConfigurationPage /> },
       { path: '/admin/audit-log', element: <AdminAuditLogPage /> },

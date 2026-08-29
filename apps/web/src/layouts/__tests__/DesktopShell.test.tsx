@@ -79,6 +79,10 @@ describe('sit portal shells cap routed content (issue #119)', () => {
       '/admin/enrollment-access',
       '/admin/governance',
       '/admin/appointments',
+      // sync-do §9.4 — admin tooling. This exact-list assertion is also the
+      // decision-20 guard on the sit sidebar: a sync-do destination outside
+      // the admin tree would have to be added here to pass.
+      '/admin/do-tasks',
       '/admin/holidays',
       '/admin/configuration',
       '/admin/audit-log',

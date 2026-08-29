@@ -66,6 +66,12 @@ export function AdminDashboard() {
           description: t('admin.manageAppointmentsDesc'),
         },
         {
+          to: '/admin/do-tasks',
+          icon: <ClipboardListIcon className="h-6 w-6 text-brand-600" />,
+          title: t('admin.doTasks.title'),
+          description: t('admin.doTasks.navDesc'),
+        },
+        {
           to: '/admin/holidays',
           icon: <CalendarIcon className="h-6 w-6 text-brand-600" />,
           title: t('admin.holidays'),
@@ -123,6 +129,19 @@ export function AdminDashboard() {
                 <p className="mt-1 text-xs text-gray-500">{t('admin.pendingVerifications')}</p>
               </Card>
             </Link>
+            {/* sync-do (§9.4): the OPEN count, not the collection total —
+                the total shrinks as the retention sweep runs, while "live on
+                the board right now" is the number an admin watches. */}
+            <Link to="/admin/do-tasks">
+              <Card className="text-center">
+                <p className="text-2xl font-bold text-brand-600">{stats?.doOpenTaskCount ?? 0}</p>
+                <p className="mt-1 text-xs text-gray-500">{t('admin.doTasks.openTasks')}</p>
+              </Card>
+            </Link>
+            <Card className="text-center">
+              <p className="text-2xl font-bold text-brand-600">{stats?.doTaskCount ?? 0}</p>
+              <p className="mt-1 text-xs text-gray-500">{t('admin.doTasks.allTasks')}</p>
+            </Card>
           </div>
         )}
 
