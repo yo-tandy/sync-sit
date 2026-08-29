@@ -156,7 +156,11 @@ export function AppBar({ role }: { role: UserRole }) {
           <div className="border-t border-gray-100" />
 
           {/* Section 3 -- cross-app and language (issue #339). Language was
-              previously rendered for admins only; every role gets it now. */}
+              previously rendered for admins ONLY; every role has a selector
+              now. Admins keep theirs inside the admin block above rather than
+              here, so "every role has one" is true but "every role has it in
+              section 3" is not -- noted so the next reader isn't surprised
+              (PR #343 round 4). */}
           <MenuItem icon={<ShareIcon className="h-5 w-5" />} label={t('share.title')} to="/share" onNavigate={() => setMenuOpen(false)} />
           <AppSwitchMenuItem />
           {role !== 'admin' && (

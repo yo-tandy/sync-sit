@@ -1,5 +1,7 @@
 export default {
   invite: {
+    generateFailed: 'Impossible de générer un lien d\'invitation. Veuillez réessayer.',
+    familyMemberFallback: 'Membre de la famille',
     desc: 'Invitez un autre parent à rejoindre votre famille. Il pourra rechercher des tuteurs et gérer les séances.',
     generateLink: 'Générer un lien d\'invitation',
     generating: 'Génération...',
@@ -13,6 +15,9 @@ export default {
     you: 'Vous',
   },
   coParent: {
+    removeErrorNotAllowed: 'Vous n\'avez pas la permission de retirer ce co-parent.',
+    removeErrorNotFound: 'Cette personne ne fait plus partie de votre famille.',
+    removeErrorState: 'Ce co-parent ne peut pas être retiré pour le moment.',
     remove: 'Retirer',
     removeTitle: 'Retirer le co-parent',
     removeConfirm: 'Retirer {{name}} de votre famille ? Cette personne perdra l\'accès aux fonctionnalités familiales, mais son compte ne sera pas supprimé.',

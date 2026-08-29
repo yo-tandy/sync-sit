@@ -713,6 +713,9 @@ export default {
   },
 
   coParent: {
+    removeErrorNotAllowed: 'You do not have permission to remove this co-parent.',
+    removeErrorNotFound: 'That person is no longer in your family.',
+    removeErrorState: 'That co-parent cannot be removed right now.',
     remove: 'Remove',
     removeTitle: 'Remove Co-Parent',
     removeConfirm: 'Remove {{name}} from your family? They will lose access to family features but their account will not be deleted.',
@@ -728,6 +731,8 @@ export default {
 
   // Invite
   invite: {
+    generateFailed: 'Could not generate an invite link. Please try again.',
+    familyMemberFallback: 'Family member',
     title: 'Invite Members',
     desc: "Invite another parent to join your family. They'll be able to search for babysitters and manage appointments.",
     generateLink: 'Generate invite link',

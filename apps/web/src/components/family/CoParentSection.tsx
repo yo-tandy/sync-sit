@@ -33,19 +33,32 @@ export function CoParentSection() {
     if (!familyId) { setLoading(false); return; }
     try {
       const familySnap = await getDoc(doc(db, 'families', familyId));
-      if (!familySnap.exists()) return;
+      if (!familySnap.exists()) {
+        setError(t('common.error'));
+        return;
+      }
       const parentIds: string[] = familySnap.data().parentIds || [];
       const list: CoParentMember[] = [];
       for (const pid of parentIds) {
         try {
           const userSnap = await getDoc(doc(db, 'users', pid));
           const u = userSnap.data();
-          list.push({ uid: pid, name: u ? `${u.firstName} ${u.lastName}` : t('invite.familyMembers') });
+          list.push({ uid: pid, name: u ? `${u.firstName} ${u.lastName}` : t('invite.familyMemberFallback') });
         } catch {
-          list.push({ uid: pid, name: t('invite.familyMembers') });
+          list.push({ uid: pid, name: t('invite.familyMemberFallback') });
         }
       }
       setMembers(list);
+      setError(null);
+    } catch {
+      // The families/{id} read is gated on isFamilyMember, so permission-denied
+      // is reachable for a parent whose family pointer has gone stale -- the
+      // same divergence removeCoParent defends against. Without this catch the
+      // rejection escaped the effect and the user got the members heading over
+      // an empty list with no explanation (PR #343 round 4). Catching HERE also
+      // keeps loadMembers non-rejecting, so the refresh after a successful
+      // removal can no longer be reported as a failed removal.
+      setError(t('common.error'));
     } finally {
       setLoading(false);
     }
@@ -63,7 +76,7 @@ export function CoParentSection() {
       const token = (res.data as { token: string }).token;
       setInviteLink(`${window.location.origin}/invite/${token}`);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : t('invite.generateLink'));
+      setError(err instanceof Error ? err.message : t('invite.generateFailed'));
     } finally {
       setGenerating(false);
     }

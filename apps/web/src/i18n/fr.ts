@@ -687,6 +687,9 @@ export default {
   },
 
   coParent: {
+    removeErrorNotAllowed: 'Vous n\'avez pas la permission de retirer ce co-parent.',
+    removeErrorNotFound: 'Cette personne ne fait plus partie de votre famille.',
+    removeErrorState: 'Ce co-parent ne peut pas être retiré pour le moment.',
     remove: 'Retirer',
     removeTitle: 'Retirer le co-parent',
     removeConfirm: 'Retirer {{name}} de votre famille ? Cette personne perdra l\'acc\u00e8s aux fonctionnalit\u00e9s familiales mais son compte ne sera pas supprim\u00e9.',
@@ -701,6 +704,8 @@ export default {
   },
 
   invite: {
+    generateFailed: 'Impossible de générer un lien d\'invitation. Veuillez réessayer.',
+    familyMemberFallback: 'Membre de la famille',
     title: 'Inviter des membres',
     desc: "Invitez un autre parent \u00e0 rejoindre votre famille. Il pourra rechercher des babysitters et g\u00e9rer les rendez-vous.",
     generateLink: "G\u00e9n\u00e9rer un lien d'invitation",

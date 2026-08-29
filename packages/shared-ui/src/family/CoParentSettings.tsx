@@ -27,6 +27,31 @@ interface CoParentSettingsProps {
 }
 
 /**
+ * Translate a removeCoParent rejection. The callable's own messages are
+ * English-only server strings ('You cannot remove yourself', and literally
+ * `INTERNAL` on an unexpected fault), so echoing `err.message` put untranslated
+ * English in front of French users (PR #343 round 4). Mapping the Firebase
+ * error CODE keeps the information at the granularity the code carries and
+ * leaves the wording to each app's catalogue.
+ */
+function removeErrorKey(err: unknown): string {
+  const code = (err as { code?: string } | null)?.code;
+  switch (code) {
+    case 'functions/permission-denied':
+    case 'permission-denied':
+      return 'coParent.removeErrorNotAllowed';
+    case 'functions/not-found':
+    case 'not-found':
+      return 'coParent.removeErrorNotFound';
+    case 'functions/failed-precondition':
+    case 'failed-precondition':
+      return 'coParent.removeErrorState';
+    default:
+      return 'common.error';
+  }
+}
+
+/**
  * Co-parent management, rendered INSIDE family settings in both apps
  * (issue #340: sit moved it there from its own page; study never had it).
  * Presentational by design -- shared-ui carries no firebase dependency, so
@@ -75,7 +100,7 @@ export function CoParentSettings({
       await onRemove(removeTarget);
       setRemoveTarget(null);
     } catch (err: unknown) {
-      setRemoveError(err instanceof Error && err.message ? err.message : t('common.error'));
+      setRemoveError(t(removeErrorKey(err)));
     } finally {
       setRemoving(false);
     }
@@ -87,10 +112,6 @@ export function CoParentSettings({
       <p className="mb-3 text-sm text-gray-500">{t('invite.desc')}</p>
       {note}
 
-      {/* The generate error renders in BOTH branches: `onGenerate` is also the
-          "New link" action once a link exists, and a failed regeneration was
-          silent while this lived only in the no-link branch (PR #343 round 3
-          -- the same failure class as the removal path in round 1). */}
       {/* The generate error renders in BOTH branches: `onGenerate` is also the
           "New link" action once a link exists, and a failed regeneration was
           silent while this lived only in the no-link branch (PR #343 round 3

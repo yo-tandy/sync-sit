@@ -1,5 +1,7 @@
 export default {
   invite: {
+    generateFailed: 'Could not generate an invite link. Please try again.',
+    familyMemberFallback: 'Family member',
     desc: 'Invite another parent to join your family. They\'ll be able to search for tutors and manage sessions.',
     generateLink: 'Generate invite link',
     generating: 'Generating...',
@@ -13,6 +15,9 @@ export default {
     you: 'You',
   },
   coParent: {
+    removeErrorNotAllowed: 'You do not have permission to remove this co-parent.',
+    removeErrorNotFound: 'That person is no longer in your family.',
+    removeErrorState: 'That co-parent cannot be removed right now.',
     remove: 'Remove',
     removeTitle: 'Remove Co-Parent',
     removeConfirm: 'Remove {{name}} from your family? They will lose access to family features but their account will not be deleted.',

@@ -63,23 +63,30 @@ describe('CoParentSettings (shared-ui, study i18n)', () => {
   });
 
   it('surfaces a failed removal in the dialog instead of failing silently', async () => {
-    const onRemove = vi.fn().mockRejectedValue(new Error('You cannot remove yourself'));
+    // Rejections carry a Firebase error CODE; the message is the callable's
+    // English-only server string and is deliberately NOT shown (round 4).
+    const onRemove = vi.fn().mockRejectedValue(
+      Object.assign(new Error('You are not a member of this family'), {
+        code: 'functions/permission-denied',
+      }),
+    );
     renderSettings({ onRemove });
 
     openConfirmAndAccept();
 
     const dialog = screen.getByRole('dialog');
-    expect(await within(dialog).findByRole('alert')).toHaveTextContent(
-      'You cannot remove yourself',
-    );
+    const alert = await within(dialog).findByRole('alert');
+    expect(alert).toHaveTextContent('You do not have permission to remove this co-parent.');
+    // The untranslated server sentence must not reach the user.
+    expect(alert).not.toHaveTextContent('You are not a member of this family');
     // The dialog must stay open so the message is reachable, and the confirm
     // must be usable again rather than stuck in its pending state.
     expect(within(dialog).getByRole('heading', { name: 'Remove Co-Parent' })).toBeInTheDocument();
     expect(within(dialog).getByRole('button', { name: 'Remove' })).toBeEnabled();
   });
 
-  it('falls back to the generic message when the rejection carries none', async () => {
-    const onRemove = vi.fn().mockRejectedValue(new Error(''));
+  it('falls back to the generic message when the rejection carries no known code', async () => {
+    const onRemove = vi.fn().mockRejectedValue(new Error('INTERNAL'));
     renderSettings({ onRemove });
     openConfirmAndAccept();
     expect(await within(screen.getByRole('dialog')).findByRole('alert')).toHaveTextContent(
@@ -88,7 +95,9 @@ describe('CoParentSettings (shared-ui, study i18n)', () => {
   });
 
   it('clears a previous failure when the dialog is reopened', async () => {
-    const onRemove = vi.fn().mockRejectedValue(new Error('You cannot remove yourself'));
+    const onRemove = vi.fn().mockRejectedValue(
+      Object.assign(new Error('nope'), { code: 'functions/not-found' }),
+    );
     renderSettings({ onRemove });
 
     openConfirmAndAccept();
@@ -128,6 +137,26 @@ describe('CoParentSettings (shared-ui, study i18n)', () => {
     }
   });
 
+  it('maps each callable error code to its own translated message', async () => {
+    const cases: [string, string][] = [
+      ['functions/permission-denied', 'You do not have permission to remove this co-parent.'],
+      ['functions/not-found', 'That person is no longer in your family.'],
+      ['functions/failed-precondition', 'That co-parent cannot be removed right now.'],
+      ['functions/unavailable', 'An error occurred'],
+    ];
+    for (const [code, expected] of cases) {
+      const onRemove = vi.fn().mockRejectedValue(
+        Object.assign(new Error('server text'), { code }),
+      );
+      renderSettings({ onRemove });
+      openConfirmAndAccept();
+      expect(await within(screen.getByRole('dialog')).findByRole('alert')).toHaveTextContent(
+        expected,
+      );
+      cleanup();
+    }
+  });
+
   it('closes the dialog when the removal succeeds', async () => {
     const onRemove = vi.fn().mockResolvedValue(undefined);
     renderSettings({ onRemove });
@@ -136,6 +165,6 @@ describe('CoParentSettings (shared-ui, study i18n)', () => {
       expect(screen.queryByRole('heading', { name: 'Remove Co-Parent' })).toBeNull(),
     );
     expect(onRemove).toHaveBeenCalledWith(MEMBERS[1]);
-    expect(screen.queryByText('You cannot remove yourself')).toBeNull();
+    expect(screen.queryByText(/permission|no longer in your family/i)).toBeNull();
   });
 });
