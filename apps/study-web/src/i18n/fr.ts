@@ -271,6 +271,7 @@ export default {
     primaryNav: 'Navigation principale',
     appMenu: 'Menu',
     home: 'Accueil',
+    coParent: 'Co-parent',
     reportProblem: 'Signaler un problème',
     privacyPolicy: 'Politique de confidentialité',
     terms: 'Conditions générales',

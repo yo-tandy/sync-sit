@@ -12,7 +12,7 @@ export interface CoParentMember {
 
 interface CoParentSettingsProps {
   members: CoParentMember[];
-  /** null while the first load is in flight. */
+  /** True while the first member load is in flight. */
   loading: boolean;
   currentUid?: string;
   inviteLink: string | null;
@@ -50,13 +50,32 @@ export function CoParentSettings({
   const { t } = useTranslation();
   const [removeTarget, setRemoveTarget] = useState<CoParentMember | null>(null);
   const [removing, setRemoving] = useState(false);
+  const [removeError, setRemoveError] = useState<string | null>(null);
 
+  const openRemove = (member: CoParentMember) => {
+    setRemoveError(null);
+    setRemoveTarget(member);
+  };
+
+  const closeRemove = () => {
+    setRemoveError(null);
+    setRemoveTarget(null);
+  };
+
+  // removeCoParent has reachable server-side rejections ('You cannot remove
+  // yourself'; permission-denied for a caller whose family pointer is
+  // stale), so the failure has to be visible: the dialog stays open and
+  // says why. This lives here, not in the containers, for the same reason
+  // the confirm does -- the destructive affordance must not drift.
   const confirmRemove = async () => {
     if (!removeTarget) return;
     setRemoving(true);
+    setRemoveError(null);
     try {
       await onRemove(removeTarget);
       setRemoveTarget(null);
+    } catch (err: unknown) {
+      setRemoveError(err instanceof Error && err.message ? err.message : t('common.error'));
     } finally {
       setRemoving(false);
     }
@@ -110,7 +129,7 @@ export function CoParentSettings({
                 <button
                   type="button"
                   className="text-xs text-brand-600 hover:underline"
-                  onClick={() => setRemoveTarget(member)}
+                  onClick={() => openRemove(member)}
                 >
                   {t('coParent.remove')}
                 </button>
@@ -120,13 +139,18 @@ export function CoParentSettings({
         ))
       )}
 
-      <Dialog open={!!removeTarget} onClose={() => setRemoveTarget(null)} ariaLabel={t('coParent.removeTitle')}>
+      <Dialog open={!!removeTarget} onClose={closeRemove} ariaLabel={t('coParent.removeTitle')}>
         <h3 className="mb-2 text-lg font-semibold">{t('coParent.removeTitle')}</h3>
         <p className="mb-6 text-sm text-gray-600">
           {t('coParent.removeConfirm', { name: removeTarget?.name })}
         </p>
+        {removeError && (
+          <p className="mb-4 text-sm text-brand-600" role="alert">
+            {removeError}
+          </p>
+        )}
         <div className="flex gap-3">
-          <Button variant="outline" size="sm" onClick={() => setRemoveTarget(null)}>
+          <Button variant="outline" size="sm" onClick={closeRemove}>
             {t('common.cancel')}
           </Button>
           <Button size="sm" onClick={confirmRemove} disabled={removing}>

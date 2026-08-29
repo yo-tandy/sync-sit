@@ -271,6 +271,7 @@ export default {
     primaryNav: 'Primary navigation',
     appMenu: 'Menu',
     home: 'Home',
+    coParent: 'Co-Parent',
     reportProblem: 'Report a Problem',
     privacyPolicy: 'Privacy Policy',
     terms: 'Terms & Conditions',
