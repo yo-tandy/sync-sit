@@ -16,7 +16,7 @@ function getResend(): any {
 
 /**
  * The three canonical app hosts — the ONE place any server-side link is built
- * from (sync-do plan §18.9's first work item).
+ * from (docs/platform-plan.md §8's first work item).
  *
  * `SIT_APP_URL` did not exist: `https://sync-sit.com` was inlined ~20 times
  * across a dozen files under `apps/functions/src/**`, while study and do had
@@ -40,9 +40,9 @@ function getResend(): any {
  *
  * NOT env-driven here: `FROM_EMAIL`, `SUPPORT_EMAIL` and `ADMIN_EMAIL`. Those
  * are addresses, not links, and moving them needs the new domain verified at
- * Resend with SPF and DKIM (plan §18.9, and the still-half-open issue #156) —
- * mail from an unverified domain lands in spam. Separate work with real lead
- * time; deliberately not bundled here.
+ * Resend with SPF and DKIM (docs/platform-plan.md §8, and the still-half-open
+ * issue #156) — mail from an unverified domain lands in spam. Separate work
+ * with real lead time; deliberately not bundled here.
  */
 export const SIT_APP_URL = process.env.SIT_APP_URL ?? 'https://sync-sit.com';
 export const STUDY_APP_URL = process.env.STUDY_APP_URL ?? 'https://sync-study-app.web.app';

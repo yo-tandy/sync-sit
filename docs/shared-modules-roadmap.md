@@ -5,6 +5,8 @@
 > **Not a per-task plan.** Each numbered item below is its own detailed implementation plan under `docs/superpowers/plans/YYYY-MM-DD-<slug>.md`. The roadmap names the slugs and the order; the per-plan docs do the actual work.
 >
 > **Status legend:** `[ ]` = not started · `[~]` = plan written, not executed · `[x]` = merged.
+>
+> **Two shared components are specified outside this roadmap.** `docs/platform-plan.md` (issue #371) carries the owner-decided suite-wide shell: the `AppSwitchBar` that replaces every app's `AppSwitchMenuItem` (#365) and the neutral shared `AccountHome` hub (#367), both landing in `@ejm/shared-ui`. Read it before adding a roadmap item that touches app chrome or the account surface — it also decides that do-web ships no account page at all, and it records the `notifPrefs` shape question (#369) that constrains any shared notification-preferences work.
 
 ---
 

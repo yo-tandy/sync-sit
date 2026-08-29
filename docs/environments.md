@@ -123,4 +123,5 @@ fails when you do — see the fallback direction above.
 ## Related
 
 - [releasing.md](releasing.md) — how production is deployed (tag-triggered).
-- Plan §18.9 — the domain consolidation this configuration was centralised for.
+- [platform-plan.md](platform-plan.md) §8 — the domain consolidation this
+  configuration was centralised for.
