@@ -205,11 +205,47 @@ export function AdminVerificationsPage() {
                           'getVerificationDocument',
                         );
                         const result = await fn({ filePath });
-                        // After the await we are outside the user-gesture
-                        // window — a popup blocker makes open() return null,
-                        // which must surface as an error, not silence.
-                        const win = window.open(result.data.url, '_blank');
-                        if (!win) throw new Error('popup blocked');
+                        // Download semantics (issue #292): the signed URL
+                        // always carries Content-Disposition: attachment
+                        // (getVerificationDocument passes responseDisposition
+                        // with v4 signing — PR #285, pinned in
+                        // shared-functions' getVerificationDocument suite), so
+                        // a plain anchor click downloads the file and leaves
+                        // this page untouched. window.open flashed a tab that
+                        // Chrome/Firefox auto-close and Safari leaves behind,
+                        // and after the await it was popup-blockable.
+                        // COUPLING: without that server header a targetless
+                        // click would navigate the admin panel away -- if the
+                        // disposition ever changes, change this call site too.
+                        // The download attribute is advisory only here: the
+                        // URL is cross-origin, so browsers drop it and the
+                        // server header is what guarantees the download. That
+                        // is also what makes fileName -- unvalidated uploader
+                        // input beyond a non-empty check -- harmless in this
+                        // position; if the signed URL ever moves behind a
+                        // same-origin proxy the attribute goes live and the
+                        // value must be sanitized first (round-1 review).
+                        // ERROR SCOPE: the banner below covers callable and
+                        // path-parse failures only. Past that point a FAILED
+                        // signed URL (expired token, SignatureDoesNotMatch,
+                        // object deleted after the exists() check) returns
+                        // 403/400 as XML with NO disposition header -- GCS
+                        // applies the query-param disposition to authorized
+                        // responses only -- so this targetless click NAVIGATES
+                        // the panel to that error page rather than failing
+                        // silently: exactly the outcome the COUPLING note
+                        // above describes. Accepted because the URL is minted
+                        // milliseconds earlier with a 15-minute TTL, so the
+                        // window is tiny. Alternatives weighed and rejected:
+                        // a hidden iframe never navigates but downloads are
+                        // unreliable across browsers there, and fetch+blob
+                        // would need CORS on the bucket.
+                        const a = document.createElement('a');
+                        a.href = result.data.url;
+                        a.download = v.fileName || '';
+                        document.body.appendChild(a);
+                        a.click();
+                        a.remove();
                       } catch (err) {
                         // No raw-fileUrl fallback: new uploads store TOKENLESS
                         // fileUrls (path carriers only), so opening one 403s —
