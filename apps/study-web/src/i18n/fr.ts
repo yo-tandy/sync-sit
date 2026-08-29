@@ -1,4 +1,30 @@
 export default {
+  invite: {
+    generateErrorNotAllowed: 'Vous n\'avez pas la permission d\'inviter un co-parent dans cette famille.',
+    generateErrorNoFamily: 'Votre famille est introuvable. Veuillez recharger la page et réessayer.',
+    generateFailed: 'Impossible de générer un lien d\'invitation. Veuillez réessayer.',
+    familyMemberFallback: 'Membre de la famille',
+    desc: 'Invitez un autre parent à rejoindre votre famille. Il pourra rechercher des tuteurs et gérer les séances.',
+    generateLink: 'Générer un lien d\'invitation',
+    generating: 'Génération...',
+    inviteLink: 'Lien d\'invitation',
+    copyLink: 'Copier le lien',
+    copied: 'Copié !',
+    newLink: 'Nouveau lien',
+    linkDesc: 'Partagez ce lien avec l\'autre parent. Il créera un compte et rejoindra automatiquement votre famille. Expire dans 7 jours.',
+    linkCopied: 'Lien copié !',
+    familyMembers: 'Membres de la famille',
+    you: 'Vous',
+  },
+  coParent: {
+    removeErrorNotAllowed: 'Vous n\'avez pas la permission de retirer ce co-parent.',
+    removeErrorNotFound: 'Cette personne ne fait plus partie de votre famille.',
+    removeErrorState: 'Ce co-parent ne peut pas être retiré pour le moment.',
+    remove: 'Retirer',
+    removeTitle: 'Retirer le co-parent',
+    removeConfirm: 'Retirer {{name}} de votre famille ? Cette personne perdra l\'accès aux fonctionnalités familiales, mais son compte ne sera pas supprimé.',
+    confirmRemove: 'Retirer',
+  },
   common: {
     save: 'Enregistrer',
     cancel: 'Annuler',
@@ -245,12 +271,14 @@ export default {
   },
 
   menu: {
+    sendFeedback: 'Envoyer un commentaire',
     about: 'À propos',
     openMenu: 'Ouvrir le menu',
     openMenuPending: 'Ouvrir le menu (éléments en attente de votre attention)',
     primaryNav: 'Navigation principale',
     appMenu: 'Menu',
     home: 'Accueil',
+    coParent: 'Co-parent',
     reportProblem: 'Signaler un problème',
     privacyPolicy: 'Politique de confidentialité',
     terms: 'Conditions générales',
@@ -642,6 +670,7 @@ export default {
   },
 
   family: {
+    coParentCrossApp: 'Le lien d\'invitation ouvre Sync/Sit, où se fait l\'adhésion à une famille. Votre famille est partagée entre les deux applications : le co-parent apparaîtra ici dès qu\'il aura rejoint.',
     dashboardTitle: 'Tableau de bord',
     accountTitle: 'Mon compte',
     settingsTitle: 'Paramètres de la famille',

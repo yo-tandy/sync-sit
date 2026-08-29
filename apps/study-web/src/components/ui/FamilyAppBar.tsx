@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { SUPPORT_EMAIL } from '@/constants/brand';
 import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '@/stores/authStore';
@@ -62,17 +63,24 @@ export function FamilyAppBar() {
   // The family portal's primary destinations — one list, two renderings
   // (issue #119): the burger dialog below and the md+ NavTabs row. Dashboard
   // stays on the home icon, mirroring the burger.
+  // Section 1 -- identity and family configuration, in the owner's order
+  // (issue #339); the same order sit uses, so the two portals match.
   const primaryNav = [
-    { to: '/family/sessions', icon: <CalendarIcon className="h-5 w-5" />, label: t('family.sessions.title') },
-    { to: '/family/requests', icon: <BellIcon className="h-5 w-5" />, label: t('family.requestsTitle') },
-    { to: '/family/endorsements', icon: <CheckIcon className="h-5 w-5" />, label: t('family.endorsements.menuTitle') },
+    { to: '/family/account', icon: <UserIcon className="h-5 w-5" />, label: t('family.accountTitle') },
+    { to: '/family/settings', icon: <SettingsIcon className="h-5 w-5" />, label: t('family.settingsTitle') },
     { to: '/family/governance', icon: <ShieldIcon className="h-5 w-5" />, label: t('family.governance.navTitle') },
     // Verification lives in-app (issue #129). The menu entry is how a
     // VERIFIED family reaches the approve-a-friend flow — the dashboard
     // banner only shows while unverified. Mirrors sit's AppBar entry.
     { to: '/family/verification', icon: <FileTextIcon className="h-5 w-5" />, label: t('family.verification.menuTitle') },
-    { to: '/family/account', icon: <UserIcon className="h-5 w-5" />, label: t('family.accountTitle') },
-    { to: '/family/settings', icon: <SettingsIcon className="h-5 w-5" />, label: t('family.settingsTitle') },
+  ];
+
+  // Section 2 -- activity. Co-parent is absent by design: it lives inside
+  // family settings (issue #340), matching sit.
+  const activityNav = [
+    { to: '/family/requests', icon: <BellIcon className="h-5 w-5" />, label: t('family.requestsTitle') },
+    { to: '/family/sessions', icon: <CalendarIcon className="h-5 w-5" />, label: t('family.sessions.title') },
+    { to: '/family/endorsements', icon: <CheckIcon className="h-5 w-5" />, label: t('family.endorsements.menuTitle') },
   ];
 
   return (
@@ -97,7 +105,7 @@ export function FamilyAppBar() {
       {/* Persistent primary nav at md+ (issue #119); the burger stays the
           phone entry point and, at desktop, the home of the secondary items. */}
       <NavTabs
-        items={primaryNav.map(({ to, label }) => ({ to, label }))}
+        items={[...primaryNav, ...activityNav].map(({ to, label }) => ({ to, label }))}
         ariaLabel={t('menu.primaryNav')}
       />
 
@@ -114,19 +122,28 @@ export function FamilyAppBar() {
 
           <div className="border-t border-gray-100" />
 
-          <MenuItem icon={<InfoIcon className="h-5 w-5" />} label={t('menu.about')} to="/about" onNavigate={() => setMenuOpen(false)} />
-          <MenuItem icon={<MailIcon className="h-5 w-5" />} label={t('menu.reportProblem')} to="/report" onNavigate={() => setMenuOpen(false)} />
-          <MenuItem icon={<ShieldIcon className="h-5 w-5" />} label={t('menu.privacyPolicy')} to="/privacy" onNavigate={() => setMenuOpen(false)} />
-          <MenuItem icon={<FileTextIcon className="h-5 w-5" />} label={t('menu.terms')} to="/terms" onNavigate={() => setMenuOpen(false)} />
+          {activityNav.map((item) => (
+            <MenuItem key={item.to} icon={item.icon} label={item.label} to={item.to} onNavigate={() => setMenuOpen(false)} />
+          ))}
 
           <div className="border-t border-gray-100" />
 
+          {/* Section 3 -- cross-app and language (issue #339). */}
           <MenuItem icon={<ShareIcon className="h-5 w-5" />} label={t('share.title')} to="/share" onNavigate={() => setMenuOpen(false)} />
           <AppSwitchMenuItem />
-
           <div className="px-4 py-3">
             <LanguageSelector />
           </div>
+
+          <div className="border-t border-gray-100" />
+
+          {/* Section 4 -- support and legal. Send feedback mirrors sit's
+              entry, using this app's own support address. */}
+          <MenuItem icon={<MailIcon className="h-5 w-5" />} label={t('menu.sendFeedback')} onClick={() => { setMenuOpen(false); window.location.href = `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent('Feedback — Sync/Study')}`; }} />
+          <MenuItem icon={<MailIcon className="h-5 w-5" />} label={t('menu.reportProblem')} to="/report" onNavigate={() => setMenuOpen(false)} />
+          <MenuItem icon={<InfoIcon className="h-5 w-5" />} label={t('menu.about')} to="/about" onNavigate={() => setMenuOpen(false)} />
+          <MenuItem icon={<ShieldIcon className="h-5 w-5" />} label={t('menu.privacyPolicy')} to="/privacy" onNavigate={() => setMenuOpen(false)} />
+          <MenuItem icon={<FileTextIcon className="h-5 w-5" />} label={t('menu.terms')} to="/terms" onNavigate={() => setMenuOpen(false)} />
 
           <div className="border-t border-gray-100" />
 

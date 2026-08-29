@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { CoParentSection } from '@/components/family/CoParentSection';
 import { useTranslation } from 'react-i18next';
 import {
   doc,
@@ -325,6 +326,13 @@ export function FamilySettingsPage() {
         <Button onClick={handleSave} disabled={saving || !familyName.trim()}>
           {saving ? 'Saving...' : 'Save'}
         </Button>
+
+        {/* Co-parent management lives here now (issue #340) rather than on
+            its own menu entry -- it is family configuration, and the owner
+            asked for the two apps to match. */}
+        <div className="mt-8 border-t border-gray-100 pt-6">
+          <CoParentSection />
+        </div>
       </div>
     </div>
   );

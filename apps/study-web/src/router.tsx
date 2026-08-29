@@ -1,4 +1,5 @@
 import { createBrowserRouter, Navigate } from 'react-router';
+import { BRAND, SUPPORT_EMAIL } from '@/constants/brand';
 import { PrivacyPage, TermsPage } from '@ejm/shared-ui';
 
 // Layouts stay EAGER — the shell (AuthGuard, app bars) renders on every route, so
@@ -55,8 +56,6 @@ import {
   NotificationsPage,
 } from '@/lazyPages';
 
-const SUPPORT_EMAIL = 'support@sync-study.com';
-const BRAND = 'Sync/Study';
 
 export const router = createBrowserRouter([
   {

@@ -1,4 +1,30 @@
 export default {
+  invite: {
+    generateErrorNotAllowed: 'You do not have permission to invite a co-parent to this family.',
+    generateErrorNoFamily: 'Your family could not be found. Please reload and try again.',
+    generateFailed: 'Could not generate an invite link. Please try again.',
+    familyMemberFallback: 'Family member',
+    desc: 'Invite another parent to join your family. They\'ll be able to search for tutors and manage sessions.',
+    generateLink: 'Generate invite link',
+    generating: 'Generating...',
+    inviteLink: 'Invite link',
+    copyLink: 'Copy link',
+    copied: 'Copied!',
+    newLink: 'New link',
+    linkDesc: 'Share this link with the other parent. They\'ll sign up and automatically join your family. Expires in 7 days.',
+    linkCopied: 'Link copied to clipboard!',
+    familyMembers: 'Family members',
+    you: 'You',
+  },
+  coParent: {
+    removeErrorNotAllowed: 'You do not have permission to remove this co-parent.',
+    removeErrorNotFound: 'That person is no longer in your family.',
+    removeErrorState: 'That co-parent cannot be removed right now.',
+    remove: 'Remove',
+    removeTitle: 'Remove Co-Parent',
+    removeConfirm: 'Remove {{name}} from your family? They will lose access to family features but their account will not be deleted.',
+    confirmRemove: 'Remove',
+  },
   common: {
     save: 'Save',
     cancel: 'Cancel',
@@ -245,12 +271,14 @@ export default {
   },
 
   menu: {
+    sendFeedback: 'Send Feedback',
     about: 'About',
     openMenu: 'Open menu',
     openMenuPending: 'Open menu (items awaiting your attention)',
     primaryNav: 'Primary navigation',
     appMenu: 'Menu',
     home: 'Home',
+    coParent: 'Co-Parent',
     reportProblem: 'Report a Problem',
     privacyPolicy: 'Privacy Policy',
     terms: 'Terms & Conditions',
@@ -642,6 +670,7 @@ export default {
   },
 
   family: {
+    coParentCrossApp: 'The invite link opens Sync/Sit, where joining a family happens. Your family is shared between both apps, so the co-parent appears here as soon as they join.',
     dashboardTitle: 'Dashboard',
     accountTitle: 'My Account',
     settingsTitle: 'Family Settings',
