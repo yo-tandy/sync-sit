@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { screen, act, waitFor } from '@testing-library/react';
+import { screen, act, fireEvent, waitFor } from '@testing-library/react';
 import { renderWithProviders } from '@/__tests__/test-utils';
 
 /**
@@ -10,8 +10,10 @@ import { renderWithProviders } from '@/__tests__/test-utils';
  *   and each stays provable under §7.2 / served by §7.3;
  * - the §6.2 `pending_guardian` split, and that neither live-offer state
  *   counts toward the amber TO-DO badge (both await someone else);
- * - the endorsement section's shape filter, and the board-pointing empty
- *   state.
+ * - the endorsement section's shape filter, its place in the SETTLED check,
+ *   and its error+retry — the empty state must never paint over an
+ *   endorsement waiting for this student (PR #362 round 1);
+ * - the board-pointing empty state.
  */
 
 const NOW = Date.now();
@@ -113,6 +115,16 @@ function pushTasks(rows: Row[]) {
   act(() => h.tasksNext!({ docs: rows.map((r) => ({ id: r.taskId as string, data: () => r })) }));
 }
 
+/**
+ * The page holds skeletons until ALL THREE reads settle — the one-shot
+ * endorsements read included, since it is the only source of one of the three
+ * sections. Every render assertion goes through here rather than firing the
+ * moment the two snapshots land.
+ */
+async function settled() {
+  await waitFor(() => expect(screen.queryByTestId('skeleton-card')).toBeNull());
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   h.queries = [];
@@ -162,16 +174,17 @@ describe('doer dashboard — query shapes (nothing new reaches the server)', () 
 });
 
 describe('doer dashboard — sections', () => {
-  it('greets the student with the role blurb and the board quick action', () => {
+  it('greets the student with the role blurb and the board quick action', async () => {
     renderWithProviders(<DashboardPage />);
     pushOffers([]);
     pushTasks([]);
+    await settled();
     expect(screen.getByRole('heading', { name: /Hello, Lea/ })).toBeInTheDocument();
     expect(screen.getByText(/Find work, track your offers/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Browse the board' })).toBeInTheDocument();
   });
 
-  it('splits live offers by who they are waiting on, and badges NEITHER as a to-do', () => {
+  it('splits live offers by who they are waiting on, and badges NEITHER as a to-do', async () => {
     renderWithProviders(<DashboardPage />);
     pushOffers([
       offerDoc('o1'),
@@ -179,6 +192,7 @@ describe('doer dashboard — sections', () => {
       offerDoc('o3', { status: 'declined', taskTitle: 'Offer dead' }),
     ]);
     pushTasks([]);
+    await settled();
 
     expect(screen.getByText('Waiting for the family to decide.')).toBeInTheDocument();
     expect(screen.getByText('Waiting for your parent to approve it.')).toBeInTheDocument();
@@ -192,7 +206,7 @@ describe('doer dashboard — sections', () => {
     expect(titles).toEqual(['Offer o1', 'Offer gated']);
   });
 
-  it('says what is next on assigned work, and drops finished assignments', () => {
+  it('says what is next on assigned work, and drops finished assignments', async () => {
     renderWithProviders(<DashboardPage />);
     pushOffers([]);
     pushTasks([
@@ -201,6 +215,7 @@ describe('doer dashboard — sections', () => {
       taskDoc('t3', { title: 'Task old', status: 'completed' }),
       taskDoc('t4', { title: 'Task gone', status: 'cancelled' }),
     ]);
+    await settled();
 
     expect(screen.getByText('Mark it done when you finish')).toBeInTheDocument();
     expect(screen.getByText('Awaiting family confirmation')).toBeInTheDocument();
@@ -239,21 +254,83 @@ describe('doer dashboard — sections', () => {
     );
   });
 
-  it('keeps the daily loop when the endorsements read fails', async () => {
+  // ── The empty state must never paint over a real to-do (PR #362 round 1).
+  //    `hasAny` counts pending endorsements, but the endorsements read is
+  //    one-shot: while it was outside the settled check and degraded to `[]`
+  //    on failure, a student whose ONLY outstanding item was an endorsement
+  //    saw "Nothing on the go" — permanently, if the read was denied. That is
+  //    an affirmative false statement, the same shape as the defect PR #331
+  //    round 2 fixed and the rule MyEndorsementsPage codifies. The two cases
+  //    below are the ones the old failure test could not catch, because it
+  //    pushed an offer first. ──
+  it('never shows the empty state when an endorsement is the ONLY to-do', async () => {
+    h.referenceRows = [referenceDoc('r1')];
+    renderWithProviders(<DashboardPage />);
+    pushOffers([]);
+    pushTasks([]);
+
+    // Both snapshots have landed and there is not a single offer or
+    // assignment — the empty state must NOT paint while the endorsements read
+    // is still in flight.
+    expect(screen.queryByText(/Browse the board and offer to help/)).toBeNull();
+    expect(screen.getAllByTestId('skeleton-card').length).toBeGreaterThan(0);
+
+    await settled();
+    expect(screen.getByRole('button', { name: /^Endorsements to answer\s*1$/ })).toBeInTheDocument();
+    expect(screen.getByText('Family r1')).toBeInTheDocument();
+    expect(screen.queryByText(/Browse the board and offer to help/)).toBeNull();
+  });
+
+  it('surfaces an error with a retry when the endorsements read fails — never an empty state', async () => {
+    h.referencesFail = true;
+    renderWithProviders(<DashboardPage />);
+    pushOffers([]);
+    pushTasks([]);
+    await settled();
+
+    expect(screen.getByText(/Could not check whether an endorsement is waiting/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
+    // The reassuring lie this replaces.
+    expect(screen.queryByText(/Browse the board and offer to help/)).toBeNull();
+    // And it never renders as a silently absent section either.
+    expect(screen.queryByRole('button', { name: /Endorsements to answer/ })).toBeNull();
+  });
+
+  it('keeps the daily loop rendered when only the endorsements read fails', async () => {
     h.referencesFail = true;
     renderWithProviders(<DashboardPage />);
     pushOffers([offerDoc('o1')]);
     pushTasks([]);
-    await waitFor(() => expect(screen.getByText('Offer o1')).toBeInTheDocument());
-    expect(screen.queryByText('Endorsements to answer')).toBeNull();
+    await settled();
+    expect(screen.getByText('Offer o1')).toBeInTheDocument();
+    expect(screen.getByText(/Could not check whether an endorsement is waiting/)).toBeInTheDocument();
+    // The page-level error line is for the two list reads, not this one.
+    expect(screen.queryByText(/Could not load your dashboard/)).toBeNull();
+  });
+
+  it('retries the endorsements read, and the section replaces the error', async () => {
+    h.referencesFail = true;
+    renderWithProviders(<DashboardPage />);
+    pushOffers([]);
+    pushTasks([]);
+    await settled();
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
+
+    h.referencesFail = false;
+    h.referenceRows = [referenceDoc('r1')];
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+
+    await waitFor(() => expect(screen.getByText('Family r1')).toBeInTheDocument());
+    expect(screen.queryByText(/Could not check whether an endorsement is waiting/)).toBeNull();
   });
 });
 
 describe('doer dashboard — empty, loading and error states', () => {
-  it('points an empty dashboard at the board', () => {
+  it('points an empty dashboard at the board', async () => {
     renderWithProviders(<DashboardPage />);
     pushOffers([]);
     pushTasks([]);
+    await settled();
     expect(screen.getByText(/Browse the board and offer to help/)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Browse the board' })).toHaveAttribute(
       'href',
@@ -261,26 +338,35 @@ describe('doer dashboard — empty, loading and error states', () => {
     );
   });
 
-  it('shows skeletons until BOTH snapshots settle, never the empty state', () => {
+  it('shows skeletons until ALL THREE reads settle, never the empty state', async () => {
     renderWithProviders(<DashboardPage />);
     pushOffers([]);
     expect(screen.getAllByTestId('skeleton-card').length).toBeGreaterThan(0);
     expect(screen.queryByText(/Browse the board and offer to help/)).toBeNull();
+
     pushTasks([]);
-    expect(screen.queryByTestId('skeleton-card')).toBeNull();
+    // Both SNAPSHOTS are in, and the page is still loading: the one-shot
+    // endorsements read has not resolved, and it is the only source of one of
+    // the three sections (PR #362 round 1).
+    expect(screen.getAllByTestId('skeleton-card').length).toBeGreaterThan(0);
+
+    await settled();
+    expect(screen.getByText(/Browse the board and offer to help/)).toBeInTheDocument();
   });
 
-  it('renders the error line only when nothing at all could be read', () => {
+  it('renders the error line only when nothing at all could be read', async () => {
     renderWithProviders(<DashboardPage />);
     act(() => h.offersError!(new Error('denied')));
     act(() => h.tasksError!(new Error('denied')));
+    await settled();
     expect(screen.getByText(/Could not load your dashboard/)).toBeInTheDocument();
   });
 
-  it('renders the half that worked when only one read fails', () => {
+  it('renders the half that worked when only one read fails', async () => {
     renderWithProviders(<DashboardPage />);
     act(() => h.offersError!(new Error('denied')));
     pushTasks([taskDoc('t1')]);
+    await settled();
     expect(screen.getByText('Task t1')).toBeInTheDocument();
     expect(screen.queryByText(/Could not load your dashboard/)).toBeNull();
   });

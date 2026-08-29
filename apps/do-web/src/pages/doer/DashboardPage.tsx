@@ -42,7 +42,12 @@ import { formatTimingSummary } from '@/lib/taskDisplay';
  *     each row carrying what is next: mark it done, or (once marked) that
  *     the family still has to confirm.
  *  3. **Endorsements to answer** (amber) — these DO await this reader, so
- *     they are the page's one real to-do count.
+ *     they are the page's one real to-do count. Their read is one-shot, and
+ *     it is part of the settled check AND has its own error + retry: it is
+ *     the sole source of a whole section, so a read that was still in flight
+ *     (or had failed) used to let the empty state say "Nothing on the go"
+ *     over an endorsement genuinely waiting — MyEndorsementsPage's rule, and
+ *     the same shape as the defect PR #331 round 2 fixed.
  *
  * QUERIES — all three are shapes this app already issues; nothing new reaches
  * the server:
@@ -64,7 +69,18 @@ export function DashboardPage() {
   const [offersError, setOffersError] = useState(false);
   const [tasks, setTasks] = useState<TaskDoc[] | null>(null);
   const [tasksError, setTasksError] = useState(false);
-  const [endorsements, setEndorsements] = useState<DoerEndorsementDoc[]>([]);
+  // Null while in flight, NEVER `[]` on failure. A failed read is UNKNOWN,
+  // not zero: degrading it to an empty array let "Nothing on the go" render
+  // over an endorsement genuinely waiting for this student — an affirmative
+  // false statement, the exact defect PR #331 round 2 fixed on the family
+  // offer list and MyEndorsementsPage codifies (its comment: "A failed read
+  // must never render as the reassuring empty state"). Its own error + retry
+  // instead, and it counts toward `loading` so the empty state cannot paint
+  // before it settles.
+  const [endorsements, setEndorsements] = useState<DoerEndorsementDoc[] | null>(null);
+  const [endorsementsError, setEndorsementsError] = useState(false);
+  /** Bumped by the retry button; re-runs the read through the effect below. */
+  const [endorsementsTick, setEndorsementsTick] = useState(0);
 
   // Shared by the one-shot read and every focus refetch, so a late resolve
   // never writes state after unmount.
@@ -115,18 +131,22 @@ export function DashboardPage() {
       .then((snap) => {
         if (!mountedRef.current) return;
         setEndorsements(snap.docs.map((d) => d.data() as DoerEndorsementDoc));
+        setEndorsementsError(false);
       })
       .catch(() => {
-        // A failed endorsements read must not block the two sections that
-        // carry the daily loop. It degrades to "none to answer"; the surface
-        // that OWNS them (/doer/endorsements) has the error + retry.
-        if (mountedRef.current) setEndorsements([]);
+        // Error, never an empty list — see the state declaration. On a focus
+        // REFETCH blip the last-known-good rows survive, because only the
+        // flag is set; on first load `endorsements` is still null, so the
+        // error branch is what renders.
+        if (mountedRef.current) setEndorsementsError(true);
       });
   }, [uid]);
 
   useEffect(() => {
     loadEndorsements();
-  }, [loadEndorsements]);
+    // `endorsementsTick` is the retry trigger; loadEndorsements itself only
+    // depends on uid.
+  }, [loadEndorsements, endorsementsTick]);
 
   // Issue #117 tier (a): the two list queries are live already, so only the
   // one-shot read re-runs when the reader comes back to the tab.
@@ -155,7 +175,7 @@ export function DashboardPage() {
   // with attacker-controlled attribution.
   const pendingEndorsements = useMemo(
     () =>
-      endorsements.filter(
+      (endorsements ?? []).filter(
         (e) => e.appSource === 'do' && e.type === 'family_submitted' && e.status === 'private',
       ),
     [endorsements],
@@ -163,12 +183,25 @@ export function DashboardPage() {
 
   // Settled = rows arrived OR the read failed; an errored read is no longer
   // in flight, so one failure never strands the page on skeletons (study's
-  // family-dashboard rule). With no uid nothing can load at all.
+  // family-dashboard rule). ALL THREE reads count: the endorsements read is
+  // the only source of one of the three sections, so leaving it out let the
+  // empty state paint over a to-do that had not arrived yet. With no uid
+  // nothing can load at all.
   const loading =
-    uid !== null && !((offers !== null || offersError) && (tasks !== null || tasksError));
+    uid !== null &&
+    !(
+      (offers !== null || offersError) &&
+      (tasks !== null || tasksError) &&
+      (endorsements !== null || endorsementsError)
+    );
   const loadError = offersError || tasksError;
-  const hasAny =
+  const hasRows =
     liveOffers.length > 0 || assignedRows.length > 0 || pendingEndorsements.length > 0;
+  // The endorsement read's own error block is CONTENT: without it in this
+  // gate, a denied endorsements read on an otherwise-quiet account collapses
+  // straight into "Nothing on the go" — the affirmative false statement this
+  // whole branch exists to prevent.
+  const hasAny = hasRows || endorsementsError;
 
   return (
     <div className="px-5 pt-4 pb-8" data-page-width="wide">
@@ -187,7 +220,10 @@ export function DashboardPage() {
         {t('doer.dashboard.boardCta')}
       </Button>
 
-      {loadError && !hasAny ? (
+      {/* `!hasRows`, not `!hasAny`: when all three reads fail there is nothing
+          to show but this line, and it says more than the endorsement block
+          alone would. */}
+      {loadError && !hasRows ? (
         <p className="py-10 text-center text-sm text-gray-500">{t('doer.dashboard.loadError')}</p>
       ) : loading ? (
         <div className="space-y-3">
@@ -276,6 +312,36 @@ export function DashboardPage() {
             ))}
           </DashboardSection>
 
+          {/* A failed endorsements read renders as an ERROR with a retry —
+              never as this section quietly not being there, which reads as
+              "nothing to answer" (MyEndorsementsPage's rule, PR #331 round
+              2). Scoped here, so the two sections above still render. */}
+          {endorsementsError ? (
+            <div className="mb-4">
+              <h3 className="mb-2 text-sm font-semibold text-gray-700">
+                {t('doer.dashboard.endorsementsTitle')}
+              </h3>
+              <p className="mb-3 text-sm text-error-600">
+                {t('doer.dashboard.endorsementsLoadError')}
+              </p>
+              <Button
+                size="sm"
+                variant="outline"
+                fullWidth={false}
+                onClick={() => {
+                  // Clear the error so the retry FALLS THROUGH to the loading
+                  // state — otherwise a re-failed read changes nothing on
+                  // screen and the button reads as dead (the AssignedTaskView
+                  // / MyEndorsementsPage retry idiom).
+                  setEndorsementsError(false);
+                  setEndorsements(null);
+                  setEndorsementsTick((n) => n + 1);
+                }}
+              >
+                {t('doer.endorsements.retry')}
+              </Button>
+            </div>
+          ) : (
           <DashboardSection
             title={t('doer.dashboard.endorsementsTitle')}
             count={pendingEndorsements.length}
@@ -299,6 +365,7 @@ export function DashboardPage() {
               </Link>
             ))}
           </DashboardSection>
+          )}
         </>
       ) : (
         <EmptyState

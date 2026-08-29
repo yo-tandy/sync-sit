@@ -439,6 +439,7 @@ export default {
       awaitingParent: 'Waiting for your parent to approve it.',
       nextMarkDone: 'Mark it done when you finish',
       endorsementPrompt: 'Accept it to show it with your offers, or decline it.',
+      endorsementsLoadError: 'Could not check whether an endorsement is waiting for you.',
       emptyDesc: 'Nothing on the go. Browse the board and offer to help with a task.',
       loadError: 'Could not load your dashboard. Please refresh and try again.',
     },

@@ -437,6 +437,7 @@ export default {
       awaitingParent: "En attente de l'accord de votre parent.",
       nextMarkDone: 'Marquez-la faite une fois terminée',
       endorsementPrompt: "Acceptez-la pour l'afficher avec vos offres, ou refusez-la.",
+      endorsementsLoadError: "Impossible de vérifier si une recommandation attend votre réponse.",
       emptyDesc: 'Rien en cours. Parcourez le tableau et proposez votre aide sur une tâche.',
       loadError: 'Impossible de charger votre tableau de bord. Veuillez rafraîchir et réessayer.',
     },
