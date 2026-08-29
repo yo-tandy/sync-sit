@@ -65,11 +65,19 @@ export function BoardPage() {
   // Server-side dimension: category ('' = all).
   const [category, setCategory] = useState<TaskCategory | ''>('');
   const [tasks, setTasks] = useState<TaskDoc[] | null>(null);
-  // The category the rows in `tasks` were fetched for. Staleness is DERIVED
-  // from it rather than blanking `tasks` synchronously inside the effect,
-  // which cascades renders; the spinner shows while it lags `category`.
-  const [loadedCategory, setLoadedCategory] = useState<TaskCategory | '' | null>(null);
+  // Staleness is DERIVED rather than written by blanking `tasks` inside the
+  // effect (which cascades renders). It compares RESET GENERATIONS, not the
+  // category value: switching away and back before the first reset lands
+  // would leave a value comparison reading "fresh" while `cursorRef` has
+  // already been nulled — and then "Load more" would re-fetch page 1 and
+  // append it to the rows already on screen (duplicate rows, duplicate
+  // keys). Generations are monotonic, so a return trip is still a new
+  // request. Both are STATE and both are written from async paths, never
+  // synchronously in the effect body.
+  const [issuedReset, setIssuedReset] = useState(0);
+  const [settledReset, setSettledReset] = useState(-1);
   const generationRef = useRef(0);
+  const resetSeqRef = useRef(0);
   const [error, setError] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [exhausted, setExhausted] = useState(true);
@@ -93,6 +101,10 @@ export function BoardPage() {
       // second), and without this a superseded page would clobber the
       // current one, including `cursorRef`.
       const generation = ++generationRef.current;
+      // Only a RESET moves the staleness pair. "Load more" must not blank the
+      // list behind a spinner — it has its own inline `loadingMore` state.
+      const resetSeq = reset ? ++resetSeqRef.current : null;
+      if (resetSeq !== null) setIssuedReset(resetSeq);
       const parts = [where('status', '==', 'open')];
       if (category) parts.push(where('category', '==', category));
       const tail = [orderBy('createdAt', 'desc'), limit(BOARD_PAGE_SIZE)];
@@ -105,7 +117,7 @@ export function BoardPage() {
         setExhausted(snap.docs.length < BOARD_PAGE_SIZE);
         setFetchedAt(Date.now());
         setTasks((prev) => (reset || prev === null ? rows : [...prev, ...rows]));
-        setLoadedCategory(category);
+        if (resetSeq !== null) setSettledReset(resetSeq);
         setError(false);
       } catch {
         if (generation !== generationRef.current) return;
@@ -124,9 +136,10 @@ export function BoardPage() {
     void Promise.resolve().then(() => fetchPage(true));
   }, [fetchPage]);
 
-  // No rows yet, or the rows on screen belong to a category the user has
-  // since changed away from. Gates the spinner AND "Load more" (see below).
-  const stale = tasks === null || loadedCategory !== category;
+  // No rows yet, or a reset is still in flight — in which case `cursorRef`
+  // has been nulled and the rows on screen no longer match it. Gates the
+  // spinner AND "Load more" (see below).
+  const stale = tasks === null || settledReset !== issuedReset;
 
   const areas = useMemo(
     () => [...new Set((tasks ?? []).map((task) => task.areaLabel).filter(Boolean))].sort(),

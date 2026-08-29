@@ -203,6 +203,48 @@ describe('BoardPage category-switch staleness', () => {
     expect(screen.queryByText('Task a0')).toBeNull();
   });
 
+  // Away-and-back: a VALUE comparison (loadedCategory === category) reads
+  // "fresh" here even though the reset is still in flight and `cursorRef`
+  // was nulled — so Load more would re-fetch page 1 and APPEND it, giving
+  // duplicate rows and duplicate keys. Reset generations are monotonic, so
+  // the return trip is still a new request.
+  it('stays stale when the category is switched away and back before the reset lands', async () => {
+    h.docsQueue.push(asDocs(Array.from({ length: BOARD_PAGE_SIZE }, (_, i) => taskDoc(`a${i}`))));
+    renderWithProviders(<BoardPage />);
+    await screen.findByText('Task a0');
+    expect(screen.getByText('Load more')).toBeInTheDocument();
+
+    // Switch away (fetch #2 held open), then straight back to '' (fetch #3).
+    let releaseSecond!: (docs: unknown[]) => void;
+    h.pending = new Promise<unknown[]>((res) => {
+      releaseSecond = res;
+    });
+    fireEvent.change(screen.getByLabelText('Category'), { target: { value: 'boxes' } });
+    // Let fetch #2 actually issue and claim its held promise — the mock has a
+    // single pending slot, so overlapping fetches must be staged.
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    let releaseThird!: (docs: unknown[]) => void;
+    h.pending = new Promise<unknown[]>((res) => {
+      releaseThird = res;
+    });
+    fireEvent.change(screen.getByLabelText('Category'), { target: { value: '' } });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    // Back on the ORIGINAL category, but its reset has not landed: the
+    // cursor is nulled, so Load more must not be offered.
+    expect(screen.queryByText('Load more')).toBeNull();
+
+    releaseSecond(asDocs([taskDoc('b0', { category: 'boxes' })]));
+    releaseThird(asDocs(Array.from({ length: BOARD_PAGE_SIZE }, (_, i) => taskDoc(`c${i}`))));
+    await screen.findByText('Task c0');
+    expect(screen.getByText('Load more')).toBeInTheDocument();
+    expect(screen.queryByText('Task b0')).toBeNull();
+  });
+
   // The generation guard: a superseded fetch that resolves LAST must perform
   // none of its writes. Without it the late response wins — it would restore
   // the old category's rows and, worse, leave `cursorRef` pointing at that
