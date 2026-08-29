@@ -1,4 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
+import { cleanup } from '@testing-library/react';
 import { readFileSync } from 'node:fs';
 import { renderWithProviders, i18n } from '@/__tests__/test-utils';
 import { PrivacyPage, TermsPage } from '@ejm/shared-ui';
@@ -47,6 +48,16 @@ interface ParsedSection {
  * earlier version of this guard skipped it and passed against a deleted bullet.
  */
 function joinLiterals(chunk: string): string {
+  // Only single-quoted literals are recognised. A future edit reaching for a
+  // double-quoted or template literal would be silently skipped, truncating
+  // that section on both sides and weakening every comparison below without
+  // failing anything — so refuse to parse instead of quietly under-reporting.
+  const body = chunk.slice(chunk.indexOf(':') + 1);
+  const withoutSingles = body.replace(/'(?:[^'\\]|\\.)*'/g, '');
+  expect({ unsupportedLiteral: /["`]/.test(withoutSingles) }).toEqual({
+    unsupportedLiteral: false,
+  });
+
   return [...chunk.matchAll(/'((?:[^'\\]|\\.)*)'/g)]
     .map((m) => m[1])
     .join('')
@@ -226,13 +237,53 @@ describe('shared legal copy — the address, and who it reaches (PR #412 review)
 
     expect(text).toContain('The other party to an engagement you accept');
     // Both halves of the two-way reveal.
-    expect(text).toContain("the family's address and its parents' names, email and phone");
-    expect(text).toContain("the service provider's name, email and phone");
+    expect(text).toContain(
+      "the family's address and its parents' names, email, phone and WhatsApp number",
+    );
+    expect(text).toContain(
+      "the service provider's name, email, phone and WhatsApp number",
+    );
     // Decision 16 holds for sync-do only — sit's appointment doc really does
     // carry `address` (packages/sit-core/src/types/appointment.ts:78), so the
     // "served live, never stored" claim must not be stated suite-wide.
     expect(text).toContain('never stored on the offer');
     expect(text).toContain('recorded on the appointment itself');
+  });
+
+  it('states the real bound on the contact reveal, not "once the engagement is over"', async () => {
+    // getAssignedContact.ts:104 admits `assigned` OR `completed`; only the
+    // cancelled branch is time-bounded (DO_CONTACT_GRACE_DAYS = 7). The reveal
+    // therefore keeps working on a completed task until the 180-day sweep.
+    await i18n.changeLanguage('en');
+    renderWithProviders(<PrivacyPage brand="Sync/Do" supportEmail="help@example.com" />);
+    const text = bodyText();
+
+    expect(text).toContain('stays available while the task is assigned and after it is completed');
+    expect(text).not.toContain('stops being available once the engagement is over');
+  });
+
+  it('scopes the booking-note rule per app, and lists pending requests as unbounded', async () => {
+    // The "left every screen" rule is sit's note redaction. Study's session
+    // notes are fields on the session and leave only with it; a PENDING sit
+    // appointment is never redacted at all (cleanupOldData:529-534).
+    await i18n.changeLanguage('en');
+    renderWithProviders(<PrivacyPage brand="Sync/Study" supportEmail="help@example.com" />);
+    const text = bodyText();
+
+    expect(text).toContain('On Sync/Study, session notes are part of the session record');
+    expect(text).toContain('a pending babysitting request and any note written on it');
+  });
+
+  it('does not claim photos are unreachable by URL, only that the links are short-lived', async () => {
+    // getTaskPhotoUrl.ts:15 issues 15-minute signed URLs, which are
+    // unauthenticated for their TTL — "never served by a public URL" overstated it.
+    await i18n.changeLanguage('en');
+    renderWithProviders(<PrivacyPage brand="Sync/Do" supportEmail="help@example.com" />);
+    const text = bodyText();
+
+    expect(text).toContain('never given a permanent public address');
+    expect(text).toContain('short-lived links, valid for fifteen minutes');
+    expect(text).not.toContain('never served by a public URL');
   });
 
   it('does not overstate the helper retention bound (EN + FR)', async () => {
@@ -244,6 +295,11 @@ describe('shared legal copy — the address, and who it reaches (PR #412 review)
     expect(text).not.toContain('at the latest');
     expect(text).toContain('If a task is assigned but neither side ever closes it');
 
+    // Two renders in one test: without this, bodyText() below spans BOTH the
+    // EN and FR DOM and the negative assertions would pass on the EN copy
+    // still mounted. The global afterEach(cleanup) only covers bleed BETWEEN
+    // tests (cf. CoParentSettings.test.tsx:119,156).
+    cleanup();
     await i18n.changeLanguage('fr');
     renderWithProviders(<PrivacyPage brand="Sync/Do" supportEmail="help@example.com" />);
     text = bodyText();
@@ -296,7 +352,7 @@ describe('shared legal copy — the +1 helper (sync-do §11.3)', () => {
     expect(text).toContain('10. People Named by Others');
     expect(text).toContain('first name, last name and age');
     // The helper has no account, so no in-app rights tool reaches them.
-    expect(text).toContain('has no account on Sync/Do');
+    expect(text).toContain('has no Sync account');
     // §11.3: recorded on the OFFER, never copied onto the task.
     expect(text).toContain('stored on the offer only');
     expect(text).toContain('never appear on the task board');
@@ -367,7 +423,14 @@ describe('shared legal copy — EN/FR parity mechanism (PR #59 design)', () => {
     '%s: every section carries all four locale fields, numbered in step',
     (page) => {
       const sections = sectionsOf(page);
-      expect(sections.length).toBeGreaterThan(0);
+      // Pin the COUNT, not just "> 0". The copy is dense with "see section N"
+      // cross-references and §10 was inserted mid-document, so a section
+      // deleted from both locales would otherwise leave every other
+      // assertion green while silently breaking those references.
+      expect({ page, count: sections.length }).toEqual({
+        page,
+        count: page === 'PrivacyPage' ? 16 : 17,
+      });
 
       sections.forEach((section, i) => {
         const n = String(i + 1);
@@ -376,6 +439,33 @@ describe('shared legal copy — EN/FR parity mechanism (PR #59 design)', () => {
         expect(section.en.length).toBeGreaterThan(0);
         expect(section.fr.length).toBeGreaterThan(0);
       });
+    },
+  );
+
+  it.each(['PrivacyPage', 'TermsPage'] as const)(
+    '%s: every "see section N" cross-reference points at a section that exists',
+    (page) => {
+      // This PR inserted Privacy §10 and shifted §10–15 to §11–16 while
+      // threading cross-references through the copy, so a future insert is
+      // exactly the edit that silently breaks them.
+      const sections = sectionsOf(page);
+      const dangling: string[] = [];
+
+      sections.forEach((section, i) => {
+        for (const [locale, body] of [
+          ['en', section.en],
+          ['fr', section.fr],
+        ] as const) {
+          for (const m of body.matchAll(/section (\d+)/gi)) {
+            const target = Number(m[1]);
+            if (target < 1 || target > sections.length) {
+              dangling.push(`§${i + 1} (${locale}) → section ${target}`);
+            }
+          }
+        }
+      });
+
+      expect(dangling).toEqual([]);
     },
   );
 
