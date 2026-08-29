@@ -1,9 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import {
   resolveEmulatorConfig,
+  resolveNodeEmulatorConfig,
   DEFAULT_EMULATOR_HOST,
   DEFAULT_EMULATOR_PORTS,
   MAX_EMULATOR_LANE,
+  NODE_EMULATOR_ENV_PREFIX,
+  NODE_EMULATOR_LANE_ALIASES,
+  VITE_EMULATOR_ENV_PREFIX,
 } from '../emulatorConfig.js';
 
 describe('resolveEmulatorConfig', () => {
@@ -144,6 +148,170 @@ describe('resolveEmulatorConfig', () => {
       ['VITE_EMULATOR_STORAGE_PORT', '-1'],
     ])('%s=%s', (key, value) => {
       expect(() => resolveEmulatorConfig({ [key]: value })).toThrow(key);
+    });
+  });
+
+  describe('prefix option', () => {
+    it('defaults to the Vite prefix', () => {
+      expect(VITE_EMULATOR_ENV_PREFIX).toBe('VITE_EMULATOR_');
+      expect(resolveEmulatorConfig({ VITE_EMULATOR_LANE: '3' })).toEqual(
+        resolveEmulatorConfig({ VITE_EMULATOR_LANE: '3' }, { prefix: 'VITE_EMULATOR_' }),
+      );
+    });
+
+    it('reads a custom prefix and ignores the other one', () => {
+      const config = resolveEmulatorConfig(
+        { EMULATOR_LANE: '3', VITE_EMULATOR_LANE: '2' },
+        { prefix: 'EMULATOR_' },
+      );
+      expect(config.lane).toBe(3);
+      expect(config.firestorePort).toBe(28080);
+    });
+
+    it('honors defaultHost when no host var is set', () => {
+      const config = resolveEmulatorConfig({}, { defaultHost: '127.0.0.1' });
+      expect(config.host).toBe('127.0.0.1');
+      expect(config.authUrl).toBe('http://127.0.0.1:9099');
+    });
+
+    it('the host var still beats defaultHost', () => {
+      const config = resolveEmulatorConfig(
+        { VITE_EMULATOR_HOST: 'example.test' },
+        { defaultHost: '127.0.0.1' },
+      );
+      expect(config.host).toBe('example.test');
+    });
+  });
+});
+
+describe('resolveNodeEmulatorConfig (issue #376: lane-aware seed scripts)', () => {
+  describe('defaults (seeding must not change for anyone who sets nothing)', () => {
+    // These are the literals seed-admin.cjs and seed-test-data.cjs hardcoded
+    // before #376. If this test needs updating, `pnpm seed:admin` just changed
+    // which stack it writes to — which is the whole hazard.
+    it('seed-admin.cjs default target is still localhost:8080 / localhost:9099', () => {
+      const emulator = resolveNodeEmulatorConfig({}, { defaultHost: 'localhost' });
+      expect(`${emulator.host}:${emulator.firestorePort}`).toBe('localhost:8080');
+      expect(`${emulator.host}:${emulator.authPort}`).toBe('localhost:9099');
+    });
+
+    it('seed-test-data.cjs default target is still 127.0.0.1:8080 / 127.0.0.1:9099', () => {
+      const emulator = resolveNodeEmulatorConfig({}, { defaultHost: '127.0.0.1' });
+      expect(`${emulator.host}:${emulator.firestorePort}`).toBe('127.0.0.1:8080');
+      expect(`${emulator.host}:${emulator.authPort}`).toBe('127.0.0.1:9099');
+    });
+
+    it('with no defaultHost falls back to the shared default host', () => {
+      expect(resolveNodeEmulatorConfig().host).toBe(DEFAULT_EMULATOR_HOST);
+      expect(resolveNodeEmulatorConfig()).toEqual(resolveEmulatorConfig());
+    });
+
+    it('a process.env full of unrelated vars changes nothing', () => {
+      const config = resolveNodeEmulatorConfig({
+        PATH: '/usr/bin',
+        HOME: '/home/someone',
+        SEED_PROJECT_ID: 'demo-test',
+        FIRESTORE_EMULATOR_HOST: 'localhost:8080',
+      });
+      expect(config).toEqual(resolveNodeEmulatorConfig());
+    });
+  });
+
+  describe('lane selection', () => {
+    it('uses the plain EMULATOR_ prefix, not VITE_', () => {
+      expect(NODE_EMULATOR_ENV_PREFIX).toBe('EMULATOR_');
+    });
+
+    // Same table as the browser resolver's, asserted through the node entry
+    // point: the seeder and the app must agree on where lane N is, or seeding
+    // lane 3 while the browser reads lane 3 quietly fails.
+    it.each([
+      [1, { auth: 9099, firestore: 8080, functions: 5001, storage: 9199 }],
+      [2, { auth: 19099, firestore: 18080, functions: 15001, storage: 19199 }],
+      [3, { auth: 29099, firestore: 28080, functions: 25001, storage: 29199 }],
+      [4, { auth: 39099, firestore: 38080, functions: 35001, storage: 39199 }],
+    ])('EMULATOR_LANE=%i matches firebase.laneN.json', (lane, ports) => {
+      const config = resolveNodeEmulatorConfig({ EMULATOR_LANE: String(lane) });
+      expect(config.lane).toBe(lane);
+      expect(config.authPort).toBe(ports.auth);
+      expect(config.firestorePort).toBe(ports.firestore);
+      expect(config.functionsPort).toBe(ports.functions);
+      expect(config.storagePort).toBe(ports.storage);
+      // ...and identical to what the web app resolves for the same lane.
+      expect(config).toEqual(resolveEmulatorConfig({ VITE_EMULATOR_LANE: String(lane) }));
+    });
+
+    it.each(NODE_EMULATOR_LANE_ALIASES)('accepts %s as the lane var', (alias) => {
+      const config = resolveNodeEmulatorConfig({ [alias]: '3' });
+      expect(config.lane).toBe(3);
+      expect(config.firestorePort).toBe(28080);
+    });
+
+    it('agreeing lane vars are fine', () => {
+      const config = resolveNodeEmulatorConfig({ EMULATOR_LANE: '4', LANE: '4', E2E_LANE: '4' });
+      expect(config.lane).toBe(4);
+    });
+
+    it('disagreeing lane vars throw rather than silently picking one', () => {
+      expect(() => resolveNodeEmulatorConfig({ EMULATOR_LANE: '3', LANE: '4' })).toThrow(
+        /different lanes/,
+      );
+      expect(() => resolveNodeEmulatorConfig({ LANE: '2', E2E_LANE: '3' })).toThrow(
+        /different lanes/,
+      );
+    });
+
+    it('an explicit port var beats the lane-derived port', () => {
+      const config = resolveNodeEmulatorConfig({
+        LANE: '3',
+        EMULATOR_FIRESTORE_PORT: '28085',
+      });
+      expect(config.firestorePort).toBe(28085);
+      expect(config.authPort).toBe(29099);
+      expect(config.functionsPort).toBe(25001);
+      expect(config.storagePort).toBe(29199);
+    });
+
+    it('honors EMULATOR_HOST over the caller default', () => {
+      const config = resolveNodeEmulatorConfig(
+        { EMULATOR_HOST: '127.0.0.1', LANE: '3' },
+        { defaultHost: 'localhost' },
+      );
+      expect(config.host).toBe('127.0.0.1');
+      expect(config.authUrl).toBe('http://127.0.0.1:29099');
+    });
+  });
+
+  describe('the two namespaces do not leak into each other', () => {
+    it('a VITE_ var in the environment does not move the seeder', () => {
+      const config = resolveNodeEmulatorConfig({
+        VITE_EMULATOR_LANE: '3',
+        VITE_EMULATOR_HOST: 'example.test',
+        VITE_EMULATOR_FIRESTORE_PORT: '28080',
+      });
+      expect(config).toEqual(resolveNodeEmulatorConfig());
+    });
+
+    it('a shell LANE does not move a browser build', () => {
+      expect(resolveEmulatorConfig({ LANE: '3', EMULATOR_LANE: '3' })).toEqual(
+        resolveEmulatorConfig(),
+      );
+    });
+  });
+
+  describe('malformed values throw rather than silently seeding lane 1', () => {
+    it.each([
+      ['EMULATOR_LANE', 'three'],
+      ['EMULATOR_LANE', '0'],
+      ['EMULATOR_LANE', String(MAX_EMULATOR_LANE + 1)],
+      ['LANE', 'lane3'],
+      ['E2E_LANE', '9'],
+      ['EMULATOR_AUTH_PORT', 'nine-thousand'],
+      ['EMULATOR_FIRESTORE_PORT', '8080abc'],
+      ['EMULATOR_FUNCTIONS_PORT', '0'],
+      ['EMULATOR_STORAGE_PORT', '70000'],
+    ])('%s=%s', (key, value) => {
+      expect(() => resolveNodeEmulatorConfig({ [key]: value })).toThrow(key);
     });
   });
 });
