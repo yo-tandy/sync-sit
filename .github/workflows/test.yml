@@ -73,9 +73,10 @@ jobs:
   # to `src/*.ts`, so `tsc` reads sources directly and a fresh checkout needs no
   # `dist`. Verified by running `pnpm -r typecheck` green with no dist present.
   #
-  # SCOPE, precisely: all 12 workspace projects now define `typecheck` (`tests`
+  # SCOPE, precisely: every workspace project now defines `typecheck` (`tests`
   # had no such script until this change, so `pnpm -r` silently skipped the
-  # integration suite entirely). Two gaps remain, neither a regression here:
+  # integration suite entirely; release-workflow.test.ts pins that they all
+  # still do). Two gaps remain, neither a regression here:
   #   - the ~250 test files under apps/{web,study-web,do-web}/src, which their
   #     tsconfig.app.json excludes. Bringing them in needs ~424 bare `vi.fn()`
   #     mocks across 145 files retyped first — issue #393.
