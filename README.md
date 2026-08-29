@@ -215,10 +215,22 @@ The cross-app switch target is configurable (defaults to the production URLs bak
 
 ## Deployment
 
-Merges to `main` auto-deploy to production via GitHub Actions
-(`firebase-hosting-merge.yml`): Firestore rules + indexes, Storage rules,
-hosting (all three sites — sit, study, do), and functions (both codebases). Manual full deploy, if
-ever needed:
+Production ships on a **tag**, not on a merge (issue #353). Merging to `main`
+runs the test suite and deploys nothing; pushing a `v*` tag runs
+`release.yml`, which deploys Firestore rules + indexes, Storage rules, hosting
+(all three sites — sit, study, do), and functions (both codebases). All three
+apps release together from one tag.
+
+```bash
+git tag -a v1.4.0 -m "co-parent move, parent landing pages"
+git push origin v1.4.0
+```
+
+Rollback is redeploying an earlier tag: **Actions → Release to production →
+Run workflow →** enter the tag. See [docs/releasing.md](docs/releasing.md) for
+the full process, including the expand/contract rule for database migrations.
+
+Manual full deploy, if ever needed:
 
 ```bash
 # Build and deploy everything

