@@ -330,7 +330,11 @@ export function TutorEnrollment() {
             ejemEmail={ejemEmail}
             onVerify={async (code) => {
               const verifyFn = httpsCallable(functions, 'verifyCode');
-              await verifyFn({ email: ejemEmail, code });
+              // enrollTutor requires an EJM-class code (issue #322); say so
+              // here too, so a code minted through the any-domain parent
+              // callable fails at this step instead of at the end of the
+              // wizard. UX only — enrollTutor asserts it server-side.
+              await verifyFn({ email: ejemEmail, code, requireIdentityClass: 'ejm' });
               handleCodeVerified(code);
             }}
             onResend={async () => {
