@@ -19,10 +19,17 @@ function branchContaining(path: string): string[] {
   return hit;
 }
 
-describe('do-web router — doer portal branch (plan §13 PR8)', () => {
-  it('registers the five doer routes together behind one guarded branch, /home the board first among them', () => {
+describe('do-web router — doer portal branch (plan §13 PR8, §9.2 at PR11)', () => {
+  it('registers the six doer routes together behind one guarded branch, /home the board first among them', () => {
     const doerPaths = branchContaining('/home');
-    for (const p of ['/home', '/tasks/:taskId', '/tasks/:taskId/offer', '/offers', '/work']) {
+    for (const p of [
+      '/home',
+      '/tasks/:taskId',
+      '/tasks/:taskId/offer',
+      '/offers',
+      '/work',
+      '/endorsements',
+    ]) {
       expect(doerPaths).toContain(p);
     }
   });
@@ -35,10 +42,13 @@ describe('do-web router — doer portal branch (plan §13 PR8)', () => {
     expect(branchContaining('/login')).not.toContain('/offers');
   });
 
-  it('registers no "my endorsements" route — that surface is PR11, not PR8', () => {
-    const all = (router.routes as RouteNode[]).flatMap((b) =>
-      (b.children ?? []).map((c) => c.path ?? ''),
-    );
-    expect(all.some((p) => /endorse/i.test(p))).toBe(false);
+  // PR8's placeholder pinned this route ABSENT ("that surface is PR11").
+  // PR11 is here: it must sit inside the DOER-guarded branch, and nowhere
+  // else — an endorsement-management surface reachable from the public
+  // branch would let anyone load it.
+  it('registers "my endorsements" in the doer branch only (§9.2, PR11)', () => {
+    expect(branchContaining('/endorsements')).toContain('/home');
+    expect(branchContaining('/login')).not.toContain('/endorsements');
+    expect(branchContaining('/family')).not.toContain('/endorsements');
   });
 });

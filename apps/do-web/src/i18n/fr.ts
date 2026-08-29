@@ -2,6 +2,7 @@ export default {
   common: {
     back: 'Retour',
     continue: 'Continuer',
+    done: 'Terminé',
     email: 'Email',
     password: 'Mot de passe',
     loading: 'Chargement...',
@@ -372,6 +373,29 @@ export default {
       cancelError: "Impossible d'annuler la tâche. Veuillez réessayer.",
       completedBanner: 'Cette tâche est terminée.',
       cancelledBanner: 'Cette tâche a été annulée.',
+      endorseTitle: 'Recommander {{name}}',
+      endorseHint: "Quelques mots sur la façon dont cela s'est passé. Les étudiants gardent leurs recommandations sur Sync/Do : une bonne recommandation compte vraiment.",
+      endorseCta: 'Écrire une recommandation',
+    },
+
+    /** Le formulaire de recommandation du §9.1 (décision 12). */
+    endorse: {
+      title: 'Recommander {{name}}',
+      intro: "Dites aux autres familles comment cela s'est passé. Votre recommandation reste privée tant que l'étudiant(e) ne l'a pas acceptée — elle apparaît ensuite avec ses offres.",
+      textLabel: 'Votre recommandation',
+      textPlaceholder: "Qu'ont-ils fait, et comment cela s'est-il passé ?",
+      refNameLabel: 'Votre nom, tel que les familles le verront',
+      submit: 'Envoyer la recommandation',
+      submitting: 'Envoi...',
+      successTitle: 'Recommandation envoyée',
+      successBody: "{{name}} devra l'accepter. Une fois acceptée, les familles la verront avec ses offres.",
+      error: "Impossible d'envoyer la recommandation. Veuillez réessayer.",
+      errorTooShort: 'Merci d\'écrire au moins {{min}} caractères.',
+      errorNameRequired: 'Merci d\'indiquer le nom que les familles verront.',
+      errorAlreadyExists: 'Votre famille a déjà recommandé cet(te) étudiant(e).',
+      errorNoCompletedTask: "Vous pouvez recommander un(e) étudiant(e) une fois qu'une tâche que vous lui avez confiée est terminée.",
+      errorPermission: "Vous ne pouvez pas recommander cet(te) étudiant(e).",
+      errorInvalid: 'Vérifiez ce que vous avez écrit et réessayez.',
     },
   },
 
@@ -381,6 +405,27 @@ export default {
       board: 'Tableau',
       myOffers: 'Mes offres',
       myWork: 'Mes tâches',
+      myEndorsements: 'Mes recommandations',
+    },
+
+    /** La surface de gestion des recommandations du §9.2 (décision 12). */
+    endorsements: {
+      title: 'Mes recommandations',
+      intro: "Les familles peuvent vous recommander après une tâche terminée. Rien n'apparaît avec vos offres tant que vous ne l'avez pas accepté.",
+      empty: 'Aucune recommandation pour le moment. Terminez une tâche et la famille pourra vous en écrire une.',
+      loadError: 'Impossible de charger vos recommandations. Veuillez réessayer.',
+      retry: 'Réessayer',
+      actionError: "Impossible d'enregistrer votre réponse. Veuillez réessayer.",
+      pendingTitle: 'En attente de votre réponse',
+      pendingHint: 'Acceptez pour l\'afficher avec vos offres, ou refusez pour la supprimer. Un refus est définitif.',
+      publishedTitle: 'Affichées avec vos offres',
+      publishedHint: 'Voici ce que les familles voient sur vos offres.',
+      accept: 'Accepter',
+      decline: 'Refuser',
+      declineConfirmTitle: 'Refuser cette recommandation ?',
+      declineConfirmBody: 'Elle sera supprimée et les familles ne la verront jamais. Cette action est irréversible.',
+      declineConfirmCta: 'Oui, la refuser',
+      anonymous: 'Une famille',
     },
 
     board: {

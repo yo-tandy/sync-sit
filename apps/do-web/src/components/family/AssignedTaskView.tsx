@@ -17,6 +17,12 @@ interface AssignedTaskViewProps {
    * and the checklist: the details stay reachable past acceptance — the
    * coordination phase is when they matter most (PR #331 round 2). */
   details?: React.ReactNode;
+  /**
+   * Open the §9.1 endorsement form. Present only while endorsing is still
+   * possible: the page passes null once the family has endorsed this
+   * student (or once the callable has told us they already had).
+   */
+  onEndorse?: (() => void) | null;
 }
 
 /**
@@ -33,9 +39,13 @@ interface AssignedTaskViewProps {
  *   cards, no grace note;
  * - the §5 considerations as a checklist (surface 3 of 3) — local ticks
  *   only, a conversation aid, nothing persisted;
- * - mark-done and cancel (the confirm dialogs live in the page).
+ * - mark-done and cancel (the confirm dialogs live in the page);
+ * - once the task is COMPLETED, the standing endorsement CTA (§9.1, PR11).
+ *   The prompt right after completion is the page's — this is the way back
+ *   to it for a family that dismissed it, so the six-month completed-task
+ *   retention (decision 19) is the real deadline rather than one dialog.
  */
-export function AssignedTaskView({ task, doerFirstName, onMarkDone, onCancel, busy, details }: AssignedTaskViewProps) {
+export function AssignedTaskView({ task, doerFirstName, onMarkDone, onCancel, busy, details, onEndorse }: AssignedTaskViewProps) {
   const { t } = useTranslation();
   const considerations = useConsiderations(task.subCategory);
   const [checked, setChecked] = useState<Record<number, boolean>>({});
@@ -144,6 +154,18 @@ export function AssignedTaskView({ task, doerFirstName, onMarkDone, onCancel, bu
               />
             ))}
           </div>
+        </Card>
+      )}
+
+      {completed && hasAssignment && onEndorse && (
+        <Card className="mb-4">
+          <h3 className="mb-1 text-sm font-semibold text-gray-900">
+            {t('family.assigned.endorseTitle', { name: doerFirstName ?? '' })}
+          </h3>
+          <p className="mb-3 text-xs text-gray-500">{t('family.assigned.endorseHint')}</p>
+          <Button size="sm" variant="outline" fullWidth={false} onClick={onEndorse}>
+            {t('family.assigned.endorseCta')}
+          </Button>
         </Card>
       )}
 

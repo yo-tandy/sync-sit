@@ -4,6 +4,9 @@ import {
   DO_CADENCE_NOTE_MAX,
   DO_CADENCE_TIME_HINT_MAX,
   DO_DOER_BIO_MAX,
+  DO_ENDORSEMENT_REF_NAME_MAX,
+  DO_ENDORSEMENT_TEXT_MAX,
+  DO_ENDORSEMENT_TEXT_MIN,
   DO_OFFER_MESSAGE_MAX,
   DO_PRICE_MAX,
   DO_PRICE_MIN,
@@ -442,4 +445,43 @@ export function validateDoerDefaultRate(rate: unknown): string | null {
   return err === null
     ? null
     : `defaultRate must be null or a number between ${DO_PRICE_MIN} and ${DO_PRICE_MAX}`;
+}
+
+// ── Endorsements (decision 12, §9.1 — doSubmitEndorsement) ──
+
+/**
+ * The endorsement body. Trim-then-measure on BOTH bounds: whitespace must
+ * neither satisfy the floor nor breach the ceiling, so what the validator
+ * measures is exactly what the callable stores (it writes `.trim()`ed text).
+ */
+export function validateEndorsementText(text: unknown): string | null {
+  if (typeof text !== 'string') {
+    return 'referenceText is required';
+  }
+  const trimmed = text.trim();
+  if (trimmed.length < DO_ENDORSEMENT_TEXT_MIN) {
+    return `referenceText must be at least ${DO_ENDORSEMENT_TEXT_MIN} characters`;
+  }
+  if (trimmed.length > DO_ENDORSEMENT_TEXT_MAX) {
+    return `referenceText must be at most ${DO_ENDORSEMENT_TEXT_MAX} characters`;
+  }
+  return null;
+}
+
+/** The submitting parent's own display name on the endorsement. */
+export function validateEndorsementRefName(refName: unknown): string | null {
+  if (typeof refName !== 'string' || refName.trim().length === 0) {
+    return 'refName is required';
+  }
+  if (refName.trim().length > DO_ENDORSEMENT_REF_NAME_MAX) {
+    return `refName must be at most ${DO_ENDORSEMENT_REF_NAME_MAX} characters`;
+  }
+  return null;
+}
+
+/** The doer's response to a pending endorsement (§9.2). */
+export type DoEndorsementAction = 'accept' | 'decline';
+
+export function isEndorsementAction(action: unknown): action is DoEndorsementAction {
+  return action === 'accept' || action === 'decline';
 }

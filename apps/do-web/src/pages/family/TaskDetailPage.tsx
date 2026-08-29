@@ -12,6 +12,7 @@ import { formatTimingSummary } from '@/lib/taskDisplay';
 import { OfferCard } from '@/components/family/OfferCard';
 import { AssignedTaskView } from '@/components/family/AssignedTaskView';
 import { TaskPhotos } from '@/components/family/TaskPhotos';
+import { EndorseDoerDialog } from '@/components/family/EndorseDoerDialog';
 
 /**
  * The family's task detail (plan §9.1): for an OPEN task, the offer list —
@@ -29,6 +30,14 @@ import { TaskPhotos } from '@/components/family/TaskPhotos';
  * declared) and the decision-15 liability line — §11.5: the acceptance
  * dialog repeats it "at the moment money and access are actually being
  * committed".
+ *
+ * COMPLETION PROMPTS FOR AN ENDORSEMENT (§9.1, PR11). The family's mark-done
+ * is what MAKES the task completed, so it is the one moment we know both
+ * that the work is finished and that the family is right here — the prompt
+ * opens on that callable's success. It is a prompt, not a gate: dismissing
+ * it costs nothing, and AssignedTaskView keeps a standing CTA on the
+ * completed task so the six-month retention window (decision 19), not one
+ * dialog, is the deadline.
  */
 export function TaskDetailPage() {
   const { t } = useTranslation();
@@ -50,6 +59,12 @@ export function TaskDetailPage() {
   const [declineTarget, setDeclineTarget] = useState<OfferDoc | null>(null);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [markDoneOpen, setMarkDoneOpen] = useState(false);
+  const [endorseOpen, setEndorseOpen] = useState(false);
+  // Set once this family has endorsed this student — on success, and also on
+  // `already-exists`, which means an earlier submission (possibly the
+  // co-parent's) already stands. Hides the CTA without spending a
+  // `references` read on every completed task the family opens.
+  const [endorsed, setEndorsed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -248,6 +263,7 @@ export function TaskDetailPage() {
               onMarkDone={() => setMarkDoneOpen(true)}
               onCancel={() => setCancelOpen(true)}
               busy={busy}
+              onEndorse={acceptedOffer && !endorsed ? () => setEndorseOpen(true) : null}
               // Description + photos stay available past acceptance — the
               // coordination phase is when the details matter most
               // (PR #331 round 2). Slotted between contact and checklist.
@@ -378,6 +394,16 @@ export function TaskDetailPage() {
         </Dialog>
       )}
 
+      {endorseOpen && acceptedOffer && (
+        <EndorseDoerDialog
+          doerUserId={acceptedOffer.doerUserId}
+          doerName={acceptedOffer.doerFirstName}
+          defaultRefName={`${userDoc?.firstName ?? ''} ${userDoc?.lastName ?? ''}`.trim()}
+          onClose={() => setEndorseOpen(false)}
+          onEndorsed={() => setEndorsed(true)}
+        />
+      )}
+
       {markDoneOpen && (
         <Dialog open onClose={() => setMarkDoneOpen(false)} ariaLabel={t('family.assigned.markDoneConfirmTitle')}>
           <h3 className="mb-2 text-lg font-bold">{t('family.assigned.markDoneConfirmTitle')}</h3>
@@ -388,9 +414,13 @@ export function TaskDetailPage() {
               onClick={() => {
                 // Close before dispatching — see the accept dialog.
                 setMarkDoneOpen(false);
-                void runAction('doMarkTaskDone', { taskId: task.taskId }, 'family.assigned.markDoneError', () =>
-                  toast(t('family.assigned.completedBanner')),
-                );
+                void runAction('doMarkTaskDone', { taskId: task.taskId }, 'family.assigned.markDoneError', () => {
+                  toast(t('family.assigned.completedBanner'));
+                  // The §9.1 prompt, on the one action that completes the
+                  // task. Only when there IS someone to endorse: a task
+                  // completed with no accepted offer has no doer.
+                  if (acceptedOffer && !endorsed) setEndorseOpen(true);
+                });
               }}
               className="flex-1"
             >

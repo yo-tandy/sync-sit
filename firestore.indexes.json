@@ -376,6 +376,14 @@
       ]
     },
     {
+      "collectionGroup": "references",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "doerUserId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "users",
       "queryScope": "COLLECTION",
       "fields": [

@@ -102,3 +102,19 @@ export const DO_CANCELLED_RETENTION_DAYS = 30;
  * own, §11.4) once `completedAt` is older than 6 months.
  */
 export const DO_COMPLETED_RETENTION_DAYS = 180;
+
+/**
+ * Endorsement free-text bounds (decision 12, §9.1). The floor mirrors
+ * study's zod gate exactly (`submitTutorEndorsementSchema`:
+ * `referenceText.trim().min(10)`) — "Great!" is not an endorsement — and
+ * the ceiling sits with the platform's other long free-text fields
+ * (`EndorseTutorDialog` caps its textarea at 1000).
+ */
+export const DO_ENDORSEMENT_TEXT_MIN = 10;
+export const DO_ENDORSEMENT_TEXT_MAX = 1000;
+
+/**
+ * The submitting parent's display name on the endorsement (study's
+ * `refName`, capped at the same 80 its dialog uses).
+ */
+export const DO_ENDORSEMENT_REF_NAME_MAX = 80;

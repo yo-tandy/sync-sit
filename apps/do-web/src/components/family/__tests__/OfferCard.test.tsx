@@ -113,6 +113,62 @@ describe('OfferCard endorsements', () => {
     expect(doLine.textContent).not.toContain('From Sync/');
   });
 
+  // PR11 verification: PR7 shipped this card with the do side ALWAYS empty
+  // (no DoerEndorsementDoc existed yet), so the do path had only ever been
+  // exercised as the zero case. This feeds a full DoerEndorsementDoc — the
+  // real shape doSubmitEndorsement writes — as the ONLY source, and pins
+  // that it renders, unlabeled, without the empty line.
+  it('populates from a real DoerEndorsementDoc with sit and study both empty', async () => {
+    h.results.set('doerUserId', [
+      {
+        referenceId: 'r1',
+        doerUserId: 'doer1',
+        appSource: 'do',
+        type: 'family_submitted',
+        status: 'approved',
+        submittedByUserId: 'p1',
+        submittedByFamilyId: 'fam1',
+        submittedByName: 'Marie Dupont',
+        refName: 'Marie',
+        referenceText: 'Assembled the PAX in an afternoon.',
+        category: 'ikea',
+        isEjmFamily: true,
+      },
+    ]);
+    renderWithProviders(<OfferCard offer={offer()} />);
+    await waitFor(() =>
+      expect(screen.getByText(/Assembled the PAX/)).toBeInTheDocument(),
+    );
+    // The empty line must be GONE — the starting state is not the steady one.
+    expect(screen.queryByText(/No endorsements yet/)).toBeNull();
+    // submittedByName wins over refName, and no origin label on do's own.
+    expect(screen.getByText('Marie Dupont')).toBeInTheDocument();
+    const line = screen.getByText(/Assembled the PAX/).closest('li')!;
+    expect(line.textContent).not.toContain('From Sync/');
+  });
+
+  // Every do endorsement the family reads here is `approved`; the doer's
+  // `private` and `removed` ones are excluded by the status constraint at
+  // the query, not by anything this component does. Pinned so a later
+  // refactor cannot start filtering client-side and quietly drop the
+  // constraint that makes the read provable at all.
+  it('renders whatever the status-constrained query returns, with no second client-side status filter', async () => {
+    h.results.set('doerUserId', [
+      { referenceText: 'Approved one', submittedByName: 'A', status: 'approved' },
+      { referenceText: 'Published one', submittedByName: 'B', status: 'published' },
+      // A row the real query could NEVER return. Asserting it renders reads
+      // oddly on purpose — it is the only fixture that can fail if someone
+      // adds a client-side `status in [approved, published]` filter, which is
+      // the regression this test names. Two public-status rows alone would
+      // stay green under exactly that filter (PR #352 round-1 review).
+      { referenceText: 'Private one', submittedByName: 'C', status: 'private' },
+    ]);
+    renderWithProviders(<OfferCard offer={offer()} />);
+    await waitFor(() => expect(screen.getByText(/Approved one/)).toBeInTheDocument());
+    expect(screen.getByText(/Published one/)).toBeInTheDocument();
+    expect(screen.getByText(/Private one/)).toBeInTheDocument();
+  });
+
   it('renders the starting-state line for a doer with no endorsements anywhere', async () => {
     renderWithProviders(<OfferCard offer={offer()} />);
     await waitFor(() =>

@@ -2,6 +2,7 @@ export default {
   common: {
     back: 'Back',
     continue: 'Continue',
+    done: 'Done',
     email: 'Email',
     password: 'Password',
     loading: 'Loading...',
@@ -372,6 +373,29 @@ export default {
       cancelError: 'Could not cancel the task. Please try again.',
       completedBanner: 'This task is completed.',
       cancelledBanner: 'This task was cancelled.',
+      endorseTitle: 'Endorse {{name}}',
+      endorseHint: 'A few words about how it went. Students carry endorsements with them across Sync/Do, so a good one really helps.',
+      endorseCta: 'Write an endorsement',
+    },
+
+    /** The §9.1 endorsement form (decision 12). */
+    endorse: {
+      title: 'Endorse {{name}}',
+      intro: 'Tell other families how it went. Your endorsement stays private until the student accepts it — then it appears with their offers.',
+      textLabel: 'Your endorsement',
+      textPlaceholder: 'What did they do, and how did it go?',
+      refNameLabel: 'Your name, as families will see it',
+      submit: 'Send endorsement',
+      submitting: 'Sending...',
+      successTitle: 'Endorsement sent',
+      successBody: '{{name}} will be asked to accept it. Once they do, families see it with their offers.',
+      error: 'Could not send the endorsement. Please try again.',
+      errorTooShort: 'Please write at least {{min}} characters.',
+      errorNameRequired: 'Please enter the name families should see.',
+      errorAlreadyExists: 'Your family has already endorsed this student.',
+      errorNoCompletedTask: 'You can endorse a student once a task you assigned them is completed.',
+      errorPermission: 'You are not able to endorse this student.',
+      errorInvalid: 'Please check what you wrote and try again.',
     },
   },
 
@@ -381,6 +405,27 @@ export default {
       board: 'Board',
       myOffers: 'My offers',
       myWork: 'My tasks',
+      myEndorsements: 'My endorsements',
+    },
+
+    /** §9.2's endorsement-management surface (decision 12). */
+    endorsements: {
+      title: 'My endorsements',
+      intro: 'Families can endorse you after a completed task. Nothing appears with your offers until you accept it.',
+      empty: 'No endorsements yet. Complete a task and the family can write you one.',
+      loadError: 'Could not load your endorsements. Please try again.',
+      retry: 'Try again',
+      actionError: 'Could not save your response. Please try again.',
+      pendingTitle: 'Waiting for you',
+      pendingHint: 'Accept to show it with your offers, or decline to remove it. Declining is permanent.',
+      publishedTitle: 'Shown with your offers',
+      publishedHint: 'This is what families see on your offer cards.',
+      accept: 'Accept',
+      decline: 'Decline',
+      declineConfirmTitle: 'Decline this endorsement?',
+      declineConfirmBody: 'It will be removed and families will never see it. This cannot be undone.',
+      declineConfirmCta: 'Yes, decline it',
+      anonymous: 'A family',
     },
 
     board: {

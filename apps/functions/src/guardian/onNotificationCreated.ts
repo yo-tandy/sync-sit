@@ -80,6 +80,16 @@ const EMAIL_PREF_CATEGORY: Record<string, 'newRequest' | 'confirmed' | 'cancelle
   //   parents (or, for `task_assigned`, to nobody — it has no sender since
   //   the round-1 dedupe), and a parent carries no `governedBy`, so neither
   //   can reach this map.
+  // - `doer_endorsement_received` (PR11): considered and left unmapped, to
+  //   match its two siblings across the platform — neither
+  //   `tutor_endorsement_received` nor sit's `reference_submitted` has an
+  //   entry, and an endorsement is not time-critical the way an approval
+  //   request or a cancellation is. The supervising parents still get the
+  //   push + in-app mirror, so they see that family-authored text about
+  //   their child is awaiting the child's accept/decline.
+  // - `doer_endorsement_published` / `doer_endorsement_declined`: addressed
+  //   to the SUBMITTING family's parents, who carry no `governedBy` — like
+  //   `task_offer_received`, they cannot reach this map at all.
 };
 
 /**

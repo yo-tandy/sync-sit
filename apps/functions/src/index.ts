@@ -113,6 +113,8 @@ export { doDecideOfferAsGuardian } from './do/decideOfferAsGuardian.js';
 export { doAcceptOffer } from './do/acceptOffer.js';
 export { doDeclineOffer } from './do/declineOffer.js';
 export { doGetAssignedContact } from './do/getAssignedContact.js';
+export { doSubmitEndorsement } from './do/submitEndorsement.js';
+export { doRespondToEndorsement } from './do/respondToEndorsement.js';
 export { doStripTaskPhoto } from './do/stripTaskPhoto.js';
 export { doGetOwnPhotoUrl } from './do/getOwnPhotoUrl.js';
 export { doGetTaskPhotoUrl } from './do/getTaskPhotoUrl.js';

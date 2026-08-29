@@ -14,6 +14,7 @@ import {
   MailIcon,
   LogOutIcon,
   NavTabs,
+  UsersIcon,
 } from '@ejm/shared-ui';
 import { AppSwitchMenuItem } from './AppSwitchMenuItem';
 
@@ -44,7 +45,13 @@ function MenuItem({ icon, label, to, onClick, onNavigate }: { icon: React.ReactN
  * primary destinations: the board (the app's home screen, §9.2), my
  * offers, and my tasks (assigned work). The burger carries the public
  * pages, the OUT-going app switch (plan §9.5's asymmetric shape) and
- * sign-out. "My endorsements" arrives at PR11 with its surface.
+ * sign-out.
+ *
+ * "My endorsements" (§9.2, PR11) sits in the BURGER, not in the tab bar:
+ * the three tabs are the app's daily loop (find work, track offers, do the
+ * work), and a fourth would crowd them for a surface visited when a
+ * notification says there is something to respond to — which deep-links
+ * straight to /endorsements anyway.
  */
 export function DoerAppBar() {
   const { t } = useTranslation();
@@ -89,6 +96,13 @@ export function DoerAppBar() {
           {primaryNav.map((item) => (
             <MenuItem key={item.to} icon={item.icon} label={item.label} to={item.to} onNavigate={() => setMenuOpen(false)} />
           ))}
+
+          <MenuItem
+            icon={<UsersIcon className="h-5 w-5" />}
+            label={t('doer.nav.myEndorsements')}
+            to="/endorsements"
+            onNavigate={() => setMenuOpen(false)}
+          />
 
           <div className="border-t border-gray-100" />
 

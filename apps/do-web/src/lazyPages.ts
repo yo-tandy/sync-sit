@@ -53,6 +53,9 @@ export const MyOffersPage = lazy(() =>
 export const MyWorkPage = lazy(() =>
   import('@/pages/doer/MyWorkPage').then((m) => ({ default: m.MyWorkPage })),
 );
+export const MyEndorsementsPage = lazy(() =>
+  import('@/pages/doer/MyEndorsementsPage').then((m) => ({ default: m.MyEndorsementsPage })),
+);
 
 // Family portal (plan §13 PR7)
 export const MyTasksPage = lazy(() =>

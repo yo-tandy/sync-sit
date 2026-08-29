@@ -12,11 +12,20 @@ import { renderWithProviders } from '@/__tests__/test-utils';
  *   doAcceptOffer call;
  * - decline per offer via doDeclineOffer;
  * - the assigned branch renders the AssignedTaskView (contact + checklist)
- *   and doMarkTaskDone completes from its dialog.
+ *   and doMarkTaskDone completes from its dialog;
+ * - the §9.1 post-completion endorsement PROMPT fires on that callable's
+ *   success, and the completed task keeps a standing CTA back to it.
  */
 
 const h = vi.hoisted(() => ({
-  auth: { userDoc: { uid: 'p1', profiles: { parent: { familyId: 'fam1' } } } as unknown },
+  auth: {
+    userDoc: {
+      uid: 'p1',
+      firstName: 'Marie',
+      lastName: 'Dupont',
+      profiles: { parent: { familyId: 'fam1' } },
+    } as unknown,
+  },
   offerQueries: [] as unknown[][],
   taskNext: null as null | ((snap: unknown) => void),
   offersNext: null as null | ((snap: unknown) => void),
@@ -316,5 +325,87 @@ describe('TaskDetailPage (assigned task)', () => {
     renderWithProviders(<TaskDetailPage />);
     pushTask(null);
     expect(screen.getByText('This task no longer exists.')).toBeInTheDocument();
+  });
+});
+
+// The §9.1 prompt (PR11). The family's mark-done is the one action that
+// COMPLETES the task, so it is the moment we know the work is finished and
+// the family is here — the prompt opens on its success, and never before.
+describe('TaskDetailPage — the post-completion endorsement prompt (§9.1)', () => {
+  function completeIt() {
+    fireEvent.click(screen.getByRole('button', { name: 'Mark as completed' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Yes, it is done' }));
+  }
+
+  it('opens the endorsement form once doMarkTaskDone resolves, prefilled for the assigned student', async () => {
+    renderWithProviders(<TaskDetailPage />);
+    pushTask(taskRow({ status: 'assigned', assignedUserId: 'doer1', assignedOfferId: 'o1' }));
+    pushOffers([offerRow('o1', { status: 'accepted' })]);
+
+    // Not before: the dialog must not be sitting there while the task is
+    // still assigned.
+    expect(screen.queryByText('Endorse Emma')).toBeNull();
+
+    completeIt();
+    await waitFor(() => expect(screen.getByText('Endorse Emma')).toBeInTheDocument());
+    expect(screen.getByLabelText('Your endorsement')).toBeInTheDocument();
+  });
+
+  it('does NOT open when the mark-done FAILS', async () => {
+    renderWithProviders(<TaskDetailPage />);
+    pushTask(taskRow({ status: 'assigned', assignedUserId: 'doer1', assignedOfferId: 'o1' }));
+    pushOffers([offerRow('o1', { status: 'accepted' })]);
+    h.callable.mockImplementation((name: string) =>
+      name === 'doMarkTaskDone'
+        ? Promise.reject(Object.assign(new Error('boom'), { code: 'functions/internal' }))
+        : Promise.resolve({ data: {} }),
+    );
+    completeIt();
+    await waitFor(() =>
+      expect(screen.getByText(/Could not complete the task/)).toBeInTheDocument(),
+    );
+    expect(screen.queryByText('Endorse Emma')).toBeNull();
+  });
+
+  // A task completed with nobody assigned has no one to endorse — the prompt
+  // would have no doerUserId to send.
+  it('does NOT open when there is no accepted offer', async () => {
+    renderWithProviders(<TaskDetailPage />);
+    pushTask(taskRow({ status: 'assigned', assignedUserId: 'doer1', assignedOfferId: 'o1' }));
+    pushOffers([]);
+    completeIt();
+    await waitFor(() =>
+      expect(h.callable).toHaveBeenCalledWith('doMarkTaskDone', { taskId: 'task1' }),
+    );
+    expect(screen.queryByLabelText('Your endorsement')).toBeNull();
+  });
+
+  // Dismissing the prompt costs nothing: the completed task keeps a standing
+  // CTA, so decision 19's six-month retention is the deadline, not a dialog.
+  it('leaves a standing CTA on the completed task, and hides it once endorsed', async () => {
+    renderWithProviders(<TaskDetailPage />);
+    pushTask(taskRow({ status: 'completed', assignedUserId: 'doer1', assignedOfferId: 'o1' }));
+    pushOffers([offerRow('o1', { status: 'accepted' })]);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Write an endorsement' }));
+    expect(screen.getByLabelText('Your endorsement')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Your endorsement'), {
+      target: { value: 'They assembled everything and cleaned up after.' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Send endorsement' }));
+    await waitFor(() =>
+      expect(h.callable).toHaveBeenCalledWith('doSubmitEndorsement', {
+        doerUserId: 'doer1',
+        referenceText: 'They assembled everything and cleaned up after.',
+        // Prefilled from the caller's own name — editable in the form.
+        refName: 'Marie Dupont',
+      }),
+    );
+    await waitFor(() => expect(screen.getByText('Endorsement sent')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    // Settled — the CTA is gone, so the family is not invited to endorse
+    // the same student twice.
+    expect(screen.queryByRole('button', { name: 'Write an endorsement' })).toBeNull();
   });
 });
