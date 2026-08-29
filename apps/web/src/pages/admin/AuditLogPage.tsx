@@ -59,6 +59,11 @@ export function AdminAuditLogPage() {
     { value: 'activate_user', label: 'activate_user' },
     { value: 'reset_password', label: 'reset_password' },
     { value: 'delete_appointment', label: 'delete_appointment' },
+    // `listAuditLogs` applies actionFilter as a server-side equality, so an
+    // action missing here shows in the unfiltered feed but cannot be
+    // filtered FOR — precisely what you want after a destructive,
+    // irreversible, file-cascading action (sync-do §13's audit coverage).
+    { value: 'do.admin_delete_task', label: 'do.admin_delete_task' },
     { value: 'update_holidays', label: 'update_holidays' },
     { value: 'admin_config_updated', label: t('admin.config.title') },
     { value: 'export_user_data', label: 'export_user_data' },

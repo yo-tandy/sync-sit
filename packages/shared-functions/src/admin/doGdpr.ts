@@ -260,6 +260,13 @@ export async function eraseDoUserData(
     ).values(),
   ) as FirebaseFirestore.QueryDocumentSnapshot[];
 
+  // A THIRD task-deletion path, and deliberately not `deleteTaskCascade`:
+  // `shared-functions` cannot import `apps/functions/src/do/taskAccess`, so
+  // the sibling-reference check does not run here. That is the correct
+  // outcome rather than a gap — a task created by the erased user may hold
+  // `{uid, photoId}` pairs belonging to the SURVIVING co-parent, whose
+  // objects step 3 must not touch; they simply become unreferenced and the
+  // sweep's 1-day orphan pass collects them.
   for (const taskDoc of tasksToDelete) {
     const offers = await db
       .collection(DO_OFFERS_COLLECTION)
@@ -370,13 +377,22 @@ export async function eraseDoUserData(
   stats.assignmentsCleared = survivingAssignments.length;
 
   // ── 3. Photo objects: both prefixes, wholesale ──
+  // `deleteFiles({ force: true })` rather than an awaited per-object loop:
+  // this is the first Storage work `deleteUser` does at all, and a sequential
+  // loop over a large `do-uploads` backlog (quarantine objects are only swept
+  // daily) is the slowest step in the callable — a timeout or a Storage 5xx
+  // here throws BEFORE the user doc and Auth account are deleted, leaving
+  // tasks and objects gone but the account intact and no audit entry written.
+  // `force` parallelises and continues past individual failures, shortening
+  // that window. The count comes from the preceding listing, which is the
+  // same number the per-object loop produced.
   const bucket = getStorage().bucket();
   for (const prefix of [DO_PHOTOS_PREFIX, DO_UPLOADS_PREFIX]) {
-    const [files] = await bucket.getFiles({ prefix: `${prefix}${targetUserId}/` });
-    for (const file of files) {
-      await file.delete({ ignoreNotFound: true });
-      stats.photoObjectsDeleted += 1;
-    }
+    const scoped = `${prefix}${targetUserId}/`;
+    const [files] = await bucket.getFiles({ prefix: scoped });
+    if (files.length === 0) continue;
+    await bucket.deleteFiles({ prefix: scoped, force: true });
+    stats.photoObjectsDeleted += files.length;
   }
 
   // ── 4. Dangling-reference scrub on the family's SURVIVING tasks ──
