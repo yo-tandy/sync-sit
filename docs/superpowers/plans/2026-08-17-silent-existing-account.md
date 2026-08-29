@@ -22,7 +22,8 @@
      - Copy: "Someone just tried to create a <Sync/Sit|Sync/Study> account with this email address, but you already have an account. If this was you, simply log in: <login URL>. Your account works on both Sync/Sit and Sync/Study — the same email and password sign you in to either app. If this wasn't you, you can safely ignore this email or contact us at support@sync-sit.com."
      - Login URLs: https://sync-sit.web.app/login / https://sync-study-app.web.app/login (the prod fallbacks of appSwitch.ts SIT_APP_URL/STUDY_APP_URL — verified; the bare sync-sit.com domain is not the hosting target).
 
-> **Superseded 2026-08-29 (plan §18.9 centralisation).** The sit login URL is
+> **Superseded 2026-08-29 (`docs/platform-plan.md` §8 centralisation).** The
+> sit login URL is
 > now built from `SIT_APP_URL`, which resolves to `https://sync-sit.com`. The
 > rationale recorded above — "the bare sync-sit.com domain is not the hosting
 > target" — is no longer true: the custom domain serves the SPA on `/`,

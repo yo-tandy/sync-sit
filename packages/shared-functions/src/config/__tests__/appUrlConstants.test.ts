@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 /**
- * The three app-host constants (sync-do plan §18.9).
+ * The three app-host constants (docs/platform-plan.md §8).
  *
  * Two properties matter and neither is visible by reading a call site:
  *
@@ -59,7 +59,8 @@ describe('app host constants', () => {
     // No LINK may point at production. The support ADDRESS
     // (support@sync-sit.com) legitimately remains: addresses are not
     // env-driven here, because moving them needs the new domain verified at
-    // Resend with SPF and DKIM or the mail lands in spam (plan §18.9, #156).
+    // Resend with SPF and DKIM or the mail lands in spam
+    // (docs/platform-plan.md §8, #156).
     // Asserting on the scheme is what keeps those two apart.
     expect(html).not.toContain('https://sync-sit.com');
     expect(html).not.toContain('https://sync-sit.web.app');

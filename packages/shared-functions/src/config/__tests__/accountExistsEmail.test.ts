@@ -3,8 +3,9 @@ import { buildAccountExistsEmail, normalizeAccountExistsApp, SIT_APP_URL } from 
 
 // Built from the constant, not a literal: the sit host moved from
 // sync-sit.web.app to the custom domain sync-sit.com when the three app-host
-// constants were centralised (plan §18.9). Both hosts serve; the custom domain
-// is canonical, and the functions were already emailing it while this table
+// constants were centralised (docs/platform-plan.md §8). Both hosts serve; the
+// custom domain is canonical, and the functions were already emailing it
+// while this table
 // named the other one. Asserting through the constant means the next domain
 // move doesn't reopen this file.
 
