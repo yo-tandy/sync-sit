@@ -6,7 +6,14 @@ import {
   getDb,
   getAdminAuth,
 } from '../../setup/emulator.js';
-import { seedTestData, seedAppointment, type SeedData } from '../../setup/seed.js';
+import {
+  seedTestData,
+  seedAppointment,
+  seedStudySession,
+  seedStudyInstance,
+  seedOverrideClaim,
+  type SeedData,
+} from '../../setup/seed.js';
 
 /**
  * deleteUser is destructive and asymmetric (different cascades for
@@ -401,6 +408,312 @@ describe('deleteUser', () => {
       // incremented, so the deletion must not create/decrement it.
       const tutorDoc = await db.collection('users').doc(seed.tutor1.uid).get();
       expect(tutorDoc.data()!.profiles.tutor.endorsementCount).toBeUndefined();
+    });
+  });
+
+  /**
+   * Issue #408 item 1 — the GDPR erasure gaps the retention work (PR #396)
+   * surfaced. Two halves, both pre-existing:
+   *   • `schedules/{uid}` + `overrides` were deleted only for `role ===
+   *     'babysitter'`, so a TUTOR-only account kept its whole availability
+   *     grid and claim ledger through a hard delete;
+   *   • `study-sessions` was never touched at all, on either side.
+   */
+  describe('study erasure (issue #408 item 1)', () => {
+    const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+
+    /** An all-available weekly grid, so a released claim restores to exactly it
+     *  and the override doc is DELETED rather than rewritten — an unambiguous
+     *  pin on "the slot came back". */
+    async function seedOpenSchedule(uid: string): Promise<void> {
+      const weekly: Record<string, boolean[]> = {};
+      for (const key of DAY_KEYS) weekly[key] = new Array(96).fill(true);
+      await getDb().collection('schedules').doc(uid).set({ userId: uid, weekly });
+    }
+
+    async function overrideExists(uid: string, date: string): Promise<boolean> {
+      return (
+        await getDb().collection('schedules').doc(uid).collection('overrides').doc(date).get()
+      ).exists;
+    }
+
+    /** A 'YYYY-MM-DD' `n` days from now (negative = past). */
+    function dateIn(n: number): string {
+      return new Date(Date.now() + n * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    }
+
+    it('deleting a TUTOR deletes schedules/{uid} and its overrides', async () => {
+      const db = getDb();
+      // Seeded tutors already have a `schedules/{uid}` weekly grid.
+      await db.collection('schedules').doc(seed.tutor1.uid).collection('overrides')
+        .doc('2026-12-24').set({ date: '2026-12-24', type: 'unavailable', slots: [] });
+
+      await callFunction('deleteUser', { targetUserId: seed.tutor1.uid }, adminToken);
+
+      expect((await db.collection('schedules').doc(seed.tutor1.uid).get()).exists).toBe(false);
+      expect(
+        (await db.collection('schedules').doc(seed.tutor1.uid).collection('overrides').get())
+          .empty,
+      ).toBe(true);
+      // A sibling tutor's schedule is untouched.
+      expect((await db.collection('schedules').doc(seed.tutor2.uid).get()).exists).toBe(true);
+    });
+
+    it('deleting a tutor anonymizes their sessions, erases their post-notes and cancels the live ones', async () => {
+      const db = getDb();
+      const live = await seedStudySession({
+        familyId: seed.family1Id,
+        tutorUserId: seed.tutor1.uid,
+        createdByUserId: seed.parent1.uid,
+        parentUserId: seed.parent1.uid,
+        status: 'confirmed',
+        date: dateIn(14),
+        preSessionNote: 'gate code 1234',
+        postSessionNote: 'Lucas struggled with fractions',
+      });
+      const past = await seedStudySession({
+        familyId: seed.family1Id,
+        tutorUserId: seed.tutor1.uid,
+        status: 'completed',
+        date: dateIn(-90),
+        postSessionNote: 'final debrief',
+      });
+      const other = await seedStudySession({
+        familyId: seed.family1Id,
+        tutorUserId: seed.tutor2.uid,
+        status: 'confirmed',
+        date: dateIn(14),
+        postSessionNote: "another tutor's note",
+      });
+
+      await callFunction('deleteUser', { targetUserId: seed.tutor1.uid }, adminToken);
+
+      const liveDoc = (await db.collection('study-sessions').doc(live).get()).data()!;
+      expect(liveDoc.tutorUserId).toBe('deleted');
+      expect(liveDoc.tutorName).toBe('');
+      expect('postSessionNote' in liveDoc).toBe(false);
+      expect(liveDoc.status).toBe('cancelled');
+      expect(liveDoc.statusReason).toBe('account_deleted');
+      expect(liveDoc.cancelledFromStatus).toBe('confirmed');
+      // The FAMILY survives, so its side of the doc is untouched — including
+      // the note it authored and the roster it owns.
+      expect(liveDoc.familyName).toBe('Dupont');
+      expect(liveDoc.parentName).toBe('Marie Dupont');
+      expect(liveDoc.students).toEqual([{ firstName: 'Lucas', age: 6 }]);
+      expect(liveDoc.address).toBe('15 Rue de Passy, 75016 Paris');
+      expect(liveDoc.preSessionNote).toBe('gate code 1234');
+
+      // A COMPLETED session is anonymized but never re-statused: it is the
+      // family's record of a session that actually happened.
+      const pastDoc = (await db.collection('study-sessions').doc(past).get()).data()!;
+      expect(pastDoc.tutorUserId).toBe('deleted');
+      expect(pastDoc.status).toBe('completed');
+      expect('postSessionNote' in pastDoc).toBe(false);
+
+      // Another tutor's session is untouched in every field.
+      const otherDoc = (await db.collection('study-sessions').doc(other).get()).data()!;
+      expect(otherDoc.tutorUserId).toBe(seed.tutor2.uid);
+      expect(otherDoc.tutorName).toBe('Noa Katz');
+      expect(otherDoc.status).toBe('confirmed');
+      expect(otherDoc.postSessionNote).toBe("another tutor's note");
+    });
+
+    it('deleting the SOLE parent erases the family snapshots, cancels the session and returns the slot', async () => {
+      const db = getDb();
+      const date = dateIn(21);
+      await seedOpenSchedule(seed.tutor2.uid);
+      const sessionId = await seedStudySession({
+        familyId: seed.family2Id, // family2 = Martin, parent3 is its sole parent
+        tutorUserId: seed.tutor2.uid,
+        createdByUserId: seed.parent3.uid,
+        parentUserId: seed.parent3.uid,
+        familyName: 'Martin',
+        parentName: 'Sophie Martin',
+        status: 'confirmed',
+        date,
+        message: 'Please ring twice',
+        preSessionNote: 'allergic to peanuts',
+        postSessionNote: 'went well',
+      });
+      await seedOverrideClaim(
+        seed.tutor2.uid,
+        date,
+        { sessionId },
+        { appSource: 'study', reason: 'study_session' },
+      );
+
+      await callFunction('deleteUser', { targetUserId: seed.parent3.uid }, adminToken);
+
+      const doc = (await db.collection('study-sessions').doc(sessionId).get()).data()!;
+      expect(doc.createdByUserId).toBe('deleted');
+      expect(doc.parentUserId).toBe('deleted');
+      expect(doc.familyName).toBe('');
+      expect(doc.parentName).toBe('');
+      expect(doc.students).toEqual([]);
+      expect(doc.studentIds).toEqual([]);
+      expect('address' in doc).toBe(false);
+      expect('latLng' in doc).toBe(false);
+      expect('message' in doc).toBe(false);
+      expect('preSessionNote' in doc).toBe(false);
+      expect(doc.status).toBe('cancelled');
+      expect(doc.statusReason).toBe('account_deleted');
+      // The TUTOR survives and is not the data subject: their identity and
+      // their own free text stay exactly as they were.
+      expect(doc.tutorUserId).toBe(seed.tutor2.uid);
+      expect(doc.tutorName).toBe('Noa Katz');
+      expect(doc.postSessionNote).toBe('went well');
+
+      // The claim came back: the override held nothing else and the day
+      // reverts to the bare weekly grid.
+      expect(await overrideExists(seed.tutor2.uid, date)).toBe(false);
+    });
+
+    it('deleting a CO-PARENT anonymizes only their own uid and keeps the family session live', async () => {
+      const db = getDb();
+      const date = dateIn(10);
+      await seedOpenSchedule(seed.tutor2.uid);
+      const sessionId = await seedStudySession({
+        familyId: seed.family1Id, // family1 = Dupont, TWO parents
+        tutorUserId: seed.tutor2.uid,
+        createdByUserId: seed.parent2.uid,
+        parentUserId: seed.parent2.uid,
+        parentName: 'Pierre Dupont',
+        status: 'confirmed',
+        date,
+        preSessionNote: 'family door code',
+      });
+      await seedOverrideClaim(
+        seed.tutor2.uid,
+        date,
+        { sessionId },
+        { appSource: 'study', reason: 'study_session' },
+      );
+
+      await callFunction('deleteUser', { targetUserId: seed.parent2.uid }, adminToken);
+
+      const doc = (await db.collection('study-sessions').doc(sessionId).get()).data()!;
+      expect(doc.createdByUserId).toBe('deleted');
+      expect(doc.parentUserId).toBe('deleted');
+      // The family still exists and can honour the booking: nothing
+      // family-level is erased and the session stays confirmed.
+      expect(doc.familyName).toBe('Dupont');
+      expect(doc.parentName).toBe('Pierre Dupont');
+      expect(doc.students).toEqual([{ firstName: 'Lucas', age: 6 }]);
+      expect(doc.address).toBe('15 Rue de Passy, 75016 Paris');
+      expect(doc.preSessionNote).toBe('family door code');
+      expect(doc.status).toBe('confirmed');
+      // ...and the tutor keeps the slot they are still booked for.
+      expect(await overrideExists(seed.tutor2.uid, date)).toBe(true);
+    });
+
+    it('a recurring series: FUTURE occurrences are cancelled with their claims, past ones keep their status', async () => {
+      const db = getDb();
+      const pastDate = dateIn(-7);
+      const futureDate = dateIn(7);
+      await seedOpenSchedule(seed.tutor2.uid);
+      const sessionId = await seedStudySession({
+        familyId: seed.family2Id,
+        tutorUserId: seed.tutor2.uid,
+        createdByUserId: seed.parent3.uid,
+        parentUserId: seed.parent3.uid,
+        familyName: 'Martin',
+        parentName: 'Sophie Martin',
+        status: 'confirmed',
+        type: 'recurring',
+        date: undefined,
+        endTime: undefined,
+        recurringSlots: [{ day: 'mon', startTime: '17:00', endTime: '18:00' }],
+      });
+      await seedStudyInstance(sessionId, pastDate, {
+        preSessionNote: 'old door code',
+        postSessionNote: 'past debrief',
+      });
+      await seedStudyInstance(sessionId, futureDate, {
+        preSessionNote: 'new door code',
+      });
+      await seedOverrideClaim(
+        seed.tutor2.uid,
+        pastDate,
+        { sessionId, instanceId: pastDate },
+        { appSource: 'study', reason: 'study_session' },
+      );
+      await seedOverrideClaim(
+        seed.tutor2.uid,
+        futureDate,
+        { sessionId, instanceId: futureDate },
+        { appSource: 'study', reason: 'study_session' },
+      );
+
+      await callFunction('deleteUser', { targetUserId: seed.parent3.uid }, adminToken);
+
+      const instances = db.collection('study-sessions').doc(sessionId).collection('instances');
+      const pastInst = (await instances.doc(pastDate).get()).data()!;
+      const futureInst = (await instances.doc(futureDate).get()).data()!;
+
+      // The past occurrence HAPPENED — cancelling it would rewrite the
+      // surviving tutor's history (cancelSession's own rule).
+      expect(pastInst.status).toBe('scheduled');
+      // ...but the family's free text on it still goes.
+      expect('preSessionNote' in pastInst).toBe(false);
+      // The tutor's own note on it survives: they are not the data subject.
+      expect(pastInst.postSessionNote).toBe('past debrief');
+
+      expect(futureInst.status).toBe('cancelled');
+      expect(futureInst.statusReason).toBe('cancelled_by_family');
+      expect('preSessionNote' in futureInst).toBe(false);
+
+      // Only the FUTURE date's claim is released.
+      expect(await overrideExists(seed.tutor2.uid, futureDate)).toBe(false);
+      expect(await overrideExists(seed.tutor2.uid, pastDate)).toBe(true);
+    });
+
+    it('sole-parent erasure gives the surviving BABYSITTER back the appointment slot', async () => {
+      const db = getDb();
+      const date = dateIn(9);
+      await seedOpenSchedule(seed.babysitter1.uid);
+      const appointmentId = await seedAppointment({
+        babysitterUserId: seed.babysitter1.uid,
+        familyId: seed.family2Id,
+        createdByUserId: seed.parent3.uid,
+        status: 'confirmed',
+        date,
+      });
+      await seedOverrideClaim(
+        seed.babysitter1.uid,
+        date,
+        { appointmentId },
+        { appSource: 'sit', reason: 'appointment' },
+      );
+
+      await callFunction('deleteUser', { targetUserId: seed.parent3.uid }, adminToken);
+
+      expect((await db.collection('appointments').doc(appointmentId).get()).data()!.status)
+        .toBe('cancelled');
+      // Before #408 the appointment was cancelled and the claim was left
+      // behind: the sitter's slot stayed blocked forever.
+      expect(await overrideExists(seed.babysitter1.uid, date)).toBe(false);
+    });
+
+    it('records the study counts in the audit log', async () => {
+      const db = getDb();
+      await seedStudySession({
+        familyId: seed.family1Id,
+        tutorUserId: seed.tutor1.uid,
+        status: 'confirmed',
+        date: dateIn(5),
+      });
+
+      await callFunction('deleteUser', { targetUserId: seed.tutor1.uid }, adminToken);
+
+      const logs = await db.collection('auditLogs')
+        .where('action', '==', 'delete_user')
+        .where('targetUserId', '==', seed.tutor1.uid)
+        .get();
+      expect(logs.size).toBe(1);
+      const details = logs.docs[0].data().details;
+      expect(details.anonymizedStudySessions).toBe(1);
+      expect(details.cancelledStudySessions).toBe(1);
+      expect(details.erasureFailures).toBe(0);
     });
   });
 
