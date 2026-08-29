@@ -99,10 +99,21 @@ splitting into more phases, not shipping.
 
 ## After the release
 
-Check the run in Actions. On failure, production may be **partially deployed** —
-the steps are sequential, so rules can be live while functions are not. Fix
-forward with a new tag if the failure is in the code; redeploy the previous tag
-if the release itself is bad.
+**Check the run actually deployed.** Two ways it can end without shipping:
+
+- **Failure.** Production may be **partially deployed** — the steps are
+  sequential, so rules can be live while functions are not. Fix forward with a
+  new tag if the failure is in the code; redeploy the previous tag if the
+  release itself is bad.
+- **Cancellation.** Releases are serialized, and GitHub keeps only one *pending*
+  run per concurrency group — a newer queued run cancels the older pending one.
+  So if a release is in flight and two more queue behind it, the middle one is
+  dropped and reports **cancelled**, not "queued". It never deployed. This
+  matters most for a rollback queued behind a release: re-run it.
+
+Serializing is still the right trade — running deploys in parallel is what
+exhausted the Cloud Functions mutation quota on 2026-08-28 and left production a
+merge behind — so this edge is handled by looking, not by configuration.
 
 The functions step retries once after a two-minute backoff: the Cloud Functions
 mutation-request quota is a short-window rate limit, and a spaced retry recovers

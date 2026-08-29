@@ -69,6 +69,45 @@ describe('release workflow (issue #353)', () => {
     expect(cond).not.toContain("'failure'");
   });
 
+  it('verify_tag actually performs the ancestor check', () => {
+    // The suite pinned that build_and_deploy DEPENDS on verify_tag, but not
+    // that verify_tag does anything. Deleting the merge-base block -- a
+    // plausible "let me ship a hotfix tag off a branch" edit -- left every
+    // other test green while any tag from any branch reached production.
+    // Asserted on the parsed step's `run` string, so workflow COMMENTS about
+    // ancestry cannot satisfy it.
+    const steps = release.jobs.verify_tag.steps as { id?: string; run?: string }[];
+    const resolve = steps.find((s) => s.id === 'resolve');
+    expect(resolve, 'verify_tag must keep a step with id: resolve').toBeDefined();
+    const script = String(resolve!.run);
+    expect(script).toMatch(/merge-base\s+--is-ancestor/);
+    expect(script).toMatch(/origin\/main/);
+    // ...and fails the job rather than warning.
+    expect(script).toMatch(/exit 1/);
+  });
+
+  it('never interpolates the tag name into the shell source', () => {
+    // ${{ }} expands into the script BEFORE bash parses it, so a ref name
+    // containing ` $ ; " | & ( ) executes as code in the job that holds
+    // id-token: write. The value must arrive via env: and be quoted.
+    const steps = release.jobs.verify_tag.steps as {
+      id?: string;
+      run?: string;
+      env?: Record<string, string>;
+    }[];
+    const resolve = steps.find((s) => s.id === 'resolve')!;
+    expect(String(resolve.run)).not.toMatch(/\$\{\{/);
+    expect(resolve.env?.TAG).toBe('${{ inputs.tag || github.ref_name }}');
+    expect(String(resolve.run)).toContain('"$TAG"');
+    // And the alphabet is constrained before the value reaches git at all.
+    expect(String(resolve.run)).toMatch(/\^v\[0-9\]/);
+  });
+
+  it('does not use always(), which survives cancellation', () => {
+    expect(String(release.jobs.build_and_deploy.if)).not.toMatch(/\balways\(\)/);
+    expect(String(release.jobs.build_and_deploy.if)).toMatch(/!cancelled\(\)/);
+  });
+
   it('runs the test gate for real releases only', () => {
     expect(release.jobs.verify_tests.if).toBe("github.event_name == 'push'");
     expect(release.jobs.verify_tests.uses).toBe('./.github/workflows/test.yml');
@@ -108,8 +147,12 @@ describe('no other workflow deploys to production on merge', () => {
     // correct in isolation.
     const dir = resolve(__dirname, '../../.github/workflows');
     const { readdirSync } = require('node:fs') as typeof import('node:fs');
+    // Both edges matter: Actions accepts .yaml as well as .yml, and the root
+    // `pnpm deploy` script IS `firebase deploy` (package.json), so matching
+    // only the literal command would miss a workflow calling it by name.
+    const DEPLOYS = /firebase deploy|pnpm(?: run)? deploy\b/;
     const offenders = readdirSync(dir).filter((f) => {
-      if (!f.endsWith('.yml')) return false;
+      if (!/\.ya?ml$/.test(f)) return false;
       const doc = wf(f);
       const t = triggers(doc);
       const push = t?.push as { branches?: string[] } | undefined;
@@ -117,7 +160,7 @@ describe('no other workflow deploys to production on merge', () => {
       // A workflow may run ON main; it may not DEPLOY from it.
       const jobs = (doc.jobs ?? {}) as Record<string, { steps?: { run?: string }[] }>;
       return Object.values(jobs).some((j) =>
-        (j.steps ?? []).some((s) => typeof s.run === 'string' && s.run.includes('firebase deploy')),
+        (j.steps ?? []).some((s) => typeof s.run === 'string' && DEPLOYS.test(s.run)),
       );
     });
     expect(offenders).toEqual([]);

