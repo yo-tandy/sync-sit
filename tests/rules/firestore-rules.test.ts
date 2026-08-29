@@ -3512,21 +3512,116 @@ describe('references collection — the doerUserId recipient disjunct (#300)', (
   });
 
   // No client write path: every mutation goes through doSubmitEndorsement /
-  // doRespondToEndorsement on the Admin SDK. The create rule's own conditions
-  // (status private + babysitterUserId == caller + type manual) already
-  // exclude this shape; pinned so a later loosening of that rule cannot make
-  // a doer endorsement client-forgeable.
-  it('denies a client creating or self-approving a do endorsement', async () => {
+  // doRespondToEndorsement on the Admin SDK.
+  it('denies a client self-approving a do endorsement', async () => {
     const forger = testEnv.authenticatedContext('doerSelf');
-    await assertFails(setDoc(doc(forger.firestore(), 'references', 'do-forged'), {
-      referenceId: 'do-forged', doerUserId: 'doerSelf', appSource: 'do',
-      type: 'family_submitted', status: 'private',
-      submittedByUserId: 'someParent', submittedByFamilyId: 'famX',
-      referenceText: 'I am excellent.', createdAt: new Date(),
-    }));
     await seedDoerEndorsement('do-self-approve');
     await assertFails(
       updateDoc(doc(forger.firestore(), 'references', 'do-self-approve'), { status: 'approved' }),
+    );
+  });
+});
+
+// PR #352 round-1 review: the recipient read disjunct above is only safe if a
+// client cannot MINT a doc carrying someone else's recipient key.
+//
+// The create rule used to constrain four fields — status, babysitterUserId,
+// type, submittedByUserId — and leave every other one free. All four are
+// satisfiable by an attacker writing a manual reference about THEMSELVES, so
+// they could attach `doerUserId: <victim>` plus arbitrary text and
+// attribution. The recipient disjunct then grants the victim the read, §9.2's
+// deliberately status-unfiltered query returns it, and the victim cannot
+// remove it: doRespondToEndorsement refuses it (`type !== 'family_submitted'`)
+// and the update rule's owner branch keys on the ATTACKER's babysitterUserId.
+//
+// An earlier version of the "no client write path" test above did NOT catch
+// this: its payload used `type: 'family_submitted'` with no
+// `babysitterUserId`, which the create rule rejects for two reasons that have
+// nothing to do with the do shape — it would have stayed green with
+// `doerUserId` fully client-writable. These use the ACTUAL attack payload.
+describe('references collection — no foreign recipient key on a client create (#352)', () => {
+  const LEGIT_MANUAL = {
+    referenceId: 'legit-manual',
+    babysitterUserId: 'sitterSelf',
+    type: 'manual',
+    status: 'private',
+    refName: 'Mme Martin',
+    refPhone: '+33 6 12 34 56 78',
+    numberOfKids: 2,
+    kidAges: [4, 7],
+    note: 'Watched the twins on Fridays.',
+    createdAt: new Date(),
+  };
+
+  // The path that MUST NOT regress: a babysitter recording their own offline
+  // reference. This is the only client create the collection has ever allowed,
+  // and the whole reason the create rule exists rather than being `false`.
+  it('still allows a babysitter to create their own manual reference', async () => {
+    const sitter = testEnv.authenticatedContext('sitterSelf');
+    await assertSucceeds(
+      setDoc(doc(sitter.firestore(), 'references', 'legit-manual'), LEGIT_MANUAL),
+    );
+  });
+
+  it('denies a client attaching a foreign doerUserId to a manual reference of their own', async () => {
+    const attacker = testEnv.authenticatedContext('attacker');
+    await assertFails(setDoc(doc(attacker.firestore(), 'references', 'do-smuggled'), {
+      ...LEGIT_MANUAL,
+      referenceId: 'do-smuggled',
+      babysitterUserId: 'attacker',
+      doerUserId: 'doerSelf',
+      appSource: 'do',
+      referenceText: 'Call 0800-SCAM to claim your payment.',
+      submittedByName: 'Sync Support',
+    }));
+  });
+
+  // Study's exposure through this same rule is identical, and closing only
+  // sync-do's half would be leaving a known hole open on purpose.
+  it('denies a client attaching a foreign tutorUserId the same way', async () => {
+    const attacker = testEnv.authenticatedContext('attacker');
+    await assertFails(setDoc(doc(attacker.firestore(), 'references', 'study-smuggled'), {
+      ...LEGIT_MANUAL,
+      referenceId: 'study-smuggled',
+      babysitterUserId: 'attacker',
+      tutorUserId: 'tutorSelf',
+      appSource: 'study',
+      referenceText: 'Call 0800-SCAM to claim your payment.',
+    }));
+  });
+
+  // Even the attacker's OWN uid in the recipient slot is refused: the rule
+  // says a client create names no other app's provider at all, so it cannot
+  // be sidestepped by first minting a self-named doc and then retargeting it.
+  it('denies a self-named doerUserId on a client create too', async () => {
+    const attacker = testEnv.authenticatedContext('attacker');
+    await assertFails(setDoc(doc(attacker.firestore(), 'references', 'self-named'), {
+      ...LEGIT_MANUAL,
+      referenceId: 'self-named',
+      babysitterUserId: 'attacker',
+      doerUserId: 'attacker',
+    }));
+  });
+
+  // ...and the retarget-by-update half of the same hole: `doerUserId` joins
+  // the update rule's frozen identity tuple, which its comment already
+  // claimed covered every recipient key.
+  it('denies retargeting doerUserId on a reference the caller owns', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'references', 'retarget'), {
+        ...LEGIT_MANUAL,
+        referenceId: 'retarget',
+        babysitterUserId: 'attacker',
+      });
+    });
+    const attacker = testEnv.authenticatedContext('attacker');
+    await assertFails(
+      updateDoc(doc(attacker.firestore(), 'references', 'retarget'), { doerUserId: 'doerSelf' }),
+    );
+    // The owner branch still works for a field that is NOT in the freeze —
+    // proving the added key narrowed the freeze rather than sealing updates.
+    await assertSucceeds(
+      updateDoc(doc(attacker.firestore(), 'references', 'retarget'), { note: 'Edited.' }),
     );
   });
 });
