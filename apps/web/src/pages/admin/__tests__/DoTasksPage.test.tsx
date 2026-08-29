@@ -13,6 +13,10 @@ const h = vi.hoisted(() => ({
   failNext: false,
   failOffers: false,
   failDelete: false,
+  // taskId -> offers, plus a manual gate so a slow response can be resolved
+  // after a second row has been expanded (the generation-guard test).
+  offersByTask: null as Record<string, Record<string, unknown>[]> | null,
+  gates: [] as (() => void)[],
 }));
 
 vi.mock('@/config/firebase', () => ({ functions: {}, auth: {}, db: {}, storage: {} }));
@@ -31,6 +35,14 @@ vi.mock('firebase/functions', () => ({
         if (h.failOffers) {
           h.failOffers = false;
           return Promise.reject(new Error('internal'));
+        }
+        const id = (payload as { taskId: string }).taskId;
+        if (h.offersByTask) {
+          const rows = h.offersByTask[id] ?? [];
+          // Held until the test releases it, so two expands can overlap.
+          return new Promise((resolve) => {
+            h.gates.push(() => resolve({ data: { tasks: [], offers: rows, hasMore: false } }));
+          });
         }
         return Promise.resolve({ data: { tasks: [], offers: [...h.offers], hasMore: false } });
       }
@@ -123,6 +135,8 @@ describe('AdminDoTasksPage', () => {
     h.failNext = false;
     h.failOffers = false;
     h.failDelete = false;
+    h.offersByTask = null;
+    h.gates = [];
     // The zustand store is a module-level singleton — reset the slice.
     useAdminStore.setState({
       doTasks: [],
@@ -262,6 +276,42 @@ describe('AdminDoTasksPage', () => {
     expect(listCalls()[1].payload).toEqual({ startAfterId: 'task-pax' });
     expect(await screen.findByText('Carry boxes')).toBeInTheDocument();
     expect(screen.getByText('Assemble a PAX')).toBeInTheDocument();
+  });
+
+  // Round-2 note: expanding row A then row B before A resolves must not
+  // render A's offers under B — the §11.3 helper's name and age attributed
+  // to the wrong task is exactly the mis-attribution nobody notices.
+  it("ignores a stale offers response after another row is expanded", async () => {
+    h.pages = [
+      {
+        tasks: [task(), task({ id: 'task-boxes', title: 'Carry boxes' })],
+        hasMore: false,
+      },
+    ];
+    h.offersByTask = {
+      'task-pax': [offer({ message: 'STALE-OFFER-FROM-TASK-A' })],
+      'task-boxes': [
+        offer({ id: 'task-boxes_doer-9', taskId: 'task-boxes', message: 'CORRECT-OFFER-FOR-B' }),
+      ],
+    };
+    renderPage();
+    await waitFor(() => expect(listCalls()).toHaveLength(1));
+
+    const detailButtons = screen.getAllByRole('button', { name: /^details$/i });
+    fireEvent.click(detailButtons[0]); // task-pax
+    await waitFor(() => expect(h.gates).toHaveLength(1));
+    fireEvent.click(screen.getAllByRole('button', { name: /^details$/i })[0]); // task-boxes
+    await waitFor(() => expect(h.gates).toHaveLength(2));
+
+    // Resolve B first, then the stale A.
+    h.gates[1]();
+    expect(await screen.findByText(/CORRECT-OFFER-FOR-B/)).toBeInTheDocument();
+    h.gates[0]();
+    await waitFor(() => expect(detailCalls()).toHaveLength(2));
+
+    // B's panel still shows B's offers; A's never leak into it.
+    expect(screen.getByText(/CORRECT-OFFER-FOR-B/)).toBeInTheDocument();
+    expect(screen.queryByText(/STALE-OFFER-FROM-TASK-A/)).not.toBeInTheDocument();
   });
 
   it('renders the empty state when there are no tasks', async () => {

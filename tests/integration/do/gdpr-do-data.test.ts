@@ -396,6 +396,74 @@ describe('GDPR coverage for sync-do data (§11.4)', () => {
       expect(task.agreedPrice).toBe(55);
     });
 
+    // Round-2 blocker. `offerCount` is §4.1's LIVE-offer count, maintained
+    // transactionally by withdraw / decline / cancel / accept, and it backs
+    // DO_OFFER_MAX_PER_TASK — the one ceiling the plan calls correctness
+    // rather than policy. Erasure is a fifth path into it, and nothing
+    // reconciles the field later (the sweep never touches it), so a missed
+    // decrement burns a slot on a surviving task permanently.
+    it("returns the erased doer's live offer slots to surviving tasks", async () => {
+      await seedTask('gdpr-task-counted', seed.family1Id, seed.parent2.uid, {
+        offerCount: 3,
+      });
+      await seedTask('gdpr-task-counted-b', seed.family1Id, seed.parent2.uid, {
+        offerCount: 1,
+      });
+      await seedTask('gdpr-task-counted-c', seed.family1Id, seed.parent2.uid, {
+        offerCount: 0,
+      });
+      // One LIVE `pending` offer, one LIVE `pending_guardian`, and one
+      // already TERMINAL — each on its own task so every count is
+      // attributable to exactly one status.
+      await seedOffer('gdpr-task-counted', seed.babysitter1.uid, seed.family1Id, {
+        status: 'pending',
+      });
+      await seedOffer('gdpr-task-counted-b', seed.babysitter1.uid, seed.family1Id, {
+        status: 'pending_guardian',
+      });
+      await seedOffer('gdpr-task-counted-c', seed.babysitter1.uid, seed.family1Id, {
+        status: 'withdrawn',
+      });
+
+      await callFunction('deleteUser', { targetUserId: seed.babysitter1.uid }, adminToken);
+
+      const db = getDb();
+      // pending → one slot back.
+      expect(
+        (await db.collection('doTasks').doc('gdpr-task-counted').get()).data()!.offerCount,
+      ).toBe(2);
+      // pending_guardian is live too (§4.1 counts both).
+      expect(
+        (await db.collection('doTasks').doc('gdpr-task-counted-b').get()).data()!.offerCount,
+      ).toBe(0);
+      // The terminal offer already left the live set — no second decrement.
+      expect(
+        (await db.collection('doTasks').doc('gdpr-task-counted-c').get()).data()!.offerCount,
+      ).toBe(0);
+
+      const audit = await db
+        .collection('auditLogs')
+        .where('action', '==', 'delete_user')
+        .where('targetUserId', '==', seed.babysitter1.uid)
+        .get();
+      expect(audit.docs[0].data().details).toMatchObject({ releasedDoOfferSlots: 2 });
+    });
+
+    it('clamps the released count at zero rather than going negative', async () => {
+      // A task whose stored count already disagrees with reality (a repair,
+      // a historical bug) must not be driven negative by the correction.
+      await seedTask('gdpr-task-zero', seed.family1Id, seed.parent2.uid, { offerCount: 0 });
+      await seedOffer('gdpr-task-zero', seed.babysitter1.uid, seed.family1Id, {
+        status: 'pending',
+      });
+
+      await callFunction('deleteUser', { targetUserId: seed.babysitter1.uid }, adminToken);
+
+      expect(
+        (await getDb().collection('doTasks').doc('gdpr-task-zero').get()).data()!.offerCount,
+      ).toBe(0);
+    });
+
     it("deletes the family's remaining tasks when the LAST parent goes", async () => {
       await seedTask('gdpr-task-coparent', seed.family1Id, seed.parent2.uid);
       // parent1 first (co-parent survives), then parent2 as last parent.
