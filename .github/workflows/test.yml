@@ -75,10 +75,17 @@ jobs:
   #
   # SCOPE, precisely: all 12 workspace projects now define `typecheck` (`tests`
   # had no such script until this change, so `pnpm -r` silently skipped the
-  # integration suite entirely). Still NOT covered: the ~250 test files under
-  # apps/{web,study-web,do-web}/src, which their tsconfig.app.json excludes —
-  # bringing those in needs ~424 bare `vi.fn()` mocks across 145 files retyped
-  # first, tracked separately rather than bundled in here.
+  # integration suite entirely). Two gaps remain, neither a regression here:
+  #   - the ~250 test files under apps/{web,study-web,do-web}/src, which their
+  #     tsconfig.app.json excludes. Bringing them in needs ~424 bare `vi.fn()`
+  #     mocks across 145 files retyped first — issue #393.
+  #   - the root-level TypeScript outside any workspace package: the 7 files in
+  #     scripts/__tests__/ (this workflow's own pins among them) run under the
+  #     root vitest `scripts` project, but there is no root tsconfig and
+  #     `pnpm -r` skips the root, so nothing type-checks them.
+  # `scripts/__tests__/release-workflow.test.ts` pins the parts of this job
+  # whose loss would be silent, including that every workspace package keeps a
+  # `typecheck` script — the gap `tests` was in until now.
   typecheck:
     runs-on: ubuntu-latest
     steps:
