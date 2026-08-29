@@ -489,6 +489,17 @@ export interface DigestTaskLine {
   suggestedBudget: number | null;
 }
 
+/**
+ * The footer names the ENROLLMENT opt-in rather than a control (PR #334
+ * round-2 review). An earlier draft said "adjustable on your profile", which
+ * promised a surface that does not exist: `profiles.doer.notifyNewTasks` is
+ * writable today only through the enrollment step and the
+ * `doUpdateDoerProfile` callable, and do-web has no account page calling it
+ * for this field. That matters here because the digest deliberately bypasses
+ * `NotifPrefs` (`prefCategory: null`), so this footer is the recipient's only
+ * explanation of why the mail arrives. The control wording belongs to the PR
+ * that ships the account page (§13's follow-up).
+ */
 export function buildNewTaskDigest(
   lang: DoLang,
   tasks: DigestTaskLine[],
@@ -515,7 +526,7 @@ export function buildNewTaskDigest(
         <p>${n === 1 ? 'Une nouvelle tâche correspond' : 'De nouvelles tâches correspondent'} aux catégories qui vous intéressent :</p>
         <ul style="padding-left: 20px;">${lines}</ul>
         ${cta(BOARD_URL, 'Voir le tableau')}
-        <p style="color: #6B7280; font-size: 13px;">Vous recevez ce résumé car les nouvelles tâches vous intéressent — réglable dans votre profil.</p>
+        <p style="color: #6B7280; font-size: 13px;">Vous recevez ce résumé parce que vous avez choisi d'être informé(e) des nouvelles tâches lors de votre inscription.</p>
       `,
       title: n === 1 ? '1 nouvelle tâche pour vous' : `${n} nouvelles tâches pour vous`,
       body:
@@ -533,7 +544,7 @@ export function buildNewTaskDigest(
       <p>${n === 1 ? 'A new task matches' : 'New tasks match'} the categories you're interested in:</p>
       <ul style="padding-left: 20px;">${lines}</ul>
       ${cta(BOARD_URL, 'Browse the board')}
-      <p style="color: #6B7280; font-size: 13px;">You get this digest because you opted into new-task updates — adjustable on your profile.</p>
+      <p style="color: #6B7280; font-size: 13px;">You get this digest because you opted into new-task updates when you enrolled.</p>
     `,
     title: n === 1 ? '1 new task for you' : `${n} new tasks for you`,
     body:
