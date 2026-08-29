@@ -2,6 +2,7 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { db, messaging } from './firebase.js';
 import { DO_APP_URL, STUDY_APP_URL } from './email.js';
 import type { NotificationApp } from './email.js';
+import { SIT_APP_URL } from './email.js';
 
 // Per-app push branding (issue #168 Phase 0). The study icon is the 512px
 // manifest variant (apps/study-web/public/icon-512.png) — the full logo.png
@@ -10,7 +11,7 @@ const PUSH_BRANDING: Record<NotificationApp, { icon: string; link: string }> = {
   // sit's icon is the downscaled 192px manifest variant (issue #193) — the
   // old favicon.png is a 1.4MB fetch per notification render, same class of
   // cost study's icon fix removed (PR #192).
-  sit: { icon: 'https://sync-sit.com/icon-192.png', link: 'https://sync-sit.com' },
+  sit: { icon: `${SIT_APP_URL}/icon-192.png`, link: SIT_APP_URL },
   study: { icon: `${STUDY_APP_URL}/icon-512.png`, link: STUDY_APP_URL },
   // do's icon follows sit's choice: the 192px manifest variant is plenty for
   // a notification render (sync-do plan §13 PR9).

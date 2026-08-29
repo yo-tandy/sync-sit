@@ -10,6 +10,7 @@ import {
   isActiveGuardianOf,
   notifyChildOfGuardianAction,
 } from '@ejm/shared-functions/guardian/guardianAccess.js';
+import { SIT_APP_URL } from '@ejm/shared-functions';
 
 /** sit stamps the override docs it creates so its cancel can restore losslessly. */
 const SIT_PROVENANCE = { appSource: 'sit', reason: 'appointment' } as const;
@@ -164,12 +165,12 @@ export const respondToRequest = onCall(
         ? `
         <p><strong>${escapeHtml(familyName)}</strong> accepted your request for <strong>${escapeHtml(dateDisplay)}</strong>.</p>
         <p>The address and the family's details are now visible in the app.</p>
-        <p style="margin-top: 16px;"><a href="https://sync-sit.com/babysitter" style="background: #DC2626; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View in app</a></p>
+        <p style="margin-top: 16px;"><a href="${SIT_APP_URL}/babysitter" style="background: #DC2626; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View in app</a></p>
       `
         : `
         <p><strong>${escapeHtml(familyName)}</strong> declined your request for <strong>${escapeHtml(dateDisplay)}</strong>.</p>
         <p>Other families publish searches too — have a look at the published searches board.</p>
-        <p style="margin-top: 16px;"><a href="https://sync-sit.com/babysitter" style="background: #DC2626; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View in app</a></p>
+        <p style="margin-top: 16px;"><a href="${SIT_APP_URL}/babysitter" style="background: #DC2626; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View in app</a></p>
       `;
       const prefCategory = accepted ? 'confirmed' : 'cancelled';
       const notifType = accepted ? 'published_search_accepted' : 'published_search_declined';
@@ -272,7 +273,7 @@ export const respondToRequest = onCall(
         <p><strong>${escapeHtml(babysitterName)}</strong> has accepted your babysitting request for <strong>${escapeHtml(dateDisplay)}</strong>.</p>
         ${contactInfo}
         ${phoneInfo}
-        <p style="margin-top: 16px;"><a href="https://sync-sit.com/family" style="background: #DC2626; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View in app</a></p>
+        <p style="margin-top: 16px;"><a href="${SIT_APP_URL}/family" style="background: #DC2626; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View in app</a></p>
       `;
 
       if (appointment.familyId) {
@@ -312,7 +313,7 @@ export const respondToRequest = onCall(
       const declineEmailBody = `
         <p><strong>${escapeHtml(babysitterName)}</strong> has declined your babysitting request for <strong>${escapeHtml(declineDateDisplay)}</strong>.</p>
         <p>You can search for other available babysitters or resubmit this request with updated details.</p>
-        <p style="margin-top: 16px;"><a href="https://sync-sit.com/family" style="background: #DC2626; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View in app</a></p>
+        <p style="margin-top: 16px;"><a href="${SIT_APP_URL}/family" style="background: #DC2626; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View in app</a></p>
       `;
 
       if (appointment.familyId) {

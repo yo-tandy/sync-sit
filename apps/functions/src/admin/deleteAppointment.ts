@@ -5,6 +5,7 @@ import { getCorsOrigin } from '../config/cors.js';
 import { verifyAdmin } from './verifyAdmin.js';
 import { writeAuditLog } from './writeAuditLog.js';
 import { escapeHtml, sendNotificationEmail } from '../config/email.js';
+import { SIT_APP_URL } from '@ejm/shared-functions';
 
 interface DeleteAppointmentInput {
   appointmentId: string;
@@ -87,7 +88,7 @@ export const deleteAppointment = onCall(
             'Appointment cancelled by admin',
             `<p>An administrator has cancelled your appointment for <strong>${escapeHtml(dateInfo)}</strong>.</p>
              <p>If you have questions, please contact support.</p>
-             <p style="margin-top: 16px;"><a href="https://sync-sit.com/babysitter" style="background: #DC2626; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View Dashboard</a></p>`
+             <p style="margin-top: 16px;"><a href="${SIT_APP_URL}/babysitter" style="background: #DC2626; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View Dashboard</a></p>`
           );
         }
       } catch (err) {
@@ -108,7 +109,7 @@ export const deleteAppointment = onCall(
               'Appointment cancelled by admin',
               `<p>An administrator has cancelled your appointment for <strong>${escapeHtml(dateInfo)}</strong>.</p>
                <p>If you have questions, please contact support.</p>
-               <p style="margin-top: 16px;"><a href="https://sync-sit.com/family/search" style="background: #DC2626; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">Search Babysitters</a></p>`
+               <p style="margin-top: 16px;"><a href="${SIT_APP_URL}/family/search" style="background: #DC2626; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">Search Babysitters</a></p>`
             );
           }
         }

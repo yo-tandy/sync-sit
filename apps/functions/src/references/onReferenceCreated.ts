@@ -2,6 +2,7 @@ import { onDocumentCreated } from 'firebase-functions/v2/firestore';
 import { db } from '../config/firebase.js';
 import { escapeHtml, sendNotificationEmail } from '../config/email.js';
 import { sendPushNotification } from '../config/push.js';
+import { SIT_APP_URL } from '@ejm/shared-functions';
 
 /**
  * Firestore trigger: when a new family-submitted reference is created,
@@ -34,7 +35,7 @@ export const notifyOnNewReference = onDocumentCreated(
       const emailBody = `
         <p><strong>${escapeHtml(submitterName)}</strong> has submitted an endorsement for you on Sync/Sit.</p>
         <p>Go to your Endorsements page to review it and choose whether to publish it on your profile.</p>
-        <p style="margin-top: 16px;"><a href="https://sync-sit.com/babysitter/endorsements" style="background: #DC2626; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View Endorsements</a></p>
+        <p style="margin-top: 16px;"><a href="${SIT_APP_URL}/babysitter/endorsements" style="background: #DC2626; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">View Endorsements</a></p>
       `;
       emailSent = await sendNotificationEmail(
         babysitter.email,
