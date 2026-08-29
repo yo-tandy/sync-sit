@@ -46,9 +46,20 @@ async function signInWithPassword(
       body: JSON.stringify({ email, password, returnSecureToken: true }),
     },
   );
-  // `res.json()` is `unknown`; the emulator's signIn response shape is the
-  // contract this helper exists to exercise.
-  return (await res.json()) as { idToken: string; localId: string };
+  // `res.json()` is `unknown`. The emulator answers EITHER shape, so the
+  // declared return type is made true by the guard rather than asserted over a
+  // failure — same modelling as getIdToken in setup/emulator.ts, and a failed
+  // sign-in surfaces the emulator's own error instead of a downstream
+  // TypeError.
+  const body = (await res.json()) as {
+    idToken?: string;
+    localId?: string;
+    error?: unknown;
+  };
+  if (!body.idToken || !body.localId) {
+    throw new Error(`signInWithPassword failed: ${JSON.stringify(body)}`);
+  }
+  return { idToken: body.idToken, localId: body.localId };
 }
 
 describe('redeemKidInvite', () => {
