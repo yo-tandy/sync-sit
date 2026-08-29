@@ -239,10 +239,13 @@ saw neither (issue #406). Source is now the single answer for types, so
 
 "Every `typecheck` config" is the precise claim: those resolve through each
 package's `tsconfig.json` (`bundler`, or `node16` for the two functions apps).
-Two `tsconfig.cjs.json` **build** configs — `shared-core`'s and
-`shared-functions`' — use `node10`, which ignores `exports` entirely and reads
-the top-level `"types": "./dist/index.d.ts"` instead. Correct there: a build
-needs its dependencies built, and pnpm orders them topologically.
+The `tsconfig.cjs.json` **build** configs split. `shared-core`'s and
+`shared-functions`' use `node10`, which ignores `exports` entirely and reads
+the top-level `"types": "./dist/index.d.ts"` instead — still `dist`. The other
+three (`sit-core`, `study-core`, `do-core`) are `node16` and so honour
+`exports`, meaning their builds read source for types now where they used to
+match `require`. Either is correct: a build needs its dependencies built
+anyway, and pnpm orders them topologically.
 
 `require` still points at `dist`, so **runtime** still needs a build: the
 emulators, the seed scripts and the deploy bundle all load compiled output.

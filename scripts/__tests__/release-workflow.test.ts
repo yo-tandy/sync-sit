@@ -384,7 +384,14 @@ export function pnpmSelection(script: string): {
       // falling through to the "unmodelled flag" message below and pointing
       // the next reader at the wrong problem.
       if (value === undefined) throw new Error(`pnpm selection flag ${token} with no value`);
-    } else value = token.match(/^(?:--filter|-F)=(.*)$/)?.[1];
+    } else {
+      // Strip quotes off the captured value too: the tokenizer only unwraps a
+      // quote spanning the WHOLE token, so `--filter='!x'` arrives with them
+      // still attached and `'!x'` would classify as an INCLUDE named `'!x'`.
+      // Red rather than green, but pointing at the wrong problem — the thing
+      // the dangling-flag branch above exists to avoid.
+      value = token.match(/^(?:--filter|-F)=(.*)$/)?.[1]?.replace(/^(['"])(.*)\1$/, '$2');
+    }
     if (value === undefined) {
       // Any OTHER spelling of a selection flag — `--filter-prod`, an attached
       // `-Fweb` — throws rather than being skipped, the way
@@ -509,11 +516,19 @@ describe('unit test lane (issue #401)', () => {
         .toEqual({ recursive: true, includes: [], excludes: ['@ejm/tests'] });
     });
 
-    it('reads --filter=x as well as --filter x', () => {
+    it('reads --filter=x as well as --filter x, quoted or not', () => {
       expect(pnpmSelection('pnpm --recursive --filter=!a --filter=b test')).toEqual({
         recursive: true,
         includes: ['b'],
         excludes: ['a'],
+      });
+      // The attached-AND-quoted form: the tokenizer only unwraps a quote
+      // spanning the whole token, so without the value-level strip this reads
+      // `'!@ejm/tests'` as an include and fails two pins for the wrong reason.
+      expect(pnpmSelection("pnpm -r --filter='!@ejm/tests' test && vitest run")).toEqual({
+        recursive: true,
+        includes: [],
+        excludes: ['@ejm/tests'],
       });
     });
 
