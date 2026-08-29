@@ -71,9 +71,7 @@ jobs:
 
       # Build do-web (third hosting target: site sync-do-app, plan §3.1). Same
       # project-level Firebase config; reuses the sit web-app id like study-web
-      # does — a dedicated app registration for sync-do is a follow-up. No
-      # VAPID key: the do shell ships no push (that arrives with sync-do's
-      # notifications PR).
+      # does — a dedicated app registration for sync-do is a follow-up.
       - name: Build do-web
         run: |
           pnpm --filter @ejm/shared-core build
@@ -86,6 +84,10 @@ jobs:
           VITE_FIREBASE_STORAGE_BUCKET: sync-sit.firebasestorage.app
           VITE_FIREBASE_MESSAGING_SENDER_ID: '652129443234'
           VITE_FIREBASE_APP_ID: '1:652129443234:web:b1addb8ca9204154aba6fb'
+          # Same project-wide public VAPID key as the sit/study build steps
+          # above — do-web push (sync-do plan §13 PR9, fcmTokensDo) needs it
+          # at build time.
+          VITE_FIREBASE_VAPID_KEY: BHhR2VRnGyiMruB55skkISGURA5MqVat0lzGRtzfnfHJ6IlgOs8sZDKy25k0nitxIlmLToaUWr1YfX5KBuxg1yo
 
       # Deploy preview channel (all three hosting targets in firebase.json)
       - name: Deploy Preview
