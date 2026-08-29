@@ -378,8 +378,13 @@ export function pnpmSelection(script: string): {
       continue;
     }
     let value: string | undefined;
-    if (token === '--filter' || token === '-F') value = tokens[++i];
-    else value = token.match(/^(?:--filter|-F)=(.*)$/)?.[1];
+    if (token === '--filter' || token === '-F') {
+      value = tokens[++i];
+      // A dangling flag is modelled but incomplete — say so, rather than
+      // falling through to the "unmodelled flag" message below and pointing
+      // the next reader at the wrong problem.
+      if (value === undefined) throw new Error(`pnpm selection flag ${token} with no value`);
+    } else value = token.match(/^(?:--filter|-F)=(.*)$/)?.[1];
     if (value === undefined) {
       // Any OTHER spelling of a selection flag — `--filter-prod`, an attached
       // `-Fweb` — throws rather than being skipped, the way
@@ -440,7 +445,14 @@ describe('unit test lane (issue #401)', () => {
 
   it('excludes only packages whose exclusion is a recorded decision', () => {
     const { excludes } = pnpmSelection(script());
-    expect(excludes.filter((name) => !(name in EXCLUDED_FROM_UNIT_LANE))).toEqual([]);
+    // `Object.hasOwn`, not `in`: `in` walks the prototype chain, so
+    // `--filter '!constructor'` would read as a recorded decision against an
+    // object literal that records nothing of the sort.
+    expect(excludes.filter((name) => !Object.hasOwn(EXCLUDED_FROM_UNIT_LANE, name))).toEqual([]);
+    // And every recorded exclusion must name a package that actually exists,
+    // so a stale entry cannot sit here excusing a package nobody has.
+    const names = new Set(workspaceManifests().map((pkg) => pkg.name));
+    expect(Object.keys(EXCLUDED_FROM_UNIT_LANE).filter((name) => !names.has(name))).toEqual([]);
   });
 
   it('keeps the integration lane out of the unit lane', () => {
@@ -468,7 +480,7 @@ describe('unit test lane (issue #401)', () => {
     const selected = new Set(base.filter((name) => !excludes.includes(name)));
     const unrun = all
       .filter((pkg) => pkg.scripts.test && !selected.has(pkg.name))
-      .filter((pkg) => !(pkg.name in EXCLUDED_FROM_UNIT_LANE))
+      .filter((pkg) => !Object.hasOwn(EXCLUDED_FROM_UNIT_LANE, pkg.name))
       .map((pkg) => pkg.name);
     expect(unrun).toEqual([]);
     // Floor, against the same list: an empty expansion must fail here rather
@@ -519,6 +531,13 @@ describe('unit test lane (issue #401)', () => {
         includes: ['web'],
         excludes: [],
       });
+    });
+
+    it('says which problem it hit when a modelled flag has no value', () => {
+      // A dangling flag IS modelled — reporting it as unmodelled would send
+      // the next reader to extend a parser that already covers it.
+      expect(() => pnpmSelection('pnpm -r --filter')).toThrow(/--filter with no value/);
+      expect(() => pnpmSelection('pnpm -r -F && vitest run')).toThrow(/-F with no value/);
     });
 
     it('throws on a selection flag it does not model rather than skipping it', () => {

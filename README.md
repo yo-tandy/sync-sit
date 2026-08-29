@@ -223,7 +223,7 @@ Each shared package's `exports` answers three ways, and the order of the keys
 is load-bearing:
 
 ```jsonc
-"types":   "./src/index.ts",   // TypeScript — always the source
+"types":   "./src/index.ts",   // every `typecheck` config — the source
 "import":  "./src/index.ts",   // Vite / Vitest — the source
 "require": "./dist/index.js"   // Node (emulators, deployed functions) — the build
 ```
@@ -236,6 +236,13 @@ and against `src` when it did not. A stale `dist` then invented errors that
 were not real and hid ones that were, while CI — which always starts clean —
 saw neither (issue #406). Source is now the single answer for types, so
 `pnpm typecheck` no longer depends on whether anything has been built.
+
+"Every `typecheck` config" is the precise claim: those resolve through each
+package's `tsconfig.json` (`bundler`, or `node16` for the two functions apps).
+Two `tsconfig.cjs.json` **build** configs — `shared-core`'s and
+`shared-functions`' — use `node10`, which ignores `exports` entirely and reads
+the top-level `"types": "./dist/index.d.ts"` instead. Correct there: a build
+needs its dependencies built, and pnpm orders them topologically.
 
 `require` still points at `dist`, so **runtime** still needs a build: the
 emulators, the seed scripts and the deploy bundle all load compiled output.
