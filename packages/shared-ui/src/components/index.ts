@@ -22,6 +22,8 @@ export { TopNav } from './TopNav.js';
 export { PageContainer } from './PageContainer.js';
 export { NavTabs } from './NavTabs.js';
 export type { NavTabItem } from './NavTabs.js';
+export { AppSwitchBar } from './AppSwitchBar.js';
+export type { AppSwitchBarProps } from './AppSwitchBar.js';
 export { SideNav } from './SideNav.js';
 export type { SideNavItem, SideNavSection } from './SideNav.js';
 export { Dialog } from './Dialog.js';
