@@ -30,7 +30,7 @@ function renderGuarded(initialPath: string) {
     <MemoryRouter initialEntries={[initialPath]}>
       <Routes>
         <Route
-          path="/home"
+          path="/doer"
           element={
             <AuthGuard role="doer">
               <div>doer-portal</div>
@@ -58,14 +58,14 @@ beforeEach(() => {
 
 describe('do-web AuthGuard basics', () => {
   it('redirects a signed-out visitor to /login', () => {
-    renderGuarded('/home');
+    renderGuarded('/doer');
     expect(screen.getByText('login-page')).toBeInTheDocument();
     expect(screen.queryByText('doer-portal')).toBeNull();
   });
 
   it('renders nothing while auth state is still loading', () => {
     h.auth = { firebaseUser: null, userDoc: null, loading: true };
-    renderGuarded('/home');
+    renderGuarded('/doer');
     expect(screen.queryByText('doer-portal')).toBeNull();
     expect(screen.queryByText('login-page')).toBeNull();
   });
@@ -78,17 +78,17 @@ describe('do-web AuthGuard role="doer" (doer portal, plan §13 PR8)', () => {
       userDoc: { uid: 'd1', profiles: { doer: { enrollmentComplete: true } } },
       loading: false,
     };
-    renderGuarded('/home');
+    renderGuarded('/doer');
     expect(screen.getByText('doer-portal')).toBeInTheDocument();
   });
 
-  it('lets an ADMIN through (no admin tree in do-web, plan §9.4 — bouncing them off /home would loop the mismatch fallback)', () => {
+  it('lets an ADMIN through (no admin tree in do-web, plan §9.4 — bouncing them off /doer would loop the mismatch fallback)', () => {
     h.auth = {
       firebaseUser: { uid: 'a1' },
       userDoc: { uid: 'a1', isAdmin: true },
       loading: false,
     };
-    renderGuarded('/home');
+    renderGuarded('/doer');
     expect(screen.getByText('doer-portal')).toBeInTheDocument();
   });
 
@@ -98,14 +98,14 @@ describe('do-web AuthGuard role="doer" (doer portal, plan §13 PR8)', () => {
       userDoc: { uid: 'p1', profiles: { parent: { familyId: 'fam1' } } },
       loading: false,
     };
-    renderGuarded('/home');
+    renderGuarded('/doer');
     expect(screen.getByText('family-portal')).toBeInTheDocument();
     expect(screen.queryByText('doer-portal')).toBeNull();
   });
 
   it('sends an account with no sync-do role to /signup to add one', () => {
     h.auth = { firebaseUser: { uid: 'x1' }, userDoc: { uid: 'x1' }, loading: false };
-    renderGuarded('/home');
+    renderGuarded('/doer');
     expect(screen.getByText('signup-page')).toBeInTheDocument();
   });
 });
@@ -121,7 +121,7 @@ describe('do-web AuthGuard role="parent" (family portal, plan §13 PR7)', () => 
     expect(screen.getByText('family-portal')).toBeInTheDocument();
   });
 
-  it('redirects a doer to the board at /home', () => {
+  it('redirects a doer to the doer portal at /doer', () => {
     h.auth = {
       firebaseUser: { uid: 'd1' },
       userDoc: { uid: 'd1', profiles: { doer: { enrollmentComplete: true } } },
@@ -132,7 +132,7 @@ describe('do-web AuthGuard role="parent" (family portal, plan §13 PR7)', () => 
     expect(screen.queryByText('family-portal')).toBeNull();
   });
 
-  it('redirects an admin to /home, where the doer guard passes them through', () => {
+  it('redirects an admin to /doer, where the doer guard passes them through', () => {
     h.auth = {
       firebaseUser: { uid: 'a1' },
       userDoc: { uid: 'a1', isAdmin: true },

@@ -112,7 +112,7 @@ test.describe('D-1: sync-do post → offer → accept → complete → endorse',
     await page.getByLabel(/Message to the family|Message à la famille/i).fill(OFFER_MESSAGE);
     await page.getByRole('button', { name: /Send offer|Envoyer l'offre/i }).click();
 
-    await page.goto('/offers');
+    await page.goto('/doer/offers');
     await expect(page.getByText(TASK_TITLE)).toBeVisible({ timeout: 15_000 });
 
     // ── 3. The family accepts (§6.4) ──
@@ -164,7 +164,7 @@ test.describe('D-1: sync-do post → offer → accept → complete → endorse',
     // without the `doerUserId` recipient disjunct the list below is EMPTY.
     await doLogout(page);
     await doLoginAs(page, DOER_EMAIL, PASSWORD, 'doer');
-    await page.goto('/endorsements');
+    await page.goto('/doer/endorsements');
 
     await expect(page.getByText(ENDORSEMENT_TEXT)).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText(/Waiting for you|En attente de votre réponse/i)).toBeVisible();

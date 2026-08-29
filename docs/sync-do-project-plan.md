@@ -1464,6 +1464,20 @@ It fixes two things:
 Favicon, PWA manifest icons, and the switcher brand mark all derive from the
 checked-in icon at PR2 (sizes per sit's #197 manifest work).
 
+**Route namespace** (issue #296 — this was under-specified below, and the
+first build put the doer portal at the root). Parity applies to the URL shape
+too: each portal owns a namespace, as sit's `/babysitter/*` and study's
+`/tutor/*` do, with the portal's own index at its root.
+
+| Portal | Index | Surfaces |
+| --- | --- | --- |
+| Family | `/family` | `/family/tasks`, `/family/tasks/:taskId`, `/family/post` |
+| Doer   | `/doer`   | `/doer/board`, `/doer/tasks/:taskId`, `/doer/tasks/:taskId/offer`, `/doer/offers`, `/doer/work`, `/doer/endorsements` |
+
+The pre-namespace root paths (`/home`, `/offers`, `/work`, `/endorsements`,
+`/tasks/:taskId`) redirect permanently: sync-do was already live and PR9's
+notification mail deep-links five of them.
+
 ### 9.1 Family
 
 - **Post a task** — a wizard: category → sub-category → timing (the four models
