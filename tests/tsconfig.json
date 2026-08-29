@@ -1,12 +1,25 @@
 {
   "extends": "../tsconfig.base.json",
   "compilerOptions": {
-    "outDir": "./dist",
-    "rootDir": ".",
+    // No `outDir`/`rootDir`: this project is `noEmit` (there is no build
+    // script — the suite runs through vitest), so both were emit-layout
+    // settings with nothing to lay out. `rootDir: "."` was not inert though:
+    // the integration suite imports handlers straight out of
+    // ../apps/{functions,study-functions}/src, and every one of those files
+    // tripped TS6059 "not under rootDir" the moment anything actually ran tsc
+    // here. Neither option affects which files are checked.
     "module": "ESNext",
     "moduleResolution": "bundler",
     "esModuleInterop": true,
-    "noEmit": true
+    "noEmit": true,
+    // Same reason, and the same two lines apps/functions and
+    // apps/study-functions already carry: the base config turns declaration
+    // emit on, and a `noEmit` project emits no .d.ts to be portable. Left on,
+    // the *declaration-emit* rule TS2742 fires on two `@google-cloud/storage`
+    // return types that are inferred perfectly well for checking — an error
+    // about output this project never produces.
+    "declaration": false,
+    "declarationMap": false
   },
   "include": ["**/*.ts"]
 }
