@@ -116,6 +116,9 @@ export { doGetAssignedContact } from './do/getAssignedContact.js';
 export { doStripTaskPhoto } from './do/stripTaskPhoto.js';
 export { doGetOwnPhotoUrl } from './do/getOwnPhotoUrl.js';
 export { doGetTaskPhotoUrl } from './do/getTaskPhotoUrl.js';
+// The §10 board digest (plan §8's doSendTaskDigest row) — hourly batcher,
+// per-recipient 6h rate limit via profiles.doer.lastDigestAt.
+export { doSendTaskDigest } from './do/sendTaskDigest.js';
 // Admin (§9.4): the two rows backing the Tasks tab in apps/web's EXISTING
 // panel. sync-do grows no admin tree of its own, and this tab is the ONE
 // sanctioned sit-side sync-do surface — admin tooling, not a member entry

@@ -5,6 +5,8 @@ import { getCorsOrigin } from '../config/cors.js';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
 import { callerFamilyId } from './taskAccess.js';
 import { loadActiveCaller, validOfferId } from './offerAccess.js';
+import { notifyDoSafely, sendDoNotificationSafely } from './notify.js';
+import { buildTaskOfferDeclined } from './notifyContent.js';
 
 /**
  * `doDeclineOffer` (plan §8): the owner family declines a single `pending`
@@ -41,6 +43,8 @@ export const doDeclineOffer = onCall(
     }
 
     let taskId = '';
+    let doerUserId = '';
+    let taskTitle = '';
     await db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
       if (!snap.exists) {
@@ -48,6 +52,8 @@ export const doDeclineOffer = onCall(
       }
       const offer = snap.data() as OfferDoc;
       taskId = offer.taskId;
+      doerUserId = offer.doerUserId;
+      taskTitle = offer.taskTitle;
       if (offer.familyId !== familyId) {
         throw new HttpsError(
           'permission-denied',
@@ -78,8 +84,22 @@ export const doDeclineOffer = onCall(
       }
     });
 
-    // PR9: notify the student their offer was declined. No notification
-    // plumbing in PR6.
+    // Notify the student their offer was declined (plan §10, §13 PR9) —
+    // post-commit, failures swallowed. Decision 18 allows a re-offer, and
+    // the copy says so.
+    await notifyDoSafely('declineOffer', async () => {
+      await sendDoNotificationSafely({
+        recipientUserId: doerUserId,
+        type: 'task_offer_declined',
+        prefCategory: 'cancelled',
+        content: (lang) =>
+          buildTaskOfferDeclined(lang, {
+            taskTitle,
+            reason: 'family_declined',
+          }),
+        data: { taskId, offerId: ref.id },
+      });
+    });
 
     await writeUserActivity(uid, 'do.offer_declined', {
       offerId: ref.id,

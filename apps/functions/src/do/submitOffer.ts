@@ -23,6 +23,12 @@ import {
   resolveDoerPhotoUrl,
   tsMillis,
 } from './offerAccess.js';
+import { notifyDoFamilyParents, notifyDoSafely } from './notify.js';
+import {
+  buildGuardianApprovalRequested,
+  buildTaskOfferReceived,
+  fallbackDoerName,
+} from './notifyContent.js';
 
 /**
  * `doSubmitOffer` (plan §4.2, §6.2, §6.3, §8, §11.1): an active, enrolled
@@ -145,6 +151,8 @@ export const doSubmitOffer = onCall(
 
     let status: 'pending' | 'pending_guardian' = 'pending';
     let resurrected = false;
+    let taskTitle = '';
+    let taskFamilyId = '';
     await db.runTransaction(async (tx) => {
       // Reads first, then writes (the §6.4 phase rule).
       const taskSnap = await tx.get(taskRef);
@@ -281,10 +289,64 @@ export const doSubmitOffer = onCall(
         offerCount: (task.offerCount ?? 0) + 1,
         updatedAt: now,
       });
+      taskTitle = task.title;
+      taskFamilyId = task.familyId;
     });
 
-    // PR9: notify the family (pending) or the supervising parent
-    // (pending_guardian) — no notification plumbing in PR6.
+    // Notify AFTER the commit (plan §10 / §13 PR9; post-commit invariant —
+    // failures log, never reject). A `pending` offer notifies the hiring
+    // family; a `pending_guardian` offer notifies the SUPERVISING family
+    // instead — the hiring family must not learn a gated offer exists
+    // (§6.2's invisibility promise starts here, not at the decision).
+    //
+    // The supervising-family notice is NOT the guardian-mirror duplication
+    // acceptOffer avoids (PR #334 review): it is an approval DECISION
+    // addressed to the parent themselves, and nothing else emits it. It also
+    // cannot double with `mirrorNotificationToGuardians` — that trigger keys
+    // off the RECIPIENT's `governedBy`, and these recipients are parents, who
+    // carry none. The offering student is deliberately sent nothing here, so
+    // there is no student notification for the trigger to mirror either.
+    // Fallback resolved inside the content closures below, where the
+    // recipient's language is known — an English literal would render « A
+    // student vous propose… » in French mail (PR #334 round-3 review).
+    const doerFirstName = (callerData.firstName as string | undefined) || null;
+    await notifyDoSafely('submitOffer', async () => {
+      if (status === 'pending') {
+        await notifyDoFamilyParents(taskFamilyId, {
+          type: 'task_offer_received',
+          prefCategory: 'newRequest',
+          content: (lang) =>
+            buildTaskOfferReceived(lang, {
+              doerFirstName: doerFirstName ?? fallbackDoerName(lang),
+              taskTitle,
+              taskId,
+              price: data.price as number,
+              priceBasis: data.priceBasis as 'flat' | 'hourly',
+            }),
+          data: { taskId, offerId: offerRef.id },
+        });
+      } else if (supervisingFamilyId !== null) {
+        // Gated on `newRequest` until issue #168 Phase-2 gives sync-do its own
+        // pref categories (§10 tells this PR not to pre-empt that) — a
+        // deliberate tradeoff worth stating, because this is the one do type
+        // where a muted category loses an ACTION rather than information: a
+        // parent who muted `newRequest` in Sync/Sit ("new babysitting
+        // request") is not told their child is waiting on a consent decision,
+        // and the offer just expires unseen by the hiring family (§6.2). The
+        // in-app row is still written either way, and the digest's
+        // `prefCategory: null` is the escape hatch if this is ever revisited.
+        await notifyDoFamilyParents(supervisingFamilyId, {
+          type: 'task_guardian_approval',
+          prefCategory: 'newRequest',
+          content: (lang) =>
+            buildGuardianApprovalRequested(lang, {
+              childFirstName: doerFirstName ?? fallbackDoerName(lang),
+              taskTitle,
+            }),
+          data: { taskId, offerId: offerRef.id },
+        });
+      }
+    });
 
     await writeUserActivity(uid, 'do.offer_submitted', {
       offerId: offerRef.id,

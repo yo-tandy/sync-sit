@@ -12,5 +12,6 @@
     "declarationMap": false,
     "sourceMap": true
   },
-  "include": ["src"]
+  "include": ["src"],
+  "exclude": ["src/**/__tests__"]
 }

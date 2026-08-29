@@ -4,6 +4,16 @@ import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
 import { callerFamilyId, validTaskId } from './taskAccess.js';
+import {
+  notifyDoFamilyParents,
+  notifyDoSafely,
+  sendDoNotificationSafely,
+} from './notify.js';
+import {
+  buildTaskCompletedForDoer,
+  buildTaskMarkedDoneForFamily,
+  fallbackDoerName,
+} from './notifyContent.js';
 
 /**
  * `doMarkTaskDone` (plan §8, §6.5): either side marks an ASSIGNED task done.
@@ -36,6 +46,10 @@ export const doMarkTaskDone = onCall(
 
     let result: 'completed' | 'marked' = 'marked';
     let taskFamilyId = '';
+    let taskTitle = '';
+    let familyName = '';
+    let assignedUserId: string | null = null;
+    let firstMark = false;
     await db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
       if (!snap.exists) {
@@ -62,7 +76,8 @@ export const doMarkTaskDone = onCall(
         });
       } else if (isAssignedDoer) {
         result = 'marked';
-        if (task.doerMarkedDoneAt === null) {
+        firstMark = task.doerMarkedDoneAt === null;
+        if (firstMark) {
           tx.update(ref, { doerMarkedDoneAt: now, updatedAt: now });
         }
         // Already marked: idempotent no-op — retries must not error, and the
@@ -73,10 +88,41 @@ export const doMarkTaskDone = onCall(
           'Only the owner family or the assigned doer can mark this task done',
         );
       }
+      taskTitle = task.title;
+      familyName = task.familyName;
+      assignedUserId = task.assignedUserId;
     });
 
-    // PR9: the student's mark notifies the family; completion notifies the
-    // student. No notification plumbing in PR5.
+    // The student's FIRST mark notifies the family (an idempotent re-mark
+    // must not re-notify); the family's completion notifies the student
+    // (plan §10, §13 PR9) — post-commit, failures swallowed.
+    await notifyDoSafely('markTaskDone', async () => {
+      if (result === 'marked' && firstMark) {
+        // Fallback resolved inside the closure, where the recipient's
+        // language is known (PR #334 round-3 review).
+        const doerFirstName = (callerData.firstName as string | undefined) || null;
+        await notifyDoFamilyParents(taskFamilyId, {
+          type: 'task_marked_done',
+          prefCategory: 'confirmed',
+          content: (lang) =>
+            buildTaskMarkedDoneForFamily(lang, {
+              doerFirstName: doerFirstName ?? fallbackDoerName(lang),
+              taskTitle,
+              taskId: ref.id,
+            }),
+          data: { taskId: ref.id },
+        });
+      } else if (result === 'completed' && assignedUserId) {
+        await sendDoNotificationSafely({
+          recipientUserId: assignedUserId,
+          type: 'task_marked_done',
+          prefCategory: 'confirmed',
+          content: (lang) =>
+            buildTaskCompletedForDoer(lang, { familyName, taskTitle }),
+          data: { taskId: ref.id },
+        });
+      }
+    });
 
     await writeUserActivity(uid, 'do.task_marked_done', {
       taskId: ref.id,

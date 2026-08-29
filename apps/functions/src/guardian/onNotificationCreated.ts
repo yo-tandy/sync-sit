@@ -50,7 +50,64 @@ const EMAIL_PREF_CATEGORY: Record<string, 'newRequest' | 'confirmed' | 'cancelle
   published_search_contact: 'newRequest',
   published_search_accepted: 'confirmed',
   published_search_declined: 'cancelled',
+  // sync-do (plan §10; PR #334 round-2 review). doAcceptOffer stopped writing
+  // an explicit guardian notice because this mirror already CCs the
+  // supervising parents — but without these entries that CC was push +
+  // in-app only, and a supervising parent with no push tokens was left with
+  // an in-app row no surface renders yet. Mapping restores the email leg
+  // through the SAME single mirror, with no duplication. Categories follow
+  // the platform's existing semantics above: an outcome the student was
+  // waiting for is `confirmed`, something falling through is `cancelled`,
+  // and a change to committed work is `newRequest` (the
+  // `study_session_modified` precedent).
+  task_offer_accepted: 'confirmed',
+  task_marked_done: 'confirmed',
+  task_offer_declined: 'cancelled',
+  task_cancelled: 'cancelled',
+  task_updated: 'newRequest',
+  // DELIBERATELY UNMAPPED do types (in-app + push only, per this map's
+  // conservative rule):
+  // - `task_guardian_approval`: on the child-facing half a parent of this
+  //   very family just made the decision, so emailing the family back is the
+  //   `supervision_request` kind of noise this trigger already skips; the
+  //   parent-facing approval REQUEST is a different write that submitOffer
+  //   emails directly (its recipients are parents, who carry no `governedBy`
+  //   and so never reach this trigger at all).
+  // - `new_task_matching`: the board digest is informational and runs up to
+  //   4x a day per student; mirroring it by email would make a parent's inbox
+  //   the busiest surface in sync-do. The push/in-app copy still reaches them.
+  // - `task_offer_received` / `task_assigned`: only ever addressed to hiring
+  //   parents (or, for `task_assigned`, to nobody — it has no sender since
+  //   the round-1 dedupe), and a parent carries no `governedBy`, so neither
+  //   can reach this map.
 };
+
+/**
+ * Which app BRANDS a mirror's email (sender name, header colour, footer CTA).
+ *
+ * The push leg already derives its world from the mirrored notification's
+ * original type; the email leg passed nothing and so defaulted to `'sit'`.
+ * Harmless while every mapped type was a sit type — but the sync-do entries
+ * above made it reachable with do content, which would have sent
+ * `Sync/Sit <noreply@sync-sit.com>` mail, headed Sync/Sit, footed
+ * "Open Sync/Sit → sync-sit.com", about a task assignment that does not
+ * exist in Sync/Sit (PR #334 round-3 review).
+ *
+ * DO-ORIGIN ONLY, deliberately. `derivePushWorld` also separates study from
+ * sit, but study mirrors have been sit-branded since they shipped: correcting
+ * that would change what a study parent's mail looks like, which is a
+ * sibling-app behavior change and not a sync-do PR's to make. So this returns
+ * `'do'` for do-world types and today's `'sit'` default for everything else —
+ * strictly additive, with the study-origin gap left as a separate follow-up.
+ *
+ * Orthogonal to issue #336. That decision is whether do mirrors should reach
+ * a parent's sit/study surfaces AT ALL; this only decides that if such a mail
+ * is sent, it is honestly branded. If #336 resolves toward suppressing do
+ * mirrors, this leg simply stops firing.
+ */
+export function deriveMirrorEmailApp(originalType: string): 'sit' | 'study' | 'do' {
+  return derivePushWorld(originalType) === 'do' ? 'do' : 'sit';
+}
 
 export const mirrorNotificationToGuardians = onDocumentCreated(
   { document: 'notifications/{notificationId}', region: 'europe-west1' },
@@ -110,12 +167,16 @@ export const mirrorNotificationToGuardians = onDocumentCreated(
         });
 
       if (sendEmail) {
+        // Branded from the ORIGINAL type, like the push leg below — a do-world
+        // event sends Sync/Do mail with the Sync/Do CTA, not sit mail pointing
+        // at an app where the event does not exist (see deriveMirrorEmailApp).
         await sendNotificationEmail(
           parent!.email as string,
           title,
           `<p>${escapeHtml(body)}</p>
            <p style="color: #6B7280; font-size: 14px;">You receive this copy because you
            supervise ${escapeHtml(kidName)}'s account.</p>`,
+          deriveMirrorEmailApp(originalType),
         );
       }
       // app='auto': the parent's app affinity is theirs, not the kid's. The

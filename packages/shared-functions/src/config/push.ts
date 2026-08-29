@@ -1,6 +1,6 @@
 import { FieldValue } from 'firebase-admin/firestore';
 import { db, messaging } from './firebase.js';
-import { STUDY_APP_URL } from './email.js';
+import { DO_APP_URL, STUDY_APP_URL } from './email.js';
 import type { NotificationApp } from './email.js';
 
 // Per-app push branding (issue #168 Phase 0). The study icon is the 512px
@@ -12,6 +12,9 @@ const PUSH_BRANDING: Record<NotificationApp, { icon: string; link: string }> = {
   // cost study's icon fix removed (PR #192).
   sit: { icon: 'https://sync-sit.com/icon-192.png', link: 'https://sync-sit.com' },
   study: { icon: `${STUDY_APP_URL}/icon-512.png`, link: STUDY_APP_URL },
+  // do's icon follows sit's choice: the 192px manifest variant is plenty for
+  // a notification render (sync-do plan §13 PR9).
+  do: { icon: `${DO_APP_URL}/icon-192.png`, link: DO_APP_URL },
 };
 
 // Per-app token arrays (issue #168 Phase 1). The sit and study PWAs are
@@ -47,19 +50,34 @@ const PUSH_BRANDING: Record<NotificationApp, { icon: string; link: string }> = {
 const PUSH_TOKEN_FIELDS: Record<NotificationApp, string> = {
   sit: 'fcmTokens',
   study: 'fcmTokensStudy',
+  // do's registrations follow the established per-app pattern (plan §10 —
+  // unification is issue #168 Phase-2 territory, not sync-do's to pre-empt).
+  do: 'fcmTokensDo',
 };
 
 /**
  * Derive which app's WORLD a notification type belongs to, for use as the
  * `world` hint of an app='auto' push. Study-world types are prefixed
- * (`study_*`, plus the `tutor_endorsement_*` family); everything else is sit.
- * The guardian mirror uses this on the mirrored notification's original type.
+ * (`study_*`, plus the `tutor_endorsement_*` family); do-world types are the
+ * §10 task set (`task_*`, `new_task_matching`, plus the `doer_endorsement_*`
+ * family); everything else is sit. The guardian mirror uses this on the
+ * mirrored notification's original type.
  */
 export function derivePushWorld(notificationType: string): NotificationApp {
-  return notificationType.startsWith('study_') ||
+  if (
+    notificationType.startsWith('study_') ||
     notificationType.startsWith('tutor_endorsement_')
-    ? 'study'
-    : 'sit';
+  ) {
+    return 'study';
+  }
+  if (
+    notificationType.startsWith('task_') ||
+    notificationType === 'new_task_matching' ||
+    notificationType.startsWith('doer_endorsement_')
+  ) {
+    return 'do';
+  }
+  return 'sit';
 }
 
 /**
@@ -89,15 +107,26 @@ export async function sendPushNotification(
 
     let resolvedApp: NotificationApp;
     if (app === 'auto') {
-      const hasSit = ((userData?.[PUSH_TOKEN_FIELDS.sit] as string[]) || []).length > 0;
-      const hasStudy = ((userData?.[PUSH_TOKEN_FIELDS.study] as string[]) || []).length > 0;
-      if (hasSit && hasStudy) {
-        resolvedApp = world ?? 'sit';
-      } else if (hasStudy) {
-        resolvedApp = 'study';
-      } else {
-        // sit-only — or neither, which the empty short-circuit below handles.
+      // Three-way affinity (sync-do plan §13 PR9 extends the #168 Phase-2
+      // pair): tokens in exactly one array -> that app; several arrays ->
+      // the `world` hint when THAT app actually holds tokens (a hint naming
+      // an empty array would short-circuit to a false negative), otherwise
+      // 'sit' — the pre-Phase-2 default, preserved for dual sit+study
+      // installs; none -> 'sit', whose empty short-circuit below returns
+      // false as before.
+      const installed = (['sit', 'study', 'do'] as const).filter(
+        (a) => ((userData?.[PUSH_TOKEN_FIELDS[a]] as string[]) || []).length > 0,
+      );
+      if (installed.length === 1) {
+        resolvedApp = installed[0];
+      } else if (world && installed.includes(world)) {
+        resolvedApp = world;
+      } else if (installed.includes('sit') || installed.length === 0) {
         resolvedApp = 'sit';
+      } else {
+        // study+do dual install, no usable hint: prefer study — the older
+        // sibling, mirroring the sit-first tie-break one tier up.
+        resolvedApp = 'study';
       }
     } else {
       resolvedApp = app;

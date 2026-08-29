@@ -10,6 +10,15 @@ import {
   tsMillis,
   validOfferId,
 } from './offerAccess.js';
+import {
+  notifyDoSafely,
+  sendDoNotificationSafely,
+  sendDoNotificationToEach,
+} from './notify.js';
+import {
+  buildTaskOfferAccepted,
+  buildTaskOfferDeclined,
+} from './notifyContent.js';
 
 /**
  * `doAcceptOffer` — the §6.4 transaction, transcribed step by step. One
@@ -48,6 +57,11 @@ export const doAcceptOffer = onCall(
     let taskId = '';
     let doerUserId = '';
     let agreedPrice = 0;
+    let priceBasis: 'flat' | 'hourly' = 'flat';
+    let taskTitle = '';
+    let familyName = '';
+    let winnerData: Record<string, unknown> = {};
+    let loserDoerUserIds: string[] = [];
     await db.runTransaction(async (tx) => {
       // ── Read phase (§6.4 steps 1-5) ──
       // The offer names the task, so it is fetched first mechanically; the
@@ -166,15 +180,17 @@ export const doAcceptOffer = onCall(
       // excludes it, and it is the truthful description: nobody declined
       // this offer, its moment passed. §6.2's invisibility promise thus
       // holds through BOTH exits — guardian denial and sibling acceptance.
+      loserDoerUserIds = [];
       for (const sibling of liveOffers.docs) {
         if (sibling.id === offerRef.id) continue;
-        const siblingStatus = (sibling.data() as OfferDoc).status;
-        if (siblingStatus === 'pending') {
+        const siblingData = sibling.data() as OfferDoc;
+        if (siblingData.status === 'pending') {
           tx.update(sibling.ref, {
             status: 'declined',
             declinedReason: 'sibling_accepted',
             updatedAt: now,
           });
+          loserDoerUserIds.push(siblingData.doerUserId);
         } else {
           tx.update(sibling.ref, { status: 'expired', updatedAt: now });
         }
@@ -182,12 +198,80 @@ export const doAcceptOffer = onCall(
 
       taskId = task.taskId;
       doerUserId = offer.doerUserId;
+      priceBasis = offer.priceBasis;
+      taskTitle = task.title;
+      familyName = task.familyName;
+      winnerData = student;
     });
 
-    // Step 9 — PR9: notify the winner, each loser, and the winner's
-    // guardian if there is an active link (outside the transaction —
-    // notifications are not transactional writes). No notification
-    // plumbing in PR6.
+    // Step 9 — notify the winner and each loser (plan §10, §13 PR9; the
+    // winner's guardian is CC'd by the platform mirror, see below).
+    // Outside the transaction:
+    // notifications are not transactional writes, and nothing after the
+    // commit may reject the callable (notifyDoSafely). "Each loser" = the
+    // `pending` siblings step 8 flipped to declined/'sibling_accepted'.
+    // `pending_guardian` siblings went to `expired` — nobody declined them,
+    // their moment passed, and no notice is sent for an offer whose guardian
+    // never decided (§6.2: the student sees the state change in "My offers").
+    // Every recipient below is INDEPENDENT of the others, so each send is
+    // isolated (…Safely / …ToEach): post-commit there is no retry, and an
+    // unguarded sequence meant one transient failure on the winner left every
+    // loser untold (PR #334 round-3 review).
+    await notifyDoSafely('acceptOffer', async () => {
+      await sendDoNotificationSafely({
+        recipientUserId: doerUserId,
+        recipientData: winnerData,
+        type: 'task_offer_accepted',
+        prefCategory: 'confirmed',
+        content: (lang) =>
+          buildTaskOfferAccepted(lang, {
+            familyName,
+            taskTitle,
+            taskId,
+            agreedPrice,
+            priceBasis,
+          }),
+        data: { taskId, offerId: offerRef.id },
+      });
+      await sendDoNotificationToEach(loserDoerUserIds, {
+        type: 'task_offer_declined',
+        prefCategory: 'cancelled',
+        content: (lang) =>
+          buildTaskOfferDeclined(lang, {
+            taskTitle,
+            reason: 'sibling_accepted',
+          }),
+        data: { taskId },
+      });
+      // NO explicit guardian notification here, deliberately (PR #334
+      // review). Step 9's "the winner's guardian if there is an active link"
+      // is satisfied by the PLATFORM, not by a second write:
+      // `mirrorNotificationToGuardians`
+      // (apps/functions/src/guardian/onNotificationCreated.ts) fires on every
+      // `notifications/{id}` create whose recipient carries `governedBy` —
+      // exactly the supervised winner above — and CCs a `guardian_mirror`
+      // copy (email + push + in-app, kid-prefixed title) to every parent of
+      // the supervising family. The winner's `task_offer_accepted` IS that
+      // trigger, so notifying the guardian family here too would mean two
+      // notices and two pushes for one acceptance. `governedBy` is still the
+      // right authority for who is supervised — it is just read by the
+      // trigger rather than here.
+      //
+      // ALL THREE channels, not just push (PR #334 round-2 review): the
+      // mirror emails only types it can map to a `notifPrefs` category, so
+      // `task_offer_accepted` — with the other do types a student receives —
+      // is now in that trigger's `EMAIL_PREF_CATEGORY` map. Without it, a
+      // supervising parent holding no push tokens would have been left with
+      // an in-app row alone, on a child-safety oversight notice.
+      //
+      // Whether do-world mirrors should surface in the sit/study bells at
+      // all is an owner decision tracked on issue #336 (decision-20's
+      // one-app-per-world line vs. child-safety oversight); it is not
+      // settled here and no sibling-app file is touched. Either way the
+      // guardian copy comes from ONE place, and `buildTaskAssignedGuardian`
+      // stays in notifyContent.ts as §10's `task_assigned` template that a
+      // "do types skip the mirror" resolution would re-attach a sender to.
+    });
 
     // Step 10: audit the assignment.
     await writeUserActivity(uid, 'do.offer_accepted', {

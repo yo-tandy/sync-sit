@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { buildNotificationEmailHtml, sendNotificationEmail, escapeHtml, STUDY_APP_URL } from '../email.js';
+import { buildNotificationEmailHtml, sendNotificationEmail, escapeHtml, STUDY_APP_URL, DO_APP_URL } from '../email.js';
 
 // Branding pins for the shared notification email wrapper (issue #168 Phase 0).
 // Study emails must carry no Sync/Sit branding and link the study host; the
@@ -38,6 +38,26 @@ describe('buildNotificationEmailHtml', () => {
 
   it('the study footer links the exported STUDY_APP_URL (one host for CTA, footer, and push)', () => {
     expect(buildNotificationEmailHtml('', 'study')).toContain(STUDY_APP_URL);
+  });
+
+  it('do branding names Sync/Do, green accent, links the LIVE do host, and carries no sibling branding', () => {
+    const html = buildNotificationEmailHtml('<p>hello</p>', 'do');
+    expect(html).toContain('Sync/Do');
+    expect(html).toContain('#0d8204');
+    expect(html).toContain(DO_APP_URL);
+    expect(html).toContain('Open Sync/Do');
+    expect(html).toContain('<p>hello</p>');
+    expect(html).not.toContain('Sync/Sit');
+    expect(html).not.toContain('Sync/Study');
+    expect(html).not.toContain('#DC2626');
+    // §10/#156 rule: CTAs build on the live web.app host, never sync-do.com.
+    expect(html).not.toContain('sync-do.com');
+    expect(buildNotificationEmailHtml('', 'do')).not.toContain('https://sync-sit.com');
+  });
+
+  it('the do footer links the exported DO_APP_URL (one host for CTA, footer, and push)', () => {
+    expect(DO_APP_URL).toBe('https://sync-do-app.web.app');
+    expect(buildNotificationEmailHtml('', 'do')).toContain(DO_APP_URL);
   });
 });
 
