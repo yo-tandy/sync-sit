@@ -31,6 +31,20 @@ export default defineConfig([
     },
   },
   {
+    // eslint.config.mjs itself, and any future ESM script. Without this block
+    // ESLint's directory scan enumerates it and matches it against nothing --
+    // the same "scanned, matched nothing, reported clean" state the .cjs block
+    // above exists to eliminate (PR #381 review). Separate from that block
+    // because sourceType differs.
+    files: ['**/*.mjs'],
+    extends: [js.configs.recommended],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: 'module',
+      globals: globals.node,
+    },
+  },
+  {
     // A leading underscore is the house marker for a binding that exists only
     // to be destructured away (rest-omit in the schema tests). Scoped to the
     // tests: a dead `_foo` in production code should still be an error.
