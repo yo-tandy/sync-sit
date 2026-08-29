@@ -133,7 +133,7 @@ export const getTutorAvailability = onCall(
     }
 
     // ── Holiday-period grid substitution (only when holidayMode is 'different') ──
-    let holidayPeriods: HolidayPeriod[] = [];
+    const holidayPeriods: HolidayPeriod[] = [];
     if (holidayMode === 'different') {
       const years = getSchoolYearsInRange(startDate, endDate);
       const holidaySnaps = await Promise.all(

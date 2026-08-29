@@ -53,10 +53,6 @@ function timeToSlotIndex(time: string): number {
   return Math.floor((h * 60 + m) / 15);
 }
 
-const DAYS_MAP: Record<string, number> = {
-  sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6,
-};
-
 export const searchBabysitters = onCall(
   { region: 'europe-west1', cors: getCorsOrigin() },
   async (request) => {

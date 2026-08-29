@@ -57,7 +57,7 @@ export const modifyAppointment = onCall(
     }
 
     // Build update object and track changed fields
-    const updates: Record<string, any> = {};
+    const updates: Record<string, unknown> = {};
     const modifiedFields: string[] = [];
     const now = new Date();
 
@@ -111,7 +111,7 @@ export const modifyAppointment = onCall(
 
         // Re-denormalize kids from family subcollection
         const kidsSnap = await db.collection('families').doc(apt.familyId).collection('kids').get();
-        const kidMap: Record<string, any> = {};
+        const kidMap: Record<string, FirebaseFirestore.DocumentData | undefined> = {};
         for (const doc of kidsSnap.docs) {
           kidMap[doc.id] = doc.data();
         }

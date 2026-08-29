@@ -82,7 +82,7 @@ const contactEmailShape = z.string().email();
  * requirement — decision 16's reveal must serve something dialable.
  */
 function isPlausiblePhone(v: string): boolean {
-  return /^\+?[0-9 ().\-]+$/.test(v) && v.replace(/\D/g, '').length >= 6;
+  return /^\+?[0-9 ().-]+$/.test(v) && v.replace(/\D/g, '').length >= 6;
 }
 
 /** Manual guards in the publishSearch house style (plan §8). */
