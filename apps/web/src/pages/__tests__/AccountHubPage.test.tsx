@@ -33,6 +33,9 @@ import { AccountHubPage } from '../AccountHubPage';
 
 const PARENT = { uid: 'p1', profiles: { parent: { familyId: 'f1' } } };
 const STUDENT = { uid: 's1', profiles: { babysitter: { enrollmentComplete: true } } };
+const ADMIN = { uid: 'a1', profiles: { admin: {} } };
+/** Signed in, no sit profile at all -- a study-only tutor. AuthGuard admits them. */
+const NO_SIT_ROLE = { uid: 't1', profiles: { tutor: { enrollmentComplete: true } } };
 
 function renderHub(userDoc: unknown) {
   h.userDoc = userDoc;
@@ -122,8 +125,12 @@ describe('AccountHubPage (sit)', () => {
     renderHub(PARENT);
     const study = screen.getByText('sync/study').closest('section')!;
     fireEvent.click(within(study).getByText('Open sync-study'));
-    expect(h.assign).not.toHaveBeenCalled();
+    // Await the error FIRST. Asserting `assign` synchronously here only says
+    // the rejected mint has not been processed yet, which is trivially true
+    // one tick after the click -- it would pass a regression that both set
+    // the error AND navigated (#416 review round 4).
     expect(await screen.findByText('Could not switch apps. Please try again.')).toBeInTheDocument();
+    expect(h.assign).not.toHaveBeenCalled();
   });
 
   it('offers no study DEEP links — study drops the destination on arrival', () => {
@@ -151,5 +158,41 @@ describe('AccountHubPage (sit)', () => {
     // Students have no "Appointments" row — their dashboard is that view.
     expect(within(sit).queryByText('Appointments')).toBeNull();
     expect(within(sit).getByText('Endorsements')).toBeInTheDocument();
+  });
+
+  /**
+   * ABSENT BEATS BROKEN, applied to roles (#416 review round 4).
+   *
+   * `getSitRole` is four-way. Collapsing it to `role === 'parent'` handed
+   * admins and role-less members the BABYSITTER rows, every one of which
+   * bounces off `BabysitterLayout`'s `role="babysitter"` guard — an admin to
+   * `/admin`, a study-only tutor to `/welcome-sit`. `AuthGuard` deliberately
+   * admits both to this page, so the rows have to be absent rather than
+   * broken.
+   */
+  it.each([
+    ['an admin', ADMIN],
+    ['a member with no sit role', NO_SIT_ROLE],
+  ])('offers %s no sit rows rather than rows that bounce', (_who, doc) => {
+    renderHub(doc);
+    expect(screen.queryByText('sync/sit')).toBeNull();
+    // The neutral block goes too: its only row is the same per-role account
+    // page. `AccountHome` also renders the hub TITLE as 'My account', so this
+    // asserts the single remaining occurrence is the <h1> and not a row.
+    const myAccount = screen.getAllByText('My account');
+    expect(myAccount).toHaveLength(1);
+    expect(myAccount[0].tagName).toBe('H1');
+    for (const bounces of ['Endorsements', 'Favorites', 'Search']) {
+      expect(screen.queryByText(bounces)).toBeNull();
+    }
+  });
+
+  it.each([
+    ['an admin', ADMIN],
+    ['a member with no sit role', NO_SIT_ROLE],
+  ])('still offers %s the study handoff, which works for them', (_who, doc) => {
+    renderHub(doc);
+    const study = screen.getByText('sync/study').closest('section')!;
+    expect(within(study).getByText('Open sync-study')).toBeInTheDocument();
   });
 });

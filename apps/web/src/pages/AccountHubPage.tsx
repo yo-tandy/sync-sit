@@ -33,7 +33,23 @@ export function AccountHubPage() {
   const { t, i18n } = useTranslation();
   const userDoc = useAuthStore((s) => s.userDoc);
   const role = userDoc ? getSitRole(userDoc) : null;
-  const isParent = role === 'parent';
+  /**
+   * A SIT role, not a boolean (#416 review round 4). `getSitRole` returns
+   * 'parent' | 'babysitter' | 'admin' | undefined, so collapsing it to
+   * `role === 'parent'` put admins AND signed-in members with no sit profile
+   * (a study-only tutor, say) into the babysitter branch — where every row
+   * they were handed bounced off `BabysitterLayout`'s `role="babysitter"`
+   * guard: an admin to `/admin`, a tutor to `/welcome-sit`. That is the whole
+   * neutral section plus all three sit rows, dead, for two role classes that
+   * `AuthGuard` now deliberately admits to this page.
+   *
+   * This page's rule is ABSENT BEATS BROKEN, so those two sections are simply
+   * not rendered without a sit role. What is left — the study handoff — works
+   * for every signed-in member regardless of sit role, which is exactly the
+   * case a role-less member is here for.
+   */
+  const sitRole = role === 'parent' || role === 'babysitter' ? role : null;
+  const isParent = sitRole === 'parent';
   const [busy, setBusy] = useState(false);
   const [handoffFailed, setHandoffFailed] = useState(false);
 
@@ -67,7 +83,7 @@ export function AccountHubPage() {
     }
   };
 
-  const sections: AccountSection[] = [
+  const sitSections: AccountSection[] = [
     {
       title: t('accountHub.title'),
       rows: [
@@ -101,6 +117,10 @@ export function AccountHubPage() {
             { label: t('accountHub.favorites'), href: '/babysitter/families' },
           ],
     },
+  ];
+
+  const sections: AccountSection[] = [
+    ...(sitRole ? sitSections : []),
     {
       app: 'study' as const,
       /*
