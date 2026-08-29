@@ -226,14 +226,23 @@ export function AdminVerificationsPage() {
                         // same-origin proxy the attribute goes live and the
                         // value must be sanitized first (round-1 review).
                         // ERROR SCOPE: the banner below covers callable and
-                        // path-parse failures only. Once the URL is handed to
-                        // the browser, a 403/expired signature fails silently
-                        // -- inherent to download semantics (window.open at
-                        // least surfaced the storage error in its tab).
+                        // path-parse failures only. Past that point a FAILED
+                        // signed URL (expired token, SignatureDoesNotMatch,
+                        // object deleted after the exists() check) returns
+                        // 403/400 as XML with NO disposition header -- GCS
+                        // applies the query-param disposition to authorized
+                        // responses only -- so this targetless click NAVIGATES
+                        // the panel to that error page rather than failing
+                        // silently: exactly the outcome the COUPLING note
+                        // above describes. Accepted because the URL is minted
+                        // milliseconds earlier with a 15-minute TTL, so the
+                        // window is tiny. Alternatives weighed and rejected:
+                        // a hidden iframe never navigates but downloads are
+                        // unreliable across browsers there, and fetch+blob
+                        // would need CORS on the bucket.
                         const a = document.createElement('a');
                         a.href = result.data.url;
                         a.download = v.fileName || '';
-                        a.rel = 'noopener';
                         document.body.appendChild(a);
                         a.click();
                         a.remove();

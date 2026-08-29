@@ -242,11 +242,13 @@ describe('AdminVerificationsPage view-document error surfacing', () => {
     (httpsCallable as ReturnType<typeof vi.fn>).mockReturnValue(
       vi.fn().mockResolvedValue({ data: { url: 'https://signed.example/u' } }),
     );
-    let seenDownload: string | null = null;
+    // Record clicks like the sibling pin (round 2): a last-value sample
+    // cannot assert that exactly ONE anchor was clicked.
+    const downloads: (string | null)[] = [];
     vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (
       this: HTMLAnchorElement,
     ) {
-      seenDownload = this.getAttribute('download');
+      downloads.push(this.getAttribute('download'));
     });
 
     renderPage();
@@ -256,6 +258,6 @@ describe('AdminVerificationsPage view-document error surfacing', () => {
     // Advisory only cross-origin (browsers ignore it; the server's
     // Content-Disposition does the work) -- pinned so a same-origin
     // future, or a filename regression, is visible.
-    await waitFor(() => expect(seenDownload).toBe('id.pdf'));
+    await waitFor(() => expect(downloads).toEqual(['id.pdf']));
   });
 });
