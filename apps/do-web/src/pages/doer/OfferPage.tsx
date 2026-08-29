@@ -22,24 +22,7 @@ import { Button, Checkbox, InfoBanner, Input, Spinner, Textarea, TopNav, useToas
 import { db, functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { formatTimingSummary } from '@/lib/taskDisplay';
-
-type Refusal =
-  | 'task_offer_cap'
-  | 'offer_cap'
-  | 'under_15'
-  | 'offer_exists'
-  | 'task_not_open'
-  | 'not_pending';
-
-/** §13 PR8's refusal→copy mapping, one place so tests can pin it. */
-export const REFUSAL_KEYS: Record<Refusal, string> = {
-  task_offer_cap: 'doer.offerForm.errorTaskOfferCap', // oversubscribed (§6.4's write-set bound)
-  offer_cap: 'doer.offerForm.errorOfferCap',
-  under_15: 'doer.offerForm.errorUnder15',
-  offer_exists: 'doer.offerForm.errorOfferExists', // the resurrection matrix's already-exists arm
-  task_not_open: 'doer.offerForm.errorTaskNotOpen',
-  not_pending: 'doer.offerForm.errorNotPending',
-};
+import { REFUSAL_KEYS, type Refusal } from './offerRefusals';
 
 /**
  * Make / update an offer (plan §9.2): price + basis, message, the optional

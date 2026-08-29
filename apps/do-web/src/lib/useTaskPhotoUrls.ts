@@ -16,13 +16,16 @@ export function useTaskPhotoUrls(
   photos: { photoId: string }[],
 ): { urls: Record<string, string>; loading: boolean } {
   const [urls, setUrls] = useState<Record<string, string>>({});
-  const [loading, setLoading] = useState(false);
+  // The SETTLED key, not a loading flag: `loading` is derived below instead of
+  // written synchronously on the way into the effect, which cascades renders.
+  // Same idiom `useAssignedContact` records — the state a fetch needs is
+  // scheduled by whoever triggers it, never set inside the effect body.
+  const [settledKey, setSettledKey] = useState<string | null>(null);
 
   const photoKey = photos.map((p) => p.photoId).join(',');
   useEffect(() => {
     if (photoKey === '') return;
     let cancelled = false;
-    setLoading(true);
     const getUrl = httpsCallable<{ taskId: string; photoId: string }, { url: string }>(
       functions,
       'doGetTaskPhotoUrl',
@@ -39,12 +42,14 @@ export function useTaskPhotoUrls(
     ).then((entries) => {
       if (cancelled) return;
       setUrls(Object.fromEntries(entries.filter((e): e is [string, string] => e !== null)));
-      setLoading(false);
+      setSettledKey(`${taskId}|${photoKey}`);
     });
     return () => {
       cancelled = true;
     };
   }, [taskId, photoKey]);
 
-  return { urls, loading };
+  // Identity includes taskId: the effect keys on both, so a taskId change
+  // with an identical photoKey is still a refetch and must read as loading.
+  return { urls, loading: photoKey !== '' && settledKey !== `${taskId}|${photoKey}` };
 }
