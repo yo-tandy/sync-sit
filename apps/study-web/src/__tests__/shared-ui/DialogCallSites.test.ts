@@ -35,25 +35,43 @@ function tsxFiles(dir: string): string[] {
 /**
  * Extract each <Dialog ...> opening tag. The tag ends at the first '>' that
  * sits at curly-brace depth 0, so arrows inside prop expressions
- * (onClose={() => ...}) don't terminate it early.
+ * (onClose={() => ...}) don't terminate it early. Heuristic, not a parser:
+ * a brace or '>' inside a string literal would skew it — none exist in the
+ * tree today, and a mis-slice can only shrink or grow the tag, both of which
+ * surface through the assertions below rather than silently passing:
+ * an occurrence whose tag never terminates is returned as null and FAILS
+ * the test (a walker that stops seeing sites must not look like success).
  */
-function dialogOpeningTags(source: string): string[] {
-  const tags: string[] = [];
+function dialogOpeningTags(source: string): Array<string | null> {
+  const tags: Array<string | null> = [];
   const re = /<Dialog[\s\n]/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(source)) !== null) {
+    let tag: string | null = null;
     let depth = 0;
     for (let i = m.index; i < source.length; i++) {
       const ch = source[i];
       if (ch === '{') depth++;
       else if (ch === '}') depth--;
       else if (ch === '>' && depth === 0) {
-        tags.push(source.slice(m.index, i + 1));
+        tag = source.slice(m.index, i + 1);
         break;
       }
     }
+    tags.push(tag);
   }
   return tags;
+}
+
+/**
+ * A tag counts as named only if it carries ariaLabel with something that
+ * can't be statically empty. `ariaLabel={expr || undefined}` still passes —
+ * the deliberate blank-title guard in the admin confirm dialogs — so this is
+ * a lint against obvious no-ops, not a proof the runtime name is non-empty.
+ */
+function isNamed(tag: string): boolean {
+  if (!tag.includes('ariaLabel')) return false;
+  return !/ariaLabel=(\{\s*(undefined|''|"")\s*\}|"")/.test(tag);
 }
 
 describe('Dialog call sites (repo-wide)', () => {
@@ -64,7 +82,9 @@ describe('Dialog call sites (repo-wide)', () => {
       for (const file of tsxFiles(join(repoRoot, root))) {
         for (const tag of dialogOpeningTags(readFileSync(file, 'utf8'))) {
           total++;
-          if (!tag.includes('ariaLabel')) unnamed.push(relative(repoRoot, file));
+          // null = the walker saw '<Dialog' but never found the tag's end —
+          // treat as a failure, never as "not a call site".
+          if (tag === null || !isNamed(tag)) unnamed.push(relative(repoRoot, file));
         }
       }
     }
