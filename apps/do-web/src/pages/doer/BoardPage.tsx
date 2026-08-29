@@ -42,7 +42,8 @@ function CardThumb({ task }: { task: TaskDoc }) {
 }
 
 /**
- * The board (plan §9.2) — the app's home screen: the demand feed of open
+ * The board (plan §9.2) — the student's daily destination, reached from the
+ * /doer dashboard's quick action and the tab bar: the demand feed of open
  * tasks, newest first.
  *
  * THE QUERY SPLIT IS THE SPEC (§7.3): `status` + `category` are the ONLY

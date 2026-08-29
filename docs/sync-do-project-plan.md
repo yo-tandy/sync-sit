@@ -1479,10 +1479,16 @@ landing surfaces `postLoginRouter` and the role-mismatch guard send people to,
 and they answer "what needs me right now?" the way sit's `/babysitter` and
 study's `/tutor` do — not a bare index of one collection. That is why the
 family task LIST lives at `/family/tasks` and the board at `/doer/board`
-rather than at their portal roots: the roots are spoken for. The two
-dashboards land in the PR that follows the namespace move; until they do,
-both indexes are temporary redirects to the surfaces above, and each is
-marked as such in `apps/do-web/src/router.tsx`.
+rather than at their portal roots: the roots are spoken for.
+
+**DONE (issue #360):** both dashboards shipped in the PR after the namespace
+move, replacing the temporary index redirects. Each composes shared-ui's
+`DashboardGreeting` + `DashboardSection` like its two siblings, over the
+queries the app's list surfaces already issue — the family's over the §9.1
+badge query and the completed-task endorsement gate, the doer's over their
+offers, their assignments and their pending endorsements. Neither dashboard
+fires a callable: rows navigate to the surface that owns the action, the rule
+all four sibling dashboards follow.
 
 The pre-namespace root paths (`/home`, `/offers`, `/work`, `/endorsements`,
 `/tasks/:taskId`) redirect permanently: sync-do was already live and PR9's
@@ -1490,6 +1496,12 @@ notification mail deep-links five of them.
 
 ### 9.1 Family
 
+- **Dashboard** (`/family`, issue #360) — the portal index. Greeting, a
+  prominent "Post a task", then three sections: open tasks badged with the
+  offers awaiting review (the badge query below, never `offerCount`), work in
+  progress, and recent completions carrying the endorsement prompt for any
+  doer this family has not endorsed yet. Empty for a family with no tasks,
+  pointing at posting one.
 - **Post a task** — a wizard: category → sub-category → timing (the four models
   each with their own small form) → title + free-text description *with the
   considerations list rendered alongside* → photos → adult-present declaration →
@@ -1591,9 +1603,15 @@ notification mail deep-links five of them.
 
 ### 9.2 Doer (student)
 
+- **Dashboard** (`/doer`, issue #360) — the portal index. Greeting, a
+  prominent "Browse the board", then three sections: live offers split by who
+  they wait on (the family, or §6.2's supervising parent), assigned work with
+  what is next, and endorsements to answer. Empty for a new student, pointing
+  at the board.
 - **Board** — the demand feed. Filters: category, sub-category, timing, area,
-  adult-present, transport-needed. Sorted newest-first by default. This is the
-  app's home screen.
+  adult-present, transport-needed. Sorted newest-first by default. It is the
+  student's daily destination, reached from the dashboard's quick action and
+  the tab bar.
 - **Task detail** — everything the family published, plus the considerations
   list as "what to ask before you offer", plus an `adultPresent` badge.
 - **Make an offer** — price + basis, message, optional +1 helper (name and
