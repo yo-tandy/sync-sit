@@ -69,8 +69,9 @@ _worktrees/
 /playwright-report/
 /playwright/.cache/
 
-# Scratch file planted by the bundle-shared-for-deploy suite to prove the
-# filter drops a stray test file outside __tests__. Its cleanup runs in a
-# `finally`, so an interrupted run can leave it behind; ignored so it cannot be
-# swept into a commit.
+# Scratch file planted by scripts/__tests__/bundle-shared-for-deploy.test.ts
+# (its `probeStem` constant) to prove the filter drops a stray test file
+# outside __tests__. Its cleanup runs in a `finally`, so an interrupted run can
+# leave it behind; ignored so it cannot be swept into a commit. That test
+# asserts this line still matches, so the two cannot drift apart.
 packages/*/src/__leftover_bundlerStrayProbe.test.ts

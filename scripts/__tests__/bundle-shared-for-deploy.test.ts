@@ -115,6 +115,7 @@ describe('bundle-shared-for-deploy', () => {
     const bundled = new Set(listBundleFiles());
     const missing: string[] = [];
     const emptyTrees: string[] = [];
+    let checked = 0;
 
     // Which deploy codebases each bundle lands in: step 6 mirrors four of the
     // five into apps/study-functions; do-core is apps/functions-only (its
@@ -142,8 +143,18 @@ describe('bundle-shared-for-deploy', () => {
         let checkedHere = 0;
         for (const rel of sources) {
           const inPkg = path.relative(pkgTree, path.join(repoRoot, rel));
-          if (isTestArtifact(inPkg)) continue;
+          // Deliberately the PATH clause only, not the full isTestArtifact.
+          // That predicate mirrors the script's TEST_FILE_RE, so using it here
+          // would make the test blind to the one bug that matters most: if the
+          // filename regex is ever widened and over-matches (`foo.tester.ts`,
+          // a broader suffix class), the over-matched runtime files would be
+          // skipped by BOTH sides and vanish from dist with the suite green.
+          // Keyed on `__tests__/` instead — a structural fact about where this
+          // repo puts tests, independent of the regex under test — every such
+          // file is expected present and lands in `missing` when it is not.
+          if (TEST_PATH_RE.test(inPkg)) continue;
           for (const appDir of appDirs) {
+            checked++;
             checkedHere++;
             const expected = path.join(appDir, bundleName, tree, inPkg);
             if (!bundled.has(expected)) missing.push(expected);
@@ -159,6 +170,10 @@ describe('bundle-shared-for-deploy', () => {
     // Cloud Functions actually loads — stayed well above any global floor and
     // passed vacuously. Named, so the failure says which tree.
     expect(emptyTrees).toEqual([]);
+    // Magnitude alongside non-emptiness: a tree only has to keep one surviving
+    // file to clear the per-tree check, so this keeps a large partial reduction
+    // visible too.
+    expect(checked).toBeGreaterThan(1000);
   }, 60000);
 
   // The filename clause of the filter removes nothing today — every test file
@@ -176,12 +191,19 @@ describe('bundle-shared-for-deploy', () => {
     // path for the same reason. (It does NOT break study-core's own suite —
     // that vitest include is `src/**/__tests__/**/*.test.ts`, which a file at
     // the root of `src` does not match.)
-    const probeName = '__leftover_bundlerStrayProbe.test.ts';
-    const probeSrc = path.join(pkgDir, 'src', probeName);
     const probeStem = '__leftover_bundlerStrayProbe';
+    const probeSrc = path.join(pkgDir, 'src', `${probeStem}.test.ts`);
     const distDir = path.join(pkgDir, 'dist');
 
-    fs.writeFileSync(probeSrc, 'export const strayProbe = 1;\n');
+    // The .gitignore entry is the half of the cleanup that survives a killed
+    // process, and renaming the stem would silently stop it matching. Asserted
+    // rather than commented, so the coupling cannot rot.
+    const gitignore = fs.readFileSync(path.join(repoRoot, '.gitignore'), 'utf8');
+    expect(gitignore, '.gitignore must still cover the probe path').toContain(
+      `packages/*/src/${probeStem}.test.ts`,
+    );
+
+    fs.writeFileSync(probeSrc, `export const ${probeStem} = 1;\n`);
     try {
       runScript(bundleScript);
 
