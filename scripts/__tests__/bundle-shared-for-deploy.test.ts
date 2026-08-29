@@ -35,6 +35,16 @@ function walk(dir: string, out: string[]) {
   }
 }
 
+/** The test-artifact shapes the bundler's filter must drop, in either tree.
+ *  Mirrors scripts/bundle-shared-for-deploy.js — dist adds the declaration and
+ *  sourcemap siblings tsc emits alongside a compiled `foo.test.js`. */
+const TEST_PATH_RE = /(^|\/)__tests__\//;
+const TEST_FILE_RE = /\.(test|spec)\.(d\.)?[cm]?[jt]sx?(\.map)?$/;
+
+function isTestArtifact(p: string): boolean {
+  return TEST_PATH_RE.test(p) || TEST_FILE_RE.test(p);
+}
+
 /** Every file under apps/{functions,study-functions}/<name>-bundle/, repo-relative. */
 function listBundleFiles(): string[] {
   const out: string[] = [];
@@ -86,20 +96,25 @@ describe('bundle-shared-for-deploy', () => {
   it('copies no test sources into any bundle', () => {
     runScript(bundleScript);
 
-    const offenders = listBundleFiles().filter(
-      (f) => /(^|\/)__tests__\//.test(f) || /\.(test|spec)\.[cm]?[jt]sx?$/.test(f),
-    );
+    const offenders = listBundleFiles().filter(isTestArtifact);
     expect(offenders).toEqual([]);
   }, 60000);
 
-  // The other half of the same guard: the filter must remove test files and
+  // The other half of the same guard: the filter must remove test artifacts and
   // NOTHING else. Asserted against the source packages rather than a golden
   // list, so a new runtime file is covered the day it is added.
-  it('still copies every non-test source file of every bundled package', () => {
+  //
+  // Covers `dist` as well as `src`, and dist is the half that matters most: it
+  // is the code Cloud Functions actually loads, so a filter that over-matched
+  // there would strip executable runtime code out of the artifact. This also
+  // turns "no dist file was removed" from a one-time manual check into a
+  // standing assertion.
+  it('still copies every non-test file of every bundled package (src and dist)', () => {
     runScript(bundleScript);
 
     const bundled = new Set(listBundleFiles());
     const missing: string[] = [];
+    let checked = 0;
 
     // Which deploy codebases each bundle lands in: step 6 mirrors four of the
     // five into apps/study-functions; do-core is apps/functions-only (its
@@ -114,22 +129,66 @@ describe('bundle-shared-for-deploy', () => {
     ];
 
     for (const [pkgName, bundleName, appDirs] of bundles) {
-      const pkgSrc = path.join(repoRoot, 'packages', pkgName, 'src');
-      const sources: string[] = [];
-      walk(pkgSrc, sources);
+      for (const tree of ['src', 'dist']) {
+        const pkgTree = path.join(repoRoot, 'packages', pkgName, tree);
+        const sources: string[] = [];
+        walk(pkgTree, sources);
 
-      for (const rel of sources) {
-        const inPkg = path.relative(pkgSrc, path.join(repoRoot, rel));
-        if (/(^|\/)__tests__\//.test(inPkg) || /\.(test|spec)\.[cm]?[jt]sx?$/.test(inPkg)) continue;
-        for (const appDir of appDirs) {
-          const expected = path.join(appDir, bundleName, 'src', inPkg);
-          if (!bundled.has(expected)) missing.push(expected);
+        for (const rel of sources) {
+          const inPkg = path.relative(pkgTree, path.join(repoRoot, rel));
+          if (isTestArtifact(inPkg)) continue;
+          for (const appDir of appDirs) {
+            checked++;
+            const expected = path.join(appDir, bundleName, tree, inPkg);
+            if (!bundled.has(expected)) missing.push(expected);
+          }
         }
       }
     }
 
     expect(missing).toEqual([]);
-    // Sanity floor: the loop above must actually have found sources to check.
-    expect(bundled.size).toBeGreaterThan(1000);
+    // Sanity floor on what the loop actually consumed — `bundled.size` would
+    // stay green off the other packages if one package's walk came back empty,
+    // which is the exact failure this floor exists to catch.
+    expect(checked).toBeGreaterThan(1000);
+  }, 60000);
+
+  // The filename clause of the filter removes nothing today — every test file
+  // in every bundled package sits under a `__tests__` directory — so without
+  // this it would ship untested. Plants the exact file it exists to catch: a
+  // stray `*.test.ts` OUTSIDE a `__tests__` directory, which each package's
+  // tsconfig.cjs.json does NOT exclude and therefore compiles into `dist` as
+  // four artifacts (.js, .d.ts, .js.map, .d.ts.map). All four must stay out of
+  // the bundle — the .js especially, since dist is what Cloud Functions loads.
+  it('drops a stray test file outside __tests__, and all four of its dist artifacts', () => {
+    const pkgDir = path.join(repoRoot, 'packages/study-core');
+    const probeSrc = path.join(pkgDir, 'src', 'strayProbe.test.ts');
+    const distDir = path.join(pkgDir, 'dist');
+
+    fs.writeFileSync(probeSrc, 'export const strayProbe = 1;\n');
+    try {
+      runScript(bundleScript);
+
+      // Not vacuous: the probe really did compile to all four dist artifacts,
+      // so there was something for the filter to drop.
+      const compiled = fs
+        .readdirSync(distDir)
+        .filter((n) => n.startsWith('strayProbe'))
+        .sort();
+      expect(compiled).toEqual([
+        'strayProbe.test.d.ts',
+        'strayProbe.test.d.ts.map',
+        'strayProbe.test.js',
+        'strayProbe.test.js.map',
+      ]);
+
+      // And none of them — nor the .ts source — reached any bundle.
+      expect(listBundleFiles().filter((f) => f.includes('strayProbe'))).toEqual([]);
+    } finally {
+      fs.rmSync(probeSrc, { force: true });
+      for (const name of fs.readdirSync(distDir)) {
+        if (name.startsWith('strayProbe')) fs.rmSync(path.join(distDir, name), { force: true });
+      }
+    }
   }, 60000);
 });
