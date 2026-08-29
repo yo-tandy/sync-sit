@@ -5,7 +5,13 @@
     // `types` does not merge through `extends`, so vite/client has to be
     // re-listed rather than added to. `node` is genuinely needed here: a few
     // tests read fixtures off disk via node:fs / import.meta.dirname.
-    "types": ["vite/client", "node"]
+    "types": ["vite/client", "node"],
+    // Inert under this non-incremental `tsc -p` run, but tsconfig.app.json
+    // sets tsBuildInfoFile and `extends` DOES inherit it — so without this
+    // override the test project would point at the app project's buildinfo
+    // path and collide with it the moment anyone enables `incremental`
+    // (PR #411 review).
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.test.tsbuildinfo"
   },
   "include": [
     "src/**/__tests__/**/*.ts",
@@ -19,7 +25,13 @@
     // / etc. Without it the matchers are unknown and every assertion using one
     // fails TS2339. Including it also type-checks the setup file itself,
     // which nothing did before.
-    "vitest.setup.ts"
+    "vitest.setup.ts",
+    // The config that decides which of the files above actually run was
+    // itself checked by nothing: tsconfig.node.json includes only
+    // vite.config.ts, tsconfig.app.json only src. It belongs in this pass
+    // rather than that one -- it imports vitest/config, and `node` is
+    // already declared here for import.meta.dirname (PR #411 review).
+    "vitest.config.ts"
   ],
   // `extends` does NOT merge `exclude`, so this line is load-bearing rather
   // than boilerplate: inherited, the app config's exclude would filter out
