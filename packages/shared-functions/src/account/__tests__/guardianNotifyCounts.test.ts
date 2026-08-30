@@ -32,6 +32,9 @@ const h = vi.hoisted(() => ({
   written: [] as Record<string, unknown>[],
   // The `app` argument each push was routed with — see the 'auto' test.
   pushApps: [] as unknown[],
+  // Parent ids whose `users` doc read should throw — the per-parent
+  // isolation test's input.
+  throwsOnGet: new Set<string>(),
 }));
 
 vi.mock('../../config/firebase.js', () => ({
@@ -41,7 +44,14 @@ vi.mock('../../config/firebase.js', () => ({
         return { doc: () => ({ get: async () => ({ data: () => ({ parentIds: h.parents }) }) }) };
       }
       if (name === 'users') {
-        return { doc: (id: string) => ({ get: async () => ({ data: () => h.users.get(id) }) }) };
+        return {
+          doc: (id: string) => ({
+            get: async () => {
+              if (h.throwsOnGet.has(id)) throw new Error(`transient failure for ${id}`);
+              return { data: () => h.users.get(id) };
+            },
+          }),
+        };
       }
       if (name === 'notifications') {
         return {
@@ -86,6 +96,7 @@ describe('guardian notification counts', () => {
     h.push = () => false;
     h.written.length = 0;
     h.pushApps.length = 0;
+    h.throwsOnGet.clear();
   });
 
   it('counts a guardian reached by email alone', async () => {
@@ -150,6 +161,29 @@ describe('guardian notification counts', () => {
       reached: 0,
     });
     expect(h.written).toHaveLength(0);
+  });
+
+  it('isolates a per-parent failure — the rest still get their attempt (review round 7)', async () => {
+    // Before per-parent isolation, a thrown error on parent 1 of 3 aborted
+    // the whole loop: parent 2 and 3 never got their attempt, and the
+    // function's caller (whose own try/catch discards the partial result)
+    // recorded `{ found: 0, reached: 0 }` — byte-identical to a family that
+    // named no parents at all, exactly the silent failure `found`/`reached`
+    // exist to catch.
+    h.parents = ['p1', 'p2', 'p3'];
+    h.users = new Map([
+      ['p1', { email: 'p1@example.com' }],
+      ['p2', { email: 'p2@example.com' }],
+      ['p3', { email: 'p3@example.com' }],
+    ]);
+    h.throwsOnGet.add('p2');
+
+    // Does not throw — the whole point of the isolation.
+    const result = await notifyGuardiansOfSelfDelete('fam1', 'kid1', 'Zoe Dupont');
+    // p2's failure counts as found-but-not-reached, the same signal a
+    // missing user doc already produces; p1 and p3 are unaffected.
+    expect(result).toEqual({ found: 3, reached: 2 });
+    expect(h.written.map((d) => d.recipientUserId).sort()).toEqual(['p1', 'p3']);
   });
 
   it("routes the push with 'auto', not a hardcoded app", async () => {

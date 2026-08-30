@@ -133,74 +133,95 @@ export async function notifyGuardiansOfSelfDelete(
   const found = parentIds.length;
   let reached = 0;
   for (const parentId of parentIds) {
-    const parentData = (await db.collection('users').doc(parentId).get()).data();
-    if (!parentData) continue;
+    // Per-parent isolation (review round 7): a Firestore error on one parent
+    // must not abort the loop for the rest. Before this, a transient failure
+    // on parent 2 of 3 threw out of the function entirely; the caller's catch
+    // then leaves `guardians` at its initial `{ found: 0, reached: 0 }`,
+    // which is byte-identical in the audit entry to a family that named no
+    // parents at all -- exactly the state `found`/`reached` were split to
+    // stop happening silently. Mirrors `eraseUserAccount`'s claim-release
+    // loop (`deleteUser.ts`), which isolates per-item for the same reason:
+    // earlier steps have already committed, so one poisoned item must not
+    // discard everyone else's already-attempted notification.
+    try {
+      const parentData = (await db.collection('users').doc(parentId).get()).data();
+      if (!parentData) continue;
 
-    let emailSent = false;
-    if (parentData.email) {
-      emailSent = await sendNotificationEmail(
-        parentData.email,
-        title,
-        `<p>${escapeHtml(name)} deleted their own account.</p>
+      let emailSent = false;
+      if (parentData.email) {
+        emailSent = await sendNotificationEmail(
+          parentData.email,
+          title,
+          `<p>${escapeHtml(name)} deleted their own account.</p>
          <p>They are no longer on the platform, and your supervision of them has ended. Their data has been removed.</p>
          <p>If you did not expect this, please contact us.</p>`,
-        // Branding only -- `sendNotificationEmail` has no 'auto' and the
-        // address is the same whichever app sends it. 'sit' is the suite's
-        // default identity; a guardian who only uses sync/study still
-        // receives the mail, it just carries sit branding.
-        'sit',
+          // Branding only -- `sendNotificationEmail` has no 'auto' and the
+          // address is the same whichever app sends it. 'sit' is the suite's
+          // default identity; a guardian who only uses sync/study still
+          // receives the mail, it just carries sit branding.
+          'sit',
+        );
+      }
+
+      // 'auto', matching every other guardian notification in the repo
+      // (`createKidInvite`, `revokeSupervision`, `forceRevokeSupervision`,
+      // `guardianAccess`, `guardianSetChildSearchable`). An explicit app makes
+      // `sendPushNotification` read that app's token array ALONE, so a guardian
+      // who only installed the sync/study or sync/do PWA has no `sit` tokens and
+      // the send returns false without trying -- leaving email as the only
+      // channel to a safeguarding message. Affinity resolution finds their
+      // actual install instead.
+      const pushSent = await sendPushNotification(
+        parentId,
+        title,
+        body,
+        { type: 'supervised_account_deleted' },
+        'auto',
       );
+
+      await db.collection('notifications').add({
+        recipientUserId: parentId,
+        type: 'supervised_account_deleted',
+        title,
+        // `body` DOES name the child, deliberately (review round 6 asked for
+        // this to be settled rather than left ambiguous, and it was ambiguous:
+        // the note below reads as a rule about the whole document).
+        //
+        // The rule is about the STRUCTURED payload, not the human copy. A
+        // guardian who supervises two minors cannot act on "a supervised
+        // account was deleted", and this is the one channel that persists: if
+        // both the email and the push missed — the case `reached` exists to
+        // surface — the in-app doc is the only record the guardian ever gets.
+        // The recipient is the child's own supervising parent, the read is
+        // restricted to them (`firestore.rules:590`), and `cleanupOldData`
+        // sweeps the doc at 30 days, so the name is bounded and goes nowhere
+        // the parent does not already have it.
+        body,
+        // `data` is the other half of that rule and keeps the uid alone: it is
+        // the payload other code consumes, and nothing downstream should be
+        // able to re-derive a display name for an account that no longer
+        // exists.
+        data: { childUid },
+        read: false,
+        channels: ['email', 'push'],
+        emailSent,
+        pushSent,
+        createdAt: now,
+      });
+      // Only a delivered channel counts. The in-app doc above is deliberately
+      // NOT one: it is written unconditionally, so counting it would make
+      // `reached` unconditional again and put the same lie back in the log.
+      if (emailSent || pushSent) reached += 1;
+    } catch (err) {
+      // This parent is FOUND but not REACHED -- the same signal a missing
+      // user doc already produces, and the one `found > reached` exists to
+      // catch. The next parent still gets their attempt.
+      console.error('[notifyGuardiansOfSelfDelete] failed for one parent', {
+        familyId,
+        parentId,
+        err,
+      });
     }
-
-    // 'auto', matching every other guardian notification in the repo
-    // (`createKidInvite`, `revokeSupervision`, `forceRevokeSupervision`,
-    // `guardianAccess`, `guardianSetChildSearchable`). An explicit app makes
-    // `sendPushNotification` read that app's token array ALONE, so a guardian
-    // who only installed the sync/study or sync/do PWA has no `sit` tokens and
-    // the send returns false without trying -- leaving email as the only
-    // channel to a safeguarding message. Affinity resolution finds their
-    // actual install instead.
-    const pushSent = await sendPushNotification(
-      parentId,
-      title,
-      body,
-      { type: 'supervised_account_deleted' },
-      'auto',
-    );
-
-    await db.collection('notifications').add({
-      recipientUserId: parentId,
-      type: 'supervised_account_deleted',
-      title,
-      // `body` DOES name the child, deliberately (review round 6 asked for
-      // this to be settled rather than left ambiguous, and it was ambiguous:
-      // the note below reads as a rule about the whole document).
-      //
-      // The rule is about the STRUCTURED payload, not the human copy. A
-      // guardian who supervises two minors cannot act on "a supervised
-      // account was deleted", and this is the one channel that persists: if
-      // both the email and the push missed — the case `reached` exists to
-      // surface — the in-app doc is the only record the guardian ever gets.
-      // The recipient is the child's own supervising parent, the read is
-      // restricted to them (`firestore.rules:590`), and `cleanupOldData`
-      // sweeps the doc at 30 days, so the name is bounded and goes nowhere
-      // the parent does not already have it.
-      body,
-      // `data` is the other half of that rule and keeps the uid alone: it is
-      // the payload other code consumes, and nothing downstream should be
-      // able to re-derive a display name for an account that no longer
-      // exists.
-      data: { childUid },
-      read: false,
-      channels: ['email', 'push'],
-      emailSent,
-      pushSent,
-      createdAt: now,
-    });
-    // Only a delivered channel counts. The in-app doc above is deliberately
-    // NOT one: it is written unconditionally, so counting it would make
-    // `reached` unconditional again and put the same lie back in the log.
-    if (emailSent || pushSent) reached += 1;
   }
   return { found, reached };
 }
