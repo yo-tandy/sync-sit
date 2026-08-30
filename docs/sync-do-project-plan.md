@@ -2054,6 +2054,25 @@ rules on minors' occasional work bear on any of this, and whether the ToS
 wording achieves what decision 15 intends. That is a Tandy SARL item, and it is
 the only launch blocker in this document.
 
+**The consent-version bump belongs to that counsel pass, not before it.** PR
+#412 rewrote both documents' substance and moved only the "Last updated" date;
+`TOS_VERSION` and `PRIVACY_POLICY_VERSION` stay `'1.0'`
+(`packages/shared-core/src/constants/config.ts`), and so does the enrollment
+`consentVersion` enum. That is deliberate rather than an oversight, and the
+reasoning is recorded here because the PR thread is not a durable place for
+it: the version constants are the ONLY machinery that can drive the in-app
+re-consent both documents promise (Privacy §15, Terms §14), and bumping them
+before counsel revises would force every user through a re-consent for text
+that is about to change again. Counsel's revision is the moment the
+notification obligation actually lands.
+
+So: **bumping `TOS_VERSION` and `PRIVACY_POLICY_VERSION`, and extending the
+enrollment `consentVersion` enum, is part of the counsel-revision PR's
+definition of done** — not a follow-up to be discovered afterwards. Until then,
+every stored consent record cites `'1.0'` for a document with a new Privacy
+§10, a rewritten Terms §8 and different age rules from the one presented; that
+divergence is visible to users through the updated date and to no code at all.
+
 ---
 
 ## 12. Shared-Package Impact

@@ -539,6 +539,37 @@ describe('shared legal copy — age and consent', () => {
     expect(text).not.toContain('aged 15 to 18 at enrollment');
   });
 
+  it('does not require an @ejm.org address unconditionally (EN + FR)', async () => {
+    // §3's own preceding bullet carves out a pre-approved address, and
+    // `verifyEjmEmail.ts:36-47` skips `validateEjmEmail` entirely when
+    // `preapprovedEmails/{email}` exists unused — so an unconditional
+    // "must have a valid @ejm.org address" disqualified the very reader the
+    // line above had just qualified. Privacy §14 said the same thing
+    // descriptively; both are scoped now, and they must not disagree.
+    await i18n.changeLanguage('en');
+    renderWithProviders(<TermsPage brand="Sync/Sit" supportEmail="help@example.com" />);
+    let text = bodyText();
+    expect(text).toContain('unless we have pre-approved a different address');
+    expect(text).not.toContain('Must have a valid EJM school email address (@ejm.org) and verify');
+
+    cleanup();
+    renderWithProviders(<PrivacyPage brand="Sync/Sit" supportEmail="help@example.com" />);
+    text = bodyText();
+    expect(text).toContain('or through an address we have pre-approved');
+
+    cleanup();
+    await i18n.changeLanguage('fr');
+    renderWithProviders(<TermsPage brand="Sync/Sit" supportEmail="help@example.com" />);
+    text = bodyText();
+    expect(text).toContain("sauf si nous avons approuvé au préalable une autre adresse");
+    expect(text).not.toContain("Disposer d'une adresse e-mail scolaire EJM valide");
+
+    cleanup();
+    renderWithProviders(<PrivacyPage brand="Sync/Sit" supportEmail="help@example.com" />);
+    text = bodyText();
+    expect(text).toContain('ou par une adresse que nous avons approuvée au préalable');
+  });
+
   it('states the real floor and carve-out (terms, FR)', async () => {
     await i18n.changeLanguage('fr');
     renderWithProviders(<TermsPage brand="Sync/Do" supportEmail="help@example.com" />);
@@ -578,6 +609,32 @@ describe('shared legal copy — the +1 helper (sync-do §11.3)', () => {
     expect(text).toContain('10. Personnes désignées par des tiers');
     expect(text).toContain('prénom, nom et âge');
     expect(text).toContain('uniquement sur la proposition');
+  });
+
+  it('pins the helper retention figures, which are written as words (EN + FR)', async () => {
+    // `shape().numbers` is a digit multiset and these quantities are word-form,
+    // so the parity guard is blind to them: an FR drift from "six mois" to
+    // "trois mois" changes no digit, no bullet count and no paragraph break.
+    // §10 is where it matters most — the helper has no account and no in-app
+    // rights tool, so the retention bound is the only guarantee they get, and
+    // it is word-form in both languages. Same for §5's seven-day
+    // post-cancellation contact window (DO_CONTACT_GRACE_DAYS).
+    await i18n.changeLanguage('en');
+    renderWithProviders(<PrivacyPage brand="Sync/Do" supportEmail="help@example.com" />);
+    let text = bodyText();
+    expect(text).toContain('six months after the task is completed, or thirty days after it is cancelled');
+    expect(text).toContain('for seven days after a cancellation');
+
+    // Two renders in one test — cleanup() so the FR assertions do not read the
+    // EN DOM still mounted (cf. the helper-retention test above).
+    cleanup();
+    await i18n.changeLanguage('fr');
+    renderWithProviders(<PrivacyPage brand="Sync/Do" supportEmail="help@example.com" />);
+    text = bodyText();
+    expect(text).toContain(
+      "six mois après l'achèvement de la mission, ou trente jours après son annulation",
+    );
+    expect(text).toContain('pendant sept jours après une annulation');
   });
 
   it('binds the student who declares one, in the terms', async () => {
