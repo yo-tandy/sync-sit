@@ -303,6 +303,23 @@ describe('shared legal copy — the address, and who it reaches (PR #412 review)
     expect(text).toContain('recorded on the appointment itself');
   });
 
+  it('lists the counterparty as a recipient, with the per-app storage difference (FR)', async () => {
+    // The single most sensitive disclosure claim in the document — that
+    // Sync/Study is one-way and shares nothing about the family beyond its
+    // name and subject — was asserted in EN only, against the file's own
+    // both-locales standard.
+    await i18n.changeLanguage('fr');
+    renderWithProviders(<PrivacyPage brand="Sync/Sit" supportEmail="help@example.com" />);
+    const text = bodyText();
+
+    expect(text).toContain("L'autre partie à une intervention");
+    expect(text).toContain('Sur Sync/Sit et Sync/Do, l\'échange est réciproque');
+    expect(text).toContain("Sur Sync/Study, l'échange est à sens unique");
+    expect(text).toContain('ni adresse, ni coordonnées des parents');
+    expect(text).toContain('ne sont jamais enregistrées sur la proposition');
+    expect(text).toContain('enregistrée sur le rendez-vous lui-même');
+  });
+
   it('states the real bound on the contact reveal, not "once the engagement is over"', async () => {
     // getAssignedContact.ts:104 admits `assigned` OR `completed`; only the
     // cancelled branch is time-bounded (DO_CONTACT_GRACE_DAYS = 7). The reveal

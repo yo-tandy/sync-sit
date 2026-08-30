@@ -93,7 +93,7 @@ const sections: Section[] = [
       'All users must create an account to access {{brand}}. Account creation requires:\n\n' +
       '- Providing accurate and complete personal information\n' +
       '- Verifying your email address through a magic link sent to your email\n' +
-      '- For service providers: verifying their school affiliation through their @ejm.org email address\n' +
+      '- For service providers: verifying their school affiliation through their @ejm.org email address, or a pre-approved address\n' +
       '- For parents: completing the parent verification process\n\n' +
       'You are responsible for maintaining the security of your account. You must not share your authentication links with anyone. You must notify us immediately at {{supportEmail}} if you suspect unauthorised access to your account.\n\n' +
       'We reserve the right to refuse, suspend, or terminate any account that fails verification or provides false information.',
@@ -101,7 +101,7 @@ const sections: Section[] = [
       'Tous les utilisateurs doivent créer un compte pour accéder à {{brand}}. La création de compte nécessite :\n\n' +
       '- La fourniture d\'informations personnelles exactes et complètes\n' +
       '- La vérification de votre adresse e-mail via un lien magique envoyé à votre adresse\n' +
-      '- Pour les prestataires : la vérification de leur affiliation scolaire par leur adresse e-mail @ejm.org\n' +
+      '- Pour les prestataires : la vérification de leur affiliation scolaire par leur adresse e-mail @ejm.org, ou par une adresse pré-approuvée\n' +
       '- Pour les parents : la réalisation du processus de vérification parentale\n\n' +
       'Vous êtes responsable de la sécurité de votre compte. Vous ne devez en aucun cas partager vos liens d\'authentification. Vous devez nous notifier immédiatement à {{supportEmail}} si vous soupçonnez un accès non autorisé à votre compte.\n\n' +
       'Nous nous réservons le droit de refuser, suspendre ou résilier tout compte qui échoue à la vérification ou fournit de fausses informations.',
