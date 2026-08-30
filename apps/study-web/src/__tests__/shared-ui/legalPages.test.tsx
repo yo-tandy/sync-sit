@@ -472,21 +472,25 @@ describe('shared legal copy — age and consent', () => {
     expect(text).toContain(
       `A student under ${SELF_ENROLL_FLOOR_AGE} can take part only through a supervised account`,
     );
-    // The upper bound is a PER-APP difference, not the absence the first draft
-    // claimed: study-web StepProfile.tsx:79 and web StepProfile.tsx:48 both
-    // gate `age >= 15 && age < 19`, and checkEnrollmentAge returns
-    // 'age_mismatch' outside ±1 school year (waivable via enrollmentExemptions).
-    // Only do-web (`governed || age >= 15`) has no ceiling.
-    expect(text).toContain('There is no single upper age limit, because the apps differ');
+    // The ceiling is enforced on ALL THREE apps, not absent on Sync/Do: PR
+    // #412 review round 7 caught this exact defect class in its own copy —
+    // `enrollDoer.ts:409-425` runs `checkEnrollmentAge` and throws
+    // `age_mismatch` for an ungoverned caller with a parseable graduation
+    // year, waivable via `enrollmentExemptions`, the same rule enrollTutor
+    // applies. study-web StepProfile.tsx:79 and web StepProfile.tsx:48 both
+    // gate `age >= 15 && age < 19` client-side; sit and do differ only in
+    // WHICH SIDE enforces it and what refusal looks like.
+    expect(text).toContain('All three apps require a provider');
     expect(text).toContain('consistent with their EJM school year');
     // enrollBabysitter.ts runs NO age check; ageBackstop.ts:6-8 calls itself
     // "the ONLY operative age gate on the provider side" and filters at search
     // and contact time, so sit enrolls the student and then hides them.
-    expect(text).toContain('Sync/Study refuses the enrollment outright');
-    expect(text).toContain('Sync/Sit accepts it and instead stops showing that provider to families');
+    expect(text).toContain('Sync/Study and Sync/Do both refuse the enrollment outright');
+    expect(text).toContain('Sync/Sit accepts the enrollment and instead stops showing that provider to families');
     // passesAgeBackstop returns true when no DOB is stored (ageBackstop.ts:46).
     expect(text).toContain('skipped where we hold no date of birth');
-    expect(text).toContain('On Sync/Do there is no upper limit');
+    expect(text).not.toContain('There is no single upper age limit');
+    expect(text).not.toContain('On Sync/Do there is no upper limit');
     expect(text).not.toContain('We do not set an upper age limit');
     expect(text).not.toContain('refuses a date of birth outside that window');
     // Guardian consent for flagged sync-do sub-categories.
@@ -508,13 +512,14 @@ describe('shared legal copy — age and consent', () => {
     expect(text).toContain(
       `Un élève de moins de ${SELF_ENROLL_FLOOR_AGE} ans ne peut participer que par l'intermédiaire d'un compte supervisé`,
     );
-    expect(text).toContain("Il n'existe pas de limite d'âge supérieure unique");
-    expect(text).toContain("rester cohérente avec son année scolaire à l'EJM");
-    expect(text).toContain('Sync/Study refuse purement et simplement l');
+    expect(text).toContain('Les trois applications exigent que la date de naissance');
+    expect(text).toContain("reste cohérente avec son année scolaire à l'EJM");
+    expect(text).toContain('Sync/Study et Sync/Do refusent tous deux purement et simplement l');
     expect(text).toContain('Sync/Sit l');
     expect(text).toContain('cesse de présenter ce prestataire aux familles');
     expect(text).toContain("écartée lorsque nous ne disposons d'aucune date de naissance");
-    expect(text).toContain("Sur Sync/Do, il n'existe aucune limite supérieure");
+    expect(text).not.toContain("Il n'existe pas de limite d'âge supérieure unique");
+    expect(text).not.toContain("Sur Sync/Do, il n'existe aucune limite supérieure");
     expect(text).not.toContain("Nous ne fixons aucune limite d'âge supérieure");
   });
 
@@ -530,11 +535,11 @@ describe('shared legal copy — age and consent', () => {
     // bullet here — a 19-year-old terminale repeater with a valid @ejm.org
     // address reads this list, and enrollment will refuse them.
     expect(text).toContain(
-      'must have a date of birth that stays consistent with their EJM school year',
+      'Must have a date of birth that stays consistent with their EJM school year',
     );
-    expect(text).toContain('Sync/Study refuses the enrollment outright');
+    expect(text).toContain('Sync/Study and Sync/Do both refuse the enrollment outright');
     expect(text).toContain('stops showing the provider to families instead');
-    expect(text).toContain('Sync/Do sets no upper age limit');
+    expect(text).not.toContain('Sync/Do sets no upper age limit');
     expect(text).not.toContain('We do not set an upper age limit');
     expect(text).not.toContain('aged 15 to 18 at enrollment');
   });
@@ -579,7 +584,8 @@ describe('shared legal copy — age and consent', () => {
       `Être âgé(e) d'au moins ${SELF_ENROLL_FLOOR_AGE} ans pour s'inscrire de sa propre initiative`,
     );
     expect(text).toContain("reste cohérente avec son année scolaire à l'EJM");
-    expect(text).toContain("Sync/Do ne fixe aucune limite d'âge supérieure");
+    expect(text).toContain('Sync/Study et Sync/Do refusent tous deux purement et simplement l');
+    expect(text).not.toContain("Sync/Do ne fixe aucune limite d'âge supérieure");
     expect(text).not.toContain("Nous ne fixons aucune limite d'âge supérieure");
   });
 });
