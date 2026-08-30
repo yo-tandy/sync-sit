@@ -312,14 +312,14 @@ const sections: Section[] = [
     titleEn: '14. Verification Documents',
     titleFr: '14. Documents de vérification',
     contentEn:
-      'Families are required to submit identity documents (government-issued ID scan) and school enrollment certificates as part of the verification process. Service providers — babysitters, tutors and doers alike — verify their school affiliation through their @ejm.org email address and do not submit identity documents. Family verification documents are:\n\n' +
+      'Families are required to submit identity documents (government-issued ID scan) and school enrollment certificates as part of the verification process. Service providers — babysitters, tutors and doers alike — verify their school affiliation through their @ejm.org email address, or through an address we have pre-approved, and do not submit identity documents. Family verification documents are:\n\n' +
       '- Uploaded securely to Firebase Cloud Storage with restricted access\n' +
       '- Accessible only to platform administrators for the purpose of identity and enrollment verification\n' +
       '- Not shared with other users or third parties\n' +
       '- Permanently deleted when the family\'s account is deleted\n\n' +
       'Administrators review these documents solely to confirm that families are part of the EJM community and that their identity matches their profile information.',
     contentFr:
-      'Les familles doivent soumettre des documents d\'identité (copie d\'une pièce d\'identité officielle) et des certificats de scolarité dans le cadre du processus de vérification. Les prestataires — babysitters, tuteurs et « doers » — vérifient leur affiliation scolaire par leur adresse e-mail @ejm.org et ne soumettent pas de documents d\'identité. Les documents de vérification des familles sont :\n\n' +
+      'Les familles doivent soumettre des documents d\'identité (copie d\'une pièce d\'identité officielle) et des certificats de scolarité dans le cadre du processus de vérification. Les prestataires — babysitters, tuteurs et « doers » — vérifient leur affiliation scolaire par leur adresse e-mail @ejm.org, ou par une adresse que nous avons approuvée au préalable, et ne soumettent pas de documents d\'identité. Les documents de vérification des familles sont :\n\n' +
       '- Téléchargés de manière sécurisée sur Firebase Cloud Storage avec un accès restreint\n' +
       '- Accessibles uniquement aux administrateurs de la plateforme à des fins de vérification d\'identité et de scolarité\n' +
       '- Non partagés avec d\'autres utilisateurs ou des tiers\n' +
