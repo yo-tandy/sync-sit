@@ -598,6 +598,12 @@ Implemented by the `deleteMyAccount` callable (issue #368). It runs the SAME
 erasure as the admin `deleteUser` — one implementation, so there are never two
 answers to "what does deleting a member remove".
 
+> **The server half landed first.** Steps 2–4 describe the account hub row
+> that issue #367 adds; no client in `apps/web`, `apps/study-web` or
+> `apps/do-web` calls `deleteMyAccount` yet. Everything from step 5 on is
+> shipped and covered by
+> `tests/integration/account/delete-my-account.test.ts`.
+
 ```
 BABYSITTER (Marie)               SYSTEM                     PARENTS (affected)
 ──────────────────               ──────                     ──────────────────
