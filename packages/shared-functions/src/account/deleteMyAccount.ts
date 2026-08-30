@@ -2,6 +2,7 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { eraseUserAccount } from '../admin/deleteUser.js';
+import { raisePartialErasureAlert } from '../admin/partialErasureAlert.js';
 import { writeAuditLog } from '../admin/writeAuditLog.js';
 import {
   escapeHtml,
@@ -283,7 +284,10 @@ export const deleteMyAccount = onCall(
       }
     }
 
-    const erasureFailures = erased.studyErasure.cascadeErrors + erased.claimReleaseErrors;
+    // Same helper the admin path uses, with `selfDeleted: true` so an operator
+    // triaging `adminAlerts` can tell which path produced it — an admin delete
+    // has a human who can be asked what happened, this one does not.
+    const erasureFailures = await raisePartialErasureAlert(uid, erased, true);
 
     // The audit trail matters MORE for a self-delete than for an admin one,
     // not less: there is no second person who witnessed it. `adminUserId` is
@@ -332,19 +336,6 @@ export const deleteMyAccount = onCall(
         erasureFailures,
       },
     });
-
-    if (erasureFailures > 0) {
-      await db.collection('adminAlerts').add({
-        type: 'partial_user_erasure',
-        createdAt: erased.now,
-        data: {
-          targetUserId: uid,
-          studySessionCascadeErrors: erased.studyErasure.cascadeErrors,
-          claimReleaseErrors: erased.claimReleaseErrors,
-          selfDeleted: true,
-        },
-      });
-    }
 
     await sendAdminNotification(
       `Account self-deleted: ${erased.email}`,

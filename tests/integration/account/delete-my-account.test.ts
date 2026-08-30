@@ -275,6 +275,52 @@ describe('deleteMyAccount', () => {
       });
     });
 
+    it('erases a member holding more schedule overrides than one batch can carry', async () => {
+      // A single `db.batch()` rejects past 500 ops, and the erasure queues one
+      // per `schedules/{uid}/overrides/{date}` — one doc per DATE, so an active
+      // sitter clears 500 in about two years of marked availability.
+      //
+      // The failure this pins is not slowness. Step 1 has already committed by
+      // the time step 3 rejects, so the member's appointments come back
+      // cancelled while their account survives, with no audit entry, no
+      // `partial_user_erasure` alert, and an INTERNAL error — and every retry
+      // fails at exactly the same place. The member could never delete their
+      // account and nobody would be told.
+      //
+      // 501 rather than 600: one over the limit is what the guard is for, and
+      // the seeding cost is the reason nothing pinned this before.
+      const db = getDb();
+      const overridesRef = db.collection('schedules').doc(seed.babysitter1.uid).collection('overrides');
+      const dates = Array.from({ length: 501 }, (_, i) => {
+        const d = new Date(Date.UTC(2027, 0, 1 + i));
+        return d.toISOString().split('T')[0];
+      });
+      for (let i = 0; i < dates.length; i += 400) {
+        const batch = db.batch();
+        for (const date of dates.slice(i, i + 400)) {
+          batch.set(overridesRef.doc(date), { date, type: 'unavailable', slots: [] });
+        }
+        await batch.commit();
+      }
+      expect((await overridesRef.get()).size).toBe(501);
+
+      const result = await callFunction<{ success: boolean }>(
+        'deleteMyAccount',
+        { confirm: 'DELETE' },
+        await getIdToken(seed.babysitter1.uid),
+      );
+      expect(result.success).toBe(true);
+
+      // Read-backs, not the return value: every override gone, the schedule
+      // doc gone, the account gone, and the audit entry written — i.e. the
+      // erasure ran to completion rather than aborting mid-way.
+      expect((await overridesRef.get()).size).toBe(0);
+      expect((await db.collection('schedules').doc(seed.babysitter1.uid).get()).exists).toBe(false);
+      expect((await db.collection('users').doc(seed.babysitter1.uid).get()).exists).toBe(false);
+      const details = (await auditEntry(seed.babysitter1.uid))!.details as Record<string, unknown>;
+      expect(details.deletedScheduleOverrides).toBe(501);
+    }, 60_000);
+
     it('audits the self-delete with the MEMBER as actor, and no guardian counts', async () => {
       const token = await getIdToken(seed.babysitter1.uid);
       await callFunction('deleteMyAccount', { confirm: 'DELETE' }, token);

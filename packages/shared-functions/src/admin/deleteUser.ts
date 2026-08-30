@@ -8,6 +8,7 @@ import { writeAuditLog } from './writeAuditLog.js';
 import { escapeHtml, sendAdminNotification } from '../config/email.js';
 import { REFERENCE_PROVIDER_KEYS } from './referenceKeys.js';
 import { eraseDoUserData } from './doGdpr.js';
+import { raisePartialErasureAlert } from './partialErasureAlert.js';
 import { eraseStudyUserData } from './studyGdpr.js';
 import { createClaimReleaser, SIT_PROVENANCE } from '../schedule/claimRelease.js';
 import type { SessionBlockEntry } from '../schedule/sessionOverride.js';
@@ -16,20 +17,48 @@ interface DeleteUserInput {
   targetUserId: string;
 }
 
+/** One queued write. Collected first, committed in chunks below. */
+type BatchOp = (batch: FirebaseFirestore.WriteBatch) => void;
+
 /**
- * GDPR-compliant hard delete: removes all user personal data from Firestore,
- * anonymizes appointment references, anonymizes their study sessions and
- * releases the schedule claims that cancel leaves behind, deletes their
- * schedule + overrides, deletes their references/endorsements
- * (both as provider and as submitter), erases their sync-do tasks/offers and
- * both `do-photos`/`do-uploads` object prefixes (scrubbing the dangling
- * `{uid, photoId}` entries off a co-parent's surviving tasks and cancelling
- * any surviving task assigned to them), and deletes the Firebase Auth
- * account.
+ * Commit queued writes in chunks of 400, the way `doGdpr`'s `deleteAll` does.
+ *
+ * A single `db.batch()` rejects past 500 operations, and three of this
+ * erasure's steps queue one op per matching document with no bound:
+ * appointments, notifications, and `schedules/{uid}/overrides` — which is one
+ * doc per DATE, so an active sitter clears 500 in about two years of marked
+ * availability.
+ *
+ * The failure that guard prevents is not "the delete is slow": step 1 has
+ * already committed by then, so a rejected step 3 leaves appointments
+ * cancelled, no user document deleted, no audit entry, no
+ * `partial_user_erasure` alert, and an `INTERNAL` to the caller — and every
+ * retry fails at exactly the same place. Inherited from the admin path, where
+ * it was rare and supervised; `deleteMyAccount` (#368) puts it behind a row in
+ * front of every member, which is the same argument this PR makes about the
+ * #420 notification gap.
  */
+async function commitInChunks(ops: BatchOp[]): Promise<void> {
+  for (let i = 0; i < ops.length; i += 400) {
+    const batch = db.batch();
+    for (const op of ops.slice(i, i + 400)) op(batch);
+    await batch.commit();
+  }
+}
+
 /**
  * What deleting a member actually removes — the erasure itself, with no view
  * on WHO asked for it.
+ *
+ * A GDPR-compliant hard delete: it removes the user's personal data from
+ * Firestore, anonymizes appointment references, anonymizes their study
+ * sessions and releases the schedule claims a cancel leaves behind, deletes
+ * their schedule and overrides, deletes their references and endorsements
+ * (both as provider and as submitter), erases their sync-do tasks/offers and
+ * both the `do-photos` and `do-uploads` object prefixes (scrubbing the
+ * dangling `{uid, photoId}` entries off a co-parent's surviving tasks and
+ * cancelling any surviving task assigned to them), and deletes the Firebase
+ * Auth account.
  *
  * Extracted so the admin callable and the member's own
  * `deleteMyAccount` (issue #368) run the SAME code. The alternative was a
@@ -70,8 +99,7 @@ export async function eraseUserAccount(targetUserId: string, actorUid: string) {
         .get()
     : { docs: [] as any[] };
 
-  const batch1 = db.batch();
-  let batch1Ops = 0;
+  const batch1Ops: BatchOp[] = [];
   let cancelledCount = 0;
   /**
    * Appointments cancelled on the FAMILY side, whose babysitter SURVIVES —
@@ -97,8 +125,7 @@ export async function eraseUserAccount(targetUserId: string, actorUid: string) {
       updates.statusReason = 'account_deleted';
       cancelledCount++;
     }
-    batch1.update(appt.ref, updates);
-    batch1Ops++;
+    batch1Ops.push((b) => b.update(appt.ref, updates));
   }
 
   // For family appointments, only anonymize if this is the last parent
@@ -146,15 +173,12 @@ export async function eraseUserAccount(targetUserId: string, actorUid: string) {
         updates.preAppointmentNote = FieldValue.delete();
       }
       if (Object.keys(updates).length > 0) {
-        batch1.update(appt.ref, updates);
-        batch1Ops++;
+        batch1Ops.push((b) => b.update(appt.ref, updates));
       }
     }
   }
 
-  if (batch1Ops > 0) {
-    await batch1.commit();
-  }
+  await commitInChunks(batch1Ops);
 
   // 1-bis. Give the SURVIVING babysitter back the slots the appointments
   // just cancelled above were holding (issue #408). `respondToRequest`
@@ -204,13 +228,7 @@ export async function eraseUserAccount(targetUserId: string, actorUid: string) {
     .where('recipientUserId', '==', targetUserId)
     .get();
 
-  if (notifications.docs.length > 0) {
-    const batch2 = db.batch();
-    for (const doc of notifications.docs) {
-      batch2.delete(doc.ref);
-    }
-    await batch2.commit();
-  }
+  await commitInChunks(notifications.docs.map((doc) => (b) => b.delete(doc.ref)));
 
   // 3. Delete the schedule document and its overrides subcollection.
   //
@@ -232,13 +250,7 @@ export async function eraseUserAccount(targetUserId: string, actorUid: string) {
   // Firestore's delete on a missing document succeeds.
   const scheduleRef = db.collection('schedules').doc(targetUserId);
   const overrides = await scheduleRef.collection('overrides').get();
-  if (overrides.docs.length > 0) {
-    const batch3 = db.batch();
-    for (const doc of overrides.docs) {
-      batch3.delete(doc.ref);
-    }
-    await batch3.commit();
-  }
+  await commitInChunks(overrides.docs.map((doc) => (b) => b.delete(doc.ref)));
   await scheduleRef.delete();
   const scheduleOverridesDeleted = overrides.docs.length;
 
@@ -249,13 +261,7 @@ export async function eraseUserAccount(targetUserId: string, actorUid: string) {
     if (isLastParent) {
       // Delete kids subcollection
       const kids = await familyRef.collection('kids').get();
-      if (kids.docs.length > 0) {
-        const batch4 = db.batch();
-        for (const doc of kids.docs) {
-          batch4.delete(doc.ref);
-        }
-        await batch4.commit();
-      }
+      await commitInChunks(kids.docs.map((doc) => (b) => b.delete(doc.ref)));
 
       // Delete family document
       await familyRef.delete();
@@ -512,6 +518,15 @@ export async function eraseUserAccount(targetUserId: string, actorUid: string) {
   };
 }
 
+/**
+ * An ADMIN deletes another member's account.
+ *
+ * Everything this callable owns is authorisation and the trail: it checks for
+ * an admin, names the target, and — after `eraseUserAccount` has run — writes
+ * the audit entry, raises the partial-erasure alert and mails the admins. The
+ * erasure itself is shared with `deleteMyAccount` (#368), which is the point
+ * of the extraction: one answer to "what does deleting a member remove".
+ */
 export const deleteUser = onCall(
   { region: 'europe-west1', cors: getCorsOrigin() },
   async (request) => {
@@ -543,7 +558,11 @@ export const deleteUser = onCall(
       now,
     } = erased;
 
-    // 7. Write audit log (only stores uid, not personal data)
+    // 7. Alert first, then log. The alert is what an operator acts on, and it
+    // returns the same total the audit entry records — so the number in the
+    // trail and the condition that raised the alarm cannot disagree.
+    const erasureFailures = await raisePartialErasureAlert(targetUserId, erased, false);
+
     await writeAuditLog({
       adminUserId: request.auth.uid,
       action: 'delete_user',
@@ -576,21 +595,9 @@ export const deleteUser = onCall(
         // document is gone by now, so `deleteUser` cannot simply be re-run and
         // a silent skip would leave un-anonymized personal data with nobody
         // aware of it.
-        erasureFailures: studyErasure.cascadeErrors + claimReleaseErrors,
+        erasureFailures,
       },
     });
-
-    if (studyErasure.cascadeErrors > 0 || claimReleaseErrors > 0) {
-      await db.collection('adminAlerts').add({
-        type: 'partial_user_erasure',
-        createdAt: now,
-        data: {
-          targetUserId,
-          studySessionCascadeErrors: studyErasure.cascadeErrors,
-          claimReleaseErrors,
-        },
-      });
-    }
 
     await sendAdminNotification(
       `User deleted: ${email}`,
@@ -602,10 +609,8 @@ export const deleteUser = onCall(
        <p><strong>Cancelled study sessions:</strong> ${studyErasure.sessionsCancelled}</p>
        <p><strong>Family deleted:</strong> ${isLastParent && !!familyId ? 'Yes' : 'No'}</p>
        ${
-         studyErasure.cascadeErrors + claimReleaseErrors > 0
-           ? `<p><strong>⚠ PARTIAL ERASURE:</strong> ${
-               studyErasure.cascadeErrors + claimReleaseErrors
-             } cascade(s) failed — personal data may remain. See adminAlerts.</p>`
+         erasureFailures > 0
+           ? `<p><strong>⚠ PARTIAL ERASURE:</strong> ${erasureFailures} cascade(s) failed — personal data may remain. See adminAlerts.</p>`
            : ''
        }`
     );
