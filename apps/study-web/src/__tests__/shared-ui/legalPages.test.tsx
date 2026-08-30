@@ -243,6 +243,12 @@ describe('shared legal copy — personal data categories', () => {
     renderWithProviders(<PrivacyPage brand="Sync/Do" supportEmail="help@example.com" />);
     expect(bodyText()).toContain('visible to every enrolled student');
   });
+
+  it('warns that a sync-do task is visible to the whole board (FR)', async () => {
+    await i18n.changeLanguage('fr');
+    renderWithProviders(<PrivacyPage brand="Sync/Do" supportEmail="help@example.com" />);
+    expect(bodyText()).toContain('visibles par tous les élèves inscrits');
+  });
 });
 
 describe('shared legal copy — the address, and who it reaches (PR #412 review)', () => {
@@ -309,6 +315,17 @@ describe('shared legal copy — the address, and who it reaches (PR #412 review)
     expect(text).not.toContain('stops being available once the engagement is over');
   });
 
+  it('states the real bound on the contact reveal (FR)', async () => {
+    await i18n.changeLanguage('fr');
+    renderWithProviders(<PrivacyPage brand="Sync/Do" supportEmail="help@example.com" />);
+    const text = bodyText();
+
+    expect(text).toContain(
+      'elles restent accessibles pendant que la mission est attribuée et après son achèvement',
+    );
+    expect(text).not.toContain("cesse d'être disponible une fois l'intervention terminée");
+  });
+
   it('scopes the booking-note rule per app, and lists pending requests as unbounded', async () => {
     // The "left every screen" rule is sit's note redaction. Study's session
     // notes are fields on the session and leave only with it; a PENDING sit
@@ -321,6 +338,17 @@ describe('shared legal copy — the address, and who it reaches (PR #412 review)
     expect(text).toContain('a pending babysitting request and any note written on it');
   });
 
+  it('scopes the booking-note rule per app, and lists pending requests as unbounded (FR)', async () => {
+    await i18n.changeLanguage('fr');
+    renderWithProviders(<PrivacyPage brand="Sync/Study" supportEmail="help@example.com" />);
+    const text = bodyText();
+
+    expect(text).toContain(
+      "Sur Sync/Study, les notes de séance font partie de l'enregistrement de la séance",
+    );
+    expect(text).toContain("une demande de garde en attente ainsi que toute note qui s'y rapporte");
+  });
+
   it('does not claim photos are unreachable by URL, only that the links are short-lived', async () => {
     // getTaskPhotoUrl.ts:15 issues 15-minute signed URLs, which are
     // unauthenticated for their TTL — "never served by a public URL" overstated it.
@@ -331,6 +359,79 @@ describe('shared legal copy — the address, and who it reaches (PR #412 review)
     expect(text).toContain('never given a permanent public address');
     expect(text).toContain('short-lived links, valid for fifteen minutes');
     expect(text).not.toContain('never served by a public URL');
+  });
+
+  it('does not claim photos are unreachable by URL (FR)', async () => {
+    await i18n.changeLanguage('fr');
+    renderWithProviders(<PrivacyPage brand="Sync/Do" supportEmail="help@example.com" />);
+    const text = bodyText();
+
+    expect(text).toContain("Elles ne reçoivent jamais d'adresse publique permanente");
+    expect(text).toContain('liens de courte durée, valables quinze minutes');
+    expect(text).not.toContain("ne sont jamais servies par une URL publique");
+  });
+
+  it('names the published-search audience in §5, per app (EN)', async () => {
+    // firestore.rules:762-777 makes `publishedSearches` readable by ANY active,
+    // fully-enrolled provider of the matching app — the rule comment is explicit
+    // that this deliberately includes providers otherwise hidden from results
+    // (it is not gated on `profiles.*.searchable`). A sit search carries
+    // `kidAges`, `numberOfKids`, `offeredRate` and family-authored
+    // `additionalInfo` (packages/shared-core/src/types/publishedSearch.ts:26-55).
+    // §5 enumerated the do-board audience in detail and said nothing about this
+    // one; neither the "Other users" bullet (scoped to PROFILE information) nor
+    // the do-board bullet reaches it.
+    await i18n.changeLanguage('en');
+    renderWithProviders(<PrivacyPage brand="Sync/Sit" supportEmail="help@example.com" />);
+    const text = bodyText();
+
+    expect(text).toContain('Verified service providers, when your family publishes a request');
+    expect(text).toContain('every active, fully enrolled provider');
+    expect(text).toContain('including one who has chosen not to appear in search results');
+    // The per-app field lists differ — PublishedStudySearch carries no kid data.
+    expect(text).toContain('the number of children and their ages');
+    expect(text).toContain('On Sync/Study it carries your family name, an area label, the subject');
+    expect(text).toContain('Neither carries your address, and neither names a child');
+  });
+
+  it('names the published-search audience in §5, per app (FR)', async () => {
+    await i18n.changeLanguage('fr');
+    renderWithProviders(<PrivacyPage brand="Sync/Sit" supportEmail="help@example.com" />);
+    const text = bodyText();
+
+    expect(text).toContain('Les prestataires vérifiés, lorsque votre famille publie une demande');
+    expect(text).toContain('tous les prestataires actifs et pleinement inscrits');
+    expect(text).toContain("le nombre d'enfants et leur âge");
+    expect(text).toContain("Ni l'une ni l'autre ne comporte votre adresse");
+  });
+
+  it('does not claim a distance is shown on the Sync/Do board (EN + FR)', async () => {
+    // `TaskDoc` carries `areaLabel` and nothing else location-shaped
+    // (packages/do-core/src/types/task.ts:21-31), and no distance is computed
+    // anywhere in apps/do-web/src. The distance exists in sit's search results
+    // (apps/web/src/pages/family/SearchPage.tsx:729-730), so the claim has to
+    // be scoped to that surface rather than made suite-wide.
+    await i18n.changeLanguage('en');
+    renderWithProviders(<PrivacyPage brand="Sync/Do" supportEmail="help@example.com" />);
+    let text = bodyText();
+    expect(text).toContain('and — in search results only — an approximate distance');
+    expect(text).toContain('an approximate distance in search results');
+    expect(text).not.toContain('commune, plus an approximate distance');
+    expect(text).not.toContain('only an area label and an approximate distance are');
+
+    // Two renders in one test — see the helper-retention test below for why the
+    // cleanup() is load-bearing on the negative assertions.
+    cleanup();
+    await i18n.changeLanguage('fr');
+    renderWithProviders(<PrivacyPage brand="Sync/Do" supportEmail="help@example.com" />);
+    text = bodyText();
+    expect(text).toContain(
+      'dans les résultats de recherche uniquement, une distance approximative',
+    );
+    expect(text).not.toContain('(arrondissement ou commune) et une distance approximative');
+    expect(text).not.toContain(
+      'seuls un libellé de secteur et une distance approximative le sont',
+    );
   });
 
   it('does not overstate the helper retention bound (EN + FR)', async () => {
@@ -390,6 +491,31 @@ describe('shared legal copy — age and consent', () => {
     expect(text).not.toContain('refuses a date of birth outside that window');
     // Guardian consent for flagged sync-do sub-categories.
     expect(text).toContain('approve that specific offer before the family sees it');
+  });
+
+  it('states the real floor and carve-out, with no upper bound (privacy, FR)', async () => {
+    // The Terms §3 equivalent was already pinned in FR; Privacy §9 was not, so
+    // the per-app ceiling, the two enforcement styles and the missing-DOB skip
+    // could drift in French without failing anything. `shape()` does not
+    // backstop it: none of these is a bullet, a paragraph break or a digit.
+    await i18n.changeLanguage('fr');
+    renderWithProviders(<PrivacyPage brand="Sync/Sit" supportEmail="help@example.com" />);
+    const text = bodyText();
+
+    expect(text).toContain(
+      `Un élève qui s'inscrit de sa propre initiative doit avoir au moins ${SELF_ENROLL_FLOOR_AGE} ans`,
+    );
+    expect(text).toContain(
+      `Un élève de moins de ${SELF_ENROLL_FLOOR_AGE} ans ne peut participer que par l'intermédiaire d'un compte supervisé`,
+    );
+    expect(text).toContain("Il n'existe pas de limite d'âge supérieure unique");
+    expect(text).toContain("rester cohérente avec son année scolaire à l'EJM");
+    expect(text).toContain('Sync/Study refuse purement et simplement l');
+    expect(text).toContain('Sync/Sit l');
+    expect(text).toContain('cesse de présenter ce prestataire aux familles');
+    expect(text).toContain("écartée lorsque nous ne disposons d'aucune date de naissance");
+    expect(text).toContain("Sur Sync/Do, il n'existe aucune limite supérieure");
+    expect(text).not.toContain("Nous ne fixons aucune limite d'âge supérieure");
   });
 
   it('states the real floor and carve-out, with no upper bound (terms, EN)', async () => {
