@@ -657,8 +657,9 @@ RESULT: Marie's data gone. Appointment records show "deleted user."
 > `packages/shared-core/src/types/notification.ts` with no writer anywhere.
 > Inherited from the admin delete path, where a human could warn people; now
 > that self-delete is a row in the account hub in front of every member, it is
-> routine rather than theoretical. Tracked separately rather than folded into
-> #368 — the fix belongs in `eraseUserAccount`, which both callables share.
+> routine rather than theoretical. Tracked separately as issue #420 rather than
+> folded into #368 — the fix belongs in `eraseUserAccount`, which both
+> callables share.
 >
 > **Also not a strip-and-keep.** Earlier revisions of this flow described
 > removing PI while retaining the user ID and links "for data integrity". The

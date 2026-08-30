@@ -19,9 +19,17 @@
  *  - chaining handoffs cannot launder it either, because
  *    `createAppHandoffCode` records THIS function's output, not raw
  *    `auth_time`;
- *  - a real re-authentication in the destination app clears the claim (custom
- *    -token developer claims do not survive a password sign-in), so the member
- *    gets their fresh window back the honest way;
+ *  - a real re-authentication in the destination app clears the claim, so the
+ *    member gets their fresh window back the honest way. Verified against the
+ *    Auth emulator rather than assumed, because the whole rule depends on that
+ *    escape hatch existing: `accounts:signInWithPassword` returns a token with
+ *    no `originalAuthTime`. That is the endpoint the JS SDK's
+ *    `reauthenticateWithCredential` calls for an email/password credential
+ *    (it swaps the returned tokens onto the current user), so a "confirm your
+ *    password" modal on the handed-off session unblocks the member — a full
+ *    sign-out and sign-in is not required. Pinned by
+ *    `tests/integration/account/delete-my-account.test.ts`, "a real password
+ *    sign-in drops the carried claim";
  *  - taking the minimum rather than trusting the claim outright means a claim
  *    that somehow read NEWER than `auth_time` could only ever make the guard
  *    stricter.

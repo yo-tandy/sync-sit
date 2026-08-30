@@ -484,5 +484,36 @@ describe('deleteMyAccount', () => {
         false,
       );
     });
+
+    it('a real password sign-in drops the carried claim — the escape hatch works', async () => {
+      // The whole rule depends on a member locked out by an inherited
+      // credential age having a way back in. `effectiveAuthTime.ts` claims a
+      // real re-authentication clears `originalAuthTime`; this stages it
+      // rather than assuming it.
+      //
+      // The API under test is `accounts:signInWithPassword`, deliberately:
+      // that is the endpoint the JS SDK's `reauthenticateWithCredential` hits
+      // for an email/password credential, and it swaps the resulting tokens
+      // onto the current user. So this settles BOTH routes at once — a full
+      // sign-out + sign-in, and a "please confirm your password" modal on the
+      // existing custom-token session.
+      const child = await createSupervisedChild();
+      const handoffToken = await handoffSession(child.uid, 30 * 24 * 60 * 60);
+      await expect(
+        callFunction('deleteMyAccount', { confirm: 'DELETE' }, handoffToken),
+      ).rejects.toMatchObject({ code: 'FAILED_PRECONDITION' });
+
+      const reauthed = await signInWithPassword(child.email, PASSWORD);
+      // The developer claim does not survive the credential sign-in...
+      expect(claimsOf(reauthed).originalAuthTime).toBeUndefined();
+      // ...so the guard sees a fresh credential and the member is unblocked.
+      const result = await callFunction<{ success: boolean }>(
+        'deleteMyAccount',
+        { confirm: 'DELETE' },
+        reauthed,
+      );
+      expect(result.success).toBe(true);
+      expect((await getDb().collection('users').doc(child.uid).get()).exists).toBe(false);
+    });
   });
 });
