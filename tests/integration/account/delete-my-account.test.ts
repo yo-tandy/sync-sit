@@ -321,6 +321,55 @@ describe('deleteMyAccount', () => {
       expect(details.deletedScheduleOverrides).toBe(501);
     }, 60_000);
 
+    it('erases a member holding more references than one batch can carry (review round 7)', async () => {
+      // The same unbounded-batch defect, in the fifth batch the round-6
+      // chunking pass missed: `refDocsToDelete` is the union of one query per
+      // `REFERENCE_PROVIDER_KEYS` entry, deduped, queued into one commit.
+      // Less reachable than the overrides case (500 references on one
+      // account is a lot), but the same class and the same failure mode —
+      // earlier steps commit, this one rejects, the account survives
+      // half-erased with no audit entry and no alert.
+      const db = getDb();
+      const referencesRef = db.collection('references');
+      // seedTestData already leaves one manual reference on babysitter1
+      // ("Lea"), so 500 more clears 501 without assuming a specific baseline.
+      const before = (
+        await referencesRef.where('babysitterUserId', '==', seed.babysitter1.uid).get()
+      ).size;
+      const ids = Array.from({ length: 500 }, (_, i) => `ref-round7-${i}`);
+      for (let i = 0; i < ids.length; i += 400) {
+        const batch = db.batch();
+        for (const id of ids.slice(i, i + 400)) {
+          batch.set(referencesRef.doc(id), {
+            babysitterUserId: seed.babysitter1.uid,
+            type: 'manual',
+            status: 'private',
+            createdAt: new Date(),
+          });
+        }
+        await batch.commit();
+      }
+      const total = before + 500;
+      expect(total).toBeGreaterThan(500);
+      expect(
+        (await referencesRef.where('babysitterUserId', '==', seed.babysitter1.uid).get()).size,
+      ).toBe(total);
+
+      const result = await callFunction<{ success: boolean }>(
+        'deleteMyAccount',
+        { confirm: 'DELETE' },
+        await getIdToken(seed.babysitter1.uid),
+      );
+      expect(result.success).toBe(true);
+
+      expect(
+        (await referencesRef.where('babysitterUserId', '==', seed.babysitter1.uid).get()).size,
+      ).toBe(0);
+      expect((await db.collection('users').doc(seed.babysitter1.uid).get()).exists).toBe(false);
+      const details = (await auditEntry(seed.babysitter1.uid))!.details as Record<string, unknown>;
+      expect(details.deletedReferences).toBe(total);
+    }, 60_000);
+
     it('audits the self-delete with the MEMBER as actor, and no guardian counts', async () => {
       const token = await getIdToken(seed.babysitter1.uid);
       await callFunction('deleteMyAccount', { confirm: 'DELETE' }, token);

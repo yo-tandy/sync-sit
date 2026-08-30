@@ -434,13 +434,11 @@ export async function eraseUserAccount(targetUserId: string, actorUid: string) {
     }
   }
 
-  if (refDocsToDelete.length > 0) {
-    const refBatch = db.batch();
-    for (const doc of refDocsToDelete) {
-      refBatch.delete(doc.ref);
-    }
-    await refBatch.commit();
-  }
+  // Chunked like the other four batches (review round 6): a member with
+  // 500+ reference/endorsement docs is far less reachable than the
+  // schedule-overrides case, but it's the same defect class this file just
+  // fixed, and the argument applies verbatim.
+  await commitInChunks(refDocsToDelete.map((doc) => (b) => b.delete(doc.ref)));
 
   for (const [tutorUid, count] of tutorDecrements) {
     const tutorRef = db.collection('users').doc(tutorUid);
