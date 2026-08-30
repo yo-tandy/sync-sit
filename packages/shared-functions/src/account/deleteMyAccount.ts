@@ -171,9 +171,24 @@ export async function notifyGuardiansOfSelfDelete(
       recipientUserId: parentId,
       type: 'supervised_account_deleted',
       title,
+      // `body` DOES name the child, deliberately (review round 6 asked for
+      // this to be settled rather than left ambiguous, and it was ambiguous:
+      // the note below reads as a rule about the whole document).
+      //
+      // The rule is about the STRUCTURED payload, not the human copy. A
+      // guardian who supervises two minors cannot act on "a supervised
+      // account was deleted", and this is the one channel that persists: if
+      // both the email and the push missed — the case `reached` exists to
+      // surface — the in-app doc is the only record the guardian ever gets.
+      // The recipient is the child's own supervising parent, the read is
+      // restricted to them (`firestore.rules:590`), and `cleanupOldData`
+      // sweeps the doc at 30 days, so the name is bounded and goes nowhere
+      // the parent does not already have it.
       body,
-      // The child's uid, not their name: the notification doc outlives the
-      // account and should not re-introduce the personal data just erased.
+      // `data` is the other half of that rule and keeps the uid alone: it is
+      // the payload other code consumes, and nothing downstream should be
+      // able to re-derive a display name for an account that no longer
+      // exists.
       data: { childUid },
       read: false,
       channels: ['email', 'push'],

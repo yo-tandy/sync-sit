@@ -163,9 +163,19 @@ describe('guardian notification counts', () => {
     expect(h.pushApps).toEqual(['auto', 'auto']);
   });
 
-  it('never puts the erased member\'s name in the durable doc payload', async () => {
+  it('names the child in the guardian-readable copy, and only the uid in the payload', async () => {
+    // Both halves, because the previous version of this test asserted on
+    // `data` alone under a name that claimed the whole document — so the name
+    // sitting in `body` passed it, and a reader saw a green test named after
+    // an invariant that was not pinned.
+    //
+    // The split is deliberate: a guardian supervising two minors cannot act on
+    // a nameless message, and this doc is the only channel that persists when
+    // both transports miss. The payload keeps the uid alone so nothing
+    // downstream re-derives a display name for an erased account.
     await notifyGuardiansOfSelfDelete('fam1', 'kid1', 'Zoe Dupont');
     for (const doc of h.written) {
+      expect(doc.body).toContain('Zoe Dupont');
       expect(doc.data).toEqual({ childUid: 'kid1' });
       expect(JSON.stringify(doc.data)).not.toContain('Zoe');
     }

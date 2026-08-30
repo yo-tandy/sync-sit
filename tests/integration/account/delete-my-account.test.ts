@@ -368,10 +368,15 @@ describe('deleteMyAccount', () => {
       // No FCM registration in the emulator, so the honest answer is false —
       // and the reached-count below must therefore be carried by email alone.
       expect(notice.pushSent).toBe(false);
-      // The doc outlives the account: it names the child by uid, never by the
-      // personal data the erasure just removed.
+      // The doc outlives the account, and the two fields answer differently on
+      // purpose: the guardian-readable copy names the child (they supervise
+      // more than one, and this is the only channel that persists when both
+      // transports miss), while the structured payload carries the uid alone.
+      // The email — an identifier no guardian needs here — is in neither.
+      expect(notice.body).toContain('Zoe Dupont');
       expect(notice.data).toEqual({ childUid: child.uid });
       expect(JSON.stringify(notice.data)).not.toContain(child.email);
+      expect(notice.body).not.toContain(child.email);
 
       const details = (await auditEntry(child.uid))!.details as Record<string, unknown>;
       expect(details.wasSupervised).toBe(true);
