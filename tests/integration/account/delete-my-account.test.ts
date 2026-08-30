@@ -8,7 +8,12 @@ import {
   getDb,
   getAdminAuth,
 } from '../../setup/emulator.js';
-import { seedTestData, seedAppointment, type SeedData } from '../../setup/seed.js';
+import {
+  seedTestData,
+  seedAppointment,
+  seedStudySession,
+  type SeedData,
+} from '../../setup/seed.js';
 
 /**
  * deleteMyAccount: the member's own irreversible erasure (issue #368).
@@ -54,6 +59,11 @@ const CONSENT = {
 
 function sha256(s: string): string {
   return createHash('sha256').update(s).digest('hex');
+}
+
+/** A 'YYYY-MM-DD' `n` days from now (negative = past). */
+function dateIn(n: number): string {
+  return new Date(Date.now() + n * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 }
 
 /** A real sign-in — the only way to get a token with a genuine `auth_time`. */
@@ -281,6 +291,48 @@ describe('deleteMyAccount', () => {
       expect(details.guardiansFound).toBe(0);
       expect(details.guardiansReached).toBe(0);
       expect(await guardianNotices()).toHaveLength(0);
+    });
+
+    it('records the same erasure counts the admin path does, including erasureFailures', async () => {
+      // `eraseUserAccount` returns these so the CALLER owns the audit trail —
+      // and there are two callers. `deleteUser` consumed them from the start;
+      // this path did not, which meant a partial erasure on a self-delete left
+      // personal data behind with nobody aware of it. The account is gone by
+      // then, so the erasure cannot be re-run: the number IS the alarm.
+      const db = getDb();
+      await seedStudySession({
+        familyId: seed.family1Id,
+        tutorUserId: seed.tutor1.uid,
+        status: 'confirmed',
+        date: dateIn(5),
+      });
+
+      await callFunction(
+        'deleteMyAccount',
+        { confirm: 'DELETE' },
+        await getIdToken(seed.tutor1.uid),
+      );
+
+      const details = (await auditEntry(seed.tutor1.uid))!.details as Record<string, unknown>;
+      expect(details.anonymizedStudySessions).toBe(1);
+      expect(details.cancelledStudySessions).toBe(1);
+      expect(details.erasureFailures).toBe(0);
+      // Present, not merely non-zero: a missing key reads as "nothing failed"
+      // exactly like a zero does, which is the regression this pins.
+      for (const key of [
+        'deletedScheduleOverrides',
+        'releasedAppointmentClaims',
+        'cancelledStudyInstances',
+        'scrubbedStudyInstances',
+        'releasedStudyClaims',
+        'erasureFailures',
+      ]) {
+        expect(details).toHaveProperty(key);
+        expect(typeof details[key]).toBe('number');
+      }
+      // A clean erasure raises no alert — the negative half of the pair.
+      expect((await db.collection('adminAlerts').where('type', '==', 'partial_user_erasure').get()).size)
+        .toBe(0);
     });
   });
 

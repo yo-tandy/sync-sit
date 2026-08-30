@@ -256,6 +256,8 @@ export const deleteMyAccount = onCall(
       }
     }
 
+    const erasureFailures = erased.studyErasure.cascadeErrors + erased.claimReleaseErrors;
+
     // The audit trail matters MORE for a self-delete than for an admin one,
     // not less: there is no second person who witnessed it. `adminUserId` is
     // the actor field, and here the actor is the member.
@@ -284,8 +286,38 @@ export const deleteMyAccount = onCall(
         wasSupervised: !!supervisingFamilyId,
         guardiansFound: guardians.found,
         guardiansReached: guardians.reached,
+        // issue #408 item 1 -- counts only, no personal data (the
+        // `deletedReferences` convention). Mirrors `deleteUser`.
+        deletedScheduleOverrides: erased.scheduleOverridesDeleted,
+        releasedAppointmentClaims: erased.sitClaimsReleased,
+        anonymizedStudySessions: erased.studyErasure.sessionsAnonymized,
+        cancelledStudySessions: erased.studyErasure.sessionsCancelled,
+        cancelledStudyInstances: erased.studyErasure.instancesCancelled,
+        scrubbedStudyInstances: erased.studyErasure.instancesScrubbed,
+        releasedStudyClaims: erased.studyErasure.claimsReleased,
+        // A non-zero value means the erasure was PARTIAL. It is recorded
+        // here, shown in the admin email, and raised as an adminAlert -- the
+        // user document is gone by now, so the erasure cannot simply be
+        // re-run and a silent skip would leave un-anonymized personal data
+        // with nobody aware of it. That reasoning is STRONGER on this path
+        // than on the admin one, for the same reason the audit entry itself
+        // is: there is no second person who witnessed it.
+        erasureFailures,
       },
     });
+
+    if (erasureFailures > 0) {
+      await db.collection('adminAlerts').add({
+        type: 'partial_user_erasure',
+        createdAt: erased.now,
+        data: {
+          targetUserId: uid,
+          studySessionCascadeErrors: erased.studyErasure.cascadeErrors,
+          claimReleaseErrors: erased.claimReleaseErrors,
+          selfDeleted: true,
+        },
+      });
+    }
 
     await sendAdminNotification(
       `Account self-deleted: ${erased.email}`,
@@ -294,7 +326,12 @@ export const deleteMyAccount = onCall(
        <p><strong>Email:</strong> ${escapeHtml(erased.email)}</p>
        <p><strong>Role:</strong> ${erased.role ?? 'none'}</p>
        <p><strong>Cancelled appointments:</strong> ${erased.cancelledCount}</p>
-       <p><strong>Family deleted:</strong> ${erased.isLastParent && !!erased.familyId ? 'Yes' : 'No'}</p>`,
+       <p><strong>Family deleted:</strong> ${erased.isLastParent && !!erased.familyId ? 'Yes' : 'No'}</p>
+       ${
+         erasureFailures > 0
+           ? `<p><strong>⚠ PARTIAL ERASURE:</strong> ${erasureFailures} cascade(s) failed — personal data may remain. See adminAlerts.</p>`
+           : ''
+       }`,
     );
 
     return { success: true, cancelledAppointments: erased.cancelledCount };
