@@ -30,6 +30,8 @@ const h = vi.hoisted(() => ({
   email: ((_to: string) => true) as (to: string) => boolean,
   push: ((_uid: string) => false) as (uid: string) => boolean,
   written: [] as Record<string, unknown>[],
+  // The `app` argument each push was routed with — see the 'auto' test.
+  pushApps: [] as unknown[],
 }));
 
 vi.mock('../../config/firebase.js', () => ({
@@ -59,7 +61,16 @@ vi.mock('../../config/email.js', async (importOriginal) => {
 });
 
 vi.mock('../../config/push.js', () => ({
-  sendPushNotification: async (uid: string) => h.push(uid),
+  sendPushNotification: async (
+    uid: string,
+    _title: string,
+    _body: string,
+    _data?: Record<string, string>,
+    app?: unknown,
+  ) => {
+    h.pushApps.push(app);
+    return h.push(uid);
+  },
 }));
 
 import { notifyGuardiansOfSelfDelete } from '../deleteMyAccount.js';
@@ -74,6 +85,7 @@ describe('guardian notification counts', () => {
     h.email = () => true;
     h.push = () => false;
     h.written.length = 0;
+    h.pushApps.length = 0;
   });
 
   it('counts a guardian reached by email alone', async () => {
@@ -138,6 +150,17 @@ describe('guardian notification counts', () => {
       reached: 0,
     });
     expect(h.written).toHaveLength(0);
+  });
+
+  it("routes the push with 'auto', not a hardcoded app", async () => {
+    // A guardian who only installed the sync/study or sync/do PWA has no
+    // tokens in the `sit` array. With an explicit app, `sendPushNotification`
+    // reads that array ALONE and returns false without attempting a send, so
+    // the guardian's only remaining channel is email — on a safeguarding
+    // message. Every other guardian notification in the repo passes 'auto';
+    // this pins that this one does too.
+    await notifyGuardiansOfSelfDelete('fam1', 'kid1', 'Zoe Dupont');
+    expect(h.pushApps).toEqual(['auto', 'auto']);
   });
 
   it('never puts the erased member\'s name in the durable doc payload', async () => {

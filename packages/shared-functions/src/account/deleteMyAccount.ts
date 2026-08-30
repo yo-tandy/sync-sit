@@ -143,16 +143,28 @@ export async function notifyGuardiansOfSelfDelete(
         `<p>${escapeHtml(name)} deleted their own account.</p>
          <p>They are no longer on the platform, and your supervision of them has ended. Their data has been removed.</p>
          <p>If you did not expect this, please contact us.</p>`,
+        // Branding only -- `sendNotificationEmail` has no 'auto' and the
+        // address is the same whichever app sends it. 'sit' is the suite's
+        // default identity; a guardian who only uses sync/study still
+        // receives the mail, it just carries sit branding.
         'sit',
       );
     }
 
+    // 'auto', matching every other guardian notification in the repo
+    // (`createKidInvite`, `revokeSupervision`, `forceRevokeSupervision`,
+    // `guardianAccess`, `guardianSetChildSearchable`). An explicit app makes
+    // `sendPushNotification` read that app's token array ALONE, so a guardian
+    // who only installed the sync/study or sync/do PWA has no `sit` tokens and
+    // the send returns false without trying -- leaving email as the only
+    // channel to a safeguarding message. Affinity resolution finds their
+    // actual install instead.
     const pushSent = await sendPushNotification(
       parentId,
       title,
       body,
       { type: 'supervised_account_deleted' },
-      'sit',
+      'auto',
     );
 
     await db.collection('notifications').add({
