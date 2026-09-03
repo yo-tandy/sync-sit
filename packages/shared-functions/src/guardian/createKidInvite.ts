@@ -3,7 +3,7 @@ import { getConfigValue } from '../config/adminConfig.js';
 import {
   ageFromDob,
   kidIdentitySchema,
-  validateEjmEmail,
+  validateEjmEmailForKidInvite,
 } from '@ejm/shared-core';
 import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
@@ -65,8 +65,12 @@ export const createKidInvite = onCall(
     const consent = requireCurrentConsent(data.consent, callerUid, now);
 
     // 3. EJM email format + graduation year (safe to reject — says nothing
-    // about whether an account exists).
-    const emailCheck = validateEjmEmail(data.kidEmail || '');
+    // about whether an account exists). Deliberately NOT `validateEjmEmail`:
+    // its current-cohort window rejects the exact kids supervision exists to
+    // admit (issue #430) — a young sibling's email may end in a graduation
+    // year a decade out. Domain and a parseable year are still required; the
+    // window is not.
+    const emailCheck = validateEjmEmailForKidInvite(data.kidEmail || '');
     if (!emailCheck.valid) {
       throw new HttpsError('invalid-argument', emailCheck.error || 'Invalid EJM email');
     }

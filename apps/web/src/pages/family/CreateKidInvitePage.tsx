@@ -6,7 +6,7 @@ import {
   PRIVACY_POLICY_VERSION,
   SUPERVISION_AGREEMENT_VERSION,
   TOS_VERSION,
-  validateEjmEmail,
+  validateEjmEmailForKidInvite,
 } from '@ejm/shared-core';
 import { functions } from '@/config/firebase';
 import { Button, Card, Input, TopNav } from '@/components/ui';
@@ -47,7 +47,9 @@ export function CreateKidInvitePage() {
 
   // Client-side EJM format check for fast feedback — safe to surface (it says
   // nothing about whether an account exists). The backend re-validates.
-  const emailCheck = kidEmail.trim() ? validateEjmEmail(kidEmail) : null;
+  // Deliberately not `validateEjmEmail`: its current-cohort window would
+  // reject the exact kids supervision exists to admit (issue #430).
+  const emailCheck = kidEmail.trim() ? validateEjmEmailForKidInvite(kidEmail) : null;
   const emailInvalid = emailCheck !== null && !emailCheck.valid;
 
   const fieldsValid =

@@ -34,9 +34,12 @@ function dobWithAge(age: number): string {
   return `${y - age}-${pad(m + 1)}-15`;
 }
 
-// An in-window grad year (validateEjmEmail accepts the school's 4-year
-// window). The invited kid's DOB may say younger — this path deliberately has
-// no DOB/grad-year consistency gate (supervision replaces gating).
+// A realistic grad year for most fixtures — no longer required to be
+// in-window: createKidInvite uses `validateEjmEmailForKidInvite`, which
+// deliberately drops the current-cohort window (issue #430) rather than
+// `validateEjmEmail`'s self-enrollment check. The invited kid's DOB may say
+// younger — this path deliberately has no DOB/grad-year consistency gate
+// either (supervision replaces gating, not just the window).
 const GRAD_13 = gradYearForExpectedAge(15);
 
 const CONSENT = {
@@ -140,10 +143,23 @@ describe('createKidInvite', () => {
     ).rejects.toMatchObject({ code: 'INVALID_ARGUMENT' });
   });
 
-  it('rejects an EJM email with an invalid graduation year', async () => {
+  it('rejects an EJM email whose suffix does not parse as a graduation year', async () => {
+    // Domain and a PARSEABLE year are still required — issue #430 only
+    // dropped the current-cohort WINDOW, not the format check.
+    await expect(
+      callFunction('createKidInvite', inviteInput('kidAB@ejm.org'), parent1Token),
+    ).rejects.toMatchObject({ code: 'INVALID_ARGUMENT' });
+  });
+
+  it('accepts a graduation year far outside the self-enrollment window (issue #430)', async () => {
+    // `kid99@ejm.org` used to be rejected here — 99 is a real 2-digit number,
+    // just far outside `validateEjmEmail`'s 4-year self-enrollment window. A
+    // young sibling invited into a supervised account is exactly this case:
+    // the whole point of supervision is to admit a kid the self-enrollment
+    // gate would reject on sight.
     await expect(
       callFunction('createKidInvite', inviteInput('kid99@ejm.org'), parent1Token),
-    ).rejects.toMatchObject({ code: 'INVALID_ARGUMENT' });
+    ).resolves.toMatchObject({ success: true });
   });
 
   it('rejects stale consent versions', async () => {
