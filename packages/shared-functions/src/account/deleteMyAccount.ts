@@ -293,6 +293,15 @@ export const deleteMyAccount = onCall(
     // account is already gone, so a mail failure must not read as a failed
     // deletion.
     let guardians = { found: 0, reached: 0 };
+    // Set only if the lookup itself throws -- e.g. the `families.get()` read
+    // before the per-parent loop starts. The loop isolates per-parent
+    // failures internally (review round 7), so this outer catch is left
+    // covering just that one remaining case: `notifyGuardiansOfSelfDelete`
+    // failing before it can even report FOUND. Without this flag, that
+    // failure and "the family named no parents" are both
+    // `{ found: 0, reached: 0 }` in the audit entry -- the exact ambiguity
+    // the found/reached split exists to remove (review round 8).
+    let guardianLookupFailed = false;
     if (supervisingFamilyId) {
       try {
         guardians = await notifyGuardiansOfSelfDelete(
@@ -301,6 +310,7 @@ export const deleteMyAccount = onCall(
           `${erased.firstName} ${erased.lastName}`,
         );
       } catch (err) {
+        guardianLookupFailed = true;
         console.error('[deleteMyAccount] guardian notification failed', { uid, err });
       }
     }
@@ -338,6 +348,12 @@ export const deleteMyAccount = onCall(
         wasSupervised: !!supervisingFamilyId,
         guardiansFound: guardians.found,
         guardiansReached: guardians.reached,
+        // true only when the LOOKUP itself failed (the `families.get()` read,
+        // before any parent could be counted) -- distinguishes that from a
+        // supervising family that genuinely named no parents, which also
+        // reads as found: 0. False whenever `wasSupervised` is false, since
+        // there was nothing to look up.
+        guardianLookupFailed,
         // issue #408 item 1 -- counts only, no personal data (the
         // `deletedReferences` convention). Mirrors `deleteUser`.
         deletedScheduleOverrides: erased.scheduleOverridesDeleted,

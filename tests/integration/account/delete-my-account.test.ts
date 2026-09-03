@@ -385,6 +385,10 @@ describe('deleteMyAccount', () => {
       expect(details.wasSupervised).toBe(false);
       expect(details.guardiansFound).toBe(0);
       expect(details.guardiansReached).toBe(0);
+      // Review round 8: false here, not merely absent -- there was nothing to
+      // look up, so this is not the "lookup itself failed" case the field
+      // exists to flag.
+      expect(details.guardianLookupFailed).toBe(false);
       expect(await guardianNotices()).toHaveLength(0);
     });
 
@@ -477,6 +481,7 @@ describe('deleteMyAccount', () => {
       expect(details.wasSupervised).toBe(true);
       expect(details.guardiansFound).toBe(2);
       expect(details.guardiansReached).toBe(2);
+      expect(details.guardianLookupFailed).toBe(false);
     });
 
     it('counts every guardian the family NAMES, including one with no user doc', async () => {

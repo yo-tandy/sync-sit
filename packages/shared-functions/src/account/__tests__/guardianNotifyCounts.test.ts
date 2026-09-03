@@ -35,13 +35,23 @@ const h = vi.hoisted(() => ({
   // Parent ids whose `users` doc read should throw — the per-parent
   // isolation test's input.
   throwsOnGet: new Set<string>(),
+  // The families lookup itself, before any parent is even known — the
+  // remaining case `deleteMyAccount`'s outer catch covers (review round 8).
+  familiesGetThrows: false,
 }));
 
 vi.mock('../../config/firebase.js', () => ({
   db: {
     collection: (name: string) => {
       if (name === 'families') {
-        return { doc: () => ({ get: async () => ({ data: () => ({ parentIds: h.parents }) }) }) };
+        return {
+          doc: () => ({
+            get: async () => {
+              if (h.familiesGetThrows) throw new Error('families lookup failed');
+              return { data: () => ({ parentIds: h.parents }) };
+            },
+          }),
+        };
       }
       if (name === 'users') {
         return {
@@ -97,6 +107,7 @@ describe('guardian notification counts', () => {
     h.written.length = 0;
     h.pushApps.length = 0;
     h.throwsOnGet.clear();
+    h.familiesGetThrows = false;
   });
 
   it('counts a guardian reached by email alone', async () => {
@@ -161,6 +172,20 @@ describe('guardian notification counts', () => {
       reached: 0,
     });
     expect(h.written).toHaveLength(0);
+  });
+
+  it('propagates when the families lookup itself fails, before any parent is known', async () => {
+    // Per-parent isolation (round 7) only covers the LOOP. A failure in the
+    // `families.get()` read that precedes it -- the query this function
+    // needs before it can report even `found` -- still has to surface as a
+    // thrown error, not a silent `{ found: 0, reached: 0 }`, or the caller
+    // can't tell "lookup failed" from "this family named no parents" (round
+    // 8: `deleteMyAccount`'s outer catch sets `guardianLookupFailed` on
+    // exactly this, and needs the throw to reach it).
+    h.familiesGetThrows = true;
+    await expect(notifyGuardiansOfSelfDelete('fam1', 'kid1', 'Zoe Dupont')).rejects.toThrow(
+      'families lookup failed',
+    );
   });
 
   it('isolates a per-parent failure — the rest still get their attempt (review round 7)', async () => {
