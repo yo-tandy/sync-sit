@@ -90,6 +90,21 @@ describe('CreateKidInvitePage (sit)', () => {
     expect(submitButton()).toBeEnabled();
   });
 
+  it('accepts a graduation year far outside the self-enrollment window (issue #430)', async () => {
+    // Supervision exists to admit kids the self-enrollment gate would reject
+    // on sight — a young sibling's email may end in a graduation year a
+    // decade out. The client check must not re-impose the window
+    // `validateEjmEmail` enforces for self-enrollment.
+    renderPage();
+    const farFutureEmail = `noa${(new Date().getFullYear() % 100) + 12}@ejm.org`;
+    fillIdentity(farFutureEmail);
+    checkConsents();
+
+    expect(submitButton()).toBeEnabled();
+    fireEvent.click(submitButton());
+    await waitFor(() => expect(h.callable).toHaveBeenCalledTimes(1));
+  });
+
   it('shows an inline error for a non-EJM email and never calls the callable', () => {
     renderPage();
     fillIdentity('kid@gmail.com');

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { validateEjmEmail, isOldEnough } from '../ejm-email.js';
+import { validateEjmEmail, validateEjmEmailForKidInvite, isOldEnough } from '../ejm-email.js';
 
 describe('validateEjmEmail', () => {
   // Use a fixed date in March 2026 — valid years are 26, 27, 28, 29
@@ -77,6 +77,45 @@ describe('validateEjmEmail', () => {
       const result = validateEjmEmail('student30@ejm.org', oct2026);
       expect(result.valid).toBe(true);
     });
+  });
+});
+
+describe('validateEjmEmailForKidInvite (issue #430)', () => {
+  // No `now` parameter: unlike `validateEjmEmail`, this never consults the
+  // current-cohort window, so there's nothing time-dependent to fix.
+
+  it('accepts a graduation year far outside the self-enrollment window', () => {
+    // A young sibling invited into a supervised account — exactly the case
+    // `validateEjmEmail`'s window would wrongly reject.
+    const result = validateEjmEmailForKidInvite('noa38@ejm.org');
+    expect(result).toEqual({ valid: true, graduationYear: 38 });
+  });
+
+  it('accepts a graduation year far in the past', () => {
+    const result = validateEjmEmailForKidInvite('noa05@ejm.org');
+    expect(result).toEqual({ valid: true, graduationYear: 5 });
+  });
+
+  it('still rejects a non-EJM domain', () => {
+    const result = validateEjmEmailForKidInvite('noa28@gmail.com');
+    expect(result.valid).toBe(false);
+    expect(result.error).toContain('@ejm.org');
+  });
+
+  it('still requires a parseable graduation year', () => {
+    const result = validateEjmEmailForKidInvite('noaAB@ejm.org');
+    expect(result.valid).toBe(false);
+    expect(result.error).toContain('graduation year');
+  });
+
+  it('still rejects a too-short local part', () => {
+    const result = validateEjmEmailForKidInvite('ab@ejm.org');
+    expect(result.valid).toBe(false);
+    expect(result.error).toContain('Invalid EJM email format');
+  });
+
+  it('is case-insensitive and trims whitespace, like validateEjmEmail', () => {
+    expect(validateEjmEmailForKidInvite('  Noa38@EJM.ORG  ').valid).toBe(true);
   });
 });
 
