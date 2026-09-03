@@ -16,6 +16,12 @@ import { checkEnrollmentAge } from '@ejm/shared-core';
  * so moving the policy moves this number and fails the copy assertions below.
  */
 const SELF_ENROLL_FLOOR_AGE = (() => {
+  // Fixed, not `Date.now()`, deliberately: a moving anchor would make this
+  // constant (and every assertion built from it) drift silently as real time
+  // passes, with no test failure to prompt a review. `checkEnrollmentAge`'s
+  // ±1-school-year window has enough slack that a stale anchor date is
+  // harmless for years, but "harmless" isn't the same as "shouldn't be
+  // deliberate" — see PR #412 review round 8.
   const now = new Date('2026-06-15T12:00:00Z');
   const dobForAge = (age: number) => {
     const d = new Date(now);
