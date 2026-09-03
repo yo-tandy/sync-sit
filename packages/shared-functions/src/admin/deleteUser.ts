@@ -552,7 +552,6 @@ export const deleteUser = onCall(
       scheduleOverridesDeleted,
       sitClaimsReleased,
       studyErasure,
-      claimReleaseErrors,
       now,
     } = erased;
 
