@@ -255,6 +255,22 @@ describe('AppSwitchBar', () => {
       expect(nav.className).not.toMatch(/(?<![\w-])h-app-switch-bar(?![\w-])/);
     });
 
+    it('stretches every tab button to the row height — items-stretch only reaches the <li>', () => {
+      // items-stretch (on the <ul>) stretches each <li> flex item to the row's
+      // height, but a <button> is a plain in-flow child of its <li>, not a
+      // flex item itself — stretch does not cascade into it. Without h-full
+      // here the button stays content-sized (~58-61px) inside the taller
+      // row, so justify-center centers within a box shorter than the row and
+      // the bottom of the tab becomes dead, non-clickable space.
+      renderBar();
+      expect(screen.getByRole('button', { name: /sync\/sit/ }).className).toMatch(
+        /(?<![\w-])h-full(?![\w-])/,
+      );
+      expect(screen.getByRole('button', { name: /my account/i }).className).toMatch(
+        /(?<![\w-])h-full(?![\w-])/,
+      );
+    });
+
     it('the failure alert OVERLAYS above the bar instead of growing it', async () => {
       // In-flow, the alert made the bar ~24px taller than any shell's
       // reserved padding, covering content on every phone — the second half

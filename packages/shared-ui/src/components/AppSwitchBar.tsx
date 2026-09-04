@@ -198,7 +198,10 @@ export function AppSwitchBar({
           h-app-switch-row: the EXPLICIT height half of the #419 contract —
           content no longer sizes the row, the shared token does, so the bar's
           total height is exactly the --spacing-app-switch-bar every shell
-          reserves. The buttons center their icon+label column inside it. */}
+          reserves. items-stretch only stretches the <li> flex items to that
+          height, not the plain in-flow <button> inside each one — so every
+          button also carries h-full, and centers its icon+label column
+          inside the row rather than inside its own content-sized box. */}
       <ul className="focus-ring-inset flex h-app-switch-row items-stretch">
         {appTabs.map(({ app, url }) => {
           const isCurrent = app === current;
@@ -222,7 +225,7 @@ export function AppSwitchBar({
                   }
                   if (url) void switchTo(app, url);
                 }}
-                className={`flex w-full flex-col items-center justify-center gap-1 px-1 py-2 text-[11px] font-semibold transition-colors ${
+                className={`flex h-full w-full flex-col items-center justify-center gap-1 px-1 py-2 text-[11px] font-semibold transition-colors ${
                   isCurrent ? 'text-brand-600' : 'text-gray-500 active:bg-gray-50'
                 }`}
               >
@@ -256,7 +259,7 @@ export function AppSwitchBar({
               setFailed(false);
               account.onNavigate(account.href);
             }}
-            className={`flex w-full flex-col items-center justify-center gap-1 px-1 py-2 text-[11px] font-semibold transition-colors ${
+            className={`flex h-full w-full flex-col items-center justify-center gap-1 px-1 py-2 text-[11px] font-semibold transition-colors ${
               // Neutral, not branded: the account is shared and app-agnostic
               // (decision 24), so it must not wear the host app's colour.
               accountActive ? 'text-gray-900' : 'text-gray-500 active:bg-gray-50'
