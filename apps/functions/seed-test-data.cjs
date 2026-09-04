@@ -20,6 +20,16 @@
  * VITE_EMULATOR_* vars (issue #376), under plain `EMULATOR_*` names plus
  * `LANE` / `E2E_LANE`. With none of them set this targets 127.0.0.1:8080 /
  * 127.0.0.1:9099 exactly as it always did. See docs/emulator-lanes.md.
+ *
+ * SCHEMA NOTE: role-specific fields live under `profiles.<role>`
+ * (`profiles.parent`, `profiles.babysitter`), not flat on the user doc, and
+ * an admin is `isAdmin: true` rather than `role: 'admin'` — every current
+ * auth guard (`getSitRole` / `getBabysitterProfile` / `getParentProfile` /
+ * `isAdmin` in @ejm/sit-core and @ejm/shared-core) reads it from there. This
+ * script used to write a flat legacy shape with no `profiles` object at all,
+ * which every seeded account silently failed the sit AuthGuard's role check
+ * and got redirected to /signup on login. Fixed to match the shape
+ * `tests/setup/seed.ts` (the integration-test fixtures) already use.
  */
 
 const { applySeedEmulatorTarget } = require('./emulator-target.cjs');
@@ -72,6 +82,17 @@ function makeSlots(ranges) {
   return slots;
 }
 
+const NOTIF_PREFS_EMAIL = {
+  shared: { reminders: { push: true, email: true } },
+  sit: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } },
+  study: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } },
+  do: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } },
+};
+const NOTIF_PREFS_NO_REMINDER_EMAIL = {
+  ...NOTIF_PREFS_EMAIL,
+  shared: { reminders: { push: true, email: false } },
+};
+
 async function seed() {
   console.log('\n=== Seeding Test Data ===\n');
   console.log(
@@ -83,9 +104,9 @@ async function seed() {
   console.log('Creating admin...');
   const adminUid = await createUser('admin@syncsit.test', 'Admin User');
   await db.collection('users').doc(adminUid).set({
-    uid: adminUid, role: 'admin', email: 'admin@syncsit.test', status: 'active',
+    uid: adminUid, isAdmin: true, email: 'admin@syncsit.test', status: 'active',
     firstName: 'Admin', lastName: 'User', language: 'en',
-    notifPrefs: { shared: { reminders: { push: true, email: false } }, sit: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } }, study: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } }, do: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } } },
+    notifPrefs: NOTIF_PREFS_NO_REMINDER_EMAIL,
     fcmTokens: [], createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
   });
   console.log(`  admin@syncsit.test (${adminUid})`);
@@ -97,18 +118,25 @@ async function seed() {
   const family1Id = 'family-dupont';
 
   await db.collection('users').doc(parent1Uid).set({
-    uid: parent1Uid, role: 'parent', email: 'marie.dupont@test.com', status: 'active',
-    firstName: 'Marie', lastName: 'Dupont', familyId: family1Id, language: 'fr',
-    phone: '+33 612345678', whatsapp: '+33 612345678',
-    notifPrefs: { shared: { reminders: { push: true, email: true } }, sit: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } }, study: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } }, do: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } } },
+    uid: parent1Uid, email: 'marie.dupont@test.com', status: 'active',
+    firstName: 'Marie', lastName: 'Dupont', language: 'fr',
+    profiles: {
+      parent: {
+        enrollmentComplete: true, familyId: family1Id,
+        phone: '+33 612345678', whatsapp: '+33 612345678',
+      },
+    },
+    notifPrefs: NOTIF_PREFS_EMAIL,
     fcmTokens: [], createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
   });
 
   await db.collection('users').doc(parent2Uid).set({
-    uid: parent2Uid, role: 'parent', email: 'pierre.dupont@test.com', status: 'active',
-    firstName: 'Pierre', lastName: 'Dupont', familyId: family1Id, language: 'fr',
-    phone: '+33 698765432',
-    notifPrefs: { shared: { reminders: { push: true, email: true } }, sit: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } }, study: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } }, do: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } } },
+    uid: parent2Uid, email: 'pierre.dupont@test.com', status: 'active',
+    firstName: 'Pierre', lastName: 'Dupont', language: 'fr',
+    profiles: {
+      parent: { enrollmentComplete: true, familyId: family1Id, phone: '+33 698765432' },
+    },
+    notifPrefs: NOTIF_PREFS_EMAIL,
     fcmTokens: [], createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
   });
 
@@ -149,10 +177,15 @@ async function seed() {
   const family2Id = 'family-martin';
 
   await db.collection('users').doc(parent3Uid).set({
-    uid: parent3Uid, role: 'parent', email: 'sophie.martin@test.com', status: 'active',
-    firstName: 'Sophie', lastName: 'Martin', familyId: family2Id, language: 'en',
-    phone: '+33 655443322', whatsapp: '+33 655443322',
-    notifPrefs: { shared: { reminders: { push: true, email: false } }, sit: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } }, study: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } }, do: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } } },
+    uid: parent3Uid, email: 'sophie.martin@test.com', status: 'active',
+    firstName: 'Sophie', lastName: 'Martin', language: 'en',
+    profiles: {
+      parent: {
+        enrollmentComplete: true, familyId: family2Id,
+        phone: '+33 655443322', whatsapp: '+33 655443322',
+      },
+    },
+    notifPrefs: NOTIF_PREFS_NO_REMINDER_EMAIL,
     fcmTokens: [], createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
   });
 
@@ -185,17 +218,21 @@ async function seed() {
   console.log('\nCreating Babysitter 1 (Lea Bernard)...');
   const bs1Uid = await createUser('lea.bernard@ejm.org', 'Lea Bernard');
   await db.collection('users').doc(bs1Uid).set({
-    uid: bs1Uid, role: 'babysitter', email: 'lea.bernard@ejm.org', ejemEmail: 'lea.bernard@ejm.org',
-    status: 'active', searchable: true,
-    firstName: 'Lea', lastName: 'Bernard',
-    dateOfBirth: new Date('2008-03-15'), gender: 'female', classLevel: '1ère',
-    languages: ['French', 'English', 'Spanish'],
-    aboutMe: 'I love working with kids! I have two younger siblings and often help with their homework.',
-    kidAgeRange: { min: 3, max: 10 }, maxKids: 3, hourlyRate: 12,
-    contactEmail: 'lea.bernard@ejm.org', contactPhone: '+33 611223344',
-    areaMode: 'arrondissement', arrondissements: ['15e', '16e', '7e'],
-    areaLatLng: { lat: 48.8530, lng: 2.2750 },
-    notifPrefs: { shared: { reminders: { push: true, email: true } }, sit: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } }, study: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } }, do: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } } },
+    uid: bs1Uid, email: 'lea.bernard@ejm.org', status: 'active',
+    firstName: 'Lea', lastName: 'Bernard', dateOfBirth: new Date('2008-03-15'),
+    profiles: {
+      babysitter: {
+        enrollmentComplete: true, ejemEmail: 'lea.bernard@ejm.org', searchable: true,
+        gender: 'female', classLevel: '1ère',
+        languages: ['French', 'English', 'Spanish'],
+        aboutMe: 'I love working with kids! I have two younger siblings and often help with their homework.',
+        kidAgeRange: { min: 3, max: 10 }, maxKids: 3, hourlyRate: 12,
+        contactEmail: 'lea.bernard@ejm.org', contactPhone: '+33 611223344',
+        areaMode: 'arrondissement', arrondissements: ['15e', '16e', '7e'],
+        areaLatLng: { lat: 48.8530, lng: 2.2750 },
+      },
+    },
+    notifPrefs: NOTIF_PREFS_EMAIL,
     fcmTokens: [], language: 'fr',
     createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
   });
@@ -213,17 +250,21 @@ async function seed() {
   console.log('\nCreating Babysitter 2 (Hugo Leroy)...');
   const bs2Uid = await createUser('hugo.leroy@ejm.org', 'Hugo Leroy');
   await db.collection('users').doc(bs2Uid).set({
-    uid: bs2Uid, role: 'babysitter', email: 'hugo.leroy@ejm.org', ejemEmail: 'hugo.leroy@ejm.org',
-    status: 'active', searchable: true,
-    firstName: 'Hugo', lastName: 'Leroy',
-    dateOfBirth: new Date('2007-09-22'), gender: 'male', classLevel: 'Terminale',
-    languages: ['French', 'English'],
-    aboutMe: 'Sporty and energetic! I enjoy playing games and doing activities with kids.',
-    kidAgeRange: { min: 5, max: 14 }, maxKids: 4, hourlyRate: 15,
-    contactEmail: 'hugo.leroy@ejm.org', contactPhone: '+33 622334455',
-    areaMode: 'distance', areaAddress: '8 Rue Lecourbe, 75015 Paris',
-    areaLatLng: { lat: 48.8450, lng: 2.3050 }, areaRadiusKm: 5,
-    notifPrefs: { shared: { reminders: { push: true, email: true } }, sit: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } }, study: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } }, do: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } } },
+    uid: bs2Uid, email: 'hugo.leroy@ejm.org', status: 'active',
+    firstName: 'Hugo', lastName: 'Leroy', dateOfBirth: new Date('2007-09-22'),
+    profiles: {
+      babysitter: {
+        enrollmentComplete: true, ejemEmail: 'hugo.leroy@ejm.org', searchable: true,
+        gender: 'male', classLevel: 'Terminale',
+        languages: ['French', 'English'],
+        aboutMe: 'Sporty and energetic! I enjoy playing games and doing activities with kids.',
+        kidAgeRange: { min: 5, max: 14 }, maxKids: 4, hourlyRate: 15,
+        contactEmail: 'hugo.leroy@ejm.org', contactPhone: '+33 622334455',
+        areaMode: 'distance', areaAddress: '8 Rue Lecourbe, 75015 Paris',
+        areaLatLng: { lat: 48.8450, lng: 2.3050 }, areaRadiusKm: 5,
+      },
+    },
+    notifPrefs: NOTIF_PREFS_EMAIL,
     fcmTokens: [], language: 'en',
     createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
   });
@@ -241,17 +282,22 @@ async function seed() {
   console.log('\nCreating Babysitter 3 (Camille Moreau)...');
   const bs3Uid = await createUser('camille.moreau@ejm.org', 'Camille Moreau');
   await db.collection('users').doc(bs3Uid).set({
-    uid: bs3Uid, role: 'babysitter', email: 'camille.moreau@ejm.org', ejemEmail: 'camille.moreau@ejm.org',
-    status: 'active', searchable: true,
-    firstName: 'Camille', lastName: 'Moreau',
-    dateOfBirth: new Date('2008-06-10'), gender: 'female', classLevel: '1ère',
-    languages: ['French', 'English', 'Hebrew'],
-    aboutMe: 'Patient and creative. I love arts and crafts, reading stories, and cooking simple meals with kids.',
-    kidAgeRange: { min: 1, max: 12 }, maxKids: 3, hourlyRate: 13,
-    contactEmail: 'camille.moreau@ejm.org', contactPhone: '+33 633445566', whatsapp: '+33 633445566',
-    areaMode: 'arrondissement', arrondissements: ['14e', '15e', '16e', '6e', '7e', 'Boulogne-Billancourt'],
-    areaLatLng: { lat: 48.8480, lng: 2.2800 },
-    notifPrefs: { shared: { reminders: { push: true, email: true } }, sit: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } }, study: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } }, do: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } } },
+    uid: bs3Uid, email: 'camille.moreau@ejm.org', status: 'active',
+    firstName: 'Camille', lastName: 'Moreau', dateOfBirth: new Date('2008-06-10'),
+    profiles: {
+      babysitter: {
+        enrollmentComplete: true, ejemEmail: 'camille.moreau@ejm.org', searchable: true,
+        gender: 'female', classLevel: '1ère',
+        languages: ['French', 'English', 'Hebrew'],
+        aboutMe: 'Patient and creative. I love arts and crafts, reading stories, and cooking simple meals with kids.',
+        kidAgeRange: { min: 1, max: 12 }, maxKids: 3, hourlyRate: 13,
+        contactEmail: 'camille.moreau@ejm.org', contactPhone: '+33 633445566',
+        areaMode: 'arrondissement',
+        arrondissements: ['14e', '15e', '16e', '6e', '7e', 'Boulogne-Billancourt'],
+        areaLatLng: { lat: 48.8480, lng: 2.2800 },
+      },
+    },
+    notifPrefs: NOTIF_PREFS_EMAIL,
     fcmTokens: [], language: 'fr',
     createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
   });
@@ -269,17 +315,22 @@ async function seed() {
   console.log('\nCreating Babysitter 4 (Tom Petit — NOT searchable)...');
   const bs4Uid = await createUser('tom.petit@ejm.org', 'Tom Petit');
   await db.collection('users').doc(bs4Uid).set({
-    uid: bs4Uid, role: 'babysitter', email: 'tom.petit@ejm.org', ejemEmail: 'tom.petit@ejm.org',
-    status: 'active', searchable: false, // inactive — won't appear in search
-    firstName: 'Tom', lastName: 'Petit',
-    dateOfBirth: new Date('2009-01-28'), gender: 'male', classLevel: '2nde',
-    languages: ['French'],
-    aboutMe: 'New to babysitting but very responsible. Good with older kids.',
-    kidAgeRange: { min: 6, max: 14 }, maxKids: 2, hourlyRate: 10,
-    contactEmail: 'tom.petit@ejm.org',
-    areaMode: 'arrondissement', arrondissements: ['16e'],
-    areaLatLng: { lat: 48.8600, lng: 2.2700 },
-    notifPrefs: { shared: { reminders: { push: true, email: true } }, sit: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } }, study: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } }, do: { newRequest: { push: true, email: true }, confirmed: { push: true, email: true }, cancelled: { push: true, email: true } } },
+    uid: bs4Uid, email: 'tom.petit@ejm.org', status: 'active',
+    firstName: 'Tom', lastName: 'Petit', dateOfBirth: new Date('2009-01-28'),
+    profiles: {
+      babysitter: {
+        enrollmentComplete: true, ejemEmail: 'tom.petit@ejm.org',
+        searchable: false, // inactive — won't appear in search
+        gender: 'male', classLevel: '2nde',
+        languages: ['French'],
+        aboutMe: 'New to babysitting but very responsible. Good with older kids.',
+        kidAgeRange: { min: 6, max: 14 }, maxKids: 2, hourlyRate: 10,
+        contactEmail: 'tom.petit@ejm.org',
+        areaMode: 'arrondissement', arrondissements: ['16e'],
+        areaLatLng: { lat: 48.8600, lng: 2.2700 },
+      },
+    },
+    notifPrefs: NOTIF_PREFS_EMAIL,
     fcmTokens: [], language: 'fr',
     createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
   });
@@ -371,8 +422,8 @@ async function seed() {
     preferredBabysitters: FieldValue.arrayUnion(bs1Uid),
   });
   await db.collection('users').doc(bs1Uid).update({
-    approvedFamilies: FieldValue.arrayUnion(family1Id),
-    contactSharingConsent: true,
+    'profiles.babysitter.approvedFamilies': FieldValue.arrayUnion(family1Id),
+    'profiles.babysitter.contactSharingConsent': true,
   });
   const csReq1 = db.collection('contactSharingRequests').doc();
   await csReq1.set({
@@ -392,7 +443,7 @@ async function seed() {
     preferredBabysitters: FieldValue.arrayUnion(bs3Uid),
   });
   await db.collection('users').doc(bs3Uid).update({
-    contactSharingConsent: true,
+    'profiles.babysitter.contactSharingConsent': true,
   });
   const csReq2 = db.collection('contactSharingRequests').doc();
   await csReq2.set({
