@@ -19,7 +19,9 @@ export function AuthGuard({ role, children }: AuthGuardProps) {
   const { firebaseUser, userDoc, loading } = useAuthStore();
 
   // Auth state still resolving: render nothing rather than flashing a redirect
-  // before we know who the visitor is.
+  // before we know who the visitor is. The blank frame sits on the portal's
+  // tinted ground, not white (#424): the mounting layout has already stamped
+  // its ground on <html> via useDocumentGround before this renders.
   if (loading) return null;
 
   // Not signed in at all -> the login page.

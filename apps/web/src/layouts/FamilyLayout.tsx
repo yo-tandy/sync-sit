@@ -1,4 +1,5 @@
 import { Outlet } from 'react-router';
+import { useDocumentGround } from '@ejm/shared-ui';
 import { AuthGuard } from './AuthGuard';
 import { AppBar } from '@/components/ui/AppBar';
 import { AppSwitchBarHost } from '@/components/ui/AppSwitchBarHost';
@@ -6,6 +7,9 @@ import { PageContainer } from '@/components/ui/PageContainer';
 import { ScrollToTop } from '@/components/ScrollToTop';
 
 export function FamilyLayout() {
+  // Ground reaches html too (#424): iOS overscroll + the AuthGuard resolve
+  // state paint the canvas, which no descendant div can tint.
+  useDocumentGround('app');
   return (
     <AuthGuard role="parent">
       {/* pb-16 on phones clears the fixed app-switch bar; the bar is md:hidden,

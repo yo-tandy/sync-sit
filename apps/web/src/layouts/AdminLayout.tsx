@@ -1,5 +1,6 @@
 import { Outlet } from 'react-router';
 import { useTranslation } from 'react-i18next';
+import { useDocumentGround } from '@ejm/shared-ui';
 import { AuthGuard } from './AuthGuard';
 import { AppBar } from '@/components/ui/AppBar';
 import { PageContainer } from '@/components/ui/PageContainer';
@@ -17,6 +18,10 @@ import { ScrollToTop } from '@/components/ScrollToTop';
 
 export function AdminLayout() {
   const { t } = useTranslation();
+  // Ground reaches html too (#424) — the ADMIN one (decision 25): iOS
+  // overscroll + the AuthGuard resolve state paint the canvas, which no
+  // descendant div can tint.
+  useDocumentGround('admin');
 
   // Desktop sidebar (issue #119): the dashboard's grouped destinations
   // (People / Trust & safety / Operations, the #140 regrouping) plus the

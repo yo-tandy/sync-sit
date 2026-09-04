@@ -20,6 +20,15 @@ interface AuthGuardProps {
 export function AuthGuard({ role, children }: AuthGuardProps) {
   const { firebaseUser, userDoc, loading } = useAuthStore();
 
+  // RESOLVE STATES SIT ON THE GROUND WITHOUT A BACKGROUND OF THEIR OWN (#424).
+  // The spinner containers below are deliberately transparent: this guard
+  // always renders inside a layout, and the layout has already stamped its
+  // ground on <html> via useDocumentGround before the guard's first paint —
+  // so the tint (or the ADMIN neutral, under AdminLayout/AccountLayout) shows
+  // through the canvas. A bg-ground class here would be actively wrong: the
+  // guard cannot know which ground it is about to resolve into, and painting
+  // the app tint under an admin shell would reintroduce the mismatch flash
+  // this issue exists to remove.
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center">
