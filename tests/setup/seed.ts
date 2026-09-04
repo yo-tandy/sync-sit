@@ -4,8 +4,23 @@
  */
 import { FieldValue } from 'firebase-admin/firestore';
 import { getDb, getAdminAuth } from './emulator.js';
+import { computeEffectiveSearchable } from '@ejm/shared-core';
 
 const PASSWORD = 'Test1234';
+
+/**
+ * Computes `effectiveSearchable` (issue #435 PR2) for a seeded provider
+ * profile via the REAL computeEffectiveSearchable, so fixtures never drift
+ * from what onUserWrittenRecomputeSearchable would itself converge to. Set
+ * explicitly at seed time (status is always 'active' for every provider this
+ * suite seeds) rather than left for the trigger to backfill asynchronously:
+ * several integration tests `.set()`/read this data and immediately call
+ * searchBabysitters/searchTutors, which now filter on this field, and racing
+ * the trigger's async convergence would make those tests flaky.
+ */
+function effSearchable(searchable: boolean, enrollmentComplete: boolean): boolean {
+  return computeEffectiveSearchable({ status: 'active' }, { searchable, enrollmentComplete });
+}
 
 function makeSlots(ranges: [number, number][]): boolean[] {
   const slots = new Array(96).fill(false);
@@ -136,6 +151,7 @@ export async function seedTestData(): Promise<SeedData> {
     firstName: 'Lea', lastName: 'Bernard', dateOfBirth: new Date('2008-03-15'),
     profiles: { babysitter: {
       enrollmentComplete: true, ejemEmail: 'lea.bernard@ejm.org', searchable: true,
+      effectiveSearchable: effSearchable(true, true),
       gender: 'female', classLevel: '1ère', languages: ['French', 'English'],
       kidAgeRange: { min: 3, max: 10 }, maxKids: 3, hourlyRate: 12,
       contactEmail: 'lea.bernard@ejm.org', contactPhone: '+33 611223344',
@@ -161,6 +177,7 @@ export async function seedTestData(): Promise<SeedData> {
     firstName: 'Hugo', lastName: 'Leroy', dateOfBirth: new Date('2007-09-22'),
     profiles: { babysitter: {
       enrollmentComplete: true, ejemEmail: 'hugo.leroy@ejm.org', searchable: true,
+      effectiveSearchable: effSearchable(true, true),
       gender: 'male', classLevel: 'Terminale', languages: ['French', 'English'],
       kidAgeRange: { min: 5, max: 14 }, maxKids: 4, hourlyRate: 15,
       contactEmail: 'hugo.leroy@ejm.org',
@@ -186,6 +203,7 @@ export async function seedTestData(): Promise<SeedData> {
     firstName: 'Camille', lastName: 'Moreau', dateOfBirth: new Date('2008-06-10'),
     profiles: { babysitter: {
       enrollmentComplete: true, ejemEmail: 'camille.moreau@ejm.org', searchable: true,
+      effectiveSearchable: effSearchable(true, true),
       gender: 'female', classLevel: '1ère', languages: ['French', 'English', 'Hebrew'],
       kidAgeRange: { min: 1, max: 12 }, maxKids: 3, hourlyRate: 13,
       contactEmail: 'camille.moreau@ejm.org',
@@ -211,6 +229,7 @@ export async function seedTestData(): Promise<SeedData> {
     firstName: 'Tom', lastName: 'Petit', dateOfBirth: new Date('2009-01-28'),
     profiles: { babysitter: {
       enrollmentComplete: true, ejemEmail: 'tom.petit@ejm.org', searchable: false,
+      effectiveSearchable: effSearchable(false, true),
       gender: 'male', classLevel: '2nde', languages: ['French'],
       kidAgeRange: { min: 6, max: 14 }, maxKids: 2, hourlyRate: 10,
       contactEmail: 'tom.petit@ejm.org',
@@ -233,6 +252,7 @@ export async function seedTestData(): Promise<SeedData> {
     firstName: 'Noa', lastName: 'Katz', dateOfBirth: new Date('2005-04-12'),
     profiles: { tutor: {
       enrollmentComplete: false, ejemEmail: 'noa.katz@ejm.org', searchable: false,
+      effectiveSearchable: effSearchable(false, false),
       verification: { identityStatus: 'not_submitted' },
       classLevel: 'L2', gender: 'female', languages: ['French', 'English'],
       subjects: [{ subject: 'math', levels: ['6e', '5e', '4e'], rate: 25 }],
@@ -260,6 +280,7 @@ export async function seedTestData(): Promise<SeedData> {
     firstName: 'Yael', lastName: 'Cohen', dateOfBirth: new Date('2004-08-19'),
     profiles: { tutor: {
       enrollmentComplete: true, ejemEmail: 'yael.cohen@ejm.org', searchable: true,
+      effectiveSearchable: effSearchable(true, true),
       classLevel: 'L3', gender: 'female', languages: ['French', 'English'],
       subjects: [
         { subject: 'math', levels: ['6e', '5e', '4e'], rate: 25 },
@@ -289,6 +310,7 @@ export async function seedTestData(): Promise<SeedData> {
     firstName: 'Daniel', lastName: 'Levy', dateOfBirth: new Date('2003-11-05'),
     profiles: { tutor: {
       enrollmentComplete: true, ejemEmail: 'daniel.levy@ejm.org', searchable: false,
+      effectiveSearchable: effSearchable(false, true),
       classLevel: 'M1', gender: 'male', languages: ['French', 'English'],
       // Offerings deliberately IDENTICAL to tutor2's so tutor3 is a clean
       // negative for the searchable gate — any search that matches tutor2

@@ -46,15 +46,19 @@ export const searchTutors = onCall(
       throw new HttpsError('permission-denied', 'Family verification required before searching for tutors');
     }
 
-    // ── Candidate tutors: three equality filters (no composite index needed) ──
-    // enrollmentComplete is true from creation for every current tutor (owner
-    // decision 2026-08-17: no admin identity approval); the filter stays to
-    // exclude legacy dev/test docs enrolled under the old gated model.
-    // searchable === true is the tutor's own visibility switch.
+    // ── Candidate tutors: one equality filter (no composite index needed) ──
+    // `effectiveSearchable` (issue #435 PR2, computeEffectiveSearchable in
+    // @ejm/shared-core) is a server-maintained denormalization that already
+    // folds in `status === 'active'`, `searchable === true` (the tutor's own
+    // visibility switch), and `enrollmentComplete === true` (kept, even
+    // though it's true from creation for every current tutor — owner
+    // decision 2026-08-17: no admin identity approval — to exclude legacy
+    // dev/test docs enrolled under the old gated model). Replaces the three
+    // separate `.where()` clauses this used to be; the write-trigger that
+    // maintains it lives in apps/functions (deploys once, from the sit
+    // codebase — see onUserWrittenRecomputeSearchable.ts).
     const usersSnap = await db.collection('users')
-      .where('status', '==', 'active')
-      .where('profiles.tutor.enrollmentComplete', '==', true)
-      .where('profiles.tutor.searchable', '==', true)
+      .where('profiles.tutor.effectiveSearchable', '==', true)
       .get();
 
     console.log(`Found ${usersSnap.size} searchable tutors`);

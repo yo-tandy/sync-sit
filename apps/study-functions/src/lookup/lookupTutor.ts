@@ -8,6 +8,7 @@ import {
   postcodeToArrondissement,
   resolveAreaLabel,
   getContact,
+  computeEffectiveSearchable,
 } from '@ejm/shared-core';
 import type { User } from '@ejm/shared-core';
 import type { StudyUser, TutorProfile, TutorLookupResult } from '@ejm/study-core';
@@ -100,13 +101,16 @@ export const lookupTutor = onCall(
     const tutor: TutorProfile | undefined = tutorUser.profiles?.tutor;
 
     // The searchTutors candidate predicate, re-applied at LOOKUP time (see
-    // the header comment): active status (the hard ban gate), completed
-    // enrollment, and the tutor's own live searchable choice.
-    if (
-      tutorUser.status !== 'active' ||
-      !tutor?.enrollmentComplete ||
-      tutor.searchable !== true
-    ) {
+    // the header comment): computeEffectiveSearchable (issue #435 PR2,
+    // @ejm/shared-core) folds in active status (the hard ban gate), completed
+    // enrollment, and the tutor's own live searchable choice — the SAME three
+    // inputs searchTutors' query now filters on via the denormalized
+    // `effectiveSearchable` field. This call site computes it LIVE off the
+    // doc just fetched rather than trusting that denormalized copy: a single
+    // already-fetched doc costs nothing extra to recompute fresh, and doing
+    // so is immune to the trigger's write lag (and to a not-yet-backfilled
+    // legacy doc) in a way that reading the stored field could not be.
+    if (!tutor || !computeEffectiveSearchable(tutorUser, tutor)) {
       throw await notFound();
     }
 

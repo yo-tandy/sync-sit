@@ -62,6 +62,13 @@ describe('study contact inversion', () => {
     await db.collection('users').doc(seed.tutor2.uid).update({
       'profiles.tutor.approvedFamilies': [],
       'profiles.tutor.searchable': true,
+      // effectiveSearchable (issue #435 PR2) is normally recomputed
+      // asynchronously by onUserWrittenRecomputeSearchable, but this test
+      // file's searchTutors assertions run right after this reset — setting
+      // it here directly (matching what the trigger would converge to:
+      // status active + searchable true + enrollmentComplete true) keeps
+      // those assertions deterministic instead of racing the trigger.
+      'profiles.tutor.effectiveSearchable': true,
       // Restored to the seeded shape: one pin below rewrites them.
       'profiles.tutor.subjects': [
         { subject: 'math', levels: ['6e', '5e', '4e'], rate: 25 },

@@ -60,11 +60,33 @@ service cloud.firestore {
     //   writes auditLog entries on every change; allowing direct client writes
     //   would bypass that audit point and the GDPR-required record of which
     //   families a babysitter has shared contact with.
+    // - effectiveSearchable (issue #435 PR2): denormalized result of
+    //   computeEffectiveSearchable (status + searchable + enrollmentComplete),
+    //   written ONLY by the onUserWrittenRecomputeSearchable trigger. A
+    //   client that could set this directly would self-grant search
+    //   visibility regardless of its real status/enrollmentComplete/
+    //   searchable state — exactly the escalation the trigger's fold-in
+    //   exists to prevent. searchBabysitters/lookupBabysitter filter on this
+    //   field alone, so it must be as trustworthy as `status` itself.
+    // Split shape (mirrors doerBoundsValid/doerMapBoundsOk, PR #320 round 3):
+    // the before/after babysitter maps are resolved ONCE each and passed down,
+    // instead of bsField's per-field re-walk of profiles.babysitter — with
+    // three fields pinned here that re-walk costs little on its own, but it
+    // is not free, and this function sits in the same always-evaluated update
+    // rule as tutorNumericBoundsValid (issue #435 PR2 round: adding a fourth
+    // bsField-based pin here was the marginal push that, combined with that
+    // function's own uncollapsed cost, tipped a heavy tutor save over the
+    // rules expression budget — see tutorNumericBoundsValid's own note).
     function babysitterIdentityUnchanged() {
-      return bsField(request.resource.data, 'ejemEmail', '')
-               == bsField(resource.data, 'ejemEmail', '')
-             && bsField(request.resource.data, 'approvedFamilies', [])
-               == bsField(resource.data, 'approvedFamilies', []);
+      return babysitterMapIdentityUnchanged(
+        request.resource.data.get('profiles', {}).get('babysitter', {}),
+        resource.data.get('profiles', {}).get('babysitter', {})
+      );
+    }
+    function babysitterMapIdentityUnchanged(after, before) {
+      return after.get('ejemEmail', '') == before.get('ejemEmail', '')
+             && after.get('approvedFamilies', []) == before.get('approvedFamilies', [])
+             && after.get('effectiveSearchable', false) == before.get('effectiveSearchable', false);
     }
 
     // Helper: a tutor-profile field on a user-doc data map (safe default).
@@ -90,23 +112,36 @@ service cloud.firestore {
     // - endorsementCount: server-owned denormalized counter of approved/published
     //   endorsements, written ONLY by respondToTutorEndorsement on accept. A
     //   tutor inflating it would fake social proof and distort search ranking.
+    // - effectiveSearchable (issue #435 PR2): denormalized result of
+    //   computeEffectiveSearchable (status + searchable + enrollmentComplete),
+    //   written ONLY by the onUserWrittenRecomputeSearchable trigger. Mirrors
+    //   the babysitter pin above — searchTutors filters on this field alone,
+    //   so a client self-setting it would bypass every other eligibility
+    //   check the trigger folds in.
     // Defaults keep the guard trivially true for users WITHOUT a tutor profile.
+    // Split shape (mirrors doerBoundsValid/doerMapBoundsOk, PR #320 round 3):
+    // the before/after tutor maps are resolved ONCE each and passed down,
+    // instead of tutorField's per-field re-walk of profiles.tutor — the same
+    // fix tutorNumericBoundsValid needed (see its own note): six-then-seven
+    // fields each re-walking profiles→tutor independently is real cost in a
+    // function evaluated on every users/{uid} write, tutor or not.
     function tutorIdentityUnchanged() {
-      return tutorField(request.resource.data, 'ejemEmail', '')
-               == tutorField(resource.data, 'ejemEmail', '')
-             && tutorField(request.resource.data, 'enrollmentComplete', false)
-               == tutorField(resource.data, 'enrollmentComplete', false)
-             && tutorField(request.resource.data, 'verification', {})
-               == tutorField(resource.data, 'verification', {})
-             && tutorField(request.resource.data, 'approvedFamilies', [])
-               == tutorField(resource.data, 'approvedFamilies', [])
-             && tutorField(request.resource.data, 'endorsementCount', 0)
-               == tutorField(resource.data, 'endorsementCount', 0)
+      return tutorMapIdentityUnchanged(
+        request.resource.data.get('profiles', {}).get('tutor', {}),
+        resource.data.get('profiles', {}).get('tutor', {})
+      );
+    }
+    function tutorMapIdentityUnchanged(after, before) {
+      return after.get('ejemEmail', '') == before.get('ejemEmail', '')
+             && after.get('enrollmentComplete', false) == before.get('enrollmentComplete', false)
+             && after.get('verification', {}) == before.get('verification', {})
+             && after.get('approvedFamilies', []) == before.get('approvedFamilies', [])
+             && after.get('endorsementCount', 0) == before.get('endorsementCount', 0)
              // personalCode (issue #235): minted only by getTutorPersonalCode;
              // a client choosing its own code could squat a memorable one or
              // collide with another tutor's and hijack their offline referrals.
-             && tutorField(request.resource.data, 'personalCode', '')
-               == tutorField(resource.data, 'personalCode', '');
+             && after.get('personalCode', '') == before.get('personalCode', '')
+             && after.get('effectiveSearchable', false) == before.get('effectiveSearchable', false);
     }
 
     // Helper: a doer-profile field on a user-doc data map (safe default).
@@ -167,27 +202,39 @@ service cloud.firestore {
     // validated ranges (paddingMin int 0-60; areaRadiusKm null or 0-50) —
     // client-side guards are UX only; THIS is the trust boundary. Post-state
     // check with in-range defaults, so docs without a tutor profile pass.
+    // Split shape (mirrors doerBoundsValid/doerMapBoundsOk, PR #320 round 3):
+    // the post-state tutor map is resolved ONCE and passed down, instead of
+    // the naive tutorField-per-clause form's ~17 independent re-walks of
+    // profiles.tutor (paddingMin x3, areaRadiusKm x4, areaLatLng x7, aboutMe
+    // x3) — exactly the doerBoundsValid comment's warning, unaddressed here
+    // until issue #435 PR2 review surfaced it: an unrelated one-field
+    // addition to a SIBLING function (tutorIdentityUnchanged) was enough to
+    // push an already-near-the-budget areaLatLng-saving write over the
+    // rules expression cap and deny it spuriously.
     function tutorNumericBoundsValid() {
-      return tutorField(request.resource.data, 'paddingMin', 0) is int
-             && tutorField(request.resource.data, 'paddingMin', 0) >= 0
-             && tutorField(request.resource.data, 'paddingMin', 0) <= 60
-             && (tutorField(request.resource.data, 'areaRadiusKm', 0) == null
-                 || (tutorField(request.resource.data, 'areaRadiusKm', 0) is number
-                     && tutorField(request.resource.data, 'areaRadiusKm', 0) >= 0
-                     && tutorField(request.resource.data, 'areaRadiusKm', 0) <= 50))
-             && (tutorField(request.resource.data, 'areaLatLng', null) == null
-                 || (tutorField(request.resource.data, 'areaLatLng', null).lat is number
-                     && tutorField(request.resource.data, 'areaLatLng', null).lat >= -90
-                     && tutorField(request.resource.data, 'areaLatLng', null).lat <= 90
-                     && tutorField(request.resource.data, 'areaLatLng', null).lng is number
-                     && tutorField(request.resource.data, 'areaLatLng', null).lng >= -180
-                     && tutorField(request.resource.data, 'areaLatLng', null).lng <= 180))
+      return tutorNumericMapBoundsOk(request.resource.data.get('profiles', {}).get('tutor', {}));
+    }
+    function tutorNumericMapBoundsOk(m) {
+      return m.get('paddingMin', 0) is int
+             && m.get('paddingMin', 0) >= 0
+             && m.get('paddingMin', 0) <= 60
+             && (m.get('areaRadiusKm', 0) == null
+                 || (m.get('areaRadiusKm', 0) is number
+                     && m.get('areaRadiusKm', 0) >= 0
+                     && m.get('areaRadiusKm', 0) <= 50))
+             && (m.get('areaLatLng', null) == null
+                 || (m.get('areaLatLng', null).lat is number
+                     && m.get('areaLatLng', null).lat >= -90
+                     && m.get('areaLatLng', null).lat <= 90
+                     && m.get('areaLatLng', null).lng is number
+                     && m.get('areaLatLng', null).lng >= -180
+                     && m.get('areaLatLng', null).lng <= 180))
              // aboutMe: the account page is the only writer since enrollment
              // stopped collecting it — its 1000-char bound must live HERE,
              // not in the textarea's maxLength (rules are the trust boundary).
-             && (tutorField(request.resource.data, 'aboutMe', null) == null
-                 || (tutorField(request.resource.data, 'aboutMe', null) is string
-                     && tutorField(request.resource.data, 'aboutMe', null).size() <= 1000));
+             && (m.get('aboutMe', null) == null
+                 || (m.get('aboutMe', null) is string
+                     && m.get('aboutMe', null).size() <= 1000));
     }
 
     // Cancellation notice window (issue #237): user-editable by design on

@@ -17,6 +17,29 @@ const FIRESTORE_PORT = process.env.TEST_FIRESTORE_PORT ?? '8080';
 const TUTOR_EMAIL = 'fresh.activation@ejm-test.org';
 const CODE = '123456';
 
+/**
+ * Polls for onUserWrittenRecomputeSearchable's write (issue #435 PR2) to land
+ * after the owner's rules-enforced searchable toggle below — the trigger is
+ * async, so asserting immediately after the toggle would race it. Mirrors
+ * guardian-mirroring.test.ts's waitForDoc idiom for the same class of problem
+ * (an async Firestore trigger this suite cannot otherwise synchronize with).
+ */
+async function waitForEffectiveSearchable(
+  uid: string,
+  expected: boolean,
+  attempts = 20,
+  delayMs = 300,
+): Promise<void> {
+  for (let i = 0; i < attempts; i++) {
+    const snap = await getDb().collection('users').doc(uid).get();
+    if (snap.data()?.profiles?.tutor?.effectiveSearchable === expected) return;
+    await new Promise((r) => setTimeout(r, delayMs));
+  }
+  throw new Error(
+    `onUserWrittenRecomputeSearchable never converged profiles.tutor.effectiveSearchable to ${expected} for ${uid} after ${attempts * delayMs}ms`,
+  );
+}
+
 /** Rules-enforced client write: set profiles.tutor.searchable via REST. */
 async function ownerToggleSearchable(uid: string, idToken: string): Promise<Response> {
   const url =
@@ -98,6 +121,11 @@ describe('tutor activation without admin step', () => {
     const before = (await getDb().collection('users').doc(uid).get()).data()!;
     expect(before.profiles.tutor.enrollmentComplete).toBe(true);
     expect(before.profiles.tutor.searchable).toBe(false);
+    // onUserWrittenRecomputeSearchable (issue #435 PR2) already ran on
+    // enrollTutor's create write and converged effectiveSearchable to false
+    // (searchable is false at creation) — wait for it so the "not visible
+    // yet" assertion below is about the SEARCH GATE, not trigger latency.
+    await waitForEffectiveSearchable(uid, false);
 
     // Not visible yet: searchable is still false.
     const preToggle = await callFunction<{ results: Array<{ uid: string }> }>(
@@ -111,6 +139,12 @@ describe('tutor activation without admin step', () => {
     const tutorToken = await getIdToken(uid);
     const res = await ownerToggleSearchable(uid, tutorToken);
     expect(res.status).toBe(200);
+
+    // onUserWrittenRecomputeSearchable fires off this write too — the real,
+    // end-to-end proof that a plain owner toggle (not a callable, not a
+    // backfill) reaches effectiveSearchable through the actual deployed
+    // trigger, not a hand-computed test shortcut.
+    await waitForEffectiveSearchable(uid, true);
 
     // 3. Immediately visible to a verified family — no admin step happened.
     const postToggle = await callFunction<{ results: Array<{ uid: string }> }>(

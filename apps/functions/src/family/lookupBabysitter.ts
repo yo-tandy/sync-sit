@@ -44,12 +44,16 @@ export const lookupBabysitter = onCall(
     const q = query.trim().toLowerCase();
     const results: LookupResult[] = [];
 
-    // Search all babysitters — only those who opted in to being searchable.
-    // Plan D profiles.babysitter shape: profiles.babysitter.searchable == true
-    // implies a babysitter profile, subsuming the old role predicate.
+    // Search all babysitters — same effective-searchability predicate as
+    // searchBabysitters.ts (issue #435 PR2): `effectiveSearchable` folds in
+    // status === 'active' + the searchable toggle + enrollmentComplete. This
+    // ALSO closes a pre-existing gap here specifically: unlike
+    // searchBabysitters, this callable never checked enrollmentComplete
+    // before, so a mid-enrollment babysitter with searchable somehow true
+    // could previously surface in a direct-lookup match; effectiveSearchable
+    // cannot be true until enrollment is complete, closing that hole too.
     const snap = await db.collection('users')
-      .where('status', '==', 'active')
-      .where('profiles.babysitter.searchable', '==', true)
+      .where('profiles.babysitter.effectiveSearchable', '==', true)
       .get();
 
     for (const doc of snap.docs) {

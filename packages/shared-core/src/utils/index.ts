@@ -10,3 +10,4 @@ export * from './pwa.js';
 export * from './crossAppEndorsements.js';
 export * from './emulatorConfig.js';
 export * from './notifPrefs.js';
+export * from './effectiveSearchable.js';

@@ -86,6 +86,9 @@ describe('enrollBabysitter cross-app add-profile', () => {
       enrollmentComplete: false,
       ejemEmail: EJEM_EMAIL.toLowerCase(),
       searchable: false,
+      // effectiveSearchable (issue #435 PR2): onUserWrittenRecomputeSearchable
+      // converges false immediately — enrollmentComplete is false at creation.
+      effectiveSearchable: false,
     });
     expect(after.profiles.tutor.searchable).toBe(true);
     expect(after.firstName).toBe('Tia');
@@ -238,6 +241,9 @@ describe('enrollBabysitter crossApp mode', () => {
       contactEmail: 'rica@contact.com',
       contactPhone: '+33600000001',
       whatsapp: '+33600000001',
+      // effectiveSearchable (issue #435 PR2): onUserWrittenRecomputeSearchable
+      // converges false immediately — enrollmentComplete is false at creation.
+      effectiveSearchable: false,
     });
     // Existing tutor profile and base fields untouched.
     expect(after.profiles.tutor.searchable).toBe(true);

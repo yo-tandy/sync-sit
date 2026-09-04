@@ -7,7 +7,7 @@ import { escapeHtml, sendNotificationEmail, STUDY_APP_URL } from '@ejm/shared-fu
 import { sendPushNotification } from '@ejm/shared-functions/config/push.js';
 import type { StudyUser } from '@ejm/study-core';
 import { respondFamilyContactRequestSchema } from '../validation/contact.js';
-import { resolveNotifPref } from '@ejm/shared-core';
+import { resolveNotifPref, computeEffectiveSearchable } from '@ejm/shared-core';
 
 /**
  * respondToFamilyContactRequest (issue #207 PR4): a PARENT answers a
@@ -96,10 +96,16 @@ export const respondToFamilyContactRequest = onCall(
         // Re-check SEARCHABLE here, not only at send: a tutor who hides
         // between sending and being accepted (or whose guardian hides them)
         // would otherwise leave the family with the dead-end links the
-        // send-side gate exists to prevent -- searchTutors filters on it, and
-        // its card is the family's only contact-reveal surface (PR #213
-        // review). One field, in a snapshot already being read.
-        if (tutorData?.profiles?.tutor?.searchable !== true) {
+        // send-side gate exists to prevent -- searchTutors now filters on
+        // profiles.tutor.effectiveSearchable (issue #435 PR2), and its card
+        // is the family's only contact-reveal surface (PR #213 review).
+        // Calls computeEffectiveSearchable LIVE on the snapshot already being
+        // read here, rather than trusting the denormalized field: status was
+        // just re-checked immediately above, so a false result is always
+        // attributable to searchable/enrollmentComplete on this fresh read --
+        // and computing live means this gate can never be tripped by the
+        // trigger's write lag or a not-yet-backfilled doc.
+        if (!computeEffectiveSearchable(tutorData, tutorData?.profiles?.tutor)) {
           throw new HttpsError(
             'failed-precondition',
             'This tutor is no longer available',
