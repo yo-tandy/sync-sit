@@ -16,6 +16,22 @@ export const MAX_PHOTO_SIZE = 5 * 1024 * 1024;
  * NOTE: the enrollment flows historically hardcode their consentVersion in
  * the web apps ('1.0' in sit, '2025-12-01' in study); these constants are the
  * server-side source of truth for the guardian consent record.
+ *
+ * DELIBERATELY NOT BUMPED BY PR #412, which rewrote the substance of both
+ * documents and moved only their "Last updated" date. These constants are the
+ * only machinery that can drive the in-app re-consent the documents themselves
+ * promise (Privacy §15, Terms §14), and the copy is still awaiting the counsel
+ * pass that is the plan's one launch blocker — bumping now would force every
+ * user through a re-consent for text about to change again. The bump is part
+ * of the counsel-revision PR's definition of done; see
+ * `docs/sync-do-project-plan.md` §11.5.
+ *
+ * Consequence worth naming: with these held at '1.0', requireCurrentConsent
+ * (packages/shared-functions/src/guardian/shared.ts) sees nothing stale, so
+ * the in-app re-consent Privacy §15 / Terms §14 now promise is NOT delivered
+ * for this revision -- no user is notified, and every stored consent record
+ * cites '1.0' for text that is not the text they accepted. That gap closes
+ * the moment the counsel-revision PR bumps this version.
  */
 export const TOS_VERSION = '1.0';
 export const PRIVACY_POLICY_VERSION = '1.0';
