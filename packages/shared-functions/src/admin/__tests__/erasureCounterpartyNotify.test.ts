@@ -132,20 +132,45 @@ describe('erasure counterparty notification', () => {
 
   it('a provider counterparty is one recipient however many appointments were cancelled', async () => {
     const targets = emptyCounterpartyTargets();
-    targets.sitProviders.set('sitter1', 2);
+    targets.sitProviders.set('sitter1', { cancelled: 2, reopened: 2 });
     const result = await notifyErasureCounterparties('erased', targets, 'Sophie Martin', NOW);
     expect(result).toEqual({ found: 1, reached: 1 });
     expect(h.written).toHaveLength(1);
     expect(h.written[0].recipientUserId).toBe('sitter1');
     expect(h.written[0].body).toContain("Sophie Martin's family");
-    // The provider flavor tells them their blocked slots came back.
+    // The provider flavor tells them their blocked slots came back — when a
+    // slot was actually blocked.
+    expect(h.written[0].body).toContain('reopened');
+  });
+
+  it('does NOT claim slots were reopened when nothing was ever confirmed — issue #420 review', async () => {
+    // A pending appointment never claims a schedule slot (sit's blockSchedule
+    // is opt-in even at confirm), so reopened stays 0 even though cancelled
+    // is not. The old unconditional wording would have said "reopened" here
+    // regardless.
+    const targets = emptyCounterpartyTargets();
+    targets.sitProviders.set('sitter1', { cancelled: 1, reopened: 0 });
+    targets.studyTutors.set('tutor1', { cancelled: 1, reopened: 0 });
+    await notifyErasureCounterparties('erased', targets, 'Sophie Martin', NOW);
+    const byUid = new Map(h.written.map((d) => [d.recipientUserId, d]));
+    expect(byUid.get('sitter1')!.body).not.toContain('reopened');
+    expect(byUid.get('tutor1')!.body).not.toContain('reopened');
+  });
+
+  it('states "reopened" for a partially-confirmed batch, still says nothing for an all-pending one', async () => {
+    // cancelled=3, reopened=1: at least one of the three actually released a
+    // claim, so the clause belongs in the copy — it is not asserting EVERY
+    // engagement blocked a slot, only that some did.
+    const targets = emptyCounterpartyTargets();
+    targets.sitProviders.set('sitter1', { cancelled: 3, reopened: 1 });
+    await notifyErasureCounterparties('erased', targets, 'Sophie Martin', NOW);
     expect(h.written[0].body).toContain('reopened');
   });
 
   it('study counterparties get the study type, study branding, and session wording', async () => {
     const targets = emptyCounterpartyTargets();
     targets.studyFamilies.set('fam1', 1);
-    targets.studyTutors.set('tutor1', 2);
+    targets.studyTutors.set('tutor1', { cancelled: 2, reopened: 2 });
     await notifyErasureCounterparties('erased', targets, 'Marie Dupont', NOW);
     const byUid = new Map(h.written.map((d) => [d.recipientUserId, d]));
     expect(byUid.get('p1')!.type).toBe('study_account_deleted');
@@ -160,8 +185,8 @@ describe('erasure counterparty notification', () => {
     // that app's token array ALONE and silently drop recipients who only
     // installed the sibling PWA — the guardianNotifyCounts pin, both halves.
     const targets = emptyCounterpartyTargets();
-    targets.sitProviders.set('sitter1', 1);
-    targets.studyTutors.set('tutor1', 1);
+    targets.sitProviders.set('sitter1', { cancelled: 1, reopened: 0 });
+    targets.studyTutors.set('tutor1', { cancelled: 1, reopened: 0 });
     await notifyErasureCounterparties('erased', targets, 'X Y', NOW);
     expect(h.pushRouting.sort()).toEqual([
       ['auto', 'sit'],
@@ -237,8 +262,8 @@ describe('erasure counterparty notification', () => {
     h.families.set('fam1', ['p1', 'erased', 'deleted']);
     const targets = emptyCounterpartyTargets();
     targets.sitFamilies.set('fam1', 1);
-    targets.sitProviders.set('erased', 1);
-    targets.sitProviders.set('deleted', 1);
+    targets.sitProviders.set('erased', { cancelled: 1, reopened: 0 });
+    targets.sitProviders.set('deleted', { cancelled: 1, reopened: 0 });
     const result = await notifyErasureCounterparties('erased', targets, 'X Y', NOW);
     expect(result).toEqual({ found: 1, reached: 1 });
     expect(h.written.map((d) => d.recipientUserId)).toEqual(['p1']);
@@ -256,6 +281,24 @@ describe('erasure counterparty notification', () => {
     expect(forP1.map((d) => d.type).sort()).toEqual(['account_deleted', 'study_account_deleted']);
   });
 
+  it('a dual-role member gets ONE message per audience, not a merged one — issue #420 review', async () => {
+    // p1 is a parent of fam1 (family audience) AND, here, also a surviving
+    // babysitter (provider audience) in the SAME world. Deduping on
+    // world:uid alone would merge the two into one entry carrying only
+    // whichever audience was resolved first, losing one of the two true
+    // facts. Deduping on world:audience:uid keeps them as two messages.
+    const targets = emptyCounterpartyTargets();
+    targets.sitFamilies.set('fam1', 1);
+    targets.sitProviders.set('p1', { cancelled: 1, reopened: 0 });
+    const result = await notifyErasureCounterparties('erased', targets, 'X Y', NOW);
+    // p1 (family + provider) and p2 (family only) — three messages total.
+    expect(result).toEqual({ found: 3, reached: 3 });
+    const forP1 = h.written.filter((d) => d.recipientUserId === 'p1');
+    expect(forP1).toHaveLength(2);
+    expect(forP1.some((d) => d.title === "Your babysitter's account was deleted")).toBe(true);
+    expect(forP1.some((d) => d.title === "A family's account was deleted")).toBe(true);
+  });
+
   it('empty targets: nothing sent, nothing thrown', async () => {
     expect(
       await notifyErasureCounterparties('erased', emptyCounterpartyTargets(), 'X Y', NOW),
@@ -266,7 +309,7 @@ describe('erasure counterparty notification', () => {
   it('falls back to the role noun when the erased account had no name', async () => {
     const targets = emptyCounterpartyTargets();
     targets.sitFamilies.set('fam1', 1);
-    targets.studyTutors.set('tutor1', 1);
+    targets.studyTutors.set('tutor1', { cancelled: 1, reopened: 0 });
     await notifyErasureCounterparties('erased', targets, '', NOW);
     const byUid = new Map(h.written.map((d) => [d.recipientUserId, d]));
     expect(byUid.get('p1')!.body).toContain('Your babysitter is no longer');

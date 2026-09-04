@@ -177,16 +177,21 @@ export async function eraseUserAccount(targetUserId: string, actorUid: string) {
         // The babysitter survives the family's erasure and must be told
         // (#420) — pending as well as confirmed, unlike the claim release
         // below, which only ever had a claim to release for confirmed ones.
+        // `reopened` starts at 0 regardless of status: it is only ever
+        // incremented once the claim-release loop below actually releases
+        // something, never inferred from `status` here (the wording bug the
+        // review caught — a pending appointment never blocked a slot).
         if (
           typeof data.babysitterUserId === 'string' &&
           data.babysitterUserId &&
           data.babysitterUserId !== 'deleted' &&
           data.babysitterUserId !== targetUserId
         ) {
-          counterpartyTargets.sitProviders.set(
-            data.babysitterUserId,
-            (counterpartyTargets.sitProviders.get(data.babysitterUserId) || 0) + 1,
-          );
+          const existing = counterpartyTargets.sitProviders.get(data.babysitterUserId);
+          counterpartyTargets.sitProviders.set(data.babysitterUserId, {
+            cancelled: (existing?.cancelled ?? 0) + 1,
+            reopened: existing?.reopened ?? 0,
+          });
         }
         if (
           data.status === 'confirmed' &&
@@ -248,7 +253,15 @@ export async function eraseUserAccount(targetUserId: string, actorUid: string) {
         (b: SessionBlockEntry) => b.appointmentId === claim.appointmentId,
         SIT_PROVENANCE,
       );
-      if (released) sitClaimsReleased++;
+      if (released) {
+        sitClaimsReleased++;
+        // Only NOW does the counterparty notify (#420) get to say "reopened"
+        // — from the actual release outcome, not from `status === 'confirmed'`
+        // alone (a confirmed appointment with no `blockSchedule` never had a
+        // claim to release either).
+        const entry = counterpartyTargets.sitProviders.get(claim.babysitterUserId);
+        if (entry) entry.reopened += 1;
+      }
     } catch (err) {
       claimReleaseErrors++;
       console.error(
@@ -552,11 +565,20 @@ export async function eraseUserAccount(targetUserId: string, actorUid: string) {
   // itself does: both the admin path and `deleteMyAccount` share it, and a
   // notification wired into one callable is how the two paths drift apart.
   for (const c of studyErasure.cancelledSessionCounterparties) {
-    const map =
-      c.kind === 'family'
-        ? counterpartyTargets.studyFamilies
-        : counterpartyTargets.studyTutors;
-    map.set(c.id, (map.get(c.id) || 0) + 1);
+    if (c.kind === 'family') {
+      counterpartyTargets.studyFamilies.set(
+        c.id,
+        (counterpartyTargets.studyFamilies.get(c.id) || 0) + 1,
+      );
+    } else {
+      const existing = counterpartyTargets.studyTutors.get(c.id);
+      counterpartyTargets.studyTutors.set(c.id, {
+        cancelled: (existing?.cancelled ?? 0) + 1,
+        // `c.reopened` came straight out of `eraseStudyUserData`'s own
+        // `releaseClaim` return value, not from `status` (#420 review).
+        reopened: (existing?.reopened ?? 0) + (c.reopened ? 1 : 0),
+      });
+    }
   }
   let counterparties = { found: 0, reached: 0 };
   let counterpartyNotifyFailed = false;

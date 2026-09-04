@@ -53,15 +53,32 @@ type ErasureWorld = 'sit' | 'study';
 /** Which side of the engagement the recipient stood on. */
 type ErasureAudience = 'family' | 'provider';
 
+/**
+ * A provider's (babysitter/tutor) cancelled-engagement tally. `cancelled` is
+ * every pending/confirmed engagement force-cancelled by the erasure;
+ * `reopened` is the subset that ACTUALLY had a `sessionBlocks` claim released
+ * — a pending engagement never claimed a schedule slot (sit's `blockSchedule`
+ * is opt-in even at confirm; study's confirm always claims, but a pending
+ * session never reaches confirm), so `reopened <= cancelled` always, and is
+ * frequently 0 while `cancelled` is not. Callers set it from the SAME
+ * `releaseClaim` return value the audit `claimsReleased`/`sitClaimsReleased`
+ * counters use — never inferred from `status` alone, which is exactly the bug
+ * this type exists to prevent (issue #420 review).
+ */
+export interface ProviderCancelCounts {
+  cancelled: number;
+  reopened: number;
+}
+
 export interface ErasureCounterpartyTargets {
   /** sit: cancelled-appointment counts keyed by the surviving family's id. */
   sitFamilies: Map<string, number>;
-  /** sit: cancelled-appointment counts keyed by the surviving babysitter's uid. */
-  sitProviders: Map<string, number>;
+  /** sit: cancelled/reopened counts keyed by the surviving babysitter's uid. */
+  sitProviders: Map<string, ProviderCancelCounts>;
   /** study: cancelled-session counts keyed by the surviving family's id. */
   studyFamilies: Map<string, number>;
-  /** study: cancelled-session counts keyed by the surviving tutor's uid. */
-  studyTutors: Map<string, number>;
+  /** study: cancelled/reopened counts keyed by the surviving tutor's uid. */
+  studyTutors: Map<string, ProviderCancelCounts>;
 }
 
 export function emptyCounterpartyTargets(): ErasureCounterpartyTargets {
@@ -79,6 +96,8 @@ interface ResolvedRecipient {
   world: ErasureWorld;
   audience: ErasureAudience;
   count: number;
+  /** Provider-only: of `count`, how many had a schedule claim actually released. */
+  reopenedCount: number;
 }
 
 /**
@@ -94,6 +113,7 @@ function buildCopy(
   audience: ErasureAudience,
   erasedName: string,
   count: number,
+  reopenedCount: number,
 ): { title: string; body: string } {
   const engagement = world === 'sit' ? 'appointment' : 'tutoring session';
   const things = count === 1 ? `Your ${engagement} with them was` : `Your ${count} ${engagement}s with them were`;
@@ -106,9 +126,15 @@ function buildCopy(
     };
   }
   const name = erasedName ? `${erasedName}'s family` : 'A family you worked with';
+  // Only a CONFIRMED engagement ever claims a schedule slot (sit's
+  // `blockSchedule` is opt-in even then; a pending one never reaches confirm),
+  // so this clause must not appear when nothing was ever reopened — the bug
+  // issue #420's review caught: it used to be unconditional.
+  const reopened =
+    reopenedCount > 0 ? ' and the blocked time slots were reopened in your schedule' : '';
   return {
     title: "A family's account was deleted",
-    body: `${name} is no longer on the platform — their account was deleted. ${things} cancelled and the blocked time slots were reopened in your schedule.`,
+    body: `${name} is no longer on the platform — their account was deleted. ${things} cancelled${reopened}.`,
   };
 }
 
@@ -129,12 +155,25 @@ async function resolveRecipients(
   erasedUserId: string,
 ): Promise<ResolvedRecipient[]> {
   const out = new Map<string, ResolvedRecipient>();
-  const add = (uid: string, world: ErasureWorld, audience: ErasureAudience, count: number) => {
+  // Keyed on AUDIENCE too, not just world:uid — a dual-role member (a
+  // babysitter who is also a parent) can legitimately be both the surviving
+  // family of one cancelled engagement and the surviving provider of another
+  // in the SAME erasure, and those are two different facts deserving two
+  // different messages, not one merged into whichever audience landed first.
+  const add = (
+    uid: string,
+    world: ErasureWorld,
+    audience: ErasureAudience,
+    count: number,
+    reopenedCount = 0,
+  ) => {
     if (!uid || uid === 'deleted' || uid === erasedUserId) return;
-    const key = `${world}:${uid}`;
+    const key = `${world}:${audience}:${uid}`;
     const existing = out.get(key);
-    if (existing) existing.count += count;
-    else out.set(key, { uid, world, audience, count });
+    if (existing) {
+      existing.count += count;
+      existing.reopenedCount += reopenedCount;
+    } else out.set(key, { uid, world, audience, count, reopenedCount });
   };
 
   const familySides: [Map<string, number>, ErasureWorld][] = [
@@ -156,8 +195,12 @@ async function resolveRecipients(
     }
   }
 
-  for (const [uid, count] of targets.sitProviders) add(uid, 'sit', 'provider', count);
-  for (const [uid, count] of targets.studyTutors) add(uid, 'study', 'provider', count);
+  for (const [uid, counts] of targets.sitProviders) {
+    add(uid, 'sit', 'provider', counts.cancelled, counts.reopened);
+  }
+  for (const [uid, counts] of targets.studyTutors) {
+    add(uid, 'study', 'provider', counts.cancelled, counts.reopened);
+  }
 
   return [...out.values()];
 }
@@ -184,6 +227,7 @@ export async function notifyErasureCounterparties(
         recipient.audience,
         erasedName,
         recipient.count,
+        recipient.reopenedCount,
       );
       const type =
         recipient.world === 'sit' ? 'account_deleted' : 'study_account_deleted';

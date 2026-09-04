@@ -792,6 +792,15 @@ describe('deleteUser', () => {
       // Before #408 the appointment was cancelled and the claim was left
       // behind: the sitter's slot stayed blocked forever.
       expect(await overrideExists(seed.babysitter1.uid, date)).toBe(false);
+
+      // A claim genuinely WAS released here (unlike the pending-only case in
+      // the counterparty describe block below), so the notification is
+      // correct to say so — issue #420's review.
+      const notice = (
+        await db.collection('notifications').where('type', '==', 'account_deleted').get()
+      ).docs[0].data();
+      expect(notice.recipientUserId).toBe(seed.babysitter1.uid);
+      expect(notice.body).toContain('reopened');
     });
 
     it('records the study counts in the audit log', async () => {
@@ -928,8 +937,10 @@ describe('deleteUser', () => {
       expect(sitDoc.recipientUserId).toBe(seed.babysitter1.uid);
       expect(sitDoc.title).toBe("A family's account was deleted");
       expect(sitDoc.body).toContain("Sophie Martin's family");
-      // The provider flavor says their blocked slots came back.
-      expect(sitDoc.body).toContain('reopened');
+      // The sit appointment was only PENDING — it never claimed a schedule
+      // slot (blockSchedule is opt-in even at confirm), so nothing was ever
+      // reopened and the copy must not claim otherwise (issue #420 review).
+      expect(sitDoc.body).not.toContain('reopened');
       expect(sitDoc.data).toEqual({ cancelledCount: '1' });
 
       const studyDocs = await notices('study_account_deleted');
@@ -937,6 +948,9 @@ describe('deleteUser', () => {
       const studyDoc = studyDocs[0].data();
       expect(studyDoc.recipientUserId).toBe(seed.tutor2.uid);
       expect(studyDoc.body).toContain('tutoring session');
+      // The study session WAS confirmed — study's confirm always claims a
+      // slot, so this one genuinely was reopened.
+      expect(studyDoc.body).toContain('reopened');
       expect(studyDoc.data).toEqual({ cancelledCount: '1' });
 
       const logs = await getDb()

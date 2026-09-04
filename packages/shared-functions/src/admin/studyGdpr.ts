@@ -155,6 +155,16 @@ export interface StudyCancelledCounterparty {
   /** `familyId` for kind 'family', the tutor's uid for kind 'tutor'. Ids
    *  only, never names — the `deleteMyAccount` structured-payload rule. */
   id: string;
+  /**
+   * `kind: 'tutor'` only — did this session's cancellation ACTUALLY release a
+   * `sessionBlocks` claim? A `pending` session never confirmed, so it never
+   * claimed a slot and this is false; always false for `kind: 'family'`,
+   * which has no claim of its own to lose. Set from the same `releaseClaim`
+   * return value `stats.claimsReleased` counts, never inferred from `status`
+   * (issue #420's review: the notify copy used to say "reopened"
+   * unconditionally).
+   */
+  reopened: boolean;
 }
 
 export interface StudyEraseStats {
@@ -521,35 +531,11 @@ export async function eraseStudyUserData(
       if (instanceWrites.length > 0) await commitChunked(instanceWrites);
       stats.instancesCancelled += pendingCancelled;
       stats.instancesScrubbed += pendingScrubbed;
-      if (cancelling) {
-        stats.sessionsCancelled += 1;
-        // Record WHO survives this cancel, for the counterparty fan-out
-        // (issue #420). Recorded here — after the document writes committed —
-        // for the same reason the counters are: an entry naming a session
-        // that was never actually cancelled would trigger a notification
-        // about nothing. One entry per SESSION, not per instance: a recurring
-        // series is one engagement to the person losing it.
-        if (isTutorSide && typeof session.familyId === 'string' && session.familyId) {
-          stats.cancelledSessionCounterparties.push({
-            kind: 'family',
-            id: session.familyId,
-          });
-        } else if (
-          !isTutorSide &&
-          typeof session.tutorUserId === 'string' &&
-          session.tutorUserId &&
-          session.tutorUserId !== DELETED &&
-          session.tutorUserId !== targetUserId
-        ) {
-          stats.cancelledSessionCounterparties.push({
-            kind: 'tutor',
-            id: session.tutorUserId,
-          });
-        }
-      }
-
       // Only a SURVIVING tutor's claims need releasing; an erased tutor's whole
-      // schedule document goes in step 3.
+      // schedule document goes in step 3. Tracked locally so the counterparty
+      // entry pushed below can say whether a slot actually came back, rather
+      // than assuming one did for every confirmed session (#420 review).
+      let claimReopened = false;
       if (cancelling && !isTutorSide) {
         const tutorUserId = (session.tutorUserId as string) ?? '';
         if (typeof session.date === 'string' && session.date) {
@@ -563,6 +549,7 @@ export async function eraseStudyUserData(
             )
           ) {
             stats.claimsReleased += 1;
+            claimReopened = true;
           }
         }
         for (const date of claimDates) {
@@ -575,7 +562,39 @@ export async function eraseStudyUserData(
             )
           ) {
             stats.claimsReleased += 1;
+            claimReopened = true;
           }
+        }
+      }
+
+      if (cancelling) {
+        stats.sessionsCancelled += 1;
+        // Record WHO survives this cancel, for the counterparty fan-out
+        // (issue #420). Recorded here — after the document writes AND the
+        // claim-release attempt above committed — for the same reason the
+        // counters are: an entry naming a session that was never actually
+        // cancelled (or a slot that was never actually released) would
+        // trigger a notification about nothing, or a wrong one. One entry per
+        // SESSION, not per instance: a recurring series is one engagement to
+        // the person losing it.
+        if (isTutorSide && typeof session.familyId === 'string' && session.familyId) {
+          stats.cancelledSessionCounterparties.push({
+            kind: 'family',
+            id: session.familyId,
+            reopened: false,
+          });
+        } else if (
+          !isTutorSide &&
+          typeof session.tutorUserId === 'string' &&
+          session.tutorUserId &&
+          session.tutorUserId !== DELETED &&
+          session.tutorUserId !== targetUserId
+        ) {
+          stats.cancelledSessionCounterparties.push({
+            kind: 'tutor',
+            id: session.tutorUserId,
+            reopened: claimReopened,
+          });
         }
       }
     } catch (err) {
