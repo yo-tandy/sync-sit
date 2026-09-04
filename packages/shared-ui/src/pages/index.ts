@@ -4,6 +4,7 @@ export { TermsPage } from './TermsPage.js';
 export { ReportProblemPage } from './ReportProblemPage.js';
 export { WelcomePage } from './WelcomePage.js';
 export { SignUpRolePage, type SignUpRoleOption } from './SignUpRolePage.js';
+export { UnifiedLandingPage, type UnifiedLandingPageProps } from './UnifiedLandingPage.js';
 export { LoginPage } from './LoginPage.js';
 export { ForgotPasswordPage } from './ForgotPasswordPage.js';
 export { AccountHome } from './AccountHome.js';
