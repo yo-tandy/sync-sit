@@ -144,6 +144,19 @@ export async function collectScheduleData(
   };
 }
 
+/**
+ * The surviving counterparty of ONE force-cancelled session — who is left
+ * holding a cancellation they were never told about (issue #420). `family`
+ * when the TUTOR was erased (the session's family survives, resolved to its
+ * parents by the notify step); `tutor` when the FAMILY was (last parent).
+ */
+export interface StudyCancelledCounterparty {
+  kind: 'family' | 'tutor';
+  /** `familyId` for kind 'family', the tutor's uid for kind 'tutor'. Ids
+   *  only, never names — the `deleteMyAccount` structured-payload rule. */
+  id: string;
+}
+
 export interface StudyEraseStats {
   /** Sessions whose tutor-side or family-side identity fields were anonymized. */
   sessionsAnonymized: number;
@@ -158,6 +171,14 @@ export interface StudyEraseStats {
   claimsReleased: number;
   /** Per-session cascades that failed and were skipped (poison-pill isolation). */
   cascadeErrors: number;
+  /**
+   * NOT a count: one entry per force-cancelled session, naming the SURVIVING
+   * counterparty, so `eraseUserAccount`'s notify step (issue #420) can tell
+   * them. Deliberately kept out of the audit entry — the audit copies the
+   * count fields above explicitly, and this list exists only to feed the
+   * fan-out, which aggregates it per recipient before sending.
+   */
+  cancelledSessionCounterparties: StudyCancelledCounterparty[];
 }
 
 /** Chunked commit — a long-lived tutor can hold arbitrarily many sessions and
@@ -288,6 +309,7 @@ export async function eraseStudyUserData(
     instancesScrubbed: 0,
     claimsReleased: 0,
     cascadeErrors: 0,
+    cancelledSessionCounterparties: [],
   };
 
   const empty = { docs: [] as FirebaseFirestore.QueryDocumentSnapshot[] };
@@ -499,7 +521,32 @@ export async function eraseStudyUserData(
       if (instanceWrites.length > 0) await commitChunked(instanceWrites);
       stats.instancesCancelled += pendingCancelled;
       stats.instancesScrubbed += pendingScrubbed;
-      if (cancelling) stats.sessionsCancelled += 1;
+      if (cancelling) {
+        stats.sessionsCancelled += 1;
+        // Record WHO survives this cancel, for the counterparty fan-out
+        // (issue #420). Recorded here — after the document writes committed —
+        // for the same reason the counters are: an entry naming a session
+        // that was never actually cancelled would trigger a notification
+        // about nothing. One entry per SESSION, not per instance: a recurring
+        // series is one engagement to the person losing it.
+        if (isTutorSide && typeof session.familyId === 'string' && session.familyId) {
+          stats.cancelledSessionCounterparties.push({
+            kind: 'family',
+            id: session.familyId,
+          });
+        } else if (
+          !isTutorSide &&
+          typeof session.tutorUserId === 'string' &&
+          session.tutorUserId &&
+          session.tutorUserId !== DELETED &&
+          session.tutorUserId !== targetUserId
+        ) {
+          stats.cancelledSessionCounterparties.push({
+            kind: 'tutor',
+            id: session.tutorUserId,
+          });
+        }
+      }
 
       // Only a SURVIVING tutor's claims need releasing; an erased tutor's whole
       // schedule document goes in step 3.

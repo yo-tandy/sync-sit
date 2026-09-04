@@ -433,6 +433,48 @@ describe('deleteMyAccount', () => {
       expect((await db.collection('adminAlerts').where('type', '==', 'partial_user_erasure').get()).size)
         .toBe(0);
     });
+
+    it('a self-delete notifies the counterparties of its cancelled appointments (issue #420)', async () => {
+      // The fan-out lives in `eraseUserAccount`, which is the whole point:
+      // this path gets it with NO code of its own, so the two delete paths
+      // cannot drift apart on "who gets told". The full matrix (both worlds,
+      // both directions, aggregation, the audit counts) is pinned against the
+      // admin path in `tests/integration/admin/delete-user.test.ts`; this test
+      // pins only that the SELF-SERVE caller reaches the same code.
+      const db = getDb();
+      await seedAppointment({
+        babysitterUserId: seed.babysitter1.uid,
+        familyId: seed.family1Id,
+        createdByUserId: seed.parent1.uid,
+        status: 'confirmed',
+      });
+
+      await callFunction(
+        'deleteMyAccount',
+        { confirm: 'DELETE' },
+        await getIdToken(seed.babysitter1.uid),
+      );
+
+      const docs = (
+        await db.collection('notifications').where('type', '==', 'account_deleted').get()
+      ).docs;
+      // Both parents of the affected family, once each.
+      expect(docs.map((d) => d.data().recipientUserId).sort()).toEqual(
+        [seed.parent1.uid, seed.parent2.uid].sort(),
+      );
+      for (const d of docs) {
+        expect(d.data().body).toContain('Lea Bernard');
+        expect(d.data().data).toEqual({ cancelledCount: '1' });
+      }
+
+      const details = (await auditEntry(seed.babysitter1.uid))!.details as Record<
+        string,
+        unknown
+      >;
+      expect(details.counterpartiesFound).toBe(2);
+      expect(details.counterpartiesReached).toBe(2);
+      expect(details.counterpartyNotifyFailed).toBe(false);
+    });
   });
 
   describe('a supervised minor deletes their own account', () => {

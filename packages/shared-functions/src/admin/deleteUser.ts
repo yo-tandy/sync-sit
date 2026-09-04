@@ -10,6 +10,10 @@ import { REFERENCE_PROVIDER_KEYS } from './referenceKeys.js';
 import { eraseDoUserData } from './doGdpr.js';
 import { raisePartialErasureAlert } from './partialErasureAlert.js';
 import { eraseStudyUserData } from './studyGdpr.js';
+import {
+  emptyCounterpartyTargets,
+  notifyErasureCounterparties,
+} from './erasureCounterpartyNotify.js';
 import { createClaimReleaser, SIT_PROVENANCE } from '../schedule/claimRelease.js';
 import type { SessionBlockEntry } from '../schedule/sessionOverride.js';
 
@@ -109,6 +113,17 @@ export async function eraseUserAccount(targetUserId: string, actorUid: string) {
    */
   const sitClaimsToRelease: { appointmentId: string; babysitterUserId: string; date: string }[] =
     [];
+  /**
+   * Who is left holding a cancellation (issue #420): cancelled-engagement
+   * counts keyed by the surviving family / provider, collected as the cancel
+   * loops run and fanned out in step 7 — one notification per DISTINCT
+   * counterparty, never one per engagement. The erased member's own family
+   * may land in `sitFamilies` (an appointment matched both query sides); the
+   * notify step resolves families to parents AFTER step 4, so a deleted
+   * family resolves to nobody and the erased member is filtered out of every
+   * recipient list.
+   */
+  const counterpartyTargets = emptyCounterpartyTargets();
 
   for (const appt of babysitterAppts.docs) {
     const data = appt.data();
@@ -124,6 +139,13 @@ export async function eraseUserAccount(targetUserId: string, actorUid: string) {
       updates.status = 'cancelled';
       updates.statusReason = 'account_deleted';
       cancelledCount++;
+      // The family survives the sitter's erasure and must be told (#420).
+      if (typeof data.familyId === 'string' && data.familyId) {
+        counterpartyTargets.sitFamilies.set(
+          data.familyId,
+          (counterpartyTargets.sitFamilies.get(data.familyId) || 0) + 1,
+        );
+      }
     }
     batch1Ops.push((b) => b.update(appt.ref, updates));
   }
@@ -152,6 +174,20 @@ export async function eraseUserAccount(targetUserId: string, actorUid: string) {
         updates.status = 'cancelled';
         updates.statusReason = 'account_deleted';
         cancelledCount++;
+        // The babysitter survives the family's erasure and must be told
+        // (#420) — pending as well as confirmed, unlike the claim release
+        // below, which only ever had a claim to release for confirmed ones.
+        if (
+          typeof data.babysitterUserId === 'string' &&
+          data.babysitterUserId &&
+          data.babysitterUserId !== 'deleted' &&
+          data.babysitterUserId !== targetUserId
+        ) {
+          counterpartyTargets.sitProviders.set(
+            data.babysitterUserId,
+            (counterpartyTargets.sitProviders.get(data.babysitterUserId) || 0) + 1,
+          );
+        }
         if (
           data.status === 'confirmed' &&
           typeof data.date === 'string' &&
@@ -492,6 +528,52 @@ export async function eraseUserAccount(targetUserId: string, actorUid: string) {
     }
   }
 
+  // 7. Tell the surviving counterparties (issue #420). Every cancelled
+  // pending/confirmed engagement above left somebody holding a cancellation
+  // they never asked for: the family whose sitter/tutor was erased, or the
+  // provider whose family was. The study half's targets come back out of
+  // `eraseStudyUserData` the same way `supervisingFamilyId` comes out of the
+  // guardian step — the value only exists as a result of the erasure, so the
+  // ordering cannot be got wrong.
+  //
+  // Placed LAST, after the erasure has fully committed, deliberately:
+  //   - it is best-effort messaging, and a failing send must never abort or
+  //     fail an erasure whose earlier steps have already committed (the exact
+  //     failure `commitInChunks`'s docblock describes) — hence the outer
+  //     catch on top of the per-recipient isolation inside;
+  //   - everything it reads belongs to SURVIVORS (their user docs, their
+  //     family docs), which steps 1-6 do not touch — except the erased
+  //     member's own family, which resolving after step 4 correctly finds
+  //     gone;
+  //   - cancel-before-notify means the message can never precede the state
+  //     it describes (the order every cancel path here takes).
+  //
+  // Lives HERE and not in either callable for the same reason the erasure
+  // itself does: both the admin path and `deleteMyAccount` share it, and a
+  // notification wired into one callable is how the two paths drift apart.
+  for (const c of studyErasure.cancelledSessionCounterparties) {
+    const map =
+      c.kind === 'family'
+        ? counterpartyTargets.studyFamilies
+        : counterpartyTargets.studyTutors;
+    map.set(c.id, (map.get(c.id) || 0) + 1);
+  }
+  let counterparties = { found: 0, reached: 0 };
+  let counterpartyNotifyFailed = false;
+  try {
+    counterparties = await notifyErasureCounterparties(
+      targetUserId,
+      counterpartyTargets,
+      `${userData.firstName || ''} ${userData.lastName || ''}`.trim(),
+      now,
+    );
+  } catch (err) {
+    // Only reachable when the fan-out fails before its per-recipient loop can
+    // even count `found` — recorded so the audit entry can tell that apart
+    // from "there was nobody to tell" (the `guardianLookupFailed` pattern).
+    counterpartyNotifyFailed = true;
+    console.error(`deleteUser: counterparty notification failed for ${targetUserId}:`, err);
+  }
 
   return {
     role,
@@ -512,6 +594,14 @@ export async function eraseUserAccount(targetUserId: string, actorUid: string) {
     sitClaimsReleased,
     studyErasure,
     claimReleaseErrors,
+    // Issue #420 — the counterparty fan-out's audit counts, the
+    // `guardiansFound`/`guardiansReached` convention: `found` distinct
+    // recipients the cancelled engagements resolve to, `reached` those a
+    // channel actually delivered to. `found > reached` is the entry to look
+    // at; `counterpartyNotifyFailed` marks a fan-out that failed before it
+    // could count anything at all.
+    counterparties,
+    counterpartyNotifyFailed,
     now,
   };
 }
@@ -587,6 +677,14 @@ export const deleteUser = onCall(
         cancelledStudyInstances: studyErasure.instancesCancelled,
         scrubbedStudyInstances: studyErasure.instancesScrubbed,
         releasedStudyClaims: studyErasure.claimsReleased,
+        // Issue #420 — whether the counterparties of the cancelled
+        // engagements were told, in the guardiansFound/guardiansReached
+        // convention: `found > reached` is the entry to investigate, and
+        // `counterpartyNotifyFailed` marks a fan-out that failed before it
+        // could even count (distinct from "there was nobody to tell").
+        counterpartiesFound: erased.counterparties.found,
+        counterpartiesReached: erased.counterparties.reached,
+        counterpartyNotifyFailed: erased.counterpartyNotifyFailed,
         // A non-zero value means the erasure was PARTIAL. It is recorded here,
         // shown in the admin email, and raised as an adminAlert — the user
         // document is gone by now, so `deleteUser` cannot simply be re-run and

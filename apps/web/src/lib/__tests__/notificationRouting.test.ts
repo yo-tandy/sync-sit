@@ -21,6 +21,7 @@ describe('sit notificationRouting', () => {
         'published_search_contact',
         'published_search_accepted',
         'published_search_declined',
+        'account_deleted',
         'supervision_request',
         'supervision_confirmed',
         'supervision_revoked',
@@ -51,6 +52,9 @@ describe('sit notificationRouting', () => {
     ['published_search_contact', '/babysitter'],
     ['published_search_accepted', '/babysitter'],
     ['published_search_declined', '/babysitter'],
+    // Issue #420: the family whose appointments this babysitter had was
+    // erased; the cancelled rows are listed on the dashboard.
+    ['account_deleted', '/babysitter'],
     ['reference_received', '/babysitter/endorsements'],
     ['contact_sharing_request', '/babysitter/families'],
     ['supervision_request', '/babysitter'],
@@ -75,6 +79,9 @@ describe('sit notificationRouting', () => {
     ['published_search_contact', '/family/appointments'],
     ['published_search_accepted', '/family/appointments'],
     ['published_search_declined', '/family/appointments'],
+    // Issue #420: this family's babysitter was erased; the cancelled rows are
+    // listed on the appointments page.
+    ['account_deleted', '/family/appointments'],
     ['supervision_confirmed', '/family/governance'],
     ['supervision_revoked', '/family/governance'],
     ['guardian_invite_accepted', '/family/governance'],

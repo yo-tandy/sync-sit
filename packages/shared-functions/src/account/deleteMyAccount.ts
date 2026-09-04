@@ -363,6 +363,16 @@ export const deleteMyAccount = onCall(
         cancelledStudyInstances: erased.studyErasure.instancesCancelled,
         scrubbedStudyInstances: erased.studyErasure.instancesScrubbed,
         releasedStudyClaims: erased.studyErasure.claimsReleased,
+        // Issue #420 — whether the counterparties of the cancelled
+        // engagements were told (same convention as guardiansFound/
+        // guardiansReached above, and the same reason it matters MORE on this
+        // path: nobody witnessed the deletion, so `found > reached` in this
+        // entry is the only sign a family was left uninformed). The fan-out
+        // itself lives in `eraseUserAccount`, so this path gets it without a
+        // second implementation.
+        counterpartiesFound: erased.counterparties.found,
+        counterpartiesReached: erased.counterparties.reached,
+        counterpartyNotifyFailed: erased.counterpartyNotifyFailed,
         // A non-zero value means the erasure was PARTIAL. It is recorded
         // here, shown in the admin email, and raised as an adminAlert -- the
         // user document is gone by now, so the erasure cannot simply be
