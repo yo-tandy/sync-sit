@@ -16,6 +16,10 @@
  * lane N" is one dial end to end. With none of them set this targets
  * localhost:8080 / localhost:9099 exactly as it always did.
  * See docs/emulator-lanes.md.
+ *
+ * An admin is `isAdmin: true` on the user doc, not `role: 'admin'` —
+ * `isAdmin()` in @ejm/shared-core reads exactly that field. The old
+ * `role: 'admin'` shape silently failed every admin-gated check.
  */
 
 const { applySeedEmulatorTarget } = require('./emulator-target.cjs');
@@ -72,7 +76,7 @@ async function seed() {
 
   await db.collection('users').doc(uid).set({
     uid,
-    role: 'admin',
+    isAdmin: true,
     email: EMAIL,
     status: 'active',
     firstName: 'Admin',
