@@ -1,6 +1,6 @@
 import { Suspense } from 'react';
 import { Outlet } from 'react-router';
-import { PageContainer, Spinner } from '@ejm/shared-ui';
+import { PageContainer, Spinner, useDocumentGround } from '@ejm/shared-ui';
 import { AuthGuard } from './AuthGuard';
 import { DoerAppBar } from '@/components/ui/DoerAppBar';
 import { AppSwitchBarHost } from '@/components/ui/AppSwitchBarHost';
@@ -13,6 +13,9 @@ import { AppSwitchBarHost } from '@/components/ui/AppSwitchBarHost';
  * issue #360); the board it links to lives at /doer/board (§9.2).
  */
 export function DoerLayout() {
+  // Ground reaches html too (#424): iOS overscroll + the AuthGuard resolve
+  // state paint the canvas, which no descendant div can tint.
+  useDocumentGround('app');
   return (
     <AuthGuard role="doer">
       {/* pb-16 clears the fixed app-switch bar on phones; the bar is

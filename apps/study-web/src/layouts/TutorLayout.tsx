@@ -1,12 +1,15 @@
 import { Suspense } from 'react';
 import { Outlet } from 'react-router';
-import { PageContainer, Spinner } from '@ejm/shared-ui';
+import { PageContainer, Spinner, useDocumentGround } from '@ejm/shared-ui';
 import { AuthGuard } from './AuthGuard';
 import { AppBar } from '@/components/ui/AppBar';
 import { AppSwitchBarHost } from '@/components/ui/AppSwitchBarHost';
 import { ScrollToTop } from '@/components/ScrollToTop';
 
 export function TutorLayout() {
+  // Ground reaches html too (#424): iOS overscroll + the AuthGuard resolve
+  // state paint the canvas, which no descendant div can tint.
+  useDocumentGround('app');
   return (
     <AuthGuard role="tutor">
       {/* pb-16 clears the fixed app-switch bar on phones; the bar is

@@ -1,5 +1,6 @@
 import { Link, Outlet } from 'react-router';
 import { useTranslation } from 'react-i18next';
+import { useDocumentGround } from '@ejm/shared-ui';
 import { getSitRole } from '@ejm/sit-core';
 import { PageContainer } from '@/components/ui/PageContainer';
 import { AuthGuard } from './AuthGuard';
@@ -41,6 +42,10 @@ import { useAuthStore } from '@/stores/authStore';
  */
 export function AccountLayout() {
   const { t } = useTranslation();
+  // Ground reaches html too (#424) — the NEUTRAL one, matching the shell's
+  // bg-ground-admin above: iOS overscroll + the AuthGuard resolve state
+  // paint the canvas, which no descendant div can tint.
+  useDocumentGround('admin');
   const userDoc = useAuthStore((s) => s.userDoc);
   // The member's own portal home. Mirrors AuthGuard's role redirects; a
   // signed-in member with no sit role has nowhere in sit to go back TO, so
