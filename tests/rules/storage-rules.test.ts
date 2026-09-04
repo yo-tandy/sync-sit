@@ -322,37 +322,62 @@ describe('verification-documents', () => {
     await assertSucceeds(uploadString(fileRef, 'contents', 'raw'));
   });
 
-  it('denies a parent writing into ANOTHER family\'s path', async () => {
+  // ── TEMPORARY: the issue #153 family-membership check is removed ──
+  //
+  // These four cases asserted DENIAL until the interim fix for the production
+  // upload outage. The check they pinned (`canWriteFamilyDocs(callerData(),
+  // familyId)`) is a cross-service `firestore.get()` that FAILS in production —
+  // rules fail closed on an errored call, so it 403'd every real parent, not
+  // just non-members. See the block comment in storage.rules for the full
+  // ruled-out list and the timeline.
+  //
+  // They now assert the widening is REAL and DELIBERATE rather than silently
+  // deleting the coverage: each caller below is one that production genuinely
+  // accepts today, so if the membership check comes back (via the signed-URL
+  // callable in the follow-up issue, which flips this path to
+  // `allow write: if false`) these flip to assertFails and this whole block
+  // gets reverted along with the rule. A reviewer reading a bare deletion
+  // could not tell the coverage was traded away on purpose; this can.
+  //
+  // What still holds the line meanwhile, pinned by the tests below this block:
+  // unauthenticated writes, the >10MB cap, the renderable-contentType
+  // denylist, deletes, and ALL reads (admin/owner only, via the
+  // getVerificationDocument callable) — so the residual exposure is write-only
+  // integrity, not disclosure.
+  it('TEMPORARILY allows a parent to write into ANOTHER family\'s path (#153 check removed)', async () => {
     await seedUser('sr-parent2', { profiles: { parent: { familyId: 'sr-family2' } } });
     const authed = testEnv.authenticatedContext('sr-parent2');
     const fileRef = ref(authed.storage(), 'verification-documents/sr-family1/doc.pdf');
-    await assertFails(uploadString(fileRef, 'contents', 'raw'));
+    await assertSucceeds(uploadString(fileRef, 'contents', 'raw'));
   });
 
-  it('denies a babysitter (no parent profile) writing into a family path', async () => {
+  it('TEMPORARILY allows a babysitter (no parent profile) to write into a family path', async () => {
     await seedUser('sr-sitter1', { profiles: { babysitter: { firstName: 'B' } } });
     const authed = testEnv.authenticatedContext('sr-sitter1');
     const fileRef = ref(authed.storage(), 'verification-documents/sr-family1/doc.pdf');
-    await assertFails(uploadString(fileRef, 'contents', 'raw'));
+    await assertSucceeds(uploadString(fileRef, 'contents', 'raw'));
   });
 
-  it('denies a tutor writing into a family path AND under their own uid', async () => {
-    // PR #152 removed the last tutor-side uploader; tutors keep read access to
-    // their legacy docs via the callable but must not write here anymore.
+  it('TEMPORARILY allows a tutor to write into a family path AND under their own uid', async () => {
+    // PR #152 removed the last tutor-side uploader, so nothing legitimate
+    // writes these paths as a tutor — this is tolerated exposure, not intent.
     await seedUser('sr-tutor1', { profiles: { tutor: { firstName: 'T' } } });
     const authed = testEnv.authenticatedContext('sr-tutor1');
-    await assertFails(
+    await assertSucceeds(
       uploadString(ref(authed.storage(), 'verification-documents/sr-family1/doc.pdf'), 'x', 'raw'),
     );
-    await assertFails(
+    await assertSucceeds(
       uploadString(ref(authed.storage(), 'verification-documents/sr-tutor1/doc.pdf'), 'x', 'raw'),
     );
   });
 
-  it('denies an authenticated user with no user doc', async () => {
+  it('TEMPORARILY allows an authenticated user with no user doc', async () => {
+    // The sharpest signal that the cross-service lookup is gone: this used to
+    // be denied BY the errored get() on a missing doc, not by a membership
+    // comparison. Nothing reads Firestore from these rules anymore.
     const authed = testEnv.authenticatedContext('sr-ghost1');
     const fileRef = ref(authed.storage(), 'verification-documents/sr-family1/doc.pdf');
-    await assertFails(uploadString(fileRef, 'contents', 'raw'));
+    await assertSucceeds(uploadString(fileRef, 'contents', 'raw'));
   });
 
   it('denies unauthenticated writes', async () => {
