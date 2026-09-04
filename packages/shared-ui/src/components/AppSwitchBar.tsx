@@ -85,6 +85,17 @@ export interface AppSwitchBarProps {
  *
  * Non-optimistic, like the menu row it supersedes: nothing navigates until
  * the mint resolves, and a failure leaves you where you are with a message.
+ *
+ * HEIGHT CONTRACT (#419). The bar's rendered height is exactly
+ * `--spacing-app-switch-bar` (base.css): the tab row takes the row token as
+ * an EXPLICIT height (`h-app-switch-row`) instead of being content-sized, and
+ * the nav pads only the safe-area inset under it. Every shell that mounts the
+ * bar reserves the same token (`pb-app-switch-bar md:pb-0`), so the bar and
+ * the reservation cannot disagree the way fixed `pb-16` did against a
+ * variable-height bar. The failed-switch alert deliberately OVERLAYS above
+ * the nav (absolute, bottom-full) rather than rendering inside it — an
+ * in-flow alert made the bar ~24px taller than any shell reserved, covering
+ * content on every phone, safe-area inset or not.
  */
 export function AppSwitchBar({
   current,
@@ -160,8 +171,20 @@ export function AppSwitchBar({
       aria-label={t('appSwitch.barLabel')}
       className="fixed inset-x-0 bottom-0 z-40 border-t border-gray-200 bg-white pb-[env(safe-area-inset-bottom)] md:hidden"
     >
+      {/* OVERLAY, not in-flow (#419): rendered inside the nav's box this
+          alert grew the bar past the height every shell reserves, covering
+          ~17px of page content on any phone while it showed. bottom-full
+          floats it just above the nav (the fixed nav is its containing
+          block), so the bar's height stays the constant the shells' token
+          padding is matched to. It needs its own ground and top border for
+          the same reason — it now sits over page content, not bar chrome.
+          Transient by design: cleared on route change, another tab, a fresh
+          attempt, and bfcache restore (see the `failed` state above). */}
       {failed && (
-        <p role="alert" className="px-4 pt-2 text-center text-xs text-error-600">
+        <p
+          role="alert"
+          className="absolute inset-x-0 bottom-full border-t border-gray-200 bg-white px-4 py-2 text-center text-xs text-error-600"
+        >
           {t('appSwitch.error')}
         </p>
       )}
@@ -170,8 +193,13 @@ export function AppSwitchBar({
           a 2px white backing, base.css) would paint ~4px OUTSIDE the viewport
           and simply not render for the bottom row and the end tabs. Drawing
           it inside keeps the indicator visible. The ground is bg-white, which
-          is that class's documented light-ground constraint. */}
-      <ul className="focus-ring-inset flex items-stretch">
+          is that class's documented light-ground constraint.
+
+          h-app-switch-row: the EXPLICIT height half of the #419 contract —
+          content no longer sizes the row, the shared token does, so the bar's
+          total height is exactly the --spacing-app-switch-bar every shell
+          reserves. The buttons center their icon+label column inside it. */}
+      <ul className="focus-ring-inset flex h-app-switch-row items-stretch">
         {appTabs.map(({ app, url }) => {
           const isCurrent = app === current;
           const busy = busyApp === app;
@@ -194,7 +222,7 @@ export function AppSwitchBar({
                   }
                   if (url) void switchTo(app, url);
                 }}
-                className={`flex w-full flex-col items-center gap-1 px-1 py-2 text-[11px] font-semibold transition-colors ${
+                className={`flex w-full flex-col items-center justify-center gap-1 px-1 py-2 text-[11px] font-semibold transition-colors ${
                   isCurrent ? 'text-brand-600' : 'text-gray-500 active:bg-gray-50'
                 }`}
               >
@@ -228,7 +256,7 @@ export function AppSwitchBar({
               setFailed(false);
               account.onNavigate(account.href);
             }}
-            className={`flex w-full flex-col items-center gap-1 px-1 py-2 text-[11px] font-semibold transition-colors ${
+            className={`flex w-full flex-col items-center justify-center gap-1 px-1 py-2 text-[11px] font-semibold transition-colors ${
               // Neutral, not branded: the account is shared and app-agnostic
               // (decision 24), so it must not wear the host app's colour.
               accountActive ? 'text-gray-900' : 'text-gray-500 active:bg-gray-50'

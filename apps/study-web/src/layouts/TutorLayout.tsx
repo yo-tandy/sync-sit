@@ -9,9 +9,10 @@ import { ScrollToTop } from '@/components/ScrollToTop';
 export function TutorLayout() {
   return (
     <AuthGuard role="tutor">
-      {/* pb-16 clears the fixed app-switch bar on phones; the bar is
+      {/* pb-app-switch-bar reserves the fixed app-switch bar's height — the
+          shared token (base.css, #419), row + safe-area inset. The bar is
           md:hidden so the padding lifts at the same breakpoint. */}
-      <div className="min-h-screen bg-ground pb-16 md:pb-0">
+      <div className="min-h-screen bg-ground pb-app-switch-bar md:pb-0">
         <ScrollToTop />
         <AppBar />
         {/* Desktop width cap (issue #119); wide pages opt out via data-page-width. */}

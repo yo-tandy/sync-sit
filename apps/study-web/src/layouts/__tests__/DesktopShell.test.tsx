@@ -52,15 +52,22 @@ describe('study portal shells cap routed content (issue #119)', () => {
 
 /**
  * The fixed bar and each shell's bottom padding are a MATCHED PAIR, and only
- * one half was pinned. Delete `pb-16` and every page still renders, every
- * mount test stays green, and the last row of each scrolled page sits under
- * the bar on a phone — the same "invisible by construction" shape the mount
- * assertions exist for. `md:pb-0` matters as much: the padding has to lift at
- * exactly the breakpoint the bar disappears at (PR #385 round 4).
+ * one half was pinned. Delete the reservation and every page still renders,
+ * every mount test stays green, and the last row of each scrolled page sits
+ * under the bar on a phone — the same "invisible by construction" shape the
+ * mount assertions exist for. `md:pb-0` matters as much: the padding has to
+ * lift at exactly the breakpoint the bar disappears at (PR #385 round 4).
+ *
+ * The reservation is the shared TOKEN, not a number (#419): `pb-16` was a
+ * fixed 64px against a bar whose height grows with the safe-area inset, so a
+ * home-indicator phone hid the bottom ~30px of every scrolled page.
+ * `pb-app-switch-bar` reads `--spacing-app-switch-bar` (base.css), the same
+ * value the bar itself is sized by — appSwitchBarHeight.test.ts (this app's
+ * shared-ui suite) pins the token side of that coupling.
  */
 function shellReservesBarHeight(bar: HTMLElement) {
   const shellRoot = bar.parentElement!;
-  expect(shellRoot.className).toMatch(/\bpb-16\b/);
+  expect(shellRoot.className).toMatch(/(?<![\w-])pb-app-switch-bar(?![\w-])/);
   expect(shellRoot.className).toMatch(/\bmd:pb-0\b/);
 }
 
