@@ -86,6 +86,33 @@ describe('BabysittingOptionsPage (post-#171 scope)', () => {
     expect(document.querySelector('textarea')).toBeNull();
   });
 
+  it('a clicked area chip stays selected across the re-render it causes', async () => {
+    // Regression: `getBabysitterView` returns a fresh object every render
+    // (packages/sit-core/src/types/sitUserAdapter.ts), so the seeding effect
+    // used to run unguarded on `[babysitter]` — including on the very
+    // re-render `toggleArea`'s own `setArrondissements` triggers — which
+    // reset `arrondissements` straight back to the userDoc snapshot and made
+    // every chip click revert itself. Clicking twice (select, then a second
+    // click elsewhere that forces another render) is what would have
+    // exposed it; a single click already fails without the seededRef guard.
+    renderPage();
+    const chip16e = screen.getByRole('button', { name: /16e/i });
+    expect(chip16e.textContent).not.toContain('✓');
+
+    fireEvent.click(chip16e);
+    expect(chip16e.textContent).toContain('✓');
+
+    // Force a second render pass (any state update in the component works;
+    // the rate input is unrelated to arrondissements) and confirm the
+    // selection survived it.
+    fireEvent.change(screen.getByLabelText(/rate/i), { target: { value: '20' } });
+    expect(chip16e.textContent).toContain('✓');
+
+    // The originally-seeded '1er' must still be there too — this proves the
+    // effect didn't silently re-seed and wipe it.
+    expect(screen.getByRole('button', { name: /1er/i }).textContent).toContain('✓');
+  });
+
   it('save no longer writes profiles.babysitter.aboutMe', async () => {
     renderPage();
     fireEvent.click(screen.getByRole('button', { name: /^save$/i }));

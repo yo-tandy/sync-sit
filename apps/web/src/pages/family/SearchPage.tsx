@@ -256,7 +256,14 @@ export function SearchPage() {
       } catch { /* ignore */ }
     }
     load();
-  }, [parent]);
+    // `parent`, not raw object identity: `getParentView` returns a fresh
+    // object every render, so `[parent]` re-ran this on every render this
+    // component causes — re-fetching family/kids/appointments each time and
+    // resetting every editable filter (address, rate, min age, gender,
+    // require-refs) and the kids selection back to the family doc's stored
+    // defaults, undoing whatever the user had just changed. Matches the
+    // sibling effect below, which already keys on the stable id.
+  }, [parent?.familyId]);
 
   const { periods: holidayPeriods } = useHolidays();
   const selectedKids = kids.filter((k) => k.selected);

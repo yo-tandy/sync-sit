@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/config/firebase';
@@ -32,9 +32,19 @@ export function BabysittingOptionsPage() {
   const [error, setError] = useState<string | null>(null);
   const toast = useToast();
 
+  // One-shot seeding guard (same bug/fix as StepPreferences.tsx, PR #206
+  // review): `getBabysitterView` returns a fresh object every render, so an
+  // unguarded `[babysitter]` effect re-fires on every render this component
+  // causes — including the one `toggleArea`'s own `setArrondissements`
+  // triggers — and immediately resets every field back to whatever is on
+  // `userDoc`, undoing the click/keystroke that just happened.
+  const seededRef = useRef(false);
+
   // Initialize from userDoc
   useEffect(() => {
     if (!babysitter) return;
+    if (seededRef.current) return;
+    seededRef.current = true;
     setLanguages(babysitter.languages || []);
     if (babysitter.kidAgeRange) { setKidAgeMin(babysitter.kidAgeRange.min); setKidAgeMax(babysitter.kidAgeRange.max); }
     if (babysitter.maxKids) setMaxKids(babysitter.maxKids);
