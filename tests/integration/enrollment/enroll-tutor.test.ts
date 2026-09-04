@@ -70,6 +70,12 @@ describe('enrollTutor (unauthenticated create path)', () => {
     expect(user.contactPhone).toBeUndefined();
     expect(user.whatsapp).toBeUndefined();
     expect(user.profiles.tutor.contactPhone).toBeNull();
+    // classLevel/gender promoted to root (issue #435 milestone, PR1) — no
+    // longer written onto the nested tutor profile for a new enrollment.
+    expect(user.classLevel).toBe('CP');
+    expect(user.gender).toBeNull();
+    expect(user.profiles.tutor.classLevel).toBeUndefined();
+    expect(user.profiles.tutor.gender).toBeUndefined();
 
     const tutor = user.profiles.tutor;
     // Owner decision 2026-08-17: tutors share the babysitter trust model —
@@ -78,7 +84,6 @@ describe('enrollTutor (unauthenticated create path)', () => {
     expect(tutor.ejemEmail).toBe(EMAIL);
     expect(tutor.searchable).toBe(false);
     expect(tutor.verification).toBeUndefined();
-    expect(tutor.classLevel).toBe('CP');
     expect(tutor.subjects).toEqual([{ subject: 'math', levels: ['CP'], rate: 20 }]);
     expect(tutor.sessionLengthsMin).toEqual([60]);
     expect(tutor.locationPrefs).toEqual(['online']);

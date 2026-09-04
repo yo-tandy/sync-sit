@@ -1,7 +1,7 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { strongPasswordSchema } from '@ejm/sit-core';
-import { DEFAULT_NOTIF_PREFS, validateEjmEmail, checkEnrollmentAge, getEjemEmail, getContact, type User } from '@ejm/shared-core';
+import { DEFAULT_NOTIF_PREFS, validateEjmEmail, checkEnrollmentAge, getEjemEmail, getContact, getClassLevel, getGender, type User } from '@ejm/shared-core';
 import { db, adminAuth } from '@ejm/shared-functions/config/firebase.js';
 import { writeUserActivity } from '@ejm/shared-functions/admin/writeAuditLog.js';
 import { getCorsOrigin } from '@ejm/shared-functions/config/cors.js';
@@ -25,7 +25,9 @@ interface EnrollTutorData {
   // babysitter adds a tutor profile without re-proving mailbox ownership —
   // the EJM identity was verified at first enrollment and lives on the doc.
   // `subjects` (tutor-specific) is always collected; classLevel/gender/contact
-  // are copied server-side from the babysitter profile. `enrollment` may carry
+  // are resolved server-side off the caller's OWN account (issue #435
+  // milestone, PR1: classLevel/gender are root fields now, so this is a
+  // resolve, not a copy from the babysitter profile). `enrollment` may carry
   // a PARTIAL supplement for the fields the sit profile never got (issue #203:
   // contact is skippable in sit; pre-age-gate docs lack a DOB; abandoned
   // signups lack classLevel/identity). Stored values win over the supplement
@@ -34,18 +36,6 @@ interface EnrollTutorData {
   // clearing it cannot resurrect the old value). See the merge block below.
   crossApp?: boolean;
   subjects?: unknown;
-}
-
-/** Copy the profile-scoped fields both provider profile types share — only
- *  those actually present on the source profile. */
-function copySharedProfileFields(source: Record<string, unknown>): Record<string, unknown> {
-  const copied: Record<string, unknown> = {};
-  for (const key of ['classLevel', 'gender', 'contactEmail', 'contactPhone', 'whatsapp']) {
-    if (source[key] !== undefined && source[key] !== null && source[key] !== '') {
-      copied[key] = source[key];
-    }
-  }
-  return copied;
 }
 
 /** Fields a crossApp caller may SUPPLY to fill the gaps its sit profile never
@@ -107,10 +97,10 @@ export const enrollTutor = onCall(
     // signed-in babysitter re-proving mailbox ownership is redundant by design
     // (owner call on issue #144); the audit trail records crossApp: true. The
     // wizard sends `subjects` plus an optional partial supplement for fields
-    // the sit profile lacks (issue #203); classLevel/gender/contact are copied
-    // from the babysitter profile OVER the supplement (stored wins; contact
-    // excepted — see the merge block) and the
-    // merged input is validated through the same schema.
+    // the sit profile lacks (issue #203); classLevel/gender/contact are
+    // resolved off the caller's own account (root ?? babysitter ?? tutor)
+    // OVER the supplement (stored wins; contact excepted — see the merge
+    // block) and the merged input is validated through the same schema.
     // Classic: verify the emailed code as before.
     let ejemEmailLower: string;
     let codeDoc: FirebaseFirestore.DocumentSnapshot | null = null;
@@ -152,13 +142,25 @@ export const enrollTutor = onCall(
       // fillBaseFields read as "absent", and a spread key holding undefined
       // still overrides the copied nested value — which is the point.
       const canonical = getContact(callerData as unknown as User);
+      // classLevel/gender are canonical at ROOT now (issue #435 milestone,
+      // PR1): getClassLevel/getGender already resolve root ?? babysitter ??
+      // tutor, so "stored" here means the SAME thing it always did (whatever
+      // the caller's account already knows) without a "copy from the
+      // babysitter profile" step — that step would just recreate the
+      // duplication this milestone removes, and babysitterProfile itself may
+      // no longer carry these fields at all for a caller who enrolled after
+      // this change. Spread order is unchanged: stored still wins over the
+      // client's supplement.
+      const storedClassLevel = getClassLevel(callerData as unknown as User);
+      const storedGender = getGender(callerData as unknown as User);
       enrollmentInput = {
         ...supplement,
         subjects: data.subjects,
-        ...copySharedProfileFields(babysitterProfile),
         contactEmail: canonical.contactEmail ?? undefined,
         contactPhone: canonical.contactPhone ?? undefined,
         whatsapp: canonical.whatsapp ?? undefined,
+        ...(storedClassLevel !== undefined ? { classLevel: storedClassLevel } : {}),
+        ...(storedGender !== undefined ? { gender: storedGender } : {}),
         ...suppliedContact,
       };
     } else {
@@ -321,8 +323,10 @@ export const enrollTutor = onCall(
       // toggle once subjects and availability exist (UX gate, not a rule).
       enrollmentComplete: true,
       ejemEmail: ejemEmailLower,
-      classLevel: enrollment.classLevel,
-      gender: enrollment.gender ?? null,
+      // classLevel/gender are root-only fields now (issue #435 milestone,
+      // PR1) — no longer written onto the nested tutor profile for new
+      // enrollments; see the fillBaseFields/setBaseFields (add-profile) and
+      // the root .set() (new-account) writes below.
       subjects: enrollment.subjects,
       sessionLengthsMin: enrollment.sessionLengthsMin,
       locationPrefs: enrollment.locationPrefs,
@@ -378,10 +382,20 @@ export const enrollTutor = onCall(
         // sitter already had, with no way for the backfill to lift it back
         // (the root key is now present). The sibling writer in
         // enrollBabysitter already filters on truthiness; this matches it.
+        // classLevel/gender (issue #435 milestone, PR1): like contact above,
+        // these are NOT set-once — `enrollment.classLevel`/`.gender` here is
+        // whatever the caller just confirmed (typed fresh in the classic
+        // wizard, or the stored/root value resolved by the crossApp merge
+        // above), so it must win over an older/absent root copy.
+        // classLevel is schema-required (non-empty), so it is always safe to
+        // set unconditionally; gender mirrors the nested profile's historical
+        // convention of writing an explicit null for "asked, no answer".
         setBaseFields: {
           ...(enrollment.contactEmail ? { contactEmail: enrollment.contactEmail } : {}),
           ...(enrollment.contactPhone ? { contactPhone: enrollment.contactPhone } : {}),
           ...(enrollment.whatsapp ? { whatsapp: enrollment.whatsapp } : {}),
+          classLevel: enrollment.classLevel,
+          gender: enrollment.gender ?? null,
         },
         auditAction: 'tutor.profile_added',
         auditDetails: {
@@ -434,6 +448,11 @@ export const enrollTutor = onCall(
       ...(enrollment.contactEmail ? { contactEmail: enrollment.contactEmail } : {}),
       ...(enrollment.contactPhone ? { contactPhone: enrollment.contactPhone } : {}),
       ...(enrollment.whatsapp ? { whatsapp: enrollment.whatsapp } : {}),
+      // classLevel/gender promoted to root (issue #435 milestone, PR1) — no
+      // longer written onto the nested tutor profile (see tutorProfile
+      // above); this is the only place they land for a brand-new account.
+      classLevel: enrollment.classLevel,
+      gender: enrollment.gender ?? null,
       status: 'active',
       // App-scoped since issue #369; the shared constant is the single
 

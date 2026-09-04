@@ -46,3 +46,27 @@ describe('study user-doc adapters', () => {
     expect(getTutorView(null)).toBeNull();
   });
 });
+
+// classLevel/gender (issue #435 milestone, PR1): the view resolves these
+// root-first (getClassLevel/getGender), same treatment as sit's
+// BabysitterView — see sitUserAdapter.viewNarrowing.test.ts.
+describe('TutorView classLevel/gender (issue #435 milestone, PR1)', () => {
+  it('resolves root over the nested profile copy', () => {
+    const user = {
+      uid: 't1', classLevel: 'Terminale', gender: 'female',
+      profiles: {
+        tutor: {
+          enrollmentComplete: true, classLevel: '2nde', gender: 'other',
+          subjects: [], sessionLengthsMin: [60], locationPrefs: ['online'], paddingMin: 15,
+        },
+      },
+    } as never;
+    const view = getTutorView(user);
+    expect(view?.classLevel).toBe('Terminale');
+    expect(view?.gender).toBe('female');
+  });
+
+  it('falls back to the nested profile copy for a legacy, un-backfilled doc', () => {
+    expect(getTutorView(tutor)?.classLevel).toBe('Terminale');
+  });
+});

@@ -362,6 +362,15 @@ service cloud.firestore {
       //   request time (bookSession/proposeSession; sendContactRequest/
       //   contactPublishedSearch/resubmitAppointment), so live edits cannot
       //   retro-classify existing bookings. Bounds via noticeWindowBoundsValid.
+      // NOTE: root `classLevel`/`gender` (issue #435 milestone, PR1 — promoted
+      //   from `profiles.babysitter.classLevel/gender` and
+      //   `profiles.tutor.classLevel/gender`) are intentionally editable and
+      //   NOT set-once, unlike firstName/lastName/dateOfBirth above: a
+      //   student's class level changes every school year. sit's classic
+      //   enrollment wizard (StepProfile.tsx) writes them directly from the
+      //   client; nothing here needs to distinguish "first set" from "later
+      //   edit". Neither field was ever bounded/shape-checked at its old
+      //   nested path either, so no new validity function is introduced here.
       // - governedBy / identityLocked: supervision mirrors owned by the
       //   guardian callables (governedBy present iff the guardianLinks doc is
       //   ACTIVE; identityLocked marks parent-attested identity).

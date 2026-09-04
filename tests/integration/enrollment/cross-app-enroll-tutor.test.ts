@@ -491,9 +491,10 @@ describe('enrollTutor crossApp mode', () => {
     expect(tutor.searchable).toBe(false);
     expect(tutor.verification).toBeUndefined();
     expect(tutor.subjects).toEqual(SUBJECTS);
-    // Copied from the babysitter profile:
-    expect(tutor.classLevel).toBe('2nde');
-    expect(tutor.gender).toBe('other');
+    // classLevel/gender are root-only fields now (issue #435 milestone, PR1)
+    // — no longer written onto the nested tutor profile.
+    expect(tutor.classLevel).toBeUndefined();
+    expect(tutor.gender).toBeUndefined();
     expect(tutor.contactEmail).toBe('sacha@contact.com');
     expect(tutor.contactPhone).toBe('+33600000002');
     // Server pref defaults (issue #143):
@@ -502,12 +503,18 @@ describe('enrollTutor crossApp mode', () => {
     expect(tutor.areaMode).toBe('arrondissement');
     // Babysitter profile and root identity untouched.
     expect(after.profiles.babysitter.searchable).toBe(true);
+    expect(after.profiles.babysitter.classLevel).toBe('2nde');
     expect(after.firstName).toBe('Sacha');
     // Canonical ROOT copies filled from the babysitter profile (issue #203
     // shared identity): fillBaseFields lifts them because the root was empty.
     expect(after.ejemEmail).toBe('richsitter@test.com');
     expect(after.contactEmail).toBe('sacha@contact.com');
     expect(after.contactPhone).toBe('+33600000002');
+    // classLevel/gender resolved off the caller's own account, root-first
+    // (issue #435 milestone, PR1) — here the ONLY source is the babysitter
+    // profile (legacy shape), so setBaseFields writes it to root.
+    expect(after.classLevel).toBe('2nde');
+    expect(after.gender).toBe('other');
   });
 
   // ── Issue #203 shared identity: root-canonical derivation ──
@@ -634,11 +641,16 @@ describe('enrollTutor crossApp mode', () => {
     );
     expect(result.uid).toBe(uid);
 
-    const tutor = (await db.collection('users').doc(uid).get()).data()!.profiles.tutor;
+    const after = (await db.collection('users').doc(uid).get()).data()!;
+    const tutor = after.profiles.tutor;
     expect(tutor.contactEmail).toBe('filled@contact.com');
-    // Stored profile fields copied as before.
-    expect(tutor.classLevel).toBe('2nde');
-    expect(tutor.gender).toBe('other');
+    // classLevel/gender resolved off the caller's account (root ?? nested)
+    // and written to ROOT only now (issue #435 milestone, PR1) — the nested
+    // tutor profile no longer carries them.
+    expect(tutor.classLevel).toBeUndefined();
+    expect(tutor.gender).toBeUndefined();
+    expect(after.classLevel).toBe('2nde');
+    expect(after.gender).toBe('other');
     // Whitelist held: prefs defaulted, searchable stays false.
     expect(tutor.sessionLengthsMin).toEqual([60]);
     expect(tutor.searchable).toBe(false);
@@ -665,10 +677,15 @@ describe('enrollTutor crossApp mode', () => {
       token,
     );
 
-    const tutor = (await db.collection('users').doc(uid).get()).data()!.profiles.tutor;
-    // classLevel/gender keep the stored-wins rule (set-once identity shape).
-    expect(tutor.classLevel).toBe('2nde');
-    expect(tutor.gender).toBe('other');
+    const after = (await db.collection('users').doc(uid).get()).data()!;
+    const tutor = after.profiles.tutor;
+    // classLevel/gender keep the stored-wins rule (set-once identity shape),
+    // now resolved off the caller's account and written to ROOT (issue #435
+    // milestone, PR1) rather than the nested tutor profile.
+    expect(tutor.classLevel).toBeUndefined();
+    expect(tutor.gender).toBeUndefined();
+    expect(after.classLevel).toBe('2nde');
+    expect(after.gender).toBe('other');
     // CONTACT does not: stored-wins was coherent when the nested copy was
     // canonical. Post-clear semantics, a contact the user just typed in the
     // wizard must beat the stored copy — otherwise clearing and re-entering

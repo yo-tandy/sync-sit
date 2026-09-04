@@ -12,6 +12,7 @@ import {
   isRunningAsPWA,
   getEjemEmail,
   getContact,
+  getClassLevel,
   notifPrefPath,
   notifPrefRowsForUser,
   resolveNotifPrefsFor,
@@ -519,7 +520,11 @@ export function AccountPage() {
             </div>
             <div className="flex-1">
               <p className="text-xs text-gray-500">{t('account.classLevel')}</p>
-              <p className="text-sm font-medium text-gray-900">{tutor?.classLevel || '—'}</p>
+              {/* Root ?? nested fallback (issue #435 milestone, PR1): reading
+                  tutor?.classLevel alone would show "—" for a legacy doc
+                  whose value already got promoted to root by the backfill
+                  but never re-written to profiles.tutor. */}
+              <p className="text-sm font-medium text-gray-900">{getClassLevel(userDoc) || '—'}</p>
             </div>
           </div>
         </Card>

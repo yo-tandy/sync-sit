@@ -1,3 +1,4 @@
+export * from './address.js';
 export * from './common.js';
 export * from './schedule.js';
 export * from './notification.js';

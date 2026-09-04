@@ -3,7 +3,7 @@ import { db, adminAuth } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { FieldValue } from 'firebase-admin/firestore';
 import { strongPasswordSchema } from '@ejm/sit-core';
-import { DEFAULT_NOTIF_PREFS, getEjemEmail, getContact, type User } from '@ejm/shared-core';
+import { DEFAULT_NOTIF_PREFS, getEjemEmail, getContact, getClassLevel, getGender, type User } from '@ejm/shared-core';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
 import { assertCodeIdentityClass } from '@ejm/shared-functions/auth/verificationCodeClass.js';
 import {
@@ -21,18 +21,6 @@ interface EnrollBabysitterData {
   // tutor adds a babysitter profile without re-proving mailbox ownership —
   // the EJM identity was verified at first enrollment and lives on the doc.
   crossApp?: boolean;
-}
-
-/** Copy the profile-scoped fields both provider profile types share — only
- *  those actually present on the source profile. */
-function copySharedProfileFields(source: Record<string, unknown>): Record<string, unknown> {
-  const copied: Record<string, unknown> = {};
-  for (const key of ['classLevel', 'gender', 'contactEmail', 'contactPhone', 'whatsapp']) {
-    if (source[key] !== undefined && source[key] !== null && source[key] !== '') {
-      copied[key] = source[key];
-    }
-  }
-  return copied;
 }
 
 /**
@@ -69,6 +57,11 @@ export const enrollBabysitter = onCall(
     let ejemEmailLower: string;
     let codeDoc: FirebaseFirestore.DocumentSnapshot | null = null;
     let copiedProfileFields: Record<string, unknown> = {};
+    // classLevel/gender resolved off the CALLER's existing doc for a lazy
+    // root promotion (issue #435 milestone, PR1) — see the comment below.
+    // Empty on the classic (non-crossApp) path: a brand-new babysitter has
+    // no prior doc to resolve these from.
+    let rootStudentFields: Record<string, unknown> = {};
     if (isCrossApp) {
       const callerSnap = await db.collection('users').doc(request.auth!.uid).get();
       const callerData = (callerSnap.data() ?? {}) as unknown as User;
@@ -82,24 +75,33 @@ export const enrollBabysitter = onCall(
         throw new HttpsError('failed-precondition', 'No verified EJM identity on this account');
       }
       ejemEmailLower = derivedEjemEmail.toLowerCase();
-      // classLevel/gender stay profile-scoped; contact comes from the
-      // canonical resolution, which already falls back to the nested copies
-      // when the root was never written. Its nulls are applied UNFILTERED:
-      // post-clear semantics mean a null is an explicit user deletion, and
-      // filtering it out would let the frozen nested copy re-enter the doc
-      // and become canonical again (PR #206 review round 4).
-      // Canonical contact overrides the copied nested values, clears
-      // included: a cleared channel resolves to null and must NOT fall back
-      // to the frozen nested copy (PR #206 review round 4). null rather than
-      // undefined because these land in a Firestore profile write, and
-      // writing null into an empty root through fillBaseFields is a no-op
-      // in effect (the root of a cleared channel is already null).
+      // classLevel/gender are canonical at ROOT now (issue #435 milestone,
+      // PR1) — no copy step is needed here at all: getClassLevel/getGender
+      // already resolve root ?? babysitter ?? tutor, so whichever app the
+      // caller enrolled in first, the value is either already on the caller's
+      // root doc (nothing to do below), or only ever lived on the caller's
+      // OWN nested tutor profile (a legacy, not-yet-backfilled doc) — in
+      // which case fillBaseFields below lazily promotes it to root. There is
+      // no "copy classLevel/gender from the tutor profile into the babysitter
+      // profile" step anymore; that would just recreate the duplication this
+      // milestone removes.
+      // Contact comes from the canonical resolution, which already falls
+      // back to the nested copies when the root was never written. Its nulls
+      // are applied UNFILTERED: post-clear semantics mean a null is an
+      // explicit user deletion, and filtering it out would let the frozen
+      // nested copy re-enter the doc and become canonical again (PR #206
+      // review round 4).
       const canonical = getContact(callerData);
       copiedProfileFields = {
-        ...copySharedProfileFields(tutorProfile),
         contactEmail: canonical.contactEmail ?? null,
         contactPhone: canonical.contactPhone ?? null,
         whatsapp: canonical.whatsapp ?? null,
+      };
+      const resolvedClassLevel = getClassLevel(callerData);
+      const resolvedGender = getGender(callerData);
+      rootStudentFields = {
+        ...(resolvedClassLevel !== undefined ? { classLevel: resolvedClassLevel } : {}),
+        ...(resolvedGender !== undefined ? { gender: resolvedGender } : {}),
       };
     } else {
       if (!data.ejemEmail) {
@@ -160,23 +162,31 @@ export const enrollBabysitter = onCall(
           enrollmentComplete: false,
           ejemEmail: ejemEmailLower,
           searchable: false,
-          // Cross-app: seed the fields the tutor profile already answered
-          // (classLevel/gender/contact) so the wizard only asks for what is
-          // sit-specific (availability).
+          // Cross-app: seed the contact channels the tutor profile already
+          // answered so the wizard only asks for what is sit-specific
+          // (availability). classLevel/gender are NOT seeded here anymore
+          // (issue #435 milestone, PR1) — they are root-only fields now; see
+          // fillBaseFields below.
           ...copiedProfileFields,
         },
-        // Root shared-identity fields (issue #203): dual-write the canonical
-        // root copies alongside the nested ones. fillBaseFields writes only
-        // EMPTY root fields, so an existing canonical value always wins.
-        // Channels with nothing to copy are OMITTED, never written as null:
-        // root presence means "the user set or cleared this", so a null here
+        // Root shared-identity fields (issue #203) plus classLevel/gender
+        // (issue #435 milestone, PR1): dual-write the canonical root copies
+        // alongside the nested ones. fillBaseFields writes only EMPTY root
+        // fields, so an existing canonical value always wins. Channels/fields
+        // with nothing to copy are OMITTED, never written as null: root
+        // presence means "the user set or cleared this", so a null here
         // would read as a deliberate clear and block both the nested
         // fallback and the backfill (same fix as enrollTutor's new-account
         // write; PR #206 review round 7). The nested profile copy above
-        // keeps its null convention.
+        // keeps its null convention. rootStudentFields resolves
+        // getClassLevel/getGender off the CALLER's existing doc, so a
+        // legacy caller whose classLevel/gender only ever lived on their
+        // nested tutor profile gets it lazily promoted to root right here —
+        // no separate backfill run required for THIS caller.
         fillBaseFields: {
           language: 'en',
           ejemEmail: ejemEmailLower,
+          ...rootStudentFields,
         },
         // Contact is the CANONICAL resolution for this user (root ?? nested),
         // so writing it back is idempotent when the root already holds it and
