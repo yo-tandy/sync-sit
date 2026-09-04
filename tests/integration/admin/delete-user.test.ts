@@ -912,13 +912,25 @@ describe('deleteUser', () => {
     });
 
     it('deleting the SOLE parent notifies the surviving babysitter AND the surviving tutor, each in their own world', async () => {
+      const studyDate = dateIn(12);
       await seedAppointment({
         babysitterUserId: seed.babysitter1.uid,
         familyId: seed.family2Id,
         createdByUserId: seed.parent3.uid,
         status: 'pending', // pending too, not just confirmed — no claim, still a counterparty
       });
-      await seedStudySession({
+      // An open weekly grid for the claim-release transaction to restore
+      // into (the `seedOpenSchedule` helper above is scoped to the OTHER
+      // describe block; inlined here rather than exported for one caller).
+      const openWeekly: Record<string, boolean[]> = {};
+      for (const key of ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']) {
+        openWeekly[key] = new Array(96).fill(true);
+      }
+      await getDb()
+        .collection('schedules')
+        .doc(seed.tutor2.uid)
+        .set({ userId: seed.tutor2.uid, weekly: openWeekly }, { merge: true });
+      const sessionId = await seedStudySession({
         familyId: seed.family2Id,
         tutorUserId: seed.tutor2.uid,
         createdByUserId: seed.parent3.uid,
@@ -926,8 +938,17 @@ describe('deleteUser', () => {
         familyName: 'Martin',
         parentName: 'Sophie Martin',
         status: 'confirmed',
-        date: dateIn(12),
+        date: studyDate,
       });
+      // Confirmed AND genuinely claimed (unlike the pending sit appointment
+      // above), so the tutor's notification below IS entitled to say a slot
+      // came back — issue #420 review.
+      await seedOverrideClaim(
+        seed.tutor2.uid,
+        studyDate,
+        { sessionId },
+        { appSource: 'study', reason: 'study_session' },
+      );
 
       await callFunction('deleteUser', { targetUserId: seed.parent3.uid }, adminToken);
 
@@ -948,8 +969,9 @@ describe('deleteUser', () => {
       const studyDoc = studyDocs[0].data();
       expect(studyDoc.recipientUserId).toBe(seed.tutor2.uid);
       expect(studyDoc.body).toContain('tutoring session');
-      // The study session WAS confirmed — study's confirm always claims a
-      // slot, so this one genuinely was reopened.
+      // The study session WAS confirmed AND genuinely claimed
+      // (seedOverrideClaim above), unlike the pending sit appointment, so
+      // this one really was reopened — issue #420 review.
       expect(studyDoc.body).toContain('reopened');
       expect(studyDoc.data).toEqual({ cancelledCount: '1' });
 
