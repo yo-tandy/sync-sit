@@ -44,7 +44,15 @@ export type NotificationType =
   | 'new_task_matching'
   | 'doer_endorsement_received'
   | 'doer_endorsement_published'
-  | 'doer_endorsement_declined';
+  | 'doer_endorsement_declined'
+  // ── guardian/governance ──
+  // A supervised member deleted their own account (issue #368); written by
+  // `deleteMyAccount` to every parent of the supervising family. Added here
+  // for the reason #298 gives above: a bare string written into an untyped
+  // `.add()` is the union under-describing reality. The other guardian types
+  // (`supervision_*`, `guardian_*`) are still missing and are tracked
+  // separately — this adds only the type this change introduces.
+  | 'supervised_account_deleted';
 
 export interface NotificationDoc {
   notificationId: string;

@@ -594,40 +594,84 @@ RESULT: Active babysitters carry forward seamlessly.
 
 ### I-a: Babysitter deletes account
 
+Implemented by the `deleteMyAccount` callable (issue #368). It runs the SAME
+erasure as the admin `deleteUser` — one implementation, so there are never two
+answers to "what does deleting a member remove".
+
+> **The server half landed first.** Steps 2–4 describe the account hub row
+> that issue #367 adds; no client in `apps/web`, `apps/study-web` or
+> `apps/do-web` calls `deleteMyAccount` yet. Everything from step 5 on is
+> shipped and covered by
+> `tests/integration/account/delete-my-account.test.ts`.
+
 ```
 BABYSITTER (Marie)               SYSTEM                     PARENTS (affected)
 ──────────────────               ──────                     ──────────────────
 
 1. Marie decides to stop
-2. Opens Settings
+2. Opens the account hub
 3. Taps [Delete account]
 4. Sees warning:
-   "All your personal data will
-    be removed. Active requests
-    will be cancelled. Affected
-    families will be notified.
-    You can re-enroll later."
+   "This removes you from
+    sync/sit, sync/study and
+    sync/do. Active requests
+    will be cancelled. This
+    cannot be undone."
 5. Types "DELETE" to confirm
 6. Taps [Delete my account]
-                                 7. All pending requests
-                                    → cancelled
-                                 8. All confirmed appointments
-                                    → cancelled
-                                 9. Notifies every affected
-                                    family (email + push)
-                                 10. Removes all PI from
-                                     Marie's record
-                                 11. Keeps user ID + links
-                                     (for data integrity)
-                                 12. Disables login
-                                                             13. Each affected family
-                                                                 gets: "Babysitter
-                                                                 cancelled — their
-                                                                 account was deleted"
+                                 7. Rejects unless a credential
+                                    was presented in the last
+                                    15 minutes (switching apps
+                                    does not count)
+                                 8. Pending + confirmed
+                                    appointments → cancelled,
+                                    statusReason
+                                    'account_deleted'
+                                 9. HARD delete, not a strip:
+                                    the users doc, the Firebase
+                                    Auth account, notifications,
+                                    schedule + overrides,
+                                    references/endorsements on
+                                    both sides, sync-do tasks/
+                                    offers/photos, guardian
+                                    links, and the family + kids
+                                    if she was the last parent
+                                 10. Appointment rows keep only
+                                     'deleted' in place of her uid
+                                 11. Admin alerted; audit entry
+                                     'self_delete_account' with
+                                     the MEMBER as actor
+                                 12. If she was supervised, every
+                                     guardian is told (email +
+                                     push + in-app)
+                                                             13. NOT NOTIFIED TODAY.
+                                                                 A family whose
+                                                                 appointment was
+                                                                 cancelled gets no
+                                                                 message — see the
+                                                                 gap note below.
 
 RESULT: Marie's data gone. Appointment records show "deleted user."
         Marie can re-enroll with a new account using same EJM email.
 ```
+
+> **Known gap — affected families are not notified.** Steps 9/13 of this flow
+> used to promise an email + push fan-out to every counterparty of a cancelled
+> appointment ("Babysitter cancelled — their account was deleted"). No such
+> fan-out has ever been written: `eraseUserAccount` sets the appointment to
+> cancelled and stops. The `account_deleted` NotificationType exists in
+> `packages/shared-core/src/types/notification.ts` with no writer anywhere.
+> Inherited from the admin delete path, where a human could warn people; now
+> that self-delete is a row in the account hub in front of every member, it is
+> routine rather than theoretical. Tracked separately as issue #420 rather than
+> folded into #368 — the fix belongs in `eraseUserAccount`, which both
+> callables share.
+>
+> **Also not a strip-and-keep.** Earlier revisions of this flow described
+> removing PI while retaining the user ID and links "for data integrity". The
+> shipped behaviour is a hard delete of the user document and the Auth account;
+> only the `'deleted'` sentinel on an appointment's `babysitterUserId` /
+> `createdByUserId` survives.
 
 ### I-b: Last parent leaves → family deletion
 
@@ -728,7 +772,7 @@ RESULT: Admin maintains system integrity with full audit trail.
 | **F** | Multi-Parent Family | Parent₁ → Parent₂ | Shared access, independent management |
 | **G** | Post-Appointment Reference | Parent → Babysitter (approves) | Verified reference in search results |
 | **H** | Annual Revalidation | System → all Babysitters | Active users carry forward, inactive hidden |
-| **I** | Account Deletion / GDPR | Any user + Admin | Clean removal with notifications |
+| **I** | Account Deletion / GDPR | Any user + Admin | Hard delete across all three apps (admin alerted, guardian told; affected families not yet — see I-a) |
 | **J** | Admin Operations | Admin | Block users, manage holidays, export data |
 
 ---

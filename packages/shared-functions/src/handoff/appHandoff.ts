@@ -4,6 +4,10 @@ import { db, adminAuth } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
 import { hashInviteToken, newInviteToken } from '../guardian/shared.js';
+import {
+  ORIGINAL_AUTH_TIME_CLAIM,
+  effectiveAuthTimeSeconds,
+} from '../auth/effectiveAuthTime.js';
 
 /** Handoff codes live 60 seconds — long enough for one redirect, nothing else. */
 const APP_HANDOFF_TTL_MS = 60_000;
@@ -48,6 +52,12 @@ export const createAppHandoffCode = onCall(
       tokenHash: hashInviteToken(code),
       createdAt: now,
       expiresAt: new Date(now.getTime() + APP_HANDOFF_TTL_MS),
+      // How old the CREDENTIAL behind this session is, carried across the
+      // handoff so the destination app cannot present a month-old session as
+      // freshly authenticated (see `auth/effectiveAuthTime.ts`). Recorded from
+      // `effectiveAuthTimeSeconds` rather than raw `auth_time` so that chaining
+      // handoff → handoff cannot launder it either.
+      originAuthTime: effectiveAuthTimeSeconds(request.auth.token as Record<string, unknown>),
     });
     await writeUserActivity(uid, 'app_handoff_created', {});
     return { code };
@@ -90,7 +100,7 @@ export const redeemAppHandoffCode = onCall(
       // one-generic-error invariant.
       const expiresAt = data.expiresAt?.toDate?.();
       if (!expiresAt || expiresAt.getTime() < Date.now()) return null;
-      return { uid: data.uid as string };
+      return { uid: data.uid as string, originAuthTime: Number(data.originAuthTime ?? 0) };
     });
     if (!consumed) {
       throw invalidHandoff();
@@ -103,7 +113,18 @@ export const redeemAppHandoffCode = onCall(
       throw invalidHandoff();
     }
 
-    const token = await adminAuth.createCustomToken(consumed.uid);
+    // Carry the originating session's credential age into the new session, so
+    // a re-auth guard on the other side sees the session it actually came from
+    // (see `auth/effectiveAuthTime.ts`). Omitted, not zeroed, when the code
+    // predates this field: a code minted by the previous deploy behaves as it
+    // did, rather than being read as "credential at epoch 0" and failing the
+    // guard closed for a member who did nothing wrong.
+    const token = await adminAuth.createCustomToken(
+      consumed.uid,
+      consumed.originAuthTime > 0
+        ? { [ORIGINAL_AUTH_TIME_CLAIM]: consumed.originAuthTime }
+        : undefined,
+    );
     await writeUserActivity(consumed.uid, 'app_handoff_redeemed', {});
     return { token };
   },

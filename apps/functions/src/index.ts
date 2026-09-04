@@ -36,6 +36,8 @@ export {
   // Cross-app session handoff
   createAppHandoffCode,
   redeemAppHandoffCode,
+  // Self-serve account deletion (issue #368) — same erasure as the admin path
+  deleteMyAccount,
   // Verification
   submitVerification,
   reviewVerification,

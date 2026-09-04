@@ -50,6 +50,12 @@ const GUARDIAN_TYPES = [
   'guardian_mirror',
   'guardian_action',
   'guardian_searchable',
+  // A supervised member deleted their own account (issue #368). Written by
+  // `deleteMyAccount` to every parent of the supervising family. Listed with
+  // no route deliberately: the child, their link and their governance page
+  // are all gone by the time this arrives, so /family/governance/{uid} would
+  // be a dead deep link and /family/governance shows nothing about them.
+  'supervised_account_deleted',
 ] as const;
 
 /** The types this app's bell counts and its /notifications pages list. */

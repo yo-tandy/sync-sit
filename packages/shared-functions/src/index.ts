@@ -66,6 +66,10 @@ export { forceRevokeSupervision } from './guardian/forceRevokeSupervision.js';
 // Callables — cross-app session handoff
 export { createAppHandoffCode, redeemAppHandoffCode } from './handoff/appHandoff.js';
 
+// Callable — a member deletes their OWN account, across all three apps
+// (issue #368). Runs the same erasure as the admin path.
+export { deleteMyAccount } from './account/deleteMyAccount.js';
+
 // Callables — admin
 export { getAdminDashboard } from './admin/getAdminDashboard.js';
 export { listUsers } from './admin/listUsers.js';
