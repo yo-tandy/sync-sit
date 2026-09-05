@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
-import { clearAll, callFunction, getDb, getIdToken, getAdminAuth } from '../../setup/emulator.js';
+import { clearAll, callFunction, getDb, getIdToken, getAdminAuth, waitForEffectiveSearchable } from '../../setup/emulator.js';
 
 const EJEM_EMAIL = 'crossapp.sitter@ejm-test.org';
 const CODE = '123456';
@@ -81,7 +81,9 @@ describe('enrollBabysitter cross-app add-profile', () => {
     );
     expect(result.uid).toBe(TUTOR_UID);
 
-    const after = (await getDb().collection('users').doc(TUTOR_UID).get()).data()!;
+    // Wait for onUserWrittenRecomputeSearchable to fold in effectiveSearchable
+    // rather than racing it (issue #453).
+    const after = await waitForEffectiveSearchable(TUTOR_UID, 'babysitter');
     expect(after.profiles.babysitter).toEqual({
       enrollmentComplete: false,
       ejemEmail: EJEM_EMAIL.toLowerCase(),
@@ -231,7 +233,7 @@ describe('enrollBabysitter crossApp mode', () => {
     );
     expect(result.uid).toBe(RICH_TUTOR_UID);
 
-    const after = (await db.collection('users').doc(RICH_TUTOR_UID).get()).data()!;
+    const after = await waitForEffectiveSearchable(RICH_TUTOR_UID, 'babysitter');
     // classLevel/gender are root-only fields now (issue #435 milestone, PR1)
     // — no longer copied onto the nested babysitter profile.
     expect(after.profiles.babysitter).toEqual({
