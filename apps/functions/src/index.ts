@@ -89,6 +89,7 @@ export { acceptFamilyEndorsement } from './references/acceptFamilyEndorsement.js
 export { publishManualReference } from './references/publishManualReference.js';
 export { notifyOnNewReference } from './references/onReferenceCreated.js';
 export { mirrorNotificationToGuardians } from './guardian/onNotificationCreated.js';
+export { onUserWrittenRecomputeSearchable } from './search/onUserWrittenRecomputeSearchable.js';
 export { sendReminders } from './scheduled/sendReminders.js';
 export { cleanupOldData } from './scheduled/cleanupOldData.js';
 export { listAppointments } from './admin/listAppointments.js';

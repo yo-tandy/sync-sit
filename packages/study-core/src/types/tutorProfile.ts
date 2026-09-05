@@ -67,6 +67,21 @@ export interface TutorProfile extends ProfileBase {
   searchable?: boolean;
 
   /**
+   * Server-owned, denormalized result of `computeEffectiveSearchable`
+   * (issue #435 PR2 — shared-core), folding in `status === 'active'`,
+   * `searchable`, and `enrollmentComplete`. Written ONLY by the
+   * `onUserWrittenRecomputeSearchable` Firestore trigger (apps/functions,
+   * covers both provider profiles from one codebase — see the guardian
+   * mirror trigger precedent) — never by a client or a callable directly —
+   * whenever any of its three inputs changes. `searchTutors` filters on THIS
+   * field instead of re-deriving the same boolean (and its separate
+   * `enrollmentComplete`/`searchable` query clauses) at every query. Absent
+   * on a doc the trigger/backfill has not yet touched — treated as not
+   * searchable, never as a fallback to the raw `searchable` toggle.
+   */
+  effectiveSearchable?: boolean;
+
+  /**
    * Stable personal code for direct lookup (issue #235, parity A2): 8
    * uppercase hex chars a tutor hands to families they already know, resolved
    * by the lookupTutor callable. Server-owned: minted ONLY by

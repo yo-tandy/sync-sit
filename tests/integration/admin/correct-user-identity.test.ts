@@ -35,7 +35,13 @@ describe('correctUserIdentity', () => {
       lastName: 'Name',
       dateOfBirth: new Date('2010-04-01'),
       language: 'en',
-      profiles: { babysitter: { searchable: true, enrollmentComplete: true } },
+      // effectiveSearchable set explicitly (issue #435 PR2) rather than left
+      // for onUserWrittenRecomputeSearchable to backfill asynchronously: the
+      // "partial update" test below reads this doc back and asserts on the
+      // FULL profiles map right after a correctUserIdentity call, which
+      // does not itself touch profiles.babysitter — racing the seed
+      // write's own trigger convergence made that assertion flaky.
+      profiles: { babysitter: { searchable: true, enrollmentComplete: true, effectiveSearchable: true } },
       notifPrefs: {},
       fcmTokens: [],
       createdAt: new Date(),
@@ -103,7 +109,11 @@ describe('correctUserIdentity', () => {
       expect(user.status).toBe('active');
       expect(user.email).toBe(original.email);
       expect(user.profiles).toEqual({
-        babysitter: { searchable: true, enrollmentComplete: true },
+        // effectiveSearchable (issue #435 PR2): onUserWrittenRecomputeSearchable
+        // converges this to true for an active/searchable/enrolled babysitter —
+        // present here because the correctUserIdentity write above re-triggers it,
+        // not because this callable touches the babysitter profile itself.
+        babysitter: { searchable: true, enrollmentComplete: true, effectiveSearchable: true },
       });
 
       const audits = await getDb()

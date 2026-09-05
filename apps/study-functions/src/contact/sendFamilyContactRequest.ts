@@ -6,6 +6,7 @@ import { writeUserActivity } from '@ejm/shared-functions/admin/writeAuditLog.js'
 import { notifyAllParents } from '@ejm/shared-functions/config/notifyParents.js';
 import { escapeHtml, STUDY_APP_URL } from '@ejm/shared-functions/config/email.js';
 import type { StudyUser, TutorProfile, SubjectOffering } from '@ejm/study-core';
+import { computeEffectiveSearchable } from '@ejm/shared-core';
 import { sendFamilyContactRequestSchema } from '../validation/contact.js';
 import {
   latestDeclineMs,
@@ -79,14 +80,22 @@ export const sendFamilyContactRequest = onCall(
     }
     // SEARCHABLE is required, even though the board itself is not gated on it
     // (PR #213 review). The family's only contact-reveal surface is
-    // searchTutors -> TutorCard, and that query filters on
-    // profiles.tutor.searchable == true. A hidden tutor could therefore be
+    // searchTutors -> TutorCard, and that query now filters on
+    // profiles.tutor.effectiveSearchable == true (issue #435 PR2,
+    // computeEffectiveSearchable). This check calls that SAME function LIVE
+    // on the caller doc already fetched above, rather than trusting the
+    // denormalized field: status === 'active' and enrollmentComplete ===
+    // true were both just independently verified, so a false result here is
+    // always attributable to the tutor's own `searchable` toggle (the
+    // 'not_searchable' message below stays accurate) — and computing live
+    // means this gate is immune to the trigger's write lag entirely, never
+    // mind a not-yet-backfilled doc. A hidden tutor could therefore be
     // accepted and STILL be unreachable: "View contact details" would land on
     // a search page without them, and "Book a session" would fall back to the
     // same query and error. Since enrollTutor writes searchable: false, that
     // would be the DEFAULT path for a new tutor. Blocking here keeps the
     // family's yes meaningful; the board stays browsable either way.
-    if (tutor.searchable !== true) {
+    if (!computeEffectiveSearchable(callerUser, tutor)) {
       throw new HttpsError(
         'failed-precondition',
         'Turn on your profile visibility before contacting families',

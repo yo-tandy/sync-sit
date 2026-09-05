@@ -1,14 +1,24 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { clearAll, callFunction, getIdToken, getDb } from '../../setup/emulator.js';
 import { seedTestData, type SeedData } from '../../setup/seed.js';
+import { computeEffectiveSearchable, type AccountStatus } from '@ejm/shared-core';
 
 // Minimal tutor user doc — status/searchable/enrollmentComplete are the
 // candidate-query axes we vary; the offering matches math/6e so exclusion can
 // only come from the gate under test. Written directly (no auth user needed:
 // candidate tutors never authenticate for search).
+//
+// `effectiveSearchable` is set explicitly here (via the REAL
+// computeEffectiveSearchable, issue #435 PR2) rather than left for
+// onUserWrittenRecomputeSearchable to backfill asynchronously: several tests
+// below `.set()` a temp tutor and call searchTutors (which now filters on
+// this field) in the very next line, and racing the trigger's async convergence
+// would make those tests flaky. The negative gate tests (enrollmentComplete
+// false / status not active) are unaffected either way — an absent or false
+// field excludes identically to a not-yet-converged one.
 function tutorDoc(overrides: {
   uid: string;
-  status: string;
+  status: AccountStatus;
   searchable: boolean;
   enrollmentComplete: boolean;
   /** Merged over the default tutor profile — coverage/prefs variations. */
@@ -25,6 +35,10 @@ function tutorDoc(overrides: {
       tutor: {
         enrollmentComplete: overrides.enrollmentComplete,
         searchable: overrides.searchable,
+        effectiveSearchable: computeEffectiveSearchable(
+          { status: overrides.status },
+          { searchable: overrides.searchable, enrollmentComplete: overrides.enrollmentComplete },
+        ),
         ejemEmail: `${overrides.uid}@ejm-test.org`,
         classLevel: 'L3',
         languages: ['French'],

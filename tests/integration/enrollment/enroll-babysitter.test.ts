@@ -52,6 +52,9 @@ describe('enrollBabysitter (unauthenticated create path)', () => {
       enrollmentComplete: false,
       ejemEmail: EMAIL,
       searchable: false,
+      // effectiveSearchable (issue #435 PR2): onUserWrittenRecomputeSearchable
+      // converges false immediately — enrollmentComplete is false at creation.
+      effectiveSearchable: false,
     });
 
     const sched = (await db.collection('schedules').doc(result.uid).get()).data()!;

@@ -262,6 +262,35 @@ describe('users collection — Plan D owner-update guards', () => {
     );
   });
 
+  // effectiveSearchable (issue #435 PR2) is written ONLY by the
+  // onUserWrittenRecomputeSearchable trigger (Admin SDK, bypasses rules
+  // entirely). A client that could set it directly would self-grant search
+  // visibility regardless of its real status/enrollmentComplete/searchable
+  // state -- searchBabysitters filters on this field alone.
+  it('babysitter may NOT set profiles.babysitter.effectiveSearchable from absent', async () => {
+    await seed('bsES1', { status: 'active', email: 'b@ejm.org', profiles: { babysitter: { ejemEmail: 'b@ejm.org', enrollmentComplete: true, searchable: false } } });
+    const authed = testEnv.authenticatedContext('bsES1');
+    await assertFails(
+      updateDoc(doc(authed.firestore(), 'users', 'bsES1'), { 'profiles.babysitter.effectiveSearchable': true })
+    );
+  });
+
+  it('babysitter may NOT change an existing profiles.babysitter.effectiveSearchable', async () => {
+    await seed('bsES2', { status: 'active', email: 'b@ejm.org', profiles: { babysitter: { ejemEmail: 'b@ejm.org', enrollmentComplete: true, searchable: false, effectiveSearchable: false } } });
+    const authed = testEnv.authenticatedContext('bsES2');
+    await assertFails(
+      updateDoc(doc(authed.firestore(), 'users', 'bsES2'), { 'profiles.babysitter.effectiveSearchable': true })
+    );
+  });
+
+  it('babysitter may still toggle searchable with effectiveSearchable present and untouched', async () => {
+    await seed('bsES3', { status: 'active', email: 'b@ejm.org', profiles: { babysitter: { ejemEmail: 'b@ejm.org', enrollmentComplete: true, searchable: false, effectiveSearchable: false } } });
+    const authed = testEnv.authenticatedContext('bsES3');
+    await assertSucceeds(
+      updateDoc(doc(authed.firestore(), 'users', 'bsES3'), { 'profiles.babysitter.searchable': true })
+    );
+  });
+
   it('parent may NOT inject a babysitter profile (role escalation)', async () => {
     await seed('par1', { status: 'active', email: 'p@x.com', profiles: { parent: { familyId: 'famP', enrollmentComplete: true } } });
     const authed = testEnv.authenticatedContext('par1');
@@ -452,6 +481,42 @@ describe('users collection — Plan D owner-update guards', () => {
     const authed = testEnv.authenticatedContext('tu8');
     await assertFails(
       updateDoc(doc(authed.firestore(), 'users', 'tu8'), { 'profiles.tutor.endorsementCount': 99 })
+    );
+  });
+
+  // effectiveSearchable (issue #435 PR2): mirrors the babysitter pin above --
+  // written ONLY by onUserWrittenRecomputeSearchable, and searchTutors filters
+  // on this field alone.
+  it('tutor may NOT set profiles.tutor.effectiveSearchable from absent', async () => {
+    await seed('tuES1', {
+      status: 'active', email: 't@ejm.org',
+      profiles: { tutor: { ejemEmail: 't@ejm.org', enrollmentComplete: true, searchable: false, subjects: ['math'] } },
+    });
+    const authed = testEnv.authenticatedContext('tuES1');
+    await assertFails(
+      updateDoc(doc(authed.firestore(), 'users', 'tuES1'), { 'profiles.tutor.effectiveSearchable': true })
+    );
+  });
+
+  it('tutor may NOT change an existing profiles.tutor.effectiveSearchable', async () => {
+    await seed('tuES2', {
+      status: 'active', email: 't@ejm.org',
+      profiles: { tutor: { ejemEmail: 't@ejm.org', enrollmentComplete: true, searchable: false, subjects: ['math'], effectiveSearchable: false } },
+    });
+    const authed = testEnv.authenticatedContext('tuES2');
+    await assertFails(
+      updateDoc(doc(authed.firestore(), 'users', 'tuES2'), { 'profiles.tutor.effectiveSearchable': true })
+    );
+  });
+
+  it('tutor may still toggle searchable with effectiveSearchable present and untouched', async () => {
+    await seed('tuES3', {
+      status: 'active', email: 't@ejm.org',
+      profiles: { tutor: { ejemEmail: 't@ejm.org', enrollmentComplete: true, searchable: false, subjects: ['math'], effectiveSearchable: false } },
+    });
+    const authed = testEnv.authenticatedContext('tuES3');
+    await assertSucceeds(
+      updateDoc(doc(authed.firestore(), 'users', 'tuES3'), { 'profiles.tutor.searchable': true })
     );
   });
 

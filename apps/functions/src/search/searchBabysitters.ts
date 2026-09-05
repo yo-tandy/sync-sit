@@ -79,13 +79,18 @@ export const searchBabysitters = onCall(
       }
     }
 
-    // 1. Get all searchable, active babysitters.
-    // Filters on the Plan D profiles.babysitter shape: a doc with
-    // profiles.babysitter.searchable == true necessarily has a babysitter
-    // profile, so this subsumes the old role == 'babysitter' predicate.
+    // 1. Get all effectively-searchable babysitters. `effectiveSearchable`
+    // (issue #435 PR2, computeEffectiveSearchable in @ejm/shared-core) is a
+    // server-maintained denormalization that already folds in
+    // `status === 'active'` + the `searchable` toggle + `enrollmentComplete`
+    // — a separate `.where('status', '==', 'active')` clause would be
+    // redundant (a doc can only carry `effectiveSearchable: true` if it was
+    // active when the write-trigger last computed it), so it's dropped here.
+    // A doc with profiles.babysitter.effectiveSearchable == true necessarily
+    // has a babysitter profile, so this subsumes the old role ==
+    // 'babysitter' predicate too, same as the field it replaces.
     const usersSnap = await db.collection('users')
-      .where('status', '==', 'active')
-      .where('profiles.babysitter.searchable', '==', true)
+      .where('profiles.babysitter.effectiveSearchable', '==', true)
       .get();
 
     console.log(`Found ${usersSnap.size} searchable babysitters`);

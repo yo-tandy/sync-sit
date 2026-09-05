@@ -48,6 +48,20 @@ export interface BabysitterProfile extends ProfileBase {
   searchable?: boolean;
 
   /**
+   * Server-owned, denormalized result of `computeEffectiveSearchable`
+   * (issue #435 PR2 — shared-core), folding in `status === 'active'`,
+   * `searchable`, and `enrollmentComplete`. Written ONLY by the
+   * `onUserWrittenRecomputeSearchable` Firestore trigger (apps/functions) —
+   * never by a client or a callable directly — whenever any of its three
+   * inputs changes. `searchBabysitters`/`lookupBabysitter` filter on THIS
+   * field instead of re-deriving the same boolean at every query. Absent on
+   * a doc the trigger/backfill has not yet touched — treated as not
+   * searchable (a missing field never equals `true` in a Firestore
+   * equality query), never as a fallback to the raw `searchable` toggle.
+   */
+  effectiveSearchable?: boolean;
+
+  /**
    * When this babysitter last visited the published-searches board (issue
    * #207). Owner-written from the client on section visit (deliberately not
    * rules-pinned — it only drives the owner's own "New" tagging/badge):

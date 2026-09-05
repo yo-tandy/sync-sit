@@ -193,6 +193,13 @@ describe('searchBabysitters age backstop', () => {
           enrollmentComplete: true,
           ejemEmail,
           searchable: true,
+          // Set explicitly (issue #435 PR2) rather than left for
+          // onUserWrittenRecomputeSearchable to backfill asynchronously:
+          // these tests `.set()` then immediately call searchBabysitters,
+          // which now filters on this field — every seeded sitter here is
+          // active/searchable/enrolled, so it's always true; the age
+          // backstop (not searchability) is what's under test.
+          effectiveSearchable: true,
           gender: 'female',
           classLevel: 'Seconde',
           languages: ['French'],
