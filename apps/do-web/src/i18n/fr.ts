@@ -687,6 +687,14 @@ export default {
     lastName: 'Nom *',
     dateOfBirth: 'Date de naissance *',
     ageError: 'Vous devez avoir au moins 15 ans',
+    // Non lu par le parcours actuel de do (les profils doer ne collectent
+    // ni classLevel ni gender) -- ajouté pour que GENDER_OPTIONS
+    // (@ejm/shared-core, jalon #435) se résolve correctement si une étape
+    // d'inscription partagée qui l'utilise est un jour montée ici aussi.
+    genderFemale: 'Féminin',
+    genderMale: 'Masculin',
+    genderOther: 'Autre',
+    genderPreferNot: 'Préfère ne pas dire',
     welcomeTitle1: 'Bienvenue sur Sync/Do !',
     welcomeTitle2: 'Commençons par vos informations de base',
     welcomeSubtitle: 'Votre nom et votre date de naissance ne pourront plus être modifiés',
@@ -718,6 +726,59 @@ export default {
       readyAddProfileCta: 'Réessayer',
       readyRetryMiss: 'Chargement en cours — patientez un instant puis réessayez.',
     },
+  },
+
+  // Jalon de l'issue #435, PR3 : la nouvelle page d'accueil inter-app
+  // (UnifiedLandingPage) et les étapes partagées StepBasicInfo/
+  // StepContactInfo/StepAdditionalInfo du futur parcours d'inscription
+  // unifié (le PR4 branchera les routes réelles). Espace de noms séparé de
+  // `enrollment` ci-dessus : plusieurs clés divergent volontairement de la
+  // copie par app de cette section (ex. le genre est obligatoire ici ; la
+  // collecte des coordonnées dès l'inscription est nouvelle pour sit comme
+  // pour study). Ajouté à l'identique dans les trois fichiers i18n des
+  // apps -- les composants de shared-ui appellent `t()` sur ce que l'app
+  // hôte a chargé. Non branché dans le parcours propre de do sur ce jalon
+  // (do reste purement décoratif sur la page d'accueil), mais chaque clé
+  // doit exister pour que les composants s'affichent correctement s'ils
+  // sont un jour montés ici aussi.
+  unifiedEnrollment: {
+    landingTitle: 'Rejoignez la communauté Sync',
+    landingSubtitle: 'Un seul compte pour le babysitting, le soutien scolaire, et plus encore — pour toute la communauté EJM.',
+    comingSoon: 'Bientôt disponible',
+    basicInfoTitle: 'Commençons par les bases',
+    basicInfoSubtitle: 'Votre nom, votre date de naissance et votre classe ne pourront plus être modifiés ensuite.',
+    firstName: 'Prénom *',
+    lastName: 'Nom *',
+    dateOfBirth: 'Date de naissance *',
+    ageError: 'Vous devez avoir entre 15 et 18 ans',
+    ageUnder15: 'Vous devez avoir au moins 15 ans pour vous inscrire seul(e). Vos parents peuvent créer un compte et vous inscrire depuis le leur.',
+    ageMismatch: "Votre date de naissance ne correspond pas à votre niveau scolaire. Merci de contacter l'administrateur EJM.",
+    classLabel: 'Classe *',
+    selectClass: 'Choisir la classe',
+    gender: 'Genre *',
+    contactInfoTitle: 'Comment les familles peuvent-elles vous contacter ?',
+    contactInfoSubtitle: 'Indiquez au moins un moyen de contact — email ou téléphone.',
+    contactEmail: 'Email de contact',
+    contactEmailInvalid: 'Saisissez une adresse email complète (ex. nom@exemple.com).',
+    autofillEjmEmail: 'Utiliser mon email EJM ({{email}})',
+    contactPhone: 'Téléphone de contact',
+    contactRequired: 'Indiquez au moins un moyen de contact (email ou téléphone).',
+    whatsappLabel: 'WhatsApp',
+    whatsappSameAsPhone: 'Identique à mon numéro de téléphone',
+    contactVisibilityConsent: "J'ai conscience que les familles qui souhaitent me contacter auront accès à ces coordonnées une fois que je serai visible dans les recherches.",
+    contactVisibilityWarning: "Sans cela, vous n'apparaîtrez pas dans les recherches tant que la visibilité de vos coordonnées ne sera pas activée plus tard, depuis les paramètres de votre compte.",
+    additionalInfoTitle: 'Quelques informations optionnelles',
+    additionalInfoSubtitle: 'Tout ceci est optionnel — vous pouvez le remplir maintenant, ou plus tard.',
+    bioLabel: 'À propos de moi (optionnel)',
+    bioPlaceholder: 'Parlez un peu de vous aux familles...',
+    photoLabel: 'Photo de profil (optionnel)',
+    photoChoose: 'Choisir une photo',
+    photoRemove: 'Supprimer',
+    photoHint: 'Optionnel · Max 5 Mo',
+    photoTypeError: 'Merci de choisir une image JPEG, PNG, WebP ou HEIC.',
+    photoSizeError: 'La photo doit faire moins de 5 Mo.',
+    addressLabel: 'Adresse (optionnel)',
+    addressHint: "Cela permet d'optimiser vos résultats de recherche — les familles voient à quelle distance vous vous trouvez.",
   },
 
   validation: {
