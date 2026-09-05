@@ -1,6 +1,15 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
+    // CURRENTLY UNUSED — callerData() and canWriteFamilyDocs() below have no
+    // caller while the issue #153 membership check is lifted (see the
+    // verification-documents block). Kept, not deleted: this cross-service
+    // lookup is the thing that breaks in production, and keeping the helpers
+    // makes restoring the check a one-line change once the signed-URL callable
+    // lands. Do NOT wire either back into a rule without first confirming
+    // cross-service calls actually work in prod — an emulator pass does not
+    // prove that (the emulator serves these lookups unconditionally).
+
     // Helper: the requester's user document (cross-service Firestore lookup).
     // Mirrors firestore.rules callerData(); .get(key, default) avoids errors
     // when a field is absent (e.g. admin docs have no `profiles`). If the doc
@@ -49,22 +58,53 @@ service firebase.storage {
                  .matches('(?s)(text/html|text/xml|application/xml|.*\\+xml).*');
     }
 
-    // Verification documents — writes only by members of the owning family or
-    // admins (issue #153). profiles.parent.familyId is server-controlled
-    // (enrollFamily; firestore.rules blocks client edits), so matching it here
-    // cannot be spoofed from a client. Size is capped at the 10MB both web
-    // clients already enforce. Content type: narrow denylist only — see
-    // isRenderableDocType above (defense-in-depth behind the read side's
-    // responseDisposition: 'attachment', issue #281).
+    // Verification documents — size- and type-bounded writes by any signed-in
+    // caller. Size is capped at the 10MB both web clients already enforce.
+    // Content type: narrow denylist only — see isRenderableDocType above
+    // (defense-in-depth behind the read side's responseDisposition:
+    // 'attachment', issue #281).
     // Deletes fall through to the implicit deny below — no client deletes
     // these; server-side cleanup uses the Admin SDK, which bypasses rules.
     // Reads go through getVerificationDocument cloud function (checks family ownership)
+    //
+    // TEMPORARY — the issue #153 family-membership check is REMOVED here.
+    //
+    // It read `canWriteFamilyDocs(callerData(), familyId)`, where callerData()
+    // is a cross-service `firestore.get()` into users/{uid}. That call fails in
+    // PRODUCTION and, because rules fail closed on an errored call, it denied
+    // EVERY parent's upload with a 403 — not just some.
+    //
+    // Timeline: the check lived in this file for a while but only reached prod
+    // in the 2026-08-28 storage-rules deploy (the first since 2026-07-07 —
+    // ruleset 07885e12, the first deployed storage ruleset containing
+    // firestore.get). Last successful upload: 2026-08-23. Every attempt after
+    // 2026-08-28 fails.
+    //
+    // Ruled out: rules drift (deployed ruleset == git, byte-for-byte), user
+    // data (all 40 prod parents have a valid profiles.parent.familyId matching
+    // their family's parentIds), the caller's token, file size, contentType,
+    // App Check (not configured), Firestore database id ((default)), and
+    // bucket/Firestore region (both europe-west1). Granting the Rules service
+    // agent roles/firebaserules.firestoreServiceAgent and re-releasing the
+    // rules did NOT fix it. Discriminating test: profile-photos writes (no
+    // cross-service call) succeed from the same session that 403s here.
+    //
+    // This restores the exact rule that shipped 2026-04-02 → 2026-08-28.
+    // Residual risk: an authenticated caller who knows a familyId can WRITE
+    // into that family's verification folder. Reads stay denied here (admin/
+    // owner only, via the getVerificationDocument callable), so this is an
+    // integrity risk (planting a document for admin review), not a disclosure
+    // one.
+    //
+    // The real fix, tracked in the follow-up issue: move the membership check
+    // server-side into a signed-upload-URL callable (the getVerificationDocument
+    // pattern in reverse), then set this back to `allow write: if false` —
+    // signed URLs bypass rules, so no cross-service call is needed at all.
     match /verification-documents/{familyId}/{allPaths=**} {
       allow read: if false;
       allow create, update: if request.auth != null
                    && request.resource.size <= 10 * 1024 * 1024
-                   && !isRenderableDocType(request.resource.contentType)
-                   && canWriteFamilyDocs(callerData(), familyId);
+                   && !isRenderableDocType(request.resource.contentType);
     }
 
     // Profile photos — only the owner can write their own photo
