@@ -80,13 +80,21 @@ function computeRootPatch(data) {
   const patch = {};
   const conflicts = [];
   for (const field of STUDENT_FIELDS) {
-    // Only lift when the root key is ABSENT. classLevel/gender are not
-    // set-once/clearable like the shared-identity contact trio, but the same
-    // "root presence wins" rule still applies here: a doc that already has a
-    // root value (however it got there — the callables, a prior backfill
-    // run, or an owner edit) must never be overwritten by a stale nested
-    // copy.
-    if (data?.[field] !== undefined) continue;
+    // Only lift when the root holds NO VALUE THE READERS CAN SEE. A doc that
+    // already has a real root value (however it got there — the callables, a
+    // prior backfill run, or an owner edit) must never be overwritten by a
+    // stale nested copy.
+    //
+    // The test is nestedValue(), not `!== undefined`: root `null` is a shape
+    // this codebase actively writes. sit's StepProfile.tsx saves
+    // `gender: gender || null` at the root whenever the question is left
+    // blank. Under `!== undefined` those docs were skipped forever while
+    // getGender/getClassLevel — which run the value through nonEmpty() and so
+    // see null as NO value — kept resolving them through the nested fallback.
+    // The doc never became canonical, and the backfill's notion of "has a
+    // value" disagreed with the readers', which is exactly what this script's
+    // header promises never happens.
+    if (nestedValue(data?.[field]) !== undefined) continue;
     const bsVal = nestedValue(babysitter[field]);
     const tuVal = nestedValue(tutor[field]);
     if (bsVal !== undefined && tuVal !== undefined && bsVal !== tuVal) {
