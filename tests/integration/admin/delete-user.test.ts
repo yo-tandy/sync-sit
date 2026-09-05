@@ -792,6 +792,15 @@ describe('deleteUser', () => {
       // Before #408 the appointment was cancelled and the claim was left
       // behind: the sitter's slot stayed blocked forever.
       expect(await overrideExists(seed.babysitter1.uid, date)).toBe(false);
+
+      // A claim genuinely WAS released here (unlike the pending-only case in
+      // the counterparty describe block below), so the notification is
+      // correct to say so — issue #420's review.
+      const notice = (
+        await db.collection('notifications').where('type', '==', 'account_deleted').get()
+      ).docs[0].data();
+      expect(notice.recipientUserId).toBe(seed.babysitter1.uid);
+      expect(notice.body).toContain('reopened');
     });
 
     it('records the study counts in the audit log', async () => {
@@ -814,6 +823,227 @@ describe('deleteUser', () => {
       expect(details.anonymizedStudySessions).toBe(1);
       expect(details.cancelledStudySessions).toBe(1);
       expect(details.erasureFailures).toBe(0);
+    });
+  });
+
+  /**
+   * Issue #420 — erasing a member cancels the counterparty's engagements and,
+   * until this, never told them. The fan-out lives in `eraseUserAccount`
+   * itself (both callables share it; `delete-my-account.test.ts` pins the
+   * self-serve path gets it for free) and sends ONE notification per distinct
+   * counterparty per world: `account_deleted` for cancelled sit appointments,
+   * `study_account_deleted` for cancelled study sessions.
+   */
+  describe('counterparty notification (issue #420)', () => {
+    /** A 'YYYY-MM-DD' `n` days from now. */
+    function dateIn(n: number): string {
+      return new Date(Date.now() + n * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    }
+
+    async function notices(type: string): Promise<FirebaseFirestore.QueryDocumentSnapshot[]> {
+      return (await getDb().collection('notifications').where('type', '==', type).get()).docs;
+    }
+
+    it('deleting a babysitter notifies every parent of each affected family, ONE aggregated message each', async () => {
+      // Two live appointments with family1 (two parents), one with family2
+      // (sole parent), one long-rejected with family1 that must count for
+      // nobody — only CANCELLED engagements produce a message.
+      await seedAppointment({
+        babysitterUserId: seed.babysitter1.uid,
+        familyId: seed.family1Id,
+        createdByUserId: seed.parent1.uid,
+        status: 'pending',
+      });
+      await seedAppointment({
+        babysitterUserId: seed.babysitter1.uid,
+        familyId: seed.family1Id,
+        createdByUserId: seed.parent2.uid,
+        status: 'confirmed',
+      });
+      await seedAppointment({
+        babysitterUserId: seed.babysitter1.uid,
+        familyId: seed.family2Id,
+        createdByUserId: seed.parent3.uid,
+        status: 'confirmed',
+      });
+      await seedAppointment({
+        babysitterUserId: seed.babysitter1.uid,
+        familyId: seed.family1Id,
+        createdByUserId: seed.parent1.uid,
+        status: 'rejected',
+      });
+
+      await callFunction('deleteUser', { targetUserId: seed.babysitter1.uid }, adminToken);
+
+      const docs = await notices('account_deleted');
+      const byRecipient = new Map(docs.map((d) => [d.data().recipientUserId, d.data()]));
+      // Every parent of both affected families — and nobody twice.
+      expect([...byRecipient.keys()].sort()).toEqual(
+        [seed.parent1.uid, seed.parent2.uid, seed.parent3.uid].sort(),
+      );
+      expect(docs).toHaveLength(3);
+
+      // family1's parents each get ONE message saying two; family2's says one.
+      expect(byRecipient.get(seed.parent1.uid)!.data).toEqual({ cancelledCount: '2' });
+      expect(byRecipient.get(seed.parent2.uid)!.data).toEqual({ cancelledCount: '2' });
+      expect(byRecipient.get(seed.parent3.uid)!.data).toEqual({ cancelledCount: '1' });
+
+      // The human copy names the erased sitter; the payload above stays
+      // count-only (the structured-payload rule).
+      for (const doc of byRecipient.values()) {
+        expect(doc.body).toContain('Lea Bernard');
+        expect(doc.title).toBe("Your babysitter's account was deleted");
+        expect(doc.channels).toEqual(['email', 'push']);
+        // Emulator mail transport delivers; the seed has no FCM tokens.
+        expect(doc.emailSent).toBe(true);
+        expect(doc.pushSent).toBe(false);
+      }
+
+      // The audit entry carries the fan-out's two counts.
+      const logs = await getDb()
+        .collection('auditLogs')
+        .where('action', '==', 'delete_user')
+        .where('targetUserId', '==', seed.babysitter1.uid)
+        .get();
+      const details = logs.docs[0].data().details;
+      expect(details.counterpartiesFound).toBe(3);
+      expect(details.counterpartiesReached).toBe(3);
+      expect(details.counterpartyNotifyFailed).toBe(false);
+    });
+
+    it('deleting the SOLE parent notifies the surviving babysitter AND the surviving tutor, each in their own world', async () => {
+      const studyDate = dateIn(12);
+      await seedAppointment({
+        babysitterUserId: seed.babysitter1.uid,
+        familyId: seed.family2Id,
+        createdByUserId: seed.parent3.uid,
+        status: 'pending', // pending too, not just confirmed — no claim, still a counterparty
+      });
+      // An open weekly grid for the claim-release transaction to restore
+      // into (the `seedOpenSchedule` helper above is scoped to the OTHER
+      // describe block; inlined here rather than exported for one caller).
+      const openWeekly: Record<string, boolean[]> = {};
+      for (const key of ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']) {
+        openWeekly[key] = new Array(96).fill(true);
+      }
+      await getDb()
+        .collection('schedules')
+        .doc(seed.tutor2.uid)
+        .set({ userId: seed.tutor2.uid, weekly: openWeekly }, { merge: true });
+      const sessionId = await seedStudySession({
+        familyId: seed.family2Id,
+        tutorUserId: seed.tutor2.uid,
+        createdByUserId: seed.parent3.uid,
+        parentUserId: seed.parent3.uid,
+        familyName: 'Martin',
+        parentName: 'Sophie Martin',
+        status: 'confirmed',
+        date: studyDate,
+      });
+      // Confirmed AND genuinely claimed (unlike the pending sit appointment
+      // above), so the tutor's notification below IS entitled to say a slot
+      // came back — issue #420 review.
+      await seedOverrideClaim(
+        seed.tutor2.uid,
+        studyDate,
+        { sessionId },
+        { appSource: 'study', reason: 'study_session' },
+      );
+
+      await callFunction('deleteUser', { targetUserId: seed.parent3.uid }, adminToken);
+
+      const sitDocs = await notices('account_deleted');
+      expect(sitDocs).toHaveLength(1);
+      const sitDoc = sitDocs[0].data();
+      expect(sitDoc.recipientUserId).toBe(seed.babysitter1.uid);
+      expect(sitDoc.title).toBe("A family's account was deleted");
+      expect(sitDoc.body).toContain("Sophie Martin's family");
+      // The sit appointment was only PENDING — it never claimed a schedule
+      // slot (blockSchedule is opt-in even at confirm), so nothing was ever
+      // reopened and the copy must not claim otherwise (issue #420 review).
+      expect(sitDoc.body).not.toContain('reopened');
+      expect(sitDoc.data).toEqual({ cancelledCount: '1' });
+
+      const studyDocs = await notices('study_account_deleted');
+      expect(studyDocs).toHaveLength(1);
+      const studyDoc = studyDocs[0].data();
+      expect(studyDoc.recipientUserId).toBe(seed.tutor2.uid);
+      expect(studyDoc.body).toContain('tutoring session');
+      // The study session WAS confirmed AND genuinely claimed
+      // (seedOverrideClaim above), unlike the pending sit appointment, so
+      // this one really was reopened — issue #420 review.
+      expect(studyDoc.body).toContain('reopened');
+      expect(studyDoc.data).toEqual({ cancelledCount: '1' });
+
+      const logs = await getDb()
+        .collection('auditLogs')
+        .where('action', '==', 'delete_user')
+        .where('targetUserId', '==', seed.parent3.uid)
+        .get();
+      expect(logs.docs[0].data().details.counterpartiesFound).toBe(2);
+      expect(logs.docs[0].data().details.counterpartiesReached).toBe(2);
+    });
+
+    it("deleting a tutor notifies the family's parents with the STUDY type", async () => {
+      await seedStudySession({
+        familyId: seed.family1Id,
+        tutorUserId: seed.tutor1.uid,
+        createdByUserId: seed.parent1.uid,
+        parentUserId: seed.parent1.uid,
+        status: 'confirmed',
+        date: dateIn(9),
+      });
+
+      await callFunction('deleteUser', { targetUserId: seed.tutor1.uid }, adminToken);
+
+      const docs = await notices('study_account_deleted');
+      expect(docs.map((d) => d.data().recipientUserId).sort()).toEqual(
+        [seed.parent1.uid, seed.parent2.uid].sort(),
+      );
+      for (const d of docs) {
+        expect(d.data().title).toBe("Your tutor's account was deleted");
+        expect(d.data().body).toContain('Noa Katz');
+      }
+      // No sit-world message: nothing sit-side was cancelled.
+      expect(await notices('account_deleted')).toHaveLength(0);
+    });
+
+    it('deleting a CO-parent notifies nobody — the family survives and nothing was cancelled', async () => {
+      // A live appointment and a live session, both kept by the surviving
+      // co-parent's family; a rejected appointment that was never live.
+      await seedAppointment({
+        babysitterUserId: seed.babysitter1.uid,
+        familyId: seed.family1Id,
+        createdByUserId: seed.parent2.uid,
+        status: 'confirmed',
+      });
+      await seedAppointment({
+        babysitterUserId: seed.babysitter2.uid,
+        familyId: seed.family1Id,
+        createdByUserId: seed.parent2.uid,
+        status: 'rejected',
+      });
+      await seedStudySession({
+        familyId: seed.family1Id,
+        tutorUserId: seed.tutor2.uid,
+        createdByUserId: seed.parent2.uid,
+        parentUserId: seed.parent2.uid,
+        status: 'confirmed',
+        date: dateIn(6),
+      });
+
+      await callFunction('deleteUser', { targetUserId: seed.parent2.uid }, adminToken);
+
+      expect(await notices('account_deleted')).toHaveLength(0);
+      expect(await notices('study_account_deleted')).toHaveLength(0);
+
+      const logs = await getDb()
+        .collection('auditLogs')
+        .where('action', '==', 'delete_user')
+        .where('targetUserId', '==', seed.parent2.uid)
+        .get();
+      expect(logs.docs[0].data().details.counterpartiesFound).toBe(0);
+      expect(logs.docs[0].data().details.counterpartiesReached).toBe(0);
     });
   });
 

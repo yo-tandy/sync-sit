@@ -644,28 +644,33 @@ BABYSITTER (Marie)               SYSTEM                     PARENTS (affected)
                                  12. If she was supervised, every
                                      guardian is told (email +
                                      push + in-app)
-                                                             13. NOT NOTIFIED TODAY.
-                                                                 A family whose
-                                                                 appointment was
-                                                                 cancelled gets no
-                                                                 message — see the
-                                                                 gap note below.
+                                                             13. Every parent of each
+                                                                 affected family is told
+                                                                 (email + push + in-app
+                                                                 row, 'account_deleted'):
+                                                                 "Your babysitter's
+                                                                 account was deleted" —
+                                                                 ONE message per person
+                                                                 however many
+                                                                 appointments were
+                                                                 cancelled
 
 RESULT: Marie's data gone. Appointment records show "deleted user."
         Marie can re-enroll with a new account using same EJM email.
 ```
 
-> **Known gap — affected families are not notified.** Steps 9/13 of this flow
-> used to promise an email + push fan-out to every counterparty of a cancelled
-> appointment ("Babysitter cancelled — their account was deleted"). No such
-> fan-out has ever been written: `eraseUserAccount` sets the appointment to
-> cancelled and stops. The `account_deleted` NotificationType exists in
-> `packages/shared-core/src/types/notification.ts` with no writer anywhere.
-> Inherited from the admin delete path, where a human could warn people; now
-> that self-delete is a row in the account hub in front of every member, it is
-> routine rather than theoretical. Tracked separately as issue #420 rather than
-> folded into #368 — the fix belongs in `eraseUserAccount`, which both
-> callables share.
+> **Counterparty notification (issue #420, closing the gap PR #409 recorded).**
+> Step 13 is real now: `eraseUserAccount` fans out to the surviving side of
+> every engagement it force-cancelled, in BOTH worlds — the family's parents
+> when their babysitter/tutor was erased (`account_deleted` for sit
+> appointments, `study_account_deleted` for study sessions), and the surviving
+> provider when a family's last parent was (Flow I-b's steps 5/9/10). One
+> notification per distinct recipient per world, email + push + in-app,
+> best-effort AFTER the erasure commits; the audit entry records
+> `counterpartiesFound`/`counterpartiesReached` (the guardiansFound/Reached
+> convention — `found > reached` is the entry to investigate). Because the
+> fan-out lives in `eraseUserAccount`, the admin path and the self-serve path
+> cannot drift apart on who gets told.
 >
 > **Also not a strip-and-keep.** Earlier revisions of this flow described
 > removing PI while retaining the user ID and links "for data integrity". The

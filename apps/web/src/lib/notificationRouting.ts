@@ -42,6 +42,13 @@ const SIT_TYPES = [
   'published_search_contact',
   'published_search_accepted',
   'published_search_declined',
+  // The counterparty fan-out of a member erasure (issue #420): written by
+  // `eraseUserAccount` to each parent of a family whose babysitter was
+  // erased, and to each babysitter whose family (last parent) was. Routed
+  // with the appointment lifecycle types below: the cancelled rows are still
+  // listed on those pages, which is where "your appointments were cancelled"
+  // can actually be verified.
+  'account_deleted',
 ] as const;
 
 /** Guardian/governance types — listed in BOTH apps (scope decision on #127). */
@@ -83,6 +90,7 @@ const APPOINTMENT_TYPES = new Set([
   'published_search_contact',
   'published_search_accepted',
   'published_search_declined',
+  'account_deleted',
 ]);
 
 /**
