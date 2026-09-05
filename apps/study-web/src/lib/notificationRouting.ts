@@ -39,6 +39,12 @@ const STUDY_TYPES = [
   'tutor_endorsement_received',
   'tutor_endorsement_declined',
   'tutor_endorsement_published',
+  // The study half of issue #420's erasure counterparty fan-out: written by
+  // `eraseUserAccount` to each parent of a family whose tutor was erased,
+  // and to each tutor whose family (last parent) was. Routed with the
+  // session lifecycle types below — the cancelled sessions are still listed
+  // there.
+  'study_account_deleted',
 ] as const;
 
 /** Guardian/governance types — listed in BOTH apps (scope decision on #127). */
@@ -73,6 +79,7 @@ const SESSION_TYPES = new Set([
   'study_session_cancelled',
   'study_session_reminder',
   'study_session_modified',
+  'study_account_deleted',
 ]);
 
 /**

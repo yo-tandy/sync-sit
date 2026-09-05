@@ -33,6 +33,7 @@
     "backfill:369-app-scoped-notifprefs": "node scripts/backfill-369-app-scoped-notifprefs.cjs",
     "backfill:family-postcode": "node scripts/backfill-family-postcode.cjs",
     "backfill:shared-identity": "node scripts/backfill-shared-identity.cjs",
+    "backfill:435-student-attributes": "node scripts/backfill-435-student-attributes.cjs",
     "backfill:435-effective-searchable": "node scripts/backfill-435-effective-searchable.cjs",
     "emulators": "firebase emulators:start --only auth,functions,firestore,storage --project demo-test",
     "deploy": "firebase deploy",

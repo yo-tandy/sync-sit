@@ -234,6 +234,59 @@ describe('AppSwitchBar', () => {
     expect(screen.getByRole('button', { name: /sync\/study/ })).toBeDisabled();
   });
 
+  describe('height contract (#419) — jsdom applies no CSS, so the classes ARE the contract', () => {
+    it('sizes the tab row with the shared token instead of letting content size it', () => {
+      // h-app-switch-row reads --spacing-app-switch-row (base.css). With the
+      // nav padding only the safe-area inset under it, the bar's total height
+      // is exactly --spacing-app-switch-bar — the token every shell reserves
+      // via pb-app-switch-bar. Replace this class with a content-sized row
+      // and the bar's height stops being anything a shell can match.
+      renderBar();
+      const row = screen.getByRole('button', { name: /sync\/sit/ }).closest('ul')!;
+      expect(row.className).toMatch(/(?<![\w-])h-app-switch-row(?![\w-])/);
+    });
+
+    it('pads the nav by the safe-area inset only — the row token covers the rest', () => {
+      renderBar();
+      const nav = screen.getByRole('navigation', { name: /switch app/i });
+      expect(nav.className).toContain('pb-[env(safe-area-inset-bottom)]');
+      // The bar must not ALSO carry a fixed height: height = row + inset is
+      // composed from the two pieces, not declared twice.
+      expect(nav.className).not.toMatch(/(?<![\w-])h-app-switch-bar(?![\w-])/);
+    });
+
+    it('stretches every tab button to the row height — items-stretch only reaches the <li>', () => {
+      // items-stretch (on the <ul>) stretches each <li> flex item to the row's
+      // height, but a <button> is a plain in-flow child of its <li>, not a
+      // flex item itself — stretch does not cascade into it. Without h-full
+      // here the button stays content-sized (~58-61px) inside the taller
+      // row, so justify-center centers within a box shorter than the row and
+      // the bottom of the tab becomes dead, non-clickable space.
+      renderBar();
+      expect(screen.getByRole('button', { name: /sync\/sit/ }).className).toMatch(
+        /(?<![\w-])h-full(?![\w-])/,
+      );
+      expect(screen.getByRole('button', { name: /my account/i }).className).toMatch(
+        /(?<![\w-])h-full(?![\w-])/,
+      );
+    });
+
+    it('the failure alert OVERLAYS above the bar instead of growing it', async () => {
+      // In-flow, the alert made the bar ~24px taller than any shell's
+      // reserved padding, covering content on every phone — the second half
+      // of #419. absolute + bottom-full floats it over page content just
+      // above the nav, so the bar's height stays the constant the token
+      // promises; bg + border because it now sits over the page, not chrome.
+      renderBar({ mintHandoffCode: vi.fn().mockRejectedValue(new Error('boom')) });
+      fireEvent.click(screen.getByRole('button', { name: /sync\/study/ }));
+
+      const alert = await screen.findByRole('alert');
+      expect(alert.className).toMatch(/(?<![\w-])absolute(?![\w-])/);
+      expect(alert.className).toMatch(/(?<![\w-])bottom-full(?![\w-])/);
+      expect(alert.className).toMatch(/(?<![\w-])bg-white(?![\w-])/);
+    });
+  });
+
   it('draws its focus ring INSIDE the tabs — they sit flush against the viewport edges', () => {
     // jsdom applies no CSS, so the class IS the contract here. The shared
     // WCAG 2.4.7 ring (base.css) offsets 2px outward plus a 2px white

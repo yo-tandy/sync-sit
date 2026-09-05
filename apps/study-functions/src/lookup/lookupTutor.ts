@@ -180,7 +180,9 @@ export const lookupTutor = onCall(
       photoUrl: tutorUser.photoUrl,
       languages: tutor.languages || [],
       aboutMe: tutor.aboutMe,
-      classLevel: tutor.classLevel,
+      // classLevel is optional now (issue #435 milestone, PR1) — default like
+      // lastName above; the DTO's classLevel stays a required string.
+      classLevel: tutor.classLevel || '',
       subjects: tutor.subjects || [],
       sessionLengthsMin: tutor.sessionLengthsMin || [],
       locationPrefs: projectedPrefs,

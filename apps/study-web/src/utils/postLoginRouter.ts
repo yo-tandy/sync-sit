@@ -1,4 +1,4 @@
-import { isBabysitter, hasAnyContact, getEjemEmail } from '@ejm/shared-core';
+import { isBabysitter, hasAnyContact, getEjemEmail, getClassLevel } from '@ejm/shared-core';
 import type { StudyUser } from '@ejm/study-core';
 
 function babysitterProfileOf(
@@ -48,11 +48,16 @@ export function crossAppTutorGaps(userDoc: StudyUser | null | undefined): CrossA
     firstName: !doc.firstName,
     lastName: !doc.lastName,
     dateOfBirth: !doc.dateOfBirth,
-    classLevel: !bs.classLevel,
-    // Sit's profile step saves `gender || null`: null means the question was
-    // ANSWERED with "no answer" — only a truly absent field (the step never
-    // ran) is asked again.
-    gender: bs.gender === undefined,
+    // Root ?? babysitter ?? tutor (issue #435 milestone, PR1): classLevel is
+    // canonical at root now, so a caller already promoted (fresh sit
+    // enrollment, or a prior crossApp/backfill lazy-promotion) has NOTHING
+    // missing here even before this tutor profile exists.
+    classLevel: !getClassLevel(userDoc as never),
+    // Sit's profile step saves `gender || null` (at root now, same
+    // convention): null means the question was ANSWERED with "no answer" —
+    // only a truly absent field (the step never ran, at EITHER level) is
+    // asked again.
+    gender: doc.gender === undefined && bs.gender === undefined,
     // Root ?? nested resolution (shared identity): a root-only contact edit
     // counts, matching what the crossApp callable copies.
     contact: !hasAnyContact(userDoc as never),

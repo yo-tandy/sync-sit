@@ -1,13 +1,11 @@
 import { useState, useRef, useEffect } from 'react';
+import type { Address } from '@ejm/shared-core';
 
-export interface AddressResult {
-  fullAddress: string;
-  street: string;
-  city: string;
-  postcode: string;
-  lat: number;
-  lng: number;
-}
+// Re-exported under its historical name: shared-core owns the canonical
+// shape now (root `User.address`, issue #435 milestone PR1) since shared-ui
+// depends on shared-core, never the reverse. Every existing import of
+// `AddressResult` from `@ejm/shared-ui` keeps working unchanged.
+export type AddressResult = Address;
 
 interface AddressAutocompleteProps {
   value: AddressResult | null;

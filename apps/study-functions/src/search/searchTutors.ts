@@ -219,7 +219,9 @@ export const searchTutors = onCall(
         photoUrl: user.photoUrl,
         languages: tutor.languages || [],
         aboutMe: tutor.aboutMe,
-        classLevel: tutor.classLevel,
+        // classLevel is optional now (issue #435 milestone, PR1) — default
+        // like lastName above; the DTO's classLevel stays a required string.
+        classLevel: tutor.classLevel || '',
         subject: params.subject,
         level: params.level,
         rate: offering.rate,

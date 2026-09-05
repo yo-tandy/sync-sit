@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { validateEjmEmail, checkEnrollmentAge } from '@ejm/shared-core';
+import { validateEjmEmail, checkEnrollmentAge, LYCEE_CLASS_LEVELS, GENDER_OPTIONS } from '@ejm/shared-core';
 import { db } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { Button, Input, Select } from '@/components/ui';
@@ -48,13 +48,6 @@ function ageGateErrorKey(dateOfBirth: string, age: number | null, email: string)
   return age >= 15 && age < 19 ? null : 'enrollment.ageError';
 }
 
-const GENDER_OPTIONS = [
-  { value: 'female', labelKey: 'enrollment.genderFemale' },
-  { value: 'male', labelKey: 'enrollment.genderMale' },
-  { value: 'other', labelKey: 'enrollment.genderOther' },
-  { value: 'prefer_not_to_say', labelKey: 'enrollment.genderPreferNot' },
-];
-
 export function StepProfile({ uid, email, onNext }: StepProfileProps) {
   const { t } = useTranslation();
   const userDoc = useAuthStore((s) => s.userDoc);
@@ -96,8 +89,12 @@ export function StepProfile({ uid, email, onNext }: StepProfileProps) {
         ...(hasFirstName ? {} : { firstName }),
         ...(hasLastName ? {} : { lastName }),
         ...(hasDateOfBirth ? {} : { dateOfBirth }),
-        'profiles.babysitter.classLevel': classLevel,
-        'profiles.babysitter.gender': gender || null,
+        // Root fields now (issue #435 milestone, PR1) — previously
+        // 'profiles.babysitter.classLevel'/'.gender'. Not set-once (a
+        // student's class level changes yearly), so a plain top-level write
+        // is correct here, unlike firstName/lastName/dateOfBirth above.
+        classLevel,
+        gender: gender || null,
         updatedAt: serverTimestamp(),
       });
       onNext();
@@ -170,12 +167,7 @@ export function StepProfile({ uid, email, onNext }: StepProfileProps) {
             value={classLevel}
             onChange={(e) => setClassLevel(e.target.value)}
             placeholder={t('enrollment.selectClass')}
-            options={[
-              { value: 'Terminale', label: 'Terminale' },
-              { value: '1ère', label: '1ère' },
-              { value: '2nde', label: '2nde' },
-              { value: '3ème', label: '3ème' },
-            ]}
+            options={LYCEE_CLASS_LEVELS.map((level) => ({ value: level, label: level }))}
             required
           />
         </div>

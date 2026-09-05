@@ -22,6 +22,7 @@ describe('study notificationRouting', () => {
         'tutor_endorsement_received',
         'tutor_endorsement_declined',
         'tutor_endorsement_published',
+        'study_account_deleted',
         'supervision_request',
         'supervision_confirmed',
         'supervision_revoked',
@@ -57,6 +58,9 @@ describe('study notificationRouting', () => {
     // The tutor is the RECIPIENT of a modification (issue #234); the tap must
     // land where the Acknowledge control lives.
     ['study_session_modified', '/tutor/sessions'],
+    // Issue #420: the family whose sessions this tutor taught was erased; the
+    // cancelled sessions are listed on the sessions page.
+    ['study_account_deleted', '/tutor/sessions'],
     ['tutor_endorsement_received', '/tutor/endorsements'],
     ['supervision_request', '/tutor'],
     ['guardian_action', null],
@@ -81,6 +85,9 @@ describe('study notificationRouting', () => {
     // Parents never receive study_session_modified today (their own change
     // needs no echo), but the row must not dead-end if that ever changes.
     ['study_session_modified', '/family/sessions'],
+    // Issue #420: this family's tutor was erased; the cancelled sessions are
+    // listed on the sessions page.
+    ['study_account_deleted', '/family/sessions'],
     ['tutor_endorsement_declined', '/family/endorsements'],
     ['tutor_endorsement_published', '/family/endorsements'],
     ['supervision_confirmed', '/family/governance'],

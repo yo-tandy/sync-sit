@@ -1,4 +1,5 @@
 import type { User, ParentProfile } from './user.js';
+import type { Gender } from '../constants/index.js';
 
 // ---------------------------------------------------------------------------
 // User-document accessors (Plan D)
@@ -168,6 +169,42 @@ export function getContact(user: User | null | undefined): ContactFields {
 export function hasAnyContact(user: User | null | undefined): boolean {
   const contact = getContact(user);
   return !!(contact.contactEmail || contact.contactPhone || contact.whatsapp);
+}
+
+// ---------------------------------------------------------------------------
+// Student-identity accessors (issue #435 milestone, PR1)
+// ---------------------------------------------------------------------------
+//
+// classLevel and gender are canonical at the ROOT of users/{uid}, same
+// promotion as ejemEmail above; the nested profiles.{babysitter,tutor}
+// copies are back-compat duplicates the enrollment callables no longer write
+// for new accounts. EVERY read goes through these helpers (root ?? babysitter
+// ?? tutor) so un-backfilled and legacy docs keep resolving correctly
+// regardless of which app enrolled the user first.
+
+/** The user's class level (French lycée year): root ?? babysitter ?? tutor. */
+export function getClassLevel(user: User | null | undefined): string | undefined {
+  return (
+    nonEmpty(user?.classLevel)
+    ?? nonEmpty(profileField(user, 'babysitter', 'classLevel'))
+    ?? nonEmpty(profileField(user, 'tutor', 'classLevel'))
+  );
+}
+
+/**
+ * The user's gender: root ?? babysitter ?? tutor, same promotion as
+ * classLevel. Note this collapses "never asked" and "asked, answered with an
+ * empty/junk value" into the same undefined result — a caller that needs to
+ * tell those apart (e.g. the crossApp gap-filling UI deciding whether to
+ * re-ask the question) should read the raw field at whichever level it
+ * cares about, not this resolver.
+ */
+export function getGender(user: User | null | undefined): Gender | undefined {
+  return (
+    (nonEmpty(user?.gender) as Gender | undefined)
+    ?? (nonEmpty(profileField(user, 'babysitter', 'gender')) as Gender | undefined)
+    ?? (nonEmpty(profileField(user, 'tutor', 'gender')) as Gender | undefined)
+  );
 }
 
 /**

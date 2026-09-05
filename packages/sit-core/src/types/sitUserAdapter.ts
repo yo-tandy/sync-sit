@@ -1,5 +1,5 @@
 import type { User } from '@ejm/shared-core';
-import { getParentProfile, isAdmin } from '@ejm/shared-core';
+import { getParentProfile, isAdmin, getClassLevel, getGender } from '@ejm/shared-core';
 import type { BabysitterProfile } from './babysitterProfile.js';
 
 // User-doc accessors for sync-sit (Plan D). The babysitter profile lives at
@@ -29,7 +29,18 @@ export function getBabysitterView(
   const profile = getBabysitterProfile(user);
   if (!user || !profile) return null;
   const { ejemEmail: _ee, contactEmail: _ce, contactPhone: _cp, whatsapp: _wa, ...base } = user;
-  return { ...base, ...profile };
+  return {
+    ...base,
+    ...profile,
+    // classLevel/gender promoted to root (issue #435 milestone, PR1) —
+    // unlike ejemEmail/contact above, the view DOES resolve these root-first
+    // (getClassLevel/getGender: root ?? babysitter ?? tutor) so existing
+    // display call sites reading `view.classLevel`/`view.gender` keep working
+    // for un-backfilled and legacy docs without switching to the resolvers
+    // individually.
+    classLevel: getClassLevel(user),
+    gender: getGender(user),
+  };
 }
 
 /** The user's role within sync-sit, for routing and guards. */

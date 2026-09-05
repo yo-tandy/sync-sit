@@ -112,6 +112,33 @@
   --color-ground-admin: #f6f7f9;
   --shadow-card-tint-admin: rgb(226, 232, 240);
 
+  /* App-switch bar geometry (#419). The bar is FIXED to the bottom of every
+     authed phone screen, so each shell must reserve exactly its height as
+     bottom padding — and "exactly" is the whole problem: the bar used to end
+     with pb-[env(safe-area-inset-bottom)] while every shell reserved a fixed
+     pb-16, so on a home-indicator device the bar was ~34px taller than the
+     reservation and the last ~30px of every scrolled page sat underneath it.
+
+     ONE token pair, defined here and read from both sides, so the two can no
+     longer drift:
+
+     - --spacing-app-switch-row is the tab row's height. AppSwitchBar sets it
+       as the row's EXPLICIT height (h-app-switch-row) rather than letting
+       content size it, which is what makes the bar's height a constant the
+       shells can actually rely on — the failed-switch alert overlays above
+       the bar instead of growing it (see AppSwitchBar.tsx).
+     - --spacing-app-switch-bar is the full rendered height: the row plus the
+       device's bottom safe-area inset, which the bar pads under the row so
+       the tabs clear the home indicator. Shells reserve THIS via
+       pb-app-switch-bar md:pb-0 (the bar is md:hidden, so the reservation
+       lifts at the same breakpoint).
+
+     A future shell that mounts the bar reserves the token, not a number —
+     appSwitchBarHeight.test.ts (study-web's shared-ui suite) pins both sides
+     of the coupling. */
+  --spacing-app-switch-row: 4rem;
+  --spacing-app-switch-bar: calc(var(--spacing-app-switch-row) + env(safe-area-inset-bottom));
+
   /* Font — Nunito, imported above. It is IMPORTED as well as named: the
      previous token asked for 'Inter' and nothing ever loaded it, so all
      three apps have been rendering in system-ui while claiming otherwise

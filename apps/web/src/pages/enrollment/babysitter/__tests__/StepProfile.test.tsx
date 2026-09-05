@@ -159,11 +159,12 @@ describe('StepProfile with identity on file (issue #144, set-once identity)', ()
     expect(screen.queryByLabelText(i18n.t('enrollment.firstName'))).toBeNull();
     expect(screen.queryByLabelText(i18n.t('enrollment.lastName'))).toBeNull();
     expect(screen.queryByLabelText(i18n.t('enrollment.dateOfBirth'))).toBeNull();
-    // classLevel and gender are profile-scoped and still collected.
+    // classLevel and gender are root fields now (issue #435 milestone, PR1)
+    // and still collected on this step.
     expect(screen.getByLabelText(i18n.t('enrollment.classLabel'))).toBeInTheDocument();
   });
 
-  it('saves WITHOUT the identity keys and WITH the profile-scoped fields', async () => {
+  it('saves WITHOUT the identity keys and WITH classLevel/gender at ROOT (issue #435 milestone, PR1)', async () => {
     authState.userDoc = onFileDoc;
     const { onNext } = renderStep();
 
@@ -179,8 +180,10 @@ describe('StepProfile with identity on file (issue #144, set-once identity)', ()
     expect(Object.keys(payload)).not.toContain('firstName');
     expect(Object.keys(payload)).not.toContain('lastName');
     expect(Object.keys(payload)).not.toContain('dateOfBirth');
-    expect(payload['profiles.babysitter.classLevel']).toBe('2nde');
-    expect(payload).toHaveProperty('profiles.babysitter.gender');
+    // classLevel/gender are root fields now, not
+    // 'profiles.babysitter.classLevel'/'.gender' dot-paths.
+    expect(payload.classLevel).toBe('2nde');
+    expect(payload).toHaveProperty('gender');
   });
 
   it('PARTIAL identity renders only the missing inputs and writes only those fields', async () => {

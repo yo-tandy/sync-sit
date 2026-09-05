@@ -220,7 +220,10 @@ export const searchBabysitters = onCall(
         firstName: b.firstName,
         lastName: b.lastName || '',
         age: babysitterAge,
-        classLevel: b.classLevel,
+        // classLevel is optional now (issue #435 milestone, PR1: root-only
+        // for a caller with neither root nor nested value) — the DTO's
+        // classLevel stays a required string, so default like lastName above.
+        classLevel: b.classLevel || '',
         languages: b.languages || [],
         photoUrl: b.photoUrl || null,
         aboutMe: b.aboutMe || null,

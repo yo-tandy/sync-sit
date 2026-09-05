@@ -11,11 +11,21 @@ vi.mock('@/config/firebase', () => ({ functions: {} }));
 vi.mock('firebase/functions', () => ({
   httpsCallable: () => () => new Promise(() => {}),
 }));
+// AccountLayout only: the real store subscribes to Firebase at import, and
+// the hub reads just userDoc from it. null = a member with no sit role, so
+// the layout's homeHref falls back to '/'.
+vi.mock('@/stores/authStore', () => ({
+  useAuthStore: (sel: (s: { userDoc: null }) => unknown) => sel({ userDoc: null }),
+}));
+vi.mock('@/components/ui/AppSwitchMenuItem', () => ({
+  AppSwitchMenuItem: () => <div data-testid="switch-menu-item" />,
+}));
 
 import i18n from '@/i18n';
 import { FamilyLayout } from '../FamilyLayout';
 import { BabysitterLayout } from '../BabysitterLayout';
 import { AdminLayout } from '../AdminLayout';
+import { AccountLayout } from '../AccountLayout';
 
 function renderLayout(
   layout: React.ReactElement,
@@ -117,15 +127,22 @@ const SWITCH_BAR = { name: /switch app/i } as const;
 
 /**
  * The fixed bar and each shell's bottom padding are a MATCHED PAIR, and only
- * one half was pinned. Delete `pb-16` and every page still renders, every
- * mount test stays green, and the last row of each scrolled page sits under
- * the bar on a phone — the same "invisible by construction" shape the mount
- * assertions exist for. `md:pb-0` matters as much: the padding has to lift at
- * exactly the breakpoint the bar disappears at (PR #385 round 4).
+ * one half was pinned. Delete the reservation and every page still renders,
+ * every mount test stays green, and the last row of each scrolled page sits
+ * under the bar on a phone — the same "invisible by construction" shape the
+ * mount assertions exist for. `md:pb-0` matters as much: the padding has to
+ * lift at exactly the breakpoint the bar disappears at (PR #385 round 4).
+ *
+ * The reservation is the shared TOKEN, not a number (#419): `pb-16` was a
+ * fixed 64px against a bar whose height grows with the safe-area inset, so a
+ * home-indicator phone hid the bottom ~30px of every scrolled page.
+ * `pb-app-switch-bar` reads `--spacing-app-switch-bar` (base.css), the same
+ * value the bar itself is sized by — appSwitchBarHeight.test.ts (study-web's
+ * shared-ui suite) pins the token side of that coupling.
  */
 function shellReservesBarHeight(bar: HTMLElement) {
   const shellRoot = bar.parentElement!;
-  expect(shellRoot.className).toMatch(/\bpb-16\b/);
+  expect(shellRoot.className).toMatch(/(?<![\w-])pb-app-switch-bar(?![\w-])/);
   expect(shellRoot.className).toMatch(/\bmd:pb-0\b/);
 }
 
@@ -187,5 +204,29 @@ describe('the app-switch bar is mounted in sit’s shells (#365)', () => {
   it('AdminLayout renders NO bar — which is why the burger keeps admin’s switch row', () => {
     renderLayout(<AdminLayout />, 'admin page');
     expect(screen.queryByRole('navigation', SWITCH_BAR)).toBeNull();
+  });
+
+  it('AccountLayout — the SEVENTH mounting shell — reserves the token height too (#419)', () => {
+    // The account hub was missing from #419's own list of six, but it mounts
+    // the same fixed bar over the same scrolled content ("the bottom bar is
+    // how you leave", its docblock says) — the shell with NO bar is
+    // AdminLayout, above. Element-level pin, because the file-level coupling
+    // test (study-web's appSwitchBarHeight.test.ts) cannot see that the
+    // padding sits on the div that actually wraps the page.
+    renderLayout(<AccountLayout />, 'account hub', '/account', [
+      { path: '/', text: 'roleless home' },
+    ]);
+    // TWO landmarks share the switch label here: the md+ header exit row
+    // (#416) and the phone bar. The bar is the `fixed` one, and only ITS
+    // parent is the shell div that must reserve the height.
+    const bar = screen
+      .getAllByRole('navigation', SWITCH_BAR)
+      .find((n) => /\bfixed\b/.test(n.className));
+    expect(bar).toBeTruthy();
+    shellReservesBarHeight(bar!);
+    // userDoc is null under this file's store mock, so homeHref falls back
+    // to '/' — and #385's rule that the current-app tab actually navigates
+    // must hold for the hub as well.
+    currentAppTabNavigatesHome(bar!, /sync\/sit/, 'roleless home');
   });
 });

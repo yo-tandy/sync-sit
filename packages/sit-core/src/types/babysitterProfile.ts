@@ -7,7 +7,16 @@ import type { FirestoreTimestamp, LatLng, ProfileBase, ParentProfile, User, Area
 export interface BabysitterProfile extends ProfileBase {
   // Identity (EJM-side)
   ejemEmail: string;
-  classLevel: string;
+  /**
+   * Back-compat duplicate only (issue #435 milestone, PR1): canonical at
+   * root `User.classLevel` now. enrollBabysitter no longer writes this for
+   * new profiles — readers use getClassLevel (root ?? babysitter ?? tutor),
+   * never this field directly. Optional because a post-promotion profile
+   * genuinely lacks it; pre-existing docs keep their value until backfilled.
+   */
+  classLevel?: string;
+  /** Back-compat duplicate only (issue #435 milestone, PR1): canonical at
+   *  root `User.gender` now — see the classLevel note above. */
   gender?: 'male' | 'female' | 'other' | 'prefer_not_to_say';
   languages: string[];
   aboutMe?: string;

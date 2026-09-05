@@ -31,3 +31,32 @@ describe('BabysitterView narrowing (issue #203)', () => {
     expect(view.ejemEmail).toBeUndefined();
   });
 });
+
+// classLevel/gender (issue #435 milestone, PR1) are the OPPOSITE of the
+// quartet above: unlike ejemEmail/contact, the view DOES resolve these
+// root-first (getClassLevel/getGender), so existing display call sites
+// reading `view.classLevel`/`view.gender` keep working for un-backfilled and
+// legacy docs without switching to the resolvers individually.
+describe('BabysitterView classLevel/gender (issue #435 milestone, PR1)', () => {
+  it('resolves root over the nested profile copy', () => {
+    const user = {
+      uid: 'u1',
+      classLevel: 'Terminale',
+      gender: 'female',
+      profiles: { babysitter: { enrollmentComplete: true, classLevel: '2nde', gender: 'other' } },
+    } as unknown as User;
+    const view = getBabysitterView(user);
+    expect(view?.classLevel).toBe('Terminale');
+    expect(view?.gender).toBe('female');
+  });
+
+  it('falls back to the nested profile copy for a legacy, un-backfilled doc', () => {
+    const user = {
+      uid: 'u1',
+      profiles: { babysitter: { enrollmentComplete: true, classLevel: '3ème', gender: 'male' } },
+    } as unknown as User;
+    const view = getBabysitterView(user);
+    expect(view?.classLevel).toBe('3ème');
+    expect(view?.gender).toBe('male');
+  });
+});
