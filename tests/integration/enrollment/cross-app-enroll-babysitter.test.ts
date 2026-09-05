@@ -229,18 +229,19 @@ describe('enrollBabysitter crossApp mode', () => {
     expect(result.uid).toBe(RICH_TUTOR_UID);
 
     const after = (await db.collection('users').doc(RICH_TUTOR_UID).get()).data()!;
+    // classLevel/gender are root-only fields now (issue #435 milestone, PR1)
+    // — no longer copied onto the nested babysitter profile.
     expect(after.profiles.babysitter).toEqual({
       enrollmentComplete: false,
       ejemEmail: 'rica.tutor@ejm-test.org',
       searchable: false,
-      classLevel: '1ère',
-      gender: 'female',
       contactEmail: 'rica@contact.com',
       contactPhone: '+33600000001',
       whatsapp: '+33600000001',
     });
     // Existing tutor profile and base fields untouched.
     expect(after.profiles.tutor.searchable).toBe(true);
+    expect(after.profiles.tutor.classLevel).toBe('1ère');
     expect(after.firstName).toBe('Rica');
     expect(after.language).toBe('fr');
     // Canonical ROOT copies filled from the tutor profile (issue #203 shared
@@ -249,6 +250,10 @@ describe('enrollBabysitter crossApp mode', () => {
     expect(after.contactEmail).toBe('rica@contact.com');
     expect(after.contactPhone).toBe('+33600000001');
     expect(after.whatsapp).toBe('+33600000001');
+    // classLevel/gender lazily promoted to root (issue #435 milestone, PR1):
+    // no separate backfill run needed for this caller.
+    expect(after.classLevel).toBe('1ère');
+    expect(after.gender).toBe('female');
   });
 
   // ── Issue #203 shared identity: root-canonical derivation ──
@@ -283,6 +288,44 @@ describe('enrollBabysitter crossApp mode', () => {
     // Root stays untouched (fillBaseFields never overwrites populated fields).
     expect(after.ejemEmail).toBe('root.derive@ejm-test.org');
     expect(after.contactPhone).toBe('+33600000009');
+    // classLevel only ever lived on the nested tutor profile for this caller
+    // (no root, no backfill run) — fillBaseFields lazily promotes it here
+    // (issue #435 milestone, PR1).
+    expect(after.classLevel).toBe('2nde');
+    expect(after.profiles.babysitter.classLevel).toBeUndefined();
+  });
+
+  it('a caller whose classLevel/gender already live at ROOT gets no copy step at all (issue #435 milestone, PR1)', async () => {
+    // The whole point of promoting these fields to root: once they're there,
+    // crossApp add-profile has nothing left to derive or copy — no dead
+    // "copy from the other nested profile" step recreating the duplication.
+    const uid = 'crossapp-already-root';
+    const db = getDb();
+    await getAdminAuth().createUser({ uid, email: 'alreadyroot@test.com' });
+    await db.collection('users').doc(uid).set({
+      uid,
+      email: 'alreadyroot@test.com',
+      firstName: 'Already', lastName: 'Root', dateOfBirth: '2008-05-01',
+      status: 'active',
+      ejemEmail: 'already.root@ejm-test.org',
+      classLevel: 'Terminale',
+      gender: 'other',
+      profiles: {
+        // The nested tutor profile carries a DIFFERENT (stale) value — the
+        // root, not the nested copy, must win, since root is canonical.
+        tutor: { enrollmentComplete: true, searchable: false, classLevel: '3ème', gender: 'male' },
+      },
+    });
+    const token = await getIdToken(uid);
+    await callFunction('enrollBabysitter', { crossApp: true, consentVersion: '1.0' }, token);
+
+    const after = (await db.collection('users').doc(uid).get()).data()!;
+    // Root is untouched — fillBaseFields never overwrites a populated field.
+    expect(after.classLevel).toBe('Terminale');
+    expect(after.gender).toBe('other');
+    // The new babysitter profile carries neither field at all.
+    expect(after.profiles.babysitter.classLevel).toBeUndefined();
+    expect(after.profiles.babysitter.gender).toBeUndefined();
   });
 
   it('channels the tutor never supplied are ABSENT at the root, not null', async () => {

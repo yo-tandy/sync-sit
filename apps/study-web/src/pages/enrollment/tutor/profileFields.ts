@@ -2,21 +2,15 @@
  * Field choices and helpers shared by the classic wizard's StepProfile and
  * CrossAppWelcomePage's gap-filling details step (issue #203) — a component
  * file cannot export them itself (react-refresh/only-export-components).
+ *
+ * CLASS_LEVELS_TUTOR/GENDER_OPTIONS re-export the shared-core constants
+ * (issue #435 milestone, PR1) — this used to be a hand-maintained copy,
+ * byte-for-byte identical to sit's own inline copy in its babysitter
+ * StepProfile.tsx. Kept under their original names here so every existing
+ * import (`./StepProfile`, `./TutorEnrollment`, the public
+ * `CrossAppWelcomePage`) keeps working unchanged.
  */
-
-export const CLASS_LEVELS_TUTOR = [
-  'Terminale',
-  '1ère',
-  '2nde',
-  '3ème',
-] as const;
-
-export const GENDER_OPTIONS = [
-  { value: 'female', labelKey: 'enrollment.genderFemale' },
-  { value: 'male', labelKey: 'enrollment.genderMale' },
-  { value: 'other', labelKey: 'enrollment.genderOther' },
-  { value: 'prefer_not_to_say', labelKey: 'enrollment.genderPreferNot' },
-] as const;
+export { LYCEE_CLASS_LEVELS as CLASS_LEVELS_TUTOR, GENDER_OPTIONS } from '@ejm/shared-core';
 
 export function getAge(dateOfBirth: string): number | null {
   if (!dateOfBirth) return null;

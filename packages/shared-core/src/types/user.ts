@@ -1,5 +1,6 @@
 import type { FirestoreTimestamp, NotifPrefs } from './common.js';
-import type { AccountStatus, Language } from '../constants/index.js';
+import type { Address } from './address.js';
+import type { AccountStatus, Language, Gender } from '../constants/index.js';
 
 // ---------------------------------------------------------------------------
 // New schema (Plan D — portable user entity)
@@ -54,6 +55,37 @@ export interface User {
   contactEmail?: string | null;
   contactPhone?: string | null;
   whatsapp?: string | null;
+
+  /**
+   * Student-identity fields, promoted to root (issue #435 milestone, PR1):
+   * previously duplicated verbatim as `profiles.babysitter.classLevel/gender`
+   * (sit) and `profiles.tutor.classLevel/gender` (study) — identical
+   * copy-pasted option lists, now sourced once from
+   * `@ejm/shared-core`'s `LYCEE_CLASS_LEVELS`/`GENDER_OPTIONS`. The nested
+   * profile copies remain as back-compat duplicates for one release (a
+   * one-time backfill lifts pre-existing docs; new enrollments write root
+   * only) — readers go through getClassLevel/getGender (root ?? babysitter
+   * ?? tutor) so un-backfilled and legacy docs keep resolving correctly.
+   * classLevel is a French lycée year (e.g. "Terminale"); free-form string
+   * rather than the LyceeClassLevel literal union so a legacy/odd value on
+   * an old doc never fails to typecheck.
+   */
+  classLevel?: string;
+  gender?: Gender;
+
+  /** Optional free-text "about me" — new in the #435 unified-enrollment
+   *  milestone (sit/study providers had none; do's profile already had one,
+   *  unrelated to this root field). */
+  bio?: string;
+
+  /**
+   * Optional home address — new in the #435 unified-enrollment milestone.
+   * Collected and stored only in this milestone; wiring it into
+   * search/distance ranking is a deferred follow-up. `null` is an explicit
+   * user clear (same convention as the root contact trio); absent means
+   * never collected.
+   */
+  address?: Address | null;
 
   /**
    * Supervision mirror, present iff the guardianLinks/{uid} doc is ACTIVE
