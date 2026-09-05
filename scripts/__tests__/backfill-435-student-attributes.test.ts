@@ -71,6 +71,36 @@ describe('computeRootPatch', () => {
     })).toEqual({ patch: { gender: 'female' }, conflicts: [] });
   });
 
+  // ROOT-side counterpart of the nested null/'' case below. sit's
+  // StepProfile.tsx writes `gender: gender || null` AT THE ROOT whenever the
+  // question is left blank, so root null is a shape production actively holds.
+  // A `!== undefined` gate treated that as "already canonical" and skipped the
+  // doc forever, while getGender — which runs the value through nonEmpty() —
+  // saw no root value and kept resolving through the nested fallback. The
+  // backfill must agree with the readers about what counts as a value.
+  it('lifts over a root null — StepProfile writes `gender: gender || null`', () => {
+    expect(computeRootPatch({
+      gender: null,
+      profiles: { babysitter: { gender: 'female' } },
+    })).toEqual({ patch: { gender: 'female' }, conflicts: [] });
+  });
+
+  it("lifts over a root '' and over root non-string junk", () => {
+    expect(computeRootPatch({
+      classLevel: '',
+      profiles: { tutor: { classLevel: '1ère' } },
+    })).toEqual({ patch: { classLevel: '1ère' }, conflicts: [] });
+    expect(computeRootPatch({
+      gender: 42,
+      profiles: { babysitter: { gender: 'male' } },
+    })).toEqual({ patch: { gender: 'male' }, conflicts: [] });
+  });
+
+  it('a root null with NOTHING nested to lift still yields no patch', () => {
+    // The fix must not invent a write where there is no source value.
+    expect(computeRootPatch({ gender: null, profiles: { babysitter: {} } })).toBeNull();
+  });
+
   it("skips nested null and '' — they are absence, not values (matches getGender's null-as-absent semantics)", () => {
     // sit's StepProfile.tsx writes `gender: gender || null` when the
     // question ran but nothing was selected — that is NOT a value to lift.
