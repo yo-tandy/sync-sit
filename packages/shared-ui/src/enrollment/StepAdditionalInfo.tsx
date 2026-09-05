@@ -46,14 +46,23 @@ const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
  * server-side on the Storage upload path (PR4).
  */
 function isAcceptablePhotoType(type: string): boolean {
-  if (!type || type === 'application/octet-stream') return true;
-  if (!type.toLowerCase().trim().startsWith('image/')) return false;
+  // Normalise ONCE, up front. Doing it per-branch invited the bug where
+  // `type === 'application/octet-stream'` compared the raw string while the
+  // image check compared a normalised one: a browser reporting
+  // 'Application/Octet-Stream' (or with stray padding) would then miss the
+  // unknown-type branch and get rejected by the image check instead --
+  // the exact opposite of this function's intent. Real browsers report
+  // File.type lowercase per spec, but the whole reason this is a denylist is
+  // that File.type is not reliably what the spec says.
+  const t = type.toLowerCase().trim();
+  if (!t || t === 'application/octet-stream') return true;
+  if (!t.startsWith('image/')) return false;
   // ...with one carve-out: image/svg+xml is a scriptable document that renders
   // live, which is exactly what storage.rules' #281 denylist exists to reject.
   // Matching the `+xml` suffix rather than the one spelling, for the same
   // reason that rule does (Firefox treats every *+xml media type as an XML
   // document).
-  return !type.toLowerCase().includes('+xml');
+  return !t.includes('+xml');
 }
 
 /**

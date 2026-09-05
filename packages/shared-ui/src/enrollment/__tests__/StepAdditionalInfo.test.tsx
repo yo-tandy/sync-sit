@@ -76,6 +76,16 @@ describe('StepAdditionalInfo', () => {
     ['application/octet-stream (generic, type undetermined)', 'application/octet-stream'],
     ['image/heic', 'image/heic'],
     ['image/gif', 'image/gif'],
+    // Padding variants must hit the unknown-type branch rather than falling
+    // through to the image check and being rejected (PR #450 review). NB the
+    // File constructor lowercases `type` per spec, and jsdom honours that, so
+    // a CASE variant cannot be exercised from a test at all -- a mixed-case
+    // pin here would pass no matter what the function does. The normalisation
+    // is written to handle case anyway, since the premise of this denylist is
+    // that File.type is not reliably what the spec promises; it just cannot be
+    // pinned from here. Padding IS preserved, so these two do bite.
+    ['a padded generic type', '  application/octet-stream  '],
+    ['whitespace-only type (effectively unknown)', '   '],
   ])('accepts a photo with %s', (_label, type) => {
     const onNext = vi.fn();
     const { container } = renderWithProviders(<StepAdditionalInfo onNext={onNext} />);
