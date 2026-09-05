@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { clearAll, callFunction, getDb, getAdminAuth } from '../../setup/emulator.js';
+import { clearAll, callFunction, getDb, getAdminAuth, waitForEffectiveSearchable } from '../../setup/emulator.js';
 
 // Baseline unauthenticated happy path — a brand-new babysitter account.
 // The cross-app suite covers the authenticated add-profile mode; this file
@@ -40,7 +40,10 @@ describe('enrollBabysitter (unauthenticated create path)', () => {
     expect(authUser.uid).toBe(result.uid);
 
     const db = getDb();
-    const user = (await db.collection('users').doc(result.uid).get()).data()!;
+    // effectiveSearchable is folded in by onUserWrittenRecomputeSearchable, an
+    // async trigger that runs AFTER the callable returns — reading straight
+    // through races it (issue #453).
+    const user = await waitForEffectiveSearchable(result.uid, 'babysitter');
     expect(user.email).toBe(EMAIL);
     expect(user.status).toBe('active');
     expect(user.language).toBe('en');

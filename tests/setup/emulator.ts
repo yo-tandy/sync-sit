@@ -204,3 +204,53 @@ export function parisDateFromNow(days: number): string {
   }).format(d);
   return parts; // en-CA formats as YYYY-MM-DD
 }
+
+/**
+ * Await an async Firestore TRIGGER's effect on a document.
+ *
+ * Callables return as soon as their own write commits; a trigger that reacts
+ * to that write (onUserWrittenRecomputeSearchable and friends) runs
+ * afterwards, out of band. Reading the doc straight after the callable
+ * therefore races the trigger — it passes or fails on timing, which is how
+ * `effectiveSearchable` assertions came to pass in CI and fail locally on the
+ * same commit (issue #453).
+ *
+ * Poll until `predicate` holds, then return the data. On timeout, throw with
+ * the last value seen so the failure names the missing field instead of
+ * surfacing as a bare deep-equal mismatch.
+ *
+ * Prefer this over a fixed `sleep`: it returns as soon as the trigger lands
+ * (usually the first poll) rather than always paying the worst case, and it
+ * does not silently start passing for the wrong reason when a machine is slow.
+ */
+export async function waitForDoc(
+  path: { collection: string; id: string },
+  predicate: (data: FirebaseFirestore.DocumentData) => boolean,
+  { timeoutMs = 5000, intervalMs = 50 }: { timeoutMs?: number; intervalMs?: number } = {},
+): Promise<FirebaseFirestore.DocumentData> {
+  const deadline = Date.now() + timeoutMs;
+  let last: FirebaseFirestore.DocumentData | undefined;
+  for (;;) {
+    last = (await getDb().collection(path.collection).doc(path.id).get()).data();
+    if (last && predicate(last)) return last;
+    if (Date.now() >= deadline) {
+      throw new Error(
+        `waitForDoc: ${path.collection}/${path.id} did not satisfy the predicate within ${timeoutMs}ms. `
+          + `Last value: ${JSON.stringify(last)}`,
+      );
+    }
+    await new Promise((r) => setTimeout(r, intervalMs));
+  }
+}
+
+/** `waitForDoc` specialised to the common case: a users/{uid} doc whose
+ *  profiles.{role} has had `effectiveSearchable` folded in by the trigger. */
+export async function waitForEffectiveSearchable(
+  uid: string,
+  role: 'babysitter' | 'tutor',
+): Promise<FirebaseFirestore.DocumentData> {
+  return waitForDoc(
+    { collection: 'users', id: uid },
+    (d) => d.profiles?.[role]?.effectiveSearchable !== undefined,
+  );
+}
