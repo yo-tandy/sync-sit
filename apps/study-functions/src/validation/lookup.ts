@@ -1,25 +1,21 @@
 import { z } from 'zod';
 
 /**
- * Input for the lookupTutor callable (issue #235, parity A2). `code` is a
- * tutor's PERSONAL CODE — 8 uppercase hex chars minted by
- * getTutorPersonalCode. Codes travel person-to-person (read aloud, pasted
- * from a chat message), so normalization is deliberately forgiving about how
- * a human relays one: lowercase, stray whitespace and dashes are all
- * stripped before matching. Anything that does not collapse to exactly 8 hex
- * chars is rejected up front as invalid-argument — a malformed code must
- * never reach the Firestore query, where it would burn a read only to
- * not-found anyway.
+ * Input for the lookupTutor callable (issue #437, replacing the personal-code
+ * schema issue #235 shipped). `query` is free text a parent already knows
+ * about the tutor — a name, an email, or a phone number — matched via
+ * @ejm/shared-core's matchesProviderIdentity. Bounded BEFORE the trim so this
+ * cannot become a free normalization service for arbitrarily long junk
+ * strings, and a 2-character floor keeps a single keystroke from scanning the
+ * whole searchable population for a substring hit.
  */
 export const lookupTutorSchema = z.object({
-  code: z
-    .string({ errorMap: () => ({ message: 'Code is required' }) })
-    // Bound BEFORE the transform: the strip/uppercase pass must not become a
-    // free normalization service for arbitrarily long junk strings.
-    .max(64, 'Code is too long')
-    .transform((raw) => raw.replace(/[\s-]/g, '').toUpperCase())
-    .refine((code) => /^[0-9A-F]{8}$/.test(code), {
-      message: 'Code must be 8 letters or digits',
+  query: z
+    .string({ errorMap: () => ({ message: 'Search query is required' }) })
+    .max(100, 'Search query is too long')
+    .transform((raw) => raw.trim())
+    .refine((q) => q.length >= 2, {
+      message: 'Search query must be at least 2 characters',
     }),
 });
 
