@@ -128,4 +128,36 @@ describe('lookupBabysitter', () => {
     expect(row?.contactEmail).toBeUndefined();
     expect(row?.contactPhone).toBeUndefined();
   });
+
+  // Issue #437 review: lookupBabysitter is a third path to the same
+  // babysitter data (search + published searches being the other two), and
+  // it now also matches by phone/WhatsApp — widening the discovery surface
+  // further. It must not become a way around the age backstop
+  // (searchBabysitters.ts / contactPublishedSearch.ts share this same gate).
+  it('excludes an under-15 babysitter even when the query matches by name', async () => {
+    const db = getDb();
+    const uid = 'bs-lookup-under15';
+    const fourteenYearsAgo = new Date();
+    fourteenYearsAgo.setFullYear(fourteenYearsAgo.getFullYear() - 14);
+    await db.collection('users').doc(uid).set({
+      uid, email: 'zoe.under15@ejm-test.org', status: 'active',
+      firstName: 'ZoeUnder15', lastName: 'Test', dateOfBirth: fourteenYearsAgo,
+      profiles: {
+        babysitter: {
+          enrollmentComplete: true, ejemEmail: 'zoe.under15@ejm-test.org',
+          searchable: true, effectiveSearchable: true,
+          classLevel: 'Troisieme', languages: ['French'],
+        },
+      },
+      fcmTokens: [], createdAt: new Date(), updatedAt: new Date(),
+    });
+    try {
+      const { results } = await callFunction<{ results: LookupResult[] }>(
+        'lookupBabysitter', { query: 'ZoeUnder15' }, parent1Token,
+      );
+      expect(results.find((r) => r.uid === uid)).toBeUndefined();
+    } finally {
+      await db.collection('users').doc(uid).delete();
+    }
+  });
 });
