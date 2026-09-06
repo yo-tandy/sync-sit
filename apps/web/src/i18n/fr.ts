@@ -624,6 +624,8 @@ export default {
     declined: 'Refusées',
     babysitterFallback: 'Babysitter',
     ageSuffix: 'ans',
+    preferredBadge: 'Favori',
+    returningBadge: 'Babysitter déjà venu(e)',
     classLabel: 'Classe :',
     agesRange: 'Âges {{min}}–{{max}}',
     upToKids: ', jusqu\'à {{count}} enfants',

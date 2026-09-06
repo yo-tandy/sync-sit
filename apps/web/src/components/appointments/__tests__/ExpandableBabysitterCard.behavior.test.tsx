@@ -96,6 +96,27 @@ describe('ExpandableBabysitterCard late-cancellation record (issue #237)', () =>
   });
 });
 
+describe('preferred/returning badges are accessible, not hover-only (issue #131)', () => {
+  // Before the fix, both badges carried only a hardcoded English `title`,
+  // unreachable on touch and unreliable for screen readers. They now expose
+  // a translated `role="img"` + `aria-label`, so they surface in the
+  // accessibility tree with no hover required.
+  it('gives the preferred badge an accessible name', () => {
+    render(<ExpandableBabysitterCard appointment={appointment} info={info} variant="confirmed" isPreferred />);
+    expect(screen.getByRole('img', { name: 'familyDashboard.preferredBadge' })).toBeInTheDocument();
+  });
+
+  it('gives the returning badge an accessible name', () => {
+    render(<ExpandableBabysitterCard appointment={appointment} info={info} variant="confirmed" isReturning />);
+    expect(screen.getByRole('img', { name: 'familyDashboard.returningBadge' })).toBeInTheDocument();
+  });
+
+  it('renders neither badge when the babysitter is neither preferred nor returning', () => {
+    render(<ExpandableBabysitterCard appointment={appointment} info={info} variant="confirmed" />);
+    expect(screen.queryByRole('img')).not.toBeInTheDocument();
+  });
+});
+
 describe('ExpandableBabysitterCard cancel control', () => {
   it('renders a Cancel Request button for a pending request', () => {
     const onCancel = vi.fn();

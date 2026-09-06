@@ -258,8 +258,21 @@ export function ExpandableBabysitterCard({
           <div>
             <div className="flex items-center gap-1.5">
               <p className="text-sm font-semibold text-gray-900">{name}</p>
-              {isPreferred && <span title="Preferred">❤️</span>}
-              {isReturning && <span className="text-blue-500" title="Returning">⭐</span>}
+              {isPreferred && (
+                <span role="img" aria-label={t('familyDashboard.preferredBadge')} title={t('familyDashboard.preferredBadge')}>
+                  ❤️
+                </span>
+              )}
+              {isReturning && (
+                <span
+                  className="text-blue-500"
+                  role="img"
+                  aria-label={t('familyDashboard.returningBadge')}
+                  title={t('familyDashboard.returningBadge')}
+                >
+                  ⭐
+                </span>
+              )}
             </div>
             {/* Pending: show age + class */}
             {variant === 'pending' && info?.age && (
