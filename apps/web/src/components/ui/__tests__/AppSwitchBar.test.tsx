@@ -83,6 +83,47 @@ describe('AppSwitchBar', () => {
     expect(screen.getByRole('button', { name: /sync\/do/ })).toBeInTheDocument();
   });
 
+  it('keeps a FIXED suite-wide order regardless of which app is current (#438)', () => {
+    // Before the fix, `current` was always sorted first: sit's bar rendered
+    // sit,study but study's bar rendered study,sit for the same two apps --
+    // the row visually reshuffled on every switch. sit, study, do is now the
+    // one true order no matter which app hosts the bar.
+    const names = (container: HTMLElement) =>
+      Array.from(container.querySelectorAll('ul > li button')).map(
+        (b) => b.querySelector('span:last-child')?.textContent,
+      );
+
+    const sitBar = render(
+      <I18nextProvider i18n={i18n}>
+        <AppSwitchBar
+          current="sit"
+          siblings={[SIBLINGS[0]]}
+          mintHandoffCode={vi.fn()}
+          account={{ href: '/family/account', onNavigate: vi.fn() }}
+          home={{ href: '/family', onNavigate: vi.fn() }}
+          pathname="/family"
+        />
+      </I18nextProvider>,
+    );
+    expect(names(sitBar.container)).toEqual(['sync/sit', 'sync/study', 'My account']);
+    sitBar.unmount();
+
+    const studyBar = render(
+      <I18nextProvider i18n={i18n}>
+        <AppSwitchBar
+          current="study"
+          siblings={[{ app: 'sit', url: 'https://sync-sit-app.web.app' }]}
+          mintHandoffCode={vi.fn()}
+          account={{ href: '/tutor/account', onNavigate: vi.fn() }}
+          home={{ href: '/tutor', onNavigate: vi.fn() }}
+          pathname="/tutor"
+        />
+      </I18nextProvider>,
+    );
+    expect(names(studyBar.container)).toEqual(['sync/sit', 'sync/study', 'My account']);
+    studyBar.unmount();
+  });
+
   it('marks the current app as the active tab', () => {
     renderBar();
     expect(screen.getByRole('button', { name: /sync\/sit/ })).toHaveAttribute(
