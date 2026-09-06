@@ -1,48 +1,57 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
-import { haversineDistance, getParentProfile, getBabysitterView, getEjemEmail } from '@ejm/sit-core';
-import type { User } from '@ejm/sit-core';
+import { haversineDistance, getParentProfile, getBabysitterView } from '@ejm/sit-core';
+import type { User, BabysitterSummary } from '@ejm/sit-core';
+import { getEjemEmail, getContact, matchesProviderIdentity } from '@ejm/shared-core';
+import { lookupBabysitterSchema } from '../validation/lookup.js';
+import { writeUserActivity } from '../admin/writeAuditLog.js';
 
-interface LookupResult {
-  uid: string;
-  firstName: string;
-  lastName: string;
-  photoUrl: string | null;
-  classLevel: string;
-  languages: string[];
-  aboutMe: string | null;
-  kidAgeRange: { min: number; max: number } | null;
-  maxKids: number | null;
-  worksInYourArea: boolean;
-}
-
+/**
+ * lookupBabysitter (issue #437): find a babysitter directly by name, email,
+ * or phone — for a family who already knows who they're looking for and
+ * doesn't want to hunt through search filters. The study twin, lookupTutor,
+ * resolves the same way (name/email/phone, not study's retired personal
+ * code) so both apps share one lookup pattern and one security bar.
+ *
+ * Caller gate matches searchBabysitters: a parent with a FULLY VERIFIED
+ * family. Previously this callable only required an authenticated parent
+ * with a familyId — an unverified family could look up any searchable
+ * babysitter by name/email with none of search's guardrails. This closes
+ * that gap rather than leaving direct lookup as the softer path in.
+ */
 export const lookupBabysitter = onCall(
   { region: 'europe-west1', cors: getCorsOrigin() },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Must be logged in');
     }
-
     const uid = request.auth.uid;
-    const { query } = request.data as { query: string };
 
-    if (!query || query.trim().length < 2) {
-      throw new HttpsError('invalid-argument', 'Search query must be at least 2 characters');
+    const parsed = lookupBabysitterSchema.safeParse(request.data);
+    if (!parsed.success) {
+      throw new HttpsError(
+        'invalid-argument',
+        parsed.error.issues[0]?.message || 'Invalid search query',
+      );
     }
+    const { query } = parsed.data;
 
-    // Verify caller is a parent and load family location
+    // Verify caller is a parent with a fully-verified family.
     const callerDoc = await db.collection('users').doc(uid).get();
     const caller = getParentProfile(callerDoc.data() as User | undefined);
     if (!caller || !caller.familyId) {
       throw new HttpsError('permission-denied', 'Only parents can search babysitters');
     }
+    const familyId = caller.familyId;
+    const familyDoc = await db.collection('families').doc(familyId).get();
+    const familyData = familyDoc.data();
+    if (!familyData?.verification?.isFullyVerified) {
+      throw new HttpsError('permission-denied', 'Family verification required before looking up babysitters');
+    }
+    const familyLatLng = familyData.latLng;
 
-    const familyDoc = await db.collection('families').doc(caller.familyId).get();
-    const familyLatLng = familyDoc.data()?.latLng;
-
-    const q = query.trim().toLowerCase();
-    const results: LookupResult[] = [];
+    const results: BabysitterSummary[] = [];
 
     // Search all babysitters — same effective-searchability predicate as
     // searchBabysitters.ts (issue #435 PR2): `effectiveSearchable` folds in
@@ -58,43 +67,59 @@ export const lookupBabysitter = onCall(
 
     for (const doc of snap.docs) {
       // Decode once; the flattened view is for the display fields, but
-      // getEjemEmail MUST see the RAW doc — the view spreads the nested
-      // profile over the root, which would invert root-first precedence.
+      // getEjemEmail/getContact MUST see the RAW doc — the view spreads the
+      // nested profile over the root, which would invert root-first precedence.
       const raw = doc.data() as User;
       const data = getBabysitterView(raw);
       if (!data) continue;
-      const fullName = `${data.firstName || ''} ${data.lastName || ''}`.toLowerCase();
-      const email = (data.email || '').toLowerCase();
       // Canonical root ?? nested resolution (issue #203 shared identity).
-      const ejemEmail = (getEjemEmail(raw) || '').toLowerCase();
+      const ejemEmail = getEjemEmail(raw) || '';
+      const contact = getContact(raw);
 
-      if (fullName.includes(q) || email === q || ejemEmail === q) {
-        // Check if babysitter works in the family's area
-        let worksInYourArea = false;
-        if (data.areaMode === 'distance' && data.areaLatLng && familyLatLng) {
-          const dist = haversineDistance(data.areaLatLng, familyLatLng);
-          worksInYourArea = dist <= (data.areaRadiusKm || 5);
-        } else if (data.areaMode === 'arrondissement') {
-          // Arrondissement-based babysitters are considered available in general
-          worksInYourArea = true;
-        }
+      if (!matchesProviderIdentity(query, {
+        fullName: `${data.firstName || ''} ${data.lastName || ''}`,
+        email: data.email || '',
+        ejemEmail,
+        contactPhone: contact.contactPhone,
+        whatsapp: contact.whatsapp,
+      })) continue;
 
-        results.push({
-          uid: doc.id,
-          firstName: data.firstName || '',
-          lastName: data.lastName || '',
-          photoUrl: data.photoUrl || null,
-          classLevel: data.classLevel || '',
-          languages: data.languages || [],
-          aboutMe: data.aboutMe || null,
-          kidAgeRange: data.kidAgeRange || null,
-          maxKids: data.maxKids || null,
-          worksInYourArea,
-        });
+      // Check if babysitter works in the family's area
+      let worksInYourArea = false;
+      if (data.areaMode === 'distance' && data.areaLatLng && familyLatLng) {
+        const dist = haversineDistance(data.areaLatLng, familyLatLng);
+        worksInYourArea = dist <= (data.areaRadiusKm || 5);
+      } else if (data.areaMode === 'arrondissement') {
+        // Arrondissement-based babysitters are considered available in general
+        worksInYourArea = true;
       }
+
+      // Only share contact info if this family is already approved — same
+      // rule as searchBabysitters; contact projects from the canonical
+      // root ?? nested resolution above.
+      const approvedFamilies: string[] = data.approvedFamilies || [];
+      const contactApproved = approvedFamilies.includes(familyId);
+
+      results.push({
+        uid: doc.id,
+        firstName: data.firstName || '',
+        lastName: data.lastName || '',
+        photoUrl: data.photoUrl || null,
+        classLevel: data.classLevel || '',
+        languages: data.languages || [],
+        aboutMe: data.aboutMe || null,
+        kidAgeRange: data.kidAgeRange ?? undefined,
+        maxKids: data.maxKids ?? undefined,
+        worksInYourArea,
+        contactEmail: contactApproved ? contact.contactEmail ?? undefined : undefined,
+        contactPhone: contactApproved ? contact.contactPhone ?? undefined : undefined,
+        whatsapp: contactApproved ? contact.whatsapp ?? undefined : undefined,
+      });
 
       if (results.length >= 10) break;
     }
+
+    await writeUserActivity(uid, 'babysitter_identity_lookup', { query, matchCount: results.length });
 
     return { results };
   }

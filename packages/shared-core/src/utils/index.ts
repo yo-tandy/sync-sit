@@ -11,3 +11,4 @@ export * from './crossAppEndorsements.js';
 export * from './emulatorConfig.js';
 export * from './notifPrefs.js';
 export * from './effectiveSearchable.js';
+export * from './providerLookup.js';
