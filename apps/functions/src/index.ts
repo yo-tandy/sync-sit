@@ -18,6 +18,8 @@ export {
   joinFamily,
   validateInviteLink,
   removeCoParent,
+  // Unified student-identity enrollment (issue #435 milestone, PR4)
+  enrollStudentIdentity,
   // Guardian (parental governance)
   createKidInvite,
   cancelKidInvite,
