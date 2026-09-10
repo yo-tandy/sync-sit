@@ -26,10 +26,24 @@
   --color-red-100: rgb(252, 214, 219);
   --color-red-50: rgb(254, 238, 240);
 
-  /* Recess ground + shadow tint (#366). --color-ground is the page surface
-     behind cards; --shadow-card-tint is the vertical shadow's colour, taken
-     from this app's own ramp rather than invented. sit's coral, warmed. */
+  /* Recess ground (#366). --color-ground is the page surface behind cards.
+     sit's coral, warmed. The vertical shadow's tint colour used to be
+     declared here too; it now lives in the plain :root block below
+     (#423) -- see there for why. */
   --color-ground: #fdf6f4;
   --color-ground-raised: #ffffff;
+}
+
+/* --shadow-card-tint is a plain COLOUR, taken from this app's own ramp
+   rather than invented, only ever read through var() by
+   --shadow-card-brand (base.css). It must NOT sit inside @theme: Tailwind
+   v4 derives a utility class from every @theme member's namespace, so a
+   --shadow-card-tint declared there generates a `shadow-card-tint` utility
+   emitting `box-shadow: rgb(252, 214, 219)` -- invalid at computed-value
+   time (a colour has no offsets or blur), painting nothing while still
+   autocompleting as if it worked (#423). A plain :root custom property
+   isn't scanned for utility generation but is still visible to that
+   var() read. */
+:root {
   --shadow-card-tint: rgb(252, 214, 219);
 }
