@@ -325,14 +325,27 @@ bash scripts/fix-cloud-run-permissions.sh
 
 The post-deploy script runs automatically via `firebase.json` postdeploy hooks.
 
+**One-time bucket CORS (required once per project, not part of `firebase deploy`):** family photos are
+uploaded by the browser with a direct `PUT` to `storage.googleapis.com` on a signed URL (issue #471), so the
+default bucket needs the CORS policy in `storage.cors.json`. Apply it once, and again whenever an origin is
+added:
+
+```bash
+gcloud storage buckets update gs://<project>.appspot.com --cors-file=storage.cors.json
+gcloud storage buckets describe gs://<project>.appspot.com --format="json(cors_config)"   # verify
+```
+
+Without it every family-photo upload fails in the browser with a CORS error while all tests stay green
+(CORS is enforced by the browser; neither the emulator nor the rules suite can see it).
+
 ## Security
 
 - **Firestore rules** — document-level access control with role-based permissions
-- **Storage rules** — family-scoped writes (10MB cap, renderable-type denylist: html/xhtml/svg/xml) on verification docs, callable-only reads (v4-signed URLs, forced download); owner-scoped profile photos; authenticated family photos
+- **Storage rules** — verification docs: authenticated writes (10MB cap, renderable-type denylist: html/xhtml/svg/xml), callable-only reads (v4-signed URLs, forced download); profile photos: owner-scoped writes + denylist; family photos: no client writes — a membership-checked callable mints a v4-signed PUT URL bound to content type and a 10MB `x-goog-content-length-range` (#471); delete still `request.auth != null` (tracked: #483)
 - **Verification codes** — `crypto.randomInt()` with 5-attempt rate limiting, 10-minute expiry
 - **Input validation** — Zod schemas on all enrollment functions
 - **Immutable fields** — role, status, uid, email protected via Firestore rules
-- **CORS** — open (functions protected by Firebase Auth)
+- **CORS** — functions: open (protected by Firebase Auth); storage bucket: `storage.cors.json` allows `PUT` from the app origins only (see Deployment)
 - **Security headers** — X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy
 
 ## License
