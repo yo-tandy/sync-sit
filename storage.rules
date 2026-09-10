@@ -96,6 +96,11 @@ service firebase.storage {
     // integrity risk (planting a document for admin review), not a disclosure
     // one.
     //
+    // A green tests/rules/ run is not proof a cross-service rule works in
+    // prod — enforced by tests/rules/cross-service-guard.test.ts (issue #449),
+    // which fails the suite on any unacknowledged firestore.get()/
+    // firestore.exists() in this file or firestore.rules.
+    //
     // The real fix, tracked in the follow-up issue: move the membership check
     // server-side into a signed-upload-URL callable (the getVerificationDocument
     // pattern in reverse), then set this back to `allow write: if false` —
