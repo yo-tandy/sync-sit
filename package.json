@@ -35,6 +35,7 @@
     "backfill:shared-identity": "node scripts/backfill-shared-identity.cjs",
     "backfill:435-student-attributes": "node scripts/backfill-435-student-attributes.cjs",
     "backfill:435-effective-searchable": "node scripts/backfill-435-effective-searchable.cjs",
+    "backfill:437-remove-personal-code": "node scripts/backfill-437-remove-personal-code.cjs",
     "emulators": "firebase emulators:start --only auth,functions,firestore,storage --project demo-test",
     "deploy": "firebase deploy",
     "audit:354-forged-endorsements": "node scripts/audit-354-forged-tutor-endorsements.cjs"
