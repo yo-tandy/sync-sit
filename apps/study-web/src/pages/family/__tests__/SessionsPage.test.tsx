@@ -449,7 +449,7 @@ describe('family SessionsPage — management', () => {
     });
   });
 
-  it('shows a load error (not the empty state) when the instances read is denied', async () => {
+  it('isolates a denied ACTIVE series instance read to an inline per-card error, not the page-level loadError (issue #275)', async () => {
     h.sessions = [confirmedRecurring({ sessionId: 'sR' })];
     h.getDocs.mockImplementation((q: { query?: { path: string }[]; path?: string }) => {
       const path = q?.query?.[0]?.path ?? q?.path ?? '';
@@ -458,9 +458,14 @@ describe('family SessionsPage — management', () => {
     });
     renderWithProviders(<SessionsPage />);
 
-    expect(await screen.findByText(/could not load your sessions/i)).toBeInTheDocument();
-    // The denial must NOT masquerade as "no sessions".
+    // The series itself still renders — one series' denied instance read must
+    // not flip the whole page to loadError (Promise.allSettled isolation).
+    expect(await screen.findByText('Sam Tutor')).toBeInTheDocument();
+    expect(screen.queryByText(/could not load your sessions/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/no sessions yet/i)).not.toBeInTheDocument();
+    // Instead, that series' card carries an inline error + retry.
+    expect(await screen.findByText(/couldn.t load this series. dates/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /try again/i })).toBeInTheDocument();
   });
 
   it('a FAILED focus refetch does not paint an error over a rendered list', async () => {
@@ -1009,10 +1014,14 @@ describe('family SessionsPage — session notes (pre)', () => {
     expect(screen.queryByText(/family\.sessions\.status\./)).not.toBeInTheDocument();
   });
 
-  it('a completed series with completed work shows the endorse prompt in history (instances now load)', async () => {
-    // Deliberate side effect of loading instances for ALL series (round 3):
-    // hasCompletedWork can now see a terminal series' completed occurrences,
-    // so the endorse affordance appears exactly where the completed work is.
+  it('a completed series with completed work shows the endorse prompt in history WITHOUT expanding (issue #275 round 2: eager for unendorsed completed series)', async () => {
+    // The endorse prompt sits on the history card header and is the family's
+    // main path into endorsing, so it must NOT require an expand click. A
+    // COMPLETED (or CANCELLED — see the next pin) recurring series whose
+    // tutor isn't endorsed yet stays EAGER (bounded by "tutors not yet
+    // endorsed", not "every series ever created") — only a DECLINED series,
+    // and a completed/cancelled series whose tutor IS already endorsed, stay
+    // lazy on expand.
     h.sessions = [recurring({ sessionId: 'sE', status: 'completed', tutorUserId: 'tut-9', tutorName: 'Nina Levy' })];
     h.instances = {
       sE: [instanceDoc({ instanceId: '2026-07-08', date: '2026-07-08', status: 'completed' })],
@@ -1020,6 +1029,49 @@ describe('family SessionsPage — session notes (pre)', () => {
     renderWithProviders(<SessionsPage />);
 
     expect(await screen.findByRole('button', { name: /endorse/i })).toBeInTheDocument();
+  });
+
+  it('a CANCELLED series with a completed occurrence and an unendorsed tutor also shows the endorse prompt WITHOUT expanding — a DECLINED series stays lazy (issue #275 round 4)', async () => {
+    // cancelSession.ts only cancels FUTURE (date >= today) instances of a
+    // confirmed series, so a CANCELLED series can still carry completed
+    // occurrences from before the cancellation — hasCompletedWork(s) is true
+    // for it once loaded, exactly like a completed series, so it needs the
+    // same eager treatment or the endorse prompt would silently regress for
+    // this shape. A DECLINED series never reached confirmation (declines
+    // happen pre-confirm) and so never had generateInstances create its
+    // instances subcollection — it stays lazy, and this pin doubles as the
+    // control proving it's never eagerly fetched.
+    h.sessions = [
+      recurring({
+        sessionId: 'sCancelledUnendorsed',
+        status: 'cancelled',
+        tutorUserId: 'tut-cx',
+        tutorName: 'Cancelled Series Tutor',
+      }),
+      recurring({
+        sessionId: 'sDeclined',
+        status: 'declined',
+        tutorUserId: 'tut-declined',
+        tutorName: 'Declined Series Tutor',
+      }),
+    ];
+    h.instances = {
+      sCancelledUnendorsed: [
+        instanceDoc({ instanceId: '2026-07-08', date: '2026-07-08', status: 'completed' }),
+      ],
+    };
+    renderWithProviders(<SessionsPage />);
+
+    expect(
+      await screen.findByRole('button', { name: /endorse cancelled series tutor/i }),
+    ).toBeInTheDocument();
+    await screen.findByText('Declined Series Tutor');
+    const instanceFetchIds = h.getDocs.mock.calls
+      .map((c) => c[0] as { query?: { path: string }[]; path?: string })
+      .map((q) => q.query?.[0]?.path ?? q.path ?? '')
+      .filter((path) => path.endsWith('/instances'))
+      .map((path) => path.split('/')[1]);
+    expect(instanceFetchIds).toEqual(['sCancelledUnendorsed']);
   });
 
   it('a CANCELLED one_time in history still shows the own note and offers REMOVE (never stranded)', async () => {
@@ -1042,14 +1094,17 @@ describe('family SessionsPage — session notes (pre)', () => {
 
   it('a CANCELLED series keeps its per-occurrence notes visible and removable in HISTORY', async () => {
     // Terminal series strand their instance notes otherwise (round 1): the
-    // fetch must load instances for non-confirmed series and the history
-    // card must render each noted occurrence with the erasure affordance.
+    // history card must render each noted occurrence with the erasure
+    // affordance. Instances load LAZILY on first expand (issue #275).
     h.sessions = [recurring({ sessionId: 'sT', status: 'cancelled' })];
     h.instances = {
       sT: [instanceDoc({ instanceId: '2026-07-01', date: '2026-07-01', status: 'cancelled', preSessionNote: 'stranded ask' })],
     };
     renderWithProviders(<SessionsPage />);
 
+    await screen.findByText('Sam Tutor');
+    expect(screen.queryByText('stranded ask')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /view dates|occurrences/i }));
     expect(await screen.findByText('stranded ask')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /remove note/i }));
     fireEvent.click(screen.getByRole('button', { name: /remove it/i }));
@@ -1105,5 +1160,305 @@ describe('family SessionsPage — session notes (pre)', () => {
         text: 'ratios please',
       }),
     );
+  });
+});
+
+// ── Issue #275: terminal series' instances load LAZILY, not eagerly ──
+// The read profile pins: ACTIVE (confirmed) series' instances are always
+// fetched on mount/focus; a COMPLETED series whose tutor isn't endorsed yet
+// is ALSO fetched eagerly (round 2 — the endorse prompt must not require an
+// expand click); everything else terminal (declined/cancelled, or completed
+// with an already-endorsed tutor) fetches its instances once, on the first
+// expand of its history card.
+describe('family SessionsPage — lazy terminal-series instances (issue #275)', () => {
+  beforeEach(() => reset());
+
+  /** sessionIds whose /instances subcollection getDocs has been called for,
+   * in call order (duplicates included — a re-fetch shows up again). */
+  function instanceFetchSessionIds(): string[] {
+    return h.getDocs.mock.calls
+      .map((c) => c[0] as { query?: { path: string }[]; path?: string })
+      .map((q) => q.query?.[0]?.path ?? q.path ?? '')
+      .filter((path) => path.endsWith('/instances'))
+      .map((path) => path.split('/')[1]);
+  }
+
+  function confirmedRecurring(overrides: Record<string, unknown> = {}) {
+    return recurring({ status: 'confirmed', ...overrides });
+  }
+
+  it('on mount, fetches instances for ACTIVE series + COMPLETED/CANCELLED-and-unendorsed series — never for a declined series or a completed/cancelled-and-endorsed series', async () => {
+    h.sessions = [
+      confirmedRecurring({ sessionId: 'a1', tutorName: 'Active One' }),
+      confirmedRecurring({ sessionId: 'a2', tutorName: 'Active Two' }),
+      recurring({
+        sessionId: 'cUnendorsed',
+        status: 'completed',
+        tutorUserId: 'tUnendorsedC',
+        tutorName: 'Unendorsed Completed Tutor',
+      }),
+      recurring({
+        sessionId: 'xUnendorsed',
+        status: 'cancelled',
+        tutorUserId: 'tUnendorsedX',
+        tutorName: 'Unendorsed Cancelled Tutor',
+      }),
+      recurring({
+        sessionId: 'cEndorsed',
+        status: 'completed',
+        tutorUserId: 'tEndorsed',
+        tutorName: 'Endorsed Tutor',
+      }),
+      recurring({ sessionId: 't1', status: 'declined', tutorName: 'Term One' }),
+    ];
+    h.instances = {
+      a1: [],
+      a2: [],
+      cUnendorsed: [
+        instanceDoc({ instanceId: '2026-07-01', date: '2026-07-01', status: 'completed' }),
+      ],
+      xUnendorsed: [
+        instanceDoc({ instanceId: '2026-06-01', date: '2026-06-01', status: 'completed' }),
+      ],
+    };
+    h.refs = [
+      {
+        referenceId: 'e1',
+        tutorUserId: 'tEndorsed',
+        appSource: 'study',
+        submittedByFamilyId: 'fam1',
+      },
+    ];
+    renderWithProviders(<SessionsPage />);
+
+    await screen.findByText('Active One');
+    await screen.findByText('Term One');
+
+    // The eager fetch for the completed/cancelled-unendorsed series only
+    // fires once the endorsedTutors read settles.
+    await waitFor(() =>
+      expect(instanceFetchSessionIds().sort()).toEqual(['a1', 'a2', 'cUnendorsed', 'xUnendorsed']),
+    );
+  });
+
+  it("expanding a DECLINED series' history card triggers exactly one instances fetch and then renders its notes", async () => {
+    // Declined (unlike cancelled/completed) is ALWAYS lazy, regardless of
+    // endorsement: a series is declined only pre-confirmation, and
+    // generateInstances runs on confirm — so a declined series never had an
+    // instances subcollection to eager-load in the first place.
+    h.sessions = [recurring({ sessionId: 'sT', status: 'declined', tutorName: 'Terminal Tutor' })];
+    h.instances = {
+      sT: [
+        instanceDoc({
+          instanceId: '2026-07-01',
+          date: '2026-07-01',
+          status: 'cancelled',
+          preSessionNote: 'lazy note',
+        }),
+      ],
+    };
+    renderWithProviders(<SessionsPage />);
+
+    await screen.findByText('Terminal Tutor');
+    expect(instanceFetchSessionIds()).toEqual([]);
+    expect(screen.queryByText('lazy note')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /view dates|occurrences/i }));
+    expect(await screen.findByText('lazy note')).toBeInTheDocument();
+    expect(instanceFetchSessionIds()).toEqual(['sT']);
+
+    // Collapsing and re-expanding an already-loaded series must not refetch.
+    fireEvent.click(screen.getByRole('button', { name: /hide dates/i }));
+    fireEvent.click(screen.getByRole('button', { name: /view dates|occurrences/i }));
+    expect(instanceFetchSessionIds()).toEqual(['sT']);
+  });
+
+  it('a COMPLETED series whose tutor is ALREADY endorsed is not eagerly fetched — it stays lazy on expand', async () => {
+    h.sessions = [
+      recurring({
+        sessionId: 'sEndorsed',
+        status: 'completed',
+        tutorUserId: 'tEndorsed',
+        tutorName: 'Endorsed Tutor',
+      }),
+    ];
+    h.instances = {
+      sEndorsed: [
+        instanceDoc({ instanceId: '2026-07-01', date: '2026-07-01', status: 'completed' }),
+      ],
+    };
+    h.refs = [
+      {
+        referenceId: 'e1',
+        tutorUserId: 'tEndorsed',
+        appSource: 'study',
+        submittedByFamilyId: 'fam1',
+      },
+    ];
+    renderWithProviders(<SessionsPage />);
+
+    await screen.findByText('Endorsed Tutor');
+    // The endorsedTutors read has to settle before we can assert the gate
+    // held — its resolution suppresses the endorse button, which is the
+    // observable signal that it's ready.
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: /endorse/i })).not.toBeInTheDocument(),
+    );
+    expect(instanceFetchSessionIds()).toEqual([]);
+
+    fireEvent.click(screen.getByRole('button', { name: /view dates|occurrences/i }));
+    await waitFor(() => expect(instanceFetchSessionIds()).toEqual(['sEndorsed']));
+  });
+
+  it('a completed/unendorsed series whose instance fetch keeps rejecting is attempted exactly ONCE — no retry storm across re-renders (round 3)', async () => {
+    // The eager-instances effect depends on instancesBySeries/seriesInstanceStatus
+    // (they change on every loadSeriesInstances transition), so a persistently
+    // failing series must be excluded once it errors — otherwise every re-fire
+    // (loading→error is itself one, and any unrelated re-render after that is
+    // another) re-passes the old buggy guard and refetches forever.
+    h.sessions = [
+      recurring({
+        sessionId: 'cFailing',
+        status: 'completed',
+        tutorUserId: 'tFailing',
+        tutorName: 'Failing Tutor',
+      }),
+    ];
+    h.getDocs.mockImplementation((q: { query?: { path: string }[]; path?: string }) => {
+      const path = q?.query?.[0]?.path ?? q?.path ?? '';
+      if (path.endsWith('/instances')) return Promise.reject({ code: 'permission-denied' });
+      if (path === 'references') return Promise.resolve({ docs: [] });
+      return Promise.resolve({ docs: h.sessions.map((s) => ({ id: s.sessionId, data: () => s })) });
+    });
+    renderWithProviders(<SessionsPage />);
+
+    await screen.findByText('Failing Tutor');
+    // The card's inline error is the observable proof the eager attempt ran
+    // and settled (not just started).
+    await screen.findByText(/couldn.t load this series. dates/i);
+    expect(instanceFetchSessionIds().filter((id) => id === 'cFailing')).toHaveLength(1);
+
+    // An unrelated re-render — a focus refetch, which reassigns `sessions` to
+    // a new array and so re-fires the eager-instances effect — must NOT retry
+    // the already-errored series. Only the card's manual retry button may.
+    const sessionListCalls = () =>
+      h.getDocs.mock.calls.filter((c) => {
+        const q = c[0] as { query?: { path: string }[]; path?: string };
+        return (q.query?.[0]?.path ?? q.path ?? '') === 'study-sessions';
+      }).length;
+    const before = sessionListCalls();
+    await act(async () => {
+      window.dispatchEvent(new Event('focus'));
+    });
+    await waitFor(() => expect(sessionListCalls()).toBeGreaterThan(before));
+
+    expect(instanceFetchSessionIds().filter((id) => id === 'cFailing')).toHaveLength(1);
+  });
+
+  it('a rejected instance fetch for one series shows that card inline error, not the page loadError — other series still render', async () => {
+    h.sessions = [
+      confirmedRecurring({ sessionId: 'aGood', tutorName: 'Good Tutor' }),
+      confirmedRecurring({ sessionId: 'aBad', tutorName: 'Bad Tutor' }),
+    ];
+    h.getDocs.mockImplementation((q: { query?: { path: string }[]; path?: string }) => {
+      const path = q?.query?.[0]?.path ?? q?.path ?? '';
+      if (path.endsWith('/instances')) {
+        const sid = path.split('/')[1];
+        if (sid === 'aBad') return Promise.reject({ code: 'permission-denied' });
+        return Promise.resolve({ docs: [] });
+      }
+      return Promise.resolve({ docs: h.sessions.map((s) => ({ id: s.sessionId, data: () => s })) });
+    });
+    renderWithProviders(<SessionsPage />);
+
+    expect(await screen.findByText('Good Tutor')).toBeInTheDocument();
+    expect(await screen.findByText('Bad Tutor')).toBeInTheDocument();
+    expect(screen.queryByText(/could not load your sessions/i)).not.toBeInTheDocument();
+    expect(await screen.findByText(/couldn.t load this series. dates/i)).toBeInTheDocument();
+  });
+
+  it('a stale error banner is cleared once an errored ACTIVE series leaves the active set — History shows the normal collapsed state, not the banner, and the fetch is not auto-retried (issue #275 round 4)', async () => {
+    // An already-endorsed tutor keeps this test isolated to the stale-status
+    // fix: a CANCELLED series with an unendorsed tutor is eagerly retried by
+    // design (round 4's other fix) — that's a different, intentional path,
+    // pinned separately above. Here the point is that the OLD error must not
+    // linger as a misleading banner once the series is no longer active, and
+    // must not be silently retried just because load() ran again.
+    h.sessions = [
+      confirmedRecurring({ sessionId: 'aBad', tutorUserId: 'tEndorsedBad', tutorName: 'Errored Tutor' }),
+    ];
+    h.refs = [
+      {
+        referenceId: 'e1',
+        tutorUserId: 'tEndorsedBad',
+        appSource: 'study',
+        submittedByFamilyId: 'fam1',
+      },
+    ];
+    let failInstances = true;
+    h.getDocs.mockImplementation((q: { query?: { path: string }[]; path?: string }) => {
+      const path = q?.query?.[0]?.path ?? q?.path ?? '';
+      if (path.endsWith('/instances')) {
+        if (failInstances) return Promise.reject({ code: 'permission-denied' });
+        return Promise.resolve({ docs: [] });
+      }
+      if (path === 'references') {
+        return Promise.resolve({ docs: h.refs.map((r) => ({ id: r.referenceId, data: () => r })) });
+      }
+      return Promise.resolve({ docs: h.sessions.map((s) => ({ id: s.sessionId, data: () => s })) });
+    });
+    renderWithProviders(<SessionsPage />);
+
+    expect(await screen.findByText(/couldn.t load this series. dates/i)).toBeInTheDocument();
+    const instanceCallCount = () =>
+      h.getDocs.mock.calls.filter((c) => {
+        const q = c[0] as { query?: { path: string }[]; path?: string };
+        const path = q.query?.[0]?.path ?? q.path ?? '';
+        return path.endsWith('/instances') && path.split('/')[1] === 'aBad';
+      }).length;
+    expect(instanceCallCount()).toBe(1);
+
+    // The series is cancelled (e.g. in another tab); the fetch would now
+    // succeed if retried, but it must NOT be retried automatically.
+    failInstances = false;
+    h.sessions = [
+      recurring({
+        sessionId: 'aBad',
+        status: 'cancelled',
+        tutorUserId: 'tEndorsedBad',
+        tutorName: 'Errored Tutor',
+      }),
+    ];
+    await act(async () => {
+      window.dispatchEvent(new Event('focus'));
+    });
+
+    await waitFor(() =>
+      expect(screen.queryByText(/couldn.t load this series. dates/i)).not.toBeInTheDocument(),
+    );
+    expect(await screen.findByText('Errored Tutor')).toBeInTheDocument();
+    expect(instanceCallCount()).toBe(1);
+  });
+
+  it('a focus refetch does not refetch a terminal series that was never expanded', async () => {
+    h.sessions = [
+      confirmedRecurring({ sessionId: 'a1', tutorName: 'Active One' }),
+      recurring({ sessionId: 't1', status: 'declined', tutorName: 'Term One' }),
+    ];
+    h.instances = { a1: [] };
+    renderWithProviders(<SessionsPage />);
+
+    await screen.findByText('Active One');
+    await screen.findByText('Term One');
+    expect(instanceFetchSessionIds()).toEqual(['a1']);
+
+    await act(async () => {
+      window.dispatchEvent(new Event('focus'));
+    });
+    await waitFor(() =>
+      expect(instanceFetchSessionIds().filter((id) => id === 'a1')).toHaveLength(2),
+    );
+    // The terminal series, never expanded, is still never fetched.
+    expect(instanceFetchSessionIds().filter((id) => id === 't1')).toHaveLength(0);
   });
 });

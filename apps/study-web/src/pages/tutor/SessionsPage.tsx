@@ -82,19 +82,22 @@ function hasStarted(date?: string, startTime?: string): boolean {
 
 /**
  * Tutor sessions hub. Reads `study-sessions` where `tutorUserId == me` (plus the
- * per-series `instances` subcollection for confirmed recurring series) and
- * presents three sections:
+ * per-series `instances` subcollection, EAGERLY for confirmed/ACTIVE recurring
+ * series and LAZILY for terminal series on first history-card expand — issue
+ * #275) and presents three sections:
  *   • Pending  — accept / decline (with the recurring conflict preview).
  *   • Upcoming — confirmed one_time sessions and confirmed series interleaved by
  *     date; series expand to their instance list; cancel session / series / date.
- *   • History  — declined / cancelled / completed parents, read-only.
+ *   • History  — declined / cancelled / completed parents, read-only; a
+ *     recurring series' occurrence notes load lazily on expand.
  *
  * INDEX NOTE: the only study-sessions composite keyed on tutorUserId is
  * (tutorUserId, status, date), which cannot serve `where(tutorUserId ==) +
  * orderBy(createdAt)`, so — like the tutor RequestsPage — we query by
  * tutorUserId alone (single-field, always indexed) and sort CLIENT-SIDE.
  * Instances are read via the NESTED per-series path (no collection-group query —
- * the client has no CG rule).
+ * the client has no CG rule). See load()/loadSeriesInstances for the
+ * eager/lazy split and per-series failure isolation.
  *
  * Every mutation is NON-OPTIMISTIC: a confirmed session and a cancellation are
  * both commitments, so a row only changes state after its callable resolves; on
@@ -109,6 +112,31 @@ export function SessionsPage() {
   const [sessions, setSessions] = useState<StudySessionDoc[] | null>(null);
   const [instancesBySeries, setInstancesBySeries] = useState<
     Record<string, StudySessionInstanceDoc[]>
+  >({});
+  // Mirrors instancesBySeries for load() to read a LIVE snapshot without
+  // depending on it directly (issue #275 round 4) — load() is a useCallback
+  // keyed on [uid, fetchSeriesInstances] only, so a direct closure over
+  // instancesBySeries there would be stale after any lazy load.
+  const instancesBySeriesRef = useRef<Record<string, StudySessionInstanceDoc[]>>({});
+  useEffect(() => {
+    instancesBySeriesRef.current = instancesBySeries;
+  }, [instancesBySeries]);
+  // The active (confirmed) series ids from the PREVIOUS load() — lets load()
+  // detect a genuine active→non-active TRANSITION (issue #275 round 4) rather
+  // than "not currently active", which a series that's simply been terminal
+  // all along (e.g. long-completed) would also match on every refetch.
+  // Mirrors the family twin (which also needs this to avoid re-arming its
+  // completed/cancelled-unendorsed eager effect on every refetch); kept here
+  // too so both pages share the same stale-status-pruning shape.
+  const prevActiveIdsRef = useRef<Set<string>>(new Set());
+  // Per-series instance load state (issue #275): 'loading' | 'error', keyed by
+  // sessionId. Covers BOTH the eager ACTIVE-series fetch in load() (isolated
+  // via allSettled so one series' failure can't flip the whole page to
+  // loadError) and a TERMINAL series' lazy fetch on first history-card expand.
+  // A sessionId absent from this map that is also absent from
+  // instancesBySeries simply hasn't been requested yet.
+  const [seriesInstanceStatus, setSeriesInstanceStatus] = useState<
+    Record<string, 'loading' | 'error'>
   >({});
   const [loadError, setLoadError] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -152,6 +180,47 @@ export function SessionsPage() {
   // a third trigger.
   const runIdRef = useRef(0);
 
+  // Fetch ONE series' instances via the nested per-series path. The read MUST
+  // be filtered on the instance's denormalized tutorUserId: the security rule
+  // proves access per-doc from resource.data.tutorUserId (no parent get()),
+  // so this is provable whether the parent series is active or terminal —
+  // single-field equality, no composite needed.
+  const fetchSeriesInstances = useCallback(
+    (sessionId: string) =>
+      getDocs(
+        query(
+          collection(db, 'study-sessions', sessionId, 'instances'),
+          where('tutorUserId', '==', uid),
+        ),
+      ).then((snap) => snap.docs.map((d) => d.data() as StudySessionInstanceDoc)),
+    [uid],
+  );
+
+  // Load (or retry) a single series' instances OUTSIDE the page's main load —
+  // the lazy path for a TERMINAL series' first history-card expand (issue
+  // #275), and the retry affordance for either an active series whose eager
+  // fetch failed or a terminal series whose lazy fetch failed.
+  const loadSeriesInstances = useCallback(
+    (sessionId: string) => {
+      setSeriesInstanceStatus((m) => ({ ...m, [sessionId]: 'loading' }));
+      fetchSeriesInstances(sessionId)
+        .then((rows) => {
+          if (!mountedRef.current) return;
+          setInstancesBySeries((m) => ({ ...m, [sessionId]: rows }));
+          setSeriesInstanceStatus((m) => {
+            const next = { ...m };
+            delete next[sessionId];
+            return next;
+          });
+        })
+        .catch(() => {
+          if (!mountedRef.current) return;
+          setSeriesInstanceStatus((m) => ({ ...m, [sessionId]: 'error' }));
+        });
+    },
+    [fetchSeriesInstances],
+  );
+
   const load = useCallback(async () => {
     const runId = ++runIdRef.current;
     if (!uid) return;
@@ -162,26 +231,24 @@ export function SessionsPage() {
       const rows = snap.docs.map((d) => d.data() as StudySessionDoc);
       rows.sort((a, b) => (b.createdAt?.seconds ?? 0) - (a.createdAt?.seconds ?? 0));
 
-      // Load the instance subcollections for ALL recurring series via the
-      // nested path — terminal (cancelled/completed) series included, because
-      // their per-occurrence notes must stay visible and ERASABLE in history
-      // (issue #255; the carve-out is worthless for a note the author can no
-      // longer reach). The read MUST be filtered on the instance's
-      // denormalized tutorUserId: the security rule proves access per-doc
-      // from resource.data.tutorUserId, and an unconstrained list is
-      // unprovable → PERMISSION_DENIED. Single-field equality (no composite
-      // needed).
-      const series = rows.filter((r) => r.type === 'recurring');
-      const instanceLists = await Promise.all(
-        series.map((s) =>
-          getDocs(
-            query(
-              collection(db, 'study-sessions', s.sessionId, 'instances'),
-              where('tutorUserId', '==', uid),
-            ),
-          ).then((isnap) => ({
+      // Instances (issue #275): eager-load ONLY for ACTIVE (confirmed)
+      // recurring series — the ones upcomingEntries actually renders. A
+      // 'pending' series has no instances subcollection yet (generateInstances
+      // runs on confirm, in respondToSession), so it needs no read at all. A
+      // TERMINAL series (declined/cancelled/completed) loads its instances
+      // LAZILY the first time its history card is expanded
+      // (loadSeriesInstances/toggleHistorySeries below) — its per-occurrence
+      // notes must stay reachable/erasable (issue #255), just not fetched for
+      // every series this tutor has EVER worked on every mount and every
+      // focus refetch. allSettled isolates failures: one series'
+      // PERMISSION_DENIED must render an inline per-card error, not flip the
+      // whole page to loadError.
+      const activeSeries = rows.filter((r) => r.type === 'recurring' && r.status === 'confirmed');
+      const settled = await Promise.allSettled(
+        activeSeries.map((s) =>
+          fetchSeriesInstances(s.sessionId).then((instanceRows) => ({
             sessionId: s.sessionId,
-            rows: isnap.docs.map((d) => d.data() as StudySessionInstanceDoc),
+            rows: instanceRows,
           })),
         ),
       );
@@ -190,15 +257,58 @@ export function SessionsPage() {
       // flag would render the error next to the freshly loaded list.
       setLoadError(false);
       const byId: Record<string, StudySessionInstanceDoc[]> = {};
-      for (const { sessionId, rows: irows } of instanceLists) byId[sessionId] = irows;
-      setInstancesBySeries(byId);
+      const failedIds: string[] = [];
+      settled.forEach((result, i) => {
+        const sessionId = activeSeries[i].sessionId;
+        if (result.status === 'fulfilled') byId[sessionId] = result.value.rows;
+        else failedIds.push(sessionId);
+      });
+      // Merge, don't replace: a refetch only refreshes what it itself queried
+      // (the ACTIVE set). A TERMINAL series' lazily-loaded instances from a
+      // prior expand must survive an unrelated focus refetch, not vanish.
+      setInstancesBySeries((prev) => ({ ...prev, ...byId }));
+      const activeIds = new Set(activeSeries.map((s) => s.sessionId));
+      const prevActiveIds = prevActiveIdsRef.current;
+      setSeriesInstanceStatus((prev) => {
+        const next = { ...prev };
+        for (const sessionId of Object.keys(byId)) delete next[sessionId];
+        for (const sessionId of failedIds) next[sessionId] = 'error';
+        // Drop STALE entries for ids that TRANSITIONED out of the active
+        // batch since the PREVIOUS load() (e.g. an active series whose eager
+        // fetch errored got cancelled in another tab) and were never
+        // actually loaded — issue #275 round 4. Without this, a series that
+        // leaves the active set keeps showing its old "couldn't load this
+        // series' dates" banner in History even though no fetch was ever
+        // attempted in its new lazy/terminal context, which is misleading.
+        // Gated on a real active→non-active TRANSITION (prevActiveIds had it,
+        // this round doesn't), not merely "not active this round" — a series
+        // that's simply been terminal all along would match "not active"
+        // forever, so an unconditional prune would keep clearing/reclearing
+        // pointlessly on every refetch (harmless here with no other eager
+        // mechanism, but kept identical to the family twin, which DOES need
+        // the transition gate to avoid re-arming its eager-unendorsed
+        // effect). instancesBySeriesRef (not the instancesBySeries closure,
+        // which is stale here — see its declaration) is the live "never
+        // loaded" check.
+        for (const sessionId of Object.keys(next)) {
+          if (
+            prevActiveIds.has(sessionId) &&
+            !activeIds.has(sessionId) &&
+            instancesBySeriesRef.current[sessionId] === undefined
+          ) {
+            delete next[sessionId];
+          }
+        }
+        return next;
+      });
+      prevActiveIdsRef.current = activeIds;
       setSessions(rows);
     } catch {
       // A THROW is a load failure — surface it, don't conflate it with the
       // tutor having no sessions (the empty state).
       if (mountedRef.current && runId === runIdRef.current) setLoadError(true);
     }
-  }, [uid]);
+  }, [uid, fetchSeriesInstances]);
 
   useEffect(() => {
     load();
@@ -454,6 +564,23 @@ export function SessionsPage() {
     });
   };
 
+  // Expanding a TERMINAL series' history card is the lazy-load trigger (issue
+  // #275): the first time it opens and its instances aren't already in
+  // instancesBySeries (active-eager or a prior lazy load), fetch them.
+  // Collapsing never unloads, and re-expanding an already-loaded series never
+  // refetches.
+  const toggleHistorySeries = (s: StudySessionDoc) => {
+    const opening = !expanded.has(s.sessionId);
+    toggleExpanded(s.sessionId);
+    if (
+      opening &&
+      instancesBySeries[s.sessionId] === undefined &&
+      seriesInstanceStatus[s.sessionId] !== 'loading'
+    ) {
+      loadSeriesInstances(s.sessionId);
+    }
+  };
+
   const slotLine = (slot: RecurringSlot): string =>
     t('tutor.sessions.recurringSlot', {
       day: t(`days.${DAY_FULL[slot.day]}`),
@@ -581,6 +708,23 @@ export function SessionsPage() {
             {t('tutor.sessions.cancelSeries')}
           </Button>
         </div>
+
+        {/* Isolated per-series failure (issue #275): this ACTIVE series'
+            eager instance fetch rejected — the rest of the page (including
+            other series) still rendered normally via allSettled in load(). */}
+        {seriesInstanceStatus[s.sessionId] === 'error' && (
+          <div className="mt-2 flex items-center gap-2">
+            <p className="text-xs text-brand-600">{t('tutor.sessions.instancesLoadError')}</p>
+            <Button
+              size="sm"
+              variant="outline"
+              fullWidth={false}
+              onClick={() => loadSeriesInstances(s.sessionId)}
+            >
+              {t('tutor.sessions.instancesRetry')}
+            </Button>
+          </div>
+        )}
 
         {isOpen && (
           <SessionInstanceList
@@ -843,26 +987,62 @@ export function SessionsPage() {
                       occurrence renders read-only with the erasure
                       affordance — otherwise the notes strand the moment the
                       series completes or is cancelled, with no redaction
-                      backstop in study. */}
-                  {s.type === 'recurring' &&
-                    (instancesBySeries[s.sessionId] ?? [])
-                      .filter((i) => i.preSessionNote != null || i.postSessionNote != null)
-                      .map((i) => (
-                        <div key={i.instanceId}>
-                          <p className="mt-3 text-[11px] font-medium text-gray-500">
-                            {formatDateStr(i.date)}
+                      backstop in study. Its instances are loaded LAZILY on
+                      first expand rather than eagerly for every series this
+                      tutor has ever had (issue #275). */}
+                  {s.type === 'recurring' && (
+                    <div className="mt-3">
+                      <Button size="sm" variant="ghost" onClick={() => toggleHistorySeries(s)}>
+                        {expanded.has(s.sessionId)
+                          ? t('tutor.sessions.hideDates')
+                          : t('tutor.sessions.viewDates')}
+                      </Button>
+                      {seriesInstanceStatus[s.sessionId] === 'loading' && (
+                        <p className="mt-2 text-xs text-gray-500">
+                          {t('tutor.sessions.instancesLoading')}
+                        </p>
+                      )}
+                      {seriesInstanceStatus[s.sessionId] === 'error' && (
+                        <div className="mt-2 flex items-center gap-2">
+                          <p className="text-xs text-brand-600">
+                            {t('tutor.sessions.instancesLoadError')}
                           </p>
-                          <SessionNotes
-                            pre={i.preSessionNote}
-                            post={i.postSessionNote}
-                            editKind="post"
-                            canEdit={false}
-                            onEdit={() => {}}
-                            onRemove={() => { setNoteError(null); setNoteRemoveTarget({ session: s, instance: i }); }}
-                            copy={noteCopy}
-                          />
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            fullWidth={false}
+                            onClick={() => loadSeriesInstances(s.sessionId)}
+                          >
+                            {t('tutor.sessions.instancesRetry')}
+                          </Button>
                         </div>
-                      ))}
+                      )}
+                      {expanded.has(s.sessionId) &&
+                        seriesInstanceStatus[s.sessionId] !== 'loading' &&
+                        seriesInstanceStatus[s.sessionId] !== 'error' &&
+                        (instancesBySeries[s.sessionId] ?? [])
+                          .filter((i) => i.preSessionNote != null || i.postSessionNote != null)
+                          .map((i) => (
+                            <div key={i.instanceId}>
+                              <p className="mt-3 text-[11px] font-medium text-gray-500">
+                                {formatDateStr(i.date)}
+                              </p>
+                              <SessionNotes
+                                pre={i.preSessionNote}
+                                post={i.postSessionNote}
+                                editKind="post"
+                                canEdit={false}
+                                onEdit={() => {}}
+                                onRemove={() => {
+                                  setNoteError(null);
+                                  setNoteRemoveTarget({ session: s, instance: i });
+                                }}
+                                copy={noteCopy}
+                              />
+                            </div>
+                          ))}
+                    </div>
+                  )}
                   {/* Completed work → offer a fresh proposal to the same family. */}
                   {s.status === 'completed' && (
                     <div className="mt-3">
