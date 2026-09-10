@@ -33,10 +33,17 @@ const STUDY_MARK = { sm: studySm, md: studyMd };
  * from a sit-hosted hub without a handoff, and do's own rows (tasks, board,
  * endorsements) live behind that switch rather than in this list.
  *
- * The study block is a SINGLE row for the same reason the missing rows are
- * absent: a cross-origin deep link cannot work today (study's handoff page
- * drops the destination), so the hub offers the one move that does. See the
- * note on that section.
+ * The study block deep-links (issue #426): study's `HandoffPage` now honours
+ * a validated `next` in the handoff fragment, so a sit member with a KNOWN
+ * sit role gets role-shaped rows into study (My account / Sessions /
+ * Search) instead of the single generic "Open sync-study" row. Role-aware
+ * is the whole point -- study guards `/family/*` on role="parent", so a sit
+ * student (babysitter) gets study's tutor-shaped equivalents
+ * (`/tutor/account`, `/tutor/sessions`, `/tutor/published-searches`), never
+ * the parent-shaped paths. A signed-in member with NO sit role (admin, or a
+ * study-only tutor) has no signal to shape rows from, so they keep the one
+ * destination that always works -- absent beats broken, same rule as the
+ * sit-only sections above.
  */
 export function AccountHubPage() {
   const navigate = useNavigate();
@@ -70,8 +77,16 @@ export function AccountHubPage() {
    * study's `/login`. Same shape as `AppSwitchMenuItem`: mint a one-time code,
    * carry it in the URL FRAGMENT (fragments never reach servers or logs), and
    * navigate only once the mint resolves.
+   *
+   * `next` (issue #426) is an in-app STUDY path (`/family/sessions`,
+   * `/tutor/account`, …) -- distinguished from the role-less fallback row,
+   * whose `href` is study's absolute app URL and therefore never starts with
+   * `/`. Only a leading-`/` value is carried as `next`; it is re-validated on
+   * the RECEIVING side (study's `HandoffPage`) against its own route table
+   * regardless -- this app is not the security boundary, since the fragment
+   * is attacker-controllable after it leaves here.
    */
-  const openStudy = async () => {
+  const openStudy = async (next?: string) => {
     if (busy) return;
     setBusy(true);
     setHandoffFailed(false);
@@ -83,8 +98,10 @@ export function AccountHubPage() {
       const res = await mint({});
       // Whitelisted at the source, mirroring the receiver's en|fr allowlist.
       const lang = i18n.language?.startsWith('fr') ? 'fr' : 'en';
+      const deepNext = next?.startsWith('/') ? next : undefined;
+      const nextParam = deepNext ? `&next=${encodeURIComponent(deepNext)}` : '';
       window.location.assign(
-        `${STUDY_APP_URL}/handoff#code=${encodeURIComponent(res.data.code)}&lang=${encodeURIComponent(lang)}`,
+        `${STUDY_APP_URL}/handoff#code=${encodeURIComponent(res.data.code)}&lang=${encodeURIComponent(lang)}${nextParam}`,
       );
       // Stay busy: the browser is navigating away.
     } catch {
@@ -130,39 +147,46 @@ export function AccountHubPage() {
     },
   ];
 
+  const errorHint = handoffFailed ? { hint: t('appSwitch.error') } : {};
+
+  /*
+   * Role-shaped deep rows (issue #426): study's own routes, mirrored 1:1 --
+   * both `FamilyLayout` and `TutorLayout` in study serve an account, a
+   * sessions and a search-equivalent page under the SAME three names. `next`
+   * is re-validated on arrival regardless (study's `HandoffPage`), so this
+   * table only needs to point at real study routes, not defend against
+   * tampering itself.
+   */
+  const studyDeepRows = isParent
+    ? [
+        { label: t('accountHub.myAccount'), href: '/family/account' },
+        { label: t('accountHub.sessions'), href: '/family/sessions' },
+        { label: t('accountHub.search'), href: '/family/search' },
+      ]
+    : sitRole === 'babysitter'
+      ? [
+          { label: t('accountHub.myAccount'), href: '/tutor/account' },
+          { label: t('accountHub.sessions'), href: '/tutor/sessions' },
+          { label: t('accountHub.search'), href: '/tutor/published-searches' },
+        ]
+      : null;
+
   const sections: AccountSection[] = [
     ...(sitRole ? sitSections : []),
     {
       app: 'study' as const,
       mark: STUDY_MARK,
       /*
-       * ONE row, not a deep-link list (#416 review round 1).
-       *
-       * The first cut listed study's account/sessions/search as deep links.
-       * Two things were wrong with that and neither is fixable here. Study's
-       * `HandoffPage` reads only `code` and `lang` and always lands via
-       * `postLoginRouter`, so a cross-origin DEEP link is not expressible
-       * today at all -- the destination is dropped on arrival. And the deep
-       * rows were parent-shaped for every role: study guards `/family/*` on
-       * role="parent", so a sit student following them is bounced.
-       *
-       * Adding a `next` to the handoff is the real fix and it is NOT a small
-       * one: the handoff mints a session, so an unvalidated destination on
-       * that endpoint is an open redirect against a freshly authenticated
-       * user. It needs an allowlist of in-app relative paths rejecting any
-       * scheme or `//` prefix, with hostile inputs pinned. Tracked separately.
-       *
-       * Until then this page applies its own rule -- absent beats broken --
-       * and offers the one destination that actually works.
+       * A signed-in member with NO sit role (admin, or a study-only tutor)
+       * gives us no signal to shape rows from -- `next` would guess wrong
+       * for one of the two shapes, and absent beats broken (#416 review
+       * round 1's original reasoning, now scoped to just this case). They
+       * keep the one destination that always works: the plain handoff, no
+       * `next`, landing on study's own `postLoginRouter`.
        */
-      rows: [
-        {
-          label: t('appSwitch.toStudy'),
-          href: STUDY_APP_URL,
-          external: true,
-          ...(handoffFailed ? { hint: t('appSwitch.error') } : {}),
-        },
-      ],
+      rows: studyDeepRows
+        ? studyDeepRows.map((row) => ({ ...row, external: true, ...errorHint }))
+        : [{ label: t('appSwitch.toStudy'), href: STUDY_APP_URL, external: true, ...errorHint }],
     },
   ];
 
@@ -170,7 +194,7 @@ export function AccountHubPage() {
     <AccountHome
       sections={sections}
       onNavigate={(href) => void navigate(href)}
-      onNavigateExternal={() => void openStudy()}
+      onNavigateExternal={(href) => void openStudy(href)}
     />
   );
 }

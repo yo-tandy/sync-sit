@@ -105,16 +105,17 @@ describe('AccountHubPage (sit)', () => {
     expect(h.assign).not.toHaveBeenCalled();
   });
 
-  it('the study row mints a handoff code and lands on /handoff, not a deep link', async () => {
+  it('a study row mints a handoff code and lands on /handoff with a validated next, not a plain link', async () => {
     renderHub(PARENT);
     const study = screen.getByText('sync/study').closest('section')!;
-    fireEvent.click(within(study).getByText('Open sync-study'));
+    fireEvent.click(within(study).getByText('Sessions'));
     await waitFor(() => expect(h.assign).toHaveBeenCalled());
     expect(h.callable).toHaveBeenCalledWith('createAppHandoffCode');
     // Fragment, not query: fragments never reach servers or logs. Code is
     // encoded -- 'abc+/=' round-trips only if encodeURIComponent is applied.
+    // The parent-shaped destination is carried as `next`, itself encoded.
     expect(h.assign).toHaveBeenCalledWith(
-      'https://sync-study-app.web.app/handoff#code=abc%2B%2F%3D&lang=en',
+      'https://sync-study-app.web.app/handoff#code=abc%2B%2F%3D&lang=en&next=%2Ffamily%2Fsessions',
     );
     // The router must not be asked to push an absolute URL.
     expect(h.navigate).not.toHaveBeenCalled();
@@ -124,23 +125,60 @@ describe('AccountHubPage (sit)', () => {
     h.mint.mockRejectedValue(new Error('offline'));
     renderHub(PARENT);
     const study = screen.getByText('sync/study').closest('section')!;
-    fireEvent.click(within(study).getByText('Open sync-study'));
+    fireEvent.click(within(study).getByText('Sessions'));
     // Await the error FIRST. Asserting `assign` synchronously here only says
     // the rejected mint has not been processed yet, which is trivially true
     // one tick after the click -- it would pass a regression that both set
-    // the error AND navigated (#416 review round 4).
-    expect(await screen.findByText('Could not switch apps. Please try again.')).toBeInTheDocument();
+    // the error AND navigated (#416 review round 4). The hint now renders on
+    // EVERY study row (three of them), not just one -- assert at least one.
+    const hints = await screen.findAllByText('Could not switch apps. Please try again.');
+    expect(hints.length).toBeGreaterThan(0);
     expect(h.assign).not.toHaveBeenCalled();
   });
 
-  it('offers no study DEEP links — study drops the destination on arrival', () => {
-    // Absent beats broken: study's HandoffPage reads only code+lang and always
-    // routes via postLoginRouter, and its /family/* routes are parent-guarded.
+  it('gives a PARENT the family-shaped study deep rows — My account, Sessions, Search', () => {
+    renderHub(PARENT);
+    const study = screen.getByText('sync/study').closest('section')!;
+    for (const present of ['My account', 'Sessions', 'Search']) {
+      expect(within(study).getByText(present)).toBeInTheDocument();
+    }
+    // The old single generic row is gone once a shaped row set is offered.
+    expect(within(study).queryByText('Open sync-study')).toBeNull();
+  });
+
+  it('gives a STUDENT the tutor-shaped study deep rows, never the parent-shaped paths (issue #426)', async () => {
+    // study guards /family/* on role="parent" — a sit student (babysitter)
+    // must get study's tutor-shaped equivalents, not the parent rows.
     renderHub(STUDENT);
     const study = screen.getByText('sync/study').closest('section')!;
-    for (const gone of ['Sessions', 'Search']) {
-      expect(within(study).queryByText(gone)).toBeNull();
+    for (const present of ['My account', 'Sessions', 'Search']) {
+      expect(within(study).getByText(present)).toBeInTheDocument();
     }
+    expect(within(study).queryByText('Open sync-study')).toBeNull();
+
+    fireEvent.click(within(study).getByText('Sessions'));
+    await waitFor(() => expect(h.assign).toHaveBeenCalled());
+    expect(h.assign).toHaveBeenCalledWith(
+      'https://sync-study-app.web.app/handoff#code=abc%2B%2F%3D&lang=en&next=%2Ftutor%2Fsessions',
+    );
+  });
+
+  it('a STUDENT study "My account" row points at the tutor account path', async () => {
+    renderHub(STUDENT);
+    const study = screen.getByText('sync/study').closest('section')!;
+    fireEvent.click(within(study).getByText('My account'));
+    await waitFor(() => expect(h.assign).toHaveBeenCalled());
+    expect(h.assign).toHaveBeenCalledWith(expect.stringContaining('next=%2Ftutor%2Faccount'));
+  });
+
+  it('a STUDENT study "Search" row points at the tutor published-searches path', async () => {
+    renderHub(STUDENT);
+    const study = screen.getByText('sync/study').closest('section')!;
+    fireEvent.click(within(study).getByText('Search'));
+    await waitFor(() => expect(h.assign).toHaveBeenCalled());
+    expect(h.assign).toHaveBeenCalledWith(
+      expect.stringContaining('next=%2Ftutor%2Fpublished-searches'),
+    );
   });
 
   it('gives a STUDENT their own account row and no family rows', () => {

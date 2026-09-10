@@ -44,6 +44,7 @@ function renderHandoff() {
         <Routes>
           <Route path="/handoff" element={<HandoffPage />} />
           <Route path="/tutor" element={<div>tutor landing</div>} />
+          <Route path="/tutor/sessions" element={<div>tutor sessions</div>} />
           <Route path="/signup" element={<div>signup page</div>} />
           <Route path="/login" element={<div>login page</div>} />
         </Routes>
@@ -217,5 +218,76 @@ describe('HandoffPage (study)', () => {
     // The one-shot settled and cleared: a fragment-less visit never calls the
     // backend (and never replays a previously stashed code).
     expect(h.callable).not.toHaveBeenCalled();
+  });
+
+  describe('the `next` deep-link destination (issue #426)', () => {
+    function mockSuccessfulRedemption() {
+      h.callable.mockResolvedValue({ data: { token: 'custom-tok' } });
+      h.signInWithCustomToken.mockResolvedValue({ user: { uid: 'u1' } });
+      h.getDoc.mockResolvedValue({
+        exists: () => true,
+        data: () => ({ uid: 'u1', profiles: { tutor: { enrollmentComplete: true } } }),
+      });
+    }
+
+    it('navigates to a valid, allow-listed `next` after redemption succeeds', async () => {
+      window.location.hash = '#code=xyz&next=%2Ftutor%2Fsessions';
+      mockSuccessfulRedemption();
+
+      renderHandoff();
+
+      // Lands on the deep link, NOT the role's default `/tutor` landing.
+      await waitFor(() => expect(screen.getByText('tutor sessions')).toBeInTheDocument());
+    });
+
+    it.each([
+      ['scheme-relative', '%2F%2Fevil.com'],
+      ['absolute URL with scheme', 'https%3A%2F%2Fevil.com'],
+      ['javascript: URL', 'javascript%3Aalert(1)'],
+      ['backslash-prefixed', '%2F%5Cevil.com'],
+      // URLSearchParams.get decodes ONE level, handing safeNext the raw
+      // string "/%2Fevil.com" — which itself decodes to "//evil.com" and
+      // must be caught on that SECOND decode (issue #426 pin).
+      ['percent-encoded scheme-relative', '/%252Fevil.com'],
+      ['data: URL', 'data%3Atext%2Fhtml%2C%3Cscript%3Ealert(1)%3C%2Fscript%3E'],
+      ['not in the known route table', '%2Ftutor%2Farea'],
+    ])('falls back to postLoginRouter when `next` is hostile/invalid (%s)', async (_label, encodedNext) => {
+      window.location.hash = `#code=xyz&next=${encodedNext}`;
+      mockSuccessfulRedemption();
+
+      renderHandoff();
+
+      // Lands on the role's normal destination...
+      await waitFor(() => expect(screen.getByText('tutor landing')).toBeInTheDocument());
+      // ...and the hostile string never appears anywhere in the document, nor
+      // in the address bar (the fragment is stripped regardless, but this
+      // also guards against ever echoing the rejected value into the DOM).
+      expect(document.body.innerHTML).not.toContain('evil.com');
+      expect(document.body.innerHTML).not.toContain('javascript:');
+      expect(document.body.innerHTML).not.toContain('data:text/html');
+      expect(window.location.hash).toBe('');
+    });
+
+    it('falls back to postLoginRouter when `next` is absent', async () => {
+      window.location.hash = '#code=xyz';
+      mockSuccessfulRedemption();
+
+      renderHandoff();
+
+      await waitFor(() => expect(screen.getByText('tutor landing')).toBeInTheDocument());
+    });
+
+    it('a hostile `next` never reaches navigate() even when sign-in succeeds but the user-doc read fails', async () => {
+      window.location.hash = '#code=xyz&next=javascript%3Aalert(1)';
+      h.callable.mockResolvedValue({ data: { token: 'tok' } });
+      h.signInWithCustomToken.mockResolvedValue({ user: { uid: 'u1' } });
+      h.getDoc.mockRejectedValue(new Error('transient'));
+
+      renderHandoff();
+
+      // Signed in, doc read failed: default entrance, not the hostile next.
+      await waitFor(() => expect(screen.getByText('signup page')).toBeInTheDocument());
+      expect(document.body.innerHTML).not.toContain('javascript:');
+    });
   });
 });
