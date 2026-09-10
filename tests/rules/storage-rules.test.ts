@@ -470,6 +470,90 @@ describe('profile-photos', () => {
     const fileRef = ref(authed.storage(), 'profile-photos/user1/avatar.jpg');
     await assertFails(uploadString(fileRef, 'photo', 'raw'));
   });
+
+  // Issue #287: this path had NO contentType constraint at all before this
+  // PR (confirmed by PR #466's investigation) — any authenticated owner
+  // could set contentType: 'text/html' and mint a durable inline-rendering
+  // link via getDownloadURL. Same denylist as verification-documents
+  // (issue #281).
+  it('denies an owner upload with contentType text/html (admin/user-phishing surface, issue #287)', async () => {
+    const authed = testEnv.authenticatedContext('user1');
+    const fileRef = ref(authed.storage(), 'profile-photos/user1.html');
+    await assertFails(
+      uploadBytes(fileRef, new TextEncoder().encode('<script>phish()</script>'), {
+        contentType: 'text/html',
+      }),
+    );
+  });
+
+  it('denies an owner upload with contentType image/svg+xml (scriptable, renders live)', async () => {
+    const authed = testEnv.authenticatedContext('user1');
+    const fileRef = ref(authed.storage(), 'profile-photos/user1.svg');
+    await assertFails(
+      uploadBytes(fileRef, new TextEncoder().encode('<svg/>'), {
+        contentType: 'image/svg+xml',
+      }),
+    );
+  });
+
+  it('allows real photo content types for the owner (image/jpeg, image/heic)', async () => {
+    const authed = testEnv.authenticatedContext('user1');
+    await assertSucceeds(
+      uploadBytes(ref(authed.storage(), 'profile-photos/user1.jpg'), new Uint8Array([1, 2, 3]), {
+        contentType: 'image/jpeg',
+      }),
+    );
+    await assertSucceeds(
+      uploadBytes(ref(authed.storage(), 'profile-photos/user1.heic'), new Uint8Array([1, 2, 3]), {
+        contentType: 'image/heic',
+      }),
+    );
+  });
+
+  it('allows empty/application/octet-stream content types for the owner (denylist, not an allowlist)', async () => {
+    // PR #466's resolvePhotoContentType falls back to these when the
+    // browser's File.type is empty/generic — the rule must not become an
+    // allowlist and reject them (mirrors the verification-documents pin).
+    const authed = testEnv.authenticatedContext('user1');
+    await assertSucceeds(
+      uploadBytes(ref(authed.storage(), 'profile-photos/user1.heic'), new Uint8Array([1, 2, 3]), {
+        contentType: '',
+      }),
+    );
+    await assertSucceeds(
+      uploadBytes(ref(authed.storage(), 'profile-photos/user1.jpg'), new Uint8Array([1, 2, 3]), {
+        contentType: 'application/octet-stream',
+      }),
+    );
+  });
+
+  // Review round on PR #470: `allow write` covers create/update/delete, and
+  // request.resource is null on a delete, so a combined `write` rule
+  // referencing request.resource.contentType denies EVERY delete. This is a
+  // real, currently-live flow — apps/web family/babysitter AccountPage.tsx
+  // and apps/study-web tutor AccountPage.tsx call
+  // deleteObject(ref(storage, oldPath)).catch(() => {}) to clean up the old
+  // avatar on remove/replace, swallowing any error — so the regression would
+  // have silently orphaned a readable photo (of a minor, in the tutor case)
+  // on every remove. The rule is now split into create/update + delete
+  // (mirroring verification-documents) specifically so this stays covered.
+  it('allows the owner to delete their own profile photo', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await uploadString(ref(ctx.storage(), 'profile-photos/user1.jpg'), 'seed', 'raw');
+    });
+    const authed = testEnv.authenticatedContext('user1');
+    const fileRef = ref(authed.storage(), 'profile-photos/user1.jpg');
+    await assertSucceeds(deleteObject(fileRef));
+  });
+
+  it('denies a non-owner from deleting another user\'s profile photo', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await uploadString(ref(ctx.storage(), 'profile-photos/user1.jpg'), 'seed', 'raw');
+    });
+    const authed = testEnv.authenticatedContext('user2');
+    const fileRef = ref(authed.storage(), 'profile-photos/user1.jpg');
+    await assertFails(deleteObject(fileRef));
+  });
 });
 
 describe('family-photos', () => {
@@ -500,6 +584,81 @@ describe('family-photos', () => {
     const unauthed = testEnv.unauthenticatedContext();
     const fileRef = ref(unauthed.storage(), 'family-photos/family1/photo.jpg');
     await assertFails(uploadString(fileRef, 'photo', 'raw'));
+  });
+
+  // Issue #287: same open gap as profile-photos before this PR — no
+  // contentType constraint at all. Write scoping (uid/familyId) is NOT
+  // narrowed here (see the storage.rules comment on this match block): no
+  // rule-local source for the caller's familyId exists without a
+  // cross-service firestore.get(), which issue #449 / PR #462's guard test
+  // now blocks. So any authenticated user can still write here (unchanged
+  // by this PR) — only the contentType denylist is new.
+  it('denies an authenticated upload with contentType text/html (admin/user-phishing surface, issue #287)', async () => {
+    const authed = testEnv.authenticatedContext('user1');
+    const fileRef = ref(authed.storage(), 'family-photos/family1/evil.html');
+    await assertFails(
+      uploadBytes(fileRef, new TextEncoder().encode('<script>phish()</script>'), {
+        contentType: 'text/html',
+      }),
+    );
+  });
+
+  it('denies an authenticated upload with contentType image/svg+xml (scriptable, renders live)', async () => {
+    const authed = testEnv.authenticatedContext('user1');
+    const fileRef = ref(authed.storage(), 'family-photos/family1/evil.svg');
+    await assertFails(
+      uploadBytes(fileRef, new TextEncoder().encode('<svg/>'), {
+        contentType: 'image/svg+xml',
+      }),
+    );
+  });
+
+  it('allows real photo content types (image/jpeg, image/heic, empty, application/octet-stream)', async () => {
+    const authed = testEnv.authenticatedContext('user1');
+    await assertSucceeds(
+      uploadBytes(ref(authed.storage(), 'family-photos/family1/photo.jpg'), new Uint8Array([1, 2, 3]), {
+        contentType: 'image/jpeg',
+      }),
+    );
+    await assertSucceeds(
+      uploadBytes(ref(authed.storage(), 'family-photos/family1/photo.heic'), new Uint8Array([1, 2, 3]), {
+        contentType: 'image/heic',
+      }),
+    );
+    await assertSucceeds(
+      uploadBytes(ref(authed.storage(), 'family-photos/family1/photo2.jpg'), new Uint8Array([1, 2, 3]), {
+        contentType: '',
+      }),
+    );
+    await assertSucceeds(
+      uploadBytes(ref(authed.storage(), 'family-photos/family1/photo3.jpg'), new Uint8Array([1, 2, 3]), {
+        contentType: 'application/octet-stream',
+      }),
+    );
+  });
+
+  // Pins the scoping finding itself: a caller with no relationship to
+  // family2 can still write into family2's photo path. This is UNCHANGED
+  // by this PR (see the storage.rules comment) — pinned here so a future
+  // narrowing attempt has a red-to-green target, and so this isn't an
+  // accidental silent gap.
+  it('TEMPORARILY allows a non-member to write into another family\'s photo path (issue #287 scoping finding)', async () => {
+    const authed = testEnv.authenticatedContext('unrelated-user');
+    const fileRef = ref(authed.storage(), 'family-photos/family2.jpg');
+    await assertSucceeds(uploadString(fileRef, 'photo', 'raw'));
+  });
+
+  // Review round on PR #470: same combined-write/delete trap as
+  // profile-photos above. No client currently calls deleteObject() against
+  // this path, but the rule is split into create/update + delete for
+  // consistency, so pin it the same way.
+  it('allows an authenticated delete (latent path, same fix as profile-photos)', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await uploadString(ref(ctx.storage(), 'family-photos/family1/photo.jpg'), 'seed', 'raw');
+    });
+    const authed = testEnv.authenticatedContext('user1');
+    const fileRef = ref(authed.storage(), 'family-photos/family1/photo.jpg');
+    await assertSucceeds(deleteObject(fileRef));
   });
 });
 
@@ -613,6 +772,18 @@ describe('do-uploads (sync-do quarantine, plan §7.4)', () => {
     await assertFails(
       uploadBytes(ref(authed.storage(), 'do-uploads/user1/not-img-3'), IMG, {
         contentType: 'application/octet-stream',
+      }),
+    );
+  });
+
+  // Issue #287 audit finding: 'image/svg+xml' matches the image/.* allowlist
+  // byte-for-byte, so before this PR an SVG (scriptable, renders live) got
+  // through this rule where text/html/application/pdf did not.
+  it('denies contentType image/svg+xml even though it matches the image/.* allowlist (issue #287)', async () => {
+    const authed = testEnv.authenticatedContext('user1');
+    await assertFails(
+      uploadBytes(ref(authed.storage(), 'do-uploads/user1/evil.svg'), IMG, {
+        contentType: 'image/svg+xml',
       }),
     );
   });
