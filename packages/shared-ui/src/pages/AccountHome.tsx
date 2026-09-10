@@ -57,6 +57,19 @@ export interface AccountHomeProps {
  * of the app you arrived from. It is not below anything; the bottom bar is how
  * you leave. Callers must not wrap this in a TopNav carrying `backTo`.
  *
+ * NO HEADER HERE (#445 review). An earlier revision of this component
+ * rendered its own sticky "Sync/Account" banner, which painted OVER
+ * `AccountLayout`'s existing `md+` desktop exit header (Home link +
+ * app-switch menu) -- two headers stacked at the same `z-40`, one hiding the
+ * other. There must be exactly ONE header, and it has to be full-bleed
+ * (spanning the viewport, not just this component's own width-capped
+ * column), which only the HOST layout can render for free since it sits
+ * outside `PageContainer` already. So the sticky "Sync/Account" banner now
+ * lives in `AccountLayout` (apps/web) -- see that file's docstring -- and
+ * this component goes back to being page BODY only: subtitle, sections,
+ * footer. A host that mounts `AccountHome` owns its own header the same way
+ * it owns `AuthGuard` and the ground token.
+ *
  * Rows are DATA. A destination that does not exist is an absent row, never a
  * disabled one -- study has no family "favorites" and sync-do has no account
  * routes at all, and the honest rendering of a feature that does not exist is
@@ -72,7 +85,6 @@ export function AccountHome({
 
   return (
     <div className="px-5 pt-4 pb-8">
-      <h1 className="mb-1 text-2xl font-bold text-gray-900">{t('accountHub.title')}</h1>
       <p className="mb-6 text-sm text-gray-500">{t('accountHub.subtitle')}</p>
 
       {sections
