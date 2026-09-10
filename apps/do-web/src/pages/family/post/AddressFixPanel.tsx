@@ -64,7 +64,8 @@ export function AddressFixPanel({ familyId, onSaved, onBack }: AddressFixPanelPr
       } else {
         setOutsideArea(true);
       }
-    } catch {
+    } catch (err) {
+      console.error('[addressFix] resolve area failed', err);
       setError(true);
     } finally {
       setSaving(false);
