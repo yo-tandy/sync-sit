@@ -101,7 +101,8 @@ export const useVerificationStore = create<VerificationState>((set) => ({
         documents: result.data.documents,
         loading: false,
       });
-    } catch {
+    } catch (err) {
+      console.error('[verification] fetch status failed', err);
       set({ loading: false });
     }
   },
@@ -133,7 +134,8 @@ export const useVerificationStore = create<VerificationState>((set) => ({
         pendingVerifications: result.data.verifications,
         pendingLoading: false,
       });
-    } catch {
+    } catch (err) {
+      console.error('[verification] fetch pending verifications failed', err);
       set({ pendingLoading: false });
     }
   },

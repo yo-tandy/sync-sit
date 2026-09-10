@@ -63,7 +63,8 @@ export function FamilyDashboard() {
       if (runId !== loadRunRef.current) return;
       setKids(kidsSnap.docs.map((d) => ({ kidId: d.id, firstName: d.data().firstName, age: d.data().age })));
       setKidsLoaded(true);
-    } catch {
+    } catch (err) {
+      console.error('[familyDashboard] load family/kids failed', err);
       // Focus refetch may fire on a network blip — keep last-known-good name
       // and kids rather than rejecting out of the hook's void call.
     }

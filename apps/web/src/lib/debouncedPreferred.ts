@@ -33,6 +33,7 @@ export function debouncedTogglePreferred(babysitterUserId: string, add: boolean)
       const fnName = add ? 'addPreferredBabysitter' : 'removePreferredBabysitter';
       const fn = httpsCallable(functions, fnName);
       await fn({ babysitterUserId });
+    // eslint-disable-next-line no-restricted-syntax -- best-effort: onSnapshot listener reconciles preferred state if this write fails
     } catch {
       // Silent — the onSnapshot listener will reconcile if needed
     }

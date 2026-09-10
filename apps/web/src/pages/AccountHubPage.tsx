@@ -87,7 +87,8 @@ export function AccountHubPage() {
         `${STUDY_APP_URL}/handoff#code=${encodeURIComponent(res.data.code)}&lang=${encodeURIComponent(lang)}`,
       );
       // Stay busy: the browser is navigating away.
-    } catch {
+    } catch (err) {
+      console.error('[accountHub] mint handoff code failed', err);
       setHandoffFailed(true);
       setBusy(false);
     }

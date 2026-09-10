@@ -157,7 +157,8 @@ export function SchedulePage() {
       setSavedNoticeHours(noticeHours);
       toast(t('schedule.cancellationPolicy.saved'));
       return true;
-    } catch {
+    } catch (err) {
+      console.error('[schedule] save cancellation policy failed', err);
       setPolicyError(t('common.error'));
       return false;
     } finally {

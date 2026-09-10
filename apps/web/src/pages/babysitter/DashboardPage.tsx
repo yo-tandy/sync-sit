@@ -29,6 +29,7 @@ function getOnboardingDismissed(): Set<string> {
   try {
     const raw = localStorage.getItem(ONBOARDING_KEY);
     return raw ? new Set(JSON.parse(raw)) : new Set();
+  // eslint-disable-next-line no-restricted-syntax -- best-effort: onboarding-dismissed flag read from localStorage
   } catch { return new Set(); }
 }
 function dismissOnboarding(key: string) {

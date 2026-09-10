@@ -71,7 +71,8 @@ export function AdminGovernancePage() {
     try {
       await reviewGovernanceAlert(alertId);
       await fetchGovernanceAlerts(onlyUnreviewed);
-    } catch {
+    } catch (err) {
+      console.error('[admin.governance] mark reviewed failed', err);
       setError(t('admin.governance.error'));
     } finally {
       setActing(false);
@@ -89,7 +90,8 @@ export function AdminGovernancePage() {
       setRevokeTarget(null);
       setRevokeReason('');
       await fetchSupervisedAccounts();
-    } catch {
+    } catch (err) {
+      console.error('[admin.governance] revoke supervision failed', err);
       setError(t('admin.governance.error'));
     } finally {
       setActing(false);

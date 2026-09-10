@@ -199,6 +199,7 @@ export function StudentEnrollment() {
           await uploadBytes(storageRef, additional.photoFile);
           const photoUrl = await getDownloadURL(storageRef);
           await updateDoc(doc(db, 'users', uid), { photoUrl, updatedAt: serverTimestamp() });
+        // eslint-disable-next-line no-restricted-syntax -- best-effort: optional profile photo upload during enrollment; retryable later from account settings
         } catch {
           // Swallowed by design — see above.
         }

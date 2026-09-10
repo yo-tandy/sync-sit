@@ -311,6 +311,7 @@ export function FamilyAppointmentsPage() {
             };
             return [uid, info] as [string, BabysitterSummary];
           }
+        // eslint-disable-next-line no-restricted-syntax -- best-effort: babysitter-info enrichment falls back to a generic label
         } catch { /* permission error */ }
         return [uid, { uid, firstName: '', lastName: '', name: t('familyDashboard.babysitterFallback') }] as [string, BabysitterSummary];
       })

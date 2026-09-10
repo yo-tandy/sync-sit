@@ -157,6 +157,7 @@ export function SearchPage() {
       if (settled.every((r) => r.status === 'fulfilled')) {
         setCompleteRefUids((prev) => new Set(prev).add(uid));
       }
+    // eslint-disable-next-line no-restricted-syntax -- best-effort: allSettled above already degrades to fewer endorsement sources
     } catch { /* silent */ } finally {
       refsInFlight.current.delete(uid);
     }
@@ -229,6 +230,7 @@ export function SearchPage() {
         );
         const ids = new Set(confirmedSnap.docs.map((d) => d.data().babysitterUserId as string));
         setReturningIds(ids);
+      // eslint-disable-next-line no-restricted-syntax -- best-effort: returning-babysitter lookup only tweaks copy, never blocks the page
       } catch { /* ignore */ }
     }
     load();
@@ -309,7 +311,8 @@ export function SearchPage() {
       await deleteDoc(doc(db, 'publishedSearches', withdrawTarget.id));
       setWithdrawTarget(null);
       toast(t('publish.withdrawn'));
-    } catch {
+    } catch (err) {
+      console.error('[publish] withdraw search failed', err);
       // Keep the dialog open and say so — a swallowed rules denial or offline
       // failure left the row visibly present but the dialog claimed success
       // (PR #210 review).
