@@ -12,6 +12,9 @@ import { describe, it, expect, vi } from 'vitest';
 vi.mock('@/config/firebase', () => ({ db: {}, auth: {}, functions: {}, storage: {} }));
 vi.mock('firebase/auth', () => ({ onAuthStateChanged: vi.fn() }));
 
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { Navigate } from 'react-router';
 import { router } from '@/router';
 
@@ -47,4 +50,24 @@ describe('dropped co-parent page (issue #340)', () => {
   // imports its pages statically, so a surviving InvitePage import would fail
   // `tsc -p tsconfig.app.json` outright. A test asserting it would restate the
   // typechecker rather than pin anything the typechecker misses.
+});
+
+describe('retired sign-up role question (issue #435 milestone, PR5)', () => {
+  it('keeps /signup mounted, wired to the redirect page (not a Navigate — it must preserve query strings, see SignUpRedirectPage.test.tsx)', () => {
+    const route = findRoute('/signup');
+    expect(route).toBeTruthy();
+    // Not a plain <Navigate>: the element is <SignUpRedirectPage />, which
+    // computes its target from the current query string at render time.
+    expect(route!.element.type).not.toBe(Navigate);
+    expect((route!.element.type as { name?: string }).name).toBe('SignUpRedirectPage');
+  });
+
+  it('the classic SignUpRolePage import is gone from the route table module (no dangling import)', () => {
+    // apps/web imports pages statically (unlike study/do's lazy barrel), so a
+    // surviving `SignUpRolePage` import would either fail typecheck (the file
+    // is deleted) or, if somehow still present, show up in this module's own
+    // source. Assert the observable: this file no longer references it.
+    const src = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), '../router.tsx'), 'utf8');
+    expect(src).not.toContain('SignUpRolePage');
+  });
 });
