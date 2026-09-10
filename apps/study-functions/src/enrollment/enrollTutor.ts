@@ -106,14 +106,24 @@ export const enrollTutor = onCall(
     let codeDoc: FirebaseFirestore.DocumentSnapshot | null = null;
     let enrollmentInput: unknown;
     if (isCrossApp) {
-      const profiles = (callerData.profiles ?? {}) as Record<string, unknown>;
-      const babysitterProfile = (profiles.babysitter ?? null) as Record<string, unknown> | null;
       // The EJM identity is canonical at the ROOT with a nested fallback
-      // (issue #203 shared identity) — but crossApp still requires the OTHER
-      // provider profile to exist: that profile is what proves the identity
-      // was verified by a real enrollment.
+      // (issue #203 shared identity). Proof of verification used to require
+      // the OTHER provider profile to exist (a babysitter profile only gets
+      // written after a code-verified enrollment) — but issue #435
+      // milestone PR4 added a second, profile-less way to reach a verified
+      // root identity: `enrollStudentIdentity` (apps/web's unified flow,
+      // run BEFORE the sit/study choice) also consumes an EJM-class
+      // verification code and writes root `ejemEmail`, with no role
+      // profile at all. Every writer of the root field is code-verified
+      // (enrollBabysitter/enrollTutor/enrollDoer's classic paths, and now
+      // enrollStudentIdentity) — so a present root `ejemEmail` is
+      // sufficient proof on its own; requiring a specific OTHER profile in
+      // addition would just reject the unified flow's root-only callers
+      // with no protective effect (profile-exists and role-exclusivity are
+      // still enforced separately by assertCanAddProfile/addProfileToUser
+      // below).
       const derivedEjemEmail = getEjemEmail(callerData as unknown as User);
-      if (!babysitterProfile || !derivedEjemEmail) {
+      if (!derivedEjemEmail) {
         throw new HttpsError('failed-precondition', 'No verified EJM identity on this account');
       }
       ejemEmailLower = derivedEjemEmail.toLowerCase();
@@ -341,7 +351,17 @@ export const enrollTutor = onCall(
       areaLatLng: enrollment.areaLatLng ?? null,
       areaRadiusKm: enrollment.areaRadiusKm ?? null,
       languages: [],
-      searchable: false,
+      // Defaults to false (every existing caller — the classic wizard was
+      // never wired to ask this). TRUE only on a crossApp call whose caller
+      // doc carries the unified flow's contact-visibility consent (issue
+      // #435 milestone, PR3 StepContactInfo / PR4, recorded by
+      // `enrollStudentIdentity` root-side — READ here rather than re-sent by
+      // the client, the same "canonical root, resolved server-side" pattern
+      // as classLevel/gender/contact above, and the only way this survives
+      // the cross-origin handoff, which transfers a session, not a client
+      // payload). Scoped to isCrossApp — the classic new-account path never
+      // has a caller doc to read, so it stays false there exactly as before.
+      searchable: isCrossApp && (callerData as { contactVisibilityConsent?: boolean }).contactVisibilityConsent === true,
     };
 
     // 5a. Add-profile path — an authenticated existing user gains a tutor
