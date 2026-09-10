@@ -24,7 +24,7 @@ vi.mock('@/stores/authStore', () => ({
 
 import { renderWithProviders } from '@/__tests__/test-utils';
 import { WelcomePage } from '@/pages/public/WelcomePage';
-import { SignUpRolePage } from '@/pages/public/SignUpRolePage';
+import { SignUpRedirectPage } from '@/pages/public/SignUpRedirectPage';
 import { ComingSoonPage } from '@/pages/public/ComingSoonPage';
 import { AboutPage } from '@/pages/public/AboutPage';
 
@@ -46,29 +46,35 @@ describe('WelcomePage', () => {
       expect(screen.getByRole('link', { name })).toHaveAttribute('href', href);
     }
     expect(screen.getByRole('link', { name: 'Log in' })).toHaveAttribute('href', '/login');
-    expect(screen.getByRole('link', { name: 'Sign up' })).toHaveAttribute('href', '/signup');
+    // issue #435 milestone, PR5: do's own role question is retired — "Sign
+    // up" points straight at sit's cross-origin /enroll, not local /signup.
+    expect(screen.getByRole('link', { name: 'Sign up' })).toHaveAttribute(
+      'href',
+      'https://sync-sit.com/enroll?lang=en',
+    );
   });
 });
 
-describe('SignUpRolePage', () => {
-  it('offers the doer and parent roles, both leading to the enrollment placeholders', () => {
-    renderWithProviders(<SignUpRolePage />);
-    expect(screen.getByRole('link', { name: /doer/i })).toHaveAttribute('href', '/enroll/doer');
-    expect(screen.getByRole('link', { name: /parent/i })).toHaveAttribute('href', '/enroll/parent');
+// SignUpRolePage (the doer/parent role picker, banner, and crossApp
+// short-circuits) is RETIRED (issue #435 milestone, PR5): /signup now just
+// forwards cross-origin to sit's unified /enroll — see
+// apps/do-web/src/pages/public/__tests__/SignUpRedirectPage.test.tsx for
+// that redirect's own dedicated coverage (target URL, language). This page
+// fires a window.location.assign side effect unconditionally and renders no
+// role UI, so it needs no auth-state variants here.
+describe('SignUpRedirectPage', () => {
+  beforeEach(() => {
+    Object.defineProperty(window, 'location', {
+      value: { ...window.location, assign: vi.fn() },
+      writable: true,
+      configurable: true,
+    });
   });
 
-  it('redirects a signed-in account WITH a sync-do role to its portal', () => {
-    h.auth.firebaseUser = { uid: 'u1' };
-    h.auth.userDoc = { uid: 'u1', profiles: { doer: { enrollmentComplete: true } } };
-    renderWithProviders(<SignUpRolePage />);
+  it('renders no role picker — the retired UI is gone', () => {
+    renderWithProviders(<SignUpRedirectPage />);
     expect(screen.queryByRole('link', { name: /doer/i })).toBeNull();
-  });
-
-  it('keeps a signed-in account with NO sync-do role here to add one (PR7 guard fallback)', () => {
-    h.auth.firebaseUser = { uid: 'u1' };
-    h.auth.userDoc = { uid: 'u1' };
-    renderWithProviders(<SignUpRolePage />);
-    expect(screen.getByRole('link', { name: /doer/i })).toHaveAttribute('href', '/enroll/doer');
+    expect(screen.queryByRole('link')).toBeNull();
   });
 });
 

@@ -33,4 +33,12 @@ describe('sit LoginPage wrapper', () => {
     expect(route(undefined)).toBe('/signup');
     expect(route('something-else')).toBe('/signup');
   });
+
+  // issue #435 milestone, PR5: /signup is retired — the "create an account"
+  // link goes straight to /enroll, the unified landing page, instead of
+  // taking the extra /signup -> /enroll redirect hop.
+  it('points the "create an account" link at /enroll, not /signup', () => {
+    render(<LoginPage />);
+    expect(captured.signUpTo).toBe('/enroll');
+  });
 });
