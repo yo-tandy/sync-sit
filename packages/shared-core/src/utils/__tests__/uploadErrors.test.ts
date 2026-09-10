@@ -21,4 +21,31 @@ describe('uploadErrorKey', () => {
     expect(uploadErrorKey(undefined)).toBe('uploadError');
     expect(uploadErrorKey('string error')).toBe('uploadError');
   });
+
+  // Issue #471 follow-up: the signed-URL callable flow (FamilySettingsPage)
+  // never throws a storage/* code — httpsCallable rejections carry
+  // functions/* codes instead, and a failed fetch PUT carries neither
+  // unless the caller attaches one.
+  it.each(['functions/permission-denied', 'functions/unauthenticated'])(
+    'maps %s (a rejected httpsCallable) to the permission key',
+    (code) => {
+      expect(uploadErrorKey({ code })).toBe('uploadErrorUnauthorized');
+    },
+  );
+
+  it.each(['functions/unavailable', 'functions/deadline-exceeded'])(
+    'maps %s (a rejected httpsCallable) to the connection-problem key',
+    (code) => {
+      expect(uploadErrorKey({ code })).toBe('uploadErrorConnection');
+    },
+  );
+
+  it('maps upload/network (the signed-URL PUT failure convention) to the connection-problem key', () => {
+    expect(uploadErrorKey({ code: 'upload/network' })).toBe('uploadErrorConnection');
+  });
+
+  it('does not treat an unrelated functions/* code as actionable (still generic)', () => {
+    expect(uploadErrorKey({ code: 'functions/invalid-argument' })).toBe('uploadError');
+    expect(uploadErrorKey({ code: 'functions/internal' })).toBe('uploadError');
+  });
 });
