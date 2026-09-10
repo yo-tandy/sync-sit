@@ -42,10 +42,18 @@ service firebase.storage {
     // type — xhtml+xml and svg+xml script directly; the rest via an
     // <?xml-stylesheet?> XSLT that can emit arbitrary HTML, and Firefox
     // treats every *+xml media type as an XML document). The +xml suffix
-    // match dominates enumerating them. No legitimate verification flow
-    // produces any of these — phones/scanners emit JPEG/PNG/PDF
-    // (accept="image/*" admits SVG only incidentally) — so the breadth
-    // costs nothing.
+    // match dominates enumerating them. No legitimate verification or
+    // photo-upload flow produces any of these — phones/scanners/cameras
+    // emit JPEG/PNG/HEIC/PDF (accept="image/*" admits SVG only incidentally)
+    // — so the breadth costs nothing.
+    //
+    // Reused (issue #287) on every client-writable path below that stores
+    // browser-supplied bytes served back inline via getDownloadURL:
+    // profile-photos, family-photos, and do-uploads, alongside the original
+    // verification-documents use. Every one of those objects is fetched
+    // through firebasestorage.googleapis.com, which renders text/html and
+    // image/svg+xml live and inline — the same admin/user-phishing surface
+    // issue #281 closed for verification documents.
     // A raw-SDK caller controls the string byte-for-byte and browsers honor
     // 'Text/HTML', 'text/html; charset=x' and leading-whitespace spellings,
     // so: lower().trim() + prefix match, and (?s) so an embedded newline
@@ -109,16 +117,45 @@ service firebase.storage {
 
     // Profile photos — only the owner can write their own photo
     // App uploads with path: profile-photos/{uid}.{ext}
+    //
+    // Content type: narrow denylist only — see isRenderableDocType above
+    // (issue #287; PR #466 confirmed this path had NO contentType
+    // constraint at all before this change, and that clients may still
+    // pass an empty/application/octet-stream type — the null/no-match
+    // fallthrough in isRenderableDocType keeps that allowed).
     match /profile-photos/{fileName} {
       allow read: if request.auth != null;
       allow write: if request.auth != null
-                   && fileName[0:request.auth.uid.size()] == request.auth.uid;
+                   && fileName[0:request.auth.uid.size()] == request.auth.uid
+                   && !isRenderableDocType(request.resource.contentType);
     }
 
-    // Family photos — authenticated users can upload/read
+    // Family photos — authenticated users can upload/read.
+    //
+    // Write scoping (issue #287): the only client writer is
+    // apps/web FamilySettingsPage.tsx, which builds the path from the
+    // CALLER'S OWN familyId (`getParentView(userDoc)?.familyId`, read from
+    // the caller's own Firestore user doc at login, not from the route).
+    // That would make `family-photos/{familyId}.{ext}` narrowable to "the
+    // caller's own family" in principle, the same way profile-photos is
+    // narrowed to the caller's own uid — but doing so needs the caller's
+    // familyId AT RULE-EVALUATION TIME, and there is no rule-local source
+    // for it: no custom claim carries familyId onto the ID token (grepped
+    // the repo for setCustomUserClaims — there is none), so the only way to
+    // check it here would be a cross-service `firestore.get()` into
+    // users/{uid}. That construct is exactly what #446 took down production
+    // with (fails closed on an errored call — every parent's write, not
+    // just non-members') and is exactly what PR #462's cross-service guard
+    // test (issue #449) now fails the suite on for any NEW occurrence. So
+    // this rule is intentionally left unscoped by uid/familyId — any
+    // authenticated user can still write here, same as before this PR —
+    // and only the contentType denylist is added. See "Follow-ups" in the
+    // PR description for the safe alternative (a callable-mediated/
+    // signed-upload-URL path, the getVerificationDocument/#153 pattern).
     match /family-photos/{allPaths=**} {
       allow read: if request.auth != null;
-      allow write: if request.auth != null;
+      allow write: if request.auth != null
+                   && !isRenderableDocType(request.resource.contentType);
     }
 
     // ── sync-do task photos (plan §7.4) — the two-path pipeline ──
@@ -153,10 +190,20 @@ service firebase.storage {
       // (§8). Deletes fall through to the implicit deny (request.resource
       // is null on delete): cleanup is the stripper's and the sweep's job,
       // via the Admin SDK.
+      //
+      // isRenderableDocType is ALSO required here (issue #287 audit): the
+      // image/.* allowlist alone does not exclude image/svg+xml — an SVG
+      // is scriptable and renders live exactly like HTML (see the helper's
+      // comment above), and 'image/svg+xml' matches 'image/.*' byte-for-
+      // byte. The allowlist stays (it's the right shape for a
+      // single-uploader-controlled prefix with no legitimate non-image use
+      // — unlike profile-photos/family-photos, which admit whatever a
+      // browser's File.type reports); the denylist closes the one gap in it.
       allow write: if request.auth != null
                    && request.auth.uid == uid
                    && request.resource.size < 10 * 1024 * 1024
-                   && request.resource.contentType.matches('image/.*');
+                   && request.resource.contentType.matches('image/.*')
+                   && !isRenderableDocType(request.resource.contentType);
     }
 
     // Default: deny all other access
