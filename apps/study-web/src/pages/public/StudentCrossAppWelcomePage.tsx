@@ -16,23 +16,31 @@ import { StepSubjects } from '@/pages/enrollment/tutor/StepSubjects';
 const CONSENT_VERSION = '2025-12-01';
 
 /**
- * `/tutor/welcome-crossapp` (issue #435 milestone, PR4) — the unified
- * flow's study-side landing page: a root-only identity (created by
- * apps/web's `enrollStudentIdentity`, no role profile at all) arrives here
- * via the cross-origin handoff after picking "study" on `/enroll/choose-app`.
+ * `/tutor/welcome-crossapp` (issue #435 milestone, PR4) — a generic
+ * "verified EJM identity, no study role yet" landing page. The unified
+ * flow's root-only identity (created by apps/web's `enrollStudentIdentity`,
+ * no role profile at all) is the flow that ships it and the most common
+ * arrival, via the cross-origin handoff after picking "study" on
+ * `/enroll/choose-app` — but the gate below is not scoped to that shape:
+ * ANY account with a verified root `ejemEmail` and no study role qualifies,
+ * a sync-do doer included (decision 20 forbids sit/study reachability INTO
+ * do, not the reverse — a doer is as entitled to add tutoring as any other
+ * verified student, and `enrollTutor`'s crossApp precondition already allows
+ * it server-side).
  *
  * Deliberately a SEPARATE page from `CrossAppWelcomePage` (`/welcome-study`),
  * which is gated on `isBabysitter` — the existing "a sit babysitter adds a
- * tutor role" precedent. A root-only unified-flow arrival is never a
- * babysitter (no role profile exists yet at all), so it fails that gate; this
- * page's gate is the inverse (no role, NOT a babysitter, but a verified root
- * identity is on file). Both pages otherwise share the same mechanism —
+ * tutor role" precedent. A babysitter fails THIS page's gate (handled by
+ * `/welcome-study` instead); this page's gate is the inverse (no role, NOT a
+ * babysitter, but a verified root identity is on file — whatever produced
+ * it). Both pages otherwise share the same mechanism —
  * `crossAppTutorGaps`/`hasCrossAppTutorGaps` render only the fields the doc
  * actually lacks (none, in the ordinary unified-flow case: StepBasicInfo/
- * StepContactInfo already collected everything but subjects) before
- * `enrollTutor({crossApp: true, subjects, ...})`, which resolves
- * classLevel/gender/contact off the caller's OWN root doc — exactly the same
- * "canonical root, resolved server-side" pattern PR1 established.
+ * StepContactInfo already collected everything but subjects; a doer-only doc
+ * may have real gaps, e.g. no DOB) before `enrollTutor({crossApp: true,
+ * subjects, ...})`, which resolves classLevel/gender/contact off the
+ * caller's OWN root doc — exactly the same "canonical root, resolved
+ * server-side" pattern PR1 established.
  */
 export function StudentCrossAppWelcomePage() {
   const { t } = useTranslation();
@@ -53,9 +61,12 @@ export function StudentCrossAppWelcomePage() {
   const role = getStudyRole(userDoc);
   if (role) return <Navigate to={postLoginRouter(role, userDoc)} replace />;
   // A sit babysitter belongs on the OTHER crossApp welcome page
-  // (`/welcome-study`); a doc with no verified identity at all is a
-  // genuinely fresh visitor. Only a root-only unified-flow identity
-  // (verified, no role profile) belongs here.
+  // (`/welcome-study`); a doc with no verified identity at all (no
+  // ejemEmail anywhere) is a genuinely fresh visitor. Any OTHER
+  // server-verified EJM identity with no study role belongs here — the
+  // unified flow's root-only shape is the common case, but a sync-do
+  // doer-only account (verified via enrollDoer, no babysitter/tutor
+  // profile) qualifies identically; see the module doc comment.
   if (isBabysitter(userDoc) || !getEjemEmail(userDoc)) return <Navigate to="/signup" replace />;
 
   const gaps = crossAppTutorGaps(userDoc);

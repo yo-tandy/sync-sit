@@ -117,6 +117,28 @@ describe('StudentCrossAppWelcomePage', () => {
     expect(screen.getByText('signup page')).toBeInTheDocument();
   });
 
+  // The gate is NOT scoped to the unified flow's root-only shape — any
+  // server-verified EJM identity with no study role (and no babysitter
+  // profile) qualifies. A sync-do doer-only account is the concrete case
+  // (decision 20 forbids sit/study reachability INTO do, not the reverse;
+  // PR review discussion on #474).
+  it('a doer-only account (verified identity, no sit/study role) renders the welcome continuation, not a redirect', () => {
+    h.auth.userDoc = {
+      firstName: 'Dana',
+      lastName: 'Doer',
+      dateOfBirth: '2008-04-01',
+      ejemEmail: 'dana28@ejm.org',
+      classLevel: '2nde',
+      gender: 'other',
+      contactPhone: '+33600000003',
+      profiles: { doer: { enrollmentComplete: true } },
+    };
+    renderPage();
+    expect(screen.queryByText('signup page')).toBeNull();
+    expect(screen.getByText(i18n.t('welcomeCross.greeting', { name: 'Dana' }))).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: i18n.t('common.continue') })).toBeInTheDocument();
+  });
+
   it('greets the root-only identity and offers Continue straight to subjects (no gaps)', () => {
     renderPage();
     expect(screen.getByText(i18n.t('welcomeCross.greeting', { name: 'Iris' }))).toBeInTheDocument();

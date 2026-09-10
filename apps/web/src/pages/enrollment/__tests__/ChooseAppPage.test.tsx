@@ -136,6 +136,22 @@ describe('ChooseAppPage', () => {
     expect(buttons).toHaveLength(2);
   });
 
+  // Decision 20 forbids sit/study reachability INTO do — unaffected by this
+  // page's gate accepting a broader set of verified identities (issue #435
+  // PR4 review discussion on #474): a sync-do doer-only user reaching this
+  // screen still sees do as a disabled "coming soon" tile, not a third
+  // option.
+  it('do stays a disabled coming-soon tile for a doer-only user too', () => {
+    h.auth.userDoc = {
+      firstName: 'Dana',
+      ejemEmail: 'dana28@ejm.org',
+      profiles: { doer: { enrollmentComplete: true } },
+    };
+    renderPage();
+    expect(screen.getByText(i18n.t('unifiedEnrollment.comingSoon'))).toBeInTheDocument();
+    expect(screen.getAllByRole('button')).toHaveLength(2);
+  });
+
   it('choosing sit calls enrollBabysitter in crossApp mode and resumes at /enroll/babysitter', async () => {
     renderPage();
     fireEvent.click(screen.getByText('sync/sit'));

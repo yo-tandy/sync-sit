@@ -92,13 +92,18 @@ export function postLoginRouter(role: string | undefined, userDoc?: StudyUser | 
   if (userDoc && isBabysitter(userDoc)) {
     return canCrossAppEnrollTutor(userDoc) ? '/welcome-study' : '/enroll/tutor';
   }
-  // Root-only unified-flow identity (issue #435 milestone, PR4): arrived via
-  // the cross-origin handoff from apps/web's /enroll/choose-app (or is
-  // re-logging in after abandoning that landing before finishing) —
-  // verified EJM identity on file, no role profile at all yet, never a
-  // babysitter (that case is handled above). Land on the dedicated welcome
-  // page rather than /signup, which would ask the role question again for
-  // information the unified flow already collected.
+  // Any server-verified EJM identity with no role IN THIS APP gets offered
+  // the crossApp continuation (issue #435 milestone, PR4), not just a
+  // unified-flow arrival via the cross-origin handoff from apps/web's
+  // /enroll/choose-app (or a re-login after abandoning that landing before
+  // finishing). Decision 20 forbids sit/study reachability INTO do, not the
+  // reverse: a sync-do doer has a verified root ejemEmail (enrollDoer writes
+  // it the same way enrollStudentIdentity does) and no study role — never a
+  // babysitter, that case is handled above — so they are as entitled to add
+  // tutoring as any other verified student; enrollTutor's crossApp
+  // precondition already allows this server-side (see that PR's fix). Land
+  // on the dedicated welcome page rather than /signup, which would ask the
+  // role question again for information already on file.
   if (userDoc && getEjemEmail(userDoc)) {
     return '/tutor/welcome-crossapp';
   }
