@@ -850,13 +850,18 @@ describe('tutor SessionsPage — session notes (post)', () => {
   });
 
   it('a COMPLETED series keeps its per-occurrence post-notes visible and removable in HISTORY', async () => {
-    // Terminal series strand their instance notes otherwise (round 1).
+    // Terminal series strand their instance notes otherwise (round 1). Its
+    // instances load LAZILY on first history-card expand (issue #275), so
+    // the note only appears once the card is expanded.
     h.sessions = [recurring({ sessionId: 'sT', status: 'completed' })];
     h.instances = {
       sT: [instanceDoc({ instanceId: '2026-07-01', date: '2026-07-01', status: 'completed', postSessionNote: 'stranded recap' })],
     };
     renderWithProviders(<SessionsPage />);
 
+    await screen.findByText('Levy');
+    expect(screen.queryByText('stranded recap')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /view dates|occurrences/i }));
     expect(await screen.findByText('stranded recap')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /remove note/i }));
     fireEvent.click(screen.getByRole('button', { name: /remove it/i }));
@@ -1055,5 +1060,127 @@ describe('tutor SessionsPage — refetch on focus', () => {
     await waitFor(() => expect(sessionCalls()).toHaveLength(2));
     // Byte-identical query construction — the provability pin holds on refetch.
     expect(sessionCalls()[1][0]).toEqual(sessionCalls()[0][0]);
+  });
+});
+
+// ── Issue #275: terminal series' instances load LAZILY, not eagerly ──
+// Mirrors the family twin's pins: only ACTIVE (confirmed) series' instances
+// are fetched on mount/focus; a TERMINAL series (declined/cancelled/completed)
+// fetches its instances once, on the first expand of its history card.
+describe('tutor SessionsPage — lazy terminal-series instances (issue #275)', () => {
+  beforeEach(() => reset());
+
+  function instanceDoc(overrides: Record<string, unknown> = {}) {
+    return {
+      instanceId: '2026-08-10',
+      sessionId: 'sR',
+      date: '2026-08-10',
+      startTime: '17:00',
+      endTime: '18:00',
+      status: 'scheduled',
+      location: 'online',
+      ...overrides,
+    };
+  }
+
+  /** sessionIds whose /instances subcollection getDocs has been called for,
+   * in call order (duplicates included — a re-fetch shows up again). */
+  function instanceFetchSessionIds(): string[] {
+    return h.getDocs.mock.calls
+      .map((c) => c[0] as { query?: { path: string }[]; path?: string })
+      .map((q) => q.query?.[0]?.path ?? q.path ?? '')
+      .filter((path) => path.endsWith('/instances'))
+      .map((path) => path.split('/')[1]);
+  }
+
+  function confirmedRecurring(overrides: Record<string, unknown> = {}) {
+    return recurring({ status: 'confirmed', ...overrides });
+  }
+
+  it('on mount, fetches instances only for ACTIVE series — never for terminal series (2 active + 3 terminal)', async () => {
+    h.sessions = [
+      confirmedRecurring({ sessionId: 'a1', familyName: 'Active One' }),
+      confirmedRecurring({ sessionId: 'a2', familyName: 'Active Two' }),
+      recurring({ sessionId: 't1', status: 'declined', familyName: 'Term One' }),
+      recurring({ sessionId: 't2', status: 'cancelled', familyName: 'Term Two' }),
+      recurring({ sessionId: 't3', status: 'completed', familyName: 'Term Three' }),
+    ];
+    h.instances = { a1: [], a2: [] };
+    renderWithProviders(<SessionsPage />);
+
+    await screen.findByText('Active One');
+    await screen.findByText('Term Three');
+
+    expect(instanceFetchSessionIds().sort()).toEqual(['a1', 'a2']);
+  });
+
+  it("expanding a terminal series' history card triggers exactly one instances fetch and then renders its notes", async () => {
+    h.sessions = [recurring({ sessionId: 'sT', status: 'completed', familyName: 'Terminal Family' })];
+    h.instances = {
+      sT: [
+        instanceDoc({
+          instanceId: '2026-07-01',
+          date: '2026-07-01',
+          status: 'completed',
+          postSessionNote: 'lazy recap',
+        }),
+      ],
+    };
+    renderWithProviders(<SessionsPage />);
+
+    await screen.findByText('Terminal Family');
+    expect(instanceFetchSessionIds()).toEqual([]);
+    expect(screen.queryByText('lazy recap')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /view dates|occurrences/i }));
+    expect(await screen.findByText('lazy recap')).toBeInTheDocument();
+    expect(instanceFetchSessionIds()).toEqual(['sT']);
+
+    // Collapsing and re-expanding an already-loaded series must not refetch.
+    fireEvent.click(screen.getByRole('button', { name: /hide dates/i }));
+    fireEvent.click(screen.getByRole('button', { name: /view dates|occurrences/i }));
+    expect(instanceFetchSessionIds()).toEqual(['sT']);
+  });
+
+  it('a rejected instance fetch for one series shows that card inline error, not the page loadError — other series still render', async () => {
+    h.sessions = [
+      confirmedRecurring({ sessionId: 'aGood', familyName: 'Good Family' }),
+      confirmedRecurring({ sessionId: 'aBad', familyName: 'Bad Family' }),
+    ];
+    h.getDocs.mockImplementation((q: { query?: { path: string }[]; path?: string }) => {
+      const path = q?.query?.[0]?.path ?? q?.path ?? '';
+      if (path.endsWith('/instances')) {
+        const sid = path.split('/')[1];
+        if (sid === 'aBad') return Promise.reject({ code: 'permission-denied' });
+        return Promise.resolve({ docs: [] });
+      }
+      return Promise.resolve({ docs: h.sessions.map((s) => ({ id: s.sessionId, data: () => s })) });
+    });
+    renderWithProviders(<SessionsPage />);
+
+    expect(await screen.findByText('Good Family')).toBeInTheDocument();
+    expect(await screen.findByText('Bad Family')).toBeInTheDocument();
+    expect(screen.queryByText(/could not load your sessions/i)).not.toBeInTheDocument();
+    expect(await screen.findByText(/couldn.t load this series. dates/i)).toBeInTheDocument();
+  });
+
+  it('a focus refetch does not refetch a terminal series that was never expanded', async () => {
+    h.sessions = [
+      confirmedRecurring({ sessionId: 'a1', familyName: 'Active One' }),
+      recurring({ sessionId: 't1', status: 'cancelled', familyName: 'Term One' }),
+    ];
+    h.instances = { a1: [] };
+    renderWithProviders(<SessionsPage />);
+
+    await screen.findByText('Active One');
+    await screen.findByText('Term One');
+    expect(instanceFetchSessionIds()).toEqual(['a1']);
+
+    fireEvent.focus(window);
+    await waitFor(() =>
+      expect(instanceFetchSessionIds().filter((id) => id === 'a1')).toHaveLength(2),
+    );
+    // The terminal series, never expanded, is still never fetched.
+    expect(instanceFetchSessionIds().filter((id) => id === 't1')).toHaveLength(0);
   });
 });
