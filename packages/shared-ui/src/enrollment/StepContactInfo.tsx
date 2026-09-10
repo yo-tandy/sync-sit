@@ -69,8 +69,22 @@ export function StepContactInfo({ onNext, initial = null, ejemEmail, serverError
   const { t } = useTranslation();
   const [contactEmail, setContactEmail] = useState(initial?.contactEmail ?? '');
   const [contactPhone, setContactPhone] = useState(initial?.contactPhone ?? '');
+  // `whatsapp` is `string | null` (null = unset, matching root `User.whatsapp`)
+  // while `contactPhone` is always a string, so the two "empty" spellings are
+  // NOT ===. Without the `?? ''`, a user who left this checkbox CHECKED (the
+  // default) and entered no phone submits `{whatsapp: null, contactPhone: ''}`,
+  // and on back-navigation `null === ''` is false — the box silently comes back
+  // UNCHECKED, and a phone typed afterwards no longer mirrors, so `whatsapp`
+  // stays null against the user's intent.
+  //
+  // Normalising leaves one genuinely ambiguous case: checked-with-no-phone and
+  // unchecked-with-no-whatsapp serialise identically, so both restore as
+  // checked. That is the harmless direction — with no phone there is nothing to
+  // mirror, and it restores the component's own default. Every case where the
+  // distinction has an observable effect (any non-empty phone) still round-trips
+  // exactly.
   const [whatsappSameAsPhone, setWhatsappSameAsPhone] = useState(
-    initial ? initial.whatsapp === initial.contactPhone : true,
+    initial ? (initial.whatsapp ?? '') === initial.contactPhone : true,
   );
   const [whatsapp, setWhatsapp] = useState(initial?.whatsapp ?? '');
   const [consent, setConsent] = useState(initial?.contactVisibilityConsent ?? false);

@@ -64,6 +64,94 @@ describe('StepContactInfo', () => {
     );
   });
 
+  // REGRESSION (review of PR #444). `whatsapp` is `string | null` while
+  // `contactPhone` is always a string, so the two "empty" spellings are not
+  // ===. A user who left "same as phone" CHECKED (the default) with no phone
+  // submits {whatsapp: null, contactPhone: ''}; the old
+  // `initial.whatsapp === initial.contactPhone` then evaluated `null === ''`
+  // and silently restored the box UNCHECKED, so a phone typed afterwards no
+  // longer mirrored and whatsapp stayed null against the user's intent.
+  it('keeps "same as phone" CHECKED on back-navigation when it was checked with no phone', () => {
+    renderWithProviders(
+      <StepContactInfo
+        onNext={vi.fn()}
+        ejemEmail=""
+        initial={{
+          contactEmail: 'nina@example.com',
+          contactPhone: '',
+          whatsapp: null,
+          contactVisibilityConsent: false,
+        }}
+      />,
+    );
+    expect(screen.getByRole('checkbox', { name: 'Same as my phone number' })).toBeChecked();
+    // ...and no separate WhatsApp field is revealed, since it mirrors.
+    expect(screen.queryAllByPlaceholderText('6 12 34 56 78')).toHaveLength(1);
+  });
+
+  it('restores a mirrored phone/WhatsApp pair on back-navigation', () => {
+    renderWithProviders(
+      <StepContactInfo
+        onNext={vi.fn()}
+        ejemEmail=""
+        initial={{
+          contactEmail: 'nina@example.com',
+          contactPhone: '+33 612345678',
+          whatsapp: '+33 612345678',
+          contactVisibilityConsent: true,
+        }}
+      />,
+    );
+    expect(screen.getByRole('checkbox', { name: 'Same as my phone number' })).toBeChecked();
+    expect(screen.getByLabelText('Contact email')).toHaveValue('nina@example.com');
+  });
+
+  it('restores an INDEPENDENT WhatsApp number as unchecked, with the second field revealed', () => {
+    // The case that must NOT regress to "checked" when fixing the above: a
+    // distinct whatsapp is unambiguous and has to round-trip exactly.
+    renderWithProviders(
+      <StepContactInfo
+        onNext={vi.fn()}
+        ejemEmail=""
+        initial={{
+          contactEmail: '',
+          contactPhone: '+33 612345678',
+          whatsapp: '+33 798765432',
+          contactVisibilityConsent: false,
+        }}
+      />,
+    );
+    expect(screen.getByRole('checkbox', { name: 'Same as my phone number' })).not.toBeChecked();
+    expect(screen.getAllByPlaceholderText('6 12 34 56 78')).toHaveLength(2);
+  });
+
+  it('sends the EXACT payload shape -- empty phone becomes null whatsapp, email is trimmed', () => {
+    // objectContaining would not catch a stray field, an untrimmed email, or
+    // whatsapp coming back as '' instead of null (the shape root User.whatsapp
+    // expects).
+    const onNext = vi.fn();
+    renderWithProviders(<StepContactInfo onNext={onNext} ejemEmail="" />);
+
+    fireEvent.change(screen.getByLabelText('Contact email'), {
+      target: { value: '  nina@example.com  ' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+
+    expect(onNext).toHaveBeenCalledWith({
+      contactEmail: 'nina@example.com',
+      contactPhone: '',
+      whatsapp: null,
+      contactVisibilityConsent: false,
+    });
+  });
+
+  it('renders a server-side rejection carried back from a later step', () => {
+    renderWithProviders(
+      <StepContactInfo onNext={vi.fn()} ejemEmail="" serverError="Something went wrong." />,
+    );
+    expect(screen.getByText('Something went wrong.')).toBeInTheDocument();
+  });
+
   it('the consent checkbox never blocks submission; unchecked shows the honest inline warning', () => {
     const onNext = vi.fn();
     renderWithProviders(<StepContactInfo onNext={onNext} ejemEmail="" />);
