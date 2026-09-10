@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useClientConfigValue } from '@/lib/adminConfigClient';
-import { ADMIN_CONFIG_DEFS } from '@ejm/shared-core';
+import { ADMIN_CONFIG_DEFS, getClassLevel } from '@ejm/shared-core';
 import { useNavigate, useSearchParams } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { httpsCallable } from 'firebase/functions';
@@ -50,12 +50,18 @@ export function BabysitterEnrollment() {
     const babysitter = getBabysitterProfile(userDoc);
     if (firebaseUser && babysitter) {
       if (babysitter.enrollmentComplete === false) {
-        // Route on the PROFILE-scoped step marker, not root identity:
-        // classLevel is collected by StepProfile, and a cross-app enrollee
-        // (identity on file, no babysitter classLevel yet) still needs that
-        // step — it renders the identity summary instead of identity inputs
-        // (issue #144), so nothing is re-asked.
-        if (!babysitter.classLevel) {
+        // Route on the RESOLVED classLevel (root ?? babysitter ?? tutor),
+        // not the raw nested profile field: classLevel/gender are root-only
+        // now (issue #435 milestone, PR1) — enrollBabysitter's crossApp mode
+        // no longer copies them onto profiles.babysitter at all, and the
+        // unified flow's account-creation step (PR4) writes them straight to
+        // root before the sit/study choice even happens. A crossApp enrollee
+        // whose classLevel already resolves (from root, or a legacy nested
+        // copy) has nothing left for StepProfile to collect — go straight to
+        // the mutable-fields step; one that still has neither goes through
+        // StepProfile, which renders the identity summary instead of
+        // identity inputs when name/DOB are already on file (issue #144).
+        if (!getClassLevel(userDoc)) {
           setStep(3); // Need classLevel/gender (+ identity when absent)
         } else {
           setStep(4); // Need mutable fields

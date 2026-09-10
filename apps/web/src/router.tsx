@@ -18,6 +18,7 @@ import { SyncSitReportProblemPage } from '@/pages/public/SyncSitReportProblemPag
 
 import { SharePage } from '@/pages/public/SharePage';
 import { SignUpRolePage } from '@/pages/public/SignUpRolePage';
+import { EnrollLandingPage } from '@/pages/public/EnrollLandingPage';
 import { ParentGuidePage } from '@/pages/public/ParentGuidePage';
 import { BabysitterGuidePage } from '@/pages/public/BabysitterGuidePage';
 import { AddToHomescreenPage } from '@/pages/public/AddToHomescreenPage';
@@ -31,6 +32,8 @@ import { SupervisionAgreementPage } from '@/pages/public/SupervisionAgreementPag
 import { BabysitterEnrollment } from '@/pages/enrollment/BabysitterEnrollment';
 import { ParentEnrollment } from '@/pages/enrollment/ParentEnrollment';
 import { JoinFamilyPage } from '@/pages/enrollment/JoinFamilyPage';
+import { StudentEnrollment } from '@/pages/enrollment/StudentEnrollment';
+import { ChooseAppPage } from '@/pages/enrollment/ChooseAppPage';
 
 // Portal dashboards
 import { BabysitterDashboard } from '@/pages/babysitter/DashboardPage';
@@ -86,8 +89,13 @@ export const router = createBrowserRouter([
       { path: '/guide/parents', element: <ParentGuidePage /> },
       { path: '/guide/babysitters', element: <BabysitterGuidePage /> },
       { path: '/install', element: <AddToHomescreenPage /> },
+      // issue #435 milestone, PR4: the new unified cross-app entry point.
+      // /signup (above) keeps working unchanged — PR5 retires it.
+      { path: '/enroll', element: <EnrollLandingPage /> },
       { path: '/enroll/babysitter', element: <BabysitterEnrollment /> },
       { path: '/enroll/parent', element: <ParentEnrollment /> },
+      { path: '/enroll/student', element: <StudentEnrollment /> },
+      { path: '/enroll/choose-app', element: <ChooseAppPage /> },
       { path: '/invite/:token', element: <JoinFamilyPage /> },
       // PUBLIC by design: the kid redeems with the emailed token, no account yet.
       { path: '/kid-invite', element: <KidInvitePage /> },

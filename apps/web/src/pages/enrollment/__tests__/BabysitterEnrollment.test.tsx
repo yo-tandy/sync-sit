@@ -242,6 +242,27 @@ describe('BabysitterEnrollment add-profile routing (issue #144)', () => {
     expect(screen.queryByText('profile-next')).toBeNull();
   });
 
+  // issue #435 milestone, PR4: the unified flow's crossApp arrival carries
+  // classLevel ONLY at root (enrollBabysitter's crossApp mode no longer
+  // seeds the nested babysitter.classLevel at all, per PR1) — the resume
+  // routing must resolve root, not the raw nested field, or every unified-
+  // flow sit continuation would be stuck re-asking StepProfile.
+  it('resume with ROOT-ONLY classLevel (unified-flow crossApp shape) goes straight to preferences', async () => {
+    h.auth = {
+      firebaseUser: { uid: 't5' },
+      userDoc: {
+        firstName: 'Iris',
+        classLevel: 'Terminale',
+        profiles: { babysitter: { enrollmentComplete: false } },
+      },
+      loading: false,
+    };
+    renderFlow();
+
+    expect(await screen.findByText('preferences-complete')).toBeInTheDocument();
+    expect(screen.queryByText('profile-next')).toBeNull();
+  });
+
   it('add-profile WITHOUT identity still gets the identity step', async () => {
     h.auth = {
       firebaseUser: { uid: 't2' },
