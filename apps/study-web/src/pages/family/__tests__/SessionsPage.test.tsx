@@ -957,9 +957,12 @@ describe('family SessionsPage — session notes (pre)', () => {
     expect(screen.queryByText(/remove this note\?/i)).not.toBeInTheDocument();
   });
 
-  it('a failed remove surfaces the error, keeps the dialog open, and the note survives', async () => {
+  it('a failed remove surfaces the error, keeps the dialog open, and the note survives, and logs (#463)', async () => {
     // The worst outcome for this feature is a silent failed erasure — the
-    // author believing the note is gone when it is not.
+    // author believing the note is gone when it is not. Pre-#463 this catch
+    // was bare (`catch {}`): the console got nothing, matching the shape
+    // that turned the #446 outage into an hours-long diagnosis.
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     h.sessions = [
       confirmedOneTime({ sessionId: 'sRm', date: '2026-08-01', startTime: '09:00', preSessionNote: 'stale ask' }),
     ];
@@ -973,6 +976,8 @@ describe('family SessionsPage — session notes (pre)', () => {
     expect(screen.getByText(/remove this note\?/i)).toBeInTheDocument();
     // Local state untouched: the note is still there behind the dialog.
     expect(screen.getByText('stale ask')).toBeInTheDocument();
+    expect(consoleErrorSpy).toHaveBeenCalledWith('[sessions] remove note failed', expect.any(Error));
+    consoleErrorSpy.mockRestore();
   });
 
   it('a failed-precondition SAVE shows the dead-end message, other failures the generic one (issue #255)', async () => {

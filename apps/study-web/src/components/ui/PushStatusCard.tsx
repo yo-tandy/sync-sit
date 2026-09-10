@@ -19,7 +19,8 @@ export function PushStatusCard({ uid }: { uid?: string }) {
     try {
       const token = await requestPushPermission(uid);
       setStatus(token ? 'granted' : Notification.permission);
-    } catch {
+    } catch (err) {
+      console.error('[account] push permission request failed', err);
       setStatus(Notification.permission);
     } finally {
       setEnabling(false);

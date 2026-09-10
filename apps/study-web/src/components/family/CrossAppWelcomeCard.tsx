@@ -10,6 +10,7 @@ const STORAGE_KEY = 'sync-welcome-seen-study';
 function alreadySeen(): boolean {
   try {
     return localStorage.getItem(STORAGE_KEY) === 'true';
+  // eslint-disable-next-line no-restricted-syntax -- best-effort: localStorage read for the one-time welcome flag
   } catch {
     return true; // storage unavailable: never nag on every visit
   }
@@ -25,6 +26,7 @@ export function CrossAppWelcomeCard() {
   const handleDismiss = () => {
     try {
       localStorage.setItem(STORAGE_KEY, 'true');
+    // eslint-disable-next-line no-restricted-syntax -- best-effort: localStorage write for the one-time welcome flag
     } catch {
       // storage unavailable — hidden for this session anyway
     }

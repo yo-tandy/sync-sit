@@ -160,7 +160,8 @@ export function AccountPage() {
       await resetPassword(userDoc.email);
       setPasswordResetSent(true);
       flashAfter(() => setPasswordResetSent(false), 5000);
-    } catch {
+    } catch (err) {
+      console.error('[account] password reset failed', err);
       setError(t('account.passwordResetFailed'));
     } finally {
       setPasswordResetting(false);
@@ -203,7 +204,8 @@ export function AccountPage() {
     setPrefs({ ...prefs, [category]: { ...current, [channel]: next } });
     try {
       await savePrefs(category, channel, next);
-    } catch {
+    } catch (err) {
+      console.error('[account] save notification prefs failed', err);
       // Revert the optimistic toggle and surface the failure.
       setPrefs(previous);
       setError(t('account.notifSaveFailed'));
