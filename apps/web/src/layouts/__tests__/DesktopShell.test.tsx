@@ -274,7 +274,7 @@ describe('AccountLayout renders the hub’s ONE header, every breakpoint (#445 r
     // OWN visibility class is still assertable regardless of its contents.
     renderLayout(<AccountLayout />, 'account hub');
     const header = screen.getByText('Sync/Account').closest('header')!;
-    const slots = header.querySelectorAll(':scope > div');
+    const slots = header.querySelectorAll(':scope > nav');
     expect(slots).toHaveLength(2);
     for (const slot of Array.from(slots)) {
       expect(slot.className).toMatch(/\bhidden\b/);
@@ -288,7 +288,7 @@ describe('AccountLayout renders the hub’s ONE header, every breakpoint (#445 r
   it('flanks the title with equal flex-1/basis-0 slots, not a fixed width -- a fixed w-24 clipped "Open sync-study" onto three wrapped lines (screenshot review of #484)', () => {
     renderLayout(<AccountLayout />, 'account hub');
     const header = screen.getByText('Sync/Account').closest('header')!;
-    const slots = header.querySelectorAll(':scope > div');
+    const slots = header.querySelectorAll(':scope > nav');
     expect(slots).toHaveLength(2);
     for (const slot of Array.from(slots)) {
       expect(slot.className).toMatch(/\bflex-1\b/);
@@ -299,6 +299,27 @@ describe('AccountLayout renders the hub’s ONE header, every breakpoint (#445 r
     // content so the two equal flex-1 slots do the centring.
     const title = screen.getByText('Sync/Account');
     expect(title.className).toMatch(/\bshrink-0\b/);
+  });
+
+  it('centres the title even below md, where both flanks are display:none and it is the only flex child (regression on a1e5f12)', () => {
+    // jsdom applies no layout, so this pins the CLASS that produces centring
+    // at that breakpoint rather than a measured position. At md+ the two
+    // equal flex-1 flanks already consume all the leftover space, making
+    // justify-center inert there -- it is what centres the lone title once
+    // both flanks vanish below md.
+    renderLayout(<AccountLayout />, 'account hub');
+    const header = screen.getByText('Sync/Account').closest('header')!;
+    expect(header.className).toMatch(/\bjustify-center\b/);
+  });
+
+  it('restores the desktop exits as real <nav> landmarks, sharing the phone bar’s label safely (it is md:hidden, never present alongside these)', () => {
+    renderLayout(<AccountLayout />, 'account hub');
+    const header = screen.getByText('Sync/Account').closest('header')!;
+    const navs = within(header).getAllByRole('navigation', SWITCH_BAR);
+    expect(navs).toHaveLength(2);
+    for (const nav of navs) {
+      expect(nav.tagName).toBe('NAV');
+    }
   });
 
   it('never wraps the app-switch slot’s content -- whitespace-nowrap on the wrapper, not inside AppSwitchMenuItem itself', () => {

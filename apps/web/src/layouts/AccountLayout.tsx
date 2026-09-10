@@ -38,17 +38,23 @@ import { useAuthStore } from '@/stores/authStore';
  * full-bleed and stacked at the same position. There can only be one header,
  * so this is now it, at every breakpoint: `sticky top-0 z-40 h-12`,
  * full-bleed because this layout sits OUTSIDE `PageContainer` (the width cap
- * only wraps `<Outlet />`, below), titled "Sync/Account" -- centred at every
- * width via the two flanking slots being equal `flex-1 basis-0` (not a fixed
- * width: a `w-24` box clipped `AppSwitchMenuItem`'s label onto three wrapped
- * lines, caught on a screenshot review of #484) and empty when hidden. The
- * Home link and app-switch menu are UNCHANGED in substance, just now
- * `hidden md:flex` instead of the old `hidden md:block` on the whole header --
+ * only wraps `<Outlet />`, below), titled "Sync/Account" -- centred via TWO
+ * mechanisms, not one: at `md+` the two flanking `<nav>`s are equal
+ * `flex-1 basis-0` (not a fixed width: a `w-24` box clipped
+ * `AppSwitchMenuItem`'s label onto three wrapped lines, caught on a
+ * screenshot review of #484) and consume all the leftover space themselves;
+ * below `md` both are `display:none`, so the header's OWN `justify-center`
+ * is what centres the lone title (a regression caught on review of a1e5f12
+ * -- without it, one flex child left-aligns by default). The Home link and
+ * app-switch menu are UNCHANGED in substance, just now `hidden md:flex` on
+ * their own `<nav>` each instead of `hidden md:block` on the whole header --
  * still the only exit at `>=md`, since `AppSwitchBar` stays `md:hidden`
- * (plan Q9 is still open on where the switch belongs at desktop). Neutral
- * `bg-ground-admin`, the same token stamped on `<html>` below -- never a
- * brand colour -- and no bell, no menu beyond the app switch: this layout
- * owns no app's chrome.
+ * (plan Q9 is still open on where the switch belongs at desktop). Both carry
+ * the SAME `aria-label` the phone bar uses -- safe, since that bar is
+ * `md:hidden` and so never in the accessibility tree at the same widths
+ * these two are. Neutral `bg-ground-admin`, the same token stamped on
+ * `<html>` below -- never a brand colour -- and no bell, no menu beyond the
+ * app switch: this layout owns no app's chrome.
  */
 export function AccountLayout() {
   const { t } = useTranslation();
@@ -81,15 +87,32 @@ export function AccountLayout() {
             `sticky` (not `fixed`) is enough here, unlike inside `AccountHome`:
             this layout already sits outside `PageContainer`, so `sticky`'s
             normal-flow containing block is already full width. */}
-        <header className="sticky top-0 z-40 flex h-12 items-center border-b border-gray-200 bg-ground-admin px-4">
+        {/* justify-center: below `md` BOTH flanks are `display:none`, so the
+            shrink-0 title is the header's only flex child and, without this,
+            left-aligns instead of centring (caught on review of a1e5f12).
+            At `md+` it is inert -- the two equal flex-1 flanks already
+            consume all the leftover space themselves, so there is nothing
+            left for justify-content to distribute -- but it is what centres
+            the title on phone, where this header is ALSO now shown (#445). */}
+        <header className="sticky top-0 z-40 flex h-12 items-center justify-center border-b border-gray-200 bg-ground-admin px-4">
           {/* Equal flex-1/basis-0 flanking slots (not a fixed w-24 -- that
               clipped `AppSwitchMenuItem`'s "Open sync-study" label onto
               three wrapped lines inside a 96px box, screenshot review on
               #484). Both grow/shrink identically regardless of content, so
               the shrink-0 title between them still centres on the FULL
               header width; the slots themselves absorb whatever space the
-              title doesn't need. Both are empty (display:none) below `md`. */}
-          <div className="hidden flex-1 basis-0 items-center justify-start md:flex">
+              title doesn't need. Both are empty (display:none) below `md`.
+              EACH ITS OWN `<nav>` (not a plain `<div>`): these are real
+              desktop navigation controls and deserve the landmark back.
+              Two navs sharing this label is fine here -- the ONE other
+              landmark that ever carried it, the phone `AppSwitchBar`, is
+              `md:hidden` and therefore absent from the accessibility tree
+              at the same widths these two are visible, so there is no
+              duplicate-label collision at any single breakpoint. */}
+          <nav
+            aria-label={t('appSwitch.barLabel')}
+            className="hidden flex-1 basis-0 items-center justify-start md:flex"
+          >
             {portalHref && (
               <Link
                 to={portalHref}
@@ -98,7 +121,7 @@ export function AccountLayout() {
                 {t('menu.home')}
               </Link>
             )}
-          </div>
+          </nav>
           <span className="shrink-0 text-center text-sm font-semibold text-gray-900">
             {t('accountHub.brandTitle')}
           </span>
@@ -107,9 +130,12 @@ export function AccountLayout() {
               full-width inside `AppBar`'s burger menu (phone width, plenty
               of room), and `white-space` inherits down to its label without
               needing to touch that shared component's own markup. */}
-          <div className="hidden flex-1 basis-0 items-center justify-end whitespace-nowrap md:flex">
+          <nav
+            aria-label={t('appSwitch.barLabel')}
+            className="hidden flex-1 basis-0 items-center justify-end whitespace-nowrap md:flex"
+          >
             <AppSwitchMenuItem />
-          </div>
+          </nav>
         </header>
         <PageContainer>
           <Outlet />
