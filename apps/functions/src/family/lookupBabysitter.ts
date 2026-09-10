@@ -6,6 +6,7 @@ import type { User, BabysitterSummary } from '@ejm/sit-core';
 import { getEjemEmail, getContact, matchesProviderIdentity } from '@ejm/shared-core';
 import { lookupBabysitterSchema } from '../validation/lookup.js';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
+import { passesAgeBackstop } from '../search/ageBackstop.js';
 
 /**
  * lookupBabysitter (issue #437): find a babysitter directly by name, email,
@@ -84,6 +85,18 @@ export const lookupBabysitter = onCall(
         whatsapp: contact.whatsapp,
       })) continue;
 
+      // Age backstop (searchBabysitters.ts / contactPublishedSearch.ts,
+      // ./ageBackstop.ts): the only operative provider-side age gate, and
+      // this lookup is a THIRD path to the same babysitter data — one that
+      // now also matches by phone/WhatsApp, widening the discovery surface
+      // further. Skipping it here would let a family reach an under-15 or
+      // grad-year-mismatched profile that searchBabysitters would exclude.
+      if (!(await passesAgeBackstop({
+        governed: !!raw.governedBy,
+        dateOfBirth: data.dateOfBirth,
+        ejemEmail,
+      }))) continue;
+
       // Check if babysitter works in the family's area
       let worksInYourArea = false;
       if (data.areaMode === 'distance' && data.areaLatLng && familyLatLng) {
@@ -108,12 +121,21 @@ export const lookupBabysitter = onCall(
         classLevel: data.classLevel || '',
         languages: data.languages || [],
         aboutMe: data.aboutMe || null,
-        kidAgeRange: data.kidAgeRange ?? undefined,
-        maxKids: data.maxKids ?? undefined,
+        // Defaults match searchBabysitters.ts exactly, for consistency
+        // between the two "same bar" surfaces.
+        kidAgeRange: data.kidAgeRange || { min: 0, max: 18 },
+        maxKids: data.maxKids || 1,
         worksInYourArea,
-        contactEmail: contactApproved ? contact.contactEmail ?? undefined : undefined,
-        contactPhone: contactApproved ? contact.contactPhone ?? undefined : undefined,
-        whatsapp: contactApproved ? contact.whatsapp ?? undefined : undefined,
+        // Keys are omitted (not set to undefined) because the callable
+        // encoder serialises undefined as null, which would leak a
+        // `contactEmail: null` key to unapproved families.
+        ...(contactApproved
+          ? {
+              contactEmail: contact.contactEmail ?? undefined,
+              contactPhone: contact.contactPhone ?? undefined,
+              whatsapp: contact.whatsapp ?? undefined,
+            }
+          : {}),
       });
 
       if (results.length >= 10) break;
