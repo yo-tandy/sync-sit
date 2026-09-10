@@ -526,6 +526,34 @@ describe('profile-photos', () => {
       }),
     );
   });
+
+  // Review round on PR #470: `allow write` covers create/update/delete, and
+  // request.resource is null on a delete, so a combined `write` rule
+  // referencing request.resource.contentType denies EVERY delete. This is a
+  // real, currently-live flow — apps/web family/babysitter AccountPage.tsx
+  // and apps/study-web tutor AccountPage.tsx call
+  // deleteObject(ref(storage, oldPath)).catch(() => {}) to clean up the old
+  // avatar on remove/replace, swallowing any error — so the regression would
+  // have silently orphaned a readable photo (of a minor, in the tutor case)
+  // on every remove. The rule is now split into create/update + delete
+  // (mirroring verification-documents) specifically so this stays covered.
+  it('allows the owner to delete their own profile photo', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await uploadString(ref(ctx.storage(), 'profile-photos/user1.jpg'), 'seed', 'raw');
+    });
+    const authed = testEnv.authenticatedContext('user1');
+    const fileRef = ref(authed.storage(), 'profile-photos/user1.jpg');
+    await assertSucceeds(deleteObject(fileRef));
+  });
+
+  it('denies a non-owner from deleting another user\'s profile photo', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await uploadString(ref(ctx.storage(), 'profile-photos/user1.jpg'), 'seed', 'raw');
+    });
+    const authed = testEnv.authenticatedContext('user2');
+    const fileRef = ref(authed.storage(), 'profile-photos/user1.jpg');
+    await assertFails(deleteObject(fileRef));
+  });
 });
 
 describe('family-photos', () => {
@@ -618,6 +646,19 @@ describe('family-photos', () => {
     const authed = testEnv.authenticatedContext('unrelated-user');
     const fileRef = ref(authed.storage(), 'family-photos/family2.jpg');
     await assertSucceeds(uploadString(fileRef, 'photo', 'raw'));
+  });
+
+  // Review round on PR #470: same combined-write/delete trap as
+  // profile-photos above. No client currently calls deleteObject() against
+  // this path, but the rule is split into create/update + delete for
+  // consistency, so pin it the same way.
+  it('allows an authenticated delete (latent path, same fix as profile-photos)', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await uploadString(ref(ctx.storage(), 'family-photos/family1/photo.jpg'), 'seed', 'raw');
+    });
+    const authed = testEnv.authenticatedContext('user1');
+    const fileRef = ref(authed.storage(), 'family-photos/family1/photo.jpg');
+    await assertSucceeds(deleteObject(fileRef));
   });
 });
 

@@ -123,11 +123,24 @@ service firebase.storage {
     // constraint at all before this change, and that clients may still
     // pass an empty/application/octet-stream type — the null/no-match
     // fallthrough in isRenderableDocType keeps that allowed).
+    //
+    // Split into create/update vs. delete (review round on PR #470),
+    // mirroring verification-documents below: `allow write` covers
+    // create/update/delete, and on a delete request.resource is null, so a
+    // combined `write` rule referencing request.resource.contentType denies
+    // EVERY delete. profile-photos has a real, currently-live delete flow —
+    // apps/web family/babysitter AccountPage.tsx and apps/study-web tutor
+    // AccountPage.tsx call deleteObject() on the old avatar when the user
+    // removes/replaces their photo, swallowing the error
+    // (`.catch(() => {})`) — so the bug would have silently orphaned a
+    // readable photo (of a minor, in the tutor case) on every remove.
     match /profile-photos/{fileName} {
       allow read: if request.auth != null;
-      allow write: if request.auth != null
+      allow create, update: if request.auth != null
                    && fileName[0:request.auth.uid.size()] == request.auth.uid
                    && !isRenderableDocType(request.resource.contentType);
+      allow delete: if request.auth != null
+                   && fileName[0:request.auth.uid.size()] == request.auth.uid;
     }
 
     // Family photos — authenticated users can upload/read.
@@ -152,10 +165,22 @@ service firebase.storage {
     // and only the contentType denylist is added. See "Follow-ups" in the
     // PR description for the safe alternative (a callable-mediated/
     // signed-upload-URL path, the getVerificationDocument/#153 pattern).
+    //
+    // Split into create/update vs. delete (same fix as profile-photos
+    // above, review round on PR #470): a combined `write` rule referencing
+    // request.resource.contentType denies every delete, since
+    // request.resource is null on a delete request. No client currently
+    // calls deleteObject() against this path (FamilySettingsPage.tsx's
+    // remove-photo handler only clears local UI state), so this was latent
+    // rather than actively triggered — fixed anyway so the next delete flow
+    // added here doesn't inherit the trap. The delete audience is
+    // unchanged from the pre-PR write audience (request.auth != null),
+    // matching the "left unscoped" decision above.
     match /family-photos/{allPaths=**} {
       allow read: if request.auth != null;
-      allow write: if request.auth != null
+      allow create, update: if request.auth != null
                    && !isRenderableDocType(request.resource.contentType);
+      allow delete: if request.auth != null;
     }
 
     // ── sync-do task photos (plan §7.4) — the two-path pipeline ──
