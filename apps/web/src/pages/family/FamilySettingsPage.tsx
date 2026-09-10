@@ -11,14 +11,67 @@ import {
   deleteDoc,
   serverTimestamp,
 } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, storage } from '@/config/firebase';
+import { ref, getDownloadURL, deleteObject } from 'firebase/storage';
+import { httpsCallable } from 'firebase/functions';
+import { db, storage, functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { Button, Input, Textarea, TopNav, Card, useToast } from '@/components/ui';
 import { AddressAutocomplete, type AddressResult } from '@/components/forms/AddressAutocomplete';
 import { XIcon, PlusIcon } from '@/components/ui/Icons';
 import type { FamilyDoc, KidDoc } from '@ejm/sit-core';
 import { getParentView } from '@ejm/sit-core';
+import { uploadErrorKey } from '@ejm/shared-core';
+
+interface CreateFamilyPhotoUploadUrlRequest {
+  familyId: string;
+  contentType: string;
+  fileName: string;
+  sizeBytes: number;
+}
+
+interface CreateFamilyPhotoUploadUrlResponse {
+  url: string;
+  path: string;
+}
+
+/**
+ * Uploads (issue #471): family-photos writes now go through this
+ * membership-checked signed-URL callable exclusively — storage.rules denies
+ * every direct client write to family-photos/**. See
+ * packages/shared-functions/src/family/createFamilyPhotoUploadUrl.ts.
+ */
+async function uploadFamilyPhoto(familyId: string, file: File): Promise<string> {
+  const contentType = file.type || 'application/octet-stream';
+  const fn = httpsCallable<CreateFamilyPhotoUploadUrlRequest, CreateFamilyPhotoUploadUrlResponse>(
+    functions,
+    'createFamilyPhotoUploadUrl',
+  );
+  const { data } = await fn({ familyId, contentType, fileName: file.name, sizeBytes: file.size });
+  // The callable binds contentType into the V4 signature — this header
+  // MUST match exactly or GCS rejects the PUT with SignatureDoesNotMatch.
+  const putRes = await fetch(data.url, {
+    method: 'PUT',
+    headers: { 'Content-Type': contentType },
+    body: file,
+  });
+  if (!putRes.ok) {
+    throw new Error(`Photo upload failed (${putRes.status})`);
+  }
+  return data.path;
+}
+
+/** Recovers the storage object path from a getDownloadURL() result, the
+ *  same way apps/web family/AccountPage.tsx does for profile-photos — used
+ *  to delete the PREVIOUS photo object on replace/remove. Unlike the old
+ *  deterministic `family-photos/{familyId}.{ext}` path (an upload just
+ *  overwrote it in place), uploads now land at a unique
+ *  `family-photos/{familyId}/{uuid}.{ext}`, so a replace/remove would
+ *  otherwise orphan the previous object. */
+function pathFromDownloadUrl(url: string | null | undefined): string | null {
+  if (typeof url !== 'string') return null;
+  const match = url.match(/family-photos%2F([^?]+)/);
+  return match ? `family-photos/${decodeURIComponent(match[1])}` : null;
+}
 
 interface KidForm {
   kidId?: string; // undefined = new kid
@@ -53,6 +106,11 @@ export function FamilySettingsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
+  // The AS-LOADED photoUrl (a download URL, not the local FileReader
+  // preview `photoPreview` gets overwritten with once a new file is
+  // picked) — needed to find and delete the PREVIOUS storage object on
+  // replace/remove (issue #471; see pathFromDownloadUrl above).
+  const originalPhotoUrlRef = useRef<string | null>(null);
 
   // Load family + kids
   useEffect(() => {
@@ -69,6 +127,7 @@ export function FamilySettingsPage() {
         setPets(f.pets || '');
         setNote(f.note || '');
         if (f.photoUrl) setPhotoPreview(f.photoUrl);
+        originalPhotoUrlRef.current = f.photoUrl || null;
       }
 
       const kidsSnap = await getDocs(collection(db, 'families', familyId!, 'kids'));
@@ -118,15 +177,22 @@ export function FamilySettingsPage() {
     setSaving(true);
     setError(null);
 
+    // Old-photo cleanup (issue #471): uploads now land at a unique
+    // family-photos/{familyId}/{uuid}.{ext} rather than overwriting a
+    // deterministic path in place, so a replace/remove must explicitly
+    // delete the PREVIOUS object or it orphans. Captured before the try
+    // block so it reflects what was actually loaded, not any local preview
+    // state the save may itself update.
+    const originalPath = pathFromDownloadUrl(originalPhotoUrlRef.current);
+    const photoChanged = photoFile !== null || photoPreview !== originalPhotoUrlRef.current;
+
     try {
       // Upload photo if changed
       let photoUrl: string | null = photoPreview;
+      let newPath: string | null = null;
       if (photoFile) {
-        const ext = photoFile.name.split('.').pop() || 'jpg';
-        const path = `family-photos/${familyId}.${ext}`;
-        const storageRef = ref(storage, path);
-        await uploadBytes(storageRef, photoFile);
-        photoUrl = await getDownloadURL(storageRef);
+        newPath = await uploadFamilyPhoto(familyId, photoFile);
+        photoUrl = await getDownloadURL(ref(storage, newPath));
       }
       if (!photoPreview) photoUrl = null;
 
@@ -142,6 +208,18 @@ export function FamilySettingsPage() {
         photoUrl,
         updatedAt: serverTimestamp(),
       });
+
+      // Delete the previous photo object now that the family doc points
+      // elsewhere (or nowhere) — best-effort, same swallow-the-error
+      // pattern as family/AccountPage.tsx's profile-photo cleanup. Only
+      // when the photo actually changed: an untouched photoPreview equals
+      // originalPhotoUrlRef.current, and originalPath === newPath (both
+      // null) in that case, so this would already no-op — the explicit
+      // photoChanged guard just makes that intent visible.
+      if (photoChanged && originalPath && originalPath !== newPath) {
+        deleteObject(ref(storage, originalPath)).catch(() => {});
+      }
+      originalPhotoUrlRef.current = photoUrl;
 
       // Sync kids: delete removed, update existing, add new
       const existingKidsSnap = await getDocs(collection(db, 'families', familyId, 'kids'));
@@ -180,8 +258,12 @@ export function FamilySettingsPage() {
 
       toast(t('familySettings.saved'));
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to save';
-      setError(message);
+      // The existing (only) error slot on this page, reused for the photo
+      // upload path (issue #471) via the same uploadErrorKey mapping
+      // VerificationPage uses — storage/* codes if the fetch/callable
+      // surfaces one, the page's own generic key otherwise.
+      console.error('[familySettings] save failed', err);
+      setError(t(`familySettings.${uploadErrorKey(err)}`));
     } finally {
       setSaving(false);
     }

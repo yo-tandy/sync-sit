@@ -54,6 +54,9 @@ export {
   lookupCommunityCode,
   approveCommunityCode,
   getVerificationDocument,
+  // Family photo uploads (issue #471) — signed-URL callable, same
+  // Admin-SDK-membership-check shape as getVerificationDocument above.
+  createFamilyPhotoUploadUrl,
   // Admin
   getAdminDashboard,
   listUsers,

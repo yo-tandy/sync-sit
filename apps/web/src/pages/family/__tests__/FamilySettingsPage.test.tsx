@@ -21,9 +21,16 @@ const h = vi.hoisted(() => ({
     Promise.resolve({ id: 'newkid' }),
   ),
   deleteDoc: vi.fn<(ref: { path: string }) => Promise<void>>(() => Promise.resolve()),
+  // createFamilyPhotoUploadUrl (issue #471) — the callable the page now
+  // calls before PUTting to the returned signed URL.
+  httpsCallable: vi.fn<(data: unknown) => Promise<{ data: { url: string; path: string } }>>(() =>
+    Promise.resolve({ data: { url: 'https://signed.example.com/put', path: 'family-photos/fam1/uuid.jpg' } }),
+  ),
+  getDownloadURL: vi.fn(() => Promise.resolve('https://example.com/photo.jpg')),
+  deleteObject: vi.fn<(ref: { path: string }) => Promise<void>>(() => Promise.resolve()),
 }));
 
-vi.mock('@/config/firebase', () => ({ db: {}, storage: {} }));
+vi.mock('@/config/firebase', () => ({ db: {}, storage: {}, functions: {} }));
 
 vi.mock('firebase/firestore', () => ({
   doc: (_db: unknown, ...path: string[]) => ({ path: path.join('/') }),
@@ -38,9 +45,13 @@ vi.mock('firebase/firestore', () => ({
 }));
 
 vi.mock('firebase/storage', () => ({
-  ref: vi.fn(),
-  uploadBytes: vi.fn(() => Promise.resolve()),
-  getDownloadURL: vi.fn(() => Promise.resolve('https://example.com/photo.jpg')),
+  ref: (_storage: unknown, path: string) => ({ path }),
+  getDownloadURL: (...args: unknown[]) => h.getDownloadURL(...args),
+  deleteObject: (...args: unknown[]) => h.deleteObject(...args),
+}));
+
+vi.mock('firebase/functions', () => ({
+  httpsCallable: () => (data: unknown) => h.httpsCallable(data),
 }));
 
 vi.mock('@/stores/authStore', () => ({
@@ -86,6 +97,11 @@ vi.mock('@ejm/shared-ui', async (importActual) => {
 
 import { FamilySettingsPage } from '../FamilySettingsPage';
 
+// The page PUTs the file straight to the signed URL with the global
+// `fetch`, not the Firebase SDK — stub it per-test via vi.stubGlobal in
+// reset() below (and unstub in afterEach so it never leaks to other suites).
+const fetchMock = vi.fn();
+
 function renderPage() {
   return render(
     <ToastProvider>
@@ -112,11 +128,25 @@ function reset() {
   h.updateDoc.mockClear();
   h.addDoc.mockClear();
   h.deleteDoc.mockClear();
+  h.httpsCallable.mockClear();
+  h.getDownloadURL.mockClear();
+  h.deleteObject.mockClear();
+  h.httpsCallable.mockImplementation(() =>
+    Promise.resolve({ data: { url: 'https://signed.example.com/put', path: 'family-photos/fam1/uuid.jpg' } }),
+  );
+  h.getDownloadURL.mockImplementation(() => Promise.resolve('https://example.com/photo.jpg'));
+  h.deleteObject.mockImplementation(() => Promise.resolve());
+  fetchMock.mockReset();
+  fetchMock.mockResolvedValue({ ok: true, status: 200 } as Response);
+  vi.stubGlobal('fetch', fetchMock);
 }
 
 describe('family FamilySettingsPage', () => {
   beforeEach(() => reset());
-  afterEach(() => cleanup());
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
 
   it('loads and renders the family name and address', async () => {
     renderPage();
@@ -216,5 +246,133 @@ describe('family FamilySettingsPage', () => {
         expect.objectContaining({ firstName: 'Noa', age: 7, languages: [] }),
       ),
     );
+  });
+
+  // ── Signed-URL photo upload (issue #471) ──
+
+  async function selectPhoto(name = 'photo.jpg', type = 'image/jpeg') {
+    const file = new File([new Uint8Array([1, 2, 3])], name, { type });
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [file] } });
+    // Wait for the FileReader-driven preview so handleSave doesn't race a
+    // still-null photoPreview (which would wipe the freshly-uploaded photoUrl
+    // back to null — see the `if (!photoPreview) photoUrl = null;` guard).
+    await screen.findByAltText('Family');
+    return file;
+  }
+
+  it('uploads via the signed-URL callable, then PUTs the file with the bound Content-Type, then saves the resulting download URL', async () => {
+    renderPage();
+    await screen.findByLabelText(/family name/i);
+    await selectPhoto();
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
+
+    await waitFor(() =>
+      expect(h.httpsCallable).toHaveBeenCalledWith(
+        expect.objectContaining({
+          familyId: 'fam1',
+          contentType: 'image/jpeg',
+          fileName: 'photo.jpg',
+          sizeBytes: 3,
+        }),
+      ),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://signed.example.com/put',
+      expect.objectContaining({
+        method: 'PUT',
+        headers: { 'Content-Type': 'image/jpeg' },
+      }),
+    );
+    await waitFor(() =>
+      expect(h.updateDoc).toHaveBeenCalledWith(
+        expect.objectContaining({ path: 'families/fam1' }),
+        expect.objectContaining({ photoUrl: 'https://example.com/photo.jpg' }),
+      ),
+    );
+  });
+
+  it('deletes the PREVIOUS photo object once the family doc is updated (old-photo cleanup)', async () => {
+    h.familyData = {
+      familyName: 'Cohen',
+      photoUrl:
+        'https://firebasestorage.googleapis.com/v0/b/demo.appspot.com/o/family-photos%2Ffam1%2Fold-uuid.jpg?alt=media&token=abc',
+    };
+    renderPage();
+    await screen.findByLabelText(/family name/i);
+    await selectPhoto();
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
+
+    await waitFor(() =>
+      expect(h.deleteObject).toHaveBeenCalledWith(
+        expect.objectContaining({ path: 'family-photos/fam1/old-uuid.jpg' }),
+      ),
+    );
+  });
+
+  it('does NOT delete anything when the photo was never touched', async () => {
+    h.familyData = {
+      familyName: 'Cohen',
+      photoUrl:
+        'https://firebasestorage.googleapis.com/v0/b/demo.appspot.com/o/family-photos%2Ffam1%2Fold-uuid.jpg?alt=media&token=abc',
+    };
+    renderPage();
+    await screen.findByLabelText(/family name/i);
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
+
+    await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
+    expect(h.deleteObject).not.toHaveBeenCalled();
+    expect(h.httpsCallable).not.toHaveBeenCalled();
+  });
+
+  it('removing the photo clears photoUrl and deletes the old object, without calling the upload callable', async () => {
+    h.familyData = {
+      familyName: 'Cohen',
+      photoUrl:
+        'https://firebasestorage.googleapis.com/v0/b/demo.appspot.com/o/family-photos%2Ffam1%2Fold-uuid.jpg?alt=media&token=abc',
+    };
+    renderPage();
+    await screen.findByLabelText(/family name/i);
+    fireEvent.click(screen.getByRole('button', { name: /remove photo/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
+
+    await waitFor(() =>
+      expect(h.updateDoc).toHaveBeenCalledWith(
+        expect.objectContaining({ path: 'families/fam1' }),
+        expect.objectContaining({ photoUrl: null }),
+      ),
+    );
+    expect(h.httpsCallable).not.toHaveBeenCalled();
+    expect(h.deleteObject).toHaveBeenCalledWith(
+      expect.objectContaining({ path: 'family-photos/fam1/old-uuid.jpg' }),
+    );
+  });
+
+  it('shows the generic upload-error copy (reusing the existing error slot) when the callable rejects (e.g. a non-member)', async () => {
+    h.httpsCallable.mockImplementation(() =>
+      Promise.reject(Object.assign(new Error('permission-denied'), { code: 'permission-denied' })),
+    );
+    renderPage();
+    await screen.findByLabelText(/family name/i);
+    await selectPhoto();
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
+
+    await waitFor(() =>
+      expect(screen.getByText('familySettings.uploadError')).toBeInTheDocument(),
+    );
+    expect(h.updateDoc).not.toHaveBeenCalled();
+  });
+
+  it('shows the generic upload-error copy when the signed PUT itself fails', async () => {
+    fetchMock.mockResolvedValue({ ok: false, status: 403 } as Response);
+    renderPage();
+    await screen.findByLabelText(/family name/i);
+    await selectPhoto();
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
+
+    await waitFor(() =>
+      expect(screen.getByText('familySettings.uploadError')).toBeInTheDocument(),
+    );
+    expect(h.updateDoc).not.toHaveBeenCalled();
   });
 });
