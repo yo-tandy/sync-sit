@@ -2,15 +2,16 @@
  * Is this `File.type` acceptable for a profile photo?
  *
  * DENYLIST, not an allowlist -- the same call `storage.rules` documents for
- * verification documents (issue #281), and the call PR #450 made for the
- * unified-enrollment photo step: browsers report `File.type` inconsistently,
+ * verification documents (issue #281). PR #450 first made it for the
+ * unified-enrollment photo step (`StepAdditionalInfo`); this is that helper's
+ * shared home, and the step now imports it from here rather than keeping its
+ * own copy. Browsers report `File.type` inconsistently,
  * giving `''` or `application/octet-stream` for perfectly valid files on some
  * OS/browser combos. An allowlist rejects those, and the worst case here is
  * precisely the common one: iPhone HEIC/HEIF frequently arrives with an empty
  * type, so an allowlist told a user photographing themselves on an iPhone
  * that their own photo was "not a supported image" (issue #452 -- the same
- * bug #450 fixed in enrollment, still present verbatim on the three
- * shipped AccountPages).
+ * bug on the three shipped AccountPages).
  *
  * So: treat an absent/generic type as UNKNOWN and accept it, and reject only
  * what the browser positively identifies as something other than an image.
@@ -70,7 +71,7 @@ const EXT_CONTENT_TYPES: Record<string, string> = {
  */
 export function resolvePhotoContentType(fileName: string, fileType: string): string {
   const t = fileType.toLowerCase().trim();
-  if (t && t !== 'application/octet-stream') return fileType;
+  if (t && t !== 'application/octet-stream') return t;
   const ext = fileName.includes('.') ? fileName.split('.').pop()!.toLowerCase() : '';
   return EXT_CONTENT_TYPES[ext] ?? 'application/octet-stream';
 }

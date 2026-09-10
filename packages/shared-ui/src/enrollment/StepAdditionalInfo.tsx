@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { Address } from '@ejm/shared-core';
+import { isAcceptablePhotoType, type Address } from '@ejm/shared-core';
 import { Button } from '../components/Button.js';
 import { Textarea } from '../components/Textarea.js';
 import { Avatar } from '../components/Avatar.js';
@@ -26,44 +26,6 @@ interface StepAdditionalInfoProps {
 }
 
 const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
-
-/**
- * Is this `File.type` acceptable for a profile photo?
- *
- * DENYLIST, not an allowlist -- the same call `storage.rules` documents for
- * verification documents (issue #281): browsers report `File.type`
- * inconsistently, giving `''` or `application/octet-stream` for perfectly
- * valid files on some OS/browser combos. An allowlist rejects those, and the
- * worst case here is precisely the common one: iPhone HEIC/HEIF frequently
- * arrives with an empty type, so an allowlist told a French lycee student
- * photographing themselves on an iPhone that their own photo was "not a
- * supported image".
- *
- * So: treat an absent/generic type as UNKNOWN and accept it, and reject only
- * what the browser positively identifies as something other than an image.
- * This is UX guidance, not a security control -- the bytes are never trusted
- * on the strength of a client-asserted MIME string. The real enforcement is
- * server-side on the Storage upload path (PR4).
- */
-function isAcceptablePhotoType(type: string): boolean {
-  // Normalise ONCE, up front. Doing it per-branch invited the bug where
-  // `type === 'application/octet-stream'` compared the raw string while the
-  // image check compared a normalised one: a browser reporting
-  // 'Application/Octet-Stream' (or with stray padding) would then miss the
-  // unknown-type branch and get rejected by the image check instead --
-  // the exact opposite of this function's intent. Real browsers report
-  // File.type lowercase per spec, but the whole reason this is a denylist is
-  // that File.type is not reliably what the spec says.
-  const t = type.toLowerCase().trim();
-  if (!t || t === 'application/octet-stream') return true;
-  if (!t.startsWith('image/')) return false;
-  // ...with one carve-out: image/svg+xml is a scriptable document that renders
-  // live, which is exactly what storage.rules' #281 denylist exists to reject.
-  // Matching the `+xml` suffix rather than the one spelling, for the same
-  // reason that rule does (Firefox treats every *+xml media type as an XML
-  // document).
-  return !t.includes('+xml');
-}
 
 /**
  * Additional-info step of the unified enrollment flow (issue #435

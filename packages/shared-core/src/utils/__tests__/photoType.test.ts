@@ -57,4 +57,8 @@ describe('resolvePhotoContentType', () => {
     expect(resolvePhotoContentType('mystery-file', '')).toBe('application/octet-stream');
     expect(resolvePhotoContentType('weird.xyz', 'application/octet-stream')).toBe('application/octet-stream');
   });
+
+  it('returns the NORMALISED type, never the raw padded/cased string (review nit)', () => {
+    expect(resolvePhotoContentType('photo.png', ' image/PNG ')).toBe('image/png');
+  });
 });
