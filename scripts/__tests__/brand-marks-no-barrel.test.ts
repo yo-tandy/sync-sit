@@ -109,9 +109,25 @@ describe('sit and study never import a sync-do mark, in source (#422, decision 2
   // regression is a source-level import reaching a sync-do asset, whether
   // through the old barrel or a direct subpath import some future call site
   // adds by mistake. Either shape trips this the same way.
-  it('apps/web/src never references a sync-do mark', () => {
+  // The sanctioned sit references: the unified /enroll landing page and the
+  // choose-app screen each render a muted, non-clickable sync/do "coming soon"
+  // tile (issue #435 items 2 and 5, decision 20 — identity, not reachability),
+  // so they legitimately import the do marks. Anything else under apps/web/src that reaches a sync-do asset is
+  // still a regression.
+  const SIT_SANCTIONED_DO_MARK_HOSTS = [
+    'apps/web/src/pages/public/EnrollLandingPage.tsx',
+    'apps/web/src/pages/enrollment/ChooseAppPage.tsx',
+  ];
+
+  it('apps/web/src never references a sync-do mark outside the /enroll landing page', () => {
     const files = trackedTsFilesRecursive('apps/web/src');
-    const offenders = files.filter((f) => /sync-do-mark|brand-marks\/sync-do/.test(code(f)));
+    const sanctioned = files.filter((f) => SIT_SANCTIONED_DO_MARK_HOSTS.includes(f));
+    // The exception must stay load-bearing: if the landing page stops
+    // importing the mark, drop it from the list rather than let it rot.
+    expect(sanctioned.map((f) => /brand-marks\/sync-do/.test(code(f)))).toEqual(sanctioned.map(() => true));
+    const offenders = files
+      .filter((f) => !SIT_SANCTIONED_DO_MARK_HOSTS.includes(f))
+      .filter((f) => /sync-do-mark|brand-marks\/sync-do/.test(code(f)));
     // Mutation check: adding `import x from '@ejm/shared-ui/brand-marks/sync-do-48.png'`
     // to any file under apps/web/src trips this.
     expect(offenders, `sync-do mark referenced in: ${offenders.join(', ')}`).toEqual([]);

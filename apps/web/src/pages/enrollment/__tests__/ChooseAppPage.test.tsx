@@ -61,11 +61,6 @@ vi.mock('@/components/ui', () => ({
 }));
 vi.mock('@ejm/shared-ui', () => ({
   APP_NAME: { sit: 'sync/sit', study: 'sync/study', do: 'sync/do' },
-  BRAND_MARKS: {
-    sit: { sm: 'sit.png', md: 'sit@2x.png' },
-    study: { sm: 'study.png', md: 'study@2x.png' },
-    do: { sm: 'do.png', md: 'do@2x.png' },
-  },
   useDocumentGround: () => {},
   LanguageSelector: () => <div>lang-selector</div>,
   enrollmentErrorReason: (err: { details?: { reason?: unknown } } | null) => {

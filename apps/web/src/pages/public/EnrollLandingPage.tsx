@@ -1,4 +1,27 @@
-import { UnifiedLandingPage, UserIcon, UsersIcon, type SignUpRoleOption } from '@ejm/shared-ui';
+import {
+  UnifiedLandingPage,
+  UserIcon,
+  UsersIcon,
+  type AppMark,
+  type SignUpRoleOption,
+  type SyncApp,
+} from '@ejm/shared-ui';
+import sitSm from '@ejm/shared-ui/brand-marks/sync-sit-48.png';
+import sitMd from '@ejm/shared-ui/brand-marks/sync-sit-96.png';
+import studySm from '@ejm/shared-ui/brand-marks/sync-study-48.png';
+import studyMd from '@ejm/shared-ui/brand-marks/sync-study-96.png';
+import doSm from '@ejm/shared-ui/brand-marks/sync-do-48.png';
+import doMd from '@ejm/shared-ui/brand-marks/sync-do-96.png';
+
+// The landing page is the ONE place in sit that renders the sync/do mark: a
+// muted, non-clickable "coming soon" tile (issue #435 item 2, platform-plan
+// decision 20 — brand identity, not reachability). Hosts import exactly the
+// marks they render (#422); this host renders all three.
+const MARKS: Record<SyncApp, AppMark> = {
+  sit: { sm: sitSm, md: sitMd },
+  study: { sm: studySm, md: studyMd },
+  do: { sm: doSm, md: doMd },
+};
 
 const ROLES: SignUpRoleOption[] = [
   {
@@ -29,5 +52,5 @@ const ROLES: SignUpRoleOption[] = [
  * point, not a replacement of that route.
  */
 export function EnrollLandingPage() {
-  return <UnifiedLandingPage roles={ROLES} />;
+  return <UnifiedLandingPage roles={ROLES} marks={MARKS} />;
 }

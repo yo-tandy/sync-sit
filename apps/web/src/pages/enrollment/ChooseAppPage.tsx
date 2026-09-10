@@ -6,7 +6,6 @@ import { getEjemEmail } from '@ejm/shared-core';
 import { getSitRole } from '@ejm/sit-core';
 import {
   APP_NAME,
-  BRAND_MARKS,
   useDocumentGround,
   enrollmentErrorReason,
   ageGateErrorCode,
@@ -17,6 +16,12 @@ import { useAuthStore } from '@/stores/authStore';
 import { postLoginRouter } from '@/lib/postLoginRouter';
 import { STUDY_APP_URL } from '@/lib/appSwitch';
 import { Spinner } from '@/components/ui';
+// Hosts import exactly the marks they render (#422). This screen renders all
+// three: sit and study as real choices, do as the muted "coming soon" tile
+// (issue #435 item 5, decision 20 — identity, not reachability).
+import sitMd from '@ejm/shared-ui/brand-marks/sync-sit-96.png';
+import studyMd from '@ejm/shared-ui/brand-marks/sync-study-96.png';
+import doMd from '@ejm/shared-ui/brand-marks/sync-do-96.png';
 
 // Same consent version the classic sit wizard passes to StepPassword.
 const CONSENT_VERSION = '1.0';
@@ -130,7 +135,7 @@ export function ChooseAppPage() {
           disabled={switching !== null}
           className="mb-4 flex items-center gap-4 rounded-xl border-[1.5px] border-gray-200 bg-white p-5 text-left transition-colors hover:border-brand-300 hover:bg-brand-50 active:bg-brand-50 disabled:opacity-60"
         >
-          <img src={BRAND_MARKS.sit.md} alt="" width={48} height={48} className="h-12 w-12 shrink-0 rounded-xl object-contain" />
+          <img src={sitMd} alt="" width={48} height={48} className="h-12 w-12 shrink-0 rounded-xl object-contain" />
           <div className="flex-1">
             <p className="text-base font-semibold text-gray-950">{APP_NAME.sit}</p>
             <p className="mt-1 text-xs leading-relaxed text-gray-500">{t('unifiedEnrollment.chooseSitDesc')}</p>
@@ -144,7 +149,7 @@ export function ChooseAppPage() {
           disabled={switching !== null}
           className="mb-4 flex items-center gap-4 rounded-xl border-[1.5px] border-gray-200 bg-white p-5 text-left transition-colors hover:border-brand-300 hover:bg-brand-50 active:bg-brand-50 disabled:opacity-60"
         >
-          <img src={BRAND_MARKS.study.md} alt="" width={48} height={48} className="h-12 w-12 shrink-0 rounded-xl object-contain" />
+          <img src={studyMd} alt="" width={48} height={48} className="h-12 w-12 shrink-0 rounded-xl object-contain" />
           <div className="flex-1">
             <p className="text-base font-semibold text-gray-950">{APP_NAME.study}</p>
             <p className="mt-1 text-xs leading-relaxed text-gray-500">{t('unifiedEnrollment.chooseStudyDesc')}</p>
@@ -153,7 +158,7 @@ export function ChooseAppPage() {
         </button>
 
         <div className="mb-4 flex items-center gap-4 rounded-xl border-[1.5px] border-gray-100 bg-gray-50 p-5 opacity-60">
-          <img src={BRAND_MARKS.do.md} alt="" width={48} height={48} className="h-12 w-12 shrink-0 rounded-xl object-contain grayscale" />
+          <img src={doMd} alt="" width={48} height={48} className="h-12 w-12 shrink-0 rounded-xl object-contain grayscale" />
           <div className="flex-1">
             <p className="text-base font-semibold text-gray-500">{APP_NAME.do}</p>
             <p className="mt-1 text-xs leading-relaxed text-gray-400">{t('unifiedEnrollment.chooseDoDesc')}</p>
