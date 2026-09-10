@@ -1014,20 +1014,19 @@ describe('family SessionsPage — session notes (pre)', () => {
     expect(screen.queryByText(/family\.sessions\.status\./)).not.toBeInTheDocument();
   });
 
-  it('a completed series with completed work shows the endorse prompt in history once its instances load (issue #275: terminal series load lazily)', async () => {
-    // hasCompletedWork reads instancesBySeries, and a TERMINAL series' instances
-    // now load lazily on first history-card expand rather than eagerly for
-    // every series ever created (issue #275) — a deliberate, documented
-    // trade-off: the endorse prompt only appears once the card is expanded.
+  it('a completed series with completed work shows the endorse prompt in history WITHOUT expanding (issue #275 round 2: eager for unendorsed completed series)', async () => {
+    // The endorse prompt sits on the history card header and is the family's
+    // main path into endorsing, so it must NOT require an expand click. A
+    // COMPLETED recurring series whose tutor isn't endorsed yet stays EAGER
+    // (bounded by "tutors not yet endorsed", not "every series ever
+    // created") — only declined/cancelled series, and a completed series
+    // whose tutor IS already endorsed, stay lazy on expand.
     h.sessions = [recurring({ sessionId: 'sE', status: 'completed', tutorUserId: 'tut-9', tutorName: 'Nina Levy' })];
     h.instances = {
       sE: [instanceDoc({ instanceId: '2026-07-08', date: '2026-07-08', status: 'completed' })],
     };
     renderWithProviders(<SessionsPage />);
 
-    await screen.findByText('Nina Levy');
-    expect(screen.queryByRole('button', { name: /endorse/i })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /view dates|occurrences/i }));
     expect(await screen.findByRole('button', { name: /endorse/i })).toBeInTheDocument();
   });
 
@@ -1121,9 +1120,12 @@ describe('family SessionsPage — session notes (pre)', () => {
 });
 
 // ── Issue #275: terminal series' instances load LAZILY, not eagerly ──
-// The read profile pins: only ACTIVE (confirmed) series' instances are
-// fetched on mount/focus; a TERMINAL series (declined/cancelled/completed)
-// fetches its instances once, on the first expand of its history card.
+// The read profile pins: ACTIVE (confirmed) series' instances are always
+// fetched on mount/focus; a COMPLETED series whose tutor isn't endorsed yet
+// is ALSO fetched eagerly (round 2 — the endorse prompt must not require an
+// expand click); everything else terminal (declined/cancelled, or completed
+// with an already-endorsed tutor) fetches its instances once, on the first
+// expand of its history card.
 describe('family SessionsPage — lazy terminal-series instances (issue #275)', () => {
   beforeEach(() => reset());
 
@@ -1141,31 +1143,59 @@ describe('family SessionsPage — lazy terminal-series instances (issue #275)', 
     return recurring({ status: 'confirmed', ...overrides });
   }
 
-  it('on mount, fetches instances only for ACTIVE series — never for terminal series (2 active + 3 terminal)', async () => {
+  it('on mount, fetches instances for ACTIVE series + a COMPLETED-and-unendorsed series — never for declined/cancelled or a completed-and-endorsed series', async () => {
     h.sessions = [
       confirmedRecurring({ sessionId: 'a1', tutorName: 'Active One' }),
       confirmedRecurring({ sessionId: 'a2', tutorName: 'Active Two' }),
+      recurring({
+        sessionId: 'cUnendorsed',
+        status: 'completed',
+        tutorUserId: 'tUnendorsed',
+        tutorName: 'Unendorsed Tutor',
+      }),
+      recurring({
+        sessionId: 'cEndorsed',
+        status: 'completed',
+        tutorUserId: 'tEndorsed',
+        tutorName: 'Endorsed Tutor',
+      }),
       recurring({ sessionId: 't1', status: 'declined', tutorName: 'Term One' }),
       recurring({ sessionId: 't2', status: 'cancelled', tutorName: 'Term Two' }),
-      recurring({ sessionId: 't3', status: 'completed', tutorName: 'Term Three' }),
     ];
-    h.instances = { a1: [], a2: [] };
+    h.instances = {
+      a1: [],
+      a2: [],
+      cUnendorsed: [
+        instanceDoc({ instanceId: '2026-07-01', date: '2026-07-01', status: 'completed' }),
+      ],
+    };
+    h.refs = [
+      {
+        referenceId: 'e1',
+        tutorUserId: 'tEndorsed',
+        appSource: 'study',
+        submittedByFamilyId: 'fam1',
+      },
+    ];
     renderWithProviders(<SessionsPage />);
 
     await screen.findByText('Active One');
-    await screen.findByText('Term Three');
+    await screen.findByText('Term Two');
+    // The eager fetch for the completed-unendorsed series only fires once the
+    // endorsedTutors read settles — wait for its effect (the endorse button).
+    await screen.findByRole('button', { name: /endorse unendorsed tutor/i });
 
-    expect(instanceFetchSessionIds().sort()).toEqual(['a1', 'a2']);
+    expect(instanceFetchSessionIds().sort()).toEqual(['a1', 'a2', 'cUnendorsed']);
   });
 
-  it("expanding a terminal series' history card triggers exactly one instances fetch and then renders its notes", async () => {
-    h.sessions = [recurring({ sessionId: 'sT', status: 'completed', tutorName: 'Terminal Tutor' })];
+  it("expanding a terminal series' history card (declined/cancelled) triggers exactly one instances fetch and then renders its notes", async () => {
+    h.sessions = [recurring({ sessionId: 'sT', status: 'cancelled', tutorName: 'Terminal Tutor' })];
     h.instances = {
       sT: [
         instanceDoc({
           instanceId: '2026-07-01',
           date: '2026-07-01',
-          status: 'completed',
+          status: 'cancelled',
           preSessionNote: 'lazy note',
         }),
       ],
@@ -1184,6 +1214,43 @@ describe('family SessionsPage — lazy terminal-series instances (issue #275)', 
     fireEvent.click(screen.getByRole('button', { name: /hide dates/i }));
     fireEvent.click(screen.getByRole('button', { name: /view dates|occurrences/i }));
     expect(instanceFetchSessionIds()).toEqual(['sT']);
+  });
+
+  it('a COMPLETED series whose tutor is ALREADY endorsed is not eagerly fetched — it stays lazy on expand', async () => {
+    h.sessions = [
+      recurring({
+        sessionId: 'sEndorsed',
+        status: 'completed',
+        tutorUserId: 'tEndorsed',
+        tutorName: 'Endorsed Tutor',
+      }),
+    ];
+    h.instances = {
+      sEndorsed: [
+        instanceDoc({ instanceId: '2026-07-01', date: '2026-07-01', status: 'completed' }),
+      ],
+    };
+    h.refs = [
+      {
+        referenceId: 'e1',
+        tutorUserId: 'tEndorsed',
+        appSource: 'study',
+        submittedByFamilyId: 'fam1',
+      },
+    ];
+    renderWithProviders(<SessionsPage />);
+
+    await screen.findByText('Endorsed Tutor');
+    // The endorsedTutors read has to settle before we can assert the gate
+    // held — its resolution suppresses the endorse button, which is the
+    // observable signal that it's ready.
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: /endorse/i })).not.toBeInTheDocument(),
+    );
+    expect(instanceFetchSessionIds()).toEqual([]);
+
+    fireEvent.click(screen.getByRole('button', { name: /view dates|occurrences/i }));
+    await waitFor(() => expect(instanceFetchSessionIds()).toEqual(['sEndorsed']));
   });
 
   it('a rejected instance fetch for one series shows that card inline error, not the page loadError — other series still render', async () => {

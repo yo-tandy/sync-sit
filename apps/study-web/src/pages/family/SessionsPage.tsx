@@ -92,15 +92,20 @@ function hasStarted(date?: string, startTime?: string): boolean {
  * Reads `study-sessions` where `familyId == mine` (single-field query, sorted
  * CLIENT-SIDE — the same index constraint the tutor page documents) plus the
  * per-series `instances` subcollection via the NESTED path (no collection-group
- * rule client-side). Instances are fetched EAGERLY only for confirmed
- * (ACTIVE) series and LAZILY for terminal series on first history-card expand
- * (issue #275) — see load()/loadSeriesInstances for the split and per-series
- * failure isolation. Three sections:
+ * rule client-side). Instances are fetched EAGERLY for (a) confirmed (ACTIVE)
+ * series in load(), and (b) a COMPLETED series whose tutor this family hasn't
+ * endorsed yet, once the endorsedTutors read settles (the effect right below
+ * it) — that keeps the endorse prompt on the history card visible without a
+ * click. Every other terminal series (declined/cancelled, or completed with
+ * an already-endorsed tutor) loads LAZILY on first history-card expand
+ * (issue #275) — see load()/loadSeriesInstances/toggleHistorySeries for the
+ * split and per-series failure isolation. Three sections:
  *   • Pending  — awaiting the tutor's confirmation; the family may cancel.
  *   • Upcoming — confirmed one_time + series interleaved by date; series expand
  *     to their instances (per-date cancel + whole-series cancel).
  *   • History  — declined / cancelled / completed, read-only; a recurring
- *     series' occurrence notes load lazily on expand.
+ *     series' occurrence notes load lazily on expand (except the
+ *     completed-unendorsed case above).
  *
  * Every cancel is NON-OPTIMISTIC and calls the SAME callables as the tutor page
  * (cancelSession / cancelSessionInstance); the backend records the party as
@@ -156,6 +161,10 @@ export function SessionsPage() {
   // tutorUserIds this family has already endorsed (from their own references) —
   // completed work with a tutor in this set shows no endorse prompt.
   const [endorsedTutors, setEndorsedTutors] = useState<Set<string>>(new Set());
+  // True once the endorsedTutors read has settled (success OR the
+  // fallback-to-none-endorsed catch) — the signal the completed-series
+  // eager-instances effect below waits on (issue #275 round 2).
+  const [endorsedTutorsReady, setEndorsedTutorsReady] = useState(false);
   // The completed session whose endorse dialog is open, or null.
   const [endorsing, setEndorsing] = useState<StudySessionDoc | null>(null);
 
@@ -299,6 +308,10 @@ export function SessionsPage() {
   // This family's submitted endorsements, to gate the post-completion prompt.
   // Equality-only (submittedByFamilyId + appSource) — no composite needed — and
   // we only need the tutor ids, so no sort. Mirrors the family RequestsPage query.
+  // endorsedTutorsReady flips true on EITHER outcome (success or the
+  // fallback-to-none-endorsed catch below) — it's the signal the
+  // completed-series eager-instances effect waits on, so it never acts on the
+  // still-empty INITIAL set.
   useEffect(() => {
     if (!familyId) return;
     let cancelled = false;
@@ -313,17 +326,58 @@ export function SessionsPage() {
         if (cancelled) return;
         const rows = snap.docs.map((d) => d.data() as TutorEndorsementDoc);
         setEndorsedTutors(new Set(rows.map((r) => r.tutorUserId)));
+        setEndorsedTutorsReady(true);
       })
       .catch(() => {
         // A denied/failed endorsements read must not block sessions — fall back to
         // "none endorsed" (the worst case is offering a prompt the callable then
-        // rejects with already-exists, which the dialog handles gracefully).
-        if (!cancelled) setEndorsedTutors(new Set());
+        // rejects with already-exists, which the dialog handles gracefully). This
+        // also means the completed-series eager-instances effect below treats
+        // every tutor as unendorsed, so it eager-loads ALL completed series —
+        // the same safe fallback, for the same reason.
+        if (!cancelled) {
+          setEndorsedTutors(new Set());
+          setEndorsedTutorsReady(true);
+        }
       });
     return () => {
       cancelled = true;
     };
   }, [familyId]);
+
+  // Issue #275 round 2: the endorse prompt sits on a completed recurring
+  // series' history card header and is the family's main path into
+  // endorsing — it must appear WITHOUT an expand click. So a COMPLETED
+  // series whose tutor is NOT YET endorsed stays EAGER (bounded by "tutors
+  // not yet endorsed", not "every series ever created" — still a real bound,
+  // just a different one than the active-series bound in load()). A
+  // completed series whose tutor IS already endorsed, and every
+  // declined/cancelled series, stays LAZY on first history-card expand
+  // exactly as toggleHistorySeries implements. Gated on endorsedTutorsReady
+  // so this reads the real endorsed set rather than the still-empty initial
+  // one (see the effect above for why a failed endorsements read still
+  // behaves correctly here).
+  useEffect(() => {
+    if (!sessions || !endorsedTutorsReady) return;
+    for (const s of sessions) {
+      if (
+        s.type === 'recurring' &&
+        s.status === 'completed' &&
+        !endorsedTutors.has(s.tutorUserId) &&
+        instancesBySeries[s.sessionId] === undefined &&
+        seriesInstanceStatus[s.sessionId] !== 'loading'
+      ) {
+        loadSeriesInstances(s.sessionId);
+      }
+    }
+  }, [
+    sessions,
+    endorsedTutorsReady,
+    endorsedTutors,
+    instancesBySeries,
+    seriesInstanceStatus,
+    loadSeriesInstances,
+  ]);
 
   const markEndorsed = (tutorUserId: string) =>
     setEndorsedTutors((prev) => new Set(prev).add(tutorUserId));
@@ -1086,12 +1140,12 @@ export function SessionsPage() {
                         the series completes or is cancelled, with no
                         redaction backstop in study. Its instances are loaded
                         LAZILY on first expand rather than eagerly for every
-                        series the family has ever had (issue #275). Note:
-                        hasCompletedWork/endorseButton above reads this same
-                        instancesBySeries map, so for a terminal series the
-                        endorse prompt only appears once its card has been
-                        expanded at least once — a deliberate, documented
-                        trade-off of the lazy load (see PR description). */}
+                        series the family has ever had (issue #275) — EXCEPT
+                        a completed series whose tutor isn't endorsed yet,
+                        which the effect above already eager-loaded so
+                        hasCompletedWork/endorseButton (reading this same
+                        instancesBySeries map) can show the endorse prompt
+                        without an expand click. */}
                     {s.type === 'recurring' && (
                       <div className="mt-3">
                         <Button size="sm" variant="ghost" onClick={() => toggleHistorySeries(s)}>
