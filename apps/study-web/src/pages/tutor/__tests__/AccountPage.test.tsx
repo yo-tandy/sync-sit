@@ -15,8 +15,8 @@ const h = vi.hoisted(() => ({
   updateDoc: vi.fn<(ref: { path: string }, data: Record<string, unknown>) => Promise<void>>(
     () => Promise.resolve(),
   ),
-  uploadBytes: vi.fn<(ref: { path: string }, data: unknown) => Promise<void>>(() =>
-    Promise.resolve(),
+  uploadBytes: vi.fn<(ref: { path: string }, data: unknown, metadata?: unknown) => Promise<void>>(
+    () => Promise.resolve(),
   ),
   getDownloadURL: vi.fn<(ref: { path: string }) => Promise<string>>(() =>
     Promise.resolve('https://cdn.example/photo.png'),
@@ -44,7 +44,8 @@ vi.mock('firebase/firestore', () => ({
 
 vi.mock('firebase/storage', () => ({
   ref: (_storage: unknown, path: string) => ({ path }),
-  uploadBytes: (...args: [ref: { path: string }, data: unknown]) => h.uploadBytes(...args),
+  uploadBytes: (...args: [ref: { path: string }, data: unknown, metadata?: unknown]) =>
+    h.uploadBytes(...args),
   deleteObject: (...args: [ref: { path: string }]) => h.deleteObject(...args),
   getDownloadURL: (...args: [ref: { path: string }]) => h.getDownloadURL(...args),
 }));
@@ -367,6 +368,47 @@ describe('tutor AccountPage', () => {
     expect(await screen.findByText(/select an image/i)).toBeInTheDocument();
     expect(h.uploadBytes).not.toHaveBeenCalled();
     expect(h.updateDoc).not.toHaveBeenCalled();
+  });
+
+  // Issue #452: File.type was gated on an ALLOWLIST, which rejected real
+  // photos whenever a browser reported an empty or application/octet-stream
+  // type -- iPhone HEIC especially. These pins prove the shared denylist
+  // (isAcceptablePhotoType) actually reaches this page.
+  it('accepts a File with an empty type (common for HEIC on iPhone) and uploads it', async () => {
+    renderWithProviders(<AccountPage />);
+    const file = new File(['x'], 'IMG_0001.HEIC', { type: '' });
+    fireEvent.change(screen.getByTestId('photo-input'), { target: { files: [file] } });
+
+    await waitFor(() => expect(h.uploadBytes).toHaveBeenCalled());
+    expect(screen.queryByText(/select an image/i)).not.toBeInTheDocument();
+  });
+
+  it('accepts a File reported as application/octet-stream and uploads it', async () => {
+    renderWithProviders(<AccountPage />);
+    const file = new File(['x'], 'me.jpg', { type: 'application/octet-stream' });
+    fireEvent.change(screen.getByTestId('photo-input'), { target: { files: [file] } });
+
+    await waitFor(() => expect(h.uploadBytes).toHaveBeenCalled());
+    expect(screen.queryByText(/select an image/i)).not.toBeInTheDocument();
+  });
+
+  it('still rejects image/svg+xml as a scriptable, non-photo type', async () => {
+    renderWithProviders(<AccountPage />);
+    const file = new File(['<svg/>'], 'picture.svg', { type: 'image/svg+xml' });
+    fireEvent.change(screen.getByTestId('photo-input'), { target: { files: [file] } });
+
+    expect(await screen.findByText(/select an image/i)).toBeInTheDocument();
+    expect(h.uploadBytes).not.toHaveBeenCalled();
+  });
+
+  it('uploads an empty-type HEIC with an explicit image/heic contentType, not octet-stream', async () => {
+    renderWithProviders(<AccountPage />);
+    const file = new File(['x'], 'IMG_0001.HEIC', { type: '' });
+    fireEvent.change(screen.getByTestId('photo-input'), { target: { files: [file] } });
+
+    await waitFor(() => expect(h.uploadBytes).toHaveBeenCalled());
+    const metadata = h.uploadBytes.mock.calls[0][2] as { contentType?: string } | undefined;
+    expect(metadata?.contentType).toBe('image/heic');
   });
 
   it('rejects an oversized file without uploading', async () => {
