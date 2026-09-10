@@ -46,8 +46,8 @@ vi.mock('firebase/firestore', () => ({
 
 vi.mock('firebase/storage', () => ({
   ref: (_storage: unknown, path: string) => ({ path }),
-  getDownloadURL: (...args: unknown[]) => h.getDownloadURL(...args),
-  deleteObject: (...args: unknown[]) => h.deleteObject(...args),
+  getDownloadURL: (...args: [ref: { path: string }]) => h.getDownloadURL(...args),
+  deleteObject: (...args: [ref: { path: string }]) => h.deleteObject(...args),
 }));
 
 vi.mock('firebase/functions', () => ({
