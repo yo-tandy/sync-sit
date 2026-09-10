@@ -502,6 +502,31 @@ export async function eraseUserAccount(targetUserId: string, actorUid: string) {
     }
   }
 
+  // 4-ter-bis. `searches/{searchId}` (issue #408 item 2). `sendContactRequest`
+  // writes one search doc 1:1 with the appointment it produces (linked by the
+  // appointment's own `searchId`), storing `address`, `latLng`, `kidIds`,
+  // `familyId` and `createdByUserId` — none of which any erasure path has
+  // ever touched, so the address copy survived a GDPR hard delete. Nothing
+  // reads `searches` after creation (every field it carries is already
+  // denormalized onto the appointment — see the retention step's comment),
+  // so there is no anonymize-and-keep case the way appointments get: full
+  // deletion, same disposition and same reasoning as `references` above.
+  // Same last-parent rule as `references`' `submittedByFamilyId`: while a
+  // co-parent survives, only the searches the erased member personally
+  // created are removed.
+  const searchSnaps = await Promise.all([
+    db.collection('searches').where('createdByUserId', '==', targetUserId).get(),
+    familyId && isLastParent
+      ? db.collection('searches').where('familyId', '==', familyId).get()
+      : Promise.resolve({ docs: [] as any[] } as any),
+  ]);
+  const searchDocsToDelete = Array.from(
+    new Map(
+      searchSnaps.flatMap((snap: any) => snap.docs).map((doc: any) => [doc.ref.path, doc]),
+    ).values(),
+  ) as FirebaseFirestore.QueryDocumentSnapshot[];
+  await commitInChunks(searchDocsToDelete.map((doc) => (b) => b.delete(doc.ref)));
+
   // 4-quater. sync-do (plan §11.4): `doTasks` + `taskOffers` on BOTH sides,
   // the two uid-keyed Storage prefixes, and the dangling-reference scrub
   // that keeps a co-parent's surviving task from pointing at objects this
@@ -606,6 +631,8 @@ export async function eraseUserAccount(targetUserId: string, actorUid: string) {
     cancelledCount,
     isLastParent,
     refDocsDeleted: refDocsToDelete.length,
+    // issue #408 item 2 -- the `searches` half of the erasure.
+    searchesDeleted: searchDocsToDelete.length,
     doErasure,
     /** The family that supervised this member, captured before the link was deleted. */
     supervisingFamilyId,
@@ -684,6 +711,9 @@ export const deleteUser = onCall(
         cancelledAppointments: cancelledCount,
         familyDeleted: isLastParent && !!familyId,
         deletedReferences: refDocsDeleted,
+        // issue #408 item 2 — counts only, no personal data (same convention
+        // as `deletedReferences`).
+        deletedSearches: erased.searchesDeleted,
         deletedDoTasks: doErasure.tasksDeleted,
         deletedDoOffers: doErasure.offersDeleted,
         deletedDoPhotoObjects: doErasure.photoObjectsDeleted,

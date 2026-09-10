@@ -15,10 +15,11 @@ interface ExportUserDataInput {
 /**
  * Export all data related to a user: profile, family, appointments,
  * notifications, audit logs targeting them, guardian links/invites,
- * references/endorsements (both sides: provider and submitter), their sync-do
- * tasks/offers with the photo paths those tasks reference, their study sessions
- * (both sides, with each series' `instances` inlined) and their availability
- * schedule with its overrides.
+ * references/endorsements (both sides: provider and submitter), the
+ * `searches` docs behind their contact requests (both sides: created and
+ * family-owned), their sync-do tasks/offers with the photo paths those tasks
+ * reference, their study sessions (both sides, with each series' `instances`
+ * inlined) and their availability schedule with its overrides.
  */
 export const exportUserData = onCall(
   { region: 'europe-west1', cors: getCorsOrigin() },
@@ -160,6 +161,30 @@ export const exportUserData = onCall(
       ).values(),
     );
 
+    // `searches/{searchId}` (issue #408 item 2): the doc `sendContactRequest`
+    // writes 1:1 with the appointment it produces, storing `address`,
+    // `latLng`, `kidIds`, `familyId` and `createdByUserId`. Missing from the
+    // export entirely, so a subject-access request under-reported the stored
+    // address — arguably the worse half of the gap this issue tracks. Same
+    // two sides as `references`/`appointments` above: searches the user
+    // personally created, and — for a parent — every search their family
+    // created.
+    const [createdSearchesSnap, familySearchesSnap] = await Promise.all([
+      db.collection('searches').where('createdByUserId', '==', targetUserId).get(),
+      familyId
+        ? db.collection('searches').where('familyId', '==', familyId).get()
+        : Promise.resolve({ docs: [] } as any),
+    ]);
+
+    const searches = Array.from(
+      new Map(
+        [...createdSearchesSnap.docs, ...familySearchesSnap.docs].map((doc: any) => [
+          doc.id,
+          { id: doc.id, ...doc.data() },
+        ]),
+      ).values(),
+    );
+
     // sync-do (plan §11.4): `doTasks` + `taskOffers`, both sides — the
     // family's tasks and the doer's offers — plus the `do-photos` object
     // paths those tasks reference. See `doGdpr.collectDoUserData` for which
@@ -198,6 +223,7 @@ export const exportUserData = onCall(
       guardianLinks,
       kidInvites,
       references,
+      searches,
       doTasks: doData.tasks,
       taskOffers: doData.offers,
       doPhotoPaths: doData.photoPaths,
