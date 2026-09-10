@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Spinner } from './Spinner.js';
-import { APP_NAME, BRAND_MARKS, type SyncApp } from '../lib/brandMarks.js';
+import { APP_NAME, APP_ORDER, BRAND_MARKS, type SyncApp } from '../lib/brandMarks.js';
 
 export interface AppSwitchBarProps {
   /** The app this bar is rendered inside. Its tab is active and never hands off. */
   current: SyncApp;
   /**
-   * Sibling apps this bar offers, in display order, each with its origin.
+   * Sibling apps this bar offers, each with its origin. Order here does NOT
+   * decide display order -- `APP_ORDER` in brandMarks.ts does (#438), fixed
+   * suite-wide so the row never reshuffles depending on which app is current.
    *
    * OMITTING AN APP HIDES ITS TAB, and that is the gate for sync/do: sit and
    * study pass only each other until #304 (decision 20) is approved. The
@@ -160,11 +162,15 @@ export function AppSwitchBar({
     }
   };
 
-  // The current app first, then its siblings in the order given, then account.
-  const appTabs: ReadonlyArray<{ app: SyncApp; url?: string }> = [
-    { app: current },
-    ...siblings.filter((s) => s.app !== current),
-  ];
+  // Fixed suite-wide order (#438) -- NOT current-first. Putting `current`
+  // first meant the row reordered itself on every switch (sit showed
+  // sit,study; switching to study showed study,sit instead of the same row
+  // with a different tab lit up). APP_ORDER is the single source of truth
+  // for position; this only decides which of its entries are present.
+  const urlByApp = new Map(siblings.map((s) => [s.app, s.url]));
+  const appTabs: ReadonlyArray<{ app: SyncApp; url?: string }> = APP_ORDER.filter(
+    (app) => app === current || urlByApp.has(app),
+  ).map((app) => ({ app, url: urlByApp.get(app) }));
 
   return (
     <nav

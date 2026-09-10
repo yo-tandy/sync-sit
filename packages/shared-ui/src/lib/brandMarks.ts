@@ -8,6 +8,18 @@ import doMd from '../assets/sync-do-mark-96.png';
 /** The three apps in the suite. */
 export type SyncApp = 'sit' | 'study' | 'do';
 
+/**
+ * The suite-wide display order (issue #438).
+ *
+ * Fixed regardless of which app is "current" -- a bar that put the current
+ * app first (sit: sit,study; study: study,sit) reordered itself on every
+ * switch, which is the bug this constant fixes. Any host may omit an app
+ * (sit and study omit `do` until decision 20/#304); `AppSwitchBar` filters
+ * this list down to whichever of `current` + `siblings` are actually present
+ * rather than reading it as "always render all three."
+ */
+export const APP_ORDER: readonly SyncApp[] = ['sit', 'study', 'do'];
+
 /** Brand name as it is written, everywhere, in every language. Not translated. */
 export const APP_NAME: Record<SyncApp, string> = {
   sit: 'sync/sit',
