@@ -104,13 +104,13 @@ export function AccountLayout() {
               title doesn't need. Both are empty (display:none) below `md`.
               EACH ITS OWN `<nav>` (not a plain `<div>`): these are real
               desktop navigation controls and deserve the landmark back.
-              Two navs sharing this label is fine here -- the ONE other
-              landmark that ever carried it, the phone `AppSwitchBar`, is
-              `md:hidden` and therefore absent from the accessibility tree
-              at the same widths these two are visible, so there is no
-              duplicate-label collision at any single breakpoint. */}
+              Distinct labels: the left nav holds only the Home link, so it
+              is named "Home"; only the right nav, which holds the actual
+              switcher, carries the app-switch label. The phone
+              `AppSwitchBar` also carries that label but is `md:hidden`, so
+              at no single breakpoint do two landmarks share a name. */}
           <nav
-            aria-label={t('appSwitch.barLabel')}
+            aria-label={t('menu.home')}
             className="hidden flex-1 basis-0 items-center justify-start md:flex"
           >
             {portalHref && (

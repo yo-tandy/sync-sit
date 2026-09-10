@@ -312,14 +312,18 @@ describe('AccountLayout renders the hub’s ONE header, every breakpoint (#445 r
     expect(header.className).toMatch(/\bjustify-center\b/);
   });
 
-  it('restores the desktop exits as real <nav> landmarks, sharing the phone bar’s label safely (it is md:hidden, never present alongside these)', () => {
+  it('restores the desktop exits as real <nav> landmarks with DISTINCT names -- "Home" for the home link, the switch label only on the switcher', () => {
     renderLayout(<AccountLayout />, 'account hub');
     const header = screen.getByText('Sync/Account').closest('header')!;
-    const navs = within(header).getAllByRole('navigation', SWITCH_BAR);
-    expect(navs).toHaveLength(2);
-    for (const nav of navs) {
-      expect(nav.tagName).toBe('NAV');
-    }
+    // Exactly one landmark per name inside the header: two simultaneously
+    // visible navs sharing "Switch app" would be indistinguishable to a
+    // screen-reader user navigating by landmark (review on #484).
+    const switcher = within(header).getAllByRole('navigation', SWITCH_BAR);
+    expect(switcher).toHaveLength(1);
+    expect(within(switcher[0]).getByTestId('switch-menu-item')).toBeInTheDocument();
+    const home = within(header).getAllByRole('navigation', { name: /^home$/i });
+    expect(home).toHaveLength(1);
+    expect(within(home[0]).queryByTestId('switch-menu-item')).toBeNull();
   });
 
   it('never wraps the app-switch slot’s content -- whitespace-nowrap on the wrapper, not inside AppSwitchMenuItem itself', () => {
