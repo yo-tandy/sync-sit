@@ -459,7 +459,8 @@ export const useAdminStore = create<AdminState>((set, get) => ({
         familiesLoading: false,
         familiesLoadingMore: false,
       }));
-    } catch {
+    } catch (err) {
+      console.error('[admin] fetch families failed', err);
       // Swallow after flagging: an error banner (not the empty state) renders,
       // and no unhandled rejection escapes the page's fire-and-forget calls.
       set({ familiesLoading: false, familiesLoadingMore: false, familiesError: true });
@@ -523,7 +524,8 @@ export const useAdminStore = create<AdminState>((set, get) => ({
         doTasksLoading: false,
         doTasksLoadingMore: false,
       }));
-    } catch {
+    } catch (err) {
+      console.error('[admin] fetch do tasks failed', err);
       set({ doTasksLoading: false, doTasksLoadingMore: false, doTasksError: true });
     }
   },

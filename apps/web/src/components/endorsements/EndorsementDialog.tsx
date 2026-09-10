@@ -90,6 +90,7 @@ export function EndorsementDialog({
           setWhatsappSameAsPhone(parentWhatsapp === parentPhone || !parentWhatsapp);
           setRefEmail(parent!.email || '');
         }
+      // eslint-disable-next-line no-restricted-syntax -- best-effort: contact prefill from the parent record; fields stay editable if it fails
       } catch { /* silent */ }
     }
     loadFamily();

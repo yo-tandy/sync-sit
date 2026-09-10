@@ -176,7 +176,8 @@ export function ExpandableBabysitterCard({
     try {
       await callSetNote('');
       setNoteRemoveOpen(false);
-    } catch {
+    } catch (err) {
+      console.error('[appointments] remove note failed', err);
       // Erasure-specific copy: the author's question here is "is the note
       // gone?" — "couldn't save" would answer the wrong one.
       setNoteError(t('familyDashboard.notes.removeError'));

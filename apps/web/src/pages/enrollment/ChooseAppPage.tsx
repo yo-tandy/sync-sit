@@ -109,7 +109,8 @@ export function ChooseAppPage() {
         `${STUDY_APP_URL}/handoff#code=${encodeURIComponent(res.data.code)}&lang=${encodeURIComponent(lang)}`,
       );
       // Stay "switching": the browser is navigating away.
-    } catch {
+    } catch (err) {
+      console.error('[enrollment] mint handoff code failed', err);
       setError(t('welcomeCross.genericError'));
       setSwitching(null);
     }

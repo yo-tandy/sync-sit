@@ -156,6 +156,30 @@ describe('family AccountPage', () => {
     expect(Object.keys(payload).sort()).toEqual(['notifPrefs.shared.reminders.email', 'updatedAt']);
   });
 
+  it('a failed notif-prefs write is logged, not swallowed silently (#463)', async () => {
+    // Pre-#463 this catch was bare (`catch {}`): a failed toggle write left
+    // no trace anywhere, which is exactly the shape that turned the #446
+    // outage into an hours-long diagnosis instead of a one-minute one.
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    h.updateDoc.mockRejectedValueOnce(new Error('permission-denied'));
+    renderPage();
+    await screen.findByText('parent@example.com');
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: `${i18n.t('notifications.confirmation')} — ${i18n.t('notifications.emailNotif')}`,
+      }),
+    );
+
+    await waitFor(() =>
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        '[account] save notification prefs failed',
+        expect.any(Error),
+      ),
+    );
+    consoleErrorSpy.mockRestore();
+  });
+
   it('never renders sync/do rows — a sit parent holds no doer profile', async () => {
     // The defect issue #369 opens with, pinned at the surface.
     renderPage();

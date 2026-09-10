@@ -59,7 +59,8 @@ function PushStatusCard({ uid }: { uid?: string }) {
     try {
       const token = await requestPushPermission(uid);
       setStatus(token ? 'granted' : Notification.permission);
-    } catch {
+    } catch (err) {
+      console.error('[account] push permission request failed', err);
       setStatus(Notification.permission);
     } finally {
       setEnabling(false);
@@ -201,7 +202,8 @@ export function AccountPage() {
       setPhotoPreview(null);
       setPhotoFile(null);
       await refreshUserDoc().catch(() => {});
-    } catch {
+    } catch (err) {
+      console.error('[account] remove photo failed', err);
       setPhotoError(t('account.photoRemoveFailed'));
     }
   };
@@ -289,7 +291,8 @@ export function AccountPage() {
       await resetPassword(parent.email);
       setPasswordResetSent(true);
       flashAfter(() => setPasswordResetSent(false), 5000);
-    } catch {
+    } catch (err) {
+      console.error('[account] password reset failed', err);
       setError(t('account.passwordResetFailed'));
     } finally {
       setPasswordResetting(false);
@@ -311,7 +314,8 @@ export function AccountPage() {
           updatedAt: serverTimestamp(),
         });
         await refreshUserDoc();
-      } catch {
+      } catch (err) {
+        console.error('[account] save notification prefs failed', err);
         // silent — will retry on next toggle
       }
     },
