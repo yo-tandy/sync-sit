@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { humanizeNoticeWindow } from '@/utils/cancellationPolicy';
 import { Link, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
-import { doc, getDoc, collection, getDocs, query, where, limit, onSnapshot, deleteDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, getDocs, query, where, onSnapshot, deleteDoc } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
@@ -19,14 +19,11 @@ import { DateTag } from '@/components/ui/DateTag';
 import type { FamilyDoc, KidDoc, BabysitterSummary } from '@ejm/sit-core';
 import { getParentView } from '@ejm/sit-core';
 import {
-  endorsementSources,
   endorsementLabelKey,
-  toCrossAppEndorsement,
-  ENDORSEMENT_PER_SOURCE_LIMIT,
-  PUBLIC_ENDORSEMENT_STATUSES,
   type CrossAppEndorsement,
 } from '@ejm/shared-core';
 import { SIT_ORIGIN_LABEL_PREFIX } from '@/lib/endorsementLabels';
+import { fetchEndorsementSources } from '@/lib/crossAppReferences';
 
 // Time options 06:00–02:00
 function generateTimeOptions(): { value: string; label: string }[] {
@@ -148,35 +145,14 @@ export function SearchPage() {
     if (refsInFlight.current.has(uid)) return; // a load is already running
     refsInFlight.current.add(uid);
     try {
-      const sources = endorsementSources('sit');
+      const sources = fetchEndorsementSources(uid);
       // allSettled, NOT all: with one query the failure mode was "this card's
       // endorsements are missing"; with three, Promise.all would let a failure
       // in a SECONDARY source (an unbuilt sibling composite, a transient
       // error) hide sit's own primary signal. Degrade to fewer, never to none.
-      const settled = await Promise.allSettled(
-        sources.map(({ field }) =>
-          getDocs(
-            query(
-              collection(db, 'references'),
-              where(field, '==', uid),
-              // Load-bearing: the H2-hardened references read rule grants an
-              // unrelated family only the public-status disjunct, provable
-              // only from the QUERY. Without it every card is
-              // PERMISSION_DENIED — and the fix is the query, never the rule.
-              where('status', 'in', PUBLIC_ENDORSEMENT_STATUSES),
-              limit(ENDORSEMENT_PER_SOURCE_LIMIT)
-            )
-          )
-        )
-      );
+      const settled = await Promise.allSettled(sources.map((s) => s.promise));
       // Concatenated in source order, so sit's own references lead.
-      const refs = settled.flatMap((r, i) =>
-        r.status === 'fulfilled'
-          ? r.value.docs.map((d) =>
-              toCrossAppEndorsement(sources[i].app, d.id, d.data() as Record<string, unknown>)
-            )
-          : []
-      );
+      const refs = settled.flatMap((r) => (r.status === 'fulfilled' ? r.value : []));
       setBabysitterRefs((prev) => ({ ...prev, [uid]: refs }));
       if (settled.every((r) => r.status === 'fulfilled')) {
         setCompleteRefUids((prev) => new Set(prev).add(uid));
@@ -821,11 +797,20 @@ export function SearchPage() {
                                   <div className="ml-4 mt-1 mb-2 space-y-1">
                                     {ref.text && <p className="text-xs text-gray-600 italic">"{ref.text}"</p>}
                                     {/* Referee contact + kid counts are sit's
-                                        own reference shape. Gated on the source
-                                        so a sibling product that later carries
-                                        contact fields cannot have them rendered
-                                        as tappable babysitting-referee links by
-                                        this shared row markup. */}
+                                        own reference shape. KEPT knowingly
+                                        post-#346: a sibling row's `ref` now
+                                        comes from the `getCrossAppReferences`
+                                        projection, which structurally cannot
+                                        carry these fields — so this gate is
+                                        currently redundant, not load-bearing
+                                        for THESE rows. It stays as the
+                                        render-side safeguard against a future
+                                        regression (a widened projection, or a
+                                        call site that bypasses the callable
+                                        and maps a raw sibling doc through
+                                        `toCrossAppEndorsement` directly), at
+                                        zero cost. Removing it would trade a
+                                        free assertion for nothing. */}
                                     {ref.sourceApp === 'sit' && (<>
                                     {ref.refEmail && (
                                       <a href={`mailto:${ref.refEmail}`} onClick={(e) => e.stopPropagation()} className="flex items-center gap-1.5 text-xs text-brand-600">

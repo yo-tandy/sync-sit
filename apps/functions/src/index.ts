@@ -38,6 +38,11 @@ export {
   redeemAppHandoffCode,
   // Self-serve account deletion (issue #368) — same erasure as the admin path
   deleteMyAccount,
+  // Server-side projection for cross-app `references` reads (issue #346).
+  // Deployed once from this codebase — same GCP project as study/do, so
+  // study-web and do-web call it the same way they call
+  // createAppHandoffCode above, with no re-export needed on their side.
+  getCrossAppReferences,
   // Verification
   submitVerification,
   reviewVerification,

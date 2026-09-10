@@ -36,7 +36,15 @@ vi.mock('@/config/firebase', () => ({ db: {}, auth: {}, functions: {}, storage: 
 vi.mock('@/hooks/useHolidays', () => ({ useHolidays: () => ({ periods: [] }) }));
 vi.mock('firebase/auth', () => ({ onAuthStateChanged: vi.fn() }));
 vi.mock('firebase/functions', () => ({
-  httpsCallable: (_fns: unknown, name: string) => (payload: unknown) => h.callable(name, payload),
+  // getCrossAppReferences (issue #346) is routed to an always-inert stub, NOT
+  // through h.callable: expanding the card unconditionally fires it for
+  // study/do now, and letting it share h.callable would consume this file's
+  // mockRejectedValueOnce/mockImplementationOnce queues meant for the
+  // setAppointmentNote save/remove flow under test.
+  httpsCallable: (_fns: unknown, name: string) => (payload: unknown) =>
+    name === 'getCrossAppReferences'
+      ? Promise.resolve({ data: { items: [] } })
+      : h.callable(name, payload),
 }));
 vi.mock('firebase/firestore', () => ({
   collection: vi.fn(),

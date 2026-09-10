@@ -2,14 +2,17 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { screen, waitFor, fireEvent } from '@testing-library/react';
 import { renderWithProviders } from '@/__tests__/test-utils';
 import type { OfferDoc } from '@ejm/do-core';
+import { ENDORSEMENT_SUBJECT_FIELD } from '@ejm/shared-core';
 
 /**
  * Offer-card pins (plan §9.1 "the heart of the product"):
  * - renders the §4.2 denormalized doer fields, price+basis, message, and
  *   the §11.3 helper WITH its disclosure copy;
- * - endorsements: THE three status-constrained queries against the shared
- *   references collection (shape asserted verbatim — the status-in
- *   constraint is what makes them provable under the H2-hardened rule);
+ * - endorsements: do's OWN source stays a direct, status-constrained
+ *   Firestore query (shape asserted verbatim — the status-in constraint is
+ *   what makes it provable under the H2-hardened rule); every SIBLING
+ *   source (sit, study) instead calls the getCrossAppReferences callable
+ *   (issue #346, PII minimisation) — never a raw Firestore query;
  * - ordering do-first, then sit/study labeled with their origin app;
  * - a doer with none renders the graceful starting-state line;
  * - accept/decline only on pending offers.
@@ -17,11 +20,28 @@ import type { OfferDoc } from '@ejm/do-core';
 
 const h = vi.hoisted(() => ({
   queries: [] as unknown[][],
+  callableCalls: [] as { name: string; payload: unknown }[],
+  /** Rows per `references` subject field — one source per app. */
   results: new Map<string, Record<string, unknown>[]>(),
   fail: false,
-  /** Subject fields whose query should reject — models a partial outage. */
+  /** Subject fields whose source should reject — models a partial outage. */
   failFields: new Set<string>(),
 }));
+
+/** Mirrors the getCrossAppReferences callable's own mapping. The callable's
+ * own key-set discipline is pinned server-side
+ * (tests/integration/references/get-cross-app-references.test.ts). */
+function project(sourceApp: string, field: string, r: Record<string, unknown>, i: number) {
+  const refName =
+    (typeof r.submittedByName === 'string' && r.submittedByName) ||
+    (typeof r.refName === 'string' && r.refName) ||
+    '';
+  const text =
+    (typeof r.referenceText === 'string' && r.referenceText) ||
+    (typeof r.note === 'string' && r.note) ||
+    '';
+  return { sourceApp, id: `${field}-${i}`, refName, text, isEjmFamily: r.isEjmFamily === true, ...r };
+}
 
 vi.mock('@/config/firebase', () => ({ db: {}, functions: {} }));
 vi.mock('firebase/firestore', () => ({
@@ -33,10 +53,30 @@ vi.mock('firebase/firestore', () => ({
     h.queries.push(q.query);
     if (h.fail) return Promise.reject(new Error('denied'));
     const field = (q.query[1] as { where: [string] }).where[0];
+    if (field !== 'doerUserId') {
+      // do's own is the ONLY subject field a raw query may ever carry now —
+      // a sibling field arriving here means a regression back to the
+      // pre-#346 direct-read path.
+      throw new Error(`unexpected raw Firestore query for sibling field ${String(field)}`);
+    }
     if (h.failFields.has(field)) return Promise.reject(new Error('denied'));
     const rows = h.results.get(field) ?? [];
     return Promise.resolve({ docs: rows.map((r, i) => ({ id: `${field}-${i}`, data: () => r })) });
   },
+}));
+vi.mock('firebase/functions', () => ({
+  httpsCallable:
+    (_fns: unknown, name: string) =>
+    (payload: { providerUserId: string; sourceApp: 'sit' | 'study' }) => {
+      h.callableCalls.push({ name, payload });
+      const field = ENDORSEMENT_SUBJECT_FIELD[payload.sourceApp];
+      if (h.fail) return Promise.reject(new Error('internal'));
+      if (h.failFields.has(field)) return Promise.reject(new Error('internal'));
+      const rows = h.results.get(field) ?? [];
+      return Promise.resolve({
+        data: { items: rows.map((r, i) => project(payload.sourceApp, field, r, i)) },
+      });
+    },
 }));
 
 import { OfferCard } from '../OfferCard';
@@ -68,25 +108,34 @@ function offer(overrides: Partial<OfferDoc> = {}): OfferDoc {
 
 beforeEach(() => {
   h.queries = [];
+  h.callableCalls = [];
   h.results = new Map();
   h.fail = false;
   h.failFields = new Set();
 });
 
 describe('OfferCard endorsements', () => {
-  it('issues EXACTLY the three status-constrained references queries (§9.1 load-bearing shape)', async () => {
+  it("issues ONE status-constrained Firestore query for do's OWN source (§9.1 load-bearing shape)", async () => {
     renderWithProviders(<OfferCard offer={offer()} />);
-    await waitFor(() => expect(h.queries).toHaveLength(3));
-    for (const field of ['doerUserId', 'babysitterUserId', 'tutorUserId']) {
-      expect(h.queries).toContainEqual([
-        { path: 'references' },
-        { where: [field, '==', 'doer1'] },
-        // NOT optional: the H2-hardened rule grants an unrelated caller only
-        // the public-status disjunct — drop this and the read is denied.
-        { where: ['status', 'in', ['approved', 'published']] },
-        { limit: 10 },
-      ]);
-    }
+    await waitFor(() => expect(h.queries).toHaveLength(1));
+    expect(h.queries).toContainEqual([
+      { path: 'references' },
+      { where: ['doerUserId', '==', 'doer1'] },
+      // NOT optional: the H2-hardened rule grants an unrelated caller only
+      // the public-status disjunct — drop this and the read is denied.
+      { where: ['status', 'in', ['approved', 'published']] },
+      { limit: 10 },
+    ]);
+  });
+
+  it('calls getCrossAppReferences for each SIBLING source, do excluded, and never issues a raw Firestore query for them', async () => {
+    renderWithProviders(<OfferCard offer={offer()} />);
+    await waitFor(() => expect(h.callableCalls).toHaveLength(2));
+    expect(h.callableCalls).toEqual([
+      { name: 'getCrossAppReferences', payload: { providerUserId: 'doer1', sourceApp: 'sit' } },
+      { name: 'getCrossAppReferences', payload: { providerUserId: 'doer1', sourceApp: 'study' } },
+    ]);
+    expect(h.queries).toHaveLength(1);
   });
 
   it('renders do-first, then sit/study labeled with their origin app', async () => {

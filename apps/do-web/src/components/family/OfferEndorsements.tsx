@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { collection, getDocs, limit, query, where } from 'firebase/firestore';
+import { httpsCallable } from 'firebase/functions';
 import { Spinner } from '@ejm/shared-ui';
 import {
   endorsementSources,
@@ -9,8 +10,10 @@ import {
   ENDORSEMENT_PER_SOURCE_LIMIT,
   PUBLIC_ENDORSEMENT_STATUSES,
   type CrossAppEndorsement,
+  type EndorsementApp,
+  type ProjectedCrossAppReference,
 } from '@ejm/shared-core';
-import { db } from '@/config/firebase';
+import { db, functions } from '@/config/firebase';
 
 /** i18n prefix for this surface's origin labels — see endorsementLabelKey. */
 const ORIGIN_LABEL_PREFIX = 'family.taskDetail.endorsementFrom';
@@ -54,16 +57,35 @@ export function OfferEndorsements({ doerUserId }: { doerUserId: string }) {
         // predates this PR (the surface was already one-shot Promise.all) and
         // is not a regression — noting it so the next reader does not mistake
         // the absence of a completeness flag for an oversight.
+        // sync-do's OWN source (`doerUserId`) stays a direct client read of
+        // the full `references` doc. Every SIBLING source (sit, study)
+        // instead calls the shared `getCrossAppReferences` callable (issue
+        // #346): the same status-constrained query, run server-side,
+        // returning ONLY the fields this card renders — a sit reference's
+        // referee email/phone/whatsapp/kid-count PII never reaches this
+        // browser.
         const settled = await Promise.allSettled(
-          sources.map(({ field }) =>
-            getDocs(
-              query(
-                collection(db, 'references'),
-                where(field, '==', doerUserId),
-                where('status', 'in', PUBLIC_ENDORSEMENT_STATUSES),
-                limit(ENDORSEMENT_PER_SOURCE_LIMIT),
-              ),
-            ),
+          sources.map(({ app, field }) =>
+            app === 'do'
+              ? getDocs(
+                  query(
+                    collection(db, 'references'),
+                    where(field, '==', doerUserId),
+                    where('status', 'in', PUBLIC_ENDORSEMENT_STATUSES),
+                    limit(ENDORSEMENT_PER_SOURCE_LIMIT),
+                  ),
+                ).then((snap) =>
+                  snap.docs.map((d) =>
+                    toCrossAppEndorsement(app, d.id, d.data() as Record<string, unknown>),
+                  ),
+                )
+              : httpsCallable<
+                  { providerUserId: string; sourceApp: EndorsementApp },
+                  { items: ProjectedCrossAppReference[] }
+                >(functions, 'getCrossAppReferences')({
+                  providerUserId: doerUserId,
+                  sourceApp: app,
+                }).then((res) => res.data.items ?? []),
           ),
         );
         if (cancelled) return;
@@ -72,15 +94,7 @@ export function OfferEndorsements({ doerUserId }: { doerUserId: string }) {
           return;
         }
         // Concatenated in source order, so sync-do's own entries lead.
-        setLines(
-          settled.flatMap((r, i) =>
-            r.status === 'fulfilled'
-              ? r.value.docs.map((d) =>
-                  toCrossAppEndorsement(sources[i].app, d.id, d.data() as Record<string, unknown>),
-                )
-              : [],
-          ),
-        );
+        setLines(settled.flatMap((r) => (r.status === 'fulfilled' ? r.value : [])));
       } catch {
         if (!cancelled) setFailed(true);
       }

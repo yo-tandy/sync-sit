@@ -126,6 +126,27 @@ export interface CrossAppEndorsement {
   kidAges?: number[];
 }
 
+/**
+ * The shape the `getCrossAppReferences` callable returns for a SIBLING source
+ * (issue #346, PII minimisation). It is exactly the fields a cross-app row
+ * renders in ANY of the three products' surfaces — `refEmail` / `refPhone` /
+ * `refWhatsapp` / `numberOfKids` / `kidAges` never leave the server for a
+ * cross-app read, because no cross-app row renders them (they are gated to
+ * `sourceApp === 'sit'`, which is only ever the CURRENT app's own
+ * full-document read, never a projected one).
+ *
+ * `Pick`, not a hand-restated interface, so a field rename on
+ * `CrossAppEndorsement` cannot silently drift the two apart.
+ *
+ * A provider's own-app surface keeps reading the full `CrossAppEndorsement` /
+ * `ReferenceDoc` directly via its existing client query — this projection
+ * exists only for reads that cross an app boundary.
+ */
+export type ProjectedCrossAppReference = Pick<
+  CrossAppEndorsement,
+  'sourceApp' | 'id' | 'refName' | 'text' | 'isEjmFamily'
+>;
+
 function str(value: unknown): string | undefined {
   return typeof value === 'string' && value !== '' ? value : undefined;
 }
