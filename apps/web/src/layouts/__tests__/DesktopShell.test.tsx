@@ -216,9 +216,12 @@ describe('the app-switch bar is mounted in sit’s shells (#365)', () => {
     renderLayout(<AccountLayout />, 'account hub', '/account', [
       { path: '/', text: 'roleless home' },
     ]);
-    // TWO landmarks share the switch label here: the md+ header exit row
-    // (#416) and the phone bar. The bar is the `fixed` one, and only ITS
-    // parent is the shell div that must reserve the height.
+    // The desktop header (below) no longer carries its own `<nav>` landmark
+    // sharing this label (#445 review) -- it did before, when it was a
+    // second, separate exit row from the one this test pins. The ONE
+    // remaining landmark with this label is the real phone bar, and it is
+    // the `fixed` one; only ITS parent is the shell div that must reserve
+    // the height.
     const bar = screen
       .getAllByRole('navigation', SWITCH_BAR)
       .find((n) => /\bfixed\b/.test(n.className));
@@ -228,5 +231,64 @@ describe('the app-switch bar is mounted in sit’s shells (#365)', () => {
     // to '/' — and #385's rule that the current-app tab actually navigates
     // must hold for the hub as well.
     currentAppTabNavigatesHome(bar!, /sync\/sit/, 'roleless home');
+  });
+});
+
+/**
+ * The hub's ONE header (#445 review). It used to be TWO: `AccountHome`
+ * (shared-ui) rendered its own always-visible sticky "Sync/Account" banner,
+ * while this layout separately rendered a `hidden md:block` exit row (Home
+ * link + app-switch menu) -- both full-bleed, both `z-40`, so at `md+` one
+ * painted over the other. There is exactly one header now, owned here, at
+ * every breakpoint.
+ */
+describe('AccountLayout renders the hub’s ONE header, every breakpoint (#445 review)', () => {
+  afterEach(cleanup);
+
+  it('titles the header "Sync/Account" regardless of viewport (jsdom has no breakpoints — this proves it is not hidden)', () => {
+    renderLayout(<AccountLayout />, 'account hub');
+    const header = screen.getByText('Sync/Account').closest('header')!;
+    expect(header).toBeInTheDocument();
+    // Not inside a `hidden` wrapper -- unlike the old md-only exit row.
+    expect(header.className).not.toMatch(/\bhidden\b/);
+  });
+
+  it('is sticky, not fixed -- this layout already sits outside PageContainer, so sticky is full-bleed here', () => {
+    renderLayout(<AccountLayout />, 'account hub');
+    const header = screen.getByText('Sync/Account').closest('header')!;
+    expect(header.className).toMatch(/\bsticky\b/);
+    expect(header.className).not.toMatch(/\bfixed\b/);
+    expect(header.className).toMatch(/\btop-0\b/);
+  });
+
+  it('is neutral -- bg-ground-admin, never a brand colour', () => {
+    renderLayout(<AccountLayout />, 'account hub');
+    const header = screen.getByText('Sync/Account').closest('header')!;
+    expect(header.className).toMatch(/\bbg-ground-admin\b/);
+    expect(header.className).not.toMatch(/bg-brand/);
+  });
+
+  it('keeps the Home-link and app-switch-menu slots, now hidden md:flex EACH instead of the whole header being md:block', () => {
+    // userDoc is mocked null for this whole file, so the Home link itself
+    // does not render here (no sit role -> no portalHref) -- that slot's
+    // OWN visibility class is still assertable regardless of its contents.
+    renderLayout(<AccountLayout />, 'account hub');
+    const header = screen.getByText('Sync/Account').closest('header')!;
+    const slots = header.querySelectorAll(':scope > div');
+    expect(slots).toHaveLength(2);
+    for (const slot of Array.from(slots)) {
+      expect(slot.className).toMatch(/\bhidden\b/);
+      expect(slot.className).toMatch(/\bmd:flex\b/);
+    }
+    // The second slot holds the (mocked) app-switch menu item, which always
+    // renders regardless of role.
+    expect(within(header).getByTestId('switch-menu-item')).toBeInTheDocument();
+  });
+
+  it('has no back button and no bell -- title and (at md+) the exit controls only', () => {
+    renderLayout(<AccountLayout />, 'account hub');
+    const header = screen.getByText('Sync/Account').closest('header')!;
+    expect(within(header).queryByRole('button', { name: /back|retour/i })).toBeNull();
+    expect(within(header).queryAllByRole('img')).toHaveLength(0);
   });
 });

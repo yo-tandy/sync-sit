@@ -289,9 +289,9 @@ export default {
   accountHub: {
     // Brand string (#445), not a translated label -- identical in every
     // language, same convention as "Sync/Sit" / "Sync/Study" (see
-    // `APP_NAME` in shared-ui's brandMarks). Titles the hub's sticky header.
+    // `APP_NAME` in shared-ui's brandMarks). Titles AccountLayout's sticky
+    // header, the hub's ONE header at every breakpoint (#445 review).
     brandTitle: 'Sync/Account',
-    title: 'My account',
     subtitle: 'Shared across sync/sit, sync/study and sync/do.',
     // The neutral section's OWN heading (#445): "Account", distinct from
     // `myAccount` ("My account"), which is that section's first ROW.

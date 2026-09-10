@@ -19,9 +19,11 @@ import { useAuthStore } from '@/stores/authStore';
  * across the top of a page that is meant to belong to no app in particular.
  * Here there is no AppBar at all.
  *
- * NO BACK BUTTON either: the hub renders no TopNav with `backTo`. A back
- * arrow would frame the account as sitting underneath the app you arrived
- * from. It sits beside them. The bottom bar is how you leave.
+ * NO BACK BUTTON either: the header below carries no back affordance, and
+ * `AccountHome` renders no TopNav with `backTo`. A back arrow would frame
+ * the account as sitting underneath the app you arrived from. It sits
+ * beside them. The bottom bar is how you leave (on phone); the header's own
+ * Home link is how you leave on desktop (below).
  *
  * The ground is the NEUTRAL one, not the app's tint, for the same reason.
  *
@@ -29,16 +31,22 @@ import { useAuthStore } from '@/stores/authStore';
  * parent and a student reach the same hub -- what differs is which rows it
  * shows, which is the host's job, not the guard's.
  *
- * DESKTOP EXIT (#416 review). `AppSwitchBar` is `md:hidden` by design -- the
- * other shells have NavTabs up there and where the switch belongs on desktop
- * is still open (plan Q9). That left this layout, which has no AppBar either,
- * with literally no navigation at all at >=md: you could reach the hub and not
- * leave it. So the exits are rendered here, in this layout only, rather than
- * by unhiding the shared bar for all six shells or by adding a back arrow --
- * a back arrow would frame the hub as sitting underneath the portal you came
- * from, which is exactly what this layout exists to deny. Same two
- * destinations the phone bar offers, laid out for desktop, and still neutral:
- * grays only, no `--color-brand-*`.
+ * ONE HEADER, OWNED HERE (#445 review). This used to be a `hidden md:block`
+ * desktop-only exit bar (Home link + app-switch menu), while `AccountHome`
+ * separately rendered its own ALWAYS-visible sticky "Sync/Account" banner at
+ * the same `z-40` -- which painted over this one at `md+`, since both are
+ * full-bleed and stacked at the same position. There can only be one header,
+ * so this is now it, at every breakpoint: `sticky top-0 z-40 h-12`,
+ * full-bleed because this layout sits OUTSIDE `PageContainer` (the width cap
+ * only wraps `<Outlet />`, below), titled "Sync/Account" -- centred at every
+ * width via the two flanking slots being equal-width and empty when hidden.
+ * The Home link and app-switch menu are UNCHANGED in substance, just now
+ * `hidden md:flex` instead of the old `hidden md:block` on the whole header --
+ * still the only exit at `>=md`, since `AppSwitchBar` stays `md:hidden`
+ * (plan Q9 is still open on where the switch belongs at desktop). Neutral
+ * `bg-ground-admin`, the same token stamped on `<html>` below -- never a
+ * brand colour -- and no bell, no menu beyond the app switch: this layout
+ * owns no app's chrome.
  */
 export function AccountLayout() {
   const { t } = useTranslation();
@@ -67,25 +75,31 @@ export function AccountLayout() {
           md:hidden so the padding lifts at the same breakpoint. */}
       <div className="min-h-screen bg-ground-admin pb-app-switch-bar md:pb-0">
         <ScrollToTop />
-        <header className="hidden border-b border-gray-200 bg-white md:block">
-          <nav
-            aria-label={t('appSwitch.barLabel')}
-            className="mx-auto flex max-w-3xl items-center justify-between gap-4 px-5 py-2"
-          >
-            {portalHref ? (
+        {/* The hub's ONE header, every breakpoint -- see the docstring above.
+            `sticky` (not `fixed`) is enough here, unlike inside `AccountHome`:
+            this layout already sits outside `PageContainer`, so `sticky`'s
+            normal-flow containing block is already full width. */}
+        <header className="sticky top-0 z-40 flex h-12 items-center border-b border-gray-200 bg-ground-admin px-4">
+          {/* Equal-width flanking slots, both empty (display:none) below
+              `md`, so the title span between them centres on the FULL
+              header width at every breakpoint, not just within its own
+              flex share. */}
+          <div className="hidden w-24 shrink-0 md:flex">
+            {portalHref && (
               <Link
                 to={portalHref}
                 className="rounded-lg px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
               >
                 {t('menu.home')}
               </Link>
-            ) : (
-              <span />
             )}
-            <div className="w-auto text-sm">
-              <AppSwitchMenuItem />
-            </div>
-          </nav>
+          </div>
+          <span className="flex-1 text-center text-sm font-semibold text-gray-900">
+            {t('accountHub.brandTitle')}
+          </span>
+          <div className="hidden w-24 shrink-0 justify-end md:flex">
+            <AppSwitchMenuItem />
+          </div>
         </header>
         <PageContainer>
           <Outlet />

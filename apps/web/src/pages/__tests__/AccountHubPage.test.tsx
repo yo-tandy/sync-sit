@@ -76,30 +76,13 @@ describe('AccountHubPage (sit)', () => {
     expect(screen.queryByRole('button', { name: /back|retour/i })).toBeNull();
   });
 
-  it('renders the sticky "Sync/Account" header (#445)', () => {
-    renderHub(PARENT);
-    expect(screen.getByText('Sync/Account')).toBeInTheDocument();
-  });
-
-  it('renders the header regardless of role — it is unconditional, unlike the sections below it', () => {
-    renderHub(ADMIN);
-    expect(screen.getByText('Sync/Account')).toBeInTheDocument();
-  });
-
   it('orders sections Account, Sync/Sit, Sync/Study for a member who holds both roles (#445)', () => {
+    // The sticky "Sync/Account" header itself is owned by AccountLayout
+    // (#445 review), not this page/AccountHome -- see
+    // apps/web/src/layouts/__tests__/DesktopShell.test.tsx for that pin.
     renderHub(PARENT);
     const headings = screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent);
     expect(headings).toEqual(['Account', 'sync/sit', 'sync/study']);
-  });
-
-  it('the header is fixed and full-bleed, not confined to the width-capped column this page renders inside', () => {
-    // AccountHubPage is routed inside AccountLayout's PageContainer
-    // (max-w-2xl) -- `fixed` is what keeps the header spanning the full
-    // viewport there rather than reading as a card strip on desktop.
-    renderHub(PARENT);
-    const header = screen.getByText('Sync/Account').closest('header')!;
-    expect(header.className).toMatch(/\bfixed\b/);
-    expect(header.className).toMatch(/\binset-x-0\b/);
   });
 
   it('shows a study section even though this is the sit app', () => {
@@ -242,11 +225,9 @@ describe('AccountHubPage (sit)', () => {
     expect(screen.queryByText('sync/sit')).toBeNull();
     // The neutral block goes too: its only row is the same per-role account
     // page, and its section heading ('Account') never renders without a sit
-    // role. The sticky header ('Sync/Account') is unconditional, so it stays
-    // -- it is a different string from the neutral section's own title.
+    // role.
     expect(screen.queryByText('Account')).toBeNull();
     expect(screen.queryByText('My account')).toBeNull();
-    expect(screen.getByText('Sync/Account')).toBeInTheDocument();
     for (const bounces of ['Endorsements', 'Favorites', 'Search']) {
       expect(screen.queryByText(bounces)).toBeNull();
     }
