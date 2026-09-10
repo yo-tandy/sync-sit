@@ -1,14 +1,17 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { httpsCallable } from 'firebase/functions';
-import { BRAND_MARKS, Spinner } from '@ejm/shared-ui';
+import { Spinner } from '@ejm/shared-ui';
+import sitSm from '@ejm/shared-ui/brand-marks/sync-sit-48.png';
+import sitMd from '@ejm/shared-ui/brand-marks/sync-sit-96.png';
 import { functions } from '@/config/firebase';
 import { SIT_APP_URL } from '@/utils/appSwitch';
 
 // Bar-weight mark, not the 256px original (#364): this slot is 20px, and the
-// full mark costs ~100 KB to draw it. Resolved through BRAND_MARKS so
-// replacing the art stays one file plus the assets (#386).
-const sitMark = BRAND_MARKS.sit;
+// full mark costs ~100 KB to draw it. Imported directly, not through a
+// shared-ui lookup (#422), so study's dist carries only this mark plus its
+// own.
+const sitMark = { sm: sitSm, md: sitMd };
 
 /**
  * Burger-menu entry that jumps to sync-sit without re-login: mints a

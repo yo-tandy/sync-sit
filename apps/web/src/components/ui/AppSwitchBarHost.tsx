@@ -1,8 +1,17 @@
 import { useNavigate, useLocation } from 'react-router';
 import { httpsCallable } from 'firebase/functions';
 import { AppSwitchBar } from '@ejm/shared-ui';
+import sitSm from '@ejm/shared-ui/brand-marks/sync-sit-48.png';
+import sitMd from '@ejm/shared-ui/brand-marks/sync-sit-96.png';
+import studySm from '@ejm/shared-ui/brand-marks/sync-study-48.png';
+import studyMd from '@ejm/shared-ui/brand-marks/sync-study-96.png';
 import { functions } from '@/config/firebase';
 import { STUDY_APP_URL } from '@/lib/appSwitch';
+
+// Imported directly, not through a shared-ui lookup (#422): sit's dist then
+// holds only its own mark and study's -- sync-do's never enters this graph.
+const SIT_MARK = { sm: sitSm, md: sitMd };
+const STUDY_MARK = { sm: studySm, md: studyMd };
 
 /**
  * sync/sit's binding of the shared app-switch bar (#365, plan §18.2).
@@ -39,7 +48,8 @@ export function AppSwitchBarHost({
   return (
     <AppSwitchBar
       current="sit"
-      siblings={[{ app: 'study', url: STUDY_APP_URL }]}
+      currentMark={SIT_MARK}
+      siblings={[{ app: 'study', url: STUDY_APP_URL, mark: STUDY_MARK }]}
       mintHandoffCode={mintHandoffCode}
       account={{ href: accountHref, onNavigate: (href) => void navigate(href) }}
       pathname={pathname}

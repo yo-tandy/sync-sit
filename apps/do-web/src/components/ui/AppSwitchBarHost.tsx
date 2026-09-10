@@ -1,8 +1,21 @@
 import { useLocation, useNavigate } from 'react-router';
 import { httpsCallable } from 'firebase/functions';
 import { AppSwitchBar } from '@ejm/shared-ui';
+import doSm from '@ejm/shared-ui/brand-marks/sync-do-48.png';
+import doMd from '@ejm/shared-ui/brand-marks/sync-do-96.png';
+import sitSm from '@ejm/shared-ui/brand-marks/sync-sit-48.png';
+import sitMd from '@ejm/shared-ui/brand-marks/sync-sit-96.png';
+import studySm from '@ejm/shared-ui/brand-marks/sync-study-48.png';
+import studyMd from '@ejm/shared-ui/brand-marks/sync-study-96.png';
 import { functions } from '@/config/firebase';
 import { SIT_APP_URL, STUDY_APP_URL } from '@/utils/appSwitch';
+
+// Imported directly (#422). do-web is the exception to "ships only its own
+// marks": it offers BOTH siblings (decision 20 gates linking TO do, not FROM
+// it), so all three marks legitimately belong in this graph.
+const DO_MARK = { sm: doSm, md: doMd };
+const SIT_MARK = { sm: sitSm, md: sitMd };
+const STUDY_MARK = { sm: studySm, md: studyMd };
 
 /**
  * sync/do's binding of the shared app-switch bar (#365, plan §18.2).
@@ -48,9 +61,10 @@ export function AppSwitchBarHost({
   return (
     <AppSwitchBar
       current="do"
+      currentMark={DO_MARK}
       siblings={[
-        { app: 'sit', url: SIT_APP_URL },
-        { app: 'study', url: STUDY_APP_URL },
+        { app: 'sit', url: SIT_APP_URL, mark: SIT_MARK },
+        { app: 'study', url: STUDY_APP_URL, mark: STUDY_MARK },
       ]}
       mintHandoffCode={mintHandoffCode}
       pathname={pathname}

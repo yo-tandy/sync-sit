@@ -1,9 +1,20 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { httpsCallable } from 'firebase/functions';
-import { BRAND_MARKS, Spinner } from '@ejm/shared-ui';
+import { Spinner } from '@ejm/shared-ui';
+import sitSm from '@ejm/shared-ui/brand-marks/sync-sit-48.png';
+import sitMd from '@ejm/shared-ui/brand-marks/sync-sit-96.png';
+import studySm from '@ejm/shared-ui/brand-marks/sync-study-48.png';
+import studyMd from '@ejm/shared-ui/brand-marks/sync-study-96.png';
 import { functions } from '@/config/firebase';
 import { SIT_APP_URL, STUDY_APP_URL } from '@/utils/appSwitch';
+
+// Imported directly, not through a shared-ui lookup (#422). do-web renders
+// both targets, so both marks legitimately belong in this graph.
+const MARKS = {
+  sit: { sm: sitSm, md: sitMd },
+  study: { sm: studySm, md: studyMd },
+} as const;
 
 /**
  * Menu entry that jumps to a sibling app without re-login: mints a one-time
@@ -28,9 +39,8 @@ export function AppSwitchMenuItem({ target }: { target: 'sit' | 'study' }) {
 
   const appUrl = target === 'sit' ? SIT_APP_URL : STUDY_APP_URL;
   // Bar-weight mark, not the 256px original (#364): this slot is 20px, and
-  // the full mark costs ~100 KB to draw it. Resolved through BRAND_MARKS so
-  // replacing the art stays one file plus the assets (#386).
-  const mark = BRAND_MARKS[target];
+  // the full mark costs ~100 KB to draw it.
+  const mark = MARKS[target];
   const label = target === 'sit' ? t('appSwitch.toSit') : t('appSwitch.toStudy');
 
   const handleClick = async () => {
