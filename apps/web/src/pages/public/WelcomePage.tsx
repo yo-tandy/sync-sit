@@ -19,6 +19,9 @@ export function WelcomePage() {
       logoAlt="Sync/Sit"
       authLoading={loading}
       redirectPath={redirectPath}
+      // /signup is retired as a first-class entry point (issue #435
+      // milestone, PR5) — /enroll is the unified landing page now.
+      signUpTo="/enroll"
     />
   );
 }
