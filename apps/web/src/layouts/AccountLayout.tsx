@@ -39,8 +39,10 @@ import { useAuthStore } from '@/stores/authStore';
  * so this is now it, at every breakpoint: `sticky top-0 z-40 h-12`,
  * full-bleed because this layout sits OUTSIDE `PageContainer` (the width cap
  * only wraps `<Outlet />`, below), titled "Sync/Account" -- centred at every
- * width via the two flanking slots being equal-width and empty when hidden.
- * The Home link and app-switch menu are UNCHANGED in substance, just now
+ * width via the two flanking slots being equal `flex-1 basis-0` (not a fixed
+ * width: a `w-24` box clipped `AppSwitchMenuItem`'s label onto three wrapped
+ * lines, caught on a screenshot review of #484) and empty when hidden. The
+ * Home link and app-switch menu are UNCHANGED in substance, just now
  * `hidden md:flex` instead of the old `hidden md:block` on the whole header --
  * still the only exit at `>=md`, since `AppSwitchBar` stays `md:hidden`
  * (plan Q9 is still open on where the switch belongs at desktop). Neutral
@@ -80,11 +82,14 @@ export function AccountLayout() {
             this layout already sits outside `PageContainer`, so `sticky`'s
             normal-flow containing block is already full width. */}
         <header className="sticky top-0 z-40 flex h-12 items-center border-b border-gray-200 bg-ground-admin px-4">
-          {/* Equal-width flanking slots, both empty (display:none) below
-              `md`, so the title span between them centres on the FULL
-              header width at every breakpoint, not just within its own
-              flex share. */}
-          <div className="hidden w-24 shrink-0 md:flex">
+          {/* Equal flex-1/basis-0 flanking slots (not a fixed w-24 -- that
+              clipped `AppSwitchMenuItem`'s "Open sync-study" label onto
+              three wrapped lines inside a 96px box, screenshot review on
+              #484). Both grow/shrink identically regardless of content, so
+              the shrink-0 title between them still centres on the FULL
+              header width; the slots themselves absorb whatever space the
+              title doesn't need. Both are empty (display:none) below `md`. */}
+          <div className="hidden flex-1 basis-0 items-center justify-start md:flex">
             {portalHref && (
               <Link
                 to={portalHref}
@@ -94,10 +99,15 @@ export function AccountLayout() {
               </Link>
             )}
           </div>
-          <span className="flex-1 text-center text-sm font-semibold text-gray-900">
+          <span className="shrink-0 text-center text-sm font-semibold text-gray-900">
             {t('accountHub.brandTitle')}
           </span>
-          <div className="hidden w-24 shrink-0 justify-end md:flex">
+          {/* whitespace-nowrap lives on THIS wrapper, not inside
+              `AppSwitchMenuItem` itself -- that component is also rendered
+              full-width inside `AppBar`'s burger menu (phone width, plenty
+              of room), and `white-space` inherits down to its label without
+              needing to touch that shared component's own markup. */}
+          <div className="hidden flex-1 basis-0 items-center justify-end whitespace-nowrap md:flex">
             <AppSwitchMenuItem />
           </div>
         </header>

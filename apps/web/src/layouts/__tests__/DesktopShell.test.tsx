@@ -285,6 +285,33 @@ describe('AccountLayout renders the hub’s ONE header, every breakpoint (#445 r
     expect(within(header).getByTestId('switch-menu-item')).toBeInTheDocument();
   });
 
+  it('flanks the title with equal flex-1/basis-0 slots, not a fixed width -- a fixed w-24 clipped "Open sync-study" onto three wrapped lines (screenshot review of #484)', () => {
+    renderLayout(<AccountLayout />, 'account hub');
+    const header = screen.getByText('Sync/Account').closest('header')!;
+    const slots = header.querySelectorAll(':scope > div');
+    expect(slots).toHaveLength(2);
+    for (const slot of Array.from(slots)) {
+      expect(slot.className).toMatch(/\bflex-1\b/);
+      expect(slot.className).toMatch(/\bbasis-0\b/);
+      expect(slot.className).not.toMatch(/\bw-24\b/);
+    }
+    // The title itself must NOT grow -- it has to stay sized to its own
+    // content so the two equal flex-1 slots do the centring.
+    const title = screen.getByText('Sync/Account');
+    expect(title.className).toMatch(/\bshrink-0\b/);
+  });
+
+  it('never wraps the app-switch slot’s content -- whitespace-nowrap on the wrapper, not inside AppSwitchMenuItem itself', () => {
+    // On the wrapper, not the (mocked-here) component: `white-space`
+    // inherits down to the real label without needing AppSwitchMenuItem's
+    // own markup to change, which would also affect its OTHER home --
+    // AppBar's full-width burger menu, where wrapping was never a problem.
+    renderLayout(<AccountLayout />, 'account hub');
+    const header = screen.getByText('Sync/Account').closest('header')!;
+    const menuSlot = within(header).getByTestId('switch-menu-item').parentElement!;
+    expect(menuSlot.className).toMatch(/\bwhitespace-nowrap\b/);
+  });
+
   it('has no back button and no bell -- title and (at md+) the exit controls only', () => {
     renderLayout(<AccountLayout />, 'account hub');
     const header = screen.getByText('Sync/Account').closest('header')!;
