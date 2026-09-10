@@ -126,9 +126,16 @@ export const lookupBabysitter = onCall(
         kidAgeRange: data.kidAgeRange || { min: 0, max: 18 },
         maxKids: data.maxKids || 1,
         worksInYourArea,
-        contactEmail: contactApproved ? contact.contactEmail ?? undefined : undefined,
-        contactPhone: contactApproved ? contact.contactPhone ?? undefined : undefined,
-        whatsapp: contactApproved ? contact.whatsapp ?? undefined : undefined,
+        // Keys are omitted (not set to undefined) because the callable
+        // encoder serialises undefined as null, which would leak a
+        // `contactEmail: null` key to unapproved families.
+        ...(contactApproved
+          ? {
+              contactEmail: contact.contactEmail ?? undefined,
+              contactPhone: contact.contactPhone ?? undefined,
+              whatsapp: contact.whatsapp ?? undefined,
+            }
+          : {}),
       });
 
       if (results.length >= 10) break;
