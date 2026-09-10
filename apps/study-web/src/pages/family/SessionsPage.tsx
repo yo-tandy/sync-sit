@@ -93,19 +93,24 @@ function hasStarted(date?: string, startTime?: string): boolean {
  * CLIENT-SIDE — the same index constraint the tutor page documents) plus the
  * per-series `instances` subcollection via the NESTED path (no collection-group
  * rule client-side). Instances are fetched EAGERLY for (a) confirmed (ACTIVE)
- * series in load(), and (b) a COMPLETED series whose tutor this family hasn't
- * endorsed yet, once the endorsedTutors read settles (the effect right below
- * it) — that keeps the endorse prompt on the history card visible without a
- * click. Every other terminal series (declined/cancelled, or completed with
- * an already-endorsed tutor) loads LAZILY on first history-card expand
- * (issue #275) — see load()/loadSeriesInstances/toggleHistorySeries for the
- * split and per-series failure isolation. Three sections:
+ * series in load(), and (b) a COMPLETED OR CANCELLED series whose tutor this
+ * family hasn't endorsed yet, once the endorsedTutors read settles (the
+ * effect right below it) — that keeps the endorse prompt on the history card
+ * visible without a click, for either terminal status that can carry a
+ * completed occurrence (cancelSession only cancels FUTURE instances, so a
+ * cancelled series can still have earlier completed ones). A DECLINED series
+ * is excluded — it never reached confirmation, so generateInstances never
+ * ran and it has no instances subcollection to eager-load. Every other
+ * terminal series (declined always, or completed/cancelled with an
+ * already-endorsed tutor) loads LAZILY on first history-card expand (issue
+ * #275) — see load()/loadSeriesInstances/toggleHistorySeries for the split
+ * and per-series failure isolation. Three sections:
  *   • Pending  — awaiting the tutor's confirmation; the family may cancel.
  *   • Upcoming — confirmed one_time + series interleaved by date; series expand
  *     to their instances (per-date cancel + whole-series cancel).
  *   • History  — declined / cancelled / completed, read-only; a recurring
  *     series' occurrence notes load lazily on expand (except the
- *     completed-unendorsed case above).
+ *     completed/cancelled-unendorsed case above).
  *
  * Every cancel is NON-OPTIMISTIC and calls the SAME callables as the tutor page
  * (cancelSession / cancelSessionInstance); the backend records the party as
@@ -124,6 +129,23 @@ export function SessionsPage() {
   const [instancesBySeries, setInstancesBySeries] = useState<
     Record<string, StudySessionInstanceDoc[]>
   >({});
+  // Mirrors instancesBySeries for load() to read a LIVE snapshot without
+  // depending on it directly (issue #275 round 4) — load() is a useCallback
+  // keyed on [familyId, fetchSeriesInstances] only, so a direct closure over
+  // instancesBySeries there would be stale after any lazy/eager load.
+  const instancesBySeriesRef = useRef<Record<string, StudySessionInstanceDoc[]>>({});
+  useEffect(() => {
+    instancesBySeriesRef.current = instancesBySeries;
+  }, [instancesBySeries]);
+  // The active (confirmed) series ids from the PREVIOUS load() — lets load()
+  // detect a genuine active→non-active TRANSITION (issue #275 round 4) rather
+  // than "not currently active", which a series that's simply been terminal
+  // all along (e.g. long-completed) would also match on every refetch. Only
+  // a real transition means "this id's error, if any, is now stale" —
+  // clearing it unconditionally on every load() would re-arm the completed/
+  // cancelled-unendorsed eager effect above on every focus refetch, turning
+  // THIS fix into the exact retry storm round 3 closed.
+  const prevActiveIdsRef = useRef<Set<string>>(new Set());
   // Per-series instance load state (issue #275): 'loading' | 'error', keyed by
   // sessionId. Covers BOTH the eager ACTIVE-series fetch in load() (isolated
   // via allSettled so one series' failure can't flip the whole page to
@@ -283,12 +305,40 @@ export function SessionsPage() {
       // (the ACTIVE set). A TERMINAL series' lazily-loaded instances from a
       // prior expand must survive an unrelated focus refetch, not vanish.
       setInstancesBySeries((prev) => ({ ...prev, ...byId }));
+      const activeIds = new Set(activeSeries.map((s) => s.sessionId));
+      const prevActiveIds = prevActiveIdsRef.current;
       setSeriesInstanceStatus((prev) => {
         const next = { ...prev };
         for (const sessionId of Object.keys(byId)) delete next[sessionId];
         for (const sessionId of failedIds) next[sessionId] = 'error';
+        // Drop STALE entries for ids that TRANSITIONED out of the active
+        // batch since the PREVIOUS load() (e.g. an active series whose eager
+        // fetch errored got cancelled in another tab) and were never
+        // actually loaded — issue #275 round 4. Without this, a series that
+        // leaves the active set keeps showing its old "couldn't load this
+        // series' dates" banner in History even though no fetch was ever
+        // attempted in its new lazy/terminal context, which is misleading.
+        // Gated on a real active→non-active TRANSITION (prevActiveIds had it,
+        // this round doesn't), not merely "not active this round": a series
+        // that's simply been terminal all along would match "not active"
+        // forever, so an unconditional prune would clear its error on every
+        // refetch and re-arm the completed/cancelled-unendorsed eager effect
+        // above every time — the exact retry storm round 3 closed, just
+        // triggered by focus refetches instead of the effect's own re-fires.
+        // instancesBySeriesRef (not the instancesBySeries closure, which is
+        // stale here — see its declaration) is the live "never loaded" check.
+        for (const sessionId of Object.keys(next)) {
+          if (
+            prevActiveIds.has(sessionId) &&
+            !activeIds.has(sessionId) &&
+            instancesBySeriesRef.current[sessionId] === undefined
+          ) {
+            delete next[sessionId];
+          }
+        }
         return next;
       });
+      prevActiveIdsRef.current = activeIds;
       setSessions(rows);
     } catch {
       // A THROW is a load failure — surface it honestly rather than
@@ -332,8 +382,8 @@ export function SessionsPage() {
         // A denied/failed endorsements read must not block sessions — fall back to
         // "none endorsed" (the worst case is offering a prompt the callable then
         // rejects with already-exists, which the dialog handles gracefully). This
-        // also means the completed-series eager-instances effect below treats
-        // every tutor as unendorsed, so it eager-loads ALL completed series —
+        // also means the completed/cancelled-series eager-instances effect below
+        // treats every tutor as unendorsed, so it eager-loads ALL of them —
         // the same safe fallback, for the same reason.
         if (!cancelled) {
           setEndorsedTutors(new Set());
@@ -347,16 +397,25 @@ export function SessionsPage() {
 
   // Issue #275 round 2: the endorse prompt sits on a completed recurring
   // series' history card header and is the family's main path into
-  // endorsing — it must appear WITHOUT an expand click. So a COMPLETED
-  // series whose tutor is NOT YET endorsed stays EAGER (bounded by "tutors
-  // not yet endorsed", not "every series ever created" — still a real bound,
-  // just a different one than the active-series bound in load()). A
-  // completed series whose tutor IS already endorsed, and every
-  // declined/cancelled series, stays LAZY on first history-card expand
-  // exactly as toggleHistorySeries implements. Gated on endorsedTutorsReady
-  // so this reads the real endorsed set rather than the still-empty initial
-  // one (see the effect above for why a failed endorsements read still
-  // behaves correctly here).
+  // endorsing — it must appear WITHOUT an expand click. So a COMPLETED OR
+  // CANCELLED series whose tutor is NOT YET endorsed stays EAGER (bounded by
+  // "tutors not yet endorsed", not "every series ever created" — still a
+  // real bound, just a different one than the active-series bound in
+  // load()). CANCELLED is included alongside COMPLETED (round 4, review):
+  // cancelSession.ts only cancels FUTURE (date >= today) instances of a
+  // confirmed series, so a cancelled series' earlier occurrences can still
+  // be 'completed' — hasCompletedWork(s) is true for it once loaded, exactly
+  // like a completed series, so it needs the same eager treatment or the
+  // endorse prompt silently regresses for that shape. DECLINED series are
+  // excluded and stay lazy: a series is only ever declined before
+  // confirmation, and generateInstances runs on confirm, so a declined
+  // series' instances subcollection never existed — there is nothing for
+  // hasCompletedWork to ever find there, eager or lazy. A completed/
+  // cancelled series whose tutor IS already endorsed stays LAZY on first
+  // history-card expand exactly as toggleHistorySeries implements. Gated on
+  // endorsedTutorsReady so this reads the real endorsed set rather than the
+  // still-empty initial one (see the effect above for why a failed
+  // endorsements read still behaves correctly here).
   //
   // Round 3 (review): this effect's deps include instancesBySeries and
   // seriesInstanceStatus, so it re-fires on every loadSeriesInstances
@@ -374,7 +433,7 @@ export function SessionsPage() {
     for (const s of sessions) {
       if (
         s.type === 'recurring' &&
-        s.status === 'completed' &&
+        (s.status === 'completed' || s.status === 'cancelled') &&
         !endorsedTutors.has(s.tutorUserId) &&
         instancesBySeries[s.sessionId] === undefined &&
         seriesInstanceStatus[s.sessionId] !== 'loading' &&
@@ -1154,11 +1213,11 @@ export function SessionsPage() {
                         redaction backstop in study. Its instances are loaded
                         LAZILY on first expand rather than eagerly for every
                         series the family has ever had (issue #275) — EXCEPT
-                        a completed series whose tutor isn't endorsed yet,
-                        which the effect above already eager-loaded so
-                        hasCompletedWork/endorseButton (reading this same
-                        instancesBySeries map) can show the endorse prompt
-                        without an expand click. */}
+                        a completed OR cancelled series whose tutor isn't
+                        endorsed yet, which the effect above already
+                        eager-loaded so hasCompletedWork/endorseButton
+                        (reading this same instancesBySeries map) can show
+                        the endorse prompt without an expand click. */}
                     {s.type === 'recurring' && (
                       <div className="mt-3">
                         <Button size="sm" variant="ghost" onClick={() => toggleHistorySeries(s)}>

@@ -113,6 +113,22 @@ export function SessionsPage() {
   const [instancesBySeries, setInstancesBySeries] = useState<
     Record<string, StudySessionInstanceDoc[]>
   >({});
+  // Mirrors instancesBySeries for load() to read a LIVE snapshot without
+  // depending on it directly (issue #275 round 4) — load() is a useCallback
+  // keyed on [uid, fetchSeriesInstances] only, so a direct closure over
+  // instancesBySeries there would be stale after any lazy load.
+  const instancesBySeriesRef = useRef<Record<string, StudySessionInstanceDoc[]>>({});
+  useEffect(() => {
+    instancesBySeriesRef.current = instancesBySeries;
+  }, [instancesBySeries]);
+  // The active (confirmed) series ids from the PREVIOUS load() — lets load()
+  // detect a genuine active→non-active TRANSITION (issue #275 round 4) rather
+  // than "not currently active", which a series that's simply been terminal
+  // all along (e.g. long-completed) would also match on every refetch.
+  // Mirrors the family twin (which also needs this to avoid re-arming its
+  // completed/cancelled-unendorsed eager effect on every refetch); kept here
+  // too so both pages share the same stale-status-pruning shape.
+  const prevActiveIdsRef = useRef<Set<string>>(new Set());
   // Per-series instance load state (issue #275): 'loading' | 'error', keyed by
   // sessionId. Covers BOTH the eager ACTIVE-series fetch in load() (isolated
   // via allSettled so one series' failure can't flip the whole page to
@@ -251,12 +267,41 @@ export function SessionsPage() {
       // (the ACTIVE set). A TERMINAL series' lazily-loaded instances from a
       // prior expand must survive an unrelated focus refetch, not vanish.
       setInstancesBySeries((prev) => ({ ...prev, ...byId }));
+      const activeIds = new Set(activeSeries.map((s) => s.sessionId));
+      const prevActiveIds = prevActiveIdsRef.current;
       setSeriesInstanceStatus((prev) => {
         const next = { ...prev };
         for (const sessionId of Object.keys(byId)) delete next[sessionId];
         for (const sessionId of failedIds) next[sessionId] = 'error';
+        // Drop STALE entries for ids that TRANSITIONED out of the active
+        // batch since the PREVIOUS load() (e.g. an active series whose eager
+        // fetch errored got cancelled in another tab) and were never
+        // actually loaded — issue #275 round 4. Without this, a series that
+        // leaves the active set keeps showing its old "couldn't load this
+        // series' dates" banner in History even though no fetch was ever
+        // attempted in its new lazy/terminal context, which is misleading.
+        // Gated on a real active→non-active TRANSITION (prevActiveIds had it,
+        // this round doesn't), not merely "not active this round" — a series
+        // that's simply been terminal all along would match "not active"
+        // forever, so an unconditional prune would keep clearing/reclearing
+        // pointlessly on every refetch (harmless here with no other eager
+        // mechanism, but kept identical to the family twin, which DOES need
+        // the transition gate to avoid re-arming its eager-unendorsed
+        // effect). instancesBySeriesRef (not the instancesBySeries closure,
+        // which is stale here — see its declaration) is the live "never
+        // loaded" check.
+        for (const sessionId of Object.keys(next)) {
+          if (
+            prevActiveIds.has(sessionId) &&
+            !activeIds.has(sessionId) &&
+            instancesBySeriesRef.current[sessionId] === undefined
+          ) {
+            delete next[sessionId];
+          }
+        }
         return next;
       });
+      prevActiveIdsRef.current = activeIds;
       setSessions(rows);
     } catch {
       // A THROW is a load failure — surface it, don't conflate it with the

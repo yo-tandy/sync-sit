@@ -1183,4 +1183,42 @@ describe('tutor SessionsPage — lazy terminal-series instances (issue #275)', (
     // The terminal series, never expanded, is still never fetched.
     expect(instanceFetchSessionIds().filter((id) => id === 't1')).toHaveLength(0);
   });
+
+  it('a stale error banner is cleared once an errored ACTIVE series leaves the active set — History shows the normal collapsed state, not the banner, and the fetch is not auto-retried (issue #275 round 4)', async () => {
+    h.sessions = [confirmedRecurring({ sessionId: 'aBad', familyName: 'Errored Family' })];
+    let failInstances = true;
+    h.getDocs.mockImplementation((q: { query?: { path: string }[]; path?: string }) => {
+      const path = q?.query?.[0]?.path ?? q?.path ?? '';
+      if (path.endsWith('/instances')) {
+        if (failInstances) return Promise.reject({ code: 'permission-denied' });
+        return Promise.resolve({ docs: [] });
+      }
+      return Promise.resolve({ docs: h.sessions.map((s) => ({ id: s.sessionId, data: () => s })) });
+    });
+    renderWithProviders(<SessionsPage />);
+
+    expect(await screen.findByText(/couldn.t load this series. dates/i)).toBeInTheDocument();
+    const instanceCallCount = () =>
+      h.getDocs.mock.calls.filter((c) => {
+        const q = c[0] as { query?: { path: string }[]; path?: string };
+        const path = q.query?.[0]?.path ?? q.path ?? '';
+        return path.endsWith('/instances') && path.split('/')[1] === 'aBad';
+      }).length;
+    expect(instanceCallCount()).toBe(1);
+
+    // The series is cancelled (e.g. in another tab); the fetch would now
+    // succeed if retried, but the tutor page has no eager-on-terminal
+    // mechanism at all — it must stay purely lazy, and NOT auto-retry.
+    failInstances = false;
+    h.sessions = [
+      recurring({ sessionId: 'aBad', status: 'cancelled', familyName: 'Errored Family' }),
+    ];
+    fireEvent.focus(window);
+
+    await waitFor(() =>
+      expect(screen.queryByText(/couldn.t load this series. dates/i)).not.toBeInTheDocument(),
+    );
+    expect(await screen.findByText('Errored Family')).toBeInTheDocument();
+    expect(instanceCallCount()).toBe(1);
+  });
 });

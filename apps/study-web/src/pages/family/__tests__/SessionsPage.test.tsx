@@ -1017,10 +1017,11 @@ describe('family SessionsPage — session notes (pre)', () => {
   it('a completed series with completed work shows the endorse prompt in history WITHOUT expanding (issue #275 round 2: eager for unendorsed completed series)', async () => {
     // The endorse prompt sits on the history card header and is the family's
     // main path into endorsing, so it must NOT require an expand click. A
-    // COMPLETED recurring series whose tutor isn't endorsed yet stays EAGER
-    // (bounded by "tutors not yet endorsed", not "every series ever
-    // created") — only declined/cancelled series, and a completed series
-    // whose tutor IS already endorsed, stay lazy on expand.
+    // COMPLETED (or CANCELLED — see the next pin) recurring series whose
+    // tutor isn't endorsed yet stays EAGER (bounded by "tutors not yet
+    // endorsed", not "every series ever created") — only a DECLINED series,
+    // and a completed/cancelled series whose tutor IS already endorsed, stay
+    // lazy on expand.
     h.sessions = [recurring({ sessionId: 'sE', status: 'completed', tutorUserId: 'tut-9', tutorName: 'Nina Levy' })];
     h.instances = {
       sE: [instanceDoc({ instanceId: '2026-07-08', date: '2026-07-08', status: 'completed' })],
@@ -1028,6 +1029,49 @@ describe('family SessionsPage — session notes (pre)', () => {
     renderWithProviders(<SessionsPage />);
 
     expect(await screen.findByRole('button', { name: /endorse/i })).toBeInTheDocument();
+  });
+
+  it('a CANCELLED series with a completed occurrence and an unendorsed tutor also shows the endorse prompt WITHOUT expanding — a DECLINED series stays lazy (issue #275 round 4)', async () => {
+    // cancelSession.ts only cancels FUTURE (date >= today) instances of a
+    // confirmed series, so a CANCELLED series can still carry completed
+    // occurrences from before the cancellation — hasCompletedWork(s) is true
+    // for it once loaded, exactly like a completed series, so it needs the
+    // same eager treatment or the endorse prompt would silently regress for
+    // this shape. A DECLINED series never reached confirmation (declines
+    // happen pre-confirm) and so never had generateInstances create its
+    // instances subcollection — it stays lazy, and this pin doubles as the
+    // control proving it's never eagerly fetched.
+    h.sessions = [
+      recurring({
+        sessionId: 'sCancelledUnendorsed',
+        status: 'cancelled',
+        tutorUserId: 'tut-cx',
+        tutorName: 'Cancelled Series Tutor',
+      }),
+      recurring({
+        sessionId: 'sDeclined',
+        status: 'declined',
+        tutorUserId: 'tut-declined',
+        tutorName: 'Declined Series Tutor',
+      }),
+    ];
+    h.instances = {
+      sCancelledUnendorsed: [
+        instanceDoc({ instanceId: '2026-07-08', date: '2026-07-08', status: 'completed' }),
+      ],
+    };
+    renderWithProviders(<SessionsPage />);
+
+    expect(
+      await screen.findByRole('button', { name: /endorse cancelled series tutor/i }),
+    ).toBeInTheDocument();
+    await screen.findByText('Declined Series Tutor');
+    const instanceFetchIds = h.getDocs.mock.calls
+      .map((c) => c[0] as { query?: { path: string }[]; path?: string })
+      .map((q) => q.query?.[0]?.path ?? q.path ?? '')
+      .filter((path) => path.endsWith('/instances'))
+      .map((path) => path.split('/')[1]);
+    expect(instanceFetchIds).toEqual(['sCancelledUnendorsed']);
   });
 
   it('a CANCELLED one_time in history still shows the own note and offers REMOVE (never stranded)', async () => {
@@ -1143,15 +1187,21 @@ describe('family SessionsPage — lazy terminal-series instances (issue #275)', 
     return recurring({ status: 'confirmed', ...overrides });
   }
 
-  it('on mount, fetches instances for ACTIVE series + a COMPLETED-and-unendorsed series — never for declined/cancelled or a completed-and-endorsed series', async () => {
+  it('on mount, fetches instances for ACTIVE series + COMPLETED/CANCELLED-and-unendorsed series — never for a declined series or a completed/cancelled-and-endorsed series', async () => {
     h.sessions = [
       confirmedRecurring({ sessionId: 'a1', tutorName: 'Active One' }),
       confirmedRecurring({ sessionId: 'a2', tutorName: 'Active Two' }),
       recurring({
         sessionId: 'cUnendorsed',
         status: 'completed',
-        tutorUserId: 'tUnendorsed',
-        tutorName: 'Unendorsed Tutor',
+        tutorUserId: 'tUnendorsedC',
+        tutorName: 'Unendorsed Completed Tutor',
+      }),
+      recurring({
+        sessionId: 'xUnendorsed',
+        status: 'cancelled',
+        tutorUserId: 'tUnendorsedX',
+        tutorName: 'Unendorsed Cancelled Tutor',
       }),
       recurring({
         sessionId: 'cEndorsed',
@@ -1160,13 +1210,15 @@ describe('family SessionsPage — lazy terminal-series instances (issue #275)', 
         tutorName: 'Endorsed Tutor',
       }),
       recurring({ sessionId: 't1', status: 'declined', tutorName: 'Term One' }),
-      recurring({ sessionId: 't2', status: 'cancelled', tutorName: 'Term Two' }),
     ];
     h.instances = {
       a1: [],
       a2: [],
       cUnendorsed: [
         instanceDoc({ instanceId: '2026-07-01', date: '2026-07-01', status: 'completed' }),
+      ],
+      xUnendorsed: [
+        instanceDoc({ instanceId: '2026-06-01', date: '2026-06-01', status: 'completed' }),
       ],
     };
     h.refs = [
@@ -1180,16 +1232,21 @@ describe('family SessionsPage — lazy terminal-series instances (issue #275)', 
     renderWithProviders(<SessionsPage />);
 
     await screen.findByText('Active One');
-    await screen.findByText('Term Two');
-    // The eager fetch for the completed-unendorsed series only fires once the
-    // endorsedTutors read settles — wait for its effect (the endorse button).
-    await screen.findByRole('button', { name: /endorse unendorsed tutor/i });
+    await screen.findByText('Term One');
 
-    expect(instanceFetchSessionIds().sort()).toEqual(['a1', 'a2', 'cUnendorsed']);
+    // The eager fetch for the completed/cancelled-unendorsed series only
+    // fires once the endorsedTutors read settles.
+    await waitFor(() =>
+      expect(instanceFetchSessionIds().sort()).toEqual(['a1', 'a2', 'cUnendorsed', 'xUnendorsed']),
+    );
   });
 
-  it("expanding a terminal series' history card (declined/cancelled) triggers exactly one instances fetch and then renders its notes", async () => {
-    h.sessions = [recurring({ sessionId: 'sT', status: 'cancelled', tutorName: 'Terminal Tutor' })];
+  it("expanding a DECLINED series' history card triggers exactly one instances fetch and then renders its notes", async () => {
+    // Declined (unlike cancelled/completed) is ALWAYS lazy, regardless of
+    // endorsement: a series is declined only pre-confirmation, and
+    // generateInstances runs on confirm — so a declined series never had an
+    // instances subcollection to eager-load in the first place.
+    h.sessions = [recurring({ sessionId: 'sT', status: 'declined', tutorName: 'Terminal Tutor' })];
     h.instances = {
       sT: [
         instanceDoc({
@@ -1320,10 +1377,73 @@ describe('family SessionsPage — lazy terminal-series instances (issue #275)', 
     expect(await screen.findByText(/couldn.t load this series. dates/i)).toBeInTheDocument();
   });
 
+  it('a stale error banner is cleared once an errored ACTIVE series leaves the active set — History shows the normal collapsed state, not the banner, and the fetch is not auto-retried (issue #275 round 4)', async () => {
+    // An already-endorsed tutor keeps this test isolated to the stale-status
+    // fix: a CANCELLED series with an unendorsed tutor is eagerly retried by
+    // design (round 4's other fix) — that's a different, intentional path,
+    // pinned separately above. Here the point is that the OLD error must not
+    // linger as a misleading banner once the series is no longer active, and
+    // must not be silently retried just because load() ran again.
+    h.sessions = [
+      confirmedRecurring({ sessionId: 'aBad', tutorUserId: 'tEndorsedBad', tutorName: 'Errored Tutor' }),
+    ];
+    h.refs = [
+      {
+        referenceId: 'e1',
+        tutorUserId: 'tEndorsedBad',
+        appSource: 'study',
+        submittedByFamilyId: 'fam1',
+      },
+    ];
+    let failInstances = true;
+    h.getDocs.mockImplementation((q: { query?: { path: string }[]; path?: string }) => {
+      const path = q?.query?.[0]?.path ?? q?.path ?? '';
+      if (path.endsWith('/instances')) {
+        if (failInstances) return Promise.reject({ code: 'permission-denied' });
+        return Promise.resolve({ docs: [] });
+      }
+      if (path === 'references') {
+        return Promise.resolve({ docs: h.refs.map((r) => ({ id: r.referenceId, data: () => r })) });
+      }
+      return Promise.resolve({ docs: h.sessions.map((s) => ({ id: s.sessionId, data: () => s })) });
+    });
+    renderWithProviders(<SessionsPage />);
+
+    expect(await screen.findByText(/couldn.t load this series. dates/i)).toBeInTheDocument();
+    const instanceCallCount = () =>
+      h.getDocs.mock.calls.filter((c) => {
+        const q = c[0] as { query?: { path: string }[]; path?: string };
+        const path = q.query?.[0]?.path ?? q.path ?? '';
+        return path.endsWith('/instances') && path.split('/')[1] === 'aBad';
+      }).length;
+    expect(instanceCallCount()).toBe(1);
+
+    // The series is cancelled (e.g. in another tab); the fetch would now
+    // succeed if retried, but it must NOT be retried automatically.
+    failInstances = false;
+    h.sessions = [
+      recurring({
+        sessionId: 'aBad',
+        status: 'cancelled',
+        tutorUserId: 'tEndorsedBad',
+        tutorName: 'Errored Tutor',
+      }),
+    ];
+    await act(async () => {
+      window.dispatchEvent(new Event('focus'));
+    });
+
+    await waitFor(() =>
+      expect(screen.queryByText(/couldn.t load this series. dates/i)).not.toBeInTheDocument(),
+    );
+    expect(await screen.findByText('Errored Tutor')).toBeInTheDocument();
+    expect(instanceCallCount()).toBe(1);
+  });
+
   it('a focus refetch does not refetch a terminal series that was never expanded', async () => {
     h.sessions = [
       confirmedRecurring({ sessionId: 'a1', tutorName: 'Active One' }),
-      recurring({ sessionId: 't1', status: 'cancelled', tutorName: 'Term One' }),
+      recurring({ sessionId: 't1', status: 'declined', tutorName: 'Term One' }),
     ];
     h.instances = { a1: [] };
     renderWithProviders(<SessionsPage />);
