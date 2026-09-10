@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { LYCEE_CLASS_LEVELS } from '../constants/classLevels.js';
 
 // ── Password Validation ──
 
@@ -73,3 +74,49 @@ export type KidInput = z.infer<typeof kidSchema>;
 export type FamilyEnrollmentInput = z.infer<typeof familyEnrollmentSchema>;
 export type SearchDefaultsInput = z.infer<typeof searchDefaultsSchema>;
 export type JoinFamilyInput = z.infer<typeof joinFamilySchema>;
+
+// ── Unified student-identity enrollment (issue #435 milestone, PR4) ──
+//
+// The common student flow (apps/web `/enroll/student`) collects a full
+// identity — name/DOB/classLevel/gender/contact/optional extras — BEFORE the
+// user picks sit or study, mirroring `enrollBabysitter`'s/`enrollTutor`'s
+// classic new-account payload shape but with no role-specific fields at all
+// (those come later, from whichever provider callable the "choose your app"
+// screen calls with `crossApp: true`). `enrollStudentIdentity`
+// (`@ejm/shared-functions`) validates against this schema.
+const addressShape = z.object({
+  fullAddress: z.string().min(1),
+  street: z.string(),
+  city: z.string(),
+  postcode: z.string(),
+  lat: z.number(),
+  lng: z.number(),
+});
+
+export const studentIdentityEnrollmentSchema = z.object({
+  ejemEmail: z.string().email('Please enter a valid email'),
+  verificationCode: z.string().min(1, 'Verification code is required'),
+  password: strongPasswordSchema,
+  consentVersion: z.string().min(1, 'Consent is required'),
+  firstName: z.string().min(1, 'First name is required'),
+  lastName: z.string().min(1, 'Last name is required'),
+  // "YYYY-MM-DD", matching the classic wizards' wire format.
+  dateOfBirth: z.string().min(1, 'Date of birth is required'),
+  classLevel: z.enum(LYCEE_CLASS_LEVELS),
+  gender: z.enum(['female', 'male', 'other', 'prefer_not_to_say']),
+  // At least one of email/phone is enforced in the callable (matches
+  // enrollTutor's "at least one contact field" rule) — both individually
+  // optional here so the zod error never fires before that clearer check.
+  contactEmail: z.string().email('Enter a full email address').optional().or(z.literal('')),
+  contactPhone: z.string().optional(),
+  whatsapp: z.string().nullable().optional(),
+  bio: z.string().max(1000).optional(),
+  address: addressShape.nullable().optional(),
+  language: z.enum(['en', 'fr']).optional(),
+  // StepContactInfo's contact-visibility consent checkbox — recorded on the
+  // root doc so the sit/study crossApp callables can read it later (see the
+  // `User.contactVisibilityConsent` doc comment).
+  contactVisibilityConsent: z.boolean().optional(),
+});
+
+export type StudentIdentityEnrollmentInput = z.infer<typeof studentIdentityEnrollmentSchema>;
