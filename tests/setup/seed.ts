@@ -377,6 +377,8 @@ export interface AppointmentSeed {
   type?: 'one_time' | 'recurring';
   status?: 'pending' | 'confirmed' | 'rejected' | 'cancelled';
   statusReason?: string;
+  /** Issue #408 item 2: links to the `searches/{searchId}` doc it was produced from. */
+  searchId?: string;
   date?: string;          // YYYY-MM-DD
   startTime?: string;     // HH:MM
   endTime?: string;       // HH:MM
@@ -439,6 +441,7 @@ export async function seedAppointment(data: AppointmentSeed): Promise<string> {
   };
 
   if (data.statusReason !== undefined) doc.statusReason = data.statusReason;
+  if (data.searchId !== undefined) doc.searchId = data.searchId;
   if (data.initiatedBy !== undefined) doc.initiatedBy = data.initiatedBy;
   if (data.publishedSearchId !== undefined) doc.publishedSearchId = data.publishedSearchId;
   if (data.offeredRate !== undefined) doc.offeredRate = data.offeredRate;
@@ -455,6 +458,59 @@ export async function seedAppointment(data: AppointmentSeed): Promise<string> {
 
   await db.collection('appointments').doc(appointmentId).set(doc);
   return appointmentId;
+}
+
+/**
+ * A `searches/{searchId}` document, in the exact shape `sendContactRequest`
+ * writes it (issue #408 item 2) — the source doc a contact request's
+ * appointment is produced 1:1 from and links back to via its own `searchId`.
+ * Required: familyId, createdByUserId.
+ */
+export interface SearchSeed {
+  searchId?: string;
+  familyId: string;
+  createdByUserId: string;
+  type?: 'one_time' | 'recurring';
+  status?: string;
+  date?: string | null;
+  startTime?: string | null;
+  endTime?: string | null;
+  kidIds?: string[];
+  address?: string;
+  latLng?: { lat: number; lng: number };
+  offeredRate?: number;
+  additionalInfo?: string;
+  createdAt?: Date;
+}
+
+export async function seedSearch(data: SearchSeed): Promise<string> {
+  const db = getDb();
+  const ref = data.searchId
+    ? db.collection('searches').doc(data.searchId)
+    : db.collection('searches').doc();
+
+  const doc: Record<string, unknown> = {
+    searchId: ref.id,
+    familyId: data.familyId,
+    createdByUserId: data.createdByUserId,
+    type: data.type ?? 'one_time',
+    status: data.status ?? 'active',
+    date: data.date === undefined ? '2026-01-02' : data.date,
+    startTime: data.startTime === undefined ? '18:00' : data.startTime,
+    endTime: data.endTime === undefined ? '22:00' : data.endTime,
+    recurringSlots: null,
+    schoolWeeksOnly: false,
+    kidIds: data.kidIds ?? ['kid1'],
+    address: data.address ?? '15 Rue de Passy, 75016 Paris',
+    latLng: data.latLng ?? { lat: 48.8566, lng: 2.2769 },
+    offeredRate: data.offeredRate ?? null,
+    additionalInfo: data.additionalInfo ?? null,
+    filters: {},
+    createdAt: data.createdAt ?? new Date(),
+  };
+
+  await ref.set(doc);
+  return ref.id;
 }
 
 /**

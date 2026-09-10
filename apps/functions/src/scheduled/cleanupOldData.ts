@@ -49,6 +49,15 @@ export interface CleanupStats {
   appointmentsSkippedMalformedDate: number;
   publishedSearchesDeleted: number;
   appointmentNotesRedacted: number;
+  /**
+   * `searches/{searchId}` docs deleted alongside their expired cancelled/
+   * rejected appointment in step 7 (issue #408 item 2). Never larger than
+   * `appointmentsDeleted` in the same run: not every appointment carries a
+   * `searchId` (a published-search-initiated one has none), and two
+   * appointments — an original and its resubmission (`resubmitAppointment.ts`
+   * carries the searchId forward) — can share one search doc, deleted once.
+   */
+  searchesDeleted: number;
 }
 
 /**
@@ -64,7 +73,13 @@ export interface CleanupStats {
  * - Verification send counters: 24 hours past windowStart (the longest
  *   window — the daily address cap — is spent by then; stale counters only
  *   retain targeted addresses)
- * - Cancelled/rejected appointments: 30 days AND date > 7 days ago
+ * - Cancelled/rejected appointments: 30 days AND date > 7 days ago. The
+ *   `searches/{searchId}` doc `sendContactRequest` wrote 1:1 with the
+ *   appointment (issue #408 item 2) is deleted alongside it — nothing reads
+ *   `searches` after creation (every field it holds is already denormalized
+ *   onto the appointment), so there is no "still in use by a live sibling"
+ *   case to guard even though `resubmitAppointment` can leave two
+ *   appointments pointing at the same search doc.
  * - COMPLETED appointments (issue #294, decision 19): 180 days past the
  *   booking date. Sit has no `completed` status — a past sitting stays
  *   `confirmed` — so the sweep keys on (status: confirmed, date) and skips
@@ -107,6 +122,7 @@ export async function runCleanupOldData(
     appointmentsSkippedNonTerminal: 0,
     publishedSearchesDeleted: 0,
     appointmentNotesRedacted: 0,
+    searchesDeleted: 0,
   };
 
   // 1. Delete old notifications (> 30 days)
@@ -255,6 +271,14 @@ export async function runCleanupOldData(
     const sevenDaysAgoStr = sevenDaysAgo.toISOString().split('T')[0];
 
     const batch = firestoreDb.batch();
+    // Own batch, not the appointments one: the appointments QUERY is capped
+    // at 500 (this block's limit above), but a resubmission can put TWO
+    // appointments' searchIds in this page pointing at one doc (see the
+    // block comment), so appointments-deleted + searches-deleted could in
+    // principle exceed the 500-op ceiling a single `WriteBatch` enforces.
+    // The dedup Set below keeps the common case to one op per search anyway.
+    const searchesBatch = firestoreDb.batch();
+    const searchIdsToDelete = new Set<string>();
     let count = 0;
     for (const doc of oldAppointments.docs) {
       const data = doc.data();
@@ -263,13 +287,30 @@ export async function runCleanupOldData(
       if (!bookingDate || bookingDate < sevenDaysAgoStr) {
         batch.delete(doc.ref);
         count++;
+        // issue #408 item 2: delete the linked search 1:1 with its
+        // appointment. Idempotent by construction — `.doc(id).delete()` on
+        // an already-gone doc (a prior partial run, or a search a
+        // `deleteUser` erasure already removed) succeeds as a no-op.
+        const searchId = data.searchId;
+        if (typeof searchId === 'string' && searchId) {
+          searchIdsToDelete.add(searchId);
+        }
       }
+    }
+    for (const searchId of searchIdsToDelete) {
+      searchesBatch.delete(firestoreDb.collection('searches').doc(searchId));
     }
     if (count > 0) {
       await batch.commit();
       stats.appointmentsDeleted = count;
       stats.totalDeleted += count;
       console.log(`Deleted ${count} old cancelled/rejected appointments`);
+    }
+    if (searchIdsToDelete.size > 0) {
+      await searchesBatch.commit();
+      stats.searchesDeleted = searchIdsToDelete.size;
+      stats.totalDeleted += searchIdsToDelete.size;
+      console.log(`Deleted ${searchIdsToDelete.size} searches linked to expired cancelled/rejected appointments`);
     }
   }
 

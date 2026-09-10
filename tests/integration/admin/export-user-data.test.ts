@@ -3,6 +3,7 @@ import { clearAll, callFunction, getIdToken, getDb } from '../../setup/emulator.
 import {
   seedTestData,
   seedAppointment,
+  seedSearch,
   seedStudySession,
   seedStudyInstance,
   type SeedData,
@@ -15,6 +16,7 @@ interface ExportResponse {
   notifications: Array<{ id: string }>;
   auditLogs: Array<{ id: string; action: string }>;
   references: Array<{ id: string; referenceText?: string }>;
+  searches: Array<{ id: string; address?: string; createdByUserId?: string; familyId?: string }>;
   studySessions: Array<{
     id: string;
     tutorName?: string;
@@ -34,6 +36,9 @@ describe('exportUserData', () => {
   let tutorSessionId: string;
   let recurringSessionId: string;
   let unrelatedSessionId: string;
+  let ownSearchId: string;
+  let familySearchId: string;
+  let unrelatedSearchId: string;
 
   beforeAll(async () => {
     await clearAll();
@@ -137,6 +142,26 @@ describe('exportUserData', () => {
       date: '2026-09-10',
     });
 
+    // `searches/{searchId}` (issue #408 item 2): one created by parent1
+    // personally, one created by parent2 (family1's co-parent — family-level
+    // data reachable via familyId, like the references' submittedByFamilyId
+    // case) and one unrelated (family2/parent3) — the isolation control.
+    ownSearchId = await seedSearch({
+      familyId: seed.family1Id,
+      createdByUserId: seed.parent1.uid,
+      address: '15 Rue de Passy, 75016 Paris',
+    });
+    familySearchId = await seedSearch({
+      familyId: seed.family1Id,
+      createdByUserId: seed.parent2.uid,
+      address: '9 Avenue Foch, 75116 Paris',
+    });
+    unrelatedSearchId = await seedSearch({
+      familyId: seed.family2Id,
+      createdByUserId: seed.parent3.uid,
+      address: '1 Place Martin, 75011 Paris',
+    });
+
     // A tutor override, so the schedule export has an overrides row to carry.
     await db.collection('schedules').doc(seed.tutor1.uid)
       .collection('overrides').doc('2026-12-24')
@@ -238,6 +263,32 @@ describe('exportUserData', () => {
       expect(ids).not.toContain(unrelatedRefId);
       // sitRef matches both the submitter and the family key — exported once.
       expect(new Set(ids).size).toBe(ids.length);
+    });
+
+    /**
+     * Issue #408 item 2 — the export half of the same gap: `searches` was
+     * absent entirely, so a subject-access request under-reported the
+     * stored `address`.
+     */
+    it('includes searches where the user is the CREATOR, plus family-owned searches, deduplicated, with the address', async () => {
+      const result = await callFunction<ExportResponse>(
+        'exportUserData',
+        { targetUserId: seed.parent1.uid },
+        adminToken,
+      );
+
+      const ids = result.searches.map((s) => s.id);
+      // Created personally.
+      expect(ids).toContain(ownSearchId);
+      // Created by the co-parent from the same family — family-level data
+      // reachable via familyId, like family appointments/references.
+      expect(ids).toContain(familySearchId);
+      // Another family's search stays out.
+      expect(ids).not.toContain(unrelatedSearchId);
+      expect(new Set(ids).size).toBe(ids.length);
+
+      const own = result.searches.find((s) => s.id === ownSearchId)!;
+      expect(own.address).toBe('15 Rue de Passy, 75016 Paris');
     });
 
     /**

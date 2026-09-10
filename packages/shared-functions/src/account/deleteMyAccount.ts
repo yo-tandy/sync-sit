@@ -333,6 +333,9 @@ export const deleteMyAccount = onCall(
         cancelledAppointments: erased.cancelledCount,
         familyDeleted: erased.isLastParent && !!erased.familyId,
         deletedReferences: erased.refDocsDeleted,
+        // issue #408 item 2 — counts only, no personal data (same convention
+        // as `deletedReferences`).
+        deletedSearches: erased.searchesDeleted,
         deletedDoTasks: erased.doErasure.tasksDeleted,
         deletedDoOffers: erased.doErasure.offersDeleted,
         deletedDoPhotoObjects: erased.doErasure.photoObjectsDeleted,

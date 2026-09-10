@@ -9,6 +9,7 @@ import {
 import {
   seedTestData,
   seedAppointment,
+  seedSearch,
   seedStudySession,
   seedStudyInstance,
   seedOverrideClaim,
@@ -408,6 +409,86 @@ describe('deleteUser', () => {
       // incremented, so the deletion must not create/decrement it.
       const tutorDoc = await db.collection('users').doc(seed.tutor1.uid).get();
       expect(tutorDoc.data()!.profiles.tutor.endorsementCount).toBeUndefined();
+    });
+  });
+
+  /**
+   * Issue #408 item 2 — `searches/{searchId}` never appeared in any of the
+   * three GDPR paths. `sendContactRequest` writes one search doc 1:1 with
+   * the appointment it produces, storing `address`, `latLng`, `kidIds`,
+   * `familyId` and `createdByUserId` — none of which the erasure ever
+   * touched, so the address copy survived a hard delete. Full deletion
+   * (not anonymization), same disposition as `references` above.
+   */
+  describe('searches (GDPR, issue #408 item 2)', () => {
+    it('deleting the CREATOR deletes the searches they personally created, leaving another family\'s untouched', async () => {
+      const db = getDb();
+
+      const apptId = await seedAppointment({
+        babysitterUserId: seed.babysitter1.uid,
+        familyId: seed.family1Id,
+        createdByUserId: seed.parent1.uid,
+        status: 'pending',
+      });
+      const ownSearchId = await seedSearch({
+        familyId: seed.family1Id,
+        createdByUserId: seed.parent1.uid,
+      });
+      await db.collection('appointments').doc(apptId).update({ searchId: ownSearchId });
+
+      const otherFamilySearchId = await seedSearch({
+        familyId: seed.family2Id,
+        createdByUserId: seed.parent3.uid,
+      });
+
+      await callFunction('deleteUser', { targetUserId: seed.parent1.uid }, adminToken);
+
+      expect((await db.collection('searches').doc(ownSearchId).get()).exists).toBe(false);
+      expect((await db.collection('searches').doc(otherFamilySearchId).get()).exists).toBe(true);
+
+      const logs = await db
+        .collection('auditLogs')
+        .where('action', '==', 'delete_user')
+        .where('targetUserId', '==', seed.parent1.uid)
+        .get();
+      expect(logs.docs).toHaveLength(1);
+      expect(logs.docs[0].data().details.deletedSearches).toBeGreaterThanOrEqual(1);
+    });
+
+    it('deleting a co-parent who is NOT the last parent leaves the surviving co-parent\'s searches alone', async () => {
+      const db = getDb();
+
+      // parent2 is being deleted but is not family1's last parent (parent1
+      // survives) — only the search parent2 personally created is removed.
+      const byDeletedParent = await seedSearch({
+        familyId: seed.family1Id,
+        createdByUserId: seed.parent2.uid,
+      });
+      const bySurvivingParent = await seedSearch({
+        familyId: seed.family1Id,
+        createdByUserId: seed.parent1.uid,
+      });
+
+      await callFunction('deleteUser', { targetUserId: seed.parent2.uid }, adminToken);
+
+      expect((await db.collection('searches').doc(byDeletedParent).get()).exists).toBe(false);
+      expect((await db.collection('searches').doc(bySurvivingParent).get()).exists).toBe(true);
+    });
+
+    it('deleting the LAST parent deletes the family\'s searches via familyId (even one created by a departed parent)', async () => {
+      const db = getDb();
+
+      // createdByUserId no longer resolvable — only the family key still
+      // ties the doc to family2, mirroring the references familyKeyedRef case.
+      const familyKeyedSearch = await seedSearch({
+        familyId: seed.family2Id,
+        createdByUserId: 'deleted',
+      });
+
+      // parent3 is family2's sole parent.
+      await callFunction('deleteUser', { targetUserId: seed.parent3.uid }, adminToken);
+
+      expect((await db.collection('searches').doc(familyKeyedSearch).get()).exists).toBe(false);
     });
   });
 
