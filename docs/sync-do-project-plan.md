@@ -2033,7 +2033,7 @@ and this is the record of it rather than a PR comment.** The two in-product
 sites shipped in PR7 and are pinned by tests: the posting flow's review step
 and the acceptance dialog both render `family.post.liabilityNotice`, EN and
 FR. **The ToS half has since shipped too, via #412 (issue #308's copy pass,
-landed 2026-09-10).** `packages/shared-ui/src/pages/TermsPage.tsx` §2 now
+merged 2026-09-04).** `packages/shared-ui/src/pages/TermsPage.tsx` §2 now
 enumerates all three Sync apps and Sync/Do's seven service categories
 (gardening and plant care; packing, moving and clearing boxes; flat-pack
 furniture assembly; help at parties; IT and device help; errands; pet care
