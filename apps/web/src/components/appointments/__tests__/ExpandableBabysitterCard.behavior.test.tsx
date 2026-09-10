@@ -45,6 +45,13 @@ vi.mock('firebase/firestore', () => ({
   getDoc: vi.fn().mockResolvedValue({ exists: () => false }),
   getDocs: vi.fn().mockResolvedValue({ docs: [] }),
 }));
+// None of these tests exercise a callable directly (they assert on the
+// onCancel/onAccept/onDecline/onEdit/onResubmit PROPS), but expanding the
+// card unconditionally fires getCrossAppReferences for study/do now (issue
+// #346) — a no-op stub keeps that load harmless here.
+vi.mock('firebase/functions', () => ({
+  httpsCallable: () => () => Promise.resolve({ data: { items: [] } }),
+}));
 
 const info: BabysitterSummary = {
   uid: 'bs-1',

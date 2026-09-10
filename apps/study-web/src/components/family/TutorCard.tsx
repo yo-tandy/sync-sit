@@ -12,6 +12,8 @@ import {
   ENDORSEMENT_PER_SOURCE_LIMIT,
   PUBLIC_ENDORSEMENT_STATUSES,
   type CrossAppEndorsement,
+  type EndorsementApp,
+  type ProjectedCrossAppReference,
 } from '@ejm/shared-core';
 import { Card, Button, Badge, Avatar, Dialog, Textarea, formatProviderName } from '@ejm/shared-ui';
 import { humanizeNoticeWindow } from '@/utils/cancellationPolicy';
@@ -89,32 +91,44 @@ export function TutorCard({ result }: { result: TutorSearchResult }) {
         // a failure in a SECONDARY source (an unbuilt sibling composite, a
         // transient error) hide study's own primary signal. Degrade to fewer
         // entries, never to none.
+        //
+        // study's OWN source (`tutorUserId`) stays a direct client read of the
+        // full `references` doc. Every SIBLING source (sit, do) instead calls
+        // the shared `getCrossAppReferences` callable (issue #346): the same
+        // status-constrained query, run server-side, returning ONLY the
+        // fields this card renders — a sit reference's referee
+        // email/phone/whatsapp/kid-count PII never reaches this browser.
         const settled = await Promise.allSettled(
-          sources.map(({ field }) =>
-            getDocs(
-              query(
-                collection(db, 'references'),
-                where(field, '==', result.uid),
-                // Load-bearing, not cosmetic: the H2-hardened references read
-                // rule gives an unrelated family only the public-status
-                // disjunct, and Firestore proves it from the QUERY. Dropping
-                // this is PERMISSION_DENIED — fix the query, never the rule.
-                where('status', 'in', PUBLIC_ENDORSEMENT_STATUSES),
-                limit(ENDORSEMENT_PER_SOURCE_LIMIT),
-              ),
-            ),
+          sources.map(({ app, field }) =>
+            app === 'study'
+              ? getDocs(
+                  query(
+                    collection(db, 'references'),
+                    where(field, '==', result.uid),
+                    // Load-bearing, not cosmetic: the H2-hardened references
+                    // read rule gives an unrelated family only the
+                    // public-status disjunct, and Firestore proves it from
+                    // the QUERY. Dropping this is PERMISSION_DENIED — fix the
+                    // query, never the rule.
+                    where('status', 'in', PUBLIC_ENDORSEMENT_STATUSES),
+                    limit(ENDORSEMENT_PER_SOURCE_LIMIT),
+                  ),
+                ).then((snap) =>
+                  snap.docs.map((d) =>
+                    toCrossAppEndorsement(app, d.id, d.data() as Record<string, unknown>),
+                  ),
+                )
+              : httpsCallable<
+                  { providerUserId: string; sourceApp: EndorsementApp },
+                  { items: ProjectedCrossAppReference[] }
+                >(functions, 'getCrossAppReferences')({
+                  providerUserId: result.uid,
+                  sourceApp: app,
+                }).then((res) => res.data.items ?? []),
           ),
         );
         // Concatenated in source order, so study's own entries lead.
-        setEndorsements(
-          settled.flatMap((r, i) =>
-            r.status === 'fulfilled'
-              ? r.value.docs.map((d) =>
-                  toCrossAppEndorsement(sources[i].app, d.id, d.data() as Record<string, unknown>),
-                )
-              : [],
-          ),
-        );
+        setEndorsements(settled.flatMap((r) => (r.status === 'fulfilled' ? r.value : [])));
         if (settled.every((r) => r.status === 'fulfilled')) setEndorsementsComplete(true);
       } catch {
         // Belt-and-braces only: allSettled never rejects, and

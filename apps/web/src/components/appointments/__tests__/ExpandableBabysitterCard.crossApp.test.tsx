@@ -1,5 +1,6 @@
 /**
- * Cross-app endorsements on the family's appointment card (issue #280).
+ * Cross-app endorsements on the family's appointment card (issue #280),
+ * server-side projected for sibling apps (issue #346 — PII minimisation).
  *
  * The shared `references` collection holds sit references, study tutor
  * endorsements and (once sync-do's PR-11 lands) doer endorsements for the SAME
@@ -7,24 +8,48 @@
  * labels every non-sit entry with its origin, because a Sync/Study endorsement
  * vouches for tutoring, not for babysitting.
  *
- * The query shape is pinned verbatim: the status-in constraint is what makes
- * the read provable under the H2-hardened references rule for a family that is
- * unrelated to the reference's author.
+ * sit's OWN source stays a DIRECT Firestore read of the full doc (status-in
+ * constrained, pinned verbatim below — that constraint is what makes the read
+ * provable under the H2-hardened references rule). Every SIBLING source
+ * (study, do) instead calls the shared `getCrossAppReferences` callable —
+ * this suite pins that the card never falls back to a raw Firestore query for
+ * those, and that a projected row (whatever the network hands back) still
+ * never renders referee contact fields.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { AppointmentDoc, BabysitterSummary } from '@ejm/sit-core';
+import { ENDORSEMENT_SUBJECT_FIELD } from '@ejm/shared-core';
 
 const h = vi.hoisted(() => ({
   queries: [] as unknown[][],
-  /** Rows per `references` subject field — one query is issued per product. */
+  callableCalls: [] as { name: string; payload: unknown }[],
+  /** Rows per `references` SUBJECT FIELD — one source per product. */
   results: new Map<string, Record<string, unknown>[]>(),
   fail: false,
-  /** Subject fields whose query should reject — models a partial outage. */
+  /** Subject fields whose source should reject — models a partial outage. */
   failFields: new Set<string>(),
-  /** Subject fields whose query hangs until released — models slow sources. */
+  /** Subject fields whose source hangs until released — models slow sources. */
   hold: new Map<string, () => void>(),
 }));
+
+/** Mirrors the getCrossAppReferences callable's own mapping, plus (deliberately)
+ * carrying any extra fields a test's fixture set — so the "never renders
+ * referee contact details" test below exercises the CLIENT-side render gate
+ * even if a row somehow arrived with more than the callable is meant to send.
+ * The callable's own key-set discipline is pinned server-side, in the
+ * integration suite (tests/integration/references/get-cross-app-references.test.ts). */
+function project(sourceApp: string, field: string, r: Record<string, unknown>, i: number) {
+  const refName =
+    (typeof r.submittedByName === 'string' && r.submittedByName) ||
+    (typeof r.refName === 'string' && r.refName) ||
+    '';
+  const text =
+    (typeof r.referenceText === 'string' && r.referenceText) ||
+    (typeof r.note === 'string' && r.note) ||
+    '';
+  return { sourceApp, id: `${field}-${i}`, refName, text, isEjmFamily: r.isEjmFamily === true, ...r };
+}
 
 // Echo translation keys so label assertions name the key the card renders.
 vi.mock('react-i18next', () => ({
@@ -56,6 +81,24 @@ vi.mock('firebase/firestore', () => ({
     }
     return Promise.resolve(result);
   },
+}));
+vi.mock('firebase/functions', () => ({
+  httpsCallable:
+    (_fns: unknown, name: string) =>
+    (payload: { providerUserId: string; sourceApp: 'study' | 'do' }) => {
+      h.callableCalls.push({ name, payload });
+      const field = ENDORSEMENT_SUBJECT_FIELD[payload.sourceApp];
+      if (h.fail) return Promise.reject(new Error('internal'));
+      if (h.failFields.has(field)) return Promise.reject(new Error('internal'));
+      const rows = h.results.get(field) ?? [];
+      const result = { data: { items: rows.map((r, i) => project(payload.sourceApp, field, r, i)) } };
+      if (h.hold.has(field)) {
+        return new Promise((resolve) => {
+          h.hold.set(field, () => resolve(result));
+        });
+      }
+      return Promise.resolve(result);
+    },
 }));
 
 import { ExpandableBabysitterCard } from '../ExpandableBabysitterCard';
@@ -89,6 +132,7 @@ function renderCard(apt: AppointmentDoc = appointment) {
 
 beforeEach(() => {
   h.queries = [];
+  h.callableCalls = [];
   h.results = new Map();
   h.fail = false;
   h.failFields = new Set();
@@ -96,7 +140,7 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-describe('ExpandableBabysitterCard cross-app endorsements (issue #280)', () => {
+describe('ExpandableBabysitterCard cross-app endorsements (issue #280, projected per #346)', () => {
   // This file mocks `t` as an identity function, so the render assertions
   // below pin the key the component COMPUTES, not that it resolves — deleting
   // the locale entry would leave them green while users saw a raw dotted key.
@@ -113,19 +157,31 @@ describe('ExpandableBabysitterCard cross-app endorsements (issue #280)', () => {
     }
   });
 
-  it('issues one status-constrained query per product, sit first', async () => {
+  it("issues one status-constrained Firestore query for sit's OWN source", async () => {
     renderCard();
-    await waitFor(() => expect(h.queries).toHaveLength(3));
-    // Fields AND their order pinned per query, sit's own field leading.
-    const fields = ['babysitterUserId', 'tutorUserId', 'doerUserId'];
-    h.queries.forEach((q, i) => {
-      expect(q[0]).toEqual({ path: 'references' });
-      expect(q[1]).toEqual({ where: [fields[i], '==', 'bs-1'] });
-      // NOT optional: an unrelated family can only prove the public-status
-      // disjunct of the references read rule, and only from the query.
-      expect(q[2]).toEqual({ where: ['status', 'in', ['approved', 'published']] });
-      expect(q[3]).toEqual({ limit: 10 });
-    });
+    await waitFor(() => expect(h.queries).toHaveLength(1));
+    expect(h.queries[0][0]).toEqual({ path: 'references' });
+    expect(h.queries[0][1]).toEqual({ where: ['babysitterUserId', '==', 'bs-1'] });
+    // NOT optional: an unrelated family can only prove the public-status
+    // disjunct of the references read rule, and only from the query.
+    expect(h.queries[0][2]).toEqual({ where: ['status', 'in', ['approved', 'published']] });
+    expect(h.queries[0][3]).toEqual({ limit: 10 });
+  });
+
+  it('calls getCrossAppReferences for each SIBLING source, sit excluded, and never issues a raw Firestore query for them', async () => {
+    renderCard();
+    await waitFor(() => expect(h.callableCalls).toHaveLength(2));
+    expect(h.callableCalls).toEqual([
+      { name: 'getCrossAppReferences', payload: { providerUserId: 'bs-1', sourceApp: 'study' } },
+      { name: 'getCrossAppReferences', payload: { providerUserId: 'bs-1', sourceApp: 'do' } },
+    ]);
+    // The ONLY Firestore query issued is sit's own — never a raw read keyed
+    // by a sibling's subject field. This is the assertion that PII
+    // minimisation is real: no code path still fetches whole study/do docs.
+    expect(h.queries).toHaveLength(1);
+    expect(h.queries.every((q) => (q[1] as { where: [string] }).where[0] === 'babysitterUserId')).toBe(
+      true,
+    );
   });
 
   it('lists sit references first, then study endorsements labeled by origin', async () => {
@@ -172,7 +228,7 @@ describe('ExpandableBabysitterCard cross-app endorsements (issue #280)', () => {
     expect(screen.getByText('references.fromDo')).toBeInTheDocument();
   });
 
-  it('keeps sit references when only a SIBLING query fails (allSettled, not all)', async () => {
+  it('keeps sit references when only a SIBLING source fails (allSettled, not all)', async () => {
     h.results.set('babysitterUserId', [
       { refName: 'Famille Garde', note: 'Sat for us for two years' },
     ]);
@@ -184,7 +240,11 @@ describe('ExpandableBabysitterCard cross-app endorsements (issue #280)', () => {
     expect(screen.queryByText(/references\.from/)).not.toBeInTheDocument();
   });
 
-  it('never renders referee contact details for a cross-app entry', async () => {
+  it('never renders referee contact details for a cross-app entry, even if the projection carried them', async () => {
+    // A row from the getCrossAppReferences mock carrying extra fields models
+    // a hypothetical projection regression — the render gate is the
+    // last-line defense documented at the `sourceApp === 'sit'` check in
+    // ExpandableBabysitterCard.tsx; this proves it still holds.
     h.results.set('tutorUserId', [
       {
         submittedByName: 'Famille Etude',
@@ -202,15 +262,15 @@ describe('ExpandableBabysitterCard cross-app endorsements (issue #280)', () => {
   });
 
   it('caches a WHOLE load — re-expanding does not refetch all three sources', async () => {
-    // This surface previously refetched on every expand, the most read-
-    // expensive of the three at 3 queries per toggle.
     h.results.set('babysitterUserId', [{ refName: 'Famille Garde', note: 'x' }]);
     renderCard();
-    await waitFor(() => expect(h.queries).toHaveLength(3));
+    await waitFor(() => expect(h.queries).toHaveLength(1));
+    await waitFor(() => expect(h.callableCalls).toHaveLength(2));
     fireEvent.click(screen.getAllByRole('button')[0]); // collapse
     fireEvent.click(screen.getAllByRole('button')[0]); // re-expand
     await waitFor(() => expect(screen.getByText(/Famille Garde/)).toBeInTheDocument());
-    expect(h.queries).toHaveLength(3);
+    expect(h.queries).toHaveLength(1);
+    expect(h.callableCalls).toHaveLength(2);
   });
 
   it('retries on re-expand after a PARTIAL load — only whole loads are cached', async () => {
@@ -220,13 +280,13 @@ describe('ExpandableBabysitterCard cross-app endorsements (issue #280)', () => {
     ]);
     h.failFields = new Set(['tutorUserId']);
     renderCard();
-    await waitFor(() => expect(h.queries).toHaveLength(3));
+    await waitFor(() => expect(h.callableCalls).toHaveLength(2));
     expect(screen.queryByText(/Famille Etude/)).not.toBeInTheDocument();
 
     h.failFields = new Set();
     fireEvent.click(screen.getAllByRole('button')[0]); // collapse
     fireEvent.click(screen.getAllByRole('button')[0]); // re-expand refetches
-    await waitFor(() => expect(h.queries).toHaveLength(6));
+    await waitFor(() => expect(h.callableCalls).toHaveLength(4));
     expect(await screen.findByText(/Endorsement from Famille Etude/)).toBeInTheDocument();
   });
 
@@ -239,12 +299,12 @@ describe('ExpandableBabysitterCard cross-app endorsements (issue #280)', () => {
     h.results.set('babysitterUserId', [{ refName: 'Famille Garde', note: 'x' }]);
     h.hold.set('tutorUserId', () => {}); // this source hangs
     renderCard();
-    await waitFor(() => expect(h.queries).toHaveLength(3));
+    await waitFor(() => expect(h.callableCalls).toHaveLength(2));
 
     const toggle = () => fireEvent.click(screen.getAllByRole('button')[0]);
     toggle(); // collapse mid-load
     toggle(); // re-expand — deduped, starts nothing
-    expect(h.queries).toHaveLength(3);
+    expect(h.callableCalls).toHaveLength(2);
 
     h.hold.get('tutorUserId')!(); // the original load lands
     expect(await screen.findByText(/Endorsement from Famille Garde/)).toBeInTheDocument();
@@ -253,7 +313,7 @@ describe('ExpandableBabysitterCard cross-app endorsements (issue #280)', () => {
     toggle();
     toggle();
     await waitFor(() => expect(screen.getByText(/Famille Garde/)).toBeInTheDocument());
-    expect(h.queries).toHaveLength(3);
+    expect(h.callableCalls).toHaveLength(2);
   });
 
   it('never latches one babysitter\'s endorsements onto another (uid changes mid-load)', async () => {
@@ -266,7 +326,7 @@ describe('ExpandableBabysitterCard cross-app endorsements (issue #280)', () => {
     h.results.set('babysitterUserId', [{ refName: 'Famille A', note: 'for A' }]);
     h.hold.set('babysitterUserId', () => {}); // A's load hangs
     const { rerender } = renderCard();
-    await waitFor(() => expect(h.queries).toHaveLength(3));
+    await waitFor(() => expect(h.callableCalls).toHaveLength(2));
 
     // Point the same card at a different babysitter while A's load is open.
     rerender(
@@ -278,15 +338,16 @@ describe('ExpandableBabysitterCard cross-app endorsements (issue #280)', () => {
     );
     h.hold.get('babysitterUserId')!(); // A's load lands late
 
-    await waitFor(() => expect(h.queries.length).toBeGreaterThanOrEqual(3));
+    await waitFor(() => expect(h.callableCalls.length).toBeGreaterThanOrEqual(2));
     // A's referee must never appear under B.
     expect(screen.queryByText(/Famille A/)).not.toBeInTheDocument();
   });
 
-  it('keeps the card intact when the endorsement queries are denied', async () => {
+  it('keeps the card intact when the endorsement sources are denied', async () => {
     h.fail = true;
     renderCard();
-    await waitFor(() => expect(h.queries).toHaveLength(3));
+    await waitFor(() => expect(h.queries).toHaveLength(1));
+    await waitFor(() => expect(h.callableCalls).toHaveLength(2));
     expect(screen.getByText('Marie Dupont')).toBeInTheDocument();
     expect(screen.queryByText(/Endorsement from/)).not.toBeInTheDocument();
   });

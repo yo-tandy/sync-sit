@@ -70,6 +70,10 @@ export { createAppHandoffCode, redeemAppHandoffCode } from './handoff/appHandoff
 // (issue #368). Runs the same erasure as the admin path.
 export { deleteMyAccount } from './account/deleteMyAccount.js';
 
+// Callable — server-side projection for CROSS-APP `references` reads
+// (issue #346, PII minimisation follow-up from #280 / PR #337).
+export { getCrossAppReferences } from './references/getCrossAppReferences.js';
+
 // Callables — admin
 export { getAdminDashboard } from './admin/getAdminDashboard.js';
 export { listUsers } from './admin/listUsers.js';
