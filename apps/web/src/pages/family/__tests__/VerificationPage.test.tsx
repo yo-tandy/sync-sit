@@ -152,3 +152,54 @@ describe('family VerificationPage — stale community requests (#218)', () => {
     expect(await screen.findByText('This code has expired')).toBeInTheDocument();
   });
 });
+
+// Issue #448 — the upload catch was bare: no logging, one generic message
+// for every failure. These pin that the raw error is now logged and that
+// the actionable storage/unauthorized code gets its own, non-technical copy.
+describe('family VerificationPage — upload error surfacing (#448)', () => {
+  const NOT_SUBMITTED = {
+    identityStatus: 'not_submitted',
+    enrollmentStatus: 'not_submitted',
+    isFullyVerified: false,
+    isEjmFamily: false,
+  };
+
+  it('logs the raw error and shows the permission-denied copy for storage/unauthorized', async () => {
+    statusResponse = { verification: { ...NOT_SUBMITTED }, documents: [] };
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const deniedError = Object.assign(new Error('denied'), { code: 'storage/unauthorized' });
+    h.uploadBytes.mockRejectedValueOnce(deniedError);
+
+    const { container } = renderPage();
+    await screen.findAllByText('Not Submitted');
+
+    const file = new File(['doc-bytes'], 'id.pdf', { type: 'application/pdf' });
+    const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(fileInput, { target: { files: [file] } });
+    fireEvent.click(screen.getByRole('button', { name: 'Upload' }));
+
+    expect(
+      await screen.findByText(/don't have permission to upload for this family/),
+    ).toBeInTheDocument();
+    expect(consoleError).toHaveBeenCalledWith('[verification] upload failed', deniedError);
+    consoleError.mockRestore();
+  });
+
+  it('falls back to the generic copy when the rejection carries no code', async () => {
+    statusResponse = { verification: { ...NOT_SUBMITTED }, documents: [] };
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    h.uploadBytes.mockRejectedValueOnce(new Error('boom'));
+
+    const { container } = renderPage();
+    await screen.findAllByText('Not Submitted');
+
+    const file = new File(['doc-bytes'], 'id.pdf', { type: 'application/pdf' });
+    const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(fileInput, { target: { files: [file] } });
+    fireEvent.click(screen.getByRole('button', { name: 'Upload' }));
+
+    expect(await screen.findByText(/An error occurred while uploading/)).toBeInTheDocument();
+    expect(consoleError).toHaveBeenCalledWith('[verification] upload failed', expect.any(Error));
+    consoleError.mockRestore();
+  });
+});

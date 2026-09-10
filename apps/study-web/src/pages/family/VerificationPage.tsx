@@ -5,7 +5,7 @@ import { storage } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { useVerificationStore } from '@/stores/verificationStore';
 import { Badge, Button, Card, Checkbox, Input, Spinner, TopNav } from '@ejm/shared-ui';
-import { getParentProfile } from '@ejm/shared-core';
+import { getParentProfile, uploadErrorKey } from '@ejm/shared-core';
 
 /**
  * Family verification, ported from sync-sit's VerificationPage
@@ -104,8 +104,9 @@ export function VerificationPage() {
       await handleUpload(identityFile, 'identity');
       setIdentityFile(null);
       if (identityInputRef.current) identityInputRef.current.value = '';
-    } catch {
-      setIdentityError(t('family.verification.uploadError'));
+    } catch (err) {
+      console.error('[verification] upload failed', err);
+      setIdentityError(t(`family.verification.${uploadErrorKey(err)}`));
     }
   };
 
@@ -120,8 +121,9 @@ export function VerificationPage() {
       await handleUpload(enrollmentFile, 'ejm_enrollment');
       setEnrollmentFile(null);
       if (enrollmentInputRef.current) enrollmentInputRef.current.value = '';
-    } catch {
-      setEnrollmentError(t('family.verification.uploadError'));
+    } catch (err) {
+      console.error('[verification] upload failed', err);
+      setEnrollmentError(t(`family.verification.${uploadErrorKey(err)}`));
     }
   };
 

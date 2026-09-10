@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/Input';
 import { Spinner } from '@/components/ui/Spinner';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { getParentProfile } from '@ejm/sit-core';
+import { uploadErrorKey } from '@ejm/shared-core';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
@@ -97,8 +98,9 @@ export function VerificationPage() {
       await handleUpload(identityFile, 'identity');
       setIdentityFile(null);
       if (identityInputRef.current) identityInputRef.current.value = '';
-    } catch {
-      setIdentityError(t('verification.uploadError'));
+    } catch (err) {
+      console.error('[verification] upload failed', err);
+      setIdentityError(t(`verification.${uploadErrorKey(err)}`));
     }
   };
 
@@ -113,8 +115,9 @@ export function VerificationPage() {
       await handleUpload(enrollmentFile, 'ejm_enrollment');
       setEnrollmentFile(null);
       if (enrollmentInputRef.current) enrollmentInputRef.current.value = '';
-    } catch {
-      setEnrollmentError(t('verification.uploadError'));
+    } catch (err) {
+      console.error('[verification] upload failed', err);
+      setEnrollmentError(t(`verification.${uploadErrorKey(err)}`));
     }
   };
 

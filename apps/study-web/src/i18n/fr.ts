@@ -967,6 +967,8 @@ export default {
       upload: 'Télécharger',
       fileTooLarge: 'Le fichier est trop volumineux. La taille maximale est de 10 Mo.',
       uploadError: 'Une erreur est survenue lors du téléchargement. Veuillez réessayer.',
+      uploadErrorUnauthorized: 'Vous n\'avez pas la permission de télécharger un document pour cette famille. Essayez de vous déconnecter puis reconnecter, ou contactez le support si le problème persiste.',
+      uploadErrorConnection: 'Un problème de connexion est survenu. Veuillez réessayer.',
       whyRequired: 'Sync/Study met en relation les familles EJM avec des étudiants professeurs. Pour assurer la sécurité de tous — en particulier des étudiants — nous devons vérifier que tous les parents sur la plateforme sont bien qui ils prétendent être et font partie de la communauté EJM. Vous pouvez vous vérifier via les documents ci-dessous, ou demander à un parent vérifié de se porter garant pour vous via la vérification communautaire. La vérification est partagée avec Sync/Sit : la compléter dans l\'une des applications débloque les deux.',
       fullyVerified: 'Vérification terminée',
       fullyVerifiedDesc: 'Votre famille a été entièrement vérifiée. Vous pouvez maintenant utiliser toutes les fonctionnalités.',

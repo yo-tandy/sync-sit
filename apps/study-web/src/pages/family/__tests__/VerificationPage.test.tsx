@@ -214,7 +214,12 @@ describe('family VerificationPage', () => {
     expect(h.callable).not.toHaveBeenCalledWith('submitVerification', expect.anything());
   });
 
-  it('surfaces the upload error and keeps the form usable when the submit fails', async () => {
+  // Issue #448 — the upload catch was bare: no logging, one generic message
+  // for every failure, which extended the #446 outage because the
+  // storage/unauthorized code was thrown away. These pin that the raw error
+  // is logged and that the actionable code gets its own, non-technical copy.
+  it('surfaces the upload error, logs it, and keeps the form usable when the submit fails with no code', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
     h.callable.mockImplementation((name: string, payload: unknown) =>
       name === 'submitVerification'
         ? Promise.reject(new Error('boom'))
@@ -228,6 +233,27 @@ describe('family VerificationPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Upload' }));
 
     expect(await screen.findByText(/An error occurred while uploading/)).toBeInTheDocument();
+    expect(consoleError).toHaveBeenCalledWith('[verification] upload failed', expect.any(Error));
+    consoleError.mockRestore();
+  });
+
+  it('logs the raw error and shows the permission-denied copy for storage/unauthorized', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const deniedError = Object.assign(new Error('denied'), { code: 'storage/unauthorized' });
+    h.uploadBytes.mockRejectedValueOnce(deniedError);
+
+    renderWithProviders(<VerificationPage />);
+    await screen.findAllByText('Not Submitted');
+
+    const file = new File(['doc-bytes'], 'id.pdf', { type: 'application/pdf' });
+    fireEvent.change(screen.getByLabelText('Identity'), { target: { files: [file] } });
+    fireEvent.click(screen.getByRole('button', { name: 'Upload' }));
+
+    expect(
+      await screen.findByText(/don't have permission to upload for this family/),
+    ).toBeInTheDocument();
+    expect(consoleError).toHaveBeenCalledWith('[verification] upload failed', deniedError);
+    consoleError.mockRestore();
   });
 
   it('generates and displays a community code with its expiry (unverified family)', async () => {

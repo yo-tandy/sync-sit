@@ -966,6 +966,8 @@ export default {
       upload: 'Upload',
       fileTooLarge: 'File is too large. Maximum size is 10 MB.',
       uploadError: 'An error occurred while uploading. Please try again.',
+      uploadErrorUnauthorized: 'You don\'t have permission to upload for this family. Try signing out and back in, or contact support if the problem continues.',
+      uploadErrorConnection: 'There was a connection problem. Please try again.',
       whyRequired: 'Sync/Study connects EJM families with student tutors. To keep everyone safe — especially the students — we need to verify that all parents on the platform are who they say they are and are part of the EJM community. You can verify through documents below, or ask a verified parent to vouch for you using the community verification option. Verification is shared with Sync/Sit: completing it in either app unlocks both.',
       fullyVerified: 'Verification Complete',
       fullyVerifiedDesc: 'Your family has been fully verified. You can now use all features.',

@@ -1235,6 +1235,8 @@ export default {
     upload: 'Upload',
     fileTooLarge: 'File is too large. Maximum size is 10 MB.',
     uploadError: 'An error occurred while uploading. Please try again.',
+    uploadErrorUnauthorized: 'You don\'t have permission to upload for this family. Try signing out and back in, or contact support if the problem continues.',
+    uploadErrorConnection: 'There was a connection problem. Please try again.',
     fillRequired: 'Please fill in the required fields and select a file.',
     addEnrollmentDoc: 'Add enrollment document',
     childFullName: 'Child\'s full name',
