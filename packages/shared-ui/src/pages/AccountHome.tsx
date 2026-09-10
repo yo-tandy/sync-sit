@@ -55,7 +55,18 @@ export interface AccountHomeProps {
  *
  * NO BACK BUTTON, deliberately. A back arrow would frame this as a subsection
  * of the app you arrived from. It is not below anything; the bottom bar is how
- * you leave. Callers must not wrap this in a TopNav carrying `backTo`.
+ * you leave. Callers must not wrap this in a TopNav carrying `backTo`, and the
+ * sticky header below renders no back affordance of its own for the same
+ * reason (#445).
+ *
+ * STICKY HEADER (#445). Every other authed page carries a sticky top banner
+ * (`AppBar`); the hub previously had none, just an in-body `<h1>`. This one
+ * is neutral (gray, not `--color-brand-*`, same rule as the rest of the
+ * page) and titled with the hub's own brand string, "Sync/Account" --
+ * identical in every language, the same convention as "Sync/Sit" /
+ * "Sync/Study" (see `accountHub.brandTitle` and `APP_NAME`). It lives here,
+ * in the shared component, rather than in each host's layout, so every app
+ * that mounts `AccountHome` gets it once rather than reimplementing it.
  *
  * Rows are DATA. A destination that does not exist is an absent row, never a
  * disabled one -- study has no family "favorites" and sync-do has no account
@@ -71,13 +82,20 @@ export function AccountHome({
   const { t } = useTranslation();
 
   return (
-    <div className="px-5 pt-4 pb-8">
-      <h1 className="mb-1 text-2xl font-bold text-gray-900">{t('accountHub.title')}</h1>
-      <p className="mb-6 text-sm text-gray-500">{t('accountHub.subtitle')}</p>
+    <div>
+      {/* Sticky, neutral, no back button -- see the docstring above. */}
+      <div className="sticky top-0 z-40 flex h-12 items-center justify-center border-b border-gray-200 bg-white px-4">
+        <span className="text-sm font-semibold text-gray-900">
+          {t('accountHub.brandTitle')}
+        </span>
+      </div>
 
-      {sections
-        .filter((s) => s.rows.length > 0)
-        .map((section, i) => {
+      <div className="px-5 pt-4 pb-8">
+        <p className="mb-6 text-sm text-gray-500">{t('accountHub.subtitle')}</p>
+
+        {sections
+          .filter((s) => s.rows.length > 0)
+          .map((section, i) => {
           const accent = section.app ? APP_ACCENT[section.app] : undefined;
           return (
             <section key={section.app ?? `neutral-${i}`} className="mb-6">
@@ -151,7 +169,8 @@ export function AccountHome({
           );
         })}
 
-      {footer && <div className="mt-8">{footer}</div>}
+        {footer && <div className="mt-8">{footer}</div>}
+      </div>
     </div>
   );
 }

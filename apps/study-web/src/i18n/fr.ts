@@ -287,8 +287,12 @@ export default {
   },
 
   accountHub: {
+    // Brand string (#445), not translated -- identical in every language,
+    // same convention as "Sync/Sit" / "Sync/Study".
+    brandTitle: 'Sync/Account',
     title: 'Mon compte',
     subtitle: 'Partagé entre sync/sit, sync/study et sync/do.',
+    neutralSection: 'Compte',
     myAccount: 'Mon compte',
     myFamily: 'Ma famille',
     supervisedKids: 'Enfants supervisés',

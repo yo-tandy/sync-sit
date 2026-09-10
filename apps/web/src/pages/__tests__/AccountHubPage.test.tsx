@@ -76,6 +76,22 @@ describe('AccountHubPage (sit)', () => {
     expect(screen.queryByRole('button', { name: /back|retour/i })).toBeNull();
   });
 
+  it('renders the sticky "Sync/Account" header (#445)', () => {
+    renderHub(PARENT);
+    expect(screen.getByText('Sync/Account')).toBeInTheDocument();
+  });
+
+  it('renders the header regardless of role — it is unconditional, unlike the sections below it', () => {
+    renderHub(ADMIN);
+    expect(screen.getByText('Sync/Account')).toBeInTheDocument();
+  });
+
+  it('orders sections Account, Sync/Sit, Sync/Study for a member who holds both roles (#445)', () => {
+    renderHub(PARENT);
+    const headings = screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent);
+    expect(headings).toEqual(['Account', 'sync/sit', 'sync/study']);
+  });
+
   it('shows a study section even though this is the sit app', () => {
     // The hub is shared: it lists every app's settings, not just the host's.
     renderHub(PARENT);
@@ -215,11 +231,12 @@ describe('AccountHubPage (sit)', () => {
     renderHub(doc);
     expect(screen.queryByText('sync/sit')).toBeNull();
     // The neutral block goes too: its only row is the same per-role account
-    // page. `AccountHome` also renders the hub TITLE as 'My account', so this
-    // asserts the single remaining occurrence is the <h1> and not a row.
-    const myAccount = screen.getAllByText('My account');
-    expect(myAccount).toHaveLength(1);
-    expect(myAccount[0].tagName).toBe('H1');
+    // page, and its section heading ('Account') never renders without a sit
+    // role. The sticky header ('Sync/Account') is unconditional, so it stays
+    // -- it is a different string from the neutral section's own title.
+    expect(screen.queryByText('Account')).toBeNull();
+    expect(screen.queryByText('My account')).toBeNull();
+    expect(screen.getByText('Sync/Account')).toBeInTheDocument();
     for (const bounces of ['Endorsements', 'Favorites', 'Search']) {
       expect(screen.queryByText(bounces)).toBeNull();
     }
