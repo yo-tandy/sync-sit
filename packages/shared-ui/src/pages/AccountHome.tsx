@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { APP_ACCENT, APP_NAME, BRAND_MARKS, type SyncApp } from '../lib/brandMarks.js';
+import { APP_ACCENT, APP_NAME, type AppMark, type SyncApp } from '../lib/brandMarks.js';
 
 /** One destination in the hub. A row with no destination is not a row. */
 export interface AccountRow {
@@ -16,13 +16,20 @@ export interface AccountRow {
   external?: boolean;
 }
 
-export interface AccountSection {
-  /** Omitted for the neutral block; set for a per-app block. */
-  app?: SyncApp;
-  /** Heading for the neutral block. Per-app blocks use the app's own name. */
-  title?: string;
-  rows: AccountRow[];
-}
+/**
+ * A discriminated union, not two independent optional fields (#422): a
+ * per-app block's icon comes from `mark`, supplied by the caller via
+ * `@ejm/shared-ui/brand-marks/sync-<app>-{48,96}.png` rather than resolved
+ * here from a suite-wide lookup -- the lookup that made every app importing
+ * ANY `AccountHome` section ship every app's mark, do's included, whether a
+ * `do` section ever appeared or not. `app` and `mark` are paired for the same
+ * reason `AppSwitchBar`'s `home`/`account` are ONE OBJECT each: an `app` with
+ * no `mark` would be a heading with a silently missing icon rather than a
+ * type error.
+ */
+export type AccountSection =
+  | { app: SyncApp; mark: AppMark; title?: undefined; rows: AccountRow[] }
+  | { app?: undefined; mark?: undefined; title: string; rows: AccountRow[] };
 
 export interface AccountHomeProps {
   sections: AccountSection[];
@@ -78,8 +85,8 @@ export function AccountHome({
                 {section.app ? (
                   <>
                     <img
-                      src={BRAND_MARKS[section.app].sm}
-                      srcSet={`${BRAND_MARKS[section.app].sm} 1x, ${BRAND_MARKS[section.app].md} 2x`}
+                      src={section.mark.sm}
+                      srcSet={`${section.mark.sm} 1x, ${section.mark.md} 2x`}
                       alt=""
                       width={18}
                       height={18}

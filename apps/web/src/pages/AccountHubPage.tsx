@@ -3,10 +3,20 @@ import { useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { httpsCallable } from 'firebase/functions';
 import { AccountHome, type AccountSection } from '@ejm/shared-ui';
+import sitSm from '@ejm/shared-ui/brand-marks/sync-sit-48.png';
+import sitMd from '@ejm/shared-ui/brand-marks/sync-sit-96.png';
+import studySm from '@ejm/shared-ui/brand-marks/sync-study-48.png';
+import studyMd from '@ejm/shared-ui/brand-marks/sync-study-96.png';
 import { getSitRole } from '@ejm/sit-core';
 import { useAuthStore } from '@/stores/authStore';
 import { functions } from '@/config/firebase';
 import { STUDY_APP_URL } from '@/lib/appSwitch';
+
+// Imported directly, not through a shared-ui lookup (#422): this page's own
+// graph then holds only the two marks it actually shows (sync-do never
+// appears here -- decision 20).
+const SIT_MARK = { sm: sitSm, md: sitMd };
+const STUDY_MARK = { sm: studySm, md: studyMd };
 
 /**
  * sync/sit's binding of the shared account hub (#367).
@@ -104,6 +114,7 @@ export function AccountHubPage() {
     },
     {
       app: 'sit' as const,
+      mark: SIT_MARK,
       rows: isParent
         ? [
             { label: t('accountHub.appointments'), href: '/family/appointments' },
@@ -123,6 +134,7 @@ export function AccountHubPage() {
     ...(sitRole ? sitSections : []),
     {
       app: 'study' as const,
+      mark: STUDY_MARK,
       /*
        * ONE row, not a deep-link list (#416 review round 1).
        *

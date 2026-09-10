@@ -1,22 +1,37 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Spinner } from './Spinner.js';
-import { APP_NAME, APP_ORDER, BRAND_MARKS, type SyncApp } from '../lib/brandMarks.js';
+import { APP_NAME, APP_ORDER, type AppMark, type SyncApp } from '../lib/brandMarks.js';
 
 export interface AppSwitchBarProps {
   /** The app this bar is rendered inside. Its tab is active and never hands off. */
   current: SyncApp;
   /**
-   * Sibling apps this bar offers, each with its origin. Order here does NOT
-   * decide display order -- `APP_ORDER` in brandMarks.ts does (#438), fixed
-   * suite-wide so the row never reshuffles depending on which app is current.
+   * The current app's own bar-weight mark, for its own tab.
+   *
+   * A prop rather than a lookup (#422): the host imports exactly the mark it
+   * is, via `@ejm/shared-ui/brand-marks/sync-<app>-{48,96}.png`, so this
+   * component never needs to hold (and no app's bundle ever ships) marks for
+   * apps it does not render a tab for.
+   */
+  currentMark: AppMark;
+  /**
+   * Sibling apps this bar offers, each with its origin and its own
+   * bar-weight mark. Order here does NOT decide display order -- `APP_ORDER`
+   * in brandMarks.ts does (#438), fixed suite-wide so the row never
+   * reshuffles depending on which app is current.
    *
    * OMITTING AN APP HIDES ITS TAB, and that is the gate for sync/do: sit and
    * study pass only each other until #304 (decision 20) is approved. The
    * component takes no view on which apps are reachable -- reachability is a
    * product decision that lives in each app's shell, not in shared-ui.
+   *
+   * `mark` is supplied by the host too (#422), imported directly via
+   * `@ejm/shared-ui/brand-marks/sync-<app>-{48,96}.png` -- not resolved here
+   * from a suite-wide lookup, which is what made every app's dist carry
+   * every app's mark regardless of whether it ever renders that tab.
    */
-  siblings: ReadonlyArray<{ app: SyncApp; url: string }>;
+  siblings: ReadonlyArray<{ app: SyncApp; url: string; mark: AppMark }>;
   /**
    * Mints a one-time handoff code. Injected because shared-ui has no Firebase
    * of its own; each app passes a thin wrapper over its own callable.
@@ -101,6 +116,7 @@ export interface AppSwitchBarProps {
  */
 export function AppSwitchBar({
   current,
+  currentMark,
   siblings,
   mintHandoffCode,
   account,
@@ -167,10 +183,14 @@ export function AppSwitchBar({
   // sit,study; switching to study showed study,sit instead of the same row
   // with a different tab lit up). APP_ORDER is the single source of truth
   // for position; this only decides which of its entries are present.
-  const urlByApp = new Map(siblings.map((s) => [s.app, s.url]));
-  const appTabs: ReadonlyArray<{ app: SyncApp; url?: string }> = APP_ORDER.filter(
-    (app) => app === current || urlByApp.has(app),
-  ).map((app) => ({ app, url: urlByApp.get(app) }));
+  const siblingByApp = new Map(siblings.map((s) => [s.app, s]));
+  const appTabs: ReadonlyArray<{ app: SyncApp; url?: string; mark: AppMark }> = APP_ORDER.filter(
+    (app) => app === current || siblingByApp.has(app),
+  ).map((app) =>
+    app === current
+      ? { app, url: undefined, mark: currentMark }
+      : { app, url: siblingByApp.get(app)!.url, mark: siblingByApp.get(app)!.mark },
+  );
 
   return (
     <nav
@@ -209,10 +229,9 @@ export function AppSwitchBar({
           button also carries h-full, and centers its icon+label column
           inside the row rather than inside its own content-sized box. */}
       <ul className="focus-ring-inset flex h-app-switch-row items-stretch">
-        {appTabs.map(({ app, url }) => {
+        {appTabs.map(({ app, url, mark }) => {
           const isCurrent = app === current;
           const busy = busyApp === app;
-          const mark = BRAND_MARKS[app];
           return (
             <li key={app} className="flex-1">
               <button

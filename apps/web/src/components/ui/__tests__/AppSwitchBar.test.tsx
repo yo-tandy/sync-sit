@@ -12,9 +12,16 @@ import { AppSwitchBar } from '@ejm/shared-ui';
  * §18.2). Lives in apps/web because shared-ui has no test harness of its own
  * (#348) -- the component under test is shared, the runner is sit's.
  */
+
+// Fake marks, not real assets (#422): these tests exercise the component's
+// prop contract, not shared-ui's actual PNGs -- `mark`/`currentMark` are now
+// supplied by the host, so the fixture just needs `-48.`/`-96.` substrings
+// for the "uses bar-weight marks" assertion below.
+const fakeMark = (app: string) => ({ sm: `${app}-48.png`, md: `${app}-96.png` });
+
 const SIBLINGS = [
-  { app: 'study' as const, url: 'https://sync-study-app.web.app' },
-  { app: 'do' as const, url: 'https://sync-do-app.web.app' },
+  { app: 'study' as const, url: 'https://sync-study-app.web.app', mark: fakeMark('study') },
+  { app: 'do' as const, url: 'https://sync-do-app.web.app', mark: fakeMark('do') },
 ];
 
 /**
@@ -31,6 +38,7 @@ function renderBar(props: Partial<React.ComponentProps<typeof AppSwitchBar>> = {
     <I18nextProvider i18n={i18n}>
       <AppSwitchBar
         current="sit"
+        currentMark={fakeMark('sit')}
         siblings={SIBLINGS.slice(0, 1)}
         mintHandoffCode={mint}
         account={{ href: '/family/account', onNavigate: onNavigateAccount }}
@@ -97,6 +105,7 @@ describe('AppSwitchBar', () => {
       <I18nextProvider i18n={i18n}>
         <AppSwitchBar
           current="sit"
+          currentMark={fakeMark('sit')}
           siblings={[SIBLINGS[0]]}
           mintHandoffCode={vi.fn()}
           account={{ href: '/family/account', onNavigate: vi.fn() }}
@@ -112,7 +121,8 @@ describe('AppSwitchBar', () => {
       <I18nextProvider i18n={i18n}>
         <AppSwitchBar
           current="study"
-          siblings={[{ app: 'sit', url: 'https://sync-sit-app.web.app' }]}
+          currentMark={fakeMark('study')}
+          siblings={[{ app: 'sit', url: 'https://sync-sit-app.web.app', mark: fakeMark('sit') }]}
           mintHandoffCode={vi.fn()}
           account={{ href: '/tutor/account', onNavigate: vi.fn() }}
           home={{ href: '/tutor', onNavigate: vi.fn() }}
@@ -355,6 +365,7 @@ describe('AppSwitchBar', () => {
       <I18nextProvider i18n={i18n}>
         <AppSwitchBar
           current="do"
+          currentMark={fakeMark('do')}
           siblings={SIBLINGS}
           mintHandoffCode={vi.fn()}
           pathname="/doer"

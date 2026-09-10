@@ -2,7 +2,7 @@ import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { LanguageSelector } from '../components/LanguageSelector.js';
 import { useDocumentGround } from '../hooks/useDocumentGround.js';
-import { APP_NAME, BRAND_MARKS, type SyncApp } from '../lib/brandMarks.js';
+import { APP_NAME, type AppMark, type SyncApp } from '../lib/brandMarks.js';
 import { RoleOptionCard } from './RoleOptionCard.js';
 import type { SignUpRoleOption } from './SignUpRolePage.js';
 
@@ -17,6 +17,17 @@ export interface UnifiedLandingPageProps {
    * component's.
    */
   roles: SignUpRoleOption[];
+  /**
+   * The three apps' bar-weight marks, one per app, for the brand row below.
+   *
+   * Supplied by the caller (#422) via
+   * `@ejm/shared-ui/brand-marks/sync-{sit,study,do}-{48,96}.png`, not
+   * resolved here from a suite-wide lookup. This page genuinely needs all
+   * three -- it shows `do` too, muted, as "coming soon" -- but the module
+   * itself should still carry no image imports: the app that eventually
+   * wires this page (issue #435 PR4) decides what its own bundle ships.
+   */
+  marks: Record<SyncApp, AppMark>;
 }
 
 /**
@@ -42,7 +53,7 @@ const DISPLAY_APPS: readonly SyncApp[] = ['sit', 'study', 'do'];
  * both resolve to `--color-ground-admin` instead of whichever brand app.css
  * the host happens to have loaded.
  */
-export function UnifiedLandingPage({ roles }: UnifiedLandingPageProps) {
+export function UnifiedLandingPage({ roles, marks }: UnifiedLandingPageProps) {
   useDocumentGround('admin');
   const { t } = useTranslation();
 
@@ -63,7 +74,7 @@ export function UnifiedLandingPage({ roles }: UnifiedLandingPageProps) {
         <div className="mb-8 flex justify-center gap-6">
           {DISPLAY_APPS.map((app) => {
             const disabled = app === 'do';
-            const mark = BRAND_MARKS[app];
+            const mark = marks[app];
             return (
               <div key={app} className="flex w-16 flex-col items-center gap-1.5">
                 <img

@@ -1,10 +1,3 @@
-import sitSm from '../assets/sync-sit-mark-48.png';
-import sitMd from '../assets/sync-sit-mark-96.png';
-import studySm from '../assets/sync-study-mark-48.png';
-import studyMd from '../assets/sync-study-mark-96.png';
-import doSm from '../assets/sync-do-mark-48.png';
-import doMd from '../assets/sync-do-mark-96.png';
-
 /** The three apps in the suite. */
 export type SyncApp = 'sit' | 'study' | 'do';
 
@@ -48,39 +41,35 @@ export const APP_ACCENT: Record<SyncApp, string> = {
 };
 
 /**
- * THE one place bar-size brand marks are resolved.
- *
- * Every consumer goes through here rather than importing an asset directly,
- * so replacing the art is this file plus the assets and touches no app and no
- * component (#386 — the owner is supplying purpose-drawn icons; the current
- * variants are downscales of the 256px illustrations and are interim).
- *
- * `sm` is 48px and `md` is 96px, meant to be used together as src + 2x
- * srcSet for a ~24px slot. The 256px originals are deliberately NOT here:
- * they are for About pages and install prompts, and pulling one into a bar
- * costs ~100 KB per app on every screen (see
- * scripts/__tests__/brand-mark-weights.test.ts).
- *
- * Consumers, exhaustively: `AppSwitchBar` (24px tabs) and each app's
- * `AppSwitchMenuItem` (20px burger rows). The only remaining direct imports
- * of `@ejm/shared-ui/brand-marks/sync-*.png` are the three About pages,
- * which is what those exports are for.
- *
- * KNOWN COST, recorded rather than discovered later (#422). This module is
- * the barrel that d50e3f80 (#302) deliberately avoided: because it imports
- * all six variants statically, every app's dist gets every app's bar-weight
- * mark whether it renders one or not -- verified, sit's build emits
- * sync-do-mark-48/96 (~25 KB) and sit shows no do tab. #302 kept the 256px
- * marks as direct subpath exports precisely so each app's graph held only
- * what it used. That property does not survive an indexable
- * `Record<SyncApp, ...>`; getting it back means giving up the single lookup
- * this file exists to be. Accepted for now -- 25 KB against the ~294 KB the
- * bar-weight variants save, and #386's purpose-drawn glyphs change the
- * arithmetic again -- but it is a real reversal of a documented decision,
- * not an oversight.
+ * A bar-weight brand mark: 48px (`sm`) and 96px (`md`), meant to be used
+ * together as `src` + 2x `srcSet` for a ~24px slot -- never the 256px
+ * originals, which cost ~100 KB each and are for About pages and install
+ * prompts (see scripts/__tests__/brand-mark-weights.test.ts).
  */
-export const BRAND_MARKS: Record<SyncApp, { sm: string; md: string }> = {
-  sit: { sm: sitSm, md: sitMd },
-  study: { sm: studySm, md: studyMd },
-  do: { sm: doSm, md: doMd },
-};
+export interface AppMark {
+  sm: string;
+  md: string;
+}
+
+/**
+ * NO `BRAND_MARKS` HERE, ON PURPOSE (#422).
+ *
+ * This file used to export a `Record<SyncApp, AppMark>` built from six
+ * static PNG imports, so every consumer could index it by app. That is
+ * exactly the barrel shape d50e3f80 (#302) chose PNG subpath exports to
+ * avoid: because the object imported all six variants at module scope, every
+ * app that imported ANYTHING from this module shipped every app's bar-weight
+ * marks in its dist, whether it rendered them or not -- verified, sit's and
+ * study's builds each emitted the ~25 KB sync-do-mark-48/96 despite showing
+ * no do tab (decision 20 gates that reachability until #304).
+ *
+ * The fix moves mark SELECTION back to the host: `AppSwitchBar`'s
+ * `currentMark`/`siblings[].mark` and `AccountHome`'s `AccountSection.mark`
+ * now take an `AppMark` from the caller, imported directly via
+ * `@ejm/shared-ui/brand-marks/sync-{sit,study,do}-{48,96}.png`. Each app's
+ * graph then holds only the marks its own call sites reference -- the same
+ * property #302 established for the 256px originals, restored for the
+ * bar-weight ones. `UnifiedLandingPage` (always shows all three, `do` muted)
+ * takes a `marks: Record<SyncApp, AppMark>` prop for the same reason: the
+ * eventual consuming app supplies the marks, this module does not.
+ */
