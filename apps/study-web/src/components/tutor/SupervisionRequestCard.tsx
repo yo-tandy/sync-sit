@@ -43,6 +43,7 @@ export function SupervisionRequestCard() {
       const snap = await getDoc(doc(db, 'guardianLinks', uid));
       if (!mountedRef.current) return;
       setLink(snap.exists() ? (snap.data() as GuardianLinkDoc) : null);
+    // eslint-disable-next-line no-restricted-syntax -- best-effort: unreadable guardian link doc just hides the card; the request still reaches the kid via notification
     } catch {
       // Unreadable link doc → no card (the request still reaches the kid via
       // notification; this surface is best-effort).
@@ -66,7 +67,8 @@ export function SupervisionRequestCard() {
       await fn({ accept });
       await load();
       await refreshUserDoc();
-    } catch {
+    } catch (err) {
+      console.error('[supervision] respond to request failed', err);
       if (mountedRef.current) setError(t('supervision.error'));
     } finally {
       if (mountedRef.current) setActing(false);

@@ -107,14 +107,16 @@ function runHandoffOnce(params: URLSearchParams, i18nInstance: I18n): Promise<st
         const userDoc = snap.exists() ? (snap.data() as StudyUser) : null;
         useAuthStore.setState({ firebaseUser: cred.user, userDoc, loading: false });
         return validNext ?? postLoginRouter(getStudyRole(userDoc), userDoc);
-      } catch {
+      } catch (err) {
+        console.error('[handoff] post-login user doc load failed', err);
         // Past sign-in the user IS authenticated and the code is consumed —
         // the "switch again" screen would strand them. Land on the default
         // entrance instead; the app re-reads the user doc from there.
         useAuthStore.setState({ firebaseUser: cred.user, userDoc: null, loading: false });
         return validNext ?? postLoginRouter(getStudyRole(null));
       }
-    } catch {
+    } catch (err) {
+      console.error('[handoff] token exchange failed', err);
       return null;
     }
   })();

@@ -116,7 +116,8 @@ export function RequestsPage() {
         ),
       );
       toast(t('family.requests.status.cancelled'));
-    } catch {
+    } catch (err) {
+      console.error('[requests] cancel contact request failed', err);
       setCancelError(t('family.requests.actionError'));
     } finally {
       setCancellingId(null);
