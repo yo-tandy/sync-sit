@@ -101,12 +101,14 @@ describe('lookupTutor — identity search (issue #437)', () => {
   });
 
   it('returns multiple matches for a query that fits several tutors', async () => {
+    // Email matching is exact (no domain/substring enumeration), so a
+    // multi-match query has to come from the name path: 'el' is a substring
+    // of both 'Yael' (tutor2) and 'Daniel' (tutor3). Only searchable tutors
+    // surface — tutor3 (searchable=false) and tutor1 (enrollmentComplete=
+    // false, and 'Noa Katz' doesn't match anyway) must not.
     const { results } = await callFunction<{ results: LookupResult[] }>(
-      'lookupTutor', { query: 'ejm.org' }, parent1Token,
+      'lookupTutor', { query: 'el' }, parent1Token,
     );
-    // Every seeded tutor's email ends in @ejm.org, but only searchable ones
-    // (tutor2) surface — tutor1 (enrollmentComplete=false) and tutor3
-    // (searchable=false) must not.
     expect(results.find((r) => r.uid === seed.tutor2.uid)).toBeDefined();
     expect(results.find((r) => r.uid === seed.tutor3.uid)).toBeUndefined();
     expect(results.find((r) => r.uid === seed.tutor1.uid)).toBeUndefined();
