@@ -127,7 +127,9 @@ pnpm install
 
 # Start Firebase emulators (runs under the demo-test project — auth,
 # functions, firestore, storage; hosting is excluded because its named
-# targets only resolve for the real sync-sit project)
+# targets only resolve for the real sync-sit project). Builds
+# packages/*/dist + both functions codebases first, so this always runs
+# current code rather than whatever was last built (issue #413).
 pnpm emulators
 
 # Integration tests can run WITHOUT killing this dev stack via the second
@@ -201,7 +203,7 @@ The cross-app switch target is configurable (defaults to the production URLs bak
 | `pnpm build` | Build sit web app for production |
 | `pnpm build:study` / `pnpm build:do` | Build the study / do web apps |
 | `pnpm build:functions` | Compile Cloud Functions |
-| `pnpm emulators` | Start Firebase emulators (lane 1) |
+| `pnpm emulators` | Build shared packages + both functions codebases, then start Firebase emulators (lane 1) |
 | `pnpm seed:admin` | Create admin user in emulator |
 | `pnpm seed:test-data` | Seed families, babysitters and sample appointments |
 | `pnpm seed:admin:lane3` / `pnpm seed:test-data:lane3` | The same, into emulator lane 3 (`lane2` / `lane4` too; or `LANE=N pnpm seed:admin`) |
