@@ -1,15 +1,18 @@
 import { randomUUID } from 'node:crypto';
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { getStorage } from 'firebase-admin/storage';
-import { isAdmin, getParentProfile, isRenderableDocType, type User } from '@ejm/shared-core';
+import {
+  isAdmin,
+  getParentProfile,
+  isRenderableDocType,
+  MAX_FAMILY_PHOTO_BYTES,
+  type User,
+} from '@ejm/shared-core';
 import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { createSignedUploadUrl } from '../storage/signedUploadUrl.js';
 
-/** Mirrors both web clients' existing 10 MB cap (VerificationPage's
- *  MAX_FILE_SIZE, FamilySettingsPage's 5 MB photo check) and storage.rules'
- *  verification-documents/profile-photos/do-uploads cap. */
-export const MAX_FAMILY_PHOTO_BYTES = 10 * 1024 * 1024;
+export { MAX_FAMILY_PHOTO_BYTES };
 
 /** Explicit allowlist for the OBJECT NAME's extension — separate from, and
  *  narrower than, the isRenderableDocType CONTENT-TYPE denylist below. The
@@ -83,14 +86,12 @@ export const createFamilyPhotoUploadUrl = onCall(
     if (typeof sizeBytes !== 'number' || !Number.isFinite(sizeBytes) || sizeBytes < 0) {
       throw new HttpsError('invalid-argument', 'sizeBytes is required');
     }
-    // ADVISORY ONLY: this bounds the CLIENT-DECLARED size, not the bytes
-    // actually PUT to the signed URL. A V4 signed PUT URL (unlike a POST
-    // policy) has no content-length-range condition to bind into the
-    // signature, so a caller that lies about sizeBytes here can still PUT
-    // an oversized body — GCS will accept it. Closing that gap needs either
-    // a POST policy (different client upload shape) or a follow-up
-    // Cloud Storage trigger that deletes/flags oversized objects after the
-    // fact; out of scope for this issue (#471), called out in the PR.
+    // Fast-fail on the CLIENT-DECLARED size before doing any Firestore/
+    // Storage work. The REAL enforcement is server-side, at the bucket:
+    // createSignedUploadUrl below binds MAX_FAMILY_PHOTO_BYTES into the V4
+    // signature as the x-goog-content-length-range extension header, and
+    // GCS rejects any PUT whose actual Content-Length falls outside
+    // 0..MAX_FAMILY_PHOTO_BYTES — see that function's doc comment.
     if (sizeBytes > MAX_FAMILY_PHOTO_BYTES) {
       throw new HttpsError('invalid-argument', 'Photo must be under 10 MB');
     }
@@ -130,6 +131,7 @@ export const createFamilyPhotoUploadUrl = onCall(
         path,
         contentType,
         ttlMs: SIGNED_URL_TTL_MS,
+        maxBytes: MAX_FAMILY_PHOTO_BYTES,
       });
       return { url, path };
     } catch (err) {

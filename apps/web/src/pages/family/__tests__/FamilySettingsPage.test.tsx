@@ -128,6 +128,13 @@ function reset() {
   h.updateDoc.mockClear();
   h.addDoc.mockClear();
   h.deleteDoc.mockClear();
+  // mockClear() only clears calls, not an implementation a PRIOR test
+  // installed via mockImplementation() (e.g. the orphan-cleanup tests below
+  // make updateDoc/deleteDoc reject) — restore the success defaults so that
+  // doesn't leak into the next test.
+  h.updateDoc.mockImplementation(() => Promise.resolve());
+  h.addDoc.mockImplementation(() => Promise.resolve({ id: 'newkid' }));
+  h.deleteDoc.mockImplementation(() => Promise.resolve());
   h.httpsCallable.mockClear();
   h.getDownloadURL.mockClear();
   h.deleteObject.mockClear();
@@ -261,7 +268,7 @@ describe('family FamilySettingsPage', () => {
     return file;
   }
 
-  it('uploads via the signed-URL callable, then PUTs the file with the bound Content-Type, then saves the resulting download URL', async () => {
+  it('uploads via the signed-URL callable, then PUTs the file with the bound Content-Type AND x-goog-content-length-range headers, then saves the resulting download URL', async () => {
     renderPage();
     await screen.findByLabelText(/family name/i);
     await selectPhoto();
@@ -281,7 +288,14 @@ describe('family FamilySettingsPage', () => {
       'https://signed.example.com/put',
       expect.objectContaining({
         method: 'PUT',
-        headers: { 'Content-Type': 'image/jpeg' },
+        // Both headers are bound into the V4 signature server-side, so both
+        // must ride on the PUT or GCS rejects it with SignatureDoesNotMatch
+        // — x-goog-content-length-range is the REAL size cap (issue #471
+        // follow-up), enforced by GCS against the actual bytes sent.
+        headers: {
+          'Content-Type': 'image/jpeg',
+          'x-goog-content-length-range': '0,10485760',
+        },
       }),
     );
     await waitFor(() =>
@@ -348,9 +362,13 @@ describe('family FamilySettingsPage', () => {
     );
   });
 
-  it('shows the generic upload-error copy (reusing the existing error slot) when the callable rejects (e.g. a non-member)', async () => {
+  it('shows the SPECIFIC unauthorized copy (not the generic key) when the callable rejects with a non-member/functions error code', async () => {
+    // The web SDK's httpsCallable prefixes rejection codes with
+    // "functions/" (see e.g. apps/web SearchPage.tsx's own
+    // 'functions/resource-exhausted' check) — uploadErrorKey (issue #482
+    // review) maps this to uploadErrorUnauthorized, not the generic key.
     h.httpsCallable.mockImplementation(() =>
-      Promise.reject(Object.assign(new Error('permission-denied'), { code: 'permission-denied' })),
+      Promise.reject(Object.assign(new Error('permission-denied'), { code: 'functions/permission-denied' })),
     );
     renderPage();
     await screen.findByLabelText(/family name/i);
@@ -358,12 +376,14 @@ describe('family FamilySettingsPage', () => {
     fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
 
     await waitFor(() =>
-      expect(screen.getByText('familySettings.uploadError')).toBeInTheDocument(),
+      expect(screen.getByText('familySettings.uploadErrorUnauthorized')).toBeInTheDocument(),
     );
     expect(h.updateDoc).not.toHaveBeenCalled();
   });
 
-  it('shows the generic upload-error copy when the signed PUT itself fails', async () => {
+  it('shows the SPECIFIC connection-problem copy (not the generic key) when the signed PUT itself fails', async () => {
+    // uploadFamilyPhoto tags a failed PUT with code: 'upload/network'
+    // (issue #482 review) precisely so this maps to uploadErrorConnection.
     fetchMock.mockResolvedValue({ ok: false, status: 403 } as Response);
     renderPage();
     await screen.findByLabelText(/family name/i);
@@ -371,8 +391,57 @@ describe('family FamilySettingsPage', () => {
     fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
 
     await waitFor(() =>
-      expect(screen.getByText('familySettings.uploadError')).toBeInTheDocument(),
+      expect(screen.getByText('familySettings.uploadErrorConnection')).toBeInTheDocument(),
     );
     expect(h.updateDoc).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the generic copy for an unrecognized error (e.g. a plain thrown Error with no code)', async () => {
+    h.getDownloadURL.mockImplementation(() => Promise.reject(new Error('boom')));
+    renderPage();
+    await screen.findByLabelText(/family name/i);
+    await selectPhoto();
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
+
+    await waitFor(() =>
+      expect(screen.getByText('familySettings.uploadError')).toBeInTheDocument(),
+    );
+  });
+
+  it('best-effort deletes the just-uploaded object if updateDoc fails after a successful upload (orphan cleanup, issue #482 review)', async () => {
+    h.updateDoc.mockImplementation(() => Promise.reject(new Error('network blip')));
+    renderPage();
+    await screen.findByLabelText(/family name/i);
+    await selectPhoto();
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
+
+    await waitFor(() =>
+      expect(h.deleteObject).toHaveBeenCalledWith(
+        expect.objectContaining({ path: 'family-photos/fam1/uuid.jpg' }),
+      ),
+    );
+    expect(screen.getByText('familySettings.uploadError')).toBeInTheDocument();
+  });
+
+  it('does NOT delete the new object if updateDoc SUCCEEDS but a later step (kid sync) fails', async () => {
+    h.deleteDoc.mockImplementation(() => Promise.reject(new Error('kid sync blip')));
+    h.kids = [{ id: 'kid1', data: { firstName: 'Existing', age: 5 } }];
+    renderPage();
+    await screen.findByLabelText(/family name/i);
+    await selectPhoto();
+    // Remove the existing kid so the (failing) deleteDoc path is hit,
+    // AFTER updateDoc(families/fam1) has already committed the new photo.
+    fireEvent.click(screen.getByLabelText(/remove/i));
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
+
+    await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(screen.getByText('familySettings.uploadError')).toBeInTheDocument(),
+    );
+    // The family doc already points at family-photos/fam1/uuid.jpg — deleting
+    // it here would orphan the family's OWN current photo.
+    expect(h.deleteObject).not.toHaveBeenCalledWith(
+      expect.objectContaining({ path: 'family-photos/fam1/uuid.jpg' }),
+    );
   });
 });

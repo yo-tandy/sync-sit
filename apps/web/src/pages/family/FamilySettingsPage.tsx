@@ -20,7 +20,7 @@ import { AddressAutocomplete, type AddressResult } from '@/components/forms/Addr
 import { XIcon, PlusIcon } from '@/components/ui/Icons';
 import type { FamilyDoc, KidDoc } from '@ejm/sit-core';
 import { getParentView } from '@ejm/sit-core';
-import { uploadErrorKey } from '@ejm/shared-core';
+import { uploadErrorKey, MAX_FAMILY_PHOTO_BYTES } from '@ejm/shared-core';
 
 interface CreateFamilyPhotoUploadUrlRequest {
   familyId: string;
@@ -47,15 +47,41 @@ async function uploadFamilyPhoto(familyId: string, file: File): Promise<string> 
     'createFamilyPhotoUploadUrl',
   );
   const { data } = await fn({ familyId, contentType, fileName: file.name, sizeBytes: file.size });
-  // The callable binds contentType into the V4 signature — this header
-  // MUST match exactly or GCS rejects the PUT with SignatureDoesNotMatch.
-  const putRes = await fetch(data.url, {
-    method: 'PUT',
-    headers: { 'Content-Type': contentType },
-    body: file,
-  });
+  // The callable binds BOTH headers into the V4 signature — a signed
+  // extension header must be present on the request, or GCS rejects the
+  // PUT with SignatureDoesNotMatch:
+  // - Content-Type must match exactly.
+  // - x-goog-content-length-range is the REAL size cap (GCS enforces it at
+  //   the bucket against the actual bytes sent); the callable's sizeBytes
+  //   check is only a fast-fail on what this request CLAIMS.
+  // Neither a rejected `fetch` (network/CORS failure — no `.code` at all)
+  // nor a non-2xx response (a plain `Error`, also no `.code`) match any
+  // case in `uploadErrorKey` (packages/shared-core) on their own — that
+  // function only recognizes Storage `storage/*` and Functions
+  // `functions/*` codes. Tagging both with `code: 'upload/network'` here is
+  // this flow's half of that contract, so a failed PUT gets the
+  // connection-problem copy instead of silently falling through to the
+  // generic one (review round on PR #482).
+  let putRes: Response;
+  try {
+    putRes = await fetch(data.url, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': contentType,
+        'x-goog-content-length-range': `0,${MAX_FAMILY_PHOTO_BYTES}`,
+      },
+      body: file,
+    });
+  } catch (err) {
+    throw Object.assign(new Error('Photo upload failed (network error)'), {
+      code: 'upload/network',
+      cause: err,
+    });
+  }
   if (!putRes.ok) {
-    throw new Error(`Photo upload failed (${putRes.status})`);
+    throw Object.assign(new Error(`Photo upload failed (${putRes.status})`), {
+      code: 'upload/network',
+    });
   }
   return data.path;
 }
@@ -185,11 +211,22 @@ export function FamilySettingsPage() {
     // state the save may itself update.
     const originalPath = pathFromDownloadUrl(originalPhotoUrlRef.current);
     const photoChanged = photoFile !== null || photoPreview !== originalPhotoUrlRef.current;
+    // Hoisted above the try (issue #482 review): if uploadFamilyPhoto
+    // succeeds but a LATER step in this function throws (updateDoc, kid
+    // sync), the catch block below needs to know a new object was actually
+    // written, to best-effort delete it rather than leave it orphaned.
+    // Stays null unless uploadFamilyPhoto returns, i.e. the object is
+    // confirmed to exist.
+    let newPath: string | null = null;
+    // Distinguishes "upload succeeded but updateDoc never committed it"
+    // (newPath is an orphan — clean it up) from "updateDoc committed it,
+    // then something LATER failed" (newPath is now the family's real
+    // photo — must NOT be deleted just because kid-sync throws afterward).
+    let familyDocUpdated = false;
 
     try {
       // Upload photo if changed
       let photoUrl: string | null = photoPreview;
-      let newPath: string | null = null;
       if (photoFile) {
         newPath = await uploadFamilyPhoto(familyId, photoFile);
         photoUrl = await getDownloadURL(ref(storage, newPath));
@@ -208,6 +245,7 @@ export function FamilySettingsPage() {
         photoUrl,
         updatedAt: serverTimestamp(),
       });
+      familyDocUpdated = true;
 
       // Delete the previous photo object now that the family doc points
       // elsewhere (or nowhere) — best-effort, same swallow-the-error
@@ -258,10 +296,21 @@ export function FamilySettingsPage() {
 
       toast(t('familySettings.saved'));
     } catch (err: unknown) {
+      // Orphan cleanup (issue #482 review): the upload succeeded (newPath
+      // is set) but updateDoc never committed it to the family doc — the
+      // object is unreachable from anywhere in the app, so best-effort
+      // delete it rather than leave it billed forever. Swallowed the same
+      // way family/AccountPage.tsx's photo cleanup is: this is cost
+      // hygiene, not correctness — a failure here must not mask the real
+      // error already being surfaced below.
+      if (newPath && !familyDocUpdated) {
+        deleteObject(ref(storage, newPath)).catch(() => {});
+      }
       // The existing (only) error slot on this page, reused for the photo
       // upload path (issue #471) via the same uploadErrorKey mapping
-      // VerificationPage uses — storage/* codes if the fetch/callable
-      // surfaces one, the page's own generic key otherwise.
+      // VerificationPage uses — storage/*, functions/*, or upload/network
+      // codes if the callable/fetch surfaces one, the page's own generic
+      // key otherwise.
       console.error('[familySettings] save failed', err);
       setError(t(`familySettings.${uploadErrorKey(err)}`));
     } finally {

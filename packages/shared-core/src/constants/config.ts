@@ -10,6 +10,17 @@ export const MIN_BABYSITTER_AGE = 15;
 export const MAX_PHOTO_SIZE = 5 * 1024 * 1024;
 
 /**
+ * Max family-photo upload size in bytes (10 MB) — issue #471. Shared
+ * between the server (createFamilyPhotoUploadUrl, which binds it into the
+ * V4 signed URL as the x-goog-content-length-range extension header — the
+ * REAL enforcement, at the bucket) and the client (FamilySettingsPage,
+ * which must send that SAME header value on the PUT, or GCS's
+ * SignatureDoesNotMatch rejects the request outright), so the two can never
+ * drift out of sync.
+ */
+export const MAX_FAMILY_PHOTO_BYTES = 10 * 1024 * 1024;
+
+/**
  * Current consent-document versions. The guardian callables require callers
  * to send versions EQUAL to these (stale consent → invalid-argument), so a
  * bump here forces clients to re-present the documents.

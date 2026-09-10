@@ -66,4 +66,27 @@ describe('createSignedUploadUrl', () => {
     });
     expect(calls[0].action).not.toBe('read');
   });
+
+  it('binds maxBytes into the signature as x-goog-content-length-range, "0,<maxBytes>" — the REAL server-side size enforcement (GCS rejects the PUT outside this range at the bucket, unlike a caller-declared size check)', async () => {
+    const calls: Record<string, unknown>[] = [];
+    await createSignedUploadUrl({
+      bucket: fakeBucket(calls),
+      path: 'p',
+      contentType: 'image/jpeg',
+      maxBytes: 10 * 1024 * 1024,
+    });
+    expect(calls[0].extensionHeaders).toEqual({
+      'x-goog-content-length-range': '0,10485760',
+    });
+  });
+
+  it('omits extensionHeaders entirely when maxBytes is not given', async () => {
+    const calls: Record<string, unknown>[] = [];
+    await createSignedUploadUrl({
+      bucket: fakeBucket(calls),
+      path: 'p',
+      contentType: 'image/jpeg',
+    });
+    expect(calls[0].extensionHeaders).toBeUndefined();
+  });
 });

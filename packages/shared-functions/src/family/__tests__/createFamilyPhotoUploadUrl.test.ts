@@ -154,6 +154,10 @@ describe('createFamilyPhotoUploadUrl', () => {
       action: 'write',
       version: 'v4',
       contentType: 'image/jpeg',
+      // The REAL size enforcement (GCS rejects the PUT outside this range
+      // at the bucket) — the sizeBytes request-body check above is only a
+      // fast-fail on what the client CLAIMS, not what it actually sends.
+      extensionHeaders: { 'x-goog-content-length-range': '0,10485760' },
     });
     const expires = h.signedUrlCalls[0].expires as number;
     expect(expires).toBeGreaterThanOrEqual(before + 5 * 60 * 1000 - 2000);
