@@ -59,14 +59,36 @@ export interface AccountHomeProps {
  * sticky header below renders no back affordance of its own for the same
  * reason (#445).
  *
- * STICKY HEADER (#445). Every other authed page carries a sticky top banner
- * (`AppBar`); the hub previously had none, just an in-body `<h1>`. This one
- * is neutral (gray, not `--color-brand-*`, same rule as the rest of the
- * page) and titled with the hub's own brand string, "Sync/Account" --
- * identical in every language, the same convention as "Sync/Sit" /
- * "Sync/Study" (see `accountHub.brandTitle` and `APP_NAME`). It lives here,
- * in the shared component, rather than in each host's layout, so every app
- * that mounts `AccountHome` gets it once rather than reimplementing it.
+ * STICKY, FULL-BLEED HEADER (#445). Every other authed page carries a sticky
+ * top banner spanning the full viewport (`AppBar`, `sticky top-0 z-40 ...`
+ * inside its OWN layout, rendered above the width-capped `PageContainer`);
+ * the hub previously had none, just an in-body `<h1>`. This one has to match
+ * that full-bleed SHAPE without the luxury `AppBar` has of living outside
+ * `PageContainer` -- `AccountHome` is the routed content itself, so it is
+ * always a descendant of whatever width cap its host applies. `position:
+ * fixed` sides steps the problem instead of fighting it: unlike `sticky`,
+ * a fixed element's containing block is the viewport regardless of any
+ * width-capped ancestor, which is exactly the same trick `AppSwitchBar`
+ * already uses for the hub's OWN bottom bar (`fixed inset-x-0 bottom-0`).
+ * The `h-12` spacer right after it reserves the header's height in normal
+ * flow, mirroring `pb-app-switch-bar`'s reservation for that bottom bar --
+ * a fixed element still needs something in-flow to stand in for it, or the
+ * first section renders underneath it.
+ *
+ * Neutral tone, not `AppBar`'s brand-colored `bg-brand-600`: `bg-ground-admin`
+ * is the SAME neutral ground token `AccountLayout` already stamps onto
+ * `<html>` for this page (`useDocumentGround('admin')`), so the header reads
+ * as one continuous neutral surface with the page behind it, just marked off
+ * by a bottom border. Titled with the hub's own brand string, "Sync/Account"
+ * -- identical in every language, the same convention as "Sync/Sit" /
+ * "Sync/Study" (see `accountHub.brandTitle` and `APP_NAME`). TITLE ONLY: no
+ * back button (the docstring above), and no bell or menu either -- those are
+ * app-specific chrome that `AppBar` owns for ITS app, and the whole point of
+ * this page is to own no app's chrome (decision 24).
+ *
+ * It lives here, in the shared component, rather than in each host's layout,
+ * so every app that mounts `AccountHome` gets it once rather than
+ * reimplementing it.
  *
  * Rows are DATA. A destination that does not exist is an absent row, never a
  * disabled one -- study has no family "favorites" and sync-do has no account
@@ -82,13 +104,21 @@ export function AccountHome({
   const { t } = useTranslation();
 
   return (
-    <div>
-      {/* Sticky, neutral, no back button -- see the docstring above. */}
-      <div className="sticky top-0 z-40 flex h-12 items-center justify-center border-b border-gray-200 bg-white px-4">
+    <>
+      {/* Fixed, full-bleed, neutral, no back button/bell/menu -- see the
+          docstring above. `inset-x-0` + `fixed` is what makes it span the
+          viewport regardless of `PageContainer`'s width cap; `sticky` alone
+          (like `TopNav`'s) would only span whatever ancestor it is inside. */}
+      <header className="fixed inset-x-0 top-0 z-40 flex h-12 items-center justify-center border-b border-gray-200 bg-ground-admin px-4">
         <span className="text-sm font-semibold text-gray-900">
           {t('accountHub.brandTitle')}
         </span>
-      </div>
+      </header>
+      {/* Reserves the fixed header's height in normal flow -- same
+          reservation pattern as `pb-app-switch-bar` for the fixed bottom
+          bar, just local to this one component since header and content
+          are both owned here. */}
+      <div className="h-12" aria-hidden="true" />
 
       <div className="px-5 pt-4 pb-8">
         <p className="mb-6 text-sm text-gray-500">{t('accountHub.subtitle')}</p>
@@ -171,7 +201,7 @@ export function AccountHome({
 
         {footer && <div className="mt-8">{footer}</div>}
       </div>
-    </div>
+    </>
   );
 }
 

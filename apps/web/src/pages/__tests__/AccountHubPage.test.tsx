@@ -92,6 +92,16 @@ describe('AccountHubPage (sit)', () => {
     expect(headings).toEqual(['Account', 'sync/sit', 'sync/study']);
   });
 
+  it('the header is fixed and full-bleed, not confined to the width-capped column this page renders inside', () => {
+    // AccountHubPage is routed inside AccountLayout's PageContainer
+    // (max-w-2xl) -- `fixed` is what keeps the header spanning the full
+    // viewport there rather than reading as a card strip on desktop.
+    renderHub(PARENT);
+    const header = screen.getByText('Sync/Account').closest('header')!;
+    expect(header.className).toMatch(/\bfixed\b/);
+    expect(header.className).toMatch(/\binset-x-0\b/);
+  });
+
   it('shows a study section even though this is the sit app', () => {
     // The hub is shared: it lists every app's settings, not just the host's.
     renderHub(PARENT);

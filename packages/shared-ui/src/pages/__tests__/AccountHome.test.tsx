@@ -35,8 +35,42 @@ describe('AccountHome sticky header (#445)', () => {
     expect(screen.queryByRole('button', { name: /back|retour/i })).toBeNull();
     // Defensive: the header itself contains no button at all -- only the
     // rows below it do, and those are navigation rows, not a back arrow.
-    const header = screen.getByText('Sync/Account').closest('div')!;
+    const header = screen.getByText('Sync/Account').closest('header')!;
     expect(within(header).queryAllByRole('button')).toHaveLength(0);
+  });
+
+  it('has no bell or menu either -- that is app-specific chrome AppBar owns, not this neutral page', () => {
+    renderHome(BOTH_ROLES_SECTIONS);
+    const header = screen.getByText('Sync/Account').closest('header')!;
+    // The header contains exactly the title span and nothing else
+    // interactive or iconographic.
+    expect(within(header).queryAllByRole('button')).toHaveLength(0);
+    expect(within(header).queryAllByRole('link')).toHaveLength(0);
+    expect(within(header).queryAllByRole('img')).toHaveLength(0);
+  });
+
+  it('is fixed and full-bleed, not confined to the width-capped content column (#445 review)', () => {
+    // A sticky header confined to whatever ancestor wraps AccountHome (e.g.
+    // apps/web's `PageContainer`, max-w-2xl) would read as a card strip
+    // rather than a banner on anything wider than a phone. `fixed` escapes
+    // that ancestor's width entirely -- its containing block is the
+    // viewport -- the same trick `AppSwitchBar` already uses for the hub's
+    // own bottom bar.
+    renderHome(BOTH_ROLES_SECTIONS);
+    const header = screen.getByText('Sync/Account').closest('header')!;
+    expect(header.className).toMatch(/\bfixed\b/);
+    expect(header.className).toMatch(/\binset-x-0\b/);
+    expect(header.className).not.toMatch(/\bsticky\b/);
+    // Not a descendant of the padded content column the sections render in.
+    const contentColumn = screen.getByText('sync/sit').closest('.px-5')!;
+    expect(contentColumn.contains(header)).toBe(false);
+  });
+
+  it('is neutral -- the same admin ground token the page stamps on <html>, never a brand colour', () => {
+    renderHome(BOTH_ROLES_SECTIONS);
+    const header = screen.getByText('Sync/Account').closest('header')!;
+    expect(header.className).toMatch(/\bbg-ground-admin\b/);
+    expect(header.className).not.toMatch(/bg-brand/);
   });
 });
 
