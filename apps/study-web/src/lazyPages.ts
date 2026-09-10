@@ -134,6 +134,12 @@ export const HandoffPage = lazy(() =>
 export const CrossAppWelcomePage = lazy(() =>
   import('@/pages/public/CrossAppWelcomePage').then((m) => ({ default: m.CrossAppWelcomePage })),
 );
+// issue #435 milestone, PR4: the unified flow's study-side landing page.
+export const StudentCrossAppWelcomePage = lazy(() =>
+  import('@/pages/public/StudentCrossAppWelcomePage').then((m) => ({
+    default: m.StudentCrossAppWelcomePage,
+  })),
+);
 export const SupervisionAgreementPage = lazy(() =>
   import('@/pages/public/SupervisionAgreementPage').then((m) => ({
     default: m.SupervisionAgreementPage,

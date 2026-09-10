@@ -74,6 +74,11 @@ describe('postLoginRouter (study)', () => {
     expect(postLoginRouter(undefined, null)).toBe('/signup');
     expect(postLoginRouter(undefined)).toBe('/signup');
   });
+
+  it('routes a root-only unified-flow identity to /tutor/welcome-crossapp (issue #435 PR4)', () => {
+    const rootOnlyIdentityDoc = { profiles: {}, ejemEmail: 'iris28@ejm.org' } as unknown as StudyUser;
+    expect(postLoginRouter(undefined, rootOnlyIdentityDoc)).toBe('/tutor/welcome-crossapp');
+  });
 });
 
 describe('canCrossAppEnrollTutor', () => {

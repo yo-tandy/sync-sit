@@ -92,6 +92,16 @@ export function postLoginRouter(role: string | undefined, userDoc?: StudyUser | 
   if (userDoc && isBabysitter(userDoc)) {
     return canCrossAppEnrollTutor(userDoc) ? '/welcome-study' : '/enroll/tutor';
   }
+  // Root-only unified-flow identity (issue #435 milestone, PR4): arrived via
+  // the cross-origin handoff from apps/web's /enroll/choose-app (or is
+  // re-logging in after abandoning that landing before finishing) —
+  // verified EJM identity on file, no role profile at all yet, never a
+  // babysitter (that case is handled above). Land on the dedicated welcome
+  // page rather than /signup, which would ask the role question again for
+  // information the unified flow already collected.
+  if (userDoc && getEjemEmail(userDoc)) {
+    return '/tutor/welcome-crossapp';
+  }
   // Foreign-profile-only users (no study role) go to /signup, not dead-end '/'.
   return '/signup';
 }

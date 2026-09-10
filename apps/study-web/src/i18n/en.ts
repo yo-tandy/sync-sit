@@ -1387,6 +1387,16 @@ export default {
     photoSizeError: 'Photo must be smaller than 5 MB.',
     addressLabel: 'Address (optional)',
     addressHint: 'This helps optimize your search results — families see how far away you are.',
+    roleStudent: "I'm a student",
+    roleStudentDesc: 'Babysit, tutor, or both — one account across the whole EJM community.',
+    roleParent: "I'm a parent",
+    roleParentDesc: 'Find a babysitter, book a tutor, and manage your family.',
+    studentTitle: 'Create your account',
+    chooseAppTitle: "You're all set — what next?",
+    chooseAppSubtitle: 'Your details are saved. Pick where you want to finish enrolling.',
+    chooseSitDesc: 'Offer babysitting to EJM families.',
+    chooseStudyDesc: 'Offer tutoring to EJM families.',
+    chooseDoDesc: 'Odd jobs and errands for EJM families.',
   },
 
   privacy: {
