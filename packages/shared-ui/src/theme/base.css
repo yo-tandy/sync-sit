@@ -91,8 +91,10 @@
   /* Shadows — Recess wants weight UNDER a card rather than a soft halo
      around it. The offset is vertical-only and the blur small, so cards
      read as sitting on the ground rather than floating over it.
-     --shadow-card-brand is the tinted variant; each app's theme sets
-     --shadow-card-tint to its own hue (see sit.css).
+     --shadow-card-brand is the tinted variant; each app's stylesheet sets
+     --shadow-card-tint to its own hue (see sit.css) from a plain :root
+     block, not from inside @theme -- see the :root block just below this
+     one for why (#423).
 
      The tint carries a FALLBACK (review round 1): a bare
      var(--shadow-card-tint) is invalid at computed-value time if the tint
@@ -107,10 +109,11 @@
   /* Admin is NEUTRAL (decision 25): its own gray ground and shadow tint, so
      no app's brand reaches admin chrome. Defined in base rather than per app
      because admin looks the same whichever app hosts it -- that is the point
-     of the decision. The tint is WIRED in the @layer base rule below; on its
-     own this line is just a value nothing reads. */
+     of the decision. --shadow-card-tint-admin itself is declared in the
+     plain :root block just below this @theme block, not here -- see that
+     block for why (#423). The tint is WIRED in the @layer base rule below;
+     on its own it is just a value nothing reads. */
   --color-ground-admin: #f6f7f9;
-  --shadow-card-tint-admin: rgb(226, 232, 240);
 
   /* App-switch bar geometry (#419). The bar is FIXED to the bottom of every
      authed phone screen, so each shell must reserve exactly its height as
@@ -144,6 +147,25 @@
      three apps have been rendering in system-ui while claiming otherwise
      (found while doing #366). Naming a font is not shipping it. */
   --font-sans: 'Nunito Variable', 'Nunito', ui-sans-serif, system-ui, -apple-system, sans-serif;
+}
+
+/* --shadow-card-tint-admin (here) and each app's --shadow-card-tint
+   (sit.css / study.css / do.css) hold a plain COLOUR, not a valid
+   box-shadow value. Both are only ever consumed through var() -- from
+   --shadow-card-brand in the @theme block above, and from the
+   .bg-ground-admin override in @layer base below -- so a plain :root
+   custom property is all either path needs.
+
+   They must NOT sit inside @theme: Tailwind v4 derives a utility class
+   from every @theme member's namespace, so a --shadow-card-tint-admin
+   declared there generates a `shadow-card-tint-admin` utility emitting
+   `box-shadow: rgb(226, 232, 240)` -- invalid at computed-value time (a
+   colour has no offsets or blur), so it paints nothing while still
+   autocompleting as if it worked (#423). Declaring it here instead stops
+   Tailwind generating a utility for it at all; var() resolution is
+   unaffected because it walks the cascade, not the @theme registry. */
+:root {
+  --shadow-card-tint-admin: rgb(226, 232, 240);
 }
 
 /* WCAG 2.4.7 Focus Visible (issue #325): ONE shared keyboard-focus

@@ -283,6 +283,73 @@ describe('admin stays neutral (decision 25)', () => {
   });
 });
 
+describe('shadow-card-tint stays out of the @theme namespace (#423)', () => {
+  /**
+   * --shadow-card-tint (sit.css / study.css / do.css) and
+   * --shadow-card-tint-admin (base.css) hold plain COLOURS, not valid
+   * box-shadow values. Declared inside @theme, Tailwind v4 derives a
+   * utility class from every @theme member's namespace -- so a
+   * --shadow-card-tint there generates a `shadow-card-tint` utility
+   * emitting `box-shadow: <colour>`, invalid at computed-value time and so
+   * painting nothing while still autocompiling as if it worked. Verified
+   * against a real compile: with the tint deliberately routed onto a used
+   * class, tailwindcss 4.2.2 emitted exactly that broken rule; moving the
+   * declaration to a plain :root block (below @theme, not inside it) made
+   * the rule stop being generated at all, while --shadow-card-brand's
+   * var(--shadow-card-tint) read and the .bg-ground-admin override kept
+   * resolving -- var() walks the cascade, not the @theme registry, so
+   * where the custom property is declared doesn't matter to either
+   * consumer. Both tokens must still exist (the readers test above
+   * requires that); they must simply not be @theme members.
+   */
+  const TINT_TOKENS = ['--shadow-card-tint', '--shadow-card-tint-admin'];
+
+  /* Balanced-brace block extraction rather than a `[^}]*` regex: robust if
+     either block ever grows a nested rule (an @theme fallback, a
+     supports-query), where a naive non-greedy match would stop at the
+     first inner `}` instead of the block's own closing brace. */
+  function extractBlocks(css: string, opener: RegExp): string[] {
+    const blocks: string[] = [];
+    let m: RegExpExecArray | null;
+    while ((m = opener.exec(css))) {
+      const start = m.index + m[0].length;
+      let depth = 1;
+      let i = start;
+      while (i < css.length && depth > 0) {
+        if (css[i] === '{') depth++;
+        else if (css[i] === '}') depth--;
+        i++;
+      }
+      blocks.push(css.slice(start, i - 1));
+    }
+    return blocks;
+  }
+
+  const themeBlocks = () => extractBlocks(themeCss, /@theme\s*\{/g).join('\n');
+  const rootBlocks = () => extractBlocks(themeCss, /(?<![\w-]):root\s*\{/g).join('\n');
+
+  it('finds @theme and :root blocks to check (guards the discovery itself)', () => {
+    // Without this, a change to the block syntax (or the extractor itself
+    // breaking) would make both pins below vacuously green.
+    expect(extractBlocks(themeCss, /@theme\s*\{/g).length, 'no @theme block found').toBeGreaterThan(0);
+    expect(extractBlocks(themeCss, /(?<![\w-]):root\s*\{/g).length, 'no :root block found').toBeGreaterThan(0);
+  });
+
+  it.each(TINT_TOKENS)('%s is declared, but never inside @theme', (token) => {
+    expect(
+      themeBlocks(),
+      `${token} is declared inside @theme -- Tailwind derives a utility from every @theme member's namespace, which regenerates the bogus shadow-card-tint* class the fix (#423) removed`,
+    ).not.toMatch(new RegExp(`${token}(?![\\w-])\\s*:`));
+  });
+
+  it.each(TINT_TOKENS)('%s is declared in a plain :root block', (token) => {
+    expect(
+      rootBlocks(),
+      `${token} should be declared in a plain :root block, outside @theme`,
+    ).toMatch(new RegExp(`${token}(?![\\w-])\\s*:`));
+  });
+});
+
 describe('the font is shipped, not just named (#366)', () => {
   const imports = [...baseCss.matchAll(/@import\s+['"]([^'"]+)['"]/g)].map((m) => m[1]);
   const fontPkg = imports.find((s) => /fontsource/.test(s));
