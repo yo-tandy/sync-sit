@@ -1216,6 +1216,8 @@ export default {
     upload: 'Télécharger',
     fileTooLarge: 'Le fichier est trop volumineux. La taille maximale est de 10 Mo.',
     uploadError: 'Une erreur est survenue lors du téléchargement. Veuillez réessayer.',
+    uploadErrorUnauthorized: 'Vous n\'avez pas la permission de télécharger un document pour cette famille. Essayez de vous déconnecter puis reconnecter, ou contactez le support si le problème persiste.',
+    uploadErrorConnection: 'Un problème de connexion est survenu. Veuillez réessayer.',
     fillRequired: 'Veuillez remplir les champs obligatoires et sélectionner un fichier.',
     addEnrollmentDoc: 'Ajouter un document d\'inscription',
     childFullName: 'Nom complet de l\'enfant',
