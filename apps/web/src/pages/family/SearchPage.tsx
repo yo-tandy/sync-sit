@@ -712,8 +712,26 @@ export function SearchPage() {
                       <div className="flex items-center justify-between">
                         <p className="font-semibold text-gray-900">
                           {formatBabysitterName(b.firstName, b.lastName)}
-                          {b.isPreferred && <span className="ml-1" title="Preferred">❤️</span>}
-                          {returningIds.has(b.uid) && <span className="ml-1 text-blue-500" title="Returning babysitter">⭐</span>}
+                          {b.isPreferred && (
+                            <span
+                              className="ml-1"
+                              role="img"
+                              aria-label={t('familyDashboard.preferredBadge')}
+                              title={t('familyDashboard.preferredBadge')}
+                            >
+                              ❤️
+                            </span>
+                          )}
+                          {returningIds.has(b.uid) && (
+                            <span
+                              className="ml-1 text-blue-500"
+                              role="img"
+                              aria-label={t('familyDashboard.returningBadge')}
+                              title={t('familyDashboard.returningBadge')}
+                            >
+                              ⭐
+                            </span>
+                          )}
                         </p>
                         <div className="flex items-center gap-2">
                           <span className="text-sm text-gray-500">{b.age} {t('familyDashboard.ageSuffix')}</span>
