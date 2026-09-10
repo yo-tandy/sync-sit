@@ -6,16 +6,18 @@ import { httpsCallable } from 'firebase/functions';
 import { signInWithCustomToken } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { getStudyRole, type StudyUser } from '@ejm/study-core';
+import { safeNext } from '@ejm/shared-core';
 import { Card, Spinner } from '@ejm/shared-ui';
 import { auth, db, functions } from '@/config/firebase';
 import { markNextSignInFresh, useAuthStore } from '@/stores/authStore';
 import { postLoginRouter } from '@/utils/postLoginRouter';
 
 /**
- * PUBLIC cross-app arrival page (/handoff#code=…&lang=…). The one-time code
- * minted on the other app is the capability — no auth guard wraps this route.
- * It arrives in the URL FRAGMENT (fragments never reach servers or logs) and
- * is stripped from the address bar as soon as the page mounts.
+ * PUBLIC cross-app arrival page (/handoff#code=…&lang=…&next=…). The
+ * one-time code minted on the other app is the capability — no auth guard
+ * wraps this route. It arrives in the URL FRAGMENT (fragments never reach
+ * servers or logs) and is stripped from the address bar as soon as the page
+ * mounts.
  *
  * Every way the code can be bad (missing, expired, already used, garbage) is
  * ONE identical "switch again" screen — the backend refuses them
@@ -28,7 +30,25 @@ import { postLoginRouter } from '@/utils/postLoginRouter';
  * the one-time code and land on the error screen). Once the attempt settles,
  * the stash and attempt are cleared — a later visit with no fragment takes the
  * pure no-code path.
+ *
+ * SECURITY (issue #426): this page mints a session on success, so an
+ * unvalidated `next` would be an open redirect against a freshly
+ * authenticated user — the highest-value kind, since the victim arrives
+ * already signed in. `next` is attacker-controllable regardless of who
+ * minted the handoff (the fragment is client-side, editable by anyone with
+ * the link), so it is re-validated HERE, on the receiving side, via
+ * `safeNext` against `ALLOWED_NEXT_PREFIXES` — never trusted as-is. Any
+ * invalid `next` silently falls back to `postLoginRouter`'s destination; the
+ * rejected raw value is never rendered or echoed anywhere.
  */
+const ALLOWED_NEXT_PREFIXES = [
+  '/family/account',
+  '/family/sessions',
+  '/family/search',
+  '/tutor/account',
+  '/tutor/sessions',
+  '/tutor/published-searches',
+] as const;
 function hashParams(): URLSearchParams {
   const hash = window.location.hash;
   return new URLSearchParams(hash.startsWith('#') ? hash.slice(1) : hash);
@@ -61,6 +81,12 @@ function runHandoffOnce(params: URLSearchParams, i18nInstance: I18n): Promise<st
     // unknown or absent value leaves the language untouched.
     const lang = params.get('lang');
     if (lang === 'en' || lang === 'fr') void i18nInstance.changeLanguage(lang);
+    // Validated ONCE here against the known route table — see the module
+    // doc. `validNext` is either a safe in-app path or null; every landing
+    // below prefers it over `postLoginRouter`'s destination but NEVER over
+    // the redemption itself (an invalid or absent `next` still lands on the
+    // normal post-login route, silently).
+    const validNext = safeNext(params.get('next'), ALLOWED_NEXT_PREFIXES);
     if (!code) return null;
     try {
       const redeem = httpsCallable<{ code: string }, { token: string }>(
@@ -75,17 +101,18 @@ function runHandoffOnce(params: URLSearchParams, i18nInstance: I18n): Promise<st
       const cred = await signInWithCustomToken(auth, res.data.token);
       try {
         // Mirror the login flow: load the user doc, prime the store, then
-        // land exactly where the login page would.
+        // land exactly where the login page would — or at the validated
+        // deep-link destination, if the handoff carried one.
         const snap = await getDoc(doc(db, 'users', cred.user.uid));
         const userDoc = snap.exists() ? (snap.data() as StudyUser) : null;
         useAuthStore.setState({ firebaseUser: cred.user, userDoc, loading: false });
-        return postLoginRouter(getStudyRole(userDoc), userDoc);
+        return validNext ?? postLoginRouter(getStudyRole(userDoc), userDoc);
       } catch {
         // Past sign-in the user IS authenticated and the code is consumed —
         // the "switch again" screen would strand them. Land on the default
         // entrance instead; the app re-reads the user doc from there.
         useAuthStore.setState({ firebaseUser: cred.user, userDoc: null, loading: false });
-        return postLoginRouter(getStudyRole(null));
+        return validNext ?? postLoginRouter(getStudyRole(null));
       }
     } catch {
       return null;
