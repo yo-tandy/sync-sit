@@ -53,6 +53,7 @@ import {
   SupervisionInfoPage,
   HandoffPage,
   CrossAppWelcomePage,
+  StudentCrossAppWelcomePage,
   NotificationsPage,
 } from '@/lazyPages';
 
@@ -92,6 +93,9 @@ export const router = createBrowserRouter([
       // fragment code is the capability; the page signs the user in itself.
       { path: '/handoff', element: <HandoffPage /> },
       { path: '/welcome-study', element: <CrossAppWelcomePage /> },
+      // issue #435 milestone, PR4: unified-flow arrival via the cross-origin
+      // handoff from apps/web's /enroll/choose-app.
+      { path: '/tutor/welcome-crossapp', element: <StudentCrossAppWelcomePage /> },
       { path: '*', element: <Navigate to="/" replace /> },
     ],
   },

@@ -282,6 +282,16 @@ export default {
     photoSizeError: 'La photo doit faire moins de 5 Mo.',
     addressLabel: 'Adresse (optionnel)',
     addressHint: "Cela permet d'optimiser vos résultats de recherche — les familles voient à quelle distance vous vous trouvez.",
+    roleStudent: 'Je suis élève',
+    roleStudentDesc: 'Babysitting, soutien scolaire, ou les deux — un seul compte pour toute la communauté EJM.',
+    roleParent: 'Je suis parent',
+    roleParentDesc: 'Trouvez une babysitter, réservez un cours, et gérez votre famille.',
+    studentTitle: 'Créez votre compte',
+    chooseAppTitle: "C'est fait — et maintenant ?",
+    chooseAppSubtitle: 'Vos informations sont enregistrées. Choisissez où terminer votre inscription.',
+    chooseSitDesc: 'Proposez du babysitting aux familles EJM.',
+    chooseStudyDesc: 'Proposez du soutien scolaire aux familles EJM.',
+    chooseDoDesc: 'Petits services et courses pour les familles EJM.',
   },
 
   babysitterDashboard: {

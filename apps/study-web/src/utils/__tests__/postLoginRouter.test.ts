@@ -74,6 +74,28 @@ describe('postLoginRouter (study)', () => {
     expect(postLoginRouter(undefined, null)).toBe('/signup');
     expect(postLoginRouter(undefined)).toBe('/signup');
   });
+
+  it('routes a root-only unified-flow identity to /tutor/welcome-crossapp (issue #435 PR4)', () => {
+    const rootOnlyIdentityDoc = { profiles: {}, ejemEmail: 'iris28@ejm.org' } as unknown as StudyUser;
+    expect(postLoginRouter(undefined, rootOnlyIdentityDoc)).toBe('/tutor/welcome-crossapp');
+  });
+
+  it('routes a doer-only account to /tutor/welcome-crossapp too (verified identity, no study role — not unified-flow-only)', () => {
+    // A sync-do doer-only account: verified root ejemEmail (enrollDoer
+    // writes it the same way enrollStudentIdentity does), no study role.
+    // The crossApp branch is NOT scoped to the unified flow's root-only
+    // shape (PR review discussion on #474).
+    const doerOnlyDoc = {
+      profiles: { doer: { enrollmentComplete: true } },
+      ejemEmail: 'dana28@ejm.org',
+    } as unknown as StudyUser;
+    expect(postLoginRouter(undefined, doerOnlyDoc)).toBe('/tutor/welcome-crossapp');
+  });
+
+  it('a doc with NO ejemEmail anywhere still falls back to /signup, even with a doer profile', () => {
+    const doerNoIdentity = { profiles: { doer: { enrollmentComplete: true } } } as unknown as StudyUser;
+    expect(postLoginRouter(undefined, doerNoIdentity)).toBe('/signup');
+  });
 });
 
 describe('canCrossAppEnrollTutor', () => {

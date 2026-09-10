@@ -88,6 +88,21 @@ export interface User {
   address?: Address | null;
 
   /**
+   * The unified flow's contact-visibility consent checkbox (issue #435
+   * milestone, PR3 `StepContactInfo` / PR4), recorded by
+   * `enrollStudentIdentity` at account-creation time, BEFORE the user has
+   * picked sit or study and so before either app's profile (where the
+   * concept ultimately lives, as `profiles.{babysitter,tutor}.searchable`)
+   * exists to hold it. `enrollBabysitter`/`enrollTutor`'s crossApp mode
+   * reads this root field off the caller's own doc to seed the new
+   * profile's initial `searchable` value — server-side, never re-sent by
+   * the client, which is what lets it survive the cross-origin handoff to
+   * study (a session transfer, not a client payload). Absent for every
+   * account that never went through the unified flow.
+   */
+  contactVisibilityConsent?: boolean;
+
+  /**
    * Supervision mirror, present iff the guardianLinks/{uid} doc is ACTIVE
    * (a pending claim does NOT set it). Server-owned, rules-pinned.
    */

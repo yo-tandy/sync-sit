@@ -31,6 +31,11 @@ export type { AddProfileParams, ProfileKey } from './enrollment/addProfileToUser
 
 // Callables — enrollment (family-related only)
 export { enrollFamily } from './enrollment/enrollFamily.js';
+// Unified student-identity enrollment (issue #435 milestone, PR4) — creates
+// a root-only identity BEFORE the sit/study role choice. Deploys from the
+// sit codebase (apps/functions re-exports it); study's crossApp add-profile
+// mode on enrollTutor is what actually adds the tutor role afterwards.
+export { enrollStudentIdentity } from './enrollment/enrollStudentIdentity.js';
 export { generateInviteLink } from './enrollment/generateInviteLink.js';
 export { joinFamily } from './enrollment/joinFamily.js';
 export { validateInviteLink } from './enrollment/validateInviteLink.js';
