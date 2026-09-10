@@ -15,8 +15,8 @@ const h = vi.hoisted(() => ({
   updateDoc: vi.fn<(ref: { path: string }, data: Record<string, unknown>) => Promise<void>>(
     () => Promise.resolve(),
   ),
-  uploadBytes: vi.fn<(ref: { path: string }, data: unknown) => Promise<void>>(() =>
-    Promise.resolve(),
+  uploadBytes: vi.fn<(ref: { path: string }, data: unknown, metadata?: unknown) => Promise<void>>(
+    () => Promise.resolve(),
   ),
   getDownloadURL: vi.fn<(ref: { path: string }) => Promise<string>>(() =>
     Promise.resolve('https://firebasestorage.example/new.jpg'),
@@ -35,7 +35,8 @@ vi.mock('firebase/firestore', () => ({
 
 vi.mock('firebase/storage', () => ({
   ref: (_storage: unknown, path: string) => ({ path }),
-  uploadBytes: (...args: [ref: { path: string }, data: unknown]) => h.uploadBytes(...args),
+  uploadBytes: (...args: [ref: { path: string }, data: unknown, metadata?: unknown]) =>
+    h.uploadBytes(...args),
   getDownloadURL: (...args: [ref: { path: string }]) => h.getDownloadURL(...args),
   deleteObject: (...args: [ref: { path: string }]) => h.deleteObject(...args),
 }));
@@ -143,5 +144,62 @@ describe('BabysitterAccountPage photo lifecycle', () => {
     fireEvent.click(screen.getByRole('button', { name: /remove photo/i }));
     expect(await screen.findByText(/could not remove the photo/i)).toBeInTheDocument();
     expect(h.deleteObject).not.toHaveBeenCalled();
+  });
+});
+
+// Issue #452: File.type was gated on an ALLOWLIST, which rejected real
+// photos whenever a browser reported an empty or application/octet-stream
+// type -- iPhone HEIC especially. These pins prove the shared denylist
+// (isAcceptablePhotoType) actually reaches this page.
+describe('BabysitterAccountPage photo type handling (#452)', () => {
+  beforeEach(() => {
+    i18n.changeLanguage('en');
+    h.auth.userDoc = userDoc();
+    h.auth.refreshUserDoc.mockClear();
+    h.updateDoc.mockClear();
+    h.uploadBytes.mockClear();
+    h.deleteObject.mockClear();
+  });
+  afterEach(() => cleanup());
+
+  it('accepts a File with an empty type (common for HEIC on iPhone) and uploads it', async () => {
+    renderPage();
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new File(['x'], 'IMG_0001.HEIC', { type: '' });
+    fireEvent.change(input, { target: { files: [file] } });
+
+    await waitFor(() => expect(h.uploadBytes).toHaveBeenCalled());
+    expect(screen.queryByText(i18n.t('account.photoInvalidType'))).not.toBeInTheDocument();
+  });
+
+  it('accepts a File reported as application/octet-stream and uploads it', async () => {
+    renderPage();
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new File(['x'], 'photo.jpg', { type: 'application/octet-stream' });
+    fireEvent.change(input, { target: { files: [file] } });
+
+    await waitFor(() => expect(h.uploadBytes).toHaveBeenCalled());
+    expect(screen.queryByText(i18n.t('account.photoInvalidType'))).not.toBeInTheDocument();
+  });
+
+  it('still rejects image/svg+xml as a scriptable, non-photo type', async () => {
+    renderPage();
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new File(['<svg/>'], 'picture.svg', { type: 'image/svg+xml' });
+    fireEvent.change(input, { target: { files: [file] } });
+
+    expect(await screen.findByText(i18n.t('account.photoInvalidType'))).toBeInTheDocument();
+    expect(h.uploadBytes).not.toHaveBeenCalled();
+  });
+
+  it('uploads an empty-type HEIC with an explicit image/heic contentType, not octet-stream', async () => {
+    renderPage();
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new File(['x'], 'IMG_0001.HEIC', { type: '' });
+    fireEvent.change(input, { target: { files: [file] } });
+
+    await waitFor(() => expect(h.uploadBytes).toHaveBeenCalled());
+    const metadata = h.uploadBytes.mock.calls[0][2] as { contentType?: string } | undefined;
+    expect(metadata?.contentType).toBe('image/heic');
   });
 });

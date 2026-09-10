@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { isRunningAsPWA } from '@ejm/sit-core';
+import { isAcceptablePhotoType, resolvePhotoContentType } from '@ejm/shared-core';
 import { db, storage } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { TopNav, Button, Card, InfoBanner, LanguageSelector, useToast } from '@/components/ui';
@@ -20,7 +21,6 @@ import {
 } from '@ejm/sit-core';
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
-const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
 
 /**
  * Which app's preference block this page edits (issue #369). Rows come from
@@ -162,7 +162,7 @@ export function AccountPage() {
   // --- Photo handlers ---
   const handlePhotoSelect = (file: File) => {
     setPhotoError(null);
-    if (!ACCEPTED_TYPES.includes(file.type)) {
+    if (!isAcceptablePhotoType(file.type)) {
       setPhotoError(t('account.photoInvalidType'));
       return;
     }
@@ -222,7 +222,13 @@ export function AccountPage() {
       const oldPath = oldMatch ? `profile-photos/${decodeURIComponent(oldMatch[1])}` : null;
       const path = `profile-photos/${uid}.${ext}`;
       const storageRef = ref(storage, path);
-      await uploadBytes(storageRef, photoFile);
+      // Explicit contentType: uploadBytes otherwise trusts photoFile.type
+      // verbatim, which is exactly the value HEIC/generic uploads don't
+      // reliably have (issue #452) — without this the object gets served as
+      // application/octet-stream and an <img> may not render it at all.
+      await uploadBytes(storageRef, photoFile, {
+        contentType: resolvePhotoContentType(photoFile.name, photoFile.type),
+      });
       const photoUrl = await getDownloadURL(storageRef);
       await updateDoc(doc(db, 'users', uid), {
         photoUrl,
@@ -359,6 +365,7 @@ export function AccountPage() {
         <input
           ref={fileInputRef}
           type="file"
+          accept="image/*"
           className="hidden"
           onChange={handleFileChange}
         />
