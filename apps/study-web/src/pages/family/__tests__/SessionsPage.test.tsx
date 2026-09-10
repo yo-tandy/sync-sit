@@ -1253,6 +1253,51 @@ describe('family SessionsPage — lazy terminal-series instances (issue #275)', 
     await waitFor(() => expect(instanceFetchSessionIds()).toEqual(['sEndorsed']));
   });
 
+  it('a completed/unendorsed series whose instance fetch keeps rejecting is attempted exactly ONCE — no retry storm across re-renders (round 3)', async () => {
+    // The eager-instances effect depends on instancesBySeries/seriesInstanceStatus
+    // (they change on every loadSeriesInstances transition), so a persistently
+    // failing series must be excluded once it errors — otherwise every re-fire
+    // (loading→error is itself one, and any unrelated re-render after that is
+    // another) re-passes the old buggy guard and refetches forever.
+    h.sessions = [
+      recurring({
+        sessionId: 'cFailing',
+        status: 'completed',
+        tutorUserId: 'tFailing',
+        tutorName: 'Failing Tutor',
+      }),
+    ];
+    h.getDocs.mockImplementation((q: { query?: { path: string }[]; path?: string }) => {
+      const path = q?.query?.[0]?.path ?? q?.path ?? '';
+      if (path.endsWith('/instances')) return Promise.reject({ code: 'permission-denied' });
+      if (path === 'references') return Promise.resolve({ docs: [] });
+      return Promise.resolve({ docs: h.sessions.map((s) => ({ id: s.sessionId, data: () => s })) });
+    });
+    renderWithProviders(<SessionsPage />);
+
+    await screen.findByText('Failing Tutor');
+    // The card's inline error is the observable proof the eager attempt ran
+    // and settled (not just started).
+    await screen.findByText(/couldn.t load this series. dates/i);
+    expect(instanceFetchSessionIds().filter((id) => id === 'cFailing')).toHaveLength(1);
+
+    // An unrelated re-render — a focus refetch, which reassigns `sessions` to
+    // a new array and so re-fires the eager-instances effect — must NOT retry
+    // the already-errored series. Only the card's manual retry button may.
+    const sessionListCalls = () =>
+      h.getDocs.mock.calls.filter((c) => {
+        const q = c[0] as { query?: { path: string }[]; path?: string };
+        return (q.query?.[0]?.path ?? q.path ?? '') === 'study-sessions';
+      }).length;
+    const before = sessionListCalls();
+    await act(async () => {
+      window.dispatchEvent(new Event('focus'));
+    });
+    await waitFor(() => expect(sessionListCalls()).toBeGreaterThan(before));
+
+    expect(instanceFetchSessionIds().filter((id) => id === 'cFailing')).toHaveLength(1);
+  });
+
   it('a rejected instance fetch for one series shows that card inline error, not the page loadError — other series still render', async () => {
     h.sessions = [
       confirmedRecurring({ sessionId: 'aGood', tutorName: 'Good Tutor' }),

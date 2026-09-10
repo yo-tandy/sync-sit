@@ -357,6 +357,18 @@ export function SessionsPage() {
   // so this reads the real endorsed set rather than the still-empty initial
   // one (see the effect above for why a failed endorsements read still
   // behaves correctly here).
+  //
+  // Round 3 (review): this effect's deps include instancesBySeries and
+  // seriesInstanceStatus, so it re-fires on every loadSeriesInstances
+  // transition — loading, then success OR error. The condition below MUST
+  // therefore exclude 'error' as well as 'loading': without it, a
+  // persistently failing series (PERMISSION_DENIED, offline) re-passes the
+  // guard on every re-fire (instancesBySeries[id] stays undefined forever)
+  // and gets refetched every time, hammering Firestore. Excluding both
+  // statuses makes each id get exactly ONE eager attempt; a further look is
+  // only ever the card's manual retry button (loadSeriesInstances called
+  // directly, bypassing this effect), matching load()'s no-auto-retry
+  // contract for the active-series path.
   useEffect(() => {
     if (!sessions || !endorsedTutorsReady) return;
     for (const s of sessions) {
@@ -365,7 +377,8 @@ export function SessionsPage() {
         s.status === 'completed' &&
         !endorsedTutors.has(s.tutorUserId) &&
         instancesBySeries[s.sessionId] === undefined &&
-        seriesInstanceStatus[s.sessionId] !== 'loading'
+        seriesInstanceStatus[s.sessionId] !== 'loading' &&
+        seriesInstanceStatus[s.sessionId] !== 'error'
       ) {
         loadSeriesInstances(s.sessionId);
       }
