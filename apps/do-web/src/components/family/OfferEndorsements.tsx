@@ -95,7 +95,8 @@ export function OfferEndorsements({ doerUserId }: { doerUserId: string }) {
         }
         // Concatenated in source order, so sync-do's own entries lead.
         setLines(settled.flatMap((r) => (r.status === 'fulfilled' ? r.value : [])));
-      } catch {
+      } catch (err) {
+        console.error('[endorsements] load offers failed', err);
         if (!cancelled) setFailed(true);
       }
     }

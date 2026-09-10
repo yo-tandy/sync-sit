@@ -22,6 +22,8 @@ const h = vi.hoisted(() => ({
   // When set, the NEXT getDocs awaits this instead of the queue — lets a test
   // hold a fetch open and inspect the in-flight window.
   pending: null as Promise<unknown[]> | null,
+  // When set, the NEXT getDocs rejects with this instead of resolving.
+  rejectNext: null as Error | null,
 }));
 
 vi.mock('@/config/firebase', () => ({ db: {}, functions: {} }));
@@ -38,6 +40,11 @@ vi.mock('firebase/firestore', () => ({
   startAfter: (cursor: unknown) => ({ startAfter: cursor }),
   getDocs: (q: { query: unknown[] }) => {
     h.calls.push(q.query);
+    if (h.rejectNext) {
+      const err = h.rejectNext;
+      h.rejectNext = null;
+      return Promise.reject(err);
+    }
     if (h.pending) {
       const held = h.pending;
       h.pending = null;
@@ -84,6 +91,22 @@ beforeEach(() => {
   h.calls = [];
   h.docsQueue = [];
   h.pending = null;
+  h.rejectNext = null;
+});
+
+describe('BoardPage load failure (#463)', () => {
+  it('a failed load shows the error state and logs, instead of vanishing silently', async () => {
+    // Pre-#463 this catch was bare (`catch {}`): a failed board fetch left
+    // no trace anywhere, which is exactly the shape that turned the #446
+    // outage into an hours-long diagnosis instead of a one-minute one.
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    h.rejectNext = new Error('permission-denied');
+    renderWithProviders(<BoardPage />);
+
+    expect(await screen.findByText('Could not load the board. Please try again.')).toBeInTheDocument();
+    expect(consoleErrorSpy).toHaveBeenCalledWith('[board] load tasks failed', expect.any(Error));
+    consoleErrorSpy.mockRestore();
+  });
 });
 
 describe('BoardPage query shape (§7.3 pins)', () => {
