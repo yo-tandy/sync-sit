@@ -1525,10 +1525,24 @@ This agent acts as continuous integration for teams without a CI pipeline. It ca
 > halves is what the sync-do plan §8 established. Full rationale and the
 > interaction analysis are in `docs/sync-do-project-plan.md` §11.4.
 >
-> **Not covered:** study `cancelled` and `declined` sessions have no retention
-> rule at all. sit deletes its cancelled/rejected appointments at 30 days;
-> study deletes nothing. The window and the cascade are a policy call the
-> owner has not made, and decision 19 is about *completed* engagement.
+> **Cancelled/declined study sessions — 30 days from last touch (issue #408
+> item 3).** The same `sweepStudySessions.ts` also deletes `study-sessions`
+> documents with `status: 'cancelled'` or `status: 'declined'` whose
+> `updatedAt` is older than 30 days — sit parity with `cleanupOldData`'s own
+> cancelled/rejected appointment sweep. It is keyed on `updatedAt`, not
+> `cancelledAt`: a decline (`respondToSession`'s `declined_by_family` /
+> `declined_by_tutor`, and `modifySession`'s auto-decline `slot_taken`) never
+> writes `cancelledAt`, only `updatedAt`, so a sweep keyed on the narrower
+> field would silently skip every declined session. This cascades the same
+> way decision 19's completed sweep does, WITH ONE GUARD: a cancelled or
+> declined recurring series is skipped — deferred, retried on the next daily
+> run — for as long as it still holds an instance that is itself `completed`
+> and inside its OWN 180-day window (`markSessionsCompleted` can complete
+> individual instances of a still-confirmed series before it is later
+> cancelled). The series only cascades with its parent once its last
+> completed occurrence has also aged past 180 days, so a completed
+> engagement is never deleted early just because the series around it was
+> subsequently cancelled.
 
 **Tasks:**
 

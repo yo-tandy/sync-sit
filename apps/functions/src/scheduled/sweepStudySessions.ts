@@ -5,6 +5,14 @@ import { createClaimReleaser, STUDY_PROVENANCE } from './retentionClaims.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+/**
+ * Cancelled/declined retention window — issue #408 item 3. Sit parity:
+ * `cleanupOldData` block 7 deletes cancelled/rejected appointments at 30 days
+ * too. Keyed on `updatedAt`, not `cancelledAt` — see the function docblock's
+ * "WHY `updatedAt`" section for the shape trap that rules `cancelledAt` out.
+ */
+const CANCELLED_RETENTION_DAYS = 30;
+
 /** Per-query page size; the category drains with a bounded pass loop. */
 const SWEEP_PAGE = 100;
 const SWEEP_MAX_PASSES = 10;
@@ -13,6 +21,14 @@ const BATCH_LIMIT = 500;
 
 export interface StudySweepStats {
   completedSessionsDeleted: number;
+  /** Issue #408 item 3: cancelled/declined sessions >30d since last touch. */
+  cancelledSessionsDeleted: number;
+  /**
+   * Issue #408 item 3 (round-2 review): a cancelled/declined RECURRING series
+   * skipped this run because it still holds a `completed` instance inside the
+   * 180-day completed-engagement window — see `hasProtectedCompletedInstance`.
+   */
+  cancelledSeriesDeferred: number;
   instancesDeleted: number;
   overrideClaimsReleased: number;
   /** Cascades that failed and were skipped (poison-pill isolation). */
@@ -57,12 +73,63 @@ export interface StudySweepStats {
  *      NOTHING prunes its claim today, so deleting the session without this
  *      step leaves a ledger entry naming a document that no longer exists.
  *
- * KNOWN GAP, stated rather than silently widened: study `cancelled` and
- * `declined` sessions have NO retention sweep at all — sit deletes its
- * cancelled/rejected appointments at 30 days, study deletes nothing. That is a
- * separate policy call (which window, and whether a cancelled recurring series
- * keeps its instances) and decision 19 is about COMPLETED engagement, so it is
- * left for the owner rather than invented here.
+ * ALSO DELETES (issue #408 item 3, the two policy answers below). `study-
+ * sessions` docs with `status === 'cancelled'` or `status === 'declined'`
+ * whose `updatedAt` is older than `CANCELLED_RETENTION_DAYS` (30) — sit
+ * parity: `cleanupOldData` block 7 deletes cancelled/rejected appointments at
+ * the same 30-day mark.
+ *
+ * WHY `updatedAt`, NOT `cancelledAt`. The two terminal paths do not write the
+ * same fields: `cancelSession.ts` and `cancelSessionInstance.ts` write
+ * `cancelledAt` alongside `status: 'cancelled'`, but `respondToSession.ts`
+ * (`statusReason: 'declined_by_family' | 'declined_by_tutor'`) and
+ * `modifySession.ts`'s auto-decline (`statusReason: 'slot_taken'`) write
+ * ONLY `updatedAt` on a `status: 'declined'` flip — no `cancelledAt` at all.
+ * A sweep keyed on `cancelledAt` would silently skip EVERY declined session —
+ * exactly the ABSENT-vs-NULL failure the completed sweep's own audit above
+ * was written to avoid, and the shape that sank PR #396. `updatedAt` is
+ * universal — written at creation (`bookSession.ts`, `proposeSession.ts`) and
+ * on every update since — so it is the only field that covers both terminal
+ * shapes, at the cost of meaning "last touched" rather than "cancelled at".
+ * One accepted consequence, stated rather than silently absorbed: issue
+ * #414's erasure anonymisation also bumps a session's `updatedAt`, so a
+ * cancelled/declined session belonging to a since-erased user gets a fresh
+ * 30-day window measured from the erasure, not from the original
+ * cancel/decline. That is a deliberate trade for keying on the one field both
+ * shapes actually write, not an oversight.
+ *
+ * INSTANCES AGE OUT WITH THE SERIES — the second policy answer, WITH ONE
+ * GUARD (round-2 review). When a cancelled or declined recurring series'
+ * PARENT crosses the 30-day window, `cascade()` — the same helper the
+ * completed sweep above uses — removes its `instances` subcollection and
+ * releases every remaining schedule claim in the same pass, UNLESS the
+ * series still holds an instance that is itself `completed` inside the
+ * 180-day completed-engagement window (`hasProtectedCompletedInstance`
+ * below) — in which case the whole parent is SKIPPED this run rather than
+ * cascaded. That case is real, not hypothetical: `markSessionsCompleted`
+ * step (b) flips individual instances to `completed` one at a time as a
+ * still-CONFIRMED series runs, and cancelling the series later
+ * (`cancelSession.ts`) touches only the remaining `scheduled` instances —
+ * "Past/completed/conflict_skip instances are untouched" (that file's own
+ * docblock) — so the parent's `updatedAt` reflects the CANCELLATION while its
+ * `instances` subcollection can hold occurrences that genuinely happened
+ * months apart. Cascading unconditionally at 30 days from cancellation would
+ * delete those before decision 19's own 180-day window, which is measured
+ * from EACH occurrence's own `completedAt`, not from the series' cancel date.
+ *
+ * THE ACCEPTED RULE: a cancelled/declined recurring series lives until its
+ * LAST completed occurrence is itself 180 days old. Every run it is still
+ * blocked, it is counted in `cancelledSeriesDeferred` and retried on the next
+ * run — no state is persisted, since the guard query is cheap and idempotent
+ * and the series' `updatedAt` does not change while it waits. Once the newest
+ * completed instance ages out of the 180-day window, the next run's guard
+ * query returns empty and the parent cascades normally.
+ *
+ * Instances are still never deleted independently of their parent: an
+ * individually cancelled occurrence inside a series whose PARENT is still
+ * `confirmed` (`cancelSessionInstance.ts`) is untouched by this sweep — only
+ * the parent's own status governs whether the cascade fires, per the type
+ * doc's "AUTHORITY SPLIT" (`types/session.ts`).
  */
 export async function runStudySweepSessions(
   db: Firestore,
@@ -70,6 +137,8 @@ export async function runStudySweepSessions(
 ): Promise<StudySweepStats> {
   const stats: StudySweepStats = {
     completedSessionsDeleted: 0,
+    cancelledSessionsDeleted: 0,
+    cancelledSeriesDeferred: 0,
     instancesDeleted: 0,
     overrideClaimsReleased: 0,
     sessionCascadeErrors: 0,
@@ -142,6 +211,34 @@ export async function runStudySweepSessions(
     await doc.ref.delete();
   }
 
+  /**
+   * True iff this cancelled/declined RECURRING parent still holds an
+   * instance that is itself `completed` inside the 180-day
+   * completed-engagement window (`cutoff`, above) — i.e. it must NOT be
+   * cascaded this run. See the function docblock's "INSTANCES AGE OUT WITH
+   * THE SERIES" section for why this case is real. One_time sessions have no
+   * `instances` subcollection and always return false; a query against an
+   * empty/nonexistent subcollection is a cheap empty read, not an error.
+   */
+  async function hasProtectedCompletedInstance(
+    doc: FirebaseFirestore.QueryDocumentSnapshot,
+  ): Promise<boolean> {
+    if (doc.get('type') !== 'recurring') return false;
+    // (status, completedAt) COLLECTION-scope composite on `instances` —
+    // added to firestore.indexes.json with this guard. This is a query
+    // against ONE specific subcollection (`doc.ref.collection(...)`), which
+    // needs its own COLLECTION-scope index distinct from the two existing
+    // COLLECTION_GROUP ones (those serve `.collectionGroup('instances')`
+    // callers elsewhere and do not cover this shape).
+    const recent = await doc.ref
+      .collection('instances')
+      .where('status', '==', 'completed')
+      .where('completedAt', '>', cutoff)
+      .limit(1)
+      .get();
+    return !recent.empty;
+  }
+
   // Cursor-paginated WITHIN the run, for the same reason the sit half is: a
   // session whose cascade fails deterministically keeps its `completedAt`, so
   // it sorts to the head of `completedAt ASC` and a head-restarting pass loop
@@ -200,6 +297,84 @@ export async function runStudySweepSessions(
     if (pass === SWEEP_MAX_PASSES - 1) {
       console.warn(
         'studySweepSessions: hit the pass ceiling; the remainder is deferred to the next run',
+      );
+    }
+  }
+
+  // ── Cancelled/declined sessions — issue #408 item 3 ──
+  //
+  // Cursor-paginated within the run, same reasoning as the completed category
+  // above: a session whose cascade fails deterministically keeps its
+  // `updatedAt`, so it sorts to the head of `updatedAt ASC` and a
+  // head-restarting pass loop would re-fetch it — and only it — forever.
+  //
+  // ABSENT-vs-NULL AUDIT for THIS category (the check the file's docblock
+  // promises): `updatedAt` is written on every path that reaches `cancelled`
+  // or `declined` — `cancelSession.ts`, `cancelSessionInstance.ts`,
+  // `respondToSession.ts`, `modifySession.ts`'s auto-decline — and it is also
+  // written at creation (`bookSession.ts`, `proposeSession.ts`), so no
+  // conforming session document is ever missing it. Unlike sit's `date`, this
+  // range needs no lower bound: `updatedAt` is a Timestamp on every writer, so
+  // a `<` bound cannot admit a differently-typed value the way a string range
+  // would. `cancelledAt` deliberately is NOT the key — see the function
+  // docblock's "WHY `updatedAt`" section: it is absent on every declined doc.
+  const cancelledCutoff = new Date(now.getTime() - CANCELLED_RETENTION_DAYS * DAY_MS);
+  let cancelledCursor: FirebaseFirestore.QueryDocumentSnapshot | null = null;
+  for (let pass = 0; pass < SWEEP_MAX_PASSES; pass++) {
+    // (status, updatedAt) composite — added to firestore.indexes.json with
+    // this sweep, alongside the existing (status, completedAt) one.
+    let query = db
+      .collection('study-sessions')
+      .where('status', 'in', ['cancelled', 'declined'])
+      .where('updatedAt', '<', cancelledCutoff)
+      .orderBy('updatedAt')
+      .limit(SWEEP_PAGE);
+    if (cancelledCursor) query = query.startAfter(cancelledCursor);
+    const snap = await query.get();
+    if (snap.empty) break;
+
+    // Same per-session error isolation as the completed category, plus a
+    // third per-doc outcome: DEFERRED (the guard above fired, so nothing was
+    // touched — not a failure, and not a deletion).
+    let deleted = 0;
+    let deferred = 0;
+    let failed = 0;
+    for (const doc of snap.docs) {
+      try {
+        if (await hasProtectedCompletedInstance(doc)) {
+          stats.cancelledSeriesDeferred += 1;
+          deferred += 1;
+          continue;
+        }
+        await cascade(doc);
+        deleted += 1;
+      } catch (err) {
+        failed += 1;
+        stats.sessionCascadeErrors += 1;
+        console.error(`studySweepSessions: cancelled/declined cascade failed for ${doc.id}:`, err);
+      }
+    }
+    stats.cancelledSessionsDeleted += deleted;
+    console.log(
+      `studySweepSessions: deleted ${deleted} cancelled/declined sessions >${CANCELLED_RETENTION_DAYS}d since last touch (issue #408 item 3)`,
+    );
+    if (deferred > 0) {
+      console.log(
+        `studySweepSessions: deferred ${deferred} cancelled/declined recurring series — a completed instance is still inside the 180-day window`,
+      );
+    }
+    if (failed === snap.size && snap.size === SWEEP_PAGE) {
+      // A FULL page where every document genuinely failed — distinct from a
+      // full page that was legitimately deferred, which is not a wedge.
+      console.warn(
+        'studySweepSessions: a full page of cancelled/declined sessions failed to cascade; advancing past it',
+      );
+    }
+    cancelledCursor = snap.docs[snap.docs.length - 1];
+    if (snap.size < SWEEP_PAGE) break;
+    if (pass === SWEEP_MAX_PASSES - 1) {
+      console.warn(
+        'studySweepSessions: cancelled/declined sweep hit the pass ceiling; the remainder is deferred to the next run',
       );
     }
   }
