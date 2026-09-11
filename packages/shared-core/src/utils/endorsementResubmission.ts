@@ -48,8 +48,9 @@ export type EndorsementResubmissionState =
  * only one can ever be live at once (a new submission is refused while one
  * is), so:
  *
- *   - any LIVE doc present (`pending`/`private` or `approved`) blocks
- *     outright, regardless of any declined docs alongside it;
+ *   - any LIVE doc present (`LIVE_ENDORSEMENT_STATUSES` — every
+ *     `ReferenceStatus` except `removed`) blocks outright, regardless of any
+ *     declined docs alongside it;
  *   - otherwise every doc is a decline, and the MOST RECENT one's
  *     `updatedAtMs` anchors the cool-down — an old decline does not matter
  *     once a newer one exists.
