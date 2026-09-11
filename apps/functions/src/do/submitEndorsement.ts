@@ -5,6 +5,8 @@ import {
   validateEndorsementText,
 } from '@ejm/do-core';
 import type { User } from '@ejm/shared-core';
+import { ENDORSEMENT_COOLDOWN_ERROR_CODE } from '@ejm/shared-core';
+import { checkEndorsementResubmission } from '@ejm/shared-functions';
 import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
@@ -124,24 +126,16 @@ export const doSubmitEndorsement = onCall(
       throw new HttpsError('not-found', 'Doer not found');
     }
 
-    // ── Dedup: one endorsement per (family, doer), study's rule. Equality
-    //    filters only, so no composite index (see endorsementAccess).
-    //
-    //    STATUS-BLIND, matching study exactly (PR #352 round-2 review).
-    //    `submitTutorEndorsement.ts:59-64` runs the same three equalities
-    //    with no `status` filter, so in study a family that has been
-    //    declined cannot re-endorse that tutor either. The consequence is
-    //    worth stating rather than discovering: **declining is permanent for
-    //    that (family, doer) pair** — the doc stays `removed`, and the
-    //    family's next attempt is `already-exists`.
-    //
-    //    Kept because decision 12 says do's lifecycle mirrors study's, and a
-    //    do-only divergence here would mean the two apps answer "can I
-    //    endorse again?" differently for no reason a user could see.
-    //    Excluding `removed` from the dedup is defensible — it is the
-    //    recipient's own decline, not a platform judgement — but it is a
-    //    PLATFORM behaviour change touching study, so it belongs in an issue
-    //    against both apps rather than in one app's PR.
+    // ── Dedup: LIVE statuses only (issue #356, option (b), superseding the
+    //    PR #352 STATUS-BLIND rule this comment used to describe). A family
+    //    that has been declined may ask again, but only after
+    //    ENDORSEMENT_RESUBMISSION_COOLDOWN_DAYS (shared-core) have passed
+    //    since the decline — enforced identically in study's
+    //    `submitTutorEndorsement.ts` through the same
+    //    `checkEndorsementResubmission` (shared-functions) this call runs,
+    //    so the two apps cannot answer "can I endorse again?" differently.
+    //    Query shape: equality filters only, so no composite index (see
+    //    `checkEndorsementResubmission`'s own header).
     //
     //    RACE-SAFE, in a transaction (issue #357 item 2). As a plain
     //    query-then-set() this was best-effort: two co-parents submitting at
@@ -186,19 +180,24 @@ export const doSubmitEndorsement = onCall(
     const refDoc = db.collection(REFERENCES).doc();
     await db.runTransaction(async (tx) => {
       // Read before write (the transaction phase rule).
-      const dup = await tx.get(
-        db
-          .collection(REFERENCES)
-          .where('appSource', '==', 'do')
-          .where('doerUserId', '==', doerUserId)
-          .where('submittedByFamilyId', '==', familyId)
-          .limit(1),
+      const resubmission = await checkEndorsementResubmission(
+        db,
+        { appSource: 'do', subjectField: 'doerUserId', subjectUserId: doerUserId, familyId },
+        { tx },
       );
-      if (!dup.empty) {
+      if (!resubmission.allowed) {
+        if (resubmission.reason === 'live') {
+          throw new HttpsError(
+            'already-exists',
+            'You have already endorsed this student',
+            { reason: 'already_endorsed' },
+          );
+        }
+        const retryAt = resubmission.retryAt;
         throw new HttpsError(
-          'already-exists',
-          'You have already endorsed this student',
-          { reason: 'already_endorsed' },
+          'failed-precondition',
+          `This family's last request was declined. You can ask again on ${retryAt.toISOString().slice(0, 10)}.`,
+          { code: ENDORSEMENT_COOLDOWN_ERROR_CODE, retryAt: retryAt.toISOString() },
         );
       }
       tx.set(refDoc, {

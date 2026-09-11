@@ -34,6 +34,29 @@ export function ageGateErrorCode(err: unknown): AgeGateErrorCode | null {
 }
 
 /**
+ * Extracts the endorsement resubmission cool-down details set by
+ * `submitTutorEndorsement` (study) and `doSubmitEndorsement` (do) (HttpsError
+ * details: `{ code: 'endorsement/cooldown', retryAt: <ISO string> }`, issue
+ * #356 option (b)). Returns null for anything else, including a `retryAt`
+ * that fails to parse — a cool-down message with no date is worse than the
+ * generic fallback the caller uses instead.
+ */
+export interface EndorsementCooldownDetails {
+  code: 'endorsement/cooldown';
+  retryAt: Date;
+}
+
+export function endorsementCooldownDetails(err: unknown): EndorsementCooldownDetails | null {
+  const details = (err as { details?: { code?: unknown; retryAt?: unknown } } | null)?.details;
+  if (details?.code !== 'endorsement/cooldown' || typeof details.retryAt !== 'string') {
+    return null;
+  }
+  const retryAt = new Date(details.retryAt);
+  if (Number.isNaN(retryAt.getTime())) return null;
+  return { code: 'endorsement/cooldown', retryAt };
+}
+
+/**
  * The Firebase callable error code, with the client SDK's `functions/` prefix
  * stripped, or null when the rejection carries no recognisable code.
  *
