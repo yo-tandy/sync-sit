@@ -87,6 +87,28 @@ describe('DeleteAccountSection', () => {
     expect(onSignOut).toHaveBeenCalledTimes(1);
   });
 
+  it('a sign-out failure AFTER a successful delete still navigates, with no error copy shown (review round 1)', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const onSignOut = vi.fn().mockRejectedValue(new Error('network dropped'));
+    const { onDeleted } = setup({ onSignOut });
+    fireEvent.click(screen.getByText('Delete my account'));
+    fireEvent.change(screen.getByLabelText('Type DELETE to confirm'), {
+      target: { value: 'DELETE' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Yes, delete my account' }));
+
+    await waitFor(() => expect(onDeleted).toHaveBeenCalledTimes(1));
+    // The account is already gone at this point -- a sign-out failure must
+    // never read as a delete failure, and must never re-open/re-enable a
+    // dialog for an account that no longer exists.
+    expect(screen.queryByText('Something went wrong. Please try again.')).toBeNull();
+    expect(consoleError).toHaveBeenCalledWith(
+      '[account] sign-out after deletion failed',
+      expect.any(Error),
+    );
+    consoleError.mockRestore();
+  });
+
   it('maps admin/last-admin to its own copy and keeps the dialog open', async () => {
     const onDeleteAccount = vi
       .fn()
