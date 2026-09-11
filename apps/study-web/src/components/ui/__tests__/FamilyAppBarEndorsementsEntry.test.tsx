@@ -18,7 +18,9 @@ import { FamilyAppBar } from '../FamilyAppBar';
 describe('FamilyAppBar endorsements entry', () => {
   it('exposes My endorsements linking /family/endorsements (issue #191)', () => {
     renderWithProviders(<FamilyAppBar />);
-    fireEvent.click(screen.getAllByRole('button')[0]);
+    // NOT `getAllByRole('button')[0]` (#417): the desktop app switch also
+    // renders buttons in this closed bar under jsdom.
+    fireEvent.click(screen.getByRole('button', { name: /open menu/i }));
     // #119 renders the same list as md+ tabs too — scope to the burger dialog.
     const link = within(screen.getByRole('dialog')).getByRole('link', { name: /My endorsements/i });
     expect(link).toHaveAttribute('href', '/family/endorsements');

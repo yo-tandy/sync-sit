@@ -1,11 +1,11 @@
 import { Link, Outlet } from 'react-router';
-import { useTranslation } from 'react-i18next';
 import { useDocumentGround } from '@ejm/shared-ui';
 import { getSitRole } from '@ejm/sit-core';
+import { useTranslation } from 'react-i18next';
 import { PageContainer } from '@/components/ui/PageContainer';
 import { AuthGuard } from './AuthGuard';
 import { AppSwitchBarHost } from '@/components/ui/AppSwitchBarHost';
-import { AppSwitchMenuItem } from '@/components/ui/AppSwitchMenuItem';
+import { AppSwitchInlineHost } from '@/components/ui/AppSwitchInlineHost';
 import { ScrollToTop } from '@/components/ScrollToTop';
 import { useAuthStore } from '@/stores/authStore';
 
@@ -29,16 +29,17 @@ import { useAuthStore } from '@/stores/authStore';
  * parent and a student reach the same hub -- what differs is which rows it
  * shows, which is the host's job, not the guard's.
  *
- * DESKTOP EXIT (#416 review). `AppSwitchBar` is `md:hidden` by design -- the
- * other shells have NavTabs up there and where the switch belongs on desktop
- * is still open (plan Q9). That left this layout, which has no AppBar either,
- * with literally no navigation at all at >=md: you could reach the hub and not
- * leave it. So the exits are rendered here, in this layout only, rather than
- * by unhiding the shared bar for all six shells or by adding a back arrow --
- * a back arrow would frame the hub as sitting underneath the portal you came
- * from, which is exactly what this layout exists to deny. Same two
- * destinations the phone bar offers, laid out for desktop, and still neutral:
- * grays only, no `--color-brand-*`.
+ * DESKTOP EXIT (#416 review, updated #417/Q9). `AppSwitchBar` is `md:hidden`
+ * by design -- the other shells have NavTabs (or, since #417, their own
+ * `AppSwitchInline`) up there, and this layout has no AppBar either. Without
+ * its own exit at >=md, you could reach the hub and not leave it. So the
+ * exits are rendered here, in this layout only, rather than by unhiding the
+ * shared bar for all six shells or by adding a back arrow -- a back arrow
+ * would frame the hub as sitting underneath the portal you came from, which
+ * is exactly what this layout exists to deny. Same two destinations the
+ * phone bar offers, laid out for desktop, now via `AppSwitchInlineHost`
+ * (#417) rather than the single-target `AppSwitchMenuItem` it used before Q9
+ * was answered -- still neutral: grays only, no `--color-brand-*`.
  */
 export function AccountLayout() {
   const { t } = useTranslation();
@@ -68,10 +69,12 @@ export function AccountLayout() {
       <div className="min-h-screen bg-ground-admin pb-app-switch-bar md:pb-0">
         <ScrollToTop />
         <header className="hidden border-b border-gray-200 bg-white md:block">
-          <nav
-            aria-label={t('appSwitch.barLabel')}
-            className="mx-auto flex max-w-3xl items-center justify-between gap-4 px-5 py-2"
-          >
+          {/* Plain div, not its own `<nav>`: AppSwitchInlineHost renders one
+              (aria-label appSwitch.barLabel) itself, and nesting a nav inside
+              an identically-labelled nav is worse than just not wrapping it
+              (#417 -- this used to BE that nav, back when it held the
+              single-target AppSwitchMenuItem instead). */}
+          <div className="mx-auto flex max-w-3xl items-center justify-between gap-4 px-5 py-2">
             {portalHref ? (
               <Link
                 to={portalHref}
@@ -82,10 +85,8 @@ export function AccountLayout() {
             ) : (
               <span />
             )}
-            <div className="w-auto text-sm">
-              <AppSwitchMenuItem />
-            </div>
-          </nav>
+            <AppSwitchInlineHost accountHref="/account" homeHref={portalHref ?? '/'} />
+          </div>
         </header>
         <PageContainer>
           <Outlet />

@@ -18,14 +18,15 @@ const sitMark = { sm: sitSm, md: sitMd };
  * one-time handoff code, then navigates with the code in the URL FRAGMENT
  * (#code=… — fragments never reach servers or logs). Non-optimistic: the
  * entry disables with a spinner until the mint resolves; nothing navigates
- * on failure. Shared by the tutor AppBar and the FamilyAppBar.
+ * on failure.
  *
- * Hidden below `md` BY THE TWO APP BARS since #365, because there the
- * app-switch bar is the entry point and a second one would let a code be
- * minted around the bar's whole-bar lock. At `md+` the bar is `md:hidden`
- * and this is the only switcher there is, until Q9 is answered (#417).
- * AdminInfoPage is unwrapped on purpose: it is a public route with no shell
- * and therefore no bar at any width.
+ * ADMININFOPAGE ONLY now (#417, plan Q9 resolved): the tutor AppBar and
+ * FamilyAppBar both dropped this from their burgers entirely once
+ * `AppSwitchInline` covered `md+` in their own top strips -- the app-switch
+ * bar already covered below `md`, so there was no width left for this row
+ * to carry in either shell. AdminInfoPage is a public route with no shell
+ * and therefore no bar (or inline switcher) at any width, so it keeps this
+ * as its one-click way back to sync-sit.
  */
 export function AppSwitchMenuItem() {
   const { t, i18n } = useTranslation();
