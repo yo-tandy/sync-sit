@@ -5,7 +5,13 @@ import { writeUserActivity } from '@ejm/shared-functions/admin/writeAuditLog.js'
 // haversineDistance lives in @ejm/shared-core (sit-core merely re-exports it);
 // study-functions already depends on @ejm/shared-core, so we import it there
 // directly rather than pulling in sit-core just for the geo helper.
-import { haversineDistance, getParentProfile, postcodeToArrondissement, getContact } from '@ejm/shared-core';
+import {
+  haversineDistance,
+  compareByDistanceLast,
+  getParentProfile,
+  postcodeToArrondissement,
+  getContact,
+} from '@ejm/shared-core';
 import type { User } from '@ejm/shared-core';
 import type { StudyUser, TutorProfile, SubjectOffering, TutorSearchResult } from '@ejm/study-core';
 import { searchTutorsSchema } from '../validation/search.js';
@@ -144,6 +150,19 @@ export const searchTutors = onCall(
         continue;
       }
 
+      // Distance from the tutor's own home address (#442/#474 root
+      // `address`) to the family's search location — computed regardless of
+      // areaMode (issue #439), independent of the areaLatLng-based
+      // `distance` above. Ranking-only: never gates a result (the radius and
+      // coverage checks above/below are untouched), only feeds the LAST sort
+      // tie-break below.
+      const addressDistance: number | null =
+        user.address && params.latLng
+          ? Math.round(
+              haversineDistance({ lat: user.address.lat, lng: user.address.lng }, params.latLng) * 10,
+            ) / 10
+          : null;
+
       // Coverage: does this tutor's area reach THIS family? Model: geography
       // constrains only the family-side legs ('family_home'/'library'). An
       // existing consent relationship (approvedFamilies) overrides geography
@@ -229,6 +248,7 @@ export const searchTutors = onCall(
         sessionLengthsMin: tutor.sessionLengthsMin || [],
         locationPrefs: projectedPrefs,
         distance,
+        addressDistance,
         endorsementCount: tutor.endorsementCount ?? 0,
         cancellationNoticeHours: tutor.cancellationNoticeHours ?? 0,
         requestStatus,
@@ -244,15 +264,20 @@ export const searchTutors = onCall(
       results.push(result);
     }
 
-    // Sort: distance ascending with nulls last, then endorsementCount descending.
+    // Sort: distance ascending with nulls last, then endorsementCount
+    // descending — both UNCHANGED (issue #439 appends only, never reorders
+    // above its tie-break) — then, on an exact tie, by the tutor's home
+    // address distance (nearer first, no-address last, never excluded).
     results.sort((a, b) => {
       if (a.distance === null && b.distance === null) {
-        return b.endorsementCount - a.endorsementCount;
+        if (a.endorsementCount !== b.endorsementCount) return b.endorsementCount - a.endorsementCount;
+        return compareByDistanceLast(a.addressDistance, b.addressDistance);
       }
       if (a.distance === null) return 1;
       if (b.distance === null) return -1;
       if (a.distance !== b.distance) return a.distance - b.distance;
-      return b.endorsementCount - a.endorsementCount;
+      if (a.endorsementCount !== b.endorsementCount) return b.endorsementCount - a.endorsementCount;
+      return compareByDistanceLast(a.addressDistance, b.addressDistance);
     });
 
     console.log(`Returning ${results.length} matching tutors`);
