@@ -6,7 +6,7 @@ import {
   DO_ENDORSEMENT_TEXT_MIN,
   DO_ENDORSEMENT_REF_NAME_MAX,
 } from '@ejm/do-core';
-import { Button, Dialog, Input, Textarea } from '@ejm/shared-ui';
+import { Button, Dialog, Input, Textarea, endorsementCooldownDetails } from '@ejm/shared-ui';
 import { functions } from '@/config/firebase';
 
 /**
@@ -38,7 +38,7 @@ export function EndorseDoerDialog({
   onClose: () => void;
   onEndorsed: () => void;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [text, setText] = useState('');
   const [refName, setRefName] = useState(defaultRefName);
   const [submitting, setSubmitting] = useState(false);
@@ -68,6 +68,17 @@ export function EndorseDoerDialog({
     } catch (err: unknown) {
       const code = (err as { code?: string })?.code;
       const reason = (err as { details?: { reason?: string } } | null)?.details?.reason;
+      // The cool-down (issue #356) is neither success nor a settled
+      // already-endorsed state — the family has not endorsed yet, they just
+      // have to wait, so this does NOT call onEndorsed.
+      const cooldown = endorsementCooldownDetails(err);
+      if (cooldown) {
+        setError(
+          t('family.endorse.errorCooldown', { date: formatRetryDate(cooldown.retryAt, i18n.language) }),
+        );
+        setSubmitting(false);
+        return;
+      }
       if (code === 'functions/already-exists') onEndorsed();
       setError(t(errorKeyFor(code, reason)));
       setSubmitting(false);
@@ -122,6 +133,19 @@ export function EndorseDoerDialog({
       )}
     </Dialog>
   );
+}
+
+/**
+ * Formats a cool-down `retryAt` for the "you can ask again on …" copy — the
+ * house `toLocaleDateString(lang === 'fr' ? 'fr-FR' : 'en-US', ...)` pattern
+ * study's `EndorseTutorDialog` also uses, rather than a new date utility.
+ */
+function formatRetryDate(date: Date, lang: string): string {
+  return date.toLocaleDateString(lang === 'fr' ? 'fr-FR' : 'en-US', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
 }
 
 /**

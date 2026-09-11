@@ -4,3 +4,4 @@ export * from './roles.js';
 export * from './statuses.js';
 export * from './adminConfigDefs.js';
 export * from './retention.js';
+export * from './endorsements.js';

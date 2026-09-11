@@ -79,6 +79,14 @@ export { deleteMyAccount } from './account/deleteMyAccount.js';
 // (issue #346, PII minimisation follow-up from #280 / PR #337).
 export { getCrossAppReferences } from './references/getCrossAppReferences.js';
 
+// Endorsement resubmission dedup/cool-down (issue #356) — shared by
+// submitTutorEndorsement (study) and doSubmitEndorsement (do) so the two
+// callables cannot drift on the rule.
+export {
+  checkEndorsementResubmission,
+  type EndorsementResubmissionQuery,
+} from './references/endorsementResubmission.js';
+
 // Callables — admin
 export { getAdminDashboard } from './admin/getAdminDashboard.js';
 export { listUsers } from './admin/listUsers.js';
