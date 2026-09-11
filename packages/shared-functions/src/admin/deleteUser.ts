@@ -16,6 +16,7 @@ import {
 } from './erasureCounterpartyNotify.js';
 import { createClaimReleaser, SIT_PROVENANCE } from '../schedule/claimRelease.js';
 import type { SessionBlockEntry } from '../schedule/sessionOverride.js';
+import { notifyBlockedMinorBestEffort } from '../guardian/notifyBlockedMinorBestEffort.js';
 
 interface DeleteUserInput {
   targetUserId: string;
@@ -51,6 +52,60 @@ async function commitInChunks(ops: BatchOp[]): Promise<void> {
 }
 
 /**
+ * Reads the target user doc and, if it is the LAST active admin, refuses to
+ * erase it (issue #421, option 2b). Not a denial of the erasure right --
+ * a PRECONDITION: appoint another admin and the same call succeeds. GDPR
+ * still gets its erasure; the platform just never ends up with zero admins
+ * able to grant it.
+ *
+ * Runs inside a Firestore transaction with a count taken AT CALL TIME, never
+ * a value the caller read earlier -- and, when the check passes, the SAME
+ * transaction immediately writes `isAdmin: false` on the target. That write
+ * is not about this account's admin rights (it is about to be fully erased
+ * either way) -- it is what makes the count race-proof. Picture two admins,
+ * exactly two active, each erasing the OTHER at the same moment: both
+ * transactions run the identical count query and both read every admin doc
+ * it returns, including each other's target. Whichever commits first flips
+ * its target's `isAdmin` to false; Firestore then forces the second
+ * transaction to retry, because it read the very doc the first one just
+ * changed. On retry the count query no longer sees that admin, so the second
+ * call now sees a real count of one and correctly refuses. A read-only check
+ * (no write) would let both transactions see the same stale count of two and
+ * both pass, leaving nobody able to administer the platform.
+ *
+ * Returns the target's data (read before the `isAdmin` write), so the caller
+ * gets the SAME snapshot `eraseUserAccount` has always started from, with no
+ * second read.
+ */
+async function guardAgainstLastAdmin(
+  userRef: FirebaseFirestore.DocumentReference,
+): Promise<FirebaseFirestore.DocumentData> {
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(userRef);
+    if (!snap.exists) {
+      throw new HttpsError('not-found', 'User not found');
+    }
+    const data = snap.data()!;
+
+    if (data.isAdmin === true && data.status === 'active') {
+      const activeAdmins = await tx.get(
+        db.collection('users').where('isAdmin', '==', true).where('status', '==', 'active'),
+      );
+      if (activeAdmins.size <= 1) {
+        throw new HttpsError(
+          'failed-precondition',
+          'You are the last active admin — appoint another admin first.',
+          { code: 'admin/last-admin' },
+        );
+      }
+      tx.update(userRef, { isAdmin: false });
+    }
+
+    return data;
+  });
+}
+
+/**
  * What deleting a member actually removes — the erasure itself, with no view
  * on WHO asked for it.
  *
@@ -76,16 +131,17 @@ async function commitInChunks(ops: BatchOp[]): Promise<void> {
  * which is the honest value in both cases.
  *
  * Throws `not-found` if the user document is gone.
+ *
+ * Throws `failed-precondition` (`admin/last-admin`) if the target is the
+ * LAST active admin (issue #421, option 2b) -- see `guardAgainstLastAdmin`.
+ * Checked here, inside the ONE function both `deleteUser` and
+ * `deleteMyAccount` call, for the same reason the erasure itself lives here:
+ * a guard wired into only one of the two callables is how the last admin
+ * still gets erased through the other one.
  */
 export async function eraseUserAccount(targetUserId: string, actorUid: string) {
   const userRef = db.collection('users').doc(targetUserId);
-  const userDoc = await userRef.get();
-
-  if (!userDoc.exists) {
-    throw new HttpsError('not-found', 'User not found');
-  }
-
-  const userData = userDoc.data()!;
+  const userData = await guardAgainstLastAdmin(userRef);
   const role = getUserRole(userData as User);
   const familyId = getParentProfile(userData as User)?.familyId || null;
   const email = userData.email || '';
@@ -396,6 +452,11 @@ export async function eraseUserAccount(targetUserId: string, actorUid: string) {
         }
         await childRef.update(childUpdates);
         if (isMinor) {
+          // Issue #421, option 1b: tell the minor themselves, BEFORE their
+          // Auth account is disabled -- the same channel set the #368 mirror
+          // case uses, best-effort so a failing send can never leave the
+          // block half-applied.
+          await notifyBlockedMinorBestEffort(child, childUid, now);
           try {
             await adminAuth.updateUser(childUid, { disabled: true });
           } catch (err: any) {
