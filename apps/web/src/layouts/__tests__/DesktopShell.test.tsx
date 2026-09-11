@@ -201,9 +201,15 @@ describe('the app-switch bar is mounted in sit’s shells (#365)', () => {
     currentAppTabNavigatesHome(bar, /sync\/sit/, 'babysitter home');
   });
 
-  it('AdminLayout renders NO bar — which is why the burger keeps admin’s switch row', () => {
+  it('AdminLayout renders NO fixed bottom bar — which is why the burger keeps admin’s switch row below md', () => {
     renderLayout(<AdminLayout />, 'admin page');
-    expect(screen.queryByRole('navigation', SWITCH_BAR)).toBeNull();
+    // #417: AdminLayout DOES now render a "Switch app" landmark at md+ --
+    // AppSwitchInline in the SideNav head -- so this scopes to the fixed
+    // bar specifically, the same way the AccountLayout pin below does.
+    const bars = screen
+      .getAllByRole('navigation', SWITCH_BAR)
+      .filter((n) => /\bfixed\b/.test(n.className));
+    expect(bars).toHaveLength(0);
   });
 
   it('AccountLayout — the SEVENTH mounting shell — reserves the token height too (#419)', () => {

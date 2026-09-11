@@ -20,7 +20,7 @@ import {
   ShareIcon,
   NavTabs,
 } from '@ejm/shared-ui';
-import { AppSwitchMenuItem } from './AppSwitchMenuItem';
+import { AppSwitchInlineHost } from './AppSwitchInlineHost';
 import { NotificationBell } from './NotificationBell';
 
 function MenuIcon({ className }: { className?: string }) {
@@ -89,7 +89,11 @@ export function FamilyAppBar() {
         <Link to="/family" aria-label={t('menu.home')} className="-m-1.5 flex h-11 w-11 items-center justify-center text-white">
           <HomeIcon className="h-5 w-5" />
         </Link>
-        <span className="text-sm font-semibold text-white">Sync/Study</span>
+        <div className="flex items-center gap-3">
+          <span className="text-sm font-semibold text-white">Sync/Study</span>
+          {/* Desktop app switch (#417, plan Q9), next to the app name. */}
+          <AppSwitchInlineHost accountHref="/family/account" homeHref="/family" tone="onBrand" />
+        </div>
         <div className="flex items-center gap-2">
           <NotificationBell to="/family/notifications" />
           <button
@@ -130,15 +134,9 @@ export function FamilyAppBar() {
 
           {/* Section 3 -- cross-app and language (issue #339). */}
           <MenuItem icon={<ShareIcon className="h-5 w-5" />} label={t('share.title')} to="/share" onNavigate={() => setMenuOpen(false)} />
-          {/* Below `md` the app-switch BAR (#365) is the entry point, so this
-              row hides there — two entry points would let a second handoff
-              code be minted around the bar's whole-bar lock. `hidden` is
-              display:none, so it leaves the tab order and the a11y tree too.
-              At `md+` the bar is `md:hidden` and this row is the ONLY
-              switcher, until Q9 is answered (#417). */}
-          <div className="hidden md:block">
-            <AppSwitchMenuItem />
-          </div>
+          {/* #417 (plan Q9 resolved): the burger row this used to carry is
+              GONE, not hidden at one breakpoint -- see AppBar.tsx's own note
+              on the same change for the full rationale. */}
           <div className="px-4 py-3">
             <LanguageSelector />
           </div>
