@@ -74,7 +74,7 @@ export function endorsementCooldownDetails(err: unknown): EndorsementCooldownDet
  * active admin, so a member who is that admin can hit this from the
  * self-serve dialog too, not only from the admin panel.
  *
-
+ *
  * There is deliberately NO supervised-minor or guardian code here. #368's
  * owner decision (2026-08-29, see `deleteMyAccount.ts`'s docstring) is that a
  * supervised minor MAY delete their own account without a guardian veto --
