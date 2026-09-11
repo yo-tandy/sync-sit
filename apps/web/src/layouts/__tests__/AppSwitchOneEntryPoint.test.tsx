@@ -96,6 +96,14 @@ describe('exactly one app-switch entry point per breakpoint (#417, plan Q9)', ()
     expect(landmarks[0].className).toMatch(/(?<!:)\bhidden\b/);
     expect(landmarks[0].className).toMatch(/\bmd:flex\b/);
 
+    // NOT nested inside SideNav's own "Primary navigation" landmark (#492
+    // review) -- SideNav used to render `head` INSIDE its own <nav>, so
+    // AppSwitchInline's <nav aria-label="Switch app"> ended up nav-in-nav at
+    // md+, the exact pattern this PR avoids everywhere else. SideNav.tsx now
+    // renders `head` as a sibling of its own <nav> under a shared wrapper.
+    const primaryNav = screen.getByRole('navigation', { name: /primary navigation/i });
+    expect(primaryNav.contains(landmarks[0])).toBe(false);
+
     // The burger's own row is md:hidden -- the sub-md-only half of the pair.
     // It lives inside the Dialog, which renders nothing until opened.
     fireEvent.click(screen.getByRole('button', { name: /open menu/i }));
