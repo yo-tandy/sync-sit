@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useClientConfigValue } from '@/lib/adminConfigClient';
-import { ADMIN_CONFIG_DEFS } from '@ejm/shared-core';
+import { ADMIN_CONFIG_DEFS, CONSENT_VERSION } from '@ejm/shared-core';
 import { useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { httpsCallable } from 'firebase/functions';
@@ -226,7 +226,7 @@ export function TutorEnrollment() {
         // the existing account — omit `password` entirely (not '') so the
         // backend takes the add-profile branch.
         ...(isAddProfile ? {} : { password }),
-        consentVersion: '2025-12-01',
+        consentVersion: CONSENT_VERSION,
         enrollment,
       });
       if (isAddProfile) {
@@ -351,7 +351,7 @@ export function TutorEnrollment() {
             onSubmit={async (password) => {
               handlePasswordNext(password);
             }}
-            consentVersion="2025-12-01"
+            consentVersion={CONSENT_VERSION}
             loading={loading}
             error={error}
           />

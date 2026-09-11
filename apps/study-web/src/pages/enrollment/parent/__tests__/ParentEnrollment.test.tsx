@@ -112,6 +112,9 @@ vi.mock('@ejm/shared-core', () => ({
   ADMIN_CONFIG_DEFS: {
     verificationCodeCooldownS: { default: 60, min: 60, max: 600, description: '' },
   },
+  // Every enrollment flow now imports the shared value (issue #415
+  // decision 2) instead of hardcoding its own — the mock must define it too.
+  CONSENT_VERSION: '1.0',
   getParentProfile: (userDoc: { profiles?: { parent?: unknown } } | null) =>
     userDoc?.profiles?.parent ?? null,
   // Mirrors the real helper (issue #279, round-7 shape): EITHER membership
@@ -163,7 +166,7 @@ vi.mock('@ejm/shared-ui', () => ({
     <button
       data-testid="step-password"
       data-collect={String(props.collectPassword)}
-      onClick={() => props.onSubmit('Pw123456!', '2025-12-01')}
+      onClick={() => props.onSubmit('Pw123456!', 'sentinel-consent-version')}
     >
       password-submit
     </button>
@@ -283,8 +286,9 @@ describe('ParentEnrollment orchestrator', () => {
       verificationCode: '123456',
       password: 'Pw123456!',
       // The consent version StepPassword presented is the one persisted
-      // (issue #178) — never sit's '1.0'.
-      consentVersion: '2025-12-01',
+      // (issue #178) — a sentinel here (not '1.0') proves it's forwarded
+      // verbatim rather than hardcoded on the orchestrator.
+      consentVersion: 'sentinel-consent-version',
       familyName: 'Durand',
       firstName: 'Claire',
       address: '10 Rue Cler, 75007 Paris',
@@ -433,7 +437,7 @@ describe('ParentEnrollment orchestrator', () => {
     }
     // The consent-only step's acceptance still travels: the backend records
     // it in the audit trail (issue #178).
-    expect(enroll.payload).toMatchObject({ consentVersion: '2025-12-01' });
+    expect(enroll.payload).toMatchObject({ consentVersion: 'sentinel-consent-version' });
     // Already signed in — no re-authentication.
     expect(h.signIn).not.toHaveBeenCalled();
     // refreshUserDoc must be awaited before the success navigation.

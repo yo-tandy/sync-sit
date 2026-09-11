@@ -13,9 +13,10 @@ export const MAX_PHOTO_SIZE = 5 * 1024 * 1024;
  * Current consent-document versions. The guardian callables require callers
  * to send versions EQUAL to these (stale consent → invalid-argument), so a
  * bump here forces clients to re-present the documents.
- * NOTE: the enrollment flows historically hardcode their consentVersion in
- * the web apps ('1.0' in sit, '2025-12-01' in study); these constants are the
- * server-side source of truth for the guardian consent record.
+ * NOTE: until issue #415 decision 2, the enrollment flows hardcoded their own
+ * consentVersion per app ('1.0' in sit, '2025-12-01' in study, '2026-08-28'
+ * in do) instead of reading it from here — see CONSENT_VERSION below, which
+ * every enrollment flow now sends instead of a local literal.
  *
  * DELIBERATELY NOT BUMPED BY PR #412, which rewrote the substance of both
  * documents and moved only their "Last updated" date. These constants are the
@@ -36,6 +37,47 @@ export const MAX_PHOTO_SIZE = 5 * 1024 * 1024;
 export const TOS_VERSION = '1.0';
 export const PRIVACY_POLICY_VERSION = '1.0';
 export const SUPERVISION_AGREEMENT_VERSION = '1.0';
+
+/**
+ * All three consent-document versions in one object, for call sites (e.g.
+ * the kid-invite consent payload) that need to send or compare the full set
+ * together rather than one document at a time.
+ */
+export const CONSENT_VERSIONS = {
+  tos: TOS_VERSION,
+  privacy: PRIVACY_POLICY_VERSION,
+  supervision: SUPERVISION_AGREEMENT_VERSION,
+} as const;
+
+/**
+ * The ONE `consentVersion` string every enrollment flow (sit, study, do,
+ * cross-app, `enrollStudentIdentity`, `enrollFamily`'s legacy default) sends
+ * on the enrollment payload — issue #415 decision 2. Before this constant
+ * existed, four flows hardcoded four different literals ('1.0' in sit,
+ * '2025-12-01' in study, '2026-08-28' in do) even though all four were
+ * presenting the SAME legal text: those dates were app-local labels picked
+ * when each app's wizard shipped, not evidence of distinct documents. This
+ * constant reconciles them onto TOS_VERSION so there is exactly one value in
+ * play going forward.
+ *
+ * Two things this constant deliberately does NOT do:
+ *  - It does not rewrite already-stored `consentVersion` values. A user who
+ *    enrolled under study's old '2025-12-01' label (or do's '2026-08-28')
+ *    keeps that value in their stored record — the audit trail names the
+ *    label that was actually in front of them when they consented, and
+ *    rewriting history to make old and new records match would be the fake
+ *    re-consent this scheme unification is explicitly not attempting.
+ *  - It is not a bump. Bumping TOS_VERSION / PRIVACY_POLICY_VERSION /
+ *    SUPERVISION_AGREEMENT_VERSION (and therefore this constant, since it is
+ *    derived from them) is a deliberate act coupled to a counsel sign-off on
+ *    revised document text — see the block comment above. A version bump
+ *    with no re-consent gate reading it is silent: nothing currently
+ *    compares a stored `consentVersion` against the live constant outside
+ *    `requireCurrentConsent` (guardian/kid-invite only). Building that gate
+ *    for the enrollment flows is issue #415 decision 1, tracked as a
+ *    follow-up, not part of this change.
+ */
+export const CONSENT_VERSION = TOS_VERSION;
 
 /** Kid-invite validity window in days (resend resets the clock) */
 export const KID_INVITE_VALIDITY_DAYS = ADMIN_CONFIG_DEFS.kidInviteValidityDays.default;

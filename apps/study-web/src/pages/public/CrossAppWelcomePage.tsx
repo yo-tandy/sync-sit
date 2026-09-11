@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { httpsCallable } from 'firebase/functions';
-import { isBabysitter } from '@ejm/shared-core';
+import { CONSENT_VERSION, isBabysitter } from '@ejm/shared-core';
 import { getStudyRole, type SubjectOffering } from '@ejm/study-core';
 import { ensureTutorProfileLoaded } from '@/lib/ensureTutorProfileLoaded';
 import { Button, Card, Input, Select, Spinner, enrollmentErrorReason, ageGateErrorCode } from '@ejm/shared-ui';
@@ -12,9 +12,6 @@ import { crossAppTutorGaps, hasCrossAppTutorGaps, postLoginRouter } from '@/util
 import { SIT_APP_URL } from '@/utils/appSwitch';
 import { StepSubjects } from '@/pages/enrollment/tutor/StepSubjects';
 import { CLASS_LEVELS_TUTOR, GENDER_OPTIONS, getAge } from '@/pages/enrollment/tutor/profileFields';
-
-// Same consent version the classic wizard passes to StepPassword.
-const CONSENT_VERSION = '2025-12-01';
 
 /**
  * One-tap cross-app arrival for a sit babysitter with no study role (issue

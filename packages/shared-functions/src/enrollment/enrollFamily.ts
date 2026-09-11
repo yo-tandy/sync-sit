@@ -2,7 +2,7 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { db, adminAuth } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { familyEnrollmentSchema } from '@ejm/sit-core';
-import { DEFAULT_NOTIF_PREFS } from '@ejm/shared-core';
+import { CONSENT_VERSION, DEFAULT_NOTIF_PREFS } from '@ejm/shared-core';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
 import { addProfileToUser, assertCanAddProfile } from './addProfileToUser.js';
 import { assertCodeIdentityClass } from '../auth/verificationCodeClass.js';
@@ -33,8 +33,9 @@ interface EnrollFamilyData {
     requireReferences?: boolean;
     maxRate?: number;
   };
-  // Consent-document version the client presented (study sends '2025-12-01';
-  // legacy sit clients send nothing → defaults to sit's '1.0').
+  // Consent-document version the client presented — every client now sends
+  // the shared CONSENT_VERSION (issue #415 decision 2); legacy sit clients
+  // that send nothing default to it too.
   consentVersion?: string;
 }
 
@@ -183,7 +184,7 @@ export const enrollFamily = onCall(
         // convention, not a helper guarantee: doEnrollDoer takes the other
         // side and refreshes the root pair via setBaseFields — see
         // addProfileToUser's docstring.)
-        auditDetails: { familyId, consentVersion: data.consentVersion || '1.0' },
+        auditDetails: { familyId, consentVersion: data.consentVersion || CONSENT_VERSION },
       });
     } else {
       await db.collection('users').doc(uid).set({
@@ -208,10 +209,10 @@ export const enrollFamily = onCall(
         createdAt: now,
         updatedAt: now,
         consentAt: now,
-        // The version the client actually presented ('2025-12-01' from
-        // study's wizard); '1.0' preserves the pre-#178 record for legacy
-        // sit clients that send nothing.
-        consentVersion: data.consentVersion || '1.0',
+        // The version the client actually presented; every client now sends
+        // the shared CONSENT_VERSION (issue #415 decision 2) — the default
+        // here only covers legacy sit clients that send nothing.
+        consentVersion: data.consentVersion || CONSENT_VERSION,
       });
 
       // 7. Clean up verification code and audit (new-account path only; the
