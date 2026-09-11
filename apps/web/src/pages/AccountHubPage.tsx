@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { httpsCallable } from 'firebase/functions';
-import { AccountHome, type AccountSection } from '@ejm/shared-ui';
+import { AccountHome, DeleteAccountSection, type AccountSection } from '@ejm/shared-ui';
 import sitSm from '@ejm/shared-ui/brand-marks/sync-sit-48.png';
 import sitMd from '@ejm/shared-ui/brand-marks/sync-sit-96.png';
 import studySm from '@ejm/shared-ui/brand-marks/sync-study-48.png';
@@ -49,6 +49,7 @@ export function AccountHubPage() {
   const navigate = useNavigate();
   const { t, i18n } = useTranslation();
   const userDoc = useAuthStore((s) => s.userDoc);
+  const logout = useAuthStore((s) => s.logout);
   const role = userDoc ? getSitRole(userDoc) : null;
   /**
    * A SIT role, not a boolean (#416 review round 4). `getSitRole` returns
@@ -190,11 +191,28 @@ export function AccountHubPage() {
     },
   ];
 
+  // Fixed, matching `deleteMyAccount`'s own non-localised confirmation token
+  // (`packages/shared-functions/src/account/deleteMyAccount.ts`). This is
+  // only ever sent by `DeleteAccountSection` once its own gate has already
+  // matched the member's typed input against the identical literal, so
+  // there is nothing to derive here.
+  const deleteMyAccount = () =>
+    httpsCallable<{ confirm: string }, void>(functions, 'deleteMyAccount')({
+      confirm: 'DELETE',
+    }).then(() => undefined);
+
   return (
     <AccountHome
       sections={sections}
       onNavigate={(href) => void navigate(href)}
       onNavigateExternal={(href) => void openStudy(href)}
+      footer={
+        <DeleteAccountSection
+          onSignOut={logout}
+          onDeleteAccount={deleteMyAccount}
+          onDeleted={() => navigate('/account-deleted')}
+        />
+      }
     />
   );
 }

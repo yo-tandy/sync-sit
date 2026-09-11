@@ -9,3 +9,7 @@ export { LoginPage } from './LoginPage.js';
 export { ForgotPasswordPage } from './ForgotPasswordPage.js';
 export { AccountHome } from './AccountHome.js';
 export type { AccountHomeProps, AccountSection, AccountRow } from './AccountHome.js';
+export { DeleteAccountSection } from './DeleteAccountSection.js';
+export type { DeleteAccountSectionProps } from './DeleteAccountSection.js';
+export { AccountDeletedPage } from './AccountDeletedPage.js';
+export type { AccountDeletedPageProps } from './AccountDeletedPage.js';

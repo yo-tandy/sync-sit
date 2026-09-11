@@ -12,7 +12,7 @@ import { WelcomePage } from '@/pages/public/WelcomePage';
 import { LoginPage } from '@/pages/public/LoginPage';
 import { ForgotPasswordPage } from '@/pages/public/ForgotPasswordPage';
 import { AboutPage } from '@/pages/public/AboutPage';
-import { PrivacyPage, TermsPage } from '@ejm/shared-ui';
+import { PrivacyPage, TermsPage, AccountDeletedPage } from '@ejm/shared-ui';
 import { BRAND, SUPPORT_EMAIL } from '@/constants/brand';
 import { SyncSitReportProblemPage } from '@/pages/public/SyncSitReportProblemPage';
 
@@ -105,6 +105,11 @@ export const router = createBrowserRouter([
       { path: '/welcome-sit', element: <CrossAppWelcomePage /> },
       { path: '/supervision-info', element: <SupervisionInfoPage /> },
       { path: '/supervision-agreement', element: <SupervisionAgreementPage /> },
+      // PUBLIC by design (#491): `DeleteAccountSection` signs the member out
+      // before it ever navigates here, so this must never sit behind
+      // `AccountLayout`'s `AuthGuard` -- a signed-out visitor would just be
+      // bounced straight back off it.
+      { path: '/account-deleted', element: <AccountDeletedPage /> },
     ],
   },
 
