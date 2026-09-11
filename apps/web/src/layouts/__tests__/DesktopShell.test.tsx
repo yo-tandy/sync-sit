@@ -85,8 +85,12 @@ describe('sit portal shells cap routed content (issue #119)', () => {
   it('AdminLayout renders the grouped desktop sidebar with every admin destination', () => {
     renderLayout(<AdminLayout />, 'admin page');
     const nav = screen.getByRole('navigation', { name: /primary navigation/i });
-    expect(nav.className).toMatch(/\bhidden\b/);
-    expect(nav.className).toMatch(/\bmd:block\b/);
+    // The sticky/scroll/visibility classes live on SideNav's wrapping div,
+    // not the <nav> itself (#492 review) -- the <nav> no longer carries them
+    // directly since `head` moved out to be a sibling of it, not nested
+    // inside it (see shared-ui's SideNav.test.tsx for that pin).
+    expect(nav.parentElement!.className).toMatch(/\bhidden\b/);
+    expect(nav.parentElement!.className).toMatch(/\bmd:block\b/);
     // The #140 dashboard grouping, mirrored: People / Trust & safety / Operations.
     for (const section of ['People', 'Trust & safety', 'Operations']) {
       expect(within(nav).getByRole('heading', { name: section })).toBeInTheDocument();
