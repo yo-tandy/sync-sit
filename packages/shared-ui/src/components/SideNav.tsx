@@ -22,13 +22,29 @@ export interface SideNavSection {
  * regrouping). Hidden below `md` so the phone shell is untouched; sticks
  * under the h-12 app bar and scrolls independently. Rendered by the layout as
  * a flex-row sibling of the capped content, not inside the app bar.
+ *
+ * `head`, optional: rendered above the sections, inside the same `<nav>`,
+ * separated by its own rule. Exists for admin's desktop app switch (#417,
+ * plan Q9) -- admin has no top-bar equivalent to the other portals'
+ * `AppBar` (its desktop nav IS this sidebar), so `AppSwitchInline` goes here
+ * instead, at the head of the one persistent nav admin has, rather than
+ * inventing a second desktop chrome surface just to hold it.
  */
-export function SideNav({ sections, ariaLabel }: { sections: SideNavSection[]; ariaLabel: string }) {
+export function SideNav({
+  sections,
+  ariaLabel,
+  head,
+}: {
+  sections: SideNavSection[];
+  ariaLabel: string;
+  head?: ReactNode;
+}) {
   return (
     <nav
       aria-label={ariaLabel}
       className="sticky top-12 hidden h-[calc(100vh-3rem)] w-56 shrink-0 overflow-y-auto border-r border-gray-200 bg-white px-3 py-4 md:block"
     >
+      {head && <div className="mb-4 border-b border-gray-100 pb-4">{head}</div>}
       {sections.map((section, i) => (
         <div key={section.title ?? i} className={i > 0 ? 'mt-5' : undefined}>
           {section.title && (
