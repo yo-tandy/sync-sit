@@ -30,6 +30,15 @@ export interface TutorSearchResult {
 
   /** Haversine distance in km, or null when it cannot be computed. */
   distance: number | null;
+  /**
+   * Haversine distance in km from the tutor's root `address` (#442/#474) to
+   * the family's search location, or null when either side lacks
+   * coordinates. Ranking-only (issue #439) — a LAST sort tie-break, never a
+   * filter; independent of `distance` above (areaLatLng-based, used for the
+   * radius/coverage gates and the existing sort keys, which this never
+   * reorders).
+   */
+  addressDistance: number | null;
   /** Count of the tutor's approved/published endorsements. */
   endorsementCount: number;
   /** Tutor's cancellation-notice policy in hours (0 = no policy). */
