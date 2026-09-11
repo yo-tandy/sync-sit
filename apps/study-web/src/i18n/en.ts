@@ -1108,6 +1108,7 @@ export default {
         'Your endorsement has been sent to {{name}}. It goes live on their profile only after they accept it.',
       errorTooShort: 'Please write at least 10 characters.',
       errorAlreadyExists: 'You\'ve already endorsed this tutor.',
+      errorCooldown: 'This tutor declined your last request. You can ask again on {{date}}.',
       errorPermission: 'Endorsements require an accepted contact request with this tutor.',
       errorInvalid: 'That endorsement can\'t be submitted — please check the text and try again.',
       error: 'Something went wrong. Please try again.',

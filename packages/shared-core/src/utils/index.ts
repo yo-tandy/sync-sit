@@ -15,3 +15,4 @@ export * from './effectiveSearchable.js';
 export * from './providerLookup.js';
 export * from './photoType.js';
 export * from './safeNext.js';
+export * from './endorsementResubmission.js';

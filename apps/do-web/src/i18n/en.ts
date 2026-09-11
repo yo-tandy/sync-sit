@@ -423,6 +423,7 @@ export default {
       errorTooShort: 'Please write at least {{min}} characters.',
       errorNameRequired: 'Please enter the name families should see.',
       errorAlreadyExists: 'Your family has already endorsed this student.',
+      errorCooldown: 'This student declined your last request. You can ask again on {{date}}.',
       errorNoCompletedTask: 'You can endorse a student once a task you assigned them is completed.',
       errorPermission: 'You are not able to endorse this student.',
       errorInvalid: 'Please check what you wrote and try again.',

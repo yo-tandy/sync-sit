@@ -122,4 +122,103 @@ describe('submitTutorEndorsement', () => {
       callFunction('submitTutorEndorsement', { tutorUserId: seed.tutor2.uid, referenceText: VALID_TEXT, refName: 'X' })
     ).rejects.toThrow();
   });
+
+  // Issue #356 option (b): dedup is on LIVE statuses only, so a decline is
+  // NOT permanent — but a family may not simply resubmit right away. Mirrors
+  // tests/integration/do/endorsements.test.ts's identical rule for do, since
+  // the two callables share checkEndorsementResubmission (shared-functions).
+  describe('resubmission after a decline (issue #356)', () => {
+    const DAY_MS = 24 * 60 * 60 * 1000;
+
+    async function submitAndDismiss(): Promise<string> {
+      const { referenceId } = await callFunction<{ referenceId: string }>(
+        'submitTutorEndorsement',
+        { tutorUserId: seed.tutor2.uid, referenceText: VALID_TEXT, refName: 'Marie' },
+        parent1Token,
+      );
+      await callFunction('respondToTutorEndorsement', { referenceId, action: 'dismiss' }, tutor2Token);
+      expect((await getDb().collection('references').doc(referenceId).get()).data()!.status)
+        .toBe('removed');
+      return referenceId;
+    }
+
+    it('rejects a resubmission while the existing endorsement is still PENDING (live)', async () => {
+      await callFunction(
+        'submitTutorEndorsement',
+        { tutorUserId: seed.tutor2.uid, referenceText: VALID_TEXT, refName: 'Marie' },
+        parent1Token,
+      );
+      await expect(
+        callFunction(
+          'submitTutorEndorsement',
+          { tutorUserId: seed.tutor2.uid, referenceText: VALID_TEXT, refName: 'Marie' },
+          parent1Token,
+        ),
+      ).rejects.toMatchObject({ code: 'ALREADY_EXISTS' });
+    });
+
+    it('rejects a resubmission once the existing endorsement is APPROVED (live)', async () => {
+      const { referenceId } = await callFunction<{ referenceId: string }>(
+        'submitTutorEndorsement',
+        { tutorUserId: seed.tutor2.uid, referenceText: VALID_TEXT, refName: 'Marie' },
+        parent1Token,
+      );
+      await callFunction('respondToTutorEndorsement', { referenceId, action: 'accept' }, tutor2Token);
+      await expect(
+        callFunction(
+          'submitTutorEndorsement',
+          { tutorUserId: seed.tutor2.uid, referenceText: VALID_TEXT, refName: 'Marie' },
+          parent1Token,
+        ),
+      ).rejects.toMatchObject({ code: 'ALREADY_EXISTS' });
+    });
+
+    it('rejects a resubmission 10 days after a decline, with the cool-down code and a retryAt', async () => {
+      const referenceId = await submitAndDismiss();
+      const declinedAt = new Date(Date.now() - 10 * DAY_MS);
+      await getDb().collection('references').doc(referenceId).update({ updatedAt: declinedAt });
+
+      try {
+        await callFunction(
+          'submitTutorEndorsement',
+          { tutorUserId: seed.tutor2.uid, referenceText: VALID_TEXT, refName: 'Marie' },
+          parent1Token,
+        );
+        throw new Error('expected rejection');
+      } catch (err) {
+        expect(err).toMatchObject({ code: 'FAILED_PRECONDITION', details: { code: 'endorsement/cooldown' } });
+        const retryAt = (err as { details?: { retryAt?: string } }).details?.retryAt;
+        expect(retryAt).toBeTruthy();
+        const expected = new Date(declinedAt.getTime() + 30 * DAY_MS);
+        expect(new Date(retryAt!).getTime()).toBe(expected.getTime());
+      }
+      // Refused — no second doc written.
+      expect((await getDb().collection('references').get()).size).toBe(1);
+    });
+
+    it('accepts a resubmission 40 days after a decline, writing a NEW doc and leaving the old one untouched', async () => {
+      const oldReferenceId = await submitAndDismiss();
+      const declinedAt = new Date(Date.now() - 40 * DAY_MS);
+      await getDb().collection('references').doc(oldReferenceId).update({ updatedAt: declinedAt });
+
+      const res = await callFunction<{ referenceId: string }>(
+        'submitTutorEndorsement',
+        { tutorUserId: seed.tutor2.uid, referenceText: 'A second, even better session went great.', refName: 'Marie' },
+        parent1Token,
+      );
+      expect(res.referenceId).not.toBe(oldReferenceId);
+
+      const newDoc = (await getDb().collection('references').doc(res.referenceId).get()).data()!;
+      expect(newDoc.status).toBe('private');
+      expect(newDoc.referenceText).toBe('A second, even better session went great.');
+
+      // The OLD declined doc is untouched — still removed, still carrying
+      // the backdated updatedAt this test set.
+      const oldDoc = (await getDb().collection('references').doc(oldReferenceId).get()).data()!;
+      expect(oldDoc.status).toBe('removed');
+      expect((oldDoc.updatedAt as FirebaseFirestore.Timestamp).toDate().getTime()).toBe(declinedAt.getTime());
+
+      expect((await getDb().collection('references').get()).size).toBe(2);
+    });
+  });
 });
