@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { httpsCallable } from 'firebase/functions';
-import { isTutor } from '@ejm/shared-core';
+import { CONSENT_VERSION, isTutor } from '@ejm/shared-core';
 import { getSitRole } from '@ejm/sit-core';
 import { enrollmentErrorReason, ageGateErrorCode } from '@ejm/shared-ui';
 import { functions } from '@/config/firebase';
@@ -10,9 +10,6 @@ import { useAuthStore } from '@/stores/authStore';
 import { postLoginRouter } from '@/lib/postLoginRouter';
 import { STUDY_APP_URL } from '@/lib/appSwitch';
 import { Button, Card, Spinner } from '@/components/ui';
-
-// Same consent version the classic wizard passes to StepPassword.
-const CONSENT_VERSION = '1.0';
 
 /**
  * One-tap cross-app arrival for a study tutor with no sit role (issue #144,

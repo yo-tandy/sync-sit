@@ -100,6 +100,9 @@ vi.mock('@ejm/shared-core', () => ({
   ADMIN_CONFIG_DEFS: {
     verificationCodeCooldownS: { default: 60, min: 60, max: 600, description: '' },
   },
+  // Every enrollment flow now imports the shared value (issue #415
+  // decision 2) instead of hardcoding its own — the mock must define it too.
+  CONSENT_VERSION: '1.0',
 }));
 vi.mock('@ejm/study-core', () => ({
   getTutorProfile: (userDoc: { profiles?: { tutor?: unknown } } | null) =>
@@ -155,7 +158,7 @@ vi.mock('@ejm/shared-ui', () => ({
     <button
       data-testid="step-password"
       data-collect={String(props.collectPassword)}
-      onClick={() => props.onSubmit('Pw123456!', '2025-12-01')}
+      onClick={() => props.onSubmit('Pw123456!', 'sentinel-consent-version')}
     >
       password-submit
     </button>
