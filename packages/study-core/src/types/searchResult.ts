@@ -38,7 +38,8 @@ export interface TutorSearchResult {
    * radius/coverage gates and the existing sort keys, which this never
    * reorders).
    */
-  addressDistance: number | null;
+  /** Optional: only the search callables compute it; lookups (TutorLookup) build results without it. */
+  addressDistance?: number | null;
   /** Count of the tutor's approved/published endorsements. */
   endorsementCount: number;
   /** Tutor's cancellation-notice policy in hours (0 = no policy). */
