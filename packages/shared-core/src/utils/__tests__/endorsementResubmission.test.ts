@@ -38,6 +38,34 @@ describe('endorsementResubmissionState', () => {
     ).toEqual({ allowed: false, reason: 'live' });
   });
 
+  // `checkEndorsementResubmission`'s query carries no status filter, so it
+  // reads whatever history exists for a (family, recipient) pair — not just
+  // what today's write paths produce. `published` and `pending` are
+  // `ReferenceStatus` values this helper must treat as LIVE even though
+  // neither `submitTutorEndorsement`'s nor `submitEndorsement`'s own respond
+  // callable ever writes them today (both write private/approved/removed
+  // only) — an admin backfill, migration, or future feature could still land
+  // one, and a `published` (publicly-live) or `pending` (awaiting-response)
+  // doc must never be treated as a stale decline just because it is not
+  // `private`/`approved`.
+  it('blocks on a LIVE published doc, even though no current write path produces one', () => {
+    expect(
+      endorsementResubmissionState(
+        [{ status: 'published', updatedAtMs: NOW.getTime() - 400 * DAY_MS }],
+        NOW,
+      ),
+    ).toEqual({ allowed: false, reason: 'live' });
+  });
+
+  it('blocks on a LIVE pending doc, even though no current write path produces one', () => {
+    expect(
+      endorsementResubmissionState(
+        [{ status: 'pending', updatedAtMs: NOW.getTime() - 400 * DAY_MS }],
+        NOW,
+      ),
+    ).toEqual({ allowed: false, reason: 'live' });
+  });
+
   it('blocks within the cool-down after a decline, with the correct retryAt', () => {
     const declinedAt = NOW.getTime() - 10 * DAY_MS;
     const result = endorsementResubmissionState(

@@ -22,6 +22,20 @@ const ENROLLED_DOER = {
   profiles: { doer: { enrollmentComplete: true } },
 };
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** A Firestore-Timestamp-shaped fake, the shape `checkEndorsementResubmission`
+ * reads `updatedAt` through (`tsMillis`'s `toMillis` branch). */
+function fakeTimestamp(ms: number) {
+  return { toMillis: () => ms, toDate: () => new Date(ms) };
+}
+
+/** A `references` doc shape the dedup/cool-down read (`checkEndorsementResubmission`,
+ * which calls `.data()` on every doc in the snapshot) actually needs. */
+function dupDoc(status: string, updatedAtMs: number) {
+  return { id: 'existing', data: () => ({ status, updatedAt: fakeTimestamp(updatedAtMs) }) };
+}
+
 const h = vi.hoisted(() => ({
   task: null as unknown,
   doerData: {} as unknown,
@@ -220,7 +234,8 @@ describe('doSubmitEndorsement dedup wiring', () => {
   });
 
   it('refuses a duplicate with already_endorsed and writes NOTHING', async () => {
-    h.dupDocs = [{ id: 'existing' }];
+    // LIVE status ('private' — pending) blocks outright regardless of age.
+    h.dupDocs = [dupDoc('private', Date.now() - 400 * DAY_MS)];
     await expect(handler(REQUEST)).rejects.toMatchObject({
       code: 'already-exists',
       details: { reason: 'already_endorsed' },
@@ -229,6 +244,27 @@ describe('doSubmitEndorsement dedup wiring', () => {
     expect(h.directSets).toBe(0);
     // A refused submission must not leave an audit trail claiming it happened.
     expect(h.auditCalls).toBe(0);
+  });
+
+  // Issue #356: dedup is on LIVE statuses only — a decline is not final, but
+  // a family may not resubmit within the 30-day cool-down.
+  it('refuses a resubmission 10 days after a decline with the cool-down code, and writes NOTHING', async () => {
+    h.dupDocs = [dupDoc('removed', Date.now() - 10 * DAY_MS)];
+    await expect(handler(REQUEST)).rejects.toMatchObject({
+      code: 'failed-precondition',
+      details: { code: 'endorsement/cooldown' },
+    });
+    expect(h.txSets).toEqual([]);
+    expect(h.directSets).toBe(0);
+    expect(h.auditCalls).toBe(0);
+  });
+
+  it('allows a resubmission 40 days after a decline, proceeding to write inside the SAME transaction', async () => {
+    h.dupDocs = [dupDoc('removed', Date.now() - 40 * DAY_MS)];
+    await handler(REQUEST);
+    expect(h.runTransactionCalls).toBe(1);
+    expect(h.txSets).toHaveLength(1);
+    expect(h.txSets[0].data).toMatchObject({ doerUserId: 'doer-1', appSource: 'do', status: 'private' });
   });
 
   it('keeps the AUTO id — the doc identity every existing reader depends on', async () => {
