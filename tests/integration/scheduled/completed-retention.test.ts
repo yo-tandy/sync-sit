@@ -579,10 +579,12 @@ describe('completed-engagement retention (decision 19 / issue #294)', () => {
         .toBe(true);
     });
 
-    it('touches no non-completed session, however old', async () => {
-      await seedSession('study-cancelled', {
-        status: 'cancelled', completedAt: undefined, cancelledAt: daysAgo(300),
-        date: dateAgo(300),
+    it('the completed category touches no pending/confirmed session, however old', async () => {
+      // 'cancelled'/'declined' are covered by the item-3 category below (its
+      // own describe block) — this pin is scoped to statuses NEITHER category
+      // ever deletes.
+      await seedSession('study-pending', {
+        status: 'pending', completedAt: undefined, date: dateAgo(300),
       });
       await seedSession('study-confirmed', {
         status: 'confirmed', completedAt: undefined, date: dateAgo(300),
@@ -591,8 +593,9 @@ describe('completed-engagement retention (decision 19 / issue #294)', () => {
       const stats = await runStudySweepSessions(getDb(), new Date());
 
       expect(stats.completedSessionsDeleted).toBe(0);
+      expect(stats.cancelledSessionsDeleted).toBe(0);
       const db = getDb();
-      expect((await db.collection('study-sessions').doc('study-cancelled').get()).exists)
+      expect((await db.collection('study-sessions').doc('study-pending').get()).exists)
         .toBe(true);
       expect((await db.collection('study-sessions').doc('study-confirmed').get()).exists)
         .toBe(true);
@@ -652,6 +655,120 @@ describe('completed-engagement retention (decision 19 / issue #294)', () => {
       expect((await poisoned.collection('instances').get()).size).toBe(1);
       expect((await db.collection('study-sessions').doc('study-healthy').get()).exists)
         .toBe(false);
+    });
+  });
+
+  // ───────── study: cancelled/declined sessions (issue #408 item 3) ─────────
+  describe('study: cancelled/declined sessions, 30 days since last touch', () => {
+    it('deletes a cancelled one_time session 31 days past its last touch, with its schedule claim', async () => {
+      const date = dateAgo(40);
+      await seedSession('study-cancelled-old', {
+        date, status: 'cancelled', statusReason: 'cancelled_by_family',
+        completedAt: undefined, cancelledAt: daysAgo(31), updatedAt: daysAgo(31),
+      });
+      await seedOverrideClaim(TUTOR, date, { sessionId: 'study-cancelled-old' },
+        { appSource: 'study', reason: 'study_session' });
+
+      const stats = await runStudySweepSessions(getDb(), new Date());
+
+      expect(stats.cancelledSessionsDeleted).toBe(1);
+      expect(stats.overrideClaimsReleased).toBe(1);
+      expect(stats.sessionCascadeErrors).toBe(0);
+      expect((await getDb().collection('study-sessions').doc('study-cancelled-old').get()).exists)
+        .toBe(false);
+      expect(await overrideExists(TUTOR, date)).toBe(false);
+    });
+
+    it('deletes a declined_by_family session with NO cancelledAt — the absent-vs-null pin', async () => {
+      // respondToSession.ts writes ONLY updatedAt on decline — cancelledAt is
+      // never set. A sweep keyed on cancelledAt would skip this doc forever.
+      const date = dateAgo(40);
+      await seedSession('study-declined-old', {
+        date, status: 'declined', statusReason: 'declined_by_family',
+        completedAt: undefined, cancelledAt: undefined, updatedAt: daysAgo(31),
+      });
+
+      const stats = await runStudySweepSessions(getDb(), new Date());
+
+      expect(stats.cancelledSessionsDeleted).toBe(1);
+      const doc = await getDb().collection('study-sessions').doc('study-declined-old').get();
+      expect(doc.exists).toBe(false);
+    });
+
+    it('deletes a cancelled recurring series WITH its instances and schedule claim — instances age out with the series', async () => {
+      await seedSession('study-cancelled-series', {
+        type: 'recurring', date: undefined, endTime: undefined,
+        status: 'cancelled', statusReason: 'cancelled_by_tutor',
+        completedAt: undefined, cancelledAt: daysAgo(31), updatedAt: daysAgo(31),
+        recurringSlots: [{ day: 'mon', startTime: '17:00', endTime: '18:00' }],
+      });
+      const claimedDate = dateAgo(45);
+      await seedInstance('study-cancelled-series', claimedDate, {
+        status: 'cancelled', statusReason: 'cancelled_by_tutor', updatedAt: daysAgo(31),
+      });
+      await seedInstance('study-cancelled-series', dateAgo(38), {
+        status: 'cancelled', statusReason: 'cancelled_by_tutor', updatedAt: daysAgo(31),
+      });
+      // Belt-and-braces: an occurrence whose claim was somehow never pruned.
+      await seedOverrideClaim(TUTOR, claimedDate,
+        { sessionId: 'study-cancelled-series', instanceId: claimedDate },
+        { appSource: 'study', reason: 'study_session' });
+
+      const stats = await runStudySweepSessions(getDb(), new Date());
+
+      expect(stats.cancelledSessionsDeleted).toBe(1);
+      expect(stats.instancesDeleted).toBe(2);
+      expect(stats.overrideClaimsReleased).toBe(1);
+      const parent = getDb().collection('study-sessions').doc('study-cancelled-series');
+      expect((await parent.get()).exists).toBe(false);
+      expect((await parent.collection('instances').get()).size).toBe(0);
+      expect(await overrideExists(TUTOR, claimedDate)).toBe(false);
+    });
+
+    it('keeps a cancelled session updated 10 days ago — inside the window', async () => {
+      await seedSession('study-cancelled-recent', {
+        date: dateAgo(10), status: 'cancelled', statusReason: 'cancelled_by_family',
+        completedAt: undefined, cancelledAt: daysAgo(10), updatedAt: daysAgo(10),
+      });
+
+      const stats = await runStudySweepSessions(getDb(), new Date());
+
+      expect(stats.cancelledSessionsDeleted).toBe(0);
+      expect((await getDb().collection('study-sessions').doc('study-cancelled-recent').get()).exists)
+        .toBe(true);
+    });
+
+    it('keeps a completed session even though it was last touched 31 days ago — wrong status for this category', async () => {
+      // The status-filter pin: without `where('status', 'in', [...])` this
+      // doc's stale `updatedAt` alone would qualify it.
+      await seedSession('study-completed-old-touch', {
+        date: dateAgo(31), status: 'completed', completedAt: daysAgo(5), updatedAt: daysAgo(31),
+      });
+
+      const stats = await runStudySweepSessions(getDb(), new Date());
+
+      expect(stats.cancelledSessionsDeleted).toBe(0);
+      expect(stats.completedSessionsDeleted).toBe(0);
+      expect((await getDb().collection('study-sessions').doc('study-completed-old-touch').get()).exists)
+        .toBe(true);
+    });
+
+    it('keeps pending and confirmed sessions regardless of updatedAt age', async () => {
+      await seedSession('study-pending-old', {
+        status: 'pending', completedAt: undefined, updatedAt: daysAgo(400), date: dateAgo(400),
+      });
+      await seedSession('study-confirmed-old2', {
+        status: 'confirmed', completedAt: undefined, updatedAt: daysAgo(400), date: dateAgo(400),
+      });
+
+      const stats = await runStudySweepSessions(getDb(), new Date());
+
+      expect(stats.cancelledSessionsDeleted).toBe(0);
+      const db = getDb();
+      expect((await db.collection('study-sessions').doc('study-pending-old').get()).exists)
+        .toBe(true);
+      expect((await db.collection('study-sessions').doc('study-confirmed-old2').get()).exists)
+        .toBe(true);
     });
   });
 });
