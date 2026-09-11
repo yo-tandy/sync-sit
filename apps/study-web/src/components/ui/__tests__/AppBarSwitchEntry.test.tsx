@@ -19,31 +19,40 @@ import { renderWithProviders } from '@/__tests__/test-utils';
 import { AppBar } from '../AppBar';
 import { FamilyAppBar } from '../FamilyAppBar';
 
-describe('app bar switch entries', () => {
-  it('shows the sync-sit switch entry in the tutor menu', () => {
+describe('app bar switch entries (#417 -- inline switcher, not the burger row)', () => {
+  it('shows the sync-sit entry in the tutor bar’s inline switcher (closed, no menu needed)', () => {
     renderWithProviders(<AppBar />);
-    fireEvent.click(screen.getByRole('button', { name: /open menu/i }));
-    expect(screen.getByRole('button', { name: /open sync-sit/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /sync\/sit/ })).toBeInTheDocument();
   });
 
-  it('shows the sync-sit switch entry in the family menu', () => {
+  it('shows the sync-sit entry in the family bar’s inline switcher', () => {
     renderWithProviders(<FamilyAppBar />);
-    fireEvent.click(screen.getByRole('button', { name: /open menu/i }));
-    expect(screen.getByRole('button', { name: /open sync-sit/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /sync\/sit/ })).toBeInTheDocument();
+  });
+
+  it('the burger no longer carries a switch row at all, in either bar', () => {
+    for (const bar of [<AppBar key="t" />, <FamilyAppBar key="f" />]) {
+      renderWithProviders(bar);
+      fireEvent.click(screen.getByRole('button', { name: /open menu/i }));
+      expect(screen.queryByRole('button', { name: /open sync-sit/i })).toBeNull();
+      cleanup();
+    }
   });
 });
 
 /**
- * The burger switch row and the app-switch bar (#365) must never both be
- * reachable at the same viewport: the bar's whole-bar lock does not extend to
- * the burger, so a second row would let a user mint a second handoff code
- * around it. Below `md` the bar is the entry point and the row hides; at
- * `md+` the bar is `md:hidden` and the row is the only switcher there is,
- * until Q9 is answered (#417).
+ * The inline switcher and the app-switch bar (#365) must never both be
+ * reachable at the same viewport: below `md` the bar (AppSwitchBarHost,
+ * mounted by the layout, not tested here) is the entry point; at `md+` the
+ * inline switcher rendered directly in these bars is. Q9 (#417) retired the
+ * burger row entirely for study-web -- unlike sit, study-web has no admin
+ * shell that needs it kept as a sub-md fallback (both its layouts always
+ * mount AppSwitchBarHost).
  *
  * jsdom loads no Tailwind, so asserting the class alone would prove nothing
  * about the tab order or the a11y tree. `phoneViewport` supplies the one rule
- * the pin turns on and models a sub-md screen by leaving `md:block` unapplied.
+ * the pin turns on and models a sub-md screen by leaving `md:block`/`md:flex`
+ * unapplied.
  */
 function phoneViewport() {
   const style = document.createElement('style');
@@ -51,41 +60,37 @@ function phoneViewport() {
   document.head.append(style);
 }
 
-describe('the burger switch row hides where the app-switch bar takes over', () => {
+describe('the inline switcher is out of the a11y tree on phones, present at md+', () => {
   afterEach(() => {
     cleanup();
     document.head.querySelectorAll('style').forEach((s) => s.remove());
   });
 
-  it('tutor bar: the row is out of the a11y tree on phones', () => {
+  it('tutor bar: hidden on phones', () => {
     phoneViewport();
     renderWithProviders(<AppBar />);
-    fireEvent.click(screen.getByRole('button', { name: /open menu/i }));
-    expect(screen.queryByRole('button', { name: /open sync-sit/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /sync\/sit/ })).toBeNull();
   });
 
-  it('family bar: the row is out of the a11y tree on phones', () => {
+  it('family bar: hidden on phones', () => {
     phoneViewport();
     renderWithProviders(<FamilyAppBar />);
-    fireEvent.click(screen.getByRole('button', { name: /open menu/i }));
-    expect(screen.queryByRole('button', { name: /open sync-sit/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /sync\/sit/ })).toBeNull();
   });
 
-  it('both bars keep the row at md+, where no app-switch bar renders', () => {
+  it('both bars carry the hidden md:flex pair — visible only at md+', () => {
     for (const bar of [<AppBar key="t" />, <FamilyAppBar key="f" />]) {
       renderWithProviders(bar);
-      fireEvent.click(screen.getByRole('button', { name: /open menu/i }));
-      const wrapper = screen.getByRole('button', { name: /open sync-sit/i }).parentElement!;
-      expect(wrapper.className).toMatch(/\bhidden\b/);
-      expect(wrapper.className).toMatch(/\bmd:block\b/);
+      const nav = screen.getByRole('navigation', { name: /switch app/i });
+      expect(nav.className).toMatch(/\bhidden\b/);
+      expect(nav.className).toMatch(/\bmd:flex\b/);
       cleanup();
     }
   });
 
-  it('the row uses the 48px bar-weight mark, never the 256px original (#364)', () => {
+  it('uses the 48px bar-weight mark, never the 256px original (#364)', () => {
     renderWithProviders(<AppBar />);
-    fireEvent.click(screen.getByRole('button', { name: /open menu/i }));
-    const img = screen.getByRole('button', { name: /open sync-sit/i }).querySelector('img')!;
+    const img = screen.getByRole('button', { name: /sync\/sit/ }).querySelector('img')!;
     expect(img.getAttribute('src') ?? '').toMatch(/-48\./);
     expect(img.getAttribute('srcset') ?? '').toMatch(/-96\./);
   });

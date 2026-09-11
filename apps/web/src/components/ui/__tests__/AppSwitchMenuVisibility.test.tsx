@@ -22,16 +22,20 @@ import { AppBar } from '../AppBar';
 import type { UserRole } from '@ejm/sit-core';
 
 /**
- * The burger switch row and the app-switch bar (#365) must never both be
- * reachable at the same viewport: the bar's whole-bar lock does not extend to
- * the burger, so a second row would let a user mint a second handoff code
- * around it and orphan the first. They must never both be ABSENT either --
- * that is app switching disappearing.
+ * The burger switch row must never be reachable at the same viewport as
+ * whichever entry point already covers that width -- a second one would let
+ * a user mint a second handoff code around the first's whole-bar lock (the
+ * bar's) or just duplicate the landmark (the inline switcher's, #417). They
+ * must never both be ABSENT either -- that is app switching disappearing.
  *
- * Three cases, and they are not symmetric:
- *   below md, parent/babysitter -> bar only, row hidden
- *   at md+,   every role        -> row only, bar is md:hidden (Q9, #417)
- *   any width, ADMIN            -> row only, AdminLayout renders no bar
+ * Q9 (#417) resolved what used to sit at md+ here: it is no longer this
+ * burger row for ANY role -- `AppSwitchInline` (in `AppBar` for parent /
+ * babysitter, in `SideNav`'s head for admin) covers md+ instead. So the row
+ * now has at most ONE reachable width, not two:
+ *   below md, parent/babysitter -> bar only, row absent at every width
+ *   below md, ADMIN             -> row only (AdminLayout renders no bar)
+ *   at md+,   every role        -> row absent; AppSwitchInline covers it
+ *     (see AppBarDesktopTabs.test.tsx / DesktopShell.test.tsx for that half)
  */
 const SWITCH_ROW = /open sync-study/i;
 
@@ -87,20 +91,27 @@ describe('the burger switch row vs the app-switch bar (#365)', () => {
     expect(screen.getByRole('button', { name: SWITCH_ROW })).toBeInTheDocument();
   });
 
-  it('returns at md+ for parents, where the bar is md:hidden (Q9, #417)', () => {
-    // No phone stylesheet: without `.hidden` painting, the row is present.
-    // The class pair is the responsive contract -- jsdom evaluates no media
-    // queries, so this half has to be asserted on the classes.
+  it('never renders for parents at ANY width -- #417 gave md+ to AppSwitchInline instead', () => {
+    // No phone stylesheet: without `.hidden` painting, a still-present row
+    // would show up here. Absence, not a hiding class, is the pin now.
     openMenu('parent');
-    const wrapper = screen.getByRole('button', { name: SWITCH_ROW }).parentElement!;
-    expect(wrapper.className).toMatch(/\bhidden\b/);
-    expect(wrapper.className).toMatch(/\bmd:block\b/);
+    expect(screen.queryByRole('button', { name: SWITCH_ROW })).toBeNull();
   });
 
-  it('carries NO hiding class at all for admins', () => {
+  it('never renders for babysitters at ANY width, for the same reason', () => {
+    openMenu('babysitter');
+    expect(screen.queryByRole('button', { name: SWITCH_ROW })).toBeNull();
+  });
+
+  it('is md:hidden for admins now (#417) -- the sidebar head’s AppSwitchInline covers md+', () => {
+    // Flipped from before Q9: admin's row used to carry NO hiding class
+    // (its only entry point, every width). Now AdminLayout's SideNav head
+    // covers md+, so the burger row -- admin's sub-md-only entry point --
+    // must hide there instead, or admin would have two reachable switchers
+    // at md+.
     openMenu('admin');
     const wrapper = screen.getByRole('button', { name: SWITCH_ROW }).parentElement!;
-    expect(wrapper.className).not.toMatch(/\bhidden\b/);
+    expect(wrapper.className).toMatch(/\bmd:hidden\b/);
   });
 });
 
