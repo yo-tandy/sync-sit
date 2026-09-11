@@ -9,6 +9,7 @@ const h = vi.hoisted(() => ({
   assign: vi.fn(),
   mint: vi.fn(),
   callable: vi.fn(),
+  logout: vi.fn(),
 }));
 
 vi.mock('@/config/firebase', () => ({ functions: {} }));
@@ -19,8 +20,10 @@ vi.mock('firebase/functions', () => ({
   },
 }));
 vi.mock('@/stores/authStore', () => ({
-  useAuthStore: (selector?: (s: { userDoc: unknown }) => unknown) =>
-    selector ? selector({ userDoc: h.userDoc }) : { userDoc: h.userDoc },
+  useAuthStore: (selector?: (s: { userDoc: unknown; logout: () => Promise<void> }) => unknown) =>
+    selector
+      ? selector({ userDoc: h.userDoc, logout: h.logout })
+      : { userDoc: h.userDoc, logout: h.logout },
 }));
 
 vi.mock('react-router', async () => ({
@@ -55,6 +58,7 @@ describe('AccountHubPage (sit)', () => {
     h.assign.mockReset();
     h.callable.mockReset();
     h.mint.mockReset().mockResolvedValue({ data: { code: 'abc+/=' } });
+    h.logout.mockReset().mockResolvedValue(undefined);
     vi.stubGlobal('location', { assign: h.assign });
   });
   afterEach(() => {
@@ -232,5 +236,114 @@ describe('AccountHubPage (sit)', () => {
     renderHub(doc);
     const study = screen.getByText('sync/study').closest('section')!;
     expect(within(study).getByText('Open sync-study')).toBeInTheDocument();
+  });
+});
+
+/**
+ * The footer slot (#491): `AccountHome`'s docstring reserves it for "sign
+ * out, delete account", and this is the first thing to fill it. The dialog
+ * gate, the error mapping and the sign-out-then-navigate ordering are all
+ * `DeleteAccountSection`'s own behaviour (unit-tested in
+ * `packages/shared-ui/src/pages/__tests__/DeleteAccountSection.test.tsx`) --
+ * these tests are about the WIRING: the real callable name, the confirmation
+ * payload, and that this app's `logout`/`navigate` are the ones actually
+ * passed through.
+ */
+describe('AccountHubPage — delete account footer (#491)', () => {
+  beforeEach(() => {
+    h.userDoc = PARENT;
+    h.navigate.mockReset();
+    h.assign.mockReset();
+    h.callable.mockReset();
+    h.mint.mockReset();
+    h.logout.mockReset().mockResolvedValue(undefined);
+    vi.stubGlobal('location', { assign: h.assign });
+  });
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  function openDeleteDialog() {
+    renderHub(PARENT);
+    fireEvent.click(screen.getByText('Delete my account'));
+    fireEvent.change(screen.getByLabelText('Type DELETE to confirm'), {
+      target: { value: 'DELETE' },
+    });
+  }
+
+  it('renders sign out and delete rows in the footer', () => {
+    renderHub(PARENT);
+    expect(screen.getByText('Sign out')).toBeInTheDocument();
+    expect(screen.getByText('Delete my account')).toBeInTheDocument();
+  });
+
+  it('sign out calls the auth store directly, with no confirmation and no callable', () => {
+    renderHub(PARENT);
+    fireEvent.click(screen.getByText('Sign out'));
+    expect(h.logout).toHaveBeenCalledTimes(1);
+    expect(h.callable).not.toHaveBeenCalledWith('deleteMyAccount');
+  });
+
+  it('the delete confirm button stays disabled until the typed word matches', () => {
+    renderHub(PARENT);
+    fireEvent.click(screen.getByText('Delete my account'));
+    const confirmButton = screen.getByRole('button', { name: 'Yes, delete my account' });
+    expect(confirmButton).toBeDisabled();
+    fireEvent.change(screen.getByLabelText('Type DELETE to confirm'), {
+      target: { value: 'delete' },
+    });
+    expect(confirmButton).toBeDisabled();
+    fireEvent.change(screen.getByLabelText('Type DELETE to confirm'), {
+      target: { value: 'DELETE' },
+    });
+    expect(confirmButton).not.toBeDisabled();
+  });
+
+  it('calls deleteMyAccount with the fixed confirmation token, then signs out, then lands on /account-deleted', async () => {
+    h.mint.mockResolvedValue(undefined);
+    openDeleteDialog();
+    fireEvent.click(screen.getByRole('button', { name: 'Yes, delete my account' }));
+
+    await waitFor(() => expect(h.navigate).toHaveBeenCalledWith('/account-deleted'));
+    expect(h.callable).toHaveBeenCalledWith('deleteMyAccount');
+    expect(h.callable).toHaveBeenCalledTimes(1);
+    expect(h.mint).toHaveBeenCalledWith({ confirm: 'DELETE' });
+    expect(h.mint).toHaveBeenCalledTimes(1);
+    expect(h.logout).toHaveBeenCalledTimes(1);
+  });
+
+  it('maps admin/last-admin to its own copy, keeps the dialog open and never signs out or navigates', async () => {
+    h.mint.mockRejectedValue(
+      Object.assign(new Error('last admin'), {
+        code: 'functions/failed-precondition',
+        details: { code: 'admin/last-admin' },
+      }),
+    );
+    openDeleteDialog();
+    fireEvent.click(screen.getByRole('button', { name: 'Yes, delete my account' }));
+
+    expect(
+      await screen.findByText(
+        "You're the last admin. Appoint another admin before deleting your account.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Delete my account?')).toBeInTheDocument();
+    expect(h.logout).not.toHaveBeenCalled();
+    expect(h.navigate).not.toHaveBeenCalledWith('/account-deleted');
+  });
+
+  it('falls back to the generic failure copy for an unmapped rejection, and keeps the dialog open', async () => {
+    h.mint.mockRejectedValue(
+      Object.assign(new Error('boom'), { code: 'functions/internal' }),
+    );
+    openDeleteDialog();
+    fireEvent.click(screen.getByRole('button', { name: 'Yes, delete my account' }));
+
+    expect(
+      await screen.findByText('Something went wrong. Please try again.'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Delete my account?')).toBeInTheDocument();
+    expect(h.logout).not.toHaveBeenCalled();
   });
 });
