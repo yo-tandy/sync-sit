@@ -92,20 +92,35 @@ export function DeleteAccountSection({
     setError('');
     try {
       await onDeleteAccount();
-      // Sign-out and navigation only run once the erasure itself succeeded
-      // -- a rejected callable must leave the member signed in, in the
-      // dialog, reading why.
-      await onSignOut();
-      onDeleted();
     } catch (err: unknown) {
+      // Only the ERASURE's own rejection is mapped and shown -- the account
+      // still exists, the dialog stays open, and the button re-enables so
+      // the member can retry or read why.
       setError(t(deleteErrorKey(err)));
       setDeleting(false);
+      return;
     }
+    // The erasure already succeeded past this point: the account is gone
+    // either way, so a sign-out failure is NOT a delete failure and must
+    // never show the delete-failed copy or re-enable a button whose account
+    // no longer exists (review round 1). Best-effort and swallowed, same
+    // shape as the server's own post-erasure notification sends.
+    try {
+      await onSignOut();
+    } catch (err: unknown) {
+      console.error('[account] sign-out after deletion failed', err);
+    }
+    onDeleted();
   };
 
   return (
     <>
-      <ul className="overflow-hidden rounded-lg border border-gray-200 bg-white">
+      {/* focus-ring-inset (issue #325's opt-in), mirroring AccountHome's own
+          row list: overflow-hidden clips the rounded corners, the rows are
+          full-bleed (px-4 py-3, no gap from the <ul>), so a focused row's
+          ring at the default 2px offset is cut off on every edge. The
+          opt-in draws it inside the row instead. */}
+      <ul className="focus-ring-inset overflow-hidden rounded-lg border border-gray-200 bg-white">
         <li>
           <button
             type="button"
