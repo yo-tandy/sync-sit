@@ -725,6 +725,65 @@ describe('completed-engagement retention (decision 19 / issue #294)', () => {
       expect(await overrideExists(TUTOR, claimedDate)).toBe(false);
     });
 
+    it('defers a cancelled series that still holds a completed instance inside the 180-day window (round-2 review)', async () => {
+      // markSessionsCompleted step (b) flipped one occurrence to 'completed'
+      // while the series was still confirmed; the series was cancelled
+      // later, so the parent's updatedAt is recent-enough-to-sweep (31d) but
+      // the completed instance (10d) is nowhere near its own 180-day window.
+      await seedSession('study-cancelled-series-protected', {
+        type: 'recurring', date: undefined, endTime: undefined,
+        status: 'cancelled', statusReason: 'cancelled_by_tutor',
+        completedAt: undefined, cancelledAt: daysAgo(31), updatedAt: daysAgo(31),
+        recurringSlots: [{ day: 'mon', startTime: '17:00', endTime: '18:00' }],
+      });
+      await seedInstance('study-cancelled-series-protected', dateAgo(10), {
+        status: 'completed', completedAt: daysAgo(10), updatedAt: daysAgo(10),
+      });
+      await seedInstance('study-cancelled-series-protected', dateAgo(38), {
+        status: 'cancelled', statusReason: 'cancelled_by_tutor', updatedAt: daysAgo(31),
+      });
+
+      const stats = await runStudySweepSessions(getDb(), new Date());
+
+      expect(stats.cancelledSeriesDeferred).toBe(1);
+      expect(stats.cancelledSessionsDeleted).toBe(0);
+      const parent = getDb().collection('study-sessions').doc('study-cancelled-series-protected');
+      expect((await parent.get()).exists).toBe(true);
+      expect((await parent.collection('instances').get()).size).toBe(2);
+    });
+
+    it('cascades a cancelled series once its last completed instance is itself past 180 days', async () => {
+      // Same shape as above, but the completed instance is old enough that
+      // decision 19's own window no longer protects it — nothing defers the
+      // parent and the whole series (parent + both instances + claim) goes.
+      await seedSession('study-cancelled-series-aged-out', {
+        type: 'recurring', date: undefined, endTime: undefined,
+        status: 'cancelled', statusReason: 'cancelled_by_tutor',
+        completedAt: undefined, cancelledAt: daysAgo(31), updatedAt: daysAgo(31),
+        recurringSlots: [{ day: 'mon', startTime: '17:00', endTime: '18:00' }],
+      });
+      const oldCompletedDate = dateAgo(200);
+      await seedInstance('study-cancelled-series-aged-out', oldCompletedDate, {
+        status: 'completed', completedAt: daysAgo(200), updatedAt: daysAgo(200),
+      });
+      await seedInstance('study-cancelled-series-aged-out', dateAgo(38), {
+        status: 'cancelled', statusReason: 'cancelled_by_tutor', updatedAt: daysAgo(31),
+      });
+      await seedOverrideClaim(TUTOR, oldCompletedDate,
+        { sessionId: 'study-cancelled-series-aged-out', instanceId: oldCompletedDate },
+        { appSource: 'study', reason: 'study_session' });
+
+      const stats = await runStudySweepSessions(getDb(), new Date());
+
+      expect(stats.cancelledSeriesDeferred).toBe(0);
+      expect(stats.cancelledSessionsDeleted).toBe(1);
+      expect(stats.instancesDeleted).toBe(2);
+      const parent = getDb().collection('study-sessions').doc('study-cancelled-series-aged-out');
+      expect((await parent.get()).exists).toBe(false);
+      expect((await parent.collection('instances').get()).size).toBe(0);
+      expect(await overrideExists(TUTOR, oldCompletedDate)).toBe(false);
+    });
+
     it('keeps a cancelled session updated 10 days ago — inside the window', async () => {
       await seedSession('study-cancelled-recent', {
         date: dateAgo(10), status: 'cancelled', statusReason: 'cancelled_by_family',

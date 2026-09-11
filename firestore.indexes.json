@@ -222,6 +222,14 @@
       ]
     },
     {
+      "collectionGroup": "instances",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "completedAt", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "publishedSearches",
       "queryScope": "COLLECTION",
       "fields": [

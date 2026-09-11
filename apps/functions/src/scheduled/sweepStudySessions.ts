@@ -23,6 +23,12 @@ export interface StudySweepStats {
   completedSessionsDeleted: number;
   /** Issue #408 item 3: cancelled/declined sessions >30d since last touch. */
   cancelledSessionsDeleted: number;
+  /**
+   * Issue #408 item 3 (round-2 review): a cancelled/declined RECURRING series
+   * skipped this run because it still holds a `completed` instance inside the
+   * 180-day completed-engagement window — see `hasProtectedCompletedInstance`.
+   */
+  cancelledSeriesDeferred: number;
   instancesDeleted: number;
   overrideClaimsReleased: number;
   /** Cascades that failed and were skipped (poison-pill isolation). */
@@ -92,12 +98,35 @@ export interface StudySweepStats {
  * cancel/decline. That is a deliberate trade for keying on the one field both
  * shapes actually write, not an oversight.
  *
- * INSTANCES AGE OUT WITH THE SERIES — the second policy answer. When a
- * cancelled or declined recurring series' PARENT crosses the 30-day window,
- * `cascade()` — the same helper the completed sweep above uses — removes its
- * `instances` subcollection and releases every remaining schedule claim in
- * the same pass. Instances are never deleted independently of their parent:
- * an individually cancelled occurrence inside a series whose PARENT is still
+ * INSTANCES AGE OUT WITH THE SERIES — the second policy answer, WITH ONE
+ * GUARD (round-2 review). When a cancelled or declined recurring series'
+ * PARENT crosses the 30-day window, `cascade()` — the same helper the
+ * completed sweep above uses — removes its `instances` subcollection and
+ * releases every remaining schedule claim in the same pass, UNLESS the
+ * series still holds an instance that is itself `completed` inside the
+ * 180-day completed-engagement window (`hasProtectedCompletedInstance`
+ * below) — in which case the whole parent is SKIPPED this run rather than
+ * cascaded. That case is real, not hypothetical: `markSessionsCompleted`
+ * step (b) flips individual instances to `completed` one at a time as a
+ * still-CONFIRMED series runs, and cancelling the series later
+ * (`cancelSession.ts`) touches only the remaining `scheduled` instances —
+ * "Past/completed/conflict_skip instances are untouched" (that file's own
+ * docblock) — so the parent's `updatedAt` reflects the CANCELLATION while its
+ * `instances` subcollection can hold occurrences that genuinely happened
+ * months apart. Cascading unconditionally at 30 days from cancellation would
+ * delete those before decision 19's own 180-day window, which is measured
+ * from EACH occurrence's own `completedAt`, not from the series' cancel date.
+ *
+ * THE ACCEPTED RULE: a cancelled/declined recurring series lives until its
+ * LAST completed occurrence is itself 180 days old. Every run it is still
+ * blocked, it is counted in `cancelledSeriesDeferred` and retried on the next
+ * run — no state is persisted, since the guard query is cheap and idempotent
+ * and the series' `updatedAt` does not change while it waits. Once the newest
+ * completed instance ages out of the 180-day window, the next run's guard
+ * query returns empty and the parent cascades normally.
+ *
+ * Instances are still never deleted independently of their parent: an
+ * individually cancelled occurrence inside a series whose PARENT is still
  * `confirmed` (`cancelSessionInstance.ts`) is untouched by this sweep — only
  * the parent's own status governs whether the cascade fires, per the type
  * doc's "AUTHORITY SPLIT" (`types/session.ts`).
@@ -109,6 +138,7 @@ export async function runStudySweepSessions(
   const stats: StudySweepStats = {
     completedSessionsDeleted: 0,
     cancelledSessionsDeleted: 0,
+    cancelledSeriesDeferred: 0,
     instancesDeleted: 0,
     overrideClaimsReleased: 0,
     sessionCascadeErrors: 0,
@@ -179,6 +209,34 @@ export async function runStudySweepSessions(
 
     // ── 3. Delete the parent ──
     await doc.ref.delete();
+  }
+
+  /**
+   * True iff this cancelled/declined RECURRING parent still holds an
+   * instance that is itself `completed` inside the 180-day
+   * completed-engagement window (`cutoff`, above) — i.e. it must NOT be
+   * cascaded this run. See the function docblock's "INSTANCES AGE OUT WITH
+   * THE SERIES" section for why this case is real. One_time sessions have no
+   * `instances` subcollection and always return false; a query against an
+   * empty/nonexistent subcollection is a cheap empty read, not an error.
+   */
+  async function hasProtectedCompletedInstance(
+    doc: FirebaseFirestore.QueryDocumentSnapshot,
+  ): Promise<boolean> {
+    if (doc.get('type') !== 'recurring') return false;
+    // (status, completedAt) COLLECTION-scope composite on `instances` —
+    // added to firestore.indexes.json with this guard. This is a query
+    // against ONE specific subcollection (`doc.ref.collection(...)`), which
+    // needs its own COLLECTION-scope index distinct from the two existing
+    // COLLECTION_GROUP ones (those serve `.collectionGroup('instances')`
+    // callers elsewhere and do not cover this shape).
+    const recent = await doc.ref
+      .collection('instances')
+      .where('status', '==', 'completed')
+      .where('completedAt', '>', cutoff)
+      .limit(1)
+      .get();
+    return !recent.empty;
   }
 
   // Cursor-paginated WITHIN the run, for the same reason the sit half is: a
@@ -275,13 +333,23 @@ export async function runStudySweepSessions(
     const snap = await query.get();
     if (snap.empty) break;
 
-    // Same per-session error isolation as the completed category.
+    // Same per-session error isolation as the completed category, plus a
+    // third per-doc outcome: DEFERRED (the guard above fired, so nothing was
+    // touched — not a failure, and not a deletion).
     let deleted = 0;
+    let deferred = 0;
+    let failed = 0;
     for (const doc of snap.docs) {
       try {
+        if (await hasProtectedCompletedInstance(doc)) {
+          stats.cancelledSeriesDeferred += 1;
+          deferred += 1;
+          continue;
+        }
         await cascade(doc);
         deleted += 1;
       } catch (err) {
+        failed += 1;
         stats.sessionCascadeErrors += 1;
         console.error(`studySweepSessions: cancelled/declined cascade failed for ${doc.id}:`, err);
       }
@@ -290,7 +358,14 @@ export async function runStudySweepSessions(
     console.log(
       `studySweepSessions: deleted ${deleted} cancelled/declined sessions >${CANCELLED_RETENTION_DAYS}d since last touch (issue #408 item 3)`,
     );
-    if (deleted === 0 && snap.size === SWEEP_PAGE) {
+    if (deferred > 0) {
+      console.log(
+        `studySweepSessions: deferred ${deferred} cancelled/declined recurring series — a completed instance is still inside the 180-day window`,
+      );
+    }
+    if (failed === snap.size && snap.size === SWEEP_PAGE) {
+      // A FULL page where every document genuinely failed — distinct from a
+      // full page that was legitimately deferred, which is not a wedge.
       console.warn(
         'studySweepSessions: a full page of cancelled/declined sessions failed to cascade; advancing past it',
       );
