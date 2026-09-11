@@ -53,7 +53,7 @@ describe('guardian GDPR integration', () => {
   async function seedGovernedChild(
     familyId: string,
     parentUid: string,
-    opts: { age: number; withInvite?: boolean },
+    opts: { age: number; withInvite?: boolean; language?: 'en' | 'fr' },
   ): Promise<{ uid: string; email: string }> {
     counter += 1;
     const email = `gdpr.kid${counter}g${GRAD}@ejm.org`;
@@ -66,7 +66,7 @@ describe('guardian GDPR integration', () => {
       firstName: `Kid${counter}`,
       lastName: 'Gdpr',
       dateOfBirth: new Date(dobWithAge(opts.age)),
-      language: 'en',
+      language: opts.language ?? 'en',
       profiles: {},
       notifPrefs: {},
       fcmTokens: [],
@@ -156,9 +156,27 @@ describe('guardian GDPR integration', () => {
     expect(invites.docs[0].data().createdByParentUid).toBe('deleted');
   });
 
+  /** The child's own blocked-account notice (issue #421, option 1b). */
+  async function blockedMinorNotice(
+    childUid: string,
+  ): Promise<Record<string, unknown> | undefined> {
+    const snap = await getDb()
+      .collection('notifications')
+      .where('type', '==', 'account_blocked_last_parent')
+      .where('recipientUserId', '==', childUid)
+      .get();
+    expect(snap.size).toBeLessThanOrEqual(1);
+    return snap.docs[0]?.data();
+  }
+
   it('deleting the LAST parent: under-15 child blocked + alerted, 15+ child just unsupervised', async () => {
-    // family2 has a single parent (parent3).
-    const young = await seedGovernedChild(seed.family2Id, seed.parent3.uid, { age: 13 });
+    // family2 has a single parent (parent3). The under-15 child is French,
+    // to pin that the block notice is localised off the CHILD's own
+    // `language` field, not a hardcoded default.
+    const young = await seedGovernedChild(seed.family2Id, seed.parent3.uid, {
+      age: 13,
+      language: 'fr',
+    });
     const older = await seedGovernedChild(seed.family2Id, seed.parent3.uid, { age: 16 });
     // A still-pending invite from that family.
     const pendingInvite = await getDb().collection('kidInvites').add({
@@ -198,11 +216,27 @@ describe('guardian GDPR integration', () => {
     const mine = alerts.docs.map((d) => d.data()).filter((a) => a.data?.childUid === young.uid);
     expect(mine.length).toBe(1);
 
-    // The 15+ child keeps a fully functional account.
+    // The blocked child gets their OWN notice (issue #421, option 1b) --
+    // written before the account was disabled, in THEIR language (French),
+    // through the email mock the emulator short-circuits to true and the
+    // push mock (no FCM registration seeded, so honestly false).
+    const notice = await blockedMinorNotice(young.uid);
+    expect(notice).toBeTruthy();
+    expect(notice!.read).toBe(false);
+    expect(notice!.channels).toEqual(['email', 'push']);
+    expect(notice!.emailSent).toBe(true);
+    expect(notice!.pushSent).toBe(false);
+    // French copy -- the language-selection proof this test exists for.
+    expect(notice!.title).toBe('Votre compte est suspendu');
+    expect(String(notice!.body)).toContain('suspendu');
+
+    // The 15+ child keeps a fully functional account, and gets no block
+    // notice at all -- there was nothing to tell them.
     const olderDoc = (await getDb().collection('users').doc(older.uid).get()).data()!;
     expect(olderDoc.status).toBe('active');
     const olderAuth = await getAdminAuth().getUser(older.uid);
     expect(olderAuth.disabled).toBe(false);
+    expect(await blockedMinorNotice(older.uid)).toBeUndefined();
 
     // The dead family's pending invite is no longer redeemable.
     const invite = (await pendingInvite.get()).data()!;
